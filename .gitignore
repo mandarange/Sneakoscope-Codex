@@ -1,0 +1,10 @@
+node_modules/
+npm-debug.log*
+.DS_Store
+coverage/
+*.tgz
+*.zip
+.dcodex/
+.codex/
+.agents/
+AGENTS.md
