@@ -1,0 +1,44 @@
+{
+  "name": "dcodex",
+  "displayName": "DCODEX",
+  "version": "0.3.0",
+  "description": "DCODEX: database-safe, performance-bounded Codex CLI harness with Ralph no-question loop, H-Proof gates, GPT Image 2 workflow, and TriWiki compression.",
+  "type": "module",
+  "bin": {
+    "dcodex": "./bin/dcodex.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "selftest": "node ./bin/dcodex.mjs selftest --mock",
+    "doctor": "node ./bin/dcodex.mjs doctor",
+    "packcheck": "node --check ./bin/dcodex.mjs && node --check ./src/cli/main.mjs"
+  },
+  "keywords": [
+    "codex",
+    "dcodex",
+    "ai-agent",
+    "harness",
+    "ralph",
+    "llm-wiki",
+    "gpt-image-2",
+    "resource-safe",
+    "database-safe",
+    "supabase-mcp",
+    "bounded-memory",
+    "storage-safe",
+    "rust-optional",
+    "supabase",
+    "mcp-safety",
+    "db-guardian"
+  ],
+  "license": "MIT"
+}

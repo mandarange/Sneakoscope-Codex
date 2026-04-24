@@ -1,0 +1,12 @@
+node_modules/
+coverage/
+*.zip
+*.tgz
+.DS_Store
+.git/
+.dcodex/
+.codex/
+.agents/
+AGENTS.md
+crates/
+native/
