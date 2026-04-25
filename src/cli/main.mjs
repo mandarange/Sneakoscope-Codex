@@ -261,6 +261,8 @@ async function selftest() {
   if (classifyCommand('supabase db reset').level !== 'destructive') throw new Error('selftest failed: supabase db reset not detected');
   const dbDecision = await checkDbOperation(tmp, { mission_id: id }, { tool_name: 'mcp__supabase__execute_sql', sql: 'drop table users;' }, { duringRalph: true });
   if (dbDecision.action !== 'block') throw new Error('selftest failed: destructive MCP SQL allowed');
+  const nonDbDecision = await checkDbOperation(tmp, {}, { command: 'npm test' }, { duringRalph: true });
+  if (nonDbDecision.action !== 'allow') throw new Error('selftest failed: non-DB command blocked by DB guard');
   await writeJsonAtomic(path.join(dir, 'done-gate.json'), { passed: true, unsupported_critical_claims: 0, database_safety_violation: false, database_safety_reviewed: true, visual_drift: 'low', wiki_drift: 'low', tests_required: false });
   const gate = await evaluateDoneGate(tmp, id);
   if (!gate.passed) throw new Error('selftest failed: done gate');
