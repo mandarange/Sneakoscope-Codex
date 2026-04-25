@@ -1,6 +1,6 @@
 # Sneakoscope Codex performance and leak policy
 
-Sneakoscope Codex v0.4 is designed to keep runtime, package size, RAM, and storage bounded.
+Sneakoscope Codex v0.5 is designed to keep runtime, package size, RAM, and storage bounded.
 
 ## Speed
 
@@ -9,6 +9,26 @@ Sneakoscope Codex v0.4 is designed to keep runtime, package size, RAM, and stora
 - TriWiki claim selection uses bounded top-K selection instead of sorting unbounded context into prompts.
 - GX visual context renders deterministic SVG/HTML from JSON sources, avoiding external image-generation latency, cost, and nondeterminism.
 - `sks gc` runs after Ralph cycles by default.
+
+## Evaluation metrics
+
+`sks eval run` creates a deterministic JSON report in `.sneakoscope/reports/` unless `--no-save` is used. The built-in scenario compares an uncompressed all-claims baseline with a TriWiki compressed context capsule.
+
+Tracked metrics:
+
+- `estimated_tokens`: deterministic chars/4 prompt-size estimate for local regression tracking
+- `token_savings_pct`: prompt-size reduction versus baseline
+- `accuracy_proxy`: evidence-weighted context-selection quality score
+- `required_recall`: required claim coverage
+- `relevance_precision`: selected required claims divided by selected claims
+- `support_ratio`: selected claims that are supported or weakly supported
+- `unsupported_critical_selected`: critical/high unsupported claims that survived compression
+- `context_build_ms_per_run`: local context construction runtime
+- `meaningful_improvement`: true only when token savings, accuracy delta, recall, unsupported-critical filtering, and runtime thresholds pass
+
+Default meaningful-improvement thresholds are intentionally explicit: at least 25% token savings, at least +0.03 accuracy-proxy delta, at least 0.95 required recall, zero unsupported critical claims selected, and candidate context construction under 25 ms per run. `sks eval compare --baseline old.json --candidate new.json` compares saved reports across implementations.
+
+The accuracy metric is not a live model task score. It is a deterministic proxy for whether the context handed to a model is smaller, better supported, and less contaminated by unsupported critical claims.
 
 ## Package size
 

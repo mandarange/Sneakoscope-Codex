@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "Sneakoscope Codex",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Sneakoscope Codex: database-safe, performance-bounded Codex CLI harness with Ralph no-question loop, H-Proof gates, deterministic GX visual context, and TriWiki compression.",
   "type": "module",
   "bin": {
@@ -33,6 +33,9 @@
     "ai-agent",
     "harness",
     "ralph",
+    "research",
+    "hypothesis",
+    "discovery",
     "llm-wiki",
     "gx",
     "svg",

@@ -11,6 +11,7 @@ npm i -g sneakoscope
 ```
 
 The npm package name is `sneakoscope`; the command is branded as SKS and exposed as lowercase `sks` for shell portability.
+Global installation is the default and recommended setup. For a project-only install, use `npm i -D sneakoscope` and initialize hooks with `npx sks init --install-scope project`; this writes hook commands that call the local `node_modules/sneakoscope` binary instead of global `sks`.
 
 `@openai/codex` is intentionally not bundled. Install Codex separately, or set `SKS_CODEX_BIN` to the Codex executable you want Sneakoscope Codex to supervise.
 
@@ -27,6 +28,14 @@ The npm package name is `sneakoscope`; the command is branded as SKS and exposed
 sks doctor --fix
 sks init
 sks selftest --mock
+```
+
+Project-only setup:
+
+```bash
+npm i -D sneakoscope
+npx sks doctor --fix --install-scope project
+npx sks init --install-scope project
 ```
 
 Create a Ralph mission:
@@ -51,15 +60,25 @@ For a local smoke test that does not call a model:
 sks ralph run latest --mock
 ```
 
+Run a research mission:
+
+```bash
+sks research prepare "LLM 에이전트의 새로운 평가 방법론"
+sks research run latest --max-cycles 3
+```
+
 ## What Sneakoscope Codex Adds
 
 - **Mandatory clarification**: `ralph prepare` generates required decision slots before autonomous execution can start.
 - **Sealed decision contract**: `ralph answer` validates answers and writes `decision-contract.json`.
 - **No-question Ralph loop**: after `ralph run` starts, Ralph must resolve ambiguity with the sealed contract instead of asking the user.
+- **Research mode**: `research` runs a frontier-discovery loop for non-obvious hypotheses, falsification, novelty ledgers, and testable experiments.
 - **Database guard**: destructive DB operations, production writes, unsafe Supabase MCP configuration, and direct live SQL mutations are blocked or warned on.
 - **H-Proof done gate**: completion requires supported critical claims, reviewed DB safety state, acceptable visual/wiki drift, and required test evidence.
+- **Performance evaluation**: `sks eval` produces deterministic token, accuracy-proxy, recall, support, and runtime metrics for before/after evidence.
 - **Bounded runtime state**: child process output is tailed, logs are rotated/compacted, and old mission artifacts can be pruned.
 - **Visual cartridges**: `gx` creates deterministic SVG/HTML visual context from `vgraph.json` and `beta.json`; no generated-image service is required.
+- **Design artifact skill**: `sks init` installs a local skill for high-fidelity HTML/UI/prototype work with design-context gathering and rendered verification.
 
 ## Ralph Workflow
 
@@ -92,14 +111,18 @@ Core invariants:
 ## Commands
 
 ```bash
-sks doctor [--fix] [--json]
-sks init [--force]
+sks doctor [--fix] [--json] [--install-scope global|project]
+sks init [--force] [--install-scope global|project]
 sks selftest [--mock]
 
 sks ralph prepare "task"
 sks ralph answer <mission-id|latest> <answers.json>
 sks ralph run <mission-id|latest> [--mock] [--max-cycles N]
 sks ralph status <mission-id|latest>
+
+sks research prepare "topic" [--depth frontier]
+sks research run <mission-id|latest> [--mock] [--max-cycles N]
+sks research status <mission-id|latest>
 
 sks db policy
 sks db scan [--migrations] [--json]
@@ -109,6 +132,10 @@ sks db classify --command "supabase db reset"
 sks db check --sql "SELECT * FROM users LIMIT 10"
 sks db check --command "supabase db reset"
 sks db check --file ./migration.sql
+
+sks eval run [--json] [--out report.json] [--iterations N]
+sks eval compare --baseline old.json --candidate new.json [--json]
+sks eval thresholds
 
 sks hproof check [mission-id|latest]
 sks gx init [name]
@@ -123,6 +150,32 @@ sks stats [--json]
 ```
 
 `sks memory` is currently an alias for garbage collection/retention handling.
+
+## Research Mode
+
+Research mode is for exploratory work where the desired output is a possible new insight, mechanism, prediction, or experiment, not a summary. It uses a frontier-discovery loop:
+
+```text
+R0 frame discovery criteria
+R1 map assumptions and baselines
+R2 generate competing hypotheses
+R3 falsify with counterexamples and missing evidence
+R4 synthesize surviving mechanisms
+R5 propose tests, predictions, or probes
+R6 write novelty ledger and research gate
+```
+
+Artifacts are written under `.sneakoscope/missions/<MISSION_ID>/`:
+
+```text
+research-plan.md
+research-plan.json
+research-report.md
+novelty-ledger.json
+research-gate.json
+```
+
+`sks research run` uses the `sks-research` Codex profile with maximum configured reasoning effort. `--mock` exercises the local artifact flow without calling a model.
 
 ## Database Safety
 
@@ -172,6 +225,24 @@ sks db check --command "supabase db reset"
 
 Hooks are strongest for Codex tool execution paths, but Sneakoscope Codex does not rely on hooks alone. Ralph startup also scans DB/MCP configuration, and the supervised prompt embeds the DB policy.
 
+## Performance Evaluation
+
+`sks eval run` benchmarks the current SKS flow with a deterministic context-selection scenario. It compares an uncompressed all-claims baseline against the TriWiki compressed capsule and reports:
+
+```text
+estimated_tokens
+token_savings_pct
+accuracy_proxy
+required_recall
+relevance_precision
+support_ratio
+unsupported_critical_selected
+context_build_ms_per_run
+meaningful_improvement
+```
+
+`accuracy_proxy` is an evidence-weighted context quality metric, not a live model task score. Use `sks eval compare --baseline old.json --candidate new.json` to compare saved JSON reports across versions or experiments.
+
 ## H-Proof Done Gate
 
 Ralph completion is evaluated through `.sneakoscope/missions/<MISSION_ID>/done-gate.json`.
@@ -183,6 +254,8 @@ A mission cannot pass when:
 - a database safety violation or destructive DB attempt is recorded
 - DB safety logs exist but have not been reviewed
 - required tests lack evidence
+- required performance evaluation evidence is missing
+- required design verification evidence is missing
 - visual or wiki drift is marked `high`
 
 Run the evaluator directly with:
@@ -202,6 +275,15 @@ sks hproof check latest
 .agents/skills/       Sneakoscope Codex helper skills
 AGENTS.md             managed repository rules block
 ```
+
+Install scope controls `.codex/hooks.json`:
+
+```text
+global  -> sks hook ...
+project -> node ./node_modules/sneakoscope/bin/sks.mjs hook ...
+```
+
+If no scope is provided, SKS uses `global`.
 
 Storage is intentionally bounded:
 
@@ -264,9 +346,11 @@ Q0 raw logs only when necessary
 bin/sks.mjs              CLI executable
 src/cli/main.mjs            command router and Ralph loop
 src/core/db-safety.mjs      SQL, CLI, and MCP payload classifier
+src/core/evaluation.mjs     token, accuracy-proxy, and context-quality evaluator
 src/core/gx-renderer.mjs    deterministic SVG/HTML visual context renderer
 src/core/hproof.mjs         done-gate evaluator
 src/core/init.mjs           project bootstrap and hook/skill installation
+src/core/research.mjs       research-mode plan, novelty ledger, and gate helpers
 src/core/retention.mjs      storage report and garbage collection policy
 src/core/triwiki-attention.mjs
 docs/PERFORMANCE.md         resource and leak policy

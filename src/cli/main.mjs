@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { projectRoot, readJson, writeJsonAtomic, appendJsonlBounded, nowIso, exists, tmpdir, packageRoot, dirSize, formatBytes } from '../core/fsx.mjs';
-import { initProject } from '../core/init.mjs';
+import { projectRoot, readJson, writeJsonAtomic, appendJsonlBounded, nowIso, exists, ensureDir, tmpdir, packageRoot, dirSize, formatBytes, which } from '../core/fsx.mjs';
+import { initProject, normalizeInstallScope, sksCommandPrefix } from '../core/init.mjs';
 import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, setCurrent, stateFile } from '../core/mission.mjs';
 import { buildQuestionSchema, writeQuestions } from '../core/questions.mjs';
@@ -13,9 +13,18 @@ import { storageReport, enforceRetention } from '../core/retention.mjs';
 import { classifySql, classifyCommand, loadDbSafetyPolicy, safeSupabaseMcpConfig, checkSqlFile, checkDbOperation, scanDbSafety } from '../core/db-safety.mjs';
 import { rustInfo } from '../core/rust-accelerator.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
+import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, runEvaluationBenchmark } from '../core/evaluation.mjs';
+import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
+
+function installScopeFromArgs(args = [], fallback = 'global') {
+  if (flag(args, '--project')) return 'project';
+  if (flag(args, '--global')) return 'global';
+  const i = args.indexOf('--install-scope');
+  return normalizeInstallScope(i >= 0 && args[i + 1] ? args[i + 1] : fallback);
+}
 
 export async function main(args) {
   const [cmd, sub, ...rest] = args;
@@ -25,6 +34,7 @@ export async function main(args) {
   if (cmd === 'init') return init(tail);
   if (cmd === 'selftest') return selftest(tail);
   if (cmd === 'ralph') return ralph(sub, rest);
+  if (cmd === 'research') return research(sub, rest);
   if (cmd === 'hook') return emitHook(sub);
   if (cmd === 'profile') return profile(sub, rest);
   if (cmd === 'hproof') return hproof(sub, rest);
@@ -32,6 +42,7 @@ export async function main(args) {
   if (cmd === 'gx') return gx(sub, rest);
   if (cmd === 'team') return team(tail);
   if (cmd === 'db') return db(sub, rest);
+  if (cmd === 'eval') return evalCommand(sub, rest);
   if (cmd === 'gc') return gc(tail);
   if (cmd === 'stats') return stats(tail);
   console.error(`Unknown command: ${cmd}`);
@@ -42,18 +53,23 @@ function help() {
   console.log(`Sneakoscope Codex
 
 Usage:
-  sks doctor [--fix] [--json]
-  sks init
+  sks doctor [--fix] [--json] [--install-scope global|project]
+  sks init [--install-scope global|project]
   sks selftest [--mock]
   sks ralph prepare "task"
   sks ralph answer <mission-id|latest> <answers.json>
   sks ralph run <mission-id|latest> [--mock] [--max-cycles N]
   sks ralph status <mission-id|latest>
+  sks research prepare "topic" [--depth frontier]
+  sks research run <mission-id|latest> [--mock] [--max-cycles N]
+  sks research status <mission-id|latest>
   sks db policy
   sks db scan [--migrations] [--json]
   sks db mcp-config --project-ref <ref>
   sks db check --sql "DROP TABLE users"
   sks db check --command "supabase db reset"
+  sks eval run [--json] [--out report.json]
+  sks eval compare --baseline old.json --candidate new.json [--json]
   sks gx init [name]
   sks gx render [name] [--format svg|html|all]
   sks gx validate [name]
@@ -66,28 +82,36 @@ Usage:
 
 async function doctor(args) {
   const root = await projectRoot();
-  if (flag(args, '--fix')) await initProject(root, {});
+  const requestedScope = args.includes('--install-scope') || flag(args, '--project') || flag(args, '--global')
+    ? installScopeFromArgs(args)
+    : null;
+  if (flag(args, '--fix')) await initProject(root, { installScope: requestedScope || 'global' });
   const codex = await getCodexInfo();
   const rust = await rustInfo();
   const nodeOk = Number(process.versions.node.split('.')[0]) >= 20;
   const storage = await storageReport(root);
   const pkgBytes = await dirSize(packageRoot()).catch(() => 0);
+  const manifest = await readJson(path.join(root, '.sneakoscope', 'manifest.json'), null);
+  const installScope = requestedScope || normalizeInstallScope(manifest?.installation?.scope || 'global');
+  const install = await installStatus(root, installScope);
   const dbPolicyExists = await exists(path.join(root, '.sneakoscope', 'db-safety.json'));
   const dbScan = await scanDbSafety(root).catch((err) => ({ ok: false, findings: [{ id: 'db_safety_scan_failed', severity: 'high', reason: err.message }] }));
   const result = {
     node: { ok: nodeOk, version: process.version }, root, codex, rust,
+    install,
     sneakoscope: { ok: await exists(path.join(root, '.sneakoscope')) },
     db_guard: { ok: dbPolicyExists && dbScan.ok, policy: dbPolicyExists ? await loadDbSafetyPolicy(root) : null, scan: dbScan },
     hooks: { ok: await exists(path.join(root, '.codex', 'hooks.json')) },
     skills: { ok: await exists(path.join(root, '.agents', 'skills')) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) }, storage
   };
-  result.ready = nodeOk && Boolean(codex.bin) && result.sneakoscope.ok && result.db_guard.ok;
+  result.ready = nodeOk && Boolean(codex.bin) && install.ok && result.sneakoscope.ok && result.db_guard.ok;
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log('Sneakoscope Codex Doctor\n');
   console.log(`Node:      ${nodeOk ? 'ok' : 'fail'} ${process.version}`);
   console.log(`Project:   ${root}`);
   console.log(`Codex:     ${codex.bin ? 'ok' : 'missing'} ${codex.version || ''}`);
+  console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
   console.log(`Rust acc.: ${rust.available ? rust.version : 'optional-missing'}`);
   console.log(`State:     ${result.sneakoscope.ok ? 'ok' : 'missing .sneakoscope'}`);
   console.log(`DB Guard:  ${result.db_guard.ok ? 'ok' : 'blocked'} ${dbScan.findings?.length || 0} finding(s)`);
@@ -97,14 +121,33 @@ async function doctor(args) {
   console.log(`Storage:   ${storage.total_human || '0 B'}`);
   console.log(`Ready:     ${result.ready ? 'yes' : 'no'}`);
   if (!codex.bin) console.log('\nCodex CLI missing. Install separately: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
+  if (!install.ok && install.scope === 'global') console.log('SKS global command missing. Install: npm i -g sneakoscope');
+  if (!install.ok && install.scope === 'project') console.log('SKS project package missing. Install in this project: npm i -D sneakoscope');
   if (!result.ready && !flag(args, '--fix')) console.log('Run: sks doctor --fix');
 }
 
 async function init(args) {
   const root = await projectRoot();
-  const res = await initProject(root, { force: flag(args, '--force') });
+  const installScope = installScopeFromArgs(args);
+  const res = await initProject(root, { force: flag(args, '--force'), installScope });
   console.log(`Initialized Sneakoscope Codex in ${root}`);
+  console.log(`Install scope: ${installScope} (${sksCommandPrefix(installScope)})`);
   for (const x of res.created) console.log(`- ${x}`);
+}
+
+async function installStatus(root, scope) {
+  const commandPrefix = sksCommandPrefix(scope);
+  const globalBin = await which('sks').catch(() => null);
+  const projectBin = path.join(root, 'node_modules', 'sneakoscope', 'bin', 'sks.mjs');
+  const projectBinExists = await exists(projectBin);
+  return {
+    scope,
+    default_scope: 'global',
+    command_prefix: commandPrefix,
+    global_bin: globalBin,
+    project_bin: projectBin,
+    ok: scope === 'project' ? projectBinExists : Boolean(globalBin)
+  };
 }
 
 async function ralph(sub, args) {
@@ -114,6 +157,101 @@ async function ralph(sub, args) {
   if (sub === 'status') return ralphStatus(args);
   console.error('Usage: sks ralph <prepare|answer|run|status>');
   process.exitCode = 1;
+}
+
+async function research(sub, args) {
+  if (sub === 'prepare') return researchPrepare(args);
+  if (sub === 'run') return researchRun(args);
+  if (sub === 'status') return researchStatus(args);
+  console.error('Usage: sks research <prepare|run|status>');
+  process.exitCode = 1;
+}
+
+async function researchPrepare(args) {
+  const root = await projectRoot();
+  if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
+  const prompt = positionalArgs(args).join(' ').trim();
+  if (!prompt) throw new Error('Missing research topic.');
+  const { id, dir } = await createMission(root, { mode: 'research', prompt });
+  const plan = await writeResearchPlan(dir, prompt, { depth: readFlagValue(args, '--depth', 'frontier') });
+  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_PREPARED', questions_allowed: false });
+  console.log(`Research mission created: ${id}`);
+  console.log(`Methodology: ${plan.methodology}`);
+  console.log(`Plan: ${path.relative(root, path.join(dir, 'research-plan.md'))}`);
+  console.log(`Run: sks research run ${id} --max-cycles 3`);
+}
+
+async function researchRun(args) {
+  const root = await projectRoot();
+  const id = await resolveMissionId(root, args[0]);
+  if (!id) throw new Error('Usage: sks research run <mission-id|latest> [--mock] [--max-cycles N]');
+  const { dir, mission } = await loadMission(root, id);
+  const planPath = path.join(dir, 'research-plan.json');
+  if (!(await exists(planPath))) await writeResearchPlan(dir, mission.prompt || '', {});
+  const plan = await readJson(planPath);
+  const dbScan = await scanDbSafety(root);
+  if (!dbScan.ok) {
+    console.error('Research cannot run: DB Guardian found unsafe Supabase/MCP/database configuration.');
+    console.error(JSON.stringify(dbScan.findings, null, 2));
+    process.exitCode = 2;
+    return;
+  }
+  const maxCycles = readMaxCycles(args, 3);
+  const mock = flag(args, '--mock');
+  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false });
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock });
+  if (mock) {
+    const gate = await writeMockResearchResult(dir, plan);
+    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true });
+    console.log(`Mock research done: ${id}`);
+    console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
+    return;
+  }
+  const codex = await getCodexInfo();
+  if (!codex.bin) {
+    console.error('Codex CLI not found. Running mock research instead.');
+    const gate = await writeMockResearchResult(dir, plan);
+    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true });
+    console.log(`Mock research done: ${id}`);
+    return;
+  }
+  let last = '';
+  for (let cycle = 1; cycle <= maxCycles; cycle++) {
+    const cycleDir = path.join(dir, 'research', `cycle-${cycle}`);
+    const outputFile = path.join(cycleDir, 'final.md');
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.start', cycle });
+    const prompt = buildResearchPrompt({ id, mission, plan, cycle, previous: last });
+    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-research', logDir: cycleDir, timeoutMs: 45 * 60 * 1000 });
+    await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
+    last = await safeReadText(outputFile, result.stdout || result.stderr || '');
+    if (containsUserQuestion(last)) {
+      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.guard.question_blocked', cycle });
+      last = `${last}\n\n${noQuestionContinuationReason()}`;
+      continue;
+    }
+    const gate = await evaluateResearchGate(dir);
+    if (gate.passed) {
+      await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_DONE', questions_allowed: true });
+      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.done', cycle });
+      await enforceRetention(root).catch(() => {});
+      console.log(`Research done: ${id}`);
+      return;
+    }
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.continue', cycle, reasons: gate.reasons });
+  }
+  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_PAUSED_MAX_CYCLES', questions_allowed: true });
+  console.log(`Research paused after max cycles: ${id}`);
+}
+
+async function researchStatus(args) {
+  const root = await projectRoot();
+  const id = await resolveMissionId(root, args[0]);
+  if (!id) throw new Error('Usage: sks research status <mission-id|latest>');
+  const { dir, mission } = await loadMission(root, id);
+  const state = await readJson(stateFile(root), {});
+  const gate = await readJson(path.join(dir, 'research-gate.evaluated.json'), await readJson(path.join(dir, 'research-gate.json'), null));
+  const ledger = await readJson(path.join(dir, 'novelty-ledger.json'), null);
+  console.log(JSON.stringify({ mission, state, gate, novelty_entries: ledger?.entries?.length ?? null }, null, 2));
 }
 
 async function ralphPrepare(args) {
@@ -212,7 +350,7 @@ async function ralphRun(args) {
 }
 
 function buildRalphPrompt({ id, mission, contract, cycle, previous }) {
-  return `You are running Sneakoscope Codex Ralph mode.\nMISSION: ${id}\nTASK: ${mission.prompt}\nCYCLE: ${cycle}\nNO-QUESTION LOCK: Do not ask the user. Resolve using decision-contract.json.\nDATABASE SAFETY: Destructive database operations are forbidden. Do not run DROP, TRUNCATE, db reset, db push, branch reset/merge/delete, project deletion, RLS disable, or live execute_sql writes. Use read-only/project-scoped Supabase MCP only unless the sealed contract explicitly allows migration files for local or preview branch.\nDECISION CONTRACT:\n${JSON.stringify(contract, null, 2)}\nPERFORMANCE POLICY: keep outputs concise; raw logs stay in files; summarize evidence only.\nLOOP: plan, read before write, implement within contract, run/justify tests, update .sneakoscope/missions/${id}/done-gate.json.\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
+  return `You are running Sneakoscope Codex Ralph mode.\nMISSION: ${id}\nTASK: ${mission.prompt}\nCYCLE: ${cycle}\nNO-QUESTION LOCK: Do not ask the user. Resolve using decision-contract.json.\nDATABASE SAFETY: Destructive database operations are forbidden. Do not run DROP, TRUNCATE, db reset, db push, branch reset/merge/delete, project deletion, RLS disable, or live execute_sql writes. Use read-only/project-scoped Supabase MCP only unless the sealed contract explicitly allows migration files for local or preview branch.\nDECISION CONTRACT:\n${JSON.stringify(contract, null, 2)}\nPERFORMANCE POLICY: keep outputs concise; raw logs stay in files; summarize evidence only. If the task claims performance, token, or accuracy improvement, run sks eval run or sks eval compare and record the report path in done-gate.json evidence.\nDESIGN POLICY: if the task creates HTML/UI/prototype/deck-like visual artifacts, use the installed design-artifact-expert skill, inspect design context first, verify rendered output, and record design verification in done-gate.json.\nLOOP: plan, read before write, implement within contract, run/justify tests, update .sneakoscope/missions/${id}/done-gate.json.\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
 }
 
 async function safeReadText(file, fallback = '') {
@@ -246,6 +384,14 @@ async function selftest() {
   const tmp = tmpdir();
   process.chdir(tmp);
   await initProject(tmp, {});
+  const defaultHooks = await readJson(path.join(tmp, '.codex', 'hooks.json'));
+  if (defaultHooks.hooks.PreToolUse[0].hooks[0].command !== 'sks hook pre-tool') throw new Error('selftest failed: global install hook command changed');
+  const projectScopeTmp = tmpdir();
+  await initProject(projectScopeTmp, { installScope: 'project' });
+  const projectHooks = await readJson(path.join(projectScopeTmp, '.codex', 'hooks.json'));
+  if (projectHooks.hooks.PreToolUse[0].hooks[0].command !== 'node ./node_modules/sneakoscope/bin/sks.mjs hook pre-tool') throw new Error('selftest failed: project install hook command missing');
+  const researchSkillExists = await exists(path.join(tmp, '.agents', 'skills', 'research-discovery', 'SKILL.md'));
+  if (!researchSkillExists) throw new Error('selftest failed: research skill not installed');
   const { id, dir, mission } = await createMission(tmp, { mode: 'ralph', prompt: '로그인 세션 만료 UX 개선 supabase db' });
   const schema = buildQuestionSchema(mission.prompt);
   await writeQuestions(dir, schema);
@@ -263,6 +409,12 @@ async function selftest() {
   if (dbDecision.action !== 'block') throw new Error('selftest failed: destructive MCP SQL allowed');
   const nonDbDecision = await checkDbOperation(tmp, {}, { command: 'npm test' }, { duringRalph: true });
   if (nonDbDecision.action !== 'allow') throw new Error('selftest failed: non-DB command blocked by DB guard');
+  const evalReport = runEvaluationBenchmark({ iterations: 5 });
+  if (!evalReport.comparison.meaningful_improvement) throw new Error('selftest failed: evaluation benchmark did not show meaningful improvement');
+  const { dir: researchDir, mission: researchMission } = await createMission(tmp, { mode: 'research', prompt: '새로운 코드 리뷰 방법론 연구' });
+  const researchPlan = await writeResearchPlan(researchDir, researchMission.prompt, {});
+  const researchGate = await writeMockResearchResult(researchDir, researchPlan);
+  if (!researchGate.passed) throw new Error('selftest failed: mock research gate did not pass');
   await writeJsonAtomic(path.join(dir, 'done-gate.json'), { passed: true, unsupported_critical_claims: 0, database_safety_violation: false, database_safety_reviewed: true, visual_drift: 'low', wiki_drift: 'low', tests_required: false });
   const gate = await evaluateDoneGate(tmp, id);
   if (!gate.passed) throw new Error('selftest failed: done gate');
@@ -298,6 +450,75 @@ async function hproof(sub, args) {
   console.log(JSON.stringify(await evaluateDoneGate(root, id), null, 2));
 }
 
+async function evalCommand(sub, args) {
+  if (!sub || sub === 'help' || sub === '--help') {
+    console.log('Usage: sks eval run [--json] [--out report.json] [--iterations N] | sks eval compare --baseline old.json --candidate new.json [--json]');
+    return;
+  }
+  if (sub === 'thresholds') return console.log(JSON.stringify(DEFAULT_EVAL_THRESHOLDS, null, 2));
+  const root = await projectRoot();
+  if (sub === 'run') {
+    const iterations = Number(readFlagValue(args, '--iterations', 200));
+    const report = runEvaluationBenchmark({ iterations });
+    const saved = await saveEvalReport(root, args, report, 'eval');
+    if (flag(args, '--json')) return console.log(JSON.stringify({ ...report, report_path: saved }, null, 2));
+    printEvalRun(report, saved);
+    return;
+  }
+  if (sub === 'compare') {
+    const positional = positionalArgs(args);
+    const baselinePath = readFlagValue(args, '--baseline', positional[0]);
+    const candidatePath = readFlagValue(args, '--candidate', positional[1]);
+    if (!baselinePath || !candidatePath) throw new Error('Usage: sks eval compare --baseline old.json --candidate new.json [--json]');
+    const report = compareEvaluationReports(await readJson(path.resolve(baselinePath)), await readJson(path.resolve(candidatePath)));
+    const saved = await saveEvalReport(root, args, report, 'eval-compare');
+    if (flag(args, '--json')) return console.log(JSON.stringify({ ...report, report_path: saved }, null, 2));
+    printEvalCompare(report, saved);
+    return;
+  }
+  console.error('Usage: sks eval run|compare|thresholds');
+  process.exitCode = 1;
+}
+
+async function saveEvalReport(root, args, report, prefix) {
+  if (flag(args, '--no-save')) return null;
+  const requested = readFlagValue(args, '--out', null);
+  const file = requested
+    ? path.resolve(requested)
+    : path.join(root, '.sneakoscope', 'reports', `${prefix}-${nowIso().replace(/[:.]/g, '-')}.json`);
+  await ensureDir(path.dirname(file));
+  await writeJsonAtomic(file, report);
+  return file;
+}
+
+function pct(x) {
+  return `${(100 * x).toFixed(1)}%`;
+}
+
+function printEvalRun(report, saved) {
+  const c = report.comparison;
+  console.log('Sneakoscope Eval');
+  console.log(`Scenario:  ${report.scenario.id}`);
+  console.log(`Tokens:    ${report.baseline.estimated_tokens} -> ${report.candidate.estimated_tokens} (${pct(c.token_savings_pct)} saved)`);
+  console.log(`Accuracy:  ${report.baseline.quality.accuracy_proxy} -> ${report.candidate.quality.accuracy_proxy} (${c.accuracy_delta >= 0 ? '+' : ''}${c.accuracy_delta})`);
+  console.log(`Recall:    ${report.candidate.quality.required_recall}`);
+  console.log(`Precision: ${report.baseline.quality.relevance_precision} -> ${report.candidate.quality.relevance_precision}`);
+  console.log(`Build ms:  ${report.baseline.context_build_ms_per_run} -> ${report.candidate.context_build_ms_per_run}`);
+  console.log(`Meaningful improvement: ${c.meaningful_improvement ? 'yes' : 'no'}`);
+  if (saved) console.log(`Report:    ${saved}`);
+}
+
+function printEvalCompare(report, saved) {
+  const c = report.comparison;
+  console.log('Sneakoscope Eval Compare');
+  console.log(`Baseline:  ${report.baseline_label}`);
+  console.log(`Candidate: ${report.candidate_label}`);
+  console.log(`Tokens:    ${report.baseline.estimated_tokens} -> ${report.candidate.estimated_tokens} (${pct(c.token_savings_pct)} saved)`);
+  console.log(`Accuracy:  ${report.baseline.quality.accuracy_proxy} -> ${report.candidate.quality.accuracy_proxy} (${c.accuracy_delta >= 0 ? '+' : ''}${c.accuracy_delta})`);
+  console.log(`Meaningful improvement: ${c.meaningful_improvement ? 'yes' : 'no'}`);
+  if (saved) console.log(`Report:    ${saved}`);
+}
+
 async function memory(sub, args) { return gc(args || []); }
 
 async function gc(args) {
@@ -324,9 +545,10 @@ async function stats(args) {
 
 function positionalArgs(args = []) {
   const out = [];
+  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth']);
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]);
-    if (arg === '--format') {
+    if (valueFlags.has(arg)) {
       i++;
       continue;
     }

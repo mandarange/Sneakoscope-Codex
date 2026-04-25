@@ -13,6 +13,8 @@ coverage/
 dist/
 build/
 out/
+target/
+crates/sks-core/target/
 tmp/
 .tmp/
 temp/
