@@ -17,7 +17,7 @@ Global installation is the default and recommended setup. During `sks setup` or 
 
 ## One-Prompt LLM Install
 
-If you are using Codex App, ChatGPT, Claude Code, Cursor, or another coding agent, copy this prompt into the agent from your target project directory:
+If you are using Codex App, ChatGPT, Claude Code, Cursor, or another coding agent, copy the whole block below into the agent from your target project directory. The agent should install SKS, initialize the project, verify the setup, and show the available commands in one pass.
 
 ````text
 You are installing Sneakoscope Codex in the current project. Do the setup end to end without asking follow-up questions unless a command needs user approval.
@@ -30,22 +30,36 @@ Requirements:
 - Codex CLI is installed separately; if missing, report that @openai/codex must be installed or SKS_CODEX_BIN must be set.
 - Prefer safe, local verification. Do not modify application source files unless needed for SKS setup.
 
-Run:
+Run this primary install path:
 ```bash
 npm i -g git+https://github.com/mandarange/Sneakoscope-Codex.git
 sks setup
 sks doctor --fix
 sks selftest --mock
 sks commands
+sks dollar-commands
 ```
 
-If the global command is not on PATH, use:
+If the global command is not on PATH after install, do not stop. Use this fallback path:
 ```bash
 npx -y -p git+https://github.com/mandarange/Sneakoscope-Codex.git sks setup
 npx -y -p git+https://github.com/mandarange/Sneakoscope-Codex.git sks doctor --fix
+npx -y -p git+https://github.com/mandarange/Sneakoscope-Codex.git sks selftest --mock
+npx -y -p git+https://github.com/mandarange/Sneakoscope-Codex.git sks commands
+npx -y -p git+https://github.com/mandarange/Sneakoscope-Codex.git sks dollar-commands
 ```
 
-After setup, explain these outputs to the user:
+If the user wants a project-only install instead of a global install, use:
+```bash
+npm i -D git+https://github.com/mandarange/Sneakoscope-Codex.git
+npx sks setup --install-scope project
+npx sks doctor --fix --install-scope project
+npx sks selftest --mock
+npx sks commands
+npx sks dollar-commands
+```
+
+Finish by reporting whether setup passed and explaining these generated outputs:
 - `.sneakoscope/` mission state and policy
 - `.codex/config.toml` Codex App profiles
 - `.codex/hooks.json` SKS hook integration
@@ -73,13 +87,6 @@ $Research investigate this idea
 $DB check this migration safely
 ```
 ````
-
-After SKS is installed, you can print this prompt again from the CLI:
-
-```bash
-sks install-prompt
-sks install-prompt --project
-```
 
 ## Repository
 
@@ -298,7 +305,14 @@ Core invariants:
 
 ## Commands
 
-All examples below use `sks`, but the same commands can be run with the `sneakoscope` alias.
+There are two command surfaces:
+
+- **Terminal CLI commands**: run in a shell as `sks ...` or `sneakoscope ...`.
+- **Prompt `$` commands**: type inside Codex App or another coding agent prompt, not in a shell.
+
+All terminal examples below use `sks`, but the same commands can be run with the `sneakoscope` alias.
+
+### Terminal CLI
 
 ```bash
 sks help [topic]
@@ -357,6 +371,43 @@ sks stats [--json]
 ```
 
 `sks memory` is currently an alias for garbage collection/retention handling.
+
+### Prompt $ Commands
+
+Use these by typing them at the start of a prompt in Codex App or another coding agent:
+
+```text
+$DF <small design/content request>
+$SKS <general Sneakoscope request>
+$Ralph <clarification-gated mission request>
+$Research <research/discovery request>
+$DB <database or Supabase safety request>
+$GX <visual context request>
+$Help <command/help request>
+```
+
+Examples:
+
+```text
+$DF 글자 색 파란색으로 바꿔줘
+$DF 내용을 영어로 바꿔줘
+$DF Change the CTA label to "Start"
+$Ralph 결제 실패 재시도 로직 개선
+$Research LLM 에이전트 평가 방법론 조사
+$DB 이 migration 안전한지 검사해줘
+$GX 현재 아키텍처를 시각 컨텍스트로 만들어줘
+$Help 사용 가능한 명령어 알려줘
+```
+
+`$DF` is the fast path for simple design/content edits. It is intentionally scoped to the requested change and should not run Ralph, Research, eval, or broad redesign loops unless you explicitly ask.
+
+To inspect these routes from the terminal:
+
+```bash
+sks dollar-commands
+sks df
+sks usage dollar
+```
 
 ## Research Mode
 
@@ -571,12 +622,32 @@ The published npm package is allowlisted to `bin`, `src`, `docs`, `README.md`, a
 ## Development
 
 ```bash
+npm run repo-audit
 npm run packcheck
 npm run selftest
 npm run sizecheck
 npm run doctor
 ```
 
+`npm run repo-audit` checks tracked files for risky local paths and high-confidence secret material such as private keys, npm/GitHub/OpenAI-style tokens, local MCP configs, DB dumps, and credential files. It is included in `prepack` and `prepublishOnly`.
+
 `npm run sizecheck` blocks accidental package bloat before `npm pack` or `npm publish`. Defaults: packed tarball `<=96 KiB`, unpacked package `<=320 KiB`, package files `<=40`, and each tracked file `<=256 KiB`. Override only for an intentional release with `SKS_MAX_PACK_BYTES`, `SKS_MAX_UNPACKED_BYTES`, `SKS_MAX_PACK_FILES`, or `SKS_MAX_TRACKED_FILE_BYTES`.
 
 `npm run selftest` uses the mock path and does not call a model. Live Ralph runs require a working Codex CLI installation and authentication.
+
+## Publishing
+
+The npm package is published as public package `sneakoscope`. You must be logged in as an npm owner for that package before publishing.
+
+```bash
+npm whoami
+npm owner ls sneakoscope
+npm run publish:dry
+npm run publish:npm
+```
+
+If `npm whoami` returns `E401 Unauthorized`, run `npm login` with an owner account or ask an existing owner to add your npm username:
+
+```bash
+npm owner add <your-npm-username> sneakoscope
+```
