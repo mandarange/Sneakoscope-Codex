@@ -181,10 +181,16 @@ function recursivelyCollectStrings(obj, out = [], depth = 0) {
   return out;
 }
 
+function looksLikeSqlText(text = '') {
+  const s = stripSqlComments(text).trim();
+  return /^(select|with|show|explain|describe|insert|update|delete|drop|truncate|alter|create|grant|revoke)\b/i.test(s)
+    || /;\s*(select|with|show|explain|describe|insert|update|delete|drop|truncate|alter|create|grant|revoke)\b/i.test(s);
+}
+
 export function classifyToolPayload(payload = {}) {
   const strings = recursivelyCollectStrings(payload).slice(0, 200);
   const toolName = [payload.tool_name, payload.name, payload.tool?.name, payload.server, payload.mcp_tool, payload.tool, payload.type].filter(Boolean).join(' ').toLowerCase();
-  const combined = strings.join('\n');
+  const combined = strings.filter(looksLikeSqlText).join('\n');
   const sqlClass = classifySql(combined);
   const commandClass = classifyCommand(strings.find((s) => /\b(supabase|psql|prisma|drizzle|knex|sequelize)\b/i.test(s)) || '');
   const toolReasons = [];
