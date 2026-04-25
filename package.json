@@ -1,12 +1,16 @@
 {
   "name": "sneakoscope",
   "displayName": "Sneakoscope Codex",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Sneakoscope Codex: database-safe, performance-bounded Codex CLI harness with Ralph no-question loop, H-Proof gates, deterministic GX visual context, and TriWiki compression.",
   "type": "module",
   "bin": {
     "sks": "bin/sks.mjs",
     "sneakoscope": "bin/sks.mjs"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "files": [
     "bin",
@@ -19,12 +23,15 @@
     "node": ">=20.11"
   },
   "scripts": {
+    "repo-audit": "node ./scripts/repo-audit.mjs",
     "selftest": "node ./bin/sks.mjs selftest --mock",
     "doctor": "node ./bin/sks.mjs doctor",
     "packcheck": "find bin src scripts -name '*.mjs' -print0 | xargs -0 -n1 node --check",
     "sizecheck": "node ./scripts/sizecheck.mjs",
-    "prepack": "npm run packcheck && npm run selftest && npm run sizecheck",
-    "prepublishOnly": "npm run packcheck && npm run selftest && npm run sizecheck"
+    "publish:dry": "npm --cache /tmp/sks-npm-cache pack --dry-run",
+    "publish:npm": "npm --cache /tmp/sks-npm-cache publish --access public",
+    "prepack": "npm run repo-audit && npm run packcheck && npm run selftest && npm run sizecheck",
+    "prepublishOnly": "npm run repo-audit && npm run packcheck && npm run selftest && npm run sizecheck"
   },
   "keywords": [
     "sneakoscope",
