@@ -1,6 +1,6 @@
 # Sneakoscope Codex
 
-Sneakoscope Codex is a zero-runtime-dependency Node.js harness for running Codex CLI in a more controlled project workflow. It adds mandatory clarification before autonomous work, a Ralph no-question execution loop, H-Proof completion gates, conservative database safety checks, bounded logs/storage, and optional GPT Image 2 visual cartridges.
+Sneakoscope Codex is a zero-runtime-dependency Node.js harness for running Codex CLI in a more controlled project workflow. It adds mandatory clarification before autonomous work, a Ralph no-question execution loop, H-Proof completion gates, conservative database safety checks, bounded logs/storage, and deterministic GX visual context cartridges.
 
 ```bash
 npm i -g sneakoscope
@@ -55,7 +55,7 @@ sks ralph run latest --mock
 - **Database guard**: destructive DB operations, production writes, unsafe Supabase MCP configuration, and direct live SQL mutations are blocked or warned on.
 - **H-Proof done gate**: completion requires supported critical claims, reviewed DB safety state, acceptable visual/wiki drift, and required test evidence.
 - **Bounded runtime state**: child process output is tailed, logs are rotated/compacted, and old mission artifacts can be pruned.
-- **Visual cartridges**: `gx` creates metadata-first visual cartridges where `vgraph.json` remains the source of truth and image generation is delegated to Codex/GPT Image 2.
+- **Visual cartridges**: `gx` creates deterministic SVG/HTML visual context from `vgraph.json` and `beta.json`; no generated-image service is required.
 
 ## Ralph Workflow
 
@@ -82,7 +82,7 @@ Core invariants:
 3. New ambiguity during `run` is resolved by the sealed decision ladder.
 4. Hooks help enforce the policy, but the Sneakoscope Codex supervisor and mission files remain the source of truth.
 5. Database destructive operations are never allowed.
-6. Generated images are not authoritative; `vgraph.json` is.
+6. Rendered GX files are reproducible context artifacts; `vgraph.json` is authoritative.
 7. Unsupported critical claims block completion.
 
 ## Commands
@@ -108,7 +108,10 @@ sks db check --file ./migration.sql
 
 sks hproof check [mission-id|latest]
 sks gx init [name]
-sks gx render|validate|drift
+sks gx render [name] [--format svg|html|all]
+sks gx validate [name]
+sks gx drift [name]
+sks gx snapshot [name]
 sks profile show
 sks profile set <model>
 sks gc [--dry-run] [--json]
@@ -217,19 +220,25 @@ This creates:
 ```text
 .sneakoscope/gx/cartridges/<name>/vgraph.json
 .sneakoscope/gx/cartridges/<name>/beta.json
-.sneakoscope/gx/cartridges/<name>/image-prompt.md
+.sneakoscope/gx/cartridges/<name>/render.svg
+.sneakoscope/gx/cartridges/<name>/render.html
+.sneakoscope/gx/cartridges/<name>/validation.json
+.sneakoscope/gx/cartridges/<name>/drift.json
 ```
 
-The intended flow is metadata first:
+The intended flow is source first and deterministic:
 
 ```text
 vgraph.json
-  -> image-prompt.md
-  -> Codex $imagegen / GPT Image 2
-  -> sheet.png
-  -> vision parse.json
-  -> validate against vgraph.json
+  + beta.json
+  -> sks gx render
+  -> render.svg / render.html
+  -> sks gx validate
+  -> sks gx drift
+  -> sks gx snapshot
 ```
+
+`render.svg` embeds the normalized `vgraph.json` hash. `sks gx drift` fails when the render is missing, stale, or structurally invalid.
 
 ## TriWiki Context Compression
 
@@ -251,6 +260,7 @@ Q0 raw logs only when necessary
 bin/sks.mjs              CLI executable
 src/cli/main.mjs            command router and Ralph loop
 src/core/db-safety.mjs      SQL, CLI, and MCP payload classifier
+src/core/gx-renderer.mjs    deterministic SVG/HTML visual context renderer
 src/core/hproof.mjs         done-gate evaluator
 src/core/init.mjs           project bootstrap and hook/skill installation
 src/core/retention.mjs      storage report and garbage collection policy

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { projectRoot, readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, tmpdir, packageRoot, dirSize, formatBytes } from '../core/fsx.mjs';
+import { projectRoot, readJson, writeJsonAtomic, appendJsonlBounded, nowIso, exists, tmpdir, packageRoot, dirSize, formatBytes } from '../core/fsx.mjs';
 import { initProject } from '../core/init.mjs';
 import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, setCurrent, stateFile } from '../core/mission.mjs';
@@ -12,6 +12,7 @@ import { emitHook } from '../core/hooks-runtime.mjs';
 import { storageReport, enforceRetention } from '../core/retention.mjs';
 import { classifySql, classifyCommand, loadDbSafetyPolicy, safeSupabaseMcpConfig, checkSqlFile, checkDbOperation, scanDbSafety } from '../core/db-safety.mjs';
 import { rustInfo } from '../core/rust-accelerator.mjs';
+import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
@@ -38,7 +39,29 @@ export async function main(args) {
 }
 
 function help() {
-  console.log(`Sneakoscope Codex\n\nUsage:\n  sks doctor [--fix] [--json]\n  sks init\n  sks selftest [--mock]\n  sks ralph prepare "task"\n  sks ralph answer <mission-id|latest> <answers.json>\n  sks ralph run <mission-id|latest> [--mock] [--max-cycles N]\n  sks ralph status <mission-id|latest>\n  sks db policy\n  sks db scan [--migrations] [--json]\n  sks db mcp-config --project-ref <ref>\n  sks db check --sql "DROP TABLE users"\n  sks db check --command "supabase db reset"\n  sks gc [--dry-run] [--json]\n  sks stats [--json]\n`);
+  console.log(`Sneakoscope Codex
+
+Usage:
+  sks doctor [--fix] [--json]
+  sks init
+  sks selftest [--mock]
+  sks ralph prepare "task"
+  sks ralph answer <mission-id|latest> <answers.json>
+  sks ralph run <mission-id|latest> [--mock] [--max-cycles N]
+  sks ralph status <mission-id|latest>
+  sks db policy
+  sks db scan [--migrations] [--json]
+  sks db mcp-config --project-ref <ref>
+  sks db check --sql "DROP TABLE users"
+  sks db check --command "supabase db reset"
+  sks gx init [name]
+  sks gx render [name] [--format svg|html|all]
+  sks gx validate [name]
+  sks gx drift [name]
+  sks gx snapshot [name]
+  sks gc [--dry-run] [--json]
+  sks stats [--json]
+`);
 }
 
 async function doctor(args) {
@@ -241,6 +264,17 @@ async function selftest() {
   await writeJsonAtomic(path.join(dir, 'done-gate.json'), { passed: true, unsupported_critical_claims: 0, database_safety_violation: false, database_safety_reviewed: true, visual_drift: 'low', wiki_drift: 'low', tests_required: false });
   const gate = await evaluateDoneGate(tmp, id);
   if (!gate.passed) throw new Error('selftest failed: done gate');
+  const gxDir = path.join(tmp, '.sneakoscope', 'gx', 'cartridges', 'selftest');
+  await writeJsonAtomic(path.join(gxDir, 'vgraph.json'), defaultVGraph('selftest'));
+  await writeJsonAtomic(path.join(gxDir, 'beta.json'), defaultBeta('selftest'));
+  const render = await renderCartridge(gxDir, { format: 'all' });
+  if (!render.outputs.includes('render.svg')) throw new Error('selftest failed: gx svg not rendered');
+  const validation = await validateCartridge(gxDir);
+  if (!validation.ok) throw new Error('selftest failed: gx validation rejected');
+  const drift = await driftCartridge(gxDir);
+  if (drift.status !== 'low') throw new Error('selftest failed: gx drift is high');
+  const snapshot = await snapshotCartridge(gxDir);
+  if (!snapshot.files.svg || !snapshot.files.html) throw new Error('selftest failed: gx snapshot incomplete');
   const gc = await enforceRetention(tmp, { dryRun: true });
   if (!gc.report.exists) throw new Error('selftest failed: storage report');
   console.log('Sneakoscope Codex selftest passed.');
@@ -286,19 +320,114 @@ async function stats(args) {
   for (const [name, sec] of Object.entries(report.sections || {})) console.log(`- ${name}: ${sec.human}`);
 }
 
+function positionalArgs(args = []) {
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = String(args[i]);
+    if (arg === '--format') {
+      i++;
+      continue;
+    }
+    if (!arg.startsWith('--')) out.push(arg);
+  }
+  return out;
+}
+
+function readFlagValue(args, name, fallback) {
+  const i = args.indexOf(name);
+  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
+}
+
+function cartridgeName(args, fallback = 'architecture-atlas') {
+  const raw = positionalArgs(args)[0] || fallback;
+  return String(raw).trim().replace(/[\\/]+/g, '-').replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
+}
+
+function cartridgeDir(root, name) {
+  return path.join(root, '.sneakoscope', 'gx', 'cartridges', name);
+}
+
+function defaultVGraph(name) {
+  return {
+    id: name,
+    title: 'Sneakoscope Context Map',
+    version: 1,
+    nodes: [
+      { id: 'source', label: 'vgraph source', kind: 'source', layer: 'input', status: 'safe' },
+      { id: 'contract', label: 'decision contract', kind: 'guard', layer: 'policy', status: 'safe' },
+      { id: 'proof', label: 'H-Proof gate', kind: 'guard', layer: 'verification', status: 'safe' }
+    ],
+    edges: [
+      { from: 'source', to: 'contract', label: 'constrains' },
+      { from: 'contract', to: 'proof', label: 'verifies' }
+    ],
+    invariants: [
+      'vgraph.json remains the source of truth',
+      'rendered SVG hash must match source hash'
+    ],
+    tests: [
+      'sks gx validate',
+      'sks gx drift'
+    ],
+    risks: []
+  };
+}
+
+function defaultBeta(name) {
+  return {
+    id: name,
+    version: 1,
+    read_order: ['title', 'layers', 'nodes', 'edges', 'invariants', 'tests'],
+    renderer: 'sneakoscope-codex-deterministic-svg'
+  };
+}
+
 async function gx(sub, args) {
   const root = await projectRoot();
+  const name = cartridgeName(args);
+  const dir = cartridgeDir(root, name);
   if (sub === 'init') {
-    const name = args[0] || 'architecture-atlas';
-    const dir = path.join(root, '.sneakoscope', 'gx', 'cartridges', name);
-    await writeJsonAtomic(path.join(dir, 'vgraph.json'), { id: name, version: 1, nodes: [], edges: [], invariants: [], tests: [] });
-    await writeJsonAtomic(path.join(dir, 'beta.json'), { id: name, version: 1, read_order: ['grid', 'layers', 'nodes', 'edges', 'tests'] });
-    await writeTextAtomic(path.join(dir, 'image-prompt.md'), 'Create a clean technical architecture sheet from vgraph.json. Use GPT Image 2 only.');
-    console.log(`GX cartridge initialized: ${path.relative(root, dir)}`);
+    const vgraphPath = path.join(dir, 'vgraph.json');
+    const betaPath = path.join(dir, 'beta.json');
+    const created = [];
+    if (!(await exists(vgraphPath)) || flag(args, '--force')) {
+      await writeJsonAtomic(vgraphPath, defaultVGraph(name));
+      created.push('vgraph.json');
+    }
+    if (!(await exists(betaPath)) || flag(args, '--force')) {
+      await writeJsonAtomic(betaPath, defaultBeta(name));
+      created.push('beta.json');
+    }
+    const render = await renderCartridge(dir, { format: 'all' });
+    const validation = await validateCartridge(dir);
+    const drift = await driftCartridge(dir);
+    console.log(JSON.stringify({ cartridge: path.relative(root, dir), created, render, validation: validation.ok, drift: drift.status }, null, 2));
     return;
   }
-  if (['render', 'validate', 'drift'].includes(sub)) return console.log(`GX ${sub}: metadata only; image generation is performed by Codex $imagegen in live mode.`);
-  console.error('Usage: sks gx init|render|validate|drift');
+  if (sub === 'render') {
+    const format = readFlagValue(args, '--format', 'all');
+    console.log(JSON.stringify(await renderCartridge(dir, { format }), null, 2));
+    return;
+  }
+  if (sub === 'validate') {
+    const validation = await validateCartridge(dir);
+    console.log(JSON.stringify(validation, null, 2));
+    process.exitCode = validation.ok ? 0 : 2;
+    return;
+  }
+  if (sub === 'drift') {
+    const drift = await driftCartridge(dir);
+    console.log(JSON.stringify(drift, null, 2));
+    process.exitCode = drift.status === 'low' ? 0 : 2;
+    return;
+  }
+  if (sub === 'snapshot') {
+    await renderCartridge(dir, { format: 'all' });
+    console.log(JSON.stringify(await snapshotCartridge(dir), null, 2));
+    return;
+  }
+  console.error('Usage: sks gx init|render|validate|drift|snapshot');
+  process.exitCode = 1;
 }
 
 async function team(args) {

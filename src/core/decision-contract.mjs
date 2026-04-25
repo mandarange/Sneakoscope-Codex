@@ -41,7 +41,7 @@ export function buildDecisionContract({ mission, schema, answers }) {
     if_e2e_unavailable: 'run_unit_or_integration_and_record_e2e_not_executed',
     if_dependency_needed: 'avoid_new_dependency_unless_allowed_by_contract',
     if_existing_behavior_conflict: 'preserve_existing_public_behavior',
-    if_visual_cartridge_conflict: 'vgraph_json_wins_over_sheet_png',
+    if_visual_cartridge_conflict: 'vgraph_json_wins_over_rendered_gx_artifact',
     if_wiki_conflict: 'current_code_wins_over_wiki',
     if_low_confidence_claim: 'read_source_do_not_ask_user',
     if_unresolvable_optional_scope: 'defer_optional_subtask_and_complete_core_acceptance_criteria',

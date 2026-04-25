@@ -4,7 +4,6 @@ coverage/
 *.tgz
 .DS_Store
 .git/
-.omx/
 .dcodex/
 .sneakoscope/
 .codex/
