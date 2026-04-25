@@ -15,6 +15,8 @@ export async function evaluateDoneGate(root, missionId) {
   if (gate.visual_drift === 'high') reasons.push('visual_drift_high');
   if (gate.wiki_drift === 'high') reasons.push('wiki_drift_high');
   if (gate.tests_required === true && !gate.test_evidence_present) reasons.push('test_evidence_missing');
+  if (gate.performance_evaluation_required === true && !gate.performance_evaluation_present) reasons.push('performance_evaluation_missing');
+  if (gate.design_verification_required === true && !gate.design_verification_present) reasons.push('design_verification_missing');
   const dbSafetyLog = path.join(dir, 'db-safety.jsonl');
   if ((await exists(dbSafetyLog)) && (await fileSize(dbSafetyLog)) > 0 && gate.database_safety_reviewed !== true) reasons.push('database_safety_log_requires_review');
   const passed = gate.passed === true && reasons.length === 0;
@@ -34,6 +36,10 @@ export function defaultDoneGate() {
     wiki_drift: 'unknown',
     tests_required: true,
     test_evidence_present: false,
+    performance_evaluation_required: false,
+    performance_evaluation_present: false,
+    design_verification_required: false,
+    design_verification_present: false,
     notes: []
   };
 }
