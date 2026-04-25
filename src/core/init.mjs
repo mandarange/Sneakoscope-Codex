@@ -22,8 +22,8 @@ Sneakoscope Codex keeps runtime state bounded. Do not write large raw logs into 
 2. decision-contract.json
 3. vgraph.json
 4. beta.json
-5. LLM Wiki
-6. visual parse
+5. GX render/snapshot metadata
+6. LLM Wiki
 7. model knowledge only if explicitly allowed
 
 ## Database Safety
@@ -50,7 +50,8 @@ export async function initProject(root, opts = {}) {
     no_external_tools: true,
     codex_required: true,
     native_runtime_dependencies: 0,
-    database_safety: 'destructive_db_operations_denied_always'
+    database_safety: 'destructive_db_operations_denied_always',
+    gx_renderer: 'deterministic_svg_html'
   });
   created.push('.sneakoscope/manifest.json');
 
@@ -82,6 +83,11 @@ export async function initProject(root, opts = {}) {
         live_database_mode: 'read_only',
         destructive_operations_allowed: false,
         mcp_write_tools_allowed: false
+      },
+      gx: {
+        renderer: 'deterministic_svg_html',
+        source_of_truth: 'vgraph.json',
+        external_image_generation: false
       }
     });
     created.push('.sneakoscope/policy.json');
@@ -120,11 +126,11 @@ async function installSkills(root) {
     'ralph-supervisor': `---\nname: ralph-supervisor\ndescription: Run the Ralph no-question loop after a decision contract is sealed.\n---\n\nYou are the Ralph Supervisor.\n\nRules:\n- Never ask the user during Ralph run.\n- Use decision-contract.json and the decision ladder.\n- Continue until done-gate.json passes or safe scope is completed with explicit limitation.\n- Keep outputs bounded. Write raw logs to files and summarize only tails.\n- Database destructive operations are never allowed.\n- Write progress to .sneakoscope mission files.\n`,
     'ralph-resolver': `---\nname: ralph-resolver\ndescription: Resolve newly discovered ambiguity during Ralph using the sealed decision ladder, without asking the user.\n---\n\nResolve ambiguity in this order: seed contract, explicit answers, approved defaults, AGENTS.md, current code/tests, smallest reversible change, defer optional scope. Never ask the user. If database risk is involved, prefer read-only, no-op, local-only migration file, or safe limitation; never run destructive SQL.\n`,
     'hproof-claim-ledger': `---\nname: hproof-claim-ledger\ndescription: Extract atomic claims and classify support status.\n---\n\nEvery factual statement must become an atomic claim. Unsupported critical claims cannot be used for implementation or final answer. Database claims require DB safety evidence.\n`,
-    'hproof-evidence-bind': `---\nname: hproof-evidence-bind\ndescription: Bind claims to code, tests, decision contract, vgraph, beta, wiki, or visual parse evidence.\n---\n\nEvidence priority: current code/tests, decision-contract.json, vgraph.json, beta.json, wiki, visual parse, user prompt. Database claims must respect .sneakoscope/db-safety.json.\n`,
+    'hproof-evidence-bind': `---\nname: hproof-evidence-bind\ndescription: Bind claims to code, tests, decision contract, vgraph, beta, wiki, or GX render evidence.\n---\n\nEvidence priority: current code/tests, decision-contract.json, vgraph.json, beta.json, GX snapshot/render metadata, wiki, user prompt. Database claims must respect .sneakoscope/db-safety.json.\n`,
     'db-safety-guard': `---\nname: db-safety-guard\ndescription: Enforce Sneakoscope Codex database safety before using SQL, Supabase MCP, Postgres, Prisma, Drizzle, Knex, or migration commands.\n---\n\nRules:\n- Never run DROP, TRUNCATE, mass DELETE/UPDATE, db reset, db push, project deletion, branch reset/merge/delete, or RLS-disabling operations.\n- Supabase MCP must be read-only and project-scoped by default.\n- Live writes through execute_sql are blocked; use migration files and only local/preview branches if explicitly allowed.\n- Production writes are forbidden.\n- If unsure, read-only only.\n`,
-    'gx-visual-generate': `---\nname: gx-visual-generate\ndescription: Generate a visual sheet using GPT Image 2 from vgraph.json and beta.json.\n---\n\nUse built-in GPT Image 2 / $imagegen only. Do not use external diagram tools. vgraph.json is source of truth.\n`,
-    'gx-visual-read': `---\nname: gx-visual-read\ndescription: Read a Sneakoscope Codex visual sheet and produce parse.json.\n---\n\nExtract nodes, edges, invariants, tests, risks, and uncertainties. Do not infer hidden nodes.\n`,
-    'gx-visual-validate': `---\nname: gx-visual-validate\ndescription: Validate visual parse against vgraph.json and beta.json.\n---\n\nIf critical nodes, edges, or invariants are missing, mark validation failed.\n`,
+    'gx-visual-generate': `---\nname: gx-visual-generate\ndescription: Render a deterministic SVG/HTML visual sheet from vgraph.json and beta.json.\n---\n\nUse sks gx render. Do not use external image generation. vgraph.json is the source of truth and the SVG embeds its source hash.\n`,
+    'gx-visual-read': `---\nname: gx-visual-read\ndescription: Read a Sneakoscope Codex deterministic visual sheet and produce context notes.\n---\n\nExtract nodes, edges, invariants, tests, risks, and uncertainties from vgraph.json, beta.json, render.svg, or snapshot.json. Do not infer hidden nodes.\n`,
+    'gx-visual-validate': `---\nname: gx-visual-validate\ndescription: Validate render metadata against vgraph.json and beta.json.\n---\n\nRun sks gx validate and sks gx drift. If critical nodes, edges, or invariants are missing or the render hash is stale, mark validation failed.\n`,
     'turbo-context-pack': `---\nname: turbo-context-pack\ndescription: Build ultra-low-token context packet with Q4 bits, Q3 tags, top-K claims, and minimal evidence.\n---\n\nDefault to Q4/Q3 only. Add Q2 or Q1 only when needed for support or verification.\n`
   };
   for (const [name, content] of Object.entries(skills)) {

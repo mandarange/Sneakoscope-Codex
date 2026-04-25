@@ -1,8 +1,8 @@
 {
   "name": "sneakoscope",
   "displayName": "Sneakoscope Codex",
-  "version": "0.3.0",
-  "description": "Sneakoscope Codex: database-safe, performance-bounded Codex CLI harness with Ralph no-question loop, H-Proof gates, GPT Image 2 workflow, and TriWiki compression.",
+  "version": "0.4.0",
+  "description": "Sneakoscope Codex: database-safe, performance-bounded Codex CLI harness with Ralph no-question loop, H-Proof gates, deterministic GX visual context, and TriWiki compression.",
   "type": "module",
   "bin": {
     "sks": "bin/sks.mjs"
@@ -31,7 +31,10 @@
     "harness",
     "ralph",
     "llm-wiki",
-    "gpt-image-2",
+    "gx",
+    "svg",
+    "deterministic",
+    "visual-context",
     "resource-safe",
     "database-safe",
     "supabase-mcp",
