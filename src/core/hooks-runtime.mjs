@@ -1,10 +1,15 @@
 import path from 'node:path';
-import { projectRoot, readJson, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION } from './fsx.mjs';
+import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION } from './fsx.mjs';
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.mjs';
 import { missionDir, stateFile } from './mission.mjs';
 import { checkDbOperation, dbBlockReason } from './db-safety.mjs';
 import { checkHarnessModification, harnessGuardBlockReason } from './harness-guard.mjs';
-import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence } from './pipeline.mjs';
+import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.mjs';
+
+const TEAM_DIGEST_MAX_EVENTS = 4;
+const TEAM_DIGEST_MESSAGE_CHARS = 180;
+const TEAM_DIGEST_CONTEXT_CHARS = 1600;
+const TEAM_DIGEST_SYSTEM_CHARS = 260;
 
 async function loadHookPayload() {
   const raw = await readStdin();
@@ -93,12 +98,16 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
     const prompt = extractUserPrompt(payload);
     const updateContext = await updateCheckContext(root, payload, prompt);
     const command = dollarCommand(prompt);
+    const route = routePrompt(prompt);
+    const bypassActiveRoute = route?.id === 'DFix' || route?.id === 'Answer';
+    const teamDigest = bypassActiveRoute ? null : await teamLiveDigest(root, state);
     const activeContext = await activeRouteContext(root, state);
     const contexts = [updateContext];
-    if (activeContext && !command) contexts.push(routePipelineContext(prompt), activeContext);
+    if (activeContext && !command && !bypassActiveRoute) contexts.push(routePipelineContext(prompt), activeContext);
     else contexts.push((await prepareRoute(root, prompt, state)).additionalContext);
+    if (teamDigest?.context) contexts.push(teamDigest.context);
     const additionalContext = contexts.filter(Boolean).join('\n\n');
-    return { continue: true, additionalContext, systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) };
+    return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
   }
   const id = state.mission_id;
   if (id) await appendJsonl(path.join(missionDir(root, id), 'user_queue.jsonl'), { ts: nowIso(), payload });
@@ -129,13 +138,24 @@ async function hookPostTool(root, state, payload, noQuestion) {
   }
   await recordContext7Evidence(root, state, payload).catch(() => null);
   await recordSubagentEvidence(root, state, payload).catch(() => null);
-  if (!noQuestion) return { continue: true };
+  const teamDigest = await teamLiveDigest(root, state);
+  if (!noQuestion) {
+    return teamDigest?.context
+      ? { continue: true, additionalContext: teamDigest.context, systemMessage: joinSystemMessages(visibleHookMessage('post-tool'), teamDigest.system) }
+      : { continue: true };
+  }
   if (toolFailed(payload)) {
     return {
-      additionalContext: 'SKS no-question mode is active. Do not ask the user about this tool failure. Apply the active plan fallback ladder, create a fix task, and continue.'
+      additionalContext: [
+        'SKS no-question mode is active. Do not ask the user about this tool failure. Apply the active plan fallback ladder, create a fix task, and continue.',
+        teamDigest?.context
+      ].filter(Boolean).join('\n\n'),
+      systemMessage: joinSystemMessages(visibleHookMessage('post-tool'), teamDigest?.system)
     };
   }
-  return { continue: true };
+  return teamDigest?.context
+    ? { continue: true, additionalContext: teamDigest.context, systemMessage: joinSystemMessages(visibleHookMessage('post-tool'), teamDigest.system) }
+    : { continue: true };
 }
 
 async function hookPermission(root, state, payload, noQuestion) {
@@ -243,6 +263,89 @@ function hasHonestMode(text) {
     && /(verified|verification|검증|tests?|테스트|evidence|근거|gap|제약|uncertainty|불확실)/i.test(s);
 }
 
+async function teamLiveDigest(root, state = {}) {
+  if (!isTeamState(state) || !state.mission_id) return null;
+  const id = String(state.mission_id);
+  const dir = missionDir(root, id);
+  const dashboard = await readJson(path.join(dir, 'team-dashboard.json'), null).catch(() => null);
+  const transcript = await readText(path.join(dir, 'team-transcript.jsonl'), '').catch(() => '');
+  let events = transcript.split(/\n/).filter(Boolean).slice(-TEAM_DIGEST_MAX_EVENTS * 3).map(parseTeamTranscriptLine).filter(Boolean);
+  let source = 'team-transcript.jsonl';
+  if (!events.length) {
+    const live = await readText(path.join(dir, 'team-live.md'), '').catch(() => '');
+    events = live.split(/\n/).filter((line) => /^- \d{4}-\d{2}-\d{2}T/.test(line.trim())).slice(-TEAM_DIGEST_MAX_EVENTS).map(parseTeamLiveLine).filter(Boolean);
+    source = 'team-live.md';
+  }
+  if (!events.length) {
+    events = dashboard?.latest_messages || [];
+    source = 'team-dashboard.json';
+  }
+  events = normalizeTeamEvents(events).slice(-TEAM_DIGEST_MAX_EVENTS);
+  if (!events.length) return null;
+
+  const phase = oneLine(state.phase || dashboard?.phase || 'TEAM', 48);
+  const lines = events.map(formatTeamDigestEvent);
+  const context = boundText([
+    `SKS Team live digest: mission ${id}, phase ${phase}, source ${source}.`,
+    `Open live view with: sks team watch ${id}`,
+    'Recent events:',
+    ...lines.map((line) => `- ${line}`)
+  ].join('\n'), TEAM_DIGEST_CONTEXT_CHARS);
+  const system = boundText(`SKS Team live: ${lines.at(-1) || `${id} ${phase}`}`, TEAM_DIGEST_SYSTEM_CHARS);
+  return { context, system };
+}
+
+function isTeamState(state = {}) {
+  const values = [state.mode, state.route, state.route_command, state.stop_gate].map((value) => String(value || '').toLowerCase());
+  return values.some((value) => value === 'team' || value === '$team' || value.includes('team-gate'));
+}
+
+function normalizeTeamEvents(events = []) {
+  return events.map((event) => ({
+    ts: String(event?.ts || ''),
+    agent: oneLine(event?.agent || 'unknown', 40),
+    phase: oneLine(event?.phase || 'general', 48),
+    message: oneLine(event?.message || '', TEAM_DIGEST_MESSAGE_CHARS)
+  })).filter((event) => event.message);
+}
+
+function parseTeamTranscriptLine(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
+  }
+}
+
+function parseTeamLiveLine(line) {
+  const match = String(line || '').trim().match(/^-\s+(\S+)\s+\[([^\]]+)\]\s+([^:]+):\s*(.*)$/);
+  if (!match) return null;
+  return { ts: match[1], phase: match[2], agent: match[3], message: match[4] };
+}
+
+function formatTeamDigestEvent(event) {
+  const ts = shortIsoTime(event.ts);
+  return `${ts} [${event.phase}] ${event.agent}: ${event.message}`;
+}
+
+function shortIsoTime(ts) {
+  return String(ts || '').replace(/^\d{4}-\d{2}-\d{2}T/, '').replace(/\.\d{3}Z$/, 'Z') || 'recent';
+}
+
+function oneLine(value, limit) {
+  return boundText(String(value || '').replace(/\s+/g, ' ').trim(), limit);
+}
+
+function boundText(value, limit) {
+  const text = String(value || '');
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+}
+
+function joinSystemMessages(...parts) {
+  return boundText(parts.filter(Boolean).join(' | '), 420);
+}
+
 export async function emitHook(name) {
   const result = await hookMain(name);
   process.stdout.write(`${JSON.stringify(normalizeHookResult(name, result))}\n`);
@@ -319,13 +422,19 @@ function codexHookEventName(name) {
 function visibleHookMessage(name, text = '') {
   const body = String(text || '');
   if (name === 'user-prompt-submit') {
+    if (body.includes('DFix ultralight pipeline active')) return 'SKS: DFix ultralight task list injected.';
+    if (body.includes('SKS answer-only pipeline active')) return 'SKS: answer-only research context injected.';
+    if (body.includes('SKS wiki pipeline active')) return 'SKS: wiki refresh context injected.';
     if (body.includes('MANDATORY $Ralph')) return 'SKS: Ralph clarification gate prepared in Codex App.';
     if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team route, live transcript, and subagent plan injected.';
     if (body.includes('Subagent policy: REQUIRED')) return 'SKS: route context injected; subagent execution gate is active.';
     return 'SKS: skill-first route context injected.';
   }
   if (name === 'post-tool') return 'SKS: tool result inspected; Context7/subagent/DB evidence updated when relevant.';
-  if (name === 'stop') return body ? 'SKS: stop gate checked; continuing until route evidence passes.' : 'SKS: stop gate checked.';
+  if (name === 'stop') {
+    if (body.includes('Required questions')) return 'SKS: clarification questions reprinted; waiting for answers.';
+    return body ? 'SKS: stop gate checked; continuing until route evidence passes.' : 'SKS: stop gate checked.';
+  }
   if (name === 'permission-request') return body ? 'SKS: permission request evaluated by harness guards.' : 'SKS: permission request inspected.';
   if (name === 'pre-tool') return body ? 'SKS: tool call inspected by harness guards.' : 'SKS: tool call inspected.';
   return 'SKS: hook evaluated.';

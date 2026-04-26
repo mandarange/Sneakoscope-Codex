@@ -11,7 +11,7 @@ import { sealContract, validateAnswers } from '../core/decision-contract.mjs';
 import { containsUserQuestion, noQuestionContinuationReason } from '../core/no-question-guard.mjs';
 import { evaluateDoneGate, defaultDoneGate } from '../core/hproof.mjs';
 import { emitHook } from '../core/hooks-runtime.mjs';
-import { storageReport, enforceRetention } from '../core/retention.mjs';
+import { storageReport, enforceRetention, pruneWikiArtifacts } from '../core/retention.mjs';
 import { classifySql, classifyCommand, loadDbSafetyPolicy, safeSupabaseMcpConfig, checkSqlFile, checkDbOperation, scanDbSafety } from '../core/db-safety.mjs';
 import { checkHarnessModification, harnessGuardStatus, isHarnessSourceProject } from '../core/harness-guard.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
@@ -23,7 +23,7 @@ import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, defaultEvaluationSce
 import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, RECOMMENDED_SKILLS, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, triwikiContextTracking } from '../core/routes.mjs';
+import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, triwikiContextTracking } from '../core/routes.mjs';
 import { context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence } from '../core/pipeline.mjs';
 import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail } from '../core/team-live.mjs';
 
@@ -53,7 +53,7 @@ export async function main(args) {
   if (cmd === 'quickstart') return quickstart();
   if (cmd === 'codex-app') return codexAppHelp();
   if (cmd === 'dollar-commands' || cmd === 'dollars' || cmd === '$') return dollarCommands(tail);
-  if (String(cmd).toLowerCase() === 'df') return dfHelp();
+  if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
   if (cmd === 'context7') return context7(sub, rest);
   if (cmd === 'pipeline') return pipeline(sub, rest);
   if (cmd === 'guard') return guard(sub, rest);
@@ -98,9 +98,10 @@ Usage:
   sks quickstart
   sks codex-app
   sks dollar-commands [--json]
-  sks df
+  sks dfix
   sks context7 check|setup|tools|resolve|docs|evidence ...
   sks pipeline status|resume [--json]
+  sks pipeline answer <mission-id|latest> <answers.json>
   sks guard check [--json]
   sks conflicts check|prompt [--json]
   sks versioning status|bump|pre-commit [--json]
@@ -130,6 +131,8 @@ Usage:
   sks eval compare --baseline old.json --candidate new.json [--json]
   sks wiki coords --rgba 12,34,56,255
   sks wiki pack [--json] [--role worker|verifier] [--max-anchors N]
+  sks wiki refresh [--json] [--role worker|verifier] [--max-anchors N] [--prune] [--dry-run]
+  sks wiki prune [--json] [--dry-run]
   sks wiki validate [context-pack.json]
   sks gx init [name]
   sks gx render [name] [--format svg|html|all]
@@ -429,7 +432,7 @@ function dollarCommands(args = []) {
   console.log('Use these inside Codex App or another agent prompt. Shells treat $ as variable syntax, so these are prompt commands, not terminal commands.\n');
   console.log(formatDollarCommandsDetailed());
   console.log(`\nCodex App picker aliases: ${DOLLAR_COMMAND_ALIASES.map((x) => x.app_skill).join(', ')}`);
-  console.log('\nDefault pipeline: even without a $ command, SKS optimizes the prompt and infers the lightest route. Simple design/content edits infer $DF.');
+  console.log('\nDefault pipeline: questions infer $Answer, simple design/content edits infer $DFix, and execution prompts use SKS routing with ambiguity gates.');
 }
 
 function formatDollarCommandsDetailed(indent = '') {
@@ -446,23 +449,24 @@ function dollarCommandNames() {
   return DOLLAR_COMMANDS.map((c) => c.command).join(', ');
 }
 
-function dfHelp() {
-  console.log(`SKS DF Mode
+function dfixHelp() {
+  console.log(`SKS DFix Mode
 
 Prompt command:
-  $DF <small design/content request>
+  $DFix <small design/content request>
 
 Examples:
-  $DF 글자 색 파란색으로 바꿔줘
-  $DF 내용을 영어로 바꿔줘
-  $DF Change the CTA label to "Start"
+  $DFix 글자 색 파란색으로 바꿔줘
+  $DFix 내용을 영어로 바꿔줘
+  $DFix Change the CTA label to "Start"
 
 Purpose:
-  Fast design/content fixes only. DF should prompt-engineer the user's request into the smallest implementation change.
+  Fast design/content fixes only. DFix bypasses the general SKS prompt pipeline and uses an ultralight task list.
 
 Rules:
-  Do not run Ralph, Research, eval, or broad redesign.
-  Inspect only what is needed, edit only what is requested, and run cheap verification when useful.
+  List the exact micro-edits, inspect only needed files, apply only those edits.
+  Do not run mission state, ambiguity gates, TriWiki refresh, Context7 routing, subagents, Ralph, Research, eval, or broad redesign.
+  Run only cheap verification when useful.
 `);
 }
 
@@ -593,6 +597,7 @@ function printContext7DocsResult(result, opts = {}) {
 async function pipeline(sub = 'status', args = []) {
   const root = await projectRoot();
   const action = sub || 'status';
+  if (action === 'answer') return pipelineAnswer(root, args);
   const state = await readJson(stateFile(root), {});
   const evidence = await context7Evidence(root, state);
   const stop = await evaluateStop(root, state, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
@@ -614,6 +619,55 @@ async function pipeline(sub = 'status', args = []) {
   console.log(`Stop gate: ${state.stop_gate || 'none'}`);
   console.log(`Context7:  ${state.context7_required ? (evidence.ok ? 'ok' : 'required-missing') : 'optional'} (${evidence.count || 0} event(s))`);
   console.log(`Next:      ${result.next_action}`);
+}
+
+async function pipelineAnswer(root, args = []) {
+  const [missionArg, answerFile] = args;
+  const id = await resolveMissionId(root, missionArg);
+  if (!id || !answerFile) throw new Error('Usage: sks pipeline answer <mission-id|latest> <answers.json>');
+  const { dir, mission } = await loadMission(root, id);
+  const answers = await readJson(path.resolve(answerFile));
+  await writeJsonAtomic(path.join(dir, 'answers.json'), answers);
+  const result = await sealContract(dir, mission);
+  if (!result.ok) {
+    console.error('Answer validation failed. SKS ambiguity gate remains locked.');
+    console.error(JSON.stringify(result.validation, null, 2));
+    process.exitCode = 2;
+    return;
+  }
+  const routeContext = await readJson(path.join(dir, 'route-context.json'), {});
+  const route = ROUTES.find((candidate) => candidate.id === routeContext.route || candidate.command === routeContext.command)
+    || routePrompt(routeContext.command || routeContext.route || '$SKS');
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.clarification.contract_sealed', route: route?.id || routeContext.route, hash: result.contract.sealed_hash });
+  await setCurrent(root, {
+    mission_id: id,
+    route: route?.id || routeContext.route || 'SKS',
+    route_command: route?.command || routeContext.command || '$SKS',
+    mode: route?.mode || routeContext.mode || 'SKS',
+    phase: `${route?.mode || routeContext.mode || 'SKS'}_CLARIFICATION_CONTRACT_SEALED`,
+    context7_required: Boolean(routeContext.context7_required),
+    context7_verified: false,
+    subagents_required: route ? routeRequiresSubagents(route, routeContext.task || mission.prompt || '') : false,
+    subagents_verified: false,
+    visible_progress_required: true,
+    context_tracking: 'triwiki',
+    required_skills: route?.requiredSkills || [],
+    stop_gate: route?.stopGate || routeContext.original_stop_gate || 'honest_mode',
+    clarification_required: false,
+    clarification_passed: true,
+    ambiguity_gate_required: true,
+    ambiguity_gate_passed: true,
+    implementation_allowed: true,
+    reasoning_effort: route ? routeReasoning(route, routeContext.task || mission.prompt || '').effort : 'medium',
+    reasoning_profile: route ? routeReasoning(route, routeContext.task || mission.prompt || '').profile : 'sks-task-medium',
+    reasoning_temporary: true,
+    prompt: routeContext.task || mission.prompt || ''
+  });
+  if (flag(args, '--json')) return console.log(JSON.stringify({ ok: true, mission_id: id, route: route?.id || routeContext.route, hash: result.contract.sealed_hash, validation: result.validation }, null, 2));
+  console.log(`SKS ambiguity gate passed for ${id}`);
+  console.log(`Route: ${route?.command || routeContext.command || '$SKS'}`);
+  console.log(`Hash: ${result.contract.sealed_hash}`);
+  console.log('Next: continue the original route lifecycle using decision-contract.json.');
 }
 
 async function guard(sub = 'check', args = []) {
@@ -810,8 +864,9 @@ Prompt command routes:
 ${formatDollarCommandsCompact('  ')}
 
 Useful prompts inside Codex App:
-  $DF 글자 색 바꿔줘
-  $DF 내용을 영어로 바꿔줘
+  $DFix 글자 색 바꿔줘
+  $DFix 내용을 영어로 바꿔줘
+  $Answer 이 훅은 왜 이렇게 동작해?
   $SKS show me available workflows
   $Team agree on the plan, then implement with specialists
   $Ralph implement this with mandatory clarification
@@ -831,7 +886,7 @@ Discover usage:
   sks context7 check
   sks pipeline status
   sks reasoning "prompt"
-  sks df
+  sks dfix
   sks team "task"
   sks team watch latest
 `);
@@ -887,7 +942,7 @@ Common workflows:
   sks usage pipeline
   sks usage guard
   sks usage reasoning
-  sks usage df
+  sks usage dfix
 `,
     install: `Install and Setup
 
@@ -935,14 +990,14 @@ Inside Codex App:
   $Team executor:5 run parallel analysis scouts, refresh TriWiki, debate the options, agree on one objective, close the debate team, then form a fresh development team with disjoint write scopes.
 
 Expected phases:
-  1. Parallel analysis scouts run exactly N read-only investigation slices and write source-backed findings to team-analysis.md.
-  2. Parent refreshes TriWiki with sks wiki pack and validates .sneakoscope/wiki/context-pack.json.
-  3. Debate team has exactly N role participants and maps stubborn user friction, code paths, risks, DB safety, tests, and implementation options.
+  1. Read relevant TriWiki, then parallel analysis scouts run exactly N read-only investigation slices and write source-backed findings to team-analysis.md.
+  2. Parent refreshes TriWiki with sks wiki refresh or sks wiki pack and validates .sneakoscope/wiki/context-pack.json before debate.
+  3. Debate team has exactly N role participants and maps stubborn user friction, code paths, risks, DB safety, tests, and implementation options using the refreshed pack.
   4. Parent records useful scout, role-agent, result, and handoff lines into team-live.md and team-transcript.jsonl.
-  5. Parent agent synthesizes the agreed objective, constraints, acceptance criteria, and parallel work slices.
+  5. Parent agent synthesizes the agreed objective, constraints, acceptance criteria, and parallel work slices, then refreshes/validates TriWiki.
   6. Debate agents are closed.
-  7. Fresh N-person executor_N development team handles disjoint slices in parallel.
-  8. Strict reviewers and user_N personas check correctness, DB safety, missing tests, final evidence, and practical friction.
+  7. Fresh N-person executor_N development team reads relevant TriWiki plus current source and handles disjoint slices in parallel.
+  8. Strict reviewers and user_N personas validate TriWiki again, then check correctness, DB safety, missing tests, final evidence, and practical friction.
 
 Session budget:
   default: 3 subagent sessions
@@ -1031,8 +1086,8 @@ Inspect app guidance:
   cat .codex/SNEAKOSCOPE.md
 
 Use inside Codex App:
-  $DF 글자 색 바꿔줘
-  $DF 내용을 영어로 바꿔줘
+  $DFix 글자 색 바꿔줘
+  $DFix 내용을 영어로 바꿔줘
   $SKS show me available workflows
   $Team agree on the plan, then implement with specialists
   $Ralph implement this with mandatory clarification
@@ -1042,20 +1097,20 @@ Use inside Codex App:
   $GX render a visual context cartridge
   $Help show available SKS commands
 `,
-    df: `DF Fast Design/Content Fix
+    dfix: `DFix Ultralight Design/Content Fix
 
 Use inside Codex App:
-  $DF 글자 색 파란색으로 바꿔줘
-  $DF 내용을 영어로 바꿔줘
-  $DF Change the button label to "Start"
+  $DFix 글자 색 파란색으로 바꿔줘
+  $DFix 내용을 영어로 바꿔줘
+  $DFix Change the button label to "Start"
 
 Behavior:
-  Prompt-engineer the request into the smallest design/content edit.
-  Do not start Ralph, Research, eval, or a broad redesign.
-  Inspect only relevant files and run only cheap verification when useful.
+  Bypass the general SKS prompt pipeline and mission state.
+  Use an ultralight task list: locate target, edit only that target, verify cheaply.
+  Do not start Ralph, Research, eval, TriWiki refresh, Context7 routing, subagents, or a broad redesign.
 
 CLI help:
-  sks df
+  sks dfix
 `,
     dollar: `Dollar Commands
 
@@ -1101,7 +1156,11 @@ Inspect active route:
 Next action hint:
   sks pipeline resume
 
-Every $ command is routed through state, skills, mission artifacts, Context7 evidence when required, and a Stop hook gate before completion.
+Seal mandatory ambiguity-removal answers:
+  sks pipeline answer latest answers.json
+  sks pipeline answer <mission-id> answers.json
+
+Questions use the $Answer path: TriWiki/web/Context7 evidence when useful, Honest Mode fact-checking, then direct reply. DFix uses an ultralight task-list path for simple design/content fixes. Execution routes start with mandatory ambiguity-removal questions and are routed through state, skills, mission artifacts, Context7 evidence when required, and a Stop hook gate before completion.
 `,
     guard: `Harness Guard
 
@@ -1205,6 +1264,14 @@ Validate a saved pack:
   sks wiki validate
   sks wiki validate .sneakoscope/wiki/context-pack.json
 
+Refresh everything in one pass:
+  sks wiki refresh
+  sks wiki refresh --prune
+
+Prune stale, oversized, or low-trust wiki artifacts:
+  sks wiki prune
+  sks wiki prune --dry-run --json
+
 Model:
   R -> domain angle
   G -> layer radius through sin()
@@ -1265,7 +1332,7 @@ async function setup(args) {
   console.log(`Version:   ${versioningInfo.enabled ? (versioningInfo.hook_installed ? 'auto-bump enabled' : 'auto-bump hook missing') : 'not enabled'}${versioningInfo.package_version ? ` (${versioningInfo.package_version})` : ''}`);
   if (localOnly) console.log('Git:       local-only (.git/info/exclude; user AGENTS preserved, SKS managed block refreshed)');
   console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .agents/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
-  console.log(`Prompt:    skill-first pipeline, $DF fast design/content route, Context7 gate`);
+  console.log(`Prompt:    intent-first routing, $Answer fact-check route, $DFix ultralight design/content route, Context7 gate`);
   console.log(`Skills:    .agents/skills`);
   console.log(`Next:      sks context7 check; sks selftest --mock; sks commands; sks dollar-commands`);
   if (!install.ok && install.scope === 'global') console.log('\nGlobal command missing. Run: npm i -g sneakoscope');
@@ -1914,6 +1981,7 @@ async function selftest() {
   if (!promptPipelineSkillExists) throw new Error('selftest failed: prompt pipeline skill not installed');
   const promptPipelineText = await safeReadText(path.join(tmp, '.agents', 'skills', 'prompt-pipeline', 'SKILL.md'));
   if (!promptPipelineText.includes('TriWiki context-tracking SSOT')) throw new Error('selftest failed: prompt pipeline missing TriWiki context-tracking SSOT');
+  if (!promptPipelineText.includes('before every route stage') || !promptPipelineText.includes('sks wiki refresh')) throw new Error('selftest failed: prompt pipeline missing per-stage TriWiki policy');
   for (const supportSkill of ['reasoning-router', 'pipeline-runner', 'context7-docs', 'seo-geo-optimizer']) {
     if (!(await exists(path.join(tmp, '.agents', 'skills', supportSkill, 'SKILL.md')))) throw new Error(`selftest failed: ${supportSkill} skill not installed`);
   }
@@ -1928,7 +1996,10 @@ async function selftest() {
   if (camelHookGuardJson.decision !== 'block') throw new Error('selftest failed: hook did not block camelCase Codex tool payload');
   if (new Set(DOLLAR_COMMANDS.map((c) => c.command)).size !== DOLLAR_COMMANDS.length) throw new Error('selftest failed: duplicate dollar commands');
   if (!DOLLAR_COMMAND_ALIASES.some((alias) => alias.canonical === '$Team' && alias.app_skill === '$agent-team')) throw new Error('selftest failed: $Team fallback picker alias missing');
+  if (!DOLLAR_COMMAND_ALIASES.some((alias) => alias.canonical === '$Wiki' && alias.app_skill === '$wiki-refresh')) throw new Error('selftest failed: $WikiRefresh picker alias missing');
   if (routePrompt('$agent-team run specialists')?.id !== 'Team') throw new Error('selftest failed: $agent-team did not route to Team');
+  if (routePrompt('$WikiRefresh 갱신')?.id !== 'Wiki') throw new Error('selftest failed: $WikiRefresh did not route to Wiki');
+  if (routePrompt('위키 갱신해줘')?.id !== 'Wiki') throw new Error('selftest failed: wiki refresh text did not route to Wiki');
   if (!COMMAND_CATALOG.some((c) => c.name === 'context7') || !COMMAND_CATALOG.some((c) => c.name === 'pipeline')) throw new Error('selftest failed: context7/pipeline commands missing from catalog');
   const registryDollarCommands = DOLLAR_COMMANDS.map((c) => c.command);
   const manifest = await readJson(path.join(tmp, '.sneakoscope', 'manifest.json'));
@@ -1944,6 +2015,7 @@ async function selftest() {
   const codexAppQuickRefText = await safeReadText(path.join(tmp, '.codex', 'SNEAKOSCOPE.md'));
   if (!codexAppQuickRefText.includes('dollar-commands')) throw new Error('selftest failed: Codex App quick reference missing dollar-command discovery');
   if (!codexAppQuickRefText.includes('Context Tracking') || !codexAppQuickRefText.includes('TriWiki')) throw new Error('selftest failed: Codex App quick reference missing TriWiki context tracking');
+  if (!codexAppQuickRefText.includes('Before each route phase') || !codexAppQuickRefText.includes('every stage')) throw new Error('selftest failed: Codex App quick reference missing per-stage TriWiki policy');
   for (const { command } of DOLLAR_COMMANDS) {
     if (!codexAppQuickRefText.includes(command)) throw new Error(`selftest failed: Codex App quick reference missing ${command}`);
   }
@@ -1966,7 +2038,73 @@ async function selftest() {
   if (stopResult.code !== 0) throw new Error(`selftest failed: stop hook exited ${stopResult.code}: ${stopResult.stderr}`);
   const stopJson = JSON.parse(stopResult.stdout);
   if (stopJson.decision !== 'block' || !String(stopJson.reason || '').includes('mandatory clarification')) throw new Error('selftest failed: Stop hook did not block missing Ralph questions');
-  if (!String(stopJson.systemMessage || '').includes('stop gate')) throw new Error('selftest failed: Stop hook missing visible status message');
+  if (!String(stopJson.reason || '').includes('Required questions') || !String(stopJson.reason || '').includes('GOAL_PRECISE')) throw new Error('selftest failed: Stop hook did not reprint Ralph questions');
+  if (!String(stopJson.reason || '').includes('sks ralph answer')) throw new Error('selftest failed: Stop hook did not provide Ralph answer command');
+  if (!String(stopJson.systemMessage || '').includes('clarification questions')) throw new Error('selftest failed: Stop hook missing clarification status message');
+  const hookTeamTmp = tmpdir();
+  await initProject(hookTeamTmp, {});
+  const hookTeamPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 버튼 UX 수정 executor:2 reviewer:1 user:1' });
+  const hookTeamResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: hookTeamPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookTeamResult.code !== 0) throw new Error(`selftest failed: $Team hook exited ${hookTeamResult.code}: ${hookTeamResult.stderr}`);
+  const hookTeamJson = JSON.parse(hookTeamResult.stdout);
+  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: $Team hook did not force ambiguity gate before Team execution');
+  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('GOAL_PRECISE')) throw new Error('selftest failed: $Team ambiguity gate did not provide questions');
+  const hookTeamState = await readJson(stateFile(hookTeamTmp), {});
+  if (hookTeamState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookTeamState.implementation_allowed !== false) throw new Error('selftest failed: $Team hook did not lock execution behind ambiguity gate');
+  if (await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-plan.json'))) throw new Error('selftest failed: Team plan was created before ambiguity gate passed');
+  const hookTeamStopResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, last_assistant_message: 'I will execute Team now.' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (hookTeamStopResult.code !== 0) throw new Error(`selftest failed: Team stop hook exited ${hookTeamStopResult.code}: ${hookTeamStopResult.stderr}`);
+  const hookTeamStopJson = JSON.parse(hookTeamStopResult.stdout);
+  if (hookTeamStopJson.decision !== 'block' || !String(hookTeamStopJson.reason || '').includes('mandatory ambiguity-removal')) throw new Error('selftest failed: Stop hook did not block missing Team ambiguity answers');
+  if (!String(hookTeamStopJson.reason || '').includes('Required questions') || !String(hookTeamStopJson.reason || '').includes('GOAL_PRECISE')) throw new Error('selftest failed: Stop hook did not reprint Team ambiguity questions');
+  if (!String(hookTeamStopJson.reason || '').includes('sks pipeline answer')) throw new Error('selftest failed: Stop hook did not provide pipeline answer command');
+  const hookTeamSchema = await readJson(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'required-answers.schema.json'));
+  const hookTeamAnswers = {};
+  for (const s of hookTeamSchema.slots) hookTeamAnswers[s.id] = s.options ? (s.type === 'array' ? [s.options[0]] : s.options[0]) : (s.type.includes('array') ? ['selftest'] : (s.id === 'DB_MAX_BLAST_RADIUS' ? 'no_live_dml' : 'selftest'));
+  const hookTeamAnswersPath = path.join(hookTeamTmp, 'team-answers.json');
+  await writeJsonAtomic(hookTeamAnswersPath, hookTeamAnswers);
+  const pipelineAnswerResult = await runProcess(process.execPath, [hookBin, 'pipeline', 'answer', 'latest', hookTeamAnswersPath], { cwd: hookTeamTmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (pipelineAnswerResult.code !== 0) throw new Error(`selftest failed: pipeline answer exited ${pipelineAnswerResult.code}: ${pipelineAnswerResult.stderr}`);
+  const answeredTeamState = await readJson(stateFile(hookTeamTmp), {});
+  if (answeredTeamState.phase !== 'TEAM_CLARIFICATION_CONTRACT_SEALED' || !answeredTeamState.ambiguity_gate_passed || answeredTeamState.implementation_allowed !== true) throw new Error('selftest failed: pipeline answer did not pass Team ambiguity gate');
+  if (!(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'decision-contract.json')))) throw new Error('selftest failed: pipeline answer did not seal decision contract');
+  const hookDfixTmp = tmpdir();
+  await initProject(hookDfixTmp, {});
+  const hookDfixPayload = JSON.stringify({ cwd: hookDfixTmp, prompt: '$DFix 버튼 라벨 바꿔줘' });
+  const hookDfixResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookDfixTmp, input: hookDfixPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (hookDfixResult.code !== 0) throw new Error(`selftest failed: $DFix hook exited ${hookDfixResult.code}: ${hookDfixResult.stderr}`);
+  const hookDfixJson = JSON.parse(hookDfixResult.stdout);
+  if (hookDfixJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: $DFix incorrectly triggered ambiguity gate');
+  if (hookDfixJson.hookSpecificOutput?.additionalContext?.includes('SKS skill-first pipeline active')) throw new Error('selftest failed: $DFix entered the general SKS prompt pipeline');
+  if (hookDfixJson.hookSpecificOutput?.additionalContext?.includes('Mission:')) throw new Error('selftest failed: $DFix created route mission state');
+  if (!hookDfixJson.hookSpecificOutput?.additionalContext?.includes('DFix ultralight pipeline active')) throw new Error('selftest failed: $DFix hook missing ultralight pipeline guidance');
+  if (!hookDfixJson.hookSpecificOutput?.additionalContext?.includes('Task list:')) throw new Error('selftest failed: $DFix hook missing micro task list');
+  if (!hookDfixJson.systemMessage?.includes('DFix ultralight')) throw new Error('selftest failed: $DFix hook missing ultralight system message');
+  const hookDfixState = await readJson(stateFile(hookDfixTmp), {});
+  if (String(hookDfixState.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS')) throw new Error('selftest failed: $DFix state entered clarification gate');
+  const inferredDfixPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '버튼 라벨 바꿔줘' });
+  const inferredDfixResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: inferredDfixPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (inferredDfixResult.code !== 0) throw new Error(`selftest failed: inferred DFix hook exited ${inferredDfixResult.code}: ${inferredDfixResult.stderr}`);
+  const inferredDfixJson = JSON.parse(inferredDfixResult.stdout);
+  const inferredDfixContext = inferredDfixJson.hookSpecificOutput?.additionalContext || '';
+  if (!inferredDfixContext.includes('DFix ultralight pipeline active')) throw new Error('selftest failed: inferred DFix did not use ultralight route');
+  if (inferredDfixContext.includes('SKS skill-first pipeline active') || inferredDfixContext.includes('Active Team mission') || inferredDfixContext.includes('Mission:')) throw new Error('selftest failed: inferred DFix leaked general pipeline or active Team context');
+  const answerPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '이 파이프라인은 왜 이렇게 동작해?' });
+  const answerResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: answerPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (answerResult.code !== 0) throw new Error(`selftest failed: answer-only hook exited ${answerResult.code}: ${answerResult.stderr}`);
+  const answerJson = JSON.parse(answerResult.stdout);
+  const answerContext = answerJson.hookSpecificOutput?.additionalContext || '';
+  if (!answerContext.includes('SKS answer-only pipeline active')) throw new Error('selftest failed: question prompt did not use Answer route');
+  if (answerContext.includes('MANDATORY ambiguity-removal gate activated') || answerContext.includes('SKS skill-first pipeline active') || answerContext.includes('Active Team mission') || answerContext.includes('Mission:')) throw new Error('selftest failed: Answer route leaked execution pipeline or active Team context');
+  if (!answerJson.systemMessage?.includes('answer-only')) throw new Error('selftest failed: Answer route missing system message');
+  const wikiPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '$WikiRefresh 갱신' });
+  const wikiResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: wikiPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (wikiResult.code !== 0) throw new Error(`selftest failed: Wiki hook exited ${wikiResult.code}: ${wikiResult.stderr}`);
+  const wikiJson = JSON.parse(wikiResult.stdout);
+  const wikiContext = wikiJson.hookSpecificOutput?.additionalContext || '';
+  if (!wikiContext.includes('SKS wiki pipeline active') || !wikiContext.includes('sks wiki refresh')) throw new Error('selftest failed: $WikiRefresh hook did not inject wiki route');
+  if (wikiContext.includes('MANDATORY ambiguity-removal gate activated') || wikiContext.includes('Mission:')) throw new Error('selftest failed: Wiki route created ambiguity mission state');
+  if (!wikiJson.systemMessage?.includes('wiki refresh')) throw new Error('selftest failed: Wiki route missing system message');
   const codexConfigText = await safeReadText(path.join(tmp, '.codex', 'config.toml'));
   if (!codexConfigText.includes('multi_agent = true')) throw new Error('selftest failed: multi_agent not enabled');
   if (!hasContext7ConfigText(codexConfigText)) throw new Error('selftest failed: Context7 MCP not configured');
@@ -2036,8 +2174,11 @@ async function selftest() {
   if (teamPlan.roster.analysis_team.length !== teamPlan.role_counts.executor || !teamPlan.roster.analysis_team.some((agent) => agent.id === 'analysis_scout_3')) throw new Error('selftest failed: team analysis scout roster missing default agents');
   if (!teamPlan.required_artifacts.includes('team-analysis.md')) throw new Error('selftest failed: team plan missing team-analysis artifact');
   if (teamPlan.context_tracking?.ssot !== 'triwiki' || !teamPlan.required_artifacts.includes('.sneakoscope/wiki/context-pack.json')) throw new Error('selftest failed: team plan missing TriWiki context tracking');
+  if (!teamPlan.context_tracking?.stage_policy?.includes('before_each_route_stage_read_relevant_context_pack')) throw new Error('selftest failed: team plan missing per-stage TriWiki policy');
+  if (!teamPlan.phases.some((phase) => String(phase.goal || '').includes('refreshes/validates TriWiki before implementation handoff'))) throw new Error('selftest failed: team plan missing mid-pipeline TriWiki refresh');
   const teamWorkflow = teamWorkflowMarkdown(teamPlan);
   if (!teamWorkflow.includes('SSOT: triwiki') || !teamWorkflow.includes('Analysis Scouts') || !teamWorkflow.includes('sks wiki validate')) throw new Error('selftest failed: team workflow missing scout-first TriWiki context tracking');
+  if (!teamWorkflow.includes('before every stage') || !teamWorkflow.includes('after findings/artifact changes')) throw new Error('selftest failed: team workflow missing per-stage TriWiki policy');
   const customTeamPlan = buildTeamPlan(teamId, '병렬 구현 팀 테스트', { agentSessions: 5 });
   if (customTeamPlan.agent_session_count !== 5) throw new Error('selftest failed: custom team sessions not honored');
   if (parseTeamCreateArgs(['--agents', '4', '작업']).agentSessions !== 4) throw new Error('selftest failed: team --agents parsing');
@@ -2054,7 +2195,11 @@ async function selftest() {
   if (!roleTeamPlan.roster.debate_team.some((agent) => /inconvenience/.test(agent.persona))) throw new Error('selftest failed: user friction persona missing from debate team');
   if (routeReasoning(routePrompt('$Research frontier idea'), '$Research frontier idea').effort !== 'xhigh') throw new Error('selftest failed: research reasoning not xhigh');
   if (routeReasoning(routePrompt('$DB migration'), '$DB migration').effort !== 'high') throw new Error('selftest failed: logical reasoning not high');
-  if (routeReasoning(routePrompt('$DF button label'), '$DF button label').effort !== 'medium') throw new Error('selftest failed: simple reasoning not medium');
+  if (routeReasoning(routePrompt('$DFix button label'), '$DFix button label').effort !== 'medium') throw new Error('selftest failed: simple reasoning not medium');
+  if (routePrompt('이 파이프라인은 왜 이렇게 동작해?')?.id !== 'Answer') throw new Error('selftest failed: question prompt did not route to Answer');
+  if (routePrompt('React useEffect 최신 문서 기준으로 설명해줘')?.id !== 'Answer') throw new Error('selftest failed: docs question did not route to Answer');
+  if (routePrompt('$DF button label')) throw new Error('selftest failed: deprecated $DF route still resolved');
+  if (routeRequiresSubagents(routePrompt('이 파이프라인은 왜 이렇게 동작해?'), '이 파이프라인은 왜 이렇게 동작해?')) throw new Error('selftest failed: Answer route requires subagents');
   if (!routeRequiresSubagents(routePrompt('$Team implement feature'), '$Team implement feature')) throw new Error('selftest failed: Team route does not require subagents');
   if (!routeRequiresSubagents(routePrompt('$Ralph implement feature'), '$Ralph implement feature')) throw new Error('selftest failed: Ralph implementation route does not require subagents');
   if (routeRequiresSubagents(routePrompt('$Help commands'), '$Help commands')) throw new Error('selftest failed: Help route incorrectly requires subagents');
@@ -2102,12 +2247,20 @@ async function selftest() {
     claims: await projectWikiClaims(tmp),
     q4: { mode: 'selftest' },
     q3: ['sks', 'llm-wiki', 'wiki-coordinate'],
-    budget: { maxWikiAnchors: 48 }
+    budget: { maxWikiAnchors: 48, includeTrustSummary: true }
   });
   const wikiValidation = validateWikiCoordinateIndex(wikiPack.wiki);
   if (!wikiValidation.ok) throw new Error('selftest failed: wiki coordinate pack invalid');
+  if (!wikiPack.trust_summary || !Number.isFinite(Number(wikiPack.trust_summary.needs_evidence))) throw new Error('selftest failed: wiki trust summary missing');
+  if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => Array.isArray(anchor) ? Number.isFinite(Number(anchor[9])) : Number.isFinite(Number(anchor.trust_score)))) throw new Error('selftest failed: wiki anchor trust score missing');
   if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => (Array.isArray(anchor) ? anchor[0] : anchor.id) === 'wiki-trig')) throw new Error('selftest failed: wiki trig anchor missing');
   if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => String(Array.isArray(anchor) ? anchor[0] : anchor.id).startsWith('team-analysis-'))) throw new Error('selftest failed: team analysis claim missing from TriWiki pack');
+  const dryRunPack = await writeWikiContextPack(tmp, ['--max-anchors', '4'], { dryRun: true });
+  if (await exists(dryRunPack.file)) throw new Error('selftest failed: wiki refresh dry-run wrote context pack');
+  await ensureDir(path.dirname(dryRunPack.file));
+  await writeJsonAtomic(path.join(path.dirname(dryRunPack.file), 'low-trust-artifact.json'), { trust_summary: { avg: 0.1 }, wiki: { anchors: [] } });
+  const wikiPruneDryRun = await pruneWikiArtifacts(tmp, { dryRun: true });
+  if (wikiPruneDryRun.candidates < 1 || !wikiPruneDryRun.actions.some((action) => action.reason === 'low_wiki_trust')) throw new Error('selftest failed: wiki prune did not flag low-trust artifact');
   const { dir: researchDir, mission: researchMission } = await createMission(tmp, { mode: 'research', prompt: '새로운 코드 리뷰 방법론 연구' });
   const researchPlan = await writeResearchPlan(researchDir, researchMission.prompt, {});
   const researchGate = await writeMockResearchResult(researchDir, researchPlan);
@@ -2181,7 +2334,7 @@ async function evalCommand(sub, args) {
 
 async function wiki(sub, args = []) {
   if (!sub || sub === 'help' || sub === '--help') {
-    console.log('Usage: sks wiki coords --rgba R,G,B,A | sks wiki pack [--json] [--role worker|verifier] [--max-anchors N] | sks wiki validate [context-pack.json] [--json]');
+    console.log('Usage: sks wiki coords --rgba R,G,B,A | sks wiki pack [--json] [--role worker|verifier] [--max-anchors N] | sks wiki refresh [--json] [--role worker|verifier] [--max-anchors N] [--prune] [--dry-run] | sks wiki prune [--json] [--dry-run] | sks wiki validate [context-pack.json] [--json]');
     return;
   }
   if (sub === 'coords') {
@@ -2194,50 +2347,134 @@ async function wiki(sub, args = []) {
   }
   if (sub === 'pack') {
     const root = await projectRoot();
-    const role = readFlagValue(args, '--role', 'worker');
-    const maxAnchors = Number(readFlagValue(args, '--max-anchors', role.includes('verifier') ? 48 : 32));
-    const pack = contextCapsule({
-      mission: { id: 'project-wiki', coord: { rgba: { r: 48, g: 132, b: 212, a: 240 } } },
-      role,
-      contractHash: null,
-      claims: await projectWikiClaims(root),
-      q4: { mode: 'project-continuity', package: PACKAGE_VERSION, hydrate: 'anchor-first' },
-      q3: ['sks', 'llm-wiki', 'wiki-coordinate', 'gx', 'skills'],
-      budget: { maxWikiAnchors: maxAnchors }
-    });
-    const file = path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
-    await ensureDir(path.dirname(file));
-    await writeJsonAtomic(file, pack);
+    const { pack, file } = await writeWikiContextPack(root, args);
     if (flag(args, '--json')) return console.log(JSON.stringify({ ...pack, path: file }, null, 2));
-    console.log('Sneakoscope LLM Wiki Context Pack');
-    console.log(`Path:     ${path.relative(root, file)}`);
-    console.log(`Claims:   ${pack.claims.length} hydrated text claims`);
-    console.log(`Anchors:  ${(pack.wiki.anchors || pack.wiki.a || []).length} coordinate anchors (${pack.wiki.overflow_count ?? pack.wiki.o ?? 0} overflow)`);
-    console.log(`Schema:   ${pack.wiki.schema}`);
-    console.log(`Validate: sks wiki validate ${path.relative(root, file)}`);
+    printWikiPackSummary(root, file, pack);
+    return;
+  }
+  if (sub === 'refresh') {
+    const root = await projectRoot();
+    const dryRun = flag(args, '--dry-run');
+    const { pack, file } = await writeWikiContextPack(root, args, { dryRun });
+    const validation = wikiValidationResult(pack);
+    const exitCode = validation.result.ok ? 0 : 2;
+    const pruneRequested = flag(args, '--prune');
+    const pruneResult = pruneRequested
+      ? await pruneWikiArtifacts(root, { dryRun })
+      : null;
+    if (flag(args, '--json')) {
+      process.exitCode = exitCode;
+      return console.log(JSON.stringify({
+        path: file,
+        dryRun,
+        written: !dryRun,
+        claims: pack.claims.length,
+        anchors: wikiAnchorCount(pack.wiki),
+        trust_summary: pack.trust_summary,
+        validation,
+        ...(pruneResult ? { prune: { dryRun: pruneResult.dryRun, scanned: pruneResult.scanned, candidates: pruneResult.candidates, actions: pruneResult.actions } } : {})
+      }, null, 2));
+    }
+    console.log('Sneakoscope LLM Wiki Refresh');
+    if (dryRun) console.log('Dry run: context pack was built and validated in memory; no wiki file was written.');
+    printWikiPackSummary(root, file, pack);
+    console.log(`Validation: ${validation.result.ok ? 'ok' : 'failed'} (${validation.result.checked} anchors, ${validation.trustAnchors} trust anchors)`);
+    if (pruneResult) {
+      console.log(`${pruneResult.dryRun ? 'Prune dry run' : 'Prune'}: ${pruneResult.candidates} wiki artifact(s), ${pruneResult.scanned} scanned`);
+      for (const a of pruneResult.actions.slice(0, 20)) console.log(`- ${a.reason} ${path.relative(root, a.path)} ${a.bytes ? formatBytes(a.bytes) : ''}`.trim());
+    } else {
+      console.log('Prune: skipped (pass --prune to prune stale/low-trust wiki artifacts)');
+    }
+    process.exitCode = exitCode;
+    return;
+  }
+  if (sub === 'prune') {
+    const root = await projectRoot();
+    const pruneResult = await pruneWikiArtifacts(root, { dryRun: flag(args, '--dry-run') });
+    if (flag(args, '--json')) {
+      return console.log(JSON.stringify({
+        dryRun: pruneResult.dryRun,
+        scanned: pruneResult.scanned,
+        candidates: pruneResult.candidates,
+        actions: pruneResult.actions
+      }, null, 2));
+    }
+    console.log('Sneakoscope LLM Wiki Prune');
+    console.log(`${pruneResult.dryRun ? 'Dry run' : 'Pruned'}: ${pruneResult.candidates} wiki artifact(s), ${pruneResult.scanned} scanned`);
+    for (const a of pruneResult.actions.slice(0, 20)) console.log(`- ${a.reason} ${path.relative(root, a.path)} ${a.bytes ? formatBytes(a.bytes) : ''}`.trim());
+    if (pruneResult.actions.length > 20) console.log(`... ${pruneResult.actions.length - 20} more action(s) omitted`);
     return;
   }
   if (sub === 'validate') {
     const root = await projectRoot();
     const target = positionalArgs(args)[0] || path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
     const pack = await readJson(path.resolve(target));
-    const result = validateWikiCoordinateIndex(pack.wiki || pack);
+    const { result, trustAnchors } = wikiValidationResult(pack);
     if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
     console.log(`Wiki coordinate index: ${result.ok ? 'ok' : 'failed'}`);
     console.log(`Anchors checked: ${result.checked}`);
+    console.log(`Trust anchors: ${trustAnchors}/${result.checked}`);
     for (const issue of result.issues) console.log(`- ${issue.severity}: ${issue.id}${issue.anchor ? ` ${issue.anchor}` : ''}`);
     process.exitCode = result.ok ? 0 : 2;
     return;
   }
-  console.error('Usage: sks wiki coords|pack|validate');
+  console.error('Usage: sks wiki coords|pack|refresh|prune|validate');
   process.exitCode = 1;
+}
+
+async function writeWikiContextPack(root, args = [], opts = {}) {
+  const role = readFlagValue(args, '--role', 'worker');
+  const maxAnchors = Number(readFlagValue(args, '--max-anchors', role.includes('verifier') ? 48 : 32));
+  const pack = contextCapsule({
+    mission: { id: 'project-wiki', coord: { rgba: { r: 48, g: 132, b: 212, a: 240 } } },
+    role,
+    contractHash: null,
+    claims: await projectWikiClaims(root),
+    q4: { mode: 'project-continuity', package: PACKAGE_VERSION, hydrate: 'anchor-first' },
+    q3: ['sks', 'llm-wiki', 'wiki-coordinate', 'gx', 'skills'],
+    budget: { maxWikiAnchors: maxAnchors, includeTrustSummary: true }
+  });
+  const file = path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
+  if (!opts.dryRun) {
+    await ensureDir(path.dirname(file));
+    await writeJsonAtomic(file, pack);
+  }
+  return { pack, file, role, maxAnchors };
+}
+
+function wikiAnchorCount(wiki = {}) {
+  return (wiki.anchors || wiki.a || []).length;
+}
+
+function wikiValidationResult(pack = {}) {
+  const wikiIndex = pack.wiki || pack;
+  const result = validateWikiCoordinateIndex(wikiIndex);
+  return { result, trustAnchors: countTrustAnchors(wikiIndex) };
+}
+
+function printWikiPackSummary(root, file, pack) {
+  console.log('Sneakoscope LLM Wiki Context Pack');
+  console.log(`Path:     ${path.relative(root, file)}`);
+  console.log(`Claims:   ${pack.claims.length} hydrated text claims`);
+  console.log(`Anchors:  ${wikiAnchorCount(pack.wiki)} coordinate anchors (${pack.wiki.overflow_count ?? pack.wiki.o ?? 0} overflow)`);
+  console.log(`Schema:   ${pack.wiki.schema}`);
+  console.log(`Trust:    avg=${pack.trust_summary.avg} needs_evidence=${pack.trust_summary.needs_evidence}`);
+  console.log('Guidance: follow high-trust claims; hydrate source/evidence before relying on lower-trust claims.');
+  console.log(`Validate: sks wiki validate ${path.relative(root, file)}`);
+}
+
+function countTrustAnchors(wiki = {}) {
+  const rows = Array.isArray(wiki.a)
+    ? wiki.a
+    : (Array.isArray(wiki.anchors) ? wiki.anchors.map((anchor) => [anchor.id, null, null, null, null, null, null, null, null, anchor.trust_score, anchor.trust_band]) : []);
+  return rows.filter((row) => row?.[9] != null && row?.[10]).length;
 }
 
 async function projectWikiClaims(root) {
   const claims = [
     ['wiki-hooks', '.codex/hooks.json routes UserPromptSubmit, tool, permission, and Stop events through SKS guards.', '.codex/hooks.json', 'code', 'high'],
     ['wiki-config', '.codex/config.toml enables Codex App profiles, multi-agent support, and Team agent limits.', '.codex/config.toml', 'code', 'high'],
-    ['wiki-skills', '.agents/skills provides official repo-local routes for df, team, ralph, research, autoresearch, db, gx, wiki, and evaluation workflows.', '.agents/skills', 'code', 'medium'],
+    ['wiki-skills', '.agents/skills provides official repo-local routes for dfix, team, ralph, research, autoresearch, db, gx, wiki, and evaluation workflows.', '.agents/skills', 'code', 'medium'],
     ['wiki-agents', '.codex/agents defines Team analysis scout, planning, implementation, DB safety, and QA reviewer roles.', '.codex/agents', 'code', 'medium'],
     ['wiki-policy', '.sneakoscope/policy.json stores update-check, honest-mode, retention, database, performance, and prompt-pipeline policy.', '.sneakoscope/policy.json', 'contract', 'high'],
     ['wiki-memory', '.sneakoscope/memory stores Q0 raw, Q1 evidence, Q2 facts, Q3 tags, and Q4 control bits for hydratable context.', '.sneakoscope/memory', 'wiki', 'high'],
@@ -2560,7 +2797,7 @@ function buildTeamPlan(id, prompt, opts = {}) {
     bundle_size: roster.bundle_size,
     roster,
     team_model: {
-      phases: ['parallel_analysis_scouts', 'triwiki_refresh', 'debate_team', 'development_team'],
+      phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'development_team', 'triwiki_stage_refresh', 'review'],
       analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents. Each scout owns one investigation slice, records source paths/evidence, and returns TriWiki-ready findings before debate or implementation starts.`,
       debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices.`,
       development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`
@@ -2581,7 +2818,7 @@ function buildTeamPlan(id, prompt, opts = {}) {
     phases: [
       {
         id: 'parallel_analysis_scouting',
-        goal: 'Read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.',
+        goal: 'Read relevant TriWiki context first, then read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.',
         agents: roster.analysis_team.map((agent) => agent.id),
         max_parallel_subagents: agentSessions,
         write_policy: 'read-only',
@@ -2589,21 +2826,21 @@ function buildTeamPlan(id, prompt, opts = {}) {
       },
       {
         id: 'triwiki_refresh',
-        goal: 'Parent orchestrator refreshes and validates TriWiki from scout findings before assigning debate or development work.',
+        goal: 'Parent orchestrator refreshes and validates TriWiki from scout findings before assigning debate work.',
         agents: ['parent_orchestrator'],
-        commands: ['sks wiki pack', 'sks wiki validate .sneakoscope/wiki/context-pack.json'],
+        commands: ['sks wiki refresh', 'sks wiki validate .sneakoscope/wiki/context-pack.json'],
         output: '.sneakoscope/wiki/context-pack.json'
       },
       {
         id: 'planning_debate',
-        goal: 'Debate team maps user inconvenience, code risk, constraints, DB safety, tests, and viable approaches using the refreshed TriWiki context.',
+        goal: 'Debate team reads the current TriWiki pack, maps user inconvenience, code risk, constraints, DB safety, tests, and viable approaches, and hydrates low-trust claims from source immediately.',
         agents: roster.debate_team.map((agent) => agent.id),
         max_parallel_subagents: agentSessions,
         write_policy: 'read-only'
       },
       {
         id: 'consensus',
-        goal: 'Parent orchestrator synthesizes one agreed objective, rejected alternatives, acceptance criteria, and parallel implementation slices.',
+        goal: 'Parent orchestrator synthesizes one agreed objective, rejected alternatives, acceptance criteria, and parallel implementation slices, then refreshes/validates TriWiki before implementation handoff.',
         agents: ['parent_orchestrator'],
         output: 'agreed-objective.md'
       },
@@ -2614,14 +2851,14 @@ function buildTeamPlan(id, prompt, opts = {}) {
       },
       {
         id: 'parallel_implementation',
-        goal: 'Fresh executor developers take disjoint write sets and implement in parallel without reverting each other.',
+        goal: 'Fresh executor developers read relevant TriWiki plus current source, take disjoint write sets, implement in parallel without reverting each other, and trigger refresh after implementation changes or blockers.',
         agents: roster.development_team.map((agent) => agent.id),
         max_parallel_subagents: agentSessions,
         write_policy: 'workspace-write with explicit ownership'
       },
       {
         id: 'review_and_integrate',
-        goal: 'Strict reviewers check correctness, DB safety, tests, and evidence; user personas validate practical inconvenience; parent integrates final result.',
+        goal: 'Strict reviewers read/validate current TriWiki context, check correctness, DB safety, tests, and evidence; user personas validate practical inconvenience; parent integrates final result and refreshes after review findings.',
         agents: roster.validation_team.map((agent) => agent.id).concat(['parent_orchestrator'])
       }
     ],
@@ -2630,13 +2867,13 @@ function buildTeamPlan(id, prompt, opts = {}) {
       'Every useful subagent message, result, handoff, review finding, and integration decision is mirrored to team-live.md and team-transcript.jsonl.',
       'Analysis scouts, debate team, and development team are separate bundles; scouts finish before debate and debate closes before implementation workers start.',
       'Analysis scouts are read-only and maximize the available session budget for independent investigation before any code edit.',
-      'The parent refreshes and validates TriWiki after scouting so later handoffs use current source-backed context.',
+      'The parent and agents use relevant TriWiki before every stage, hydrate low-trust claims from source during the stage, and refresh/validate TriWiki after scouting, debate, consensus, implementation, and review changes.',
       'executor:N creates exactly N debate participants and then a separate N-person executor development team.',
       'Final user personas should not be overly smart or cooperative; they represent stubborn, inconvenience-averse real users.',
       'Planning agents do not edit files.',
       'Implementation workers receive disjoint ownership scopes.',
       'Workers are told they are not alone in the codebase and must not revert others edits.',
-      'Context tracking uses TriWiki as the SSOT; team handoffs must preserve id, hash, source path, and RGBA/trig coordinate anchors.',
+      'Context tracking uses TriWiki as the SSOT throughout the whole pipeline; team handoffs and final claims must preserve id, hash, source path, and RGBA/trig coordinate anchors.',
       'SKS hooks, DB safety rules, Ralph no-question rules, and H-Proof gates remain active.',
       'Destructive database operations remain forbidden.'
     ],
@@ -2673,7 +2910,7 @@ $Team ${plan.prompt}
 
 Use high reasoning for the Team route only, then return to the default/user-selected profile after completion. Use at most ${plan.agent_session_count || 3} subagent sessions at a time; the parent orchestrator is not counted.
 
-First run exactly ${plan.roster.bundle_size} read-only analysis_scout_N agents in parallel. Split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation into independent slices, then capture source-backed findings in team-analysis.md. Refresh and validate TriWiki before debate. Then run the debate team with exactly ${plan.roster.bundle_size} participants. Use the concrete roster below: final-user voices are stubborn and inconvenience-averse, executor voices are capable developers, reviewers are strict, and planners force consensus. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices. Close the debate team. Then form a fresh development team with exactly ${plan.roster.bundle_size} executor_N developers implementing slices in parallel with non-overlapping ownership. Review with the validation team, integrate results in the parent thread, run verification, and report evidence.
+Before each stage, read the relevant TriWiki context pack and hydrate low-trust claims from source. First run exactly ${plan.roster.bundle_size} read-only analysis_scout_N agents in parallel. Split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation into independent slices, then capture source-backed findings in team-analysis.md. Refresh and validate TriWiki before debate. Then run the debate team with exactly ${plan.roster.bundle_size} participants using the refreshed pack. Use the concrete roster below: final-user voices are stubborn and inconvenience-averse, executor voices are capable developers, reviewers are strict, and planners force consensus. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices, then refresh and validate TriWiki again. Close the debate team. Then form a fresh development team with exactly ${plan.roster.bundle_size} executor_N developers implementing slices in parallel with non-overlapping ownership. Refresh TriWiki after implementation changes or blockers. Review with the validation team, validate TriWiki again, integrate results in the parent thread, run verification, and report evidence.
 \`\`\`
 
 ## Session Budget
@@ -2691,7 +2928,7 @@ First run exactly ${plan.roster.bundle_size} read-only analysis_scout_N agents i
 - Pack: ${ctx.default_pack}
 - Refresh: \`${ctx.pack_command}\`
 - Validate: \`${ctx.validate_command}\`
-- Rule: selected text is only the visible slice; handoffs keep id, hash, source path, and RGBA/trig coordinate anchors hydratable.
+- Rule: use relevant TriWiki before every stage, hydrate low-trust claims during the stage, refresh after findings/artifact changes, validate before handoffs/final claims, and keep id, hash, source path, and RGBA/trig coordinate anchors hydratable.
 
 ## Analysis Scouts
 
@@ -2701,7 +2938,7 @@ Scout rules:
 - Read-only only.
 - Each scout owns one independent investigation slice.
 - Return source paths, risks, claims, and suggested implementation slices in TriWiki-ready form.
-- Parent updates team-analysis.md, runs \`${ctx.pack_command}\`, then runs \`${ctx.validate_command}\` before debate/development.
+- Parent updates team-analysis.md, runs \`${ctx.refresh_command || ctx.pack_command}\` or \`${ctx.pack_command}\`, then runs \`${ctx.validate_command}\` before debate/development.
 
 ## Debate Team
 

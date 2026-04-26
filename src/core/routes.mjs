@@ -1,4 +1,4 @@
-export const USAGE_TOPICS = 'install|setup|team|ralph|research|db|codex-app|df|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|gx|wiki';
+export const USAGE_TOPICS = 'install|setup|team|ralph|research|db|codex-app|dfix|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|gx|wiki';
 
 export const RECOMMENDED_MCP_SERVERS = [
   {
@@ -34,32 +34,66 @@ export function triwikiContextTracking(commandPrefix = 'sks') {
     ssot: 'triwiki',
     default_pack: '.sneakoscope/wiki/context-pack.json',
     pack_command: `${prefix} wiki pack`,
+    refresh_command: `${prefix} wiki refresh`,
+    prune_command: `${prefix} wiki prune`,
     validate_command: `${prefix} wiki validate .sneakoscope/wiki/context-pack.json`,
     hydrate_policy: 'hydrate_by_id_hash_source_path_rgba_trig_coordinate',
     selected_text_policy: 'selected_text_is_only_the_visible_slice',
-    required_for: ['long_running_routes', 'team_handoffs', 'context_pressure', 'cross_turn_continuity']
+    stage_policy: [
+      'before_each_route_stage_read_relevant_context_pack',
+      'during_each_stage_hydrate_relevant_low_trust_claims_from_source',
+      'after_new_findings_or_artifact_changes_refresh_or_pack',
+      'before_each_handoff_validate_context_pack',
+      'before_final_answer_recheck_relevant_wiki_claims_against_sources'
+    ],
+    required_for: ['every_work_stage', 'long_running_routes', 'team_handoffs', 'context_pressure', 'cross_turn_continuity']
   };
 }
 
 export function triwikiContextTrackingText(commandPrefix = 'sks') {
   const ctx = triwikiContextTracking(commandPrefix);
-  return `Context tracking SSOT: TriWiki. Build or refresh ${ctx.default_pack} with "${ctx.pack_command}" and validate it with "${ctx.validate_command}". Selected text is only the visible slice; non-selected claims remain hydratable by id, hash, source path, and RGBA/trig coordinate.`;
+  return `Context tracking SSOT: TriWiki. Use relevant TriWiki context at every work stage, not only at the first refresh: read ${ctx.default_pack} before each route phase, hydrate relevant low-trust claims from source during the phase, refresh with "${ctx.refresh_command}" or "${ctx.pack_command}" after new findings/artifact changes, prune stale/oversized wiki state with "${ctx.prune_command}" when retention matters, and validate with "${ctx.validate_command}" before each handoff or final claim. Selected text is only the visible slice; non-selected claims remain hydratable by id, hash, source path, and RGBA/trig coordinate. Follow high-trust claims unless newer source evidence contradicts them; low-trust claims should trigger source/evidence hydration before implementation or final claims.`;
+}
+
+export function triwikiStagePolicyText(commandPrefix = 'sks') {
+  const ctx = triwikiContextTracking(commandPrefix);
+  return [
+    'TriWiki stage policy:',
+    `- Before each route phase, read the relevant parts of ${ctx.default_pack} instead of relying on memory or a one-time initial summary.`,
+    '- During the phase, when a decision touches a wiki claim, hydrate low-trust or stale claims from their source path/hash/RGBA anchor before relying on them.',
+    `- After new findings, changed artifacts, scout results, debate conclusions, implementation changes, reviews, or blockers, run "${ctx.refresh_command}" or "${ctx.pack_command}" so later stages see the update.`,
+    `- Before every handoff and before final output, run or require "${ctx.validate_command}" and re-check high-impact claims against current sources.`
+  ].join('\n');
 }
 
 export const ROUTES = [
   {
-    id: 'DF',
-    command: '$DF',
-    mode: 'DF',
+    id: 'DFix',
+    command: '$DFix',
+    mode: 'DFIX',
     route: 'fast design/content fix',
-    description: 'Small UI/content edits such as text color, copy, label, spacing, or translation. Avoids heavy loops.',
-    requiredSkills: ['df', 'prompt-pipeline', 'honest-mode'],
-    lifecycle: ['skill_context', 'smallest_scoped_edit', 'cheap_verification', 'honest_mode'],
+    description: 'Small UI/content edits such as text color, copy, label, spacing, or translation. Bypasses the general SKS pipeline and runs an ultralight task-list path.',
+    requiredSkills: ['dfix'],
+    lifecycle: ['micro_task_list', 'targeted_inspection', 'listed_edits_only', 'cheap_verification'],
+    context7Policy: 'optional',
+    reasoningPolicy: 'medium',
+    stopGate: 'none',
+    cliEntrypoint: 'sks dfix',
+    examples: ['$DFix 글자 색 바꿔줘', '$DFix 내용을 영어로 바꿔줘']
+  },
+  {
+    id: 'Answer',
+    command: '$Answer',
+    mode: 'ANSWER',
+    route: 'answer-only research',
+    description: 'Answer questions without starting implementation. Uses TriWiki, web, Context7 when relevant, and Honest Mode fact-checking.',
+    requiredSkills: ['answer', 'honest-mode'],
+    lifecycle: ['intent_classification', 'triwiki_hydration', 'web_or_context7_evidence_when_needed', 'honest_fact_check', 'direct_answer'],
     context7Policy: 'if_external_docs',
     reasoningPolicy: 'medium',
-    stopGate: 'honest_mode',
-    cliEntrypoint: 'sks df',
-    examples: ['$DF 글자 색 바꿔줘', '$DF 내용을 영어로 바꿔줘']
+    stopGate: 'none',
+    cliEntrypoint: 'implicit question route',
+    examples: ['이 파이프라인이 왜 이렇게 동작해?', 'What does this hook do?']
   },
   {
     id: 'SKS',
@@ -161,6 +195,21 @@ export const ROUTES = [
     examples: ['$GX render a visual context cartridge']
   },
   {
+    id: 'Wiki',
+    command: '$Wiki',
+    mode: 'WIKI',
+    route: 'TriWiki refresh and maintenance',
+    description: 'Refresh, pack, validate, or prune TriWiki context packs from Codex App.',
+    appSkillAliases: ['wiki-refresh', 'wikirefresh'],
+    requiredSkills: ['wiki', 'sks', 'honest-mode'],
+    lifecycle: ['intent_classification', 'wiki_refresh_or_pack', 'wiki_validate', 'honest_mode'],
+    context7Policy: 'optional',
+    reasoningPolicy: 'medium',
+    stopGate: 'none',
+    cliEntrypoint: 'sks wiki refresh|pack|validate|prune',
+    examples: ['$Wiki refresh', '$WikiRefresh prune and validate']
+  },
+  {
     id: 'Help',
     command: '$Help',
     mode: 'HELP',
@@ -195,10 +244,10 @@ export const COMMAND_CATALOG = [
   { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
   { name: 'codex-app', usage: 'sks codex-app', description: 'Show Codex App setup files and example prompts.' },
-  { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DF and $Team.' },
-  { name: 'df', usage: 'sks df', description: 'Explain $DF fast design/content fix mode.' },
+  { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Team.' },
+  { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight design/content fix mode.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
-  { name: 'pipeline', usage: 'sks pipeline status|resume [--json]', description: 'Inspect the active skill-first route and its completion gates.' },
+  { name: 'pipeline', usage: 'sks pipeline status|resume|answer ...', description: 'Inspect the active skill-first route, pass mandatory ambiguity gates, and inspect completion gates.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
   { name: 'conflicts', usage: 'sks conflicts check|prompt [--json]', description: 'Detect other Codex harnesses such as OMX/DCodex and print the GPT-5.5 high cleanup prompt.' },
   { name: 'versioning', usage: 'sks versioning status|bump|pre-commit [--json]', description: 'Manage automatic project version bumps on every commit with a shared Git lock.' },
@@ -212,7 +261,7 @@ export const COMMAND_CATALOG = [
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run frontier-style research missions with novelty and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
-  { name: 'wiki', usage: 'sks wiki coords|pack|validate ...', description: 'Build and validate RGBA/trig LLM Wiki coordinate context packs.' },
+  { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate ...', description: 'Build, refresh, prune, and validate RGBA/trig LLM Wiki coordinate context packs; use `sks wiki refresh` before relying on handoff context.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
   { name: 'team', usage: 'sks team "task" [executor:5 reviewer:2 user:1]|log|tail|watch|status|event ...', description: 'Create and observe a scout-first Team mission: parallel analysis, TriWiki refresh, role debate, then executor parallel development.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
@@ -249,20 +298,37 @@ export function looksLikeFastDesignFix(prompt) {
   const text = String(prompt || '');
   const designCue = /(글자|텍스트|문구|내용|색|컬러|폰트|간격|여백|정렬|버튼|라벨|영어|한국어|번역|copy|text|color|font|spacing|padding|margin|align|label|button|translate)/i.test(text);
   const changeCue = /(바꿔|변경|수정|교체|고쳐|영어로|한국어로|change|replace|update|make|turn|translate|fix)/i.test(text);
-  return designCue && changeCue;
+  return designCue && changeCue && (!looksLikeAnswerOnlyRequest(text) || looksLikeDirectWorkRequest(text));
 }
 
 export function routePrompt(prompt) {
   const command = dollarCommand(prompt);
   if (command) return routeById(command) || null;
   const text = String(prompt || '');
-  if (looksLikeFastDesignFix(text)) return routeById('DF');
+  if (looksLikeFastDesignFix(text)) return routeById('DFix');
+  if (looksLikeAnswerOnlyRequest(text)) return routeById('Answer');
   if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql|mcp)\b/i.test(text)) return routeById('DB');
   if (/\b(team|multi-agent|subagent|parallel agents|agent team|병렬|팀)\b/i.test(text)) return routeById('Team');
   if (/\b(autoresearch|experiment|benchmark|SEO|GEO|ranking|optimi[sz]e|improve metric|discoverability|visibility|github stars?|npm downloads?|검색|노출|스타|다운로드)\b/i.test(text)) return routeById('AutoResearch');
   if (/\b(research|hypothesis|falsify|novelty|frontier|조사|연구)\b/i.test(text)) return routeById('Research');
+  if (/(wiki\s+(refresh|pack|validate|prune)|triwiki\s+(refresh|pack|validate)|위키\s*(갱신|리프레시|정리|검증|패킹)|트라이위키|triwiki)/i.test(text)) return routeById('Wiki');
   if (/\b(GX|vgraph|visual context|render cartridge|wiki coordinate|rgba|trig|llm wiki)\b/i.test(text)) return routeById('GX');
   return routeById('SKS');
+}
+
+export function looksLikeAnswerOnlyRequest(prompt = '') {
+  const text = String(prompt || '').trim();
+  if (!text) return false;
+  const infoCue = /(왜|뭐야|무엇|뭔가|어떤|어떻게|언제|어디|누구|얼마|가능해|맞아|인가|인지|차이|의미|원리|이유|방법|설명|알려줘|요약|정리|비교|찾아줘|찾아봐|검색|조사|근거|출처|fact|source|cite|explain|what|why|how|when|where|who|which|whether|compare|summari[sz]e|search|look up|research|tell me|question|\?)/i.test(text);
+  if (!infoCue) return false;
+  return !looksLikeDirectWorkRequest(text);
+}
+
+export function looksLikeDirectWorkRequest(prompt = '') {
+  const text = String(prompt || '');
+  return looksLikeCodeChangingWork(text)
+    || /(작업|파이프라인|구현|수정|변경|추가|적용|반영|처리|수행).*(해줘|해달)/i.test(text)
+    || /(진행해|수행해|작업해|처리해|적용해|반영해|고쳐줘|바꿔줘|만들어줘|install|run|execute|test|deploy|commit|push)/i.test(text);
 }
 
 export function routeNeedsContext7(route, prompt = '') {
@@ -275,10 +341,10 @@ export function routeNeedsContext7(route, prompt = '') {
 export function routeRequiresSubagents(route, prompt = '') {
   if (!route) return false;
   if (route.id === 'Team') return true;
-  if (route.id === 'Help' || route.id === 'SKS') return false;
+  if (route.id === 'Help' || route.id === 'SKS' || route.id === 'Answer' || route.id === 'Wiki') return false;
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
   if (route.id === 'Ralph' || route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
-  if (route.id === 'DF') return looksLikeCodeChangingWork(prompt) && !looksLikeFastDesignFix(prompt);
+  if (route.id === 'DFix') return looksLikeCodeChangingWork(prompt) && !looksLikeFastDesignFix(prompt);
   return looksLikeExecutionWork(prompt);
 }
 

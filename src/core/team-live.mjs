@@ -70,7 +70,7 @@ export function defaultTeamDashboard(id, prompt, opts = {}) {
       event: `sks team event ${id} --agent <agent> --phase <phase> --message "..."`
     },
     agents: Object.fromEntries([...new Set([...DEFAULT_AGENTS, ...spec.roster.all_agents.map((agent) => agent.id)])].map((name) => [name, { status: 'pending', phase: null, last_seen: null }])),
-    phases: ['parallel_analysis_scouting', 'triwiki_refresh', 'debate_team', 'consensus', 'close_debate_team', 'parallel_development_team', 'strict_review_and_user_acceptance'],
+    phases: ['parallel_analysis_scouting', 'triwiki_refresh', 'debate_team', 'triwiki_refresh_after_consensus', 'parallel_development_team', 'triwiki_refresh_after_implementation', 'strict_review_and_user_acceptance'],
     latest_messages: []
   };
 }
@@ -96,7 +96,8 @@ ${prompt}
 - This file is the Codex App-visible replacement for tmux-style team panes.
 - Use at most ${spec.agentSessions} subagent sessions at a time unless the mission is recreated with a different budget.
 - Team mode has three bundles: parallel analysis scouts first, debate team second, then fresh parallel development team.
-- Analysis scouts are read-only and split repo, docs, tests, risk, API, and user-flow investigation before the parent refreshes TriWiki.
+- Use relevant TriWiki context before every stage, hydrate low-trust claims from source during the stage, refresh after findings/artifact changes, and validate before handoffs or final claims.
+- Analysis scouts are read-only and split repo, docs, tests, risk, API, and user-flow investigation before the parent refreshes TriWiki for debate.
 - executor:N means build N debate participants and then a separate N-person executor development team.
 - User personas are intentionally impatient, self-interested, stubborn, low-context, and dislike inconvenience.
 - Executors are capable developers with disjoint ownership.

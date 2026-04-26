@@ -76,8 +76,9 @@ export async function bumpProjectVersion(root, opts = {}) {
     pkg.version = formatSemver(target);
     await writeJsonAtomic(pkgPath, pkg);
   }
+  const sourceVersion = await syncSourcePackageVersion(root, formatSemver(target));
   const synced = await syncPackageLockVersions(root, formatSemver(target));
-  const staged = await stageVersionFiles(root, [pkgPath, ...synced.files]);
+  const staged = await stageVersionFiles(root, [pkgPath, ...synced.files, ...sourceVersion.files]);
   if (!staged.ok) return { ok: false, reason: 'git_add_version_files_failed', stderr: staged.stderr };
   if (statePath) {
     await writeJsonAtomic(statePath, {
@@ -95,7 +96,7 @@ export async function bumpProjectVersion(root, opts = {}) {
     version: formatSemver(target),
     previous_version: formatSemver(current),
     changed,
-    synced_files: synced.relative_files,
+    synced_files: [...synced.relative_files, ...sourceVersion.relative_files],
     staged_files: staged.relative_files,
     updated_at: nowIso()
   }).catch(() => {});
@@ -104,7 +105,7 @@ export async function bumpProjectVersion(root, opts = {}) {
     changed,
     version: formatSemver(target),
     previous_version: formatSemver(current),
-    synced_files: synced.relative_files,
+    synced_files: [...synced.relative_files, ...sourceVersion.relative_files],
     staged_files: staged.relative_files,
     lock_scope: git.common_dir
   };
@@ -185,6 +186,16 @@ async function syncPackageLockVersions(root, version) {
     }
   }
   return { files, relative_files: files.map((file) => path.relative(root, file)) };
+}
+
+async function syncSourcePackageVersion(root, version) {
+  const file = path.join(root, 'src', 'core', 'fsx.mjs');
+  const text = await readFileMaybe(file);
+  if (!text) return { files: [], relative_files: [] };
+  const next = text.replace(/export const PACKAGE_VERSION = ['"][^'"]+['"];/, `export const PACKAGE_VERSION = '${version}';`);
+  if (next === text) return { files: [], relative_files: [] };
+  await writeTextAtomic(file, next);
+  return { files: [file], relative_files: [path.relative(root, file)] };
 }
 
 async function stageVersionFiles(root, files) {
