@@ -161,10 +161,7 @@ async function postinstall() {
   const installRoot = path.resolve(process.env.INIT_CWD || process.cwd());
   const conflictScan = await scanHarnessConflicts(installRoot);
   if (conflictScan.hard_block) {
-    console.error('\nSneakoscope Codex install blocked.');
-    console.error(formatHarnessConflictReport(conflictScan));
-    console.error('\nRun the cleanup prompt above in Codex App with GPT-5.5 high mode, then rerun npm install.');
-    process.exitCode = 1;
+    await postinstallHarnessConflictNotice(conflictScan);
     return;
   }
   console.log('\nSneakoscope Codex installed.');
@@ -182,6 +179,40 @@ async function postinstall() {
   else if (context7Install.status === 'failed') console.log(`Context7 MCP: auto setup failed. Run \`sks context7 setup --scope global\` or \`sks setup\`. ${context7Install.error || ''}`.trim());
   console.log('Run `sks` to open the interactive setup UI, or run `sks setup` for the default global setup.');
   console.log('Project-only setup: `sks wizard` -> choose project, or `npx sks setup --install-scope project`.\n');
+}
+
+async function postinstallHarnessConflictNotice(conflictScan) {
+  console.log('\nSneakoscope Codex package installed, but SKS setup is blocked.');
+  console.log(formatHarnessConflictReport(conflictScan, { includePrompt: false }));
+  console.log('\nWhat this means: npm can finish installing the package, but `sks setup` and `sks doctor --fix` will refuse to activate SKS until the conflicting harness is removed with human approval.');
+  console.log('No files were removed by postinstall.');
+  console.log('Cleanup requires a human-approved Codex App session. Recommended model: GPT-5.5, reasoning: high.');
+  if (shouldAskPostinstallQuestion()) {
+    const answer = await askPostinstallQuestion('Show the cleanup prompt now? [y/N] ');
+    if (/^(y|yes|예|네|응)$/i.test(answer.trim())) {
+      console.log('\nCleanup prompt:\n');
+      console.log(llmHarnessCleanupPrompt(conflictScan));
+    } else {
+      console.log('Cleanup prompt skipped. You can print it later with: sks conflicts prompt');
+    }
+  } else {
+    console.log('Print the cleanup prompt later with: sks conflicts prompt');
+  }
+  console.log('After approved cleanup, rerun: sks setup && sks doctor --fix && sks selftest --mock\n');
+}
+
+function shouldAskPostinstallQuestion() {
+  if (process.env.SKS_POSTINSTALL_PROMPT === '1') return true;
+  return Boolean(input.isTTY && output.isTTY && process.env.CI !== 'true' && process.env.SKS_POSTINSTALL_NO_PROMPT !== '1');
+}
+
+async function askPostinstallQuestion(question) {
+  const rl = readline.createInterface({ input, output });
+  try {
+    return await rl.question(question);
+  } finally {
+    rl.close();
+  }
 }
 
 async function ensureSksCommandDuringInstall(opts = {}) {
@@ -1008,8 +1039,8 @@ Print the LLM cleanup prompt:
   sks conflicts prompt
 
 Install behavior:
-  npm install/postinstall blocks when OMX, DCodex, or their global/repo-level traces are detected.
-  sks setup and sks doctor --fix also refuse to continue until a human approves cleanup.
+  npm install/postinstall prints a clean setup-blocked notice when OMX, DCodex, or their global/repo-level traces are detected.
+  npm can finish installing the package, but sks setup and sks doctor --fix refuse to continue until a human approves cleanup.
   If cleanup is denied, SKS cannot be installed in that environment.
 
 Cleanup operator:
@@ -1615,7 +1646,11 @@ async function selftest() {
   const conflictScan = await scanHarnessConflicts(conflictTmp, { home: path.join(conflictTmp, 'home') });
   if (!conflictScan.hard_block || !formatHarnessConflictReport(conflictScan).includes('GPT-5.5')) throw new Error('selftest failed: OMX conflict did not block with cleanup prompt');
   const postinstallConflict = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
-  if (postinstallConflict.code === 0 || !String(postinstallConflict.stderr || postinstallConflict.stdout).includes('install blocked')) throw new Error('selftest failed: postinstall did not block OMX conflict');
+  if (postinstallConflict.code !== 0) throw new Error('selftest failed: postinstall conflict notice should not make npm install fail');
+  const postinstallConflictOutput = String(`${postinstallConflict.stdout}\n${postinstallConflict.stderr}`);
+  if (!postinstallConflictOutput.includes('SKS setup is blocked') || postinstallConflictOutput.includes('Cleanup prompt:')) throw new Error('selftest failed: postinstall conflict notice did not stay informational');
+  const postinstallConflictPrompt = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, input: 'y\n', env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_POSTINSTALL_PROMPT: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (postinstallConflictPrompt.code !== 0 || !String(postinstallConflictPrompt.stdout || '').includes('Goal: completely remove the conflicting Codex harnesses')) throw new Error('selftest failed: interactive postinstall prompt did not print cleanup prompt');
   const guardBlocked = await checkHarnessModification(tmp, { tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
   if (guardBlocked.action !== 'block') throw new Error('selftest failed: harness guard allowed skill tampering');
   const setupBlocked = await checkHarnessModification(tmp, { command: 'sks setup --force' });
