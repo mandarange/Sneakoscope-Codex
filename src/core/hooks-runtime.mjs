@@ -1,8 +1,10 @@
 import path from 'node:path';
-import { projectRoot, readJson, writeJsonAtomic, appendJsonl, readStdin, nowIso, exists, runProcess, which, PACKAGE_VERSION } from './fsx.mjs';
-import { containsUserQuestion, looksInteractiveCommand, noQuestionContinuationReason, interactiveCommandReason } from './no-question-guard.mjs';
-import { stateFile, missionDir } from './mission.mjs';
+import { projectRoot, readJson, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION } from './fsx.mjs';
+import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.mjs';
+import { missionDir, stateFile } from './mission.mjs';
 import { checkDbOperation, dbBlockReason } from './db-safety.mjs';
+import { checkHarnessModification, harnessGuardBlockReason } from './harness-guard.mjs';
+import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence } from './pipeline.mjs';
 
 async function loadHookPayload() {
   const raw = await readStdin();
@@ -54,35 +56,6 @@ function looksLikeUpdateAccept(prompt) {
   return /^(yes|y|ok|okay|update|upgrade|do it|go ahead|응|네|예|업데이트|해줘|진행)/i.test(String(prompt || '').trim());
 }
 
-function looksLikeFastDesignFix(prompt) {
-  const text = String(prompt || '');
-  const designCue = /(글자|텍스트|문구|내용|색|컬러|폰트|간격|여백|정렬|버튼|라벨|영어|한국어|번역|copy|text|color|font|spacing|padding|margin|align|label|button|translate)/i.test(text);
-  const changeCue = /(바꿔|변경|수정|교체|고쳐|영어로|한국어로|change|replace|update|make|turn|translate|fix)/i.test(text);
-  return designCue && changeCue;
-}
-
-function promptPipelineContext(prompt) {
-  const command = dollarCommand(prompt);
-  const fastDesign = command === 'DF' || looksLikeFastDesignFix(prompt);
-  const team = command === 'TEAM';
-  const wiki = command === 'GX' || /\b(llm wiki|wiki|context compression|context pack|hydrate|rgba|coordinate|좌표|컨텍스트|압축)\b/i.test(String(prompt || ''));
-  const autoresearch = command === 'AUTORESEARCH' || command === 'RESEARCH' || /\b(autoresearch|experiment|benchmark|hypothesis|research|optimi[sz]e|improve metric|falsify|novelty|SEO|GEO)\b/i.test(String(prompt || ''));
-  const route = command ? `$${command}` : (fastDesign ? '$DF inferred' : 'default');
-  const dfLine = fastDesign
-    ? '\nFast design fix: treat this as $DF. Do the smallest relevant edit, avoid Ralph/research loops, avoid broad redesign, and run only cheap verification when useful.'
-    : '';
-  const teamLine = team
-    ? '\nTeam route: first use a planning/debate team, synthesize one agreed objective, close planning agents, then form a fresh implementation team with disjoint write scopes.'
-    : '';
-  const autoresearchLine = autoresearch
-    ? '\nAutoResearch route: use an experiment loop with a clear program, fixed budget, metric, keep/discard decision, ledger, falsification, and next experiment.'
-    : '';
-  const wikiLine = wiki
-    ? '\nLLM Wiki route: preserve context through TriWiki RGBA/trig coordinate anchors. Prefer sks wiki pack for hydratable context; keep ids, hashes, source paths, and coordinates for non-selected claims instead of lossy summaries.'
-    : '';
-  return `SKS prompt pipeline active. Route: ${route}. Before work, respect the SKS update-check context if present. Optimize the user request before acting: extract intent, target files/surfaces, constraints, acceptance criteria, and the smallest safe execution path. Use explicit $ commands when present: $DF fast design/content edit, $Team multi-agent orchestration, $Ralph clarification-gated mission, $Research discovery run, $AutoResearch iterative experiment loop, $DB database safety, $GX visual context, $SKS general SKS help. Without a command, infer the lightest matching route and avoid heavy loops unless the task requires them. Preserve multi-turn context with LLM Wiki coordinate packs when compression or continuity matters. Do not stop at a plan when implementation was requested; continue until the stated goal is actually handled or a hard blocker is honestly reported. Before final answer, perform SKS Honest Mode: verify evidence, list tests run or gaps, call out uncertainty, and confirm the goal is actually complete.${dfLine}${teamLine}${autoresearchLine}${wikiLine}`;
-}
-
 export async function hookMain(name) {
   const payload = await loadHookPayload();
   const root = await projectRoot(payload.cwd || process.cwd());
@@ -100,7 +73,13 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
   if (!noQuestion) {
     const prompt = extractUserPrompt(payload);
     const updateContext = await updateCheckContext(root, payload, prompt);
-    return { continue: true, additionalContext: `${updateContext}${updateContext ? '\n\n' : ''}${promptPipelineContext(prompt)}` };
+    const command = dollarCommand(prompt);
+    const activeContext = await activeRouteContext(root, state);
+    const contexts = [updateContext];
+    if (activeContext && !command) contexts.push(routePipelineContext(prompt), activeContext);
+    else contexts.push((await prepareRoute(root, prompt, state)).additionalContext);
+    const additionalContext = contexts.filter(Boolean).join('\n\n');
+    return { continue: true, additionalContext, systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) };
   }
   const id = state.mission_id;
   if (id) await appendJsonl(path.join(missionDir(root, id), 'user_queue.jsonl'), { ts: nowIso(), payload });
@@ -111,6 +90,10 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
 }
 
 async function hookPreTool(root, state, payload, noQuestion) {
+  const harnessDecision = await checkHarnessModification(root, payload, { phase: 'pre-tool' });
+  if (harnessDecision.action === 'block') {
+    return { decision: 'block', permissionDecision: 'deny', reason: harnessGuardBlockReason(harnessDecision) };
+  }
   const dbDecision = await checkDbOperation(root, state, payload, { duringRalph: noQuestion });
   if (dbDecision.action === 'block') {
     return { decision: 'block', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
@@ -125,6 +108,8 @@ async function hookPostTool(root, state, payload, noQuestion) {
   if (dbDecision.action === 'block') {
     return { decision: 'block', reason: dbBlockReason(dbDecision) };
   }
+  await recordContext7Evidence(root, state, payload).catch(() => null);
+  await recordSubagentEvidence(root, state, payload).catch(() => null);
   if (!noQuestion) return { continue: true };
   const failed = payload.exit_code && payload.exit_code !== 0;
   if (failed) {
@@ -136,6 +121,10 @@ async function hookPostTool(root, state, payload, noQuestion) {
 }
 
 async function hookPermission(root, state, payload, noQuestion) {
+  const harnessDecision = await checkHarnessModification(root, payload, { phase: 'permission-request' });
+  if (harnessDecision.action === 'block') {
+    return { decision: 'deny', permissionDecision: 'deny', reason: harnessGuardBlockReason(harnessDecision) };
+  }
   const dbDecision = await checkDbOperation(root, state, payload, { duringRalph: noQuestion });
   if (dbDecision.action === 'block') {
     return { decision: 'deny', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
@@ -149,6 +138,8 @@ async function hookPermission(root, state, payload, noQuestion) {
 }
 
 async function hookStop(root, state, payload, noQuestion) {
+  const routeDecision = await evaluateStop(root, state, payload, { noQuestion });
+  if (routeDecision) return routeDecision;
   if (!noQuestion) {
     const last = extractLastMessage(payload);
     if (!hasHonestMode(last)) {
@@ -158,18 +149,6 @@ async function hookStop(root, state, payload, noQuestion) {
       };
     }
     return { continue: true };
-  }
-  const id = state.mission_id;
-  const last = extractLastMessage(payload);
-  if (containsUserQuestion(last)) return { decision: 'block', reason: noQuestionContinuationReason() };
-  if (id) {
-    for (const gateName of ['done-gate.json', 'research-gate.json']) {
-      const gatePath = path.join(missionDir(root, id), gateName);
-      if (await exists(gatePath)) {
-        const gate = await readJson(gatePath, {});
-        if (gate.passed === true) return { continue: true };
-      }
-    }
   }
   return {
     decision: 'block',
@@ -248,5 +227,49 @@ function hasHonestMode(text) {
 
 export async function emitHook(name) {
   const result = await hookMain(name);
-  process.stdout.write(`${JSON.stringify(result)}\n`);
+  process.stdout.write(`${JSON.stringify(normalizeHookResult(name, result))}\n`);
+}
+
+function normalizeHookResult(name, result = {}) {
+  const out = { ...result };
+  const eventName = codexHookEventName(name);
+  const specific = { ...(out.hookSpecificOutput || {}) };
+  if (out.additionalContext && (eventName === 'UserPromptSubmit' || eventName === 'PostToolUse')) {
+    specific.hookEventName = eventName;
+    specific.additionalContext = out.additionalContext;
+  }
+  if ((eventName === 'PreToolUse' || eventName === 'PermissionRequest') && (out.decision === 'block' || out.permissionDecision === 'deny' || out.decision === 'deny')) {
+    specific.hookEventName = eventName;
+    specific.permissionDecision = out.permissionDecision || 'deny';
+    specific.reason = out.reason || 'SKS guard denied this action.';
+  }
+  if (Object.keys(specific).length) out.hookSpecificOutput = { hookEventName: eventName, ...specific };
+  if (!out.systemMessage) out.systemMessage = visibleHookMessage(name, out.reason || out.additionalContext || '');
+  if (!out.statusMessage) out.statusMessage = out.systemMessage;
+  return out;
+}
+
+function codexHookEventName(name) {
+  return {
+    'user-prompt-submit': 'UserPromptSubmit',
+    'pre-tool': 'PreToolUse',
+    'post-tool': 'PostToolUse',
+    'permission-request': 'PermissionRequest',
+    'stop': 'Stop'
+  }[name] || name;
+}
+
+function visibleHookMessage(name, text = '') {
+  const body = String(text || '');
+  if (name === 'user-prompt-submit') {
+    if (body.includes('MANDATORY $Ralph')) return 'SKS: Ralph clarification gate prepared in Codex App.';
+    if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team route, live transcript, and subagent plan injected.';
+    if (body.includes('Subagent policy: REQUIRED')) return 'SKS: route context injected; subagent execution gate is active.';
+    return 'SKS: skill-first route context injected.';
+  }
+  if (name === 'post-tool') return 'SKS: tool result inspected; Context7/subagent/DB evidence updated when relevant.';
+  if (name === 'stop') return body ? 'SKS: stop gate checked; continuing until route evidence passes.' : 'SKS: stop gate checked.';
+  if (name === 'permission-request') return body ? 'SKS: permission request evaluated by harness guards.' : 'SKS: permission request inspected.';
+  if (name === 'pre-tool') return body ? 'SKS: tool call inspected by harness guards.' : 'SKS: tool call inspected.';
+  return 'SKS: hook evaluated.';
 }
