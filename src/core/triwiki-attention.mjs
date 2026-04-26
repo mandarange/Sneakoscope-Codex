@@ -149,7 +149,7 @@ export function selectClaims(mission, claims, budget = {}) {
   const selectedIds = new Set();
   const required = scored
     .filter((x) => Number(x.claim.required_weight) > 0)
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => (Number(b.claim.required_weight) - Number(a.claim.required_weight)) || b.score - a.score);
   for (const item of required) {
     if (selected.length >= maxClaims) break;
     selected.push(item);
@@ -157,7 +157,7 @@ export function selectClaims(mission, claims, budget = {}) {
   }
   const fill = topKByScore(scored.filter((x) => !selectedIds.has(x.claim.id)), maxClaims - selected.length);
   return [...selected, ...fill]
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => (Number(b.claim.required_weight || 0) - Number(a.claim.required_weight || 0)) || b.score - a.score)
     .map((x) => withTrust({ ...x.claim, triwiki_score: Number(x.score.toFixed(4)) }, trustPolicy));
 }
 
