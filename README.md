@@ -10,7 +10,7 @@
   <a href="https://npm-stat.com/charts.html?package=sneakoscope"><img alt="monthly downloads" src="https://img.shields.io/npm/dm/sneakoscope?label=monthly%20downloads&cacheSeconds=3600"></a>
   <a href="https://github.com/mandarange/Sneakoscope-Codex"><img alt="GitHub stars" src="https://img.shields.io/github/stars/mandarange/Sneakoscope-Codex?style=flat"></a>
   <a href="https://www.npmjs.com/package/sneakoscope"><img alt="license" src="https://img.shields.io/npm/l/sneakoscope.svg"></a>
-  <img alt="node >=20.11" src="https://img.shields.io/badge/node-%3E%3D20.11-339933.svg">
+  <img alt="Node.js 20.11+" src="https://img.shields.io/badge/node-20.11%2B-339933.svg">
 </p>
 
 <p align="center">
