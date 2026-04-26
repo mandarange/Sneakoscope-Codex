@@ -5,7 +5,7 @@ import { stdin as input, stdout as output } from 'node:process';
 import { projectRoot, readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, tmpdir, packageRoot, dirSize, formatBytes, which, runProcess, PACKAGE_VERSION } from '../core/fsx.mjs';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../core/init.mjs';
 import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
-import { createMission, loadMission, findLatestMission, setCurrent, stateFile } from '../core/mission.mjs';
+import { createMission, loadMission, findLatestMission, missionDir, setCurrent, stateFile } from '../core/mission.mjs';
 import { buildQuestionSchema, writeQuestions } from '../core/questions.mjs';
 import { sealContract, validateAnswers } from '../core/decision-contract.mjs';
 import { containsUserQuestion, noQuestionContinuationReason } from '../core/no-question-guard.mjs';
@@ -13,61 +13,22 @@ import { evaluateDoneGate, defaultDoneGate } from '../core/hproof.mjs';
 import { emitHook } from '../core/hooks-runtime.mjs';
 import { storageReport, enforceRetention } from '../core/retention.mjs';
 import { classifySql, classifyCommand, loadDbSafetyPolicy, safeSupabaseMcpConfig, checkSqlFile, checkDbOperation, scanDbSafety } from '../core/db-safety.mjs';
+import { checkHarnessModification, harnessGuardStatus, isHarnessSourceProject } from '../core/harness-guard.mjs';
+import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
+import { context7Docs, context7Resolve, context7Text, context7Tools } from '../core/context7-client.mjs';
 import { rustInfo } from '../core/rust-accelerator.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
 import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
+import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, RECOMMENDED_SKILLS, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, triwikiContextTracking } from '../core/routes.mjs';
+import { context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence } from '../core/pipeline.mjs';
+import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail } from '../core/team-live.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
 const REPOSITORY_URL = 'https://github.com/mandarange/Sneakoscope-Codex.git';
-const USAGE_TOPICS = 'install|setup|team|ralph|research|db|codex-app|df|dollar|eval|gx|wiki';
-
-const DOLLAR_COMMANDS = [
-  { command: '$DF', route: 'fast design/content fix', description: 'Small UI/content edits such as text color, copy, label, spacing, or translation. Avoids heavy loops.' },
-  { command: '$SKS', route: 'general SKS workflow', description: 'General Sneakoscope setup, help, status, and workflow routing.' },
-  { command: '$Team', route: 'multi-agent team orchestration', description: 'Debate options, agree on an objective, form a fresh implementation team, and coordinate parallel specialist work.' },
-  { command: '$Ralph', route: 'Ralph mission', description: 'Mandatory clarification and no-question autonomous mission workflow.' },
-  { command: '$Research', route: 'research mission', description: 'Frontier discovery, hypotheses, falsification, and testable predictions.' },
-  { command: '$AutoResearch', route: 'iterative experiment loop', description: 'Program, hypothesize, test, measure, keep/discard, falsify, and report evidence.' },
-  { command: '$DB', route: 'database safety', description: 'Database, Supabase, migration, SQL, or MCP safety checks.' },
-  { command: '$GX', route: 'visual context', description: 'Deterministic GX visual context cartridges.' },
-  { command: '$Help', route: 'command help', description: 'Explain installed SKS commands and workflows.' }
-];
-
-const COMMAND_CATALOG = [
-  { name: 'help', usage: 'sks help [topic]', description: 'Show CLI help or focused help for a topic.' },
-  { name: 'version', usage: 'sks version | sks --version', description: 'Print the installed Sneakoscope Codex version.' },
-  { name: 'update-check', usage: 'sks update-check [--json]', description: 'Check npm for the latest Sneakoscope Codex version.' },
-  { name: 'wizard', usage: 'sks wizard', description: 'Open an interactive setup UI for install scope, setup, doctor, and verification.' },
-  { name: 'commands', usage: 'sks commands [--json]', description: 'List every user-facing command with a short description.' },
-  { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
-  { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
-  { name: 'install-prompt', usage: 'sks install-prompt [--project] [--full]', description: 'Print a short LLM-ready prompt that installs and configures SKS automatically.' },
-  { name: 'codex-app', usage: 'sks codex-app', description: 'Show Codex App setup files and example prompts.' },
-  { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DF.' },
-  { name: 'df', usage: 'sks df', description: 'Explain $DF fast design/content fix mode.' },
-  { name: 'aliases', usage: 'sks aliases', description: 'Show command aliases and npm binary names.' },
-  { name: 'setup', usage: 'sks setup [--install-scope global|project] [--local-only] [--force] [--json]', description: 'Initialize SKS state, Codex App files, hooks, skills, and rules.' },
-  { name: 'fix-path', usage: 'sks fix-path [--install-scope global|project] [--json]', description: 'Refresh hook commands with the resolved SKS binary path.' },
-  { name: 'doctor', usage: 'sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]', description: 'Check Node, Codex CLI, install scope, hooks, skills, DB guard, and Codex App files.' },
-  { name: 'init', usage: 'sks init [--force] [--local-only] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
-  { name: 'selftest', usage: 'sks selftest [--mock]', description: 'Run local smoke tests without calling a model.' },
-  { name: 'ralph', usage: 'sks ralph prepare|answer|run|status ...', description: 'Run mandatory-clarification Ralph missions with a no-question execution loop.' },
-  { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run frontier-style research missions with novelty and falsification gates.' },
-  { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
-  { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
-  { name: 'wiki', usage: 'sks wiki coords|pack|validate ...', description: 'Build and validate RGBA/trig LLM Wiki coordinate context packs.' },
-  { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'team', usage: 'sks team "task" [--json]', description: 'Create a Codex multi-agent Team mission with consensus and implementation phases.' },
-  { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
-  { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
-  { name: 'gc', usage: 'sks gc [--dry-run] [--json]', description: 'Compact oversized logs and prune stale runtime artifacts.' },
-  { name: 'memory', usage: 'sks memory [--dry-run] [--json]', description: 'Alias for SKS garbage collection and retention handling.' },
-  { name: 'stats', usage: 'sks stats [--json]', description: 'Show package and .sneakoscope storage size.' }
-];
 
 function installScopeFromArgs(args = [], fallback = 'global') {
   if (flag(args, '--project')) return 'project';
@@ -89,10 +50,14 @@ export async function main(args) {
   if (cmd === 'commands') return commands(tail);
   if (cmd === 'usage') return usage(tail);
   if (cmd === 'quickstart') return quickstart();
-  if (cmd === 'install-prompt') return installPrompt(tail);
   if (cmd === 'codex-app') return codexAppHelp();
   if (cmd === 'dollar-commands' || cmd === 'dollars' || cmd === '$') return dollarCommands(tail);
   if (String(cmd).toLowerCase() === 'df') return dfHelp();
+  if (cmd === 'context7') return context7(sub, rest);
+  if (cmd === 'pipeline') return pipeline(sub, rest);
+  if (cmd === 'guard') return guard(sub, rest);
+  if (cmd === 'conflicts') return conflicts(sub, rest);
+  if (cmd === 'reasoning') return reasoningCommand(tail);
   if (cmd === 'aliases') return aliases();
   if (cmd === 'setup') return setup(tail);
   if (cmd === 'fix-path') return fixPath(tail);
@@ -129,10 +94,14 @@ Usage:
   sks commands [--json]
   sks usage [${USAGE_TOPICS}]
   sks quickstart
-  sks install-prompt [--project] [--full]
   sks codex-app
   sks dollar-commands [--json]
   sks df
+  sks context7 check|setup|tools|resolve|docs|evidence ...
+  sks pipeline status|resume [--json]
+  sks guard check [--json]
+  sks conflicts check|prompt [--json]
+  sks reasoning ["prompt"] [--json]
   sks aliases
   sks setup [--install-scope global|project] [--local-only] [--force] [--json]
   sks fix-path [--install-scope global|project] [--json]
@@ -143,7 +112,9 @@ Usage:
   sks ralph answer <mission-id|latest> <answers.json>
   sks ralph run <mission-id|latest> [--mock] [--max-cycles N]
   sks ralph status <mission-id|latest>
-  sks team "task" [--json]
+  sks team "task" [executor:5 reviewer:2 user:1] [--json]
+  sks team log|tail|watch|status [mission-id|latest]
+  sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."
   sks research prepare "topic" [--depth frontier]
   sks research run <mission-id|latest> [--mock] [--max-cycles N]
   sks research status <mission-id|latest>
@@ -168,11 +139,13 @@ Usage:
   sks memory [--dry-run] [--json]
   sks stats [--json]
 
+Codex App prompt commands:
+${formatDollarCommandsCompact('  ')}
+
 Discovery:
   sks commands       Full command list with descriptions
   sks usage ralph    Workflow examples for one topic
-  sks install-prompt Copy/paste prompt for an LLM installer
-  sks dollar-commands Codex App $ commands, including $DF
+  sks dollar-commands Codex App $ commands: ${dollarCommandNames()}
 `);
 }
 
@@ -184,10 +157,101 @@ function shouldShowWizard() {
   return Boolean(input.isTTY && output.isTTY && process.env.SKS_NO_WIZARD !== '1' && process.env.CI !== 'true');
 }
 
-function postinstall() {
+async function postinstall() {
+  const installRoot = path.resolve(process.env.INIT_CWD || process.cwd());
+  const conflictScan = await scanHarnessConflicts(installRoot);
+  if (conflictScan.hard_block) {
+    console.error('\nSneakoscope Codex install blocked.');
+    console.error(formatHarnessConflictReport(conflictScan));
+    console.error('\nRun the cleanup prompt above in Codex App with GPT-5.5 high mode, then rerun npm install.');
+    process.exitCode = 1;
+    return;
+  }
   console.log('\nSneakoscope Codex installed.');
+  const shim = await ensureSksCommandDuringInstall();
+  if (shim.status === 'present') console.log(`SKS command: available (${shim.command}).`);
+  else if (shim.status === 'created') console.log(`SKS command: shim created at ${shim.command}.`);
+  else if (shim.status === 'created_not_on_path') console.log(`SKS command: shim created at ${shim.command}. Add ${path.dirname(shim.command)} to PATH, or run npx -y -p sneakoscope sks.`);
+  else if (shim.status === 'skipped') console.log(`SKS command: skipped (${shim.reason}).`);
+  else console.log(`SKS command: shim unavailable. Use npx -y -p sneakoscope sks. ${shim.error || ''}`.trim());
+  const context7Install = await ensureGlobalContext7DuringInstall();
+  if (context7Install.status === 'present') console.log('Context7 MCP: already configured for Codex.');
+  else if (context7Install.status === 'installed') console.log('Context7 MCP: configured for Codex.');
+  else if (context7Install.status === 'codex_missing') console.log('Context7 MCP: Codex CLI missing. Install @openai/codex or set SKS_CODEX_BIN, then run `sks context7 setup --scope global` or `sks setup` in a project.');
+  else if (context7Install.status === 'skipped') console.log(`Context7 MCP: skipped (${context7Install.reason}).`);
+  else if (context7Install.status === 'failed') console.log(`Context7 MCP: auto setup failed. Run \`sks context7 setup --scope global\` or \`sks setup\`. ${context7Install.error || ''}`.trim());
   console.log('Run `sks` to open the interactive setup UI, or run `sks setup` for the default global setup.');
   console.log('Project-only setup: `sks wizard` -> choose project, or `npx sks setup --install-scope project`.\n');
+}
+
+async function ensureSksCommandDuringInstall(opts = {}) {
+  if (process.env.SKS_SKIP_POSTINSTALL_SHIM === '1' && !opts.force) return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_SHIM=1' };
+  const pathEnv = opts.pathEnv ?? process.env.PATH ?? '';
+  const existing = await findCommandOnPath('sks', pathEnv);
+  if (isStableSksBin(existing)) return { status: 'present', command: existing };
+  const nodeBin = opts.nodeBin || process.execPath;
+  const target = opts.target || path.join(packageRoot(), 'bin', 'sks.mjs');
+  const dirs = candidateShimDirs(pathEnv, opts.home || process.env.HOME);
+  const script = process.platform === 'win32'
+    ? `@echo off\r\n"${nodeBin}" "${target}" %*\r\n`
+    : `#!/bin/sh\nexec "${nodeBin}" "${target}" "$@"\n`;
+  const suffix = process.platform === 'win32' ? '.cmd' : '';
+  let createdFallback = null;
+  let lastError = '';
+  for (const entry of dirs) {
+    const dest = path.join(entry.dir, `sks${suffix}`);
+    try {
+      await ensureDir(entry.dir);
+      await writeTextAtomic(dest, script);
+      if (process.platform !== 'win32') await fsp.chmod(dest, 0o755).catch(() => {});
+      if (entry.onPath) return { status: 'created', command: dest };
+      createdFallback ||= dest;
+    } catch (err) {
+      lastError = err.message;
+    }
+  }
+  if (createdFallback) return { status: 'created_not_on_path', command: createdFallback };
+  return { status: 'failed', error: lastError };
+}
+
+function candidateShimDirs(pathEnv, home) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of String(pathEnv || '').split(path.delimiter).filter(Boolean)) {
+    const dir = path.resolve(raw);
+    if (seen.has(dir) || isTransientNpmBinPath(dir)) continue;
+    seen.add(dir);
+    out.push({ dir, onPath: true });
+  }
+  for (const raw of [home && path.join(home, '.local', 'bin'), home && path.join(home, 'bin')].filter(Boolean)) {
+    const dir = path.resolve(raw);
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    out.push({ dir, onPath: false });
+  }
+  return out;
+}
+
+async function findCommandOnPath(name, pathEnv) {
+  const suffixes = process.platform === 'win32' ? ['.cmd', '.exe', ''] : [''];
+  for (const dir of String(pathEnv || '').split(path.delimiter).filter(Boolean)) {
+    for (const suffix of suffixes) {
+      const candidate = path.join(dir, `${name}${suffix}`);
+      if (await exists(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+async function ensureGlobalContext7DuringInstall() {
+  if (process.env.SKS_SKIP_POSTINSTALL_CONTEXT7 === '1') return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_CONTEXT7=1' };
+  const codex = await getCodexInfo().catch(() => ({}));
+  if (!codex.bin) return { status: 'codex_missing' };
+  const list = await runProcess(codex.bin, ['mcp', 'list'], { timeoutMs: 8000, maxOutputBytes: 32 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
+  if (list.code === 0 && /context7/i.test(`${list.stdout}\n${list.stderr}`)) return { status: 'present' };
+  const add = await runProcess(codex.bin, ['mcp', 'add', 'context7', '--', 'npx', '-y', '@upstash/context7-mcp@latest'], { timeoutMs: 30000, maxOutputBytes: 64 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
+  if (add.code === 0) return { status: 'installed' };
+  return { status: 'failed', error: `${add.stderr || add.stdout || 'codex mcp add failed'}`.trim() };
 }
 
 async function wizard(args = []) {
@@ -268,20 +332,38 @@ async function updateCheck(args = []) {
 }
 
 function commands(args = []) {
-  if (flag(args, '--json')) return console.log(JSON.stringify({ aliases: ['sks', 'sneakoscope'], dollar_commands: DOLLAR_COMMANDS, commands: COMMAND_CATALOG }, null, 2));
+  if (flag(args, '--json')) return console.log(JSON.stringify({ aliases: ['sks', 'sneakoscope'], dollar_commands: DOLLAR_COMMANDS, app_skill_aliases: DOLLAR_COMMAND_ALIASES, commands: COMMAND_CATALOG }, null, 2));
   console.log('Sneakoscope Codex Commands\n');
   console.log('Aliases: sks, sneakoscope\n');
   const width = Math.max(...COMMAND_CATALOG.map((c) => c.usage.length));
   for (const c of COMMAND_CATALOG) console.log(`${c.usage.padEnd(width)}  ${c.description}`);
+  console.log('\nCodex App $ Commands\n');
+  console.log('Use these inside Codex App or another agent prompt. They are prompt routes, not terminal commands.\n');
+  console.log(formatDollarCommandsDetailed());
+  console.log(`\nCodex App picker aliases: ${DOLLAR_COMMAND_ALIASES.map((x) => x.app_skill).join(', ')}`);
 }
 
 function dollarCommands(args = []) {
-  if (flag(args, '--json')) return console.log(JSON.stringify({ dollar_commands: DOLLAR_COMMANDS }, null, 2));
+  if (flag(args, '--json')) return console.log(JSON.stringify({ dollar_commands: DOLLAR_COMMANDS, app_skill_aliases: DOLLAR_COMMAND_ALIASES }, null, 2));
   console.log('Sneakoscope Codex $ Commands\n');
   console.log('Use these inside Codex App or another agent prompt. Shells treat $ as variable syntax, so these are prompt commands, not terminal commands.\n');
-  const width = Math.max(...DOLLAR_COMMANDS.map((c) => c.command.length));
-  for (const c of DOLLAR_COMMANDS) console.log(`${c.command.padEnd(width)}  ${c.route}: ${c.description}`);
+  console.log(formatDollarCommandsDetailed());
+  console.log(`\nCodex App picker aliases: ${DOLLAR_COMMAND_ALIASES.map((x) => x.app_skill).join(', ')}`);
   console.log('\nDefault pipeline: even without a $ command, SKS optimizes the prompt and infers the lightest route. Simple design/content edits infer $DF.');
+}
+
+function formatDollarCommandsDetailed(indent = '') {
+  const width = Math.max(...DOLLAR_COMMANDS.map((c) => c.command.length));
+  return DOLLAR_COMMANDS.map((c) => `${indent}${c.command.padEnd(width)}  ${c.route}: ${c.description}`).join('\n');
+}
+
+function formatDollarCommandsCompact(indent = '') {
+  const width = Math.max(...DOLLAR_COMMANDS.map((c) => c.command.length));
+  return DOLLAR_COMMANDS.map((c) => `${indent}${c.command.padEnd(width)}  ${c.route}`).join('\n');
+}
+
+function dollarCommandNames() {
+  return DOLLAR_COMMANDS.map((c) => c.command).join(', ');
 }
 
 function dfHelp() {
@@ -304,6 +386,249 @@ Rules:
 `);
 }
 
+async function context7(sub = 'check', args = []) {
+  const root = await projectRoot();
+  const action = sub || 'check';
+  if (action === 'check') {
+    const result = await checkContext7(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log('SKS Context7 MCP\n');
+    console.log(`Project config: ${result.project.ok ? 'ok' : 'missing'} ${result.project.path}`);
+    console.log(`Global config:  ${result.global.ok ? 'ok' : 'missing'} ${result.global.path}`);
+    console.log(`Codex mcp list: ${result.codex_mcp_list.ok ? 'ok' : result.codex_mcp_list.checked ? 'missing' : 'not checked'}`);
+    console.log(`Ready:          ${result.ok ? 'yes' : 'no'}`);
+    if (!result.ok) console.log('\nRun: sks context7 setup --scope project');
+    return;
+  }
+  if (action === 'tools') {
+    const result = await context7Tools({ timeoutMs: readNumberOption(args, '--timeout-ms', 30000) });
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log('SKS Context7 Local MCP Tools\n');
+    console.log(`Server: ${result.server.info?.name || 'context7'} ${result.server.info?.version || ''}`.trim());
+    console.log(`Command: ${result.server.command} ${result.server.args.join(' ')}`);
+    console.log(`Tools:  ${result.tool_names.join(', ') || 'none'}`);
+    if (!result.tool_names.includes('resolve-library-id') || !result.tool_names.some((name) => name === 'query-docs' || name === 'get-library-docs')) {
+      process.exitCode = 1;
+      console.log('\nContext7 local MCP is missing the required resolve/docs tools.');
+    }
+    return;
+  }
+  if (action === 'resolve') {
+    const positional = positionalArgs(args);
+    const libraryName = positional.join(' ').trim();
+    if (!libraryName) throw new Error('Usage: sks context7 resolve <library-name> [--query "..."] [--json]');
+    const result = await context7Resolve(libraryName, {
+      query: readOption(args, '--query', libraryName),
+      timeoutMs: readNumberOption(args, '--timeout-ms', 30000)
+    });
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log('SKS Context7 Resolve\n');
+    console.log(`Library: ${libraryName}`);
+    console.log(`ID:      ${result.library_id || 'not resolved'}`);
+    console.log(`Server:  ${result.server.info?.name || 'context7'} ${result.server.info?.version || ''}`.trim());
+    const text = context7Text(result.result).split(/\n/).slice(0, 24).join('\n').trim();
+    if (text) console.log(`\n${text}`);
+    if (!result.ok || !result.library_id) process.exitCode = 1;
+    return;
+  }
+  if (action === 'docs') {
+    const positional = positionalArgs(args);
+    const libraryNameOrId = positional.join(' ').trim();
+    if (!libraryNameOrId) throw new Error('Usage: sks context7 docs <library-name|/org/project> [--query "..."] [--topic "..."] [--tokens N] [--json]');
+    const result = await context7Docs(libraryNameOrId, {
+      query: readOption(args, '--query', readOption(args, '--topic', libraryNameOrId)),
+      topic: readOption(args, '--topic', libraryNameOrId),
+      tokens: readNumberOption(args, '--tokens', 2000),
+      timeoutMs: readNumberOption(args, '--timeout-ms', 30000)
+    });
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    printContext7DocsResult(result, { title: 'SKS Context7 Docs' });
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'evidence') {
+    const positional = positionalArgs(args);
+    const missionArg = positional.shift();
+    const libraryNameOrId = positional.join(' ').trim();
+    if (!missionArg || !libraryNameOrId) throw new Error('Usage: sks context7 evidence <mission-id|latest> <library-name|/org/project> [--query "..."] [--topic "..."] [--tokens N] [--json]');
+    const missionId = await resolveMissionId(root, missionArg);
+    if (!missionId) throw new Error('No mission found for Context7 evidence.');
+    const result = await context7Docs(libraryNameOrId, {
+      query: readOption(args, '--query', readOption(args, '--topic', libraryNameOrId)),
+      topic: readOption(args, '--topic', libraryNameOrId),
+      tokens: readNumberOption(args, '--tokens', 2000),
+      timeoutMs: readNumberOption(args, '--timeout-ms', 30000)
+    });
+    const state = { ...(await readJson(stateFile(root), {})), mission_id: missionId };
+    await recordContext7Evidence(root, state, { tool_name: 'resolve-library-id', library: libraryNameOrId, library_id: result.library_id, source: result.resolve ? 'sks context7 evidence' : 'sks context7 evidence explicit-library-id' });
+    if (result.docs_tool) {
+      await recordContext7Evidence(root, state, { tool_name: result.docs_tool, library_id: result.library_id, source: 'sks context7 evidence' });
+    }
+    const evidence = await context7Evidence(root, state);
+    const out = { ...result, mission_id: missionId, evidence };
+    if (flag(args, '--json')) return console.log(JSON.stringify(out, null, 2));
+    printContext7DocsResult(result, { title: 'SKS Context7 Evidence' });
+    console.log(`\nMission:  ${missionId}`);
+    console.log(`Evidence: ${evidence.ok ? 'ok' : 'missing'} resolve=${evidence.resolve ? 'yes' : 'no'} docs=${evidence.docs ? 'yes' : 'no'} events=${evidence.count}`);
+    if (!result.ok || !evidence.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'setup') {
+    const scope = readOption(args, '--scope', flag(args, '--global') ? 'global' : 'project');
+    const transport = readOption(args, '--transport', flag(args, '--remote') ? 'remote' : 'local');
+    if (!['project', 'global'].includes(scope)) throw new Error('Invalid Context7 scope. Use project or global.');
+    if (!['local', 'remote'].includes(transport)) throw new Error('Invalid Context7 transport. Use local or remote.');
+    if (scope === 'project') {
+      const changed = await ensureProjectContext7Config(root, transport);
+      const result = await checkContext7(root);
+      if (flag(args, '--json')) return console.log(JSON.stringify({ changed, ...result }, null, 2));
+      console.log(`Context7 project MCP ${changed ? 'configured' : 'already configured'} in .codex/config.toml`);
+      console.log(`Ready: ${result.ok ? 'yes' : 'no'}`);
+      return;
+    }
+    const codex = await getCodexInfo();
+    if (!codex.bin) throw new Error('Codex CLI missing. Install separately: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
+    const cmdArgs = transport === 'remote'
+      ? ['mcp', 'add', 'context7', '--url', 'https://mcp.context7.com/mcp']
+      : ['mcp', 'add', 'context7', '--', 'npx', '-y', '@upstash/context7-mcp@latest'];
+    const result = await runProcess(codex.bin, cmdArgs, { timeoutMs: 30000, maxOutputBytes: 64 * 1024 });
+    if (flag(args, '--json')) return console.log(JSON.stringify({ command: `${codex.bin} ${cmdArgs.join(' ')}`, result }, null, 2));
+    if (result.code !== 0) throw new Error(result.stderr || result.stdout || 'codex mcp add failed');
+    console.log('Context7 global MCP configured.');
+    return;
+  }
+  throw new Error(`Unknown context7 command: ${action}`);
+}
+
+function printContext7DocsResult(result, opts = {}) {
+  console.log(`${opts.title || 'SKS Context7 Docs'}\n`);
+  console.log(`Library ID: ${result.library_id || 'not resolved'}`);
+  console.log(`Docs tool:  ${result.docs_tool || 'missing'}`);
+  console.log(`Server:     ${result.server?.info?.name || 'context7'} ${result.server?.info?.version || ''}`.trim());
+  const text = context7Text(result.docs).split(/\n/).slice(0, 48).join('\n').trim();
+  if (text) console.log(`\n${text}`);
+  if (result.error) console.log(`\nError: ${result.error}`);
+}
+
+async function pipeline(sub = 'status', args = []) {
+  const root = await projectRoot();
+  const action = sub || 'status';
+  const state = await readJson(stateFile(root), {});
+  const evidence = await context7Evidence(root, state);
+  const stop = await evaluateStop(root, state, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  const result = {
+    root,
+    state,
+    context7: evidence,
+    stop_gate: state.stop_gate || null,
+    next_action: stop?.reason || 'No active blocking route gate detected.'
+  };
+  if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+  if (action !== 'status' && action !== 'resume') throw new Error(`Unknown pipeline command: ${action}`);
+  console.log('SKS Pipeline\n');
+  console.log(`Mode:      ${state.mode || 'IDLE'}`);
+  console.log(`Route:     ${state.route_command || state.route || 'none'}`);
+  console.log(`Phase:     ${state.phase || 'IDLE'}`);
+  console.log(`Mission:   ${state.mission_id || 'none'}`);
+  console.log(`Reasoning: ${state.reasoning_effort || 'medium'}${state.reasoning_profile ? ` (${state.reasoning_profile})` : ''}${state.reasoning_temporary ? ' temporary' : ''}`);
+  console.log(`Stop gate: ${state.stop_gate || 'none'}`);
+  console.log(`Context7:  ${state.context7_required ? (evidence.ok ? 'ok' : 'required-missing') : 'optional'} (${evidence.count || 0} event(s))`);
+  console.log(`Next:      ${result.next_action}`);
+}
+
+async function guard(sub = 'check', args = []) {
+  const root = await projectRoot();
+  const action = sub || 'check';
+  if (action !== 'check' && action !== 'status') throw new Error(`Unknown guard command: ${action}`);
+  const status = await harnessGuardStatus(root);
+  if (flag(args, '--json')) return console.log(JSON.stringify(status, null, 2));
+  console.log('SKS Harness Guard\n');
+  console.log(`Status:    ${status.ok ? 'ok' : 'blocked'}`);
+  console.log(`Locked:    ${status.locked ? 'yes' : 'no'}`);
+  console.log(`Exception: ${status.source_exception ? 'Sneakoscope engine source repo' : 'none'}`);
+  console.log(`Policy:    ${status.policy_path}${status.policy_exists ? '' : ' (missing)'}`);
+  console.log(`Checked:   ${status.fingerprints_checked} fingerprint(s)`);
+  if (status.missing.length) console.log(`Missing:   ${status.missing.join(', ')}`);
+  if (status.changed.length) console.log(`Changed:   ${status.changed.join(', ')}`);
+}
+
+async function conflicts(sub = 'check', args = []) {
+  const root = await projectRoot();
+  const action = sub || 'check';
+  if (action !== 'check' && action !== 'prompt') throw new Error(`Unknown conflicts command: ${action}`);
+  const scan = await scanHarnessConflicts(root);
+  const result = { ...scan, cleanup_prompt: scan.hard_block ? llmHarnessCleanupPrompt(scan) : null };
+  if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+  if (action === 'prompt') return console.log(llmHarnessCleanupPrompt(scan));
+  console.log('SKS Harness Conflict Check\n');
+  console.log(`Status:    ${scan.hard_block ? 'blocked' : 'ok'}`);
+  console.log(`Conflicts: ${scan.conflicts.length}`);
+  if (scan.conflicts.length) console.log(formatHarnessConflictReport(scan));
+}
+
+async function reasoningCommand(args = []) {
+  const prompt = promptOf(args);
+  const route = routePrompt(prompt || '$SKS');
+  const info = routeReasoning(route, prompt);
+  const result = { route: route?.command || '$SKS', effort: info.effort, profile: info.profile, reason: info.reason, temporary: true, instruction: reasoningInstruction(info) };
+  if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+  console.log('SKS Reasoning Route\n');
+  console.log(`Route:      ${result.route}`);
+  console.log(`Effort:     ${result.effort}`);
+  console.log(`Profile:    ${result.profile}`);
+  console.log(`Reason:     ${result.reason}`);
+  console.log('Lifecycle:  temporary; return to default/user-selected profile after the route gate passes');
+}
+
+async function checkContext7(root) {
+  const projectPath = path.join(root, '.codex', 'config.toml');
+  const globalPath = path.join(process.env.HOME || '', '.codex', 'config.toml');
+  const projectText = await safeReadText(projectPath);
+  const globalText = await safeReadText(globalPath);
+  const codex = await getCodexInfo().catch(() => ({}));
+  let list = { checked: false, ok: false, stdout: '', stderr: '' };
+  if (codex.bin) {
+    const out = await runProcess(codex.bin, ['mcp', 'list'], { timeoutMs: 8000, maxOutputBytes: 32 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
+    list = { checked: true, ok: out.code === 0 && /context7/i.test(`${out.stdout}\n${out.stderr}`), stdout: out.stdout || '', stderr: out.stderr || '' };
+  }
+  const result = {
+    project: { path: projectPath, ok: hasContext7ConfigText(projectText) },
+    global: { path: globalPath, ok: hasContext7ConfigText(globalText) },
+    codex_mcp_list: list
+  };
+  result.ok = result.project.ok || result.global.ok || result.codex_mcp_list.ok;
+  return result;
+}
+
+async function ensureProjectContext7Config(root, transport = 'local') {
+  const configPath = path.join(root, '.codex', 'config.toml');
+  await ensureDir(path.dirname(configPath));
+  const current = await safeReadText(configPath);
+  const block = context7ConfigToml(transport).trim();
+  const existingBlock = /(^|\n)\[mcp_servers\.context7\]\n[\s\S]*?(?=\n\[[^\]]+\]|\s*$)/;
+  if (existingBlock.test(current)) {
+    const next = current.replace(existingBlock, `$1${block}\n`);
+    if (next === current) return false;
+    await writeTextAtomic(configPath, next.endsWith('\n') ? next : `${next}\n`);
+    return true;
+  }
+  if (hasContext7ConfigText(current)) return false;
+  await writeTextAtomic(configPath, `${current.trimEnd()}${current.trim() ? '\n\n' : ''}${block}\n`);
+  return true;
+}
+
+function readOption(args, name, fallback) {
+  const i = args.indexOf(name);
+  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
+}
+
+function readNumberOption(args, name, fallback) {
+  const raw = readOption(args, name, null);
+  if (raw === null || raw === undefined) return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 function quickstart() {
   console.log(`Sneakoscope Codex Quickstart
 
@@ -316,8 +641,10 @@ Initialize this project for CLI and Codex App:
 
 Verify:
   sks doctor --fix
+  sks context7 check
   sks selftest --mock
   sks commands
+  sks dollar-commands
 
 If hooks cannot find the command:
   sks fix-path
@@ -329,130 +656,10 @@ Project-only install:
 Local-only install artifacts:
   sks setup --local-only
   # writes generated SKS files but excludes .sneakoscope/, .codex/, .agents/, AGENTS.md through .git/info/exclude
-  # existing AGENTS.md is not modified in local-only mode
+  # user-owned AGENTS.md is preserved; an existing SKS managed block is refreshed
 
 GitHub install for unreleased commits:
   npm i -g git+${REPOSITORY_URL}
-`);
-}
-
-function installPrompt(args = []) {
-  const projectOnly = flag(args, '--project');
-  const full = flag(args, '--full');
-  const install = projectOnly
-    ? `npm i -D sneakoscope\nnpx sks setup --install-scope project`
-    : `npm i -g sneakoscope\nsks setup`;
-  if (full) return installPromptFull({ projectOnly, install });
-  const command = projectOnly ? 'npx sks' : 'sks';
-  const doctor = projectOnly ? 'npx sks doctor --fix --install-scope project' : 'sks doctor --fix';
-  const fallback = projectOnly
-    ? 'If `npx sks` is unavailable, run `npm i -D sneakoscope` again and stop with the error.'
-    : 'If `sks` is unavailable after install, replace `sks` with `npx -y -p sneakoscope sks` and continue.';
-
-  console.log(`Copy this prompt into an LLM coding assistant:
-
-Install Sneakoscope Codex in this project.
-
-Rules:
-- Do not modify application source files.
-- Ask only when a command requires user approval.
-- If Node.js is below 20.11, stop and report it.
-- If Codex CLI is missing, report: install @openai/codex or set SKS_CODEX_BIN.
-
-Run exactly:
-\`\`\`bash
-node -v
-${install}
-${command} update-check
-${doctor}
-${command} selftest --mock
-${command} commands
-${command} dollar-commands
-\`\`\`
-
-${fallback}
-
-Finish with only:
-- setup passed/failed
-- Codex CLI present/missing
-- generated files: \`.sneakoscope/\`, \`.codex/config.toml\`, \`.codex/hooks.json\`, \`.codex/skills/\`, \`.codex/agents/\`, \`.codex/SNEAKOSCOPE.md\`, \`AGENTS.md\`
-`);
-}
-
-function installPromptFull({ projectOnly, install }) {
-  console.log(`Copy this prompt into an LLM coding assistant:
-
-Install Sneakoscope Codex in the current project end to end. Do not ask follow-up questions unless a command requires user approval.
-
-Repository:
-${REPOSITORY_URL}
-
-Requirements:
-- Node.js must be >=20.11.
-- Codex CLI is installed separately. If it is missing, report that \`@openai/codex\` must be installed or \`SKS_CODEX_BIN\` must be set.
-- Use the published npm package for normal installs.
-- Do not modify application source files unless needed for SKS setup.
-
-Run:
-\`\`\`bash
-${install}
-${projectOnly ? 'npx sks update-check\nnpx sks doctor --fix --install-scope project\nnpx sks selftest --mock\nnpx sks commands\nnpx sks dollar-commands' : 'sks update-check\nsks doctor --fix\nsks selftest --mock\nsks commands\nsks dollar-commands'}
-\`\`\`
-
-If npm reports ENOTEMPTY, EEXIST, or a broken old global package:
-\`\`\`bash
-npm uninstall -g sneakoscope
-npm i -g sneakoscope
-sks setup
-sks doctor --fix
-\`\`\`
-
-If \`sks\` is not on PATH:
-\`\`\`bash
-npx -y -p sneakoscope sks setup
-npx -y -p sneakoscope sks doctor --fix
-npx -y -p sneakoscope sks selftest --mock
-npx -y -p sneakoscope sks commands
-npx -y -p sneakoscope sks dollar-commands
-\`\`\`
-
-Use the GitHub install path only when the registry package is not acceptable and an unreleased commit is required:
-\`\`\`bash
-npm i -g git+${REPOSITORY_URL}
-\`\`\`
-
-After setup, explain only these outputs:
-- \`.sneakoscope/\` mission state and policy
-- \`.codex/config.toml\` Codex App profiles
-- \`.codex/hooks.json\` SKS hook integration
-- \`.codex/skills/\` local Codex App skills
-- \`.codex/agents/\` local Codex App multi-agent roles
-- \`.codex/SNEAKOSCOPE.md\` Codex App quick reference
-- \`AGENTS.md\` repository rules
-
-Show command discovery:
-\`\`\`bash
-sks help
-sks update-check
-sks commands
-sks usage team
-sks usage ralph
-sks quickstart
-sks codex-app
-sks dollar-commands
-\`\`\`
-
-Tell the user they can use these prompt commands inside Codex App:
-\`\`\`text
-$DF 글자 색 바꿔줘
-$DF 내용을 영어로 바꿔줘
-$SKS show me available workflows
-$Team agree on the plan and implement with specialists
-$Ralph implement this with mandatory clarification
-$Research investigate this idea
-$AutoResearch improve this workflow with experiments
-$DB check this migration safely
-\`\`\`
 `);
 }
 
@@ -463,22 +670,27 @@ Run once in the project:
   sks setup
 
 Generated app files:
-  .codex/config.toml       profiles plus multi_agent and Team agent limits
+  .codex/config.toml       profiles, multi_agent, Team limits, and Context7 MCP
   .codex/hooks.json        hook events routed through SKS guards
-  .codex/skills/           local project skills
+  .agents/skills/          official repo-local Codex App skills
   .codex/agents/           local Codex subagent roles for Team mode
   .codex/SNEAKOSCOPE.md    app quick reference
   AGENTS.md                repository rules
 
+Prompt command routes:
+${formatDollarCommandsCompact('  ')}
+
 Useful prompts inside Codex App:
   $DF 글자 색 바꿔줘
   $DF 내용을 영어로 바꿔줘
+  $SKS show me available workflows
   $Team agree on the plan, then implement with specialists
+  $Ralph implement this with mandatory clarification
+  $Research investigate this idea
   $AutoResearch improve this workflow with experiments.
-  Use Sneakoscope Ralph mode to prepare this task.
-  Run the latest Ralph mission with the sealed decision contract.
-  Use SKS DB safety before touching database or Supabase files.
-  Use SKS research mode for this investigation.
+  $DB check this migration safely
+  $GX render a visual context cartridge
+  $Help show available SKS commands
 
 Repair hook PATH issues:
   sks fix-path
@@ -487,9 +699,12 @@ Discover usage:
   sks commands
   sks usage codex-app
   sks dollar-commands
+  sks context7 check
+  sks pipeline status
+  sks reasoning "prompt"
   sks df
-  sks install-prompt
   sks team "task"
+  sks team watch latest
 `);
 }
 
@@ -506,15 +721,7 @@ Command aliases:
   sks -h        -> sks help
 
 Codex App prompt commands:
-  $DF       fast design/content fix
-  $SKS      general Sneakoscope route
-  $Team     multi-agent team route
-  $Ralph    Ralph mission route
-  $Research research mission route
-  $AutoResearch iterative experiment route
-  $DB       database safety route
-  $GX       visual context route
-  $Help     command help route
+${formatDollarCommandsCompact('  ')}
 
 Examples:
   sks setup
@@ -535,9 +742,10 @@ Discovery:
   sks wizard
   sks commands
   sks quickstart
-  sks install-prompt
   sks codex-app
   sks dollar-commands
+  sks context7 check
+  sks pipeline status
 
 Common workflows:
   sks usage install
@@ -546,6 +754,10 @@ Common workflows:
   sks usage research
   sks usage db
   sks usage wiki
+  sks usage context7
+  sks usage pipeline
+  sks usage guard
+  sks usage reasoning
   sks usage df
 `,
     install: `Install and Setup
@@ -554,6 +766,7 @@ Global install:
   npm i -g sneakoscope
   sks setup
   sks doctor --fix
+  sks context7 check
   sks selftest --mock
 
 Repair an older broken global install:
@@ -563,6 +776,7 @@ Repair an older broken global install:
 PATH fallback after global install:
   npx -y -p sneakoscope sks setup
   npx -y -p sneakoscope sks doctor --fix
+  npx -y -p sneakoscope sks context7 check
 
 Project-only install:
   npm i -D sneakoscope
@@ -571,14 +785,11 @@ Project-only install:
 Local-only install artifacts:
   sks setup --local-only
   # excludes .sneakoscope/, .codex/, .agents/, AGENTS.md through .git/info/exclude
-  # existing AGENTS.md is not modified in local-only mode
+  # user-owned AGENTS.md is preserved; an existing SKS managed block is refreshed
 
 GitHub install for unreleased commits:
   npm i -g git+${REPOSITORY_URL}
   sks setup
-
-LLM-assisted install:
-  sks install-prompt
 `,
     team: `Team Workflow
 
@@ -586,22 +797,42 @@ Initialize Team support:
   sks setup
 
 Create a Team mission:
-  sks team "task"
+  sks team "task" executor:5 reviewer:2 user:1
+  sks team "task" --agents 5
+  sks team watch latest
+  sks team event latest --agent analysis_scout_1 --phase parallel_analysis_scouting --message "mapped repo slice"
 
 Inside Codex App:
-  $Team debate the options, agree on one objective, close the planning agents, then form a fresh implementation team with disjoint write scopes.
+  $Team executor:5 run parallel analysis scouts, refresh TriWiki, debate the options, agree on one objective, close the debate team, then form a fresh development team with disjoint write scopes.
 
 Expected phases:
-  1. Planning/debate agents map code paths, risks, DB safety, tests, and implementation options.
-  2. Parent agent synthesizes the agreed objective, constraints, acceptance criteria, and parallel work slices.
-  3. Planning agents are closed.
-  4. Fresh implementation workers handle disjoint slices in parallel.
-  5. Review agents check correctness, DB safety, missing tests, and final evidence.
+  1. Parallel analysis scouts run exactly N read-only investigation slices and write source-backed findings to team-analysis.md.
+  2. Parent refreshes TriWiki with sks wiki pack and validates .sneakoscope/wiki/context-pack.json.
+  3. Debate team has exactly N role participants and maps stubborn user friction, code paths, risks, DB safety, tests, and implementation options.
+  4. Parent records useful scout, role-agent, result, and handoff lines into team-live.md and team-transcript.jsonl.
+  5. Parent agent synthesizes the agreed objective, constraints, acceptance criteria, and parallel work slices.
+  6. Debate agents are closed.
+  7. Fresh N-person executor_N development team handles disjoint slices in parallel.
+  8. Strict reviewers and user_N personas check correctness, DB safety, missing tests, final evidence, and practical friction.
+
+Session budget:
+  default: 3 subagent sessions
+  executor:N means N analysis scouts, N debate participants, and a separate N-person executor development team
+  role counts: executor:5 reviewer:2 user:1 planner:1
+  legacy override: --agents N, --sessions N, or --team-size N
+  max shorthand: --max-agents uses the configured default maximum of 6 sessions/agents
+  parent orchestrator is not counted
+
+Live visibility:
+  sks team status <mission-id|latest>
+  sks team log <mission-id|latest>
+  sks team tail <mission-id|latest>
+  sks team watch <mission-id|latest> --follow
 
 Generated Codex App support:
   .codex/config.toml enables multi_agent and [agents] limits.
-  .codex/agents/*.toml defines team_consensus, implementation_worker, db_safety_reviewer, and qa_reviewer.
-  .codex/skills/Team/SKILL.md explains the orchestration protocol.
+  .codex/agents/*.toml defines analysis_scout, team_consensus, implementation_worker, db_safety_reviewer, and qa_reviewer.
+  .agents/skills/team/SKILL.md explains the orchestration protocol.
 `,
     setup: `Setup Repair
 
@@ -673,8 +904,14 @@ Inspect app guidance:
 Use inside Codex App:
   $DF 글자 색 바꿔줘
   $DF 내용을 영어로 바꿔줘
-  Use Sneakoscope Ralph mode to prepare this task.
-  Use SKS DB safety before touching database or Supabase files.
+  $SKS show me available workflows
+  $Team agree on the plan, then implement with specialists
+  $Ralph implement this with mandatory clarification
+  $Research investigate this idea
+  $AutoResearch improve this workflow with experiments
+  $DB check this migration safely
+  $GX render a visual context cartridge
+  $Help show available SKS commands
 `,
     df: `DF Fast Design/Content Fix
 
@@ -694,19 +931,105 @@ CLI help:
     dollar: `Dollar Commands
 
 Use inside Codex App or an agent prompt:
-  $DF        fast design/content fix
-  $SKS       general Sneakoscope route
-  $Team      multi-agent team route
-  $Ralph     Ralph mission route
-  $Research  research mission route
-  $AutoResearch iterative experiment route
-  $DB        database safety route
-  $GX        visual context route
-  $Help      command help route
+${formatDollarCommandsCompact('  ')}
 
 Terminal discovery:
   sks dollar-commands
   sks dollar-commands --json
+`,
+    context7: `Context7 MCP
+
+Check project/global readiness:
+  sks context7 check
+  sks context7 check --json
+
+Configure project-local stdio MCP:
+  sks context7 setup --scope project --transport local
+
+Configure project remote fallback:
+  sks context7 setup --scope project --transport remote
+
+Configure global Codex MCP only when explicitly chosen:
+  sks context7 setup --scope global --transport local
+
+Call the project-local stdio MCP directly:
+  sks context7 tools
+  sks context7 resolve "OpenAI Codex" --query "hooks customization"
+  sks context7 docs /websites/developers_openai_codex --query "hooks customization"
+  sks context7 evidence latest /websites/developers_openai_codex --query "hooks customization"
+
+Required evidence flow:
+  1. Context7 resolve-library-id
+  2. Context7 query-docs (or legacy get-library-docs)
+  3. SKS PostToolUse records context7-evidence.jsonl
+`,
+    pipeline: `Skill-First Pipeline
+
+Inspect active route:
+  sks pipeline status
+  sks pipeline status --json
+
+Next action hint:
+  sks pipeline resume
+
+Every $ command is routed through state, skills, mission artifacts, Context7 evidence when required, and a Stop hook gate before completion.
+`,
+    guard: `Harness Guard
+
+Check installed harness self-protection:
+  sks guard check
+  sks guard check --json
+
+Protected after setup:
+  .codex/config.toml
+  .codex/hooks.json
+  .codex/SNEAKOSCOPE.md
+  .agents/skills/
+  .codex/agents/
+  .sneakoscope/manifest.json
+  .sneakoscope/policy.json
+  .sneakoscope/db-safety.json
+  .sneakoscope/harness-guard.json
+  AGENTS.md
+  node_modules/sneakoscope
+
+Hooks block LLM tool writes to those paths and block LLM-issued SKS maintenance commands such as sks setup, sks init, sks doctor --fix, sks context7 setup, and npm uninstall sneakoscope.
+
+Exception:
+  Only the Sneakoscope engine source repo can edit harness source files automatically.
+`,
+    conflicts: `Harness Conflict Gate
+
+Check for incompatible Codex harnesses:
+  sks conflicts check
+  sks conflicts check --json
+
+Print the LLM cleanup prompt:
+  sks conflicts prompt
+
+Install behavior:
+  npm install/postinstall blocks when OMX, DCodex, or their global/repo-level traces are detected.
+  sks setup and sks doctor --fix also refuse to continue until a human approves cleanup.
+  If cleanup is denied, SKS cannot be installed in that environment.
+
+Cleanup operator:
+  Use Codex App with GPT-5.5 high mode.
+  Paste the prompt from sks conflicts prompt.
+  The LLM must ask for explicit approval before deleting or moving conflicting harness artifacts.
+`,
+    reasoning: `Reasoning Routing
+
+Inspect:
+  sks reasoning "change button copy"
+  sks reasoning "check this migration"
+  sks reasoning "research this idea" --json
+
+Policy:
+  medium  simple fulfillment, command discovery, copy/color/mechanical edits
+  high    logical work, safety, DB, orchestration, implementation, refactors
+  xhigh   research, AutoResearch, hypotheses, falsification, benchmarks, SEO/GEO experiments
+
+Routing is temporary. Return to the default or user-selected profile after the route gate passes.
 `,
     eval: `Evaluation
 
@@ -759,6 +1082,8 @@ Render and verify:
 
 async function setup(args) {
   const root = await projectRoot();
+  const conflicts = await scanHarnessConflicts(root);
+  if (conflicts.hard_block) return blockForHarnessConflicts(conflicts, args);
   const installScope = installScopeFromArgs(args);
   const localOnly = flag(args, '--local-only');
   const globalCommand = await globalSksCommand();
@@ -772,31 +1097,33 @@ async function setup(args) {
     codex_app: {
       config: path.join(root, '.codex', 'config.toml'),
       hooks: hooksPath,
-      skills: path.join(root, '.codex', 'skills'),
+      skills: path.join(root, '.agents', 'skills'),
       agents: path.join(root, '.codex', 'agents'),
       quick_reference: path.join(root, '.codex', 'SNEAKOSCOPE.md'),
       agents_rules: path.join(root, 'AGENTS.md')
     },
     created: res.created,
     local_only: localOnly,
-    next: ['sks selftest --mock', 'sks doctor', 'sks commands']
+    next: ['sks context7 check', 'sks selftest --mock', 'sks doctor', 'sks commands']
   };
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log('Sneakoscope Codex Setup\n');
   console.log(`Project:   ${root}`);
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
   console.log(`Hooks:     ${path.relative(root, hooksPath)}`);
-  if (localOnly) console.log('Git:       local-only (.git/info/exclude; existing AGENTS.md not modified)');
-  console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .codex/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
-  console.log(`Prompt:    default optimization pipeline, $DF fast design/content route`);
-  console.log(`Skills:    .codex/skills`);
-  console.log(`Next:      sks selftest --mock; sks commands; sks dollar-commands`);
+  if (localOnly) console.log('Git:       local-only (.git/info/exclude; user AGENTS preserved, SKS managed block refreshed)');
+  console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .agents/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
+  console.log(`Prompt:    skill-first pipeline, $DF fast design/content route, Context7 gate`);
+  console.log(`Skills:    .agents/skills`);
+  console.log(`Next:      sks context7 check; sks selftest --mock; sks commands; sks dollar-commands`);
   if (!install.ok && install.scope === 'global') console.log('\nGlobal command missing. Run: npm i -g sneakoscope');
   if (!install.ok && install.scope === 'project') console.log('\nProject package missing. Run: npm i -D sneakoscope');
 }
 
 async function fixPath(args) {
   const root = await projectRoot();
+  const conflicts = await scanHarnessConflicts(root);
+  if (conflicts.hard_block) return blockForHarnessConflicts(conflicts, args);
   const manifest = await readJson(path.join(root, '.sneakoscope', 'manifest.json'), null);
   const installScope = args.includes('--install-scope') || flag(args, '--project') || flag(args, '--global')
     ? installScopeFromArgs(args)
@@ -825,10 +1152,14 @@ async function doctor(args) {
   const requestedScope = args.includes('--install-scope') || flag(args, '--project') || flag(args, '--global')
     ? installScopeFromArgs(args)
     : null;
-  if (flag(args, '--fix')) {
+  let conflictScan = await scanHarnessConflicts(root);
+  let repairApplied = false;
+  if (flag(args, '--fix') && !conflictScan.hard_block) {
     const fixScope = requestedScope || 'global';
     const existingManifest = await readJson(path.join(root, '.sneakoscope', 'manifest.json'), null);
-    await initProject(root, { installScope: fixScope, globalCommand: await globalSksCommand(), localOnly: flag(args, '--local-only') || Boolean(existingManifest?.git?.local_only) });
+    await initProject(root, { installScope: fixScope, globalCommand: await globalSksCommand(), localOnly: flag(args, '--local-only') || Boolean(existingManifest?.git?.local_only), force: true, repair: true });
+    repairApplied = true;
+    conflictScan = await scanHarnessConflicts(root);
   }
   const codex = await getCodexInfo();
   const rust = await rustInfo();
@@ -840,10 +1171,13 @@ async function doctor(args) {
   const install = await installStatus(root, installScope);
   const dbPolicyExists = await exists(path.join(root, '.sneakoscope', 'db-safety.json'));
   const dbScan = await scanDbSafety(root).catch((err) => ({ ok: false, findings: [{ id: 'db_safety_scan_failed', severity: 'high', reason: err.message }] }));
+  const context7Status = await checkContext7(root);
+  const skillStatus = await checkRequiredSkills(root);
+  const guardStatus = await harnessGuardStatus(root);
   const codexApp = {
     config: { ok: await exists(path.join(root, '.codex', 'config.toml')) },
     hooks: { ok: await exists(path.join(root, '.codex', 'hooks.json')) },
-    skills: { ok: await exists(path.join(root, '.codex', 'skills')) },
+    skills: skillStatus,
     agents: { ok: await exists(path.join(root, '.codex', 'agents')) },
     quick_reference: { ok: await exists(path.join(root, '.codex', 'SNEAKOSCOPE.md')) },
     agents_rules: { ok: await exists(path.join(root, 'AGENTS.md')) }
@@ -851,40 +1185,74 @@ async function doctor(args) {
   const result = {
     node: { ok: nodeOk, version: process.version }, root, codex, rust,
     install,
+    repair: { applied: repairApplied, blocked_by_other_harness: flag(args, '--fix') && conflictScan.hard_block },
+    harness_conflicts: {
+      ok: conflictScan.ok,
+      hard_block: conflictScan.hard_block,
+      requires_human_approval: conflictScan.requires_human_approval,
+      conflicts: conflictScan.conflicts,
+      cleanup_prompt: conflictScan.hard_block ? llmHarnessCleanupPrompt(conflictScan) : null
+    },
     sneakoscope: { ok: await exists(path.join(root, '.sneakoscope')) },
+    context7: context7Status,
+    harness_guard: guardStatus,
     db_guard: { ok: dbPolicyExists && dbScan.ok, policy: dbPolicyExists ? await loadDbSafetyPolicy(root) : null, scan: dbScan },
     hooks: { ok: await exists(path.join(root, '.codex', 'hooks.json')) },
-    skills: { ok: await exists(path.join(root, '.codex', 'skills')) },
+    skills: { ok: await exists(path.join(root, '.agents', 'skills')) },
     codex_app: {
       ...codexApp,
       ok: codexApp.config.ok && codexApp.hooks.ok && codexApp.skills.ok && codexApp.agents.ok && codexApp.quick_reference.ok && codexApp.agents_rules.ok
     },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) }, storage
   };
-  result.ready = nodeOk && Boolean(codex.bin) && install.ok && result.sneakoscope.ok && result.db_guard.ok && result.codex_app.ok;
+  result.ready = !result.harness_conflicts.hard_block && nodeOk && Boolean(codex.bin) && install.ok && result.sneakoscope.ok && result.context7.ok && result.harness_guard.ok && result.db_guard.ok && result.codex_app.ok && result.skills.ok;
+  if (result.harness_conflicts.hard_block) process.exitCode = 1;
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log('Sneakoscope Codex Doctor\n');
   console.log(`Node:      ${nodeOk ? 'ok' : 'fail'} ${process.version}`);
   console.log(`Project:   ${root}`);
   console.log(`Codex:     ${codex.bin ? 'ok' : 'missing'} ${codex.version || ''}`);
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
+  console.log(`Conflicts: ${result.harness_conflicts.hard_block ? 'blocked' : 'ok'} ${result.harness_conflicts.conflicts.length} finding(s)`);
+  if (repairApplied) console.log('Repair:    regenerated SKS managed files from the installed package template');
+  if (flag(args, '--fix') && result.harness_conflicts.hard_block) console.log('Repair:    skipped because another Codex harness needs human-approved removal first');
   console.log(`Rust acc.: ${rust.available ? rust.version : 'optional-missing'}`);
   console.log(`State:     ${result.sneakoscope.ok ? 'ok' : 'missing .sneakoscope'}`);
+  console.log(`Context7:  ${result.context7.ok ? 'ok' : 'missing MCP config'} project=${result.context7.project.ok ? 'ok' : 'missing'} global=${result.context7.global.ok ? 'ok' : 'missing'}`);
+  console.log(`Guard:     ${result.harness_guard.ok ? 'ok' : 'blocked'}${result.harness_guard.source_exception ? ' source-exception' : ''}`);
   console.log(`DB Guard:  ${result.db_guard.ok ? 'ok' : 'blocked'} ${dbScan.findings?.length || 0} finding(s)`);
   console.log(`Hooks:     ${result.hooks.ok ? 'ok' : 'missing .codex/hooks.json'}`);
-  console.log(`Codex App: ${result.codex_app.ok ? 'ok' : 'missing app files'} .codex/config.toml .codex/hooks.json .codex/skills .codex/agents .codex/SNEAKOSCOPE.md`);
-  console.log(`Skills:    ${result.skills.ok ? 'ok' : 'missing .codex/skills'}`);
+  console.log(`Codex App: ${result.codex_app.ok ? 'ok' : 'missing app files'} .codex/config.toml .codex/hooks.json .agents/skills .codex/agents .codex/SNEAKOSCOPE.md`);
+  console.log(`Skills:    ${result.skills.ok ? 'ok' : `missing ${result.skills.missing.length} skill(s)`}`);
   console.log(`Package:   ${result.package.human}`);
   console.log(`Storage:   ${storage.total_human || '0 B'}`);
   console.log(`Ready:     ${result.ready ? 'yes' : 'no'}`);
   if (!codex.bin) console.log('\nCodex CLI missing. Install separately: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
   if (!install.ok && install.scope === 'global') console.log('SKS global command missing. Install: npm i -g sneakoscope');
   if (!install.ok && install.scope === 'project') console.log('SKS project package missing. Install in this project: npm i -D sneakoscope');
+  if (result.harness_conflicts.hard_block) console.log(`\n${formatHarnessConflictReport(conflictScan)}`);
+  if (!result.context7.ok) console.log('Context7 MCP missing. Run: sks context7 setup --scope project');
+  if (!result.harness_guard.ok) console.log('Harness guard failed. Run: sks setup from a real terminal, then sks guard check.');
+  if (!result.skills.ok) console.log(`Missing skills: ${result.skills.missing.join(', ')}. Run: sks setup`);
   if (!result.ready && !flag(args, '--fix')) console.log('Run: sks doctor --fix');
+}
+
+async function checkRequiredSkills(root) {
+  const expected = Array.from(new Set([
+    ...DOLLAR_SKILL_NAMES,
+    ...RECOMMENDED_SKILLS
+  ])).sort();
+  const missing = [];
+  for (const name of expected) {
+    if (!(await exists(path.join(root, '.agents', 'skills', name, 'SKILL.md')))) missing.push(name);
+  }
+  return { ok: missing.length === 0, expected, missing };
 }
 
 async function init(args) {
   const root = await projectRoot();
+  const conflicts = await scanHarnessConflicts(root);
+  if (conflicts.hard_block) return blockForHarnessConflicts(conflicts, args);
   const installScope = installScopeFromArgs(args);
   const localOnly = flag(args, '--local-only');
   const globalCommand = await globalSksCommand();
@@ -893,6 +1261,14 @@ async function init(args) {
   console.log(`Install scope: ${installScope} (${sksCommandPrefix(installScope, { globalCommand })})`);
   if (localOnly) console.log('Git mode: local-only (.git/info/exclude)');
   for (const x of res.created) console.log(`- ${x}`);
+}
+
+function blockForHarnessConflicts(scan, args = []) {
+  const result = { ready: false, install_blocked: true, harness_conflicts: scan, cleanup_prompt: llmHarnessCleanupPrompt(scan) };
+  process.exitCode = 1;
+  if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+  console.error(formatHarnessConflictReport(scan));
+  console.error('\nSKS setup cannot continue while another Codex harness is present.');
 }
 
 async function globalSksCommand() {
@@ -1092,10 +1468,13 @@ async function ralphPrepare(args) {
   const schema = buildQuestionSchema(prompt);
   await writeQuestions(dir, schema);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'ralph.prepare.questions_created', slots: schema.slots.length });
+  await setCurrent(root, { mission_id: id, mode: 'RALPH', phase: 'RALPH_AWAITING_ANSWERS', questions_allowed: true, implementation_allowed: false });
   console.log(`Mission created: ${id}`);
   console.log('Ralph Prepare completed. Ralph run is locked until all required answers are supplied.');
   console.log(`Questions: ${path.relative(root, path.join(dir, 'questions.md'))}`);
   console.log(`Answer schema: ${path.relative(root, path.join(dir, 'required-answers.schema.json'))}`);
+  console.log('\nRequired questions:');
+  console.log(formatRalphQuestionsForCli(schema));
 }
 
 async function ralphAnswer(args) {
@@ -1182,6 +1561,14 @@ function buildRalphPrompt({ id, mission, contract, cycle, previous }) {
   return `You are running Sneakoscope Codex Ralph mode.\nMISSION: ${id}\nTASK: ${mission.prompt}\nCYCLE: ${cycle}\nNO-QUESTION LOCK: Do not ask the user. Resolve using decision-contract.json.\nDATABASE SAFETY: Destructive database operations are forbidden. Do not run DROP, TRUNCATE, db reset, db push, branch reset/merge/delete, project deletion, RLS disable, or live execute_sql writes. Use read-only/project-scoped Supabase MCP only unless the sealed contract explicitly allows migration files for local or preview branch.\nDECISION CONTRACT:\n${JSON.stringify(contract, null, 2)}\nPERFORMANCE POLICY: keep outputs concise; raw logs stay in files; summarize evidence only. If the task claims performance, token, or accuracy improvement, run sks eval run or sks eval compare and record the report path in done-gate.json evidence.\nDESIGN POLICY: if the task creates HTML/UI/prototype/deck-like visual artifacts, use the installed design-artifact-expert skill, inspect design context first, verify rendered output, and record design verification in done-gate.json.\nLOOP: plan, read before write, implement within contract, run/justify tests, update .sneakoscope/missions/${id}/done-gate.json.\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
 }
 
+function formatRalphQuestionsForCli(schema) {
+  return schema.slots.map((s, i) => {
+    const options = s.options ? ` Options: ${s.options.join(', ')}.` : '';
+    const examples = s.examples ? ` Examples: ${s.examples.join(', ')}.` : '';
+    return `${i + 1}. ${s.id}: ${s.question}${options}${examples}`;
+  }).join('\n');
+}
+
 async function safeReadText(file, fallback = '') {
   try { return await fsp.readFile(file, 'utf8'); } catch { return fallback; }
 }
@@ -1213,8 +1600,50 @@ async function selftest() {
   const tmp = tmpdir();
   process.chdir(tmp);
   await initProject(tmp, {});
+  const guardStatus = await harnessGuardStatus(tmp);
+  if (!guardStatus.ok || !guardStatus.locked || guardStatus.source_exception) throw new Error('selftest failed: harness guard not locked in installed project');
+  const repairTmp = tmpdir();
+  await initProject(repairTmp, {});
+  await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'team', 'SKILL.md'), 'tampered\n');
+  await writeTextAtomic(path.join(repairTmp, '.codex', 'skills', 'team', 'SKILL.md'), 'legacy mirror\n');
+  await initProject(repairTmp, { force: true, repair: true });
+  const repairedTeamSkill = await safeReadText(path.join(repairTmp, '.agents', 'skills', 'team', 'SKILL.md'));
+  if (!repairedTeamSkill.includes('SKS Team multi-agent orchestration') || repairedTeamSkill.includes('tampered')) throw new Error('selftest failed: doctor repair did not regenerate team skill');
+  if (await exists(path.join(repairTmp, '.codex', 'skills', 'team', 'SKILL.md'))) throw new Error('selftest failed: doctor repair did not remove legacy .codex/skills');
+  const conflictTmp = tmpdir();
+  await ensureDir(path.join(conflictTmp, '.omx'));
+  const conflictScan = await scanHarnessConflicts(conflictTmp, { home: path.join(conflictTmp, 'home') });
+  if (!conflictScan.hard_block || !formatHarnessConflictReport(conflictScan).includes('GPT-5.5')) throw new Error('selftest failed: OMX conflict did not block with cleanup prompt');
+  const postinstallConflict = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (postinstallConflict.code === 0 || !String(postinstallConflict.stderr || postinstallConflict.stdout).includes('install blocked')) throw new Error('selftest failed: postinstall did not block OMX conflict');
+  const guardBlocked = await checkHarnessModification(tmp, { tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
+  if (guardBlocked.action !== 'block') throw new Error('selftest failed: harness guard allowed skill tampering');
+  const setupBlocked = await checkHarnessModification(tmp, { command: 'sks setup --force' });
+  if (setupBlocked.action !== 'block') throw new Error('selftest failed: harness guard allowed setup maintenance command');
+  const appEditAllowed = await checkHarnessModification(tmp, { tool_name: 'apply_patch', command: '*** Update File: src/app.js\n+ok\n' });
+  if (appEditAllowed.action === 'block') throw new Error('selftest failed: harness guard blocked app source edit');
+  const sourceEditAllowed = await checkHarnessModification(packageRoot(), { tool_name: 'apply_patch', command: '*** Update File: src/core/init.mjs\n+ok\n' });
+  if (sourceEditAllowed.action === 'block' || !(await isHarnessSourceProject(packageRoot()))) throw new Error('selftest failed: harness source exception not honored');
   const defaultHooks = await readJson(path.join(tmp, '.codex', 'hooks.json'));
   if (defaultHooks.hooks.PreToolUse[0].hooks[0].command !== 'sks hook pre-tool') throw new Error('selftest failed: global install hook command changed');
+  const sharedHooksTmp = tmpdir();
+  await ensureDir(path.join(sharedHooksTmp, '.codex'));
+  await writeJsonAtomic(path.join(sharedHooksTmp, '.codex', 'hooks.json'), {
+    hooks: {
+      UserPromptSubmit: [
+        { hooks: [{ type: 'command', command: 'node ./old/sks.mjs hook user-prompt-submit' }] },
+        { hooks: [{ type: 'command', command: 'node ./user-hook.mjs' }] }
+      ],
+      Stop: [{ hooks: [{ type: 'command', command: 'node ./user-stop.mjs' }] }]
+    },
+    user_key: true
+  });
+  await initProject(sharedHooksTmp, {});
+  const sharedHooks = await readJson(path.join(sharedHooksTmp, '.codex', 'hooks.json'));
+  if (!sharedHooks.user_key) throw new Error('selftest failed: hooks merge dropped root metadata');
+  if (!sharedHooks.hooks.UserPromptSubmit.some((entry) => entry.hooks?.some((hook) => hook.command === 'node ./user-hook.mjs'))) throw new Error('selftest failed: hooks merge dropped user hook');
+  if (JSON.stringify(sharedHooks).includes('node ./old/sks.mjs hook user-prompt-submit')) throw new Error('selftest failed: hooks merge kept stale SKS hook');
+  if (sharedHooks.hooks.UserPromptSubmit.filter((entry) => entry.hooks?.some((hook) => hook.command === 'sks hook user-prompt-submit')).length !== 1) throw new Error('selftest failed: hooks merge did not install exactly one SKS prompt hook');
   const absoluteHookTmp = tmpdir();
   await initProject(absoluteHookTmp, { globalCommand: '/usr/local/bin/sks' });
   const absoluteHooks = await readJson(path.join(absoluteHookTmp, '.codex', 'hooks.json'));
@@ -1233,6 +1662,12 @@ async function selftest() {
   if (localAgents.trim() !== 'existing local rules') throw new Error('selftest failed: local-only modified existing AGENTS.md');
   const localManifest = await readJson(path.join(localOnlyTmp, '.sneakoscope', 'manifest.json'));
   if (!localManifest.git?.local_only) throw new Error('selftest failed: local-only manifest missing');
+  const managedAgentsTmp = tmpdir();
+  await ensureDir(path.join(managedAgentsTmp, '.git'));
+  await writeTextAtomic(path.join(managedAgentsTmp, 'AGENTS.md'), '<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->\nold managed rules\n<!-- END Sneakoscope Codex GX MANAGED BLOCK -->\n');
+  await initProject(managedAgentsTmp, { localOnly: true });
+  const managedAgents = await safeReadText(path.join(managedAgentsTmp, 'AGENTS.md'));
+  if (!managedAgents.includes('TriWiki is the context-tracking SSOT') || managedAgents.includes('old managed rules')) throw new Error('selftest failed: local-only did not refresh managed AGENTS.md block');
   if (!isTransientNpmBinPath('/tmp/.npm/_npx/abc/node_modules/.bin/sks')) throw new Error('selftest failed: npx bin path not recognized as transient');
   if (!isTransientNpmBinPath('/tmp/.npm-cache/_cacache/tmp/git-cloneabc/bin/sks.mjs')) throw new Error('selftest failed: npm cache git clone path not recognized as transient');
   if (isTransientNpmBinPath('/usr/local/bin/sks')) throw new Error('selftest failed: stable global bin marked transient');
@@ -1252,31 +1687,176 @@ async function selftest() {
     if (oldSksBin === undefined) delete process.env.SKS_BIN;
     else process.env.SKS_BIN = oldSksBin;
   }
-  const legacySkillMirrorExists = await exists(path.join(tmp, '.agents', 'skills', 'research-discovery', 'SKILL.md'));
-  if (legacySkillMirrorExists) throw new Error('selftest failed: legacy .agents/skills mirror still installed');
-  const codexAppSkillExists = await exists(path.join(tmp, '.codex', 'skills', 'research-discovery', 'SKILL.md'));
+  const shimTmp = tmpdir();
+  const shimDir = path.join(shimTmp, 'bin');
+  const shimResult = await ensureSksCommandDuringInstall({ force: true, pathEnv: shimDir, home: shimTmp, target: path.join(packageRoot(), 'bin', 'sks.mjs'), nodeBin: process.execPath });
+  if (shimResult.status !== 'created' || !(await exists(path.join(shimDir, process.platform === 'win32' ? 'sks.cmd' : 'sks')))) throw new Error('selftest failed: sks command shim not created');
+  const codexSkillMirrorExists = await exists(path.join(tmp, '.codex', 'skills', 'research-discovery', 'SKILL.md'));
+  if (codexSkillMirrorExists) throw new Error('selftest failed: generated .codex/skills mirror still installed');
+  const codexAppSkillExists = await exists(path.join(tmp, '.agents', 'skills', 'research-discovery', 'SKILL.md'));
   if (!codexAppSkillExists) throw new Error('selftest failed: Codex App skill not installed');
-  const dfSkillExists = await exists(path.join(tmp, '.codex', 'skills', 'DF', 'SKILL.md'));
-  if (!dfSkillExists) throw new Error('selftest failed: $DF skill not installed');
-  const promptPipelineSkillExists = await exists(path.join(tmp, '.codex', 'skills', 'prompt-pipeline', 'SKILL.md'));
+  for (const { command } of DOLLAR_COMMANDS) {
+    const skillName = command.slice(1).toLowerCase();
+    const dollarSkillExists = await exists(path.join(tmp, '.agents', 'skills', skillName, 'SKILL.md'));
+    if (!dollarSkillExists) throw new Error(`selftest failed: ${command} skill not installed`);
+  }
+  const promptPipelineSkillExists = await exists(path.join(tmp, '.agents', 'skills', 'prompt-pipeline', 'SKILL.md'));
   if (!promptPipelineSkillExists) throw new Error('selftest failed: prompt pipeline skill not installed');
+  const promptPipelineText = await safeReadText(path.join(tmp, '.agents', 'skills', 'prompt-pipeline', 'SKILL.md'));
+  if (!promptPipelineText.includes('TriWiki context-tracking SSOT')) throw new Error('selftest failed: prompt pipeline missing TriWiki context-tracking SSOT');
+  for (const supportSkill of ['reasoning-router', 'pipeline-runner', 'context7-docs', 'seo-geo-optimizer']) {
+    if (!(await exists(path.join(tmp, '.agents', 'skills', supportSkill, 'SKILL.md')))) throw new Error(`selftest failed: ${supportSkill} skill not installed`);
+  }
+  if (!(await exists(path.join(tmp, '.agents', 'skills', 'reasoning-router', 'agents', 'openai.yaml')))) throw new Error('selftest failed: skill metadata missing');
+  const hookGuardPayload = JSON.stringify({ cwd: tmp, tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
+  const hookGuardResult = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'pre-tool'], { cwd: tmp, input: hookGuardPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  const hookGuardJson = JSON.parse(hookGuardResult.stdout);
+  if (hookGuardJson.decision !== 'block' || !String(hookGuardJson.reason || '').includes('harness guard')) throw new Error('selftest failed: hook did not block harness tampering');
+  if (new Set(DOLLAR_COMMANDS.map((c) => c.command)).size !== DOLLAR_COMMANDS.length) throw new Error('selftest failed: duplicate dollar commands');
+  if (!COMMAND_CATALOG.some((c) => c.name === 'context7') || !COMMAND_CATALOG.some((c) => c.name === 'pipeline')) throw new Error('selftest failed: context7/pipeline commands missing from catalog');
+  const registryDollarCommands = DOLLAR_COMMANDS.map((c) => c.command);
+  const manifest = await readJson(path.join(tmp, '.sneakoscope', 'manifest.json'));
+  const policy = await readJson(path.join(tmp, '.sneakoscope', 'policy.json'));
+  const manifestDollarCommands = manifest.prompt_pipeline?.dollar_commands || [];
+  const policyDollarCommands = policy.prompt_pipeline?.dollar_commands || [];
+  if (JSON.stringify(manifestDollarCommands) !== JSON.stringify(registryDollarCommands)) throw new Error('selftest failed: manifest dollar command drift');
+  if (JSON.stringify(policyDollarCommands) !== JSON.stringify(registryDollarCommands)) throw new Error('selftest failed: policy dollar command drift');
+  if (!manifest.harness_guard?.immutable_to_llm_edits || !policy.harness_guard?.immutable_to_llm_edits) throw new Error('selftest failed: harness guard missing from manifest/policy');
+  if (manifest.llm_wiki?.ssot !== 'triwiki' || policy.llm_wiki?.ssot !== 'triwiki') throw new Error('selftest failed: TriWiki context tracking not recorded in manifest/policy');
   const codexAppQuickRefExists = await exists(path.join(tmp, '.codex', 'SNEAKOSCOPE.md'));
   if (!codexAppQuickRefExists) throw new Error('selftest failed: Codex App quick reference missing');
+  const codexAppQuickRefText = await safeReadText(path.join(tmp, '.codex', 'SNEAKOSCOPE.md'));
+  if (!codexAppQuickRefText.includes('dollar-commands')) throw new Error('selftest failed: Codex App quick reference missing dollar-command discovery');
+  if (!codexAppQuickRefText.includes('Context Tracking') || !codexAppQuickRefText.includes('TriWiki')) throw new Error('selftest failed: Codex App quick reference missing TriWiki context tracking');
+  for (const { command } of DOLLAR_COMMANDS) {
+    if (!codexAppQuickRefText.includes(command)) throw new Error(`selftest failed: Codex App quick reference missing ${command}`);
+  }
+  const hookRalphTmp = tmpdir();
+  await initProject(hookRalphTmp, {});
+  const hookBin = path.join(packageRoot(), 'bin', 'sks.mjs');
+  const hookPayload = JSON.stringify({ cwd: hookRalphTmp, prompt: '$Ralph 로그인 세션 만료 UX 개선 supabase db' });
+  const hookResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookRalphTmp, input: hookPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookResult.code !== 0) throw new Error(`selftest failed: $Ralph hook exited ${hookResult.code}: ${hookResult.stderr}`);
+  const hookJson = JSON.parse(hookResult.stdout);
+  if (!hookJson.additionalContext?.includes('MANDATORY $Ralph route activated')) throw new Error('selftest failed: $Ralph hook did not activate Ralph prepare pipeline');
+  if (hookJson.hookSpecificOutput?.hookEventName !== 'UserPromptSubmit' || !hookJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY $Ralph route activated')) throw new Error('selftest failed: $Ralph hook did not emit official UserPromptSubmit additionalContext');
+  if (!String(hookJson.systemMessage || '').includes('Ralph clarification gate')) throw new Error('selftest failed: $Ralph hook missing visible status message');
+  if (!hookJson.additionalContext?.includes('GOAL_PRECISE')) throw new Error('selftest failed: $Ralph hook did not provide clarification questions');
+  const hookState = await readJson(stateFile(hookRalphTmp), {});
+  if (hookState.phase !== 'RALPH_AWAITING_ANSWERS') throw new Error('selftest failed: $Ralph hook did not set awaiting-answers state');
+  if (!(await exists(path.join(missionDir(hookRalphTmp, hookState.mission_id), 'questions.md')))) throw new Error('selftest failed: $Ralph hook did not write questions.md');
+  const stopResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: hookRalphTmp, input: JSON.stringify({ cwd: hookRalphTmp, last_assistant_message: 'I will implement now.' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (stopResult.code !== 0) throw new Error(`selftest failed: stop hook exited ${stopResult.code}: ${stopResult.stderr}`);
+  const stopJson = JSON.parse(stopResult.stdout);
+  if (stopJson.decision !== 'block' || !String(stopJson.reason || '').includes('mandatory clarification')) throw new Error('selftest failed: Stop hook did not block missing Ralph questions');
+  if (!String(stopJson.systemMessage || '').includes('stop gate')) throw new Error('selftest failed: Stop hook missing visible status message');
   const codexConfigText = await safeReadText(path.join(tmp, '.codex', 'config.toml'));
   if (!codexConfigText.includes('multi_agent = true')) throw new Error('selftest failed: multi_agent not enabled');
+  if (!hasContext7ConfigText(codexConfigText)) throw new Error('selftest failed: Context7 MCP not configured');
+  if (!codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]')) throw new Error('selftest failed: reasoning profiles not configured');
+  if (!codexConfigText.includes('[agents.analysis_scout]')) throw new Error('selftest failed: analysis_scout agent not configured');
   if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest failed: team_consensus agent not configured');
+  const analysisAgentExists = await exists(path.join(tmp, '.codex', 'agents', 'analysis-scout.toml'));
+  if (!analysisAgentExists) throw new Error('selftest failed: analysis scout agent not installed');
   const teamAgentExists = await exists(path.join(tmp, '.codex', 'agents', 'team-consensus.toml'));
   if (!teamAgentExists) throw new Error('selftest failed: team consensus agent not installed');
-  const teamSkillExists = await exists(path.join(tmp, '.codex', 'skills', 'Team', 'SKILL.md'));
+  const teamSkillExists = await exists(path.join(tmp, '.agents', 'skills', 'team', 'SKILL.md'));
   if (!teamSkillExists) throw new Error('selftest failed: $Team skill not installed');
-  const honestSkillExists = await exists(path.join(tmp, '.codex', 'skills', 'honest-mode', 'SKILL.md'));
+  const honestSkillExists = await exists(path.join(tmp, '.agents', 'skills', 'honest-mode', 'SKILL.md'));
   if (!honestSkillExists) throw new Error('selftest failed: honest-mode skill not installed');
-  const autoResearchSkillExists = await exists(path.join(tmp, '.codex', 'skills', 'autoresearch-loop', 'SKILL.md'));
+  const autoResearchSkillExists = await exists(path.join(tmp, '.agents', 'skills', 'autoresearch-loop', 'SKILL.md'));
   if (!autoResearchSkillExists) throw new Error('selftest failed: autoresearch-loop skill not installed');
+  const requiredSkillsStatus = await checkRequiredSkills(tmp);
+  if (!requiredSkillsStatus.ok) throw new Error(`selftest failed: required skills missing: ${requiredSkillsStatus.missing.join(', ')}`);
+  const c7Status = await checkContext7(tmp);
+  if (!c7Status.ok || !c7Status.project.ok) throw new Error('selftest failed: Context7 check failed for project config');
+  if (hasContext7ConfigText('[mcp_servers.other]\ncommand = "npx"\n')) throw new Error('selftest failed: missing Context7 config passed structural check');
+  const mockContext7Path = path.join(tmp, 'mock-context7.mjs');
+  await writeTextAtomic(mockContext7Path, `process.stdin.setEncoding('utf8');\nlet buf='';\nfunction send(id,result){process.stdout.write(JSON.stringify({jsonrpc:'2.0',id,result})+'\\n');}\nprocess.stdin.on('data',(chunk)=>{buf+=chunk;for(;;){const i=buf.indexOf('\\n');if(i<0)break;const line=buf.slice(0,i).trim();buf=buf.slice(i+1);if(!line)continue;const msg=JSON.parse(line);if(!msg.id)continue;if(msg.method==='initialize')send(msg.id,{protocolVersion:'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'Mock Context7',version:'0.0.0'}});else if(msg.method==='tools/list')send(msg.id,{tools:[{name:'resolve-library-id'},{name:'query-docs'}]});else if(msg.method==='tools/call'&&msg.params.name==='resolve-library-id')send(msg.id,{content:[{type:'text',text:'Context7-compatible library ID: /mock/lib'}]});else if(msg.method==='tools/call'&&msg.params.name==='query-docs')send(msg.id,{content:[{type:'text',text:'mock docs for '+msg.params.arguments.libraryId}]});else send(msg.id,{content:[{type:'text',text:'unknown'}],isError:true});}});\n`);
+  const mockContext7Docs = await context7Docs('Mock Lib', { command: process.execPath, args: [mockContext7Path], query: 'hooks', timeoutMs: 5000 });
+  if (!mockContext7Docs.ok || mockContext7Docs.docs_tool !== 'query-docs' || mockContext7Docs.library_id !== '/mock/lib') throw new Error('selftest failed: local Context7 MCP client did not resolve/query docs');
+  const passedTeamGate = { passed: true, analysis_artifact: true, triwiki_refreshed: true, triwiki_validated: true, consensus_artifact: true, implementation_team_fresh: true, review_artifact: true, integration_evidence: true };
+  const incompleteTeamGateTmp = tmpdir();
+  await initProject(incompleteTeamGateTmp, {});
+  const { id: incompleteGateId, dir: incompleteGateDir } = await createMission(incompleteTeamGateTmp, { mode: 'team', prompt: 'incomplete team gate test' });
+  await writeJsonAtomic(path.join(incompleteGateDir, 'team-gate.json'), { passed: true, analysis_artifact: true, triwiki_refreshed: true });
+  await setCurrent(incompleteTeamGateTmp, { mission_id: incompleteGateId, mode: 'TEAM', route: 'Team', route_command: '$Team', phase: 'TEAM_REVIEW', context7_required: false, subagents_required: false, stop_gate: 'team-gate.json' });
+  const incompleteGateState = await readJson(stateFile(incompleteTeamGateTmp), {});
+  const incompleteGateStop = await evaluateStop(incompleteTeamGateTmp, incompleteGateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (incompleteGateStop?.decision !== 'block' || !String(incompleteGateStop.reason || '').includes('triwiki_validated')) throw new Error('selftest failed: incomplete Team gate was not blocked');
+  const routeGateTmp = tmpdir();
+  await initProject(routeGateTmp, {});
+  const { id: gateId, dir: gateDir } = await createMission(routeGateTmp, { mode: 'team', prompt: 'Context7 gate test' });
+  await writeJsonAtomic(path.join(gateDir, 'team-gate.json'), passedTeamGate);
+  await setCurrent(routeGateTmp, { mission_id: gateId, mode: 'TEAM', route: 'Team', route_command: '$Team', phase: 'TEAM_REVIEW', context7_required: true, stop_gate: 'team-gate.json' });
+  const gateState = await readJson(stateFile(routeGateTmp), {});
+  const missingC7Stop = await evaluateStop(routeGateTmp, gateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (missingC7Stop?.decision !== 'block' || !String(missingC7Stop.reason || '').includes('Context7')) throw new Error('selftest failed: Stop hook did not block missing Context7 evidence');
+  await recordContext7Evidence(routeGateTmp, gateState, { tool_name: 'resolve-library-id', library: 'react' });
+  const resolveOnlyStop = await evaluateStop(routeGateTmp, gateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (resolveOnlyStop?.decision !== 'block') throw new Error('selftest failed: resolve-only Context7 evidence unblocked route');
+  await recordContext7Evidence(routeGateTmp, gateState, { tool_name: 'query-docs', library_id: '/facebook/react' });
+  const c7Unblocked = await evaluateStop(routeGateTmp, gateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (c7Unblocked?.decision === 'block') throw new Error('selftest failed: full Context7 evidence did not unblock route gate');
+  const subagentGateTmp = tmpdir();
+  await initProject(subagentGateTmp, {});
+  const { id: subagentGateId, dir: subagentGateDir } = await createMission(subagentGateTmp, { mode: 'team', prompt: 'subagent evidence gate test' });
+  await writeJsonAtomic(path.join(subagentGateDir, 'team-gate.json'), passedTeamGate);
+  await setCurrent(subagentGateTmp, { mission_id: subagentGateId, mode: 'TEAM', route: 'Team', route_command: '$Team', phase: 'TEAM_REVIEW', context7_required: false, subagents_required: true, stop_gate: 'team-gate.json' });
+  const subagentGateState = await readJson(stateFile(subagentGateTmp), {});
+  const missingSubagentStop = await evaluateStop(subagentGateTmp, subagentGateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (missingSubagentStop?.decision !== 'block' || !String(missingSubagentStop.reason || '').includes('subagent')) throw new Error('selftest failed: Stop hook did not block missing subagent evidence');
+  await recordSubagentEvidence(subagentGateTmp, subagentGateState, { tool_name: 'spawn_agent', agent_type: 'worker' });
+  const subagentUnblocked = await evaluateStop(subagentGateTmp, subagentGateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (subagentUnblocked?.decision === 'block') throw new Error('selftest failed: subagent evidence did not unblock route gate');
   const { id: teamId, dir: teamDir } = await createMission(tmp, { mode: 'team', prompt: '병렬 구현 팀 테스트' });
   const teamPlan = buildTeamPlan(teamId, '병렬 구현 팀 테스트');
   await writeJsonAtomic(path.join(teamDir, 'team-plan.json'), teamPlan);
+  if (teamPlan.agent_session_count !== 3) throw new Error('selftest failed: team default sessions not 3');
+  if (teamPlan.role_counts.executor !== 3 || teamPlan.role_counts.user !== 1 || teamPlan.role_counts.reviewer !== 1) throw new Error('selftest failed: team default role counts invalid');
+  if (teamPlan.phases[0]?.id !== 'parallel_analysis_scouting' || teamPlan.phases[1]?.id !== 'triwiki_refresh') throw new Error('selftest failed: team plan is not scout-first');
+  if (teamPlan.roster.debate_team.length !== 3 || !teamPlan.roster.debate_team.some((agent) => agent.id === 'debate_user_1') || !teamPlan.roster.development_team.some((agent) => agent.id === 'executor_3')) throw new Error('selftest failed: team roster missing default agents');
+  if (teamPlan.roster.analysis_team.length !== teamPlan.role_counts.executor || !teamPlan.roster.analysis_team.some((agent) => agent.id === 'analysis_scout_3')) throw new Error('selftest failed: team analysis scout roster missing default agents');
+  if (!teamPlan.required_artifacts.includes('team-analysis.md')) throw new Error('selftest failed: team plan missing team-analysis artifact');
+  if (teamPlan.context_tracking?.ssot !== 'triwiki' || !teamPlan.required_artifacts.includes('.sneakoscope/wiki/context-pack.json')) throw new Error('selftest failed: team plan missing TriWiki context tracking');
+  const teamWorkflow = teamWorkflowMarkdown(teamPlan);
+  if (!teamWorkflow.includes('SSOT: triwiki') || !teamWorkflow.includes('Analysis Scouts') || !teamWorkflow.includes('sks wiki validate')) throw new Error('selftest failed: team workflow missing scout-first TriWiki context tracking');
+  const customTeamPlan = buildTeamPlan(teamId, '병렬 구현 팀 테스트', { agentSessions: 5 });
+  if (customTeamPlan.agent_session_count !== 5) throw new Error('selftest failed: custom team sessions not honored');
+  if (parseTeamCreateArgs(['--agents', '4', '작업']).agentSessions !== 4) throw new Error('selftest failed: team --agents parsing');
+  const maxAgentParsed = parseTeamCreateArgs(['--max-agents', '작업']);
+  if (maxAgentParsed.agentSessions !== 6 || maxAgentParsed.roleCounts.executor !== 6) throw new Error('selftest failed: team --max-agents parsing');
+  const maxTextParsed = parseTeamSpecText('가용가능한 최대 agents로 분석하고 구현');
+  if (maxTextParsed.agentSessions !== 6 || maxTextParsed.roleCounts.executor !== 6) throw new Error('selftest failed: team max-agent text parsing');
+  const roleParsed = parseTeamCreateArgs(['executor:5', 'reviewer:2', 'user:1', '작업']);
+  if (roleParsed.roleCounts.executor !== 5 || roleParsed.roleCounts.reviewer !== 2 || roleParsed.agentSessions !== 5 || roleParsed.prompt !== '작업') throw new Error('selftest failed: team role-count parsing');
+  const roleTeamPlan = buildTeamPlan(teamId, '역할 팀 테스트', { roleCounts: roleParsed.roleCounts });
+  if (roleTeamPlan.roster.debate_team.length !== 5) throw new Error('selftest failed: executor role count not reflected in debate team size');
+  if (roleTeamPlan.roster.analysis_team.length !== 5) throw new Error('selftest failed: executor role count not reflected in analysis scout team');
+  if (roleTeamPlan.roster.development_team.filter((agent) => agent.role === 'executor').length !== 5) throw new Error('selftest failed: executor role count not reflected in development team');
+  if (!roleTeamPlan.roster.debate_team.some((agent) => /inconvenience/.test(agent.persona))) throw new Error('selftest failed: user friction persona missing from debate team');
+  if (routeReasoning(routePrompt('$Research frontier idea'), '$Research frontier idea').effort !== 'xhigh') throw new Error('selftest failed: research reasoning not xhigh');
+  if (routeReasoning(routePrompt('$DB migration'), '$DB migration').effort !== 'high') throw new Error('selftest failed: logical reasoning not high');
+  if (routeReasoning(routePrompt('$DF button label'), '$DF button label').effort !== 'medium') throw new Error('selftest failed: simple reasoning not medium');
+  if (!routeRequiresSubagents(routePrompt('$Team implement feature'), '$Team implement feature')) throw new Error('selftest failed: Team route does not require subagents');
+  if (!routeRequiresSubagents(routePrompt('$Ralph implement feature'), '$Ralph implement feature')) throw new Error('selftest failed: Ralph implementation route does not require subagents');
+  if (routeRequiresSubagents(routePrompt('$Help commands'), '$Help commands')) throw new Error('selftest failed: Help route incorrectly requires subagents');
   if (!teamPlan.phases.some((phase) => phase.id === 'parallel_implementation')) throw new Error('selftest failed: team plan missing implementation phase');
+  await initTeamLive(teamId, teamDir, '병렬 구현 팀 테스트', { roleCounts: roleParsed.roleCounts });
+  await appendTeamEvent(teamDir, { agent: 'analysis_scout_1', phase: 'parallel_analysis_scouting', message: 'selftest mapped repo slice' });
+  await appendTeamEvent(teamDir, { agent: 'team_consensus', phase: 'planning_debate', message: 'selftest mapped options' });
+  const teamDashboard = await readTeamDashboard(teamDir);
+  if (teamDashboard?.agent_session_count !== 5 || teamDashboard?.role_counts?.executor !== 5) throw new Error('selftest failed: team dashboard session/role budget missing');
+  if (teamDashboard?.context_tracking?.ssot !== 'triwiki') throw new Error('selftest failed: team dashboard missing TriWiki context tracking');
+  if (!teamDashboard?.phases?.includes('parallel_analysis_scouting')) throw new Error('selftest failed: team dashboard missing analysis scout phase');
+  if (!teamDashboard?.latest_messages?.some((entry) => entry.agent === 'analysis_scout_1')) throw new Error('selftest failed: team live dashboard missing analysis scout event');
+  if (!teamDashboard?.latest_messages?.some((entry) => entry.agent === 'team_consensus')) throw new Error('selftest failed: team live dashboard missing agent event');
+  const teamLive = await readTeamLive(teamDir);
+  if (!teamLive.includes('Analysis scouts') || !teamLive.includes('selftest mapped repo slice')) throw new Error('selftest failed: team live transcript missing analysis scout section/event');
+  if (!teamLive.includes('selftest mapped options')) throw new Error('selftest failed: team live transcript missing event');
+  if (!teamLive.includes('Context tracking SSOT: TriWiki')) throw new Error('selftest failed: team live transcript missing TriWiki context tracking');
+  if (!(await readTeamTranscriptTail(teamDir, 1)).join('\n').includes('selftest mapped options')) throw new Error('selftest failed: team transcript tail missing event');
+  await writeTextAtomic(path.join(teamDir, 'team-analysis.md'), '- claim: analysis scout mapped route registry | source: src/core/routes.mjs | risk: high | confidence: supported\n');
   const { id, dir, mission } = await createMission(tmp, { mode: 'ralph', prompt: '로그인 세션 만료 UX 개선 supabase db' });
   const schema = buildQuestionSchema(mission.prompt);
   await writeQuestions(dir, schema);
@@ -1310,6 +1890,7 @@ async function selftest() {
   const wikiValidation = validateWikiCoordinateIndex(wikiPack.wiki);
   if (!wikiValidation.ok) throw new Error('selftest failed: wiki coordinate pack invalid');
   if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => (Array.isArray(anchor) ? anchor[0] : anchor.id) === 'wiki-trig')) throw new Error('selftest failed: wiki trig anchor missing');
+  if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => String(Array.isArray(anchor) ? anchor[0] : anchor.id).startsWith('team-analysis-'))) throw new Error('selftest failed: team analysis claim missing from TriWiki pack');
   const { dir: researchDir, mission: researchMission } = await createMission(tmp, { mode: 'research', prompt: '새로운 코드 리뷰 방법론 연구' });
   const researchPlan = await writeResearchPlan(researchDir, researchMission.prompt, {});
   const researchGate = await writeMockResearchResult(researchDir, researchPlan);
@@ -1439,8 +2020,8 @@ async function projectWikiClaims(root) {
   const claims = [
     ['wiki-hooks', '.codex/hooks.json routes UserPromptSubmit, tool, permission, and Stop events through SKS guards.', '.codex/hooks.json', 'code', 'high'],
     ['wiki-config', '.codex/config.toml enables Codex App profiles, multi-agent support, and Team agent limits.', '.codex/config.toml', 'code', 'high'],
-    ['wiki-skills', '.codex/skills provides local routes for DF, Team, Ralph, Research, AutoResearch, DB, GX, wiki, and evaluation workflows.', '.codex/skills', 'code', 'medium'],
-    ['wiki-agents', '.codex/agents defines Team planning, implementation, DB safety, and QA reviewer roles.', '.codex/agents', 'code', 'medium'],
+    ['wiki-skills', '.agents/skills provides official repo-local routes for df, team, ralph, research, autoresearch, db, gx, wiki, and evaluation workflows.', '.agents/skills', 'code', 'medium'],
+    ['wiki-agents', '.codex/agents defines Team analysis scout, planning, implementation, DB safety, and QA reviewer roles.', '.codex/agents', 'code', 'medium'],
     ['wiki-policy', '.sneakoscope/policy.json stores update-check, honest-mode, retention, database, performance, and prompt-pipeline policy.', '.sneakoscope/policy.json', 'contract', 'high'],
     ['wiki-memory', '.sneakoscope/memory stores Q0 raw, Q1 evidence, Q2 facts, Q3 tags, and Q4 control bits for hydratable context.', '.sneakoscope/memory', 'wiki', 'high'],
     ['wiki-gx', 'GX cartridges keep vgraph.json and beta.json as deterministic visual context sources with render, validation, drift, and snapshot outputs.', '.sneakoscope/gx/cartridges', 'vgraph', 'medium'],
@@ -1463,7 +2044,61 @@ async function projectWikiClaims(root) {
       evidence_count: await exists(path.join(root, file)) ? 1 : 0
     });
   }
+  out.push(...(await teamAnalysisWikiClaims(root)));
   return out;
+}
+
+async function teamAnalysisWikiClaims(root) {
+  const base = path.join(root, '.sneakoscope', 'missions');
+  let entries = [];
+  try {
+    entries = await fsp.readdir(base, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const claims = [];
+  for (const entry of entries.filter((item) => item.isDirectory() && item.name.startsWith('M-')).map((item) => item.name).sort().reverse().slice(0, 10)) {
+    const file = path.join(base, entry, 'team-analysis.md');
+    let text = '';
+    try {
+      text = await fsp.readFile(file, 'utf8');
+    } catch {
+      continue;
+    }
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#')).slice(0, 24);
+    let index = 0;
+    for (const line of lines) {
+      const clean = line.replace(/^[-*]\s*/, '').slice(0, 260);
+      if (!clean) continue;
+      const source = extractTeamAnalysisSource(clean) || path.relative(root, file);
+      const risk = extractTeamAnalysisRisk(clean);
+      const sourceExists = source && (await exists(path.join(root, source)));
+      index += 1;
+      claims.push({
+        id: `team-analysis-${entry}-${index}`,
+        text: clean,
+        authority: 'wiki',
+        risk,
+        status: sourceExists || source === path.relative(root, file) ? 'supported' : 'unknown',
+        freshness: 'fresh',
+        source,
+        file: source,
+        evidence_count: 1,
+        required_weight: 0.5
+      });
+    }
+  }
+  return claims;
+}
+
+function extractTeamAnalysisSource(text) {
+  const match = String(text || '').match(/\b(?:source|file|path)\s*[:=]\s*`?([^`|,\s]+)/i);
+  return match ? match[1].replace(/[.;)]$/, '') : null;
+}
+
+function extractTeamAnalysisRisk(text) {
+  const match = String(text || '').match(/\b(critical|high|medium|low)\b/i);
+  return match ? match[1].toLowerCase() : 'medium';
 }
 
 async function saveEvalReport(root, args, report, prefix) {
@@ -1532,7 +2167,7 @@ async function stats(args) {
 
 function positionalArgs(args = []) {
   const out = [];
-  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth']);
+  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors']);
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]);
     if (valueFlags.has(arg)) {
@@ -1642,9 +2277,14 @@ async function gx(sub, args) {
 }
 
 async function team(args) {
-  const prompt = promptOf(args);
+  const teamSubcommands = new Set(['log', 'tail', 'watch', 'status', 'event']);
+  if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
+  const opts = parseTeamCreateArgs(args);
+  const { prompt, agentSessions, roleCounts, roster } = opts;
   if (!prompt) {
-    console.error('Usage: sks team "task" [--json]');
+    console.error('Usage: sks team "task" [executor:5 reviewer:2 user:1] [--agents N] [--json]');
+    console.error('       sks team log|tail|watch|status [mission-id|latest]');
+    console.error('       sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
     process.exitCode = 1;
     return;
   }
@@ -1652,40 +2292,96 @@ async function team(args) {
   const { id, dir } = await createMission(root, { mode: 'team', prompt });
   const schema = buildQuestionSchema(prompt);
   await writeQuestions(dir, schema);
-  const plan = buildTeamPlan(id, prompt);
+  const plan = buildTeamPlan(id, prompt, { agentSessions, roleCounts, roster });
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
   await writeTextAtomic(path.join(dir, 'team-workflow.md'), teamWorkflowMarkdown(plan));
+  const liveFiles = await initTeamLive(id, dir, prompt, { agentSessions, roleCounts, roster });
+  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, context7_evidence: false });
   const result = {
     mission_id: id,
     mission_dir: dir,
     plan: path.join(dir, 'team-plan.json'),
     workflow: path.join(dir, 'team-workflow.md'),
+    live: liveFiles.live,
+    transcript: liveFiles.transcript,
+    dashboard: liveFiles.dashboard,
+    context_pack: path.join(root, '.sneakoscope', 'wiki', 'context-pack.json'),
+    agent_sessions: agentSessions,
+    bundle_size: roster.bundle_size,
+    role_counts: roleCounts,
     questions: path.join(dir, 'questions.md'),
-    codex_agents: ['team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']
+    codex_agents: ['analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']
   };
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
   console.log(`Plan: ${path.relative(root, result.plan)}`);
+  console.log(`Agent sessions: ${agentSessions}`);
+  console.log(`Role counts: ${formatRoleCounts(roleCounts)}`);
   console.log(`Workflow: ${path.relative(root, result.workflow)}`);
-  console.log('Use $Team in Codex App to run the two-phase flow: debate/consensus, close planning agents, then spawn a fresh implementation team with disjoint ownership.');
+  console.log(`Live: ${path.relative(root, result.live)}`);
+  console.log(`Watch: sks team watch ${id}`);
+  console.log('Use $Team in Codex App to run the scout-first flow: parallel analysis scouts, TriWiki refresh, debate/consensus, then a fresh implementation team with disjoint ownership.');
 }
 
-function buildTeamPlan(id, prompt) {
+function parseTeamCreateArgs(args) {
+  const spec = parseTeamSpecArgs(args);
+  return { prompt: spec.cleanArgs.join(' ').trim(), agentSessions: spec.agentSessions, roleCounts: spec.roleCounts, roster: spec.roster };
+}
+
+function buildTeamPlan(id, prompt, opts = {}) {
+  const spec = normalizeTeamSpec(opts);
+  const { agentSessions, roleCounts, roster } = spec;
   return {
     schema_version: 1,
     mission_id: id,
     mode: 'team',
     prompt,
+    agent_session_count: agentSessions,
+    default_agent_session_count: 3,
+    role_counts: roleCounts,
+    session_policy: `Use at most ${agentSessions} subagent sessions at a time; parent orchestrator is not counted.`,
+    bundle_size: roster.bundle_size,
+    roster,
+    team_model: {
+      phases: ['parallel_analysis_scouts', 'triwiki_refresh', 'debate_team', 'development_team'],
+      analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents. Each scout owns one investigation slice, records source paths/evidence, and returns TriWiki-ready findings before debate or implementation starts.`,
+      debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices.`,
+      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`
+    },
+    persona_axioms: [
+      'Final users are intentionally low-context, impatient, self-interested, stubborn, and hostile to inconvenience.',
+      'Executors are capable developers and must receive disjoint write ownership.',
+      'Reviewers are strict, skeptical, and block unsupported correctness, DB safety, test, or evidence claims.',
+      'Analysis scouts run before debate, then the debate team closes before a fresh development team starts parallel implementation.'
+    ],
+    reasoning: { effort: 'high', profile: 'sks-logic-high', temporary: true, restore_after_completion: true },
     codex_config_required: {
       features: { multi_agent: true, codex_hooks: true },
       agents: { max_threads: 6, max_depth: 1 },
       custom_agents_dir: '.codex/agents'
     },
+    context_tracking: triwikiContextTracking(),
     phases: [
       {
+        id: 'parallel_analysis_scouting',
+        goal: 'Read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.',
+        agents: roster.analysis_team.map((agent) => agent.id),
+        max_parallel_subagents: agentSessions,
+        write_policy: 'read-only',
+        output: 'team-analysis.md'
+      },
+      {
+        id: 'triwiki_refresh',
+        goal: 'Parent orchestrator refreshes and validates TriWiki from scout findings before assigning debate or development work.',
+        agents: ['parent_orchestrator'],
+        commands: ['sks wiki pack', 'sks wiki validate .sneakoscope/wiki/context-pack.json'],
+        output: '.sneakoscope/wiki/context-pack.json'
+      },
+      {
         id: 'planning_debate',
-        goal: 'Specialists independently map the code, risks, constraints, DB safety, tests, and viable approaches.',
-        agents: ['team_consensus', 'db_safety_reviewer', 'qa_reviewer'],
+        goal: 'Debate team maps user inconvenience, code risk, constraints, DB safety, tests, and viable approaches using the refreshed TriWiki context.',
+        agents: roster.debate_team.map((agent) => agent.id),
+        max_parallel_subagents: agentSessions,
         write_policy: 'read-only'
       },
       {
@@ -1696,34 +2392,56 @@ function buildTeamPlan(id, prompt) {
       },
       {
         id: 'close_planning_agents',
-        goal: 'Close or stop planning agents after their findings are captured so implementation starts with fresh context.',
+        goal: 'Close or stop the debate team after findings and consensus are captured so implementation starts with a fresh development bundle.',
         agents: ['parent_orchestrator']
       },
       {
         id: 'parallel_implementation',
-        goal: 'Fresh implementation workers take disjoint write sets and implement without reverting each other.',
-        agents: ['implementation_worker'],
+        goal: 'Fresh executor developers take disjoint write sets and implement in parallel without reverting each other.',
+        agents: roster.development_team.map((agent) => agent.id),
+        max_parallel_subagents: agentSessions,
         write_policy: 'workspace-write with explicit ownership'
       },
       {
         id: 'review_and_integrate',
-        goal: 'Reviewers check correctness, DB safety, tests, and evidence. Parent integrates final result.',
-        agents: ['qa_reviewer', 'db_safety_reviewer', 'parent_orchestrator']
+        goal: 'Strict reviewers check correctness, DB safety, tests, and evidence; user personas validate practical inconvenience; parent integrates final result.',
+        agents: roster.validation_team.map((agent) => agent.id).concat(['parent_orchestrator'])
       }
     ],
     invariants: [
       'The parent thread remains the orchestrator and owns final integration.',
+      'Every useful subagent message, result, handoff, review finding, and integration decision is mirrored to team-live.md and team-transcript.jsonl.',
+      'Analysis scouts, debate team, and development team are separate bundles; scouts finish before debate and debate closes before implementation workers start.',
+      'Analysis scouts are read-only and maximize the available session budget for independent investigation before any code edit.',
+      'The parent refreshes and validates TriWiki after scouting so later handoffs use current source-backed context.',
+      'executor:N creates exactly N debate participants and then a separate N-person executor development team.',
+      'Final user personas should not be overly smart or cooperative; they represent stubborn, inconvenience-averse real users.',
       'Planning agents do not edit files.',
       'Implementation workers receive disjoint ownership scopes.',
       'Workers are told they are not alone in the codebase and must not revert others edits.',
+      'Context tracking uses TriWiki as the SSOT; team handoffs must preserve id, hash, source path, and RGBA/trig coordinate anchors.',
       'SKS hooks, DB safety rules, Ralph no-question rules, and H-Proof gates remain active.',
       'Destructive database operations remain forbidden.'
     ],
+    live_visibility: {
+      markdown: 'team-live.md',
+      transcript: 'team-transcript.jsonl',
+      dashboard: 'team-dashboard.json',
+      commands: [
+        'sks team status <mission-id>',
+        'sks team log <mission-id>',
+        'sks team tail <mission-id>',
+        'sks team watch <mission-id>',
+        'sks team event <mission-id> --agent <name> --phase <phase> --message "..."'
+      ]
+    },
+    required_artifacts: ['team-analysis.md', 'team-consensus.md', 'team-review.md', 'team-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'],
     prompt_command: '$Team'
   };
 }
 
 function teamWorkflowMarkdown(plan) {
+  const ctx = plan.context_tracking || triwikiContextTracking();
   return `# SKS Team Mission
 
 Mission: ${plan.mission_id}
@@ -1736,8 +2454,56 @@ ${plan.prompt}
 \`\`\`text
 $Team ${plan.prompt}
 
-First run a planning/debate team. Have team_consensus map options and constraints, db_safety_reviewer check DB/migration/RLS risk if relevant, and qa_reviewer identify correctness and test risks. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices. Close the planning agents. Then form a fresh implementation team with implementation_worker agents, each with non-overlapping ownership. Review with qa_reviewer and db_safety_reviewer, integrate results in the parent thread, run verification, and report evidence.
+Use high reasoning for the Team route only, then return to the default/user-selected profile after completion. Use at most ${plan.agent_session_count || 3} subagent sessions at a time; the parent orchestrator is not counted.
+
+First run exactly ${plan.roster.bundle_size} read-only analysis_scout_N agents in parallel. Split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation into independent slices, then capture source-backed findings in team-analysis.md. Refresh and validate TriWiki before debate. Then run the debate team with exactly ${plan.roster.bundle_size} participants. Use the concrete roster below: final-user voices are stubborn and inconvenience-averse, executor voices are capable developers, reviewers are strict, and planners force consensus. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices. Close the debate team. Then form a fresh development team with exactly ${plan.roster.bundle_size} executor_N developers implementing slices in parallel with non-overlapping ownership. Review with the validation team, integrate results in the parent thread, run verification, and report evidence.
 \`\`\`
+
+## Session Budget
+
+- Default: 3 subagent sessions.
+- This mission: ${plan.agent_session_count || 3} subagent sessions.
+- Bundle size: ${plan.roster.bundle_size}
+- Role counts: ${formatRoleCounts(plan.role_counts)}
+- The parent orchestrator is not counted.
+- Use the full available session budget for analysis when independent slices exist; use fewer agents only when the work cannot be split cleanly.
+
+## Context Tracking
+
+- SSOT: ${ctx.ssot}
+- Pack: ${ctx.default_pack}
+- Refresh: \`${ctx.pack_command}\`
+- Validate: \`${ctx.validate_command}\`
+- Rule: selected text is only the visible slice; handoffs keep id, hash, source path, and RGBA/trig coordinate anchors hydratable.
+
+## Analysis Scouts
+
+${plan.roster.analysis_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+
+Scout rules:
+- Read-only only.
+- Each scout owns one independent investigation slice.
+- Return source paths, risks, claims, and suggested implementation slices in TriWiki-ready form.
+- Parent updates team-analysis.md, runs \`${ctx.pack_command}\`, then runs \`${ctx.validate_command}\` before debate/development.
+
+## Debate Team
+
+${plan.roster.debate_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+
+## Development Team
+
+${plan.roster.development_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+
+## Validation Team
+
+${plan.roster.validation_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+
+## Live Visibility
+
+- Keep team-live.md readable for the user inside Codex App.
+- Mirror every useful subagent status, debate result, handoff, review finding, and integration decision to team-transcript.jsonl.
+- Use \`sks team event ${plan.mission_id} --agent <name> --phase <phase> --message "..."\` when recording a live event from the parent thread.
+- The user can inspect the flow with \`sks team log ${plan.mission_id}\`, \`sks team tail ${plan.mission_id}\`, or \`sks team watch ${plan.mission_id}\`.
 
 ## Phases
 
@@ -1747,6 +2513,71 @@ ${plan.phases.map((phase, idx) => `${idx + 1}. ${phase.id}: ${phase.goal}`).join
 
 ${plan.invariants.map((x) => `- ${x}`).join('\n')}
 `;
+}
+
+async function teamCommand(sub, args) {
+  const root = await projectRoot();
+  const missionArg = args[0] && !String(args[0]).startsWith('--') ? args[0] : 'latest';
+  const id = await resolveMissionId(root, missionArg);
+  if (!id) {
+    console.error(`Usage: sks team ${sub} [mission-id|latest]`);
+    process.exitCode = 1;
+    return;
+  }
+  const { dir } = await loadMission(root, id);
+  if (sub === 'event') {
+    const message = readFlagValue(args, '--message', '');
+    if (!message) {
+      console.error('Usage: sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
+      process.exitCode = 1;
+      return;
+    }
+    const record = await appendTeamEvent(dir, {
+      agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
+      phase: readFlagValue(args, '--phase', 'general'),
+      type: readFlagValue(args, '--type', 'status'),
+      artifact: readFlagValue(args, '--artifact', ''),
+      message
+    });
+    if (flag(args, '--json')) return console.log(JSON.stringify(record, null, 2));
+    console.log(`${record.ts} [${record.phase}] ${record.agent}: ${record.message}`);
+    return;
+  }
+  if (sub === 'status') {
+    const dashboard = await readTeamDashboard(dir);
+    if (flag(args, '--json')) return console.log(JSON.stringify(dashboard || {}, null, 2));
+    if (!dashboard) {
+      console.error(`Team dashboard missing for ${id}.`);
+      process.exitCode = 2;
+      return;
+    }
+    console.log(`Team mission: ${id}`);
+    console.log(`Updated: ${dashboard.updated_at || 'unknown'}`);
+    console.log(`Agent sessions: ${dashboard.agent_session_count || 3}`);
+    if (dashboard.role_counts) console.log(`Role counts: ${formatRoleCounts(dashboard.role_counts)}`);
+    for (const entry of dashboard.latest_messages || []) console.log(`${entry.ts} [${entry.phase}] ${entry.agent}: ${entry.message}`);
+    return;
+  }
+  if (sub === 'log') return console.log(await readTeamLive(dir));
+  if (sub === 'tail' || sub === 'watch') {
+    const lines = readFlagValue(args, '--lines', '20');
+    const printTail = async () => {
+      for (const line of await readTeamTranscriptTail(dir, Number(lines))) console.log(line);
+    };
+    await printTail();
+    if (sub === 'watch' && flag(args, '--follow')) {
+      let last = (await readTeamTranscriptTail(dir, Number(lines))).join('\n');
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const next = (await readTeamTranscriptTail(dir, Number(lines))).join('\n');
+        if (next !== last) {
+          console.log(next);
+          last = next;
+        }
+      }
+    }
+    return;
+  }
 }
 
 async function db(sub, args) {
