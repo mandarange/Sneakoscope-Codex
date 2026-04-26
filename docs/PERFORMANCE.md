@@ -6,8 +6,8 @@ Sneakoscope Codex v0.6 is designed to keep runtime, package size, RAM, and stora
 
 - `codex exec` output is streamed to files and only a bounded tail is retained in memory.
 - Ralph cycles run under a timeout and bounded max cycles.
-- TriWiki claim selection uses bounded top-K selection instead of sorting unbounded context into prompts.
-- GX visual context renders deterministic SVG/HTML from JSON sources, avoiding external image-generation latency, cost, and nondeterminism.
+- TriWiki claim selection uses bounded top-K selection plus RGBA/trig wiki anchors instead of sorting unbounded context into prompts.
+- GX visual context renders deterministic SVG/HTML from JSON sources, avoiding external image-generation latency, cost, and nondeterminism. Rendered nodes expose the same RGBA wiki-coordinate anchors used by TriWiki.
 - `sks gc` runs after Ralph cycles by default.
 
 ## Evaluation metrics
@@ -30,13 +30,26 @@ Default meaningful-improvement thresholds are intentionally explicit: at least 2
 
 The accuracy metric is not a live model task score. It is a deterministic proxy for whether the context handed to a model is smaller, better supported, and less contaminated by unsupported critical claims.
 
+## LLM Wiki coordinate continuity
+
+TriWiki does not treat compression as permanent deletion. The visible context pack includes selected claim text plus a compact LLM Wiki coordinate index:
+
+```text
+R channel -> domain angle
+G channel -> layer radius via sin()
+B channel -> phase angle
+A channel -> concentration/confidence
+```
+
+Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source path, status/risk, and a text hash. This keeps non-selected claims hydratable across turns while keeping raw Q0 logs and large Q1 evidence out of the prompt until verification needs them.
+
 ## Package size
 
 - The npm package has zero runtime dependencies.
 - `@openai/codex` is no longer bundled. Users install Codex separately or set `SKS_CODEX_BIN`.
 - Optional Rust source is in `crates/` for the Git repo, but is excluded from the npm package by the `files` allowlist.
 - GX rendering uses only built-in Node.js APIs and ships as source in the npm package.
-- `npm run sizecheck` enforces package limits before pack/publish: `<=96 KiB` packed, `<=320 KiB` unpacked, `<=40` package files, and `<=256 KiB` per tracked file by default.
+- `npm run sizecheck` enforces package limits during `release:check`, `publish:dry`, and publish: `<=96 KiB` packed, `<=320 KiB` unpacked, `<=40` package files, and `<=256 KiB` per tracked file by default.
 
 ## Memory leaks
 
@@ -66,3 +79,5 @@ Blocked classes include destructive SQL, direct remote SQL mutation, `supabase d
 Sneakoscope Codex v0.4 replaces model-rendered visual cartridges with deterministic code-rendered context sheets. `vgraph.json` and `beta.json` are the inputs, `render.svg` and `render.html` are reproducible outputs, and `drift.json` records whether the rendered source hash still matches the current graph.
 
 This keeps visual context cheap to regenerate, diffable in normal tooling, and safe to validate during npm packaging without network calls or model access.
+
+GX snapshots include `wiki_coordinates`, and `render.svg` nodes include `data-wiki-rgba` and `data-wiki-coord` attributes. This makes the visual context sheet and LLM Wiki pack share one deterministic coordinate system.

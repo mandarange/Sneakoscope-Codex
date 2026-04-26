@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { exists, nowIso, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
+import { buildWikiCoordinateIndex, normalizeWikiCoord, rgbaKey } from './wiki-coordinate.mjs';
 
 const SVG_WIDTH = 1280;
 const SVG_HEIGHT = 820;
@@ -89,6 +90,22 @@ export function vgraphHash(vgraph = {}) {
   return sha256(stableJson(normalizeVGraph(vgraph)));
 }
 
+function nodeWikiCoord(node) {
+  return normalizeWikiCoord(node?.coord || {}, `node:${node?.id || node?.label || 'node'}`);
+}
+
+function nodeClaims(graph) {
+  return graph.nodes.map((node) => ({
+    id: `node:${node.id}`,
+    text: node.label,
+    authority: 'vgraph',
+    source: 'vgraph.json',
+    status: node.status === 'blocked' ? 'unsupported' : 'supported',
+    risk: node.risk === 'critical' ? 'critical' : (node.risk === 'high' ? 'high' : 'medium'),
+    coord: nodeWikiCoord(node)
+  }));
+}
+
 function nodePalette(node) {
   if (node.risk === 'critical' || node.status === 'blocked') return { fill: '#fee2e2', stroke: '#b91c1c', text: '#3b0a0a' };
   if (node.risk === 'high' || node.status === 'warn') return { fill: '#ffedd5', stroke: '#c2410c', text: '#431407' };
@@ -166,12 +183,19 @@ export function renderVGraphSvg(vgraph = {}, beta = {}) {
     const palette = nodePalette(node);
     const labelLines = splitLabel(node.label);
     const tag = `${node.kind} / ${node.status}`;
-    return `<g class="node" transform="translate(${pos.x - pos.w / 2} ${pos.y - pos.h / 2})">
+    const wikiCoord = nodeWikiCoord(node);
+    return `<g class="node" data-wiki-rgba="${rgbaKey(wikiCoord.rgba)}" data-wiki-coord="${wikiCoord.domainAngle},${wikiCoord.layerRadius},${wikiCoord.phase},${wikiCoord.concentration}" transform="translate(${pos.x - pos.w / 2} ${pos.y - pos.h / 2})">
       <rect width="${pos.w}" height="${pos.h}" rx="14" fill="${palette.fill}" stroke="${palette.stroke}" stroke-width="3"/>
       <text x="18" y="27" class="node-title" fill="${palette.text}">${escapeXml(labelLines[0])}</text>
       ${labelLines.slice(1).map((line, i) => `<text x="18" y="${49 + i * 18}" class="node-title small" fill="${palette.text}">${escapeXml(line)}</text>`).join('\n')}
       <text x="18" y="${pos.h - 14}" class="node-meta" fill="${palette.text}">${escapeXml(shortText(tag, 34))}</text>
     </g>`;
+  }).join('\n');
+  const wikiStrip = graph.nodes.slice(0, 24).map((node, index) => {
+    const coord = nodeWikiCoord(node);
+    const x = 1010 + (index % 12) * 18;
+    const y = 36 + Math.floor(index / 12) * 18;
+    return `<rect x="${x}" y="${y}" width="14" height="14" rx="2" fill="rgb(${coord.rgba.r},${coord.rgba.g},${coord.rgba.b})" fill-opacity="${(coord.rgba.a / 255).toFixed(3)}" data-node="${escapeXml(node.id)}" data-rgba="${rgbaKey(coord.rgba)}"/>`;
   }).join('\n');
   const emptyState = graph.nodes.length ? '' : `<g class="empty">
     <rect x="332" y="214" width="616" height="178" rx="18"/>
@@ -206,6 +230,7 @@ export function renderVGraphSvg(vgraph = {}, beta = {}) {
   <rect x="0" y="0" width="${SVG_WIDTH}" height="108" fill="#f8fafc"/>
   <text x="42" y="56" class="title">${escapeXml(graph.title)}</text>
   <text x="42" y="86" class="subtitle">vgraph:${escapeXml(graph.id)} hash:${hash.slice(0, 12)} nodes:${graph.nodes.length} edges:${graph.edges.length} generated:${generatedAt}</text>
+  <g aria-label="RGBA wiki coordinate atlas">${wikiStrip}</g>
   ${layerBands}
   ${edgeLines}
   ${nodeCards}
@@ -268,6 +293,13 @@ export function validateVGraph(vgraph = {}, beta = {}) {
     graph_id: graph.id,
     source_hash: vgraphHash(graph),
     counts: { nodes: graph.nodes.length, edges: graph.edges.length, invariants: graph.invariants.length, tests: graph.tests.length },
+    wiki_coordinates: buildWikiCoordinateIndex({
+      mission: { id: graph.id, coord: beta?.mission_coord || {} },
+      claims: nodeClaims(graph),
+      q4: { vgraph_hash: vgraphHash(graph) },
+      q3: ['gx', 'vgraph', 'wiki-coordinate'],
+      maxAnchors: Math.min(32, graph.nodes.length)
+    }),
     issues,
     warnings
   };
@@ -344,6 +376,13 @@ export async function snapshotCartridge(dir) {
     },
     validation,
     drift,
+    wiki_coordinates: buildWikiCoordinateIndex({
+      mission: { id: normalizeVGraph(vgraph).id, coord: beta?.mission_coord || {} },
+      claims: nodeClaims(normalizeVGraph(vgraph)),
+      q4: { vgraph_hash: vgraphHash(vgraph) },
+      q3: ['gx', 'vgraph', 'wiki-coordinate'],
+      maxAnchors: 32
+    }),
     vgraph: normalizeVGraph(vgraph),
     beta
   };

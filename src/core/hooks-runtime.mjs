@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { projectRoot, readJson, appendJsonl, readStdin, nowIso, exists } from './fsx.mjs';
+import { projectRoot, readJson, writeJsonAtomic, appendJsonl, readStdin, nowIso, exists, runProcess, which, PACKAGE_VERSION } from './fsx.mjs';
 import { containsUserQuestion, looksInteractiveCommand, noQuestionContinuationReason, interactiveCommandReason } from './no-question-guard.mjs';
 import { stateFile, missionDir } from './mission.mjs';
 import { checkDbOperation, dbBlockReason } from './db-safety.mjs';
@@ -33,6 +33,10 @@ function extractUserPrompt(payload) {
     || '';
 }
 
+function conversationId(payload) {
+  return String(payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || payload.cwd || 'default');
+}
+
 function extractCommand(payload) {
   return payload.command || payload.tool_input?.command || payload.input?.command || payload.tool?.input?.command || '';
 }
@@ -40,6 +44,14 @@ function extractCommand(payload) {
 function dollarCommand(prompt) {
   const match = String(prompt || '').trim().match(/^\$([A-Za-z][A-Za-z0-9_-]*)(?:\s|:|$)/);
   return match ? match[1].toUpperCase() : null;
+}
+
+function looksLikeUpdateDecline(prompt) {
+  return /^(no|nope|skip|later|not now|don't|dont|아니|아니요|안해|안 함|나중에|건너뛰|스킵)/i.test(String(prompt || '').trim());
+}
+
+function looksLikeUpdateAccept(prompt) {
+  return /^(yes|y|ok|okay|update|upgrade|do it|go ahead|응|네|예|업데이트|해줘|진행)/i.test(String(prompt || '').trim());
 }
 
 function looksLikeFastDesignFix(prompt) {
@@ -52,11 +64,23 @@ function looksLikeFastDesignFix(prompt) {
 function promptPipelineContext(prompt) {
   const command = dollarCommand(prompt);
   const fastDesign = command === 'DF' || looksLikeFastDesignFix(prompt);
+  const team = command === 'TEAM';
+  const wiki = command === 'GX' || /\b(llm wiki|wiki|context compression|context pack|hydrate|rgba|coordinate|좌표|컨텍스트|압축)\b/i.test(String(prompt || ''));
+  const autoresearch = command === 'AUTORESEARCH' || command === 'RESEARCH' || /\b(autoresearch|experiment|benchmark|hypothesis|research|optimi[sz]e|improve metric|falsify|novelty|SEO|GEO)\b/i.test(String(prompt || ''));
   const route = command ? `$${command}` : (fastDesign ? '$DF inferred' : 'default');
   const dfLine = fastDesign
     ? '\nFast design fix: treat this as $DF. Do the smallest relevant edit, avoid Ralph/research loops, avoid broad redesign, and run only cheap verification when useful.'
     : '';
-  return `SKS prompt pipeline active. Route: ${route}. Optimize the user request before acting: extract intent, target files/surfaces, constraints, acceptance criteria, and the smallest safe execution path. Use explicit $ commands when present: $DF fast design/content edit, $Ralph clarification-gated mission, $Research discovery run, $DB database safety, $GX visual context, $SKS general SKS help. Without a command, infer the lightest matching route and avoid heavy loops unless the task requires them.${dfLine}`;
+  const teamLine = team
+    ? '\nTeam route: first use a planning/debate team, synthesize one agreed objective, close planning agents, then form a fresh implementation team with disjoint write scopes.'
+    : '';
+  const autoresearchLine = autoresearch
+    ? '\nAutoResearch route: use an experiment loop with a clear program, fixed budget, metric, keep/discard decision, ledger, falsification, and next experiment.'
+    : '';
+  const wikiLine = wiki
+    ? '\nLLM Wiki route: preserve context through TriWiki RGBA/trig coordinate anchors. Prefer sks wiki pack for hydratable context; keep ids, hashes, source paths, and coordinates for non-selected claims instead of lossy summaries.'
+    : '';
+  return `SKS prompt pipeline active. Route: ${route}. Before work, respect the SKS update-check context if present. Optimize the user request before acting: extract intent, target files/surfaces, constraints, acceptance criteria, and the smallest safe execution path. Use explicit $ commands when present: $DF fast design/content edit, $Team multi-agent orchestration, $Ralph clarification-gated mission, $Research discovery run, $AutoResearch iterative experiment loop, $DB database safety, $GX visual context, $SKS general SKS help. Without a command, infer the lightest matching route and avoid heavy loops unless the task requires them. Preserve multi-turn context with LLM Wiki coordinate packs when compression or continuity matters. Do not stop at a plan when implementation was requested; continue until the stated goal is actually handled or a hard blocker is honestly reported. Before final answer, perform SKS Honest Mode: verify evidence, list tests run or gaps, call out uncertainty, and confirm the goal is actually complete.${dfLine}${teamLine}${autoresearchLine}${wikiLine}`;
 }
 
 export async function hookMain(name) {
@@ -73,7 +97,11 @@ export async function hookMain(name) {
 }
 
 async function hookUserPrompt(root, state, payload, noQuestion) {
-  if (!noQuestion) return { continue: true, additionalContext: promptPipelineContext(extractUserPrompt(payload)) };
+  if (!noQuestion) {
+    const prompt = extractUserPrompt(payload);
+    const updateContext = await updateCheckContext(root, payload, prompt);
+    return { continue: true, additionalContext: `${updateContext}${updateContext ? '\n\n' : ''}${promptPipelineContext(prompt)}` };
+  }
   const id = state.mission_id;
   if (id) await appendJsonl(path.join(missionDir(root, id), 'user_queue.jsonl'), { ts: nowIso(), payload });
   return {
@@ -121,7 +149,16 @@ async function hookPermission(root, state, payload, noQuestion) {
 }
 
 async function hookStop(root, state, payload, noQuestion) {
-  if (!noQuestion) return { continue: true };
+  if (!noQuestion) {
+    const last = extractLastMessage(payload);
+    if (!hasHonestMode(last)) {
+      return {
+        decision: 'block',
+        reason: 'SKS Honest Mode is required before finishing. Re-check the actual goal, verify evidence/tests, state gaps honestly, and only then provide the final answer. Include a short "SKS Honest Mode" or "솔직모드" section.'
+      };
+    }
+    return { continue: true };
+  }
   const id = state.mission_id;
   const last = extractLastMessage(payload);
   if (containsUserQuestion(last)) return { decision: 'block', reason: noQuestionContinuationReason() };
@@ -138,6 +175,75 @@ async function hookStop(root, state, payload, noQuestion) {
     decision: 'block',
     reason: 'SKS no-question run is not done. Continue autonomously, fix failing checks, update the active gate file, and do not ask the user.'
   };
+}
+
+async function updateCheckContext(root, payload, prompt) {
+  if (process.env.SKS_DISABLE_UPDATE_CHECK === '1') return '';
+  const statePath = path.join(root, '.sneakoscope', 'state', 'update-check.json');
+  const updateState = await readJson(statePath, {});
+  const conv = conversationId(payload);
+  const pending = updateState.pending_offer;
+  if (pending?.conversation_id === conv && pending?.latest && looksLikeUpdateDecline(prompt)) {
+    await writeJsonAtomic(statePath, {
+      ...updateState,
+      pending_offer: null,
+      skipped: { conversation_id: conv, latest: pending.latest, skipped_at: nowIso() }
+    });
+    return `SKS update check: user skipped update to ${pending.latest} for this conversation only. Continue the previous task without updating. Check again on the next conversation.`;
+  }
+  if (pending?.conversation_id === conv && pending?.latest && looksLikeUpdateAccept(prompt)) {
+    await writeJsonAtomic(statePath, {
+      ...updateState,
+      pending_offer: null,
+      accepted: { conversation_id: conv, latest: pending.latest, accepted_at: nowIso() }
+    });
+    return `SKS update check: user accepted update to ${pending.latest}. Before doing other work, run the appropriate update command, then rerun sks setup and sks doctor --fix. Global install: npm i -g sneakoscope. Project install: npm i -D sneakoscope && npx sks setup --install-scope project.`;
+  }
+  if (updateState.skipped?.conversation_id === conv && updateState.skipped?.latest) {
+    return `SKS update check: update ${updateState.skipped.latest} was skipped for this conversation only. Do not ask again in this conversation; check again next conversation.`;
+  }
+  const check = await checkLatestVersion();
+  await writeJsonAtomic(statePath, {
+    ...updateState,
+    current: PACKAGE_VERSION,
+    latest: check.latest || null,
+    checked_at: nowIso(),
+    check_error: check.error || null
+  });
+  if (!check.latest || check.error || compareVersions(check.latest, PACKAGE_VERSION) <= 0) return '';
+  await writeJsonAtomic(statePath, {
+    ...updateState,
+    current: PACKAGE_VERSION,
+    latest: check.latest,
+    checked_at: nowIso(),
+    pending_offer: { conversation_id: conv, latest: check.latest, offered_at: nowIso() },
+    skipped: updateState.skipped?.conversation_id === conv ? null : updateState.skipped || null
+  });
+  return `SKS update check: installed ${PACKAGE_VERSION}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run npm i -g sneakoscope for global installs, or npm i -D sneakoscope && npx sks setup --install-scope project for project installs, then run sks setup and sks doctor --fix. If they skip, do not ask again in this conversation, but check again next conversation.`;
+}
+
+async function checkLatestVersion() {
+  const npm = await which('npm').catch(() => null);
+  if (!npm) return { error: 'npm not found' };
+  const result = await runProcess(npm, ['view', 'sneakoscope', 'version'], { timeoutMs: 3500, maxOutputBytes: 4096 });
+  if (result.code !== 0) return { error: `${result.stderr || result.stdout || 'npm view failed'}`.trim() };
+  return { latest: result.stdout.trim().split(/\s+/).pop() };
+}
+
+function compareVersions(a, b) {
+  const pa = String(a || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+  const pb = String(b || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length, 3); i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+  }
+  return 0;
+}
+
+function hasHonestMode(text) {
+  const s = String(text || '');
+  return /(SKS Honest Mode|솔직모드|Honest Mode)/i.test(s)
+    && /(verified|verification|검증|tests?|테스트|evidence|근거|gap|제약|uncertainty|불확실)/i.test(s);
 }
 
 export async function emitHook(name) {

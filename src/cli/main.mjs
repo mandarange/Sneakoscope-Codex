@@ -1,6 +1,8 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { projectRoot, readJson, writeJsonAtomic, appendJsonlBounded, nowIso, exists, ensureDir, tmpdir, packageRoot, dirSize, formatBytes, which } from '../core/fsx.mjs';
+import readline from 'node:readline/promises';
+import { stdin as input, stdout as output } from 'node:process';
+import { projectRoot, readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, tmpdir, packageRoot, dirSize, formatBytes, which, runProcess, PACKAGE_VERSION } from '../core/fsx.mjs';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../core/init.mjs';
 import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, setCurrent, stateFile } from '../core/mission.mjs';
@@ -13,19 +15,23 @@ import { storageReport, enforceRetention } from '../core/retention.mjs';
 import { classifySql, classifyCommand, loadDbSafetyPolicy, safeSupabaseMcpConfig, checkSqlFile, checkDbOperation, scanDbSafety } from '../core/db-safety.mjs';
 import { rustInfo } from '../core/rust-accelerator.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
-import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, runEvaluationBenchmark } from '../core/evaluation.mjs';
+import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
+import { contextCapsule } from '../core/triwiki-attention.mjs';
+import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
 const REPOSITORY_URL = 'https://github.com/mandarange/Sneakoscope-Codex.git';
-const USAGE_TOPICS = 'install|setup|ralph|research|db|codex-app|df|dollar|eval|gx';
+const USAGE_TOPICS = 'install|setup|team|ralph|research|db|codex-app|df|dollar|eval|gx|wiki';
 
 const DOLLAR_COMMANDS = [
   { command: '$DF', route: 'fast design/content fix', description: 'Small UI/content edits such as text color, copy, label, spacing, or translation. Avoids heavy loops.' },
   { command: '$SKS', route: 'general SKS workflow', description: 'General Sneakoscope setup, help, status, and workflow routing.' },
+  { command: '$Team', route: 'multi-agent team orchestration', description: 'Debate options, agree on an objective, form a fresh implementation team, and coordinate parallel specialist work.' },
   { command: '$Ralph', route: 'Ralph mission', description: 'Mandatory clarification and no-question autonomous mission workflow.' },
   { command: '$Research', route: 'research mission', description: 'Frontier discovery, hypotheses, falsification, and testable predictions.' },
+  { command: '$AutoResearch', route: 'iterative experiment loop', description: 'Program, hypothesize, test, measure, keep/discard, falsify, and report evidence.' },
   { command: '$DB', route: 'database safety', description: 'Database, Supabase, migration, SQL, or MCP safety checks.' },
   { command: '$GX', route: 'visual context', description: 'Deterministic GX visual context cartridges.' },
   { command: '$Help', route: 'command help', description: 'Explain installed SKS commands and workflows.' }
@@ -33,25 +39,29 @@ const DOLLAR_COMMANDS = [
 
 const COMMAND_CATALOG = [
   { name: 'help', usage: 'sks help [topic]', description: 'Show CLI help or focused help for a topic.' },
+  { name: 'version', usage: 'sks version | sks --version', description: 'Print the installed Sneakoscope Codex version.' },
+  { name: 'update-check', usage: 'sks update-check [--json]', description: 'Check npm for the latest Sneakoscope Codex version.' },
+  { name: 'wizard', usage: 'sks wizard', description: 'Open an interactive setup UI for install scope, setup, doctor, and verification.' },
   { name: 'commands', usage: 'sks commands [--json]', description: 'List every user-facing command with a short description.' },
   { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
-  { name: 'install-prompt', usage: 'sks install-prompt [--project]', description: 'Print an LLM-ready prompt that installs and configures SKS automatically.' },
+  { name: 'install-prompt', usage: 'sks install-prompt [--project] [--full]', description: 'Print a short LLM-ready prompt that installs and configures SKS automatically.' },
   { name: 'codex-app', usage: 'sks codex-app', description: 'Show Codex App setup files and example prompts.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DF.' },
   { name: 'df', usage: 'sks df', description: 'Explain $DF fast design/content fix mode.' },
   { name: 'aliases', usage: 'sks aliases', description: 'Show command aliases and npm binary names.' },
-  { name: 'setup', usage: 'sks setup [--install-scope global|project] [--force] [--json]', description: 'Initialize SKS state, Codex App files, hooks, skills, and rules.' },
+  { name: 'setup', usage: 'sks setup [--install-scope global|project] [--local-only] [--force] [--json]', description: 'Initialize SKS state, Codex App files, hooks, skills, and rules.' },
   { name: 'fix-path', usage: 'sks fix-path [--install-scope global|project] [--json]', description: 'Refresh hook commands with the resolved SKS binary path.' },
-  { name: 'doctor', usage: 'sks doctor [--fix] [--json] [--install-scope global|project]', description: 'Check Node, Codex CLI, install scope, hooks, skills, DB guard, and Codex App files.' },
-  { name: 'init', usage: 'sks init [--force] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
+  { name: 'doctor', usage: 'sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]', description: 'Check Node, Codex CLI, install scope, hooks, skills, DB guard, and Codex App files.' },
+  { name: 'init', usage: 'sks init [--force] [--local-only] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
   { name: 'selftest', usage: 'sks selftest [--mock]', description: 'Run local smoke tests without calling a model.' },
   { name: 'ralph', usage: 'sks ralph prepare|answer|run|status ...', description: 'Run mandatory-clarification Ralph missions with a no-question execution loop.' },
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run frontier-style research missions with novelty and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
+  { name: 'wiki', usage: 'sks wiki coords|pack|validate ...', description: 'Build and validate RGBA/trig LLM Wiki coordinate context packs.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'team', usage: 'sks team "task"', description: 'Create a clarification-gated team mission.' },
+  { name: 'team', usage: 'sks team "task" [--json]', description: 'Create a Codex multi-agent Team mission with consensus and implementation phases.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
   { name: 'gc', usage: 'sks gc [--dry-run] [--json]', description: 'Compact oversized logs and prune stale runtime artifacts.' },
@@ -69,7 +79,12 @@ function installScopeFromArgs(args = [], fallback = 'global') {
 export async function main(args) {
   const [cmd, sub, ...rest] = args;
   const tail = sub === undefined ? [] : [sub, ...rest];
-  if (!cmd || cmd === '--help' || cmd === '-h') return help();
+  if (!cmd) return shouldShowWizard() ? wizard([]) : help();
+  if (cmd === '--help' || cmd === '-h') return help();
+  if (cmd === '--version' || cmd === '-v' || cmd === 'version') return version();
+  if (cmd === 'postinstall') return postinstall();
+  if (cmd === 'wizard' || cmd === 'ui') return wizard(tail);
+  if (cmd === 'update-check') return updateCheck(tail);
   if (cmd === 'help') return help(tail);
   if (cmd === 'commands') return commands(tail);
   if (cmd === 'usage') return usage(tail);
@@ -94,6 +109,7 @@ export async function main(args) {
   if (cmd === 'team') return team(tail);
   if (cmd === 'db') return db(sub, rest);
   if (cmd === 'eval') return evalCommand(sub, rest);
+  if (cmd === 'wiki') return wiki(sub, rest);
   if (cmd === 'gc') return gc(tail);
   if (cmd === 'stats') return stats(tail);
   console.error(`Unknown command: ${cmd}`);
@@ -107,23 +123,27 @@ function help(args = []) {
 
 Usage:
   sks help [topic]
+  sks version
+  sks update-check [--json]
+  sks wizard
   sks commands [--json]
   sks usage [${USAGE_TOPICS}]
   sks quickstart
-  sks install-prompt [--project]
+  sks install-prompt [--project] [--full]
   sks codex-app
   sks dollar-commands [--json]
   sks df
   sks aliases
-  sks setup [--install-scope global|project] [--force] [--json]
+  sks setup [--install-scope global|project] [--local-only] [--force] [--json]
   sks fix-path [--install-scope global|project] [--json]
-  sks doctor [--fix] [--json] [--install-scope global|project]
-  sks init [--install-scope global|project]
+  sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]
+  sks init [--install-scope global|project] [--local-only]
   sks selftest [--mock]
   sks ralph prepare "task"
   sks ralph answer <mission-id|latest> <answers.json>
   sks ralph run <mission-id|latest> [--mock] [--max-cycles N]
   sks ralph status <mission-id|latest>
+  sks team "task" [--json]
   sks research prepare "topic" [--depth frontier]
   sks research run <mission-id|latest> [--mock] [--max-cycles N]
   sks research status <mission-id|latest>
@@ -134,6 +154,9 @@ Usage:
   sks db check --command "supabase db reset"
   sks eval run [--json] [--out report.json]
   sks eval compare --baseline old.json --candidate new.json [--json]
+  sks wiki coords --rgba 12,34,56,255
+  sks wiki pack [--json] [--role worker|verifier] [--max-anchors N]
+  sks wiki validate [context-pack.json]
   sks gx init [name]
   sks gx render [name] [--format svg|html|all]
   sks gx validate [name]
@@ -151,6 +174,97 @@ Discovery:
   sks install-prompt Copy/paste prompt for an LLM installer
   sks dollar-commands Codex App $ commands, including $DF
 `);
+}
+
+function version() {
+  console.log(`sneakoscope ${PACKAGE_VERSION}`);
+}
+
+function shouldShowWizard() {
+  return Boolean(input.isTTY && output.isTTY && process.env.SKS_NO_WIZARD !== '1' && process.env.CI !== 'true');
+}
+
+function postinstall() {
+  console.log('\nSneakoscope Codex installed.');
+  console.log('Run `sks` to open the interactive setup UI, or run `sks setup` for the default global setup.');
+  console.log('Project-only setup: `sks wizard` -> choose project, or `npx sks setup --install-scope project`.\n');
+}
+
+async function wizard(args = []) {
+  if (!shouldShowWizard() && !flag(args, '--force')) return help();
+  const rl = readline.createInterface({ input, output });
+  try {
+    console.log('Sneakoscope Codex Setup UI\n');
+    console.log(`Current package: ${PACKAGE_VERSION}`);
+    const latest = await npmPackageVersion('sneakoscope');
+    if (latest.version) {
+      const needsUpdate = compareVersions(latest.version, PACKAGE_VERSION) > 0;
+      console.log(`Latest on npm:   ${latest.version}${needsUpdate ? ' (update available)' : ''}`);
+      if (needsUpdate) {
+        const update = await askChoice(rl, 'Update SKS before setup?', ['yes', 'no'], 'yes');
+        if (update === 'yes') {
+          console.log('\nRun this update command, then rerun `sks`:');
+          console.log('  npm i -g sneakoscope\n');
+          return;
+        }
+        console.log('Skipping update for this setup run.\n');
+      }
+    } else if (latest.error) {
+      console.log(`Latest on npm:   unknown (${latest.error})`);
+    }
+
+    const scope = await askChoice(rl, 'Install scope for this project?', ['global', 'project', 'commands', 'quit'], 'global');
+    if (scope === 'quit') return;
+    if (scope === 'commands') {
+      quickstart();
+      return;
+    }
+    if (scope === 'project') {
+      console.log('\nProject-only setup needs the package installed in this project:');
+      console.log('  npm i -D sneakoscope');
+      const proceed = await askChoice(rl, 'Continue with project setup after that dependency exists?', ['yes', 'no'], 'no');
+      if (proceed !== 'yes') return;
+    }
+
+    const runSetup = await askChoice(rl, `Run sks setup with ${scope} scope now?`, ['yes', 'no'], 'yes');
+    if (runSetup === 'yes') await setup(['--install-scope', scope]);
+    const runDoctor = await askChoice(rl, 'Run sks doctor --fix now?', ['yes', 'no'], 'yes');
+    if (runDoctor === 'yes') await doctor(['--fix', '--install-scope', scope]);
+    const runSelftest = await askChoice(rl, 'Run sks selftest --mock now?', ['yes', 'no'], 'yes');
+    if (runSelftest === 'yes') await selftest(['--mock']);
+    console.log('\nSetup UI complete. Useful next commands:');
+    console.log('  sks commands');
+    console.log('  sks dollar-commands');
+    console.log('  sks codex-app');
+  } finally {
+    rl.close();
+  }
+}
+
+async function askChoice(rl, question, choices, fallback) {
+  const suffix = choices.map((c) => c === fallback ? c.toUpperCase() : c).join('/');
+  const raw = (await rl.question(`${question} [${suffix}] `)).trim().toLowerCase();
+  const value = raw || fallback;
+  const hit = choices.find((c) => c.toLowerCase() === value || c[0].toLowerCase() === value);
+  return hit || fallback;
+}
+
+async function updateCheck(args = []) {
+  const latest = await npmPackageVersion('sneakoscope');
+  const result = {
+    package: 'sneakoscope',
+    current: PACKAGE_VERSION,
+    latest: latest.version,
+    update_available: latest.version ? compareVersions(latest.version, PACKAGE_VERSION) > 0 : false,
+    error: latest.error || null
+  };
+  if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+  console.log('Sneakoscope Codex Update Check');
+  console.log(`Current: ${result.current}`);
+  console.log(`Latest:  ${result.latest || 'unknown'}`);
+  console.log(`Update:  ${result.update_available ? 'available' : 'not needed'}`);
+  if (result.error) console.log(`Error:   ${result.error}`);
+  if (result.update_available) console.log('Run:     npm i -g sneakoscope');
 }
 
 function commands(args = []) {
@@ -195,9 +309,7 @@ function quickstart() {
 
 Install from npm:
   npm i -g sneakoscope
-
-Install from GitHub:
-  npm i -g git+${REPOSITORY_URL}
+  sks
 
 Initialize this project for CLI and Codex App:
   sks setup
@@ -213,50 +325,117 @@ If hooks cannot find the command:
 Project-only install:
   npm i -D sneakoscope
   npx sks setup --install-scope project
+
+Local-only install artifacts:
+  sks setup --local-only
+  # writes generated SKS files but excludes .sneakoscope/, .codex/, .agents/, AGENTS.md through .git/info/exclude
+  # existing AGENTS.md is not modified in local-only mode
+
+GitHub install for unreleased commits:
+  npm i -g git+${REPOSITORY_URL}
 `);
 }
 
 function installPrompt(args = []) {
   const projectOnly = flag(args, '--project');
+  const full = flag(args, '--full');
   const install = projectOnly
-    ? `npm i -D git+${REPOSITORY_URL}\nnpx sks setup --install-scope project`
-    : `npm i -g git+${REPOSITORY_URL}\nsks setup`;
+    ? `npm i -D sneakoscope\nnpx sks setup --install-scope project`
+    : `npm i -g sneakoscope\nsks setup`;
+  if (full) return installPromptFull({ projectOnly, install });
+  const command = projectOnly ? 'npx sks' : 'sks';
+  const doctor = projectOnly ? 'npx sks doctor --fix --install-scope project' : 'sks doctor --fix';
+  const fallback = projectOnly
+    ? 'If `npx sks` is unavailable, run `npm i -D sneakoscope` again and stop with the error.'
+    : 'If `sks` is unavailable after install, replace `sks` with `npx -y -p sneakoscope sks` and continue.';
+
   console.log(`Copy this prompt into an LLM coding assistant:
 
-You are installing Sneakoscope Codex in the current project. Do the setup end to end without asking follow-up questions unless a command needs user approval.
+Install Sneakoscope Codex in this project.
+
+Rules:
+- Do not modify application source files.
+- Ask only when a command requires user approval.
+- If Node.js is below 20.11, stop and report it.
+- If Codex CLI is missing, report: install @openai/codex or set SKS_CODEX_BIN.
+
+Run exactly:
+\`\`\`bash
+node -v
+${install}
+${command} update-check
+${doctor}
+${command} selftest --mock
+${command} commands
+${command} dollar-commands
+\`\`\`
+
+${fallback}
+
+Finish with only:
+- setup passed/failed
+- Codex CLI present/missing
+- generated files: \`.sneakoscope/\`, \`.codex/config.toml\`, \`.codex/hooks.json\`, \`.codex/skills/\`, \`.codex/agents/\`, \`.codex/SNEAKOSCOPE.md\`, \`AGENTS.md\`
+`);
+}
+
+function installPromptFull({ projectOnly, install }) {
+  console.log(`Copy this prompt into an LLM coding assistant:
+
+Install Sneakoscope Codex in the current project end to end. Do not ask follow-up questions unless a command requires user approval.
 
 Repository:
 ${REPOSITORY_URL}
 
 Requirements:
 - Node.js must be >=20.11.
-- Codex CLI is installed separately; if missing, report that @openai/codex must be installed or SKS_CODEX_BIN must be set.
-- Prefer safe, local verification. Do not modify application source files unless needed for SKS setup.
+- Codex CLI is installed separately. If it is missing, report that \`@openai/codex\` must be installed or \`SKS_CODEX_BIN\` must be set.
+- Use the published npm package for normal installs.
+- Do not modify application source files unless needed for SKS setup.
 
 Run:
 \`\`\`bash
 ${install}
-${projectOnly ? 'npx sks doctor --fix --install-scope project\nnpx sks selftest --mock\nnpx sks commands' : 'sks doctor --fix\nsks selftest --mock\nsks commands'}
+${projectOnly ? 'npx sks update-check\nnpx sks doctor --fix --install-scope project\nnpx sks selftest --mock\nnpx sks commands\nnpx sks dollar-commands' : 'sks update-check\nsks doctor --fix\nsks selftest --mock\nsks commands\nsks dollar-commands'}
 \`\`\`
 
-If the global command is not on PATH, use:
+If npm reports ENOTEMPTY, EEXIST, or a broken old global package:
 \`\`\`bash
-npx -y -p git+${REPOSITORY_URL} sks setup
-npx -y -p git+${REPOSITORY_URL} sks doctor --fix
+npm uninstall -g sneakoscope
+npm i -g sneakoscope
+sks setup
+sks doctor --fix
 \`\`\`
 
-After setup, explain these outputs to the user:
+If \`sks\` is not on PATH:
+\`\`\`bash
+npx -y -p sneakoscope sks setup
+npx -y -p sneakoscope sks doctor --fix
+npx -y -p sneakoscope sks selftest --mock
+npx -y -p sneakoscope sks commands
+npx -y -p sneakoscope sks dollar-commands
+\`\`\`
+
+Use the GitHub install path only when the registry package is not acceptable and an unreleased commit is required:
+\`\`\`bash
+npm i -g git+${REPOSITORY_URL}
+\`\`\`
+
+After setup, explain only these outputs:
 - \`.sneakoscope/\` mission state and policy
 - \`.codex/config.toml\` Codex App profiles
 - \`.codex/hooks.json\` SKS hook integration
 - \`.codex/skills/\` local Codex App skills
+- \`.codex/agents/\` local Codex App multi-agent roles
 - \`.codex/SNEAKOSCOPE.md\` Codex App quick reference
 - \`AGENTS.md\` repository rules
 
-Show the user how to discover commands:
+Show command discovery:
 \`\`\`bash
 sks help
+sks update-check
 sks commands
+sks usage team
 sks usage ralph
 sks quickstart
 sks codex-app
@@ -267,8 +446,11 @@ Tell the user they can use these prompt commands inside Codex App:
 \`\`\`text
 $DF 글자 색 바꿔줘
 $DF 내용을 영어로 바꿔줘
+$SKS show me available workflows
+$Team agree on the plan and implement with specialists
 $Ralph implement this with mandatory clarification
 $Research investigate this idea
+$AutoResearch improve this workflow with experiments
 $DB check this migration safely
 \`\`\`
 `);
@@ -281,15 +463,18 @@ Run once in the project:
   sks setup
 
 Generated app files:
-  .codex/config.toml       profiles for SKS Ralph, research, and default work
+  .codex/config.toml       profiles plus multi_agent and Team agent limits
   .codex/hooks.json        hook events routed through SKS guards
   .codex/skills/           local project skills
+  .codex/agents/           local Codex subagent roles for Team mode
   .codex/SNEAKOSCOPE.md    app quick reference
   AGENTS.md                repository rules
 
 Useful prompts inside Codex App:
   $DF 글자 색 바꿔줘
   $DF 내용을 영어로 바꿔줘
+  $Team agree on the plan, then implement with specialists
+  $AutoResearch improve this workflow with experiments.
   Use Sneakoscope Ralph mode to prepare this task.
   Run the latest Ralph mission with the sealed decision contract.
   Use SKS DB safety before touching database or Supabase files.
@@ -304,6 +489,7 @@ Discover usage:
   sks dollar-commands
   sks df
   sks install-prompt
+  sks team "task"
 `);
 }
 
@@ -322,8 +508,10 @@ Command aliases:
 Codex App prompt commands:
   $DF       fast design/content fix
   $SKS      general Sneakoscope route
+  $Team     multi-agent team route
   $Ralph    Ralph mission route
   $Research research mission route
+  $AutoResearch iterative experiment route
   $DB       database safety route
   $GX       visual context route
   $Help     command help route
@@ -343,6 +531,8 @@ function usage(args = []) {
 
 Discovery:
   sks help
+  sks update-check
+  sks wizard
   sks commands
   sks quickstart
   sks install-prompt
@@ -351,9 +541,11 @@ Discovery:
 
 Common workflows:
   sks usage install
+  sks usage team
   sks usage ralph
   sks usage research
   sks usage db
+  sks usage wiki
   sks usage df
 `,
     install: `Install and Setup
@@ -364,16 +556,52 @@ Global install:
   sks doctor --fix
   sks selftest --mock
 
-GitHub install:
-  npm i -g git+${REPOSITORY_URL}
-  sks setup
+Repair an older broken global install:
+  npm uninstall -g sneakoscope
+  npm i -g sneakoscope
+
+PATH fallback after global install:
+  npx -y -p sneakoscope sks setup
+  npx -y -p sneakoscope sks doctor --fix
 
 Project-only install:
   npm i -D sneakoscope
   npx sks setup --install-scope project
 
+Local-only install artifacts:
+  sks setup --local-only
+  # excludes .sneakoscope/, .codex/, .agents/, AGENTS.md through .git/info/exclude
+  # existing AGENTS.md is not modified in local-only mode
+
+GitHub install for unreleased commits:
+  npm i -g git+${REPOSITORY_URL}
+  sks setup
+
 LLM-assisted install:
   sks install-prompt
+`,
+    team: `Team Workflow
+
+Initialize Team support:
+  sks setup
+
+Create a Team mission:
+  sks team "task"
+
+Inside Codex App:
+  $Team debate the options, agree on one objective, close the planning agents, then form a fresh implementation team with disjoint write scopes.
+
+Expected phases:
+  1. Planning/debate agents map code paths, risks, DB safety, tests, and implementation options.
+  2. Parent agent synthesizes the agreed objective, constraints, acceptance criteria, and parallel work slices.
+  3. Planning agents are closed.
+  4. Fresh implementation workers handle disjoint slices in parallel.
+  5. Review agents check correctness, DB safety, missing tests, and final evidence.
+
+Generated Codex App support:
+  .codex/config.toml enables multi_agent and [agents] limits.
+  .codex/agents/*.toml defines team_consensus, implementation_worker, db_safety_reviewer, and qa_reviewer.
+  .codex/skills/Team/SKILL.md explains the orchestration protocol.
 `,
     setup: `Setup Repair
 
@@ -468,8 +696,10 @@ CLI help:
 Use inside Codex App or an agent prompt:
   $DF        fast design/content fix
   $SKS       general Sneakoscope route
+  $Team      multi-agent team route
   $Ralph     Ralph mission route
   $Research  research mission route
+  $AutoResearch iterative experiment route
   $DB        database safety route
   $GX        visual context route
   $Help      command help route
@@ -490,6 +720,27 @@ Compare reports:
 Show thresholds:
   sks eval thresholds
 `,
+    wiki: `LLM Wiki Context Continuity
+
+Convert RGBA channels to deterministic wiki coordinates:
+  sks wiki coords --rgba 12,34,56,255
+
+Build a hydratable context pack:
+  sks wiki pack
+  sks wiki pack --json --role verifier --max-anchors 48
+
+Validate a saved pack:
+  sks wiki validate
+  sks wiki validate .sneakoscope/wiki/context-pack.json
+
+Model:
+  R -> domain angle
+  G -> layer radius through sin()
+  B -> phase angle
+  A -> concentration/confidence
+
+TriWiki keeps selected claims as text and preserves the rest as anchor ids, RGBA keys, coordinate tuples, source pointers, and hashes so later turns can hydrate the needed context instead of relying on lossy summaries.
+`,
     gx: `GX Visual Context
 
 Create:
@@ -509,8 +760,9 @@ Render and verify:
 async function setup(args) {
   const root = await projectRoot();
   const installScope = installScopeFromArgs(args);
+  const localOnly = flag(args, '--local-only');
   const globalCommand = await globalSksCommand();
-  const res = await initProject(root, { force: flag(args, '--force'), installScope, globalCommand });
+  const res = await initProject(root, { force: flag(args, '--force'), installScope, globalCommand, localOnly });
   const install = await installStatus(root, installScope, { globalCommand });
   const hooksPath = path.join(root, '.codex', 'hooks.json');
   const result = {
@@ -521,10 +773,12 @@ async function setup(args) {
       config: path.join(root, '.codex', 'config.toml'),
       hooks: hooksPath,
       skills: path.join(root, '.codex', 'skills'),
+      agents: path.join(root, '.codex', 'agents'),
       quick_reference: path.join(root, '.codex', 'SNEAKOSCOPE.md'),
       agents_rules: path.join(root, 'AGENTS.md')
     },
     created: res.created,
+    local_only: localOnly,
     next: ['sks selftest --mock', 'sks doctor', 'sks commands']
   };
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
@@ -532,7 +786,8 @@ async function setup(args) {
   console.log(`Project:   ${root}`);
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
   console.log(`Hooks:     ${path.relative(root, hooksPath)}`);
-  console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .codex/skills, .codex/SNEAKOSCOPE.md`);
+  if (localOnly) console.log('Git:       local-only (.git/info/exclude; existing AGENTS.md not modified)');
+  console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .codex/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
   console.log(`Prompt:    default optimization pipeline, $DF fast design/content route`);
   console.log(`Skills:    .codex/skills, .agents/skills`);
   console.log(`Next:      sks selftest --mock; sks commands; sks dollar-commands`);
@@ -547,7 +802,7 @@ async function fixPath(args) {
     ? installScopeFromArgs(args)
     : normalizeInstallScope(manifest?.installation?.scope || 'global');
   const globalCommand = await globalSksCommand();
-  await initProject(root, { installScope, globalCommand });
+  await initProject(root, { installScope, globalCommand, localOnly: flag(args, '--local-only') || Boolean(manifest?.git?.local_only) });
   const install = await installStatus(root, installScope, { globalCommand });
   const result = {
     root,
@@ -572,7 +827,8 @@ async function doctor(args) {
     : null;
   if (flag(args, '--fix')) {
     const fixScope = requestedScope || 'global';
-    await initProject(root, { installScope: fixScope, globalCommand: await globalSksCommand() });
+    const existingManifest = await readJson(path.join(root, '.sneakoscope', 'manifest.json'), null);
+    await initProject(root, { installScope: fixScope, globalCommand: await globalSksCommand(), localOnly: flag(args, '--local-only') || Boolean(existingManifest?.git?.local_only) });
   }
   const codex = await getCodexInfo();
   const rust = await rustInfo();
@@ -588,6 +844,7 @@ async function doctor(args) {
     config: { ok: await exists(path.join(root, '.codex', 'config.toml')) },
     hooks: { ok: await exists(path.join(root, '.codex', 'hooks.json')) },
     skills: { ok: await exists(path.join(root, '.codex', 'skills')) },
+    agents: { ok: await exists(path.join(root, '.codex', 'agents')) },
     quick_reference: { ok: await exists(path.join(root, '.codex', 'SNEAKOSCOPE.md')) },
     agents_rules: { ok: await exists(path.join(root, 'AGENTS.md')) }
   };
@@ -600,7 +857,7 @@ async function doctor(args) {
     skills: { ok: (await exists(path.join(root, '.codex', 'skills'))) && (await exists(path.join(root, '.agents', 'skills'))) },
     codex_app: {
       ...codexApp,
-      ok: codexApp.config.ok && codexApp.hooks.ok && codexApp.skills.ok && codexApp.quick_reference.ok && codexApp.agents_rules.ok
+      ok: codexApp.config.ok && codexApp.hooks.ok && codexApp.skills.ok && codexApp.agents.ok && codexApp.quick_reference.ok && codexApp.agents_rules.ok
     },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) }, storage
   };
@@ -615,7 +872,7 @@ async function doctor(args) {
   console.log(`State:     ${result.sneakoscope.ok ? 'ok' : 'missing .sneakoscope'}`);
   console.log(`DB Guard:  ${result.db_guard.ok ? 'ok' : 'blocked'} ${dbScan.findings?.length || 0} finding(s)`);
   console.log(`Hooks:     ${result.hooks.ok ? 'ok' : 'missing .codex/hooks.json'}`);
-  console.log(`Codex App: ${result.codex_app.ok ? 'ok' : 'missing app files'} .codex/config.toml .codex/hooks.json .codex/skills .codex/SNEAKOSCOPE.md`);
+  console.log(`Codex App: ${result.codex_app.ok ? 'ok' : 'missing app files'} .codex/config.toml .codex/hooks.json .codex/skills .codex/agents .codex/SNEAKOSCOPE.md`);
   console.log(`Skills:    ${result.skills.ok ? 'ok' : 'missing .codex/skills or .agents/skills'}`);
   console.log(`Package:   ${result.package.human}`);
   console.log(`Storage:   ${storage.total_human || '0 B'}`);
@@ -629,20 +886,22 @@ async function doctor(args) {
 async function init(args) {
   const root = await projectRoot();
   const installScope = installScopeFromArgs(args);
+  const localOnly = flag(args, '--local-only');
   const globalCommand = await globalSksCommand();
-  const res = await initProject(root, { force: flag(args, '--force'), installScope, globalCommand });
+  const res = await initProject(root, { force: flag(args, '--force'), installScope, globalCommand, localOnly });
   console.log(`Initialized Sneakoscope Codex in ${root}`);
   console.log(`Install scope: ${installScope} (${sksCommandPrefix(installScope, { globalCommand })})`);
+  if (localOnly) console.log('Git mode: local-only (.git/info/exclude)');
   for (const x of res.created) console.log(`- ${x}`);
 }
 
 async function globalSksCommand() {
-  return process.env.SKS_BIN || await which('sks').catch(() => null) || 'sks';
+  return await discoverGlobalSksCommand() || 'sks';
 }
 
 async function installStatus(root, scope, opts = {}) {
-  const discoveredGlobalBin = await which('sks').catch(() => null);
-  const configuredGlobalBin = process.env.SKS_BIN || (opts.globalCommand && opts.globalCommand !== 'sks' ? opts.globalCommand : null);
+  const discoveredGlobalBin = await discoverGlobalSksCommand();
+  const configuredGlobalBin = await configuredSksBin(opts.globalCommand);
   const globalBin = configuredGlobalBin || discoveredGlobalBin;
   const commandPrefix = sksCommandPrefix(scope, { globalCommand: globalBin || undefined });
   const projectBin = path.join(root, 'node_modules', 'sneakoscope', 'bin', 'sks.mjs');
@@ -655,6 +914,69 @@ async function installStatus(root, scope, opts = {}) {
     project_bin: projectBin,
     ok: scope === 'project' ? projectBinExists : Boolean(globalBin)
   };
+}
+
+async function discoverGlobalSksCommand() {
+  const configured = await configuredSksBin(process.env.SKS_BIN);
+  if (configured) return configured;
+  for (const name of ['sks', 'sneakoscope']) {
+    const found = await which(name).catch(() => null);
+    if (isStableSksBin(found)) return found;
+  }
+  return await npmGlobalSksBin();
+}
+
+async function configuredSksBin(candidate) {
+  if (!candidate || candidate === 'sks') return null;
+  return isStableSksBin(candidate) && await exists(candidate) ? candidate : null;
+}
+
+function isStableSksBin(candidate) {
+  return Boolean(candidate) && !isTransientNpmBinPath(candidate);
+}
+
+function isTransientNpmBinPath(candidate) {
+  const normalized = String(candidate || '').split(path.sep).join('/');
+  return normalized.includes('/_npx/')
+    || normalized.includes('/_cacache/tmp/')
+    || /\/npm-cache\/_npx\//.test(normalized)
+    || (/\/node_modules\/\.bin\/sks$/.test(normalized) && normalized.includes('/.npm-cache/'));
+}
+
+async function npmGlobalSksBin() {
+  const npm = await which('npm').catch(() => null);
+  if (!npm) return null;
+  const result = await runProcess(npm, ['prefix', '-g'], { timeoutMs: 10000, maxOutputBytes: 4096 });
+  if (result.code !== 0) return null;
+  const prefix = result.stdout.trim().split(/\r?\n/).pop();
+  if (!prefix) return null;
+  const binDir = process.platform === 'win32' ? prefix : path.join(prefix, 'bin');
+  const suffixes = process.platform === 'win32' ? ['.cmd', '.exe', ''] : [''];
+  for (const name of ['sks', 'sneakoscope']) {
+    for (const suffix of suffixes) {
+      const candidate = path.join(binDir, `${name}${suffix}`);
+      if (isStableSksBin(candidate) && await exists(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+async function npmPackageVersion(name) {
+  const npm = await which('npm').catch(() => null);
+  if (!npm) return { error: 'npm not found' };
+  const result = await runProcess(npm, ['view', name, 'version'], { timeoutMs: 5000, maxOutputBytes: 4096 });
+  if (result.code !== 0) return { error: `${result.stderr || result.stdout || 'npm view failed'}`.trim() };
+  return { version: result.stdout.trim().split(/\s+/).pop() };
+}
+
+function compareVersions(a, b) {
+  const pa = String(a || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+  const pb = String(b || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length, 3); i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+  }
+  return 0;
 }
 
 async function ralph(sub, args) {
@@ -901,6 +1223,35 @@ async function selftest() {
   await initProject(projectScopeTmp, { installScope: 'project' });
   const projectHooks = await readJson(path.join(projectScopeTmp, '.codex', 'hooks.json'));
   if (projectHooks.hooks.PreToolUse[0].hooks[0].command !== 'node ./node_modules/sneakoscope/bin/sks.mjs hook pre-tool') throw new Error('selftest failed: project install hook command missing');
+  const localOnlyTmp = tmpdir();
+  await ensureDir(path.join(localOnlyTmp, '.git'));
+  await writeTextAtomic(path.join(localOnlyTmp, 'AGENTS.md'), 'existing local rules\n');
+  await initProject(localOnlyTmp, { localOnly: true });
+  const localExclude = await safeReadText(path.join(localOnlyTmp, '.git', 'info', 'exclude'));
+  if (!localExclude.includes('.codex/') || !localExclude.includes('AGENTS.md')) throw new Error('selftest failed: local-only git excludes missing');
+  const localAgents = await safeReadText(path.join(localOnlyTmp, 'AGENTS.md'));
+  if (localAgents.trim() !== 'existing local rules') throw new Error('selftest failed: local-only modified existing AGENTS.md');
+  const localManifest = await readJson(path.join(localOnlyTmp, '.sneakoscope', 'manifest.json'));
+  if (!localManifest.git?.local_only) throw new Error('selftest failed: local-only manifest missing');
+  if (!isTransientNpmBinPath('/tmp/.npm/_npx/abc/node_modules/.bin/sks')) throw new Error('selftest failed: npx bin path not recognized as transient');
+  if (!isTransientNpmBinPath('/tmp/.npm-cache/_cacache/tmp/git-cloneabc/bin/sks.mjs')) throw new Error('selftest failed: npm cache git clone path not recognized as transient');
+  if (isTransientNpmBinPath('/usr/local/bin/sks')) throw new Error('selftest failed: stable global bin marked transient');
+  const oldPath = process.env.PATH;
+  const oldSksBin = process.env.SKS_BIN;
+  const fakeNpxBin = path.join(tmp, '.npm', '_npx', 'abc', 'node_modules', '.bin');
+  await ensureDir(fakeNpxBin);
+  await writeJsonAtomic(path.join(fakeNpxBin, 'sks'), { fake: true });
+  try {
+    process.env.PATH = fakeNpxBin;
+    delete process.env.SKS_BIN;
+    const discovered = await discoverGlobalSksCommand();
+    if (isTransientNpmBinPath(discovered)) throw new Error('selftest failed: transient npx bin selected as global command');
+  } finally {
+    if (oldPath === undefined) delete process.env.PATH;
+    else process.env.PATH = oldPath;
+    if (oldSksBin === undefined) delete process.env.SKS_BIN;
+    else process.env.SKS_BIN = oldSksBin;
+  }
   const researchSkillExists = await exists(path.join(tmp, '.agents', 'skills', 'research-discovery', 'SKILL.md'));
   if (!researchSkillExists) throw new Error('selftest failed: research skill not installed');
   const codexAppSkillExists = await exists(path.join(tmp, '.codex', 'skills', 'research-discovery', 'SKILL.md'));
@@ -911,6 +1262,21 @@ async function selftest() {
   if (!promptPipelineSkillExists) throw new Error('selftest failed: prompt pipeline skill not installed');
   const codexAppQuickRefExists = await exists(path.join(tmp, '.codex', 'SNEAKOSCOPE.md'));
   if (!codexAppQuickRefExists) throw new Error('selftest failed: Codex App quick reference missing');
+  const codexConfigText = await safeReadText(path.join(tmp, '.codex', 'config.toml'));
+  if (!codexConfigText.includes('multi_agent = true')) throw new Error('selftest failed: multi_agent not enabled');
+  if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest failed: team_consensus agent not configured');
+  const teamAgentExists = await exists(path.join(tmp, '.codex', 'agents', 'team-consensus.toml'));
+  if (!teamAgentExists) throw new Error('selftest failed: team consensus agent not installed');
+  const teamSkillExists = await exists(path.join(tmp, '.codex', 'skills', 'Team', 'SKILL.md'));
+  if (!teamSkillExists) throw new Error('selftest failed: $Team skill not installed');
+  const honestSkillExists = await exists(path.join(tmp, '.codex', 'skills', 'honest-mode', 'SKILL.md'));
+  if (!honestSkillExists) throw new Error('selftest failed: honest-mode skill not installed');
+  const autoResearchSkillExists = await exists(path.join(tmp, '.codex', 'skills', 'autoresearch-loop', 'SKILL.md'));
+  if (!autoResearchSkillExists) throw new Error('selftest failed: autoresearch-loop skill not installed');
+  const { id: teamId, dir: teamDir } = await createMission(tmp, { mode: 'team', prompt: '병렬 구현 팀 테스트' });
+  const teamPlan = buildTeamPlan(teamId, '병렬 구현 팀 테스트');
+  await writeJsonAtomic(path.join(teamDir, 'team-plan.json'), teamPlan);
+  if (!teamPlan.phases.some((phase) => phase.id === 'parallel_implementation')) throw new Error('selftest failed: team plan missing implementation phase');
   const { id, dir, mission } = await createMission(tmp, { mode: 'ralph', prompt: '로그인 세션 만료 UX 개선 supabase db' });
   const schema = buildQuestionSchema(mission.prompt);
   await writeQuestions(dir, schema);
@@ -930,6 +1296,20 @@ async function selftest() {
   if (nonDbDecision.action !== 'allow') throw new Error('selftest failed: non-DB command blocked by DB guard');
   const evalReport = runEvaluationBenchmark({ iterations: 5 });
   if (!evalReport.comparison.meaningful_improvement) throw new Error('selftest failed: evaluation benchmark did not show meaningful improvement');
+  if (!evalReport.candidate.wiki?.valid) throw new Error('selftest failed: wiki coordinate index invalid in eval');
+  const coord = rgbaToWikiCoord({ r: 12, g: 34, b: 56, a: 255 });
+  if (coord.schema !== 'sks.wiki-coordinate.v1' || coord.xyzw.length !== 4) throw new Error('selftest failed: RGBA wiki coordinate conversion');
+  const wikiPack = contextCapsule({
+    mission: { id: 'selftest-wiki', coord: { rgba: { r: 48, g: 132, b: 212, a: 240 } } },
+    role: 'verifier',
+    claims: await projectWikiClaims(tmp),
+    q4: { mode: 'selftest' },
+    q3: ['sks', 'llm-wiki', 'wiki-coordinate'],
+    budget: { maxWikiAnchors: 48 }
+  });
+  const wikiValidation = validateWikiCoordinateIndex(wikiPack.wiki);
+  if (!wikiValidation.ok) throw new Error('selftest failed: wiki coordinate pack invalid');
+  if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => (Array.isArray(anchor) ? anchor[0] : anchor.id) === 'wiki-trig')) throw new Error('selftest failed: wiki trig anchor missing');
   const { dir: researchDir, mission: researchMission } = await createMission(tmp, { mode: 'research', prompt: '새로운 코드 리뷰 방법론 연구' });
   const researchPlan = await writeResearchPlan(researchDir, researchMission.prompt, {});
   const researchGate = await writeMockResearchResult(researchDir, researchPlan);
@@ -944,10 +1324,12 @@ async function selftest() {
   if (!render.outputs.includes('render.svg')) throw new Error('selftest failed: gx svg not rendered');
   const validation = await validateCartridge(gxDir);
   if (!validation.ok) throw new Error('selftest failed: gx validation rejected');
+  if (!validateWikiCoordinateIndex(validation.wiki_coordinates).ok) throw new Error('selftest failed: gx wiki coordinate validation rejected');
   const drift = await driftCartridge(gxDir);
   if (drift.status !== 'low') throw new Error('selftest failed: gx drift is high');
   const snapshot = await snapshotCartridge(gxDir);
   if (!snapshot.files.svg || !snapshot.files.html) throw new Error('selftest failed: gx snapshot incomplete');
+  if (!validateWikiCoordinateIndex(snapshot.wiki_coordinates).ok) throw new Error('selftest failed: gx snapshot wiki coordinates invalid');
   const gc = await enforceRetention(tmp, { dryRun: true });
   if (!gc.report.exists) throw new Error('selftest failed: storage report');
   console.log('Sneakoscope Codex selftest passed.');
@@ -999,6 +1381,91 @@ async function evalCommand(sub, args) {
   process.exitCode = 1;
 }
 
+async function wiki(sub, args = []) {
+  if (!sub || sub === 'help' || sub === '--help') {
+    console.log('Usage: sks wiki coords --rgba R,G,B,A | sks wiki pack [--json] [--role worker|verifier] [--max-anchors N] | sks wiki validate [context-pack.json] [--json]');
+    return;
+  }
+  if (sub === 'coords') {
+    const raw = readFlagValue(args, '--rgba', positionalArgs(args)[0] || '');
+    const parts = String(raw).split(/[,\s]+/).filter(Boolean).map((x) => Number.parseInt(x, 10));
+    if (parts.length < 3) throw new Error('Usage: sks wiki coords --rgba R,G,B,A');
+    const coord = rgbaToWikiCoord({ r: parts[0], g: parts[1], b: parts[2], a: parts[3] ?? 255 });
+    console.log(JSON.stringify({ rgba: coord.rgba, rgba_key: rgbaKey(coord.rgba), coord }, null, 2));
+    return;
+  }
+  if (sub === 'pack') {
+    const root = await projectRoot();
+    const role = readFlagValue(args, '--role', 'worker');
+    const maxAnchors = Number(readFlagValue(args, '--max-anchors', role.includes('verifier') ? 48 : 32));
+    const pack = contextCapsule({
+      mission: { id: 'project-wiki', coord: { rgba: { r: 48, g: 132, b: 212, a: 240 } } },
+      role,
+      contractHash: null,
+      claims: await projectWikiClaims(root),
+      q4: { mode: 'project-continuity', package: PACKAGE_VERSION, hydrate: 'anchor-first' },
+      q3: ['sks', 'llm-wiki', 'wiki-coordinate', 'gx', 'skills'],
+      budget: { maxWikiAnchors: maxAnchors }
+    });
+    const file = path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
+    await ensureDir(path.dirname(file));
+    await writeJsonAtomic(file, pack);
+    if (flag(args, '--json')) return console.log(JSON.stringify({ ...pack, path: file }, null, 2));
+    console.log('Sneakoscope LLM Wiki Context Pack');
+    console.log(`Path:     ${path.relative(root, file)}`);
+    console.log(`Claims:   ${pack.claims.length} hydrated text claims`);
+    console.log(`Anchors:  ${(pack.wiki.anchors || pack.wiki.a || []).length} coordinate anchors (${pack.wiki.overflow_count ?? pack.wiki.o ?? 0} overflow)`);
+    console.log(`Schema:   ${pack.wiki.schema}`);
+    console.log(`Validate: sks wiki validate ${path.relative(root, file)}`);
+    return;
+  }
+  if (sub === 'validate') {
+    const root = await projectRoot();
+    const target = positionalArgs(args)[0] || path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
+    const pack = await readJson(path.resolve(target));
+    const result = validateWikiCoordinateIndex(pack.wiki || pack);
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log(`Wiki coordinate index: ${result.ok ? 'ok' : 'failed'}`);
+    console.log(`Anchors checked: ${result.checked}`);
+    for (const issue of result.issues) console.log(`- ${issue.severity}: ${issue.id}${issue.anchor ? ` ${issue.anchor}` : ''}`);
+    process.exitCode = result.ok ? 0 : 2;
+    return;
+  }
+  console.error('Usage: sks wiki coords|pack|validate');
+  process.exitCode = 1;
+}
+
+async function projectWikiClaims(root) {
+  const claims = [
+    ['wiki-hooks', '.codex/hooks.json routes UserPromptSubmit, tool, permission, and Stop events through SKS guards.', '.codex/hooks.json', 'code', 'high'],
+    ['wiki-config', '.codex/config.toml enables Codex App profiles, multi-agent support, and Team agent limits.', '.codex/config.toml', 'code', 'high'],
+    ['wiki-skills', '.codex/skills and .agents/skills provide local routes for DF, Team, Ralph, Research, AutoResearch, DB, GX, wiki, and evaluation workflows.', '.codex/skills', 'code', 'medium'],
+    ['wiki-agents', '.codex/agents defines Team planning, implementation, DB safety, and QA reviewer roles.', '.codex/agents', 'code', 'medium'],
+    ['wiki-policy', '.sneakoscope/policy.json stores update-check, honest-mode, retention, database, performance, and prompt-pipeline policy.', '.sneakoscope/policy.json', 'contract', 'high'],
+    ['wiki-memory', '.sneakoscope/memory stores Q0 raw, Q1 evidence, Q2 facts, Q3 tags, and Q4 control bits for hydratable context.', '.sneakoscope/memory', 'wiki', 'high'],
+    ['wiki-gx', 'GX cartridges keep vgraph.json and beta.json as deterministic visual context sources with render, validation, drift, and snapshot outputs.', '.sneakoscope/gx/cartridges', 'vgraph', 'medium'],
+    ['wiki-db', 'Database safety blocks destructive SQL, risky Supabase commands, unsafe MCP writes, and production data mutation.', '.sneakoscope/db-safety.json', 'code', 'critical'],
+    ['wiki-hproof', 'H-Proof blocks completion when unsupported critical claims, DB safety issues, missing tests, or high visual/wiki drift remain.', '.sneakoscope/hproof', 'test', 'critical'],
+    ['wiki-eval', 'sks eval run measures token savings, evidence-weighted accuracy proxy, required recall, unsupported critical filtering, and build runtime.', 'src/core/evaluation.mjs', 'test', 'medium'],
+    ['wiki-trig', 'TriWiki maps RGBA channels to domain angle, layer radius, phase, and concentration using deterministic trigonometric coordinates.', 'src/core/wiki-coordinate.mjs', 'code', 'high']
+  ];
+  const out = [];
+  for (const [id, text, file, authority, risk] of claims) {
+    out.push({
+      id,
+      text,
+      authority,
+      risk,
+      status: await exists(path.join(root, file)) ? 'supported' : 'unknown',
+      freshness: 'fresh',
+      source: file,
+      file,
+      evidence_count: await exists(path.join(root, file)) ? 1 : 0
+    });
+  }
+  return out;
+}
+
 async function saveEvalReport(root, args, report, prefix) {
   if (flag(args, '--no-save')) return null;
   const requested = readFlagValue(args, '--out', null);
@@ -1022,6 +1489,7 @@ function printEvalRun(report, saved) {
   console.log(`Accuracy:  ${report.baseline.quality.accuracy_proxy} -> ${report.candidate.quality.accuracy_proxy} (${c.accuracy_delta >= 0 ? '+' : ''}${c.accuracy_delta})`);
   console.log(`Recall:    ${report.candidate.quality.required_recall}`);
   console.log(`Precision: ${report.baseline.quality.relevance_precision} -> ${report.candidate.quality.relevance_precision}`);
+  if (report.candidate.wiki) console.log(`Wiki:      ${report.candidate.wiki.anchors} anchors, valid=${report.candidate.wiki.valid}`);
   console.log(`Build ms:  ${report.baseline.context_build_ms_per_run} -> ${report.candidate.context_build_ms_per_run}`);
   console.log(`Meaningful improvement: ${c.meaningful_improvement ? 'yes' : 'no'}`);
   if (saved) console.log(`Report:    ${saved}`);
@@ -1175,12 +1643,110 @@ async function gx(sub, args) {
 
 async function team(args) {
   const prompt = promptOf(args);
+  if (!prompt) {
+    console.error('Usage: sks team "task" [--json]');
+    process.exitCode = 1;
+    return;
+  }
   const root = await projectRoot();
   const { id, dir } = await createMission(root, { mode: 'team', prompt });
   const schema = buildQuestionSchema(prompt);
   await writeQuestions(dir, schema);
+  const plan = buildTeamPlan(id, prompt);
+  await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
+  await writeTextAtomic(path.join(dir, 'team-workflow.md'), teamWorkflowMarkdown(plan));
+  const result = {
+    mission_id: id,
+    mission_dir: dir,
+    plan: path.join(dir, 'team-plan.json'),
+    workflow: path.join(dir, 'team-workflow.md'),
+    questions: path.join(dir, 'questions.md'),
+    codex_agents: ['team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']
+  };
+  if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
-  console.log('Team mode also requires mandatory clarification before implementation.');
+  console.log(`Plan: ${path.relative(root, result.plan)}`);
+  console.log(`Workflow: ${path.relative(root, result.workflow)}`);
+  console.log('Use $Team in Codex App to run the two-phase flow: debate/consensus, close planning agents, then spawn a fresh implementation team with disjoint ownership.');
+}
+
+function buildTeamPlan(id, prompt) {
+  return {
+    schema_version: 1,
+    mission_id: id,
+    mode: 'team',
+    prompt,
+    codex_config_required: {
+      features: { multi_agent: true, codex_hooks: true },
+      agents: { max_threads: 6, max_depth: 1 },
+      custom_agents_dir: '.codex/agents'
+    },
+    phases: [
+      {
+        id: 'planning_debate',
+        goal: 'Specialists independently map the code, risks, constraints, DB safety, tests, and viable approaches.',
+        agents: ['team_consensus', 'db_safety_reviewer', 'qa_reviewer'],
+        write_policy: 'read-only'
+      },
+      {
+        id: 'consensus',
+        goal: 'Parent orchestrator synthesizes one agreed objective, rejected alternatives, acceptance criteria, and parallel implementation slices.',
+        agents: ['parent_orchestrator'],
+        output: 'agreed-objective.md'
+      },
+      {
+        id: 'close_planning_agents',
+        goal: 'Close or stop planning agents after their findings are captured so implementation starts with fresh context.',
+        agents: ['parent_orchestrator']
+      },
+      {
+        id: 'parallel_implementation',
+        goal: 'Fresh implementation workers take disjoint write sets and implement without reverting each other.',
+        agents: ['implementation_worker'],
+        write_policy: 'workspace-write with explicit ownership'
+      },
+      {
+        id: 'review_and_integrate',
+        goal: 'Reviewers check correctness, DB safety, tests, and evidence. Parent integrates final result.',
+        agents: ['qa_reviewer', 'db_safety_reviewer', 'parent_orchestrator']
+      }
+    ],
+    invariants: [
+      'The parent thread remains the orchestrator and owns final integration.',
+      'Planning agents do not edit files.',
+      'Implementation workers receive disjoint ownership scopes.',
+      'Workers are told they are not alone in the codebase and must not revert others edits.',
+      'SKS hooks, DB safety rules, Ralph no-question rules, and H-Proof gates remain active.',
+      'Destructive database operations remain forbidden.'
+    ],
+    prompt_command: '$Team'
+  };
+}
+
+function teamWorkflowMarkdown(plan) {
+  return `# SKS Team Mission
+
+Mission: ${plan.mission_id}
+
+Prompt:
+${plan.prompt}
+
+## Codex App Prompt
+
+\`\`\`text
+$Team ${plan.prompt}
+
+First run a planning/debate team. Have team_consensus map options and constraints, db_safety_reviewer check DB/migration/RLS risk if relevant, and qa_reviewer identify correctness and test risks. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices. Close the planning agents. Then form a fresh implementation team with implementation_worker agents, each with non-overlapping ownership. Review with qa_reviewer and db_safety_reviewer, integrate results in the parent thread, run verification, and report evidence.
+\`\`\`
+
+## Phases
+
+${plan.phases.map((phase, idx) => `${idx + 1}. ${phase.id}: ${phase.goal}`).join('\n')}
+
+## Invariants
+
+${plan.invariants.map((x) => `- ${x}`).join('\n')}
+`;
 }
 
 async function db(sub, args) {

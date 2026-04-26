@@ -1,9 +1,17 @@
 {
   "name": "sneakoscope",
   "displayName": "Sneakoscope Codex",
-  "version": "0.6.0",
-  "description": "Sneakoscope Codex: database-safe, performance-bounded Codex CLI harness with Ralph no-question loop, H-Proof gates, deterministic GX visual context, and TriWiki compression.",
+  "version": "0.6.7",
+  "description": "Sneakoscope Codex: update-aware, database-safe Codex CLI harness with multi-agent Team orchestration, Ralph no-question execution, autoresearch-style loops, and H-Proof gates.",
   "type": "module",
+  "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mandarange/Sneakoscope-Codex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mandarange/Sneakoscope-Codex/issues"
+  },
   "bin": {
     "sks": "bin/sks.mjs",
     "sneakoscope": "bin/sks.mjs"
@@ -24,14 +32,15 @@
   },
   "scripts": {
     "repo-audit": "node ./scripts/repo-audit.mjs",
+    "postinstall": "node ./bin/sks.mjs postinstall",
     "selftest": "node ./bin/sks.mjs selftest --mock",
     "doctor": "node ./bin/sks.mjs doctor",
     "packcheck": "find bin src scripts -name '*.mjs' -print0 | xargs -0 -n1 node --check",
     "sizecheck": "node ./scripts/sizecheck.mjs",
-    "publish:dry": "npm --cache /tmp/sks-npm-cache pack --dry-run",
+    "release:check": "npm run repo-audit && npm run packcheck && npm run selftest && npm run sizecheck",
+    "publish:dry": "npm run release:check && npm --cache /tmp/sks-npm-cache pack --dry-run",
     "publish:npm": "npm --cache /tmp/sks-npm-cache publish --access public",
-    "prepack": "npm run repo-audit && npm run packcheck && npm run selftest && npm run sizecheck",
-    "prepublishOnly": "npm run repo-audit && npm run packcheck && npm run selftest && npm run sizecheck"
+    "prepublishOnly": "npm run release:check"
   },
   "keywords": [
     "sneakoscope",
@@ -39,12 +48,24 @@
     "sks",
     "cli",
     "ai-agent",
+    "ai-agents",
     "harness",
+    "codex-cli",
+    "codex-app",
+    "multi-agent",
+    "subagents",
+    "agent-orchestration",
+    "agent-team",
     "ralph",
     "research",
+    "autoresearch",
+    "honest-mode",
+    "update-check",
     "hypothesis",
     "discovery",
     "llm-wiki",
+    "wiki-coordinate",
+    "context-compression",
     "gx",
     "svg",
     "deterministic",

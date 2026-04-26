@@ -5,7 +5,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 
-export const PACKAGE_VERSION = '0.6.0';
+export const PACKAGE_VERSION = '0.6.7';
 export const DEFAULT_PROCESS_TAIL_BYTES = 256 * 1024;
 export const DEFAULT_PROCESS_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -36,15 +36,33 @@ export async function readText(p, fallback = undefined) {
 
 export async function writeTextAtomic(p, text) {
   await ensureDir(path.dirname(p));
-  const tmp = `${p}.${process.pid}.${randomId(6)}.tmp`;
-  const handle = await fsp.open(tmp, 'w');
   try {
-    await handle.writeFile(text, 'utf8');
-    await handle.sync().catch(() => {});
-  } finally {
-    await handle.close().catch(() => {});
+    if (await fsp.readFile(p, 'utf8') === text) return;
+  } catch {}
+  const tmp = `${p}.${process.pid}.${randomId(6)}.tmp`;
+  try {
+    const handle = await fsp.open(tmp, 'w');
+    try {
+      await handle.writeFile(text, 'utf8');
+      await handle.sync().catch(() => {});
+    } finally {
+      await handle.close().catch(() => {});
+    }
+    await fsp.rename(tmp, p);
+  } catch (err) {
+    await fsp.rm(tmp, { force: true }).catch(() => {});
+    if (!canFallbackToDirectWrite(err)) throw err;
+    try {
+      await fsp.writeFile(p, text, 'utf8');
+    } catch (fallbackErr) {
+      fallbackErr.message = `Atomic write failed (${err.code || err.message}); direct write fallback failed: ${fallbackErr.message}`;
+      throw fallbackErr;
+    }
   }
-  await fsp.rename(tmp, p);
+}
+
+function canFallbackToDirectWrite(err) {
+  return ['EACCES', 'EEXIST', 'ENOTEMPTY', 'EPERM', 'EXDEV'].includes(err?.code);
 }
 
 export async function readJson(p, fallback = undefined) {
