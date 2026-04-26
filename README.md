@@ -42,7 +42,7 @@ npm i -g sneakoscope
 sks
 ```
 
-`npm i -g sneakoscope` prints the next command without opening an interactive prompt, so CI and agent installs do not hang. During postinstall, SKS blocks installation if OMX, DCodex, or their global/repo-level traces are detected; the output includes a GPT-5.5 high cleanup prompt and installation cannot continue unless a human approves removal. If no conflicting harness exists, SKS checks whether the `sks` command is available, best-effort creates a command shim in a writable PATH directory when needed, and best-effort installs the Context7 MCP globally when Codex CLI is available. Run `sks` in a real terminal to open the setup UI. The UI asks whether this project should use the global install or a project-only install, then offers to run setup, doctor, and selftest.
+`npm i -g sneakoscope` prints setup guidance without making npm output look like a crash. If OMX, DCodex, or their global/repo-level traces are detected during postinstall, npm installation can still finish, but SKS clearly reports that `sks setup` and `sks doctor --fix` are blocked until a human-approved cleanup happens. In an interactive terminal, postinstall asks whether to show the GPT-5.5 high cleanup prompt now; in CI or agent installs, it prints `sks conflicts prompt` for later. If no conflicting harness exists, SKS checks whether the `sks` command is available, best-effort creates a command shim in a writable PATH directory when needed, and best-effort installs the Context7 MCP globally when Codex CLI is available. Run `sks` in a real terminal to open the setup UI. The UI asks whether this project should use the global install or a project-only install, then offers to run setup, doctor, and selftest.
 
 Default non-interactive setup:
 
