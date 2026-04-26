@@ -1,5 +1,6 @@
 import { nowIso, sha256 } from './fsx.mjs';
 import { contextCapsule } from './triwiki-attention.mjs';
+import { validateWikiCoordinateIndex } from './wiki-coordinate.mjs';
 
 export const DEFAULT_EVAL_THRESHOLDS = Object.freeze({
   min_token_savings_pct: 0.25,
@@ -34,6 +35,7 @@ export function defaultEvaluationScenario() {
     ['req-db-block', 'destructive database operations such as DROP, TRUNCATE, db reset, and live execute_sql writes are blocked.', 'code', 'critical', 1.4],
     ['req-hook', '.codex/hooks.json routes PreToolUse, PostToolUse, PermissionRequest, UserPromptSubmit, and Stop to sks hook handlers.', 'code', 'high', 1],
     ['req-gx-hash', 'GX render output embeds the normalized vgraph.json source hash so drift can be detected deterministically.', 'test', 'medium', 0.9],
+    ['req-wiki-rgba', 'TriWiki stores RGBA-derived trigonometric wiki anchors so compressed context remains hydratable by id, hash, source, and coordinate.', 'code', 'high', 1.2],
     ['req-retention', 'runtime logs and mission artifacts are bounded through retention policy and sks gc.', 'code', 'medium', 0.85],
     ['req-selftest', 'selftest covers contract sealing, DB guard blocking, done-gate evaluation, GX render/validate/drift, snapshot, and retention report.', 'test', 'high', 1.1],
     ['req-skill', 'sks init installs local skills under .agents/skills so project workflows can trigger domain-specific guidance.', 'code', 'medium', 0.9],
@@ -43,6 +45,7 @@ export function defaultEvaluationScenario() {
     ['noise-rust-default', 'Rust acceleration is required at runtime for every npm installation.', 'unsupported', 'model', 'high'],
     ['noise-live-write', 'Live Supabase execute_sql writes are acceptable when the prompt sounds urgent.', 'unsupported', 'model', 'critical'],
     ['noise-image', 'GX visual context requires an external image generation service.', 'unsupported', 'model', 'medium'],
+    ['noise-wiki-lossy', 'TriWiki deletes non-selected claims permanently when it compresses context.', 'unsupported', 'wiki', 'high'],
     ['noise-unbounded', 'Raw child process output is kept entirely in memory for later summarization.', 'unsupported', 'model', 'high'],
     ['noise-hooks-only', 'Hooks are the only source of truth and mission files are optional.', 'unsupported', 'wiki', 'high'],
     ['noise-package', 'The npm package bundles @openai/codex and native Rust binaries.', 'unsupported', 'model', 'medium'],
@@ -134,11 +137,18 @@ function scoreSelection(allClaims, selectedIds) {
 
 function metricBlock({ label, context, scenario, msPerRun }) {
   const selectedIds = (context.claims || []).map((claim) => claim.id);
+  const wikiValidation = context.wiki ? validateWikiCoordinateIndex(context.wiki) : null;
   return {
     label,
     context_hash: sha256(JSON.stringify(context)),
     estimated_tokens: estimateTokens(context),
     context_build_ms_per_run: Number(msPerRun.toFixed(4)),
+    wiki: context.wiki ? {
+      schema: context.wiki.schema,
+      anchors: (context.wiki.anchors || context.wiki.a || []).length,
+      overflow_count: context.wiki.overflow_count ?? context.wiki.o ?? 0,
+      valid: wikiValidation.ok
+    } : null,
     quality: scoreSelection(scenario.claims, selectedIds)
   };
 }
@@ -158,6 +168,7 @@ export function compareMetricBlocks(baseline, candidate, thresholds = DEFAULT_EV
     unsupported_critical: candidate.quality.unsupported_critical_selected <= thresholds.max_unsupported_critical_selected,
     candidate_build_time: candidate.context_build_ms_per_run <= thresholds.max_candidate_build_ms_per_run
   };
+  if (candidate.wiki) checks.wiki_index = candidate.wiki.valid === true;
   return {
     token_savings_pct: Number(tokenSavingsPct.toFixed(4)),
     accuracy_delta: Number(accuracyDelta.toFixed(4)),

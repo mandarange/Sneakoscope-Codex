@@ -1,14 +1,40 @@
 <p align="center">
-  <img src="docs/assets/sneakoscope-codex-logo.svg" alt="Sneakoscope Codex logo" width="180">
+  <img src="https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/main/docs/assets/sneakoscope-codex-logo.svg" alt="Sneakoscope Codex logo" width="180">
 </p>
 
 <h1 align="center">Sneakoscope Codex</h1>
 
-Sneakoscope Codex is a zero-runtime-dependency Node.js harness for running Codex CLI in a more controlled project workflow. It adds mandatory clarification before autonomous work, a Ralph no-question execution loop, H-Proof completion gates, conservative database safety checks, bounded logs/storage, and deterministic GX visual context cartridges.
+<p align="center">
+  <a href="https://www.npmjs.com/package/sneakoscope"><img alt="npm version" src="https://img.shields.io/npm/v/sneakoscope.svg"></a>
+  <a href="https://www.npmjs.com/package/sneakoscope"><img alt="weekly downloads" src="https://img.shields.io/npm/dw/sneakoscope.svg"></a>
+  <a href="https://github.com/mandarange/Sneakoscope-Codex"><img alt="GitHub stars" src="https://img.shields.io/github/stars/mandarange/Sneakoscope-Codex?style=flat"></a>
+  <a href="https://www.npmjs.com/package/sneakoscope"><img alt="license" src="https://img.shields.io/npm/l/sneakoscope.svg"></a>
+  <img alt="node >=20.11" src="https://img.shields.io/badge/node-%3E%3D20.11-339933.svg">
+</p>
+
+Sneakoscope Codex is an update-aware, zero-runtime-dependency Node.js harness for running Codex CLI in a more controlled project workflow. It adds mandatory clarification before autonomous work, a Ralph no-question execution loop, Codex multi-agent Team orchestration, AutoResearch-style experiment loops, H-Proof completion gates, conservative database safety checks, bounded logs/storage, and deterministic GX visual context cartridges.
 
 ```bash
 npm i -g sneakoscope
+sks
 ```
+
+`npm i -g sneakoscope` prints the next command without opening an interactive prompt, so CI and agent installs do not hang. Run `sks` in a real terminal to open the setup UI. The UI asks whether this project should use the global install or a project-only install, then offers to run setup, doctor, and selftest.
+
+Default non-interactive setup:
+
+```bash
+sks setup
+sks doctor --fix
+```
+
+Use local-only setup when the generated SKS files must never appear in git status:
+
+```bash
+sks setup --local-only
+```
+
+This writes repo-local excludes to `.git/info/exclude` for `.sneakoscope/`, `.codex/`, `.agents/`, and `AGENTS.md`. If `AGENTS.md` already exists, local-only setup does not modify it.
 
 The npm package name is `sneakoscope`; the command is branded as SKS and exposed as lowercase `sks` for shell portability. The package also exposes a `sneakoscope` command alias, so `sks setup` and `sneakoscope setup` are equivalent.
 Global installation is the default and recommended setup. During `sks setup` or `sks init`, SKS resolves the global binary when possible and writes that absolute path into `.codex/hooks.json`, which avoids PATH issues in GUI or hook execution environments. For a project-only install, use `npm i -D sneakoscope` and initialize hooks with `npx sks setup --install-scope project`; this writes hook commands that call the local `node_modules/sneakoscope` binary.
@@ -17,76 +43,38 @@ Global installation is the default and recommended setup. During `sks setup` or 
 
 ## One-Prompt LLM Install
 
-If you are using Codex App, ChatGPT, Claude Code, Cursor, or another coding agent, copy the whole block below into the agent from your target project directory. The agent should install SKS, initialize the project, verify the setup, and show the available commands in one pass.
+If you are using Codex App, ChatGPT, Claude Code, Cursor, or another coding agent, copy this short prompt from your target project directory. It intentionally avoids recovery branches and broad instructions so the agent does only the install and verification work.
 
 ````text
-You are installing Sneakoscope Codex in the current project. Do the setup end to end without asking follow-up questions unless a command needs user approval.
+Install Sneakoscope Codex in this project.
 
-Repository:
-https://github.com/mandarange/Sneakoscope-Codex.git
+Rules:
+- Do not modify application source files.
+- Ask only when a command requires user approval.
+- If Node.js is below 20.11, stop and report it.
+- If Codex CLI is missing, report: install @openai/codex or set SKS_CODEX_BIN.
 
-Requirements:
-- Node.js must be >=20.11.
-- Codex CLI is installed separately; if missing, report that @openai/codex must be installed or SKS_CODEX_BIN must be set.
-- Prefer safe, local verification. Do not modify application source files unless needed for SKS setup.
-
-Run this primary install path:
+Run exactly:
 ```bash
-npm i -g git+https://github.com/mandarange/Sneakoscope-Codex.git
+node -v
+npm i -g sneakoscope
 sks setup
+sks update-check
 sks doctor --fix
 sks selftest --mock
 sks commands
 sks dollar-commands
 ```
 
-If the global command is not on PATH after install, do not stop. Use this fallback path:
-```bash
-npx -y -p git+https://github.com/mandarange/Sneakoscope-Codex.git sks setup
-npx -y -p git+https://github.com/mandarange/Sneakoscope-Codex.git sks doctor --fix
-npx -y -p git+https://github.com/mandarange/Sneakoscope-Codex.git sks selftest --mock
-npx -y -p git+https://github.com/mandarange/Sneakoscope-Codex.git sks commands
-npx -y -p git+https://github.com/mandarange/Sneakoscope-Codex.git sks dollar-commands
-```
+If `sks` is unavailable after install, replace `sks` with `npx -y -p sneakoscope sks` and continue.
 
-If the user wants a project-only install instead of a global install, use:
-```bash
-npm i -D git+https://github.com/mandarange/Sneakoscope-Codex.git
-npx sks setup --install-scope project
-npx sks doctor --fix --install-scope project
-npx sks selftest --mock
-npx sks commands
-npx sks dollar-commands
-```
-
-Finish by reporting whether setup passed and explaining these generated outputs:
-- `.sneakoscope/` mission state and policy
-- `.codex/config.toml` Codex App profiles
-- `.codex/hooks.json` SKS hook integration
-- `.codex/skills/` local Codex App skills
-- `.codex/SNEAKOSCOPE.md` Codex App quick reference
-- `AGENTS.md` repository rules
-
-Show the user how to discover commands:
-```bash
-sks help
-sks commands
-sks usage ralph
-sks quickstart
-sks codex-app
-sks dollar-commands
-```
-
-Tell the user they can use these prompt commands inside Codex App:
-```text
-$DF 글자 색 바꿔줘
-$DF 내용을 영어로 바꿔줘
-$SKS show me available workflows
-$Ralph implement this with mandatory clarification
-$Research investigate this idea
-$DB check this migration safely
-```
+Finish with only:
+- setup passed/failed
+- Codex CLI present/missing
+- generated files: `.sneakoscope/`, `.codex/config.toml`, `.codex/hooks.json`, `.codex/skills/`, `.codex/agents/`, `.codex/SNEAKOSCOPE.md`, `AGENTS.md`
 ````
+
+Run `sks install-prompt --project` for a project-only prompt, or `sks install-prompt --full` for the longer recovery-oriented installer prompt.
 
 ## Repository
 
@@ -95,6 +83,8 @@ npm i -g git+https://github.com/mandarange/Sneakoscope-Codex.git
 ```
 
 Source repository: <https://github.com/mandarange/Sneakoscope-Codex.git>
+
+Use the registry install (`npm i -g sneakoscope`) for normal users. The GitHub install path is intended for testing an unreleased commit.
 
 Local development checkout:
 
@@ -138,8 +128,10 @@ Use `$` prompt commands inside Codex App or another coding agent when you want t
 ```text
 $DF        fast design/content fix
 $SKS       general Sneakoscope workflow/help
+$Team      multi-agent team orchestration
 $Ralph     clarification-gated Ralph mission
 $Research  frontier research mission
+$AutoResearch iterative experiment loop
 $DB        database/Supabase safety check
 $GX        deterministic visual context
 $Help      command and workflow help
@@ -169,6 +161,7 @@ This creates the app-facing control surface:
 .codex/config.toml       Codex App profiles for SKS Ralph, research, and default work
 .codex/hooks.json        Codex App hook entrypoints routed through SKS guards
 .codex/skills/           local project skills for Ralph, DB safety, GX, research, and design work
+.codex/agents/           local Codex subagent roles for Team consensus, implementation, DB safety, and QA
 .codex/SNEAKOSCOPE.md    quick reference for using SKS inside Codex App
 AGENTS.md                repository rules loaded by Codex agents
 .sneakoscope/            mission state, gates, logs, policy, GX cartridges, and reports
@@ -179,6 +172,7 @@ Inside Codex App, you can ask the agent to use the local SKS control surface, fo
 ```text
 $DF 글자 색 바꿔줘
 $DF 내용을 영어로 바꿔줘
+$Team agree on the plan, then implement it with a fresh specialist team.
 Use Sneakoscope Ralph mode to prepare this task.
 Run the latest Ralph mission with the sealed decision contract.
 Use SKS DB safety before touching database or Supabase files.
@@ -266,7 +260,11 @@ sks research run latest --max-cycles 3
 - **Sealed decision contract**: `ralph answer` validates answers and writes `decision-contract.json`.
 - **No-question Ralph loop**: after `ralph run` starts, Ralph must resolve ambiguity with the sealed contract instead of asking the user.
 - **Research mode**: `research` runs a frontier-discovery loop for non-obvious hypotheses, falsification, novelty ledgers, and testable experiments.
-- **Prompt pipeline and `$` routes**: user prompts are lightly optimized by default, and Codex App users can force routes such as `$DF`, `$Ralph`, `$Research`, `$DB`, and `$GX`.
+- **Prompt pipeline and `$` routes**: user prompts are lightly optimized by default, and Codex App users can force routes such as `$DF`, `$Team`, `$Ralph`, `$Research`, `$AutoResearch`, `$DB`, and `$GX`.
+- **Team orchestration**: `sks team` and `$Team` prepare a Codex multi-agent flow where planning agents debate options, the parent agent seals one objective, planning agents are closed, and a fresh implementation team handles disjoint work in parallel.
+- **AutoResearch loop**: open-ended improvement tasks use a small experiment cycle: program, hypothesis, experiment, metric, keep/discard, falsification, and honest conclusion.
+- **Update-aware hooks**: before work, SKS checks for a newer published package and asks whether to update now or skip for the current conversation only.
+- **Honest Mode finish**: final answers must include an evidence-aware verification pass before claiming the goal is complete.
 - **Fast DF mode**: `$DF` handles small design/content edits like color, copy, labels, spacing, and translation without unnecessary Ralph, Research, or evaluation loops.
 - **Database guard**: destructive DB operations, production writes, unsafe Supabase MCP configuration, and direct live SQL mutations are blocked or warned on.
 - **H-Proof done gate**: completion requires supported critical claims, reviewed DB safety state, acceptable visual/wiki drift, and required test evidence.
@@ -274,6 +272,64 @@ sks research run latest --max-cycles 3
 - **Bounded runtime state**: child process output is tailed, logs are rotated/compacted, and old mission artifacts can be pruned.
 - **Visual cartridges**: `gx` creates deterministic SVG/HTML visual context from `vgraph.json` and `beta.json`; no generated-image service is required.
 - **Design artifact skill**: `sks init` installs a local skill for high-fidelity HTML/UI/prototype work with design-context gathering and rendered verification.
+
+## FAQ For Search And AI Answers
+
+### What is Sneakoscope Codex?
+
+Sneakoscope Codex is a Codex CLI harness for safer autonomous software work. It combines update checks, Codex App hooks, multi-agent Team orchestration, Ralph no-question execution, database safety guards, H-Proof completion gates, and bounded runtime state.
+
+### Does Sneakoscope Codex support Codex multi-agent teams?
+
+Yes. `sks setup` enables Codex `multi_agent`, creates `.codex/agents/*.toml` custom agents, and installs a `$Team` workflow for planning debate, consensus, fresh implementation workers, review, and final integration.
+
+### Does Sneakoscope Codex replace Codex CLI?
+
+No. `@openai/codex` is installed separately. Sneakoscope Codex supervises project workflow, hooks, safety policy, state, and local skills around Codex CLI and Codex App.
+
+### Why star the GitHub repository?
+
+Stars help developers discover a lightweight Codex workflow harness focused on database safety, multi-agent orchestration, update hygiene, honest completion checks, and practical autonomous coding loops.
+
+## Team Workflow
+
+Team mode uses Codex subagents/custom agents as an orchestration protocol rather than a single long-running worker. `sks setup` enables `multi_agent`, sets agent concurrency limits, and installs local agent role files under `.codex/agents/`.
+
+```text
+team planning
+  -> spawn read-only/explorer specialists for code paths, risks, DB safety, tests, and options
+  -> synthesize one agreed objective with constraints and acceptance criteria
+  -> close planning agents
+
+fresh implementation team
+  -> assign disjoint write scopes to implementation workers
+  -> run work in parallel only when ownership does not overlap
+  -> review with QA and DB safety specialists
+  -> parent orchestrator integrates, verifies, and reports evidence
+```
+
+Create a Team mission:
+
+```bash
+sks team "implement this feature safely"
+```
+
+Inside Codex App, use:
+
+```text
+$Team agree on the best plan, then implement with specialists
+```
+
+The generated Team artifacts are:
+
+```text
+.sneakoscope/missions/<MISSION_ID>/team-plan.json
+.sneakoscope/missions/<MISSION_ID>/team-workflow.md
+.codex/agents/team-consensus.toml
+.codex/agents/implementation-worker.toml
+.codex/agents/db-safety-reviewer.toml
+.codex/agents/qa-reviewer.toml
+```
 
 ## Ralph Workflow
 
@@ -316,10 +372,12 @@ All terminal examples below use `sks`, but the same commands can be run with the
 
 ```bash
 sks help [topic]
+sks update-check [--json]
+sks wizard
 sks commands [--json]
-sks usage [install|setup|ralph|research|db|codex-app|df|dollar|eval|gx]
+sks usage [install|setup|team|ralph|research|db|codex-app|df|dollar|eval|gx|wiki]
 sks quickstart
-sks install-prompt [--project]
+sks install-prompt [--project] [--full]
 sks codex-app
 sks dollar-commands [--json]
 sks df
@@ -328,10 +386,10 @@ sks aliases
 sks --help
 sneakoscope --help
 
-sks setup [--install-scope global|project] [--force] [--json]
+sks setup [--install-scope global|project] [--local-only] [--force] [--json]
 sks fix-path [--install-scope global|project] [--json]
-sks doctor [--fix] [--json] [--install-scope global|project]
-sks init [--force] [--install-scope global|project]
+sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]
+sks init [--force] [--local-only] [--install-scope global|project]
 sks selftest [--mock]
 
 sks ralph prepare "task"
@@ -356,8 +414,12 @@ sks eval run [--json] [--out report.json] [--iterations N]
 sks eval compare --baseline old.json --candidate new.json [--json]
 sks eval thresholds
 
+sks wiki coords --rgba 12,34,56,255
+sks wiki pack [--json] [--role worker|verifier] [--max-anchors N]
+sks wiki validate [context-pack.json]
+
 sks hproof check [mission-id|latest]
-sks team "task"
+sks team "task" [--json]
 sks gx init [name]
 sks gx render [name] [--format svg|html|all]
 sks gx validate [name]
@@ -379,8 +441,10 @@ Use these by typing them at the start of a prompt in Codex App or another coding
 ```text
 $DF <small design/content request>
 $SKS <general Sneakoscope request>
+$Team <multi-agent team request>
 $Ralph <clarification-gated mission request>
 $Research <research/discovery request>
+$AutoResearch <iterative experiment request>
 $DB <database or Supabase safety request>
 $GX <visual context request>
 $Help <command/help request>
@@ -527,10 +591,11 @@ sks hproof check latest
 `sks init` creates the local control surface:
 
 ```text
-.sneakoscope/              mission state, policy, retention, logs, GX cartridges
+.sneakoscope/              mission state, policy, retention, logs, wiki packs, GX cartridges
 .codex/config.toml    Codex profiles used by Sneakoscope Codex
 .codex/hooks.json     hook entrypoints
 .codex/skills/        Codex App local project skills
+.codex/agents/        Codex App custom agents for Team mode
 .codex/SNEAKOSCOPE.md Codex App quick reference
 .agents/skills/       Sneakoscope Codex helper skills
 AGENTS.md             managed repository rules block
@@ -588,7 +653,28 @@ vgraph.json
 
 ## TriWiki Context Compression
 
-TriWiki is a harness-level context selection strategy, not a model-internal modification. It scores claims and memory entries by geometric distance, authority, freshness, risk, and token cost, then builds small context capsules for the current mission.
+TriWiki is a harness-level context selection strategy, not a model-internal modification. It scores claims and memory entries by geometric distance, authority, freshness, risk, and token cost, then builds context capsules for the current mission.
+
+The default model is anchor-first rather than lossy-summary-first. Selected claims are included as text, while non-selected claims are preserved as LLM Wiki anchors with id, source path, hash, RGBA key, and a compact coordinate tuple. Later turns can hydrate the missing context from the project wiki instead of depending on a one-way summary.
+
+RGBA wiki coordinates use four channels:
+
+```text
+R -> domain angle
+G -> layer radius through sin()
+B -> phase angle
+A -> concentration/confidence
+```
+
+The derived coordinate is `[domain, layer, phase, concentration]`, with an internal `xyzw` vector computed through sine/cosine. GX renders expose the same anchors through SVG data attributes and an RGBA coordinate strip, so visual context and text claims share one retrieval space.
+
+Useful commands:
+
+```bash
+sks wiki coords --rgba 12,34,56,255
+sks wiki pack
+sks wiki validate
+```
 
 Default context layers:
 
@@ -626,12 +712,13 @@ npm run repo-audit
 npm run packcheck
 npm run selftest
 npm run sizecheck
+npm run release:check
 npm run doctor
 ```
 
-`npm run repo-audit` checks tracked files for risky local paths and high-confidence secret material such as private keys, npm/GitHub/OpenAI-style tokens, local MCP configs, DB dumps, and credential files. It is included in `prepack` and `prepublishOnly`.
+`npm run repo-audit` checks tracked files for risky local paths and high-confidence secret material such as private keys, npm/GitHub/OpenAI-style tokens, local MCP configs, DB dumps, and credential files. It is included in `release:check` and `prepublishOnly`. The package intentionally does not define `prepack`; GitHub installs should not trigger npm's heavier git-dependency preparation path for normal users.
 
-`npm run sizecheck` blocks accidental package bloat before `npm pack` or `npm publish`. Defaults: packed tarball `<=96 KiB`, unpacked package `<=320 KiB`, package files `<=40`, and each tracked file `<=256 KiB`. Override only for an intentional release with `SKS_MAX_PACK_BYTES`, `SKS_MAX_UNPACKED_BYTES`, `SKS_MAX_PACK_FILES`, or `SKS_MAX_TRACKED_FILE_BYTES`.
+`npm run sizecheck` blocks accidental package bloat during `release:check`, `publish:dry`, and `npm publish`. Defaults: packed tarball `<=96 KiB`, unpacked package `<=320 KiB`, package files `<=40`, and each tracked file `<=256 KiB`. Override only for an intentional release with `SKS_MAX_PACK_BYTES`, `SKS_MAX_UNPACKED_BYTES`, `SKS_MAX_PACK_FILES`, or `SKS_MAX_TRACKED_FILE_BYTES`.
 
 `npm run selftest` uses the mock path and does not call a model. Live Ralph runs require a working Codex CLI installation and authentication.
 
