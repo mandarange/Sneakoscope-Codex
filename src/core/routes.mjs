@@ -1,4 +1,4 @@
-export const USAGE_TOPICS = 'install|setup|team|ralph|research|db|codex-app|dfix|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|gx|wiki';
+export const USAGE_TOPICS = 'install|setup|team|qa-loop|ralph|research|db|codex-app|dfix|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|gx|wiki';
 
 export const RECOMMENDED_MCP_SERVERS = [
   {
@@ -125,6 +125,21 @@ export const ROUTES = [
     examples: ['$Team executor:5 agree on the best plan and implement it']
   },
   {
+    id: 'QALoop',
+    command: '$QALoop',
+    mode: 'QALOOP',
+    route: 'QA loop',
+    description: 'Clarification-gated UI/API E2E QA loop with local/deployed safety policy, Computer Use UI evidence, temp-only credentials, detailed checklist, QA report, and Honest Mode.',
+    appSkillAliases: ['qa-loop'],
+    requiredSkills: ['qaloop', 'qa-loop', 'pipeline-runner', 'honest-mode'],
+    lifecycle: ['qa_questions_answered', 'contract_sealed', 'qa_checklist', 'qa_loop_cycles', 'qa_report_md', 'qa_gate', 'honest_mode'],
+    context7Policy: 'optional',
+    reasoningPolicy: 'high',
+    stopGate: 'qa-gate.json',
+    cliEntrypoint: 'sks qa-loop prepare|answer|run|status',
+    examples: ['$QALoop run UI and API E2E against local dev', '$QA-Loop deployed smoke only']
+  },
+  {
     id: 'Ralph',
     command: '$Ralph',
     mode: 'RALPH',
@@ -246,6 +261,7 @@ export const COMMAND_CATALOG = [
   { name: 'codex-app', usage: 'sks codex-app', description: 'Show Codex App setup files and example prompts.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Team.' },
   { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight design/content fix mode.' },
+  { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Run clarification-gated UI/API E2E QA with safety gates, Computer Use evidence, and a QA report.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
   { name: 'pipeline', usage: 'sks pipeline status|resume|answer ...', description: 'Inspect the active skill-first route, pass mandatory ambiguity gates, and inspect completion gates.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
@@ -309,6 +325,7 @@ export function routePrompt(prompt) {
   if (looksLikeAnswerOnlyRequest(text)) return routeById('Answer');
   if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql|mcp)\b/i.test(text)) return routeById('DB');
   if (/\b(team|multi-agent|subagent|parallel agents|agent team|병렬|팀)\b/i.test(text)) return routeById('Team');
+  if (/\b(qa[-\s]?loop|qaloop|e2e\s+qa|qa\s+e2e)\b/i.test(text)) return routeById('QALoop');
   if (/\b(autoresearch|experiment|benchmark|SEO|GEO|ranking|optimi[sz]e|improve metric|discoverability|visibility|github stars?|npm downloads?|검색|노출|스타|다운로드)\b/i.test(text)) return routeById('AutoResearch');
   if (/\b(research|hypothesis|falsify|novelty|frontier|조사|연구)\b/i.test(text)) return routeById('Research');
   if (/(wiki\s+(refresh|pack|validate|prune)|triwiki\s+(refresh|pack|validate)|위키\s*(갱신|리프레시|정리|검증|패킹)|트라이위키|triwiki)/i.test(text)) return routeById('Wiki');

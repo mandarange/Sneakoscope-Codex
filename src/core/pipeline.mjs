@@ -2,7 +2,7 @@ import path from 'node:path';
 import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
 import { containsUserQuestion, noQuestionContinuationReason } from './no-question-guard.mjs';
 import { createMission, missionDir, setCurrent } from './mission.mjs';
-import { buildQuestionSchema, writeQuestions } from './questions.mjs';
+import { buildQuestionSchemaForRoute, writeQuestions } from './questions.mjs';
 import { scanDbSafety } from './db-safety.mjs';
 import { writeResearchPlan } from './research.mjs';
 import { context7RequirementText, dollarCommand, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, subagentExecutionPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
@@ -156,7 +156,7 @@ async function prepareRalph(root, route, task, required) {
 
 async function prepareClarificationGate(root, route, task, required, opts = {}) {
   const { id, dir } = await createMission(root, { mode: String(route.mode || route.id || 'route').toLowerCase(), prompt: task });
-  const schema = buildQuestionSchema(task);
+  const schema = buildQuestionSchemaForRoute(route, task);
   await writeQuestions(dir, schema);
   await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, original_stop_gate: route.stopGate, clarification_gate: true });
   await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: opts.ralph ? 'route.ralph.questions_created' : 'route.clarification.questions_created', route: route.id, slots: schema.slots.length });
@@ -513,6 +513,10 @@ function missingRequiredGateFields(file, state, gate = {}) {
     return ['analysis_artifact', 'triwiki_refreshed', 'triwiki_validated', 'consensus_artifact', 'implementation_team_fresh', 'review_artifact', 'integration_evidence']
       .filter((key) => gate[key] !== true);
   }
+  if (file === 'qa-gate.json' || mode === 'QALOOP') {
+    return ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'ui_computer_use_evidence', 'honest_mode_complete']
+      .filter((key) => gate[key] !== true);
+  }
   return [];
 }
 
@@ -524,6 +528,7 @@ function gateFilesForState(state) {
   if (state.mode === 'AUTORESEARCH') return ['autoresearch-gate.json'];
   if (state.mode === 'DB') return ['db-review.json'];
   if (state.mode === 'GX') return ['gx-gate.json'];
+  if (state.mode === 'QALOOP') return ['qa-gate.json'];
   return ['done-gate.json'];
 }
 

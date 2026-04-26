@@ -8,6 +8,7 @@ import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, missionDir, setCurrent, stateFile } from '../core/mission.mjs';
 import { buildQuestionSchema, writeQuestions } from '../core/questions.mjs';
 import { sealContract, validateAnswers } from '../core/decision-contract.mjs';
+import { buildQaLoopQuestionSchema, buildQaLoopPrompt, evaluateQaGate, qaStatus, writeMockQaResult, writeQaLoopArtifacts } from '../core/qa-loop.mjs';
 import { containsUserQuestion, noQuestionContinuationReason } from '../core/no-question-guard.mjs';
 import { evaluateDoneGate, defaultDoneGate } from '../core/hproof.mjs';
 import { emitHook } from '../core/hooks-runtime.mjs';
@@ -54,6 +55,7 @@ export async function main(args) {
   if (cmd === 'codex-app') return codexAppHelp();
   if (cmd === 'dollar-commands' || cmd === 'dollars' || cmd === '$') return dollarCommands(tail);
   if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
+  if (cmd === 'qa-loop' || cmd === 'qaloop') return qaLoop(sub, rest);
   if (cmd === 'context7') return context7(sub, rest);
   if (cmd === 'pipeline') return pipeline(sub, rest);
   if (cmd === 'guard') return guard(sub, rest);
@@ -99,6 +101,10 @@ Usage:
   sks codex-app
   sks dollar-commands [--json]
   sks dfix
+  sks qa-loop prepare "target"
+  sks qa-loop answer <mission-id|latest> <answers.json>
+  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N]
+  sks qa-loop status <mission-id|latest>
   sks context7 check|setup|tools|resolve|docs|evidence ...
   sks pipeline status|resume [--json]
   sks pipeline answer <mission-id|latest> <answers.json>
@@ -639,6 +645,7 @@ async function pipelineAnswer(root, args = []) {
   const route = ROUTES.find((candidate) => candidate.id === routeContext.route || candidate.command === routeContext.command)
     || routePrompt(routeContext.command || routeContext.route || '$SKS');
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.clarification.contract_sealed', route: route?.id || routeContext.route, hash: result.contract.sealed_hash });
+  if (route?.id === 'QALoop') await writeQaLoopArtifacts(dir, mission, result.contract);
   await setCurrent(root, {
     mission_id: id,
     route: route?.id || routeContext.route || 'SKS',
@@ -869,6 +876,7 @@ Useful prompts inside Codex App:
   $Answer 이 훅은 왜 이렇게 동작해?
   $SKS show me available workflows
   $Team agree on the plan, then implement with specialists
+  $QALoop run UI and API E2E against local dev
   $Ralph implement this with mandatory clarification
   $Research investigate this idea
   $AutoResearch improve this workflow with experiments.
@@ -934,6 +942,7 @@ Discovery:
 Common workflows:
   sks usage install
   sks usage team
+  sks usage qa-loop
   sks usage ralph
   sks usage research
   sks usage db
@@ -1018,6 +1027,33 @@ Generated Codex App support:
   .codex/agents/*.toml defines analysis_scout, team_consensus, implementation_worker, db_safety_reviewer, and qa_reviewer.
   .agents/skills/team/SKILL.md explains the orchestration protocol.
 `,
+    'qa-loop': `QA-Loop Workflow
+
+Prepare:
+  sks qa-loop prepare "QA this app"
+
+Answer generated slots:
+  cat .sneakoscope/missions/<MISSION_ID>/questions.md
+  cp .sneakoscope/missions/<MISSION_ID>/required-answers.schema.json answers.json
+  sks qa-loop answer <MISSION_ID> answers.json
+
+Run:
+  sks qa-loop run <MISSION_ID> --max-cycles 8
+  sks qa-loop status latest
+
+Inside Codex App:
+  $QALoop run UI and API E2E against local dev
+
+Safety:
+  UI E2E requires @Computer Use evidence or it must be reported as not verified.
+  Login credentials are test-only, runtime-only, and must not be saved to artifacts or TriWiki.
+  Non-local/deployed targets are read-only smoke by default; destructive removal scenarios are never allowed there.
+
+Artifacts:
+  qa-ledger.json
+  qa-report.md
+  qa-gate.json
+`,
     setup: `Setup Repair
 
 Initialize:
@@ -1090,6 +1126,7 @@ Use inside Codex App:
   $DFix 내용을 영어로 바꿔줘
   $SKS show me available workflows
   $Team agree on the plan, then implement with specialists
+  $QALoop run UI and API E2E against local dev
   $Ralph implement this with mandatory clarification
   $Research investigate this idea
   $AutoResearch improve this workflow with experiments
@@ -1596,6 +1633,156 @@ async function research(sub, args) {
   process.exitCode = 1;
 }
 
+async function qaLoop(sub, args) {
+  const known = new Set(['prepare', 'answer', 'run', 'status', 'help', '--help', '-h']);
+  const action = known.has(sub) ? sub : 'prepare';
+  const actionArgs = action === 'prepare' && sub && !known.has(sub) ? [sub, ...args] : args;
+  if (action === 'prepare') return qaLoopPrepare(actionArgs);
+  if (action === 'answer') return qaLoopAnswer(actionArgs);
+  if (action === 'run') return qaLoopRun(actionArgs);
+  if (action === 'status') return qaLoopStatus(actionArgs);
+  console.log(`SKS QA-Loop
+
+Usage:
+  sks qa-loop prepare "target"
+  sks qa-loop answer <mission-id|latest> <answers.json>
+  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N]
+  sks qa-loop status <mission-id|latest>
+
+Prompt route:
+  $QALoop run UI and API E2E against local dev
+`);
+}
+
+function qaRoute() {
+  return ROUTES.find((route) => route.id === 'QALoop') || routePrompt('$QALoop');
+}
+
+async function qaLoopPrepare(args) {
+  const root = await projectRoot();
+  if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
+  const prompt = promptOf(args);
+  if (!prompt) throw new Error('Missing QA target prompt.');
+  const { id, dir } = await createMission(root, { mode: 'qaloop', prompt });
+  const schema = buildQaLoopQuestionSchema(prompt);
+  const route = qaRoute();
+  await writeQuestions(dir, schema);
+  await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: 'QALoop', command: '$QALoop', mode: 'QALOOP', task: prompt, required_skills: route?.requiredSkills || [], context7_required: false, original_stop_gate: 'qa-gate.json', clarification_gate: true });
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.prepare.questions_created', slots: schema.slots.length });
+  await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QALoop', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_AWAITING_ANSWERS', questions_allowed: true, implementation_allowed: false, clarification_required: true, ambiguity_gate_required: true, stop_gate: 'clarification-gate', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
+  console.log(`QA-Loop mission created: ${id}`);
+  console.log('QA-Loop is locked until all required answers are supplied.');
+  console.log(`Questions: ${path.relative(root, path.join(dir, 'questions.md'))}`);
+  console.log(`Answer schema: ${path.relative(root, path.join(dir, 'required-answers.schema.json'))}`);
+  console.log('\nRequired questions:');
+  console.log(formatRalphQuestionsForCli(schema));
+}
+
+async function qaLoopAnswer(args) {
+  const root = await projectRoot();
+  const [missionArg, answerFile] = args;
+  const id = await resolveMissionId(root, missionArg);
+  if (!id || !answerFile) throw new Error('Usage: sks qa-loop answer <mission-id|latest> <answers.json>');
+  const { dir, mission } = await loadMission(root, id);
+  const answers = await readJson(path.resolve(answerFile));
+  await writeJsonAtomic(path.join(dir, 'answers.json'), answers);
+  const result = await sealContract(dir, mission);
+  if (!result.ok) {
+    console.error('Answer validation failed. QA-Loop remains locked.');
+    console.error(JSON.stringify(result.validation, null, 2));
+    process.exitCode = 2;
+    return;
+  }
+  const artifactResult = await writeQaLoopArtifacts(dir, mission, result.contract);
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.contract.sealed', hash: result.contract.sealed_hash, checklist_count: artifactResult.checklist_count });
+  await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QALoop', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED', questions_allowed: false, implementation_allowed: true, clarification_required: false, clarification_passed: true, ambiguity_gate_passed: true, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
+  console.log(`QA-Loop contract sealed for ${id}`);
+  console.log(`Hash: ${result.contract.sealed_hash}`);
+  console.log(`Checklist: ${artifactResult.checklist_count} cases`);
+  console.log(`Report: ${path.relative(root, path.join(dir, 'qa-report.md'))}`);
+  console.log(`Run: sks qa-loop run ${id} --max-cycles ${answers.MAX_QA_CYCLES || 8}`);
+}
+
+async function qaLoopRun(args) {
+  const root = await projectRoot();
+  const id = await resolveMissionId(root, args[0]);
+  if (!id) throw new Error('Usage: sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N]');
+  const { dir, mission } = await loadMission(root, id);
+  const contractPath = path.join(dir, 'decision-contract.json');
+  if (!(await exists(contractPath))) throw new Error('QA-Loop cannot run: decision-contract.json is missing.');
+  const contract = await readJson(contractPath);
+  if (!(await exists(path.join(dir, 'qa-ledger.json')))) await writeQaLoopArtifacts(dir, mission, contract);
+  const safetyScan = await scanDbSafety(root);
+  if (!safetyScan.ok) {
+    console.error('QA-Loop cannot run: SKS safety scan found unsafe project data-tool configuration.');
+    console.error(JSON.stringify(safetyScan.findings, null, 2));
+    process.exitCode = 2;
+    return;
+  }
+  const fallbackCycles = Number.parseInt(contract.answers?.MAX_QA_CYCLES, 10) || 8;
+  const maxCycles = readMaxCycles(args, fallbackCycles);
+  const mock = flag(args, '--mock');
+  await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QALoop', mode: 'QALOOP', phase: 'QALOOP_RUNNING_NO_QUESTIONS', questions_allowed: false, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.run.started', maxCycles, mock });
+  if (mock) {
+    const gate = await writeMockQaResult(dir, mission, contract);
+    await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: gate.passed ? 'QALOOP_DONE' : 'QALOOP_PAUSED', questions_allowed: true });
+    console.log(`Mock QA-Loop done: ${id}`);
+    console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
+    return;
+  }
+  const codex = await getCodexInfo();
+  if (!codex.bin) {
+    console.error('Codex CLI not found. Running mock QA-Loop instead.');
+    const gate = await writeMockQaResult(dir, mission, contract);
+    await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: gate.passed ? 'QALOOP_DONE' : 'QALOOP_PAUSED', questions_allowed: true });
+    console.log(`Mock QA-Loop done: ${id}`);
+    return;
+  }
+  let last = '';
+  for (let cycle = 1; cycle <= maxCycles; cycle++) {
+    const cycleDir = path.join(dir, 'qa-loop', `cycle-${cycle}`);
+    const outputFile = path.join(cycleDir, 'final.md');
+    const prompt = buildQaLoopPrompt({ id, mission, contract, cycle, previous: last });
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.cycle.start', cycle });
+    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-logic-high', logDir: cycleDir });
+    await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
+    last = await safeReadText(outputFile, result.stdout || result.stderr || '');
+    if (containsUserQuestion(last)) {
+      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.guard.question_blocked', cycle });
+      last = `${last}\n\n${noQuestionContinuationReason()}`;
+      continue;
+    }
+    const gate = await evaluateQaGate(dir);
+    if (gate.passed) {
+      await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_DONE', questions_allowed: true });
+      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.done', cycle });
+      console.log(`QA-Loop done: ${id}`);
+      return;
+    }
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.cycle.continue', cycle, reasons: gate.reasons });
+  }
+  await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_PAUSED_MAX_CYCLES', questions_allowed: true });
+  console.log(`QA-Loop paused after max cycles: ${id}`);
+}
+
+async function qaLoopStatus(args) {
+  const root = await projectRoot();
+  const id = await resolveMissionId(root, args[0]);
+  if (!id) throw new Error('Usage: sks qa-loop status <mission-id|latest>');
+  const { dir, mission } = await loadMission(root, id);
+  const state = await readJson(stateFile(root), {});
+  const status = await qaStatus(dir);
+  if (flag(args, '--json')) return console.log(JSON.stringify({ mission, state, qa: status }, null, 2));
+  console.log('SKS QA-Loop Status\n');
+  console.log(`Mission:   ${id}`);
+  console.log(`Phase:     ${state.phase || mission.phase}`);
+  console.log(`Checklist: ${status.checklist_count ?? 'none'}`);
+  console.log(`Report:    ${status.report_written ? 'present' : 'missing'}`);
+  console.log(`Gate:      ${status.gate?.passed ? 'passed' : 'not passed'}`);
+  if (status.gate?.reasons?.length) console.log(`Reasons:   ${status.gate.reasons.join(', ')}`);
+}
+
 async function researchPrepare(args) {
   const root = await projectRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
@@ -1997,10 +2184,12 @@ async function selftest() {
   if (new Set(DOLLAR_COMMANDS.map((c) => c.command)).size !== DOLLAR_COMMANDS.length) throw new Error('selftest failed: duplicate dollar commands');
   if (!DOLLAR_COMMAND_ALIASES.some((alias) => alias.canonical === '$Team' && alias.app_skill === '$agent-team')) throw new Error('selftest failed: $Team fallback picker alias missing');
   if (!DOLLAR_COMMAND_ALIASES.some((alias) => alias.canonical === '$Wiki' && alias.app_skill === '$wiki-refresh')) throw new Error('selftest failed: $WikiRefresh picker alias missing');
+  if (!DOLLAR_COMMAND_ALIASES.some((alias) => alias.canonical === '$QALoop' && alias.app_skill === '$qa-loop')) throw new Error('selftest failed: $QALoop picker alias missing');
   if (routePrompt('$agent-team run specialists')?.id !== 'Team') throw new Error('selftest failed: $agent-team did not route to Team');
+  if (routePrompt('$QALoop run UI E2E')?.id !== 'QALoop' || routePrompt('$QA-Loop deployed smoke')?.id !== 'QALoop') throw new Error('selftest failed: $QALoop did not route to QA-Loop');
   if (routePrompt('$WikiRefresh 갱신')?.id !== 'Wiki') throw new Error('selftest failed: $WikiRefresh did not route to Wiki');
   if (routePrompt('위키 갱신해줘')?.id !== 'Wiki') throw new Error('selftest failed: wiki refresh text did not route to Wiki');
-  if (!COMMAND_CATALOG.some((c) => c.name === 'context7') || !COMMAND_CATALOG.some((c) => c.name === 'pipeline')) throw new Error('selftest failed: context7/pipeline commands missing from catalog');
+  if (!COMMAND_CATALOG.some((c) => c.name === 'context7') || !COMMAND_CATALOG.some((c) => c.name === 'pipeline') || !COMMAND_CATALOG.some((c) => c.name === 'qa-loop')) throw new Error('selftest failed: context7/pipeline/qa-loop commands missing from catalog');
   const registryDollarCommands = DOLLAR_COMMANDS.map((c) => c.command);
   const manifest = await readJson(path.join(tmp, '.sneakoscope', 'manifest.json'));
   const policy = await readJson(path.join(tmp, '.sneakoscope', 'policy.json'));
@@ -2068,6 +2257,29 @@ async function selftest() {
   const answeredTeamState = await readJson(stateFile(hookTeamTmp), {});
   if (answeredTeamState.phase !== 'TEAM_CLARIFICATION_CONTRACT_SEALED' || !answeredTeamState.ambiguity_gate_passed || answeredTeamState.implementation_allowed !== true) throw new Error('selftest failed: pipeline answer did not pass Team ambiguity gate');
   if (!(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'decision-contract.json')))) throw new Error('selftest failed: pipeline answer did not seal decision contract');
+  const hookQaTmp = tmpdir();
+  await initProject(hookQaTmp, {});
+  const hookQaPayload = JSON.stringify({ cwd: hookQaTmp, prompt: '$QALoop run UI and API E2E against local dev' });
+  const hookQaResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookQaTmp, input: hookQaPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookQaResult.code !== 0) throw new Error(`selftest failed: $QALoop hook exited ${hookQaResult.code}: ${hookQaResult.stderr}`);
+  const hookQaJson = JSON.parse(hookQaResult.stdout);
+  const hookQaContext = hookQaJson.hookSpecificOutput?.additionalContext || '';
+  if (!hookQaContext.includes('MANDATORY ambiguity-removal gate activated') || !hookQaContext.includes('QA_SCOPE') || !hookQaContext.includes('UI_COMPUTER_USE_ACK')) throw new Error('selftest failed: $QALoop hook did not provide QA-specific questions');
+  const hookQaState = await readJson(stateFile(hookQaTmp), {});
+  if (hookQaState.phase !== 'QALOOP_CLARIFICATION_AWAITING_ANSWERS' || hookQaState.implementation_allowed !== false) throw new Error('selftest failed: $QALoop hook did not lock execution behind ambiguity gate');
+  const hookQaSchema = await readJson(path.join(missionDir(hookQaTmp, hookQaState.mission_id), 'required-answers.schema.json'));
+  const hookQaAnswers = {};
+  for (const s of hookQaSchema.slots) hookQaAnswers[s.id] = s.options ? (s.type === 'array' ? [s.options[0]] : s.options[0]) : (s.type.includes('array') ? ['selftest'] : 'selftest');
+  const hookQaAnswersPath = path.join(hookQaTmp, 'qa-answers.json');
+  await writeJsonAtomic(hookQaAnswersPath, hookQaAnswers);
+  const qaAnswerResult = await runProcess(process.execPath, [hookBin, 'pipeline', 'answer', 'latest', hookQaAnswersPath], { cwd: hookQaTmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (qaAnswerResult.code !== 0) throw new Error(`selftest failed: QA pipeline answer exited ${qaAnswerResult.code}: ${qaAnswerResult.stderr}`);
+  const qaMissionDir = missionDir(hookQaTmp, hookQaState.mission_id);
+  if (!(await exists(path.join(qaMissionDir, 'qa-report.md'))) || !(await exists(path.join(qaMissionDir, 'qa-ledger.json'))) || !(await exists(path.join(qaMissionDir, 'qa-gate.json')))) throw new Error('selftest failed: QA artifacts missing after answer');
+  const qaRunResult = await runProcess(process.execPath, [hookBin, 'qa-loop', 'run', 'latest', '--mock'], { cwd: hookQaTmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (qaRunResult.code !== 0) throw new Error(`selftest failed: qa-loop mock run exited ${qaRunResult.code}: ${qaRunResult.stderr}`);
+  const qaGate = await readJson(path.join(qaMissionDir, 'qa-gate.evaluated.json'));
+  if (!qaGate.passed) throw new Error('selftest failed: qa-loop mock gate did not pass');
   const hookDfixTmp = tmpdir();
   await initProject(hookDfixTmp, {});
   const hookDfixPayload = JSON.stringify({ cwd: hookDfixTmp, prompt: '$DFix 버튼 라벨 바꿔줘' });
@@ -2241,6 +2453,7 @@ async function selftest() {
   if (!evalReport.candidate.wiki?.valid) throw new Error('selftest failed: wiki coordinate index invalid in eval');
   const coord = rgbaToWikiCoord({ r: 12, g: 34, b: 56, a: 255 });
   if (coord.schema !== 'sks.wiki-coordinate.v1' || coord.xyzw.length !== 4) throw new Error('selftest failed: RGBA wiki coordinate conversion');
+  await writeTextAtomic(path.join(tmp, '.sneakoscope', 'memory', 'q2_facts', 'selftest.md'), '- claim: Selftest memory claim must be selected before lower-weight mission notes. | id: selftest-memory-priority | source: src/cli/main.mjs | risk: high | status: supported | evidence_count: 3 | required_weight: 1.0 | trust_score: 0.9\n');
   const wikiPack = contextCapsule({
     mission: { id: 'selftest-wiki', coord: { rgba: { r: 48, g: 132, b: 212, a: 240 } } },
     role: 'verifier',
@@ -2255,6 +2468,7 @@ async function selftest() {
   if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => Array.isArray(anchor) ? Number.isFinite(Number(anchor[9])) : Number.isFinite(Number(anchor.trust_score)))) throw new Error('selftest failed: wiki anchor trust score missing');
   if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => (Array.isArray(anchor) ? anchor[0] : anchor.id) === 'wiki-trig')) throw new Error('selftest failed: wiki trig anchor missing');
   if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => String(Array.isArray(anchor) ? anchor[0] : anchor.id).startsWith('team-analysis-'))) throw new Error('selftest failed: team analysis claim missing from TriWiki pack');
+  if (wikiPack.claims?.[0]?.id !== 'selftest-memory-priority') throw new Error('selftest failed: memory required_weight did not take priority in TriWiki pack');
   const dryRunPack = await writeWikiContextPack(tmp, ['--max-anchors', '4'], { dryRun: true });
   if (await exists(dryRunPack.file)) throw new Error('selftest failed: wiki refresh dry-run wrote context pack');
   await ensureDir(path.dirname(dryRunPack.file));
@@ -2498,8 +2712,134 @@ async function projectWikiClaims(root) {
       evidence_count: await exists(path.join(root, file)) ? 1 : 0
     });
   }
+  out.push(...(await memoryWikiClaims(root)));
   out.push(...(await teamAnalysisWikiClaims(root)));
   return out;
+}
+
+async function memoryWikiClaims(root) {
+  const base = path.join(root, '.sneakoscope', 'memory');
+  const files = await listMemoryClaimFiles(base);
+  const claims = [];
+  for (const file of files.slice(0, 80)) {
+    const relFile = path.relative(root, file);
+    let text = '';
+    try {
+      text = await fsp.readFile(file, 'utf8');
+    } catch {
+      continue;
+    }
+    if (!text.trim()) continue;
+    const rows = parseMemoryClaimRows(text, relFile).slice(0, 24);
+    let index = 0;
+    for (const row of rows) {
+      const source = row.source || relFile;
+      const sourceExists = source && (await exists(path.join(root, source)));
+      index += 1;
+      claims.push({
+        id: row.id || `memory-${slugifyClaimId(relFile)}-${index}`,
+        text: row.text,
+        authority: row.authority || 'wiki',
+        risk: row.risk || 'high',
+        status: row.status || (sourceExists || source === relFile ? 'supported' : 'unknown'),
+        freshness: row.freshness || 'fresh',
+        source,
+        file: source,
+        evidence_count: row.evidence_count ?? (sourceExists ? 2 : 1),
+        required_weight: row.required_weight ?? 0.85,
+        trust_score: row.trust_score
+      });
+    }
+  }
+  return claims;
+}
+
+async function listMemoryClaimFiles(base) {
+  const out = [];
+  async function walk(dir, depth = 0) {
+    if (depth > 3) return;
+    let entries = [];
+    try {
+      entries = await fsp.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const p = path.join(dir, entry.name);
+      if (entry.isDirectory()) await walk(p, depth + 1);
+      else if (/\.(md|txt|json)$/i.test(entry.name)) out.push(p);
+    }
+  }
+  await walk(base);
+  return out;
+}
+
+function parseMemoryClaimRows(text, relFile) {
+  if (/\.json$/i.test(relFile)) {
+    try {
+      const parsed = JSON.parse(text);
+      const rows = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.claims) ? parsed.claims : []);
+      return rows.map((row) => normalizeMemoryClaimRow(row, relFile)).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+  return text.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+    .map((line) => normalizeMemoryClaimRow(line.replace(/^[-*]\s*/, ''), relFile))
+    .filter(Boolean);
+}
+
+function normalizeMemoryClaimRow(row, relFile) {
+  if (!row) return null;
+  if (typeof row === 'object') {
+    const text = String(row.text || row.claim || '').trim();
+    if (!text) return null;
+    return {
+      id: row.id ? String(row.id) : null,
+      text: text.slice(0, 320),
+      source: row.source || row.file || relFile,
+      authority: row.authority,
+      risk: row.risk,
+      status: row.status || row.confidence,
+      freshness: row.freshness,
+      evidence_count: Number.isFinite(Number(row.evidence_count)) ? Number(row.evidence_count) : undefined,
+      required_weight: Number.isFinite(Number(row.required_weight)) ? Number(row.required_weight) : undefined,
+      trust_score: Number.isFinite(Number(row.trust_score)) ? Number(row.trust_score) : undefined
+    };
+  }
+  const clean = String(row || '').trim();
+  if (!/\bclaim\s*:/i.test(clean)) return null;
+  const source = extractClaimField(clean, 'source') || extractClaimField(clean, 'file') || extractClaimField(clean, 'path') || relFile;
+  const status = extractClaimField(clean, 'status') || extractClaimField(clean, 'confidence');
+  return {
+    id: extractClaimField(clean, 'id'),
+    text: clean.slice(0, 320),
+    source,
+    authority: extractClaimField(clean, 'authority') || 'wiki',
+    risk: extractClaimField(clean, 'risk') || 'high',
+    status,
+    freshness: extractClaimField(clean, 'freshness') || 'fresh',
+    evidence_count: parseOptionalNumber(extractClaimField(clean, 'evidence_count')),
+    required_weight: parseOptionalNumber(extractClaimField(clean, 'required_weight')),
+    trust_score: parseOptionalNumber(extractClaimField(clean, 'trust_score'))
+  };
+}
+
+function extractClaimField(text, key) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = String(text || '').match(new RegExp(`\\b${escaped}\\s*[:=]\\s*\\\`?([^\\\`|,;]+)`, 'i'));
+  return match ? match[1].trim().replace(/[.;)]$/, '') : null;
+}
+
+function parseOptionalNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function slugifyClaimId(value) {
+  return String(value || 'claim').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'claim';
 }
 
 async function teamAnalysisWikiClaims(root) {
