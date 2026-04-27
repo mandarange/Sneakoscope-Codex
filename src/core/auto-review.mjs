@@ -2,7 +2,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { ensureDir, exists, readText, writeTextAtomic } from './fsx.mjs';
 
-export const AUTO_REVIEW_REVIEWER = 'auto_review';
+export const AUTO_REVIEW_REVIEWER = 'guardian_subagent';
+export const LEGACY_AUTO_REVIEW_REVIEWER = 'auto_review';
 export const AUTO_REVIEW_PROFILE = 'sks-auto-review';
 export const AUTO_REVIEW_HIGH_PROFILE = 'sks-auto-review-high';
 
@@ -21,13 +22,17 @@ export function autoReviewProfileName(opts = {}) {
 export async function autoReviewStatus(opts = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
   const text = await readText(configPath, '');
+  const approvalsReviewer = readTomlString(text, 'approvals_reviewer');
+  const profileReviewer = readTableString(text, `profiles.${AUTO_REVIEW_PROFILE}`, 'approvals_reviewer');
+  const highProfileReviewer = readTableString(text, `profiles.${AUTO_REVIEW_HIGH_PROFILE}`, 'approvals_reviewer');
   return {
     config_path: configPath,
     exists: await exists(configPath),
-    approvals_reviewer: readTomlString(text, 'approvals_reviewer'),
-    enabled: readTomlString(text, 'approvals_reviewer') === AUTO_REVIEW_REVIEWER,
-    profile: tableHasString(text, `profiles.${AUTO_REVIEW_PROFILE}`, 'approvals_reviewer', AUTO_REVIEW_REVIEWER),
-    high_profile: tableHasString(text, `profiles.${AUTO_REVIEW_HIGH_PROFILE}`, 'approvals_reviewer', AUTO_REVIEW_REVIEWER),
+    approvals_reviewer: approvalsReviewer,
+    enabled: approvalsReviewer === AUTO_REVIEW_REVIEWER,
+    profile: profileReviewer === AUTO_REVIEW_REVIEWER,
+    high_profile: highProfileReviewer === AUTO_REVIEW_REVIEWER,
+    legacy_invalid: [approvalsReviewer, profileReviewer, highProfileReviewer].includes(LEGACY_AUTO_REVIEW_REVIEWER),
     policy: readTableString(text, 'auto_review', 'policy') || ''
   };
 }
@@ -55,6 +60,8 @@ export async function disableAutoReview(opts = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
   const current = await readText(configPath, '');
   let next = upsertTopLevelString(current, 'approvals_reviewer', 'user');
+  if (tableBody(next, `profiles.${AUTO_REVIEW_PROFILE}`)) next = upsertProfile(next, AUTO_REVIEW_PROFILE, 'medium', 'user');
+  if (tableBody(next, `profiles.${AUTO_REVIEW_HIGH_PROFILE}`)) next = upsertProfile(next, AUTO_REVIEW_HIGH_PROFILE, 'high', 'user');
   if (!next.endsWith('\n')) next += '\n';
   await writeTextAtomic(configPath, next);
   return autoReviewStatus({ configPath });
@@ -73,6 +80,9 @@ export function autoReviewSummary(status = {}) {
   if (!status.enabled) {
     lines.push('', 'Enable with: sks auto-review enable');
     lines.push('Launch high mode with: sks --Auto-review --high');
+  }
+  if (status.legacy_invalid) {
+    lines.push('', 'Legacy invalid reviewer value found: run sks auto-review enable or sks auto-review disable to rewrite Codex config.');
   }
   return lines.join('\n');
 }
@@ -123,12 +133,12 @@ function upsertTopLevelString(text, key, value) {
   return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
-function upsertProfile(text, profile, effort) {
+function upsertProfile(text, profile, effort, reviewer = AUTO_REVIEW_REVIEWER) {
   const block = [
     `[profiles.${profile}]`,
     'model = "gpt-5.5"',
     'approval_policy = "on-request"',
-    'approvals_reviewer = "auto_review"',
+    `approvals_reviewer = "${reviewer}"`,
     'sandbox_mode = "workspace-write"',
     `model_reasoning_effort = "${effort}"`
   ].join('\n');
