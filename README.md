@@ -45,7 +45,7 @@ Prompt routes use one canonical name each: `$DFix`, `$Answer`, `$SKS`, `$Team`, 
 
 Run `sks setup` once. SKS creates hooks/skills plus `.sneakoscope/` mission/wiki/policy state. Hooks inject context/status or block a turn; Team status is mirrored to `team-live.md`, `team-transcript.jsonl`, and `sks team watch latest`.
 
-Codex CLI parity is gated on Codex App because App-provisioned MCP/plugin tools are shared with CLI sessions. `sks` opens the tmux runtime after `sks codex-app check` and `sks tmux check` pass. `sks --Auto-review --high` enables Codex `auto_review` approval review and launches the ㅅㅋㅅ tmux runtime with a high-reasoning profile. QA-LOOP prioritizes Browser Use for local browser targets and Computer Use for desktop/browser evidence.
+Codex CLI parity is gated on Codex App because App-provisioned MCP/plugin tools are shared with CLI sessions. `sks` opens the tmux runtime after `sks codex-app check` and `sks tmux check` pass. `sks --Auto-review --high` enables the Codex `guardian_subagent` approvals reviewer and launches the ㅅㅋㅅ tmux runtime with a high-reasoning profile. QA-LOOP prioritizes Browser Use for local browser targets and Computer Use for desktop/browser evidence.
 
 ## TriWiki
 

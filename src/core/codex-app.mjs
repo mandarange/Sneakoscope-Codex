@@ -111,17 +111,21 @@ export async function codexAppIntegrationStatus(opts = {}) {
       computer_use_cache: computerUsePath,
       browser_use_cache: browserUsePath
     },
-    guidance: codexAppGuidance({ appInstalled, codex, computerUseReady, browserUseReady })
+    guidance: codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady })
   };
 }
 
-export function codexAppGuidance({ appInstalled, codex, computerUseReady, browserUseReady }) {
+export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady }) {
   const lines = [];
   if (!appInstalled) {
     lines.push('Install and open Codex App first. SKS CLI blocks tmux launch until Codex App is present because first-party MCP/plugin tools are App-provisioned.');
     lines.push(`Docs: ${CODEX_APP_DOCS_URL}`);
   }
   if (!codex?.bin) lines.push('Install Codex CLI too: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
+  if (mcpList?.checked && !mcpList.ok) {
+    lines.push(`Codex MCP/config check failed: ${summarizeCodexMcpError(mcpList.stderr || mcpList.stdout)}`);
+    lines.push('Verify with: codex mcp list');
+  }
   if (appInstalled && (!computerUseReady || !browserUseReady)) {
     lines.push('Open Codex App settings, enable recommended MCP/plugin tools, then restart Codex CLI sessions.');
     lines.push('Required for SKS QA-LOOP priority order: Browser Use for local browser targets, Computer Use for desktop/app/browser evidence.');
@@ -145,4 +149,16 @@ export function formatCodexAppStatus(status, { includeRaw = false } = {}) {
   ];
   if (includeRaw && status.mcp.stdout) lines.push('', status.mcp.stdout.trim());
   return lines.join('\n');
+}
+
+function summarizeCodexMcpError(text) {
+  const cleanLines = String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith('WARNING: proceeding'));
+  const variantLine = cleanLines.find((line) => line.includes('unknown variant'));
+  const errorLine = cleanLines.find((line) => line.startsWith('Error:'));
+  if (errorLine && variantLine && errorLine !== variantLine) return `${errorLine}; ${variantLine}`;
+  return variantLine || errorLine || cleanLines[0] || 'codex mcp list failed';
 }
