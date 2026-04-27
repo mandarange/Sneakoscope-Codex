@@ -1149,7 +1149,7 @@ Inspect or disable:
   sks auto-review disable
 
 Effect:
-  Writes approvals_reviewer = "auto_review" to Codex config and creates sks-auto-review / sks-auto-review-high profiles.
+  Writes approvals_reviewer = "guardian_subagent" to Codex config and creates sks-auto-review / sks-auto-review-high profiles.
   Automatic review applies only to approval prompts that are already interactive under approval_policy = "on-request" or granular approval policies.
 `,
     team: `Team Workflow
@@ -2517,9 +2517,11 @@ async function selftest() {
   const autoReviewEnabled = await enableAutoReview({ env: autoReviewEnv, high: true });
   if (!autoReviewEnabled.enabled || autoReviewEnabled.profile_name !== 'sks-auto-review-high' || !autoReviewEnabled.high_profile) throw new Error('selftest failed: auto-review high profile was not enabled');
   const autoReviewConfig = await safeReadText(path.join(autoReviewHome, '.codex', 'config.toml'));
-  if (!autoReviewConfig.includes('approvals_reviewer = "auto_review"') || !autoReviewConfig.includes('[profiles.sks-auto-review-high]')) throw new Error('selftest failed: auto-review config not written');
+  if (!autoReviewConfig.includes('approvals_reviewer = "guardian_subagent"') || autoReviewConfig.includes('approvals_reviewer = "auto_review"') || !autoReviewConfig.includes('[profiles.sks-auto-review-high]')) throw new Error('selftest failed: auto-review config not written');
   const autoReviewDisabled = await disableAutoReview({ env: autoReviewEnv });
   if (autoReviewDisabled.enabled || autoReviewDisabled.approvals_reviewer !== 'user') throw new Error('selftest failed: auto-review disable did not restore user reviewer');
+  const autoReviewDisabledConfig = await safeReadText(path.join(autoReviewHome, '.codex', 'config.toml'));
+  if (autoReviewDisabledConfig.includes('approvals_reviewer = "auto_review"')) throw new Error('selftest failed: auto-review disable left legacy invalid reviewer values');
   const analysisAgentExists = await exists(path.join(tmp, '.codex', 'agents', 'analysis-scout.toml'));
   if (!analysisAgentExists) throw new Error('selftest failed: analysis scout agent not installed');
   const teamAgentExists = await exists(path.join(tmp, '.codex', 'agents', 'team-consensus.toml'));
