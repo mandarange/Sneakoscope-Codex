@@ -25,7 +25,7 @@ import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, defaultEvaluationSce
 import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, looksLikeAnswerOnlyRequest, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence } from '../core/pipeline.mjs';
 import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail } from '../core/team-live.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
@@ -749,6 +749,7 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
   if (route?.id !== 'Team') return {};
   const spec = parseTeamSpecText(routeContext.task || mission.prompt || '');
   const prompt = spec.prompt || routeContext.task || mission.prompt || '';
+  const fromChatImgRequired = hasFromChatImgSignal(prompt);
   const plan = buildTeamPlan(id, prompt, {
     agentSessions: spec.agentSessions,
     roleCounts: spec.roleCounts,
@@ -773,6 +774,7 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
     integration_evidence: false,
     session_cleanup: false,
     context7_evidence: false,
+    ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}),
     contract_hash: contract.sealed_hash || null
   });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), {
@@ -790,7 +792,8 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
       role_counts: spec.roleCounts,
       team_roster_confirmed: true,
       team_plan_ready: true,
-      team_live_ready: true
+      team_live_ready: true,
+      from_chat_img_required: fromChatImgRequired
     }
   };
 }
@@ -2079,12 +2082,35 @@ async function ralphStatus(args) {
 }
 
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
-function readMaxCycles(args, fallback) { const i = args.indexOf('--max-cycles'); return i >= 0 && args[i + 1] ? Number(args[i + 1]) : fallback; }
+function readMaxCycles(args, fallback) {
+  const i = args.indexOf('--max-cycles');
+  const raw = i >= 0 && args[i + 1] ? Number(args[i + 1]) : Number(fallback);
+  if (!Number.isFinite(raw)) return Math.max(1, Number.parseInt(fallback, 10) || 1);
+  return Math.max(1, Math.min(50, Math.floor(raw)));
+}
 
 async function selftest() {
   const tmp = tmpdir();
   process.chdir(tmp);
   await initProject(tmp, {});
+  if (readMaxCycles(['--max-cycles', 'Infinity'], 8) !== 8) throw new Error('selftest failed: non-finite max cycles not sanitized');
+  if (readMaxCycles(['--max-cycles', '0'], 8) !== 1) throw new Error('selftest failed: zero max cycles not bounded');
+  const loopMission = await createMission(tmp, { mode: 'team', prompt: 'compliance loop guard selftest' });
+  const loopState = { mission_id: loopMission.id, mode: 'TEAM', route_command: '$Team', stop_gate: 'team-gate.json' };
+  await writeJsonAtomic(path.join(loopMission.dir, 'team-gate.json'), { passed: false });
+  for (let i = 0; i < 2; i++) {
+    const stop = await evaluateStop(tmp, loopState, { last_assistant_message: 'done' });
+    if (stop?.decision !== 'block') throw new Error('selftest failed: compliance loop guard blocked too early');
+  }
+  const trippedStop = await evaluateStop(tmp, loopState, { last_assistant_message: 'done' });
+  if (trippedStop) throw new Error('selftest failed: compliance loop guard did not terminally trip');
+  const loopBlocker = await readJson(path.join(loopMission.dir, 'hard-blocker.json'), null);
+  if (loopBlocker?.reason !== 'compliance_loop_guard_tripped') throw new Error('selftest failed: compliance loop guard did not write hard blocker');
+  await writeJsonAtomic(path.join(loopMission.dir, 'team-roster.json'), { schema_version: 1, mission_id: loopMission.id, confirmed: true });
+  await writeJsonAtomic(path.join(loopMission.dir, 'team-session-cleanup.json'), { schema_version: 1, passed: true, all_sessions_closed: true, outstanding_sessions: 0, live_transcript_finalized: true });
+  await writeJsonAtomic(path.join(loopMission.dir, 'team-gate.json'), { passed: true, team_roster_confirmed: true, analysis_artifact: true, triwiki_refreshed: true, triwiki_validated: true, consensus_artifact: true, implementation_team_fresh: true, review_artifact: true, integration_evidence: true, session_cleanup: true });
+  const afterGateFixStop = await evaluateStop(tmp, loopState, { last_assistant_message: 'done' });
+  if (afterGateFixStop?.decision !== 'block' || !String(afterGateFixStop.reason || '').includes('reflection')) throw new Error('selftest failed: hard blocker masked later gate progress');
   const guardStatus = await harnessGuardStatus(tmp);
   if (!guardStatus.ok || !guardStatus.locked || guardStatus.source_exception) throw new Error('selftest failed: harness guard not locked in installed project');
   const repairTmp = tmpdir();
@@ -2274,7 +2300,7 @@ async function selftest() {
   if (!promptPipelineText.includes('design.md') || !promptPipelineText.includes('imagegen')) throw new Error('selftest failed: prompt pipeline missing design/image asset routing');
   if (!promptPipelineText.includes('From-Chat-IMG') || !promptPipelineText.includes('Do not assume ordinary image prompts are chat captures')) throw new Error('selftest failed: prompt pipeline missing explicit From-Chat-IMG gating');
   const fromChatImgSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'from-chat-img', 'SKILL.md'));
-  if (!fromChatImgSkillText.includes('normal Team pipeline') || !fromChatImgSkillText.includes('Computer Use/browser visual inspection')) throw new Error('selftest failed: from-chat-img skill missing Team/browser inspection guidance');
+  if (!fromChatImgSkillText.includes('normal Team pipeline') || !fromChatImgSkillText.includes('Computer Use/browser visual inspection') || !fromChatImgSkillText.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT)) throw new Error('selftest failed: from-chat-img skill missing Team/browser inspection checklist guidance');
   for (const supportSkill of ['reasoning-router', 'pipeline-runner', 'context7-docs', 'seo-geo-optimizer', 'reflection', 'design-system-builder', 'design-ui-editor', 'imagegen']) {
     if (!(await exists(path.join(tmp, '.agents', 'skills', supportSkill, 'SKILL.md')))) throw new Error(`selftest failed: ${supportSkill} skill not installed`);
   }
@@ -2335,7 +2361,8 @@ async function selftest() {
   if (!hookJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY $Ralph route activated')) throw new Error('selftest failed: $Ralph hook did not activate Ralph prepare pipeline');
   if (hookJson.hookSpecificOutput?.hookEventName !== 'UserPromptSubmit' || !hookJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY $Ralph route activated')) throw new Error('selftest failed: $Ralph hook did not emit official UserPromptSubmit additionalContext');
   if (!String(hookJson.systemMessage || '').includes('Ralph clarification gate')) throw new Error('selftest failed: $Ralph hook missing visible status message');
-  if (!hookJson.hookSpecificOutput?.additionalContext?.includes('GOAL_PRECISE')) throw new Error('selftest failed: $Ralph hook did not provide clarification questions');
+  if (hookJson.hookSpecificOutput?.additionalContext?.includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Ralph goal template');
+  if (!hookJson.hookSpecificOutput?.additionalContext?.includes('Required questions')) throw new Error('selftest failed: missing Ralph dynamic questions');
   const hookState = await readJson(stateFile(hookRalphTmp), {});
   if (hookState.phase !== 'RALPH_AWAITING_ANSWERS') throw new Error('selftest failed: $Ralph hook did not set awaiting-answers state');
   if (!(await exists(path.join(missionDir(hookRalphTmp, hookState.mission_id), 'questions.md')))) throw new Error('selftest failed: $Ralph hook did not write questions.md');
@@ -2343,7 +2370,8 @@ async function selftest() {
   if (stopResult.code !== 0) throw new Error(`selftest failed: stop hook exited ${stopResult.code}: ${stopResult.stderr}`);
   const stopJson = JSON.parse(stopResult.stdout);
   if (stopJson.decision !== 'block' || !String(stopJson.reason || '').includes('mandatory clarification')) throw new Error('selftest failed: Stop hook did not block missing Ralph questions');
-  if (!String(stopJson.reason || '').includes('Required questions') || !String(stopJson.reason || '').includes('GOAL_PRECISE')) throw new Error('selftest failed: Stop hook did not reprint Ralph questions');
+  if (!String(stopJson.reason || '').includes('Required questions')) throw new Error('selftest failed: Stop hook did not reprint Ralph questions');
+  if (String(stopJson.reason || '').includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Ralph stop goal');
   if (!String(stopJson.reason || '').includes('sks ralph answer')) throw new Error('selftest failed: Stop hook did not provide Ralph answer command');
   if (!String(stopJson.systemMessage || '').includes('clarification questions')) throw new Error('selftest failed: Stop hook missing clarification status message');
   const hookKoreanSksTmp = tmpdir();
@@ -2353,11 +2381,11 @@ async function selftest() {
   if (hookKoreanSksResult.code !== 0) throw new Error(`selftest failed: Korean SKS hook exited ${hookKoreanSksResult.code}: ${hookKoreanSksResult.stderr}`);
   const hookKoreanSksJson = JSON.parse(hookKoreanSksResult.stdout);
   const hookKoreanSksContext = hookKoreanSksJson.hookSpecificOutput?.additionalContext || '';
-  if (!hookKoreanSksContext.includes('MANDATORY ambiguity-removal gate activated') || !hookKoreanSksContext.includes('GOAL_PRECISE')) throw new Error('selftest failed: Korean implementation prompt did not trigger ambiguity gate');
+  if (!hookKoreanSksContext.includes('Ambiguity gate auto-sealed') || hookKoreanSksContext.includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: Korean prompt did not auto-infer');
   if (!hookKoreanSksContext.includes('Route: $Team')) throw new Error('selftest failed: Korean implementation prompt did not promote to Team route');
   if (hookKoreanSksContext.includes('SKS answer-only pipeline active')) throw new Error('selftest failed: Korean implementation prompt still used answer-only pipeline');
   const hookKoreanSksState = await readJson(stateFile(hookKoreanSksTmp), {});
-  if (hookKoreanSksState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookKoreanSksState.implementation_allowed !== false) throw new Error('selftest failed: Korean implementation prompt did not lock Team execution behind ambiguity gate');
+  if (hookKoreanSksState.phase !== 'TEAM_CLARIFICATION_CONTRACT_SEALED' || hookKoreanSksState.implementation_allowed !== true || !hookKoreanSksState.ambiguity_gate_passed) throw new Error('selftest failed: Korean Team auto-seal');
   const hookTeamTmp = tmpdir();
   await initProject(hookTeamTmp, {});
   const hookTeamPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 버튼 UX 수정 executor:2 reviewer:1 user:1' });
@@ -2365,7 +2393,8 @@ async function selftest() {
   if (hookTeamResult.code !== 0) throw new Error(`selftest failed: $Team hook exited ${hookTeamResult.code}: ${hookTeamResult.stderr}`);
   const hookTeamJson = JSON.parse(hookTeamResult.stdout);
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: $Team hook did not force ambiguity gate before Team execution');
-  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('GOAL_PRECISE')) throw new Error('selftest failed: $Team ambiguity gate did not provide questions');
+  if (hookTeamJson.hookSpecificOutput?.additionalContext?.includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Team goal');
+  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('UI_STATE_BEHAVIOR')) throw new Error('selftest failed: missing Team UI question');
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('Codex plan-tool interaction')) throw new Error('selftest failed: $Team ambiguity gate did not inject plan-tool guidance');
   const hookTeamState = await readJson(stateFile(hookTeamTmp), {});
   if (hookTeamState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookTeamState.implementation_allowed !== false) throw new Error('selftest failed: $Team hook did not lock execution behind ambiguity gate');
@@ -2374,7 +2403,8 @@ async function selftest() {
   if (hookTeamStopResult.code !== 0) throw new Error(`selftest failed: Team stop hook exited ${hookTeamStopResult.code}: ${hookTeamStopResult.stderr}`);
   const hookTeamStopJson = JSON.parse(hookTeamStopResult.stdout);
   if (hookTeamStopJson.decision !== 'block' || !String(hookTeamStopJson.reason || '').includes('mandatory ambiguity-removal')) throw new Error('selftest failed: Stop hook did not block missing Team ambiguity answers');
-  if (!String(hookTeamStopJson.reason || '').includes('Required questions') || !String(hookTeamStopJson.reason || '').includes('GOAL_PRECISE')) throw new Error('selftest failed: Stop hook did not reprint Team ambiguity questions');
+  if (!String(hookTeamStopJson.reason || '').includes('Required questions') || !String(hookTeamStopJson.reason || '').includes('UI_STATE_BEHAVIOR')) throw new Error('selftest failed: missing Team stop UI question');
+  if (String(hookTeamStopJson.reason || '').includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Team stop goal');
   if (!String(hookTeamStopJson.reason || '').includes('sks pipeline answer')) throw new Error('selftest failed: Stop hook did not provide pipeline answer command');
   if (!String(hookTeamStopJson.reason || '').includes('Codex plan-tool interaction')) throw new Error('selftest failed: Stop hook did not reprint plan-tool guidance');
   const hookTeamSchema = await readJson(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'required-answers.schema.json'));
@@ -2548,6 +2578,47 @@ async function selftest() {
   if (!mockContext7Docs.ok || mockContext7Docs.docs_tool !== 'query-docs' || mockContext7Docs.library_id !== '/mock/lib') throw new Error('selftest failed: local Context7 MCP client did not resolve/query docs');
   const passedTeamGate = { passed: true, analysis_artifact: true, triwiki_refreshed: true, triwiki_validated: true, consensus_artifact: true, team_roster_confirmed: true, implementation_team_fresh: true, review_artifact: true, integration_evidence: true, session_cleanup: true };
   const passedTeamSessionCleanup = { schema_version: 1, passed: true, all_sessions_closed: true, outstanding_sessions: 0, live_transcript_finalized: true, closed_at: nowIso() };
+  const passedFromChatImgCoverageLedger = {
+    schema_version: 1,
+    passed: true,
+    all_chat_requirements_listed: true,
+    all_requirements_mapped_to_work_order: true,
+    all_screenshot_regions_accounted: true,
+    all_attachments_accounted: true,
+    image_analysis_complete: true,
+    verbatim_customer_requests_preserved: true,
+    checklist_updated: true,
+    temp_triwiki_recorded: true,
+    checklist_file: FROM_CHAT_IMG_CHECKLIST_ARTIFACT,
+    temp_triwiki_file: FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT,
+    unresolved_items: [],
+    chat_requirements: [{ id: 'req-1', source: 'selftest chat text', text: 'Change the hero image.' }],
+    attachment_matches: [{ id: 'match-1', requirement_ids: ['req-1'], attachment: 'original-1.png', confidence: 'high' }],
+    work_order_items: [{ id: 'work-1', requirement_ids: ['req-1'], action: 'Apply the requested hero image change.' }]
+  };
+  const passedFromChatImgChecklist = [
+    '# From-Chat-IMG Checklist',
+    '',
+    '## Customer Requests',
+    '- [x] req-1 source-bound customer request preserved.',
+    '',
+    '## Image Analysis',
+    '- [x] match-1 screenshot image region matched to original-1.png with high confidence.',
+    '',
+    '## Work Items',
+    '- [x] work-1 requested hero image change represented in the work order.',
+    '',
+    '## Verification',
+    '- [x] coverage ledger, checklist, and temporary TriWiki session context reconciled.',
+    ''
+  ].join('\n');
+  const passedFromChatImgTempTriWiki = {
+    schema_version: 1,
+    scope: 'temporary',
+    storage: 'triwiki',
+    expires_after_sessions: FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS,
+    claims: [{ id: 'req-1', source: 'selftest chat text', text: 'Change the hero image.', trust: 'source_bound' }]
+  };
   const incompleteTeamGateTmp = tmpdir();
   await initProject(incompleteTeamGateTmp, {});
   const { id: incompleteGateId, dir: incompleteGateDir } = await createMission(incompleteTeamGateTmp, { mode: 'team', prompt: 'incomplete team gate test' });
@@ -2573,6 +2644,37 @@ async function selftest() {
   const rosterArtifactGateState = await readJson(stateFile(rosterArtifactGateTmp), {});
   const missingRosterArtifactStop = await evaluateStop(rosterArtifactGateTmp, rosterArtifactGateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (missingRosterArtifactStop?.decision !== 'block' || !String(missingRosterArtifactStop.reason || '').includes('team-roster.json')) throw new Error('selftest failed: Team gate did not block missing team roster artifact');
+  const fromChatCoverageTmp = tmpdir();
+  await initProject(fromChatCoverageTmp, {});
+  const { id: fromChatCoverageId, dir: fromChatCoverageDir } = await createMission(fromChatCoverageTmp, { mode: 'team', prompt: '$From-Chat-IMG coverage gate test' });
+  await writeJsonAtomic(path.join(fromChatCoverageDir, 'team-roster.json'), { schema_version: 1, mission_id: fromChatCoverageId, confirmed: true, source: 'selftest' });
+  await writeJsonAtomic(path.join(fromChatCoverageDir, 'team-gate.json'), { ...passedTeamGate, session_cleanup: false, from_chat_img_required: true });
+  await setCurrent(fromChatCoverageTmp, { mission_id: fromChatCoverageId, mode: 'TEAM', route: 'Team', route_command: '$From-Chat-IMG', phase: 'TEAM_REVIEW', context7_required: false, from_chat_img_required: true, stop_gate: 'team-gate.json' });
+  const fromChatCoverageState = await readJson(stateFile(fromChatCoverageTmp), {});
+  const missingFromChatCoverageFieldStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (missingFromChatCoverageFieldStop?.decision !== 'block' || !String(missingFromChatCoverageFieldStop.reason || '').includes('from_chat_img_request_coverage')) throw new Error('selftest failed: From-Chat-IMG coverage field did not block Team gate');
+  await writeJsonAtomic(path.join(fromChatCoverageDir, 'team-gate.json'), { ...passedTeamGate, session_cleanup: false, from_chat_img_required: true, from_chat_img_request_coverage: true });
+  const missingFromChatCoverageArtifactStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (missingFromChatCoverageArtifactStop?.decision !== 'block' || !String(missingFromChatCoverageArtifactStop.reason || '').includes(FROM_CHAT_IMG_COVERAGE_ARTIFACT)) throw new Error('selftest failed: From-Chat-IMG coverage artifact did not block Team gate');
+  await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_COVERAGE_ARTIFACT), { ...passedFromChatImgCoverageLedger, unresolved_items: ['ambiguous request'] });
+  const unresolvedFromChatCoverageStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (unresolvedFromChatCoverageStop?.decision !== 'block' || !String(unresolvedFromChatCoverageStop.reason || '').includes(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:unresolved_items`)) throw new Error('selftest failed: From-Chat-IMG unresolved items did not block Team gate');
+  await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_COVERAGE_ARTIFACT), passedFromChatImgCoverageLedger);
+  const missingFromChatChecklistStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (missingFromChatChecklistStop?.decision !== 'block' || !String(missingFromChatChecklistStop.reason || '').includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT)) throw new Error('selftest failed: From-Chat-IMG checklist artifact did not block Team gate');
+  await writeTextAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_CHECKLIST_ARTIFACT), passedFromChatImgChecklist.replace('- [x] req-1', '- [ ] req-1'));
+  const uncheckedFromChatChecklistStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (uncheckedFromChatChecklistStop?.decision !== 'block' || !String(uncheckedFromChatChecklistStop.reason || '').includes(`${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}:unchecked_items`)) throw new Error('selftest failed: From-Chat-IMG unchecked checklist item did not block Team gate');
+  await writeTextAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_CHECKLIST_ARTIFACT), passedFromChatImgChecklist);
+  const missingFromChatTempTriWikiStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (missingFromChatTempTriWikiStop?.decision !== 'block' || !String(missingFromChatTempTriWikiStop.reason || '').includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT)) throw new Error('selftest failed: From-Chat-IMG temporary TriWiki artifact did not block Team gate');
+  await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT), { ...passedFromChatImgTempTriWiki, expires_after_sessions: FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS + 1 });
+  const invalidFromChatTempTriWikiStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (invalidFromChatTempTriWikiStop?.decision !== 'block' || !String(invalidFromChatTempTriWikiStop.reason || '').includes(`${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}:expires_after_sessions`)) throw new Error('selftest failed: From-Chat-IMG temporary TriWiki TTL did not block Team gate');
+  await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT), passedFromChatImgTempTriWiki);
+  await writeJsonAtomic(path.join(fromChatCoverageDir, 'team-gate.json'), { ...passedTeamGate, from_chat_img_required: true, from_chat_img_request_coverage: true });
+  const coveredFromChatStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (coveredFromChatStop?.decision !== 'block' || String(coveredFromChatStop.reason || '').includes('from-chat-img') || !String(coveredFromChatStop.reason || '').includes(TEAM_SESSION_CLEANUP_ARTIFACT)) throw new Error('selftest failed: valid From-Chat-IMG artifacts did not hand off to session cleanup gate');
   await recordContext7Evidence(routeGateTmp, gateState, { tool_name: 'resolve-library-id', library: 'react' });
   const resolveOnlyStop = await evaluateStop(routeGateTmp, gateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (resolveOnlyStop?.decision !== 'block') throw new Error('selftest failed: resolve-only Context7 evidence unblocked route');
@@ -2618,7 +2720,15 @@ async function selftest() {
   if (teamPlan.context_tracking?.ssot !== 'triwiki' || !teamPlan.required_artifacts.includes('.sneakoscope/wiki/context-pack.json')) throw new Error('selftest failed: team plan missing TriWiki context tracking');
   if (!teamPlan.context_tracking?.stage_policy?.includes('before_each_route_stage_read_relevant_context_pack')) throw new Error('selftest failed: team plan missing per-stage TriWiki policy');
   if (!teamPlan.invariants.some((item) => item.includes('chat-history screenshots'))) throw new Error('selftest failed: team invariants missing chat capture matching');
+  if (!teamPlan.invariants.some((item) => item.includes('request coverage'))) throw new Error('selftest failed: team invariants missing From-Chat-IMG request coverage');
   if (!teamPlan.phases.some((phase) => String(phase.goal || '').includes('refreshes/validates TriWiki before implementation handoff'))) throw new Error('selftest failed: team plan missing mid-pipeline TriWiki refresh');
+  const fromChatTeamPlan = buildTeamPlan(teamId, '$From-Chat-IMG 채팅 기록 이미지와 첨부 원본 이미지로 고객 요청 작업 지시서 작성');
+  if (fromChatTeamPlan.prompt_command !== '$From-Chat-IMG') throw new Error('selftest failed: From-Chat-IMG team plan did not preserve prompt command');
+  if (!fromChatTeamPlan.required_artifacts.includes(FROM_CHAT_IMG_COVERAGE_ARTIFACT)) throw new Error('selftest failed: From-Chat-IMG team plan missing coverage ledger artifact');
+  if (!fromChatTeamPlan.required_artifacts.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT) || !fromChatTeamPlan.required_artifacts.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT)) throw new Error('selftest failed: From-Chat-IMG team plan missing checklist/temp TriWiki artifacts');
+  if (!fromChatTeamPlan.phases.some((phase) => phase.id === 'from_chat_img_coverage_reconciliation')) throw new Error('selftest failed: From-Chat-IMG team plan missing coverage reconciliation phase');
+  if (!fromChatTeamPlan.invariants.some((item) => item.includes('unresolved_items=[]'))) throw new Error('selftest failed: From-Chat-IMG team plan missing zero-unresolved invariant');
+  if (!fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT)) || !fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT))) throw new Error('selftest failed: From-Chat-IMG team plan missing checklist/temp TriWiki invariants');
   const teamWorkflow = teamWorkflowMarkdown(teamPlan);
   if (!teamWorkflow.includes('SSOT: triwiki') || !teamWorkflow.includes('Analysis Scouts') || !teamWorkflow.includes('sks wiki validate')) throw new Error('selftest failed: team workflow missing scout-first TriWiki context tracking');
   if (!teamWorkflow.includes('before every stage') || !teamWorkflow.includes('after findings/artifact changes')) throw new Error('selftest failed: team workflow missing per-stage TriWiki policy');
@@ -2755,8 +2865,14 @@ async function selftest() {
   const snapshot = await snapshotCartridge(gxDir);
   if (!snapshot.files.svg || !snapshot.files.html) throw new Error('selftest failed: gx snapshot incomplete');
   if (!validateWikiCoordinateIndex(snapshot.wiki_coordinates).ok) throw new Error('selftest failed: gx snapshot wiki coordinates invalid');
+  const { dir: oldFromChatTempDir } = await createMission(tmp, { mode: 'team', prompt: '$From-Chat-IMG old temp TriWiki retention selftest' });
+  await writeJsonAtomic(path.join(oldFromChatTempDir, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT), { schema_version: 1, scope: 'temporary', storage: 'triwiki', expires_after_sessions: 1, claims: [{ id: 'req-1', text: 'old temporary claim' }] });
+  const oldMtime = new Date(Date.now() - 60 * 1000);
+  await fsp.utimes(oldFromChatTempDir, oldMtime, oldMtime);
+  await createMission(tmp, { mode: 'team', prompt: 'newer mission for temp TriWiki retention selftest' });
   const gc = await enforceRetention(tmp, { dryRun: true });
   if (!gc.report.exists) throw new Error('selftest failed: storage report');
+  if (!gc.actions.some((action) => action.action === 'remove_from_chat_img_temp_triwiki')) throw new Error('selftest failed: From-Chat-IMG temporary TriWiki retention action missing');
   console.log('ㅅㅋㅅ selftest passed.');
   console.log(`temp: ${tmp}`);
 }
@@ -3493,7 +3609,8 @@ async function team(args) {
   await writeTextAtomic(path.join(dir, 'team-workflow.md'), teamWorkflowMarkdown(plan));
   const liveFiles = await initTeamLive(id, dir, prompt, { agentSessions, roleCounts, roster });
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
-  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false });
+  const fromChatImgRequired = hasFromChatImgSignal(prompt);
+  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
   const result = {
     mission_id: id,
     mission_dir: dir,
@@ -3528,6 +3645,14 @@ function parseTeamCreateArgs(args) {
 function buildTeamPlan(id, prompt, opts = {}) {
   const spec = normalizeTeamSpec(opts);
   const { agentSessions, roleCounts, roster } = spec;
+  const fromChatImgRequired = hasFromChatImgSignal(prompt);
+  const fromChatImgCoveragePhase = fromChatImgRequired ? [{
+    id: 'from_chat_img_coverage_reconciliation',
+    goal: `Before implementation, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}: every visible customer request, screenshot image region, and separate attachment must be listed, source-bound, mapped to work-order item(s), confidence-tagged, tracked with checkboxes, and reconciled with unresolved_items empty.`,
+    agents: ['parent_orchestrator'],
+    output: [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT]
+  }] : [];
+  const requiredArtifacts = ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT] : []), 'team-consensus.md', 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'];
   return {
     schema_version: 1,
     mission_id: id,
@@ -3567,12 +3692,15 @@ function buildTeamPlan(id, prompt, opts = {}) {
       },
       {
         id: 'parallel_analysis_scouting',
-        goal: 'Read relevant TriWiki context first. If chat-history screenshots or attached images are present, list visible chat text and image-region matches as evidence, then read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.',
+        goal: fromChatImgRequired
+          ? `Read relevant TriWiki context first. From-Chat-IMG is active: extract visible chat text in reading order, enumerate every customer request, account for every screenshot image region and separate attachment, prepare evidence for ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, update ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} as work proceeds, and store temporary session context in ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}; then read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.`
+          : 'Read relevant TriWiki context first. From-Chat-IMG is inactive, so do not assume ordinary image prompts are chat captures; then read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.',
         agents: roster.analysis_team.map((agent) => agent.id),
         max_parallel_subagents: agentSessions,
         write_policy: 'read-only',
         output: 'team-analysis.md'
       },
+      ...fromChatImgCoveragePhase,
       {
         id: 'triwiki_refresh',
         goal: 'Parent orchestrator refreshes and validates TriWiki from scout findings before assigning debate work.',
@@ -3620,7 +3748,10 @@ function buildTeamPlan(id, prompt, opts = {}) {
     invariants: [
       'The parent thread remains the orchestrator and owns final integration.',
       'Team roster confirmation is mandatory before implementation: default SKS counts are materialized when the user did not specify counts, explicit counts are honored, and team-gate.json must include team_roster_confirmed=true with team-roster.json present.',
-      'When and only when From-Chat-IMG/$From-Chat-IMG is explicit, treat client requests as chat-history screenshots plus separate attachments: extract visible text in reading order, use Computer Use/browser visual inspection to match screenshot image regions to attachments with confidence notes, and turn that evidence into a complete modification work order before editing.',
+      `When and only when From-Chat-IMG/$From-Chat-IMG is explicit, treat client requests as chat-history screenshots plus separate attachments: extract visible text in reading order, use Computer Use/browser visual inspection to match screenshot image regions to attachments with confidence notes, and turn that evidence into a complete modification work order before editing.`,
+      `For From-Chat-IMG, request coverage is stop-gated: ${FROM_CHAT_IMG_COVERAGE_ARTIFACT} must show all_chat_requirements_listed=true, all_requirements_mapped_to_work_order=true, all_screenshot_regions_accounted=true, all_attachments_accounted=true, image_analysis_complete=true, verbatim_customer_requests_preserved=true, checklist_updated=true, temp_triwiki_recorded=true, and unresolved_items=[] before Team completion.`,
+      `For From-Chat-IMG, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} must contain Customer Requests, Image Analysis, Work Items, and Verification sections, with every checkbox checked as each item is completed.`,
+      `For From-Chat-IMG, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} stores temporary TriWiki-backed claims with expires_after_sessions no greater than ${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}; retention may remove it after enough newer sessions.`,
       'Every useful subagent message, result, handoff, review finding, and integration decision is mirrored to team-live.md and team-transcript.jsonl.',
       'Analysis scouts, debate team, and development team are separate bundles; scouts finish before debate and debate closes before implementation workers start.',
       'Analysis scouts are read-only and maximize the available session budget for independent investigation before any code edit.',
@@ -3647,8 +3778,8 @@ function buildTeamPlan(id, prompt, opts = {}) {
         'sks team event <mission-id> --agent <name> --phase <phase> --message "..."'
       ]
     },
-    required_artifacts: ['team-roster.json', 'team-analysis.md', 'team-consensus.md', 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'],
-    prompt_command: '$Team'
+    required_artifacts: requiredArtifacts,
+    prompt_command: fromChatImgRequired ? '$From-Chat-IMG' : '$Team'
   };
 }
 
@@ -3664,7 +3795,7 @@ ${plan.prompt}
 ## Codex App Prompt
 
 \`\`\`text
-$Team ${plan.prompt}
+${plan.prompt_command || '$Team'} ${plan.prompt}
 
 Use high reasoning for the Team route only, then return to the default/user-selected profile after completion. Use at most ${plan.agent_session_count || 3} subagent sessions at a time; the parent orchestrator is not counted.
 
@@ -3680,6 +3811,7 @@ Before each stage, read the relevant latest coordinate+voxel TriWiki context pac
 - The parent orchestrator is not counted.
 - Use the full available session budget for analysis when independent slices exist; use fewer agents only when the work cannot be split cleanly.
 - Before reflection/final, close or account for all Team subagent sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.
+${plan.required_artifacts?.includes(FROM_CHAT_IMG_COVERAGE_ARTIFACT) ? `- From-Chat-IMG coverage: write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} before implementation and do not pass team-gate.json until every visible customer request, screenshot image region, and attachment is mapped, every checklist box is checked, and unresolved_items is empty.` : ''}
 
 ## Context Tracking
 

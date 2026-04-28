@@ -7,7 +7,7 @@ import { buildQuestionSchemaForRoute, writeQuestions } from './questions.mjs';
 import { sealContract } from './decision-contract.mjs';
 import { scanDbSafety } from './db-safety.mjs';
 import { writeResearchPlan } from './research.mjs';
-import { chatCaptureIntakeText, context7RequirementText, dollarCommand, hasFromChatImgSignal, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
+import { FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, hasFromChatImgSignal, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { formatRoleCounts, initTeamLive, parseTeamSpecText } from './team-live.mjs';
 
 export { routePrompt };
@@ -16,6 +16,9 @@ const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
+const COMPLIANCE_LOOP_GUARD_ARTIFACT = 'compliance-loop-guard.json';
+const HARD_BLOCKER_ARTIFACT = 'hard-blocker.json';
+const DEFAULT_COMPLIANCE_LOOP_LIMIT = 3;
 
 function reflectionInstructionText(commandPrefix = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write ${REFLECTION_ARTIFACT}; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass ${REFLECTION_GATE}.`;
@@ -239,6 +242,7 @@ ${formatRalphQuestions(schema)}`
 async function prepareTeam(root, route, task, required) {
   const spec = parseTeamSpecText(task);
   const cleanTask = spec.prompt || task;
+  const fromChatImgRequired = hasFromChatImgSignal(cleanTask);
   const { agentSessions, roleCounts, roster } = spec;
   const { id, dir } = await createMission(root, { mode: 'team', prompt: cleanTask });
   const plan = {
@@ -260,7 +264,7 @@ async function prepareTeam(root, route, task, required) {
     context_tracking: triwikiContextTracking(),
     phases: [
       { id: 'team_roster_confirmation', goal: `Before any implementation, materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}. Implementation cannot be considered complete unless team-gate.json has team_roster_confirmed=true.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'parallel_analysis_scouting', goal: `Before scouting, read TriWiki context. ${hasFromChatImgSignal(cleanTask) ? 'From-Chat-IMG active: use Computer Use/browser visual inspection, list requirements, match regions to attachments, and write the work order before edits.' : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'} Spawn exactly ${roster.bundle_size} read-only analysis_scout_N agents in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, and record source-backed findings.`, agents: roster.analysis_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
+      { id: 'parallel_analysis_scouting', goal: `Before scouting, read TriWiki context. ${fromChatImgRequired ? `From-Chat-IMG active: use Computer Use/browser visual inspection, list every visible customer request, match every screenshot image region to attachments, and write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} before edits.` : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'} Spawn exactly ${roster.bundle_size} read-only analysis_scout_N agents in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, and record source-backed findings.`, agents: roster.analysis_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
       { id: 'triwiki_refresh', goal: `Parent orchestrator updates Team analysis artifacts, then runs ${triwikiContextTracking().refresh_command} or ${triwikiContextTracking().pack_command}, prunes with ${triwikiContextTracking().prune_command} when stale/oversized wiki state would pollute handoffs, and runs ${triwikiContextTracking().validate_command} so the next stage uses current TriWiki context.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
       { id: 'planning_debate', goal: `Before debate, read the refreshed TriWiki pack. Debate team of exactly ${roster.bundle_size} participants maps user inconvenience, options, constraints, affected files, DB/test risk, and tradeoffs while hydrating low-trust claims from source.`, agents: roster.debate_team.map((agent) => agent.id) },
       { id: 'consensus', goal: `Seal one objective with acceptance criteria and disjoint implementation slices, then refresh/validate TriWiki so implementation receives current consensus context.` },
@@ -274,15 +278,15 @@ async function prepareTeam(root, route, task, required) {
       dashboard: 'team-dashboard.json',
       commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team watch latest', 'sks team event latest --agent <name> --phase <phase> --message "..."']
     },
-    required_artifacts: ['team-roster.json', 'team-analysis.md', 'team-consensus.md', 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
+    required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT] : []), 'team-consensus.md', 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
   };
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
   const contextTracking = triwikiContextTracking();
   await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReasoning: high for team logic, temporary for this route only.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\n1. Run exactly ${roster.bundle_size} read-only analysis_scout_N agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants, then write consensus and implementation slices.\n4. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n5. Review, integrate, verify, and record evidence.\n6. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
   await initTeamLive(id, dir, cleanTask, { agentSessions, roleCounts, roster });
-  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false });
-  await setCurrent(root, routeState(id, route, 'TEAM_PARALLEL_ANALYSIS_SCOUTING', required, { prompt: cleanTask, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, context_tracking: 'triwiki' }));
+  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
+  await setCurrent(root, routeState(id, route, 'TEAM_PARALLEL_ANALYSIS_SCOUTING', required, { prompt: cleanTask, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, context_tracking: 'triwiki', from_chat_img_required: fromChatImgRequired }));
   return routeContext(route, id, cleanTask, required, `Run scouts, refresh/validate TriWiki, debate, close debate agents, form a fresh ${roster.bundle_size}-person executor team, then close/clean Team sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection.`);
 }
 
@@ -597,52 +601,108 @@ export async function evaluateStop(root, state, payload, opts = {}) {
   const last = extractLastMessage(payload);
   if (state?.mode === 'RALPH' && ['RALPH_PREPARE', 'RALPH_AWAITING_ANSWERS'].includes(state.phase)) {
     if (looksLikeRalphQuestionResponse(last)) return { continue: true };
-    return { decision: 'block', reason: await clarificationStopReason(root, state, 'ralph') };
+    return complianceBlock(root, state, await clarificationStopReason(root, state, 'ralph'), { gate: 'clarification' });
   }
   if (state?.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS')) {
     if (looksLikeRalphQuestionResponse(last)) return { continue: true };
-    return { decision: 'block', reason: await clarificationStopReason(root, state, 'route') };
+    return complianceBlock(root, state, await clarificationStopReason(root, state, 'route'), { gate: 'clarification' });
   }
   if (state?.mode === 'RALPH' && state.phase === 'DECISION_CONTRACT_SEALED') {
-    return { decision: 'block', reason: `Ralph mission ${state.mission_id || 'latest'} has a sealed decision contract but has not run. Continue automatically by running: sks ralph run ${state.mission_id || 'latest'}` };
+    return complianceBlock(root, state, `Ralph mission ${state.mission_id || 'latest'} has a sealed decision contract but has not run. Continue automatically by running: sks ralph run ${state.mission_id || 'latest'}`, { gate: 'ralph-run' });
   }
   if (state?.mode === 'RALPH' && /^RALPH_PAUSED/.test(String(state.phase || ''))) {
-    return { decision: 'block', reason: `Ralph mission ${state.mission_id || 'latest'} paused before completion. Resume with sks ralph run ${state.mission_id || 'latest'} or record a hard blocker in done-gate.json before finishing.` };
+    return complianceBlock(root, state, `Ralph mission ${state.mission_id || 'latest'} paused before completion. Resume with sks ralph run ${state.mission_id || 'latest'} or record a hard blocker in done-gate.json before finishing.`, { gate: 'ralph-paused' });
   }
   if (state?.context7_required && !(await hasContext7DocsEvidence(root, state))) {
-    return { decision: 'block', reason: `SKS ${state.route_command || state.mode || 'route'} requires Context7 evidence before completion. Use Context7 resolve-library-id, then query-docs (or legacy get-library-docs), so SKS can record context7-evidence.jsonl.` };
+    return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires Context7 evidence before completion. Use Context7 resolve-library-id, then query-docs (or legacy get-library-docs), so SKS can record context7-evidence.jsonl.`, { gate: 'context7-evidence' });
   }
   if (state?.subagents_required && !(await hasSubagentEvidence(root, state))) {
-    return { decision: 'block', reason: `SKS ${state.route_command || state.mode || 'route'} requires subagent execution evidence before completion. Spawn worker/reviewer subagents for disjoint code-changing work, or record explicit evidence that subagents were unavailable or unsafe to split.` };
+    return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires subagent execution evidence before completion. Spawn worker/reviewer subagents for disjoint code-changing work, or record explicit evidence that subagents were unavailable or unsafe to split.`, { gate: 'subagent-evidence' });
   }
   if (opts.noQuestion) {
-    if (containsUserQuestion(last)) return { decision: 'block', reason: noQuestionContinuationReason() };
+    if (containsUserQuestion(last)) return complianceBlock(root, state, noQuestionContinuationReason(), { gate: 'no-question' });
     const gate = await passedActiveGate(root, state);
     if (gate.ok) {
       const reflection = await reflectionGateStatus(root, state);
-      if (!reflection.ok) return { decision: 'block', reason: reflectionStopReason(state, reflection) };
+      if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
       return { continue: true };
     }
     const missing = gate.missing?.length ? ` Missing gate fields: ${gate.missing.join(', ')}.` : '';
-    return { decision: 'block', reason: `SKS no-question run is not done. Continue autonomously, fix failing checks, update ${gate.file || 'the active gate file'}, and do not ask the user.${missing}` };
+    return complianceBlock(root, state, `SKS no-question run is not done. Continue autonomously, fix failing checks, update ${gate.file || 'the active gate file'}, and do not ask the user.${missing}`, { gate: gate.file || 'active-gate', missing: gate.missing });
   }
   if (state?.mission_id && state?.stop_gate && !['none', 'honest_mode'].includes(state.stop_gate)) {
     const gate = await passedActiveGate(root, state);
     if (!gate.ok) {
       const missing = gate.missing?.length ? ` Missing gate fields: ${gate.missing.join(', ')}.` : '';
-      return { decision: 'block', reason: `SKS ${state.route_command || state.mode} route cannot stop yet. Pass ${gate.file || state.stop_gate} or record a hard blocker with evidence before finishing.${missing}` };
+      return complianceBlock(root, state, `SKS ${state.route_command || state.mode} route cannot stop yet. Pass ${gate.file || state.stop_gate} or record a hard blocker with evidence before finishing.${missing}`, { gate: gate.file || state.stop_gate, missing: gate.missing });
     }
   }
   const reflection = await reflectionGateStatus(root, state);
-  if (!reflection.ok) return { decision: 'block', reason: reflectionStopReason(state, reflection) };
+  if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
   return null;
+}
+
+async function complianceBlock(root, state = {}, reason = '', detail = {}) {
+  if (!state?.mission_id) return { decision: 'block', reason };
+  const dir = missionDir(root, state.mission_id);
+  const guardPath = path.join(dir, COMPLIANCE_LOOP_GUARD_ARTIFACT);
+  const normalized = normalizeComplianceReason(reason);
+  const previous = await readJson(guardPath, {});
+  const count = previous.normalized_reason === normalized ? Number(previous.repeat_count || 0) + 1 : 1;
+  const limit = complianceLoopLimit();
+  const record = {
+    schema_version: 1,
+    updated_at: nowIso(),
+    mission_id: state.mission_id,
+    route: state.route_command || state.route || state.mode || null,
+    gate: detail.gate || state.stop_gate || null,
+    normalized_reason: normalized,
+    repeat_count: count,
+    limit,
+    tripped: count >= limit,
+    last_reason: reason,
+    missing: Array.isArray(detail.missing) ? detail.missing : []
+  };
+  await writeJsonAtomic(guardPath, record);
+  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.compliance_loop_guard', gate: record.gate, repeat_count: count, limit, tripped: record.tripped, missing: record.missing });
+  if (!record.tripped) return { decision: 'block', reason };
+  await writeJsonAtomic(path.join(dir, HARD_BLOCKER_ARTIFACT), {
+    passed: true,
+    created_at: nowIso(),
+    reason: 'compliance_loop_guard_tripped',
+    route: record.route,
+    gate: record.gate,
+    repeat_count: count,
+    limit,
+    original_reason: reason,
+    evidence: [
+      `${COMPLIANCE_LOOP_GUARD_ARTIFACT}: repeated identical compliance stop reason ${count} time(s)`,
+      'Pipeline stopped as a hard blocker instead of looping indefinitely; no completion success is claimed.'
+    ]
+  });
+  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.compliance_loop_guard.tripped', gate: record.gate, repeat_count: count, limit });
+  return null;
+}
+
+function complianceLoopLimit() {
+  const raw = Number.parseInt(process.env.SKS_COMPLIANCE_LOOP_LIMIT || '', 10);
+  if (!Number.isFinite(raw)) return DEFAULT_COMPLIANCE_LOOP_LIMIT;
+  return Math.max(1, Math.min(20, raw));
+}
+
+function normalizeComplianceReason(reason = '') {
+  return String(reason || '')
+    .replace(/\bM-\d{8}-\d{6}-[a-z0-9]+\b/gi, 'M-*')
+    .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, 'TIMESTAMP')
+    .replace(/\d+/g, 'N')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1200);
 }
 
 async function passedActiveGate(root, state) {
   const id = state?.mission_id;
   if (!id) return { ok: false, file: null };
-  const hardBlocker = await passedHardBlocker(root, state);
-  if (hardBlocker.ok) return hardBlocker;
   const files = gateFilesForState(state);
   for (const file of files) {
     const p = path.join(missionDir(root, id), file);
@@ -657,6 +717,8 @@ async function passedActiveGate(root, state) {
       return { ok: false, file };
     }
   }
+  const hardBlocker = await passedHardBlocker(root, state);
+  if (hardBlocker.ok) return hardBlocker;
   return { ok: false, file: files[0] || null };
 }
 
@@ -671,7 +733,9 @@ async function passedHardBlocker(root, state) {
 function missingRequiredGateFields(file, state, gate = {}) {
   const mode = String(state?.mode || '').toUpperCase();
   if (file === 'team-gate.json' || mode === 'TEAM') {
-    return ['team_roster_confirmed', 'analysis_artifact', 'triwiki_refreshed', 'triwiki_validated', 'consensus_artifact', 'implementation_team_fresh', 'review_artifact', 'integration_evidence', 'session_cleanup']
+    const required = ['team_roster_confirmed', 'analysis_artifact', 'triwiki_refreshed', 'triwiki_validated', 'consensus_artifact', 'implementation_team_fresh', 'review_artifact', 'integration_evidence', 'session_cleanup'];
+    if (fromChatImgCoverageRequired(state, gate)) required.push('from_chat_img_request_coverage');
+    return required
       .filter((key) => gate[key] !== true);
   }
   if (file === 'qa-gate.json' || mode === 'QALOOP') {
@@ -686,12 +750,57 @@ async function missingRequiredGateArtifacts(root, file, state, gate = {}) {
   if (file !== 'team-gate.json' && mode !== 'TEAM') return [];
   const missing = [];
   if (gate.team_roster_confirmed === true && !(await exists(path.join(missionDir(root, state.mission_id), 'team-roster.json')))) missing.push('team-roster.json');
+  if (fromChatImgCoverageRequired(state, gate) && gate.from_chat_img_request_coverage === true) {
+    missing.push(...await missingFromChatImgCoverageArtifacts(root, state));
+  }
   if (gate.session_cleanup !== true) return missing;
   const cleanup = await readJson(path.join(missionDir(root, state.mission_id), TEAM_SESSION_CLEANUP_ARTIFACT), null);
   if (!cleanup) return [...missing, TEAM_SESSION_CLEANUP_ARTIFACT];
   if (cleanup.passed !== true) missing.push(`${TEAM_SESSION_CLEANUP_ARTIFACT}:passed`);
   if (cleanup.all_sessions_closed !== true && cleanup.outstanding_sessions !== 0) missing.push(`${TEAM_SESSION_CLEANUP_ARTIFACT}:all_sessions_closed`);
   if (cleanup.live_transcript_finalized !== true) missing.push(`${TEAM_SESSION_CLEANUP_ARTIFACT}:live_transcript_finalized`);
+  return missing;
+}
+
+function fromChatImgCoverageRequired(state = {}, gate = {}) {
+  return state?.from_chat_img_required === true || gate?.from_chat_img_required === true;
+}
+
+async function missingFromChatImgCoverageArtifacts(root, state = {}) {
+  const missing = [];
+  const id = state?.mission_id;
+  if (!id) return [`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:mission_id`];
+  const ledger = await readJson(path.join(missionDir(root, id), FROM_CHAT_IMG_COVERAGE_ARTIFACT), null);
+  if (!ledger) return [FROM_CHAT_IMG_COVERAGE_ARTIFACT];
+  if (ledger.passed !== true) missing.push(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:passed`);
+  for (const key of ['all_chat_requirements_listed', 'all_requirements_mapped_to_work_order', 'all_screenshot_regions_accounted', 'all_attachments_accounted', 'image_analysis_complete', 'verbatim_customer_requests_preserved', 'checklist_updated', 'temp_triwiki_recorded']) {
+    if (ledger[key] !== true) missing.push(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:${key}`);
+  }
+  if (!Array.isArray(ledger.unresolved_items)) missing.push(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:unresolved_items`);
+  else if (ledger.unresolved_items.length > 0) missing.push(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:unresolved_items`);
+  if (!Array.isArray(ledger.chat_requirements) || ledger.chat_requirements.length === 0) missing.push(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:chat_requirements`);
+  if (!Array.isArray(ledger.work_order_items) || ledger.work_order_items.length === 0) missing.push(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:work_order_items`);
+  if (!Array.isArray(ledger.attachment_matches)) missing.push(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:attachment_matches`);
+  const checklistName = typeof ledger.checklist_file === 'string' && ledger.checklist_file.trim() ? ledger.checklist_file.trim() : FROM_CHAT_IMG_CHECKLIST_ARTIFACT;
+  const checklistPath = path.join(missionDir(root, id), checklistName);
+  const checklist = await readText(checklistPath, null).catch(() => null);
+  if (typeof checklist !== 'string') missing.push(FROM_CHAT_IMG_CHECKLIST_ARTIFACT);
+  else {
+    if (!/- \[[ xX]\]\s+\S/.test(checklist)) missing.push(`${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}:checkboxes`);
+    if (/- \[ \]\s+\S/.test(checklist)) missing.push(`${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}:unchecked_items`);
+    for (const section of ['Customer Requests', 'Image Analysis', 'Work Items', 'Verification']) {
+      if (!checklist.includes(section)) missing.push(`${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}:${section.toLowerCase().replaceAll(' ', '_')}`);
+    }
+  }
+  const tempWikiName = typeof ledger.temp_triwiki_file === 'string' && ledger.temp_triwiki_file.trim() ? ledger.temp_triwiki_file.trim() : FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT;
+  const tempWiki = await readJson(path.join(missionDir(root, id), tempWikiName), null);
+  if (!tempWiki) missing.push(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT);
+  else {
+    const ttl = Number(tempWiki.expires_after_sessions);
+    if (tempWiki.scope !== 'temporary' || tempWiki.storage !== 'triwiki') missing.push(`${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}:scope`);
+    if (!Number.isFinite(ttl) || ttl < 1 || ttl > FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS) missing.push(`${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}:expires_after_sessions`);
+    if (!Array.isArray(tempWiki.claims) || tempWiki.claims.length === 0) missing.push(`${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}:claims`);
+  }
   return missing;
 }
 
