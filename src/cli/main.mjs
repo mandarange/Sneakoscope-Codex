@@ -25,7 +25,7 @@ import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, defaultEvaluationSce
 import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence } from '../core/pipeline.mjs';
 import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail } from '../core/team-live.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
@@ -2300,7 +2300,7 @@ async function selftest() {
   if (!promptPipelineText.includes('design.md') || !promptPipelineText.includes('imagegen')) throw new Error('selftest failed: prompt pipeline missing design/image asset routing');
   if (!promptPipelineText.includes('From-Chat-IMG') || !promptPipelineText.includes('Do not assume ordinary image prompts are chat captures')) throw new Error('selftest failed: prompt pipeline missing explicit From-Chat-IMG gating');
   const fromChatImgSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'from-chat-img', 'SKILL.md'));
-  if (!fromChatImgSkillText.includes('normal Team pipeline') || !fromChatImgSkillText.includes('Computer Use/browser visual inspection') || !fromChatImgSkillText.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT)) throw new Error('selftest failed: from-chat-img skill missing Team/browser inspection checklist guidance');
+  if (!fromChatImgSkillText.includes('normal Team pipeline') || !fromChatImgSkillText.includes('Computer Use/browser visual inspection') || !fromChatImgSkillText.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_QA_LOOP_ARTIFACT)) throw new Error('selftest failed: from-chat-img skill missing Team/browser inspection checklist guidance');
   for (const supportSkill of ['reasoning-router', 'pipeline-runner', 'context7-docs', 'seo-geo-optimizer', 'reflection', 'design-system-builder', 'design-ui-editor', 'imagegen']) {
     if (!(await exists(path.join(tmp, '.agents', 'skills', supportSkill, 'SKILL.md')))) throw new Error(`selftest failed: ${supportSkill} skill not installed`);
   }
@@ -2589,8 +2589,10 @@ async function selftest() {
     verbatim_customer_requests_preserved: true,
     checklist_updated: true,
     temp_triwiki_recorded: true,
+    scoped_qa_loop_completed: true,
     checklist_file: FROM_CHAT_IMG_CHECKLIST_ARTIFACT,
     temp_triwiki_file: FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT,
+    qa_loop_file: FROM_CHAT_IMG_QA_LOOP_ARTIFACT,
     unresolved_items: [],
     chat_requirements: [{ id: 'req-1', source: 'selftest chat text', text: 'Change the hero image.' }],
     attachment_matches: [{ id: 'match-1', requirement_ids: ['req-1'], attachment: 'original-1.png', confidence: 'high' }],
@@ -2608,6 +2610,9 @@ async function selftest() {
     '## Work Items',
     '- [x] work-1 requested hero image change represented in the work order.',
     '',
+    '## QA Loop',
+    '- [x] scoped QA-LOOP covered work-1 after implementation with zero unresolved findings.',
+    '',
     '## Verification',
     '- [x] coverage ledger, checklist, and temporary TriWiki session context reconciled.',
     ''
@@ -2618,6 +2623,19 @@ async function selftest() {
     storage: 'triwiki',
     expires_after_sessions: FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS,
     claims: [{ id: 'req-1', source: 'selftest chat text', text: 'Change the hero image.', trust: 'source_bound' }]
+  };
+  const passedFromChatImgQaLoop = {
+    schema_version: 1,
+    passed: true,
+    scope: 'from-chat-img-work-order',
+    coverage_ledger: FROM_CHAT_IMG_COVERAGE_ARTIFACT,
+    checklist_file: FROM_CHAT_IMG_CHECKLIST_ARTIFACT,
+    all_work_order_items_qa_checked: true,
+    work_order_item_ids_covered: ['work-1'],
+    unresolved_findings: 0,
+    unresolved_fixable_findings: 0,
+    post_fix_verification_complete: true,
+    evidence: ['selftest scoped QA-LOOP covered work-1']
   };
   const incompleteTeamGateTmp = tmpdir();
   await initProject(incompleteTeamGateTmp, {});
@@ -2672,6 +2690,15 @@ async function selftest() {
   const invalidFromChatTempTriWikiStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (invalidFromChatTempTriWikiStop?.decision !== 'block' || !String(invalidFromChatTempTriWikiStop.reason || '').includes(`${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}:expires_after_sessions`)) throw new Error('selftest failed: From-Chat-IMG temporary TriWiki TTL did not block Team gate');
   await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT), passedFromChatImgTempTriWiki);
+  const missingFromChatQaLoopStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (missingFromChatQaLoopStop?.decision !== 'block' || !String(missingFromChatQaLoopStop.reason || '').includes(FROM_CHAT_IMG_QA_LOOP_ARTIFACT)) throw new Error('selftest failed: From-Chat-IMG scoped QA-LOOP artifact did not block Team gate');
+  await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_QA_LOOP_ARTIFACT), { ...passedFromChatImgQaLoop, unresolved_findings: 1 });
+  const unresolvedFromChatQaLoopStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (unresolvedFromChatQaLoopStop?.decision !== 'block' || !String(unresolvedFromChatQaLoopStop.reason || '').includes(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:unresolved_findings`)) throw new Error('selftest failed: From-Chat-IMG scoped QA-LOOP findings did not block Team gate');
+  await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_QA_LOOP_ARTIFACT), { ...passedFromChatImgQaLoop, work_order_item_ids_covered: [] });
+  const uncoveredFromChatQaLoopStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (uncoveredFromChatQaLoopStop?.decision !== 'block' || !String(uncoveredFromChatQaLoopStop.reason || '').includes(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:work_order_item_ids_covered`)) throw new Error('selftest failed: From-Chat-IMG scoped QA-LOOP work item coverage did not block Team gate');
+  await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_QA_LOOP_ARTIFACT), passedFromChatImgQaLoop);
   await writeJsonAtomic(path.join(fromChatCoverageDir, 'team-gate.json'), { ...passedTeamGate, from_chat_img_required: true, from_chat_img_request_coverage: true });
   const coveredFromChatStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (coveredFromChatStop?.decision !== 'block' || String(coveredFromChatStop.reason || '').includes('from-chat-img') || !String(coveredFromChatStop.reason || '').includes(TEAM_SESSION_CLEANUP_ARTIFACT)) throw new Error('selftest failed: valid From-Chat-IMG artifacts did not hand off to session cleanup gate');
@@ -2725,10 +2752,10 @@ async function selftest() {
   const fromChatTeamPlan = buildTeamPlan(teamId, '$From-Chat-IMG 채팅 기록 이미지와 첨부 원본 이미지로 고객 요청 작업 지시서 작성');
   if (fromChatTeamPlan.prompt_command !== '$From-Chat-IMG') throw new Error('selftest failed: From-Chat-IMG team plan did not preserve prompt command');
   if (!fromChatTeamPlan.required_artifacts.includes(FROM_CHAT_IMG_COVERAGE_ARTIFACT)) throw new Error('selftest failed: From-Chat-IMG team plan missing coverage ledger artifact');
-  if (!fromChatTeamPlan.required_artifacts.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT) || !fromChatTeamPlan.required_artifacts.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT)) throw new Error('selftest failed: From-Chat-IMG team plan missing checklist/temp TriWiki artifacts');
+  if (!fromChatTeamPlan.required_artifacts.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT) || !fromChatTeamPlan.required_artifacts.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT) || !fromChatTeamPlan.required_artifacts.includes(FROM_CHAT_IMG_QA_LOOP_ARTIFACT)) throw new Error('selftest failed: From-Chat-IMG team plan missing checklist/temp TriWiki/QA artifacts');
   if (!fromChatTeamPlan.phases.some((phase) => phase.id === 'from_chat_img_coverage_reconciliation')) throw new Error('selftest failed: From-Chat-IMG team plan missing coverage reconciliation phase');
   if (!fromChatTeamPlan.invariants.some((item) => item.includes('unresolved_items=[]'))) throw new Error('selftest failed: From-Chat-IMG team plan missing zero-unresolved invariant');
-  if (!fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT)) || !fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT))) throw new Error('selftest failed: From-Chat-IMG team plan missing checklist/temp TriWiki invariants');
+  if (!fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT)) || !fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT)) || !fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_QA_LOOP_ARTIFACT))) throw new Error('selftest failed: From-Chat-IMG team plan missing checklist/temp TriWiki/QA invariants');
   const teamWorkflow = teamWorkflowMarkdown(teamPlan);
   if (!teamWorkflow.includes('SSOT: triwiki') || !teamWorkflow.includes('Analysis Scouts') || !teamWorkflow.includes('sks wiki validate')) throw new Error('selftest failed: team workflow missing scout-first TriWiki context tracking');
   if (!teamWorkflow.includes('before every stage') || !teamWorkflow.includes('after findings/artifact changes')) throw new Error('selftest failed: team workflow missing per-stage TriWiki policy');
@@ -3648,11 +3675,11 @@ function buildTeamPlan(id, prompt, opts = {}) {
   const fromChatImgRequired = hasFromChatImgSignal(prompt);
   const fromChatImgCoveragePhase = fromChatImgRequired ? [{
     id: 'from_chat_img_coverage_reconciliation',
-    goal: `Before implementation, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}: every visible customer request, screenshot image region, and separate attachment must be listed, source-bound, mapped to work-order item(s), confidence-tagged, tracked with checkboxes, and reconciled with unresolved_items empty.`,
+    goal: `Before implementation, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}: every visible customer request, screenshot image region, and separate attachment must be listed, source-bound, mapped to work-order item(s), confidence-tagged, tracked with checkboxes, and reconciled with unresolved_items empty. After implementation, run scoped QA-LOOP over the exact work-order range and write ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}.`,
     agents: ['parent_orchestrator'],
-    output: [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT]
+    output: [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT]
   }] : [];
-  const requiredArtifacts = ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT] : []), 'team-consensus.md', 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'];
+  const requiredArtifacts = ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'];
   return {
     schema_version: 1,
     mission_id: id,
@@ -3693,7 +3720,7 @@ function buildTeamPlan(id, prompt, opts = {}) {
       {
         id: 'parallel_analysis_scouting',
         goal: fromChatImgRequired
-          ? `Read relevant TriWiki context first. From-Chat-IMG is active: extract visible chat text in reading order, enumerate every customer request, account for every screenshot image region and separate attachment, prepare evidence for ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, update ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} as work proceeds, and store temporary session context in ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}; then read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.`
+          ? `Read relevant TriWiki context first. From-Chat-IMG is active: extract visible chat text in reading order, enumerate every customer request, account for every screenshot image region and separate attachment, prepare evidence for ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, update ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} as work proceeds, store temporary session context in ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and plan scoped QA-LOOP evidence in ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}; then read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.`
           : 'Read relevant TriWiki context first. From-Chat-IMG is inactive, so do not assume ordinary image prompts are chat captures; then read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.',
         agents: roster.analysis_team.map((agent) => agent.id),
         max_parallel_subagents: agentSessions,
@@ -3749,9 +3776,10 @@ function buildTeamPlan(id, prompt, opts = {}) {
       'The parent thread remains the orchestrator and owns final integration.',
       'Team roster confirmation is mandatory before implementation: default SKS counts are materialized when the user did not specify counts, explicit counts are honored, and team-gate.json must include team_roster_confirmed=true with team-roster.json present.',
       `When and only when From-Chat-IMG/$From-Chat-IMG is explicit, treat client requests as chat-history screenshots plus separate attachments: extract visible text in reading order, use Computer Use/browser visual inspection to match screenshot image regions to attachments with confidence notes, and turn that evidence into a complete modification work order before editing.`,
-      `For From-Chat-IMG, request coverage is stop-gated: ${FROM_CHAT_IMG_COVERAGE_ARTIFACT} must show all_chat_requirements_listed=true, all_requirements_mapped_to_work_order=true, all_screenshot_regions_accounted=true, all_attachments_accounted=true, image_analysis_complete=true, verbatim_customer_requests_preserved=true, checklist_updated=true, temp_triwiki_recorded=true, and unresolved_items=[] before Team completion.`,
-      `For From-Chat-IMG, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} must contain Customer Requests, Image Analysis, Work Items, and Verification sections, with every checkbox checked as each item is completed.`,
+      `For From-Chat-IMG, request coverage is stop-gated: ${FROM_CHAT_IMG_COVERAGE_ARTIFACT} must show all_chat_requirements_listed=true, all_requirements_mapped_to_work_order=true, all_screenshot_regions_accounted=true, all_attachments_accounted=true, image_analysis_complete=true, verbatim_customer_requests_preserved=true, checklist_updated=true, temp_triwiki_recorded=true, scoped_qa_loop_completed=true, and unresolved_items=[] before Team completion.`,
+      `For From-Chat-IMG, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} must contain Customer Requests, Image Analysis, Work Items, QA Loop, and Verification sections, with every checkbox checked as each item is completed.`,
       `For From-Chat-IMG, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} stores temporary TriWiki-backed claims with expires_after_sessions no greater than ${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}; retention may remove it after enough newer sessions.`,
+      `For From-Chat-IMG, ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} must prove QA-LOOP ran after implementation over the exact customer-request work-order range, covered every work-order item, completed post-fix verification, and has zero unresolved findings.`,
       'Every useful subagent message, result, handoff, review finding, and integration decision is mirrored to team-live.md and team-transcript.jsonl.',
       'Analysis scouts, debate team, and development team are separate bundles; scouts finish before debate and debate closes before implementation workers start.',
       'Analysis scouts are read-only and maximize the available session budget for independent investigation before any code edit.',
@@ -3811,7 +3839,7 @@ Before each stage, read the relevant latest coordinate+voxel TriWiki context pac
 - The parent orchestrator is not counted.
 - Use the full available session budget for analysis when independent slices exist; use fewer agents only when the work cannot be split cleanly.
 - Before reflection/final, close or account for all Team subagent sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.
-${plan.required_artifacts?.includes(FROM_CHAT_IMG_COVERAGE_ARTIFACT) ? `- From-Chat-IMG coverage: write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} before implementation and do not pass team-gate.json until every visible customer request, screenshot image region, and attachment is mapped, every checklist box is checked, and unresolved_items is empty.` : ''}
+${plan.required_artifacts?.includes(FROM_CHAT_IMG_COVERAGE_ARTIFACT) ? `- From-Chat-IMG coverage: write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} before implementation; after implementation write ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}; do not pass team-gate.json until every visible customer request, screenshot image region, and attachment is mapped, every checklist box is checked, scoped QA-LOOP covers every work item with zero unresolved findings, and unresolved_items is empty.` : ''}
 
 ## Context Tracking
 

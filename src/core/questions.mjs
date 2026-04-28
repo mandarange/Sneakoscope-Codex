@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
 import { buildQaLoopQuestionSchema } from './qa-loop.mjs';
-import { FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, hasFromChatImgSignal } from './routes.mjs';
+import { FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, hasFromChatImgSignal } from './routes.mjs';
 
 export function buildQuestionSchemaForRoute(route, prompt) {
   if (String(route?.id || '') === 'QALoop') return buildQaLoopQuestionSchema(prompt);
@@ -51,7 +51,7 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   };
   const criteria = {
     version: [version ? `version refs are ${version}` : 'version refs advance consistently', 'publish:dry gate passes', 'npm publish is not run'],
-    chat_capture: ['From-Chat-IMG activates chat-image intake only here', 'all visible chat requirements are listed before implementation', `${FROM_CHAT_IMG_COVERAGE_ARTIFACT} maps every customer request, screenshot region, and attachment to work-order item(s)`, `${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} is updated as each request, image match, work item, and verification step is completed`, `${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} records temporary TriWiki-backed session context with retention metadata`, 'unresolved_items is empty before Team completion', 'Computer Use/browser visual inspection strengthens matches when available', 'client requests follow normal SKS gates and verification'],
+    chat_capture: ['From-Chat-IMG activates chat-image intake only here', 'all visible chat requirements are listed before implementation', `${FROM_CHAT_IMG_COVERAGE_ARTIFACT} maps every customer request, screenshot region, and attachment to work-order item(s)`, `${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} is updated as each request, image match, work item, scoped QA-LOOP, and verification step is completed`, `${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} records temporary TriWiki-backed session context with retention metadata`, `${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} proves QA-LOOP ran over the exact customer-request work-order range after implementation`, 'unresolved_items is empty before Team completion', 'scoped_qa_loop_completed is true with zero unresolved QA findings', 'Computer Use/browser visual inspection strengthens matches when available', 'client requests follow normal SKS gates and verification'],
     priority: ['strong feedback raises required_weight', 'request topics are counted in wiki packs', 'future inference uses priority signals'],
     questions: ['predictable answers are inferred', 'partial answers can seal contracts', 'only unresolved changing slots remain visible'],
     install: ['bootstrap/deps initialize readiness', 'missing runtime deps show repair actions', 'readiness output is concrete']

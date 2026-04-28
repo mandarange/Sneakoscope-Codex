@@ -7,7 +7,7 @@ import { buildQuestionSchemaForRoute, writeQuestions } from './questions.mjs';
 import { sealContract } from './decision-contract.mjs';
 import { scanDbSafety } from './db-safety.mjs';
 import { writeResearchPlan } from './research.mjs';
-import { FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, hasFromChatImgSignal, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
+import { FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, hasFromChatImgSignal, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { formatRoleCounts, initTeamLive, parseTeamSpecText } from './team-live.mjs';
 
 export { routePrompt };
@@ -264,7 +264,7 @@ async function prepareTeam(root, route, task, required) {
     context_tracking: triwikiContextTracking(),
     phases: [
       { id: 'team_roster_confirmation', goal: `Before any implementation, materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}. Implementation cannot be considered complete unless team-gate.json has team_roster_confirmed=true.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'parallel_analysis_scouting', goal: `Before scouting, read TriWiki context. ${fromChatImgRequired ? `From-Chat-IMG active: use Computer Use/browser visual inspection, list every visible customer request, match every screenshot image region to attachments, and write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} before edits.` : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'} Spawn exactly ${roster.bundle_size} read-only analysis_scout_N agents in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, and record source-backed findings.`, agents: roster.analysis_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
+      { id: 'parallel_analysis_scouting', goal: `Before scouting, read TriWiki context. ${fromChatImgRequired ? `From-Chat-IMG active: use Computer Use/browser visual inspection, list every visible customer request, match every screenshot image region to attachments, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, then require scoped QA-LOOP evidence in ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} after the customer-request work is done.` : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'} Spawn exactly ${roster.bundle_size} read-only analysis_scout_N agents in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, and record source-backed findings.`, agents: roster.analysis_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
       { id: 'triwiki_refresh', goal: `Parent orchestrator updates Team analysis artifacts, then runs ${triwikiContextTracking().refresh_command} or ${triwikiContextTracking().pack_command}, prunes with ${triwikiContextTracking().prune_command} when stale/oversized wiki state would pollute handoffs, and runs ${triwikiContextTracking().validate_command} so the next stage uses current TriWiki context.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
       { id: 'planning_debate', goal: `Before debate, read the refreshed TriWiki pack. Debate team of exactly ${roster.bundle_size} participants maps user inconvenience, options, constraints, affected files, DB/test risk, and tradeoffs while hydrating low-trust claims from source.`, agents: roster.debate_team.map((agent) => agent.id) },
       { id: 'consensus', goal: `Seal one objective with acceptance criteria and disjoint implementation slices, then refresh/validate TriWiki so implementation receives current consensus context.` },
@@ -278,7 +278,7 @@ async function prepareTeam(root, route, task, required) {
       dashboard: 'team-dashboard.json',
       commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team watch latest', 'sks team event latest --agent <name> --phase <phase> --message "..."']
     },
-    required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT] : []), 'team-consensus.md', 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
+    required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
   };
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
@@ -773,7 +773,7 @@ async function missingFromChatImgCoverageArtifacts(root, state = {}) {
   const ledger = await readJson(path.join(missionDir(root, id), FROM_CHAT_IMG_COVERAGE_ARTIFACT), null);
   if (!ledger) return [FROM_CHAT_IMG_COVERAGE_ARTIFACT];
   if (ledger.passed !== true) missing.push(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:passed`);
-  for (const key of ['all_chat_requirements_listed', 'all_requirements_mapped_to_work_order', 'all_screenshot_regions_accounted', 'all_attachments_accounted', 'image_analysis_complete', 'verbatim_customer_requests_preserved', 'checklist_updated', 'temp_triwiki_recorded']) {
+  for (const key of ['all_chat_requirements_listed', 'all_requirements_mapped_to_work_order', 'all_screenshot_regions_accounted', 'all_attachments_accounted', 'image_analysis_complete', 'verbatim_customer_requests_preserved', 'checklist_updated', 'temp_triwiki_recorded', 'scoped_qa_loop_completed']) {
     if (ledger[key] !== true) missing.push(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:${key}`);
   }
   if (!Array.isArray(ledger.unresolved_items)) missing.push(`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:unresolved_items`);
@@ -788,7 +788,7 @@ async function missingFromChatImgCoverageArtifacts(root, state = {}) {
   else {
     if (!/- \[[ xX]\]\s+\S/.test(checklist)) missing.push(`${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}:checkboxes`);
     if (/- \[ \]\s+\S/.test(checklist)) missing.push(`${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}:unchecked_items`);
-    for (const section of ['Customer Requests', 'Image Analysis', 'Work Items', 'Verification']) {
+    for (const section of ['Customer Requests', 'Image Analysis', 'Work Items', 'QA Loop', 'Verification']) {
       if (!checklist.includes(section)) missing.push(`${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}:${section.toLowerCase().replaceAll(' ', '_')}`);
     }
   }
@@ -800,6 +800,23 @@ async function missingFromChatImgCoverageArtifacts(root, state = {}) {
     if (tempWiki.scope !== 'temporary' || tempWiki.storage !== 'triwiki') missing.push(`${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}:scope`);
     if (!Number.isFinite(ttl) || ttl < 1 || ttl > FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS) missing.push(`${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}:expires_after_sessions`);
     if (!Array.isArray(tempWiki.claims) || tempWiki.claims.length === 0) missing.push(`${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}:claims`);
+  }
+  const qaLoopName = typeof ledger.qa_loop_file === 'string' && ledger.qa_loop_file.trim() ? ledger.qa_loop_file.trim() : FROM_CHAT_IMG_QA_LOOP_ARTIFACT;
+  const qaLoop = await readJson(path.join(missionDir(root, id), qaLoopName), null);
+  if (!qaLoop) missing.push(FROM_CHAT_IMG_QA_LOOP_ARTIFACT);
+  else {
+    if (qaLoop.passed !== true) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:passed`);
+    if (qaLoop.scope !== 'from-chat-img-work-order') missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:scope`);
+    if (qaLoop.all_work_order_items_qa_checked !== true) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:all_work_order_items_qa_checked`);
+    if (qaLoop.post_fix_verification_complete !== true) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:post_fix_verification_complete`);
+    if (Number(qaLoop.unresolved_findings) !== 0) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:unresolved_findings`);
+    if (Number(qaLoop.unresolved_fixable_findings) !== 0) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:unresolved_fixable_findings`);
+    if (!Array.isArray(qaLoop.evidence) || qaLoop.evidence.length === 0) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:evidence`);
+    const coveredWorkItems = new Set(Array.isArray(qaLoop.work_order_item_ids_covered) ? qaLoop.work_order_item_ids_covered.map(String) : []);
+    for (const item of Array.isArray(ledger.work_order_items) ? ledger.work_order_items : []) {
+      const workId = String(item?.id || '');
+      if (workId && !coveredWorkItems.has(workId)) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:work_order_item_ids_covered`);
+    }
   }
   return missing;
 }
