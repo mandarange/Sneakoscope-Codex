@@ -1,9 +1,10 @@
 import path from 'node:path';
+import os from 'node:os';
 import fsp from 'node:fs/promises';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { projectRoot, readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, tmpdir, packageRoot, dirSize, formatBytes, which, runProcess, PACKAGE_VERSION } from '../core/fsx.mjs';
-import { initProject, normalizeInstallScope, sksCommandPrefix } from '../core/init.mjs';
+import { initProject, installSkills, normalizeInstallScope, sksCommandPrefix } from '../core/init.mjs';
 import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, missionDir, setCurrent, stateFile } from '../core/mission.mjs';
 import { buildQuestionSchema, writeQuestions } from '../core/questions.mjs';
@@ -209,6 +210,11 @@ async function postinstall() {
   else if (context7Install.status === 'codex_missing') console.log('Context7 MCP: Codex CLI missing. Install @openai/codex or set SKS_CODEX_BIN, then run `sks context7 setup --scope global` or `sks setup` in a project.');
   else if (context7Install.status === 'skipped') console.log(`Context7 MCP: skipped (${context7Install.reason}).`);
   else if (context7Install.status === 'failed') console.log(`Context7 MCP: auto setup failed. Run \`sks context7 setup --scope global\` or \`sks setup\`. ${context7Install.error || ''}`.trim());
+  const globalSkills = await ensureGlobalCodexSkillsDuringInstall();
+  if (globalSkills.status === 'installed') console.log(`Codex App global $ skills: installed in ${globalSkills.root} (${globalSkills.installed_count} skills).`);
+  else if (globalSkills.status === 'partial') console.log(`Codex App global $ skills: partial in ${globalSkills.root}; missing ${globalSkills.missing_skills.join(', ')}. Run \`sks doctor --fix\`.`);
+  else if (globalSkills.status === 'skipped') console.log(`Codex App global $ skills: skipped (${globalSkills.reason}).`);
+  else if (globalSkills.status === 'failed') console.log(`Codex App global $ skills: auto setup failed. Run \`sks doctor --fix\`. ${globalSkills.error || ''}`.trim());
   const appSetup = await ensureCodexAppProjectDuringInstall(installRoot, { shim });
   if (appSetup.status === 'installed') console.log(`Codex App project setup: installed in ${appSetup.root} (${appSetup.install_scope}; canonical picker skills include ${appSetup.aliases.join(', ')}).`);
   else if (appSetup.status === 'partial') console.log(`Codex App project setup: repaired with missing skill warning (${appSetup.missing_skills.join(', ')}). Run \`sks doctor --fix\`.`);
@@ -321,6 +327,20 @@ async function ensureGlobalContext7DuringInstall() {
   const add = await runProcess(codex.bin, ['mcp', 'add', 'context7', '--', 'npx', '-y', '@upstash/context7-mcp@latest'], { timeoutMs: 30000, maxOutputBytes: 64 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
   if (add.code === 0) return { status: 'installed' };
   return { status: 'failed', error: `${add.stderr || add.stdout || 'codex mcp add failed'}`.trim() };
+}
+
+async function ensureGlobalCodexSkillsDuringInstall(opts = {}) {
+  if (process.env.SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS === '1' && !opts.force) return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS=1' };
+  const home = opts.home || process.env.HOME || os.homedir();
+  if (!home) return { status: 'skipped', reason: 'home directory unavailable' };
+  const root = globalCodexSkillsRoot(home);
+  try {
+    const install = await installSkills(home);
+    const skills = await checkRequiredSkills(home, root);
+    return { status: skills.ok ? 'installed' : 'partial', root, installed_count: install.installed_skills.length, removed_aliases: install.removed_agent_skill_aliases, missing_skills: skills.missing };
+  } catch (err) {
+    return { status: 'failed', root, error: err.message };
+  }
 }
 
 async function ensureRelatedCliTools(args = []) {
@@ -1046,9 +1066,15 @@ async function codexAppHelp(args = []) {
   const action = args[0] || 'help';
   if (action === 'check' || action === 'status') {
     const status = await codexAppIntegrationStatus();
-    if (flag(args, '--json')) return console.log(JSON.stringify(status, null, 2));
+    const skills = await codexAppSkillReadiness();
+    const readiness = { ...status, ok: status.ok && skills.ok, runtime_ok: status.ok, skills };
+    if (flag(args, '--json')) return console.log(JSON.stringify(readiness, null, 2));
     console.log(formatCodexAppStatus(status, { includeRaw: flag(args, '--verbose') }));
-    if (!status.ok) process.exitCode = 1;
+    console.log('');
+    console.log(`Project $ skills: ${skills.project.ok ? 'ok' : `missing ${skills.project.missing.length}`} ${skills.project.root}`);
+    console.log(`Global $ skills:  ${skills.global.ok ? 'ok' : `missing ${skills.global.missing.length}`} ${skills.global.root}`);
+    if (!skills.ok) console.log('Run: sks setup, or reinstall/repair with npm i -g sneakoscope && sks doctor --fix');
+    if (!readiness.ok) process.exitCode = 1;
     return;
   }
   if (action === 'open') {
@@ -1059,9 +1085,14 @@ async function codexAppHelp(args = []) {
     return;
   }
   const status = await codexAppIntegrationStatus();
+  const skills = await codexAppSkillReadiness();
   console.log(`ㅅㅋㅅ App Usage
 
 ${formatCodexAppStatus(status)}
+
+Dollar-command skills:
+  Project: ${skills.project.ok ? 'ok' : `missing ${skills.project.missing.length}`} ${skills.project.root}
+  Global:  ${skills.global.ok ? 'ok' : `missing ${skills.global.missing.length}`} ${skills.global.root}
 
 Run once in the project:
   sks setup
@@ -1619,6 +1650,9 @@ async function setup(args) {
   const cliTools = await ensureRelatedCliTools(args);
   const globalCommand = await globalSksCommand();
   const res = await initProject(root, { force: flag(args, '--force'), installScope, globalCommand, localOnly });
+  const globalSkills = localOnly
+    ? { status: 'skipped', reason: '--local-only', root: globalCodexSkillsRoot() }
+    : await ensureGlobalCodexSkillsDuringInstall({ force: flag(args, '--force') });
   const install = await installStatus(root, installScope, { globalCommand });
   const versioningInfo = await versioningStatus(root);
   const appRuntime = await codexAppIntegrationStatus();
@@ -1632,11 +1666,13 @@ async function setup(args) {
       config: path.join(root, '.codex', 'config.toml'),
       hooks: hooksPath,
       skills: path.join(root, '.agents', 'skills'),
+      global_skills: globalSkills.root,
       agents: path.join(root, '.codex', 'agents'),
       quick_reference: path.join(root, '.codex', 'SNEAKOSCOPE.md'),
       agents_rules: path.join(root, 'AGENTS.md')
     },
     codex_app_runtime: appRuntime,
+    global_skills: globalSkills,
     created: res.created,
     versioning: versioningInfo,
     local_only: localOnly,
@@ -1651,6 +1687,7 @@ async function setup(args) {
   console.log(`Version:   ${versioningInfo.enabled ? (versioningInfo.hook_installed ? 'auto-bump enabled' : 'auto-bump hook missing') : 'not enabled'}${versioningInfo.package_version ? ` (${versioningInfo.package_version})` : ''}`);
   if (localOnly) console.log('Git:       local-only (.git/info/exclude; user AGENTS preserved, SKS managed block refreshed)');
   console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .agents/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
+  console.log(`Global $:  ${globalSkills.status === 'installed' ? 'ok' : globalSkills.status} ${globalSkills.root || ''}`.trimEnd());
   console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser Use=${appRuntime.mcp.has_browser_use ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'}`);
   console.log(`Prompt:    intent-first routing, $Answer fact-check route, $DFix ultralight design/content route, Context7 gate`);
   console.log(`Skills:    .agents/skills`);
@@ -1706,10 +1743,12 @@ async function doctor(args) {
     : null;
   let conflictScan = await scanHarnessConflicts(root);
   let repairApplied = false;
+  let globalSkillsRepair = null;
   if (flag(args, '--fix') && !conflictScan.hard_block) {
     const fixScope = requestedScope || 'global';
     const existingManifest = await readJson(path.join(root, '.sneakoscope', 'manifest.json'), null);
     await initProject(root, { installScope: fixScope, globalCommand: await globalSksCommand(), localOnly: flag(args, '--local-only') || Boolean(existingManifest?.git?.local_only), force: true, repair: true });
+    if (!flag(args, '--local-only')) globalSkillsRepair = await ensureGlobalCodexSkillsDuringInstall({ force: true });
     repairApplied = true;
     conflictScan = await scanHarnessConflicts(root);
   }
@@ -1726,6 +1765,7 @@ async function doctor(args) {
   const context7Status = await checkContext7(root);
   const appRuntime = await codexAppIntegrationStatus({ codex });
   const skillStatus = await checkRequiredSkills(root);
+  const globalSkillStatus = await checkRequiredSkills(null, globalCodexSkillsRoot());
   const guardStatus = await harnessGuardStatus(root);
   const versioningInfo = await versioningStatus(root);
   const codexApp = {
@@ -1733,6 +1773,7 @@ async function doctor(args) {
     hooks: { ok: await exists(path.join(root, '.codex', 'hooks.json')) },
     versioning: versioningInfo,
     skills: skillStatus,
+    global_skills: globalSkillStatus,
     agents: { ok: await exists(path.join(root, '.codex', 'agents')) },
     quick_reference: { ok: await exists(path.join(root, '.codex', 'SNEAKOSCOPE.md')) },
     agents_rules: { ok: await exists(path.join(root, 'AGENTS.md')) }
@@ -1740,7 +1781,7 @@ async function doctor(args) {
   const result = {
     node: { ok: nodeOk, version: process.version }, root, codex, rust,
     install,
-    repair: { applied: repairApplied, blocked_by_other_harness: flag(args, '--fix') && conflictScan.hard_block },
+    repair: { applied: repairApplied, global_skills: globalSkillsRepair, blocked_by_other_harness: flag(args, '--fix') && conflictScan.hard_block },
     harness_conflicts: {
       ok: conflictScan.ok,
       hard_block: conflictScan.hard_block,
@@ -1755,14 +1796,15 @@ async function doctor(args) {
     versioning: versioningInfo,
     db_guard: { ok: dbPolicyExists && dbScan.ok, policy: dbPolicyExists ? await loadDbSafetyPolicy(root) : null, scan: dbScan },
     hooks: { ok: await exists(path.join(root, '.codex', 'hooks.json')) },
-    skills: { ok: await exists(path.join(root, '.agents', 'skills')) },
+    skills: skillStatus,
+    global_skills: globalSkillStatus,
     codex_app: {
       ...codexApp,
       ok: codexApp.config.ok && codexApp.hooks.ok && codexApp.skills.ok && codexApp.agents.ok && codexApp.quick_reference.ok && codexApp.agents_rules.ok
     },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) }, storage
   };
-  result.ready = !result.harness_conflicts.hard_block && nodeOk && Boolean(codex.bin) && install.ok && result.sneakoscope.ok && result.context7.ok && appRuntime.ok && result.harness_guard.ok && result.versioning.ok && result.db_guard.ok && result.codex_app.ok && result.skills.ok;
+  result.ready = !result.harness_conflicts.hard_block && nodeOk && Boolean(codex.bin) && install.ok && result.sneakoscope.ok && result.context7.ok && appRuntime.ok && result.harness_guard.ok && result.versioning.ok && result.db_guard.ok && result.codex_app.ok && result.skills.ok && result.global_skills.ok;
   if (result.harness_conflicts.hard_block) process.exitCode = 1;
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log('ㅅㅋㅅ Doctor\n');
@@ -1772,6 +1814,7 @@ async function doctor(args) {
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
   console.log(`Conflicts: ${result.harness_conflicts.hard_block ? 'blocked' : 'ok'} ${result.harness_conflicts.conflicts.length} finding(s)`);
   if (repairApplied) console.log('Repair:    regenerated SKS managed files from the installed package template');
+  if (globalSkillsRepair) console.log(`Global $ repair: ${globalSkillsRepair.status} ${globalSkillsRepair.root || ''}`.trimEnd());
   if (flag(args, '--fix') && result.harness_conflicts.hard_block) console.log('Repair:    skipped because another Codex harness needs human-approved removal first');
   console.log(`Rust acc.: ${rust.available ? rust.version : 'optional-missing'}`);
   console.log(`State:     ${result.sneakoscope.ok ? 'ok' : 'missing .sneakoscope'}`);
@@ -1783,6 +1826,7 @@ async function doctor(args) {
   console.log(`Hooks:     ${result.hooks.ok ? 'ok' : 'missing .codex/hooks.json'}`);
   console.log(`Codex App: ${result.codex_app.ok ? 'ok' : 'missing app files'} .codex/config.toml .codex/hooks.json .agents/skills .codex/agents .codex/SNEAKOSCOPE.md`);
   console.log(`Skills:    ${result.skills.ok ? 'ok' : `missing ${result.skills.missing.length} skill(s)`}`);
+  console.log(`Global $:  ${result.global_skills.ok ? 'ok' : `missing ${result.global_skills.missing.length} skill(s)`} ${result.global_skills.root}`);
   console.log(`Package:   ${result.package.human}`);
   console.log(`Storage:   ${storage.total_human || '0 B'}`);
   console.log(`Ready:     ${result.ready ? 'yes' : 'no'}`);
@@ -1795,19 +1839,31 @@ async function doctor(args) {
   if (!result.harness_guard.ok) console.log('Harness guard failed. Run: sks setup from a real terminal, then sks guard check.');
   if (!result.versioning.ok) console.log('Versioning hook missing. Run: sks versioning hook, or sks doctor --fix.');
   if (!result.skills.ok) console.log(`Missing skills: ${result.skills.missing.join(', ')}. Run: sks setup`);
+  if (!result.global_skills.ok) console.log(`Missing global $ skills: ${result.global_skills.missing.join(', ')}. Run: npm i -g sneakoscope, or sks setup from a non-local-only run.`);
   if (!result.ready && !flag(args, '--fix')) console.log('Run: sks doctor --fix');
 }
 
-async function checkRequiredSkills(root) {
+async function checkRequiredSkills(root, skillRoot = path.join(root, '.agents', 'skills')) {
   const expected = Array.from(new Set([
     ...DOLLAR_SKILL_NAMES,
     ...RECOMMENDED_SKILLS
   ])).sort();
   const missing = [];
   for (const name of expected) {
-    if (!(await exists(path.join(root, '.agents', 'skills', name, 'SKILL.md')))) missing.push(name);
+    if (!(await exists(path.join(skillRoot, name, 'SKILL.md')))) missing.push(name);
   }
-  return { ok: missing.length === 0, expected, missing };
+  return { ok: missing.length === 0, root: skillRoot, expected, missing };
+}
+
+async function codexAppSkillReadiness(root = null) {
+  root ||= await projectRoot();
+  const project = await checkRequiredSkills(root);
+  const global = await checkRequiredSkills(null, globalCodexSkillsRoot());
+  return { ok: project.ok || global.ok, project, global };
+}
+
+function globalCodexSkillsRoot(home = process.env.HOME || os.homedir()) {
+  return path.join(home, '.agents', 'skills');
 }
 
 async function init(args) {
@@ -2317,11 +2373,14 @@ async function selftest() {
   await initProject(repairTmp, {});
   await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'team', 'SKILL.md'), 'tampered\n');
   await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'), '---\nname: agent-team\ndescription: Fallback Codex App picker alias for $Team.\n---\n');
+  await ensureDir(path.join(repairTmp, '.agents', 'skills', 'custom-keep'));
+  await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'custom-keep', 'SKILL.md'), '---\nname: custom-keep\ndescription: User custom skill, not generated by SKS.\n---\n');
   await writeTextAtomic(path.join(repairTmp, '.codex', 'skills', 'team', 'SKILL.md'), 'legacy mirror\n');
   await initProject(repairTmp, { force: true, repair: true });
   const repairedTeamSkill = await safeReadText(path.join(repairTmp, '.agents', 'skills', 'team', 'SKILL.md'));
   if (!repairedTeamSkill.includes('SKS Team multi-agent orchestration') || repairedTeamSkill.includes('tampered')) throw new Error('selftest failed: doctor repair did not regenerate team skill');
   if (await exists(path.join(repairTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest failed: doctor repair did not remove deprecated agent-team alias skill');
+  if (!(await exists(path.join(repairTmp, '.agents', 'skills', 'custom-keep', 'SKILL.md')))) throw new Error('selftest failed: doctor repair removed a user-owned custom skill');
   if (await exists(path.join(repairTmp, '.codex', 'skills', 'team', 'SKILL.md'))) throw new Error('selftest failed: doctor repair did not remove legacy .codex/skills');
   const conflictTmp = tmpdir();
   await ensureDir(path.join(conflictTmp, '.omx'));
@@ -2339,6 +2398,11 @@ async function selftest() {
   if (postinstallSetup.code !== 0) throw new Error(`selftest failed: postinstall setup exited ${postinstallSetup.code}: ${postinstallSetup.stderr}`);
   if (await exists(path.join(postinstallSetupTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest failed: postinstall installed deprecated agent-team fallback skill');
   if (!String(postinstallSetup.stdout || '').includes('Codex App project setup: installed')) throw new Error('selftest failed: postinstall did not report automatic Codex App setup');
+  if (!String(postinstallSetup.stdout || '').includes('Codex App global $ skills: installed')) throw new Error('selftest failed: postinstall did not report automatic global Codex App skills');
+  for (const { command } of DOLLAR_COMMANDS) {
+    const skillName = command.slice(1).toLowerCase();
+    if (!(await exists(path.join(postinstallSetupTmp, 'home', '.agents', 'skills', skillName, 'SKILL.md')))) throw new Error(`selftest failed: postinstall global ${command} skill not installed`);
+  }
   const guardBlocked = await checkHarnessModification(tmp, { tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
   if (guardBlocked.action !== 'block') throw new Error('selftest failed: harness guard allowed skill tampering');
   const setupBlocked = await checkHarnessModification(tmp, { command: 'sks setup --force' });
@@ -2454,6 +2518,11 @@ async function selftest() {
   const shimDir = path.join(shimTmp, 'bin');
   const shimResult = await ensureSksCommandDuringInstall({ force: true, pathEnv: shimDir, home: shimTmp, target: path.join(packageRoot(), 'bin', 'sks.mjs'), nodeBin: process.execPath });
   if (shimResult.status !== 'created' || !(await exists(path.join(shimDir, process.platform === 'win32' ? 'sks.cmd' : 'sks')))) throw new Error('selftest failed: sks command shim not created');
+  const globalSkillsTmp = tmpdir();
+  const globalSkillsResult = await ensureGlobalCodexSkillsDuringInstall({ force: true, home: globalSkillsTmp });
+  if (globalSkillsResult.status !== 'installed') throw new Error(`selftest failed: global Codex App skills not installed: ${globalSkillsResult.status}`);
+  const globalSkillStatus = await checkRequiredSkills(globalSkillsTmp, path.join(globalSkillsTmp, '.agents', 'skills'));
+  if (!globalSkillStatus.ok) throw new Error(`selftest failed: global Codex App skills missing: ${globalSkillStatus.missing.join(', ')}`);
   const codexSkillMirrorExists = await exists(path.join(tmp, '.codex', 'skills', 'research-discovery', 'SKILL.md'));
   if (codexSkillMirrorExists) throw new Error('selftest failed: generated .codex/skills mirror still installed');
   const codexAppSkillExists = await exists(path.join(tmp, '.agents', 'skills', 'research-discovery', 'SKILL.md'));

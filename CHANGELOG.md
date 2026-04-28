@@ -6,6 +6,34 @@ All user-facing Sneakoscope Codex changes are tracked here. Copy the relevant ve
 
 - Keep upcoming changes here until they are assigned to a package version.
 
+## [0.6.41] - 2026-04-28
+
+### Fixed
+
+- Preserve custom Codex App skills during `sks doctor --fix` repair instead of clearing the whole `.agents/skills` tree.
+
+## [0.6.40] - 2026-04-28
+
+### Fixed
+
+- Preserve user-owned non-generated Codex App skill aliases during upgrade/repair while still removing obsolete SKS-generated aliases.
+- Add selftest coverage for custom skill preservation during generated alias cleanup.
+
+## [0.6.39] - 2026-04-28
+
+### Fixed
+
+- Restore the README from the overly short quick-summary form into a fuller install, command, Codex App, Team, Ralph, TriWiki, H-Proof, development, and publishing guide while keeping the new logo and first-install dollar-command guidance.
+- Compress generated skill template text so the expanded README still passes the npm package size gate.
+
+## [0.6.38] - 2026-04-28
+
+### Fixed
+
+- Seed SKS Codex App dollar-command skills into `$HOME/.agents/skills` during package install so first-time global users can invoke `$sks`, `$team`, `$qa-loop`, and the rest of the SKS routes before a project is initialized.
+- Strengthen `sks codex-app check` and `sks doctor` to report both project-local and global dollar-command skill readiness.
+- Replace the README text mark with a modern minimal `ㅅㅋㅅ` logo asset.
+
 ## [0.6.37] - 2026-04-28
 
 ### Added
