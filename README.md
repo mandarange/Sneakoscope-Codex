@@ -13,20 +13,20 @@ Check: `sks deps check`, `sks doctor --fix`, `sks selftest --mock`
 
 ## What It Adds
 
-Sneakoscope (`sks`, displayed as `ㅅㅋㅅ`) wraps Codex with a repeatable control surface:
+Sneakoscope (`sks`, displayed as `ㅅㅋㅅ`) wraps Codex with a repeatable control surface. Its core idea is not just "more commands": it gives Codex a memory-and-evidence harness so it can keep the mission goal, source facts, visual/context anchors, and verification state intact instead of drifting or silently skipping the thing the user actually asked for.
 
 | Area | What it does |
 | --- | --- |
-| Codex App commands | Installs generated skills so `$Team`, `$DFix`, `$QA-LOOP`, `$Ralph`, `$DB`, `$Wiki`, `$Help`, and related routes are discoverable in prompt workflows. |
+| Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$Ralph`, `$DB`, `$Wiki`, `$Help`, and related routes are discoverable in prompt workflows. |
 | CLI commands | Provides `sks commands`, `sks dollar-commands`, `sks usage <topic>`, bootstrap, setup, doctor, deps, selftest, wiki, team, QA, Ralph, DB, and GX commands. |
 | Team orchestration | Routes substantial code work through ambiguity removal, scouts, TriWiki refresh, debate, consensus, implementation, review, integration, reflection, and Honest Mode. |
 | Ralph | Seals a decision contract up front, then continues without more user questions by using the agreed decision ladder. |
 | QA loop | Dogfoods UI/API behavior with safety boundaries, evidence capture, safe remediation, and focused rechecks. |
-| TriWiki | Keeps `.sneakoscope/wiki/context-pack.json` as the context SSOT, with refresh, pack, prune, validate, and hydratable source-backed claims. |
+| TriWiki + voxels | Keeps `.sneakoscope/wiki/context-pack.json` as the context SSOT, combining coordinate anchors with voxel metadata so Codex can recover the right evidence, source paths, trust weights, and visual/context positions after long missions or context pressure. |
 | Context7 | Requires current external library/API/framework docs for routes whose correctness depends on live package or platform behavior. |
 | DB safety | Treats SQL, migrations, Supabase, RLS, and destructive operations as high risk; defaults to inspection and guarded local/branch-safe migration work. |
 | Honest Mode | Finishes work with a claim/evidence pass that separates verified facts, unsupported claims, blocked checks, and not-applicable items. |
-| GX visual context | Generates deterministic visual context cartridges for structured visual review and drift checks. |
+| GX visual context | Generates deterministic visual context cartridges for structured visual review and drift checks, feeding the same coordinate/voxel idea into UI and image-heavy work. |
 | Research loops | Supports Research and AutoResearch workflows with hypotheses, experiments, falsification, novelty ledgers, SEO/GEO, and evidence-backed conclusions. |
 | Release hygiene | Checks versioning, changelog, package contents, tarball size, syntax, selftests, and dry-run packaging before publish. |
 
@@ -37,7 +37,7 @@ Use these inside Codex App or another agent prompt. They are prompt commands, no
 | Prompt | Purpose |
 | --- | --- |
 | `$Team` | Default route for code-changing work and substantial implementation. |
-| `$From-Chat-IMG` | Team alias for chat screenshot plus original attachment intake. |
+| `$From-Chat-IMG` | Explicit Team route for chat screenshot plus original attachment intake. It extracts visible chat requirements first, matches screenshot regions to the attached originals, then turns that into a concrete work order before implementation. |
 | `$DFix` | Tiny design/content fixes: labels, copy, colors, spacing, translation. |
 | `$Answer` | Answer-only route when no implementation should start. |
 | `$SKS` | Setup, status, usage, and Sneakoscope workflow help. |
@@ -51,6 +51,22 @@ Use these inside Codex App or another agent prompt. They are prompt commands, no
 | `$Help` | Installed command and workflow explanation. |
 
 Run `sks dollar-commands` to verify the terminal and Codex App command surfaces agree.
+
+## TriWiki Voxels
+
+TriWiki is the main differentiator. It is a compact mission memory that helps Codex finish the actual job instead of improvising from a stale chat tail.
+
+The coordinate layer records where important claims came from: source files, command evidence, wiki claims, visual anchors, and route artifacts. The voxel layer adds compact metadata over those coordinates: trust, risk, recency, source path, hash, and hydration pointers. Together they let SKS tell Codex what to trust, what to re-check, and what evidence must be refreshed before it can honestly claim completion.
+
+This matters most in long or high-stakes work:
+
+- Team handoffs can recover the same mission facts instead of restarting from vibes.
+- Honest Mode can bind final claims to tests, source files, route gates, and package evidence.
+- Context pressure does not erase the decision contract or the proof trail.
+- Visual/GX work can keep deterministic anchors for what changed and what drifted.
+- QA, DB, and release workflows can distinguish verified, stale, blocked, and not-applicable claims.
+
+In short: TriWiki voxels are the part that keeps Codex oriented, evidence-bound, and less likely to miss the user's real objective.
 
 ## Terminal Examples
 
