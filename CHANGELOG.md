@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+## [0.6.59] - 2026-04-29
+
+### Changed
+
+- Merge the dev branch Team runtime graph, From-Chat-IMG completion gates, and active TriWiki attention work into main while preserving the main README positioning for From-Chat-IMG and TriWiki voxels.
+
+## [0.6.57] - 2026-04-29
+
+### Changed
+
+- Add active TriWiki attention ranking so context packs expose compact `attention.use_first` recall and `attention.hydrate_first` source-check queues for higher-signal route and worker handoffs.
+
+## [0.6.56] - 2026-04-29
+
+### Changed
+
+- Infer predictable ambiguity-gate contract answers from the prompt/default safety policy so SKS asks only unresolved behavior or safety questions instead of static `GOAL_PRECISE` and `ACCEPTANCE_CRITERIA` templates.
+- Add a Team runtime graph compiler that remaps symbolic plan nodes to concrete task ids, writes scope-aware worker inboxes, and stop-gates the runtime graph artifacts before executor handoff.
+
+## [0.6.55] - 2026-04-29
+
+### Changed
+
+- Require From-Chat-IMG completion to include scoped QA-LOOP evidence after the customer-request work is implemented, with every work-order item covered, post-fix verification complete, and zero unresolved QA findings.
+- Raise the tracked-file size gate to 288 KiB for the enlarged From-Chat-IMG scoped QA-LOOP selftest while retaining the existing package size gates.
+
+## [0.6.54] - 2026-04-29
+
+### Changed
+
+- Strengthen From-Chat-IMG completion gates with a required checked work checklist and temporary TriWiki-backed request snapshot, so chat screenshot text, image-region matches, work items, and verification steps are tracked before Team completion.
+- Add From-Chat-IMG temporary TriWiki retention handling so session-scoped image-analysis claims can be pruned after the configured later-session TTL.
+
+## [0.6.53] - 2026-04-29
+
+### Changed
+
+- Add a stop-gated From-Chat-IMG coverage ledger so every visible customer request, screenshot image region, and attachment must be mapped to work-order item(s) with `unresolved_items=[]` before Team completion.
+- Teach Team plans, generated skills, prompt context, inferred acceptance criteria, and selftests to require the From-Chat-IMG no-omission work-order coverage pass.
+- Add a compliance-loop guard so repeated identical stop-gate blocks produce an evidenced `hard-blocker.json` instead of looping indefinitely, re-evaluate normal gates after later repairs, and bound route runner `--max-cycles` values.
+- Raise the tracked-file size gate to 272 KiB for the enlarged CLI selftest and Team plan coverage logic while retaining the 256 KiB packed tarball limit.
+
 ## [0.6.52] - 2026-04-28
 
 ### Changed

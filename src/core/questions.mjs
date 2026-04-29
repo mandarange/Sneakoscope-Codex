@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
 import { buildQaLoopQuestionSchema } from './qa-loop.mjs';
-import { hasFromChatImgSignal } from './routes.mjs';
+import { FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, hasFromChatImgSignal } from './routes.mjs';
 
 export function buildQuestionSchemaForRoute(route, prompt) {
   if (String(route?.id || '') === 'QALoop') return buildQaLoopQuestionSchema(prompt);
@@ -26,6 +26,11 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   const lower = text.toLowerCase();
   const inferred = {};
   const notes = {};
+  const normalizedPrompt = String(prompt || '')
+    .replace(/^\s*\$(?:Team|SKS|Ralph|team|sks|ralph)\b/i, '')
+    .replace(/\b(?:executor|reviewer|planner|user)\s*:\s*\d+\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   const version = String(text || '').match(/\bv?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1] || null;
   const versionWork = /버전|version|bump|release|publish:dry|npm\s+pack/.test(lower);
   const installWork = /bootstrap|postinstall|doctor|deps|tmux|homebrew|first install|최초\s*설치|설치\s*ux|셋업|setup/.test(lower);
@@ -46,13 +51,33 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   };
   const criteria = {
     version: [version ? `version refs are ${version}` : 'version refs advance consistently', 'publish:dry gate passes', 'npm publish is not run'],
-    chat_capture: ['From-Chat-IMG activates chat-image intake only here', 'chat requirements are listed before implementation', 'screenshot regions are matched to attachments or marked low-confidence', 'Computer Use/browser visual inspection strengthens matches when available', 'client requests follow normal SKS gates and verification'],
+    chat_capture: ['From-Chat-IMG activates chat-image intake only here', 'all visible chat requirements are listed before implementation', `${FROM_CHAT_IMG_COVERAGE_ARTIFACT} maps every customer request, screenshot region, and attachment to work-order item(s)`, `${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} is updated as each request, image match, work item, scoped QA-LOOP, and verification step is completed`, `${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} records temporary TriWiki-backed session context with retention metadata`, `${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} proves QA-LOOP ran over the exact customer-request work-order range after implementation`, 'unresolved_items is empty before Team completion', 'scoped_qa_loop_completed is true with zero unresolved QA findings', 'Computer Use/browser visual inspection strengthens matches when available', 'client requests follow normal SKS gates and verification'],
     priority: ['strong feedback raises required_weight', 'request topics are counted in wiki packs', 'future inference uses priority signals'],
     questions: ['predictable answers are inferred', 'partial answers can seal contracts', 'only unresolved changing slots remain visible'],
     install: ['bootstrap/deps initialize readiness', 'missing runtime deps show repair actions', 'readiness output is concrete']
   };
-  if (kind && !hasAnswer(explicitAnswers.GOAL_PRECISE)) addInferred(inferred, notes, 'GOAL_PRECISE', goals[kind], kind);
-  if (kind && !hasAnswer(explicitAnswers.ACCEPTANCE_CRITERIA)) addInferred(inferred, notes, 'ACCEPTANCE_CRITERIA', criteria[kind], kind);
+  if (!hasAnswer(explicitAnswers.GOAL_PRECISE)) {
+    addInferred(
+      inferred,
+      notes,
+      'GOAL_PRECISE',
+      kind ? goals[kind] : (normalizedPrompt ? `사용자 요청을 현재 코드 기준으로 구현한다: ${normalizedPrompt}` : '사용자 요청을 현재 코드 기준으로 구현한다'),
+      kind || 'prompt-derived-goal'
+    );
+  }
+  if (!hasAnswer(explicitAnswers.ACCEPTANCE_CRITERIA)) {
+    addInferred(
+      inferred,
+      notes,
+      'ACCEPTANCE_CRITERIA',
+      kind ? criteria[kind] : [
+        'requested behavior is implemented in the relevant code path',
+        'relevant tests/checks pass or any unavailable check is explicitly justified',
+        'final response states what was changed, verified, and left unverified'
+      ],
+      kind || 'default-implementation-criteria'
+    );
+  }
 
   if (explicitAnswers.NON_GOALS === undefined) addInferred(inferred, notes, 'NON_GOALS', [], 'empty non-goals is the safest default when the user did not exclude scope');
   if (!hasAnswer(explicitAnswers.PUBLIC_API_CHANGE_ALLOWED)) addInferred(inferred, notes, 'PUBLIC_API_CHANGE_ALLOWED', cliSurfaceWork || installWork ? 'yes_if_needed' : 'no', 'public-api');

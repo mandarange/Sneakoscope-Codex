@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { exists, readJson, writeJsonAtomic, ensureDir, dirSize, fileSize, formatBytes, rmrf, nowIso, appendJsonlBounded, listFilesRecursive } from './fsx.mjs';
+import { FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS } from './routes.mjs';
 
 export const DEFAULT_RETENTION_POLICY = Object.freeze({
   schema_version: 1,
@@ -18,7 +19,8 @@ export const DEFAULT_RETENTION_POLICY = Object.freeze({
   max_wiki_prune_files: 25,
   max_wiki_artifact_read_bytes: 256 * 1024,
   min_wiki_trust_score: 0.3,
-  prune_wiki_artifacts: false
+  prune_wiki_artifacts: false,
+  max_from_chat_img_temp_sessions: FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS
 });
 
 export async function ensureRetentionPolicy(root) {
@@ -90,6 +92,22 @@ async function pruneOldMissions(root, policy, dryRun, actions) {
       actions.push({ action: 'remove_mission', mission: m.id, path: m.path, bytes: m.size, reason: tooMany ? 'max_missions' : 'max_age' });
       if (!dryRun) await rmrf(m.path);
     }
+  }
+}
+
+async function pruneFromChatImgTempTriWiki(root, policy, dryRun, actions) {
+  const missions = await listMissionDirs(root);
+  const ttlDefault = Math.max(1, Number(policy.max_from_chat_img_temp_sessions) || FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS);
+  for (let i = 0; i < missions.length; i++) {
+    const m = missions[i];
+    const file = path.join(m.path, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT);
+    if (!(await exists(file))) continue;
+    const data = await readJson(file, {});
+    const ttl = Math.max(1, Math.min(ttlDefault, Number(data.expires_after_sessions) || ttlDefault));
+    if (i < ttl) continue;
+    const bytes = await fileSize(file).catch(() => 0);
+    actions.push({ action: 'remove_from_chat_img_temp_triwiki', mission: m.id, path: file, bytes, reason: 'session_ttl', expires_after_sessions: ttl });
+    if (!dryRun) await rmrf(file);
   }
 }
 
@@ -219,6 +237,7 @@ export async function enforceRetention(root, opts = {}) {
   await ensureDir(path.join(root, '.sneakoscope', 'reports'));
   await pruneTmp(root, policy, dryRun, actions);
   await pruneOldMissions(root, policy, dryRun, actions);
+  await pruneFromChatImgTempTriWiki(root, policy, dryRun, actions);
   for (const m of await listMissionDirs(root)) await compactMission(m, policy, dryRun, actions);
   await rotateLargeJsonl(root, policy, dryRun, actions);
   if (opts.pruneWikiArtifacts || policy.prune_wiki_artifacts) await pruneWikiArtifacts(root, { policy, dryRun, actions, lowTrust: opts.pruneWikiLowTrust });

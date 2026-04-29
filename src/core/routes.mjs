@@ -1,4 +1,9 @@
 const REFLECTION_SKILL_NAME = 'reflection';
+export const FROM_CHAT_IMG_COVERAGE_ARTIFACT = 'from-chat-img-coverage-ledger.json';
+export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
+export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
+export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
+export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
 export const USAGE_TOPICS = 'install|setup|bootstrap|deps|tmux|auto-review|team|qa-loop|ralph|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|hproof|gx|wiki';
 
 export const RECOMMENDED_MCP_SERVERS = [
@@ -43,6 +48,7 @@ export function triwikiContextTracking(commandPrefix = 'sks') {
     prune_command: `${prefix} wiki prune`,
     validate_command: `${prefix} wiki validate .sneakoscope/wiki/context-pack.json`,
     hydrate_policy: 'hydrate_by_id_hash_source_path_rgba_trig_coordinate',
+    attention_policy: 'use_attention_use_first_for_fast_high_trust_recall_and_hydrate_attention_hydrate_first_before_risky_or_lower_trust_decisions',
     required_schema: 'sks.wiki-coordinate.v1+vx:sks.wiki-voxel.v1',
     selected_text_policy: 'selected_text_is_only_the_visible_slice',
     stack_current_docs: stackCurrentDocsPolicy(prefix),
@@ -83,7 +89,7 @@ export function stackCurrentDocsPolicyText(commandPrefix = 'sks') {
 
 export function triwikiContextTrackingText(commandPrefix = 'sks') {
   const ctx = triwikiContextTracking(commandPrefix);
-  return `Context tracking SSOT: TriWiki. Use only the latest TriWiki pack shape at every work stage: ${ctx.required_schema}; coordinate-only legacy packs are invalid and must be refreshed before use. Read ${ctx.default_pack} before each route phase, hydrate relevant low-trust claims from source during the phase, refresh with "${ctx.refresh_command}" or "${ctx.pack_command}" after new findings/artifact changes, prune stale/oversized wiki state with "${ctx.prune_command}" when retention matters, and validate with "${ctx.validate_command}" before each handoff or final claim. Selected text is only the visible slice; non-selected claims remain hydratable by id, hash, source path, and RGBA/trig coordinate. Follow high-trust claims unless newer source evidence contradicts them; low-trust claims should trigger source/evidence hydration before implementation or final claims. ${stackCurrentDocsPolicyText(commandPrefix)}`;
+  return `Context tracking SSOT: TriWiki. Use only the latest TriWiki pack shape at every work stage: ${ctx.required_schema}; coordinate-only legacy packs are invalid and must be refreshed before use. Read ${ctx.default_pack} before each route phase, consume attention.use_first as the compact high-trust recall set, hydrate attention.hydrate_first from source before risky or lower-trust decisions, refresh with "${ctx.refresh_command}" or "${ctx.pack_command}" after new findings/artifact changes, prune stale/oversized wiki state with "${ctx.prune_command}" when retention matters, and validate with "${ctx.validate_command}" before each handoff or final claim. Selected text is only the visible slice; non-selected claims remain hydratable by id, hash, source path, and RGBA/trig coordinate. Follow high-trust claims unless newer source evidence contradicts them; low-trust claims should trigger source/evidence hydration before implementation or final claims. ${stackCurrentDocsPolicyText(commandPrefix)}`;
 }
 
 export function triwikiStagePolicyText(commandPrefix = 'sks') {
@@ -91,6 +97,7 @@ export function triwikiStagePolicyText(commandPrefix = 'sks') {
   return [
     'TriWiki stage policy:',
     `- Before each route phase, read the relevant parts of ${ctx.default_pack} instead of relying on memory or a one-time initial summary; the pack must validate as ${ctx.required_schema}.`,
+    '- Consume `attention.use_first` for the fastest high-trust context path; hydrate `attention.hydrate_first` from source before making risky, user-visible, or final claims.',
     `- If a TriWiki pack is coordinate-only or lacks voxel overlay metadata, run "${ctx.refresh_command}" or "${ctx.pack_command}" and do not use the legacy pack for pipeline decisions.`,
     '- During the phase, when a decision touches a wiki claim, hydrate low-trust or stale claims from their source path/hash/RGBA anchor before relying on them.',
     `- After new findings, changed artifacts, scout results, debate conclusions, implementation changes, reviews, or blockers, run "${ctx.refresh_command}" or "${ctx.pack_command}" so later stages see the update.`,
@@ -100,7 +107,7 @@ export function triwikiStagePolicyText(commandPrefix = 'sks') {
 }
 
 export function chatCaptureIntakeText() {
-  return 'From-Chat-IMG intake: explicit signal only. Treat uploads as chat screenshot plus originals, use Computer Use/browser visual inspection when available, list requirements first, match regions to attachments with confidence, write the work order, then continue Team. Do not assume ordinary image prompts are chat captures.';
+  return `From-Chat-IMG intake: explicit signal only. Treat uploads as chat screenshot plus originals, use Computer Use/browser visual inspection when available, list requirements first in source order, match regions to attachments with confidence, and write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}. Preserve each visible customer request as source-bound text, account for every screenshot image region and separate attachment, map each item to work-order actions, perform the customer-request work, then run a scoped QA-LOOP over that exact work-order range before Team completion. Update checklist checkboxes as work proceeds until all boxes are checked, unresolved_items is empty, scoped_qa_loop_completed=true, and QA unresolved findings are zero. ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} is temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}, so it can be forgotten by retention after enough later sessions. Do not assume ordinary image prompts are chat captures.`;
 }
 
 export function hasFromChatImgSignal(prompt = '') {
@@ -163,7 +170,7 @@ export const ROUTES = [
     command: '$Team',
     mode: 'TEAM',
     route: 'multi-agent team orchestration',
-    description: 'Run parallel analysis scouts, refresh TriWiki, debate, form a fresh executor team, then clean up team sessions before final evidence.',
+    description: 'Run parallel analysis scouts, refresh TriWiki, debate, compile a concrete runtime task graph with worker inboxes, form a fresh executor team, then clean up team sessions before final evidence.',
     requiredSkills: ['team', 'pipeline-runner', 'context7-docs', 'prompt-pipeline', REFLECTION_SKILL_NAME, 'honest-mode'],
     dollarAliases: ['$From-Chat-IMG'],
     appSkillAliases: ['from-chat-img'],
@@ -332,9 +339,9 @@ export const COMMAND_CATALOG = [
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run frontier-style research missions with novelty and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
-  { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate ...', description: 'Build, refresh, prune, and validate RGBA/trig LLM Wiki coordinate context packs; use `sks wiki refresh` before relying on handoff context.' },
+  { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate ...', description: 'Build, refresh, prune, and validate RGBA/trig LLM Wiki context packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:2 user:1]|log|tail|watch|status|event ...', description: 'Create and observe a scout-first Team mission: parallel analysis, TriWiki refresh, role debate, then executor parallel development.' },
+  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:2 user:1]|log|tail|watch|status|event ...', description: 'Create and observe a scout-first Team mission: parallel analysis, TriWiki attention, role debate, runtime graph/inbox handoff, then executor parallel development.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },

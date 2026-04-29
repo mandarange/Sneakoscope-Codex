@@ -10,7 +10,7 @@ const limits = {
   packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 256 * 1024),
   unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 1024 * 1024),
   packFiles: Number(process.env.SKS_MAX_PACK_FILES || 40),
-  trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 256 * 1024)
+  trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 288 * 1024)
 };
 
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
