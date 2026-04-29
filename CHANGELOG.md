@@ -2,9 +2,18 @@
 
 ## [Unreleased]
 
+## [0.6.57] - 2026-04-29
+
+### Changed
+
+- Add active TriWiki attention ranking so context packs expose compact `attention.use_first` recall and `attention.hydrate_first` source-check queues for higher-signal route and worker handoffs.
+
+## [0.6.56] - 2026-04-29
+
 ### Changed
 
 - Infer predictable ambiguity-gate contract answers from the prompt/default safety policy so SKS asks only unresolved behavior or safety questions instead of static `GOAL_PRECISE` and `ACCEPTANCE_CRITERIA` templates.
+- Add a Team runtime graph compiler that remaps symbolic plan nodes to concrete task ids, writes scope-aware worker inboxes, and stop-gates the runtime graph artifacts before executor handoff.
 
 ## [0.6.55] - 2026-04-29
 

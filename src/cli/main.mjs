@@ -27,6 +27,7 @@ import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence } from '../core/pipeline.mjs';
+import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail } from '../core/team-live.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
 import { buildTmuxLaunchPlan, defaultTmuxSessionName, formatTmuxBanner, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, tmuxAvailable } from '../core/tmux-ui.mjs';
@@ -763,12 +764,15 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
     roleCounts: spec.roleCounts,
     roster: spec.roster
   });
+  const runtime = await writeTeamRuntimeArtifacts(dir, plan, { contractHash: contract.sealed_hash || null });
   await writeJsonAtomic(path.join(dir, 'team-gate.json'), {
     passed: false,
+    team_roster_confirmed: true,
     analysis_artifact: false,
     triwiki_refreshed: false,
     triwiki_validated: false,
     consensus_artifact: false,
+    ...runtime.gate_fields,
     implementation_team_fresh: false,
     review_artifact: false,
     integration_evidence: false,
@@ -792,6 +796,7 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
       role_counts: spec.roleCounts,
       team_roster_confirmed: true,
       team_plan_ready: true,
+      team_graph_ready: runtime.ok,
       team_live_ready: true,
       from_chat_img_required: fromChatImgRequired
     }
@@ -1260,12 +1265,12 @@ function usage(args = []) {
     bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and tmux.'],
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew only after approval.'],
     tmux: ['tmux', '', '  sks', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux'],
-    team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '', '$Team runs questions -> contract -> scouts -> TriWiki -> debate -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
+    team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
     ralph: ['Ralph', '', '  sks ralph prepare "task"', '  sks ralph answer <MISSION_ID> answers.json', '  sks ralph run <MISSION_ID> --max-cycles 8'],
     'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
     dollar: ['Dollar Commands', '', formatDollarCommandsCompact('  '), '', 'Terminal: sks dollar-commands [--json]'],
-    wiki: ['TriWiki', '', '  sks wiki pack', '  sks wiki refresh [--prune]', '  sks wiki validate .sneakoscope/wiki/context-pack.json', '  sks wiki prune --dry-run --json'],
+    wiki: ['TriWiki', '', '  sks wiki pack', '  sks wiki refresh [--prune]', '  sks wiki validate .sneakoscope/wiki/context-pack.json', '  sks wiki prune --dry-run --json', '', 'Packs include attention.use_first and attention.hydrate_first for compact recall plus source hydration.'],
     gx: ['GX', '', '  sks gx init architecture-atlas', '  sks gx render architecture-atlas --format all', '  sks gx validate architecture-atlas']
   };
   const catalog = COMMAND_CATALOG.find((c) => c.name === topic);
@@ -2662,6 +2667,24 @@ async function selftest() {
   const rosterArtifactGateState = await readJson(stateFile(rosterArtifactGateTmp), {});
   const missingRosterArtifactStop = await evaluateStop(rosterArtifactGateTmp, rosterArtifactGateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (missingRosterArtifactStop?.decision !== 'block' || !String(missingRosterArtifactStop.reason || '').includes('team-roster.json')) throw new Error('selftest failed: Team gate did not block missing team roster artifact');
+  const runtimeGateTmp = tmpdir();
+  await initProject(runtimeGateTmp, {});
+  const { id: runtimeGateId, dir: runtimeGateDir } = await createMission(runtimeGateTmp, { mode: 'team', prompt: 'team runtime graph gate test' });
+  await writeJsonAtomic(path.join(runtimeGateDir, 'team-roster.json'), { schema_version: 1, mission_id: runtimeGateId, confirmed: true, source: 'selftest' });
+  await writeJsonAtomic(path.join(runtimeGateDir, TEAM_SESSION_CLEANUP_ARTIFACT), passedTeamSessionCleanup);
+  await writeJsonAtomic(path.join(runtimeGateDir, 'team-gate.json'), {
+    ...passedTeamGate,
+    team_graph_required: true,
+    team_graph_compiled: true,
+    runtime_dependencies_concrete: true,
+    worker_inboxes_written: true,
+    write_scope_conflicts_zero: true,
+    task_claim_readiness_checked: true
+  });
+  await setCurrent(runtimeGateTmp, { mission_id: runtimeGateId, mode: 'TEAM', route: 'Team', route_command: '$Team', phase: 'TEAM_REVIEW', context7_required: false, stop_gate: 'team-gate.json' });
+  const runtimeGateState = await readJson(stateFile(runtimeGateTmp), {});
+  const missingRuntimeGraphStop = await evaluateStop(runtimeGateTmp, runtimeGateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (missingRuntimeGraphStop?.decision !== 'block' || !String(missingRuntimeGraphStop.reason || '').includes(TEAM_GRAPH_ARTIFACT)) throw new Error('selftest failed: Team gate did not block missing runtime graph artifacts');
   const fromChatCoverageTmp = tmpdir();
   await initProject(fromChatCoverageTmp, {});
   const { id: fromChatCoverageId, dir: fromChatCoverageDir } = await createMission(fromChatCoverageTmp, { mode: 'team', prompt: '$From-Chat-IMG coverage gate test' });
@@ -2744,6 +2767,13 @@ async function selftest() {
   if (teamPlan.roster.debate_team.length !== 3 || !teamPlan.roster.debate_team.some((agent) => agent.id === 'debate_user_1') || !teamPlan.roster.development_team.some((agent) => agent.id === 'executor_3')) throw new Error('selftest failed: team roster missing default agents');
   if (teamPlan.roster.analysis_team.length !== teamPlan.role_counts.executor || !teamPlan.roster.analysis_team.some((agent) => agent.id === 'analysis_scout_3')) throw new Error('selftest failed: team analysis scout roster missing default agents');
   if (!teamPlan.required_artifacts.includes('team-roster.json') || !teamPlan.required_artifacts.includes('team-analysis.md') || !teamPlan.required_artifacts.includes(TEAM_SESSION_CLEANUP_ARTIFACT)) throw new Error('selftest failed: team plan missing required artifacts');
+  if (teamPlan.team_runtime?.graph_artifact !== TEAM_GRAPH_ARTIFACT || !teamPlan.required_artifacts.includes(TEAM_RUNTIME_TASKS_ARTIFACT) || !teamPlan.required_artifacts.includes(TEAM_DECOMPOSITION_ARTIFACT) || !teamPlan.required_artifacts.includes(TEAM_INBOX_DIR)) throw new Error('selftest failed: team plan missing runtime graph metadata/artifacts');
+  if (!teamPlan.phases.some((phase) => phase.id === 'runtime_task_graph_compile')) throw new Error('selftest failed: team plan missing runtime task graph compile phase');
+  const teamRuntime = await writeTeamRuntimeArtifacts(teamDir, teamPlan, { contractHash: 'selftest' });
+  const teamRuntimeValidation = await validateTeamRuntimeArtifacts(teamDir);
+  if (!teamRuntimeValidation.ok) throw new Error(`selftest failed: team runtime graph validation failed: ${teamRuntimeValidation.issues.join(', ')}`);
+  if (!teamRuntime.runtime.tasks.every((task) => (task.depends_on || []).every((dep) => String(dep).startsWith('task-')))) throw new Error('selftest failed: team runtime graph dependencies are not concrete task ids');
+  if (!Object.keys(teamRuntime.inboxes || {}).length || !teamRuntime.report.inboxes.length) throw new Error('selftest failed: team runtime graph did not write worker inboxes');
   if (teamPlan.context_tracking?.ssot !== 'triwiki' || !teamPlan.required_artifacts.includes('.sneakoscope/wiki/context-pack.json')) throw new Error('selftest failed: team plan missing TriWiki context tracking');
   if (!teamPlan.context_tracking?.stage_policy?.includes('before_each_route_stage_read_relevant_context_pack')) throw new Error('selftest failed: team plan missing per-stage TriWiki policy');
   if (!teamPlan.invariants.some((item) => item.includes('chat-history screenshots'))) throw new Error('selftest failed: team invariants missing chat capture matching');
@@ -2758,6 +2788,7 @@ async function selftest() {
   if (!fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT)) || !fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT)) || !fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_QA_LOOP_ARTIFACT))) throw new Error('selftest failed: From-Chat-IMG team plan missing checklist/temp TriWiki/QA invariants');
   const teamWorkflow = teamWorkflowMarkdown(teamPlan);
   if (!teamWorkflow.includes('SSOT: triwiki') || !teamWorkflow.includes('Analysis Scouts') || !teamWorkflow.includes('sks wiki validate')) throw new Error('selftest failed: team workflow missing scout-first TriWiki context tracking');
+  if (!teamWorkflow.includes(TEAM_GRAPH_ARTIFACT) || !teamWorkflow.includes(TEAM_INBOX_DIR)) throw new Error('selftest failed: team workflow missing runtime graph/inbox guidance');
   if (!teamWorkflow.includes('before every stage') || !teamWorkflow.includes('after findings/artifact changes')) throw new Error('selftest failed: team workflow missing per-stage TriWiki policy');
   const customTeamPlan = buildTeamPlan(teamId, '병렬 구현 팀 테스트', { agentSessions: 5 });
   if (customTeamPlan.agent_session_count !== 5) throw new Error('selftest failed: custom team sessions not honored');
@@ -2857,6 +2888,9 @@ async function selftest() {
   const legacyValidation = validateWikiCoordinateIndex(legacyWiki);
   if (legacyValidation.ok || !legacyValidation.issues.some((issue) => issue.id === 'vx_missing')) throw new Error('selftest failed: legacy coordinate-only wiki pack was accepted');
   if (!wikiPack.trust_summary || !Number.isFinite(Number(wikiPack.trust_summary.needs_evidence))) throw new Error('selftest failed: wiki trust summary missing');
+  if (wikiPack.attention?.mode !== 'aggressive_triwiki_active_recall' || !wikiPack.attention.use_first?.length || !wikiPack.attention.hydrate_first?.length) throw new Error('selftest failed: wiki active attention ranking missing');
+  if (!wikiPack.attention.use_first.every((row) => Array.isArray(row) && row[0] && row[1] && row[2])) throw new Error('selftest failed: wiki attention use_first rows are not hydratable anchors');
+  if (!wikiPack.claims?.some((claim) => claim.id === 'wiki-aggressive-active-recall')) throw new Error('selftest failed: aggressive TriWiki attention claim missing from pack');
   if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => Array.isArray(anchor) ? Number.isFinite(Number(anchor[9])) : Number.isFinite(Number(anchor.trust_score)))) throw new Error('selftest failed: wiki anchor trust score missing');
   if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => (Array.isArray(anchor) ? anchor[0] : anchor.id) === 'wiki-trig')) throw new Error('selftest failed: wiki trig anchor missing');
   if (!(wikiPack.wiki.anchors || wikiPack.wiki.a || []).some((anchor) => String(Array.isArray(anchor) ? anchor[0] : anchor.id).startsWith('team-analysis-'))) throw new Error('selftest failed: team analysis claim missing from TriWiki pack');
@@ -2987,6 +3021,7 @@ async function wiki(sub, args = []) {
         written: !dryRun,
         claims: pack.claims.length,
         anchors: wikiAnchorCount(pack.wiki),
+        attention: wikiAttentionSummary(pack),
         trust_summary: pack.trust_summary,
         validation,
         ...(pruneResult ? { prune: { dryRun: pruneResult.dryRun, scanned: pruneResult.scanned, candidates: pruneResult.candidates, actions: pruneResult.actions } } : {})
@@ -3089,10 +3124,21 @@ function printWikiPackSummary(root, file, pack) {
   console.log(`Claims:   ${pack.claims.length} hydrated text claims`);
   console.log(`Anchors:  ${wikiAnchorCount(pack.wiki)} coordinate anchors (${pack.wiki.overflow_count ?? pack.wiki.o ?? 0} overflow)`);
   console.log(`Voxels:   ${wikiVoxelRowCount(pack.wiki)} metadata rows (${pack.wiki.vx?.s || pack.wiki.vx?.schema || 'none'})`);
+  if (pack.attention) console.log(`Attention: use_first=${pack.attention.use_first?.length || 0} hydrate_first=${pack.attention.hydrate_first?.length || 0} (${pack.attention.mode})`);
   console.log(`Schema:   ${pack.wiki.schema}`);
   console.log(`Trust:    avg=${pack.trust_summary.avg} needs_evidence=${pack.trust_summary.needs_evidence}`);
   console.log('Guidance: follow high-trust claims; hydrate source/evidence before relying on lower-trust claims. Stack/version changes require current Context7 or official-doc TriWiki claims before coding.');
   console.log(`Validate: sks wiki validate ${path.relative(root, file)}`);
+}
+
+function wikiAttentionSummary(pack = {}) {
+  const attention = pack.attention || {};
+  return {
+    mode: attention.mode || null,
+    use_first: Array.isArray(attention.use_first) ? attention.use_first.length : 0,
+    hydrate_first: Array.isArray(attention.hydrate_first) ? attention.hydrate_first.length : 0,
+    fields: { use_first: ['id', 'rgba', 'h'], hydrate_first: ['id', 'reason'] }
+  };
 }
 
 function countTrustAnchors(wiki = {}) {
@@ -3170,6 +3216,19 @@ async function projectWikiClaims(root) {
     evidence_count: 2,
     required_weight: 1.2,
     trust_score: 0.9
+  });
+  out.push({
+    id: 'wiki-aggressive-active-recall',
+    text: 'TriWiki should be used aggressively for performance and accuracy: route prompts and worker handoffs should consume attention.use_first for compact high-trust recall and attention.hydrate_first for source hydration of risky or lower-trust claims before decisions.',
+    authority: 'code',
+    risk: 'high',
+    status: 'supported',
+    freshness: 'fresh',
+    source: 'src/core/triwiki-attention.mjs',
+    file: 'src/core/triwiki-attention.mjs',
+    evidence_count: 3,
+    required_weight: 1.45,
+    trust_score: 0.95
   });
   out.push(...(await memoryWikiClaims(root)));
   out.push(...(await userRequestSignalWikiClaims(root)));
@@ -3637,12 +3696,17 @@ async function team(args) {
   const liveFiles = await initTeamLive(id, dir, prompt, { agentSessions, roleCounts, roster });
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
   const fromChatImgRequired = hasFromChatImgSignal(prompt);
-  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
+  const runtime = await writeTeamRuntimeArtifacts(dir, plan, {});
+  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
   const result = {
     mission_id: id,
     mission_dir: dir,
     plan: path.join(dir, 'team-plan.json'),
     workflow: path.join(dir, 'team-workflow.md'),
+    team_graph: path.join(dir, TEAM_GRAPH_ARTIFACT),
+    runtime_tasks: path.join(dir, TEAM_RUNTIME_TASKS_ARTIFACT),
+    decomposition_report: path.join(dir, TEAM_DECOMPOSITION_ARTIFACT),
+    worker_inbox_dir: path.join(dir, TEAM_INBOX_DIR),
     live: liveFiles.live,
     transcript: liveFiles.transcript,
     dashboard: liveFiles.dashboard,
@@ -3659,9 +3723,11 @@ async function team(args) {
   console.log(`Agent sessions: ${agentSessions}`);
   console.log(`Role counts: ${formatRoleCounts(roleCounts)}`);
   console.log(`Workflow: ${path.relative(root, result.workflow)}`);
+  console.log(`Runtime graph: ${path.relative(root, result.team_graph)}`);
+  console.log(`Worker inbox: ${path.relative(root, result.worker_inbox_dir)}`);
   console.log(`Live: ${path.relative(root, result.live)}`);
   console.log(`Watch: sks team watch ${id}`);
-  console.log('Use $Team in Codex App to run the scout-first flow: parallel analysis scouts, TriWiki refresh, debate/consensus, then a fresh implementation team with disjoint ownership.');
+  console.log('Use $Team in Codex App to run the scout-first flow: parallel analysis scouts, TriWiki attention, debate/consensus, runtime graph/inbox handoff, then a fresh implementation team with disjoint ownership.');
 }
 
 function parseTeamCreateArgs(args) {
@@ -3679,7 +3745,7 @@ function buildTeamPlan(id, prompt, opts = {}) {
     agents: ['parent_orchestrator'],
     output: [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT]
   }] : [];
-  const requiredArtifacts = ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'];
+  const requiredArtifacts = ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'];
   return {
     schema_version: 1,
     mission_id: id,
@@ -3692,11 +3758,12 @@ function buildTeamPlan(id, prompt, opts = {}) {
     bundle_size: roster.bundle_size,
     roster,
     team_model: {
-      phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'development_team', 'triwiki_stage_refresh', 'review', 'session_cleanup'],
+      phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'runtime_task_graph', 'development_team', 'triwiki_stage_refresh', 'review', 'session_cleanup'],
       analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents. Each scout owns one investigation slice, records source paths/evidence, and returns TriWiki-ready findings before debate or implementation starts.`,
       debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices.`,
       development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`
     },
+    team_runtime: teamRuntimePlanMetadata(),
     persona_axioms: [
       'Final users are intentionally low-context, impatient, self-interested, stubborn, and hostile to inconvenience.',
       'Executors are capable developers and must receive disjoint write ownership.',
@@ -3749,6 +3816,12 @@ function buildTeamPlan(id, prompt, opts = {}) {
         output: 'agreed-objective.md'
       },
       {
+        id: 'runtime_task_graph_compile',
+        goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}; remap symbolic plan nodes to concrete task ids, allocate role/path/domain worker lanes, and write ${TEAM_INBOX_DIR} before executor work starts.`,
+        agents: ['parent_orchestrator'],
+        output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR]
+      },
+      {
         id: 'close_planning_agents',
         goal: 'Close or stop the debate team after findings and consensus are captured so implementation starts with a fresh development bundle.',
         agents: ['parent_orchestrator']
@@ -3784,6 +3857,8 @@ function buildTeamPlan(id, prompt, opts = {}) {
       'Analysis scouts, debate team, and development team are separate bundles; scouts finish before debate and debate closes before implementation workers start.',
       'Analysis scouts are read-only and maximize the available session budget for independent investigation before any code edit.',
       'The parent and agents use relevant TriWiki before every stage, hydrate low-trust claims from source during the stage, and refresh/validate TriWiki after scouting, debate, consensus, implementation, and review changes.',
+      `After consensus and before executor work, compile the Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}; symbolic node ids are remapped to concrete task ids before worker inboxes are written.`,
+      `Worker inbox files under ${TEAM_INBOX_DIR} must use concrete task ids, include role/path/domain/lane/allocation hints, and be generated only after runtime task readiness is checked.`,
       'executor:N creates exactly N debate participants and then a separate N-person executor development team.',
       'Final user personas should not be overly smart or cooperative; they represent stubborn, inconvenience-averse real users.',
       'Planning agents do not edit files.',
@@ -3827,7 +3902,7 @@ ${plan.prompt_command || '$Team'} ${plan.prompt}
 
 Use high reasoning for the Team route only, then return to the default/user-selected profile after completion. Use at most ${plan.agent_session_count || 3} subagent sessions at a time; the parent orchestrator is not counted.
 
-Before each stage, read the relevant latest coordinate+voxel TriWiki context pack and hydrate low-trust claims from source. Coordinate-only legacy packs are invalid; refresh and validate before using TriWiki for pipeline decisions. First run exactly ${plan.roster.bundle_size} read-only analysis_scout_N agents in parallel. Split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation into independent slices, then capture source-backed findings in team-analysis.md. Refresh and validate TriWiki before debate. Then run the debate team with exactly ${plan.roster.bundle_size} participants using the refreshed pack. Use the concrete roster below: final-user voices are stubborn and inconvenience-averse, executor voices are capable developers, reviewers are strict, and planners force consensus. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices, then refresh and validate TriWiki again. Close the debate team. Then form a fresh development team with exactly ${plan.roster.bundle_size} executor_N developers implementing slices in parallel with non-overlapping ownership. Refresh TriWiki after implementation changes or blockers. Review with the validation team, validate TriWiki again, integrate results in the parent thread, close or account for all Team sessions in team-session-cleanup.json, run verification, and report evidence.
+Before each stage, read the relevant latest coordinate+voxel TriWiki context pack and hydrate low-trust claims from source. Coordinate-only legacy packs are invalid; refresh and validate before using TriWiki for pipeline decisions. First run exactly ${plan.roster.bundle_size} read-only analysis_scout_N agents in parallel. Split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation into independent slices, then capture source-backed findings in team-analysis.md. Refresh and validate TriWiki before debate. Then run the debate team with exactly ${plan.roster.bundle_size} participants using the refreshed pack. Use the concrete roster below: final-user voices are stubborn and inconvenience-averse, executor voices are capable developers, reviewers are strict, and planners force consensus. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices, then refresh and validate TriWiki again. Compile the Team runtime graph into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so symbolic plan nodes become concrete runtime task ids before worker handoff. Close the debate team. Then form a fresh development team with exactly ${plan.roster.bundle_size} executor_N developers implementing slices in parallel with non-overlapping ownership. Refresh TriWiki after implementation changes or blockers. Review with the validation team, validate TriWiki again, integrate results in the parent thread, close or account for all Team sessions in team-session-cleanup.json, run verification, and report evidence.
 \`\`\`
 
 ## Session Budget
@@ -3838,6 +3913,7 @@ Before each stage, read the relevant latest coordinate+voxel TriWiki context pac
 - Role counts: ${formatRoleCounts(plan.role_counts)}
 - The parent orchestrator is not counted.
 - Use the full available session budget for analysis when independent slices exist; use fewer agents only when the work cannot be split cleanly.
+- Runtime graph: write ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR}; worker handoff starts from concrete runtime task ids and scope-aware inboxes.
 - Before reflection/final, close or account for all Team subagent sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.
 ${plan.required_artifacts?.includes(FROM_CHAT_IMG_COVERAGE_ARTIFACT) ? `- From-Chat-IMG coverage: write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} before implementation; after implementation write ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}; do not pass team-gate.json until every visible customer request, screenshot image region, and attachment is mapped, every checklist box is checked, scoped QA-LOOP covers every work item with zero unresolved findings, and unresolved_items is empty.` : ''}
 

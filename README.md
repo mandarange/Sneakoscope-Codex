@@ -19,10 +19,10 @@ Sneakoscope (`sks`, displayed as `ㅅㅋㅅ`) wraps Codex with a repeatable cont
 | --- | --- |
 | Codex App commands | Installs generated skills so `$Team`, `$DFix`, `$QA-LOOP`, `$Ralph`, `$DB`, `$Wiki`, `$Help`, and related routes are discoverable in prompt workflows. |
 | CLI commands | Provides `sks commands`, `sks dollar-commands`, `sks usage <topic>`, bootstrap, setup, doctor, deps, selftest, wiki, team, QA, Ralph, DB, and GX commands. |
-| Team orchestration | Routes substantial code work through ambiguity removal, scouts, TriWiki refresh, debate, consensus, implementation, review, integration, reflection, and Honest Mode. |
+| Team orchestration | Routes substantial code work through ambiguity removal, scouts, TriWiki refresh, debate, consensus, concrete runtime task graph/inboxes, implementation, review, integration, reflection, and Honest Mode. |
 | Ralph | Seals a decision contract up front, then continues without more user questions by using the agreed decision ladder. |
 | QA loop | Dogfoods UI/API behavior with safety boundaries, evidence capture, safe remediation, and focused rechecks. |
-| TriWiki | Keeps `.sneakoscope/wiki/context-pack.json` as the context SSOT, with refresh, pack, prune, validate, and hydratable source-backed claims. |
+| TriWiki | Keeps `.sneakoscope/wiki/context-pack.json` as the context SSOT, with refresh, pack, prune, validate, active attention ranking, and hydratable source-backed claims. |
 | Context7 | Requires current external library/API/framework docs for routes whose correctness depends on live package or platform behavior. |
 | DB safety | Treats SQL, migrations, Supabase, RLS, and destructive operations as high risk; defaults to inspection and guarded local/branch-safe migration work. |
 | Honest Mode | Finishes work with a claim/evidence pass that separates verified facts, unsupported claims, blocked checks, and not-applicable items. |
@@ -80,7 +80,7 @@ sks gx init
 
 ## Workflow Rules
 
-For code work, Sneakoscope defaults to Team. The normal flow is: remove ambiguity that can change scope or safety, read/validate TriWiki, gather current source evidence, implement bounded changes, refresh/validate context after meaningful findings, run relevant checks, then finish with reflection and Honest Mode.
+For code work, Sneakoscope defaults to Team. The normal flow is: remove ambiguity that can change scope or safety, read/validate TriWiki, consume `attention.use_first` for compact high-trust context, hydrate `attention.hydrate_first` from source before risky decisions, gather current source evidence, synthesize consensus, compile a concrete runtime task graph plus worker inboxes, implement bounded changes, refresh/validate context after meaningful findings, run relevant checks, then finish with reflection and Honest Mode.
 
 For tiny text/design edits use `$DFix`. For questions that should not change files use `$Answer`.
 

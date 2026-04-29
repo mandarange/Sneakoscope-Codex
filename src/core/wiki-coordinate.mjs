@@ -173,9 +173,12 @@ export function buildWikiCoordinateIndex({ mission = {}, claims = [], q4 = {}, q
     .map((claim, index) => {
       const anchor = wikiAnchorFromClaim(claim, index);
       const coord = { domainAngle: anchor.c[0], layerRadius: anchor.c[1], phase: anchor.c[2], concentration: anchor.c[3] };
-      return { ...anchor, sim: round6(wikiCoordSimilarity(missionCoord, coord)) };
+      const required = clamp01(Number(claim.required_weight || 0) / 1.5);
+      const trust = Number.isFinite(Number(claim.trust_score)) ? clamp01(Number(claim.trust_score)) : statusScore(claim.status);
+      const risk = riskScore(claim.risk);
+      return { ...anchor, sim: round6(wikiCoordSimilarity(missionCoord, coord)), pri: round4((required * 0.52) + (trust * 0.3) + (risk * 0.18)) };
     })
-    .sort((a, b) => b.sim - a.sim || a.id.localeCompare(b.id))
+    .sort((a, b) => b.pri - a.pri || b.sim - a.sim || a.id.localeCompare(b.id))
     .slice(0, Math.max(0, Number(maxAnchors) || 0));
   return {
     schema: WIKI_COORD_SCHEMA,

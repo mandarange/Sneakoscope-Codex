@@ -141,6 +141,57 @@ function topKByScore(items, k) {
   return top.sort((a, b) => b.score - a.score);
 }
 
+function attentionAnchorMap(wiki = {}) {
+  const anchors = new Map();
+  for (const anchor of Array.isArray(wiki.anchors) ? wiki.anchors : []) {
+    anchors.set(anchor.id, { id: anchor.id, rgba: anchor.rgba, h: anchor.h, source: anchor.src });
+  }
+  for (const row of Array.isArray(wiki.a) ? wiki.a : []) {
+    anchors.set(row[0], { id: row[0], rgba: row[1], h: row[7], source: row[6] });
+  }
+  return anchors;
+}
+
+function attentionRow(claim, anchor, reason = '') {
+  return reason ? [claim.id, reason] : [claim.id, anchor?.rgba, anchor?.h];
+}
+
+function hydrateReason(claim = {}) {
+  const action = trustAction(claim);
+  if (action !== 'use') return `trust_action:${action}`;
+  if (['high', 'critical'].includes(claim.risk)) return `risk:${claim.risk}`;
+  if (claim.status !== 'supported') return `status:${claim.status || 'unknown'}`;
+  return '';
+}
+
+export function buildTriWikiAttention({ selected = [], wiki = {}, role = 'worker', maxUse = 4, maxHydrate = 4 } = {}) {
+  const anchors = attentionAnchorMap(wiki);
+  const ranked = [...(selected || [])]
+    .map((claim, index) => ({ claim, index }))
+    .filter(({ claim }) => anchors.has(claim.id))
+    .sort((a, b) =>
+      (Number(b.claim.required_weight || 0) - Number(a.claim.required_weight || 0)) ||
+      (Number(b.claim.triwiki_score || 0) - Number(a.claim.triwiki_score || 0)) ||
+      (Number(b.claim.trust_score || 0) - Number(a.claim.trust_score || 0)) ||
+      a.index - b.index
+    )
+    .map(({ claim }) => claim);
+  const useFirst = ranked
+    .filter((claim) => trustAction(claim) === 'use')
+    .slice(0, maxUse)
+    .map((claim) => attentionRow(claim, anchors.get(claim.id)));
+  const hydrateFirst = ranked
+    .map((claim) => ({ claim, reason: hydrateReason(claim) }))
+    .filter((item) => item.reason)
+    .slice(0, maxHydrate)
+    .map((item) => attentionRow(item.claim, anchors.get(item.claim.id), item.reason));
+  return {
+    mode: 'aggressive_triwiki_active_recall',
+    use_first: useFirst,
+    hydrate_first: hydrateFirst
+  };
+}
+
 export function selectClaims(mission, claims, budget = {}) {
   const maxClaims = Math.max(0, budget.maxClaims ?? 12);
   const trustPolicy = budget.trustPolicy || DEFAULT_TRUST_POLICY;
@@ -186,23 +237,34 @@ export function contextCapsule({ mission, role = 'worker', contractHash = null, 
     mission: mission.id,
     role,
     contract_hash: contractHash,
-    token_policy: 'Q4_Q3_DEFAULT_WITH_RGBA_TRIG_WIKI_ANCHORS_Q2_Q1_HYDRATED_ON_DEMAND',
+    token_policy: 'Q4_Q3_TRIWIKI_ATTENTION_HYDRATE_ON_DEMAND',
     ...(budget.includeTrustSummary ? { trust_summary: trustSummary(selected, trustPolicy) } : {}),
     q4,
     q3,
     wiki,
+    attention: buildTriWikiAttention({
+      selected,
+      wiki,
+      role,
+      maxUse: budget.maxAttentionUse ?? (role.includes('verifier') ? 7 : 4),
+      maxHydrate: budget.maxAttentionHydrate ?? (role.includes('verifier') ? 7 : 4)
+    }),
     claims: selected.map((c) => {
       const anchor = anchorsById.get(c.id);
-      return {
+      const row = {
         id: c.id,
         text: c.text,
-        status: c.status,
-        risk: c.risk,
         source: c.source,
-        score: c.triwiki_score,
         rgba: anchor?.rgba,
         h: anchor?.h
       };
+      if (budget.verboseClaims) {
+        row.status = c.status;
+        row.risk = c.risk;
+        row.score = c.triwiki_score;
+        row.trust = c.trust_score;
+      }
+      return row;
     })
   };
 }
