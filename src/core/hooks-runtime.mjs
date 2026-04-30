@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION } from './fsx.mjs';
+import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION, sha256 } from './fsx.mjs';
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.mjs';
 import { missionDir, setCurrent, stateFile } from './mission.mjs';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.mjs';
@@ -10,6 +10,10 @@ const TEAM_DIGEST_MAX_EVENTS = 4;
 const TEAM_DIGEST_MESSAGE_CHARS = 180;
 const TEAM_DIGEST_CONTEXT_CHARS = 1600;
 const TEAM_DIGEST_SYSTEM_CHARS = 260;
+const STOP_REPEAT_GUARD_ARTIFACT = 'stop-hook-repeat-guard.json';
+const STOP_REPEAT_GUARD_WINDOW_MS = 10 * 60 * 1000;
+const STOP_REPEAT_GUARD_MAX_ENTRIES = 25;
+const DEFAULT_STOP_REPEAT_GUARD_LIMIT = 2;
 
 async function loadHookPayload() {
   const raw = await readStdin();
@@ -188,15 +192,19 @@ async function hookStop(root, state, payload, noQuestion) {
   if (!noQuestion) {
     const last = extractLastMessage(payload);
     if (!hasHonestMode(last)) {
-      return {
+      const reason = 'SKS Honest Mode is required before finishing. Re-check the actual goal, verify evidence/tests, state gaps honestly, and only then provide the final answer. Include a short "SKS Honest Mode" or "솔직모드" section.';
+      const repeatDecision = await finalizationRepeatDecision(root, state, payload, reason, 'honest_mode_missing');
+      return repeatDecision || {
         decision: 'block',
-        reason: 'SKS Honest Mode is required before finishing. Re-check the actual goal, verify evidence/tests, state gaps honestly, and only then provide the final answer. Include a short "SKS Honest Mode" or "솔직모드" section.'
+        reason
       };
     }
     if (!hasCompletionSummary(last)) {
-      return {
+      const reason = 'SKS final completion summary is required before finishing. Explain what was done, what changed for the user/repo, what was verified, and any remaining gaps before or alongside SKS Honest Mode.';
+      const repeatDecision = await finalizationRepeatDecision(root, state, payload, reason, 'completion_summary_missing');
+      return repeatDecision || {
         decision: 'block',
-        reason: 'SKS final completion summary is required before finishing. Explain what was done, what changed for the user/repo, what was verified, and any remaining gaps before or alongside SKS Honest Mode.'
+        reason
       };
     }
     if (shouldLoopBackAfterHonestMode(state) && hasHonestModeUnresolvedGap(last)) {
@@ -213,6 +221,76 @@ async function hookStop(root, state, payload, noQuestion) {
     decision: 'block',
     reason: 'SKS no-question run is not done. Continue autonomously, fix failing checks, update the active gate file, and do not ask the user.'
   };
+}
+
+async function finalizationRepeatDecision(root, state = {}, payload = {}, reason = '', kind = 'finalization') {
+  const now = nowIso();
+  const guardPath = path.join(root, '.sneakoscope', 'state', STOP_REPEAT_GUARD_ARTIFACT);
+  const previous = await readJson(guardPath, {}).catch(() => ({}));
+  const limit = stopRepeatGuardLimit();
+  const entries = pruneStopRepeatEntries(previous.entries || {}, now);
+  const key = stopRepeatKey(state, payload, reason, kind);
+  const prior = entries[key] || {};
+  const repeatCount = stopRepeatInWindow(prior, now)
+    ? Number(prior.repeat_count || 0) + 1
+    : 1;
+  const record = {
+    schema_version: 1,
+    updated_at: now,
+    window_ms: STOP_REPEAT_GUARD_WINDOW_MS,
+    limit,
+    entries: {
+      ...entries,
+      [key]: {
+        kind,
+        route: state.route_command || state.route || state.mode || null,
+        mission_id: state.mission_id || null,
+        conversation_id: conversationId(payload),
+        first_seen: stopRepeatInWindow(prior, now) ? (prior.first_seen || now) : now,
+        last_seen: now,
+        repeat_count: repeatCount,
+        tripped: repeatCount >= limit,
+        reason
+      }
+    }
+  };
+  await writeJsonAtomic(guardPath, record).catch(() => null);
+  if (repeatCount < limit) return null;
+  return {
+    continue: true,
+    systemMessage: `SKS stop hook repeat guard suppressed repeated ${kind} prompt after ${repeatCount} identical block(s). No completion success is claimed by the hook.`
+  };
+}
+
+function stopRepeatKey(state = {}, payload = {}, reason = '', kind = '') {
+  return sha256(JSON.stringify({
+    kind,
+    reason,
+    conversation_id: conversationId(payload),
+    mission_id: state.mission_id || null,
+    route: state.route_command || state.route || state.mode || null,
+    gate: state.stop_gate || null
+  })).slice(0, 24);
+}
+
+function stopRepeatGuardLimit() {
+  const raw = Number.parseInt(process.env.SKS_STOP_REPEAT_GUARD_LIMIT || '', 10);
+  if (!Number.isFinite(raw)) return DEFAULT_STOP_REPEAT_GUARD_LIMIT;
+  return Math.max(1, Math.min(20, raw));
+}
+
+function stopRepeatInWindow(entry = {}, now = nowIso()) {
+  const last = Date.parse(entry.last_seen || '');
+  const current = Date.parse(now);
+  if (!Number.isFinite(last) || !Number.isFinite(current)) return false;
+  return current - last <= STOP_REPEAT_GUARD_WINDOW_MS;
+}
+
+function pruneStopRepeatEntries(entries = {}, now = nowIso()) {
+  return Object.fromEntries(Object.entries(entries)
+    .filter(([, entry]) => stopRepeatInWindow(entry, now))
+    .sort((a, b) => Date.parse(b[1]?.last_seen || '') - Date.parse(a[1]?.last_seen || ''))
+    .slice(0, STOP_REPEAT_GUARD_MAX_ENTRIES));
 }
 
 async function updateCheckContext(root, payload, prompt) {

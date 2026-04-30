@@ -2669,6 +2669,10 @@ async function selftest() {
   if (honestMissingSummaryResult.code !== 0) throw new Error(`selftest failed: missing-summary honest hook exited ${honestMissingSummaryResult.code}: ${honestMissingSummaryResult.stderr}`);
   const honestMissingSummaryJson = JSON.parse(honestMissingSummaryResult.stdout);
   if (honestMissingSummaryJson.decision !== 'block' || !String(honestMissingSummaryJson.reason || '').includes('completion summary')) throw new Error('selftest failed: Honest Mode without completion summary was accepted');
+  const honestMissingSummaryRepeatResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: honestLoopTmp, input: JSON.stringify({ cwd: honestLoopTmp, last_assistant_message: '**솔직모드**\n검증: selftest 통과\n남은 gap: 없음' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (honestMissingSummaryRepeatResult.code !== 0) throw new Error(`selftest failed: repeated missing-summary honest hook exited ${honestMissingSummaryRepeatResult.code}: ${honestMissingSummaryRepeatResult.stderr}`);
+  const honestMissingSummaryRepeatJson = JSON.parse(honestMissingSummaryRepeatResult.stdout);
+  if (honestMissingSummaryRepeatJson.decision === 'block' || !String(honestMissingSummaryRepeatJson.systemMessage || '').includes('repeat guard')) throw new Error('selftest failed: repeated completion-summary stop prompt was not suppressed');
   const honestBlockedAsExpectedResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: honestLoopTmp, input: JSON.stringify({ cwd: honestLoopTmp, last_assistant_message: '**작업 요약**\nlegacy QA report 차단 확인을 검증했습니다.\n**솔직모드**\n검증: selftest 통과, legacy `qa-report.md` 차단 확인\n제약: registry publish excluded' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (honestBlockedAsExpectedResult.code !== 0) throw new Error(`selftest failed: blocked-as-expected honest hook exited ${honestBlockedAsExpectedResult.code}: ${honestBlockedAsExpectedResult.stderr}`);
   const honestBlockedAsExpectedJson = JSON.parse(honestBlockedAsExpectedResult.stdout);

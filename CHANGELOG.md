@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.6.72] - 2026-04-30
+
+### Changed
+
+- Add a bounded stop-hook repeat guard so repeated identical Honest Mode or final completion summary prompts are suppressed instead of re-entering an infinite finalization loop.
+
 ## [0.6.71] - 2026-04-30
 
 ### Changed
