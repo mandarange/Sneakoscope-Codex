@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.6.71] - 2026-04-30
+
+### Changed
+
+- Persist SKS-created cmux workspace refs so repeated `sks --mad --high` launches can reuse the last workspace even when cmux workspace listing is incomplete or unstable.
+- Block duplicate workspace creation when cmux workspace inspection fails, instead of silently falling through to another `new-workspace` request.
+
 ## [0.6.70] - 2026-04-30
 
 ### Changed

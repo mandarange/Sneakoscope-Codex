@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { exists, packageRoot, runProcess, sha256, sksRoot, which } from './fsx.mjs';
+import { exists, nowIso, packageRoot, readJson, runProcess, sha256, sksRoot, which, writeJsonAtomic } from './fsx.mjs';
 import { getCodexInfo } from './codex-adapter.mjs';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.mjs';
 
@@ -72,6 +72,64 @@ export function matchingCmuxWorkspaces(workspaces = [], plan = {}) {
 
 export function cmuxWorkspaceRef(workspace = {}) {
   return String(workspace.ref || workspace.workspace_ref || workspace.handle || workspace.id || workspace.workspace_id || workspace.uuid || '').trim();
+}
+
+export function cmuxWorkspaceRefFromText(text = '') {
+  return String(text || '').match(/\bworkspace:\d+\b/i)?.[0] || String(text || '').match(/[0-9a-f]{8}-[0-9a-f-]{27,}/i)?.[0] || '';
+}
+
+export function cmuxWorkspaceStatePath(plan = {}) {
+  return path.join(path.resolve(plan.root || process.cwd()), '.sneakoscope', 'state', 'cmux-workspaces.json');
+}
+
+export function cmuxWorkspaceStateKey(plan = {}) {
+  const root = path.resolve(plan.root || process.cwd());
+  const workspace = sanitizeCmuxWorkspaceName(plan.workspace || defaultCmuxWorkspaceName(root));
+  const profile = codexProfileFromArgs(plan.codexArgs);
+  return sha256(`${root}\n${workspace}\n${profile || 'default'}`).slice(0, 16);
+}
+
+export async function readCmuxWorkspaceRecord(plan = {}) {
+  const state = await readJson(cmuxWorkspaceStatePath(plan), {}).catch(() => ({}));
+  const record = state.workspaces?.[cmuxWorkspaceStateKey(plan)] || null;
+  return record && typeof record === 'object' ? record : null;
+}
+
+export async function writeCmuxWorkspaceRecord(plan = {}, workspace = {}) {
+  const statePath = cmuxWorkspaceStatePath(plan);
+  const state = await readJson(statePath, {}).catch(() => ({}));
+  const root = path.resolve(plan.root || process.cwd());
+  const name = workspaceName(workspace) || sanitizeCmuxWorkspaceName(plan.workspace || defaultCmuxWorkspaceName(root));
+  const record = {
+    workspace: name,
+    root,
+    ref: cmuxWorkspaceRef(workspace),
+    description: workspaceDescription(workspace) || cmuxWorkspaceDescription(plan),
+    cwd: workspaceCwd(workspace) || root,
+    profile: codexProfileFromArgs(plan.codexArgs) || 'default',
+    updated_at: nowIso()
+  };
+  if (!record.ref) return null;
+  const next = {
+    schema_version: 1,
+    updated_at: record.updated_at,
+    workspaces: {
+      ...(state.workspaces && typeof state.workspaces === 'object' ? state.workspaces : {}),
+      [cmuxWorkspaceStateKey(plan)]: record
+    }
+  };
+  await writeJsonAtomic(statePath, next);
+  return record;
+}
+
+async function forgetCmuxWorkspaceRecord(plan = {}) {
+  const statePath = cmuxWorkspaceStatePath(plan);
+  const state = await readJson(statePath, null).catch(() => null);
+  if (!state?.workspaces || typeof state.workspaces !== 'object') return;
+  const key = cmuxWorkspaceStateKey(plan);
+  if (!(key in state.workspaces)) return;
+  delete state.workspaces[key];
+  await writeJsonAtomic(statePath, { ...state, updated_at: nowIso(), workspaces: state.workspaces });
 }
 
 export function shellEscape(value) {
@@ -280,12 +338,18 @@ export async function launchCmuxUi(args = [], opts = {}) {
       return { plan, workspace_reuse: reuse };
     }
   }
-  const created = spawnSync(plan.cmux.bin, buildCmuxNewWorkspaceArgs(plan, command), { encoding: 'utf8', stdio: args.includes('--quiet') ? 'pipe' : 'inherit' });
+  const created = spawnSync(plan.cmux.bin, buildCmuxNewWorkspaceArgs(plan, command), { encoding: 'utf8', stdio: 'pipe' });
+  if (!args.includes('--quiet')) {
+    if (created.stdout) process.stdout.write(created.stdout);
+    if (created.stderr) process.stderr.write(created.stderr);
+  }
   if (created.status !== 0) {
     process.exitCode = created.status || 1;
-    if (created.stderr) process.stderr.write(created.stderr);
+    if (args.includes('--quiet') && created.stderr) process.stderr.write(created.stderr);
     return { plan };
   }
+  const createdRef = cmuxWorkspaceRefFromText(`${created.stdout || ''}\n${created.stderr || ''}`);
+  if (createdRef) await writeCmuxWorkspaceRecord(plan, { ref: createdRef, name: plan.workspace, description: cmuxWorkspaceDescription(plan), cwd: plan.root }).catch(() => null);
   if (args.includes('--no-open')) {
     console.log(`SKS cmux workspace requested: ${plan.workspace}`);
   }
@@ -293,6 +357,8 @@ export async function launchCmuxUi(args = [], opts = {}) {
 }
 
 async function reuseExistingCmuxWorkspace(plan = {}, opts = {}) {
+  const remembered = await reuseRecordedCmuxWorkspace(plan);
+  if (remembered.reused) return remembered;
   const listed = await listCmuxWorkspaces(plan.cmux?.bin);
   if (!listed.ok) return listed;
   const matches = matchingCmuxWorkspaces(listed.workspaces, plan);
@@ -311,7 +377,20 @@ async function reuseExistingCmuxWorkspace(plan = {}, opts = {}) {
       if (close.code === 0) closed += 1;
     }
   }
+  await writeCmuxWorkspaceRecord(plan, keep).catch(() => null);
   return { ok: true, reused: true, workspace: keep, workspace_ref: ref, closed_duplicates: closed, total_matches: matches.length };
+}
+
+async function reuseRecordedCmuxWorkspace(plan = {}) {
+  const record = await readCmuxWorkspaceRecord(plan);
+  const ref = cmuxWorkspaceRef(record || {});
+  if (!ref) return { ok: true, reused: false };
+  const selected = await runProcess(plan.cmux.bin, ['select-workspace', '--workspace', ref], { timeoutMs: 5000, maxOutputBytes: 16 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  if (selected.code === 0) return { ok: true, reused: true, workspace: record, workspace_ref: ref, remembered: true, closed_duplicates: 0 };
+  const error = `${selected.stderr || selected.stdout || 'cmux select-workspace failed'}`.trim();
+  if (isRecoverableCmuxSocketError(error)) return { ok: false, error, stale_ref: ref };
+  await forgetCmuxWorkspaceRecord(plan).catch(() => null);
+  return { ok: true, reused: false, stale_ref: ref, stale_error: error };
 }
 
 async function listCmuxWorkspaces(bin) {
