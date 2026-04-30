@@ -30,7 +30,7 @@ import { context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentE
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane } from '../core/team-live.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
-import { CMUX_BREW_COMMAND, CMUX_BREW_UPGRADE_COMMAND, buildCmuxLaunchPlan, buildCmuxNewWorkspaceArgs, cmuxWorkspaceRef, defaultCmuxWorkspaceName, ensureCmuxInstalled, formatCmuxBanner, launchCmuxTeamView, launchCmuxUi, matchingCmuxWorkspaces, parseCmuxWorkspaceList, platformCmuxInstallHint, runCmuxStatus, sanitizeCmuxWorkspaceName, cmuxAvailable } from '../core/cmux-ui.mjs';
+import { CMUX_BREW_COMMAND, CMUX_BREW_UPGRADE_COMMAND, buildCmuxLaunchPlan, buildCmuxNewWorkspaceArgs, cmuxWorkspaceRef, cmuxWorkspaceRefFromText, defaultCmuxWorkspaceName, ensureCmuxInstalled, formatCmuxBanner, launchCmuxTeamView, launchCmuxUi, matchingCmuxWorkspaces, parseCmuxWorkspaceList, platformCmuxInstallHint, readCmuxWorkspaceRecord, runCmuxStatus, sanitizeCmuxWorkspaceName, cmuxAvailable, writeCmuxWorkspaceRecord } from '../core/cmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 
 const flag = (args, name) => args.includes(name);
@@ -2378,6 +2378,10 @@ async function selftest() {
   ] }));
   const workspaceMatches = matchingCmuxWorkspaces(workspaceList, workspacePlan);
   if (workspaceMatches.length !== 1 || cmuxWorkspaceRef(workspaceMatches[0]) !== 'workspace:1') throw new Error('selftest failed: MAD cmux workspace reuse matching did not select the stable workspace');
+  if (cmuxWorkspaceRefFromText('OK workspace:3') !== 'workspace:3') throw new Error('selftest failed: cmux workspace ref parser did not read cmux OK output');
+  await writeCmuxWorkspaceRecord(workspacePlan, { ref: 'workspace:7', name: 'sks-mad-selftest', cwd: tmp });
+  const workspaceRecord = await readCmuxWorkspaceRecord(workspacePlan);
+  if (workspaceRecord?.ref !== 'workspace:7' || workspaceRecord.workspace !== 'sks-mad-selftest') throw new Error('selftest failed: MAD cmux workspace record was not persisted for stable reuse');
   const guardBlocked = await checkHarnessModification(tmp, { tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
   if (guardBlocked.action !== 'block') throw new Error('selftest failed: harness guard allowed skill tampering');
   const setupBlocked = await checkHarnessModification(tmp, { command: 'sks setup --force' });
