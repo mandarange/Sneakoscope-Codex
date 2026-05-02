@@ -2,7 +2,7 @@
 
 ![](https://github.com/mandarange/Sneakoscope-Codex/raw/dev/docs/assets/sneakoscope-codex-logo.png)
 
-Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, cmux-native CLI workspaces, Team/Goal/QA/Research routes, Context7 evidence checks, DB safety, TriWiki context tracking, Honest Mode, and release-readiness gates.
+Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, warp-native CLI workspaces, Team/Goal/QA/Research routes, Context7 evidence checks, DB safety, TriWiki context tracking, Honest Mode, and release-readiness gates.
 
 ## Quick Start
 
@@ -43,7 +43,7 @@ sks selftest --mock
 
 | Area | What it does |
 | --- | --- |
-| CLI runtime | `sks`, `sks cmux`, and `sks --mad` open Codex CLI in a cmux workspace. |
+| CLI runtime | `sks`, `sks warp`, and `sks --mad` write/open Warp Launch Configurations for Codex CLI. |
 | Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
 | Team orchestration | Runs substantial work through ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode. |
 | From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
@@ -60,31 +60,21 @@ sks selftest --mock
 - npm
 - Codex CLI for terminal workflows
 - Codex App for app-facing workflows, with Codex Computer Use required for UI/browser evidence
-- cmux for the CLI-first runtime
+- Warp for the CLI-first runtime
 - Context7 MCP for current-docs-gated routes
 
-On macOS, `sks --mad` can install cmux through Homebrew when cmux is missing. You can also install it manually:
+Install Warp from [warp.dev/download](https://www.warp.dev/download). On macOS, Homebrew users can also install it with:
 
 ```sh
-brew tap manaflow-ai/cmux
-brew install --cask cmux
-```
-
-If the CLI is not on `PATH`, SKS also checks the app bundle path:
-
-```sh
-/Applications/cmux.app/Contents/Resources/bin/cmux
-/Applications/cmux.app/Contents/MacOS/cmux
+brew install --cask warp
 ```
 
 `sks --mad` is stricter than the normal runtime path:
 
 - Checks npm for a newer `sneakoscope` before launch and asks whether to update when the terminal can answer y/n.
 - Installs the latest Codex CLI with `npm i -g @openai/codex@latest` when it is missing and you approve or pass `--yes`.
-- Installs or upgrades the latest cmux cask through Homebrew when cmux is missing or not launchable.
-- Re-probes the real cmux binary after install instead of trusting Homebrew's success text alone.
-- Wakes cmux and retries the socket probe; if the socket is broken, SKS attempts a cmux app restart during that explicit launch.
-- Reuses the named SKS MAD cmux workspace when it already exists and closes duplicate SKS-named MAD workspaces instead of increasing the workspace count on every launch.
+- Requires Warp to be installed before opening the Launch Configuration.
+- Writes a named Warp Launch Configuration and opens it through `warp://launch/<name>.yaml`.
 
 ## Installation
 
@@ -153,30 +143,30 @@ sks --version
 ```sh
 sks bootstrap
 sks deps check
-sks deps install cmux
+sks deps install warp
 sks codex-app check
 sks doctor --fix
 sks fix-path
 ```
 
-### Open Codex CLI With cmux
+### Open Codex CLI With Warp
 
 ```sh
 sks
-sks cmux check
-sks cmux status --once
+sks warp check
+sks warp status --once
 ```
 
-`sks` opens a cmux workspace for Codex CLI when running in an interactive terminal. `sks cmux check` is diagnostic and prints readiness without starting a workspace. It checks both the cmux executable and the workspace socket so a stale app/socket is reported before launch.
+`sks` writes a Warp Launch Configuration for Codex CLI and opens it through Warp's public URI scheme when running in an interactive terminal. `sks warp check` is diagnostic and prints readiness without starting a workspace.
 
-### MAD cmux Workspace
+### MAD Warp Launch
 
 ```sh
 sks --mad
 sks --mad --yes
 ```
 
-This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning cmux workspace with `approval_policy = "on-request"` and `approvals_reviewer = "auto_review"`. It is scoped to that explicit command and does not change normal SKS/DB safety defaults. Repeat launches select the existing named SKS MAD workspace and clean duplicate SKS-named MAD workspaces instead of creating an endless workspace list.
+This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning Warp launch with `approval_policy = "on-request"` and `approvals_reviewer = "auto_review"`. It is scoped to that explicit command and does not change normal SKS/DB safety defaults. Repeat launches overwrite the same named SKS MAD Launch Configuration.
 
 MAD does not disable the pipeline contract: stages, executors, reviewers, and auto-review policy still must not invent unrequested fallback implementation code. If the requested path cannot be implemented, SKS should block with evidence rather than add substitute behavior.
 
@@ -194,16 +184,20 @@ Answer `y` to install `sneakoscope@latest`, then rerun `sks --mad`. Answer `n` t
 sks team "implement this feature" executor:3 reviewer:1
 sks team watch latest
 sks team lane latest --agent analysis_scout_1 --follow
+sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"
+sks team cleanup-warp latest
 sks team status latest
 sks team dashboard latest
 sks team log latest
 ```
 
-Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named cmux Team workspace with split live lanes when cmux is available. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
+Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named Warp Team Launch Configuration with split live lanes when Warp is available. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
 
-The cmux Team workspace is a live orchestration screen: the first pane follows `sks team watch <mission-id> --follow` as the mission overview, and neighboring split panes follow individual `sks team lane <mission-id> --agent <name> --follow` views. SKS colors and labels lanes by role, so scouts, planning/debate voices, executors, reviewers, and safety lanes are visually distinct while the same evidence is mirrored into `team-transcript.jsonl`, `team-live.md`, and `team-dashboard.json`.
+The Warp Team launch is a live orchestration screen: the first pane follows `sks team watch <mission-id> --follow` as the mission overview, and neighboring split panes follow individual `sks team lane <mission-id> --agent <name> --follow` views. SKS gives lanes role-specific colors, labels, and terminal titles, so scouts, planning/debate voices, executors, reviewers, and safety lanes are visually distinct while the same evidence is mirrored into `team-transcript.jsonl`, `team-live.md`, and `team-dashboard.json`.
 
-When the Team route reaches `session_cleanup`, SKS collapses the cmux workspace back to the overview pane and marks the workspace complete. You can also run `sks team cleanup-cmux <mission-id|latest>` manually, or `sks team cleanup-cmux latest --close-workspace` when you want the whole Team workspace closed.
+Agent sessions communicate through the bounded Team transcript. Use `sks team message <mission-id|latest> --from <agent> --to <agent|all> --message "..."` to add direct or broadcast messages; lane panes show messages addressed to that agent plus the fallback global tail.
+
+When the Team route reaches `session_cleanup`, SKS marks the Warp launch record complete and asks `watch --follow` / `lane --follow` panes to show a cleanup summary and stop. You can also run `sks team cleanup-warp <mission-id|latest>` manually, or `sks team cleanup-warp latest --close` to remove the generated Launch Configuration. Warp's public URI/Launch Configuration surface does not expose a live pane-close API, so the panes remain user-controlled.
 
 ### QA, Goal, Research, DB, Wiki, GX
 
@@ -262,7 +256,7 @@ Generated app files include:
 
 Use `sks dollar-commands` to confirm that terminal discovery and Codex App prompt commands agree.
 
-TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks harness fixture` validates the broader Harness Growth Factory contract: deliberate forgetting fixtures, skill card metadata, experiment schema, tool-error taxonomy, permission profiles, MultiAgentV2 defaults, and Cmux cockpit view coverage. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
+TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks harness fixture` validates the broader Harness Growth Factory contract: deliberate forgetting fixtures, skill card metadata, experiment schema, tool-error taxonomy, permission profiles, MultiAgentV2 defaults, and Warp cockpit view coverage. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
 
 ## Prompt `$` Commands
 
@@ -301,7 +295,7 @@ sks selftest --mock
 ### Start A CLI Workspace
 
 ```sh
-sks cmux check
+sks warp check
 sks
 ```
 
@@ -364,14 +358,14 @@ npm install -g .
 
 If the global command is stale, reinstall globally from the repo or from npm.
 
-### cmux is missing
+### Warp is missing
 
 ```sh
-sks deps install cmux
-sks cmux check
+sks deps install warp
+sks warp check
 ```
 
-`sks --mad` also attempts Homebrew installation or upgrade automatically on macOS when cmux is missing. If Homebrew reports the cask installed but the CLI still is not reachable, SKS checks the cmux app bundle paths directly, wakes the app, retries the socket, and reports `unhealthy` rather than `missing` when the executable exists but the app/socket is still broken.
+Install Warp from [warp.dev/download](https://www.warp.dev/download) or run `brew install --cask warp` on macOS, then re-run `sks warp check`.
 
 ### Codex App tools are missing
 
