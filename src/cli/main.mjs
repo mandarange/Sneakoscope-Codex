@@ -25,7 +25,7 @@ import { defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evalu
 import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence } from '../core/pipeline.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, initTeamLive, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane } from '../core/team-live.mjs';
@@ -1632,7 +1632,7 @@ async function setup(args) {
   if (!cliTools.cmux.ok) console.log(`\ncmux ${cmuxStatusKind(cliTools.cmux)}. ${cliTools.cmux.bin ? 'Run: sks cmux check' : `Install: ${cliTools.cmux.install_hint}`}`);
   if (!install.ok && install.scope === 'global') console.log('\nGlobal command missing. Run: npm i -g sneakoscope');
   if (!install.ok && install.scope === 'project') console.log('\nProject package missing. Run: npm i -D sneakoscope');
-  if (!appRuntime.ok) console.log('\nCodex App and first-party Browser Use/Computer Use tools are required for SKS cmux/QA parity. Run: sks codex-app check');
+  if (!appRuntime.ok) console.log('\nCodex App and first-party Codex Computer Use are required for SKS QA/visual evidence; Browser Use is not a UI verification substitute. Run: sks codex-app check');
 }
 
 function formatCodexCliToolStatus(status = {}) {
@@ -2205,7 +2205,8 @@ async function selftest() {
   if (!promptPipelineText.includes('design.md') || !promptPipelineText.includes('imagegen')) throw new Error('selftest failed: prompt pipeline missing design/image asset routing');
   if (!promptPipelineText.includes('From-Chat-IMG') || !promptPipelineText.includes('Do not assume ordinary image prompts are chat captures')) throw new Error('selftest failed: prompt pipeline missing explicit From-Chat-IMG gating');
   const fromChatImgSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'from-chat-img', 'SKILL.md'));
-  if (!fromChatImgSkillText.includes('normal Team pipeline') || !fromChatImgSkillText.includes('Computer Use/browser visual inspection') || !fromChatImgSkillText.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_QA_LOOP_ARTIFACT)) throw new Error('selftest failed: from-chat-img skill missing Team/browser inspection checklist guidance');
+  if (!fromChatImgSkillText.includes('normal Team pipeline') || !fromChatImgSkillText.includes('Codex Computer Use visual inspection') || !fromChatImgSkillText.includes(CODEX_COMPUTER_USE_ONLY_POLICY) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_QA_LOOP_ARTIFACT)) throw new Error('selftest failed: from-chat-img skill missing Team/Computer Use-only inspection checklist guidance');
+  if (fromChatImgSkillText.includes('Computer Use/browser visual inspection')) throw new Error('selftest failed: from-chat-img skill still allows browser visual inspection wording');
   const fromChatImgSkillMeta = await safeReadText(path.join(tmp, '.agents', 'skills', 'from-chat-img', 'agents', 'openai.yaml'));
   if (!fromChatImgSkillMeta.includes('model_reasoning_effort: xhigh')) throw new Error('selftest failed: from-chat-img skill metadata is not xhigh');
   for (const supportSkill of ['reasoning-router', 'pipeline-runner', 'context7-docs', 'seo-geo-optimizer', 'reflection', 'design-system-builder', 'design-ui-editor', 'imagegen']) {
@@ -2473,6 +2474,9 @@ async function selftest() {
   const hookQaSchema = await readJson(path.join(missionDir(hookQaTmp, hookQaState.mission_id), 'required-answers.schema.json'));
   const hookQaAnswers = {};
   for (const s of hookQaSchema.slots) hookQaAnswers[s.id] = s.options ? (s.type === 'array' ? [s.options[0]] : s.options[0]) : (s.type.includes('array') ? ['selftest'] : 'selftest');
+  hookQaAnswers.QA_SCOPE = 'all_available';
+  hookQaAnswers.TARGET_BASE_URL = 'none';
+  hookQaAnswers.API_BASE_URL = 'same_as_target';
   const hookQaAnswersPath = path.join(hookQaTmp, 'qa-answers.json');
   await writeJsonAtomic(hookQaAnswersPath, hookQaAnswers);
   const qaAnswerResult = await runProcess(process.execPath, [hookBin, 'pipeline', 'answer', 'latest', hookQaAnswersPath], { cwd: hookQaTmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
@@ -2496,9 +2500,16 @@ async function selftest() {
   await writeTextAtomic(path.join(unresolvedQaTmp, unresolvedQaGateFile), '# unresolved\n');
   const unresolvedQaGate = await evaluateQaGate(unresolvedQaTmp);
   if (unresolvedQaGate.passed || !unresolvedQaGate.reasons.includes('unresolved_fixable_findings_remaining')) throw new Error('selftest failed: unresolved fixable QA finding was accepted');
+  const forbiddenQaTmp = tmpdir();
+  const forbiddenQaGate = defaultQaGate({ sealed_hash: 'selftest', answers: { QA_SCOPE: 'ui_e2e_only', TARGET_BASE_URL: 'http://localhost:3000', API_BASE_URL: 'same_as_target', TARGET_ENVIRONMENT: 'local_dev_server', DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED: 'never' } });
+  await writeJsonAtomic(path.join(forbiddenQaTmp, 'qa-gate.json'), { ...forbiddenQaGate, passed: true, qa_report_written: true, qa_ledger_complete: true, checklist_completed: true, safety_reviewed: true, credentials_not_persisted: true, ui_computer_use_evidence: true, ui_evidence_source: 'playwright', post_fix_verification_complete: true, honest_mode_complete: true, evidence: ['Playwright screenshot evidence'] });
+  await writeJsonAtomic(path.join(forbiddenQaTmp, 'qa-ledger.json'), { checklist: [] });
+  await writeTextAtomic(path.join(forbiddenQaTmp, forbiddenQaGate.qa_report_file), '# forbidden\n');
+  const forbiddenQaGateResult = await evaluateQaGate(forbiddenQaTmp);
+  if (forbiddenQaGateResult.passed || !forbiddenQaGateResult.reasons.includes('ui_evidence_source_not_codex_computer_use') || !forbiddenQaGateResult.reasons.includes('forbidden_browser_automation_evidence')) throw new Error('selftest failed: forbidden browser automation QA evidence was accepted');
   const promptQa = buildQaLoopPrompt({ id: 'selftest', mission: { prompt: 'QA and fix' }, contract: { answers: { QA_CORRECTIVE_POLICY: 'apply_safe_fixes_and_reverify' } }, cycle: 1, previous: '', reportFile: qaReportFile });
   if (!promptQa.includes('dogfood as human proxy') || !promptQa.includes('fix safe code/test/docs now') || !promptQa.includes('post_fix_verification_complete')) throw new Error('selftest failed: QA-LOOP dogfood prompt');
-  if (!promptQa.includes('Codex Computer Use evidence only') || !promptQa.includes('Chrome MCP') || !promptQa.includes('Playwright')) throw new Error('selftest failed: QA-LOOP prompt did not enforce Computer Use-only UI evidence');
+  if (!promptQa.includes(CODEX_COMPUTER_USE_ONLY_POLICY) || !promptQa.includes('Chrome MCP') || !promptQa.includes('Playwright') || !promptQa.includes('Browser Use')) throw new Error('selftest failed: QA-LOOP prompt did not enforce Computer Use-only UI evidence');
   if (promptQa.includes('Browser/Computer Use evidence')) throw new Error('selftest failed: QA-LOOP prompt still allows Browser/Computer UI evidence');
   const pkgQa = defaultQaGate({ sealed_hash: 'selftest', answers: { QA_SCOPE: 'all_available', TARGET_BASE_URL: 'none', API_BASE_URL: 'same_as_target', TARGET_ENVIRONMENT: 'local_dev_server', DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED: 'never' } });
   if (pkgQa.ui_e2e_required || pkgQa.api_e2e_required || !pkgQa.ui_computer_use_evidence) throw new Error('selftest failed: package QA target gate');
@@ -2637,6 +2648,7 @@ async function selftest() {
     unresolved_findings: 0,
     unresolved_fixable_findings: 0,
     post_fix_verification_complete: true,
+    computer_use_evidence_source: CODEX_COMPUTER_USE_EVIDENCE_SOURCE,
     evidence: ['selftest scoped QA-LOOP covered work-1']
   };
   const incompleteTeamGateTmp = tmpdir();
@@ -2718,6 +2730,9 @@ async function selftest() {
   await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_QA_LOOP_ARTIFACT), { ...passedFromChatImgQaLoop, work_order_item_ids_covered: [] });
   const uncoveredFromChatQaLoopStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (uncoveredFromChatQaLoopStop?.decision !== 'block' || !String(uncoveredFromChatQaLoopStop.reason || '').includes(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:work_order_item_ids_covered`)) throw new Error('selftest failed: From-Chat-IMG scoped QA-LOOP work item coverage did not block Team gate');
+  await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_QA_LOOP_ARTIFACT), { ...passedFromChatImgQaLoop, computer_use_evidence_source: 'playwright', evidence: ['Playwright visual verification'] });
+  const forbiddenFromChatQaLoopStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
+  if (forbiddenFromChatQaLoopStop?.decision !== 'block' || !String(forbiddenFromChatQaLoopStop.reason || '').includes(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:computer_use_evidence_source`) || !String(forbiddenFromChatQaLoopStop.reason || '').includes(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:forbidden_browser_automation_evidence`)) throw new Error('selftest failed: From-Chat-IMG scoped QA-LOOP accepted forbidden browser automation evidence');
   await writeJsonAtomic(path.join(fromChatCoverageDir, FROM_CHAT_IMG_QA_LOOP_ARTIFACT), passedFromChatImgQaLoop);
   await writeJsonAtomic(path.join(fromChatCoverageDir, 'team-gate.json'), { ...passedTeamGate, from_chat_img_required: true, from_chat_img_request_coverage: true });
   const coveredFromChatStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });

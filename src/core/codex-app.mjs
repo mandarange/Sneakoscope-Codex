@@ -118,7 +118,7 @@ export async function codexAppIntegrationStatus(opts = {}) {
 export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady }) {
   const lines = [];
   if (!appInstalled) {
-    lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS cmux launch can still run with Codex CLI alone, but Browser Use and Computer Use evidence will be unavailable until Codex App is ready.');
+    lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS cmux launch can still run with Codex CLI alone, but Codex Computer Use evidence will be unavailable until Codex App is ready.');
     lines.push(`Docs: ${CODEX_APP_DOCS_URL}`);
   }
   if (!codex?.bin) lines.push('Install Codex CLI too: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
@@ -128,10 +128,10 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseRead
   }
   if (appInstalled && (!computerUseReady || !browserUseReady)) {
     lines.push('Open Codex App settings, enable recommended MCP/plugin tools, then restart Codex CLI sessions.');
-    lines.push('Required for SKS QA-LOOP UI evidence: Codex Computer Use only. Browser Use can support non-UI browser context, but it does not satisfy UI-level E2E verification.');
+    lines.push('Required for SKS QA-LOOP UI/browser evidence: Codex Computer Use only. Browser Use can support non-UI browser context, but it does not satisfy UI-level E2E verification.');
     lines.push('Verify with: codex mcp list');
   }
-  if (!lines.length) lines.push('Codex App, Codex CLI, Computer Use, and Browser Use checks look ready. UI-level E2E verification still requires Codex Computer Use evidence.');
+  if (!lines.length) lines.push('Codex App, Codex CLI, Computer Use, and Browser Use checks look ready. UI-level E2E and visual verification still require Codex Computer Use evidence.');
   return lines;
 }
 

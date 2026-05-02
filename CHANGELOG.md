@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.6.81] - 2026-05-02
+
+### Changed
+
+- Require package pipeline UI/browser verification and visual inspection evidence to use Codex Computer Use only, explicitly rejecting Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, and other browser automation as substitutes.
+
 ## [0.6.80] - 2026-05-02
 
 ### Fixed
@@ -224,7 +230,7 @@
 
 - Add explicit `$From-Chat-IMG` / `From-Chat-IMG` Team alias for chat-history screenshot plus original attachment intake.
 - Gate chat-image analysis behind the explicit From-Chat-IMG signal so ordinary image prompts are not treated as chat captures.
-- Require From-Chat-IMG intake to list chat requirements first, use Computer Use/browser visual inspection to strengthen attachment matching, and produce a client modification work order before continuing the normal Team pipeline.
+- Require From-Chat-IMG intake to list chat requirements first, use Codex Computer Use visual inspection to strengthen attachment matching, and produce a client modification work order before continuing the normal Team pipeline.
 - Raise the package size gates to 168 KiB packed and 644 KiB unpacked for the added command alias, generated skill, and route-gating selftests.
 
 ## [0.6.49] - 2026-04-28
