@@ -55,6 +55,25 @@ function checkTrackedFiles() {
   }
 }
 
+function checkVersionSync() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+  const fsx = fs.readFileSync(path.join(root, 'src', 'core', 'fsx.mjs'), 'utf8');
+  const sourceVersion = fsx.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
+  const lockRootVersion = lock.packages?.['']?.version;
+  const mismatches = [
+    ['package-lock.json version', lock.version],
+    ['package-lock root package version', lockRootVersion],
+    ['src/core/fsx.mjs PACKAGE_VERSION', sourceVersion]
+  ].filter(([, version]) => version !== pkg.version);
+  if (mismatches.length) {
+    fail('package version metadata is not synchronized', [
+      `package.json version: ${pkg.version}`,
+      ...mismatches.map(([label, version]) => `${label}: ${version || 'missing'}`)
+    ].join('\n'));
+  }
+}
+
 function checkPackageFootprint() {
   const env = {
     ...process.env,
@@ -97,4 +116,5 @@ function checkPackageFootprint() {
 }
 
 checkTrackedFiles();
+checkVersionSync();
 checkPackageFootprint();

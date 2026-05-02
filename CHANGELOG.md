@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.6.80] - 2026-05-02
+
+### Fixed
+
+- Stop repeating the SKS update prompt after the installed `sks` binary is already at the npm latest version, and clear stale pending update offers before accepting another update response.
+
 ## [0.6.79] - 2026-05-02
 
 ### Changed
