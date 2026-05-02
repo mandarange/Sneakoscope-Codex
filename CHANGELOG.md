@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.6.78] - 2026-05-02
+
+### Added
+
+- Add `sks harness fixture|review` and `harness-growth-report.json` for deliberate forgetting fixtures, skill card metadata, harness experiment schema, permission profiles, MultiAgentV2 defaults, Cmux cockpit view coverage, and tool-error taxonomy.
+- Record failed tool calls into `tool-errors.jsonl` with InvalidArguments, UnexpectedEnvironment, ProviderError, UserAborted, Timeout, PermissionDenied, NetworkDenied, ResourceExhausted, Conflict, or Unknown classification; Unknown is marked as a harness bug.
+
+### Changed
+
+- Tighten the ambiguity stop gate so a clarification-only final must visibly include the `Required questions` block and slot ids instead of passing on vague “I need decisions” wording.
+- Expand Team dashboard panes to the requested Mission/Goal, Agent Grid, MultiAgentV2, Work Order Ledger, Memory Health, Forget Queue, Mistake Immunity, Tool Reliability, Harness Experiments, Dogfood Evidence, Code Structure, and statusline/title cockpit surfaces.
+- Extend Goal workflow artifacts with checkpoints, resume context, clear policy, and structured `/goal` continuation metadata.
+
+## [0.6.77] - 2026-05-02
+
+### Changed
+
+- Make `sks team` open a tmux-style cmux orchestration workspace with a live mission overview pane plus split per-agent lanes.
+- Render `sks team watch` as a readable live cockpit instead of raw transcript JSON by default, with `--raw` preserving the old tail output.
+- Color-code and rename cmux Team lanes by role, expose role status badges, and collapse agent panes back to the overview through `sks team cleanup-cmux` or the `session_cleanup` live event.
+- Repair external cmux socket launch by restarting cmux with a non-persistent `CMUX_SOCKET_MODE=allowAll` fallback when default `cmuxOnly` control rejects SKS with `Broken pipe`.
+
 ## [0.6.76] - 2026-05-01
 
 ### Added

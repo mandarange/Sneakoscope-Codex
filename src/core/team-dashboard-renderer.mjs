@@ -3,17 +3,21 @@ import { nowIso, readJson, writeJsonAtomic } from './fsx.mjs';
 import { ARTIFACT_FILES, validateTeamDashboardState } from './artifact-schemas.mjs';
 
 export const TEAM_DASHBOARD_PANES = [
-  'Mission Overview',
-  'Agent Lanes',
-  'Task DAG',
-  'QA and Dogfood',
+  'Mission / Goal View',
+  'Agent Grid View',
+  'MultiAgentV2 Graph View',
+  'Work Order Ledger View',
+  'Skill Autopilot View',
+  'TriWiki Memory Health View',
+  'Forget Queue',
+  'Mistake Immunity',
+  'Tool Reliability View',
+  'Harness Experiments View',
+  'Dogfood Evidence View',
+  'Code Structure',
+  'Statusline / Terminal Title Preview',
   'Artifacts and Evidence',
   'Performance',
-  'Memory Attention',
-  'Forget Queue',
-  'Skill Autopilot',
-  'Mistake Immunity',
-  'Code Structure',
   'From-Chat-IMG Visual Map'
 ];
 

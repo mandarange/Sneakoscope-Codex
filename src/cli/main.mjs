@@ -35,14 +35,15 @@ import { createWorkOrderLedger } from '../core/work-order-ledger.mjs';
 import { buildFromChatImgVisualMap } from '../core/from-chat-img-forensics.mjs';
 import { classifyDogfoodFinding, createDogfoodReport, writeDogfoodReport } from '../core/dogfood-loop.mjs';
 import { createSkillCandidate, decideSkillInjection, writeSkillCandidate, writeSkillForgeReport, writeSkillInjectionDecision } from '../core/skill-forge.mjs';
+import { classifyToolError, harnessGrowthReport } from '../core/evaluation.mjs';
 import { recordMistake, writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
 import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
-import { CMUX_BREW_COMMAND, CMUX_BREW_UPGRADE_COMMAND, buildCmuxLaunchPlan, buildCmuxNewWorkspaceArgs, cmuxSurfaceRefFromText, cmuxWorkspaceRef, cmuxWorkspaceRefFromText, cmuxReadiness, cmuxStatusKind, defaultCmuxWorkspaceName, ensureCmuxInstalled, formatCmuxBanner, launchCmuxTeamView, launchCmuxUi, matchingCmuxWorkspaces, parseCmuxWorkspaceList, platformCmuxInstallHint, readCmuxWorkspaceRecord, runCmuxStatus, sanitizeCmuxWorkspaceName, writeCmuxWorkspaceRecord } from '../core/cmux-ui.mjs';
+import { CMUX_BREW_COMMAND, CMUX_BREW_UPGRADE_COMMAND, buildCmuxLaunchPlan, buildCmuxNewWorkspaceArgs, cmuxSurfaceRefFromText, cmuxWorkspaceRef, cmuxWorkspaceRefFromText, cmuxReadiness, cmuxStatusKind, defaultCmuxWorkspaceName, ensureCmuxInstalled, formatCmuxBanner, launchCmuxTeamView, launchCmuxUi, matchingCmuxWorkspaces, parseCmuxWorkspaceList, platformCmuxInstallHint, readCmuxWorkspaceRecord, runCmuxStatus, sanitizeCmuxWorkspaceName, teamLaneStyle, writeCmuxWorkspaceRecord } from '../core/cmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
-import { buildTeamPlan, codeStructureCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, qaLoopCommand, researchCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
+import { buildTeamPlan, codeStructureCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, qaLoopCommand, researchCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
@@ -107,6 +108,7 @@ export async function main(args) {
   if (cmd === 'team') return team(tail);
   if (cmd === 'db') return db(sub, rest);
   if (cmd === 'eval') return evalCommand(sub, rest);
+  if (cmd === 'harness') return harnessCommand(sub, rest);
   if (cmd === 'wiki') return wikiCommand(sub, rest);
   if (cmd === 'gc') return gcCommand(tail);
   if (cmd === 'stats') return statsCommand(tail);
@@ -175,6 +177,7 @@ Usage:
   sks eval run [--json] [--out report.json]
   sks eval compare --baseline old.json --candidate new.json [--json]
   sks perf run [--json]
+  sks harness fixture [--json]
   sks code-structure scan [--json]
   sks wiki coords --rgba 12,34,56,255
   sks wiki pack [--json] [--role worker|verifier] [--max-anchors N]
@@ -1477,6 +1480,7 @@ function usage(args = []) {
     'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
     dollar: ['Dollar Commands', '', formatDollarCommandsCompact('  '), '', 'Terminal: sks dollar-commands [--json]'],
     wiki: ['TriWiki', '', '  sks wiki pack', '  sks wiki refresh [--prune]', '  sks wiki sweep latest --json', '  sks wiki validate .sneakoscope/wiki/context-pack.json', '  sks wiki prune --dry-run --json', '', 'Packs include attention.use_first and attention.hydrate_first for compact recall plus source hydration. Sweep records intentional forgetting and promotion candidates.'],
+    harness: ['Harness Growth', '', '  sks harness fixture --json', '  sks harness review --json', '', 'Runs deterministic fixtures for deliberate forgetting, skill cards, harness experiments, tool error taxonomy, permission profiles, MultiAgentV2, and Cmux cockpit views.'],
     'code-structure': ['Code Structure', '', '  sks code-structure scan', '  sks code-structure scan --json', '', 'Flags handwritten source files above 1000/2000/3000-line thresholds and records split-review exceptions.'],
     gx: ['GX', '', '  sks gx init architecture-atlas', '  sks gx render architecture-atlas --format all', '  sks gx validate architecture-atlas']
   };
@@ -2293,7 +2297,7 @@ async function selftest() {
   if (hookTeamPendingState.mission_id !== hookTeamState.mission_id) throw new Error('selftest failed: pending clarification allowed a new route mission to replace the visible question sheet');
   if (!hookTeamPendingContext.includes('Required questions still pending') || !hookTeamPendingContext.includes('VISIBLE RESPONSE CONTRACT') || !hookTeamPendingContext.includes('UI_STATE_BEHAVIOR')) throw new Error('selftest failed: pending clarification did not re-expose the question sheet');
   if (hookTeamPendingContext.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: pending clarification prepared a new ambiguity gate instead of reusing the active one');
-  const hookTeamStopResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, last_assistant_message: 'I will execute Team now.' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  const hookTeamStopResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, last_assistant_message: 'I need three decisions before implementation, but I will not paste the Required questions block.' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (hookTeamStopResult.code !== 0) throw new Error(`selftest failed: Team stop hook exited ${hookTeamStopResult.code}: ${hookTeamStopResult.stderr}`);
   const hookTeamStopJson = JSON.parse(hookTeamStopResult.stdout);
   if (hookTeamStopJson.decision !== 'block' || !String(hookTeamStopJson.reason || '').includes('mandatory ambiguity-removal')) throw new Error('selftest failed: Stop hook did not block missing Team ambiguity answers');
@@ -2303,6 +2307,13 @@ async function selftest() {
   if (!String(hookTeamStopJson.reason || '').includes('Codex plan-tool interaction')) throw new Error('selftest failed: Stop hook did not reprint plan-tool guidance');
   if (!String(hookTeamStopJson.reason || '').includes('VISIBLE RESPONSE CONTRACT')) throw new Error('selftest failed: Stop hook did not force visible clarification response');
   const hookTeamSchema = await readJson(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'required-answers.schema.json'));
+  const visibleQuestionsBlock = [
+    'Required questions',
+    ...hookTeamSchema.slots.map((slot, idx) => `${idx + 1}. ${slot.id}: ${slot.question}`),
+    'Reply by slot id, then I will write answers.json and run sks pipeline answer latest answers.json.'
+  ].join('\n');
+  const visibleQuestionDecision = await evaluateStop(hookTeamTmp, hookTeamState, { last_assistant_message: visibleQuestionsBlock }, { noQuestion: false });
+  if (!visibleQuestionDecision?.continue) throw new Error('selftest failed: visible Required questions block was not accepted by clarification stop gate');
   const nonGoalsSlot = hookTeamSchema.slots.find((s) => s.id === 'NON_GOALS');
   if (nonGoalsSlot && !nonGoalsSlot.allow_empty) throw new Error('selftest failed: NON_GOALS does not allow an empty array answer');
   if (!nonGoalsSlot && !Array.isArray(hookTeamSchema.inferred_answers?.NON_GOALS)) throw new Error('selftest failed: NON_GOALS was neither asked nor inferred');
@@ -2700,7 +2711,10 @@ async function selftest() {
   if (!roleTeamPlan.roster.debate_team.some((agent) => /inconvenience/.test(agent.persona))) throw new Error('selftest failed: user friction persona missing from debate team');
   const cmuxTeam = await launchCmuxTeamView({ root: tmp, missionId: teamId, plan: roleTeamPlan, json: true });
   if (!cmuxTeam.agents?.length || !cmuxTeam.agents.some((entry) => entry.agent === 'analysis_scout_1') || !cmuxTeam.agents.every((entry) => String(entry.command || '').includes('team lane') && String(entry.command || '').includes('--agent'))) throw new Error('selftest failed: Team cmux view did not expose agent live lanes');
-  const cmuxTeamWorkspaceArgs = buildCmuxNewWorkspaceArgs({ root: tmp, workspace: `sks-team-${teamId}` }, cmuxTeam.agents[0].command);
+  if (!cmuxTeam.overview?.command?.includes('team watch') || !cmuxTeam.lanes?.some((entry) => entry.role === 'overview') || !cmuxTeam.lanes?.some((entry) => entry.agent === 'analysis_scout_1')) throw new Error('selftest failed: Team cmux view did not expose orchestration overview plus agent lanes');
+  if (teamLaneStyle('analysis_scout_1').role !== 'scout' || teamLaneStyle('executor_1').role !== 'execution' || teamLaneStyle('reviewer_1').role !== 'review') throw new Error('selftest failed: Team cmux role palette did not classify lane roles');
+  if (cmuxTeam.cleanup_policy !== 'collapse-agent-lanes-to-overview' || !cmuxTeam.lanes.every((entry) => entry.style?.color && entry.title)) throw new Error('selftest failed: Team cmux view did not expose color/title metadata and cleanup policy');
+  const cmuxTeamWorkspaceArgs = buildCmuxNewWorkspaceArgs({ root: tmp, workspace: `sks-team-${teamId}` }, cmuxTeam.overview.command);
   if (!cmuxTeamWorkspaceArgs.includes('--name') || !cmuxTeamWorkspaceArgs.includes(`sks-team-${teamId}`)) throw new Error('selftest failed: Team cmux workspace is not named for visibility');
   if (routeReasoning(routePrompt('$Research frontier idea'), '$Research frontier idea').effort !== 'xhigh') throw new Error('selftest failed: research reasoning not xhigh');
   if (routeReasoning(routePrompt('$From-Chat-IMG 채팅 이미지 작업'), '$From-Chat-IMG 채팅 이미지 작업').effort !== 'xhigh') throw new Error('selftest failed: From-Chat-IMG reasoning not xhigh');
@@ -2761,7 +2775,7 @@ async function selftest() {
   if (teamDashboard?.agent_session_count !== 5 || teamDashboard?.role_counts?.executor !== 5) throw new Error('selftest failed: team dashboard session/role budget missing');
   await writeTeamDashboardState(teamDir, { missionId: teamId, mission: { id: teamId, mode: 'team' }, effort: 'high', phase: 'verification' });
   const teamDashboardState = await readJson(path.join(teamDir, ARTIFACT_FILES.team_dashboard_state), {});
-  if (!validateTeamDashboardState(teamDashboardState).ok || !renderTeamDashboardState(teamDashboardState).includes('Mission Overview')) throw new Error('selftest failed: Team dashboard state missing required cockpit panes');
+  if (!validateTeamDashboardState(teamDashboardState).ok || !renderTeamDashboardState(teamDashboardState).includes('Mission / Goal View')) throw new Error('selftest failed: Team dashboard state missing required cockpit panes');
   if (teamDashboard?.context_tracking?.ssot !== 'triwiki') throw new Error('selftest failed: team dashboard missing TriWiki context tracking');
   if (!teamDashboard?.phases?.includes('parallel_analysis_scouting')) throw new Error('selftest failed: team dashboard missing analysis scout phase');
   if (!teamDashboard?.latest_messages?.some((entry) => entry.agent === 'analysis_scout_1')) throw new Error('selftest failed: team live dashboard missing analysis scout event');
@@ -2817,6 +2831,9 @@ async function selftest() {
   if (!evalReport.comparison.meaningful_improvement) throw new Error('selftest failed: evaluation benchmark did not show meaningful improvement');
   if (!evalReport.candidate.wiki?.valid) throw new Error('selftest failed: wiki coordinate index invalid in eval');
   if (evalReport.candidate.wiki?.voxel_schema !== 'sks.wiki-voxel.v1' || evalReport.candidate.wiki?.voxel_rows < 1) throw new Error('selftest failed: eval did not include voxel overlay metrics');
+  const harnessReport = harnessGrowthReport({});
+  if (!harnessReport.forgetting.fixture.passed || !harnessReport.cmux.views.includes('Harness Experiments View') || !harnessReport.reliability.tool_error_taxonomy.includes('Unknown')) throw new Error('selftest failed: harness growth fixture incomplete');
+  if (classifyToolError({ message: 'operation timed out' }) !== 'Timeout' || classifyToolError({ message: 'unclassified weirdness' }) !== 'Unknown') throw new Error('selftest failed: tool error taxonomy classification');
   const coord = rgbaToWikiCoord({ r: 12, g: 34, b: 56, a: 255 });
   if (coord.schema !== 'sks.wiki-coordinate.v1' || coord.xyzw.length !== 4) throw new Error('selftest failed: RGBA wiki coordinate conversion');
   await writeTextAtomic(path.join(tmp, '.sneakoscope', 'memory', 'q2_facts', 'selftest.md'), '- claim: Selftest memory claim must be selected before lower-weight mission notes. | id: selftest-memory-priority | source: src/cli/main.mjs | risk: high | status: supported | evidence_count: 3 | required_weight: 1.0 | trust_score: 0.9\n');

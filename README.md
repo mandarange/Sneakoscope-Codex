@@ -201,6 +201,10 @@ sks team log latest
 
 Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named cmux Team workspace with split live lanes when cmux is available. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
 
+The cmux Team workspace is a live orchestration screen: the first pane follows `sks team watch <mission-id> --follow` as the mission overview, and neighboring split panes follow individual `sks team lane <mission-id> --agent <name> --follow` views. SKS colors and labels lanes by role, so scouts, planning/debate voices, executors, reviewers, and safety lanes are visually distinct while the same evidence is mirrored into `team-transcript.jsonl`, `team-live.md`, and `team-dashboard.json`.
+
+When the Team route reaches `session_cleanup`, SKS collapses the cmux workspace back to the overview pane and marks the workspace complete. You can also run `sks team cleanup-cmux <mission-id|latest>` manually, or `sks team cleanup-cmux latest --close-workspace` when you want the whole Team workspace closed.
+
 ### QA, Goal, Research, DB, Wiki, GX
 
 ```sh
@@ -212,6 +216,7 @@ sks db scan --json
 sks wiki refresh
 sks wiki sweep latest --json
 sks wiki validate .sneakoscope/wiki/context-pack.json
+sks harness fixture --json
 sks gx init homepage
 sks gx render homepage --format html
 sks validate-artifacts latest --json
@@ -257,7 +262,7 @@ Generated app files include:
 
 Use `sks dollar-commands` to confirm that terminal discovery and Codex App prompt commands agree.
 
-TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
+TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks harness fixture` validates the broader Harness Growth Factory contract: deliberate forgetting fixtures, skill card metadata, experiment schema, tool-error taxonomy, permission profiles, MultiAgentV2 defaults, and Cmux cockpit view coverage. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
 
 ## Prompt `$` Commands
 

@@ -17,6 +17,7 @@ export const ARTIFACT_FILES = {
   memory_sweep_report: 'memory-sweep-report.json',
   skill_forge_report: 'skill-forge-report.json',
   mistake_memory_report: 'mistake-memory-report.json',
+  harness_growth_report: 'harness-growth-report.json',
   code_structure_report: 'code-structure-report.json',
   team_dashboard_state: 'team-dashboard-state.json',
   cmux_pane_plan: 'cmux-pane-plan.json',
@@ -163,6 +164,21 @@ export function validateMistakeMemoryReport(data = {}) {
   return validationResult('MistakeMemoryReport', errors);
 }
 
+export function validateHarnessGrowthReport(data = {}) {
+  const errors = [];
+  pushMissing(errors, isObj(data.forgetting), 'forgetting_missing');
+  pushMissing(errors, isObj(data.skills), 'skills_missing');
+  pushMissing(errors, isObj(data.experiments), 'experiments_missing');
+  pushMissing(errors, isObj(data.codex_native), 'codex_native_missing');
+  pushMissing(errors, isObj(data.cmux), 'cmux_missing');
+  pushMissing(errors, isObj(data.reliability), 'reliability_missing');
+  if (data.forgetting?.fixture?.passed !== true) errors.push('forgetting_fixture_failed');
+  if (!Array.isArray(data.reliability?.tool_error_taxonomy) || !data.reliability.tool_error_taxonomy.includes('Unknown')) errors.push('tool_error_taxonomy_missing_unknown');
+  if (data.reliability?.unknown_errors_are_bugs !== true) errors.push('unknown_errors_not_marked_bug');
+  if (!Array.isArray(data.cmux?.views) || data.cmux.views.length < 10) errors.push('cmux_views_incomplete');
+  return validationResult('HarnessGrowthReport', errors);
+}
+
 export function validateCodeStructureReport(data = {}) {
   const errors = [];
   pushMissing(errors, isObj(data.thresholds), 'thresholds_missing');
@@ -179,7 +195,7 @@ export function validateTeamDashboardState(data = {}) {
   pushMissing(errors, Array.isArray(data.gates), 'gates_not_array');
   pushMissing(errors, Array.isArray(data.agents), 'agents_not_array');
   pushMissing(errors, Array.isArray(data.tasks), 'tasks_not_array');
-  for (const pane of ['Mission Overview', 'Agent Lanes', 'Task DAG', 'QA and Dogfood', 'Artifacts and Evidence', 'Performance']) {
+  for (const pane of ['Mission / Goal View', 'Agent Grid View', 'MultiAgentV2 Graph View', 'Work Order Ledger View', 'Skill Autopilot View', 'TriWiki Memory Health View', 'Forget Queue', 'Mistake Immunity', 'Tool Reliability View', 'Harness Experiments View', 'Dogfood Evidence View', 'Code Structure']) {
     if (!arr(data.panes).includes(pane)) errors.push(`pane_missing:${pane}`);
   }
   if (arr(data.gates).some((gate) => !GATE_STATUSES.has(gate.status))) errors.push('gate_status_invalid');
@@ -214,6 +230,7 @@ export const ARTIFACT_VALIDATORS = {
   memory_sweep_report: validateMemorySweepReport,
   skill_forge_report: validateSkillForgeReport,
   mistake_memory_report: validateMistakeMemoryReport,
+  harness_growth_report: validateHarnessGrowthReport,
   code_structure_report: validateCodeStructureReport,
   team_dashboard_state: validateTeamDashboardState,
   cmux_pane_plan: validateCmuxPanePlan,

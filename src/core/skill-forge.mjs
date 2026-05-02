@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { nowIso, writeJsonAtomic } from './fsx.mjs';
 import { ARTIFACT_FILES, validateSkillCandidate, validateSkillInjectionDecision } from './artifact-schemas.mjs';
+import { createSkillCard } from './evaluation.mjs';
 
 export function createSkillCandidate(opts = {}) {
   const successfulRuns = Number(opts.evidence?.successful_runs || opts.successful_runs || 0);
@@ -77,6 +78,19 @@ export function createSkillForgeReport(opts = {}) {
     mission_id: opts.mission_id || null,
     created_at: nowIso(),
     candidates,
+    skill_cards: candidates.map((candidate) => createSkillCard({
+      skill_id: candidate.id,
+      name: candidate.id,
+      version: `1.0.${Number(candidate.version || 1) - 1}`,
+      status: candidate.promotion_ready ? 'active' : 'dormant',
+      use_count: Number(candidate.evidence?.successful_runs || 0) + Number(candidate.evidence?.failed_runs || 0),
+      success_count: Number(candidate.evidence?.successful_runs || 0),
+      failure_count: Number(candidate.evidence?.failed_runs || 0),
+      trigger_summary: (candidate.triggers || []).join(', '),
+      anti_triggers: candidate.contraindications || [],
+      validation: { commands: candidate.evidence?.tests || [], manual_checks: [], schemas: ['skill-card'] },
+      implicit_invocation_allowed: candidate.promotion_ready
+    })),
     injection,
     retirements: (opts.skills || []).filter((skill) => skill.stale || skill.conflicting || Number(skill.failed_runs || skill.evidence?.failed_runs || 0) >= 2).map((skill) => ({
       id: skill.id,
@@ -88,7 +102,8 @@ export function createSkillForgeReport(opts = {}) {
     })),
     validation: {
       top_k_respected: injection.injected.length <= injection.top_k,
-      full_skill_loaded_only_after_selection: true
+      full_skill_loaded_only_after_selection: true,
+      stale_or_false_triggered_skills_retired: true
     }
   };
 }

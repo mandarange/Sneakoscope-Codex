@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { exists, nowIso, packageRoot, readJson, runProcess, sha256, sksRoot, which, writeJsonAtomic } from './fsx.mjs';
 import { getCodexInfo } from './codex-adapter.mjs';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.mjs';
@@ -88,6 +88,10 @@ export function cmuxPaneRefFromText(text = '') {
 
 export function cmuxWorkspaceStatePath(plan = {}) {
   return path.join(path.resolve(plan.root || process.cwd()), '.sneakoscope', 'state', 'cmux-workspaces.json');
+}
+
+export function cmuxTeamStatePath(root = process.cwd()) {
+  return path.join(path.resolve(root || process.cwd()), '.sneakoscope', 'state', 'cmux-team-workspaces.json');
 }
 
 export function cmuxWorkspaceStateKey(plan = {}) {
@@ -189,6 +193,23 @@ export function cmuxBinaryCandidates() {
   return Array.from(new Set(candidates));
 }
 
+function cmuxAppExecutableCandidates() {
+  if (process.platform !== 'darwin') return [];
+  const envApps = String(process.env.SKS_CMUX_APP_PATHS || '')
+    .split(path.delimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const appBundles = [
+    ...envApps,
+    '/Applications/cmux.app',
+    '/Applications/Cmux.app',
+    '/Applications/CMUX.app',
+    path.join(process.env.HOME || '', 'Applications', 'cmux.app'),
+    '/opt/homebrew/Caskroom/cmux/latest/cmux.app'
+  ].filter(Boolean);
+  return Array.from(new Set(appBundles.map((app) => path.join(app, 'Contents', 'MacOS', 'cmux'))));
+}
+
 export async function cmuxAvailable() {
   const bin = await findCmuxBinary();
   if (!bin) return { ok: false, bin: null, version: null, executable_ok: false, error: 'cmux CLI not found' };
@@ -267,11 +288,56 @@ export function codexLaunchCommand(root, codexBin, codexArgs = []) {
   ].join('; ');
 }
 
+function echoLinesCommand(lines = []) {
+  return lines.map((line) => String(line) ? `echo ${shellEscape(line)}` : 'echo').join('; ');
+}
+
+export const CMUX_TEAM_LANE_STYLES = Object.freeze({
+  overview: Object.freeze({ role: 'overview', label: 'overview', color_name: 'Charcoal', color: '#3E4B5E', icon: 'layout-dashboard' }),
+  scout: Object.freeze({ role: 'scout', label: 'scout', color_name: 'Aqua', color: '#0E6B8C', icon: 'search' }),
+  planning: Object.freeze({ role: 'planning', label: 'plan', color_name: 'Amber', color: '#7D6608', icon: 'messages-square' }),
+  execution: Object.freeze({ role: 'execution', label: 'exec', color_name: 'Green', color: '#196F3D', icon: 'hammer' }),
+  review: Object.freeze({ role: 'review', label: 'review', color_name: 'Crimson', color: '#922B21', icon: 'shield-check' }),
+  safety: Object.freeze({ role: 'safety', label: 'safety', color_name: 'Magenta', color: '#AD1457', icon: 'database' })
+});
+
+export function teamLaneStyle(agentId = '') {
+  const id = String(agentId || '').toLowerCase();
+  if (!id || id === 'mission_overview' || id === 'overview') return CMUX_TEAM_LANE_STYLES.overview;
+  if (/analysis|scout/.test(id)) return CMUX_TEAM_LANE_STYLES.scout;
+  if (/debate|consensus|planner|user/.test(id)) return CMUX_TEAM_LANE_STYLES.planning;
+  if (/db|safety/.test(id)) return CMUX_TEAM_LANE_STYLES.safety;
+  if (/review|qa|validation/.test(id)) return CMUX_TEAM_LANE_STYLES.review;
+  if (/executor|implementation|worker|developer/.test(id)) return CMUX_TEAM_LANE_STYLES.execution;
+  return CMUX_TEAM_LANE_STYLES.planning;
+}
+
+function teamLaneTitle(agentId = '') {
+  const style = teamLaneStyle(agentId);
+  return `${style.label}: ${String(agentId || 'mission_overview')}`.slice(0, 80);
+}
+
+function cmuxStatusKey(agentId = '') {
+  return sanitizeCmuxWorkspaceName(`sks-${String(agentId || 'overview').toLowerCase()}`).slice(0, 40);
+}
+
 export function teamAgentCommand(root, missionId, agentId, phase) {
+  const style = teamLaneStyle(agentId);
   return [
-    `printf '%s\\n' ${shellEscape(`${SKS_CMUX_LOGO}\n\nTeam mission: ${missionId}\nAgent: ${agentId}\nPhase: ${phase}\n`)}`,
+    'clear',
+    echoLinesCommand([...SKS_CMUX_LOGO.split('\n'), '', `Team mission: ${missionId}`, `Agent: ${agentId}`, `Lane: ${style.label} (${style.color_name} ${style.color})`, `Phase: ${phase}`, '']),
     `cd ${shellEscape(root)}`,
     `node ${shellEscape(path.join(packageRoot(), 'bin', 'sks.mjs'))} team lane ${shellEscape(missionId)} --agent ${shellEscape(agentId)} --phase ${shellEscape(phase)} --follow --lines 12`
+  ].join('; ');
+}
+
+export function teamOverviewCommand(root, missionId) {
+  const style = teamLaneStyle('mission_overview');
+  return [
+    'clear',
+    echoLinesCommand([...SKS_CMUX_LOGO.split('\n'), '', `Team mission: ${missionId}`, 'View: live orchestration overview', `Lane: ${style.label} (${style.color_name} ${style.color})`, '']),
+    `cd ${shellEscape(root)}`,
+    `node ${shellEscape(path.join(packageRoot(), 'bin', 'sks.mjs'))} team watch ${shellEscape(missionId)} --follow --lines 18`
   ].join('; ');
 }
 
@@ -491,6 +557,14 @@ async function ensureCmuxDaemonReady(cmux = {}) {
       last = await cmuxSocketProbe(cmux.bin);
       if (last.ok) return { ...cmux, ok: true, error: null };
     }
+    if (process.env.SKS_CMUX_SOCKET_ALLOW_ALL !== '0') {
+      await restartCmuxApp({ socketMode: 'allowAll' });
+      for (let i = 0; i < 8; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        last = await cmuxSocketProbe(cmux.bin);
+        if (last.ok) return { ...cmux, ok: true, error: null, socket_mode: 'allowAll' };
+      }
+    }
   }
   return { ok: false, error: last.error || 'cmux socket did not become ready' };
 }
@@ -505,7 +579,7 @@ function isRecoverableCmuxSocketError(error) {
   return /socket|broken pipe|receive timeout|connection refused/i.test(String(error || ''));
 }
 
-async function restartCmuxApp() {
+async function restartCmuxApp(opts = {}) {
   if (process.platform !== 'darwin') return { ok: false, reason: 'not_macos' };
   const quit = await runProcess('osascript', ['-e', 'tell application "cmux" to quit'], { timeoutMs: 8000, maxOutputBytes: 16 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
   if (quit.code !== 0) {
@@ -513,6 +587,21 @@ async function restartCmuxApp() {
   }
   await new Promise((resolve) => setTimeout(resolve, 1500));
   await removeStaleCmuxSocket().catch(() => null);
+  if (opts.socketMode) return openCmuxAppWithSocketMode(opts.socketMode);
+  return openCmuxApp();
+}
+
+async function openCmuxAppWithSocketMode(socketMode) {
+  for (const exe of cmuxAppExecutableCandidates()) {
+    if (!await exists(exe)) continue;
+    const child = spawn(exe, [], {
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env, CMUX_SOCKET_MODE: socketMode }
+    });
+    child.unref();
+    return { ok: true, mode: socketMode, executable: exe };
+  }
   return openCmuxApp();
 }
 
@@ -524,7 +613,7 @@ async function removeStaleCmuxSocket() {
 }
 
 export async function launchCmuxTeamView({ root, missionId, plan = {}, promptFile = null, json = false } = {}) {
-  const launch = await buildCmuxLaunchPlan({ root, workspace: `sks-team-${missionId}` });
+  const launch = await buildCmuxLaunchPlan({ root, workspace: `sks-team-${missionId}`, wakeCmux: true });
   const agents = [
     ...(plan.roster?.analysis_team || []),
     ...(plan.roster?.debate_team || []),
@@ -541,18 +630,26 @@ export async function launchCmuxTeamView({ root, missionId, plan = {}, promptFil
   }
   const commands = uniqueAgents.slice(0, Math.max(1, plan.agent_session_count || 3)).map((agentId, index) => ({
     agent: agentId,
-    command: teamAgentCommand(launch.root, missionId, agentId, index === 0 ? 'analysis' : 'team', promptFile)
+    command: teamAgentCommand(launch.root, missionId, agentId, index === 0 ? 'analysis' : 'team', promptFile),
+    style: teamLaneStyle(agentId),
+    title: teamLaneTitle(agentId)
   }));
-  const result = { ready: launch.ready, cmux: launch.cmux, workspace: launch.workspace, agents: commands, blockers: launch.blockers };
+  const overview = { agent: 'mission_overview', role: 'overview', command: teamOverviewCommand(launch.root, missionId), style: teamLaneStyle('mission_overview'), title: teamLaneTitle('mission_overview') };
+  const lanes = [overview, ...commands.map((entry) => ({ ...entry, role: entry.style.role }))];
+  const result = { ready: launch.ready, cmux: launch.cmux, workspace: launch.workspace, overview, agents: commands, lanes, cleanup_policy: 'collapse-agent-lanes-to-overview', blockers: launch.blockers };
   if (json || !launch.ready) return result;
-  const first = commands[0]?.command || teamAgentCommand(launch.root, missionId, 'parent_orchestrator', 'team', promptFile);
+  const first = overview.command;
   const created = spawnSync(launch.cmux.bin, buildCmuxNewWorkspaceArgs(launch, first), { encoding: 'utf8', stdio: 'pipe' });
   result.created = created.status === 0;
   result.stdout = created.stdout || '';
   result.stderr = created.stderr || '';
-  const workspaceRef = cmuxWorkspaceRefFromText(`${created.stdout || ''}\n${created.stderr || ''}`);
+  const createdText = `${created.stdout || ''}\n${created.stderr || ''}`;
+  const workspaceRef = cmuxWorkspaceRefFromText(createdText);
+  let overviewSurfaceRef = cmuxSurfaceRefFromText(createdText);
   if (workspaceRef) {
+    overviewSurfaceRef ||= firstCmuxSurfaceRef(launch.cmux.bin, workspaceRef);
     result.workspace_ref = workspaceRef;
+    if (overviewSurfaceRef) result.overview.surface_ref = overviewSurfaceRef;
     await writeCmuxWorkspaceRecord(launch, { ref: workspaceRef, name: launch.workspace, description: cmuxWorkspaceDescription(launch), cwd: launch.root }).catch(() => null);
     const selected = await runProcess(launch.cmux.bin, ['select-workspace', '--workspace', workspaceRef], { timeoutMs: 5000, maxOutputBytes: 16 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
     result.selected = selected.code === 0;
@@ -564,7 +661,7 @@ export async function launchCmuxTeamView({ root, missionId, plan = {}, promptFil
     if (!workspaceRef) result.blockers = [...(result.blockers || []), 'cmux new-workspace did not return a workspace ref'];
     return result;
   }
-  for (const entry of commands.slice(1)) {
+  for (const entry of commands) {
     const split = spawnSync(launch.cmux.bin, ['new-split', 'right', '--workspace', workspaceRef], { encoding: 'utf8', stdio: 'pipe' });
     const splitText = `${split.stdout || ''}\n${split.stderr || ''}`;
     const surfaceRef = cmuxSurfaceRefFromText(splitText);
@@ -574,6 +671,8 @@ export async function launchCmuxTeamView({ root, missionId, plan = {}, promptFil
       ok: split.status === 0 && Boolean(surfaceRef),
       pane_ref: paneRef,
       surface_ref: surfaceRef,
+      style: entry.style,
+      title: entry.title,
       stdout: split.stdout || '',
       stderr: split.stderr || ''
     };
@@ -585,10 +684,35 @@ export async function launchCmuxTeamView({ root, missionId, plan = {}, promptFil
     }
     result.splits.push(splitResult);
   }
+  const customizationLanes = [
+    { ...overview, surface_ref: overviewSurfaceRef },
+    ...result.splits.map((entry) => ({ agent: entry.agent, surface_ref: entry.surface_ref, pane_ref: entry.pane_ref, style: entry.style, title: entry.title }))
+  ];
+  result.customization = await applyCmuxTeamCustomization(launch.cmux.bin, workspaceRef, customizationLanes);
+  await writeCmuxTeamRecord(launch.root, {
+    mission_id: missionId,
+    workspace: launch.workspace,
+    workspace_ref: workspaceRef,
+    overview_surface_ref: overviewSurfaceRef || null,
+    cleanup_policy: result.cleanup_policy,
+    lanes: customizationLanes.map((entry) => ({
+      agent: entry.agent,
+      role: entry.style?.role || teamLaneStyle(entry.agent).role,
+      style: entry.style || teamLaneStyle(entry.agent),
+      title: entry.title || teamLaneTitle(entry.agent),
+      surface_ref: entry.surface_ref || null,
+      pane_ref: entry.pane_ref || null
+    }))
+  }).catch(() => null);
   result.split_count = result.splits.filter((entry) => entry.ok && entry.send_ok).length;
-  const expectedSplits = Math.max(0, commands.length - 1);
+  const expectedSplits = commands.length;
   result.opened_lane_count = 1 + result.split_count;
   result.all_lanes_opened = result.created && result.selected !== false && result.split_count === expectedSplits;
+  result.screen_read_checks = readCmuxLaneScreens(launch.cmux.bin, workspaceRef, [
+    { agent: 'mission_overview', surface_ref: overviewSurfaceRef },
+    ...result.splits.map((entry) => ({ agent: entry.agent, surface_ref: entry.surface_ref }))
+  ]);
+  result.screen_read_ok = result.screen_read_checks.some((entry) => entry.ok);
   result.ready = Boolean(result.ready && result.all_lanes_opened);
   if (!result.all_lanes_opened) {
     result.blockers = [
@@ -598,6 +722,135 @@ export async function launchCmuxTeamView({ root, missionId, plan = {}, promptFil
     ];
   }
   return result;
+}
+
+async function applyCmuxTeamCustomization(bin, workspaceRef, lanes = []) {
+  if (!bin || !workspaceRef) return { ok: false, skipped: true, reason: 'missing cmux binary or workspace ref', operations: [] };
+  const operations = [];
+  const pushRun = async (label, args) => {
+    const run = await runProcess(bin, args, { timeoutMs: 5000, maxOutputBytes: 16 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+    operations.push({ label, args, ok: run.code === 0, stdout: run.stdout || '', stderr: run.stderr || '' });
+    return run.code === 0;
+  };
+  const overview = lanes.find((lane) => (lane.agent || '') === 'mission_overview') || lanes[0] || {};
+  const overviewStyle = overview.style || teamLaneStyle('mission_overview');
+  await pushRun('workspace-color', ['workspace-action', '--workspace', workspaceRef, '--action', 'set-color', '--color', overviewStyle.color]);
+  await pushRun('workspace-status', ['set-status', 'sks-team', 'Team live', '--icon', overviewStyle.icon, '--color', overviewStyle.color, '--workspace', workspaceRef]);
+  await pushRun('workspace-progress', ['set-progress', '0.15', '--label', 'Team running', '--workspace', workspaceRef]);
+  for (const lane of lanes) {
+    const style = lane.style || teamLaneStyle(lane.agent);
+    if (lane.surface_ref) await pushRun(`rename-${lane.agent}`, ['rename-tab', '--workspace', workspaceRef, '--surface', lane.surface_ref, '--title', lane.title || teamLaneTitle(lane.agent)]);
+    await pushRun(`status-${lane.agent}`, ['set-status', cmuxStatusKey(lane.agent), lane.title || teamLaneTitle(lane.agent), '--icon', style.icon, '--color', style.color, '--workspace', workspaceRef]);
+  }
+  return { ok: operations.some((entry) => entry.ok), operations };
+}
+
+async function writeCmuxTeamRecord(root, record = {}) {
+  if (!record.mission_id || !record.workspace_ref) return null;
+  const statePath = cmuxTeamStatePath(root);
+  const state = await readJson(statePath, {}).catch(() => ({}));
+  const now = nowIso();
+  const nextRecord = { ...record, schema_version: 1, root: path.resolve(root || process.cwd()), updated_at: now };
+  const missions = state.missions && typeof state.missions === 'object' ? state.missions : {};
+  await writeJsonAtomic(statePath, {
+    schema_version: 1,
+    updated_at: now,
+    missions: {
+      ...missions,
+      [record.mission_id]: nextRecord
+    }
+  });
+  return nextRecord;
+}
+
+async function readCmuxTeamRecord(root, missionId) {
+  const state = await readJson(cmuxTeamStatePath(root), {}).catch(() => ({}));
+  const missions = state.missions && typeof state.missions === 'object' ? state.missions : {};
+  if (missionId && missionId !== 'latest') return missions[missionId] || null;
+  const records = Object.values(missions).filter((entry) => entry && typeof entry === 'object');
+  records.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+  return records[0] || null;
+}
+
+export async function cleanupCmuxTeamView({ root, missionId = 'latest', closeWorkspace = false } = {}) {
+  const resolvedRoot = path.resolve(root || await sksRoot());
+  const record = await readCmuxTeamRecord(resolvedRoot, missionId);
+  if (!record?.workspace_ref) return { ok: false, skipped: true, reason: 'no recorded cmux Team workspace', mission_id: missionId };
+  const cmux = await cmuxReadiness({ wake: true }).catch((err) => ({ ok: false, error: err.message || 'cmux readiness failed' }));
+  if (!cmux.ok) return { ok: false, workspace_ref: record.workspace_ref, mission_id: record.mission_id, reason: cmux.error || 'cmux not ready' };
+  const operations = [];
+  const run = async (label, args) => {
+    const out = await runProcess(cmux.bin, args, { timeoutMs: 5000, maxOutputBytes: 16 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+    operations.push({ label, ok: out.code === 0, stdout: out.stdout || '', stderr: out.stderr || '' });
+    return out.code === 0;
+  };
+  if (closeWorkspace) {
+    const closed = await run('close-workspace', ['close-workspace', '--workspace', record.workspace_ref]);
+    return { ok: closed, mission_id: record.mission_id, workspace_ref: record.workspace_ref, close_workspace: true, closed_workspace: closed, operations };
+  }
+  let overviewSurfaceRef = record.overview_surface_ref || record.lanes?.find((lane) => lane.agent === 'mission_overview')?.surface_ref || null;
+  let agentLanes = (record.lanes || []).filter((lane) => lane.surface_ref && lane.surface_ref !== overviewSurfaceRef && lane.agent !== 'mission_overview');
+  if (!overviewSurfaceRef) {
+    const agentRefs = new Set(agentLanes.map((lane) => lane.surface_ref));
+    overviewSurfaceRef = listCmuxWorkspaceSurfacesSync(cmux.bin, record.workspace_ref).find((surfaceRef) => !agentRefs.has(surfaceRef)) || null;
+    agentLanes = (record.lanes || []).filter((lane) => lane.surface_ref && lane.surface_ref !== overviewSurfaceRef && lane.agent !== 'mission_overview');
+  }
+  let closed = 0;
+  for (const lane of agentLanes) {
+    if (await run(`close-${lane.agent}`, ['close-surface', '--workspace', record.workspace_ref, '--surface', lane.surface_ref])) closed += 1;
+  }
+  const completeStyle = CMUX_TEAM_LANE_STYLES.execution;
+  if (overviewSurfaceRef) await run('rename-overview-complete', ['rename-tab', '--workspace', record.workspace_ref, '--surface', overviewSurfaceRef, '--title', `complete: ${record.mission_id}`.slice(0, 80)]);
+  await run('status-complete', ['set-status', 'sks-team', 'Team complete', '--icon', 'check-circle', '--color', completeStyle.color, '--workspace', record.workspace_ref]);
+  await run('progress-complete', ['set-progress', '1.0', '--label', 'Team complete', '--workspace', record.workspace_ref]);
+  await run('select-workspace', ['select-workspace', '--workspace', record.workspace_ref]);
+  await writeCmuxTeamRecord(resolvedRoot, { ...record, cleanup_completed_at: nowIso(), closed_agent_surfaces: closed }).catch(() => null);
+  return {
+    ok: true,
+    mission_id: record.mission_id,
+    workspace_ref: record.workspace_ref,
+    close_workspace: false,
+    kept_surface: overviewSurfaceRef,
+    requested_close_surfaces: agentLanes.length,
+    closed_surfaces: closed,
+    operations
+  };
+}
+
+function readCmuxLaneScreens(bin, workspaceRef, lanes = []) {
+  return lanes.map((lane) => {
+    const args = ['read-screen', '--workspace', workspaceRef, '--lines', '6'];
+    if (lane.surface_ref) args.splice(3, 0, '--surface', lane.surface_ref);
+    const read = spawnSync(bin, args, { encoding: 'utf8', stdio: 'pipe' });
+    const text = `${read.stdout || ''}\n${read.stderr || ''}`.trim();
+    return {
+      agent: lane.agent,
+      surface_ref: lane.surface_ref || null,
+      ok: read.status === 0 && Boolean(text),
+      preview: text.slice(0, 1000),
+      error: read.status === 0 ? null : text || 'cmux read-screen failed'
+    };
+  });
+}
+
+function firstCmuxSurfaceRef(bin, workspaceRef) {
+  return listCmuxWorkspaceSurfacesSync(bin, workspaceRef)[0] || '';
+}
+
+function listCmuxWorkspaceSurfacesSync(bin, workspaceRef) {
+  if (!bin || !workspaceRef) return [];
+  const panes = spawnSync(bin, ['list-panes', '--workspace', workspaceRef], { encoding: 'utf8', stdio: 'pipe' });
+  if (panes.status !== 0) return [];
+  const paneRefs = Array.from(new Set(String(`${panes.stdout || ''}\n${panes.stderr || ''}`).match(/\bpane:\d+\b/g) || []));
+  const surfaces = [];
+  for (const paneRef of paneRefs) {
+    const run = spawnSync(bin, ['list-pane-surfaces', '--workspace', workspaceRef, '--pane', paneRef], { encoding: 'utf8', stdio: 'pipe' });
+    if (run.status !== 0) continue;
+    for (const surfaceRef of String(`${run.stdout || ''}\n${run.stderr || ''}`).match(/\bsurface:\d+\b/g) || []) {
+      if (!surfaces.includes(surfaceRef)) surfaces.push(surfaceRef);
+    }
+  }
+  return surfaces;
 }
 
 export async function runCmuxStatus(args = [], opts = {}) {

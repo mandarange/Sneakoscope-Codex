@@ -642,7 +642,7 @@ function reflectionStopReason(state = {}, status = {}) {
 export async function evaluateStop(root, state, payload, opts = {}) {
   const last = extractLastMessage(payload);
   if (state?.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS')) {
-    if (looksLikeClarificationAnswer(last)) return { continue: true };
+    if (await hasVisibleClarificationQuestionBlock(root, state, last)) return { continue: true };
     return complianceBlock(root, state, await clarificationStopReason(root, state, 'route'), { gate: 'clarification' });
   }
   if (state?.context7_required && !(await hasContext7DocsEvidence(root, state))) {
@@ -878,6 +878,12 @@ function extractLastMessage(payload) {
   return payload.last_assistant_message || payload.assistant_message || payload.message || payload.response || payload.raw || '';
 }
 
-function looksLikeClarificationAnswer(text) {
-  return /(GOAL_PRECISE|ACCEPTANCE_CRITERIA|질문|answers\.json|required-answers|Decision Contract|clarification|모호성|답변)/i.test(String(text || ''));
+async function hasVisibleClarificationQuestionBlock(root, state = {}, text = '') {
+  const body = String(text || '');
+  if (!/Required questions|필수 질문|질문지|답변할 항목/i.test(body)) return false;
+  const schema = state.mission_id ? await readJson(path.join(missionDir(root, state.mission_id), 'required-answers.schema.json'), null) : null;
+  const slots = Array.isArray(schema?.slots) ? schema.slots : [];
+  if (!slots.length) return /sks pipeline answer|answers\.json/i.test(body);
+  const requiredIds = slots.slice(0, Math.min(3, slots.length)).map((slot) => slot.id).filter(Boolean);
+  return requiredIds.every((id) => body.includes(id)) && /sks pipeline answer|answers\.json|slot id|슬롯|항목/i.test(body);
 }
