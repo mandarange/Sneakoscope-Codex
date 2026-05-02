@@ -22,16 +22,16 @@ export function containsUserQuestion(text = '') {
 
 export function noQuestionContinuationReason() {
   return [
-    'RALPH_NO_QUESTION_LOCK is active.',
+    'SKS_NO_QUESTION_LOCK is active.',
     'Do not ask the user, do not request confirmation, and do not present choices.',
     'Resolve using decision-contract.json: seed contract → explicit user answers → approved defaults → AGENTS.md → current code/tests → smallest reversible change → defer optional scope.',
     'If a risky required path has no safe resolution, complete the safe core scope and record limitation in done-gate.json; do not ask the user mid-loop.',
-    'Continue the Ralph loop.'
+    'Continue the active SKS loop.'
   ].join(' ');
 }
 
 export function interactiveCommandReason(command = '') {
-  return `Interactive or approval-seeking command is forbidden during Ralph no-question mode: ${command}`;
+  return `Interactive or approval-seeking command is forbidden during SKS no-question mode: ${command}`;
 }
 
 export function looksInteractiveCommand(command = '') {

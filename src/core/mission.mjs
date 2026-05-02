@@ -18,14 +18,14 @@ export async function createMission(root, { mode, prompt }) {
   const dir = missionDir(root, id);
   await ensureDir(dir);
   await ensureDir(path.join(dir, 'bus'));
-  await ensureDir(path.join(dir, 'ralph'));
+  await ensureDir(path.join(dir, 'goal'));
   await ensureDir(path.join(dir, 'sessions'));
   const mission = {
     id,
     mode,
     prompt,
     created_at: nowIso(),
-    phase: mode === 'ralph' ? 'RALPH_PREPARE' : 'PREPARE',
+    phase: mode === 'goal' ? 'GOAL_PREPARE' : 'PREPARE',
     questions_allowed: true,
     implementation_allowed: false
   };

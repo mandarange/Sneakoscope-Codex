@@ -6,6 +6,11 @@ import { createMission, missionDir, setCurrent } from './mission.mjs';
 import { buildQuestionSchemaForRoute, writeQuestions } from './questions.mjs';
 import { sealContract } from './decision-contract.mjs';
 import { scanDbSafety } from './db-safety.mjs';
+import { GOAL_WORKFLOW_ARTIFACT, writeGoalWorkflow } from './goal-workflow.mjs';
+import { writeCodeStructureReport } from './code-structure.mjs';
+import { writeMemorySweepReport } from './memory-governor.mjs';
+import { writeMistakeMemoryReport } from './mistake-memory.mjs';
+import { writeSkillForgeReport } from './skill-forge.mjs';
 import { writeResearchPlan } from './research.mjs';
 import { FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, hasFromChatImgSignal, hasMadSksSignal, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
@@ -57,7 +62,7 @@ export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
   ];
   if (reflectionRequiredForRoute(route)) lines.push(reflectionInstructionText());
   if (route?.id === 'Team') lines.push(`Team route: scouts, TriWiki refresh, debate, consensus, runtime graph compile with concrete task ids and worker inboxes, close planning agents, fresh executors, review/integration, ${TEAM_SESSION_CLEANUP_ARTIFACT}, reflection, and Honest Mode.`);
-  if (route?.id === 'Ralph') lines.push('Ralph route: no implementation until required clarification answers are converted into a sealed decision contract.');
+  if (route?.id === 'Goal') lines.push('Goal route: write SKS goal bridge artifacts, then use Codex native /goal persistence for create, pause, resume, and clear continuation controls.');
   if (route?.id === 'AutoResearch') lines.push('AutoResearch route: load autoresearch-loop plus seo-geo-optimizer when SEO/GEO, discoverability, README, npm, GitHub stars, ranking, or AI-search visibility is relevant.');
   if (route?.id === 'DB') lines.push('DB route: scan/check database risk first; destructive DB operations remain forbidden.');
   if (route?.id === 'GX') lines.push('GX route: use deterministic vgraph/beta render, validate, drift, and snapshot artifacts.');
@@ -69,7 +74,7 @@ export function dfixQuickContext(prompt, route = routePrompt(prompt)) {
   const routeLabel = route?.command || '$DFix';
   return [
     `DFix ultralight pipeline active. Route: ${routeLabel} (${route?.route || 'fast design/content fix'}).`,
-    'Bypass: do not enter the general SKS prompt pipeline, mission creation, ambiguity gate, TriWiki refresh, Context7 routing, subagent orchestration, Ralph, Research, eval, or broad planning.',
+    'Bypass: do not enter the general SKS prompt pipeline, mission creation, ambiguity gate, TriWiki refresh, Context7 routing, subagent orchestration, Goal, Research, eval, or broad planning.',
     `Task: ${task}`,
     'Task list:',
     '1. Infer the smallest visible design/content target from the request and current files.',
@@ -85,7 +90,7 @@ export function answerOnlyContext(prompt, route = routePrompt(prompt)) {
   const required = routeNeedsContext7(route, task);
   return [
     `SKS answer-only pipeline active. Route: ${route?.command || '$Answer'} (${route?.route || 'answer-only research'}).`,
-    'Intent classification: answer/research question, not implementation. Do not create route mission state, ask ambiguity-gate questions, spawn subagents, continue active Team/Ralph work, or edit files unless the user explicitly asks for implementation.',
+    'Intent classification: answer/research question, not implementation. Do not create route mission state, ask ambiguity-gate questions, spawn subagents, continue active Team/Goal work, or edit files unless the user explicitly asks for implementation.',
     `Question: ${task}`,
     'Evidence flow:',
     '1. Check current repo facts and TriWiki context first; hydrate low-trust wiki claims from source paths before relying on them.',
@@ -107,11 +112,11 @@ export async function prepareRoute(root, prompt, state = {}) {
   if (route.id === 'DFix') return prepareDfixQuickRoute(route, task);
   if (route.id === 'Answer') return prepareAnswerOnlyRoute(route, task);
   if (route.id === 'Wiki') return prepareWikiQuickRoute(route, task);
+  if (route.id === 'Goal') return prepareGoal(root, route, task, routeNeedsContext7(route, prompt));
   const required = routeNeedsContext7(route, prompt);
   const reasoning = routeReasoning(route, prompt);
   const subagentsRequired = routeRequiresSubagents(route, prompt);
-  if (route.id !== 'Help') return prepareClarificationGate(root, route, task, required, { ralph: route.id === 'Ralph', madSksAuthorization });
-  if (route.id === 'Ralph') return prepareRalph(root, route, task, required);
+  if (route.id !== 'Help') return prepareClarificationGate(root, route, task, required, { madSksAuthorization });
   if (route.id === 'Team') return prepareTeam(root, route, task, required);
   if (route.id === 'Research') return prepareResearch(root, route, task, required);
   if (route.id === 'AutoResearch') return prepareAutoResearch(root, route, task, required);
@@ -172,16 +177,19 @@ export async function activeRouteContext(root, state) {
   if (state.subagents_required && !(await hasSubagentEvidence(root, state))) {
     return `Active SKS route ${id} requires subagent execution evidence before code-changing work can be considered complete. Spawn worker/reviewer subagents for disjoint write scopes, or record an explicit unavailable/unsplittable subagent evidence event before editing.${reasoningNote}`;
   }
-  if (state.mode === 'RALPH' && ['RALPH_PREPARE', 'RALPH_AWAITING_ANSWERS'].includes(state.phase)) return ralphAwaitingAnswersContext(root, state);
-  if (state.mode === 'RALPH' && state.phase === 'DECISION_CONTRACT_SEALED') return `Active Ralph mission ${state.mission_id || 'latest'} has a sealed decision contract. Run "sks ralph run ${state.mission_id || 'latest'}" and continue until done-gate.json passes.`;
+  if (state.mode === 'GOAL') return `Active Goal mission ${state.mission_id || 'latest'} uses Codex native /goal continuation. Inspect .sneakoscope/missions/${state.mission_id || 'latest'}/${GOAL_WORKFLOW_ARTIFACT}, then use /goal create, pause, resume, or clear in the Codex runtime as appropriate.`;
   if (state.context7_required && !(await hasContext7DocsEvidence(root, state))) {
     return `Active SKS route ${id} still requires Context7 evidence. Use resolve-library-id, then query-docs (or legacy get-library-docs) for relevant docs/APIs before completing.${reasoningNote}`;
   }
   return '';
 }
 
-async function prepareRalph(root, route, task, required) {
-  return prepareClarificationGate(root, route, task, required, { ralph: true });
+async function prepareGoal(root, route, task, required) {
+  const { id, dir, mission } = await createMission(root, { mode: 'goal', prompt: task });
+  const workflow = await writeGoalWorkflow(dir, mission, { action: 'create', prompt: task });
+  await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, native_goal: workflow.native_goal, stop_gate: 'honest_mode' });
+  await setCurrent(root, routeState(id, route, 'GOAL_READY', required, { prompt: task, native_goal: workflow.native_goal, stop_gate: 'honest_mode', implementation_allowed: true, questions_allowed: true }));
+  return routeContext(route, id, task, required, `Use Codex native ${workflow.native_goal.slash_command} control for persisted continuation, then continue the relevant SKS route gates for any implementation work.`);
 }
 
 async function prepareClarificationGate(root, route, task, required, opts = {}) {
@@ -191,7 +199,7 @@ async function prepareClarificationGate(root, route, task, required, opts = {}) 
   await writeQuestions(dir, schema);
   const routeContext = { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, original_stop_gate: route.stopGate, clarification_gate: true, mad_sks_authorization: Boolean(opts.madSksAuthorization || route.id === 'MadSKS') };
   await writeJsonAtomic(path.join(dir, 'route-context.json'), routeContext);
-  if (!opts.ralph && schema.slots.length === 0) {
+  if (schema.slots.length === 0) {
     await writeJsonAtomic(path.join(dir, 'answers.json'), schema.inferred_answers || {});
     const result = await sealContract(dir, mission);
     await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'route.clarification.auto_sealed', route: route.id, slots: 0, ok: result.ok });
@@ -217,13 +225,11 @@ Resolved answers: .sneakoscope/missions/${id}/resolved-answers.json
 Next atomic action: continue the original route lifecycle with the sealed decision-contract.json.`
     };
   }
-  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: opts.ralph ? 'route.ralph.questions_created' : 'route.clarification.questions_created', route: route.id, slots: schema.slots.length });
-  const phase = opts.ralph ? 'RALPH_AWAITING_ANSWERS' : `${route.mode}_CLARIFICATION_AWAITING_ANSWERS`;
+  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'route.clarification.questions_created', route: route.id, slots: schema.slots.length });
+  const phase = `${route.mode}_CLARIFICATION_AWAITING_ANSWERS`;
   await setCurrent(root, routeState(id, route, phase, required, { prompt: task, questions_allowed: true, implementation_allowed: false, clarification_required: true, ambiguity_gate_required: true, original_stop_gate: route.stopGate, stop_gate: 'clarification-gate' }));
-  const answerCommand = opts.ralph
-    ? 'sks ralph answer latest answers.json, then run "sks ralph run latest"'
-    : 'sks pipeline answer latest answers.json, then continue the original route lifecycle';
-  const title = opts.ralph ? 'MANDATORY $Ralph route activated.' : 'MANDATORY ambiguity-removal gate activated.';
+  const answerCommand = 'sks pipeline answer latest answers.json, then continue the original route lifecycle';
+  const title = 'MANDATORY ambiguity-removal gate activated.';
   return {
     route,
     additionalContext: `${title}
@@ -235,11 +241,12 @@ Question file: .sneakoscope/missions/${id}/questions.md
 Answer schema: .sneakoscope/missions/${id}/required-answers.schema.json
 
 Do not execute the route yet. Ask the user the required ambiguity-removal questions now. After the user answers, convert the answers to answers.json, run "${answerCommand}".
+${clarificationVisibleResponseContract(id)}
 ${context7RequirementText(required)}
-${clarificationPlanHint(route, id, opts.ralph)}
+${clarificationPlanHint(route, id)}
 
 Required questions:
-${formatRalphQuestions(schema)}`
+${formatRequiredQuestions(schema)}`
   };
 }
 
@@ -316,6 +323,10 @@ async function prepareTeam(root, route, task, required) {
   await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReasoning: high for team logic, temporary for this route only.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\n1. Run exactly ${roster.bundle_size} read-only analysis_scout_N agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Review, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent analysis_scout_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
   await initTeamLive(id, dir, cleanTask, { agentSessions, roleCounts, roster });
   const runtime = await writeTeamRuntimeArtifacts(dir, plan, {});
+  await writeMemorySweepReport(root, dir, { missionId: id }).catch(() => null);
+  await writeSkillForgeReport(dir, { mission_id: id, route: 'team', task_signature: cleanTask }).catch(() => null);
+  await writeMistakeMemoryReport(dir, { mission_id: id, route: 'team', task: cleanTask }).catch(() => null);
+  await writeCodeStructureReport(root, dir, { missionId: id, exception: 'Team prepare records split-review risk; extraction happens only when the mission scope includes the touched file.' }).catch(() => null);
   await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
   await setCurrent(root, routeState(id, route, 'TEAM_PARALLEL_ANALYSIS_SCOUTING', required, { prompt: cleanTask, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, context_tracking: 'triwiki', from_chat_img_required: fromChatImgRequired }));
   return routeContext(route, id, cleanTask, required, `Run scouts, refresh/validate TriWiki, debate, close debate agents, form a fresh ${roster.bundle_size}-person executor team, then close/clean Team sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection.`);
@@ -385,24 +396,27 @@ Next atomic action: ${next}`
   };
 }
 
-async function ralphAwaitingAnswersContext(root, state) {
-  const id = state.mission_id;
-  if (!id) return '';
-  const schema = await readJson(path.join(missionDir(root, id), 'required-answers.schema.json'), null);
-  const questionBlock = schema ? `\n\nRequired questions still pending:\n${formatRalphQuestions(schema)}` : '';
-  return `Active Ralph mission ${id} is waiting for mandatory clarification answers. If the user answered, write answers.json, run "sks ralph answer ${id} answers.json", then "sks ralph run ${id}". If required answers are missing, use the Codex plan tool first, then ask only those questions. Do not implement outside Ralph.${clarificationPlanHint({ command: '$Ralph', route: 'Ralph mission' }, id, true)}${questionBlock}`;
-}
-
 async function clarificationAwaitingAnswersContext(root, state) {
   const id = state.mission_id;
   if (!id) return '';
   const schema = await readJson(path.join(missionDir(root, id), 'required-answers.schema.json'), null);
-  const questionBlock = schema ? `\n\nRequired questions still pending:\n${formatRalphQuestions(schema)}` : '';
-  return `Active SKS route ${state.route_command || state.route || state.mode} is waiting for mandatory ambiguity-removal answers. If the user answered, write answers.json, run "sks pipeline answer ${id} answers.json", then continue the original route lifecycle. If required answers are missing, use the Codex plan tool first, then ask only those questions. Do not execute the route before this gate passes.${clarificationPlanHint({ command: state.route_command || state.route || '$SKS', route: state.route || state.mode || 'SKS route' }, id, false)}${questionBlock}`;
+  const questionBlock = schema ? `\n\nRequired questions still pending:\n${formatRequiredQuestions(schema)}` : '';
+  return `Active SKS route ${state.route_command || state.route || state.mode} is waiting for mandatory ambiguity-removal answers. If the user answered, write answers.json, run "sks pipeline answer ${id} answers.json", then continue the original route lifecycle. If required answers are missing, use the Codex plan tool first, then ask only those questions. Do not execute the route before this gate passes.${clarificationVisibleResponseContract(id, false)}${clarificationPlanHint({ command: state.route_command || state.route || '$SKS', route: state.route || state.mode || 'SKS route' }, id, false)}${questionBlock}`;
 }
 
-function clarificationPlanHint(route, id, ralph = false) {
-  const command = ralph ? `sks ralph answer ${id} answers.json` : `sks pipeline answer ${id} answers.json`;
+function clarificationVisibleResponseContract(id) {
+  const answerCommand = `sks pipeline answer ${id} answers.json`;
+  return `
+
+VISIBLE RESPONSE CONTRACT:
+- This turn is clarification-only.
+- Do not call tools, do not start implementation, and do not advance to the next route phase.
+- Reply to the user with the Required questions block so it is visible in chat.
+- Tell the user they can answer directly by slot id; after they answer, convert the reply to answers.json and run \`${answerCommand}\`.`;
+}
+
+function clarificationPlanHint(route, id) {
+  const command = `sks pipeline answer ${id} answers.json`;
   return `
 
 Codex plan-tool interaction:
@@ -413,7 +427,7 @@ Before asking the user, call update_plan with:
 Then ask the questions in one compact message.`;
 }
 
-function formatRalphQuestions(schema) {
+function formatRequiredQuestions(schema) {
   return schema.slots.map((s, i) => {
     const options = s.options ? ` Options: ${s.options.join(', ')}.` : '';
     const examples = s.examples ? ` Examples: ${s.examples.join(', ')}.` : '';
@@ -424,20 +438,17 @@ function formatRalphQuestions(schema) {
 async function clarificationStopReason(root, state, kind) {
   const id = state?.mission_id || 'latest';
   const routeName = state?.route_command || state?.route || state?.mode || 'route';
-  const isRalph = kind === 'ralph';
   const schema = state?.mission_id ? await readJson(path.join(missionDir(root, state.mission_id), 'required-answers.schema.json'), null) : null;
-  const questionBlock = schema ? `\n\nRequired questions (reply in chat by slot id):\n${formatRalphQuestions(schema)}` : '';
+  const questionBlock = schema ? `\n\nRequired questions (reply in chat by slot id):\n${formatRequiredQuestions(schema)}` : '';
   const files = state?.mission_id ? `
 Question file: .sneakoscope/missions/${state.mission_id}/questions.md
 Answer schema: .sneakoscope/missions/${state.mission_id}/required-answers.schema.json` : '';
-  const command = isRalph
-    ? `sks ralph answer ${id} answers.json, then sks ralph run ${id}`
-    : `sks pipeline answer ${id} answers.json, then continue the original ${routeName} route`;
-  const title = isRalph
-    ? `Ralph mission ${id} is waiting for mandatory clarification answers.`
-    : `SKS ${routeName} is waiting for mandatory ambiguity-removal answers.`;
+  const command = `sks pipeline answer ${id} answers.json, then continue the original ${routeName} route`;
+  const title = `SKS ${routeName} is waiting for mandatory ambiguity-removal answers.`;
   return `${title}
 Do not finish or implement yet. Reprint these questions to the user if they are not already visible.${files}
+
+${clarificationVisibleResponseContract(id)}
 
 The user can answer directly in chat as plain text, for example:
 GOAL_PRECISE: ...
@@ -446,7 +457,7 @@ ACCEPTANCE_CRITERIA:
 NON_GOALS:
 - ...
 
-${clarificationPlanHint({ command: routeName, route: routeName }, id, isRalph)}
+${clarificationPlanHint({ command: routeName, route: routeName }, id)}
 
 After the user answers, convert the reply to answers.json and run: ${command}.${questionBlock}`;
 }
@@ -630,19 +641,9 @@ function reflectionStopReason(state = {}, status = {}) {
 
 export async function evaluateStop(root, state, payload, opts = {}) {
   const last = extractLastMessage(payload);
-  if (state?.mode === 'RALPH' && ['RALPH_PREPARE', 'RALPH_AWAITING_ANSWERS'].includes(state.phase)) {
-    if (looksLikeRalphQuestionResponse(last)) return { continue: true };
-    return complianceBlock(root, state, await clarificationStopReason(root, state, 'ralph'), { gate: 'clarification' });
-  }
   if (state?.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS')) {
-    if (looksLikeRalphQuestionResponse(last)) return { continue: true };
+    if (looksLikeClarificationAnswer(last)) return { continue: true };
     return complianceBlock(root, state, await clarificationStopReason(root, state, 'route'), { gate: 'clarification' });
-  }
-  if (state?.mode === 'RALPH' && state.phase === 'DECISION_CONTRACT_SEALED') {
-    return complianceBlock(root, state, `Ralph mission ${state.mission_id || 'latest'} has a sealed decision contract but has not run. Continue automatically by running: sks ralph run ${state.mission_id || 'latest'}`, { gate: 'ralph-run' });
-  }
-  if (state?.mode === 'RALPH' && /^RALPH_PAUSED/.test(String(state.phase || ''))) {
-    return complianceBlock(root, state, `Ralph mission ${state.mission_id || 'latest'} paused before completion. Resume with sks ralph run ${state.mission_id || 'latest'} or record a hard blocker in done-gate.json before finishing.`, { gate: 'ralph-paused' });
   }
   if (state?.context7_required && !(await hasContext7DocsEvidence(root, state))) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires Context7 evidence before completion. Use Context7 resolve-library-id, then query-docs (or legacy get-library-docs), so SKS can record context7-evidence.jsonl.`, { gate: 'context7-evidence' });
@@ -863,7 +864,7 @@ async function missingFromChatImgCoverageArtifacts(root, state = {}) {
 
 function gateFilesForState(state) {
   if (state.stop_gate) return [state.stop_gate];
-  if (state.mode === 'RALPH') return ['done-gate.json', 'done-gate.evaluated.json'];
+  if (state.mode === 'GOAL') return ['goal-workflow.json'];
   if (state.mode === 'RESEARCH') return ['research-gate.json', 'research-gate.evaluated.json'];
   if (state.mode === 'TEAM') return ['team-gate.json'];
   if (state.mode === 'AUTORESEARCH') return ['autoresearch-gate.json'];
@@ -877,6 +878,6 @@ function extractLastMessage(payload) {
   return payload.last_assistant_message || payload.assistant_message || payload.message || payload.response || payload.raw || '';
 }
 
-function looksLikeRalphQuestionResponse(text) {
-  return /(GOAL_PRECISE|ACCEPTANCE_CRITERIA|Ralph|랄프|질문|answers\.json|required-answers|Decision Contract|clarification|모호성|답변)/i.test(String(text || ''));
+function looksLikeClarificationAnswer(text) {
+  return /(GOAL_PRECISE|ACCEPTANCE_CRITERIA|질문|answers\.json|required-answers|Decision Contract|clarification|모호성|답변)/i.test(String(text || ''));
 }

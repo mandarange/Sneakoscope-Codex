@@ -2,7 +2,7 @@
 
 ![](https://github.com/mandarange/Sneakoscope-Codex/raw/dev/docs/assets/sneakoscope-codex-logo.png)
 
-Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, cmux-native CLI workspaces, Team/Ralph/QA/Research routes, Context7 evidence checks, DB safety, TriWiki context tracking, Honest Mode, and release-readiness gates.
+Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, cmux-native CLI workspaces, Team/Goal/QA/Research routes, Context7 evidence checks, DB safety, TriWiki context tracking, Honest Mode, and release-readiness gates.
 
 ## Quick Start
 
@@ -44,11 +44,11 @@ sks selftest --mock
 | Area | What it does |
 | --- | --- |
 | CLI runtime | `sks`, `sks cmux`, and `sks --mad` open Codex CLI in a cmux workspace. |
-| Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$Ralph`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
+| Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
 | Team orchestration | Runs substantial work through ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode. |
 | From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
 | QA loop | Dogfoods UI/API behavior with safety gates, Browser/Computer evidence, safe fixes, and rechecks. |
-| Ralph | Clarifies once, seals a decision contract, then continues without repeatedly asking the user. |
+| Goal | Bridges SKS pipeline state to Codex native persisted `/goal` create, pause, resume, and clear workflows. |
 | TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, and `attention.hydrate_first`. |
 | Context7 | Requires current docs for external packages, APIs, MCPs, SDKs, and framework/runtime behavior when correctness depends on current guidance. |
 | DB safety | Treats SQL, migrations, Supabase, RLS, and destructive operations as high risk. |
@@ -167,7 +167,7 @@ sks cmux check
 sks cmux status --once
 ```
 
-`sks` opens a cmux workspace for Codex CLI when running in an interactive terminal. `sks cmux check` is diagnostic and prints readiness without starting a workspace.
+`sks` opens a cmux workspace for Codex CLI when running in an interactive terminal. `sks cmux check` is diagnostic and prints readiness without starting a workspace. It checks both the cmux executable and the workspace socket so a stale app/socket is reported before launch.
 
 ### MAD cmux Workspace
 
@@ -195,23 +195,28 @@ sks team "implement this feature" executor:3 reviewer:1
 sks team watch latest
 sks team lane latest --agent analysis_scout_1 --follow
 sks team status latest
+sks team dashboard latest
 sks team log latest
 ```
 
-Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, and opens cmux live lanes when cmux is available. `sks team lane` renders one agent's status, assigned runtime tasks, recent events, and a fallback global tail for multi-pane monitoring.
+Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named cmux Team workspace with split live lanes when cmux is available. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
 
-### QA, Ralph, Research, DB, Wiki, GX
+### QA, Goal, Research, DB, Wiki, GX
 
 ```sh
 sks qa-loop prepare "http://localhost:3000"
 sks qa-loop run latest --max-cycles 2
-sks ralph prepare "migrate this workflow without asking after prepare"
+sks goal create "persist this migration workflow"
 sks research prepare "evaluate this approach"
 sks db scan --json
 sks wiki refresh
+sks wiki sweep latest --json
 sks wiki validate .sneakoscope/wiki/context-pack.json
 sks gx init homepage
 sks gx render homepage --format html
+sks validate-artifacts latest --json
+sks perf run --json
+sks code-structure scan --json
 ```
 
 ## Codex App Usage
@@ -235,7 +240,7 @@ Then open Codex App and use prompt commands directly in the chat. Examples:
 $Team implement the checkout fix and verify it
 $DFix change this label and spacing only
 $QA-LOOP dogfood localhost:3000 and fix safe issues
-$Ralph clarify once, then finish the migration without more questions
+$Goal persist this migration workflow with native /goal continuation
 $Wiki refresh and validate the context pack
 $DB inspect this migration for destructive risk
 ```
@@ -252,6 +257,8 @@ Generated app files include:
 
 Use `sks dollar-commands` to confirm that terminal discovery and Codex App prompt commands agree.
 
+TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
+
 ## Prompt `$` Commands
 
 Use these inside Codex App or another agent prompt. They are prompt commands, not terminal commands.
@@ -264,7 +271,7 @@ Use these inside Codex App or another agent prompt. They are prompt commands, no
 | `$Answer` | You want an answer only and no implementation should start. |
 | `$SKS` | You need setup, status, usage, or workflow help. |
 | `$QA-LOOP` | You want UI/API dogfooding, safe fixes, and rechecks. |
-| `$Ralph` | You want one prepare-time clarification pass, then no more user questions. |
+| `$Goal` | You want Codex native persisted `/goal` continuation for a workflow. |
 | `$Research` | You need frontier-style research with hypotheses and falsification. |
 | `$AutoResearch` | You want iterative improve/test/keep-or-discard optimization. |
 | `$DB` | You need database, Supabase, migration, SQL, or MCP safety checks. |
@@ -306,6 +313,7 @@ $Team implement the requested change, update docs if needed, and verify with the
 ```
 
 Team mode records a mission under `.sneakoscope/missions/`, keeps a live transcript, uses TriWiki context, and finishes with evidence and Honest Mode.
+Every new Team mission now also writes `work-order-ledger.json`, `effort-decision.json`, and `team-dashboard-state.json`. Run `sks validate-artifacts latest` to check the schema gates before treating mission artifacts as completion evidence.
 
 ### Dogfood A UI Or API
 
@@ -358,7 +366,7 @@ sks deps install cmux
 sks cmux check
 ```
 
-`sks --mad` also attempts Homebrew installation or upgrade automatically on macOS when cmux is missing. If Homebrew reports the cask installed but the CLI still is not reachable, SKS checks the cmux app bundle paths directly, wakes the app, and retries the socket before reporting a remaining cmux app/socket issue.
+`sks --mad` also attempts Homebrew installation or upgrade automatically on macOS when cmux is missing. If Homebrew reports the cask installed but the CLI still is not reachable, SKS checks the cmux app bundle paths directly, wakes the app, retries the socket, and reports `unhealthy` rather than `missing` when the executable exists but the app/socket is still broken.
 
 ### Codex App tools are missing
 

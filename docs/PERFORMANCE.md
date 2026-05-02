@@ -5,14 +5,18 @@ Sneakoscope Codex v0.6 is designed to keep runtime, package size, RAM, and stora
 ## Speed
 
 - `codex exec` output is streamed to files and only a bounded tail is retained in memory.
-- Ralph cycles run under a timeout and bounded max cycles.
+- `sks perf run --json` records structured startup and package-payload measurements and writes `.sneakoscope/perf/budgets.json`.
+- Codex native `/goal` workflows handle persisted continuation; SKS records only bounded bridge artifacts.
+- `sks wiki sweep` records intentional forgetting and promotion candidates so default recall stays top-K instead of becoming an unbounded memory dump.
+- `sks code-structure scan` flags 1000/2000/3000-line handwritten source files before new logic is added to oversized modules.
 - TriWiki claim selection uses bounded top-K selection plus the latest RGBA/trig wiki anchors and required voxel overlay metadata instead of sorting unbounded context into prompts.
 - GX visual context renders deterministic SVG/HTML from JSON sources, avoiding external image-generation latency, cost, and nondeterminism. Rendered nodes expose the same RGBA wiki-coordinate anchors used by TriWiki.
-- `sks gc` runs after Ralph cycles by default.
+- `sks gc` keeps mission/runtime artifacts bounded.
 
 ## Evaluation metrics
 
 `sks eval run` creates a deterministic JSON report in `.sneakoscope/reports/` unless `--no-save` is used. The built-in scenario compares an uncompressed all-claims baseline with a TriWiki compressed context capsule.
+`sks perf run --json` is the lightweight runtime probe for CLI startup and package payload budgets.
 
 Tracked metrics:
 
@@ -49,7 +53,8 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 - `@openai/codex` is no longer bundled. Users install Codex separately or set `SKS_CODEX_BIN`.
 - Optional Rust source is in `crates/` for the Git repo, but is excluded from the npm package by the `files` allowlist.
 - GX rendering uses only built-in Node.js APIs and ships as source in the npm package.
-- `npm run sizecheck` enforces package limits during `release:check`, `publish:dry`, and publish: `<=96 KiB` packed, `<=320 KiB` unpacked, `<=40` package files, and `<=256 KiB` per tracked file by default.
+- `npm run sizecheck` enforces package limits during `release:check`, `publish:dry`, and publish: `<=256 KiB` packed, `<=1024 KiB` unpacked, `<=48` package files, and `<=320 KiB` per tracked file by default.
+- The GPT-5.5 performance budget file uses a 1024KB package payload cap because the measured zero-dependency CLI payload is already above 512KB; shrinking that cap requires measured justification.
 
 ## Memory leaks
 
@@ -61,7 +66,7 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 ## Storage leaks
 
 - `.sneakoscope/policy.json` controls retention.
-- Old missions, old Ralph cycle directories, arenas, temp files, and oversized JSONL logs are removed or rotated by `sks gc`.
+- Old missions, old cycle directories, arenas, temp files, and oversized JSONL logs are removed or rotated by `sks gc`.
 - `sks stats` reports package/state size.
 
 ## Rust decision

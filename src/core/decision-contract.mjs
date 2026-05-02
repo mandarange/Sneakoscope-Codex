@@ -57,17 +57,17 @@ export function buildDecisionContract({ mission, schema, answers }) {
     if_mcp_database_tool_needed: 'use_read_only_project_scoped_supabase_mcp_or_do_not_use_mcp',
     if_database_blast_radius_unknown: 'do_not_execute_live_dml'
   };
-  const fallback = answers.MID_RALPH_UNKNOWN_POLICY || ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'];
+  const fallback = answers.MID_RUN_UNKNOWN_POLICY || ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'];
   const contract = {
     schema_version: 2,
     mission_id: mission.id,
     status: 'sealed',
     sealed_at: nowIso(),
-    ralph_mode: 'no_questions',
+    goal_mode: mission.mode === 'goal' ? 'native_codex_goal' : 'standard_sks_route',
     prompt: mission.prompt,
     answers,
     hard_constraints: {
-      ask_user_during_ralph: false,
+      ask_user_mid_run: false,
       public_api_change_allowed: answers.PUBLIC_API_CHANGE_ALLOWED || 'no',
       db_schema_change_allowed: answers.DB_SCHEMA_CHANGE_ALLOWED || 'no',
       dependency_change_allowed: answers.DEPENDENCY_CHANGE_ALLOWED || 'no',
