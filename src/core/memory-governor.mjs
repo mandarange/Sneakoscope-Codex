@@ -1,17 +1,10 @@
 import path from 'node:path';
 import { exists, nowIso, readJson, writeJsonAtomic } from './fsx.mjs';
+import { DEFAULT_FORGETTING_THRESHOLDS, MEMORY_LIFECYCLE_STATES, forgettingDecision } from './evaluation.mjs';
 
 export const MEMORY_OPERATIONS = new Set([
-  'ADD',
-  'UPDATE',
-  'CONSOLIDATE',
-  'DEMOTE',
-  'SOFT_FORGET',
-  'ARCHIVE',
-  'HARD_DELETE',
-  'NOOP',
-  'PROMOTE_SKILL',
-  'PROMOTE_RULE'
+  'ADD', 'KEEP_ACTIVE', 'PIN', 'UNPIN', 'UPDATE', 'CONSOLIDATE', 'DEMOTE', 'SOFT_FORGET', 'DISABLE', 'ARCHIVE',
+  'QUARANTINE', 'HARD_DELETE', 'NOOP', 'PROMOTE_SKILL', 'PROMOTE_RULE', 'PROMOTE_TEST'
 ]);
 
 export const DEFAULT_RETRIEVAL_BUDGET = {
@@ -62,6 +55,9 @@ export async function sweepTriWiki(root, opts = {}) {
     started_at: startedAt,
     completed_at: nowIso(),
     operations,
+    lifecycle_states: MEMORY_LIFECYCLE_STATES,
+    forgetting_defaults: DEFAULT_FORGETTING_THRESHOLDS,
+    tombstones: operations.map((op) => op.tombstone).filter(Boolean),
     retrieval_budget: {
       ...DEFAULT_RETRIEVAL_BUDGET,
       top_k_default: Number(opts.topKDefault || DEFAULT_RETRIEVAL_BUDGET.top_k_default),
@@ -114,14 +110,28 @@ function operationForClaim(claim, before, score, duplicateCount) {
     operation = 'PROMOTE_RULE';
     reasonCodes.push('mistake_prevention');
   }
+  const governed = forgettingDecision({
+    id: claim.id || stableId(text),
+    type: 'wiki_claim',
+    trust_score: score,
+    evidence_count: claim.evidence_count,
+    updated_at: claim.updated_at,
+    stale: claim.freshness === 'stale',
+    known_false: claim.status === 'unsupported',
+    duplicate_of: duplicateCount > 0 ? 'previous-claim' : null,
+    regression_prevention: /mistake|failure|regression|fingerprint/i.test(text)
+  });
   return {
     claim_id: claim.id || stableId(text),
     operation,
+    lifecycle_state: governed.lifecycle_state,
     reason_codes: reasonCodes.length ? reasonCodes : ['kept_within_budget'],
     before_score: round(before),
     after_score: round(score),
+    utility_score: governed.utility_score,
     evidence: [claim.source || claim.file || 'context-pack.json'].filter(Boolean),
-    reversible
+    reversible,
+    tombstone: governed.tombstone || null
   };
 }
 

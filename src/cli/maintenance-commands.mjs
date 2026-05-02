@@ -17,7 +17,7 @@ import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
 import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, ROUTES, hasFromChatImgSignal, routePrompt, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
-import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane } from '../core/team-live.mjs';
+import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamWatch } from '../core/team-live.mjs';
 import { ARTIFACT_FILES, writeValidationReport } from '../core/artifact-schemas.mjs';
 import { writeEffortDecision } from '../core/effort-orchestrator.mjs';
 import { createWorkOrderLedger, writeWorkOrderLedger } from '../core/work-order-ledger.mjs';
@@ -27,10 +27,11 @@ import { runPerfBench } from '../core/perf-bench.mjs';
 import { GOAL_BRIDGE_ARTIFACT, GOAL_WORKFLOW_ARTIFACT, updateGoalWorkflow, writeGoalWorkflow } from '../core/goal-workflow.mjs';
 import { scanCodeStructure, writeCodeStructureReport } from '../core/code-structure.mjs';
 import { writeMemorySweepReport } from '../core/memory-governor.mjs';
-import { launchCmuxTeamView } from '../core/cmux-ui.mjs';
+import { cleanupCmuxTeamView, launchCmuxTeamView } from '../core/cmux-ui.mjs';
 import { writeSkillForgeReport } from '../core/skill-forge.mjs';
 import { writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
 import { scanDbSafety } from '../core/db-safety.mjs';
+import { harnessGrowthReport, writeHarnessGrowthReport } from '../core/evaluation.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
@@ -415,6 +416,25 @@ export async function perfCommand(sub, args = []) {
   console.log(`Package size: ${report.metrics.package_size_kb}KB`);
   console.log(`Budget file: ${path.relative(root, report.budget_file)}`);
   console.log(`Report: ${path.relative(root, outPath)}`);
+}
+
+export async function harnessCommand(sub, args = []) {
+  const action = sub || 'fixture';
+  if (!['fixture', 'review'].includes(action)) {
+    console.error('Usage: sks harness fixture|review [--json]');
+    process.exitCode = 1;
+    return;
+  }
+  const root = await sksRoot();
+  const report = action === 'review'
+    ? await writeHarnessGrowthReport(root, path.join(root, '.sneakoscope', 'reports'), {})
+    : harnessGrowthReport({});
+  if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+  console.log('SKS Harness Growth');
+  console.log(`Forgetting fixture: ${report.forgetting.fixture.passed ? 'pass' : 'fail'}`);
+  console.log(`Cmux views: ${report.cmux.views.length}`);
+  console.log(`Tool taxonomy: ${report.reliability.tool_error_taxonomy.join(', ')}`);
+  console.log(`Unknown errors recorded as bugs: ${report.reliability.unknown_errors_are_bugs ? 'yes' : 'no'}`);
 }
 
 export async function codeStructureCommand(sub, args = []) {
@@ -1171,13 +1191,13 @@ export async function gxCommand(sub, args) {
 }
 
 export async function team(args) {
-  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event']);
+  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'cleanup-cmux']);
   if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
   const opts = parseTeamCreateArgs(args);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   if (!prompt) {
     console.error('Usage: sks team "task" [executor:5 reviewer:2 user:1] [--agents N] [--json]');
-    console.error('       sks team log|tail|watch|lane|status [mission-id|latest]');
+    console.error('       sks team log|tail|watch|lane|status|cleanup-cmux [mission-id|latest]');
     console.error('       sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
     process.exitCode = 1;
     return;
@@ -1211,6 +1231,7 @@ export async function team(args) {
   });
   await writeWorkOrderLedger(dir, workOrder);
   if (fromChatImgRequired) await writeFromChatImgArtifacts(dir, { missionId: id, requests: [{ verbatim: prompt }], ambiguities: ['image source inventory must be completed before implementation'] });
+  await writeHarnessGrowthReport(root, dir, {});
   let dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team analysis scouts' });
   await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
   dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team analysis scouts' });
@@ -1507,15 +1528,35 @@ async function teamCommand(sub, args) {
       process.exitCode = 1;
       return;
     }
+    const phase = readFlagValue(args, '--phase', 'general');
     const record = await appendTeamEvent(dir, {
       agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
-      phase: readFlagValue(args, '--phase', 'general'),
+      phase,
       type: readFlagValue(args, '--type', 'status'),
       artifact: readFlagValue(args, '--artifact', ''),
       message
     });
+    const cmuxCleanup = /^session_cleanup$|^team_cleanup$|^cleanup$/i.test(String(phase || ''))
+      ? await cleanupCmuxTeamView({ root, missionId: id, closeWorkspace: flag(args, '--close-workspace') }).catch((err) => ({ ok: false, reason: err.message || 'cmux cleanup failed' }))
+      : null;
     if (flag(args, '--json')) return console.log(JSON.stringify(record, null, 2));
     console.log(`${record.ts} [${record.phase}] ${record.agent}: ${record.message}`);
+    if (cmuxCleanup) {
+      if (cmuxCleanup.ok) console.log(`cmux cleanup: collapsed ${cmuxCleanup.closed_surfaces || 0} agent pane(s), kept overview ${cmuxCleanup.kept_surface || cmuxCleanup.workspace_ref}`);
+      else console.log(`cmux cleanup: skipped (${cmuxCleanup.reason || 'not available'})`);
+    }
+    return;
+  }
+  if (sub === 'cleanup-cmux') {
+    const cleanup = await cleanupCmuxTeamView({ root, missionId: id, closeWorkspace: flag(args, '--close-workspace') || flag(args, '--close') });
+    if (flag(args, '--json')) return console.log(JSON.stringify(cleanup, null, 2));
+    if (!cleanup.ok) {
+      console.error(`cmux cleanup skipped: ${cleanup.reason || 'not available'}`);
+      process.exitCode = cleanup.skipped ? 0 : 2;
+      return;
+    }
+    if (cleanup.close_workspace) console.log(`cmux cleanup: closed Team workspace ${cleanup.workspace_ref}`);
+    else console.log(`cmux cleanup: collapsed ${cleanup.closed_surfaces}/${cleanup.requested_close_surfaces} agent pane(s), kept overview ${cleanup.kept_surface || cleanup.workspace_ref}`);
     return;
   }
   if (sub === 'status') {
@@ -1573,15 +1614,26 @@ async function teamCommand(sub, args) {
   if (sub === 'tail' || sub === 'watch') {
     const lines = readFlagValue(args, '--lines', '20');
     const printTail = async () => {
+      if (sub === 'watch' && !flag(args, '--raw')) {
+        if (flag(args, '--follow') && process.stdout.isTTY) console.clear();
+        console.log(await renderTeamWatch(dir, { missionId: id, lines: Number(lines) }));
+        return;
+      }
       for (const line of await readTeamTranscriptTail(dir, Number(lines))) console.log(line);
     };
     await printTail();
     if (sub === 'watch' && flag(args, '--follow')) {
-      let last = (await readTeamTranscriptTail(dir, Number(lines))).join('\n');
+      let last = flag(args, '--raw')
+        ? (await readTeamTranscriptTail(dir, Number(lines))).join('\n')
+        : await renderTeamWatch(dir, { missionId: id, lines: Number(lines) });
       for (;;) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        const next = (await readTeamTranscriptTail(dir, Number(lines))).join('\n');
+        const next = flag(args, '--raw')
+          ? (await readTeamTranscriptTail(dir, Number(lines))).join('\n')
+          : await renderTeamWatch(dir, { missionId: id, lines: Number(lines) });
         if (next !== last) {
+          if (process.stdout.isTTY) console.clear();
+          else console.log('\n--- team watch update ---\n');
           console.log(next);
           last = next;
         }

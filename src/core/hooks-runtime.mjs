@@ -5,6 +5,7 @@ import { missionDir, setCurrent, stateFile } from './mission.mjs';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.mjs';
 import { checkHarnessModification, harnessGuardBlockReason } from './harness-guard.mjs';
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.mjs';
+import { classifyToolError } from './evaluation.mjs';
 
 const TEAM_DIGEST_MAX_EVENTS = 4;
 const TEAM_DIGEST_MESSAGE_CHARS = 180;
@@ -163,6 +164,7 @@ async function hookPostTool(root, state, payload, noQuestion) {
   }
   await recordContext7Evidence(root, state, payload).catch(() => null);
   await recordSubagentEvidence(root, state, payload).catch(() => null);
+  if (toolFailed(payload)) await recordToolErrorTaxonomy(root, state, payload).catch(() => null);
   const teamDigest = await teamLiveDigest(root, state);
   if (!noQuestion) {
     return teamDigest?.context
@@ -181,6 +183,25 @@ async function hookPostTool(root, state, payload, noQuestion) {
   return teamDigest?.context
     ? { continue: true, additionalContext: teamDigest.context, systemMessage: joinSystemMessages(visibleHookMessage('post-tool'), teamDigest.system) }
     : { continue: true };
+}
+
+async function recordToolErrorTaxonomy(root, state = {}, payload = {}) {
+  if (!state?.mission_id) return null;
+  const classification = classifyToolError({
+    code: payload.exit_code ?? payload.exitCode ?? payload.tool_response?.exit_code ?? payload.result?.exit_code,
+    name: payload.tool_name || payload.name || payload.tool?.name,
+    message: payload.error || payload.message || payload.stderr || payload.tool_response?.stderr || payload.result?.stderr,
+    stderr: payload.stderr || payload.tool_response?.stderr || payload.result?.stderr
+  });
+  const record = {
+    ts: nowIso(),
+    classification,
+    unknown_is_harness_bug: classification === 'Unknown',
+    tool: payload.tool_name || payload.name || payload.tool?.name || null,
+    payload_hash: sha256(JSON.stringify(payload || {})).slice(0, 16)
+  };
+  await appendJsonl(path.join(missionDir(root, state.mission_id), 'tool-errors.jsonl'), record);
+  return record;
 }
 
 async function hookPermission(root, state, payload, noQuestion) {

@@ -36,6 +36,34 @@ export async function writeGoalWorkflow(dir, mission, opts = {}) {
       ralph_removed: true,
       ambiguity_gate: 'use normal SKS ambiguity gates when required by the selected execution route; Goal itself delegates persistence/continuation to Codex /goal',
       evidence: ['goal-workflow.json', 'goal-bridge.md']
+    },
+    phase: action === 'clear' ? 'reporting' : 'intake',
+    user_outcome: prompt,
+    work_order_ledger_id: null,
+    checkpoints: [
+      {
+        timestamp: nowIso(),
+        phase: 'intake',
+        summary: 'Goal workflow bridge created.',
+        completed_checkboxes: ['goal workflow artifact written'],
+        open_checkboxes: ['continue original SKS route lifecycle when implementation is needed'],
+        blockers: [],
+        evidence: [GOAL_WORKFLOW_ARTIFACT, GOAL_BRIDGE_ARTIFACT]
+      }
+    ],
+    resume_context: {
+      stable_requirements: prompt ? [prompt] : [],
+      current_files: [GOAL_WORKFLOW_ARTIFACT, GOAL_BRIDGE_ARTIFACT],
+      decisions: ['Codex native /goal is the persisted continuation surface'],
+      known_mistakes_to_avoid: ['do not clear noisy context without writing a structured handoff first'],
+      active_skills: ['goal'],
+      active_agents: []
+    },
+    clear_policy: {
+      preserve_work_order: true,
+      preserve_decisions: true,
+      preserve_evidence_links: true,
+      discard_noisy_logs: true
     }
   };
   await writeJsonAtomic(path.join(dir, GOAL_WORKFLOW_ARTIFACT), workflow);
@@ -51,10 +79,23 @@ export async function updateGoalWorkflow(dir, action) {
     action,
     status: action === 'clear' ? 'cleared' : action === 'pause' ? 'paused' : action === 'resume' ? 'resumed' : current.status || 'created',
     updated_at: nowIso(),
+    phase: action === 'pause' ? 'reporting' : action === 'resume' ? 'implementation' : action === 'clear' ? 'retro' : current.phase || 'intake',
     native_goal: {
       ...(current.native_goal || {}),
       slash_command: nativeGoalCommand(action, current.prompt || '')
-    }
+    },
+    checkpoints: [
+      ...(Array.isArray(current.checkpoints) ? current.checkpoints : []),
+      {
+        timestamp: nowIso(),
+        phase: action,
+        summary: `Goal ${action} requested through SKS bridge.`,
+        completed_checkboxes: [`goal ${action} artifact update`],
+        open_checkboxes: action === 'clear' ? ['handoff preserved before noisy context clear'] : [],
+        blockers: [],
+        evidence: [GOAL_WORKFLOW_ARTIFACT, GOAL_BRIDGE_ARTIFACT]
+      }
+    ]
   };
   await writeJsonAtomic(path.join(dir, GOAL_WORKFLOW_ARTIFACT), next);
   await writeTextAtomic(path.join(dir, GOAL_BRIDGE_ARTIFACT), goalBridgeMarkdown(next));

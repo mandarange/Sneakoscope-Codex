@@ -7,7 +7,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|cmux|auto-review|team|qa-loop|goal|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|hproof|gx|wiki|code-structure';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|cmux|auto-review|team|qa-loop|goal|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure';
 
 export const RECOMMENDED_MCP_SERVERS = [
   {
@@ -362,6 +362,7 @@ export const COMMAND_CATALOG = [
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run frontier-style research missions with novelty and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
+  { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and Cmux views.' },
   { name: 'perf', usage: 'sks perf run [--json] [--iterations N]', description: 'Measure structured GPT-5.5/SKS performance budgets such as CLI startup and package size.' },
   { name: 'code-structure', usage: 'sks code-structure scan [--json]', description: 'Scan handwritten source files for 1000/2000/3000-line structure gates and split-review exceptions.' },
   { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, effort decisions, visual maps, dogfood reports, skills, mistake memory, Team dashboard state, and Honest Mode.' },

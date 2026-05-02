@@ -376,6 +376,47 @@ export async function renderTeamAgentLane(dir, opts = {}) {
   ].join('\n');
 }
 
+export async function renderTeamWatch(dir, opts = {}) {
+  const lines = Math.max(1, Number(opts.lines) || 20);
+  const dashboard = await readTeamDashboard(dir);
+  const runtime = await readJson(path.join(dir, TEAM_RUNTIME_TASKS_ARTIFACT), null);
+  const missionId = opts.missionId || dashboard?.mission_id || runtime?.mission_id || path.basename(dir);
+  const agents = Object.entries(dashboard?.agents || {});
+  const visibleAgents = agents
+    .filter(([name]) => name !== 'parent_orchestrator')
+    .slice(0, Math.max(3, Number(dashboard?.agent_session_count) || 3));
+  const events = (await readTeamTranscriptTail(dir, lines)).map(parseTranscriptLine).filter(Boolean);
+  const runtimeTasks = Array.isArray(runtime?.tasks) ? runtime.tasks : Array.isArray(runtime) ? runtime : [];
+  return [
+    '# SKS Team Live Orchestration',
+    '',
+    `Mission: ${missionId}`,
+    `Updated: ${dashboard?.updated_at || 'unknown'}`,
+    `Agent session budget: ${dashboard?.agent_session_count || 'unknown'}`,
+    dashboard?.role_counts ? `Role counts: ${formatRoleCounts(dashboard.role_counts)}` : null,
+    '',
+    '## Split-Screen Map',
+    '- This overview pane follows the whole mission transcript.',
+    '- Neighbor cmux panes follow individual `sks team lane ... --agent <name>` views.',
+    '- Use `sks team event ...` to mirror scout, debate, executor, review, and verification status into the live panes.',
+    '',
+    '## Cockpit Views',
+    '- Mission / Goal | Agents | MultiAgentV2 | Work Orders | Skills | Memory Health | Forget Queue',
+    '- Mistake Immunity | Tool Reliability | Harness Experiments | Dogfood Evidence | Code Structure | Statusline/Title',
+    '',
+    '## Visible Agent Lanes',
+    ...(visibleAgents.length
+      ? visibleAgents.map(([name, status]) => `- ${name}: ${status.status || 'pending'} | ${status.phase || 'unknown'} | last_seen:${status.last_seen || 'never'}`)
+      : ['- No agent lanes registered yet.']),
+    '',
+    '## Runtime Task Snapshot',
+    ...(runtimeTasks.length ? formatRuntimeTasks(runtimeTasks.slice(0, 8)) : ['- team-runtime-tasks.json not available yet.']),
+    '',
+    '## Recent Mission Events',
+    ...(events.length ? events.map(formatTranscriptEvent) : ['- No transcript events yet.'])
+  ].filter((line) => line !== null).join('\n');
+}
+
 function normalizeEvent(event = {}) {
   return {
     ts: event.ts || nowIso(),

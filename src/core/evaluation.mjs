@@ -1,4 +1,5 @@
-import { nowIso, sha256 } from './fsx.mjs';
+import path from 'node:path';
+import { nowIso, sha256, writeJsonAtomic } from './fsx.mjs';
 import { contextCapsule } from './triwiki-attention.mjs';
 import { validateWikiCoordinateIndex } from './wiki-coordinate.mjs';
 
@@ -10,13 +11,357 @@ export const DEFAULT_EVAL_THRESHOLDS = Object.freeze({
   max_candidate_build_ms_per_run: 25
 });
 
+export const HARNESS_GROWTH_REPORT = 'harness-growth-report.json';
+
+export const MEMORY_LIFECYCLE_STATES = Object.freeze([
+  'ACTIVE',
+  'PINNED',
+  'DORMANT',
+  'STALE',
+  'DUPLICATE',
+  'CONFLICTED',
+  'QUARANTINED',
+  'ARCHIVED',
+  'DISABLED',
+  'DELETE_CANDIDATE',
+  'DELETED'
+]);
+
+export const FORGETTING_ACTIONS = Object.freeze([
+  'KEEP_ACTIVE',
+  'PIN',
+  'UNPIN',
+  'UPDATE',
+  'CONSOLIDATE',
+  'DEMOTE',
+  'DISABLE',
+  'ARCHIVE',
+  'QUARANTINE',
+  'HARD_DELETE',
+  'NOOP',
+  'PROMOTE_SKILL',
+  'PROMOTE_RULE',
+  'PROMOTE_TEST'
+]);
+
+export const TOOL_ERROR_TAXONOMY = Object.freeze([
+  'InvalidArguments',
+  'UnexpectedEnvironment',
+  'ProviderError',
+  'UserAborted',
+  'Timeout',
+  'PermissionDenied',
+  'NetworkDenied',
+  'ResourceExhausted',
+  'Conflict',
+  'Unknown'
+]);
+
+export const DEFAULT_FORGETTING_THRESHOLDS = Object.freeze({
+  wiki_claim: { stale_after_days: 60, dormant_after_days_without_use: 90, archive_after_days_without_use: 150, hard_delete_after_days_without_use: 240 },
+  wiki_page: { stale_after_days: 90, archive_after_days_without_use: 180, hard_delete_after_days_without_use: 365 },
+  codex_memory: { stale_after_days: 60, hard_delete_after_days_without_use: 180 },
+  skill: { stale_after_days_without_use: 45, disable_after_days_without_use: 90, archive_after_days_without_use: 180, hard_delete_after_days_without_use: 270 },
+  mistake_fingerprint: { stale_after_days_without_recurrence: 180, archive_after_days_without_recurrence: 365, hard_delete_after_days_without_recurrence: 540 },
+  temporary_artifact: { archive_after_days: 14, hard_delete_after_days: 45 }
+});
+
+export const PERMISSION_PROFILES = Object.freeze({
+  read_only_explorer: { filesystem: 'read-only', network: 'disabled_or_limited', purpose: 'Map code, collect evidence, no writes.' },
+  workspace_worker: { filesystem: 'workspace-write', network: 'disabled_by_default', purpose: 'Implement local code changes safely.' },
+  dogfood_browser: { filesystem: 'workspace-write', network: 'localhost_and_required_docs', purpose: 'Run app/browser dogfood and collect evidence.' },
+  harness_research: { filesystem: 'workspace-write', network: 'limited_allowlist', purpose: 'Fetch official docs/research for harness improvements.' },
+  dangerous_full_access: { filesystem: 'full-access', network: 'controlled', purpose: 'Never default. Requires explicit reason and review.' }
+});
+
+export const DEFAULT_MULTIAGENT_V2 = Object.freeze({
+  max_threads: 6,
+  max_depth: 1,
+  job_max_runtime_seconds: 1800,
+  wait_control: 'bounded_wait_then_structured_summary',
+  subagent_output: 'structured_summary_only'
+});
+
+export const CMUX_COCKPIT_VIEWS = Object.freeze([
+  'Mission / Goal View',
+  'Agent Grid View',
+  'MultiAgentV2 Graph View',
+  'Work Order Ledger View',
+  'Skill Autopilot View',
+  'TriWiki Memory Health View',
+  'Forget Queue View',
+  'Mistake Immunity View',
+  'Tool Reliability View',
+  'Harness Experiments View',
+  'Dogfood Evidence View',
+  'Code Structure View',
+  'Statusline / Terminal Title Preview'
+]);
+
 export function estimateTokens(value) {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   return Math.max(1, Math.ceil(String(text || '').length / 4));
 }
 
+export function classifyToolError(input = {}) {
+  const text = `${input.code || ''} ${input.name || ''} ${input.message || ''} ${input.stderr || ''}`.toLowerCase();
+  if (/invalid|required|schema|argument|parameter|json/.test(text)) return 'InvalidArguments';
+  if (/enoent|not found|cwd|path|missing file|environment|not installed/.test(text)) return 'UnexpectedEnvironment';
+  if (/provider|upstream|api error|5\d\d|service unavailable/.test(text)) return 'ProviderError';
+  if (/abort|cancel|interrupted|user stopped/.test(text)) return 'UserAborted';
+  if (/timeout|timed out|deadline/.test(text)) return 'Timeout';
+  if (/permission|denied|not allowed|approval|sandbox/.test(text)) return 'PermissionDenied';
+  if (/network|dns|eai_again|enotfound|offline/.test(text)) return 'NetworkDenied';
+  if (/rate limit|quota|memory|resource|emfile|enospc|token limit|too large/.test(text)) return 'ResourceExhausted';
+  if (/conflict|merge|lock|concurrent|dirty/.test(text)) return 'Conflict';
+  return 'Unknown';
+}
+
+export function utilityScore(object = {}) {
+  const evidence = Math.min(20, Number(object.evidence_count || 0) * 4);
+  const successfulUse = Math.min(16, Number(object.success_count || object.use_count || 0) * 3);
+  const recency = daysSince(object.updated_at || object.last_used_at || object.created_at) <= 30 ? 14 : 4;
+  const uniqueness = object.duplicate_of ? -18 : 10;
+  const trust = Math.round(Number(object.trust_score ?? 0.5) * 18);
+  const riskPrevention = object.regression_prevention ? 12 : 0;
+  const penalties = [
+    object.stale ? 14 : 0,
+    object.conflicted ? 28 : 0,
+    object.failed_use ? 10 : 0,
+    object.prompt_bloat ? 8 : 0,
+    object.security_risk ? 80 : 0,
+    object.maintenance_cost ? 8 : 0
+  ].reduce((a, b) => a + b, 0);
+  return clamp(0, 100, recency + evidence + successfulUse + uniqueness + trust + riskPrevention - penalties);
+}
+
+export function forgettingDecision(object = {}, opts = {}) {
+  const state = String(object.lifecycle_state || object.status || '').toUpperCase();
+  const score = utilityScore(object);
+  if (isPinned(object)) return decision('KEEP_ACTIVE', 'PINNED', score, ['retention_exempt']);
+  if (containsSecret(object)) return decision('HARD_DELETE', 'DELETED', score, ['secret_or_sensitive_content'], true);
+  if (object.poisoned || object.unsafe_instruction) return decision('HARD_DELETE', 'DELETED', score, ['poisoned_or_unsafe'], true);
+  if (object.known_false) return decision('QUARANTINE', 'QUARANTINED', score, ['known_false']);
+  if (object.duplicate_of) return decision('CONSOLIDATE', 'DUPLICATE', score, ['duplicate']);
+  if (object.conflicted || state === 'CONFLICTED') return decision('QUARANTINE', 'CONFLICTED', score, ['conflict_requires_resolution']);
+  if (object.repeated_success && Number(object.success_count || 0) >= 3) return decision('PROMOTE_SKILL', 'ACTIVE', score, ['verified_repetition']);
+  if (object.repeated_mistake && !object.regression_test) return decision('PROMOTE_TEST', 'ACTIVE', score, ['mistake_without_test']);
+  if (object.stale && Number(object.evidence_count || 0) >= 3 && Number(object.trust_score || 0) >= 0.65) return decision('DEMOTE', 'STALE', score, ['stale_but_useful_verify_before_use']);
+  if (score < 20 && graceChecksPass(object, opts)) return decision('HARD_DELETE', 'DELETED', score, ['old_unused_low_utility'], false, tombstone(object, opts));
+  if (score < 40) return decision('ARCHIVE', 'ARCHIVED', score, ['low_utility']);
+  if (score < 60 || object.stale) return decision(object.type === 'skill' ? 'DISABLE' : 'DEMOTE', object.type === 'skill' ? 'DISABLED' : 'STALE', score, ['stale_or_watch']);
+  return decision('KEEP_ACTIVE', 'ACTIVE', score, ['useful_current']);
+}
+
+export function createSkillCard(input = {}) {
+  return {
+    skill_id: input.skill_id || input.id || `skill.${safeId(input.name || 'candidate')}`,
+    name: input.name || input.skill_id || 'Candidate Skill',
+    version: input.version || '1.0.0',
+    status: input.status || 'active',
+    created_at: input.created_at || nowIso(),
+    updated_at: input.updated_at || nowIso(),
+    last_used_at: input.last_used_at || null,
+    use_count: Number(input.use_count || 0),
+    success_count: Number(input.success_count || 0),
+    failure_count: Number(input.failure_count || 0),
+    false_trigger_count: Number(input.false_trigger_count || 0),
+    owner: input.owner || 'harness',
+    trigger_summary: input.trigger_summary || '',
+    anti_triggers: input.anti_triggers || [],
+    inputs: input.inputs || [],
+    outputs: input.outputs || [],
+    validation: input.validation || { commands: [], manual_checks: [], schemas: [] },
+    risk_notes: input.risk_notes || [],
+    retirement_conditions: input.retirement_conditions || ['stale without use', 'repeated false trigger', 'validation no longer runs'],
+    related_mistake_fingerprints: input.related_mistake_fingerprints || [],
+    related_wiki_entries: input.related_wiki_entries || [],
+    plugin_distribution: input.plugin_distribution || 'none',
+    implicit_invocation_allowed: input.implicit_invocation_allowed !== false
+  };
+}
+
+export function createHarnessExperiment(input = {}) {
+  return {
+    experiment_id: input.experiment_id || `exp.${safeId(input.title || 'harness')}.${sha256(JSON.stringify(input)).slice(0, 8)}`,
+    title: input.title || 'Harness experiment',
+    owner: 'harness_growth',
+    created_at: input.created_at || nowIso(),
+    status: input.status || 'draft',
+    vision_alignment: input.vision_alignment || 'Improve verified task outcomes while reducing context bloat.',
+    hypothesis: input.hypothesis || '',
+    change_surface: input.change_surface || ['eval'],
+    variant_a: input.variant_a || 'baseline',
+    variant_b: input.variant_b || 'candidate',
+    risk_level: input.risk_level || 'low',
+    rollback_plan: input.rollback_plan || 'revert candidate surface and re-run smoke shard',
+    offline_eval_suite: input.offline_eval_suite || ['sneakoscopebench:smoke'],
+    online_metrics: input.online_metrics || ['latency_p95_ms', 'token_input', 'tool_error_rate', 'keep_rate', 'context_bloat_score'],
+    launch_gate: input.launch_gate || {
+      min_quality_delta: '>= 0',
+      max_latency_regression: '<= 10%',
+      max_cost_regression: '<= 10%',
+      max_error_regression: '<= 0',
+      required_evidence: 'offline eval plus rollback plan'
+    },
+    post_launch_monitoring: input.post_launch_monitoring || { duration_days: 7, alert_thresholds: { unknown_error_rate: 0, repeated_mistake_rate: 0 } }
+  };
+}
+
+export function buildHarnessGrowthFixture() {
+  const old = isoDaysAgo(400);
+  const recent = isoDaysAgo(2);
+  return [
+    { id: 'pinned-user-rule', type: 'wiki_claim', lifecycle_state: 'PINNED', pinned: true, trust_score: 0.95, updated_at: old },
+    { id: 'old-unused-wiki', type: 'wiki_page', trust_score: 0.2, updated_at: old, use_count: 0, stale: true },
+    { id: 'duplicate-claim', type: 'wiki_claim', duplicate_of: 'better-claim', trust_score: 0.5, updated_at: old },
+    { id: 'stale-useful-architecture', type: 'wiki_claim', trust_score: 0.7, evidence_count: 3, stale: true, updated_at: isoDaysAgo(95) },
+    { id: 'poisoned-memory', type: 'memory', poisoned: true, trust_score: 0.1, updated_at: recent },
+    { id: 'old-unused-skill', type: 'skill', trust_score: 0.2, updated_at: old, false_trigger_count: 2, use_count: 0 },
+    { id: 'recent-successful-skill', type: 'skill', trust_score: 0.9, updated_at: recent, success_count: 4, repeated_success: true },
+    { id: 'secret-memory', type: 'memory', text: 'token=sk-live-secret-value', updated_at: recent },
+    { id: 'mistake-no-test', type: 'mistake_fingerprint', trust_score: 0.9, regression_prevention: true, repeated_mistake: true, regression_test: null, updated_at: recent }
+  ];
+}
+
+export function runHarnessGrowthFixture() {
+  const objects = buildHarnessGrowthFixture();
+  const decisions = objects.map((object) => ({ id: object.id, ...forgettingDecision(object, { now: new Date() }) }));
+  const byId = Object.fromEntries(decisions.map((item) => [item.id, item]));
+  const checks = {
+    pinned_rule_remains: byId['pinned-user-rule'].action === 'KEEP_ACTIVE',
+    old_wiki_leaves_active: ['ARCHIVE', 'HARD_DELETE'].includes(byId['old-unused-wiki'].action),
+    duplicate_consolidates: byId['duplicate-claim'].action === 'CONSOLIDATE',
+    stale_useful_stays_hydratable: ['DEMOTE', 'KEEP_ACTIVE'].includes(byId['stale-useful-architecture'].action),
+    poisoned_removed: ['HARD_DELETE', 'QUARANTINE'].includes(byId['poisoned-memory'].action),
+    old_skill_disabled_or_removed: ['DISABLE', 'ARCHIVE', 'HARD_DELETE'].includes(byId['old-unused-skill'].action),
+    recent_skill_active_or_promoted: ['KEEP_ACTIVE', 'PROMOTE_SKILL'].includes(byId['recent-successful-skill'].action),
+    secret_hard_deleted: byId['secret-memory'].action === 'HARD_DELETE',
+    uncovered_mistake_kept_for_test: byId['mistake-no-test'].action === 'PROMOTE_TEST'
+  };
+  return {
+    schema_version: 1,
+    fixture: 'memory_sweep_fixture',
+    created_at: nowIso(),
+    decisions,
+    checks,
+    passed: Object.values(checks).every(Boolean)
+  };
+}
+
+export function harnessGrowthReport(input = {}) {
+  const fixture = runHarnessGrowthFixture();
+  const toolErrors = (input.tool_errors || [
+    { message: 'operation timed out after 30s' },
+    { message: 'unexpected provider 500' },
+    { message: 'unmatched example for taxonomy coverage' }
+  ]).map((error) => ({ ...error, classification: classifyToolError(error), unknown_is_bug: classifyToolError(error) === 'Unknown' }));
+  return {
+    schema_version: 1,
+    generated_at: nowIso(),
+    forgetting: {
+      lifecycle_states: MEMORY_LIFECYCLE_STATES,
+      actions: FORGETTING_ACTIONS,
+      thresholds: DEFAULT_FORGETTING_THRESHOLDS,
+      fixture
+    },
+    skills: {
+      card_schema_example: createSkillCard({
+        skill_id: 'skill.harness.weekly-review',
+        name: 'Weekly Harness Review',
+        trigger_summary: 'Run on weekly harness review automation or explicit harness growth request.',
+        validation: { commands: ['sks harness fixture --json'], manual_checks: ['review proposed deletions before live hard-delete'], schemas: ['harness-growth-report.json'] }
+      })
+    },
+    experiments: {
+      registry_schema_example: createHarnessExperiment({
+        title: 'Visible ambiguity question delivery',
+        hypothesis: 'Stop gates that require visible question blocks reduce hidden clarification failures.',
+        change_surface: ['prompt', 'tool', 'eval'],
+        offline_eval_suite: ['selftest:team-visible-questions']
+      })
+    },
+    codex_native: {
+      permission_profiles: PERMISSION_PROFILES,
+      multiagent_v2: DEFAULT_MULTIAGENT_V2,
+      goal_checkpoint_required_fields: ['goal_id', 'phase', 'summary', 'completed_checkboxes', 'open_checkboxes', 'blockers', 'evidence'],
+      external_session_import: 'structured_summary_only_with_utility_score_and_forgetting_metadata'
+    },
+    cmux: {
+      views: CMUX_COCKPIT_VIEWS,
+      status_terms: ['idle', 'planning', 'exploring', 'implementing', 'waiting_for_tool', 'waiting_for_approval', 'dogfooding', 'verifying', 'summarizing', 'blocked', 'failed', 'completed', 'paused', 'resuming']
+    },
+    reliability: {
+      tool_error_taxonomy: TOOL_ERROR_TAXONOMY,
+      classified_errors: toolErrors,
+      unknown_errors_are_bugs: true
+    },
+    validation: {
+      fixture_passed: fixture.passed,
+      unknown_errors_recorded: toolErrors.filter((e) => e.classification === 'Unknown').length
+    }
+  };
+}
+
+export async function writeHarnessGrowthReport(root, dir, input = {}) {
+  const report = harnessGrowthReport(input);
+  await writeJsonAtomic(path.join(dir || path.join(root, '.sneakoscope', 'reports'), HARNESS_GROWTH_REPORT), report);
+  return report;
+}
+
 function clamp01(x) {
   return Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0));
+}
+
+function decision(action, lifecycle_state, utility_score, reason_codes, immediate = false, tombstoneMeta = null) {
+  return { action, lifecycle_state, utility_score, reason_codes, immediate, tombstone: tombstoneMeta };
+}
+
+function isPinned(object = {}) {
+  return object.pinned === true || String(object.lifecycle_state || '').toUpperCase() === 'PINNED';
+}
+
+function containsSecret(object = {}) {
+  const text = JSON.stringify(object);
+  return /(sk-|ghp_|glpat-|xox[baprs]-|AKIA[0-9A-Z]{16}|secret|private[_-]?key|token=|password=)/i.test(text);
+}
+
+function graceChecksPass(object = {}, opts = {}) {
+  if (isPinned(object)) return false;
+  if (object.active_work_order || object.required_by_skill_validation || object.only_source_for_user_preference) return false;
+  if (object.only_source_for_mistake_prevention && !object.regression_test) return false;
+  if (daysSince(object.last_used_at || object.updated_at || object.created_at, opts.now) < 90) return false;
+  return true;
+}
+
+function tombstone(object = {}, opts = {}) {
+  return {
+    deleted_object_id: safeId(object.id || sha256(JSON.stringify(object)).slice(0, 16)),
+    object_type: object.type || 'memory',
+    deleted_at: nowIso(),
+    reason: opts.reason || 'old-unused-low-utility',
+    replacement_id: object.replacement_id || object.duplicate_of || null,
+    deleted_by: opts.deleted_by || 'automation',
+    content_hash: object.sensitive ? null : sha256(JSON.stringify(object)).slice(0, 24)
+  };
+}
+
+function daysSince(value, now = new Date()) {
+  const t = Date.parse(value || '');
+  if (!Number.isFinite(t)) return 9999;
+  return Math.floor((Number(now) - t) / 86400000);
+}
+
+function isoDaysAgo(days) {
+  return new Date(Date.now() - Number(days) * 86400000).toISOString();
+}
+
+function safeId(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'object';
+}
+
+function clamp(min, max, value) {
+  return Math.max(min, Math.min(max, Math.round(Number(value) || 0)));
 }
 
 function timed(fn, iterations) {
