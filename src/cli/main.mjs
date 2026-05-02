@@ -41,7 +41,7 @@ import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
-import { CMUX_BREW_COMMAND, CMUX_BREW_UPGRADE_COMMAND, buildCmuxLaunchPlan, buildCmuxNewWorkspaceArgs, cmuxSurfaceRefFromText, cmuxWorkspaceRef, cmuxWorkspaceRefFromText, cmuxReadiness, cmuxStatusKind, defaultCmuxWorkspaceName, ensureCmuxInstalled, formatCmuxBanner, launchCmuxTeamView, launchCmuxUi, matchingCmuxWorkspaces, parseCmuxWorkspaceList, platformCmuxInstallHint, readCmuxWorkspaceRecord, runCmuxStatus, sanitizeCmuxWorkspaceName, teamLaneStyle, writeCmuxWorkspaceRecord } from '../core/cmux-ui.mjs';
+import { buildWarpLaunchConfigYaml, buildWarpLaunchPlan, buildWarpOpenArgs, runWarpLaunchConfigSyntaxCheck, warpReadiness, warpStatusKind, defaultWarpWorkspaceName, formatWarpBanner, launchWarpTeamView, launchWarpUi, platformWarpInstallHint, runWarpStatus, sanitizeWarpWorkspaceName, teamLaneStyle, writeWarpLaunchConfig } from '../core/warp-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { buildTeamPlan, codeStructureCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, qaLoopCommand, researchCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 
@@ -64,12 +64,12 @@ export async function main(args) {
   if (isAutoReviewFlag(args[0])) return autoReviewCommand('start', args.slice(1));
   const [cmd, sub, ...rest] = args;
   const tail = sub === undefined ? [] : [sub, ...rest];
-  if (!cmd) return shouldLaunchCmuxUi() ? cmuxCommand('start', []) : help();
+  if (!cmd) return shouldLaunchWarpUi() ? warpCommand('start', []) : help();
   if (cmd === '--help' || cmd === '-h') return help();
   if (cmd === '--version' || cmd === '-v' || cmd === 'version') return version();
   if (cmd === 'postinstall') return postinstall();
   if (cmd === 'wizard' || cmd === 'ui') return wizard(tail);
-  if (cmd === 'cmux') return String(sub || '').startsWith('--') ? cmuxCommand('start', tail) : cmuxCommand(sub, rest);
+  if (cmd === 'warp') return String(sub || '').startsWith('--') ? warpCommand('start', tail) : warpCommand(sub, rest);
   if (cmd === 'auto-review' || cmd === 'autoreview') return autoReviewCommand(sub, rest);
   if (cmd === 'update-check') return updateCheck(tail);
   if (cmd === 'help') return help(tail);
@@ -132,13 +132,13 @@ Usage:
   sks root [--json]
   sks quickstart
   sks bootstrap [--install-scope global|project] [--local-only] [--json]
-  sks deps check|install [cmux|codex|context7|all] [--yes] [--json]
+  sks deps check|install [warp|codex|context7|all] [--yes] [--json]
   sks codex-app
   sks --mad [--high]
   sks auto-review status|enable|start [--high]
   sks --Auto-review [--high]
-  sks cmux [--workspace name]
-  sks cmux status [--once]
+  sks warp [--workspace name]
+  sks warp status [--once]
   sks dollar-commands [--json]
   sks dfix
   sks qa-loop prepare "target"
@@ -164,6 +164,8 @@ Usage:
   sks team "task" [executor:5 reviewer:2 user:1] [--json]
   sks team log|tail|watch|lane|status|dashboard [mission-id|latest]
   sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."
+  sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."
+  sks team cleanup-warp [mission-id|latest]
   sks research prepare "topic" [--depth frontier]
   sks research run <mission-id|latest> [--mock] [--max-cycles N]
   sks research status <mission-id|latest>
@@ -213,8 +215,8 @@ function shouldShowWizard() {
   return Boolean(input.isTTY && output.isTTY && process.env.SKS_NO_WIZARD !== '1' && process.env.CI !== 'true');
 }
 
-function shouldLaunchCmuxUi() {
-  return Boolean(input.isTTY && output.isTTY && process.env.SKS_NO_CMUX !== '1' && process.env.CI !== 'true');
+function shouldLaunchWarpUi() {
+  return Boolean(input.isTTY && output.isTTY && process.env.SKS_NO_WARP !== '1' && process.env.CI !== 'true');
 }
 
 function isAutoReviewFlag(value) {
@@ -262,8 +264,8 @@ async function postinstall() {
   }
   console.log('\nNext:');
   console.log('  sks bootstrap');
-  console.log('\nThis initializes the current project, installs SKS Codex App skills, verifies Codex App/Context7 readiness, and checks cmux/runtime dependencies.');
-  console.log('Dependency repair: sks deps check; sks deps install cmux');
+  console.log('\nThis initializes the current project, installs SKS Codex App skills, verifies Codex App/Context7 readiness, and checks warp/runtime dependencies.');
+  console.log('Dependency repair: sks deps check; sks deps install warp');
   console.log('Open runtime after readiness is green: sks\n');
 }
 
@@ -393,15 +395,18 @@ async function ensureGlobalCodexSkillsDuringInstall(opts = {}) {
 async function ensureRelatedCliTools(args = []) {
   const skip = flag(args, '--skip-cli-tools') || process.env.SKS_SKIP_CLI_TOOLS === '1';
   const codex = await ensureCodexCliTool({ skip });
-  const cmux = await cmuxReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
+  const warp = await warpReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
   return {
     codex,
-    cmux: {
-      ok: Boolean(cmux.ok),
-      bin: cmux.bin || null,
-      version: cmux.version || null,
-      install_hint: cmux.ok ? null : platformCmuxInstallHint(),
-      error: cmux.error || null
+    warp: {
+      ok: Boolean(warp.ok),
+      app: warp.app || null,
+      cli: warp.cli || null,
+      version: warp.version || null,
+      launch_config_dir: warp.launch_config_dir || null,
+      uri_scheme: warp.uri_scheme || null,
+      install_hint: warp.ok ? null : platformWarpInstallHint(),
+      error: warp.error || null
     }
   };
 }
@@ -1058,23 +1063,23 @@ function readNumberOption(args, name, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-async function cmuxCommand(sub = 'start', args = []) {
+async function warpCommand(sub = 'start', args = []) {
   const action = sub || 'start';
   if (action === 'status' || action === 'banner') {
     if (flag(args, '--json')) {
       const status = await codexAppIntegrationStatus();
       return console.log(JSON.stringify(status, null, 2));
     }
-    await runCmuxStatus(action === 'banner' ? ['--once', ...args] : args);
+    await runWarpStatus(action === 'banner' ? ['--once', ...args] : args);
     return;
   }
   if (action === 'check') {
     const root = await sksRoot();
-    const plan = await buildCmuxLaunchPlan({ root, session: readOption(args, '--session', null) });
+    const plan = await buildWarpLaunchPlan({ root, session: readOption(args, '--session', null) });
     if (flag(args, '--json')) return console.log(JSON.stringify(plan, null, 2));
-    console.log(formatCmuxBanner(plan.app));
+    console.log(formatWarpBanner(plan.app));
     console.log('');
-    console.log(`cmux:      ${plan.cmux.ok ? 'ok' : 'missing'} ${plan.cmux.version || ''}`.trim());
+    console.log(`warp:      ${plan.warp.ok ? 'ok' : 'missing'} ${plan.warp.version || ''}`.trim());
     console.log(`Workspace: ${plan.workspace}`);
     console.log(`Project:   ${plan.root}`);
     console.log(`Ready:     ${plan.ready ? 'yes' : 'no'}`);
@@ -1085,13 +1090,17 @@ async function cmuxCommand(sub = 'start', args = []) {
     }
     return;
   }
-  if (['start', 'attach', 'connect', 'open'].includes(action)) return launchCmuxUi(args);
-  console.error('Usage: sks cmux [check|status|banner] [--workspace name]');
+  if (['start', 'attach', 'connect', 'open'].includes(action)) {
+    const result = await launchWarpUi(args);
+    if (flag(args, '--json')) console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.error('Usage: sks warp [check|status|banner] [--workspace name]');
   process.exitCode = 1;
 }
 
 async function madHighCommand(args = []) {
-  const cleanArgs = args.filter((arg) => !['--mad', '--MAD', '--mad-sks', '--high', '--no-auto-install-cmux'].includes(arg));
+  const cleanArgs = args.filter((arg) => !['--mad', '--MAD', '--mad-sks', '--high', '--no-auto-install-warp'].includes(arg));
   if (flag(args, '--json')) {
     const profile = await enableMadHighProfile();
     return console.log(JSON.stringify(profile, null, 2));
@@ -1115,11 +1124,11 @@ async function madHighCommand(args = []) {
   }
   const profile = await enableMadHighProfile();
   console.log(`SKS MAD auto-review profile ready: ${madHighProfileName()}`);
-  console.log('Scope: explicit cmux launch only; full access uses Codex auto_review approvals when approval prompts are raised.');
-  const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', `sks-mad-${defaultCmuxWorkspaceName(process.cwd())}`));
-  return launchCmuxUi([...cleanArgs, '--workspace', workspace], {
+  console.log('Scope: explicit warp launch only; full access uses Codex auto_review approvals when approval prompts are raised.');
+  const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', `sks-mad-${defaultWarpWorkspaceName(process.cwd())}`));
+  return launchWarpUi([...cleanArgs, '--workspace', workspace], {
     codexArgs: ['--profile', profile.profile_name],
-    autoInstallCmux: !flag(args, '--no-auto-install-cmux'),
+    autoInstallWarp: !flag(args, '--no-auto-install-warp'),
     conciseBlockers: true
   });
 }
@@ -1155,13 +1164,12 @@ async function ensureMadLaunchDependencies(args = []) {
     const codex = await getCodexInfo().catch(() => ({}));
     if (!codex.bin) actions.push(await installCodexDependency(args, { prompt: 'Codex CLI missing. Install latest Codex CLI with npm i -g @openai/codex@latest?' }));
   }
-  if (!flag(args, '--no-auto-install-cmux')) {
-    const cmux = await cmuxReadiness().catch(() => ({ ok: false }));
-    if (!cmux.ok && !cmux.bin) actions.push(await installCmuxDependency(args));
-    else if (!cmux.ok) actions.push({ target: 'cmux', status: 'unhealthy', bin: cmux.bin, version: cmux.version || null, command: 'sks cmux check', error: cmux.error || 'cmux app/socket unhealthy' });
+  if (!flag(args, '--no-auto-install-warp')) {
+    const warp = await warpReadiness().catch(() => ({ ok: false }));
+    if (!warp.ok) actions.push(await installWarpDependency(args));
   }
   const status = await depsStatus(await sksRoot());
-  return { ready: Boolean(status.codex_cli.ok && status.cmux.ok), actions, status };
+  return { ready: Boolean(status.codex_cli.ok && status.warp.ok), actions, status };
 }
 
 async function deps(sub = 'check', args = []) {
@@ -1175,7 +1183,7 @@ async function deps(sub = 'check', args = []) {
     return;
   }
   if (action === 'install') return depsInstall(args);
-  console.error('Usage: sks deps check|install [cmux|codex|context7|all] [--yes] [--json]');
+  console.error('Usage: sks deps check|install [warp|codex|context7|all] [--yes] [--json]');
   process.exitCode = 1;
 }
 
@@ -1185,7 +1193,7 @@ async function depsStatus(root = null, opts = {}) {
   const codex = opts.codex || await getCodexInfo().catch(() => ({}));
   const app = opts.codexApp || await codexAppIntegrationStatus({ codex });
   const context7 = opts.context7 || await checkContext7(root);
-  const cmux = opts.cmux || await cmuxReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
+  const warp = opts.warp || await warpReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
   const brew = process.platform === 'darwin' ? await which('brew').catch(() => null) : null;
   const globalBin = await discoverGlobalSksCommand();
   const npmPrefix = npmBin ? await runProcess(npmBin, ['prefix', '-g'], { timeoutMs: 8000, maxOutputBytes: 4096 }).catch(() => null) : null;
@@ -1193,10 +1201,10 @@ async function depsStatus(root = null, opts = {}) {
   const npmPrefixDir = npmPrefix?.code === 0 ? npmPrefix.stdout.trim().split(/\r?\n/).pop() : null;
   const npmBinDir = npmPrefixDir ? (process.platform === 'win32' ? npmPrefixDir : path.join(npmPrefixDir, 'bin')) : null;
   const nodeOk = Number(process.versions.node.split('.')[0]) >= 20;
-  const homebrewNeeded = process.platform === 'darwin' && !cmux.ok;
+  const homebrewNeeded = process.platform === 'darwin' && !warp.ok;
   return {
     root,
-    ready: Boolean(nodeOk && npmBin && globalBin && codex.bin && context7.ok && cmux.ok),
+    ready: Boolean(nodeOk && npmBin && globalBin && codex.bin && context7.ok && warp.ok),
     node: { ok: nodeOk, version: process.version },
     npm: { ok: Boolean(npmBin), bin: npmBin, global_bin_dir: npmBinDir, global_bin_on_path: npmBinDir ? pathText.split(path.delimiter).includes(npmBinDir) : null },
     sneakoscope: { ok: Boolean(globalBin), bin: globalBin },
@@ -1205,13 +1213,13 @@ async function depsStatus(root = null, opts = {}) {
     context7,
     browser_use: { ok: app.mcp.has_browser_use, cache: app.plugins.browser_use_cache },
     computer_use: { ok: app.mcp.has_computer_use, cache: app.plugins.computer_use_cache },
-    cmux: { ok: Boolean(cmux.ok), bin: cmux.bin || null, version: cmux.version || null, socket_ok: cmux.socket_ok ?? null, install_hint: cmux.ok ? null : platformCmuxInstallHint(), error: cmux.error || null },
-    homebrew: process.platform === 'darwin' ? { ok: Boolean(brew), bin: brew, required_for_cmux_install: homebrewNeeded } : { ok: null, bin: null, required_for_cmux_install: false },
-    next_actions: depsNextActions({ npmBin, globalBin, codex, app, context7, cmux, brew, nodeOk })
+    warp: { ok: Boolean(warp.ok), app: warp.app || null, cli: warp.cli || null, version: warp.version || null, launch_config_dir: warp.launch_config_dir || null, uri_scheme: warp.uri_scheme || null, install_hint: warp.ok ? null : platformWarpInstallHint(), error: warp.error || null },
+    homebrew: process.platform === 'darwin' ? { ok: Boolean(brew), bin: brew, required_for_warp_install: homebrewNeeded } : { ok: null, bin: null, required_for_warp_install: false },
+    next_actions: depsNextActions({ npmBin, globalBin, codex, app, context7, warp, brew, nodeOk })
   };
 }
 
-function depsNextActions({ npmBin, globalBin, codex, app, context7, cmux, brew, nodeOk }) {
+function depsNextActions({ npmBin, globalBin, codex, app, context7, warp, brew, nodeOk }) {
   const out = [];
   if (!nodeOk) out.push('Install Node.js 20.11+.');
   if (!npmBin) out.push('Install npm or use a Node.js distribution that includes npm.');
@@ -1219,10 +1227,7 @@ function depsNextActions({ npmBin, globalBin, codex, app, context7, cmux, brew, 
   if (!codex.bin) out.push('Run: sks deps install codex');
   if (!context7.ok) out.push('Run: sks deps install context7');
   if (!app.ok) out.push('Run: sks codex-app check');
-  if (!cmux.ok) {
-    if (cmux.bin) out.push('Run: sks cmux check; if the cmux app/socket remains unhealthy, run: sks deps install cmux');
-    else out.push(process.platform === 'darwin' && !brew ? 'Install Homebrew, then run: sks deps install cmux' : 'Run: sks deps install cmux');
-  }
+  if (!warp.ok) out.push(process.platform === 'darwin' && !brew ? 'Install Warp from https://www.warp.dev/download, or install Homebrew then run: sks deps install warp' : 'Run: sks deps install warp');
   return out;
 }
 
@@ -1237,7 +1242,7 @@ function printDepsStatus(status) {
   console.log(`Context7:    ${status.context7.ok ? 'ok' : 'missing'}`);
   console.log(`Browser Use: ${status.browser_use.ok ? 'ok' : 'missing'}`);
   console.log(`Computer Use:${status.computer_use.ok ? ' ok' : ' missing'}`);
-  console.log(`cmux:        ${cmuxStatusKind(status.cmux)} ${status.cmux.version || status.cmux.error || ''}`.trimEnd());
+  console.log(`warp:        ${warpStatusKind(status.warp)} ${status.warp.version || status.warp.error || ''}`.trimEnd());
   if (process.platform === 'darwin') console.log(`Homebrew:    ${status.homebrew.ok ? 'ok' : 'missing'} ${status.homebrew.bin || ''}`.trimEnd());
   console.log(`Ready:       ${status.ready ? 'true' : 'false'}`);
   if (status.next_actions.length) {
@@ -1249,11 +1254,11 @@ function printDepsStatus(status) {
 async function depsInstall(args = []) {
   const root = await sksRoot();
   const target = positionalArgs(args)[0] || 'all';
-  const wants = target === 'all' ? ['codex', 'context7', 'cmux'] : [target];
+  const wants = target === 'all' ? ['codex', 'context7', 'warp'] : [target];
   const actions = [];
   if (wants.includes('codex')) actions.push(await installCodexDependency(args));
   if (wants.includes('context7')) actions.push(await installContext7Dependency(root));
-  if (wants.includes('cmux')) actions.push(await installCmuxDependency(args));
+  if (wants.includes('warp')) actions.push(await installWarpDependency(args));
   const status = await depsStatus(root);
   const result = { target, actions, status };
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
@@ -1278,29 +1283,12 @@ async function installContext7Dependency(root) {
   return { target: 'context7', status: changed ? 'project_configured' : 'already_configured', command: 'sks context7 check' };
 }
 
-async function installCmuxDependency(args = []) {
-  const before = await cmuxReadiness({ wake: true }).catch(() => ({ ok: false }));
-  if (before.ok) return { target: 'cmux', status: 'present', version: before.version || null };
-  if (before.bin && before.executable_ok && before.socket_ok === false) {
-    return { target: 'cmux', status: 'unhealthy', bin: before.bin, version: before.version || null, command: 'sks cmux check', error: before.error || 'cmux app/socket unhealthy' };
-  }
-  if (process.platform === 'darwin') {
-    const brew = await which('brew').catch(() => null);
-    const command = CMUX_BREW_COMMAND;
-    if (!brew) return { target: 'cmux', status: 'homebrew_missing', command: `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && ${command}` };
-    if (flag(args, '--dry-run')) return { target: 'cmux', status: 'dry_run', command };
-    if (!await confirmInstall(`Install/update latest cmux with Homebrew (${command}; ${CMUX_BREW_UPGRADE_COMMAND} if already installed)?`, args)) return { target: 'cmux', status: 'needs_approval', command };
-    const installed = await ensureCmuxInstalled({ autoInstall: true });
-    return {
-      target: 'cmux',
-      status: installed.status,
-      version: installed.cmux?.version || null,
-      command,
-      code: installed.code,
-      error: installed.error || null
-    };
-  }
-  return { target: 'cmux', status: 'manual_required', command: platformCmuxInstallHint() };
+async function installWarpDependency(args = []) {
+  const before = await warpReadiness().catch(() => ({ ok: false }));
+  if (before.ok) return { target: 'warp', status: 'present', version: before.version || null, app: before.app || null, cli: before.cli || null };
+  const command = process.platform === 'darwin' ? 'brew install --cask warp' : platformWarpInstallHint();
+  if (flag(args, '--dry-run')) return { target: 'warp', status: 'dry_run', command };
+  return { target: 'warp', status: 'manual_required', command, error: before.error || 'Warp app not found' };
 }
 
 async function confirmInstall(question, args = []) {
@@ -1350,8 +1338,8 @@ async function autoReviewCommand(sub = 'status', args = []) {
     if (flag(args, '--json')) return console.log(JSON.stringify(status, null, 2));
     console.log(`SKS Auto-Review enabled: ${profile}`);
     const sessionArg = readOption(cleanArgs, '--session', null);
-    const session = sessionArg || sanitizeCmuxWorkspaceName(`${profile}-${defaultCmuxWorkspaceName(process.cwd())}`);
-    return launchCmuxUi([...cleanArgs, '--session', session], { codexArgs: ['--profile', profile] });
+    const session = sessionArg || sanitizeWarpWorkspaceName(`${profile}-${defaultWarpWorkspaceName(process.cwd())}`);
+    return launchWarpUi([...cleanArgs, '--session', session], { codexArgs: ['--profile', profile] });
   }
   console.error('Usage: sks auto-review status|enable|disable|start [--high] [--json]');
   console.error('Alias: sks --Auto-review [--high]');
@@ -1372,8 +1360,8 @@ Use outside a project:
   sks deps check
   sks team "global mission"
 
-If cmux is missing:
-  sks deps install cmux
+If warp is missing:
+  sks deps install warp
 
 Initialize this project for CLI and Codex App:
   sks setup --bootstrap
@@ -1386,7 +1374,7 @@ Open from terminal:
 Verify:
   sks deps check
   sks codex-app check
-  sks cmux check
+  sks warp check
   sks auto-review status
   sks doctor --fix
   sks context7 check
@@ -1440,7 +1428,7 @@ async function codexAppHelp(args = []) {
     'ㅅㅋㅅ Codex App', '',
     formatCodexAppStatus(status), '',
     `Skills: project=${skills.project.ok ? 'ok' : `missing ${skills.project.missing.length}`} global=${skills.global.ok ? 'ok' : `missing ${skills.global.missing.length}`}`, '',
-    'Setup:', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks cmux check', '',
+    'Setup:', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks warp check', '',
     'Generated files:', '  .codex/config.toml', '  .codex/hooks.json', '  .agents/skills/', '  .codex/agents/', '  .codex/SNEAKOSCOPE.md', '  AGENTS.md', '',
     'Prompt routes:', formatDollarCommandsCompact('  ')
   ].join('\n'));
@@ -1472,19 +1460,19 @@ Examples:
 function usage(args = []) {
   const topic = String(args[0] || 'overview').toLowerCase();
   const blocks = {
-    overview: ['ㅅㅋㅅ Usage', '', 'Discover:', '  sks commands', '  sks quickstart', '  sks root', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks cmux check', '  sks dollar-commands', '', `Topics: ${USAGE_TOPICS}`],
+    overview: ['ㅅㅋㅅ Usage', '', 'Discover:', '  sks commands', '  sks quickstart', '  sks root', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks warp check', '  sks dollar-commands', '', `Topics: ${USAGE_TOPICS}`],
     install: ['Install', '', '  npm i -g sneakoscope', '  sks root', '  sks', '', 'Project bootstrap:', '  sks bootstrap', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
-    bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and cmux.'],
+    bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and warp.'],
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
-    deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [cmux|codex|context7|all] [--yes]', '', 'cmux on macOS uses Homebrew only after approval.'],
-    cmux: ['cmux', '', '  sks', '  sks cmux check', '  sks cmux status --once', '  sks deps install cmux'],
-    team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
+    deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [warp|codex|context7|all] [--yes]', '', 'warp on macOS uses Homebrew only after approval.'],
+    warp: ['warp', '', '  sks', '  sks warp check', '  sks warp status --once', '  sks deps install warp'],
+    team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-warp latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
     goal: ['Goal', '', '  sks goal create "task"', '  sks goal status latest', '  sks goal pause latest', '  sks goal resume latest', '  sks goal clear latest'],
     'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
     dollar: ['Dollar Commands', '', formatDollarCommandsCompact('  '), '', 'Terminal: sks dollar-commands [--json]'],
     wiki: ['TriWiki', '', '  sks wiki pack', '  sks wiki refresh [--prune]', '  sks wiki sweep latest --json', '  sks wiki validate .sneakoscope/wiki/context-pack.json', '  sks wiki prune --dry-run --json', '', 'Packs include attention.use_first and attention.hydrate_first for compact recall plus source hydration. Sweep records intentional forgetting and promotion candidates.'],
-    harness: ['Harness Growth', '', '  sks harness fixture --json', '  sks harness review --json', '', 'Runs deterministic fixtures for deliberate forgetting, skill cards, harness experiments, tool error taxonomy, permission profiles, MultiAgentV2, and Cmux cockpit views.'],
+    harness: ['Harness Growth', '', '  sks harness fixture --json', '  sks harness review --json', '', 'Runs deterministic fixtures for deliberate forgetting, skill cards, harness experiments, tool error taxonomy, permission profiles, MultiAgentV2, and Warp cockpit views.'],
     'code-structure': ['Code Structure', '', '  sks code-structure scan', '  sks code-structure scan --json', '', 'Flags handwritten source files above 1000/2000/3000-line thresholds and records split-review exceptions.'],
     gx: ['GX', '', '  sks gx init architecture-atlas', '  sks gx render architecture-atlas --format all', '  sks gx validate architecture-atlas']
   };
@@ -1508,13 +1496,13 @@ async function bootstrap(args = []) {
   const cliTools = await ensureRelatedCliTools(args);
   const context7Status = await checkContext7(root);
   const appRuntime = await codexAppIntegrationStatus({ codex: await getCodexInfo().catch(() => ({})) });
-  const deps = await depsStatus(root, { context7: context7Status, codexApp: appRuntime, cmux: cliTools.cmux });
+  const deps = await depsStatus(root, { context7: context7Status, codexApp: appRuntime, warp: cliTools.warp });
   const install = await installStatus(root, installScope, { globalCommand });
   const versioningInfo = await versioningStatus(root);
   const skills = await checkRequiredSkills(root);
   const guard = await harnessGuardStatus(root);
   const files = await codexAppFilesStatus(root, skills, versioningInfo);
-  const ready = Boolean(!conflicts.hard_block && install.ok && files.ok && skills.ok && guard.ok && context7Status.ok && appRuntime.ok && deps.cmux.ok);
+  const ready = Boolean(!conflicts.hard_block && install.ok && files.ok && skills.ok && guard.ok && context7Status.ok && appRuntime.ok && deps.warp.ok);
   const result = {
     root,
     ready,
@@ -1525,7 +1513,7 @@ async function bootstrap(args = []) {
     codex_app: appRuntime,
     global_skills: globalSkills,
     context7: context7Status,
-    cmux: deps.cmux,
+    warp: deps.warp,
     harness_guard: guard,
     deps,
     next: ready ? ['sks', '$Team implement ...', '$QA-LOOP run ...'] : deps.next_actions
@@ -1538,7 +1526,7 @@ async function bootstrap(args = []) {
   console.log(`Hooks:         ${files.hooks.ok ? 'ok' : 'missing'}`);
   console.log(`Harness guard: ${guard.ok ? 'ok' : 'blocked'}`);
   console.log(`Context7:      ${context7Status.ok ? 'ok' : 'missing'}`);
-  console.log(`cmux:          ${deps.cmux.ok ? 'ok' : 'missing'}${deps.cmux.version ? ` ${deps.cmux.version}` : ''}`);
+  console.log(`warp:          ${deps.warp.ok ? 'ok' : 'missing'}${deps.warp.version ? ` ${deps.warp.version}` : ''}`);
   console.log(`ready:         ${ready ? 'true' : 'false'}`);
   if (!ready) {
     console.log('\nNext:');
@@ -1617,7 +1605,7 @@ async function setup(args) {
   console.log('ㅅㅋㅅ Setup\n');
   console.log(`Project:   ${root}`);
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
-  console.log(`CLI tools: Codex ${formatCodexCliToolStatus(cliTools.codex)}; cmux ${cmuxStatusKind(cliTools.cmux)} ${cliTools.cmux.version || cliTools.cmux.error || ''}`.trimEnd());
+  console.log(`CLI tools: Codex ${formatCodexCliToolStatus(cliTools.codex)}; warp ${warpStatusKind(cliTools.warp)} ${cliTools.warp.version || cliTools.warp.error || ''}`.trimEnd());
   console.log(`Hooks:     ${path.relative(root, hooksPath)}`);
   console.log(`Version:   ${versioningInfo.enabled ? (versioningInfo.hook_installed ? 'auto-bump enabled' : 'auto-bump hook missing') : 'not enabled'}${versioningInfo.package_version ? ` (${versioningInfo.package_version})` : ''}`);
   if (localOnly) console.log('Git:       local-only (.git/info/exclude; user AGENTS preserved, SKS managed block refreshed)');
@@ -1629,7 +1617,7 @@ async function setup(args) {
   console.log(`Next:      sks context7 check; sks selftest --mock; sks commands; sks dollar-commands`);
   if (cliTools.codex.status === 'failed') console.log(`\nCodex CLI install failed. Run manually: npm i -g @openai/codex. ${cliTools.codex.error || ''}`.trim());
   if (cliTools.codex.status === 'installed_not_on_path') console.log(`\nCodex CLI installed but not on PATH. ${cliTools.codex.hint}`);
-  if (!cliTools.cmux.ok) console.log(`\ncmux ${cmuxStatusKind(cliTools.cmux)}. ${cliTools.cmux.bin ? 'Run: sks cmux check' : `Install: ${cliTools.cmux.install_hint}`}`);
+  if (!cliTools.warp.ok) console.log(`\nwarp ${warpStatusKind(cliTools.warp)}. Install: ${cliTools.warp.install_hint}`);
   if (!install.ok && install.scope === 'global') console.log('\nGlobal command missing. Run: npm i -g sneakoscope');
   if (!install.ok && install.scope === 'project') console.log('\nProject package missing. Run: npm i -D sneakoscope');
   if (!appRuntime.ok) console.log('\nCodex App and first-party Codex Computer Use are required for SKS QA/visual evidence; Browser Use is not a UI verification substitute. Run: sks codex-app check');
@@ -1699,7 +1687,7 @@ async function doctor(args) {
   const dbScan = await scanDbSafety(root).catch((err) => ({ ok: false, findings: [{ id: 'db_safety_scan_failed', severity: 'high', reason: err.message }] }));
   const context7Status = await checkContext7(root);
   const appRuntime = await codexAppIntegrationStatus({ codex });
-  const cmuxStatus = await cmuxReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
+  const warpStatus = await warpReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
   const skillStatus = await checkRequiredSkills(root);
   const globalSkillStatus = await checkRequiredSkills(null, globalCodexSkillsRoot());
   const guardStatus = await harnessGuardStatus(root);
@@ -1720,7 +1708,7 @@ async function doctor(args) {
     sneakoscope: { ok: await exists(path.join(root, '.sneakoscope')) },
     context7: context7Status,
     codex_app_runtime: appRuntime,
-    runtime: { cmux: { ok: Boolean(cmuxStatus.ok), bin: cmuxStatus.bin || null, version: cmuxStatus.version || null, socket_ok: cmuxStatus.socket_ok ?? null, install_hint: cmuxStatus.ok ? null : platformCmuxInstallHint(), error: cmuxStatus.error || null } },
+    runtime: { warp: { ok: Boolean(warpStatus.ok), app: warpStatus.app || null, cli: warpStatus.cli || null, version: warpStatus.version || null, launch_config_dir: warpStatus.launch_config_dir || null, uri_scheme: warpStatus.uri_scheme || null, install_hint: warpStatus.ok ? null : platformWarpInstallHint(), error: warpStatus.error || null } },
     harness_guard: guardStatus,
     versioning: versioningInfo,
     db_guard: { ok: dbPolicyExists && dbScan.ok, policy: dbPolicyExists ? await loadDbSafetyPolicy(root) : null, scan: dbScan },
@@ -1732,7 +1720,7 @@ async function doctor(args) {
     },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) }, storage
   };
-  result.ready = !result.harness_conflicts.hard_block && nodeOk && Boolean(codex.bin) && install.ok && result.sneakoscope.ok && result.context7.ok && appRuntime.ok && result.runtime.cmux.ok && result.harness_guard.ok && result.versioning.ok && result.db_guard.ok && result.codex_app.ok && result.skills.ok && result.global_skills.ok;
+  result.ready = !result.harness_conflicts.hard_block && nodeOk && Boolean(codex.bin) && install.ok && result.sneakoscope.ok && result.context7.ok && appRuntime.ok && result.runtime.warp.ok && result.harness_guard.ok && result.versioning.ok && result.db_guard.ok && result.codex_app.ok && result.skills.ok && result.global_skills.ok;
   if (result.harness_conflicts.hard_block) process.exitCode = 1;
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log('ㅅㅋㅅ Doctor\n');
@@ -1748,7 +1736,7 @@ async function doctor(args) {
   console.log(`State:     ${result.sneakoscope.ok ? 'ok' : 'missing .sneakoscope'}`);
   console.log(`Context7:  ${result.context7.ok ? 'ok' : 'missing MCP config'} project=${result.context7.project.ok ? 'ok' : 'missing'} global=${result.context7.global.ok ? 'ok' : 'missing'}`);
   console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser Use=${appRuntime.mcp.has_browser_use ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'}`);
-  console.log(`cmux:      ${cmuxStatusKind(result.runtime.cmux)} ${result.runtime.cmux.version || result.runtime.cmux.error || ''}`.trimEnd());
+  console.log(`warp:      ${warpStatusKind(result.runtime.warp)} ${result.runtime.warp.version || result.runtime.warp.error || ''}`.trimEnd());
   console.log(`Guard:     ${result.harness_guard.ok ? 'ok' : 'blocked'}${result.harness_guard.source_exception ? ' source-exception' : ''}`);
   console.log(`Version:   ${result.versioning.ok ? 'ok' : 'missing'}${result.versioning.enabled ? ` ${result.versioning.package_version || ''}` : ` ${result.versioning.reason || 'disabled'}`}`);
   console.log(`DB Guard:  ${result.db_guard.ok ? 'ok' : 'blocked'} ${dbScan.findings?.length || 0} finding(s)`);
@@ -1765,13 +1753,13 @@ async function doctor(args) {
   if (result.harness_conflicts.hard_block) console.log(`\n${formatHarnessConflictReport(conflictScan)}`);
   if (!result.context7.ok) console.log('Context7 MCP missing. Run: sks context7 setup --scope project');
   if (!appRuntime.ok) console.log('Codex App or first-party MCP/plugin tools missing. Run: sks codex-app check');
-  if (!result.runtime.cmux.ok) console.log(result.runtime.cmux.bin ? 'cmux app/socket unhealthy. Run: sks cmux check' : 'cmux missing. Run: sks deps install cmux');
+  if (!result.runtime.warp.ok) console.log('Warp missing. Run: sks deps install warp');
   if (!result.harness_guard.ok) console.log('Harness guard failed. Run: sks setup from a real terminal, then sks guard check.');
   if (!result.versioning.ok) console.log('Versioning hook missing. Run: sks versioning hook, or sks doctor --fix.');
   if (!result.skills.ok) console.log(`Missing skills: ${result.skills.missing.join(', ')}. Run: sks setup`);
   if (!result.global_skills.ok) console.log(`Missing global $ skills: ${result.global_skills.missing.join(', ')}. Run: npm i -g sneakoscope, or sks setup from a non-local-only run.`);
   const blocked = [];
-  if (!result.runtime.cmux.ok) blocked.push([result.runtime.cmux.bin ? 'cmux app/socket is unhealthy' : 'cmux is missing', result.runtime.cmux.bin ? 'sks cmux check' : 'sks deps install cmux']);
+  if (!result.runtime.warp.ok) blocked.push(['Warp is missing', 'sks deps install warp']);
   if (!appRuntime.ok) blocked.push(['Codex App or first-party MCP/plugin tools need setup', 'sks codex-app check']);
   if (blocked.length) {
     console.log('\nBlocked:');
@@ -2034,7 +2022,7 @@ async function selftest() {
   if (!bootstrapResult.project_setup?.ok || typeof bootstrapResult.ready !== 'boolean') throw new Error('selftest failed: bootstrap json did not report project setup and ready boolean');
   const depsCheck = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'deps', 'check', '--json'], { cwd: bootstrapJsonTmp, env: { HOME: path.join(bootstrapJsonTmp, 'home') }, timeoutMs: 20000, maxOutputBytes: 256 * 1024 });
   const depsResult = JSON.parse(depsCheck.stdout);
-  if (!depsResult.node?.ok || !('cmux' in depsResult) || !('homebrew' in depsResult)) throw new Error('selftest failed: deps check json missing expected fields');
+  if (!depsResult.node?.ok || !('warp' in depsResult) || !('homebrew' in depsResult)) throw new Error('selftest failed: deps check json missing expected fields');
   const globalCwd = tmpdir();
   const globalRuntimeRoot = path.join(tmpdir(), 'sks-global-root');
   const globalRootProbe = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'root', '--json'], { cwd: globalCwd, env: { SKS_GLOBAL_ROOT: globalRuntimeRoot }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
@@ -2053,21 +2041,18 @@ async function selftest() {
   if (madProfile.profile_name !== 'sks-mad-high' || !madProfileText.includes('sandbox_mode = "danger-full-access"') || !madProfileText.includes('approval_policy = "on-request"') || !madProfileText.includes('approvals_reviewer = "auto_review"') || !madProfileText.includes('model_reasoning_effort = "high"') || !madProfileText.includes('unrequested fallback implementation code')) throw new Error('selftest failed: MAD high profile is not full-access auto-review high with fallback-code guard');
   if (!isMadHighLaunch(['--mad', '--high']) || isMadHighLaunch(['db', '--mad'])) throw new Error('selftest failed: MAD high launch flag parsing is not top-level only');
   const workspacePlan = { workspace: 'sks-mad-selftest', root: tmp, codexArgs: ['--profile', 'sks-mad-high'] };
-  const workspaceArgs = buildCmuxNewWorkspaceArgs(workspacePlan, 'codex');
-  if (!workspaceArgs.includes('--name') || !workspaceArgs.includes('sks-mad-selftest') || !workspaceArgs.includes('--description')) throw new Error('selftest failed: MAD cmux workspace is not named for reuse');
-  const workspaceList = parseCmuxWorkspaceList(JSON.stringify({ workspaces: [
-    { id: 'keep-id', ref: 'workspace:1', name: 'sks-mad-selftest', cwd: tmp },
-    { id: 'other-id', ref: 'workspace:2', name: 'other', cwd: tmp }
-  ] }));
-  const workspaceMatches = matchingCmuxWorkspaces(workspaceList, workspacePlan);
-  if (workspaceMatches.length !== 1 || cmuxWorkspaceRef(workspaceMatches[0]) !== 'workspace:1') throw new Error('selftest failed: MAD cmux workspace reuse matching did not select the stable workspace');
-  if (cmuxWorkspaceRefFromText('OK workspace:3') !== 'workspace:3') throw new Error('selftest failed: cmux workspace ref parser did not read cmux OK output');
-  if (cmuxSurfaceRefFromText('OK surface:6 workspace:5') !== 'surface:6') throw new Error('selftest failed: cmux surface ref parser did not read split output');
-  await writeCmuxWorkspaceRecord(workspacePlan, { ref: 'workspace:7', name: 'sks-mad-selftest', cwd: tmp });
-  const workspaceRecord = await readCmuxWorkspaceRecord(workspacePlan);
-  if (workspaceRecord?.ref !== 'workspace:7' || workspaceRecord.workspace !== 'sks-mad-selftest') throw new Error('selftest failed: MAD cmux workspace record was not persisted for stable reuse');
-  if (cmuxStatusKind({ ok: false, bin: '/tmp/cmux', error: 'Broken pipe' }) !== 'unhealthy') throw new Error('selftest failed: cmux socket failure was not labeled unhealthy');
-  if (cmuxStatusKind({ ok: false, bin: null }) !== 'missing') throw new Error('selftest failed: missing cmux was not labeled missing');
+  const warpLaunchYaml = buildWarpLaunchConfigYaml({ ...workspacePlan, command: 'codex', title: 'sks-mad-selftest' }, [{ cwd: tmp, command: 'codex --profile sks-mad-high', focused: true }]);
+  const warpSyntax = runWarpLaunchConfigSyntaxCheck(warpLaunchYaml);
+  if (!warpSyntax.ok || !warpLaunchYaml.includes('name: "sks-mad-selftest"') || !warpLaunchYaml.includes('commands:')) throw new Error('selftest failed: MAD Warp launch configuration was not generated with name and command');
+  const warpOpenArgs = buildWarpOpenArgs(workspacePlan);
+  if (!warpOpenArgs.includes('open') || !warpOpenArgs.some((arg) => String(arg).includes('warp://launch/sks-mad-selftest.yaml'))) throw new Error('selftest failed: MAD Warp launch URI is not stable by workspace name');
+  const oldWarpConfigDir = process.env.SKS_WARP_LAUNCH_CONFIG_DIR;
+  process.env.SKS_WARP_LAUNCH_CONFIG_DIR = path.join(tmp, 'warp-launch-configs');
+  const writtenWarpConfig = await writeWarpLaunchConfig({ ...workspacePlan, command: 'codex', title: 'sks-mad-selftest' }, [{ cwd: tmp, command: 'codex --profile sks-mad-high', focused: true }]);
+  if (!(await exists(writtenWarpConfig.config_path)) || !writtenWarpConfig.record.launch_uri.includes('warp://launch/')) throw new Error('selftest failed: Warp launch configuration was not persisted for URI launch');
+  if (oldWarpConfigDir === undefined) delete process.env.SKS_WARP_LAUNCH_CONFIG_DIR;
+  else process.env.SKS_WARP_LAUNCH_CONFIG_DIR = oldWarpConfigDir;
+  if (warpStatusKind({ ok: false, bin: null }) !== 'missing') throw new Error('selftest failed: missing warp was not labeled missing');
   const guardBlocked = await checkHarnessModification(tmp, { tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
   if (guardBlocked.action !== 'block') throw new Error('selftest failed: harness guard allowed skill tampering');
   const setupBlocked = await checkHarnessModification(tmp, { command: 'sks setup --force' });
@@ -2816,13 +2801,12 @@ async function selftest() {
   if (roleTeamPlan.roster.analysis_team.length !== 5) throw new Error('selftest failed: executor role count not reflected in analysis scout team');
   if (roleTeamPlan.roster.development_team.filter((agent) => agent.role === 'executor').length !== 5) throw new Error('selftest failed: executor role count not reflected in development team');
   if (!roleTeamPlan.roster.debate_team.some((agent) => /inconvenience/.test(agent.persona))) throw new Error('selftest failed: user friction persona missing from debate team');
-  const cmuxTeam = await launchCmuxTeamView({ root: tmp, missionId: teamId, plan: roleTeamPlan, json: true });
-  if (!cmuxTeam.agents?.length || !cmuxTeam.agents.some((entry) => entry.agent === 'analysis_scout_1') || !cmuxTeam.agents.every((entry) => String(entry.command || '').includes('team lane') && String(entry.command || '').includes('--agent'))) throw new Error('selftest failed: Team cmux view did not expose agent live lanes');
-  if (!cmuxTeam.overview?.command?.includes('team watch') || !cmuxTeam.lanes?.some((entry) => entry.role === 'overview') || !cmuxTeam.lanes?.some((entry) => entry.agent === 'analysis_scout_1')) throw new Error('selftest failed: Team cmux view did not expose orchestration overview plus agent lanes');
-  if (teamLaneStyle('analysis_scout_1').role !== 'scout' || teamLaneStyle('executor_1').role !== 'execution' || teamLaneStyle('reviewer_1').role !== 'review') throw new Error('selftest failed: Team cmux role palette did not classify lane roles');
-  if (cmuxTeam.cleanup_policy !== 'collapse-agent-lanes-to-overview' || !cmuxTeam.lanes.every((entry) => entry.style?.color && entry.title)) throw new Error('selftest failed: Team cmux view did not expose color/title metadata and cleanup policy');
-  const cmuxTeamWorkspaceArgs = buildCmuxNewWorkspaceArgs({ root: tmp, workspace: `sks-team-${teamId}` }, cmuxTeam.overview.command);
-  if (!cmuxTeamWorkspaceArgs.includes('--name') || !cmuxTeamWorkspaceArgs.includes(`sks-team-${teamId}`)) throw new Error('selftest failed: Team cmux workspace is not named for visibility');
+  const warpTeam = await launchWarpTeamView({ root: tmp, missionId: teamId, plan: roleTeamPlan, json: true });
+  if (!warpTeam.agents?.length || !warpTeam.agents.some((entry) => entry.agent === 'analysis_scout_1') || !warpTeam.agents.every((entry) => String(entry.command || '').includes('team lane') && String(entry.command || '').includes('--agent'))) throw new Error('selftest failed: Team warp view did not expose agent live lanes');
+  if (!warpTeam.overview?.command?.includes('team watch') || !warpTeam.lanes?.some((entry) => entry.role === 'overview') || !warpTeam.lanes?.some((entry) => entry.agent === 'analysis_scout_1')) throw new Error('selftest failed: Team warp view did not expose orchestration overview plus agent lanes');
+  if (teamLaneStyle('analysis_scout_1').role !== 'scout' || teamLaneStyle('executor_1').role !== 'execution' || teamLaneStyle('reviewer_1').role !== 'review') throw new Error('selftest failed: Team warp role palette did not classify lane roles');
+  if (!String(warpTeam.cleanup_policy || '').includes('mark-complete') || !warpTeam.lanes.every((entry) => entry.style?.color && entry.title)) throw new Error('selftest failed: Team warp view did not expose color/title metadata and cleanup policy');
+  if (!warpTeam.launch_uri?.includes(encodeURIComponent(`sks-team-${teamId}.yaml`))) throw new Error('selftest failed: Team warp launch URI is not named for visibility');
   if (routeReasoning(routePrompt('$Research frontier idea'), '$Research frontier idea').effort !== 'xhigh') throw new Error('selftest failed: research reasoning not xhigh');
   if (routeReasoning(routePrompt('$From-Chat-IMG 채팅 이미지 작업'), '$From-Chat-IMG 채팅 이미지 작업').effort !== 'xhigh') throw new Error('selftest failed: From-Chat-IMG reasoning not xhigh');
   if (routeReasoning(routePrompt('$DB migration'), '$DB migration').effort !== 'high') throw new Error('selftest failed: logical reasoning not high');
@@ -2939,7 +2923,7 @@ async function selftest() {
   if (!evalReport.candidate.wiki?.valid) throw new Error('selftest failed: wiki coordinate index invalid in eval');
   if (evalReport.candidate.wiki?.voxel_schema !== 'sks.wiki-voxel.v1' || evalReport.candidate.wiki?.voxel_rows < 1) throw new Error('selftest failed: eval did not include voxel overlay metrics');
   const harnessReport = harnessGrowthReport({});
-  if (!harnessReport.forgetting.fixture.passed || !harnessReport.cmux.views.includes('Harness Experiments View') || !harnessReport.reliability.tool_error_taxonomy.includes('Unknown')) throw new Error('selftest failed: harness growth fixture incomplete');
+  if (!harnessReport.forgetting.fixture.passed || !harnessReport.warp.views.includes('Harness Experiments View') || !harnessReport.reliability.tool_error_taxonomy.includes('Unknown')) throw new Error('selftest failed: harness growth fixture incomplete');
   if (classifyToolError({ message: 'operation timed out' }) !== 'Timeout' || classifyToolError({ message: 'unclassified weirdness' }) !== 'Unknown') throw new Error('selftest failed: tool error taxonomy classification');
   const coord = rgbaToWikiCoord({ r: 12, g: 34, b: 56, a: 255 });
   if (coord.schema !== 'sks.wiki-coordinate.v1' || coord.xyzw.length !== 4) throw new Error('selftest failed: RGBA wiki coordinate conversion');

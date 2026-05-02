@@ -17,7 +17,7 @@ import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
 import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, ROUTES, hasFromChatImgSignal, routePrompt, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
-import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamWatch } from '../core/team-live.mjs';
+import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested } from '../core/team-live.mjs';
 import { ARTIFACT_FILES, writeValidationReport } from '../core/artifact-schemas.mjs';
 import { writeEffortDecision } from '../core/effort-orchestrator.mjs';
 import { createWorkOrderLedger, writeWorkOrderLedger } from '../core/work-order-ledger.mjs';
@@ -27,7 +27,7 @@ import { runPerfBench } from '../core/perf-bench.mjs';
 import { GOAL_BRIDGE_ARTIFACT, GOAL_WORKFLOW_ARTIFACT, updateGoalWorkflow, writeGoalWorkflow } from '../core/goal-workflow.mjs';
 import { scanCodeStructure, writeCodeStructureReport } from '../core/code-structure.mjs';
 import { writeMemorySweepReport } from '../core/memory-governor.mjs';
-import { cleanupCmuxTeamView, launchCmuxTeamView } from '../core/cmux-ui.mjs';
+import { cleanupWarpTeamView, launchWarpTeamView } from '../core/warp-ui.mjs';
 import { writeSkillForgeReport } from '../core/skill-forge.mjs';
 import { writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
 import { scanDbSafety } from '../core/db-safety.mjs';
@@ -435,7 +435,7 @@ export async function harnessCommand(sub, args = []) {
   if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
   console.log('SKS Harness Growth');
   console.log(`Forgetting fixture: ${report.forgetting.fixture.passed ? 'pass' : 'fail'}`);
-  console.log(`Cmux views: ${report.cmux.views.length}`);
+  console.log(`Warp views: ${report.warp.views.length}`);
   console.log(`Tool taxonomy: ${report.reliability.tool_error_taxonomy.join(', ')}`);
   console.log(`Unknown errors recorded as bugs: ${report.reliability.unknown_errors_are_bugs ? 'yes' : 'no'}`);
 }
@@ -954,7 +954,7 @@ function userRequestSignal(prompt = '') {
   const topicRules = [
     ['ambiguity-questions', /모호|ambiguity|clarification|질문|답변|answers?\.json|decision-contract|추론|예측/],
     ['triwiki-priority-memory', /triwiki|wiki|메모리|memory|기억|우선|반복|자주|카운팅|count|frequency|weight/],
-    ['install-bootstrap', /bootstrap|postinstall|doctor|deps|cmux|homebrew|최초\s*설치|셋업|setup/],
+    ['install-bootstrap', /bootstrap|postinstall|doctor|deps|warp|homebrew|최초\s*설치|셋업|setup/],
     ['version-release', /버전|version|publish:dry|release|npm\s+pack/],
     ['qa-loop', /qa|e2e|검증|리포트|report/],
     ['team-pipeline', /team|subagent|세션|cleanup|reflection|회고|반성/],
@@ -1194,14 +1194,15 @@ export async function gxCommand(sub, args) {
 }
 
 export async function team(args) {
-  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'cleanup-cmux']);
+  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'cleanup-warp']);
   if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
   const opts = parseTeamCreateArgs(args);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   if (!prompt) {
     console.error('Usage: sks team "task" [executor:5 reviewer:2 user:1] [--agents N] [--json]');
-    console.error('       sks team log|tail|watch|lane|status|cleanup-cmux [mission-id|latest]');
+    console.error('       sks team log|tail|watch|lane|status|message|cleanup-warp [mission-id|latest]');
     console.error('       sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
+    console.error('       sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."');
     process.exitCode = 1;
     return;
   }
@@ -1261,7 +1262,7 @@ export async function team(args) {
     questions: path.join(dir, 'questions.md'),
     codex_agents: ['analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']
   };
-  result.cmux = await launchCmuxTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: flag(args, '--json') });
+  result.warp = await launchWarpTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: flag(args, '--json') });
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
   console.log(`Plan: ${path.relative(root, result.plan)}`);
@@ -1271,10 +1272,10 @@ export async function team(args) {
   console.log(`Runtime graph: ${path.relative(root, result.team_graph)}`);
   console.log(`Worker inbox: ${path.relative(root, result.worker_inbox_dir)}`);
   console.log(`Live: ${path.relative(root, result.live)}`);
-  if (result.cmux.ready) console.log(`cmux: ${result.cmux.created ? 'opened' : 'ready'} ${result.cmux.opened_lane_count || result.cmux.agents.length} agent lane(s) in ${result.cmux.workspace_ref || result.cmux.workspace}`);
-  else console.log(`cmux: blocked (${Array.from(new Set(result.cmux.blockers || [])).join('; ')})`);
+  if (result.warp.ready) console.log(`warp: ${result.warp.created ? 'opened' : 'ready'} ${result.warp.opened_lane_count || result.warp.agents.length} agent lane(s) in ${result.warp.workspace_ref || result.warp.workspace}`);
+  else console.log(`warp: blocked (${Array.from(new Set(result.warp.blockers || [])).join('; ')})`);
   console.log(`Watch: sks team watch ${id}`);
-  console.log('Use $Team in Codex App or the cmux lanes from this CLI flow to run scouts, debate/consensus, runtime graph/inbox handoff, then a fresh implementation team with disjoint ownership.');
+  console.log('Use $Team in Codex App or the Warp launch view from this CLI flow to run scouts, debate/consensus, runtime graph/inbox handoff, then a fresh implementation team with disjoint ownership.');
 }
 
 export function parseTeamCreateArgs(args) {
@@ -1421,14 +1422,16 @@ export function buildTeamPlan(id, prompt, opts = {}) {
       markdown: 'team-live.md',
       transcript: 'team-transcript.jsonl',
       dashboard: 'team-dashboard.json',
-      cmux: 'sks team opens a cmux workspace with one live multi-line lane per visible Team agent budget when cmux is available.',
+      warp: 'sks team opens a warp workspace with one live multi-line lane per visible Team agent budget when warp is available.',
       commands: [
         'sks team status <mission-id>',
         'sks team log <mission-id>',
         'sks team tail <mission-id>',
         'sks team watch <mission-id>',
         'sks team lane <mission-id> --agent <name> --follow',
-        'sks team event <mission-id> --agent <name> --phase <phase> --message "..."'
+        'sks team event <mission-id> --agent <name> --phase <phase> --message "..."',
+        'sks team message <mission-id> --from <agent> --to <agent|all> --message "..."',
+        'sks team cleanup-warp <mission-id>'
       ]
     },
     required_artifacts: requiredArtifacts,
@@ -1539,27 +1542,66 @@ async function teamCommand(sub, args) {
       artifact: readFlagValue(args, '--artifact', ''),
       message
     });
-    const cmuxCleanup = /^session_cleanup$|^team_cleanup$|^cleanup$/i.test(String(phase || ''))
-      ? await cleanupCmuxTeamView({ root, missionId: id, closeWorkspace: flag(args, '--close-workspace') }).catch((err) => ({ ok: false, reason: err.message || 'cmux cleanup failed' }))
+    const warpCleanup = /^session_cleanup$|^team_cleanup$|^cleanup$/i.test(String(phase || ''))
+      ? await requestTeamSessionCleanup(dir, {
+        missionId: id,
+        agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
+        reason: message,
+        finalMessage: 'Team cleanup event received. Follow panes may stop; Warp panes remain user-controlled.'
+      }).then(() => cleanupWarpTeamView({ root, missionId: id, closeWorkspace: flag(args, '--close-workspace') })).catch((err) => ({ ok: false, reason: err.message || 'warp cleanup failed' }))
       : null;
     if (flag(args, '--json')) return console.log(JSON.stringify(record, null, 2));
     console.log(`${record.ts} [${record.phase}] ${record.agent}: ${record.message}`);
-    if (cmuxCleanup) {
-      if (cmuxCleanup.ok) console.log(`cmux cleanup: collapsed ${cmuxCleanup.closed_surfaces || 0} agent pane(s), kept overview ${cmuxCleanup.kept_surface || cmuxCleanup.workspace_ref}`);
-      else console.log(`cmux cleanup: skipped (${cmuxCleanup.reason || 'not available'})`);
+    if (warpCleanup) {
+      if (warpCleanup.ok) console.log(`warp cleanup: marked complete (${warpCleanup.reason || 'record updated'})`);
+      else console.log(`warp cleanup: skipped (${warpCleanup.reason || 'not available'})`);
     }
     return;
   }
-  if (sub === 'cleanup-cmux') {
-    const cleanup = await cleanupCmuxTeamView({ root, missionId: id, closeWorkspace: flag(args, '--close-workspace') || flag(args, '--close') });
+  if (sub === 'message') {
+    const message = readFlagValue(args, '--message', '');
+    if (!message) {
+      console.error('Usage: sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."');
+      process.exitCode = 1;
+      return;
+    }
+    const from = readFlagValue(args, '--from', readFlagValue(args, '--agent', 'parent_orchestrator'));
+    const to = readFlagValue(args, '--to', 'all');
+    const record = await appendTeamEvent(dir, {
+      agent: from,
+      to,
+      phase: readFlagValue(args, '--phase', 'communication'),
+      type: 'message',
+      message
+    });
+    if (flag(args, '--json')) return console.log(JSON.stringify(record, null, 2));
+    console.log(`${record.ts} [${record.phase}] ${record.agent} -> ${record.to}: ${record.message}`);
+    return;
+  }
+  if (sub === 'cleanup-warp') {
+    const control = await requestTeamSessionCleanup(dir, {
+      missionId: id,
+      agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
+      reason: readFlagValue(args, '--reason', 'Team session ended; clean up live follow panes.'),
+      finalMessage: 'Team session ended. Lane/watch follow loops will stop after showing this cleanup summary; Warp panes remain user-controlled.'
+    });
+    await appendTeamEvent(dir, {
+      agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
+      phase: 'session_cleanup',
+      type: 'cleanup',
+      message: control.cleanup_reason || 'Team session cleanup requested.'
+    });
+    const cleanup = await cleanupWarpTeamView({ root, missionId: id, closeWorkspace: flag(args, '--close-workspace') || flag(args, '--close') });
+    cleanup.control = control;
     if (flag(args, '--json')) return console.log(JSON.stringify(cleanup, null, 2));
     if (!cleanup.ok) {
-      console.error(`cmux cleanup skipped: ${cleanup.reason || 'not available'}`);
+      console.error(`warp cleanup skipped: ${cleanup.reason || 'not available'}`);
       process.exitCode = cleanup.skipped ? 0 : 2;
       return;
     }
-    if (cleanup.close_workspace) console.log(`cmux cleanup: closed Team workspace ${cleanup.workspace_ref}`);
-    else console.log(`cmux cleanup: collapsed ${cleanup.closed_surfaces}/${cleanup.requested_close_surfaces} agent pane(s), kept overview ${cleanup.kept_surface || cleanup.workspace_ref}`);
+    if (cleanup.removed_config) console.log(`warp cleanup: removed generated launch config ${cleanup.config_path}`);
+    else console.log(`warp cleanup: marked complete (${cleanup.reason || 'record updated'})`);
+    console.log(renderTeamCleanupSummary(control));
     return;
   }
   if (sub === 'status') {
@@ -1600,7 +1642,7 @@ async function teamCommand(sub, args) {
       return text;
     };
     let last = await printLane();
-    if (flag(args, '--follow')) {
+    if (flag(args, '--follow') && !teamCleanupRequested(await readTeamControl(dir))) {
       for (;;) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
         const next = await renderTeamAgentLane(dir, { missionId: id, agent, phase, lines });
@@ -1610,6 +1652,7 @@ async function teamCommand(sub, args) {
           console.log(next);
           last = next;
         }
+        if (teamCleanupRequested(await readTeamControl(dir))) return;
       }
     }
     return;
@@ -1625,7 +1668,7 @@ async function teamCommand(sub, args) {
       for (const line of await readTeamTranscriptTail(dir, Number(lines))) console.log(line);
     };
     await printTail();
-    if (sub === 'watch' && flag(args, '--follow')) {
+    if (sub === 'watch' && flag(args, '--follow') && !teamCleanupRequested(await readTeamControl(dir))) {
       let last = flag(args, '--raw')
         ? (await readTeamTranscriptTail(dir, Number(lines))).join('\n')
         : await renderTeamWatch(dir, { missionId: id, lines: Number(lines) });
@@ -1640,6 +1683,7 @@ async function teamCommand(sub, args) {
           console.log(next);
           last = next;
         }
+        if (teamCleanupRequested(await readTeamControl(dir))) return;
       }
     }
     return;

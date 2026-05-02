@@ -82,7 +82,7 @@ export const DEFAULT_MULTIAGENT_V2 = Object.freeze({
   subagent_output: 'structured_summary_only'
 });
 
-export const CMUX_COCKPIT_VIEWS = Object.freeze([
+export const WARP_COCKPIT_VIEWS = Object.freeze([
   'Mission / Goal View',
   'Agent Grid View',
   'MultiAgentV2 Graph View',
@@ -287,8 +287,8 @@ export function harnessGrowthReport(input = {}) {
       goal_checkpoint_required_fields: ['goal_id', 'phase', 'summary', 'completed_checkboxes', 'open_checkboxes', 'blockers', 'evidence'],
       external_session_import: 'structured_summary_only_with_utility_score_and_forgetting_metadata'
     },
-    cmux: {
-      views: CMUX_COCKPIT_VIEWS,
+    warp: {
+      views: WARP_COCKPIT_VIEWS,
       status_terms: ['idle', 'planning', 'exploring', 'implementing', 'waiting_for_tool', 'waiting_for_approval', 'dogfooding', 'verifying', 'summarizing', 'blocked', 'failed', 'completed', 'paused', 'resuming']
     },
     reliability: {

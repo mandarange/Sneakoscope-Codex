@@ -78,7 +78,7 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
     .trim();
   const version = String(text || '').match(/\bv?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1] || null;
   const versionWork = /버전|version|bump|release|publish:dry|npm\s+pack/.test(lower);
-  const installWork = /bootstrap|postinstall|doctor|deps|cmux|homebrew|first install|최초\s*설치|설치\s*ux|셋업|setup/.test(lower);
+  const installWork = /bootstrap|postinstall|doctor|deps|warp|homebrew|first install|최초\s*설치|설치\s*ux|셋업|setup/.test(lower);
   const questionGateWork = /모호|ambiguity|clarification|질문|triwiki|추론|infer|predict|예측|answers?\.json|decision-contract/.test(lower);
   const prioritySignalWork = /화|짜증|답답|;;|!!|강력|기억|우선|자주|반복|카운팅|count|frequency|frequent|priority|weight/.test(lower);
   const cliSurfaceWork = /\b(cli|command|route|usage|help|sks)\b|명령|커맨드|사용법/.test(lower);

@@ -20,7 +20,7 @@ export const ARTIFACT_FILES = {
   harness_growth_report: 'harness-growth-report.json',
   code_structure_report: 'code-structure-report.json',
   team_dashboard_state: 'team-dashboard-state.json',
-  cmux_pane_plan: 'cmux-pane-plan.json',
+  warp_pane_plan: 'warp-pane-plan.json',
   final_honest_mode_report: 'final-honest-mode-report.json'
 };
 
@@ -170,12 +170,12 @@ export function validateHarnessGrowthReport(data = {}) {
   pushMissing(errors, isObj(data.skills), 'skills_missing');
   pushMissing(errors, isObj(data.experiments), 'experiments_missing');
   pushMissing(errors, isObj(data.codex_native), 'codex_native_missing');
-  pushMissing(errors, isObj(data.cmux), 'cmux_missing');
+  pushMissing(errors, isObj(data.warp), 'warp_missing');
   pushMissing(errors, isObj(data.reliability), 'reliability_missing');
   if (data.forgetting?.fixture?.passed !== true) errors.push('forgetting_fixture_failed');
   if (!Array.isArray(data.reliability?.tool_error_taxonomy) || !data.reliability.tool_error_taxonomy.includes('Unknown')) errors.push('tool_error_taxonomy_missing_unknown');
   if (data.reliability?.unknown_errors_are_bugs !== true) errors.push('unknown_errors_not_marked_bug');
-  if (!Array.isArray(data.cmux?.views) || data.cmux.views.length < 10) errors.push('cmux_views_incomplete');
+  if (!Array.isArray(data.warp?.views) || data.warp.views.length < 10) errors.push('warp_views_incomplete');
   return validationResult('HarnessGrowthReport', errors);
 }
 
@@ -202,12 +202,12 @@ export function validateTeamDashboardState(data = {}) {
   return validationResult('TeamDashboardState', errors);
 }
 
-export function validateCmuxPanePlan(data = {}) {
+export function validateWarpPanePlan(data = {}) {
   const errors = [];
   pushMissing(errors, nonEmpty(data.mission_id), 'mission_id_missing');
   pushMissing(errors, Array.isArray(data.panes), 'panes_not_array');
   if (arr(data.panes).some((pane) => !nonEmpty(pane.name) || !nonEmpty(pane.command))) errors.push('pane_missing_name_or_command');
-  return validationResult('CmuxPanePlan', errors);
+  return validationResult('WarpPanePlan', errors);
 }
 
 export function validateFinalHonestModeReport(data = {}) {
@@ -233,7 +233,7 @@ export const ARTIFACT_VALIDATORS = {
   harness_growth_report: validateHarnessGrowthReport,
   code_structure_report: validateCodeStructureReport,
   team_dashboard_state: validateTeamDashboardState,
-  cmux_pane_plan: validateCmuxPanePlan,
+  warp_pane_plan: validateWarpPanePlan,
   final_honest_mode_report: validateFinalHonestModeReport
 };
 

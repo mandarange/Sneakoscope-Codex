@@ -312,7 +312,7 @@ async function prepareTeam(root, route, task, required) {
       markdown: 'team-live.md',
       transcript: 'team-transcript.jsonl',
       dashboard: 'team-dashboard.json',
-      cmux: 'CLI Team entrypoints open cmux live lanes for the visible Team agent budget when cmux is available.',
+      warp: 'CLI Team entrypoints open warp live lanes for the visible Team agent budget when warp is available.',
       commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow', 'sks team event latest --agent <name> --phase <phase> --message "..."']
     },
     required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']

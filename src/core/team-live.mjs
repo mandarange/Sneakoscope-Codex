@@ -41,7 +41,8 @@ export function teamLogPaths(dir) {
   return {
     live: path.join(dir, 'team-live.md'),
     transcript: path.join(dir, 'team-transcript.jsonl'),
-    dashboard: path.join(dir, 'team-dashboard.json')
+    dashboard: path.join(dir, 'team-dashboard.json'),
+    control: path.join(dir, 'team-control.json')
   };
 }
 
@@ -69,7 +70,9 @@ export function defaultTeamDashboard(id, prompt, opts = {}) {
       tail: `sks team tail ${id}`,
       watch: `sks team watch ${id}`,
       lane: `sks team lane ${id} --agent <agent> --follow`,
-      event: `sks team event ${id} --agent <agent> --phase <phase> --message "..."`
+      event: `sks team event ${id} --agent <agent> --phase <phase> --message "..."`,
+      message: `sks team message ${id} --from <agent> --to <agent|all> --message "..."`,
+      cleanup: `sks team cleanup-warp ${id}`
     },
     agents: Object.fromEntries([...new Set([...DEFAULT_AGENTS, ...spec.roster.all_agents.map((agent) => agent.id)])].map((name) => [name, { status: 'pending', phase: null, last_seen: null }])),
     phases: ['parallel_analysis_scouting', 'triwiki_refresh', 'debate_team', 'triwiki_refresh_after_consensus', 'parallel_development_team', 'triwiki_refresh_after_implementation', 'strict_review_and_user_acceptance', 'session_cleanup'],
@@ -95,7 +98,7 @@ ${prompt}
 
 ## How to Read
 
-- This file is the Codex App-visible replacement for cmux-style team panes.
+- This file is the Codex App-visible replacement for warp-style team panes.
 - Use at most ${spec.agentSessions} subagent sessions at a time unless the mission is recreated with a different budget.
 - Team mode has three bundles: parallel analysis scouts first, debate team second, then fresh parallel development team.
 - Use relevant TriWiki context before every stage, hydrate low-trust claims from source during the stage, refresh after findings/artifact changes, and validate before handoffs or final claims.
@@ -119,6 +122,8 @@ sks team tail ${id}
 sks team watch ${id}
 sks team lane ${id} --agent analysis_scout_1 --follow
 sks team event ${id} --agent analysis_scout_1 --phase parallel_analysis_scouting --message "mapped repo slice"
+sks team message ${id} --from analysis_scout_1 --to executor_1 --message "handoff note"
+sks team cleanup-warp ${id}
 \`\`\`
 
 ## Roster
@@ -142,10 +147,24 @@ ${spec.roster.validation_team.map((agent) => `- ${agent.id}: ${agent.persona}`).
 export async function initTeamLive(id, dir, prompt, opts = {}) {
   const files = teamLogPaths(dir);
   await writeJsonAtomic(files.dashboard, defaultTeamDashboard(id, prompt, opts));
+  await writeJsonAtomic(files.control, defaultTeamControl(id));
   await writeTextAtomic(files.live, teamLiveMarkdown(id, prompt, opts));
   await writeTextAtomic(files.transcript, '');
   await appendTeamEvent(dir, { agent: 'parent_orchestrator', phase: 'mission_created', type: 'status', message: 'Team mission created and live transcript initialized.' });
   return files;
+}
+
+export function defaultTeamControl(id) {
+  return {
+    schema_version: 1,
+    mission_id: id,
+    status: 'running',
+    cleanup_requested: false,
+    cleanup_requested_at: null,
+    cleanup_requested_by: null,
+    cleanup_reason: null,
+    final_message: null
+  };
 }
 
 export function normalizeTeamAgentSessions(value, fallback = 3) {
@@ -322,9 +341,49 @@ export async function appendTeamEvent(dir, event) {
     await writeJsonAtomic(files.dashboard, dashboard);
   }
   const current = await readText(files.live, teamLiveMarkdown('unknown', 'unknown'));
-  const line = `\n- ${record.ts} [${record.phase || 'general'}] ${record.agent || 'unknown'}: ${record.message || ''}${record.artifact ? ` (${record.artifact})` : ''}\n`;
+  const target = record.to ? ` -> ${record.to}` : '';
+  const line = `\n- ${record.ts} [${record.phase || 'general'}] ${record.agent || 'unknown'}${target}: ${record.message || ''}${record.artifact ? ` (${record.artifact})` : ''}\n`;
   await writeTextAtomic(files.live, trimLiveMarkdown(`${current.trimEnd()}${line}`));
   return record;
+}
+
+export async function readTeamControl(dir) {
+  return readJson(teamLogPaths(dir).control, defaultTeamControl(path.basename(dir)));
+}
+
+export async function requestTeamSessionCleanup(dir, opts = {}) {
+  const files = teamLogPaths(dir);
+  const current = await readTeamControl(dir);
+  const next = {
+    ...defaultTeamControl(current?.mission_id || opts.missionId || path.basename(dir)),
+    ...current,
+    status: 'cleanup_requested',
+    cleanup_requested: true,
+    cleanup_requested_at: opts.ts || nowIso(),
+    cleanup_requested_by: opts.agent || 'parent_orchestrator',
+    cleanup_reason: opts.reason || 'Team session cleanup requested.',
+    final_message: opts.finalMessage || 'Team session ended. Lane follow loops may stop; Warp panes remain user-controlled.'
+  };
+  await writeJsonAtomic(files.control, next);
+  return next;
+}
+
+export function teamCleanupRequested(control = {}) {
+  return Boolean(control?.cleanup_requested || control?.status === 'cleanup_requested' || control?.status === 'ended');
+}
+
+export function renderTeamCleanupSummary(control = {}) {
+  if (!teamCleanupRequested(control)) return '';
+  return [
+    '# SKS Team Session Cleanup',
+    '',
+    `Status: ${control.status || 'cleanup_requested'}`,
+    `Requested at: ${control.cleanup_requested_at || 'unknown'}`,
+    `Requested by: ${control.cleanup_requested_by || 'unknown'}`,
+    `Reason: ${control.cleanup_reason || 'Team session cleanup requested.'}`,
+    '',
+    control.final_message || 'Team session ended. Warp panes remain user-controlled.'
+  ].join('\n');
 }
 
 export async function readTeamDashboard(dir) {
@@ -345,20 +404,26 @@ export async function renderTeamAgentLane(dir, opts = {}) {
   const phase = opts.phase ? String(opts.phase) : null;
   const lines = Math.max(1, Number(opts.lines) || 12);
   const dashboard = await readTeamDashboard(dir);
+  const control = await readTeamControl(dir);
   const runtime = await readJson(path.join(dir, TEAM_RUNTIME_TASKS_ARTIFACT), null);
   const missionId = opts.missionId || dashboard?.mission_id || runtime?.mission_id || path.basename(dir);
   const status = dashboard?.agents?.[agent] || {};
   const runtimeTasks = Array.isArray(runtime?.tasks) ? runtime.tasks : Array.isArray(runtime) ? runtime : [];
   const assignedTasks = runtimeTasks.filter((task) => task?.worker === agent || task?.agent_hint === agent);
   const eventWindow = await readTeamTranscriptTail(dir, Math.max(lines * 8, 80));
-  const agentEvents = eventWindow.map(parseTranscriptLine).filter((event) => event?.agent === agent).slice(-lines);
+  const parsedWindow = eventWindow.map(parseTranscriptLine).filter(Boolean);
+  const agentEvents = parsedWindow.filter((event) => event?.agent === agent || eventAddressedTo(event, agent)).slice(-lines);
+  const directMessages = parsedWindow.filter((event) => event?.type === 'message' && eventAddressedTo(event, agent)).slice(-lines);
   const globalTail = (await readTeamTranscriptTail(dir, lines)).map(parseTranscriptLine).filter(Boolean);
+  const laneStyle = teamLaneTextStyle(agent);
   return [
     `# SKS Team Agent Lane`,
     '',
     `Mission: ${missionId}`,
     `Agent: ${agent}`,
+    `Lane color: ${laneStyle.color_name}`,
     `Requested phase: ${phase || 'any'}`,
+    teamCleanupRequested(control) ? `Cleanup: requested at ${control.cleanup_requested_at || 'unknown'}` : null,
     '',
     `## Agent Status`,
     `- status: ${status.status || 'pending'}`,
@@ -371,14 +436,19 @@ export async function renderTeamAgentLane(dir, opts = {}) {
     `## Recent Agent Events`,
     ...(agentEvents.length ? agentEvents.map(formatTranscriptEvent) : ['- No recent agent-specific events in the bounded tail.']),
     '',
+    `## Direct Messages`,
+    ...(directMessages.length ? directMessages.map(formatTranscriptEvent) : ['- No direct or broadcast messages in the bounded tail.']),
+    '',
     `## Fallback Global Tail`,
-    ...(globalTail.length ? globalTail.map(formatTranscriptEvent) : ['- No transcript events yet.'])
-  ].join('\n');
+    ...(globalTail.length ? globalTail.map(formatTranscriptEvent) : ['- No transcript events yet.']),
+    teamCleanupRequested(control) ? ['', renderTeamCleanupSummary(control)].join('\n') : null
+  ].filter((line) => line !== null).join('\n');
 }
 
 export async function renderTeamWatch(dir, opts = {}) {
   const lines = Math.max(1, Number(opts.lines) || 20);
   const dashboard = await readTeamDashboard(dir);
+  const control = await readTeamControl(dir);
   const runtime = await readJson(path.join(dir, TEAM_RUNTIME_TASKS_ARTIFACT), null);
   const missionId = opts.missionId || dashboard?.mission_id || runtime?.mission_id || path.basename(dir);
   const agents = Object.entries(dashboard?.agents || {});
@@ -394,11 +464,14 @@ export async function renderTeamWatch(dir, opts = {}) {
     `Updated: ${dashboard?.updated_at || 'unknown'}`,
     `Agent session budget: ${dashboard?.agent_session_count || 'unknown'}`,
     dashboard?.role_counts ? `Role counts: ${formatRoleCounts(dashboard.role_counts)}` : null,
+    teamCleanupRequested(control) ? `Cleanup: requested at ${control.cleanup_requested_at || 'unknown'}` : null,
     '',
     '## Split-Screen Map',
     '- This overview pane follows the whole mission transcript.',
-    '- Neighbor cmux panes follow individual `sks team lane ... --agent <name>` views.',
+    '- Neighbor warp panes follow individual `sks team lane ... --agent <name>` views.',
     '- Use `sks team event ...` to mirror scout, debate, executor, review, and verification status into the live panes.',
+    '- Use `sks team message ... --from <agent> --to <agent|all>` for bounded inter-agent communication in transcript/lane views.',
+    '- Use `sks team cleanup-warp ...` at session end; follow loops show cleanup and exit while Warp panes remain user-controlled.',
     '',
     '## Cockpit Views',
     '- Mission / Goal | Agents | MultiAgentV2 | Work Orders | Skills | Memory Health | Forget Queue',
@@ -413,7 +486,8 @@ export async function renderTeamWatch(dir, opts = {}) {
     ...(runtimeTasks.length ? formatRuntimeTasks(runtimeTasks.slice(0, 8)) : ['- team-runtime-tasks.json not available yet.']),
     '',
     '## Recent Mission Events',
-    ...(events.length ? events.map(formatTranscriptEvent) : ['- No transcript events yet.'])
+    ...(events.length ? events.map(formatTranscriptEvent) : ['- No transcript events yet.']),
+    teamCleanupRequested(control) ? ['', renderTeamCleanupSummary(control)].join('\n') : null
   ].filter((line) => line !== null).join('\n');
 }
 
@@ -423,6 +497,7 @@ function normalizeEvent(event = {}) {
     agent: String(event.agent || 'parent_orchestrator'),
     phase: String(event.phase || 'general'),
     type: String(event.type || 'status'),
+    to: event.to ? String(event.to).slice(0, 200) : undefined,
     message: String(event.message || '').slice(0, 4000),
     artifact: event.artifact ? String(event.artifact) : undefined
   };
@@ -442,10 +517,29 @@ function formatTranscriptEvent(event = {}) {
     event.ts || 'no-ts',
     `[${event.phase || 'general'}]`,
     event.agent || 'unknown',
+    event.to ? `-> ${event.to}` : null,
     event.type ? `(${event.type})` : null
   ].filter(Boolean);
   const suffix = event.artifact ? ` (${event.artifact})` : '';
   return `- ${parts.join(' ')}: ${String(event.message || '').slice(0, 500)}${suffix}`;
+}
+
+function eventAddressedTo(event = {}, agent = '') {
+  if (!event?.to) return false;
+  const target = String(event.to || '').trim().toLowerCase();
+  const name = String(agent || '').trim().toLowerCase();
+  return target === name || target === 'all' || target === '*' || target === 'broadcast';
+}
+
+function teamLaneTextStyle(agentId = '') {
+  const id = String(agentId || '').toLowerCase();
+  if (!id || id === 'mission_overview' || id === 'overview') return { role: 'overview', color_name: 'Blue' };
+  if (/analysis|scout/.test(id)) return { role: 'scout', color_name: 'Cyan' };
+  if (/debate|consensus|planner|user/.test(id)) return { role: 'planning', color_name: 'Yellow' };
+  if (/db|safety/.test(id)) return { role: 'safety', color_name: 'Magenta' };
+  if (/review|qa|validation/.test(id)) return { role: 'review', color_name: 'Red' };
+  if (/executor|implementation|worker|developer/.test(id)) return { role: 'execution', color_name: 'Green' };
+  return { role: 'planning', color_name: 'Yellow' };
 }
 
 function formatRuntimeTasks(tasks = []) {

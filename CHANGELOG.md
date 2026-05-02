@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.6.85] - 2026-05-02
+
+### Changed
+
+- Bump the deployment package version after the Warp Team cleanup, message, and color-lane UX work so the next npm release has a fresh patch version.
+
+## [0.6.84] - 2026-05-02
+
+### Changed
+
+- Improve Warp Team sessions with cleanup-aware `watch`/`lane` follow loops, bounded `sks team message` inter-agent communication, terminal titles, and stronger color-coded lane banners.
+
+## [0.6.83] - 2026-05-02
+
+### Changed
+
+- Replace the SKS CLI runtime from cmux to Warp Launch Configurations, including `sks`, `sks warp`, `sks --mad`, dependency checks, doctor/bootstrap readiness, Team live lanes, generated quick references, and README usage.
+- Remove cmux runtime support and its socket/workspace control path from the source tree.
+
 ## [0.6.81] - 2026-05-02
 
 ### Changed
