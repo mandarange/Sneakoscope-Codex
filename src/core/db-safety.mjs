@@ -250,13 +250,14 @@ async function madSksOverrideState(root, state = {}) {
   };
 }
 
-export function evaluateDbSafety({ classification, policy = DEFAULT_DB_SAFETY_POLICY, contract = null, duringRalph = false, madSks = null } = {}) {
+export function evaluateDbSafety({ classification, policy = DEFAULT_DB_SAFETY_POLICY, contract = null, duringNoQuestion = false, madSks = null } = {}) {
   const cls = classification || { level: 'none', reasons: [] };
+  const noQuestion = Boolean(duringNoQuestion);
   const reasons = [];
   const effective = contractAllowsDbWrite(contract || {});
   if (cls.level === 'none') return { allowed: true, action: 'allow', reasons: [], classification: cls };
   if (cls.level === 'safe') return { allowed: true, action: 'allow', reasons: ['read_only_operation'], classification: cls };
-  if (cls.level === 'possible_db') return { allowed: !duringRalph, action: duringRalph ? 'block' : 'warn', reasons: duringRalph ? ['unknown_database_operation_blocked_during_ralph'] : ['unknown_database_operation'], classification: cls };
+  if (cls.level === 'possible_db') return { allowed: !noQuestion, action: noQuestion ? 'block' : 'warn', reasons: noQuestion ? ['unknown_database_operation_blocked_during_no_question_run'] : ['unknown_database_operation'], classification: cls };
   if (madSks?.active && (cls.level === 'write' || cls.level === 'destructive')) {
     if (hasTableRemovalRisk(cls) && !madSks.tableDeleteConfirmed) {
       return {
@@ -364,12 +365,12 @@ export async function loadMissionContract(root, state = {}) {
   return readJson(p, null);
 }
 
-export async function checkDbOperation(root, state, payload, { duringRalph = false } = {}) {
+export async function checkDbOperation(root, state, payload, { duringNoQuestion = false } = {}) {
   const policy = await loadDbSafetyPolicy(root);
   const contract = await loadMissionContract(root, state);
   const classification = classifyToolPayload(payload);
   const madSks = await madSksOverrideState(root, state);
-  const decision = evaluateDbSafety({ classification, policy, contract, duringRalph, madSks });
+  const decision = evaluateDbSafety({ classification, policy, contract, duringNoQuestion, madSks });
   if (decision.action === 'confirm') await writeMadSksTableDeletePending(root, state, decision);
   if (decision.action !== 'allow' && state?.mission_id) {
     await appendJsonlBounded(path.join(missionDir(root, state.mission_id), 'db-safety.jsonl'), { ts: nowIso(), decision });

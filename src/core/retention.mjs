@@ -113,14 +113,14 @@ async function pruneFromChatImgTempTriWiki(root, policy, dryRun, actions) {
 
 async function compactMission(mission, policy, dryRun, actions) {
   if (mission.size <= policy.max_mission_bytes) return;
-  const ralph = path.join(mission.path, 'ralph');
-  if (await exists(ralph)) {
-    const entries = await fs.readdir(ralph, { withFileTypes: true }).catch(() => []);
+  const cyclesRoot = path.join(mission.path, 'cycles');
+  if (await exists(cyclesRoot)) {
+    const entries = await fs.readdir(cyclesRoot, { withFileTypes: true }).catch(() => []);
     const dirs = [];
     for (const e of entries) {
       if (!e.isDirectory() || !/^cycle-\d+$/.test(e.name)) continue;
       const n = Number(e.name.replace('cycle-', ''));
-      const p = path.join(ralph, e.name);
+      const p = path.join(cyclesRoot, e.name);
       dirs.push({ n, path: p, bytes: await dirSize(p).catch(() => 0) });
     }
     dirs.sort((a, b) => b.n - a.n);

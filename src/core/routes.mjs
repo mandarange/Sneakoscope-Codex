@@ -1,10 +1,13 @@
 const REFLECTION_SKILL_NAME = 'reflection';
 export const FROM_CHAT_IMG_COVERAGE_ARTIFACT = 'from-chat-img-coverage-ledger.json';
+export const FROM_CHAT_IMG_WORK_ORDER_ARTIFACT = 'from-chat-img-work-order.md';
+export const FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT = 'from-chat-img-source-inventory.json';
+export const FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT = 'from-chat-img-visual-map.json';
 export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|cmux|auto-review|team|qa-loop|ralph|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|hproof|gx|wiki';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|cmux|auto-review|team|qa-loop|goal|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|hproof|gx|wiki|code-structure';
 
 export const RECOMMENDED_MCP_SERVERS = [
   {
@@ -107,7 +110,7 @@ export function triwikiStagePolicyText(commandPrefix = 'sks') {
 }
 
 export function chatCaptureIntakeText() {
-  return `From-Chat-IMG intake: explicit signal only. Treat uploads as chat screenshot plus originals, use Computer Use/browser visual inspection when available, list requirements first in source order, match regions to attachments with confidence, and write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}. Preserve each visible customer request as source-bound text, account for every screenshot image region and separate attachment, map each item to work-order actions, perform the customer-request work, then run a scoped QA-LOOP over that exact work-order range before Team completion. Update checklist checkboxes as work proceeds until all boxes are checked, unresolved_items is empty, scoped_qa_loop_completed=true, and QA unresolved findings are zero. ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} is temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}, so it can be forgotten by retention after enough later sessions. Do not assume ordinary image prompts are chat captures.`;
+  return `From-Chat-IMG intake: explicit signal only. Select forensic visual effort. Treat uploads as chat screenshot plus originals, use Computer Use/browser visual inspection when available, list requirements first in source order, match regions to attachments with confidence, and write ${FROM_CHAT_IMG_WORK_ORDER_ARTIFACT}, ${FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT}, ${FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT}, ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}. Preserve each visible customer request as source-bound text, account for every screenshot image region and separate attachment, map each item to work-order actions, perform the customer-request work, then run a scoped QA-LOOP over that exact work-order range before Team completion. Update checklist checkboxes as work proceeds until all boxes are checked, unresolved_items is empty, scoped_qa_loop_completed=true, QA unresolved findings are zero, and schema validation passes. ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} is temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}, so it can be forgotten by retention after enough later sessions. Do not assume ordinary image prompts are chat captures.`;
 }
 
 export function noUnrequestedFallbackCodePolicyText() {
@@ -179,7 +182,7 @@ export const ROUTES = [
     dollarAliases: ['$From-Chat-IMG'],
     appSkillAliases: ['from-chat-img'],
     lifecycle: ['parallel_analysis_scouting', 'triwiki_refresh', 'planning_debate', 'live_transcript', 'consensus_artifact', 'fresh_implementation_team', 'review_artifact', 'integration_evidence', 'session_cleanup', 'post_route_reflection', 'honest_mode'],
-    context7Policy: 'required',
+    context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'team-gate.json',
     cliEntrypoint: 'sks team "task" [executor:5 reviewer:2 user:1] | sks team log|tail|watch|status|event',
@@ -200,18 +203,18 @@ export const ROUTES = [
     examples: ['$QA-LOOP dogfood UI and API against local dev', '$QA-LOOP deployed smoke only']
   },
   {
-    id: 'Ralph',
-    command: '$Ralph',
-    mode: 'RALPH',
-    route: 'Ralph mission',
-    description: 'Mandatory clarification and no-question autonomous mission workflow.',
-    requiredSkills: ['ralph', 'ralph-supervisor', 'ralph-resolver', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
-    lifecycle: ['questions_answered', 'contract_sealed', 'sks_ralph_run', 'done_gate_passed', 'post_route_reflection', 'honest_mode'],
+    id: 'Goal',
+    command: '$Goal',
+    mode: 'GOAL',
+    route: 'native Codex goal workflow',
+    description: 'Bridge SKS pipeline work into Codex native persisted /goal workflows for create, pause, resume, and clear.',
+    requiredSkills: ['goal', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
+    lifecycle: ['goal_workflow_artifact', 'native_goal_create_or_control', 'runtime_continuation', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'required',
     reasoningPolicy: 'high',
-    stopGate: 'done-gate.json',
-    cliEntrypoint: 'sks ralph prepare|answer|run',
-    examples: ['$Ralph implement this with mandatory clarification']
+    stopGate: 'honest_mode',
+    cliEntrypoint: 'sks goal create|pause|resume|clear|status',
+    examples: ['$Goal persist this migration workflow with native /goal continuation']
   },
   {
     id: 'Research',
@@ -355,13 +358,16 @@ export const COMMAND_CATALOG = [
   { name: 'doctor', usage: 'sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]', description: 'Check and repair SKS generated files, while blocking setup if another Codex harness is detected.' },
   { name: 'init', usage: 'sks init [--force] [--local-only] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
   { name: 'selftest', usage: 'sks selftest [--mock]', description: 'Run local smoke tests without calling a model.' },
-  { name: 'ralph', usage: 'sks ralph prepare|answer|run|status ...', description: 'Run mandatory-clarification Ralph missions with a no-question execution loop.' },
+  { name: 'goal', usage: 'sks goal create|pause|resume|clear|status ...', description: 'Prepare and control SKS bridge artifacts for Codex native persisted /goal workflows.' },
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run frontier-style research missions with novelty and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
+  { name: 'perf', usage: 'sks perf run [--json] [--iterations N]', description: 'Measure structured GPT-5.5/SKS performance budgets such as CLI startup and package size.' },
+  { name: 'code-structure', usage: 'sks code-structure scan [--json]', description: 'Scan handwritten source files for 1000/2000/3000-line structure gates and split-review exceptions.' },
+  { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, effort decisions, visual maps, dogfood reports, skills, mistake memory, Team dashboard state, and Honest Mode.' },
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate ...', description: 'Build, refresh, prune, and validate RGBA/trig LLM Wiki context packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:2 user:1]|log|tail|watch|lane|status|event ...', description: 'Create and observe a scout-first Team mission: parallel analysis, TriWiki attention, role debate, runtime graph/inbox handoff, then executor parallel development.' },
+  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:2 user:1]|log|tail|watch|lane|status|dashboard|event ...', description: 'Create and observe a scout-first Team mission: parallel analysis, TriWiki attention, role debate, runtime graph/inbox handoff, then executor parallel development.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
@@ -496,14 +502,14 @@ export function routeRequiresSubagents(route, prompt = '') {
   if (route.id === 'SKS') return looksLikeTeamDefaultWork(prompt);
   if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki') return false;
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
-  if (route.id === 'Ralph' || route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
+  if (route.id === 'Goal' || route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
   if (route.id === 'DFix') return looksLikeCodeChangingWork(prompt) && !looksLikeFastDesignFix(prompt);
   return looksLikeExecutionWork(prompt);
 }
 
 export function reflectionRequiredForRoute(route) {
   const id = String(route?.id || route?.mode || route?.route || route || '').replace(/^\$/, '');
-  return /^(team|qaloop|qa-loop|ralph|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
+  return /^(team|qaloop|qa-loop|goal|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
 }
 
 export function looksLikeCodeChangingWork(prompt = '') {
@@ -530,17 +536,22 @@ export function subagentExecutionPolicyText(route, prompt = '') {
   ].join(' ');
 }
 
+export const ALLOWED_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh']);
+
 export function routeReasoning(route, prompt = '') {
   const text = String(prompt || '');
-  const base = route?.reasoningPolicy || 'medium';
+  const base = ALLOWED_REASONING_EFFORTS.has(route?.reasoningPolicy) ? route.reasoningPolicy : 'medium';
   if (hasFromChatImgSignal(text)) return reasoning('xhigh', 'from_chat_img_image_work_order_analysis');
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
   if (/\b(research|autoresearch|hypothesis|falsify|novelty|frontier|benchmark|experiment|SEO|GEO|ranking|연구|실험|가설|검증)\b/i.test(text)) return reasoning('xhigh', 'research_level_prompt');
+  if (base === 'xhigh') return reasoning('xhigh', 'route_policy_xhigh');
   if (base === 'high' || /\b(architecture|design|migration|database|security|parallel|orchestrat|refactor|algorithm|logic|tradeoff|검토|설계|마이그레이션|보안|병렬|팀|논리)\b/i.test(text)) return reasoning('high', 'logical_or_safety_work');
+  if (base === 'low') return reasoning('low', 'route_policy_low');
   return reasoning('medium', 'simple_fulfillment');
 }
 
 export function reasoningProfileName(effort) {
+  if (effort === 'low') return 'sks-task-low';
   if (effort === 'xhigh') return 'sks-research-xhigh';
   if (effort === 'high') return 'sks-logic-high';
   return 'sks-task-medium';
@@ -552,7 +563,8 @@ export function reasoningInstruction(info) {
 }
 
 function reasoning(effort, reason) {
-  return { effort, profile: reasoningProfileName(effort), reason, temporary: true };
+  const normalizedEffort = ALLOWED_REASONING_EFFORTS.has(effort) ? effort : 'medium';
+  return { effort: normalizedEffort, profile: reasoningProfileName(normalizedEffort), reason, temporary: true };
 }
 
 export function context7RequirementText(required = true) {

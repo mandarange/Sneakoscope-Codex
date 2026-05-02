@@ -2,6 +2,54 @@
 
 ## [Unreleased]
 
+## [0.6.76] - 2026-05-01
+
+### Added
+
+- Add TriWiki memory-governor sweep reports with ADD/UPDATE/CONSOLIDATE/DEMOTE/SOFT_FORGET/ARCHIVE/HARD_DELETE/NOOP/PROMOTE operations and bounded retrieval budgets.
+- Add `sks wiki sweep` to emit memory hygiene, Skill Forge, Mistake Memory, and code-structure mission artifacts.
+- Add `sks code-structure scan` and `code-structure-report.json` for 1000/2000/3000-line structure gates and split-review exceptions.
+
+### Changed
+
+- Team preparation now writes memory sweep, skill forge, mistake-memory, and code-structure reports before dashboard rendering.
+- Team dashboard state now includes Memory Attention, Forget Queue, Skill Autopilot, Mistake Immunity, and Code Structure panes.
+- Split maintenance-heavy CLI handlers into `src/cli/maintenance-commands.mjs`, bringing `src/cli/main.mjs` below the 3,000-line split-required review gate.
+
+## [0.6.75] - 2026-05-01
+
+### Added
+
+- Add `$Goal` and `sks goal create|pause|resume|clear|status` as the SKS bridge to Codex native persisted `/goal` workflows.
+- Add `goal-workflow.json` and `goal-bridge.md` mission artifacts so pipeline runs record the native `/goal` control contract.
+
+### Changed
+
+- Replace the user-facing Ralph route, command, generated skills, and selftest surface with the native Goal workflow path.
+- Update no-question, DB safety, retention, generated rules, docs, and discovery surfaces to use generic SKS run/Goal terminology.
+
+## [0.6.74] - 2026-05-01
+
+### Added
+
+- Add schema-backed GPT-5.5 performance artifacts for Work Order Ledgers, effort decisions, From-Chat-IMG visual maps, dogfood reports, Skill Forge, mistake memory, Team dashboard state, Cmux pane plans, and Honest Mode reports.
+- Add `sks validate-artifacts` and `sks perf run` so mission evidence and performance budgets are locally checkable.
+- Add lightweight effort orchestration, prompt-context ordering, Skill Forge, mistake memory, dogfood, From-Chat-IMG work-order, and Team dashboard renderer modules.
+
+### Changed
+
+- Team mission creation now writes work-order, effort, and dashboard-state artifacts and exposes `sks team dashboard`.
+- Make ambiguity-removal awaiting states modal: pending questions are re-exposed in chat and new route prompts cannot replace the active question sheet before answers are sealed.
+- Size/performance budgets now reflect the measured zero-dependency package payload after schema/orchestration modules were added.
+
+## [0.6.73] - 2026-04-30
+
+### Changed
+
+- Make cmux readiness checks validate workspace socket health, not only the cmux executable version, so `sks deps check`, `sks doctor`, `sks cmux check`, and `sks --mad` report unhealthy app/socket states before launch.
+- Make `sks team` create a named cmux Team workspace and target each split/send by returned workspace and surface refs, so visible Team lanes open as split panes instead of relying on ambient cmux environment variables.
+- Select the newly created cmux Team workspace after launch and report the actual opened lane count, so split panes are brought to the visible workspace instead of opening behind the current cmux view.
+
 ## [0.6.72] - 2026-04-30
 
 ### Changed
@@ -96,18 +144,9 @@
 
 - Merge the dev branch Team runtime graph, From-Chat-IMG completion gates, and active TriWiki attention work into main while preserving the main README positioning for From-Chat-IMG and TriWiki voxels.
 
-## [0.6.57] - 2026-04-29
-
-### Changed
-
-- Add active TriWiki attention ranking so context packs expose compact `attention.use_first` recall and `attention.hydrate_first` source-check queues for higher-signal route and worker handoffs.
-
-## [0.6.56] - 2026-04-29
-
 ### Changed
 
 - Infer predictable ambiguity-gate contract answers from the prompt/default safety policy so SKS asks only unresolved behavior or safety questions instead of static `GOAL_PRECISE` and `ACCEPTANCE_CRITERIA` templates.
-- Add a Team runtime graph compiler that remaps symbolic plan nodes to concrete task ids, writes scope-aware worker inboxes, and stop-gates the runtime graph artifacts before executor handoff.
 
 ## [0.6.55] - 2026-04-29
 

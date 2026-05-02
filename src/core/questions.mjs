@@ -29,7 +29,7 @@ function buildMadSksQuestionSchema(prompt) {
       DB_SCHEMA_CHANGE_ALLOWED: 'yes_if_needed',
       DEPENDENCY_CHANGE_ALLOWED: 'no',
       TEST_SCOPE: ['packcheck', 'selftest'],
-      MID_RALPH_UNKNOWN_POLICY: ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'],
+      MID_RUN_UNKNOWN_POLICY: ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'],
       RISK_BOUNDARY: [
         'MAD-SKS permission widening is explicit-invocation-only',
         'MAD-SKS permission widening does not persist after the active task gate closes',
@@ -72,7 +72,7 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   const inferred = {};
   const notes = {};
   const normalizedPrompt = String(prompt || '')
-    .replace(/^\s*\$(?:Team|SKS|Ralph|team|sks|ralph)\b/i, '')
+    .replace(/^\s*\$(?:Team|SKS|Goal|team|sks|goal)\b/i, '')
     .replace(/\b(?:executor|reviewer|planner|user)\s*:\s*\d+\b/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -131,8 +131,8 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
     const releaseLike = versionWork || installWork || questionGateWork || prioritySignalWork || chatCaptureWork || /\bsneakoscope\b|\bsks\b/.test(lower);
     addInferred(inferred, notes, 'TEST_SCOPE', releaseLike ? ['packcheck', 'selftest', 'sizecheck', 'publish:dry'] : ['focused relevant tests or documented justification'], 'tests');
   }
-  if (!hasAnswer(explicitAnswers.MID_RALPH_UNKNOWN_POLICY)) {
-    addInferred(inferred, notes, 'MID_RALPH_UNKNOWN_POLICY', ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'], 'ladder');
+  if (!hasAnswer(explicitAnswers.MID_RUN_UNKNOWN_POLICY)) {
+    addInferred(inferred, notes, 'MID_RUN_UNKNOWN_POLICY', ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'], 'ladder');
   }
   if (!hasAnswer(explicitAnswers.RISK_BOUNDARY)) {
     addInferred(inferred, notes, 'RISK_BOUNDARY', [
@@ -159,8 +159,8 @@ export function buildQuestionSchema(prompt) {
     { id: 'PUBLIC_API_CHANGE_ALLOWED', question: 'public API 또는 외부 계약 변경을 허용하나요?', required: true, type: 'enum', options: ['no', 'yes_if_needed', 'yes'] },
     { id: 'DB_SCHEMA_CHANGE_ALLOWED', question: 'DB schema 또는 migration 변경을 허용하나요?', required: true, type: 'enum', options: ['no', 'yes_if_needed', 'yes_with_migration'] },
     { id: 'DEPENDENCY_CHANGE_ALLOWED', question: '새 dependency 추가를 허용하나요?', required: true, type: 'enum', options: ['no', 'yes_if_already_approved', 'yes'] },
-    { id: 'TEST_SCOPE', question: 'Ralph가 완료 전 실행 또는 정당화해야 할 테스트 범위를 지정해주세요.', required: true, type: 'array_or_string', examples: ['unit', 'integration', 'e2e', 'lint', 'typecheck'] },
-    { id: 'MID_RALPH_UNKNOWN_POLICY', question: 'Ralph 중 새 모호성이 생기면 사용자에게 묻지 않고 어떤 해결 순서로 판단할까요? 이 항목은 대체 구현 또는 fallback 코드를 새로 만드는 허가가 아닙니다.', required: true, type: 'array', options: ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'] },
+    { id: 'TEST_SCOPE', question: '완료 전 실행 또는 정당화해야 할 테스트 범위를 지정해주세요.', required: true, type: 'array_or_string', examples: ['unit', 'integration', 'e2e', 'lint', 'typecheck'] },
+    { id: 'MID_RUN_UNKNOWN_POLICY', question: '실행 중 새 모호성이 생기면 사용자에게 묻지 않고 어떤 해결 순서로 판단할까요? 이 항목은 대체 구현 또는 fallback 코드를 새로 만드는 허가가 아닙니다.', required: true, type: 'array', options: ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'] },
     { id: 'RISK_BOUNDARY', question: '보안, 결제, 데이터 손상, 권한, 인증 등 절대 넘으면 안 되는 위험 경계를 적어주세요.', required: true, type: 'array_or_string' },
 
     { id: 'DATABASE_TARGET_ENVIRONMENT', question: 'DB 관련 작업의 대상 환경을 지정해주세요. production write는 Sneakoscope Codex가 허용하지 않습니다.', required: true, type: 'enum', options: ['no_database', 'local_dev', 'preview_branch', 'supabase_branch', 'production_read_only'] },
@@ -196,11 +196,11 @@ export function buildQuestionSchema(prompt) {
   }
   const skippedByDefault = new RegExp('^(D' + 'B_|D' + 'ATABASE_|D' + 'ESTRUCTIVE_D' + 'B_|SUPA' + 'BASE_)');
   const inferred = inferAnswersForPrompt(prompt);
-  const inferredSlots = new Set(['MID_RALPH_UNKNOWN_POLICY', ...Object.keys(inferred.answers)]);
+  const inferredSlots = new Set(['MID_RUN_UNKNOWN_POLICY', ...Object.keys(inferred.answers)]);
   const askedSlots = slots.filter((s) => !inferredSlots.has(s.id) && (domainHints.includes('db') || !skippedByDefault.test(s.id)));
   return {
     schema_version: 1,
-    description: 'Only slots that can change scope, safety, behavior, or acceptance are asked. The rest is inferred from TriWiki/current code defaults. Ralph never asks the user after the contract is sealed.',
+    description: 'Only slots that can change scope, safety, behavior, or acceptance are asked. The rest is inferred from TriWiki/current code defaults. After the contract is sealed, SKS resolves with the decision ladder instead of asking mid-run questions.',
     prompt,
     domain_hints: domainHints,
     inferred_answers: inferred.answers,

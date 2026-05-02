@@ -31,7 +31,7 @@ function timed(fn, iterations) {
 export function defaultEvaluationScenario() {
   const coord = { domainAngle: 0.15, layerRadius: 0.35, phase: 0.1 };
   const required = [
-    ['req-contract', 'decision-contract.json must be sealed before Ralph run can execute autonomous work.', 'contract', 'critical', 1.2],
+    ['req-contract', 'decision-contract.json must be sealed before ambiguity-gated execution can proceed.', 'contract', 'critical', 1.2],
     ['req-db-block', 'destructive database operations such as DROP, TRUNCATE, db reset, and live execute_sql writes are blocked.', 'code', 'critical', 1.4],
     ['req-hook', '.codex/hooks.json routes PreToolUse, PostToolUse, PermissionRequest, UserPromptSubmit, and Stop to sks hook handlers.', 'code', 'high', 1],
     ['req-gx-hash', 'GX render output embeds the normalized vgraph.json source hash so drift can be detected deterministically.', 'test', 'medium', 0.9],
@@ -67,7 +67,7 @@ export function defaultEvaluationScenario() {
     description: 'Deterministic context-selection benchmark for SKS flow, DB safety, GX, retention, and design artifact guidance.',
     mission: { id: 'eval-sks-flow', coord },
     q4: { mode: 'evaluation', db_guard: 'deny_destructive', design_artifact: 'html_verified' },
-    q3: ['sks', 'ralph', 'db-safety', 'gx', 'skills', 'design'],
+    q3: ['sks', 'goal', 'db-safety', 'gx', 'skills', 'design'],
     claims: [
       ...required.map(([id, text, authority, risk, weight], i) => ({
         id, text, authority, risk, status: 'supported', freshness: 'fresh', required_weight: weight,

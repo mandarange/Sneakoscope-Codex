@@ -78,6 +78,14 @@ export function cmuxWorkspaceRefFromText(text = '') {
   return String(text || '').match(/\bworkspace:\d+\b/i)?.[0] || String(text || '').match(/[0-9a-f]{8}-[0-9a-f-]{27,}/i)?.[0] || '';
 }
 
+export function cmuxSurfaceRefFromText(text = '') {
+  return String(text || '').match(/\bsurface:\d+\b/i)?.[0] || '';
+}
+
+export function cmuxPaneRefFromText(text = '') {
+  return String(text || '').match(/\bpane:\d+\b/i)?.[0] || '';
+}
+
 export function cmuxWorkspaceStatePath(plan = {}) {
   return path.join(path.resolve(plan.root || process.cwd()), '.sneakoscope', 'state', 'cmux-workspaces.json');
 }
@@ -183,17 +191,40 @@ export function cmuxBinaryCandidates() {
 
 export async function cmuxAvailable() {
   const bin = await findCmuxBinary();
-  if (!bin) return { ok: false, bin: null, version: null, error: 'cmux CLI not found' };
+  if (!bin) return { ok: false, bin: null, version: null, executable_ok: false, error: 'cmux CLI not found' };
   const probe = await runProcess(bin, ['version'], { timeoutMs: 5000, maxOutputBytes: 16 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
   const text = `${probe.stdout || ''}${probe.stderr || ''}`.trim();
-  return { ok: probe.code === 0, bin, version: text || 'cmux CLI', error: probe.code === 0 ? null : text || 'cmux CLI probe failed' };
+  return { ok: probe.code === 0, bin, version: text || 'cmux CLI', executable_ok: probe.code === 0, error: probe.code === 0 ? null : text || 'cmux CLI probe failed' };
+}
+
+export async function cmuxReadiness(opts = {}) {
+  const available = opts.available || await cmuxAvailable();
+  if (!available.ok) return { ...available, socket_ok: false };
+  if (opts.checkSocket === false) return { ...available, ok: true, socket_ok: null };
+  const socket = opts.wake ? await ensureCmuxDaemonReady(available) : await cmuxSocketProbe(available.bin);
+  if (socket.ok) return { ...available, ok: true, socket_ok: true, error: null };
+  return {
+    ...available,
+    ok: false,
+    socket_ok: false,
+    error: socket.error || 'cmux app/socket probe failed'
+  };
+}
+
+export function cmuxStatusKind(cmux = {}) {
+  if (cmux.ok) return 'ok';
+  if (cmux.bin) return 'unhealthy';
+  return 'missing';
 }
 
 export async function ensureCmuxInstalled(opts = {}) {
-  const before = await cmuxAvailable().catch((err) => ({ ok: false, error: err.message || 'cmux probe failed' }));
+  const before = await cmuxReadiness({ wake: true }).catch((err) => ({ ok: false, error: err.message || 'cmux probe failed' }));
   if (before.ok) return { target: 'cmux', status: 'present', cmux: before, command: null };
+  if (before.bin && before.executable_ok && before.socket_ok === false) {
+    return { target: 'cmux', status: 'unhealthy', cmux: before, command: 'sks cmux check', error: before.error || 'cmux app/socket unhealthy' };
+  }
   if (opts.autoInstall === false || process.env.SKS_NO_CMUX_AUTO_INSTALL === '1') {
-    return { target: 'cmux', status: 'missing', cmux: before, command: CMUX_BREW_COMMAND, error: before.error || 'cmux CLI not found' };
+    return { target: 'cmux', status: before.bin ? 'unhealthy' : 'missing', cmux: before, command: before.bin ? 'sks cmux check' : CMUX_BREW_COMMAND, error: before.error || 'cmux CLI not found' };
   }
   if (process.platform !== 'darwin') {
     return { target: 'cmux', status: 'manual_required', cmux: before, command: platformCmuxInstallHint(), error: before.error || 'cmux is macOS-only' };
@@ -207,8 +238,7 @@ export async function ensureCmuxInstalled(opts = {}) {
   const install = tap.code === 0
     ? await installOrUpgradeCmuxCask(brew)
     : tap;
-  let after = await cmuxAvailable().catch((err) => ({ ok: false, error: err.message || 'cmux probe failed after install' }));
-  if (!after.ok && after.bin) after = await wakeCmuxAndReprobe(after);
+  const after = await cmuxReadiness({ wake: true }).catch((err) => ({ ok: false, error: err.message || 'cmux probe failed after install' }));
   if (after.ok) return { target: 'cmux', status: 'installed', cmux: after, command: CMUX_BREW_COMMAND };
   const installText = `${install.stderr || ''}\n${install.stdout || ''}`.trim();
   const rawError = after.error || installText || 'brew install --cask cmux completed, but no working cmux CLI was found';
@@ -250,7 +280,7 @@ export async function buildCmuxLaunchPlan(opts = {}) {
   const workspace = sanitizeCmuxWorkspaceName(opts.workspace || opts.session || defaultCmuxWorkspaceName(root));
   const sksBin = opts.sksBin || path.join(packageRoot(), 'bin', 'sks.mjs');
   const codex = opts.codex || await getCodexInfo().catch(() => ({}));
-  const cmux = opts.cmux || await cmuxAvailable();
+  const cmux = opts.cmux || await cmuxReadiness({ wake: opts.wakeCmux === true });
   const app = opts.app || await codexAppIntegrationStatus({ codex });
   const codexArgs = Array.isArray(opts.codexArgs) ? opts.codexArgs : [];
   return {
@@ -264,7 +294,7 @@ export async function buildCmuxLaunchPlan(opts = {}) {
     ready: Boolean(cmux.ok && codex.bin),
     warnings: app.ok ? [] : app.guidance || [],
     blockers: [
-      ...(!cmux.ok ? [`cmux missing. Install: ${platformCmuxInstallHint()}`] : []),
+      ...(!cmux.ok ? [cmux.bin ? `cmux app/socket unhealthy: ${cmux.error || 'run sks cmux check'}` : `cmux missing. Install: ${platformCmuxInstallHint()}`] : []),
       ...(!codex.bin ? ['Codex CLI missing. Install: npm i -g @openai/codex, or set SKS_CODEX_BIN.'] : [])
     ]
   };
@@ -277,7 +307,7 @@ export function formatCmuxBanner(status = null) {
     'ㅅㅋㅅ cmux runtime',
     '',
     'Canonical prompt commands:',
-    '  $DFix  $Answer  $SKS  $Team  $QA-LOOP  $Ralph  $Research  $AutoResearch  $DB  $GX  $Wiki  $Help',
+    '  $DFix  $Answer  $SKS  $Team  $QA-LOOP  $Goal  $Research  $AutoResearch  $DB  $GX  $Wiki  $Help',
     '',
     'CLI-first runtime:',
     '  sks                 open a cmux Codex CLI workspace',
@@ -349,7 +379,10 @@ export async function launchCmuxUi(args = [], opts = {}) {
     return { plan };
   }
   const createdRef = cmuxWorkspaceRefFromText(`${created.stdout || ''}\n${created.stderr || ''}`);
-  if (createdRef) await writeCmuxWorkspaceRecord(plan, { ref: createdRef, name: plan.workspace, description: cmuxWorkspaceDescription(plan), cwd: plan.root }).catch(() => null);
+  if (createdRef) {
+    await writeCmuxWorkspaceRecord(plan, { ref: createdRef, name: plan.workspace, description: cmuxWorkspaceDescription(plan), cwd: plan.root }).catch(() => null);
+    await runProcess(plan.cmux.bin, ['select-workspace', '--workspace', createdRef], { timeoutMs: 5000, maxOutputBytes: 16 * 1024 }).catch(() => null);
+  }
   if (args.includes('--no-open')) {
     console.log(`SKS cmux workspace requested: ${plan.workspace}`);
   }
@@ -513,11 +546,56 @@ export async function launchCmuxTeamView({ root, missionId, plan = {}, promptFil
   const result = { ready: launch.ready, cmux: launch.cmux, workspace: launch.workspace, agents: commands, blockers: launch.blockers };
   if (json || !launch.ready) return result;
   const first = commands[0]?.command || teamAgentCommand(launch.root, missionId, 'parent_orchestrator', 'team', promptFile);
-  const created = spawnSync(launch.cmux.bin, ['new-workspace', '--cwd', launch.root, '--command', first], { encoding: 'utf8', stdio: 'ignore' });
+  const created = spawnSync(launch.cmux.bin, buildCmuxNewWorkspaceArgs(launch, first), { encoding: 'utf8', stdio: 'pipe' });
   result.created = created.status === 0;
+  result.stdout = created.stdout || '';
+  result.stderr = created.stderr || '';
+  const workspaceRef = cmuxWorkspaceRefFromText(`${created.stdout || ''}\n${created.stderr || ''}`);
+  if (workspaceRef) {
+    result.workspace_ref = workspaceRef;
+    await writeCmuxWorkspaceRecord(launch, { ref: workspaceRef, name: launch.workspace, description: cmuxWorkspaceDescription(launch), cwd: launch.root }).catch(() => null);
+    const selected = await runProcess(launch.cmux.bin, ['select-workspace', '--workspace', workspaceRef], { timeoutMs: 5000, maxOutputBytes: 16 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+    result.selected = selected.code === 0;
+    result.select_stdout = selected.stdout || '';
+    result.select_stderr = selected.stderr || '';
+  }
+  result.splits = [];
+  if (!result.created || !workspaceRef) {
+    if (!workspaceRef) result.blockers = [...(result.blockers || []), 'cmux new-workspace did not return a workspace ref'];
+    return result;
+  }
   for (const entry of commands.slice(1)) {
-    spawnSync(launch.cmux.bin, ['new-split', 'right'], { encoding: 'utf8', stdio: 'ignore' });
-    spawnSync(launch.cmux.bin, ['send', `${entry.command}\n`], { encoding: 'utf8', stdio: 'ignore' });
+    const split = spawnSync(launch.cmux.bin, ['new-split', 'right', '--workspace', workspaceRef], { encoding: 'utf8', stdio: 'pipe' });
+    const splitText = `${split.stdout || ''}\n${split.stderr || ''}`;
+    const surfaceRef = cmuxSurfaceRefFromText(splitText);
+    const paneRef = cmuxPaneRefFromText(splitText);
+    const splitResult = {
+      agent: entry.agent,
+      ok: split.status === 0 && Boolean(surfaceRef),
+      pane_ref: paneRef,
+      surface_ref: surfaceRef,
+      stdout: split.stdout || '',
+      stderr: split.stderr || ''
+    };
+    if (splitResult.ok) {
+      const send = spawnSync(launch.cmux.bin, ['send', '--workspace', workspaceRef, '--surface', surfaceRef, `${entry.command}\n`], { encoding: 'utf8', stdio: 'pipe' });
+      splitResult.send_ok = send.status === 0;
+      splitResult.send_stdout = send.stdout || '';
+      splitResult.send_stderr = send.stderr || '';
+    }
+    result.splits.push(splitResult);
+  }
+  result.split_count = result.splits.filter((entry) => entry.ok && entry.send_ok).length;
+  const expectedSplits = Math.max(0, commands.length - 1);
+  result.opened_lane_count = 1 + result.split_count;
+  result.all_lanes_opened = result.created && result.selected !== false && result.split_count === expectedSplits;
+  result.ready = Boolean(result.ready && result.all_lanes_opened);
+  if (!result.all_lanes_opened) {
+    result.blockers = [
+      ...(result.blockers || []),
+      ...(result.selected === false ? [`cmux workspace was created but could not be selected: ${result.select_stderr || result.select_stdout || 'select-workspace failed'}`] : []),
+      ...(result.split_count !== expectedSplits ? [`cmux opened ${result.opened_lane_count}/${commands.length} requested Team lane(s)`] : [])
+    ];
   }
   return result;
 }

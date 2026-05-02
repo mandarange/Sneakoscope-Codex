@@ -21,17 +21,28 @@ import { context7Docs, context7Resolve, context7Text, context7Tools } from '../c
 import { installVersionGitHook, runVersionPreCommit, versioningStatus } from '../core/version-manager.mjs';
 import { rustInfo } from '../core/rust-accelerator.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
-import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evaluation.mjs';
+import { defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence } from '../core/pipeline.mjs';
-import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
-import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane } from '../core/team-live.mjs';
+import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
+import { appendTeamEvent, initTeamLive, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane } from '../core/team-live.mjs';
+import { ARTIFACT_FILES, validateDogfoodReport, validateEffortDecision, validateFromChatImgVisualMap, validateSkillCandidate, validateSkillInjectionDecision, validateTeamDashboardState, validateWorkOrderLedger } from '../core/artifact-schemas.mjs';
+import { selectEffort, writeEffortDecision } from '../core/effort-orchestrator.mjs';
+import { createWorkOrderLedger } from '../core/work-order-ledger.mjs';
+import { buildFromChatImgVisualMap } from '../core/from-chat-img-forensics.mjs';
+import { classifyDogfoodFinding, createDogfoodReport, writeDogfoodReport } from '../core/dogfood-loop.mjs';
+import { createSkillCandidate, decideSkillInjection, writeSkillCandidate, writeSkillForgeReport, writeSkillInjectionDecision } from '../core/skill-forge.mjs';
+import { recordMistake, writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
+import { buildPromptContext } from '../core/prompt-context-builder.mjs';
+import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
+import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
-import { CMUX_BREW_COMMAND, CMUX_BREW_UPGRADE_COMMAND, buildCmuxLaunchPlan, buildCmuxNewWorkspaceArgs, cmuxWorkspaceRef, cmuxWorkspaceRefFromText, defaultCmuxWorkspaceName, ensureCmuxInstalled, formatCmuxBanner, launchCmuxTeamView, launchCmuxUi, matchingCmuxWorkspaces, parseCmuxWorkspaceList, platformCmuxInstallHint, readCmuxWorkspaceRecord, runCmuxStatus, sanitizeCmuxWorkspaceName, cmuxAvailable, writeCmuxWorkspaceRecord } from '../core/cmux-ui.mjs';
+import { CMUX_BREW_COMMAND, CMUX_BREW_UPGRADE_COMMAND, buildCmuxLaunchPlan, buildCmuxNewWorkspaceArgs, cmuxSurfaceRefFromText, cmuxWorkspaceRef, cmuxWorkspaceRefFromText, cmuxReadiness, cmuxStatusKind, defaultCmuxWorkspaceName, ensureCmuxInstalled, formatCmuxBanner, launchCmuxTeamView, launchCmuxUi, matchingCmuxWorkspaces, parseCmuxWorkspaceList, platformCmuxInstallHint, readCmuxWorkspaceRecord, runCmuxStatus, sanitizeCmuxWorkspaceName, writeCmuxWorkspaceRecord } from '../core/cmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
+import { buildTeamPlan, codeStructureCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, qaLoopCommand, researchCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
@@ -70,7 +81,7 @@ export async function main(args) {
   if (cmd === 'deps') return deps(sub, rest);
   if (cmd === 'dollar-commands' || cmd === 'dollars' || cmd === '$') return dollarCommands(tail);
   if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
-  if (cmd === 'qa-loop') return qaLoop(sub, rest);
+  if (cmd === 'qa-loop') return qaLoopCommand(sub, rest);
   if (cmd === 'context7') return context7(sub, rest);
   if (cmd === 'pipeline') return pipeline(sub, rest);
   if (cmd === 'guard') return guard(sub, rest);
@@ -83,19 +94,22 @@ export async function main(args) {
   if (cmd === 'doctor') return doctor(tail);
   if (cmd === 'init') return init(tail);
   if (cmd === 'selftest') return selftest(tail);
-  if (cmd === 'ralph') return ralph(sub, rest);
-  if (cmd === 'research') return research(sub, rest);
+  if (cmd === 'goal') return goalCommand(sub, rest);
+  if (cmd === 'research') return researchCommand(sub, rest);
   if (cmd === 'hook') return emitHook(sub);
-  if (cmd === 'profile') return profile(sub, rest);
-  if (cmd === 'hproof') return hproof(sub, rest);
-  if (cmd === 'memory') return memory(sub, rest);
-  if (cmd === 'gx') return gx(sub, rest);
+  if (cmd === 'profile') return profileCommand(sub, rest);
+  if (cmd === 'hproof') return hproofCommand(sub, rest);
+  if (cmd === 'validate-artifacts') return validateArtifactsCommand(tail);
+  if (cmd === 'perf') return perfCommand(sub, rest);
+  if (cmd === 'code-structure') return codeStructureCommand(sub, rest);
+  if (cmd === 'memory') return memoryCommand(sub, rest);
+  if (cmd === 'gx') return gxCommand(sub, rest);
   if (cmd === 'team') return team(tail);
   if (cmd === 'db') return db(sub, rest);
   if (cmd === 'eval') return evalCommand(sub, rest);
-  if (cmd === 'wiki') return wiki(sub, rest);
-  if (cmd === 'gc') return gc(tail);
-  if (cmd === 'stats') return stats(tail);
+  if (cmd === 'wiki') return wikiCommand(sub, rest);
+  if (cmd === 'gc') return gcCommand(tail);
+  if (cmd === 'stats') return statsCommand(tail);
   console.error(`Unknown command: ${cmd}`);
   process.exitCode = 1;
 }
@@ -142,12 +156,11 @@ Usage:
   sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]
   sks init [--install-scope global|project] [--local-only]
   sks selftest [--mock]
-  sks ralph prepare "task"
-  sks ralph answer <mission-id|latest> <answers.json>
-  sks ralph run <mission-id|latest> [--mock] [--max-cycles N]
-  sks ralph status <mission-id|latest>
+  sks goal create "task"
+  sks goal pause|resume|clear <mission-id|latest>
+  sks goal status <mission-id|latest>
   sks team "task" [executor:5 reviewer:2 user:1] [--json]
-  sks team log|tail|watch|lane|status [mission-id|latest]
+  sks team log|tail|watch|lane|status|dashboard [mission-id|latest]
   sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."
   sks research prepare "topic" [--depth frontier]
   sks research run <mission-id|latest> [--mock] [--max-cycles N]
@@ -158,8 +171,11 @@ Usage:
   sks db check --sql "DROP TABLE users"
   sks db check --command "supabase db reset"
   sks hproof check [mission-id|latest]
+  sks validate-artifacts [mission-id|latest] [--json]
   sks eval run [--json] [--out report.json]
   sks eval compare --baseline old.json --candidate new.json [--json]
+  sks perf run [--json]
+  sks code-structure scan [--json]
   sks wiki coords --rgba 12,34,56,255
   sks wiki pack [--json] [--role worker|verifier] [--max-anchors N]
   sks wiki refresh [--json] [--role worker|verifier] [--max-anchors N] [--prune] [--dry-run]
@@ -181,7 +197,7 @@ ${formatDollarCommandsCompact('  ')}
 
 Discovery:
   sks commands       Full command list with descriptions
-  sks usage ralph    Workflow examples for one topic
+  sks usage goal     Workflow examples for one topic
   sks dollar-commands Codex App $ commands: ${dollarCommandNames()}
 `);
 }
@@ -374,11 +390,12 @@ async function ensureGlobalCodexSkillsDuringInstall(opts = {}) {
 async function ensureRelatedCliTools(args = []) {
   const skip = flag(args, '--skip-cli-tools') || process.env.SKS_SKIP_CLI_TOOLS === '1';
   const codex = await ensureCodexCliTool({ skip });
-  const cmux = await cmuxAvailable().catch((err) => ({ ok: false, version: null, error: err.message }));
+  const cmux = await cmuxReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
   return {
     codex,
     cmux: {
       ok: Boolean(cmux.ok),
+      bin: cmux.bin || null,
       version: cmux.version || null,
       install_hint: cmux.ok ? null : platformCmuxInstallHint(),
       error: cmux.error || null
@@ -566,7 +583,7 @@ Purpose:
 
 Rules:
   List the exact micro-edits, inspect only needed files, apply only those edits.
-  Do not run mission state, ambiguity gates, TriWiki refresh, Context7 routing, subagents, Ralph, Research, eval, or broad redesign.
+  Do not run mission state, ambiguity gates, TriWiki refresh, Context7 routing, subagents, Goal, Research, eval, or broad redesign.
   Run only cheap verification when useful.
 `);
 }
@@ -1132,11 +1149,12 @@ async function ensureMadLaunchDependencies(args = []) {
     if (!codex.bin) actions.push(await installCodexDependency(args, { prompt: 'Codex CLI missing. Install latest Codex CLI with npm i -g @openai/codex@latest?' }));
   }
   if (!flag(args, '--no-auto-install-cmux')) {
-    const cmux = await cmuxAvailable().catch(() => ({ ok: false }));
+    const cmux = await cmuxReadiness().catch(() => ({ ok: false }));
     if (!cmux.ok && !cmux.bin) actions.push(await installCmuxDependency(args));
+    else if (!cmux.ok) actions.push({ target: 'cmux', status: 'unhealthy', bin: cmux.bin, version: cmux.version || null, command: 'sks cmux check', error: cmux.error || 'cmux app/socket unhealthy' });
   }
   const status = await depsStatus(await sksRoot());
-  return { ready: Boolean(status.codex_cli.ok && (status.cmux.ok || status.cmux.bin)), actions, status };
+  return { ready: Boolean(status.codex_cli.ok && status.cmux.ok), actions, status };
 }
 
 async function deps(sub = 'check', args = []) {
@@ -1160,7 +1178,7 @@ async function depsStatus(root = null, opts = {}) {
   const codex = opts.codex || await getCodexInfo().catch(() => ({}));
   const app = opts.codexApp || await codexAppIntegrationStatus({ codex });
   const context7 = opts.context7 || await checkContext7(root);
-  const cmux = opts.cmux || await cmuxAvailable().catch((err) => ({ ok: false, version: null, error: err.message }));
+  const cmux = opts.cmux || await cmuxReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
   const brew = process.platform === 'darwin' ? await which('brew').catch(() => null) : null;
   const globalBin = await discoverGlobalSksCommand();
   const npmPrefix = npmBin ? await runProcess(npmBin, ['prefix', '-g'], { timeoutMs: 8000, maxOutputBytes: 4096 }).catch(() => null) : null;
@@ -1180,7 +1198,7 @@ async function depsStatus(root = null, opts = {}) {
     context7,
     browser_use: { ok: app.mcp.has_browser_use, cache: app.plugins.browser_use_cache },
     computer_use: { ok: app.mcp.has_computer_use, cache: app.plugins.computer_use_cache },
-    cmux: { ok: Boolean(cmux.ok), bin: cmux.bin || null, version: cmux.version || null, install_hint: cmux.ok ? null : platformCmuxInstallHint(), error: cmux.error || null },
+    cmux: { ok: Boolean(cmux.ok), bin: cmux.bin || null, version: cmux.version || null, socket_ok: cmux.socket_ok ?? null, install_hint: cmux.ok ? null : platformCmuxInstallHint(), error: cmux.error || null },
     homebrew: process.platform === 'darwin' ? { ok: Boolean(brew), bin: brew, required_for_cmux_install: homebrewNeeded } : { ok: null, bin: null, required_for_cmux_install: false },
     next_actions: depsNextActions({ npmBin, globalBin, codex, app, context7, cmux, brew, nodeOk })
   };
@@ -1194,7 +1212,10 @@ function depsNextActions({ npmBin, globalBin, codex, app, context7, cmux, brew, 
   if (!codex.bin) out.push('Run: sks deps install codex');
   if (!context7.ok) out.push('Run: sks deps install context7');
   if (!app.ok) out.push('Run: sks codex-app check');
-  if (!cmux.ok) out.push(process.platform === 'darwin' && !brew ? 'Install Homebrew, then run: sks deps install cmux' : 'Run: sks deps install cmux');
+  if (!cmux.ok) {
+    if (cmux.bin) out.push('Run: sks cmux check; if the cmux app/socket remains unhealthy, run: sks deps install cmux');
+    else out.push(process.platform === 'darwin' && !brew ? 'Install Homebrew, then run: sks deps install cmux' : 'Run: sks deps install cmux');
+  }
   return out;
 }
 
@@ -1209,7 +1230,7 @@ function printDepsStatus(status) {
   console.log(`Context7:    ${status.context7.ok ? 'ok' : 'missing'}`);
   console.log(`Browser Use: ${status.browser_use.ok ? 'ok' : 'missing'}`);
   console.log(`Computer Use:${status.computer_use.ok ? ' ok' : ' missing'}`);
-  console.log(`cmux:        ${status.cmux.ok ? 'ok' : 'missing'} ${status.cmux.version || ''}`.trimEnd());
+  console.log(`cmux:        ${cmuxStatusKind(status.cmux)} ${status.cmux.version || status.cmux.error || ''}`.trimEnd());
   if (process.platform === 'darwin') console.log(`Homebrew:    ${status.homebrew.ok ? 'ok' : 'missing'} ${status.homebrew.bin || ''}`.trimEnd());
   console.log(`Ready:       ${status.ready ? 'true' : 'false'}`);
   if (status.next_actions.length) {
@@ -1251,8 +1272,11 @@ async function installContext7Dependency(root) {
 }
 
 async function installCmuxDependency(args = []) {
-  const before = await cmuxAvailable().catch(() => ({ ok: false }));
+  const before = await cmuxReadiness({ wake: true }).catch(() => ({ ok: false }));
   if (before.ok) return { target: 'cmux', status: 'present', version: before.version || null };
+  if (before.bin && before.executable_ok && before.socket_ok === false) {
+    return { target: 'cmux', status: 'unhealthy', bin: before.bin, version: before.version || null, command: 'sks cmux check', error: before.error || 'cmux app/socket unhealthy' };
+  }
   if (process.platform === 'darwin') {
     const brew = await which('brew').catch(() => null);
     const command = CMUX_BREW_COMMAND;
@@ -1449,10 +1473,11 @@ function usage(args = []) {
     cmux: ['cmux', '', '  sks', '  sks cmux check', '  sks cmux status --once', '  sks deps install cmux'],
     team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
-    ralph: ['Ralph', '', '  sks ralph prepare "task"', '  sks ralph answer <MISSION_ID> answers.json', '  sks ralph run <MISSION_ID> --max-cycles 8'],
+    goal: ['Goal', '', '  sks goal create "task"', '  sks goal status latest', '  sks goal pause latest', '  sks goal resume latest', '  sks goal clear latest'],
     'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
     dollar: ['Dollar Commands', '', formatDollarCommandsCompact('  '), '', 'Terminal: sks dollar-commands [--json]'],
-    wiki: ['TriWiki', '', '  sks wiki pack', '  sks wiki refresh [--prune]', '  sks wiki validate .sneakoscope/wiki/context-pack.json', '  sks wiki prune --dry-run --json', '', 'Packs include attention.use_first and attention.hydrate_first for compact recall plus source hydration.'],
+    wiki: ['TriWiki', '', '  sks wiki pack', '  sks wiki refresh [--prune]', '  sks wiki sweep latest --json', '  sks wiki validate .sneakoscope/wiki/context-pack.json', '  sks wiki prune --dry-run --json', '', 'Packs include attention.use_first and attention.hydrate_first for compact recall plus source hydration. Sweep records intentional forgetting and promotion candidates.'],
+    'code-structure': ['Code Structure', '', '  sks code-structure scan', '  sks code-structure scan --json', '', 'Flags handwritten source files above 1000/2000/3000-line thresholds and records split-review exceptions.'],
     gx: ['GX', '', '  sks gx init architecture-atlas', '  sks gx render architecture-atlas --format all', '  sks gx validate architecture-atlas']
   };
   const catalog = COMMAND_CATALOG.find((c) => c.name === topic);
@@ -1584,7 +1609,7 @@ async function setup(args) {
   console.log('ㅅㅋㅅ Setup\n');
   console.log(`Project:   ${root}`);
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
-  console.log(`CLI tools: Codex ${formatCodexCliToolStatus(cliTools.codex)}; cmux ${cliTools.cmux.ok ? `ok ${cliTools.cmux.version || ''}`.trim() : 'missing'}`);
+  console.log(`CLI tools: Codex ${formatCodexCliToolStatus(cliTools.codex)}; cmux ${cmuxStatusKind(cliTools.cmux)} ${cliTools.cmux.version || cliTools.cmux.error || ''}`.trimEnd());
   console.log(`Hooks:     ${path.relative(root, hooksPath)}`);
   console.log(`Version:   ${versioningInfo.enabled ? (versioningInfo.hook_installed ? 'auto-bump enabled' : 'auto-bump hook missing') : 'not enabled'}${versioningInfo.package_version ? ` (${versioningInfo.package_version})` : ''}`);
   if (localOnly) console.log('Git:       local-only (.git/info/exclude; user AGENTS preserved, SKS managed block refreshed)');
@@ -1596,7 +1621,7 @@ async function setup(args) {
   console.log(`Next:      sks context7 check; sks selftest --mock; sks commands; sks dollar-commands`);
   if (cliTools.codex.status === 'failed') console.log(`\nCodex CLI install failed. Run manually: npm i -g @openai/codex. ${cliTools.codex.error || ''}`.trim());
   if (cliTools.codex.status === 'installed_not_on_path') console.log(`\nCodex CLI installed but not on PATH. ${cliTools.codex.hint}`);
-  if (!cliTools.cmux.ok) console.log(`\ncmux missing. Install: ${cliTools.cmux.install_hint}`);
+  if (!cliTools.cmux.ok) console.log(`\ncmux ${cmuxStatusKind(cliTools.cmux)}. ${cliTools.cmux.bin ? 'Run: sks cmux check' : `Install: ${cliTools.cmux.install_hint}`}`);
   if (!install.ok && install.scope === 'global') console.log('\nGlobal command missing. Run: npm i -g sneakoscope');
   if (!install.ok && install.scope === 'project') console.log('\nProject package missing. Run: npm i -D sneakoscope');
   if (!appRuntime.ok) console.log('\nCodex App and first-party Browser Use/Computer Use tools are required for SKS cmux/QA parity. Run: sks codex-app check');
@@ -1666,7 +1691,7 @@ async function doctor(args) {
   const dbScan = await scanDbSafety(root).catch((err) => ({ ok: false, findings: [{ id: 'db_safety_scan_failed', severity: 'high', reason: err.message }] }));
   const context7Status = await checkContext7(root);
   const appRuntime = await codexAppIntegrationStatus({ codex });
-  const cmuxStatus = await cmuxAvailable().catch((err) => ({ ok: false, version: null, error: err.message }));
+  const cmuxStatus = await cmuxReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
   const skillStatus = await checkRequiredSkills(root);
   const globalSkillStatus = await checkRequiredSkills(null, globalCodexSkillsRoot());
   const guardStatus = await harnessGuardStatus(root);
@@ -1687,7 +1712,7 @@ async function doctor(args) {
     sneakoscope: { ok: await exists(path.join(root, '.sneakoscope')) },
     context7: context7Status,
     codex_app_runtime: appRuntime,
-    runtime: { cmux: { ok: Boolean(cmuxStatus.ok), version: cmuxStatus.version || null, install_hint: cmuxStatus.ok ? null : platformCmuxInstallHint(), error: cmuxStatus.error || null } },
+    runtime: { cmux: { ok: Boolean(cmuxStatus.ok), bin: cmuxStatus.bin || null, version: cmuxStatus.version || null, socket_ok: cmuxStatus.socket_ok ?? null, install_hint: cmuxStatus.ok ? null : platformCmuxInstallHint(), error: cmuxStatus.error || null } },
     harness_guard: guardStatus,
     versioning: versioningInfo,
     db_guard: { ok: dbPolicyExists && dbScan.ok, policy: dbPolicyExists ? await loadDbSafetyPolicy(root) : null, scan: dbScan },
@@ -1715,7 +1740,7 @@ async function doctor(args) {
   console.log(`State:     ${result.sneakoscope.ok ? 'ok' : 'missing .sneakoscope'}`);
   console.log(`Context7:  ${result.context7.ok ? 'ok' : 'missing MCP config'} project=${result.context7.project.ok ? 'ok' : 'missing'} global=${result.context7.global.ok ? 'ok' : 'missing'}`);
   console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser Use=${appRuntime.mcp.has_browser_use ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'}`);
-  console.log(`cmux:      ${result.runtime.cmux.ok ? 'ok' : 'missing'} ${result.runtime.cmux.version || ''}`.trimEnd());
+  console.log(`cmux:      ${cmuxStatusKind(result.runtime.cmux)} ${result.runtime.cmux.version || result.runtime.cmux.error || ''}`.trimEnd());
   console.log(`Guard:     ${result.harness_guard.ok ? 'ok' : 'blocked'}${result.harness_guard.source_exception ? ' source-exception' : ''}`);
   console.log(`Version:   ${result.versioning.ok ? 'ok' : 'missing'}${result.versioning.enabled ? ` ${result.versioning.package_version || ''}` : ` ${result.versioning.reason || 'disabled'}`}`);
   console.log(`DB Guard:  ${result.db_guard.ok ? 'ok' : 'blocked'} ${dbScan.findings?.length || 0} finding(s)`);
@@ -1732,13 +1757,13 @@ async function doctor(args) {
   if (result.harness_conflicts.hard_block) console.log(`\n${formatHarnessConflictReport(conflictScan)}`);
   if (!result.context7.ok) console.log('Context7 MCP missing. Run: sks context7 setup --scope project');
   if (!appRuntime.ok) console.log('Codex App or first-party MCP/plugin tools missing. Run: sks codex-app check');
-  if (!result.runtime.cmux.ok) console.log('cmux missing. Run: sks deps install cmux');
+  if (!result.runtime.cmux.ok) console.log(result.runtime.cmux.bin ? 'cmux app/socket unhealthy. Run: sks cmux check' : 'cmux missing. Run: sks deps install cmux');
   if (!result.harness_guard.ok) console.log('Harness guard failed. Run: sks setup from a real terminal, then sks guard check.');
   if (!result.versioning.ok) console.log('Versioning hook missing. Run: sks versioning hook, or sks doctor --fix.');
   if (!result.skills.ok) console.log(`Missing skills: ${result.skills.missing.join(', ')}. Run: sks setup`);
   if (!result.global_skills.ok) console.log(`Missing global $ skills: ${result.global_skills.missing.join(', ')}. Run: npm i -g sneakoscope, or sks setup from a non-local-only run.`);
   const blocked = [];
-  if (!result.runtime.cmux.ok) blocked.push(['cmux is missing', 'sks deps install cmux']);
+  if (!result.runtime.cmux.ok) blocked.push([result.runtime.cmux.bin ? 'cmux app/socket is unhealthy' : 'cmux is missing', result.runtime.cmux.bin ? 'sks cmux check' : 'sks deps install cmux']);
   if (!appRuntime.ok) blocked.push(['Codex App or first-party MCP/plugin tools need setup', 'sks codex-app check']);
   if (blocked.length) {
     console.log('\nBlocked:');
@@ -1880,365 +1905,7 @@ function compareVersions(a, b) {
   return 0;
 }
 
-async function ralph(sub, args) {
-  if (sub === 'prepare') return ralphPrepare(args);
-  if (sub === 'answer') return ralphAnswer(args);
-  if (sub === 'run') return ralphRun(args);
-  if (sub === 'status') return ralphStatus(args);
-  console.error('Usage: sks ralph <prepare|answer|run|status>');
-  process.exitCode = 1;
-}
-
-async function research(sub, args) {
-  if (sub === 'prepare') return researchPrepare(args);
-  if (sub === 'run') return researchRun(args);
-  if (sub === 'status') return researchStatus(args);
-  console.error('Usage: sks research <prepare|run|status>');
-  process.exitCode = 1;
-}
-
-async function qaLoop(sub, args) {
-  const known = new Set(['prepare', 'answer', 'run', 'status', 'help', '--help', '-h']);
-  const action = known.has(sub) ? sub : 'prepare';
-  const actionArgs = action === 'prepare' && sub && !known.has(sub) ? [sub, ...args] : args;
-  if (action === 'prepare') return qaLoopPrepare(actionArgs);
-  if (action === 'answer') return qaLoopAnswer(actionArgs);
-  if (action === 'run') return qaLoopRun(actionArgs);
-  if (action === 'status') return qaLoopStatus(actionArgs);
-  console.log(`SKS QA-LOOP
-
-Usage:
-  sks qa-loop prepare "target"
-  sks qa-loop answer <mission-id|latest> <answers.json>
-  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N]
-  sks qa-loop status <mission-id|latest>
-
-Prompt route:
-  $QA-LOOP dogfood UI/API, fix safe issues, reverify
-`);
-}
-
-function qaRoute() {
-  return ROUTES.find((route) => route.id === 'QALoop') || routePrompt('$QA-LOOP');
-}
-
-async function qaLoopPrepare(args) {
-  const root = await sksRoot();
-  if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
-  const prompt = promptOf(args);
-  if (!prompt) throw new Error('Missing QA target prompt.');
-  const { id, dir } = await createMission(root, { mode: 'qaloop', prompt });
-  const schema = buildQaLoopQuestionSchema(prompt);
-  const route = qaRoute();
-  await writeQuestions(dir, schema);
-  await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: 'QALoop', command: '$QA-LOOP', mode: 'QALOOP', task: prompt, required_skills: route?.requiredSkills || [], context7_required: false, original_stop_gate: 'qa-gate.json', clarification_gate: true });
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.prepare.questions_created', slots: schema.slots.length });
-  await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_AWAITING_ANSWERS', questions_allowed: true, implementation_allowed: false, clarification_required: true, ambiguity_gate_required: true, stop_gate: 'clarification-gate', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
-  console.log(`QA-LOOP mission created: ${id}`);
-  console.log('QA-LOOP is locked until all required answers are supplied.');
-  console.log(`Questions: ${path.relative(root, path.join(dir, 'questions.md'))}`);
-  console.log(`Answer schema: ${path.relative(root, path.join(dir, 'required-answers.schema.json'))}`);
-  console.log('\nRequired questions:');
-  console.log(formatRalphQuestionsForCli(schema));
-}
-
-async function qaLoopAnswer(args) {
-  const root = await sksRoot();
-  const [missionArg, answerFile] = args;
-  const id = await resolveMissionId(root, missionArg);
-  if (!id || !answerFile) throw new Error('Usage: sks qa-loop answer <mission-id|latest> <answers.json>');
-  const { dir, mission } = await loadMission(root, id);
-  const answers = await readJson(path.resolve(answerFile));
-  await writeJsonAtomic(path.join(dir, 'answers.json'), answers);
-  const result = await sealContract(dir, mission);
-  if (!result.ok) {
-    console.error('Answer validation failed. QA-LOOP remains locked.');
-    console.error(JSON.stringify(result.validation, null, 2));
-    process.exitCode = 2;
-    return;
-  }
-  const artifactResult = await writeQaLoopArtifacts(dir, mission, result.contract);
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.contract.sealed', hash: result.contract.sealed_hash, checklist_count: artifactResult.checklist_count });
-  await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED', questions_allowed: false, implementation_allowed: true, clarification_required: false, clarification_passed: true, ambiguity_gate_passed: true, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
-  console.log(`QA-LOOP contract sealed for ${id}`);
-  console.log(`Hash: ${result.contract.sealed_hash}`);
-  console.log(`Checklist: ${artifactResult.checklist_count} cases`);
-  console.log(`Report: ${path.relative(root, path.join(dir, artifactResult.report_file))}`);
-  console.log(`Run: sks qa-loop run ${id} --max-cycles ${answers.MAX_QA_CYCLES || 8}`);
-}
-
-async function qaLoopRun(args) {
-  const root = await sksRoot();
-  const id = await resolveMissionId(root, args[0]);
-  if (!id) throw new Error('Usage: sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N]');
-  const { dir, mission } = await loadMission(root, id);
-  const contractPath = path.join(dir, 'decision-contract.json');
-  if (!(await exists(contractPath))) throw new Error('QA-LOOP cannot run: decision-contract.json is missing.');
-  const contract = await readJson(contractPath);
-  if (!(await exists(path.join(dir, 'qa-ledger.json')))) await writeQaLoopArtifacts(dir, mission, contract);
-  const safetyScan = await scanDbSafety(root);
-  if (!safetyScan.ok) {
-    console.error('QA-LOOP cannot run: SKS safety scan found unsafe project data-tool configuration.');
-    console.error(JSON.stringify(safetyScan.findings, null, 2));
-    process.exitCode = 2;
-    return;
-  }
-  const fallbackCycles = Number.parseInt(contract.answers?.MAX_QA_CYCLES, 10) || 8;
-  const maxCycles = readMaxCycles(args, fallbackCycles);
-  const mock = flag(args, '--mock');
-  const qaGate = await readJson(path.join(dir, 'qa-gate.json'), {});
-  const reportFile = qaGate.qa_report_file;
-  await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_RUNNING_NO_QUESTIONS', questions_allowed: false, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.run.started', maxCycles, mock });
-  if (mock) {
-    const gate = await writeMockQaResult(dir, mission, contract);
-    await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: gate.passed ? 'QALOOP_DONE' : 'QALOOP_PAUSED', questions_allowed: true });
-    console.log(`Mock QA-LOOP done: ${id}`);
-    console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
-    return;
-  }
-  const codex = await getCodexInfo();
-  if (!codex.bin) {
-    console.error('Codex CLI not found. Running mock QA-LOOP instead.');
-    const gate = await writeMockQaResult(dir, mission, contract);
-    await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: gate.passed ? 'QALOOP_DONE' : 'QALOOP_PAUSED', questions_allowed: true });
-    console.log(`Mock QA-LOOP done: ${id}`);
-    return;
-  }
-  let last = '';
-  for (let cycle = 1; cycle <= maxCycles; cycle++) {
-    const cycleDir = path.join(dir, 'qa-loop', `cycle-${cycle}`);
-    const outputFile = path.join(cycleDir, 'final.md');
-    const prompt = buildQaLoopPrompt({ id, mission, contract, cycle, previous: last, reportFile });
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.cycle.start', cycle });
-    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-logic-high', logDir: cycleDir });
-    await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
-    last = await safeReadText(outputFile, result.stdout || result.stderr || '');
-    if (containsUserQuestion(last)) {
-      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.guard.question_blocked', cycle });
-      last = `${last}\n\n${noQuestionContinuationReason()}`;
-      continue;
-    }
-    const gate = await evaluateQaGate(dir);
-    if (gate.passed) {
-      await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_DONE', questions_allowed: true });
-      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.done', cycle });
-      console.log(`QA-LOOP done: ${id}`);
-      return;
-    }
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.cycle.continue', cycle, reasons: gate.reasons });
-  }
-  await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_PAUSED_MAX_CYCLES', questions_allowed: true });
-  console.log(`QA-LOOP paused after max cycles: ${id}`);
-}
-
-async function qaLoopStatus(args) {
-  const root = await sksRoot();
-  const id = await resolveMissionId(root, args[0]);
-  if (!id) throw new Error('Usage: sks qa-loop status <mission-id|latest>');
-  const { dir, mission } = await loadMission(root, id);
-  const state = await readJson(stateFile(root), {});
-  const status = await qaStatus(dir);
-  if (flag(args, '--json')) return console.log(JSON.stringify({ mission, state, qa: status }, null, 2));
-  console.log('SKS QA-LOOP Status\n');
-  console.log(`Mission:   ${id}`);
-  console.log(`Phase:     ${state.phase || mission.phase}`);
-  console.log(`Checklist: ${status.checklist_count ?? 'none'}`);
-  console.log(`Report:    ${status.report_written ? `present ${status.report_file || ''}`.trim() : 'missing'}`);
-  console.log(`Gate:      ${status.gate?.passed ? 'passed' : 'not passed'}`);
-  if (status.gate?.reasons?.length) console.log(`Reasons:   ${status.gate.reasons.join(', ')}`);
-}
-
-async function researchPrepare(args) {
-  const root = await sksRoot();
-  if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
-  const prompt = positionalArgs(args).join(' ').trim();
-  if (!prompt) throw new Error('Missing research topic.');
-  const { id, dir } = await createMission(root, { mode: 'research', prompt });
-  const plan = await writeResearchPlan(dir, prompt, { depth: readFlagValue(args, '--depth', 'frontier') });
-  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_PREPARED', questions_allowed: false });
-  console.log(`Research mission created: ${id}`);
-  console.log(`Methodology: ${plan.methodology}`);
-  console.log(`Plan: ${path.relative(root, path.join(dir, 'research-plan.md'))}`);
-  console.log(`Run: sks research run ${id} --max-cycles 3`);
-}
-
-async function researchRun(args) {
-  const root = await sksRoot();
-  const id = await resolveMissionId(root, args[0]);
-  if (!id) throw new Error('Usage: sks research run <mission-id|latest> [--mock] [--max-cycles N]');
-  const { dir, mission } = await loadMission(root, id);
-  const planPath = path.join(dir, 'research-plan.json');
-  if (!(await exists(planPath))) await writeResearchPlan(dir, mission.prompt || '', {});
-  const plan = await readJson(planPath);
-  const dbScan = await scanDbSafety(root);
-  if (!dbScan.ok) {
-    console.error('Research cannot run: DB Guardian found unsafe Supabase/MCP/database configuration.');
-    console.error(JSON.stringify(dbScan.findings, null, 2));
-    process.exitCode = 2;
-    return;
-  }
-  const maxCycles = readMaxCycles(args, 3);
-  const mock = flag(args, '--mock');
-  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false });
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock });
-  if (mock) {
-    const gate = await writeMockResearchResult(dir, plan);
-    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true });
-    console.log(`Mock research done: ${id}`);
-    console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
-    return;
-  }
-  const codex = await getCodexInfo();
-  if (!codex.bin) {
-    console.error('Codex CLI not found. Running mock research instead.');
-    const gate = await writeMockResearchResult(dir, plan);
-    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true });
-    console.log(`Mock research done: ${id}`);
-    return;
-  }
-  let last = '';
-  for (let cycle = 1; cycle <= maxCycles; cycle++) {
-    const cycleDir = path.join(dir, 'research', `cycle-${cycle}`);
-    const outputFile = path.join(cycleDir, 'final.md');
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.start', cycle });
-    const prompt = buildResearchPrompt({ id, mission, plan, cycle, previous: last });
-    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-research', logDir: cycleDir, timeoutMs: 45 * 60 * 1000 });
-    await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
-    last = await safeReadText(outputFile, result.stdout || result.stderr || '');
-    if (containsUserQuestion(last)) {
-      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.guard.question_blocked', cycle });
-      last = `${last}\n\n${noQuestionContinuationReason()}`;
-      continue;
-    }
-    const gate = await evaluateResearchGate(dir);
-    if (gate.passed) {
-      await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_DONE', questions_allowed: true });
-      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.done', cycle });
-      await enforceRetention(root).catch(() => {});
-      console.log(`Research done: ${id}`);
-      return;
-    }
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.continue', cycle, reasons: gate.reasons });
-  }
-  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_PAUSED_MAX_CYCLES', questions_allowed: true });
-  console.log(`Research paused after max cycles: ${id}`);
-}
-
-async function researchStatus(args) {
-  const root = await sksRoot();
-  const id = await resolveMissionId(root, args[0]);
-  if (!id) throw new Error('Usage: sks research status <mission-id|latest>');
-  const { dir, mission } = await loadMission(root, id);
-  const state = await readJson(stateFile(root), {});
-  const gate = await readJson(path.join(dir, 'research-gate.evaluated.json'), await readJson(path.join(dir, 'research-gate.json'), null));
-  const ledger = await readJson(path.join(dir, 'novelty-ledger.json'), null);
-  console.log(JSON.stringify({ mission, state, gate, novelty_entries: ledger?.entries?.length ?? null }, null, 2));
-}
-
-async function ralphPrepare(args) {
-  const root = await sksRoot();
-  if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
-  const prompt = promptOf(args);
-  if (!prompt) throw new Error('Missing task prompt.');
-  const { id, dir } = await createMission(root, { mode: 'ralph', prompt });
-  const schema = buildQuestionSchema(prompt);
-  await writeQuestions(dir, schema);
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'ralph.prepare.questions_created', slots: schema.slots.length });
-  await setCurrent(root, { mission_id: id, mode: 'RALPH', phase: 'RALPH_AWAITING_ANSWERS', questions_allowed: true, implementation_allowed: false });
-  console.log(`Mission created: ${id}`);
-  console.log('Ralph Prepare completed. Ralph run is locked until all required answers are supplied.');
-  console.log(`Questions: ${path.relative(root, path.join(dir, 'questions.md'))}`);
-  console.log(`Answer schema: ${path.relative(root, path.join(dir, 'required-answers.schema.json'))}`);
-  console.log('\nRequired questions:');
-  console.log(formatRalphQuestionsForCli(schema));
-}
-
-async function ralphAnswer(args) {
-  const root = await sksRoot();
-  const [missionArg, answerFile] = args;
-  const id = await resolveMissionId(root, missionArg);
-  if (!id || !answerFile) throw new Error('Usage: sks ralph answer <mission-id|latest> <answers.json>');
-  const { dir, mission } = await loadMission(root, id);
-  const answers = await readJson(path.resolve(answerFile));
-  await writeJsonAtomic(path.join(dir, 'answers.json'), answers);
-  const result = await sealContract(dir, mission);
-  if (!result.ok) {
-    console.error('Answer validation failed. Ralph run remains locked.');
-    console.error(JSON.stringify(result.validation, null, 2));
-    process.exitCode = 2;
-    return;
-  }
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'ralph.contract.sealed', hash: result.contract.sealed_hash });
-  await setCurrent(root, { mission_id: id, mode: 'RALPH', phase: 'DECISION_CONTRACT_SEALED' });
-  console.log(`Decision Contract sealed for ${id}`);
-  console.log(`Hash: ${result.contract.sealed_hash}`);
-}
-
-async function ralphRun(args) {
-  const root = await sksRoot();
-  const id = await resolveMissionId(root, args[0]);
-  if (!id) throw new Error('Usage: sks ralph run <mission-id|latest> [--mock]');
-  const { dir, mission } = await loadMission(root, id);
-  const contractPath = path.join(dir, 'decision-contract.json');
-  if (!(await exists(contractPath))) throw new Error('Ralph cannot run: decision-contract.json is missing.');
-  const contract = await readJson(contractPath);
-  const dbScan = await scanDbSafety(root);
-  if (!dbScan.ok) {
-    console.error('Ralph cannot run: DB Guardian found unsafe Supabase/MCP/database configuration.');
-    console.error(JSON.stringify(dbScan.findings, null, 2));
-    process.exitCode = 2;
-    return;
-  }
-  const maxCycles = readMaxCycles(args, 8);
-  const mock = flag(args, '--mock');
-  await setCurrent(root, { mission_id: id, mode: 'RALPH', phase: 'RALPH_RUNNING_NO_QUESTIONS', questions_allowed: false });
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'ralph.run.started', maxCycles, mock });
-  await enforceRetention(root).catch(() => {});
-  const gatePath = path.join(dir, 'done-gate.json');
-  if (!(await exists(gatePath))) await writeJsonAtomic(gatePath, defaultDoneGate());
-  console.log(`Ralph started: ${id}`);
-  console.log('No-question lock active. Database destructive operations are blocked by DB Guard.');
-  if (mock) return ralphRunMock(root, id, dir);
-  const codex = await getCodexInfo();
-  if (!codex.bin) {
-    console.error('Codex CLI not found. Running mock loop instead.');
-    return ralphRunMock(root, id, dir);
-  }
-  let last = '';
-  for (let cycle = 1; cycle <= maxCycles; cycle++) {
-    const cycleDir = path.join(dir, 'ralph', `cycle-${cycle}`);
-    const outputFile = path.join(cycleDir, 'final.md');
-    const prompt = buildRalphPrompt({ id, mission, contract, cycle, previous: last });
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'ralph.cycle.start', cycle });
-    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-ralph', logDir: cycleDir });
-    await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
-    last = await safeReadText(outputFile, result.stdout || result.stderr || '');
-    if (containsUserQuestion(last)) {
-      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'ralph.guard.question_blocked', cycle });
-      last = `${last}\n\n${noQuestionContinuationReason()}`;
-      continue;
-    }
-    const gate = await evaluateDoneGate(root, id);
-    if (gate.passed) {
-      await setCurrent(root, { mission_id: id, mode: 'RALPH', phase: 'RALPH_DONE', questions_allowed: true });
-      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'ralph.done', cycle });
-      await enforceRetention(root).catch(() => {});
-      console.log(`Ralph done: ${id}`);
-      return;
-    }
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'ralph.cycle.continue', cycle, reasons: gate.reasons });
-    await enforceRetention(root).catch(() => {});
-  }
-  await setCurrent(root, { mission_id: id, mode: 'RALPH', phase: 'RALPH_PAUSED_MAX_CYCLES', questions_allowed: true });
-  console.log(`Ralph paused after max cycles: ${id}`);
-}
-
-function buildRalphPrompt({ id, mission, contract, cycle, previous }) {
-  return `You are running Sneakoscope Codex Ralph mode.\nMISSION: ${id}\nTASK: ${mission.prompt}\nCYCLE: ${cycle}\nNO-QUESTION LOCK: Do not ask the user. Resolve using decision-contract.json.\nDATABASE SAFETY: Destructive database operations are forbidden. Do not run DROP, TRUNCATE, db reset, db push, branch reset/merge/delete, project deletion, RLS disable, or live execute_sql writes. Use read-only/project-scoped Supabase MCP only unless the sealed contract explicitly allows migration files for local or preview branch.\nDECISION CONTRACT:\n${JSON.stringify(contract, null, 2)}\nPERFORMANCE POLICY: keep outputs concise; raw logs stay in files; summarize evidence only. If the task claims performance, token, or accuracy improvement, run sks eval run or sks eval compare and record the report path in done-gate.json evidence.\nDESIGN POLICY: if the task creates HTML/UI/prototype/deck-like visual artifacts, use the installed design-artifact-expert skill, inspect design context first, verify rendered output, and record design verification in done-gate.json.\nLOOP: plan, read before write, implement within contract, run/justify tests, update .sneakoscope/missions/${id}/done-gate.json.\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
-}
-
-function formatRalphQuestionsForCli(schema) {
+function formatQuestionsForCli(schema) {
   return schema.slots.map((s, i) => {
     const options = s.options ? ` Options: ${s.options.join(', ')}.` : '';
     const examples = s.examples ? ` Examples: ${s.examples.join(', ')}.` : '';
@@ -2250,32 +1917,31 @@ async function safeReadText(file, fallback = '') {
   try { return await fsp.readFile(file, 'utf8'); } catch { return fallback; }
 }
 
-async function ralphRunMock(root, id, dir) {
-  await writeJsonAtomic(path.join(dir, 'done-gate.json'), { passed: true, unsupported_critical_claims: 0, database_safety_violation: false, database_safety_reviewed: true, visual_drift: 'low', wiki_drift: 'low', tests_required: false, test_evidence_present: false, evidence: ['mock Ralph loop completed'], notes: ['mock run'] });
-  await evaluateDoneGate(root, id);
-  await setCurrent(root, { mission_id: id, mode: 'RALPH', phase: 'RALPH_DONE', questions_allowed: true });
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'ralph.mock.done' });
-  await enforceRetention(root).catch(() => {});
-  console.log(`Mock Ralph done: ${id}`);
-}
-
-async function ralphStatus(args) {
-  const root = await sksRoot();
-  const id = await resolveMissionId(root, args[0]);
-  if (!id) throw new Error('Usage: sks ralph status <mission-id|latest>');
-  const { dir, mission } = await loadMission(root, id);
-  const state = await readJson(stateFile(root), {});
-  const contract = await readJson(path.join(dir, 'decision-contract.json'), null);
-  const gate = await readJson(path.join(dir, 'done-gate.evaluated.json'), await readJson(path.join(dir, 'done-gate.json'), null));
-  console.log(JSON.stringify({ mission, state, contract_sealed: Boolean(contract), done_gate: gate }, null, 2));
-}
-
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
 function readMaxCycles(args, fallback) {
   const i = args.indexOf('--max-cycles');
   const raw = i >= 0 && args[i + 1] ? Number(args[i + 1]) : Number(fallback);
   if (!Number.isFinite(raw)) return Math.max(1, Number.parseInt(fallback, 10) || 1);
   return Math.max(1, Math.min(50, Math.floor(raw)));
+}
+
+function positionalArgs(args = []) {
+  const out = [];
+  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines']);
+  for (let i = 0; i < args.length; i++) {
+    const arg = String(args[i]);
+    if (valueFlags.has(arg)) {
+      i++;
+      continue;
+    }
+    if (!arg.startsWith('--')) out.push(arg);
+  }
+  return out;
+}
+
+function readFlagValue(args, name, fallback) {
+  const i = args.indexOf(name);
+  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 }
 
 async function selftest() {
@@ -2379,9 +2045,12 @@ async function selftest() {
   const workspaceMatches = matchingCmuxWorkspaces(workspaceList, workspacePlan);
   if (workspaceMatches.length !== 1 || cmuxWorkspaceRef(workspaceMatches[0]) !== 'workspace:1') throw new Error('selftest failed: MAD cmux workspace reuse matching did not select the stable workspace');
   if (cmuxWorkspaceRefFromText('OK workspace:3') !== 'workspace:3') throw new Error('selftest failed: cmux workspace ref parser did not read cmux OK output');
+  if (cmuxSurfaceRefFromText('OK surface:6 workspace:5') !== 'surface:6') throw new Error('selftest failed: cmux surface ref parser did not read split output');
   await writeCmuxWorkspaceRecord(workspacePlan, { ref: 'workspace:7', name: 'sks-mad-selftest', cwd: tmp });
   const workspaceRecord = await readCmuxWorkspaceRecord(workspacePlan);
   if (workspaceRecord?.ref !== 'workspace:7' || workspaceRecord.workspace !== 'sks-mad-selftest') throw new Error('selftest failed: MAD cmux workspace record was not persisted for stable reuse');
+  if (cmuxStatusKind({ ok: false, bin: '/tmp/cmux', error: 'Broken pipe' }) !== 'unhealthy') throw new Error('selftest failed: cmux socket failure was not labeled unhealthy');
+  if (cmuxStatusKind({ ok: false, bin: null }) !== 'missing') throw new Error('selftest failed: missing cmux was not labeled missing');
   const guardBlocked = await checkHarnessModification(tmp, { tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
   if (guardBlocked.action !== 'block') throw new Error('selftest failed: harness guard allowed skill tampering');
   const setupBlocked = await checkHarnessModification(tmp, { command: 'sks setup --force' });
@@ -2575,30 +2244,21 @@ async function selftest() {
   for (const { command } of DOLLAR_COMMANDS) {
     if (!codexAppQuickRefText.includes(command)) throw new Error(`selftest failed: Codex App quick reference missing ${command}`);
   }
-  const hookRalphTmp = tmpdir();
-  await initProject(hookRalphTmp, {});
+  const hookGoalTmp = tmpdir();
+  await initProject(hookGoalTmp, {});
   const hookBin = path.join(packageRoot(), 'bin', 'sks.mjs');
-  const hookPayload = JSON.stringify({ cwd: hookRalphTmp, prompt: '$Ralph 로그인 세션 만료 UX 개선 supabase db' });
-  const hookResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookRalphTmp, input: hookPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
-  if (hookResult.code !== 0) throw new Error(`selftest failed: $Ralph hook exited ${hookResult.code}: ${hookResult.stderr}`);
+  const hookPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '$Goal 로그인 세션 만료 UX 개선 supabase db' });
+  const hookResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookGoalTmp, input: hookPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookResult.code !== 0) throw new Error(`selftest failed: $Goal hook exited ${hookResult.code}: ${hookResult.stderr}`);
   const hookJson = JSON.parse(hookResult.stdout);
   if ('statusMessage' in hookJson || 'additionalContext' in hookJson) throw new Error('selftest failed: hook emitted Codex schema-invalid top-level fields');
-  if (!hookJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY $Ralph route activated')) throw new Error('selftest failed: $Ralph hook did not activate Ralph prepare pipeline');
-  if (hookJson.hookSpecificOutput?.hookEventName !== 'UserPromptSubmit' || !hookJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY $Ralph route activated')) throw new Error('selftest failed: $Ralph hook did not emit official UserPromptSubmit additionalContext');
-  if (!String(hookJson.systemMessage || '').includes('Ralph clarification gate')) throw new Error('selftest failed: $Ralph hook missing visible status message');
-  if (hookJson.hookSpecificOutput?.additionalContext?.includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Ralph goal template');
-  if (!hookJson.hookSpecificOutput?.additionalContext?.includes('Required questions')) throw new Error('selftest failed: missing Ralph dynamic questions');
-  const hookState = await readJson(stateFile(hookRalphTmp), {});
-  if (hookState.phase !== 'RALPH_AWAITING_ANSWERS') throw new Error('selftest failed: $Ralph hook did not set awaiting-answers state');
-  if (!(await exists(path.join(missionDir(hookRalphTmp, hookState.mission_id), 'questions.md')))) throw new Error('selftest failed: $Ralph hook did not write questions.md');
-  const stopResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: hookRalphTmp, input: JSON.stringify({ cwd: hookRalphTmp, last_assistant_message: 'I will implement now.' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  if (stopResult.code !== 0) throw new Error(`selftest failed: stop hook exited ${stopResult.code}: ${stopResult.stderr}`);
-  const stopJson = JSON.parse(stopResult.stdout);
-  if (stopJson.decision !== 'block' || !String(stopJson.reason || '').includes('mandatory clarification')) throw new Error('selftest failed: Stop hook did not block missing Ralph questions');
-  if (!String(stopJson.reason || '').includes('Required questions')) throw new Error('selftest failed: Stop hook did not reprint Ralph questions');
-  if (String(stopJson.reason || '').includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Ralph stop goal');
-  if (!String(stopJson.reason || '').includes('sks ralph answer')) throw new Error('selftest failed: Stop hook did not provide Ralph answer command');
-  if (!String(stopJson.systemMessage || '').includes('clarification questions')) throw new Error('selftest failed: Stop hook missing clarification status message');
+  const goalContext = hookJson.hookSpecificOutput?.additionalContext || '';
+  if (!goalContext.includes('$Goal route prepared') || !goalContext.includes('/goal create')) throw new Error('selftest failed: $Goal hook did not prepare native goal bridge');
+  if (hookJson.hookSpecificOutput?.hookEventName !== 'UserPromptSubmit') throw new Error('selftest failed: $Goal hook did not emit official UserPromptSubmit additionalContext');
+  if (!String(hookJson.systemMessage || '').includes('Goal workflow bridge')) throw new Error('selftest failed: $Goal hook missing visible status message');
+  const hookState = await readJson(stateFile(hookGoalTmp), {});
+  if (hookState.phase !== 'GOAL_READY' || hookState.mode !== 'GOAL') throw new Error('selftest failed: $Goal hook did not set ready state');
+  if (!(await exists(path.join(missionDir(hookGoalTmp, hookState.mission_id), GOAL_WORKFLOW_ARTIFACT)))) throw new Error('selftest failed: $Goal hook did not write goal workflow artifact');
   const hookKoreanSksTmp = tmpdir();
   await initProject(hookKoreanSksTmp, {});
   const hookKoreanSksPayload = JSON.stringify({ cwd: hookKoreanSksTmp, prompt: koreanReadmeInstallPrompt });
@@ -2618,12 +2278,21 @@ async function selftest() {
   if (hookTeamResult.code !== 0) throw new Error(`selftest failed: $Team hook exited ${hookTeamResult.code}: ${hookTeamResult.stderr}`);
   const hookTeamJson = JSON.parse(hookTeamResult.stdout);
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: $Team hook did not force ambiguity gate before Team execution');
+  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('VISIBLE RESPONSE CONTRACT') || !String(hookTeamJson.systemMessage || '').includes('clarification questions')) throw new Error('selftest failed: $Team ambiguity gate did not force visible question response');
   if (hookTeamJson.hookSpecificOutput?.additionalContext?.includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Team goal');
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('UI_STATE_BEHAVIOR')) throw new Error('selftest failed: missing Team UI question');
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('Codex plan-tool interaction')) throw new Error('selftest failed: $Team ambiguity gate did not inject plan-tool guidance');
   const hookTeamState = await readJson(stateFile(hookTeamTmp), {});
   if (hookTeamState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookTeamState.implementation_allowed !== false) throw new Error('selftest failed: $Team hook did not lock execution behind ambiguity gate');
   if (await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-plan.json'))) throw new Error('selftest failed: Team plan was created before ambiguity gate passed');
+  const hookTeamPendingResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 새 작업으로 넘어가' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookTeamPendingResult.code !== 0) throw new Error(`selftest failed: pending clarification hook exited ${hookTeamPendingResult.code}: ${hookTeamPendingResult.stderr}`);
+  const hookTeamPendingJson = JSON.parse(hookTeamPendingResult.stdout);
+  const hookTeamPendingState = await readJson(stateFile(hookTeamTmp), {});
+  const hookTeamPendingContext = hookTeamPendingJson.hookSpecificOutput?.additionalContext || '';
+  if (hookTeamPendingState.mission_id !== hookTeamState.mission_id) throw new Error('selftest failed: pending clarification allowed a new route mission to replace the visible question sheet');
+  if (!hookTeamPendingContext.includes('Required questions still pending') || !hookTeamPendingContext.includes('VISIBLE RESPONSE CONTRACT') || !hookTeamPendingContext.includes('UI_STATE_BEHAVIOR')) throw new Error('selftest failed: pending clarification did not re-expose the question sheet');
+  if (hookTeamPendingContext.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: pending clarification prepared a new ambiguity gate instead of reusing the active one');
   const hookTeamStopResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, last_assistant_message: 'I will execute Team now.' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (hookTeamStopResult.code !== 0) throw new Error(`selftest failed: Team stop hook exited ${hookTeamStopResult.code}: ${hookTeamStopResult.stderr}`);
   const hookTeamStopJson = JSON.parse(hookTeamStopResult.stdout);
@@ -2632,6 +2301,7 @@ async function selftest() {
   if (String(hookTeamStopJson.reason || '').includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Team stop goal');
   if (!String(hookTeamStopJson.reason || '').includes('sks pipeline answer')) throw new Error('selftest failed: Stop hook did not provide pipeline answer command');
   if (!String(hookTeamStopJson.reason || '').includes('Codex plan-tool interaction')) throw new Error('selftest failed: Stop hook did not reprint plan-tool guidance');
+  if (!String(hookTeamStopJson.reason || '').includes('VISIBLE RESPONSE CONTRACT')) throw new Error('selftest failed: Stop hook did not force visible clarification response');
   const hookTeamSchema = await readJson(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'required-answers.schema.json'));
   const nonGoalsSlot = hookTeamSchema.slots.find((s) => s.id === 'NON_GOALS');
   if (nonGoalsSlot && !nonGoalsSlot.allow_empty) throw new Error('selftest failed: NON_GOALS does not allow an empty array answer');
@@ -2773,7 +2443,7 @@ async function selftest() {
   const codexConfigText = await safeReadText(path.join(tmp, '.codex', 'config.toml'));
   if (!codexConfigText.includes('multi_agent = true')) throw new Error('selftest failed: multi_agent not enabled');
   if (!hasContext7ConfigText(codexConfigText)) throw new Error('selftest failed: Context7 MCP not configured');
-  if (!codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest failed: reasoning profiles not configured');
+  if (!codexConfigText.includes('[profiles.sks-task-low]') || !codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest failed: GPT-5.5 reasoning profiles not configured');
   if (!codexConfigText.includes('[agents.analysis_scout]')) throw new Error('selftest failed: analysis_scout agent not configured');
   if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest failed: team_consensus agent not configured');
   const autoReviewHome = path.join(tmp, 'auto-review-home');
@@ -3030,9 +2700,40 @@ async function selftest() {
   if (!roleTeamPlan.roster.debate_team.some((agent) => /inconvenience/.test(agent.persona))) throw new Error('selftest failed: user friction persona missing from debate team');
   const cmuxTeam = await launchCmuxTeamView({ root: tmp, missionId: teamId, plan: roleTeamPlan, json: true });
   if (!cmuxTeam.agents?.length || !cmuxTeam.agents.some((entry) => entry.agent === 'analysis_scout_1') || !cmuxTeam.agents.every((entry) => String(entry.command || '').includes('team lane') && String(entry.command || '').includes('--agent'))) throw new Error('selftest failed: Team cmux view did not expose agent live lanes');
+  const cmuxTeamWorkspaceArgs = buildCmuxNewWorkspaceArgs({ root: tmp, workspace: `sks-team-${teamId}` }, cmuxTeam.agents[0].command);
+  if (!cmuxTeamWorkspaceArgs.includes('--name') || !cmuxTeamWorkspaceArgs.includes(`sks-team-${teamId}`)) throw new Error('selftest failed: Team cmux workspace is not named for visibility');
   if (routeReasoning(routePrompt('$Research frontier idea'), '$Research frontier idea').effort !== 'xhigh') throw new Error('selftest failed: research reasoning not xhigh');
   if (routeReasoning(routePrompt('$From-Chat-IMG 채팅 이미지 작업'), '$From-Chat-IMG 채팅 이미지 작업').effort !== 'xhigh') throw new Error('selftest failed: From-Chat-IMG reasoning not xhigh');
   if (routeReasoning(routePrompt('$DB migration'), '$DB migration').effort !== 'high') throw new Error('selftest failed: logical reasoning not high');
+  const lowReasoning = routeReasoning({ id: 'LowSmoke', reasoningPolicy: 'low' }, 'small metadata read');
+  if (lowReasoning.effort !== 'low' || lowReasoning.profile !== 'sks-task-low') throw new Error('selftest failed: low reasoning did not route to sks-task-low');
+  const forensicEffort = selectEffort({ mission_id: 'selftest', task_id: 'TASK-IMG', route: 'from-chat-img', prompt: '$From-Chat-IMG screenshot match' });
+  if (forensicEffort.selected_effort !== 'forensic_vision' || !validateEffortDecision(forensicEffort).ok) throw new Error('selftest failed: From-Chat-IMG effort did not select forensic_vision');
+  const lowEffort = selectEffort({ mission_id: 'selftest', task_id: 'TASK-LOW', is_deterministic: true, has_verified_skill: true });
+  if (lowEffort.selected_effort !== 'low') throw new Error('selftest failed: deterministic verified skill did not select low effort');
+  const recoveryEffort = selectEffort({ mission_id: 'selftest', task_id: 'TASK-RECOVERY', failure_count: 2 });
+  if (recoveryEffort.selected_effort !== 'recovery') throw new Error('selftest failed: repeated failure did not select recovery effort');
+  const invalidLedger = createWorkOrderLedger({ missionId: 'selftest', route: 'team', sourcesComplete: true, requests: [{ verbatim: 'do it', status: 'verified' }] });
+  if (validateWorkOrderLedger(invalidLedger).ok) throw new Error('selftest failed: work-order ledger accepted verified item without evidence');
+  const validLedger = createWorkOrderLedger({ missionId: 'selftest', route: 'team', sourcesComplete: true, requests: [{ verbatim: 'do it', implementation_tasks: ['TASK-001'], status: 'verified', implementation_evidence: ['file:src/core/routes.mjs'], verification_evidence: ['selftest'] }] });
+  if (!validateWorkOrderLedger(validLedger).ok) throw new Error('selftest failed: valid work-order ledger rejected');
+  const unresolvedVisualMap = buildFromChatImgVisualMap({ missionId: 'selftest', sources: [{ id: 'chat-img-1', type: 'chat_image', relevant: true, accounted_for: true }], regions: [{ image_id: 'chat-img-1', region_id: 'R01', status: 'uncertain' }] });
+  if (validateFromChatImgVisualMap(unresolvedVisualMap).ok) throw new Error('selftest failed: unresolved From-Chat-IMG visual region accepted');
+  const validVisualMap = buildFromChatImgVisualMap({ missionId: 'selftest', sources: [{ id: 'chat-img-1', type: 'chat_image', relevant: true, accounted_for: true }], regions: [{ image_id: 'chat-img-1', region_id: 'R01', observed_detail: 'button', matched_customer_request_ids: ['REQ-001'], confidence: 0.9, status: 'mapped' }] });
+  if (!validateFromChatImgVisualMap(validVisualMap).ok) throw new Error('selftest failed: valid From-Chat-IMG visual map rejected');
+  const dogfoodBlocked = createDogfoodReport({ scenario: 'selftest', computer_use_available: false, browser_available: false, cycles: 1, findings: [classifyDogfoodFinding({ id: 'DF-001', classification: 'fixable', description: 'broken' })], post_fix_verification_complete: false });
+  if (validateDogfoodReport(dogfoodBlocked).ok) throw new Error('selftest failed: dogfood report accepted unresolved fixable finding');
+  const dogfoodPassed = createDogfoodReport({ scenario: 'selftest', computer_use_available: true, browser_available: true, cycles: 2, findings: [classifyDogfoodFinding({ id: 'DF-001', classification: 'fixable', description: 'fixed', post_fix_verification: 'passed' })], post_fix_verification_complete: true });
+  if (!validateDogfoodReport(dogfoodPassed).ok) throw new Error('selftest failed: dogfood report rejected post-fix verification');
+  const skillCandidate = createSkillCandidate({ id: 'skill.from-chat-img.visual-work-order.v1', status: 'active', triggers: ['$From-Chat-IMG'], successful_runs: 3, files: ['.agents/skills/from-chat-img/SKILL.md'] });
+  if (!validateSkillCandidate(skillCandidate).ok) throw new Error('selftest failed: active skill candidate rejected');
+  const injection = decideSkillInjection({ route: 'from-chat-img', task_signature: 'reference images', skills: [skillCandidate, { ...skillCandidate, id: 'deprecated', status: 'deprecated' }] });
+  if (!validateSkillInjectionDecision(injection).ok || injection.injected.length !== 1) throw new Error('selftest failed: skill injection did not respect active/top-K filtering');
+  const promptContext = buildPromptContext({ stable: ['stable'], policies: ['policy'], dynamic: ['dynamic'] });
+  if (promptContext.blocks[0]?.cache_region !== 'stable_prefix' || promptContext.blocks.at(-1)?.cache_region !== 'dynamic_suffix') throw new Error('selftest failed: prompt context did not place dynamic context last');
+  const repeatedMistake = await recordMistake(teamDir, { route: 'from-chat-img', gate: 'visual-map', reason: 'unmatched-reference' });
+  const repeatedMistake2 = await recordMistake(teamDir, { route: 'from-chat-img', gate: 'visual-map', reason: 'unmatched-reference' });
+  if (!repeatedMistake.ledger.entries.length || !repeatedMistake2.ledger.entries[0].prevention) throw new Error('selftest failed: repeated mistake did not attach prevention');
   if (routeReasoning(routePrompt('$DFix button label'), '$DFix button label').effort !== 'medium') throw new Error('selftest failed: simple reasoning not medium');
   if (routePrompt('이 파이프라인은 왜 이렇게 동작해?')?.id !== 'Answer') throw new Error('selftest failed: question prompt did not route to Answer');
   if (routePrompt('React useEffect 최신 문서 기준으로 설명해줘')?.id !== 'Answer') throw new Error('selftest failed: docs question did not route to Answer');
@@ -3046,7 +2747,7 @@ async function selftest() {
   if (routeRequiresSubagents(routePrompt('이 파이프라인은 왜 이렇게 동작해?'), '이 파이프라인은 왜 이렇게 동작해?')) throw new Error('selftest failed: Answer route requires subagents');
   if (!routeRequiresSubagents(routePrompt('implement feature'), 'implement feature')) throw new Error('selftest failed: default Team implementation route does not require subagents');
   if (!routeRequiresSubagents(routePrompt('$Team implement feature'), '$Team implement feature')) throw new Error('selftest failed: Team route does not require subagents');
-  if (!routeRequiresSubagents(routePrompt('$Ralph implement feature'), '$Ralph implement feature')) throw new Error('selftest failed: Ralph implementation route does not require subagents');
+  if (!routeRequiresSubagents(routePrompt('$Goal implement feature'), '$Goal implement feature')) throw new Error('selftest failed: Goal implementation route does not require subagents');
   if (routeRequiresSubagents(routePrompt('$Help commands'), '$Help commands')) throw new Error('selftest failed: Help route incorrectly requires subagents');
   if (!reflectionRequiredForRoute(routePrompt('$Team implement feature'))) throw new Error('selftest failed: Team route does not require reflection');
   if (!reflectionRequiredForRoute(routePrompt('$DB migration'))) throw new Error('selftest failed: DB route does not require reflection');
@@ -3058,6 +2759,9 @@ async function selftest() {
   await appendTeamEvent(teamDir, { agent: 'team_consensus', phase: 'planning_debate', message: 'selftest mapped options' });
   const teamDashboard = await readTeamDashboard(teamDir);
   if (teamDashboard?.agent_session_count !== 5 || teamDashboard?.role_counts?.executor !== 5) throw new Error('selftest failed: team dashboard session/role budget missing');
+  await writeTeamDashboardState(teamDir, { missionId: teamId, mission: { id: teamId, mode: 'team' }, effort: 'high', phase: 'verification' });
+  const teamDashboardState = await readJson(path.join(teamDir, ARTIFACT_FILES.team_dashboard_state), {});
+  if (!validateTeamDashboardState(teamDashboardState).ok || !renderTeamDashboardState(teamDashboardState).includes('Mission Overview')) throw new Error('selftest failed: Team dashboard state missing required cockpit panes');
   if (teamDashboard?.context_tracking?.ssot !== 'triwiki') throw new Error('selftest failed: team dashboard missing TriWiki context tracking');
   if (!teamDashboard?.phases?.includes('parallel_analysis_scouting')) throw new Error('selftest failed: team dashboard missing analysis scout phase');
   if (!teamDashboard?.latest_messages?.some((entry) => entry.agent === 'analysis_scout_1')) throw new Error('selftest failed: team live dashboard missing analysis scout event');
@@ -3076,8 +2780,8 @@ async function selftest() {
   const installUxSlotIds = installUxSchema.slots.map((s) => s.id);
   if (installUxSchema.domain_hints.includes('uiux') || installUxSlotIds.includes('VISUAL_REGRESSION_REQUIRED')) throw new Error('selftest failed: CLI UX install prompt should not ask visual UI questions');
   if (installUxSlotIds.some((id) => /^(D|SUPA)/.test(id) && id !== 'DEPENDENCY_CHANGE_ALLOWED')) throw new Error('selftest failed: non-data MCP setup prompt asked guarded slots');
-  if (installUxSlotIds.includes('MID_RALPH_UNKNOWN_POLICY')) throw new Error('selftest failed: Ralph fallback ladder should be inferred, not asked');
-  const { id, dir, mission } = await createMission(tmp, { mode: 'ralph', prompt: '로그인 세션 만료 UX 개선 supabase db' });
+  if (installUxSlotIds.includes('MID_RUN_UNKNOWN_POLICY')) throw new Error('selftest failed: no-question fallback ladder should be inferred, not asked');
+  const { id, dir, mission } = await createMission(tmp, { mode: 'goal', prompt: '로그인 세션 만료 UX 개선 supabase db' });
   const schema = buildQuestionSchema(mission.prompt);
   await writeQuestions(dir, schema);
   if (validateAnswers(schema, {}).ok) throw new Error('selftest failed: empty answers valid');
@@ -3086,28 +2790,28 @@ async function selftest() {
   await writeJsonAtomic(path.join(dir, 'answers.json'), answers);
   const sealed = await sealContract(dir, mission);
   if (!sealed.ok) throw new Error('selftest failed: answers rejected');
-  await setCurrent(tmp, { mission_id: id, mode: 'RALPH', phase: 'RALPH_RUNNING_NO_QUESTIONS' });
+  await setCurrent(tmp, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_RUNNING_NO_QUESTIONS' });
   if (!containsUserQuestion('확인해 주세요?')) throw new Error('selftest failed: question guard');
   if (classifySql('drop table users;').level !== 'destructive') throw new Error('selftest failed: destructive sql not detected');
   if (classifyCommand('supabase db reset').level !== 'destructive') throw new Error('selftest failed: supabase db reset not detected');
-  const dbDecision = await checkDbOperation(tmp, { mission_id: id }, { tool_name: 'mcp__supabase__execute_sql', sql: 'drop table users;' }, { duringRalph: true });
+  const dbDecision = await checkDbOperation(tmp, { mission_id: id }, { tool_name: 'mcp__supabase__execute_sql', sql: 'drop table users;' }, { duringNoQuestion: true });
   if (dbDecision.action !== 'block') throw new Error('selftest failed: destructive MCP SQL allowed');
   const madMission = await createMission(tmp, { mode: 'mad-sks', prompt: '$MAD-SKS selftest scoped DB override' });
   await writeJsonAtomic(path.join(madMission.dir, 'team-gate.json'), { schema_version: 1, passed: false, team_roster_confirmed: true });
   const madState = { mission_id: madMission.id, mode: 'TEAM', route_command: '$Team', stop_gate: 'team-gate.json', mad_sks_active: true, mad_sks_modifier: true, mad_sks_gate_file: 'team-gate.json' };
   const tableRemovalSql = 'dr' + 'op table users;';
-  const madNeedsConfirmation = await checkDbOperation(tmp, madState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringRalph: false });
+  const madNeedsConfirmation = await checkDbOperation(tmp, madState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringNoQuestion: false });
   if (madNeedsConfirmation.action !== 'confirm') throw new Error('selftest failed: MAD-SKS table deletion did not require confirmation');
   await setCurrent(tmp, madState);
   const madConfirmation = await handleMadSksUserConfirmation(tmp, madState, 'yes');
   if (!madConfirmation?.handled) throw new Error('selftest failed: MAD-SKS confirmation was not accepted');
   const madConfirmedState = await readJson(stateFile(tmp), {});
-  const madConfirmedDecision = await checkDbOperation(tmp, madConfirmedState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringRalph: false });
+  const madConfirmedDecision = await checkDbOperation(tmp, madConfirmedState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringNoQuestion: false });
   if (madConfirmedDecision.action !== 'allow') throw new Error('selftest failed: MAD-SKS confirmed table deletion was not allowed in the short confirmation window');
   await writeJsonAtomic(path.join(madMission.dir, 'team-gate.json'), { schema_version: 1, passed: true, team_roster_confirmed: true, permissions_deactivated: true });
-  const madClosedDecision = await checkDbOperation(tmp, madConfirmedState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringRalph: false });
+  const madClosedDecision = await checkDbOperation(tmp, madConfirmedState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringNoQuestion: false });
   if (madClosedDecision.action !== 'block') throw new Error('selftest failed: MAD-SKS permission persisted after gate close');
-  const nonDbDecision = await checkDbOperation(tmp, {}, { command: 'npm test' }, { duringRalph: true });
+  const nonDbDecision = await checkDbOperation(tmp, {}, { command: 'npm test' }, { duringNoQuestion: true });
   if (nonDbDecision.action !== 'allow') throw new Error('selftest failed: non-DB command blocked by DB guard');
   const evalReport = runEvaluationBenchmark({ iterations: 5 });
   if (!evalReport.comparison.meaningful_improvement) throw new Error('selftest failed: evaluation benchmark did not show meaningful improvement');
@@ -3184,1132 +2888,6 @@ async function selftest() {
   console.log(`temp: ${tmp}`);
 }
 
-async function profile(sub, args) {
-  const root = await sksRoot();
-  if (sub === 'show') return console.log(JSON.stringify(await readJson(path.join(root, '.sneakoscope', 'model', 'current.json'), { model: 'gpt-5.5' }), null, 2));
-  if (sub === 'set') { await writeJsonAtomic(path.join(root, '.sneakoscope', 'model', 'current.json'), { model: args[0] || 'gpt-5.5', set_at: nowIso() }); return console.log(`Model profile set: ${args[0] || 'gpt-5.5'}`); }
-  console.error('Usage: sks profile show|set <model>');
-}
-
-async function hproof(sub, args) {
-  if (sub !== 'check') return console.error('Usage: sks hproof check [mission-id]');
-  const root = await sksRoot();
-  const id = await resolveMissionId(root, args[0]);
-  if (!id) throw new Error('No mission found.');
-  console.log(JSON.stringify(await evaluateDoneGate(root, id), null, 2));
-}
-
-async function evalCommand(sub, args) {
-  if (!sub || sub === 'help' || sub === '--help') {
-    console.log('Usage: sks eval run [--json] [--out report.json] [--iterations N] | sks eval compare --baseline old.json --candidate new.json [--json]');
-    return;
-  }
-  if (sub === 'thresholds') return console.log(JSON.stringify(DEFAULT_EVAL_THRESHOLDS, null, 2));
-  const root = await sksRoot();
-  if (sub === 'run') {
-    const iterations = Number(readFlagValue(args, '--iterations', 200));
-    const report = runEvaluationBenchmark({ iterations });
-    const saved = await saveEvalReport(root, args, report, 'eval');
-    if (flag(args, '--json')) return console.log(JSON.stringify({ ...report, report_path: saved }, null, 2));
-    printEvalRun(report, saved);
-    return;
-  }
-  if (sub === 'compare') {
-    const positional = positionalArgs(args);
-    const baselinePath = readFlagValue(args, '--baseline', positional[0]);
-    const candidatePath = readFlagValue(args, '--candidate', positional[1]);
-    if (!baselinePath || !candidatePath) throw new Error('Usage: sks eval compare --baseline old.json --candidate new.json [--json]');
-    const report = compareEvaluationReports(await readJson(path.resolve(baselinePath)), await readJson(path.resolve(candidatePath)));
-    const saved = await saveEvalReport(root, args, report, 'eval-compare');
-    if (flag(args, '--json')) return console.log(JSON.stringify({ ...report, report_path: saved }, null, 2));
-    printEvalCompare(report, saved);
-    return;
-  }
-  console.error('Usage: sks eval run|compare|thresholds');
-  process.exitCode = 1;
-}
-
-async function wiki(sub, args = []) {
-  if (!sub || sub === 'help' || sub === '--help') {
-    console.log('Usage: sks wiki coords --rgba R,G,B,A | sks wiki pack [--json] [--role worker|verifier] [--max-anchors N] | sks wiki refresh [--json] [--role worker|verifier] [--max-anchors N] [--prune] [--dry-run] | sks wiki prune [--json] [--dry-run] | sks wiki validate [context-pack.json] [--json]');
-    return;
-  }
-  if (sub === 'coords') {
-    const raw = readFlagValue(args, '--rgba', positionalArgs(args)[0] || '');
-    const parts = String(raw).split(/[,\s]+/).filter(Boolean).map((x) => Number.parseInt(x, 10));
-    if (parts.length < 3) throw new Error('Usage: sks wiki coords --rgba R,G,B,A');
-    const coord = rgbaToWikiCoord({ r: parts[0], g: parts[1], b: parts[2], a: parts[3] ?? 255 });
-    console.log(JSON.stringify({ rgba: coord.rgba, rgba_key: rgbaKey(coord.rgba), coord }, null, 2));
-    return;
-  }
-  if (sub === 'pack') {
-    const root = await sksRoot();
-    const { pack, file } = await writeWikiContextPack(root, args);
-    if (flag(args, '--json')) return console.log(JSON.stringify({ ...pack, path: file }, null, 2));
-    printWikiPackSummary(root, file, pack);
-    return;
-  }
-  if (sub === 'refresh') {
-    const root = await sksRoot();
-    const dryRun = flag(args, '--dry-run');
-    const { pack, file } = await writeWikiContextPack(root, args, { dryRun });
-    const validation = wikiValidationResult(pack);
-    const exitCode = validation.result.ok ? 0 : 2;
-    const pruneRequested = flag(args, '--prune');
-    const pruneResult = pruneRequested
-      ? await pruneWikiArtifacts(root, { dryRun })
-      : null;
-    if (flag(args, '--json')) {
-      process.exitCode = exitCode;
-      return console.log(JSON.stringify({
-        path: file,
-        dryRun,
-        written: !dryRun,
-        claims: pack.claims.length,
-        anchors: wikiAnchorCount(pack.wiki),
-        attention: wikiAttentionSummary(pack),
-        trust_summary: pack.trust_summary,
-        validation,
-        ...(pruneResult ? { prune: { dryRun: pruneResult.dryRun, scanned: pruneResult.scanned, candidates: pruneResult.candidates, actions: pruneResult.actions } } : {})
-      }, null, 2));
-    }
-    console.log('Sneakoscope LLM Wiki Refresh');
-    if (dryRun) console.log('Dry run: context pack was built and validated in memory; no wiki file was written.');
-    printWikiPackSummary(root, file, pack);
-    console.log(`Validation: ${validation.result.ok ? 'ok' : 'failed'} (${validation.result.checked} anchors, ${validation.trustAnchors} trust anchors)`);
-    if (pruneResult) {
-      console.log(`${pruneResult.dryRun ? 'Prune dry run' : 'Prune'}: ${pruneResult.candidates} wiki artifact(s), ${pruneResult.scanned} scanned`);
-      for (const a of pruneResult.actions.slice(0, 20)) console.log(`- ${a.reason} ${path.relative(root, a.path)} ${a.bytes ? formatBytes(a.bytes) : ''}`.trim());
-    } else {
-      console.log('Prune: skipped (pass --prune to prune stale/low-trust wiki artifacts)');
-    }
-    process.exitCode = exitCode;
-    return;
-  }
-  if (sub === 'prune') {
-    const root = await sksRoot();
-    const pruneResult = await pruneWikiArtifacts(root, { dryRun: flag(args, '--dry-run') });
-    if (flag(args, '--json')) {
-      return console.log(JSON.stringify({
-        dryRun: pruneResult.dryRun,
-        scanned: pruneResult.scanned,
-        candidates: pruneResult.candidates,
-        actions: pruneResult.actions
-      }, null, 2));
-    }
-    console.log('Sneakoscope LLM Wiki Prune');
-    console.log(`${pruneResult.dryRun ? 'Dry run' : 'Pruned'}: ${pruneResult.candidates} wiki artifact(s), ${pruneResult.scanned} scanned`);
-    for (const a of pruneResult.actions.slice(0, 20)) console.log(`- ${a.reason} ${path.relative(root, a.path)} ${a.bytes ? formatBytes(a.bytes) : ''}`.trim());
-    if (pruneResult.actions.length > 20) console.log(`... ${pruneResult.actions.length - 20} more action(s) omitted`);
-    return;
-  }
-  if (sub === 'validate') {
-    const root = await sksRoot();
-    const target = positionalArgs(args)[0] || path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
-    const pack = await readJson(path.resolve(target));
-    const { result, trustAnchors } = wikiValidationResult(pack);
-    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-    console.log(`Wiki coordinate index: ${result.ok ? 'ok' : 'failed'}`);
-    console.log(`Anchors checked: ${result.checked}`);
-    console.log(`Trust anchors: ${trustAnchors}/${result.checked}`);
-    for (const issue of result.issues) console.log(`- ${issue.severity}: ${issue.id}${issue.anchor ? ` ${issue.anchor}` : ''}`);
-    process.exitCode = result.ok ? 0 : 2;
-    return;
-  }
-  console.error('Usage: sks wiki coords|pack|refresh|prune|validate');
-  process.exitCode = 1;
-}
-
-async function writeWikiContextPack(root, args = [], opts = {}) {
-  const role = readFlagValue(args, '--role', 'worker');
-  const maxAnchors = Number(readFlagValue(args, '--max-anchors', role.includes('verifier') ? 48 : 32));
-  const pack = contextCapsule({
-    mission: { id: 'project-wiki', coord: { rgba: { r: 48, g: 132, b: 212, a: 240 } } },
-    role,
-    contractHash: null,
-    claims: await projectWikiClaims(root),
-    q4: { mode: 'project-continuity', package: PACKAGE_VERSION, hydrate: 'anchor-first' },
-    q3: ['sks', 'llm-wiki', 'wiki-coordinate', 'gx', 'skills'],
-    budget: { maxWikiAnchors: maxAnchors, includeTrustSummary: true }
-  });
-  const file = path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
-  if (!opts.dryRun) {
-    await ensureDir(path.dirname(file));
-    await writeJsonAtomic(file, pack);
-  }
-  return { pack, file, role, maxAnchors };
-}
-
-async function migrateWikiContextPack(root) {
-  try {
-    const { pack } = await writeWikiContextPack(root, ['--max-anchors', '32']);
-    return wikiValidationResult(pack).result.ok;
-  } catch (err) {
-    return false;
-  }
-}
-
-function wikiAnchorCount(wiki = {}) {
-  return (wiki.anchors || wiki.a || []).length;
-}
-
-function wikiVoxelRowCount(wiki = {}) {
-  const overlay = wiki.vx || wiki.voxel_overlay || {};
-  return (overlay.rows || overlay.v || []).length;
-}
-
-function wikiValidationResult(pack = {}) {
-  const wikiIndex = pack.wiki || pack;
-  const result = validateWikiCoordinateIndex(wikiIndex);
-  return { result, trustAnchors: countTrustAnchors(wikiIndex) };
-}
-
-function printWikiPackSummary(root, file, pack) {
-  console.log('Sneakoscope LLM Wiki Context Pack');
-  console.log(`Path:     ${path.relative(root, file)}`);
-  console.log(`Claims:   ${pack.claims.length} hydrated text claims`);
-  console.log(`Anchors:  ${wikiAnchorCount(pack.wiki)} coordinate anchors (${pack.wiki.overflow_count ?? pack.wiki.o ?? 0} overflow)`);
-  console.log(`Voxels:   ${wikiVoxelRowCount(pack.wiki)} metadata rows (${pack.wiki.vx?.s || pack.wiki.vx?.schema || 'none'})`);
-  if (pack.attention) console.log(`Attention: use_first=${pack.attention.use_first?.length || 0} hydrate_first=${pack.attention.hydrate_first?.length || 0} (${pack.attention.mode})`);
-  console.log(`Schema:   ${pack.wiki.schema}`);
-  console.log(`Trust:    avg=${pack.trust_summary.avg} needs_evidence=${pack.trust_summary.needs_evidence}`);
-  console.log('Guidance: follow high-trust claims; hydrate source/evidence before relying on lower-trust claims. Stack/version changes require current Context7 or official-doc TriWiki claims before coding.');
-  console.log(`Validate: sks wiki validate ${path.relative(root, file)}`);
-}
-
-function wikiAttentionSummary(pack = {}) {
-  const attention = pack.attention || {};
-  return {
-    mode: attention.mode || null,
-    use_first: Array.isArray(attention.use_first) ? attention.use_first.length : 0,
-    hydrate_first: Array.isArray(attention.hydrate_first) ? attention.hydrate_first.length : 0,
-    fields: { use_first: ['id', 'rgba', 'h'], hydrate_first: ['id', 'reason'] }
-  };
-}
-
-function countTrustAnchors(wiki = {}) {
-  const rows = Array.isArray(wiki.a)
-    ? wiki.a
-    : (Array.isArray(wiki.anchors) ? wiki.anchors.map((anchor) => [anchor.id, null, null, null, null, null, null, null, null, anchor.trust_score, anchor.trust_band]) : []);
-  return rows.filter((row) => row?.[9] != null && row?.[10]).length;
-}
-
-async function projectWikiClaims(root) {
-  const claims = [
-    ['wiki-hooks', '.codex/hooks.json routes UserPromptSubmit, tool, permission, and Stop events through SKS guards.', '.codex/hooks.json', 'code', 'high'],
-    ['wiki-config', '.codex/config.toml enables Codex App profiles, multi-agent support, and Team agent limits.', '.codex/config.toml', 'code', 'high'],
-    ['wiki-skills', '.agents/skills provides official repo-local routes plus support skills for dfix, team, ralph, research, autoresearch, db, gx, wiki, reflection, evaluation, design-system/UI editing, and imagegen workflows.', '.agents/skills', 'code', 'medium'],
-    ['wiki-agents', '.codex/agents defines Team analysis scout, planning, implementation, DB safety, and QA reviewer roles.', '.codex/agents', 'code', 'medium'],
-    ['wiki-policy', '.sneakoscope/policy.json stores update-check, honest-mode, retention, database, performance, and prompt-pipeline policy.', '.sneakoscope/policy.json', 'contract', 'high'],
-    ['wiki-memory', '.sneakoscope/memory stores Q0 raw, Q1 evidence, Q2 facts, Q3 tags, and Q4 control bits for hydratable context.', '.sneakoscope/memory', 'wiki', 'high'],
-    ['wiki-gx', 'GX cartridges keep vgraph.json and beta.json as deterministic visual context sources with render, validation, drift, and snapshot outputs.', '.sneakoscope/gx/cartridges', 'vgraph', 'medium'],
-    ['wiki-db', 'Database safety blocks destructive SQL, risky Supabase commands, unsafe MCP writes, and production data mutation.', '.sneakoscope/db-safety.json', 'code', 'critical'],
-    ['wiki-hproof', 'H-Proof blocks completion when unsupported critical claims, DB safety issues, missing tests, or high visual/wiki drift remain.', '.sneakoscope/hproof', 'test', 'critical'],
-    ['wiki-eval', 'sks eval run measures token savings, evidence-weighted accuracy proxy, required recall, unsupported critical filtering, and build runtime.', 'src/core/evaluation.mjs', 'test', 'medium'],
-    ['wiki-trig', 'TriWiki maps RGBA channels to domain angle, layer radius, phase, and concentration using deterministic trigonometric coordinates.', 'src/core/wiki-coordinate.mjs', 'code', 'high']
-  ];
-  const out = [];
-  for (const [id, text, file, authority, risk] of claims) {
-    out.push({
-      id,
-      text,
-      authority,
-      risk,
-      status: await exists(path.join(root, file)) ? 'supported' : 'unknown',
-      freshness: 'fresh',
-      source: file,
-      file,
-      evidence_count: await exists(path.join(root, file)) ? 1 : 0
-    });
-  }
-
-  const stackPolicy = stackCurrentDocsPolicy();
-  out.push({
-    id: 'wiki-stack-current-docs-policy',
-    text: `When project tech stack, framework, package, runtime, SDK, MCP, or deployment-platform versions change, use Context7 or official vendor docs, write current syntax/security/limit guidance to ${stackPolicy.memory_path}, refresh TriWiki, validate it, and prefer those claims over stale model defaults before coding.`,
-    authority: 'contract',
-    risk: 'critical',
-    status: 'supported',
-    freshness: 'fresh',
-    source: 'src/core/routes.mjs',
-    file: 'src/core/routes.mjs',
-    evidence_count: 3,
-    required_weight: 1.35,
-    trust_score: 0.95
-  });
-  out.push({
-    id: 'wiki-stack-current-docs-examples',
-    text: `Current-doc examples that belong in TriWiki when relevant: Supabase hosted keys prefer sb_publishable_/sb_secret_ over legacy anon/service_role defaults, Next.js 16 uses proxy.ts/proxy.js instead of deprecated middleware convention, and Vercel duration limits such as the 300s Fluid Compute default constrain long-running server work.`,
-    authority: 'wiki',
-    risk: 'critical',
-    status: 'supported',
-    freshness: 'fresh',
-    source: 'src/core/routes.mjs',
-    file: 'src/core/routes.mjs',
-    evidence_count: 4,
-    required_weight: 1.25,
-    trust_score: 0.92
-  });
-  out.push({
-    id: 'wiki-stack-current-docs-vercel-duration',
-    text: 'Vercel Function duration limits are deployment constraints; record current official limits in TriWiki before designing long-running server work, including the 300s Fluid Compute default when applicable.',
-    authority: 'wiki',
-    risk: 'high',
-    status: 'supported',
-    freshness: 'fresh',
-    source: 'https://vercel.com/docs/functions/limitations',
-    file: 'https://vercel.com/docs/functions/limitations',
-    evidence_count: 2,
-    required_weight: 1.2,
-    trust_score: 0.9
-  });
-  out.push({
-    id: 'wiki-aggressive-active-recall',
-    text: 'TriWiki should be used aggressively for performance and accuracy: route prompts and worker handoffs should consume attention.use_first for compact high-trust recall and attention.hydrate_first for source hydration of risky or lower-trust claims before decisions.',
-    authority: 'code',
-    risk: 'high',
-    status: 'supported',
-    freshness: 'fresh',
-    source: 'src/core/triwiki-attention.mjs',
-    file: 'src/core/triwiki-attention.mjs',
-    evidence_count: 3,
-    required_weight: 1.45,
-    trust_score: 0.95
-  });
-  out.push(...(await memoryWikiClaims(root)));
-  out.push(...(await userRequestSignalWikiClaims(root)));
-  out.push(...(await teamAnalysisWikiClaims(root)));
-  return out;
-}
-
-async function memoryWikiClaims(root) {
-  const base = path.join(root, '.sneakoscope', 'memory');
-  const files = await listMemoryClaimFiles(base);
-  const claims = [];
-  for (const file of files.slice(0, 80)) {
-    const relFile = path.relative(root, file);
-    let text = '';
-    try {
-      text = await fsp.readFile(file, 'utf8');
-    } catch {
-      continue;
-    }
-    if (!text.trim()) continue;
-    const rows = parseMemoryClaimRows(text, relFile).slice(0, 24);
-    let index = 0;
-    for (const row of rows) {
-      const source = row.source || relFile;
-      const sourceExists = source && (await exists(path.join(root, source)));
-      index += 1;
-      claims.push({
-        id: row.id || `memory-${slugifyClaimId(relFile)}-${index}`,
-        text: row.text,
-        authority: row.authority || 'wiki',
-        risk: row.risk || 'high',
-        status: row.status || (sourceExists || source === relFile ? 'supported' : 'unknown'),
-        freshness: row.freshness || 'fresh',
-        source,
-        file: source,
-        evidence_count: row.evidence_count ?? (sourceExists ? 2 : 1),
-        required_weight: row.required_weight ?? 0.85,
-        trust_score: row.trust_score
-      });
-    }
-  }
-  return claims;
-}
-
-async function listMemoryClaimFiles(base) {
-  const out = [];
-  async function walk(dir, depth = 0) {
-    if (depth > 3) return;
-    let entries = [];
-    try {
-      entries = await fsp.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      const p = path.join(dir, entry.name);
-      if (entry.isDirectory()) await walk(p, depth + 1);
-      else if (/\.(md|txt|json)$/i.test(entry.name)) out.push(p);
-    }
-  }
-  await walk(base);
-  return out;
-}
-
-function parseMemoryClaimRows(text, relFile) {
-  if (/\.json$/i.test(relFile)) {
-    try {
-      const parsed = JSON.parse(text);
-      const rows = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.claims) ? parsed.claims : []);
-      return rows.map((row) => normalizeMemoryClaimRow(row, relFile)).filter(Boolean);
-    } catch {
-      return [];
-    }
-  }
-  return text.split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
-    .map((line) => normalizeMemoryClaimRow(line.replace(/^[-*]\s*/, ''), relFile))
-    .filter(Boolean);
-}
-
-function normalizeMemoryClaimRow(row, relFile) {
-  if (!row) return null;
-  if (typeof row === 'object') {
-    const text = String(row.text || row.claim || '').trim();
-    if (!text) return null;
-    return {
-      id: row.id ? String(row.id) : null,
-      text: text.slice(0, 320),
-      source: row.source || row.file || relFile,
-      authority: row.authority,
-      risk: row.risk,
-      status: row.status || row.confidence,
-      freshness: row.freshness,
-      evidence_count: Number.isFinite(Number(row.evidence_count)) ? Number(row.evidence_count) : undefined,
-      required_weight: Number.isFinite(Number(row.required_weight)) ? Number(row.required_weight) : undefined,
-      trust_score: Number.isFinite(Number(row.trust_score)) ? Number(row.trust_score) : undefined
-    };
-  }
-  const clean = String(row || '').trim();
-  if (!/\bclaim\s*:/i.test(clean)) return null;
-  const source = extractClaimField(clean, 'source') || extractClaimField(clean, 'file') || extractClaimField(clean, 'path') || relFile;
-  const status = extractClaimField(clean, 'status') || extractClaimField(clean, 'confidence');
-  return {
-    id: extractClaimField(clean, 'id'),
-    text: clean.slice(0, 320),
-    source,
-    authority: extractClaimField(clean, 'authority') || 'wiki',
-    risk: extractClaimField(clean, 'risk') || 'high',
-    status,
-    freshness: extractClaimField(clean, 'freshness') || 'fresh',
-    evidence_count: parseOptionalNumber(extractClaimField(clean, 'evidence_count')),
-    required_weight: parseOptionalNumber(extractClaimField(clean, 'required_weight')),
-    trust_score: parseOptionalNumber(extractClaimField(clean, 'trust_score'))
-  };
-}
-
-function extractClaimField(text, key) {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = String(text || '').match(new RegExp(`\\b${escaped}\\s*[:=]\\s*\\\`?([^\\\`|,;]+)`, 'i'));
-  return match ? match[1].trim().replace(/[.;)]$/, '') : null;
-}
-
-function parseOptionalNumber(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-function slugifyClaimId(value) {
-  return String(value || 'claim').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'claim';
-}
-
-async function userRequestSignalWikiClaims(root) {
-  const base = path.join(root, '.sneakoscope', 'missions');
-  let entries = [];
-  try {
-    entries = await fsp.readdir(base, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const topics = new Map();
-  const strong = [];
-  const missionIds = entries.filter((item) => item.isDirectory() && item.name.startsWith('M-')).map((item) => item.name).sort().reverse().slice(0, 120);
-  for (const id of missionIds) {
-    const mission = await readJson(path.join(base, id, 'mission.json'), null);
-    const prompt = String(mission?.prompt || '').trim();
-    if (!prompt) continue;
-    const signal = userRequestSignal(prompt);
-    for (const topic of signal.topics) {
-      const current = topics.get(topic) || { count: 0, strong: 0, examples: [] };
-      current.count += 1;
-      if (signal.intensity >= 1) current.strong += 1;
-      if (current.examples.length < 3) current.examples.push(id);
-      topics.set(topic, current);
-    }
-    if (signal.intensity >= 1) strong.push({ id, signal });
-  }
-  const claims = [];
-  for (const [topic, row] of [...topics.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 16)) {
-    const weight = Math.min(1.25, 0.45 + row.count * 0.12 + row.strong * 0.18);
-    claims.push({
-      id: `user-request-frequency-${slugifyClaimId(topic)}`,
-      text: `User request topic "${topic}" appeared ${row.count} time(s); repeated topics should be consulted before asking predictable clarification questions.`,
-      authority: 'wiki',
-      risk: row.strong ? 'high' : 'medium',
-      status: 'supported',
-      freshness: 'fresh',
-      source: '.sneakoscope/missions',
-      file: '.sneakoscope/missions',
-      evidence_count: row.count,
-      request_count: row.count,
-      strong_feedback_count: row.strong,
-      required_weight: Number(weight.toFixed(2)),
-      trust_score: row.strong ? 0.92 : undefined
-    });
-  }
-  for (const item of strong.slice(0, 12)) {
-    claims.push({
-      id: `user-strong-feedback-${item.id}`,
-      text: `Mission ${item.id} contains strong user feedback markers; treat the underlying preference as high-priority context and avoid repeating the same friction.`,
-      authority: 'wiki',
-      risk: 'high',
-      status: 'supported',
-      freshness: 'fresh',
-      source: `.sneakoscope/missions/${item.id}/mission.json`,
-      file: `.sneakoscope/missions/${item.id}/mission.json`,
-      evidence_count: item.signal.markers.length,
-      request_count: 1,
-      strong_feedback_count: 1,
-      required_weight: 1.15,
-      trust_score: 0.94
-    });
-  }
-  return claims;
-}
-
-function userRequestSignal(prompt = '') {
-  const lower = String(prompt || '').toLowerCase();
-  const markers = [];
-  for (const pattern of [/;;+/g, /!!+/g, /\b왜\b/g, /화|짜증|답답|문제|제발|강력|두번다시|자꾸|계속/g]) {
-    const found = String(prompt || '').match(pattern);
-    if (found) markers.push(...found);
-  }
-  const topicRules = [
-    ['ambiguity-questions', /모호|ambiguity|clarification|질문|답변|answers?\.json|decision-contract|추론|예측/],
-    ['triwiki-priority-memory', /triwiki|wiki|메모리|memory|기억|우선|반복|자주|카운팅|count|frequency|weight/],
-    ['install-bootstrap', /bootstrap|postinstall|doctor|deps|cmux|homebrew|최초\s*설치|셋업|setup/],
-    ['version-release', /버전|version|publish:dry|release|npm\s+pack/],
-    ['qa-loop', /qa|e2e|검증|리포트|report/],
-    ['team-pipeline', /team|subagent|세션|cleanup|reflection|회고|반성/],
-    ['safety-boundary', /삭제|파괴|destructive|production|권한|보안|인증|결제/]
-  ];
-  const topics = topicRules.filter(([, pattern]) => pattern.test(lower)).map(([topic]) => topic);
-  if (!topics.length) topics.push('general-user-preference');
-  return { intensity: Math.min(3, markers.length), markers, topics };
-}
-
-async function teamAnalysisWikiClaims(root) {
-  const base = path.join(root, '.sneakoscope', 'missions');
-  let entries = [];
-  try {
-    entries = await fsp.readdir(base, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const claims = [];
-  for (const entry of entries.filter((item) => item.isDirectory() && item.name.startsWith('M-')).map((item) => item.name).sort().reverse().slice(0, 10)) {
-    const file = path.join(base, entry, 'team-analysis.md');
-    let text = '';
-    try {
-      text = await fsp.readFile(file, 'utf8');
-    } catch {
-      continue;
-    }
-    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#')).slice(0, 24);
-    let index = 0;
-    for (const line of lines) {
-      const clean = line.replace(/^[-*]\s*/, '').slice(0, 260);
-      if (!clean) continue;
-      const source = extractTeamAnalysisSource(clean) || path.relative(root, file);
-      const risk = extractTeamAnalysisRisk(clean);
-      const sourceExists = source && (await exists(path.join(root, source)));
-      index += 1;
-      claims.push({
-        id: `team-analysis-${entry}-${index}`,
-        text: clean,
-        authority: 'wiki',
-        risk,
-        status: sourceExists || source === path.relative(root, file) ? 'supported' : 'unknown',
-        freshness: 'fresh',
-        source,
-        file: source,
-        evidence_count: 1,
-        required_weight: 0.5
-      });
-    }
-  }
-  return claims;
-}
-
-function extractTeamAnalysisSource(text) {
-  const match = String(text || '').match(/\b(?:source|file|path)\s*[:=]\s*`?([^`|,\s]+)/i);
-  return match ? match[1].replace(/[.;)]$/, '') : null;
-}
-
-function extractTeamAnalysisRisk(text) {
-  const match = String(text || '').match(/\b(critical|high|medium|low)\b/i);
-  return match ? match[1].toLowerCase() : 'medium';
-}
-
-async function saveEvalReport(root, args, report, prefix) {
-  if (flag(args, '--no-save')) return null;
-  const requested = readFlagValue(args, '--out', null);
-  const file = requested
-    ? path.resolve(requested)
-    : path.join(root, '.sneakoscope', 'reports', `${prefix}-${nowIso().replace(/[:.]/g, '-')}.json`);
-  await ensureDir(path.dirname(file));
-  await writeJsonAtomic(file, report);
-  return file;
-}
-
-function pct(x) {
-  return `${(100 * x).toFixed(1)}%`;
-}
-
-function printEvalRun(report, saved) {
-  const c = report.comparison;
-  console.log('Sneakoscope Eval');
-  console.log(`Scenario:  ${report.scenario.id}`);
-  console.log(`Tokens:    ${report.baseline.estimated_tokens} -> ${report.candidate.estimated_tokens} (${pct(c.token_savings_pct)} saved)`);
-  console.log(`Accuracy:  ${report.baseline.quality.accuracy_proxy} -> ${report.candidate.quality.accuracy_proxy} (${c.accuracy_delta >= 0 ? '+' : ''}${c.accuracy_delta})`);
-  console.log(`Recall:    ${report.candidate.quality.required_recall}`);
-  console.log(`Precision: ${report.baseline.quality.relevance_precision} -> ${report.candidate.quality.relevance_precision}`);
-  if (report.candidate.wiki) console.log(`Wiki:      ${report.candidate.wiki.anchors} anchors, valid=${report.candidate.wiki.valid}`);
-  console.log(`Build ms:  ${report.baseline.context_build_ms_per_run} -> ${report.candidate.context_build_ms_per_run}`);
-  console.log(`Meaningful improvement: ${c.meaningful_improvement ? 'yes' : 'no'}`);
-  if (saved) console.log(`Report:    ${saved}`);
-}
-
-function printEvalCompare(report, saved) {
-  const c = report.comparison;
-  console.log('Sneakoscope Eval Compare');
-  console.log(`Baseline:  ${report.baseline_label}`);
-  console.log(`Candidate: ${report.candidate_label}`);
-  console.log(`Tokens:    ${report.baseline.estimated_tokens} -> ${report.candidate.estimated_tokens} (${pct(c.token_savings_pct)} saved)`);
-  console.log(`Accuracy:  ${report.baseline.quality.accuracy_proxy} -> ${report.candidate.quality.accuracy_proxy} (${c.accuracy_delta >= 0 ? '+' : ''}${c.accuracy_delta})`);
-  console.log(`Meaningful improvement: ${c.meaningful_improvement ? 'yes' : 'no'}`);
-  if (saved) console.log(`Report:    ${saved}`);
-}
-
-async function memory(sub, args) { return gc(args || []); }
-
-async function gc(args) {
-  const root = await sksRoot();
-  const res = await enforceRetention(root, { dryRun: flag(args, '--dry-run') });
-  if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
-  console.log(flag(args, '--dry-run') ? 'ㅅㅋㅅ GC dry run' : 'ㅅㅋㅅ GC completed');
-  console.log(`Storage: ${res.report.total_human || '0 B'}`);
-  console.log(`Actions: ${res.actions.length}`);
-  for (const a of res.actions.slice(0, 20)) console.log(`- ${a.action} ${a.path || a.mission || ''} ${a.bytes ? formatBytes(a.bytes) : ''}`);
-}
-
-async function stats(args) {
-  const root = await sksRoot();
-  const report = await storageReport(root);
-  const pkgBytes = await dirSize(packageRoot()).catch(() => 0);
-  const out = { package: { bytes: pkgBytes, human: formatBytes(pkgBytes) }, storage: report };
-  if (flag(args, '--json')) return console.log(JSON.stringify(out, null, 2));
-  console.log('ㅅㅋㅅ Stats');
-  console.log(`Package: ${out.package.human}`);
-  console.log(`State:   ${report.total_human || '0 B'}`);
-  for (const [name, sec] of Object.entries(report.sections || {})) console.log(`- ${name}: ${sec.human}`);
-}
-
-function positionalArgs(args = []) {
-  const out = [];
-  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines']);
-  for (let i = 0; i < args.length; i++) {
-    const arg = String(args[i]);
-    if (valueFlags.has(arg)) {
-      i++;
-      continue;
-    }
-    if (!arg.startsWith('--')) out.push(arg);
-  }
-  return out;
-}
-
-function readFlagValue(args, name, fallback) {
-  const i = args.indexOf(name);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-}
-
-function cartridgeName(args, fallback = 'architecture-atlas') {
-  const raw = positionalArgs(args)[0] || fallback;
-  return String(raw).trim().replace(/[\\/]+/g, '-').replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
-}
-
-function cartridgeDir(root, name) {
-  return path.join(root, '.sneakoscope', 'gx', 'cartridges', name);
-}
-
-function defaultVGraph(name) {
-  return {
-    id: name,
-    title: 'Sneakoscope Context Map',
-    version: 1,
-    nodes: [
-      { id: 'source', label: 'vgraph source', kind: 'source', layer: 'input', status: 'safe' },
-      { id: 'contract', label: 'decision contract', kind: 'guard', layer: 'policy', status: 'safe' },
-      { id: 'proof', label: 'H-Proof gate', kind: 'guard', layer: 'verification', status: 'safe' }
-    ],
-    edges: [
-      { from: 'source', to: 'contract', label: 'constrains' },
-      { from: 'contract', to: 'proof', label: 'verifies' }
-    ],
-    invariants: [
-      'vgraph.json remains the source of truth',
-      'rendered SVG hash must match source hash'
-    ],
-    tests: [
-      'sks gx validate',
-      'sks gx drift'
-    ],
-    risks: []
-  };
-}
-
-function defaultBeta(name) {
-  return {
-    id: name,
-    version: 1,
-    read_order: ['title', 'layers', 'nodes', 'edges', 'invariants', 'tests'],
-    renderer: 'sneakoscope-codex-deterministic-svg'
-  };
-}
-
-async function gx(sub, args) {
-  const root = await sksRoot();
-  const name = cartridgeName(args);
-  const dir = cartridgeDir(root, name);
-  if (sub === 'init') {
-    const vgraphPath = path.join(dir, 'vgraph.json');
-    const betaPath = path.join(dir, 'beta.json');
-    const created = [];
-    if (!(await exists(vgraphPath)) || flag(args, '--force')) {
-      await writeJsonAtomic(vgraphPath, defaultVGraph(name));
-      created.push('vgraph.json');
-    }
-    if (!(await exists(betaPath)) || flag(args, '--force')) {
-      await writeJsonAtomic(betaPath, defaultBeta(name));
-      created.push('beta.json');
-    }
-    const render = await renderCartridge(dir, { format: 'all' });
-    const validation = await validateCartridge(dir);
-    const drift = await driftCartridge(dir);
-    console.log(JSON.stringify({ cartridge: path.relative(root, dir), created, render, validation: validation.ok, drift: drift.status }, null, 2));
-    return;
-  }
-  if (sub === 'render') {
-    const format = readFlagValue(args, '--format', 'all');
-    console.log(JSON.stringify(await renderCartridge(dir, { format }), null, 2));
-    return;
-  }
-  if (sub === 'validate') {
-    const validation = await validateCartridge(dir);
-    console.log(JSON.stringify(validation, null, 2));
-    process.exitCode = validation.ok ? 0 : 2;
-    return;
-  }
-  if (sub === 'drift') {
-    const drift = await driftCartridge(dir);
-    console.log(JSON.stringify(drift, null, 2));
-    process.exitCode = drift.status === 'low' ? 0 : 2;
-    return;
-  }
-  if (sub === 'snapshot') {
-    await renderCartridge(dir, { format: 'all' });
-    console.log(JSON.stringify(await snapshotCartridge(dir), null, 2));
-    return;
-  }
-  console.error('Usage: sks gx init|render|validate|drift|snapshot');
-  process.exitCode = 1;
-}
-
-async function team(args) {
-  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'event']);
-  if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
-  const opts = parseTeamCreateArgs(args);
-  const { prompt, agentSessions, roleCounts, roster } = opts;
-  if (!prompt) {
-    console.error('Usage: sks team "task" [executor:5 reviewer:2 user:1] [--agents N] [--json]');
-    console.error('       sks team log|tail|watch|lane|status [mission-id|latest]');
-    console.error('       sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
-    process.exitCode = 1;
-    return;
-  }
-  const root = await sksRoot();
-  if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
-  const { id, dir } = await createMission(root, { mode: 'team', prompt });
-  const schema = buildQuestionSchema(prompt);
-  await writeQuestions(dir, schema);
-  const plan = buildTeamPlan(id, prompt, { agentSessions, roleCounts, roster });
-  await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
-  await writeTextAtomic(path.join(dir, 'team-workflow.md'), teamWorkflowMarkdown(plan));
-  const liveFiles = await initTeamLive(id, dir, prompt, { agentSessions, roleCounts, roster });
-  await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
-  const fromChatImgRequired = hasFromChatImgSignal(prompt);
-  const runtime = await writeTeamRuntimeArtifacts(dir, plan, {});
-  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
-  const result = {
-    mission_id: id,
-    mission_dir: dir,
-    plan: path.join(dir, 'team-plan.json'),
-    workflow: path.join(dir, 'team-workflow.md'),
-    team_graph: path.join(dir, TEAM_GRAPH_ARTIFACT),
-    runtime_tasks: path.join(dir, TEAM_RUNTIME_TASKS_ARTIFACT),
-    decomposition_report: path.join(dir, TEAM_DECOMPOSITION_ARTIFACT),
-    worker_inbox_dir: path.join(dir, TEAM_INBOX_DIR),
-    live: liveFiles.live,
-    transcript: liveFiles.transcript,
-    dashboard: liveFiles.dashboard,
-    context_pack: path.join(root, '.sneakoscope', 'wiki', 'context-pack.json'),
-    agent_sessions: agentSessions,
-    bundle_size: roster.bundle_size,
-    role_counts: roleCounts,
-    questions: path.join(dir, 'questions.md'),
-    codex_agents: ['analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']
-  };
-  result.cmux = await launchCmuxTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: flag(args, '--json') });
-  if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-  console.log(`Team mission created: ${id}`);
-  console.log(`Plan: ${path.relative(root, result.plan)}`);
-  console.log(`Agent sessions: ${agentSessions}`);
-  console.log(`Role counts: ${formatRoleCounts(roleCounts)}`);
-  console.log(`Workflow: ${path.relative(root, result.workflow)}`);
-  console.log(`Runtime graph: ${path.relative(root, result.team_graph)}`);
-  console.log(`Worker inbox: ${path.relative(root, result.worker_inbox_dir)}`);
-  console.log(`Live: ${path.relative(root, result.live)}`);
-  if (result.cmux.ready) console.log(`cmux: ${result.cmux.created ? 'opened' : 'ready'} ${result.cmux.agents.length} agent lane(s)`);
-  else console.log(`cmux: blocked (${Array.from(new Set(result.cmux.blockers || [])).join('; ')})`);
-  console.log(`Watch: sks team watch ${id}`);
-  console.log('Use $Team in Codex App or the cmux lanes from this CLI flow to run scouts, debate/consensus, runtime graph/inbox handoff, then a fresh implementation team with disjoint ownership.');
-}
-
-function parseTeamCreateArgs(args) {
-  const spec = parseTeamSpecArgs(args);
-  return { prompt: spec.cleanArgs.join(' ').trim(), agentSessions: spec.agentSessions, roleCounts: spec.roleCounts, roster: spec.roster };
-}
-
-function buildTeamPlan(id, prompt, opts = {}) {
-  const spec = normalizeTeamSpec(opts);
-  const { agentSessions, roleCounts, roster } = spec;
-  const fromChatImgRequired = hasFromChatImgSignal(prompt);
-  const fromChatImgCoveragePhase = fromChatImgRequired ? [{
-    id: 'from_chat_img_coverage_reconciliation',
-    goal: `Before implementation, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}: every visible customer request, screenshot image region, and separate attachment must be listed, source-bound, mapped to work-order item(s), confidence-tagged, tracked with checkboxes, and reconciled with unresolved_items empty. After implementation, run scoped QA-LOOP over the exact work-order range and write ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}.`,
-    agents: ['parent_orchestrator'],
-    output: [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT]
-  }] : [];
-  const requiredArtifacts = ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'];
-  return {
-    schema_version: 1,
-    mission_id: id,
-    mode: 'team',
-    prompt,
-    agent_session_count: agentSessions,
-    default_agent_session_count: 3,
-    role_counts: roleCounts,
-    session_policy: `Use at most ${agentSessions} subagent sessions at a time; parent orchestrator is not counted.`,
-    bundle_size: roster.bundle_size,
-    roster,
-    team_model: {
-      phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'runtime_task_graph', 'development_team', 'triwiki_stage_refresh', 'review', 'session_cleanup'],
-      analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents. Each scout owns one investigation slice, records source paths/evidence, and returns TriWiki-ready findings before debate or implementation starts.`,
-      debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices.`,
-      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`
-    },
-    team_runtime: teamRuntimePlanMetadata(),
-    persona_axioms: [
-      'Final users are intentionally low-context, impatient, self-interested, stubborn, and hostile to inconvenience.',
-      'Executors are capable developers and must receive disjoint write ownership.',
-      'Reviewers are strict, skeptical, and block unsupported correctness, DB safety, test, or evidence claims.',
-      'Analysis scouts run before debate, then the debate team closes before a fresh development team starts parallel implementation.'
-    ],
-    reasoning: { effort: 'high', profile: 'sks-logic-high', temporary: true, restore_after_completion: true },
-    codex_config_required: {
-      features: { multi_agent: true, codex_hooks: true },
-      agents: { max_threads: 6, max_depth: 1 },
-      custom_agents_dir: '.codex/agents'
-    },
-    context_tracking: triwikiContextTracking(),
-    phases: [
-      {
-        id: 'team_roster_confirmation',
-        goal: 'Materialize Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts before any implementation.',
-        agents: ['parent_orchestrator'],
-        output: 'team-roster.json'
-      },
-      {
-        id: 'parallel_analysis_scouting',
-        goal: fromChatImgRequired
-          ? `Read relevant TriWiki context first. From-Chat-IMG is active: extract visible chat text in reading order, enumerate every customer request, account for every screenshot image region and separate attachment, prepare evidence for ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, update ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} as work proceeds, store temporary session context in ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and plan scoped QA-LOOP evidence in ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}; then read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.`
-          : 'Read relevant TriWiki context first. From-Chat-IMG is inactive, so do not assume ordinary image prompts are chat captures; then read-only analysis scouts split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation in parallel before debate.',
-        agents: roster.analysis_team.map((agent) => agent.id),
-        max_parallel_subagents: agentSessions,
-        write_policy: 'read-only',
-        output: 'team-analysis.md'
-      },
-      ...fromChatImgCoveragePhase,
-      {
-        id: 'triwiki_refresh',
-        goal: 'Parent orchestrator refreshes and validates TriWiki from scout findings before assigning debate work.',
-        agents: ['parent_orchestrator'],
-        commands: ['sks wiki refresh', 'sks wiki validate .sneakoscope/wiki/context-pack.json'],
-        output: '.sneakoscope/wiki/context-pack.json'
-      },
-      {
-        id: 'planning_debate',
-        goal: 'Debate team reads the current TriWiki pack, maps user inconvenience, code risk, constraints, DB safety, tests, and viable approaches, and hydrates low-trust claims from source immediately.',
-        agents: roster.debate_team.map((agent) => agent.id),
-        max_parallel_subagents: agentSessions,
-        write_policy: 'read-only'
-      },
-      {
-        id: 'consensus',
-        goal: 'Parent orchestrator synthesizes one agreed objective, rejected alternatives, acceptance criteria, and parallel implementation slices, then refreshes/validates TriWiki before implementation handoff.',
-        agents: ['parent_orchestrator'],
-        output: 'agreed-objective.md'
-      },
-      {
-        id: 'runtime_task_graph_compile',
-        goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}; remap symbolic plan nodes to concrete task ids, allocate role/path/domain worker lanes, and write ${TEAM_INBOX_DIR} before executor work starts.`,
-        agents: ['parent_orchestrator'],
-        output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR]
-      },
-      {
-        id: 'close_planning_agents',
-        goal: 'Close or stop the debate team after findings and consensus are captured so implementation starts with a fresh development bundle.',
-        agents: ['parent_orchestrator']
-      },
-      {
-        id: 'parallel_implementation',
-        goal: 'Fresh executor developers read relevant TriWiki plus current source, take disjoint write sets, implement in parallel without reverting each other, and trigger refresh after implementation changes or blockers.',
-        agents: roster.development_team.map((agent) => agent.id),
-        max_parallel_subagents: agentSessions,
-        write_policy: 'workspace-write with explicit ownership'
-      },
-      {
-        id: 'review_and_integrate',
-        goal: 'Strict reviewers read/validate current TriWiki context, check correctness, DB safety, tests, and evidence; user personas validate practical inconvenience; parent integrates final result and refreshes after review findings.',
-        agents: roster.validation_team.map((agent) => agent.id).concat(['parent_orchestrator'])
-      },
-      {
-        id: 'session_cleanup',
-        goal: 'Close or account for all Team subagent sessions, finalize live transcript state, and write team-session-cleanup.json before reflection or final.',
-        agents: ['parent_orchestrator'],
-        output: TEAM_SESSION_CLEANUP_ARTIFACT
-      }
-    ],
-    invariants: [
-      'The parent thread remains the orchestrator and owns final integration.',
-      'Team roster confirmation is mandatory before implementation: default SKS counts are materialized when the user did not specify counts, explicit counts are honored, and team-gate.json must include team_roster_confirmed=true with team-roster.json present.',
-      `When and only when From-Chat-IMG/$From-Chat-IMG is explicit, treat client requests as chat-history screenshots plus separate attachments: extract visible text in reading order, use Computer Use/browser visual inspection to match screenshot image regions to attachments with confidence notes, and turn that evidence into a complete modification work order before editing.`,
-      `For From-Chat-IMG, request coverage is stop-gated: ${FROM_CHAT_IMG_COVERAGE_ARTIFACT} must show all_chat_requirements_listed=true, all_requirements_mapped_to_work_order=true, all_screenshot_regions_accounted=true, all_attachments_accounted=true, image_analysis_complete=true, verbatim_customer_requests_preserved=true, checklist_updated=true, temp_triwiki_recorded=true, scoped_qa_loop_completed=true, and unresolved_items=[] before Team completion.`,
-      `For From-Chat-IMG, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} must contain Customer Requests, Image Analysis, Work Items, QA Loop, and Verification sections, with every checkbox checked as each item is completed.`,
-      `For From-Chat-IMG, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} stores temporary TriWiki-backed claims with expires_after_sessions no greater than ${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}; retention may remove it after enough newer sessions.`,
-      `For From-Chat-IMG, ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} must prove QA-LOOP ran after implementation over the exact customer-request work-order range, covered every work-order item, completed post-fix verification, and has zero unresolved findings.`,
-      'Every useful subagent message, result, handoff, review finding, and integration decision is mirrored to team-live.md and team-transcript.jsonl.',
-      'Analysis scouts, debate team, and development team are separate bundles; scouts finish before debate and debate closes before implementation workers start.',
-      'Analysis scouts are read-only and maximize the available session budget for independent investigation before any code edit.',
-      'The parent and agents use relevant TriWiki before every stage, hydrate low-trust claims from source during the stage, and refresh/validate TriWiki after scouting, debate, consensus, implementation, and review changes.',
-      `After consensus and before executor work, compile the Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}; symbolic node ids are remapped to concrete task ids before worker inboxes are written.`,
-      `Worker inbox files under ${TEAM_INBOX_DIR} must use concrete task ids, include role/path/domain/lane/allocation hints, and be generated only after runtime task readiness is checked.`,
-      'executor:N creates exactly N debate participants and then a separate N-person executor development team.',
-      'Final user personas should not be overly smart or cooperative; they represent stubborn, inconvenience-averse real users.',
-      'Planning agents do not edit files.',
-      'Implementation workers receive disjoint ownership scopes.',
-      'Workers are told they are not alone in the codebase and must not revert others edits.',
-      'Team completion requires session cleanup evidence with zero outstanding subagent sessions before reflection.',
-      'Context tracking uses the latest coordinate+voxel TriWiki pack as the SSOT throughout the whole pipeline; coordinate-only legacy packs are invalid, and team handoffs/final claims must preserve id, hash, source path, and RGBA/trig coordinate anchors.',
-      'SKS hooks, DB safety rules, Ralph no-question rules, and H-Proof gates remain active.',
-      'Destructive database operations remain forbidden.'
-    ],
-    live_visibility: {
-      markdown: 'team-live.md',
-      transcript: 'team-transcript.jsonl',
-      dashboard: 'team-dashboard.json',
-      cmux: 'sks team opens a cmux workspace with one live multi-line lane per visible Team agent budget when cmux is available.',
-      commands: [
-        'sks team status <mission-id>',
-        'sks team log <mission-id>',
-        'sks team tail <mission-id>',
-        'sks team watch <mission-id>',
-        'sks team lane <mission-id> --agent <name> --follow',
-        'sks team event <mission-id> --agent <name> --phase <phase> --message "..."'
-      ]
-    },
-    required_artifacts: requiredArtifacts,
-    prompt_command: fromChatImgRequired ? '$From-Chat-IMG' : '$Team'
-  };
-}
-
-function teamWorkflowMarkdown(plan) {
-  const ctx = plan.context_tracking || triwikiContextTracking();
-  return `# SKS Team Mission
-
-Mission: ${plan.mission_id}
-
-Prompt:
-${plan.prompt}
-
-## Codex App Prompt
-
-\`\`\`text
-${plan.prompt_command || '$Team'} ${plan.prompt}
-
-Use high reasoning for the Team route only, then return to the default/user-selected profile after completion. Use at most ${plan.agent_session_count || 3} subagent sessions at a time; the parent orchestrator is not counted.
-
-Before each stage, read the relevant latest coordinate+voxel TriWiki context pack and hydrate low-trust claims from source. Coordinate-only legacy packs are invalid; refresh and validate before using TriWiki for pipeline decisions. First run exactly ${plan.roster.bundle_size} read-only analysis_scout_N agents in parallel. Split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation into independent slices, then capture source-backed findings in team-analysis.md. Refresh and validate TriWiki before debate. Then run the debate team with exactly ${plan.roster.bundle_size} participants using the refreshed pack. Use the concrete roster below: final-user voices are stubborn and inconvenience-averse, executor voices are capable developers, reviewers are strict, and planners force consensus. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices, then refresh and validate TriWiki again. Compile the Team runtime graph into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so symbolic plan nodes become concrete runtime task ids before worker handoff. Close the debate team. Then form a fresh development team with exactly ${plan.roster.bundle_size} executor_N developers implementing slices in parallel with non-overlapping ownership. Refresh TriWiki after implementation changes or blockers. Review with the validation team, validate TriWiki again, integrate results in the parent thread, close or account for all Team sessions in team-session-cleanup.json, run verification, and report evidence.
-\`\`\`
-
-## Session Budget
-
-- Default: 3 subagent sessions.
-- This mission: ${plan.agent_session_count || 3} subagent sessions.
-- Bundle size: ${plan.roster.bundle_size}
-- Role counts: ${formatRoleCounts(plan.role_counts)}
-- The parent orchestrator is not counted.
-- Use the full available session budget for analysis when independent slices exist; use fewer agents only when the work cannot be split cleanly.
-- Runtime graph: write ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR}; worker handoff starts from concrete runtime task ids and scope-aware inboxes.
-- Before reflection/final, close or account for all Team subagent sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.
-${plan.required_artifacts?.includes(FROM_CHAT_IMG_COVERAGE_ARTIFACT) ? `- From-Chat-IMG coverage: write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} before implementation; after implementation write ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}; do not pass team-gate.json until every visible customer request, screenshot image region, and attachment is mapped, every checklist box is checked, scoped QA-LOOP covers every work item with zero unresolved findings, and unresolved_items is empty.` : ''}
-
-## Context Tracking
-
-- SSOT: ${ctx.ssot}
-- Pack: ${ctx.default_pack}
-- Refresh: \`${ctx.pack_command}\`
-- Validate: \`${ctx.validate_command}\`
-- Rule: use only the latest coordinate+voxel TriWiki pack before every stage, hydrate low-trust claims during the stage, refresh after findings/artifact changes, validate before handoffs/final claims, reject coordinate-only legacy packs, and keep id, hash, source path, and RGBA/trig coordinate anchors hydratable.
-
-## Analysis Scouts
-
-${plan.roster.analysis_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
-
-Scout rules:
-- Read-only only.
-- Each scout owns one independent investigation slice.
-- Return source paths, risks, claims, and suggested implementation slices in TriWiki-ready form.
-- Parent updates team-analysis.md, runs \`${ctx.refresh_command || ctx.pack_command}\` or \`${ctx.pack_command}\`, then runs \`${ctx.validate_command}\` before debate/development.
-
-## Debate Team
-
-${plan.roster.debate_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
-
-## Development Team
-
-${plan.roster.development_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
-
-## Validation Team
-
-${plan.roster.validation_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
-
-## Live Visibility
-
-- Keep team-live.md readable for the user inside Codex App.
-- Mirror every useful subagent status, debate result, handoff, review finding, and integration decision to team-transcript.jsonl.
-- Use \`sks team event ${plan.mission_id} --agent <name> --phase <phase> --message "..."\` when recording a live event from the parent thread.
-- The user can inspect the flow with \`sks team log ${plan.mission_id}\`, \`sks team tail ${plan.mission_id}\`, \`sks team watch ${plan.mission_id}\`, or \`sks team lane ${plan.mission_id} --agent analysis_scout_1 --follow\`.
-
-## Phases
-
-${plan.phases.map((phase, idx) => `${idx + 1}. ${phase.id}: ${phase.goal}`).join('\n')}
-
-## Invariants
-
-${plan.invariants.map((x) => `- ${x}`).join('\n')}
-`;
-}
-
-async function teamCommand(sub, args) {
-  const root = await sksRoot();
-  const missionArg = args[0] && !String(args[0]).startsWith('--') ? args[0] : 'latest';
-  const id = await resolveMissionId(root, missionArg);
-  if (!id) {
-    console.error(`Usage: sks team ${sub} [mission-id|latest]`);
-    process.exitCode = 1;
-    return;
-  }
-  const { dir } = await loadMission(root, id);
-  if (sub === 'event') {
-    const message = readFlagValue(args, '--message', '');
-    if (!message) {
-      console.error('Usage: sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
-      process.exitCode = 1;
-      return;
-    }
-    const record = await appendTeamEvent(dir, {
-      agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
-      phase: readFlagValue(args, '--phase', 'general'),
-      type: readFlagValue(args, '--type', 'status'),
-      artifact: readFlagValue(args, '--artifact', ''),
-      message
-    });
-    if (flag(args, '--json')) return console.log(JSON.stringify(record, null, 2));
-    console.log(`${record.ts} [${record.phase}] ${record.agent}: ${record.message}`);
-    return;
-  }
-  if (sub === 'status') {
-    const dashboard = await readTeamDashboard(dir);
-    if (flag(args, '--json')) return console.log(JSON.stringify(dashboard || {}, null, 2));
-    if (!dashboard) {
-      console.error(`Team dashboard missing for ${id}.`);
-      process.exitCode = 2;
-      return;
-    }
-    console.log(`Team mission: ${id}`);
-    console.log(`Updated: ${dashboard.updated_at || 'unknown'}`);
-    console.log(`Agent sessions: ${dashboard.agent_session_count || 3}`);
-    if (dashboard.role_counts) console.log(`Role counts: ${formatRoleCounts(dashboard.role_counts)}`);
-    for (const entry of dashboard.latest_messages || []) console.log(`${entry.ts} [${entry.phase}] ${entry.agent}: ${entry.message}`);
-    return;
-  }
-  if (sub === 'log') return console.log(await readTeamLive(dir));
-  if (sub === 'lane') {
-    const agent = readFlagValue(args, '--agent', 'parent_orchestrator');
-    const phase = readFlagValue(args, '--phase', '');
-    const lines = Number(readFlagValue(args, '--lines', '12'));
-    const printLane = async () => {
-      const text = await renderTeamAgentLane(dir, { missionId: id, agent, phase, lines });
-      if (flag(args, '--json')) {
-        console.log(JSON.stringify({ mission_id: id, agent, phase, lane: text }, null, 2));
-      } else {
-        if (flag(args, '--follow') && process.stdout.isTTY) console.clear();
-        console.log(text);
-      }
-      return text;
-    };
-    let last = await printLane();
-    if (flag(args, '--follow')) {
-      for (;;) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        const next = await renderTeamAgentLane(dir, { missionId: id, agent, phase, lines });
-        if (next !== last) {
-          if (process.stdout.isTTY) console.clear();
-          else console.log('\n--- team lane update ---\n');
-          console.log(next);
-          last = next;
-        }
-      }
-    }
-    return;
-  }
-  if (sub === 'tail' || sub === 'watch') {
-    const lines = readFlagValue(args, '--lines', '20');
-    const printTail = async () => {
-      for (const line of await readTeamTranscriptTail(dir, Number(lines))) console.log(line);
-    };
-    await printTail();
-    if (sub === 'watch' && flag(args, '--follow')) {
-      let last = (await readTeamTranscriptTail(dir, Number(lines))).join('\n');
-      for (;;) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        const next = (await readTeamTranscriptTail(dir, Number(lines))).join('\n');
-        if (next !== last) {
-          console.log(next);
-          last = next;
-        }
-      }
-    }
-    return;
-  }
-}
-
 async function db(sub, args) {
   const root = await sksRoot();
   if (sub === 'policy') {
@@ -4347,7 +2925,7 @@ async function db(sub, args) {
   if (sub === 'scan-payload') {
     const raw = await fsp.readFile(0, 'utf8');
     const payload = raw.trim() ? JSON.parse(raw) : {};
-    const decision = await checkDbOperation(root, {}, payload, { duringRalph: false });
+    const decision = await checkDbOperation(root, {}, payload, { duringNoQuestion: false });
     console.log(JSON.stringify(decision, null, 2));
     process.exitCode = decision.action === 'block' ? 2 : 0;
     return;

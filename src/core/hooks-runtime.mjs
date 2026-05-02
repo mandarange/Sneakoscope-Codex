@@ -25,8 +25,7 @@ async function loadState(root) {
 }
 
 function isNoQuestionRunning(state) {
-  return (state.mode === 'RALPH' && state.phase === 'RALPH_RUNNING_NO_QUESTIONS')
-    || (state.mode === 'RESEARCH' && state.phase === 'RESEARCH_RUNNING_NO_QUESTIONS')
+  return (state.mode === 'RESEARCH' && state.phase === 'RESEARCH_RUNNING_NO_QUESTIONS')
     || (state.mode === 'QALOOP' && state.phase === 'QALOOP_RUNNING_NO_QUESTIONS');
 }
 
@@ -111,6 +110,12 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
     const command = dollarCommand(prompt);
     const route = routePrompt(prompt);
     const bypassActiveRoute = route?.id === 'DFix' || route?.id === 'Answer';
+    if (isClarificationAwaiting(state) && !looksLikeClarificationCancel(prompt)) {
+      const activeContext = await activeRouteContext(root, state);
+      const teamDigest = await teamLiveDigest(root, state);
+      const additionalContext = [updateContext, activeContext, teamDigest?.context].filter(Boolean).join('\n\n');
+      return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
+    }
     const teamDigest = bypassActiveRoute ? null : await teamLiveDigest(root, state);
     const activeContext = await activeRouteContext(root, state);
     const contexts = [updateContext];
@@ -128,12 +133,21 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
   };
 }
 
+function isClarificationAwaiting(state = {}) {
+  return Boolean(state.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS'))
+    || ['QALOOP_CLARIFICATION_AWAITING_ANSWERS'].includes(String(state.phase || ''));
+}
+
+function looksLikeClarificationCancel(prompt = '') {
+  return /^(cancel|reset|restart|new mission|새로|취소|중단|리셋|다시 시작)\b/i.test(String(prompt || '').trim());
+}
+
 async function hookPreTool(root, state, payload, noQuestion) {
   const harnessDecision = await checkHarnessModification(root, payload, { phase: 'pre-tool' });
   if (harnessDecision.action === 'block') {
     return { decision: 'block', permissionDecision: 'deny', reason: harnessGuardBlockReason(harnessDecision) };
   }
-  const dbDecision = await checkDbOperation(root, state, payload, { duringRalph: noQuestion });
+  const dbDecision = await checkDbOperation(root, state, payload, { duringNoQuestion: noQuestion });
   if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
     return { decision: 'block', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
   }
@@ -143,7 +157,7 @@ async function hookPreTool(root, state, payload, noQuestion) {
 }
 
 async function hookPostTool(root, state, payload, noQuestion) {
-  const dbDecision = await checkDbOperation(root, state, payload, { duringRalph: noQuestion });
+  const dbDecision = await checkDbOperation(root, state, payload, { duringNoQuestion: noQuestion });
   if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
     return { decision: 'block', reason: dbBlockReason(dbDecision) };
   }
@@ -174,7 +188,7 @@ async function hookPermission(root, state, payload, noQuestion) {
   if (harnessDecision.action === 'block') {
     return { decision: 'deny', permissionDecision: 'deny', reason: harnessGuardBlockReason(harnessDecision) };
   }
-  const dbDecision = await checkDbOperation(root, state, payload, { duringRalph: noQuestion });
+  const dbDecision = await checkDbOperation(root, state, payload, { duringNoQuestion: noQuestion });
   if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
     return { decision: 'deny', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
   }
@@ -607,7 +621,8 @@ function visibleHookMessage(name, text = '') {
     if (body.includes('DFix ultralight pipeline active')) return 'SKS: DFix ultralight task list injected.';
     if (body.includes('SKS answer-only pipeline active')) return 'SKS: answer-only research context injected.';
     if (body.includes('SKS wiki pipeline active')) return 'SKS: wiki refresh context injected.';
-    if (body.includes('MANDATORY $Ralph')) return 'SKS: Ralph clarification gate prepared in Codex App.';
+    if (body.includes('$Goal route prepared')) return 'SKS: Goal workflow bridge prepared for native Codex /goal continuation.';
+    if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: clarification questions must be shown in chat before the route can continue.';
     if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team route, live transcript, and subagent plan injected.';
     if (body.includes('$QA-LOOP route prepared') || body.includes('QA-LOOP')) return 'SKS: QA-LOOP route and safety checklist injected.';
     if (body.includes('Subagent policy: REQUIRED')) return 'SKS: route context injected; subagent execution gate is active.';
