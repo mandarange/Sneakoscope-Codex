@@ -440,10 +440,11 @@ async function wizard(args = []) {
   const rl = readline.createInterface({ input, output });
   try {
     console.log('ㅅㅋㅅ Setup UI\n');
-    console.log(`Current package: ${PACKAGE_VERSION}`);
+    const currentPackage = await effectivePackageVersion();
+    console.log(`Current package: ${currentPackage}`);
     const latest = await npmPackageVersion('sneakoscope');
     if (latest.version) {
-      const needsUpdate = compareVersions(latest.version, PACKAGE_VERSION) > 0;
+      const needsUpdate = compareVersions(latest.version, currentPackage) > 0;
       console.log(`Latest on npm:   ${latest.version}${needsUpdate ? ' (update available)' : ''}`);
       if (needsUpdate) {
         const update = await askChoice(rl, 'Update SKS before setup?', ['yes', 'no'], 'yes');
@@ -496,11 +497,13 @@ async function askChoice(rl, question, choices, fallback) {
 
 async function updateCheck(args = []) {
   const latest = await npmPackageVersion('sneakoscope');
+  const currentPackage = await effectivePackageVersion();
   const result = {
     package: 'sneakoscope',
-    current: PACKAGE_VERSION,
+    current: currentPackage,
+    runtime_current: PACKAGE_VERSION,
     latest: latest.version,
-    update_available: latest.version ? compareVersions(latest.version, PACKAGE_VERSION) > 0 : false,
+    update_available: latest.version ? compareVersions(latest.version, currentPackage) > 0 : false,
     error: latest.error || null
   };
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
@@ -1124,14 +1127,15 @@ async function madHighCommand(args = []) {
 async function maybePromptSksUpdateForMad(args = []) {
   if (flag(args, '--json') || flag(args, '--skip-update-check') || process.env.SKS_SKIP_UPDATE_CHECK === '1') return { status: 'skipped' };
   const latest = await npmPackageVersion('sneakoscope');
-  if (!latest.version || compareVersions(latest.version, PACKAGE_VERSION) <= 0) return { status: 'current', latest: latest.version || null, error: latest.error || null };
+  const currentPackage = await effectivePackageVersion();
+  if (!latest.version || compareVersions(latest.version, currentPackage) <= 0) return { status: 'current', latest: latest.version || null, error: latest.error || null };
   const command = 'npm i -g sneakoscope@latest';
   if (flag(args, '--yes') || flag(args, '-y')) return installSksLatest(command, latest.version);
   if (!canAskYesNo()) {
-    console.log(`SKS update available: ${PACKAGE_VERSION} -> ${latest.version}. Run: ${command}`);
+    console.log(`SKS update available: ${currentPackage} -> ${latest.version}. Run: ${command}`);
     return { status: 'available', latest: latest.version, command };
   }
-  const answer = (await askPostinstallQuestion(`SKS ${PACKAGE_VERSION} -> ${latest.version} update before MAD launch? [Y/n] `)).trim();
+  const answer = (await askPostinstallQuestion(`SKS ${currentPackage} -> ${latest.version} update before MAD launch? [Y/n] `)).trim();
   const yes = answer === '' || /^(y|yes|예|네|응)$/i.test(answer);
   if (!yes) return { status: 'skipped_by_user', latest: latest.version, command };
   return installSksLatest(command, latest.version);
@@ -1899,6 +1903,15 @@ async function npmPackageVersion(name) {
   return { version: result.stdout.trim().split(/\s+/).pop() };
 }
 
+async function effectivePackageVersion() {
+  const pkg = await readJson(path.join(packageRoot(), 'package.json'), {}).catch(() => ({}));
+  return highestVersion([PACKAGE_VERSION, pkg.version]);
+}
+
+function highestVersion(versions = []) {
+  return versions.filter(Boolean).reduce((best, candidate) => compareVersions(candidate, best) > 0 ? candidate : best, '0.0.0');
+}
+
 function compareVersions(a, b) {
   const pa = String(a || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
   const pb = String(b || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
@@ -2263,6 +2276,81 @@ async function selftest() {
   const hookState = await readJson(stateFile(hookGoalTmp), {});
   if (hookState.phase !== 'GOAL_READY' || hookState.mode !== 'GOAL') throw new Error('selftest failed: $Goal hook did not set ready state');
   if (!(await exists(path.join(missionDir(hookGoalTmp, hookState.mission_id), GOAL_WORKFLOW_ARTIFACT)))) throw new Error('selftest failed: $Goal hook did not write goal workflow artifact');
+  const hookUpdateCurrentTmp = tmpdir();
+  await initProject(hookUpdateCurrentTmp, {});
+  const hookUpdateCurrentPayload = JSON.stringify({ cwd: hookUpdateCurrentTmp, prompt: '상태 확인해줘' });
+  const hookUpdateCurrentResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], {
+    cwd: hookUpdateCurrentTmp,
+    input: hookUpdateCurrentPayload,
+    env: { SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9', SKS_INSTALLED_SKS_VERSION: '9.9.9' },
+    timeoutMs: 15000,
+    maxOutputBytes: 256 * 1024
+  });
+  if (hookUpdateCurrentResult.code !== 0) throw new Error(`selftest failed: current update hook exited ${hookUpdateCurrentResult.code}: ${hookUpdateCurrentResult.stderr}`);
+  const hookUpdateCurrentJson = JSON.parse(hookUpdateCurrentResult.stdout);
+  const hookUpdateCurrentContext = hookUpdateCurrentJson.hookSpecificOutput?.additionalContext || '';
+  if (String(hookUpdateCurrentContext).includes('Update SKS now') || String(hookUpdateCurrentContext).includes('Skip update for this conversation')) throw new Error('selftest failed: hook prompted for update even though installed SKS is current');
+  const hookUpdateCurrentState = await readJson(path.join(hookUpdateCurrentTmp, '.sneakoscope', 'state', 'update-check.json'), {});
+  if (hookUpdateCurrentState.pending_offer) throw new Error('selftest failed: current installed SKS left a pending update offer');
+  if (hookUpdateCurrentState.current !== '9.9.9' || hookUpdateCurrentState.runtime_current !== PACKAGE_VERSION || hookUpdateCurrentState.installed_current !== '9.9.9') throw new Error('selftest failed: hook did not record effective installed SKS version');
+  const hookUpdatePendingTmp = tmpdir();
+  await initProject(hookUpdatePendingTmp, {});
+  await writeJsonAtomic(path.join(hookUpdatePendingTmp, '.sneakoscope', 'state', 'update-check.json'), {
+    current: PACKAGE_VERSION,
+    latest: '9.9.9',
+    pending_offer: { conversation_id: hookUpdatePendingTmp, latest: '9.9.9', offered_at: nowIso() }
+  });
+  const hookUpdatePendingPayload = JSON.stringify({ cwd: hookUpdatePendingTmp, prompt: 'Update SKS now' });
+  const hookUpdatePendingResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], {
+    cwd: hookUpdatePendingTmp,
+    input: hookUpdatePendingPayload,
+    env: { SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9', SKS_INSTALLED_SKS_VERSION: '9.9.9' },
+    timeoutMs: 15000,
+    maxOutputBytes: 256 * 1024
+  });
+  if (hookUpdatePendingResult.code !== 0) throw new Error(`selftest failed: stale pending update hook exited ${hookUpdatePendingResult.code}: ${hookUpdatePendingResult.stderr}`);
+  const hookUpdatePendingJson = JSON.parse(hookUpdatePendingResult.stdout);
+  const hookUpdatePendingContext = hookUpdatePendingJson.hookSpecificOutput?.additionalContext || '';
+  if (String(hookUpdatePendingContext).includes('user accepted update') || String(hookUpdatePendingContext).includes('Before doing other work')) throw new Error('selftest failed: current installed SKS accepted a stale pending update offer');
+  const hookUpdatePendingState = await readJson(path.join(hookUpdatePendingTmp, '.sneakoscope', 'state', 'update-check.json'), {});
+  if (hookUpdatePendingState.pending_offer) throw new Error('selftest failed: stale pending update offer was not cleared after installed SKS became current');
+  const hookUpdateSkippedTmp = tmpdir();
+  await initProject(hookUpdateSkippedTmp, {});
+  await writeJsonAtomic(path.join(hookUpdateSkippedTmp, '.sneakoscope', 'state', 'update-check.json'), {
+    current: PACKAGE_VERSION,
+    latest: '9.9.9',
+    skipped: { conversation_id: hookUpdateSkippedTmp, latest: '9.9.9', skipped_at: nowIso() }
+  });
+  const hookUpdateSkippedPayload = JSON.stringify({ cwd: hookUpdateSkippedTmp, prompt: '상태 확인해줘' });
+  const hookUpdateSkippedResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], {
+    cwd: hookUpdateSkippedTmp,
+    input: hookUpdateSkippedPayload,
+    env: { SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9', SKS_INSTALLED_SKS_VERSION: '9.9.9' },
+    timeoutMs: 15000,
+    maxOutputBytes: 256 * 1024
+  });
+  if (hookUpdateSkippedResult.code !== 0) throw new Error(`selftest failed: stale skipped update hook exited ${hookUpdateSkippedResult.code}: ${hookUpdateSkippedResult.stderr}`);
+  const hookUpdateSkippedJson = JSON.parse(hookUpdateSkippedResult.stdout);
+  const hookUpdateSkippedContext = hookUpdateSkippedJson.hookSpecificOutput?.additionalContext || '';
+  if (String(hookUpdateSkippedContext).includes('was skipped for this conversation')) throw new Error('selftest failed: current installed SKS kept stale skipped update context');
+  const hookUpdateSkippedState = await readJson(path.join(hookUpdateSkippedTmp, '.sneakoscope', 'state', 'update-check.json'), {});
+  if (hookUpdateSkippedState.skipped) throw new Error('selftest failed: stale skipped update state was not cleared after installed SKS became current');
+  const hookUpdateOldTmp = tmpdir();
+  await initProject(hookUpdateOldTmp, {});
+  const hookUpdateOldPayload = JSON.stringify({ cwd: hookUpdateOldTmp, prompt: '상태 확인해줘' });
+  const hookUpdateOldResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], {
+    cwd: hookUpdateOldTmp,
+    input: hookUpdateOldPayload,
+    env: { SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9', SKS_INSTALLED_SKS_VERSION: '0.0.0' },
+    timeoutMs: 15000,
+    maxOutputBytes: 256 * 1024
+  });
+  if (hookUpdateOldResult.code !== 0) throw new Error(`selftest failed: stale update hook exited ${hookUpdateOldResult.code}: ${hookUpdateOldResult.stderr}`);
+  const hookUpdateOldJson = JSON.parse(hookUpdateOldResult.stdout);
+  const hookUpdateOldContext = hookUpdateOldJson.hookSpecificOutput?.additionalContext || '';
+  if (!String(hookUpdateOldContext).includes('Update SKS now') || !String(hookUpdateOldContext).includes('Skip update for this conversation')) throw new Error('selftest failed: hook did not prompt when installed SKS is stale');
+  const hookUpdateOldState = await readJson(path.join(hookUpdateOldTmp, '.sneakoscope', 'state', 'update-check.json'), {});
+  if (hookUpdateOldState.pending_offer?.latest !== '9.9.9') throw new Error('selftest failed: stale installed SKS did not persist pending update offer');
   const hookKoreanSksTmp = tmpdir();
   await initProject(hookKoreanSksTmp, {});
   const hookKoreanSksPayload = JSON.stringify({ cwd: hookKoreanSksTmp, prompt: koreanReadmeInstallPrompt });

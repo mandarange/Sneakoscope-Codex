@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION, sha256 } from './fsx.mjs';
+import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION, sha256, packageRoot } from './fsx.mjs';
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.mjs';
 import { missionDir, setCurrent, stateFile } from './mission.mjs';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.mjs';
@@ -334,6 +334,50 @@ async function updateCheckContext(root, payload, prompt) {
   const updateState = await readJson(statePath, {});
   const conv = conversationId(payload);
   const pending = updateState.pending_offer;
+  let effective = null;
+  async function effectiveVersion() {
+    if (!effective) {
+      const installed = await detectInstalledSksVersion();
+      effective = {
+        installed,
+        current: highestVersion([PACKAGE_VERSION, installed.version])
+      };
+    }
+    return effective;
+  }
+  if (pending?.latest) {
+    const currentCheck = await effectiveVersion();
+    if (compareVersions(pending.latest, currentCheck.current) <= 0) {
+      await writeJsonAtomic(statePath, {
+        ...updateState,
+        current: currentCheck.current,
+        runtime_current: PACKAGE_VERSION,
+        installed_current: currentCheck.installed.version || null,
+        latest: pending.latest,
+        checked_at: nowIso(),
+        pending_offer: null,
+        check_error: null
+      });
+      return '';
+    }
+  }
+  if (updateState.skipped?.latest) {
+    const currentCheck = await effectiveVersion();
+    if (compareVersions(updateState.skipped.latest, currentCheck.current) <= 0) {
+      await writeJsonAtomic(statePath, {
+        ...updateState,
+        current: currentCheck.current,
+        runtime_current: PACKAGE_VERSION,
+        installed_current: currentCheck.installed.version || null,
+        latest: updateState.skipped.latest,
+        checked_at: nowIso(),
+        pending_offer: null,
+        skipped: null,
+        check_error: null
+      });
+      return '';
+    }
+  }
   if (pending?.conversation_id === conv && pending?.latest && looksLikeUpdateDecline(prompt)) {
     await writeJsonAtomic(statePath, {
       ...updateState,
@@ -354,31 +398,66 @@ async function updateCheckContext(root, payload, prompt) {
     return `SKS update check: update ${updateState.skipped.latest} was skipped for this conversation only. Do not ask again in this conversation; check again next conversation.`;
   }
   const check = await checkLatestVersion();
+  const { installed, current } = await effectiveVersion();
+  const isCurrent = check.latest && compareVersions(check.latest, current) <= 0;
   await writeJsonAtomic(statePath, {
     ...updateState,
-    current: PACKAGE_VERSION,
+    current,
+    runtime_current: PACKAGE_VERSION,
+    installed_current: installed.version || null,
     latest: check.latest || null,
     checked_at: nowIso(),
+    pending_offer: isCurrent ? null : updateState.pending_offer || null,
     check_error: check.error || null
   });
-  if (!check.latest || check.error || compareVersions(check.latest, PACKAGE_VERSION) <= 0) return '';
+  if (!check.latest || check.error || isCurrent) return '';
   await writeJsonAtomic(statePath, {
     ...updateState,
-    current: PACKAGE_VERSION,
+    current,
+    runtime_current: PACKAGE_VERSION,
+    installed_current: installed.version || null,
     latest: check.latest,
     checked_at: nowIso(),
     pending_offer: { conversation_id: conv, latest: check.latest, offered_at: nowIso() },
     skipped: updateState.skipped?.conversation_id === conv ? null : updateState.skipped || null
   });
-  return `SKS update check: installed ${PACKAGE_VERSION}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run npm i -g sneakoscope for global installs, or npm i -D sneakoscope && npx sks setup --install-scope project for project installs, then run sks setup and sks doctor --fix. If they skip, do not ask again in this conversation, but check again next conversation.`;
+  return `SKS update check: installed ${current}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run npm i -g sneakoscope for global installs, or npm i -D sneakoscope && npx sks setup --install-scope project for project installs, then run sks setup and sks doctor --fix. If they skip, do not ask again in this conversation, but check again next conversation.`;
 }
 
 async function checkLatestVersion() {
+  if (process.env.SKS_NPM_VIEW_SNEAKOSCOPE_VERSION) return { latest: process.env.SKS_NPM_VIEW_SNEAKOSCOPE_VERSION };
   const npm = await which('npm').catch(() => null);
   if (!npm) return { error: 'npm not found' };
   const result = await runProcess(npm, ['view', 'sneakoscope', 'version'], { timeoutMs: 3500, maxOutputBytes: 4096 });
   if (result.code !== 0) return { error: `${result.stderr || result.stdout || 'npm view failed'}`.trim() };
   return { latest: result.stdout.trim().split(/\s+/).pop() };
+}
+
+async function detectInstalledSksVersion() {
+  const override = parseVersionText(process.env.SKS_INSTALLED_SKS_VERSION || '');
+  if (override) return { version: override, source: 'env' };
+  const candidates = [];
+  const pkg = await readJson(path.join(packageRoot(), 'package.json'), {}).catch(() => ({}));
+  if (parseVersionText(pkg.version)) candidates.push({ version: parseVersionText(pkg.version), source: 'package.json' });
+  const sks = await which('sks').catch(() => null);
+  if (!sks) return candidates[0] || { version: null, source: null };
+  const result = await runProcess(sks, ['--version'], {
+    timeoutMs: 2000,
+    maxOutputBytes: 4096,
+    env: { SKS_DISABLE_UPDATE_CHECK: '1' }
+  }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  if (result.code === 0 && parseVersionText(result.stdout)) candidates.push({ version: parseVersionText(result.stdout), source: sks });
+  if (candidates.length) return candidates.reduce((best, candidate) => compareVersions(candidate.version, best.version) > 0 ? candidate : best);
+  return { version: null, source: sks, error: `${result.stderr || result.stdout || 'sks --version failed'}`.trim() };
+}
+
+function parseVersionText(text) {
+  const match = String(text || '').match(/\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b/);
+  return match ? match[0] : null;
+}
+
+function highestVersion(versions = []) {
+  return versions.filter(Boolean).reduce((best, candidate) => compareVersions(candidate, best) > 0 ? candidate : best, '0.0.0');
 }
 
 function compareVersions(a, b) {
