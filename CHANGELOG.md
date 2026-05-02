@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.6.79] - 2026-05-02
+
+### Changed
+
+- Require Codex Computer Use-only evidence for UI-level QA/E2E verification, explicitly rejecting Chrome MCP, Browser Use, Playwright, and other browser automation as UI verification substitutes.
+
 ## [0.6.78] - 2026-05-02
 
 ### Added

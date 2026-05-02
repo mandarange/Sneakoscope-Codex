@@ -47,7 +47,7 @@ sks selftest --mock
 | Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
 | Team orchestration | Runs substantial work through ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode. |
 | From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
-| QA loop | Dogfoods UI/API behavior with safety gates, Browser/Computer evidence, safe fixes, and rechecks. |
+| QA loop | Dogfoods UI/API behavior with safety gates, Codex Computer Use-only UI evidence, safe fixes, and rechecks. |
 | Goal | Bridges SKS pipeline state to Codex native persisted `/goal` create, pause, resume, and clear workflows. |
 | TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, and `attention.hydrate_first`. |
 | Context7 | Requires current docs for external packages, APIs, MCPs, SDKs, and framework/runtime behavior when correctness depends on current guidance. |
@@ -328,7 +328,7 @@ sks qa-loop run latest --max-cycles 2
 sks qa-loop status latest
 ```
 
-Use `$QA-LOOP` in Codex App when Browser Use or Computer Use evidence should be part of the workflow.
+Use `$QA-LOOP` in Codex App when UI-level E2E needs verification. UI verification must use Codex Computer Use evidence only; Chrome MCP, Browser Use, Playwright, and other browser automation do not satisfy UI-level E2E verification.
 
 ### Refresh Context Before Risky Work
 

@@ -82,7 +82,7 @@ export function buildDecisionContract({ mission, schema, answers }) {
       qa_loop_target_environment: answers.TARGET_ENVIRONMENT || null,
       qa_loop_mutation_policy: answers.QA_MUTATION_POLICY || null,
       qa_loop_credentials_saved: false,
-      qa_loop_ui_requires_official_browser_or_computer_use: Boolean(answers.QA_SCOPE && answers.QA_SCOPE !== 'api_e2e_only'),
+      qa_loop_ui_requires_codex_computer_use_only: Boolean(answers.QA_SCOPE && answers.QA_SCOPE !== 'api_e2e_only'),
       unrequested_fallback_code_allowed: false,
       mad_sks_mode: madSks ? 'explicit_invocation_only' : false,
       production_database_writes_allowed: madSks ? 'mad_sks_scoped' : false,

@@ -128,10 +128,10 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseRead
   }
   if (appInstalled && (!computerUseReady || !browserUseReady)) {
     lines.push('Open Codex App settings, enable recommended MCP/plugin tools, then restart Codex CLI sessions.');
-    lines.push('Required for SKS QA-LOOP priority order: Browser Use for local browser targets, Computer Use for desktop/app/browser evidence.');
+    lines.push('Required for SKS QA-LOOP UI evidence: Codex Computer Use only. Browser Use can support non-UI browser context, but it does not satisfy UI-level E2E verification.');
     lines.push('Verify with: codex mcp list');
   }
-  if (!lines.length) lines.push('Codex App, Codex CLI, Computer Use, and Browser Use checks look ready.');
+  if (!lines.length) lines.push('Codex App, Codex CLI, Computer Use, and Browser Use checks look ready. UI-level E2E verification still requires Codex Computer Use evidence.');
   return lines;
 }
 

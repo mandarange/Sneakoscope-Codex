@@ -65,6 +65,9 @@ Usage:
 
 Prompt route:
   $QA-LOOP dogfood UI/API, fix safe issues, reverify
+
+UI evidence:
+  Codex Computer Use only for UI-level E2E; do not use Chrome MCP, Browser Use, Playwright, or other browser automation as UI verification evidence.
 `);
 }
 

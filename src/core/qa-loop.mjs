@@ -3,6 +3,7 @@ import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, P
 
 export const QA_LOOP_ROUTE = 'QALoop';
 const QA_REPORT_SUFFIX = 'qa-report.md';
+const UI_COMPUTER_USE_ONLY_ACK = 'use_codex_computer_use_only_no_chrome_mcp_no_browser_use_no_playwright_or_mark_ui_not_verified';
 
 function qaReportDateStamp(date = new Date()) {
   return date.toISOString().slice(0, 10);
@@ -28,7 +29,7 @@ export function buildQaLoopQuestionSchema(prompt) {
   return {
     schema_version: 1,
     route: QA_LOOP_ROUTE,
-    description: 'QA-LOOP questions must be answered before execution. Login secrets and browser auth state are runtime-only and must not be saved to mission files or TriWiki. UI evidence must prefer official Codex Browser Use and Computer Use MCP/plugin tools.',
+    description: 'QA-LOOP questions must be answered before execution. Login secrets and browser auth state are runtime-only and must not be saved to mission files or TriWiki. UI-level E2E evidence must use Codex Computer Use only; Chrome MCP, Browser Use, Playwright, and other browser automation do not satisfy UI verification.',
     prompt,
     slots: [
       { id: 'GOAL_PRECISE', question: 'Define the QA objective in one sentence.', required: true, type: 'string' },
@@ -44,7 +45,7 @@ export function buildQaLoopQuestionSchema(prompt) {
       { id: 'TEMP_TEST_CREDENTIALS_READY', question: 'If login is required, are test-only credentials ready to provide ephemerally during the run?', required: true, type: 'enum', options: ['not_required', 'yes_temp_only', 'no_block_authenticated_tests'] },
       { id: 'TEST_CREDENTIALS_RUNTIME_SOURCE', question: 'If login is required, how will test-only credentials be provided without saving the values?', required: true, type: 'enum', options: ['not_required', 'ephemeral_chat_only', 'environment_variables', 'secret_manager'] },
       { id: 'CREDENTIAL_STORAGE_ACK', question: 'Acknowledge credential handling policy.', required: true, type: 'enum', options: ['never_store_credentials_in_artifacts_or_wiki'] },
-      { id: 'UI_COMPUTER_USE_ACK', question: 'Acknowledge UI E2E evidence policy.', required: true, type: 'enum', options: ['use_browser_use_or_computer_use_for_ui_e2e_or_mark_ui_not_verified'] },
+      { id: 'UI_COMPUTER_USE_ACK', question: 'Acknowledge UI E2E evidence policy: Codex Computer Use only; no Chrome MCP, Browser Use, Playwright, or other browser automation.', required: true, type: 'enum', options: [UI_COMPUTER_USE_ONLY_ACK] },
       { id: 'TEAM_MODE_ALLOWED', question: 'May QA-LOOP use Team/subagents where useful?', required: true, type: 'enum', options: ['yes_parallel_where_safe', 'no_parent_only'] },
       { id: 'MAX_QA_CYCLES', question: 'How many no-question QA cycles are allowed before pausing?', required: true, type: 'string' },
       { id: 'ACCEPTANCE_CRITERIA', question: 'List the QA completion criteria.', required: true, type: 'array_or_string' },
@@ -65,7 +66,7 @@ export function validateQaLoopAnswers(schema, answers = {}) {
   if (env !== 'local_dev_server' && mutation === 'seeded_create_change_remove_local_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'destructive_removal_tests_are_local_dev_only' });
   if (env === 'deployed_production_domain' && mutation !== 'read_only_smoke_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'production_deployed_qa_is_read_only_smoke_only' });
   if (answers.DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED !== 'never') errors.push({ slot: 'DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED', error: 'destructive_deployed_tests_never_allowed' });
-  if (isUiScope(answers.QA_SCOPE) && answers.UI_COMPUTER_USE_ACK !== 'use_browser_use_or_computer_use_for_ui_e2e_or_mark_ui_not_verified') errors.push({ slot: 'UI_COMPUTER_USE_ACK', error: 'ui_e2e_requires_browser_or_computer_use_ack' });
+  if (isUiScope(answers.QA_SCOPE) && answers.UI_COMPUTER_USE_ACK !== UI_COMPUTER_USE_ONLY_ACK) errors.push({ slot: 'UI_COMPUTER_USE_ACK', error: 'ui_e2e_requires_codex_computer_use_only_ack' });
   if (answers.LOGIN_REQUIRED === 'yes' && answers.TEMP_TEST_CREDENTIALS_READY !== 'yes_temp_only') errors.push({ slot: 'TEMP_TEST_CREDENTIALS_READY', error: 'authenticated_tests_require_ephemeral_test_credentials_or_must_be_blocked' });
   if (answers.LOGIN_REQUIRED === 'yes' && answers.TEST_CREDENTIALS_RUNTIME_SOURCE === 'not_required') errors.push({ slot: 'TEST_CREDENTIALS_RUNTIME_SOURCE', error: 'credential_runtime_source_required' });
   if (answers.CREDENTIAL_STORAGE_ACK !== 'never_store_credentials_in_artifacts_or_wiki') errors.push({ slot: 'CREDENTIAL_STORAGE_ACK', error: 'credential_temp_only_ack_required' });
@@ -146,7 +147,7 @@ export async function writeQaLoopArtifacts(dir, mission, contract) {
     mission_id: mission.id,
     qa_report_file: reportFile,
     target: { scope: a.QA_SCOPE, environment: a.TARGET_ENVIRONMENT, base_url: a.TARGET_BASE_URL, api_base_url: a.API_BASE_URL },
-    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'browser_use_or_computer_use_required_for_ui_e2e' },
+    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_computer_use_only_required_for_ui_e2e' },
     checklist
   });
   await writeJsonAtomic(path.join(dir, 'qa-gate.json'), defaultQaGate(contract, { reportFile }));
@@ -195,7 +196,7 @@ TASK: ${mission.prompt}
 CYCLE: ${cycle}
 NO QUESTIONS: use decision-contract.json.
 MODE: dogfood as human proxy; use real flows, fix safe code/test/docs now, then recheck.
-UI: Browser/Computer Use evidence or mark unverified. Secrets runtime-only.
+UI: Codex Computer Use evidence only, or mark UI unverified. Chrome MCP, Browser Use, Playwright, and other browser automation do not satisfy UI-level E2E verification. Secrets runtime-only.
 SAFETY: deployed read-only smoke; no destructive, billing, message, webhook, admin, bulk-write, global-config, or live-data edits unless contract allows.
 GATE: passed=false while unresolved_findings or unresolved_fixable_findings > 0, or post_fix_verification_complete is not true.
 ARTIFACTS: update qa-ledger.json, ${report}, qa-gate.json, and qa-loop/cycle-${cycle}/.
@@ -224,7 +225,7 @@ function qaChecklist(a) {
     ['preflight.roles', 'Map roles, permissions, protected areas.']
   ];
   if (qaUiRequired(a)) cases.push(
-    ['ui.official_mcp_tools', 'Use Browser Use or Computer Use evidence, or mark UI unverified.'],
+    ['ui.computer_use_only', 'Use Codex Computer Use evidence only, or mark UI unverified. Do not use Chrome MCP, Browser Use, Playwright, or other browser automation as UI verification evidence.'],
     ['ui.navigation', 'Check primary navigation, deep links, back/forward, refresh, and protected routes.'],
     ['ui.auth', 'Check login, logout, session expiry, unauthorized access, and role-specific visibility.'],
     ['ui.forms', 'Check required fields, validation, disabled states, success, and failure.'],
@@ -252,7 +253,7 @@ function qaChecklist(a) {
 
 function qaReportTemplate(mission, contract, checklist) {
   const a = contract.answers || {};
-  return `# QA-LOOP Report\n\nMission: ${mission.id}\nTarget: ${a.TARGET_BASE_URL || 'unset'}\nScope: ${a.QA_SCOPE || 'unset'}\nEnvironment: ${a.TARGET_ENVIRONMENT || 'unset'}\n\n## Safety\n\n- Deployed destructive tests: never\n- Credentials: temp-only, never saved\n- UI evidence: Browser Use or Computer Use when runnable\n\n## Checklist\n\n${checklist.map((item) => `- [ ] ${item.id}: ${item.title}`).join('\n')}\n\n## Findings\n\nTBD\n\n## Corrections And Rechecks\n\nTBD\n\n## Honest Mode\n\nTBD\n`;
+  return `# QA-LOOP Report\n\nMission: ${mission.id}\nTarget: ${a.TARGET_BASE_URL || 'unset'}\nScope: ${a.QA_SCOPE || 'unset'}\nEnvironment: ${a.TARGET_ENVIRONMENT || 'unset'}\n\n## Safety\n\n- Deployed destructive tests: never\n- Credentials: temp-only, never saved\n- UI evidence: Codex Computer Use only when runnable; Chrome MCP, Browser Use, Playwright, and other browser automation do not satisfy UI-level E2E verification\n\n## Checklist\n\n${checklist.map((item) => `- [ ] ${item.id}: ${item.title}`).join('\n')}\n\n## Findings\n\nTBD\n\n## Corrections And Rechecks\n\nTBD\n\n## Honest Mode\n\nTBD\n`;
 }
 
 function positiveCount(value) {

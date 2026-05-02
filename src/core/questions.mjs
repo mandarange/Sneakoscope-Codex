@@ -217,7 +217,7 @@ export function questionsMarkdown(schema) {
   if (isQaLoop) {
     lines.push('QA-LOOP는 이 질문들에 모두 답변하고 Decision Contract가 봉인된 뒤에만 실행됩니다.');
     lines.push('로그인이 필요하면 테스트 전용 계정 정보만 임시 런타임 입력으로 제공해야 하며, answers.json/리포트/로그/wiki에는 절대 저장하지 않습니다.');
-    lines.push('UI E2E는 Browser Use 또는 Computer Use 증거가 없으면 검증 완료로 주장할 수 없습니다.');
+    lines.push('UI 수준 E2E는 Codex Computer Use 증거가 없으면 검증 완료로 주장할 수 없습니다. Chrome MCP, Browser Use, Playwright, 기타 브라우저 자동화는 UI 검증 증거로 인정하지 않습니다.');
     lines.push('개발 서버가 아닌 배포/스테이징 도메인에서는 삭제성 테스트를 절대 실행하지 않습니다.');
   } else {
     lines.push('이 질문들에 모두 답변하고 Decision Contract가 봉인된 뒤에만 실행됩니다.');
