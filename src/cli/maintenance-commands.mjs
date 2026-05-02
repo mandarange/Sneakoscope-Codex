@@ -15,7 +15,7 @@ import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge }
 import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, ROUTES, hasFromChatImgSignal, routePrompt, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, ROUTES, hasFromChatImgSignal, routePrompt, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamWatch } from '../core/team-live.mjs';
 import { ARTIFACT_FILES, writeValidationReport } from '../core/artifact-schemas.mjs';
@@ -67,7 +67,7 @@ Prompt route:
   $QA-LOOP dogfood UI/API, fix safe issues, reverify
 
 UI evidence:
-  Codex Computer Use only for UI-level E2E; do not use Chrome MCP, Browser Use, Playwright, or other browser automation as UI verification evidence.
+  Codex Computer Use only for UI-level E2E and visual evidence; do not use Chrome MCP, Browser Use, Playwright, Selenium, Puppeteer, or other browser automation as UI verification evidence.
 `);
 }
 
@@ -1395,7 +1395,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
     invariants: [
       'The parent thread remains the orchestrator and owns final integration.',
       'Team roster confirmation is mandatory before implementation: default SKS counts are materialized when the user did not specify counts, explicit counts are honored, and team-gate.json must include team_roster_confirmed=true with team-roster.json present.',
-      `When and only when From-Chat-IMG/$From-Chat-IMG is explicit, treat client requests as chat-history screenshots plus separate attachments: extract visible text in reading order, use Computer Use/browser visual inspection to match screenshot image regions to attachments with confidence notes, and turn that evidence into a complete modification work order before editing.`,
+      `When and only when From-Chat-IMG/$From-Chat-IMG is explicit, treat client requests as chat-history screenshots plus separate attachments: extract visible text in reading order, use Codex Computer Use visual inspection to match screenshot image regions to attachments with confidence notes, and turn that evidence into a complete modification work order before editing. ${CODEX_COMPUTER_USE_ONLY_POLICY}`,
       `For From-Chat-IMG, forensic intake is stop-gated: ${FROM_CHAT_IMG_WORK_ORDER_ARTIFACT}, ${FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT}, and ${FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT} must exist and pass schema validation before implementation is treated as complete.`,
       `For From-Chat-IMG, request coverage is stop-gated: ${FROM_CHAT_IMG_COVERAGE_ARTIFACT} must show all_chat_requirements_listed=true, all_requirements_mapped_to_work_order=true, all_screenshot_regions_accounted=true, all_attachments_accounted=true, image_analysis_complete=true, verbatim_customer_requests_preserved=true, checklist_updated=true, temp_triwiki_recorded=true, scoped_qa_loop_completed=true, and unresolved_items=[] before Team completion.`,
       `For From-Chat-IMG, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} must contain Customer Requests, Image Analysis, Work Items, QA Loop, and Verification sections, with every checkbox checked as each item is completed.`,

@@ -59,7 +59,7 @@ sks selftest --mock
 - Node.js `>=20.11`
 - npm
 - Codex CLI for terminal workflows
-- Codex App for app-facing workflows and first-party Browser Use / Computer Use parity
+- Codex App for app-facing workflows, with Codex Computer Use required for UI/browser evidence
 - cmux for the CLI-first runtime
 - Context7 MCP for current-docs-gated routes
 
@@ -328,7 +328,7 @@ sks qa-loop run latest --max-cycles 2
 sks qa-loop status latest
 ```
 
-Use `$QA-LOOP` in Codex App when UI-level E2E needs verification. UI verification must use Codex Computer Use evidence only; Chrome MCP, Browser Use, Playwright, and other browser automation do not satisfy UI-level E2E verification.
+Use `$QA-LOOP` in Codex App when UI-level E2E needs verification. UI verification must use Codex Computer Use evidence only; Chrome MCP, Browser Use, Playwright, Selenium, Puppeteer, and other browser automation do not satisfy UI-level E2E verification.
 
 ### Refresh Context Before Risky Work
 
@@ -380,7 +380,7 @@ sks codex-app check
 codex mcp list
 ```
 
-Codex App workflows need the app installed and the first-party Browser Use / Computer Use tools available for parity with QA and visual workflows.
+Codex App workflows need the app installed. QA and visual-evidence workflows require first-party Codex Computer Use; Browser Use may support non-UI browser context, but it is not valid UI/browser verification evidence.
 
 ### Setup is blocked by another harness
 
@@ -414,6 +414,8 @@ npm run selftest
 npm run sizecheck
 npm run release:check
 ```
+
+Package pipeline UI/browser verification and visual inspection evidence must come from Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or other browser automation as substitutes for that evidence.
 
 Dry-run publish:
 
