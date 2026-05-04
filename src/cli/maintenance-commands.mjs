@@ -23,21 +23,77 @@ import { writeEffortDecision } from '../core/effort-orchestrator.mjs';
 import { createWorkOrderLedger, writeWorkOrderLedger } from '../core/work-order-ledger.mjs';
 import { writeFromChatImgArtifacts } from '../core/from-chat-img-forensics.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
-import { runPerfBench } from '../core/perf-bench.mjs';
+import { runPerfBench, runWorkflowPerfBench } from '../core/perf-bench.mjs';
+import { writeProofFieldReport } from '../core/proof-field.mjs';
 import { GOAL_BRIDGE_ARTIFACT, GOAL_WORKFLOW_ARTIFACT, updateGoalWorkflow, writeGoalWorkflow } from '../core/goal-workflow.mjs';
 import { scanCodeStructure, writeCodeStructureReport } from '../core/code-structure.mjs';
 import { writeMemorySweepReport } from '../core/memory-governor.mjs';
 import { cleanupWarpTeamView, launchWarpTeamView } from '../core/warp-ui.mjs';
 import { writeSkillForgeReport } from '../core/skill-forge.mjs';
 import { writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
-import { scanDbSafety } from '../core/db-safety.mjs';
+import { checkDbOperation, checkSqlFile, classifyCommand, classifySql, loadDbSafetyPolicy, safeSupabaseMcpConfig, scanDbSafety } from '../core/db-safety.mjs';
 import { harnessGrowthReport, writeHarnessGrowthReport } from '../core/evaluation.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
+const REPOSITORY_URL = 'https://github.com/mandarange/Sneakoscope-Codex.git';
 
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
+
+export function quickstartCommand() {
+  console.log(`ㅅㅋㅅ Quickstart
+
+First install and bootstrap this project:
+  npm i -g sneakoscope
+  sks root
+  sks bootstrap
+  sks
+
+Use outside a project:
+  sks root
+  sks deps check
+  sks team "global mission"
+
+If warp is missing:
+  sks deps install warp
+
+Initialize this project for CLI and Codex App:
+  sks setup --bootstrap
+
+Open from terminal:
+  sks
+  sks --auto-review --high
+  sks auto-review start --high
+
+Verify:
+  sks deps check
+  sks codex-app check
+  sks warp check
+  sks auto-review status
+  sks doctor --fix
+  sks context7 check
+  sks selftest --mock
+  sks commands
+  sks dollar-commands
+
+If hooks cannot find the command:
+  sks fix-path
+
+Project-only install:
+  npm i -D sneakoscope
+  npx sks setup --install-scope project
+
+Local-only install artifacts:
+  sks setup --local-only
+  # writes generated SKS files but excludes .sneakoscope/, .codex/, .agents/, AGENTS.md through .git/info/exclude
+  # user-owned AGENTS.md is preserved; an existing SKS managed block is refreshed
+
+GitHub install for unreleased commits:
+  npm i -g git+${REPOSITORY_URL}
+  sks bootstrap
+`);
+}
 
 export async function researchCommand(sub, args) {
   if (sub === 'prepare') return researchPrepare(args);
@@ -385,6 +441,52 @@ export async function hproofCommand(sub, args) {
   console.log(JSON.stringify(await evaluateDoneGate(root, id), null, 2));
 }
 
+export async function dbCommand(sub, args = []) {
+  const root = await sksRoot();
+  if (sub === 'policy') {
+    console.log(JSON.stringify(await loadDbSafetyPolicy(root), null, 2));
+    return;
+  }
+  if (sub === 'scan') {
+    const report = await scanDbSafety(root, { includeMigrations: flag(args, '--migrations') });
+    console.log(JSON.stringify(report, null, 2));
+    process.exitCode = report.ok ? 0 : 2;
+    return;
+  }
+  if (sub === 'mcp-config') {
+    const projectIdx = args.indexOf('--project-ref');
+    const featuresIdx = args.indexOf('--features');
+    const projectRef = projectIdx >= 0 ? args[projectIdx + 1] : '<project_ref>';
+    const features = featuresIdx >= 0 ? args[featuresIdx + 1] : 'database,docs';
+    console.log(JSON.stringify(safeSupabaseMcpConfig({ projectRef, readOnly: true, features }), null, 2));
+    return;
+  }
+  if (sub === 'classify' || sub === 'check') {
+    const sqlIdx = args.indexOf('--sql');
+    const commandIdx = args.indexOf('--command');
+    const fileIdx = args.indexOf('--file');
+    let result;
+    if (fileIdx >= 0 && args[fileIdx + 1]) result = await checkSqlFile(path.resolve(args[fileIdx + 1]));
+    else if (commandIdx >= 0 && args[commandIdx + 1]) result = classifyCommand(args[commandIdx + 1]);
+    else if (sqlIdx >= 0 && args[sqlIdx + 1]) result = classifySql(args[sqlIdx + 1]);
+    else if (sub === 'check' && args[0]) result = await checkSqlFile(path.resolve(args[0]));
+    else result = classifySql(args.join(' ').trim());
+    console.log(JSON.stringify(result, null, 2));
+    process.exitCode = ['destructive', 'write', 'possible_db'].includes(result.level) ? 2 : 0;
+    return;
+  }
+  if (sub === 'scan-payload') {
+    const raw = await fsp.readFile(0, 'utf8');
+    const payload = raw.trim() ? JSON.parse(raw) : {};
+    const decision = await checkDbOperation(root, {}, payload, { duringNoQuestion: false });
+    console.log(JSON.stringify(decision, null, 2));
+    process.exitCode = decision.action === 'block' ? 2 : 0;
+    return;
+  }
+  console.error('Usage: sks db policy | db scan [--migrations] | db mcp-config --project-ref <id> | db check --sql "..." | db check --command "..." | db check --file file.sql');
+  process.exitCode = 1;
+}
+
 export async function validateArtifactsCommand(args = []) {
   const root = await sksRoot();
   const missionArg = args[0] && !String(args[0]).startsWith('--') ? args[0] : 'latest';
@@ -404,12 +506,32 @@ export async function validateArtifactsCommand(args = []) {
 }
 
 export async function perfCommand(sub, args = []) {
-  if (sub !== 'run') {
-    console.error('Usage: sks perf run [--json] [--iterations N]');
+  if (!['run', 'workflow'].includes(sub)) {
+    console.error('Usage: sks perf run|workflow [--json] [--iterations N] [--intent "task"] [--changed file1,file2]');
     process.exitCode = 1;
     return;
   }
   const root = await sksRoot();
+  if (sub === 'workflow') {
+    const changedRaw = readFlagValue(args, '--changed', null);
+    const report = await runWorkflowPerfBench(root, {
+      iterations: readFlagValue(args, '--iterations', 3),
+      intent: readFlagValue(args, '--intent', positionalArgs(args).join(' ')),
+      changedFiles: changedRaw ? changedRaw.split(',').filter(Boolean) : undefined
+    });
+    const outPath = path.join(root, '.sneakoscope', 'reports', `workflow-perf-${Date.now()}.json`);
+    await writeJsonAtomic(outPath, report);
+    if (flag(args, '--json')) return console.log(JSON.stringify({ ...report, report_path: outPath }, null, 2));
+    console.log('SKS Workflow Performance');
+    console.log(`Mode: ${report.metrics.decision_mode}`);
+    console.log(`Fast lane: ${report.metrics.fast_lane_eligible ? 'yes' : 'no'}`);
+    console.log(`Proof Field p95: ${report.metrics.proof_field_build_ms_p95}ms`);
+    console.log(`Proof cones: ${report.metrics.proof_cone_count}`);
+    console.log(`Negative work skipped: ${report.metrics.negative_work_skipped_count}`);
+    console.log(`Next: ${report.recommendation.next.join('; ')}`);
+    console.log(`Report: ${path.relative(root, outPath)}`);
+    return;
+  }
   const report = await runPerfBench(root, { iterations: readFlagValue(args, '--iterations', 3) });
   const outPath = path.join(root, '.sneakoscope', 'reports', `perf-${Date.now()}.json`);
   await writeJsonAtomic(outPath, report);
@@ -419,6 +541,34 @@ export async function perfCommand(sub, args = []) {
   console.log(`Package size: ${report.metrics.package_size_kb}KB`);
   console.log(`Budget file: ${path.relative(root, report.budget_file)}`);
   console.log(`Report: ${path.relative(root, outPath)}`);
+}
+
+export async function proofFieldCommand(sub, args = []) {
+  const action = sub || 'scan';
+  if (!['scan', 'help', '--help'].includes(action)) {
+    console.error('Usage: sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]');
+    process.exitCode = 1;
+    return;
+  }
+  if (action === 'help' || action === '--help') {
+    console.log('Usage: sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]');
+    console.log('Build a Potential Proof Field report: proof cones, negative-work cache, and fast-lane eligibility for the current change set.');
+    return;
+  }
+  const root = await sksRoot();
+  const changedRaw = readFlagValue(args, '--changed', null);
+  const report = await writeProofFieldReport(root, {
+    intent: readFlagValue(args, '--intent', positionalArgs(args).join(' ')),
+    changedFiles: changedRaw ? changedRaw.split(',').filter(Boolean) : undefined
+  });
+  if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+  console.log('SKS Proof Field');
+  console.log(`Mode: ${report.fast_lane_decision.mode}`);
+  console.log(`Eligible: ${report.fast_lane_decision.eligible ? 'yes' : 'no'}`);
+  if (report.fast_lane_decision.blockers.length) console.log(`Blockers: ${report.fast_lane_decision.blockers.join(', ')}`);
+  console.log(`Proof cones: ${report.proof_cones.map((cone) => cone.id).join(', ')}`);
+  console.log(`Verification: ${report.fast_lane_decision.verification.join('; ')}`);
+  console.log(`Report: ${path.relative(root, report.report_path)}`);
 }
 
 export async function harnessCommand(sub, args = []) {
@@ -1084,7 +1234,7 @@ export async function statsCommand(args) {
 
 function positionalArgs(args = []) {
   const out = [];
-  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines']);
+  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines', '--intent', '--changed']);
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]);
     if (valueFlags.has(arg)) {

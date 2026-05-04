@@ -9,7 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const limits = {
   packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 256 * 1024),
   unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 1024 * 1024),
-  packFiles: Number(process.env.SKS_MAX_PACK_FILES || 48),
+  packFiles: Number(process.env.SKS_MAX_PACK_FILES || 49),
   trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 320 * 1024)
 };
 

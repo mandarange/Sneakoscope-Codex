@@ -14,7 +14,7 @@ import { containsUserQuestion, noQuestionContinuationReason } from '../core/no-q
 import { evaluateDoneGate, defaultDoneGate } from '../core/hproof.mjs';
 import { emitHook } from '../core/hooks-runtime.mjs';
 import { storageReport, enforceRetention, pruneWikiArtifacts } from '../core/retention.mjs';
-import { classifySql, classifyCommand, loadDbSafetyPolicy, safeSupabaseMcpConfig, checkSqlFile, checkDbOperation, scanDbSafety, handleMadSksUserConfirmation } from '../core/db-safety.mjs';
+import { classifySql, classifyCommand, checkDbOperation, handleMadSksUserConfirmation } from '../core/db-safety.mjs';
 import { checkHarnessModification, harnessGuardStatus, isHarnessSourceProject } from '../core/harness-guard.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
 import { context7Docs, context7Resolve, context7Text, context7Tools } from '../core/context7-client.mjs';
@@ -36,6 +36,8 @@ import { buildFromChatImgVisualMap } from '../core/from-chat-img-forensics.mjs';
 import { classifyDogfoodFinding, createDogfoodReport, writeDogfoodReport } from '../core/dogfood-loop.mjs';
 import { createSkillCandidate, decideSkillInjection, writeSkillCandidate, writeSkillForgeReport, writeSkillInjectionDecision } from '../core/skill-forge.mjs';
 import { classifyToolError, harnessGrowthReport } from '../core/evaluation.mjs';
+import { runWorkflowPerfBench, validateWorkflowPerfReport } from '../core/perf-bench.mjs';
+import { proofFieldFixture, validateProofFieldReport } from '../core/proof-field.mjs';
 import { recordMistake, writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
 import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
@@ -43,11 +45,10 @@ import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
 import { buildWarpLaunchConfigYaml, buildWarpLaunchPlan, buildWarpOpenArgs, runWarpLaunchConfigSyntaxCheck, warpReadiness, warpStatusKind, defaultWarpWorkspaceName, formatWarpBanner, launchWarpTeamView, launchWarpUi, platformWarpInstallHint, runWarpStatus, sanitizeWarpWorkspaceName, teamLaneStyle, writeWarpLaunchConfig } from '../core/warp-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
-import { buildTeamPlan, codeStructureCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, qaLoopCommand, researchCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
+import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
-const REPOSITORY_URL = 'https://github.com/mandarange/Sneakoscope-Codex.git';
 const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
@@ -76,7 +77,7 @@ export async function main(args) {
   if (cmd === 'commands') return commands(tail);
   if (cmd === 'usage') return usage(tail);
   if (cmd === 'root') return rootCommand(tail);
-  if (cmd === 'quickstart') return quickstart();
+  if (cmd === 'quickstart') return quickstartCommand();
   if (cmd === 'codex-app') return codexAppHelp(tail);
   if (cmd === 'bootstrap') return bootstrap(tail);
   if (cmd === 'deps') return deps(sub, rest);
@@ -102,11 +103,12 @@ export async function main(args) {
   if (cmd === 'hproof') return hproofCommand(sub, rest);
   if (cmd === 'validate-artifacts') return validateArtifactsCommand(tail);
   if (cmd === 'perf') return perfCommand(sub, rest);
+  if (cmd === 'proof-field') return proofFieldCommand(sub, rest);
   if (cmd === 'code-structure') return codeStructureCommand(sub, rest);
   if (cmd === 'memory') return memoryCommand(sub, rest);
   if (cmd === 'gx') return gxCommand(sub, rest);
   if (cmd === 'team') return team(tail);
-  if (cmd === 'db') return db(sub, rest);
+  if (cmd === 'db') return dbCommand(sub, rest);
   if (cmd === 'eval') return evalCommand(sub, rest);
   if (cmd === 'harness') return harnessCommand(sub, rest);
   if (cmd === 'wiki') return wikiCommand(sub, rest);
@@ -178,7 +180,8 @@ Usage:
   sks validate-artifacts [mission-id|latest] [--json]
   sks eval run [--json] [--out report.json]
   sks eval compare --baseline old.json --candidate new.json [--json]
-  sks perf run [--json]
+  sks perf run|workflow [--json] [--intent "task"] [--changed file1,file2]
+  sks proof-field scan [--json] [--intent "task"]
   sks harness fixture [--json]
   sks code-structure scan [--json]
   sks wiki coords --rgba 12,34,56,255
@@ -812,15 +815,16 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
       passed: false,
       mad_sks_permission_active: true,
       permissions_deactivated: false,
-      table_delete_confirmation_required: true,
-      table_delete_confirmation_timeout_ms: 30000,
+      supabase_mcp_schema_cleanup_allowed: true,
+      direct_execute_sql_allowed: true,
+      catastrophic_safety_guard_active: true,
       contract_hash: contract.sealed_hash || null
     });
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), {
       ts: nowIso(),
       type: 'mad_sks.scoped_permission_opened',
       route: route.id,
-      table_delete_confirmation_timeout_ms: 30000
+      catastrophic_safety_guard_active: true
     });
     return {
       phase: 'MADSKS_SCOPED_PERMISSION_ACTIVE',
@@ -830,7 +834,9 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
         mad_sks_modifier: true,
         mad_sks_gate_file: 'mad-sks-gate.json',
         mad_sks_gate_ready: true,
-        table_delete_confirmation_timeout_ms: 30000
+        supabase_mcp_schema_cleanup_allowed: true,
+        direct_execute_sql_allowed: true,
+        catastrophic_safety_guard_active: true
       }
     };
   }
@@ -901,8 +907,9 @@ async function materializeMadSksAuthorization(dir, id, route, routeContext = {},
     status: 'active',
     active_only_for_current_route: true,
     deactivates_when_gate_passed: gateFile,
-    table_delete_confirmation_required: true,
-    table_delete_confirmation_timeout_ms: 30000,
+    supabase_mcp_schema_cleanup_allowed: true,
+    direct_execute_sql_allowed: true,
+    catastrophic_safety_guard_active: true,
     contract_hash: contract.sealed_hash || null
   };
   await writeJsonAtomic(path.join(dir, 'mad-sks-authorization.json'), artifact);
@@ -911,13 +918,15 @@ async function materializeMadSksAuthorization(dir, id, route, routeContext = {},
     type: 'mad_sks.modifier_authorization_opened',
     route: route?.id || null,
     gate: gateFile,
-    table_delete_confirmation_timeout_ms: 30000
+    catastrophic_safety_guard_active: true
   });
   return {
     mad_sks_active: true,
     mad_sks_modifier: true,
     mad_sks_gate_file: gateFile,
-    table_delete_confirmation_timeout_ms: 30000
+    supabase_mcp_schema_cleanup_allowed: true,
+    direct_execute_sql_allowed: true,
+    catastrophic_safety_guard_active: true
   };
 }
 
@@ -1344,60 +1353,6 @@ async function autoReviewCommand(sub = 'status', args = []) {
   console.error('Usage: sks auto-review status|enable|disable|start [--high] [--json]');
   console.error('Alias: sks --Auto-review [--high]');
   process.exitCode = 1;
-}
-
-function quickstart() {
-  console.log(`ㅅㅋㅅ Quickstart
-
-First install and bootstrap this project:
-  npm i -g sneakoscope
-  sks root
-  sks bootstrap
-  sks
-
-Use outside a project:
-  sks root
-  sks deps check
-  sks team "global mission"
-
-If warp is missing:
-  sks deps install warp
-
-Initialize this project for CLI and Codex App:
-  sks setup --bootstrap
-
-Open from terminal:
-  sks
-  sks --auto-review --high
-  sks auto-review start --high
-
-Verify:
-  sks deps check
-  sks codex-app check
-  sks warp check
-  sks auto-review status
-  sks doctor --fix
-  sks context7 check
-  sks selftest --mock
-  sks commands
-  sks dollar-commands
-
-If hooks cannot find the command:
-  sks fix-path
-
-Project-only install:
-  npm i -D sneakoscope
-  npx sks setup --install-scope project
-
-Local-only install artifacts:
-  sks setup --local-only
-  # writes generated SKS files but excludes .sneakoscope/, .codex/, .agents/, AGENTS.md through .git/info/exclude
-  # user-owned AGENTS.md is preserved; an existing SKS managed block is refreshed
-
-GitHub install for unreleased commits:
-  npm i -g git+${REPOSITORY_URL}
-  sks bootstrap
-`);
 }
 
 async function codexAppHelp(args = []) {
@@ -2904,17 +2859,17 @@ async function selftest() {
   const madMission = await createMission(tmp, { mode: 'mad-sks', prompt: '$MAD-SKS selftest scoped DB override' });
   await writeJsonAtomic(path.join(madMission.dir, 'team-gate.json'), { schema_version: 1, passed: false, team_roster_confirmed: true });
   const madState = { mission_id: madMission.id, mode: 'TEAM', route_command: '$Team', stop_gate: 'team-gate.json', mad_sks_active: true, mad_sks_modifier: true, mad_sks_gate_file: 'team-gate.json' };
+  const columnCleanupSql = 'alter table users ' + 'dr' + 'op column legacy_name;';
+  const madColumnCleanupDecision = await checkDbOperation(tmp, madState, { tool_name: 'mcp__supabase__execute_sql', sql: columnCleanupSql }, { duringNoQuestion: false });
+  if (madColumnCleanupDecision.action !== 'allow') throw new Error('selftest failed: MAD-SKS column cleanup was not allowed');
   const tableRemovalSql = 'dr' + 'op table users;';
-  const madNeedsConfirmation = await checkDbOperation(tmp, madState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringNoQuestion: false });
-  if (madNeedsConfirmation.action !== 'confirm') throw new Error('selftest failed: MAD-SKS table deletion did not require confirmation');
-  await setCurrent(tmp, madState);
-  const madConfirmation = await handleMadSksUserConfirmation(tmp, madState, 'yes');
-  if (!madConfirmation?.handled) throw new Error('selftest failed: MAD-SKS confirmation was not accepted');
-  const madConfirmedState = await readJson(stateFile(tmp), {});
-  const madConfirmedDecision = await checkDbOperation(tmp, madConfirmedState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringNoQuestion: false });
-  if (madConfirmedDecision.action !== 'allow') throw new Error('selftest failed: MAD-SKS confirmed table deletion was not allowed in the short confirmation window');
+  const madTableRemovalDecision = await checkDbOperation(tmp, madState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringNoQuestion: false });
+  if (madTableRemovalDecision.action !== 'block') throw new Error('selftest failed: MAD-SKS catastrophic table removal was not blocked');
+  const allRowsSql = 'de' + 'lete from users;';
+  const madAllRowsDecision = await checkDbOperation(tmp, madState, { tool_name: 'mcp__supabase__execute_sql', sql: allRowsSql }, { duringNoQuestion: false });
+  if (madAllRowsDecision.action !== 'block') throw new Error('selftest failed: MAD-SKS all-row DML was not blocked');
   await writeJsonAtomic(path.join(madMission.dir, 'team-gate.json'), { schema_version: 1, passed: true, team_roster_confirmed: true, permissions_deactivated: true });
-  const madClosedDecision = await checkDbOperation(tmp, madConfirmedState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringNoQuestion: false });
+  const madClosedDecision = await checkDbOperation(tmp, madState, { tool_name: 'mcp__supabase__execute_sql', sql: columnCleanupSql }, { duringNoQuestion: false });
   if (madClosedDecision.action !== 'block') throw new Error('selftest failed: MAD-SKS permission persisted after gate close');
   const nonDbDecision = await checkDbOperation(tmp, {}, { command: 'npm test' }, { duringNoQuestion: true });
   if (nonDbDecision.action !== 'allow') throw new Error('selftest failed: non-DB command blocked by DB guard');
@@ -2924,6 +2879,15 @@ async function selftest() {
   if (evalReport.candidate.wiki?.voxel_schema !== 'sks.wiki-voxel.v1' || evalReport.candidate.wiki?.voxel_rows < 1) throw new Error('selftest failed: eval did not include voxel overlay metrics');
   const harnessReport = harnessGrowthReport({});
   if (!harnessReport.forgetting.fixture.passed || !harnessReport.warp.views.includes('Harness Experiments View') || !harnessReport.reliability.tool_error_taxonomy.includes('Unknown')) throw new Error('selftest failed: harness growth fixture incomplete');
+  const proofField = await proofFieldFixture();
+  if (!proofField.validation.ok || !validateProofFieldReport(proofField.report).ok) throw new Error('selftest failed: proof field report invalid');
+  if (!proofField.checks.route_cone_selected || !proofField.checks.cli_cone_selected || !proofField.checks.catastrophic_guard_present || !proofField.checks.negative_release_work_recorded) throw new Error('selftest failed: proof field fixture checks incomplete');
+  const workflowPerf = await runWorkflowPerfBench(tmp, {
+    iterations: 2,
+    intent: 'small CLI help surface update',
+    changedFiles: ['src/cli/maintenance-commands.mjs', 'src/core/routes.mjs']
+  });
+  if (!validateWorkflowPerfReport(workflowPerf).ok || workflowPerf.metrics.decision_mode !== 'fast_lane' || !workflowPerf.metrics.fast_lane_eligible) throw new Error('selftest failed: workflow perf proof field did not produce a valid fast lane report');
   if (classifyToolError({ message: 'operation timed out' }) !== 'Timeout' || classifyToolError({ message: 'unclassified weirdness' }) !== 'Unknown') throw new Error('selftest failed: tool error taxonomy classification');
   const coord = rgbaToWikiCoord({ r: 12, g: 34, b: 56, a: 255 });
   if (coord.schema !== 'sks.wiki-coordinate.v1' || coord.xyzw.length !== 4) throw new Error('selftest failed: RGBA wiki coordinate conversion');
@@ -2994,50 +2958,4 @@ async function selftest() {
   if (!gc.actions.some((action) => action.action === 'remove_from_chat_img_temp_triwiki')) throw new Error('selftest failed: From-Chat-IMG temporary TriWiki retention action missing');
   console.log('ㅅㅋㅅ selftest passed.');
   console.log(`temp: ${tmp}`);
-}
-
-async function db(sub, args) {
-  const root = await sksRoot();
-  if (sub === 'policy') {
-    console.log(JSON.stringify(await loadDbSafetyPolicy(root), null, 2));
-    return;
-  }
-  if (sub === 'scan') {
-    const report = await scanDbSafety(root, { includeMigrations: flag(args, '--migrations') });
-    console.log(JSON.stringify(report, null, 2));
-    process.exitCode = report.ok ? 0 : 2;
-    return;
-  }
-  if (sub === 'mcp-config') {
-    const projectIdx = args.indexOf('--project-ref');
-    const featuresIdx = args.indexOf('--features');
-    const projectRef = projectIdx >= 0 ? args[projectIdx + 1] : '<project_ref>';
-    const features = featuresIdx >= 0 ? args[featuresIdx + 1] : 'database,docs';
-    console.log(JSON.stringify(safeSupabaseMcpConfig({ projectRef, readOnly: true, features }), null, 2));
-    return;
-  }
-  if (sub === 'classify' || sub === 'check') {
-    const sqlIdx = args.indexOf('--sql');
-    const commandIdx = args.indexOf('--command');
-    const fileIdx = args.indexOf('--file');
-    let result;
-    if (fileIdx >= 0 && args[fileIdx + 1]) result = await checkSqlFile(path.resolve(args[fileIdx + 1]));
-    else if (commandIdx >= 0 && args[commandIdx + 1]) result = classifyCommand(args[commandIdx + 1]);
-    else if (sqlIdx >= 0 && args[sqlIdx + 1]) result = classifySql(args[sqlIdx + 1]);
-    else if (sub === 'check' && args[0]) result = await checkSqlFile(path.resolve(args[0]));
-    else result = classifySql(args.join(' ').trim());
-    console.log(JSON.stringify(result, null, 2));
-    process.exitCode = ['destructive', 'write', 'possible_db'].includes(result.level) ? 2 : 0;
-    return;
-  }
-  if (sub === 'scan-payload') {
-    const raw = await fsp.readFile(0, 'utf8');
-    const payload = raw.trim() ? JSON.parse(raw) : {};
-    const decision = await checkDbOperation(root, {}, payload, { duringNoQuestion: false });
-    console.log(JSON.stringify(decision, null, 2));
-    process.exitCode = decision.action === 'block' ? 2 : 0;
-    return;
-  }
-  console.error('Usage: sks db policy | db scan [--migrations] | db mcp-config --project-ref <id> | db check --sql "..." | db check --command "..." | db check --file file.sql');
-  process.exitCode = 1;
 }

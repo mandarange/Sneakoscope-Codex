@@ -258,16 +258,16 @@ function applyMadSksAuthorizationToSchema(schema = {}) {
     DATABASE_TARGET_ENVIRONMENT: 'main_branch',
     DATABASE_WRITE_MODE: 'mad_sks_full_mcp_write_for_invocation',
     SUPABASE_MCP_POLICY: 'mad_sks_project_scoped_write_for_invocation',
-    DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'mad_sks_scoped_with_table_delete_confirmation',
+    DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'mad_sks_scoped_except_catastrophic_db_wipe',
     DB_BACKUP_OR_BRANCH_REQUIRED: 'recommended_but_not_required_in_mad_sks',
-    DB_MAX_BLAST_RADIUS: 'mad_sks_active_invocation_only_table_delete_confirmation_required',
+    DB_MAX_BLAST_RADIUS: 'mad_sks_active_invocation_only_catastrophic_wipe_blocked',
     DB_MIGRATION_APPLY_ALLOWED: 'mad_sks_active_invocation_only',
     DB_READ_ONLY_QUERY_LIMIT: '100'
   };
   schema.inference_notes = {
     ...(schema.inference_notes || {}),
     MAD_SKS_MODE: 'explicit dollar command modifier is the permission boundary',
-    DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'MAD-SKS scoped override with table deletion confirmation'
+    DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'MAD-SKS opens Supabase MCP DB cleanup while blocking only catastrophic database wipe operations'
   };
   schema.slots = (schema.slots || []).filter((slot) => !/^(DB_|DATABASE_|DESTRUCTIVE_DB_|SUPABASE_MCP_POLICY$)/.test(slot.id));
   return schema;

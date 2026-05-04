@@ -13,16 +13,16 @@ function buildMadSksQuestionSchema(prompt) {
   const task = String(prompt || '').trim() || 'MAD-SKS scoped database override';
   return {
     schema_version: 1,
-    description: 'MAD-SKS is explicit-invocation-only. It auto-seals because the dollar command itself is the permission boundary; table deletion still requires runtime user confirmation with an approximately 30 second timeout.',
+    description: 'MAD-SKS is explicit-invocation-only. It auto-seals because the dollar command itself is the permission boundary; while active, SKS opens Supabase MCP schema cleanup and direct DB write permissions, leaving only catastrophic database-wipe safeguards.',
     prompt,
     domain_hints: ['db', 'mad-sks'],
     inferred_answers: {
       GOAL_PRECISE: `명시적인 MAD-SKS 호출 범위에서만 DB 권한 조건을 넓혀 작업한다: ${task}`,
       ACCEPTANCE_CRITERIA: [
         '$MAD-SKS is listed in dollar commands and routes to MADSKS mode',
-        'broad Supabase MCP DB manipulation is allowed only while the active MAD-SKS mission gate remains open',
+        'Supabase MCP column cleanup, schema cleanup, direct execute SQL, and normal DB writes are allowed only while the active MAD-SKS mission gate remains open',
         'the widened permission is inactive after the MAD-SKS gate is passed or permissions_deactivated is true',
-        'table deletion requires explicit user confirmation and expires after about 30 seconds without confirmation'
+        'whole database/table removal and all-row delete/update operations remain blocked as non-sensible catastrophic operations'
       ],
       NON_GOALS: [],
       PUBLIC_API_CHANGE_ALLOWED: 'yes_if_needed',
@@ -33,21 +33,21 @@ function buildMadSksQuestionSchema(prompt) {
       RISK_BOUNDARY: [
         'MAD-SKS permission widening is explicit-invocation-only',
         'MAD-SKS permission widening does not persist after the active task gate closes',
-        'table deletion must pause for explicit user confirmation and timeout-abort after about 30 seconds'
+        'catastrophic database wipe operations remain blocked even in MAD-SKS'
       ],
       MAD_SKS_MODE: 'explicit_invocation_only',
       DATABASE_TARGET_ENVIRONMENT: 'main_branch',
       DATABASE_WRITE_MODE: 'mad_sks_full_mcp_write_for_invocation',
       SUPABASE_MCP_POLICY: 'mad_sks_project_scoped_write_for_invocation',
-      DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'mad_sks_scoped_with_table_delete_confirmation',
+      DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'mad_sks_scoped_except_catastrophic_db_wipe',
       DB_BACKUP_OR_BRANCH_REQUIRED: 'recommended_but_not_required_in_mad_sks',
-      DB_MAX_BLAST_RADIUS: 'mad_sks_active_invocation_only_table_delete_confirmation_required',
+      DB_MAX_BLAST_RADIUS: 'mad_sks_active_invocation_only_catastrophic_wipe_blocked',
       DB_MIGRATION_APPLY_ALLOWED: 'mad_sks_active_invocation_only',
       DB_READ_ONLY_QUERY_LIMIT: '100'
     },
     inference_notes: {
       MAD_SKS_MODE: 'explicit dollar command is the permission boundary',
-      DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'MAD-SKS scoped override with table deletion confirmation'
+      DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'MAD-SKS opens Supabase MCP DB cleanup while blocking only catastrophic database wipe operations'
     },
     slots: []
   };

@@ -215,6 +215,8 @@ sks gx init homepage
 sks gx render homepage --format html
 sks validate-artifacts latest --json
 sks perf run --json
+sks perf workflow --json --intent "small CLI change" --changed src/cli/main.mjs,src/core/routes.mjs
+sks proof-field scan --json --intent "small CLI change"
 sks code-structure scan --json
 ```
 
@@ -274,7 +276,7 @@ Use these inside Codex App or another agent prompt. They are prompt commands, no
 | `$Research` | You need frontier-style research with hypotheses and falsification. |
 | `$AutoResearch` | You want iterative improve/test/keep-or-discard optimization. |
 | `$DB` | You need database, Supabase, migration, SQL, or MCP safety checks. |
-| `$MAD-SKS` | You explicitly authorize a scoped high-risk DB permission modifier for the active invocation only. |
+| `$MAD-SKS` | You explicitly authorize scoped Supabase MCP DB cleanup/write permissions for the active invocation only, while keeping catastrophic wipe safeguards. |
 | `$GX` | You need deterministic visual context cartridges. |
 | `$Wiki` | You want TriWiki refresh, pack, prune, validate, or maintenance. |
 | `$Help` | You want installed command and workflow explanation. |

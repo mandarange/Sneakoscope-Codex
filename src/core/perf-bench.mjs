@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { dirSize, fileSize, nowIso, packageRoot, runProcess, writeJsonAtomic } from './fsx.mjs';
+import { buildProofField, validateProofFieldReport } from './proof-field.mjs';
 
 export const DEFAULT_PERF_BUDGETS = {
   cli_startup_ms_p95: 250,
@@ -8,6 +9,8 @@ export const DEFAULT_PERF_BUDGETS = {
   context_build_ms_p95: 500,
   artifact_validation_ms_p95: 150,
   dashboard_render_ms_p95: 100,
+  proof_field_build_ms_p95: 150,
+  workflow_scan_ms_p95: 1000,
   fast_selftest_ms_p95: 5000,
   package_size_kb_max: 1024,
   notes: 'Package payload budget is 1024KB because the current low-dependency CLI payload is already above 512KB; reduce only with measured justification.'
@@ -49,6 +52,90 @@ export async function runPerfBench(root, opts = {}) {
       package_size_kb: packageSizeKb
     },
     raw: { cli_startup_ms: startup.map((value) => Math.round(value)) }
+  };
+}
+
+export async function runWorkflowPerfBench(root, opts = {}) {
+  const iterations = Math.max(1, Math.min(20, Number(opts.iterations || 3)));
+  const intent = String(opts.intent || '').trim();
+  const changedFiles = normalizeChangedFiles(opts.changedFiles);
+  const proofFieldBuild = [];
+  let proofField = null;
+  for (let i = 0; i < iterations; i++) {
+    const t0 = performance.now();
+    proofField = await buildProofField(root, {
+      intent,
+      changedFiles: changedFiles.length ? changedFiles : undefined
+    });
+    proofFieldBuild.push(performance.now() - t0);
+  }
+  const proofValidation = validateProofFieldReport(proofField);
+  const verification = proofField?.fast_lane_decision?.verification || [];
+  const negativeWork = proofField?.negative_work_cache || [];
+  const estimatedSavedWork = negativeWork.filter((item) => item.disposition === 'skip_with_evidence').length;
+  const proofFieldMsP95 = Math.round(percentile(proofFieldBuild, 95));
+  const workflowScanMsP95 = proofFieldMsP95;
+  return {
+    schema_version: 1,
+    measured_at: nowIso(),
+    theory: 'Potential Proof Field',
+    iterations,
+    intent: intent || null,
+    budgets: DEFAULT_PERF_BUDGETS,
+    metrics: {
+      proof_field_build_ms_p95: proofFieldMsP95,
+      workflow_scan_ms_p95: workflowScanMsP95,
+      decision_mode: proofField?.fast_lane_decision?.mode || null,
+      fast_lane_eligible: Boolean(proofField?.fast_lane_decision?.eligible),
+      proof_cone_count: proofField?.proof_cones?.length || 0,
+      verification_count: verification.length,
+      negative_work_skipped_count: estimatedSavedWork,
+      proof_field_valid: proofValidation.ok
+    },
+    proof_field: proofField,
+    recommendation: workflowRecommendation(proofField, proofValidation),
+    raw: {
+      proof_field_build_ms: proofFieldBuild.map((value) => Math.round(value))
+    }
+  };
+}
+
+export function validateWorkflowPerfReport(report = {}) {
+  const issues = [];
+  if (report.schema_version !== 1) issues.push('schema_version');
+  if (report.theory !== 'Potential Proof Field') issues.push('theory');
+  if (!report.metrics || !Number.isFinite(Number(report.metrics.proof_field_build_ms_p95))) issues.push('proof_field_build_ms_p95');
+  if (!report.metrics?.decision_mode) issues.push('decision_mode');
+  if (!report.proof_field || !validateProofFieldReport(report.proof_field).ok) issues.push('proof_field');
+  if (!report.recommendation?.mode) issues.push('recommendation');
+  return { ok: issues.length === 0, issues };
+}
+
+function normalizeChangedFiles(files) {
+  return [...new Set((files || []).flatMap((value) => String(value || '').split(',')).map((file) => file.trim()).filter(Boolean))]
+    .sort();
+}
+
+function workflowRecommendation(proofField, validation) {
+  if (!validation.ok) {
+    return {
+      mode: 'full_proof',
+      reason: `proof field invalid: ${validation.issues.join(', ')}`,
+      next: ['repair proof-field report generation', 'rerun sks perf workflow --json']
+    };
+  }
+  const decision = proofField.fast_lane_decision;
+  if (decision.eligible) {
+    return {
+      mode: 'fast_lane',
+      reason: 'selected proof cones are narrow and all unrelated work is safely cached as negative work',
+      next: decision.verification
+    };
+  }
+  return {
+    mode: decision.mode,
+    reason: decision.blockers.length ? `blocked by ${decision.blockers.join(', ')}` : 'balanced proof required',
+    next: decision.verification
   };
 }
 
