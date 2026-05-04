@@ -226,7 +226,27 @@ function hasTableRemovalRisk(cls = {}) {
     ...(cls.sql?.reasons || []),
     ...(cls.command?.reasons || [])
   ]);
-  return ['drop_table', 'alter_table_drop', 'truncate'].some((reason) => reasons.has(reason));
+  return ['drop_table', 'truncate'].some((reason) => reasons.has(reason));
+}
+
+function hasMadSksCatastrophicDbRisk(cls = {}) {
+  const reasons = new Set([
+    ...(cls.reasons || []),
+    ...(cls.sql?.reasons || []),
+    ...(cls.command?.reasons || [])
+  ]);
+  return [
+    'drop_database',
+    'drop_schema',
+    'drop_table',
+    'truncate',
+    'delete_without_where',
+    'update_without_where',
+    'supabase_db_reset',
+    'prisma_migrate_reset',
+    'postgres_database_admin_command'
+  ].some((reason) => reasons.has(reason))
+    || cls.toolReasons?.includes?.('dangerous_supabase_management_tool');
 }
 
 function isMadSksRouteState(state = {}) {
@@ -259,23 +279,32 @@ export function evaluateDbSafety({ classification, policy = DEFAULT_DB_SAFETY_PO
   if (cls.level === 'safe') return { allowed: true, action: 'allow', reasons: ['read_only_operation'], classification: cls };
   if (cls.level === 'possible_db') return { allowed: !noQuestion, action: noQuestion ? 'block' : 'warn', reasons: noQuestion ? ['unknown_database_operation_blocked_during_no_question_run'] : ['unknown_database_operation'], classification: cls };
   if (madSks?.active && (cls.level === 'write' || cls.level === 'destructive')) {
-    if (hasTableRemovalRisk(cls) && !madSks.tableDeleteConfirmed) {
+    if (hasMadSksCatastrophicDbRisk(cls)) {
       return {
         allowed: false,
-        action: 'confirm',
-        reasons: ['mad_sks_table_delete_requires_user_confirmation_30s'],
+        action: 'block',
+        reasons: ['mad_sks_catastrophic_db_operation_blocked'],
         classification: cls,
         effective,
-        mad_sks: { active: true, table_delete_confirmation_required: true, timeout_ms: MAD_SKS_TABLE_DELETE_TIMEOUT_MS }
+        mad_sks: {
+          active: true,
+          catastrophic_safety_guard_active: true,
+          blocked_categories: ['whole_database_or_table_removal', 'all_rows_delete_or_update', 'dangerous_project_management']
+        }
       };
     }
     return {
       allowed: true,
       action: 'allow',
-      reasons: hasTableRemovalRisk(cls) ? ['mad_sks_table_delete_confirmed'] : ['mad_sks_scoped_override_active'],
+      reasons: ['mad_sks_scoped_override_active'],
       classification: cls,
       effective,
-      mad_sks: { active: true, table_delete_confirmed_until: madSks.tableDeleteConfirmedUntil || null }
+      mad_sks: {
+        active: true,
+        sks_db_constraints_removed: true,
+        catastrophic_safety_guard_active: true,
+        supabase_mcp_schema_cleanup_allowed: true
+      }
     };
   }
   if (cls.level === 'destructive') reasons.push('destructive_database_operation_blocked_always');
@@ -384,6 +413,13 @@ export async function checkSqlFile(file) {
 }
 
 export function dbBlockReason(decision) {
+  if ((decision.reasons || []).includes('mad_sks_catastrophic_db_operation_blocked')) {
+    return [
+      'Sneakoscope Codex MAD-SKS catastrophic database safeguard blocked this operation.',
+      'MAD-SKS opens Supabase MCP column/schema cleanup, direct execute SQL, and normal DB writes only while the mission gate is active.',
+      'Whole database/table removal, all-row value wipes, database reset, and dangerous project or branch management remain blocked.'
+    ].join(' ');
+  }
   if ((decision.reasons || []).includes('mad_sks_table_delete_requires_user_confirmation_30s')) {
     return [
       'Sneakoscope Codex MAD-SKS gate paused a table deletion operation.',

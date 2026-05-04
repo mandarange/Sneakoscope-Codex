@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.6.87] - 2026-05-04
+
+### Added
+
+- Add `sks proof-field scan` as the first Potential Proof Field implementation slice, reporting invariant ledgers, proof cones, negative-work cache entries, fast-lane eligibility, and fail-closed escalation triggers for the current change set.
+- Add `sks perf workflow` to measure Proof Field build time, fast-lane eligibility, selected proof cones, verification count, and cached negative work for a concrete change intent.
+- Raise the package file-count budget to 49 for the new proof-field module while keeping packed and unpacked byte budgets unchanged.
+
+## [0.6.86] - 2026-05-03
+
+### Changed
+
+- Change `$MAD-SKS` from a table-removal confirmation flow into a scoped Supabase MCP DB cleanup/write override: column and schema cleanup are allowed during the active invocation, while catastrophic wipe operations remain blocked.
+
 ## [0.6.85] - 2026-05-02
 
 ### Changed

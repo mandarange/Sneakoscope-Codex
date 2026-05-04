@@ -87,21 +87,23 @@ export function buildDecisionContract({ mission, schema, answers }) {
       mad_sks_mode: madSks ? 'explicit_invocation_only' : false,
       production_database_writes_allowed: madSks ? 'mad_sks_scoped' : false,
       mcp_direct_execute_sql_writes_allowed: madSks ? 'mad_sks_scoped' : false,
-      db_reset_allowed: madSks ? 'mad_sks_scoped' : false,
-      db_drop_allowed: madSks ? 'requires_table_delete_confirmation_when_table_removal' : false,
-      db_truncate_allowed: madSks ? 'requires_table_delete_confirmation_when_table_removal' : false,
+      db_reset_allowed: false,
+      db_drop_allowed: madSks ? 'column_and_non_catastrophic_schema_cleanup_only' : false,
+      db_truncate_allowed: false,
       db_mass_delete_update_allowed: madSks ? 'mad_sks_scoped' : false
     },
     database_safety: {
-      policy: madSks ? 'mad_sks_scoped_override_table_delete_confirmation_required' : 'destructive_denied_always',
+      policy: madSks ? 'mad_sks_scoped_override_with_catastrophic_db_guard' : 'destructive_denied_always',
       supabase_mcp_recommended_url: 'https://mcp.supabase.com/mcp?project_ref=<project_ref>&read_only=true&features=database,docs',
       allowed_targets_for_write: madSks ? ['main_branch', 'production', 'local_dev', 'preview_branch', 'supabase_branch'] : ['local_dev', 'preview_branch', 'supabase_branch'],
-      forbidden_operations: madSks ? ['TABLE_REMOVAL_WITHOUT_RUNTIME_CONFIRMATION'] : ['DROP', 'TRUNCATE', 'DELETE_WITHOUT_WHERE', 'UPDATE_WITHOUT_WHERE', 'DB_RESET', 'DB_PUSH', 'PROJECT_DELETE', 'BRANCH_RESET_OR_MERGE_OR_DELETE', 'DISABLE_RLS', 'BROAD_GRANT_REVOKE'],
+      forbidden_operations: madSks ? ['DROP_DATABASE', 'DROP_SCHEMA', 'DROP_TABLE', 'TRUNCATE', 'DELETE_WITHOUT_WHERE', 'UPDATE_WITHOUT_WHERE', 'DB_RESET', 'PROJECT_DELETE', 'BRANCH_RESET_OR_MERGE_OR_DELETE'] : ['DROP', 'TRUNCATE', 'DELETE_WITHOUT_WHERE', 'UPDATE_WITHOUT_WHERE', 'DB_RESET', 'DB_PUSH', 'PROJECT_DELETE', 'BRANCH_RESET_OR_MERGE_OR_DELETE', 'DISABLE_RLS', 'BROAD_GRANT_REVOKE'],
       mad_sks_scope: madSks ? {
         active_only_when_prompt_contains: '$MAD-SKS',
         may_combine_with_primary_route: true,
         deactivates_when_active_mission_gate_passes: true,
-        table_delete_confirmation_timeout_ms: 30000
+        supabase_mcp_schema_cleanup_allowed: true,
+        direct_execute_sql_allowed: true,
+        catastrophic_safety_guard_active: true
       } : null,
       migration_apply_allowed: answers.DB_MIGRATION_APPLY_ALLOWED || 'no',
       read_only_query_limit: answers.DB_READ_ONLY_QUERY_LIMIT || '1000'

@@ -7,7 +7,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|warp|auto-review|team|qa-loop|goal|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|warp|auto-review|team|qa-loop|goal|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_COMPUTER_USE_ONLY_POLICY = 'Pipeline UI/browser verification and visual inspection must use Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or any other browser automation substitute; if Codex Computer Use is unavailable, mark the UI/browser evidence unverified instead of substituting another tool.';
 export const FORBIDDEN_BROWSER_AUTOMATION_RE = /\b(playwright|chrome\s+mcp|browser\s+use|selenium|puppeteer)\b/i;
@@ -276,14 +276,14 @@ export const ROUTES = [
     command: '$MAD-SKS',
     mode: 'MADSKS',
     route: 'explicit scoped database authorization modifier',
-    description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily widen Supabase MCP DB permissions for that active invocation only; table deletion still requires user confirmation with an approximately 30 second timeout.',
+    description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily open Supabase MCP column/schema cleanup, direct execute SQL, and normal DB write permissions for the active invocation, while blocking only catastrophic database-wipe operations.',
     requiredSkills: ['mad-sks', 'db-safety-guard', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
-    lifecycle: ['explicit_invocation', 'auto_sealed_permission_scope', 'scoped_db_override', 'table_delete_confirmation_gate', 'permission_deactivation', 'post_route_reflection', 'honest_mode'],
+    lifecycle: ['explicit_invocation', 'auto_sealed_permission_scope', 'scoped_db_cleanup_override', 'catastrophic_db_guard', 'permission_deactivation', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'required',
     reasoningPolicy: 'high',
     stopGate: 'mad-sks-gate.json',
     cliEntrypoint: 'Codex App prompt route only: $MAD-SKS <task>',
-    examples: ['$MAD-SKS $Team Supabase MCP로 main 대상 DB 작업을 수행하되 테이블 삭제는 확인받아', '$DB Supabase 점검 $MAD-SKS']
+    examples: ['$MAD-SKS $Team Supabase MCP로 main 대상 DB 컬럼 정리를 수행해', '$DB Supabase 점검 $MAD-SKS']
   },
   {
     id: 'GX',
@@ -376,7 +376,8 @@ export const COMMAND_CATALOG = [
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
   { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and Warp views.' },
-  { name: 'perf', usage: 'sks perf run [--json] [--iterations N]', description: 'Measure structured GPT-5.5/SKS performance budgets such as CLI startup and package size.' },
+  { name: 'perf', usage: 'sks perf run|workflow [--json] [--iterations N] [--intent "task"] [--changed file1,file2]', description: 'Measure structured GPT-5.5/SKS performance budgets, including Proof Field workflow decisions and fast-lane evidence.' },
+  { name: 'proof-field', usage: 'sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]', description: 'Analyze Potential Proof Field cones, negative-work cache, and fast-lane eligibility for a change set.' },
   { name: 'code-structure', usage: 'sks code-structure scan [--json]', description: 'Scan handwritten source files for 1000/2000/3000-line structure gates and split-review exceptions.' },
   { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, effort decisions, visual maps, dogfood reports, skills, mistake memory, Team dashboard state, and Honest Mode.' },
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate ...', description: 'Build, refresh, prune, and validate RGBA/trig LLM Wiki context packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
