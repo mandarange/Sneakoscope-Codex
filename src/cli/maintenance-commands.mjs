@@ -89,6 +89,8 @@ Local-only install artifacts:
   # writes generated SKS files but excludes .sneakoscope/, .codex/, .agents/, AGENTS.md through .git/info/exclude
   # user-owned AGENTS.md is preserved; an existing SKS managed block is refreshed
 
+Default project setup writes the same SKS generated-file patterns into the project .gitignore.
+
 GitHub install for unreleased commits:
   npm i -g git+${REPOSITORY_URL}
   sks bootstrap
