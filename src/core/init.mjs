@@ -9,6 +9,8 @@ import { installVersionGitHook } from './version-manager.mjs';
 import { CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_COMMANDS, DOLLAR_COMMAND_ALIASES, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, RECOMMENDED_MCP_SERVERS, RECOMMENDED_SKILLS, chatCaptureIntakeText, context7ConfigToml, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
+const SKS_GENERATED_GIT_PATTERNS = ['.sneakoscope/', '.codex/', '.agents/', 'AGENTS.md'];
+
 function reflectionInstructionText(commandPrefix = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write reflection.md; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass reflection-gate.json.`;
 }
@@ -107,7 +109,9 @@ export async function initProject(root, opts = {}) {
   ];
   for (const d of dirs) await ensureDir(path.join(root, d));
   const localExclude = localOnly ? await ensureLocalOnlyGitExclude(root) : null;
+  const sharedIgnore = localOnly ? null : await ensureSharedGitIgnore(root);
   if (localExclude?.path) created.push(`${path.relative(root, localExclude.path)} local-only excludes`);
+  if (sharedIgnore?.changed) created.push(`${path.relative(root, sharedIgnore.path)} SKS generated files ignore`);
 
   await writeJsonAtomic(path.join(sine, 'manifest.json'), {
     package: 'sneakoscope',
@@ -165,6 +169,8 @@ export async function initProject(root, opts = {}) {
     },
     git: {
       local_only: localOnly,
+      ignore_path: sharedIgnore?.path ? path.relative(root, sharedIgnore.path) : null,
+      ignored_patterns: sharedIgnore?.patterns || [],
       exclude_path: localExclude?.path ? path.relative(root, localExclude.path) : null,
       excluded_patterns: localExclude?.patterns || [],
       versioning: {
@@ -198,6 +204,8 @@ export async function initProject(root, opts = {}) {
       git: {
         ...(policy.git || {}),
         local_only: localOnly || Boolean(policy.git?.local_only),
+        ignore_path: sharedIgnore?.path ? path.relative(root, sharedIgnore.path) : policy.git?.ignore_path || null,
+        ignored_patterns: sharedIgnore?.patterns || policy.git?.ignored_patterns || [],
         exclude_path: localExclude?.path ? path.relative(root, localExclude.path) : policy.git?.exclude_path || null,
         excluded_patterns: localExclude?.patterns || policy.git?.excluded_patterns || [],
         versioning: {
@@ -267,6 +275,8 @@ export async function initProject(root, opts = {}) {
       installation: installPolicy(scope, commandPrefix),
       git: {
         local_only: localOnly,
+        ignore_path: sharedIgnore?.path ? path.relative(root, sharedIgnore.path) : null,
+        ignored_patterns: sharedIgnore?.patterns || [],
         exclude_path: localExclude?.path ? path.relative(root, localExclude.path) : null,
         excluded_patterns: localExclude?.patterns || [],
         versioning: {
@@ -445,10 +455,33 @@ policy = "Deny destructive database operations, credential exfiltration, persist
   return { created };
 }
 
+async function ensureSharedGitIgnore(root) {
+  const patterns = SKS_GENERATED_GIT_PATTERNS;
+  const ignorePath = path.join(root, '.gitignore');
+  const markerStart = '# BEGIN Sneakoscope Codex generated files';
+  const markerEnd = '# END Sneakoscope Codex generated files';
+  const managedBlock = `${markerStart}\n${patterns.join('\n')}\n${markerEnd}\n`;
+  const current = await readText(ignorePath, '');
+  if (current.includes(markerStart)) {
+    const re = new RegExp(`${escapeRegExp(markerStart)}[\\s\\S]*?${escapeRegExp(markerEnd)}\\n?`);
+    const next = current.replace(re, managedBlock);
+    if (next !== current) await writeTextAtomic(ignorePath, next.endsWith('\n') ? next : `${next}\n`);
+    return { path: ignorePath, patterns, changed: next !== current };
+  }
+  const existing = new Set(current.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
+  const missing = patterns.filter((pattern) => !existing.has(pattern));
+  if (!missing.length) return { path: ignorePath, patterns, changed: false };
+  const block = missing.length === patterns.length
+    ? managedBlock
+    : `${markerStart}\n${missing.join('\n')}\n${markerEnd}\n`;
+  await writeTextAtomic(ignorePath, `${current.trimEnd()}${current.trim() ? '\n\n' : ''}${block}`);
+  return { path: ignorePath, patterns, changed: true };
+}
+
 async function ensureLocalOnlyGitExclude(root) {
   const gitDir = await resolveGitDir(root);
   if (!gitDir) return { path: null, patterns: [] };
-  const patterns = ['.sneakoscope/', '.codex/', '.agents/', 'AGENTS.md'];
+  const patterns = SKS_GENERATED_GIT_PATTERNS;
   const excludePath = path.join(gitDir, 'info', 'exclude');
   await ensureDir(path.dirname(excludePath));
   const markerStart = '# Sneakoscope Codex local-only generated files';

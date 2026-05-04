@@ -1385,6 +1385,7 @@ async function codexAppHelp(args = []) {
     `Skills: project=${skills.project.ok ? 'ok' : `missing ${skills.project.missing.length}`} global=${skills.global.ok ? 'ok' : `missing ${skills.global.missing.length}`}`, '',
     'Setup:', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks warp check', '',
     'Generated files:', '  .codex/config.toml', '  .codex/hooks.json', '  .agents/skills/', '  .codex/agents/', '  .codex/SNEAKOSCOPE.md', '  AGENTS.md', '',
+    'Git ignore:', '  default setup writes .gitignore entries for .sneakoscope/, .codex/, .agents/, AGENTS.md', '  --local-only writes those patterns to .git/info/exclude instead', '',
     'Prompt routes:', formatDollarCommandsCompact('  ')
   ].join('\n'));
 }
@@ -1564,6 +1565,7 @@ async function setup(args) {
   console.log(`Hooks:     ${path.relative(root, hooksPath)}`);
   console.log(`Version:   ${versioningInfo.enabled ? (versioningInfo.hook_installed ? 'auto-bump enabled' : 'auto-bump hook missing') : 'not enabled'}${versioningInfo.package_version ? ` (${versioningInfo.package_version})` : ''}`);
   if (localOnly) console.log('Git:       local-only (.git/info/exclude; user AGENTS preserved, SKS managed block refreshed)');
+  else console.log('Git:       .gitignore ignores SKS generated files');
   console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .agents/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
   console.log(`Global $:  ${globalSkills.status === 'installed' ? 'ok' : globalSkills.status} ${globalSkills.root || ''}`.trimEnd());
   console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser Use=${appRuntime.mcp.has_browser_use ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'}`);
@@ -1759,6 +1761,7 @@ async function init(args) {
   console.log(`Initialized ㅅㅋㅅ in ${root}`);
   console.log(`Install scope: ${installScope} (${sksCommandPrefix(installScope, { globalCommand })})`);
   if (localOnly) console.log('Git mode: local-only (.git/info/exclude)');
+  else console.log('Git mode: shared .gitignore');
   for (const x of res.created) console.log(`- ${x}`);
 }
 
@@ -1967,9 +1970,11 @@ async function selftest() {
   await writeJsonAtomic(path.join(postinstallBootstrapTmp, 'package.json'), { name: 'postinstall-bootstrap-smoke', version: '0.0.0' });
   const postinstallBootstrap = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallBootstrapTmp, input: 'y\n', env: { INIT_CWD: postinstallBootstrapTmp, HOME: path.join(postinstallBootstrapTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1', SKS_SKIP_CLI_TOOLS: '1', SKS_POSTINSTALL_PROMPT: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
   if (postinstallBootstrap.code !== 0 || !String(postinstallBootstrap.stdout || '').includes('SKS Ready')) throw new Error(`selftest failed: approved postinstall bootstrap did not run: ${postinstallBootstrap.stderr}`);
-  for (const rel of ['.agents/skills/team/SKILL.md', '.codex/config.toml', '.codex/hooks.json', '.sneakoscope/harness-guard.json', '.codex/SNEAKOSCOPE.md', 'AGENTS.md']) {
+  for (const rel of ['.agents/skills/team/SKILL.md', '.codex/config.toml', '.codex/hooks.json', '.sneakoscope/harness-guard.json', '.codex/SNEAKOSCOPE.md', 'AGENTS.md', '.gitignore']) {
     if (!(await exists(path.join(postinstallBootstrapTmp, rel)))) throw new Error(`selftest failed: bootstrap did not create ${rel}`);
   }
+  const postinstallBootstrapGitignore = await safeReadText(path.join(postinstallBootstrapTmp, '.gitignore'));
+  if (!postinstallBootstrapGitignore.includes('.sneakoscope/') || !postinstallBootstrapGitignore.includes('.codex/') || !postinstallBootstrapGitignore.includes('.agents/') || !postinstallBootstrapGitignore.includes('AGENTS.md')) throw new Error('selftest failed: bootstrap did not ignore SKS generated files');
   const bootstrapJsonTmp = tmpdir();
   await writeJsonAtomic(path.join(bootstrapJsonTmp, 'package.json'), { name: 'bootstrap-json-smoke', version: '0.0.0' });
   const bootstrapJson = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'bootstrap', '--json'], { cwd: bootstrapJsonTmp, env: { HOME: path.join(bootstrapJsonTmp, 'home'), SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
@@ -2090,10 +2095,19 @@ async function selftest() {
   await initProject(localOnlyTmp, { localOnly: true });
   const localExclude = await safeReadText(path.join(localOnlyTmp, '.git', 'info', 'exclude'));
   if (!localExclude.includes('.codex/') || !localExclude.includes('AGENTS.md')) throw new Error('selftest failed: local-only git excludes missing');
+  if (await exists(path.join(localOnlyTmp, '.gitignore'))) throw new Error('selftest failed: local-only wrote shared .gitignore');
   const localAgents = await safeReadText(path.join(localOnlyTmp, 'AGENTS.md'));
   if (localAgents.trim() !== 'existing local rules') throw new Error('selftest failed: local-only modified existing AGENTS.md');
   const localManifest = await readJson(path.join(localOnlyTmp, '.sneakoscope', 'manifest.json'));
   if (!localManifest.git?.local_only) throw new Error('selftest failed: local-only manifest missing');
+  const gitignoreTmp = tmpdir();
+  await writeTextAtomic(path.join(gitignoreTmp, '.gitignore'), 'node_modules/\n.sneakoscope/\n');
+  await initProject(gitignoreTmp, {});
+  const gitignoreText = await safeReadText(path.join(gitignoreTmp, '.gitignore'));
+  if (!gitignoreText.includes('node_modules/') || !gitignoreText.includes('# BEGIN Sneakoscope Codex generated files') || !gitignoreText.includes('.codex/') || !gitignoreText.includes('.agents/') || !gitignoreText.includes('AGENTS.md')) throw new Error('selftest failed: shared .gitignore did not preserve existing entries and add SKS patterns');
+  await initProject(gitignoreTmp, {});
+  const gitignoreTextSecond = await safeReadText(path.join(gitignoreTmp, '.gitignore'));
+  if ((gitignoreTextSecond.match(/BEGIN Sneakoscope Codex generated files/g) || []).length !== 1) throw new Error('selftest failed: shared .gitignore managed block duplicated');
   const managedAgentsTmp = tmpdir();
   await ensureDir(path.join(managedAgentsTmp, '.git'));
   await writeTextAtomic(path.join(managedAgentsTmp, 'AGENTS.md'), '<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->\nold managed rules\n<!-- END Sneakoscope Codex GX MANAGED BLOCK -->\n');

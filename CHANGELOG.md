@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.6.89] - 2026-05-04
+
+### Changed
+
+- Bump the release version for the SKS generated-file ignore update so the next npm publish can ship a new package version.
+
+## [0.6.88] - 2026-05-04
+
+### Changed
+
+- Make default SKS project setup write shared `.gitignore` entries for generated Sneakoscope files so `.sneakoscope/`, `.codex/`, `.agents/`, and managed `AGENTS.md` do not appear as project changes.
+- Keep `--local-only` installs on `.git/info/exclude` while adding selftest coverage for both shared and local-only ignore modes.
+
 ## [0.6.87] - 2026-05-04
 
 ### Added

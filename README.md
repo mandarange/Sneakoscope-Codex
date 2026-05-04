@@ -90,6 +90,8 @@ sks bootstrap
 
 `sks` commands work even when no project root is present. Project-aware commands use the nearest `.sneakoscope`, `.dcodex`, or `.git` root; if none exists, SKS uses a per-user global runtime root. `sks bootstrap` still initializes the current project when you want project-local hooks, skills, and TriWiki state.
 
+Project setup writes shared `.gitignore` entries for generated SKS files: `.sneakoscope/`, `.codex/`, `.agents/`, and managed `AGENTS.md`. Use `sks setup --local-only` when you want those excludes kept only in `.git/info/exclude`.
+
 ### One-Shot Install
 
 Use this when you do not want to keep a global install:
@@ -255,6 +257,8 @@ Generated app files include:
 | `.codex/hooks.json` | Stop/finalization hooks for Honest Mode and completion summaries. |
 | `.codex/config.toml` | Codex profiles, agents, and MCP configuration. |
 | `.sneakoscope/` | Runtime state, missions, wiki packs, policies, and artifacts. |
+
+Default setup adds these generated SKS paths to the project `.gitignore`; `--local-only` uses `.git/info/exclude` instead.
 
 Use `sks dollar-commands` to confirm that terminal discovery and Codex App prompt commands agree.
 
