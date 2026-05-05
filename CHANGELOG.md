@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.6.90] - 2026-05-05
+
+### Fixed
+
+- Prevent `$DFix` turns from being pulled into repeated full-route Honest Mode stop-hook loopbacks; DFix now records a one-shot ultralight finalization context and keeps only cheap verification for micro-edits.
+
 ## [0.6.89] - 2026-05-04
 
 ### Changed

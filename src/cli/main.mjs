@@ -1924,6 +1924,24 @@ async function selftest() {
   if (trippedStop) throw new Error('selftest failed: compliance loop guard did not terminally trip');
   const loopBlocker = await readJson(path.join(loopMission.dir, 'hard-blocker.json'), null);
   if (loopBlocker?.reason !== 'compliance_loop_guard_tripped') throw new Error('selftest failed: compliance loop guard did not write hard blocker');
+  await setCurrent(tmp, loopState);
+  const dfixPromptHook = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'user-prompt-submit'], {
+    cwd: tmp,
+    input: JSON.stringify({ cwd: tmp, prompt: '$DFix Change the CTA label only' }),
+    timeoutMs: 15000,
+    maxOutputBytes: 64 * 1024
+  });
+  if (dfixPromptHook.code !== 0) throw new Error(`selftest failed: DFix prompt hook exited ${dfixPromptHook.code}: ${dfixPromptHook.stderr}`);
+  const dfixStopHook = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'stop'], {
+    cwd: tmp,
+    input: JSON.stringify({ cwd: tmp, last_assistant_message: 'DFix 완료 요약: CTA 라벨만 변경했습니다. 검증: 대상 파일 확인 통과. 남은 문제: 없음.' }),
+    timeoutMs: 15000,
+    maxOutputBytes: 64 * 1024
+  });
+  if (dfixStopHook.code !== 0) throw new Error(`selftest failed: DFix stop hook exited ${dfixStopHook.code}: ${dfixStopHook.stderr}`);
+  const dfixStop = JSON.parse(dfixStopHook.stdout || '{}');
+  if (dfixStop.decision === 'block' || dfixStop.continue === false) throw new Error(`selftest failed: DFix stop hook was blocked: ${dfixStopHook.stdout}`);
+  if (!String(dfixStop.systemMessage || '').includes('DFix ultralight finalization accepted')) throw new Error('selftest failed: DFix stop hook did not use the ultralight finalization bypass');
   await writeJsonAtomic(path.join(loopMission.dir, 'team-roster.json'), { schema_version: 1, mission_id: loopMission.id, confirmed: true });
   await writeJsonAtomic(path.join(loopMission.dir, 'team-session-cleanup.json'), { schema_version: 1, passed: true, all_sessions_closed: true, outstanding_sessions: 0, live_transcript_finalized: true });
   await writeJsonAtomic(path.join(loopMission.dir, 'team-gate.json'), { passed: true, team_roster_confirmed: true, analysis_artifact: true, triwiki_refreshed: true, triwiki_validated: true, consensus_artifact: true, implementation_team_fresh: true, review_artifact: true, integration_evidence: true, session_cleanup: true });

@@ -12,9 +12,11 @@ const TEAM_DIGEST_MESSAGE_CHARS = 180;
 const TEAM_DIGEST_CONTEXT_CHARS = 1600;
 const TEAM_DIGEST_SYSTEM_CHARS = 260;
 const STOP_REPEAT_GUARD_ARTIFACT = 'stop-hook-repeat-guard.json';
+const LIGHT_ROUTE_STOP_ARTIFACT = 'light-route-stop.json';
 const STOP_REPEAT_GUARD_WINDOW_MS = 10 * 60 * 1000;
 const STOP_REPEAT_GUARD_MAX_ENTRIES = 25;
 const DEFAULT_STOP_REPEAT_GUARD_LIMIT = 2;
+const LIGHT_ROUTE_STOP_WINDOW_MS = 10 * 60 * 1000;
 
 async function loadHookPayload() {
   const raw = await readStdin();
@@ -111,6 +113,7 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
     const command = dollarCommand(prompt);
     const route = routePrompt(prompt);
     const bypassActiveRoute = route?.id === 'DFix' || route?.id === 'Answer';
+    if (route?.id === 'DFix') await recordLightRouteStop(root, route, payload, prompt);
     if (isClarificationAwaiting(state) && !looksLikeClarificationCancel(prompt)) {
       const activeContext = await activeRouteContext(root, state);
       const teamDigest = await teamLiveDigest(root, state);
@@ -222,6 +225,12 @@ async function hookPermission(root, state, payload, noQuestion) {
 }
 
 async function hookStop(root, state, payload, noQuestion) {
+  if (!noQuestion && await consumeLightRouteStop(root, payload)) {
+    return {
+      continue: true,
+      systemMessage: 'SKS: DFix ultralight finalization accepted; full-route Honest Mode loopback is not required.'
+    };
+  }
   const routeDecision = await evaluateStop(root, state, payload, { noQuestion });
   if (routeDecision) return routeDecision;
   if (!noQuestion) {
@@ -256,6 +265,46 @@ async function hookStop(root, state, payload, noQuestion) {
     decision: 'block',
     reason: 'SKS no-question run is not done. Continue autonomously, fix failing checks, update the active gate file, and do not ask the user.'
   };
+}
+
+async function recordLightRouteStop(root, route = {}, payload = {}, prompt = '') {
+  const now = nowIso();
+  const expires = new Date(Date.parse(now) + LIGHT_ROUTE_STOP_WINDOW_MS).toISOString();
+  const file = path.join(root, '.sneakoscope', 'state', LIGHT_ROUTE_STOP_ARTIFACT);
+  await writeJsonAtomic(file, {
+    schema_version: 1,
+    route: route.id || null,
+    route_command: route.command || null,
+    mode: route.mode || null,
+    conversation_id: conversationId(payload),
+    prompt_hash: sha256(String(prompt || '')).slice(0, 16),
+    created_at: now,
+    expires_at: expires,
+    pending_stop_bypass: true,
+    stop_policy: 'dfix_ultralight_bypasses_full_route_honest_mode'
+  }).catch(() => null);
+}
+
+async function consumeLightRouteStop(root, payload = {}) {
+  const file = path.join(root, '.sneakoscope', 'state', LIGHT_ROUTE_STOP_ARTIFACT);
+  const record = await readJson(file, null).catch(() => null);
+  if (!record?.pending_stop_bypass) return false;
+  if (record.route !== 'DFix') return false;
+  const nowMs = Date.now();
+  const expiresMs = Date.parse(record.expires_at || '');
+  if (!Number.isFinite(expiresMs) || expiresMs < nowMs) return false;
+  const currentConversation = conversationId(payload);
+  if (record.conversation_id && explicitConversationId(payload) && record.conversation_id !== currentConversation) return false;
+  await writeJsonAtomic(file, {
+    ...record,
+    pending_stop_bypass: false,
+    consumed_at: nowIso()
+  }).catch(() => null);
+  return true;
+}
+
+function explicitConversationId(payload = {}) {
+  return payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || null;
 }
 
 async function finalizationRepeatDecision(root, state = {}, payload = {}, reason = '', kind = 'finalization') {
