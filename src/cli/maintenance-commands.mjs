@@ -1348,10 +1348,12 @@ export async function gxCommand(sub, args) {
 export async function team(args) {
   const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'cleanup-warp']);
   if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
-  const opts = parseTeamCreateArgs(args);
+  const openWarp = flag(args, '--open-warp') || flag(args, '--warp-open');
+  const cleanCreateArgs = args.filter((arg) => !['--open-warp', '--warp-open'].includes(String(arg)));
+  const opts = parseTeamCreateArgs(cleanCreateArgs);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   if (!prompt) {
-    console.error('Usage: sks team "task" [executor:5 reviewer:2 user:1] [--agents N] [--json]');
+    console.error('Usage: sks team "task" [executor:5 reviewer:2 user:1] [--agents N] [--open-warp] [--json]');
     console.error('       sks team log|tail|watch|lane|status|message|cleanup-warp [mission-id|latest]');
     console.error('       sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
     console.error('       sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."');
@@ -1414,7 +1416,7 @@ export async function team(args) {
     questions: path.join(dir, 'questions.md'),
     codex_agents: ['analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']
   };
-  result.warp = await launchWarpTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: flag(args, '--json') });
+  result.warp = await launchWarpTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: flag(args, '--json') || !openWarp });
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
   console.log(`Plan: ${path.relative(root, result.plan)}`);
@@ -1424,7 +1426,10 @@ export async function team(args) {
   console.log(`Runtime graph: ${path.relative(root, result.team_graph)}`);
   console.log(`Worker inbox: ${path.relative(root, result.worker_inbox_dir)}`);
   console.log(`Live: ${path.relative(root, result.live)}`);
-  if (result.warp.ready) console.log(`warp: ${result.warp.created ? 'opened' : 'ready'} ${result.warp.opened_lane_count || result.warp.agents.length} agent lane(s) in ${result.warp.workspace_ref || result.warp.workspace}`);
+  if (result.warp.ready) {
+    const warpState = result.warp.created ? 'opened' : 'not opened; use --open-warp for a launch configuration';
+    console.log(`warp: ${warpState} ${result.warp.opened_lane_count || result.warp.agents.length} agent lane(s) in ${result.warp.workspace_ref || result.warp.workspace}`);
+  }
   else console.log(`warp: blocked (${Array.from(new Set(result.warp.blockers || [])).join('; ')})`);
   console.log(`Watch: sks team watch ${id}`);
   console.log('Use $Team in Codex App or the Warp launch view from this CLI flow to run scouts, debate/consensus, runtime graph/inbox handoff, then a fresh implementation team with disjoint ownership.');

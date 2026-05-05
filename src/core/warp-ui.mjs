@@ -64,6 +64,31 @@ export function warpLaunchUri(configPathOrFilename) {
   return `warp://launch/${encodeURIComponent(filename)}`;
 }
 
+export function isWarpShellSession(env = process.env) {
+  if (truthyEnv(env.WARP_IS_LOCAL_SHELL_SESSION)) return true;
+  if (truthyEnv(env.WARP_SESSION_ID)) return true;
+  return String(env.TERM_PROGRAM || '') === 'WarpTerminal';
+}
+
+export function warpOpenLaunchDecision(opts = {}) {
+  const args = Array.isArray(opts.args) ? opts.args : [];
+  const env = opts.env || process.env;
+  if (opts.forceOpen === true || opts.open === true || args.includes('--open') || args.includes('--force-open') || truthyEnv(env.SKS_WARP_FORCE_OPEN) || truthyEnv(env.SKS_WARP_OPEN)) {
+    return { open: true, reason: 'forced' };
+  }
+  if (opts.skipOpen === true || opts.noOpen === true || opts.open === false || args.includes('--no-open') || truthyEnv(env.SKS_WARP_SKIP_OPEN) || truthyEnv(env.SKS_WARP_NO_OPEN)) {
+    return { open: false, reason: 'opening disabled by option/env' };
+  }
+  if (isWarpShellSession(env)) {
+    return { open: false, current_session: true, reason: 'already inside Warp shell session' };
+  }
+  return { open: true, reason: 'default' };
+}
+
+function truthyEnv(value) {
+  return value !== undefined && value !== null && !/^(?:0|false|no|off)$/i.test(String(value).trim());
+}
+
 export async function findWarpApp() {
   const env = process.env.SKS_WARP_APP || process.env.WARP_APP;
   if (env && await exists(env)) return env;
@@ -222,7 +247,7 @@ export function formatWarpBanner(status = null) {
     '  $DFix  $Answer  $SKS  $Team  $QA-LOOP  $Goal  $Research  $AutoResearch  $DB  $GX  $Wiki  $Help',
     '',
     'CLI-first runtime:',
-    '  sks                 open a Warp Codex CLI launch configuration',
+    '  sks warp open       explicitly open a Warp Codex CLI launch configuration',
     '  sks --mad           open one-shot MAD full-access auto-review launch configuration',
     '  sks team "task"     prepare Team mission and Warp split-pane live view',
     '',
@@ -317,18 +342,20 @@ export async function writeWarpLaunchConfig(plan = {}, panes = []) {
   return { config_path: configPath, yaml, record };
 }
 
-export async function openWarpLaunchConfig(configPath) {
+export async function openWarpLaunchConfig(configPath, opts = {}) {
   const uri = warpLaunchUri(configPath);
+  const decision = warpOpenLaunchDecision(opts);
+  if (!decision.open) return { ok: false, skipped: true, reason: decision.reason, uri, stdout: '', stderr: '' };
   if (process.platform === 'darwin') {
     const run = await runProcess('open', [uri], { timeoutMs: 5000, maxOutputBytes: 16 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
-    return { ok: run.code === 0, uri, stdout: run.stdout || '', stderr: run.stderr || '' };
+    return { ok: run.code === 0, skipped: false, reason: decision.reason, uri, stdout: run.stdout || '', stderr: run.stderr || '' };
   }
   const opener = await which('xdg-open').catch(() => null);
   if (opener) {
     const run = await runProcess(opener, [uri], { timeoutMs: 5000, maxOutputBytes: 16 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
-    return { ok: run.code === 0, uri, stdout: run.stdout || '', stderr: run.stderr || '' };
+    return { ok: run.code === 0, skipped: false, reason: decision.reason, uri, stdout: run.stdout || '', stderr: run.stderr || '' };
   }
-  return { ok: false, uri, stderr: 'No platform URI opener found' };
+  return { ok: false, skipped: false, reason: decision.reason, uri, stdout: '', stderr: 'No platform URI opener found' };
 }
 
 export async function launchWarpUi(args = [], opts = {}) {
@@ -344,14 +371,38 @@ export async function launchWarpUi(args = [], opts = {}) {
   if (args.includes('--status-only')) return { plan };
   const command = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs);
   const written = await writeWarpLaunchConfig({ ...plan, command }, [{ cwd: plan.root, command, focused: true }]);
-  const opened = args.includes('--no-open') ? { ok: false, skipped: true, uri: written.record.launch_uri } : await openWarpLaunchConfig(written.config_path);
+  const decision = warpOpenLaunchDecision({ ...opts, args });
+  const opened = decision.current_session
+    ? runWarpCommandInCurrentSession(command, { cwd: plan.root, dryRun: opts.dryRunCurrentSession || opts.dryRun })
+    : await openWarpLaunchConfig(written.config_path, { ...opts, args });
   if (!args.includes('--quiet')) {
     console.log(`SKS Warp launch configuration: ${written.config_path}`);
     console.log(`Warp URI: ${written.record.launch_uri}`);
-    if (opened.ok) console.log('Warp: opened');
+    if (opened.current_session) console.log(`Warp: current session (${opened.reason || 'already inside Warp shell session'})`);
+    else if (opened.ok) console.log('Warp: opened');
+    else if (opened.skipped) console.log(`Warp: skipped (${opened.reason || 'opening disabled'})`);
     else if (!opened.skipped) console.log(`Warp: not opened (${opened.stderr || 'URI opener failed'})`);
   }
   return { plan, created: true, config_path: written.config_path, launch_uri: written.record.launch_uri, opened };
+}
+
+function runWarpCommandInCurrentSession(command, opts = {}) {
+  if (opts.dryRun) return { ok: true, current_session: true, skipped: false, reason: 'dry run current Warp session', command };
+  const shell = process.env.SHELL || '/bin/sh';
+  const run = spawnSync(shell, ['-lc', command], {
+    cwd: opts.cwd || process.cwd(),
+    stdio: 'inherit',
+    env: process.env
+  });
+  return {
+    ok: run.status === 0,
+    current_session: true,
+    skipped: false,
+    reason: 'ran in current Warp shell session',
+    code: run.status,
+    signal: run.signal || null,
+    stderr: run.error?.message || ''
+  };
 }
 
 function printWarpLaunchBlocked(plan, opts = {}) {

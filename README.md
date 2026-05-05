@@ -43,7 +43,7 @@ sks selftest --mock
 
 | Area | What it does |
 | --- | --- |
-| CLI runtime | `sks`, `sks warp`, and `sks --mad` write/open Warp Launch Configurations for Codex CLI. |
+| CLI runtime | `sks warp open` and `sks --mad` explicitly launch Codex CLI with Warp; bare `sks` only prints help/readiness surfaces. |
 | Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
 | Team orchestration | Runs substantial work through ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode. |
 | From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
@@ -155,12 +155,12 @@ sks fix-path
 ### Open Codex CLI With Warp
 
 ```sh
-sks
+sks warp open
 sks warp check
 sks warp status --once
 ```
 
-`sks` writes a Warp Launch Configuration for Codex CLI and opens it through Warp's public URI scheme when running in an interactive terminal. `sks warp check` is diagnostic and prints readiness without starting a workspace.
+`sks warp open` writes a Warp Launch Configuration for Codex CLI and opens it through Warp's public URI scheme only when that is explicitly requested. When it is already running inside Warp, SKS runs Codex in the current terminal session instead of opening another Warp window. `sks` and `sks warp check` are diagnostic/help surfaces and do not start a workspace.
 
 ### MAD Warp Launch
 
@@ -277,7 +277,7 @@ Use these inside Codex App or another agent prompt. They are prompt commands, no
 | --- | --- |
 | `$Team` | You want implementation, code changes, or substantial repo work. |
 | `$From-Chat-IMG` | You have a chat screenshot plus original attachments and want each visible request mapped to work. |
-| `$DFix` | You need a tiny design/content edit such as copy, label, color, spacing, or translation. |
+| `$DFix` | You need a tiny design/content edit such as copy, label, color, spacing, or translation, with no Team/TriWiki/reflection recording and only a one-line DFix Honest check. |
 | `$Answer` | You want an answer only and no implementation should start. |
 | `$SKS` | You need setup, status, usage, or workflow help. |
 | `$QA-LOOP` | You want UI/API dogfooding, safe fixes, and rechecks. |
@@ -308,7 +308,7 @@ sks selftest --mock
 
 ```sh
 sks warp check
-sks
+sks warp open
 ```
 
 For the high-reasoning full-access profile:

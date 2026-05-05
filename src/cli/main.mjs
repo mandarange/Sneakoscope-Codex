@@ -43,7 +43,7 @@ import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
-import { buildWarpLaunchConfigYaml, buildWarpLaunchPlan, buildWarpOpenArgs, runWarpLaunchConfigSyntaxCheck, warpReadiness, warpStatusKind, defaultWarpWorkspaceName, formatWarpBanner, launchWarpTeamView, launchWarpUi, platformWarpInstallHint, runWarpStatus, sanitizeWarpWorkspaceName, teamLaneStyle, writeWarpLaunchConfig } from '../core/warp-ui.mjs';
+import { buildWarpLaunchConfigYaml, buildWarpLaunchPlan, buildWarpOpenArgs, isWarpShellSession, runWarpLaunchConfigSyntaxCheck, warpOpenLaunchDecision, warpReadiness, warpStatusKind, defaultWarpWorkspaceName, formatWarpBanner, launchWarpTeamView, launchWarpUi, platformWarpInstallHint, runWarpStatus, sanitizeWarpWorkspaceName, teamLaneStyle, writeWarpLaunchConfig } from '../core/warp-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 
@@ -65,12 +65,12 @@ export async function main(args) {
   if (isAutoReviewFlag(args[0])) return autoReviewCommand('start', args.slice(1));
   const [cmd, sub, ...rest] = args;
   const tail = sub === undefined ? [] : [sub, ...rest];
-  if (!cmd) return shouldLaunchWarpUi() ? warpCommand('start', []) : help();
+  if (!cmd) return help();
   if (cmd === '--help' || cmd === '-h') return help();
   if (cmd === '--version' || cmd === '-v' || cmd === 'version') return version();
   if (cmd === 'postinstall') return postinstall();
   if (cmd === 'wizard' || cmd === 'ui') return wizard(tail);
-  if (cmd === 'warp') return String(sub || '').startsWith('--') ? warpCommand('start', tail) : warpCommand(sub, rest);
+  if (cmd === 'warp') return !sub || String(sub).startsWith('--') ? warpCommand('check', tail) : warpCommand(sub, rest);
   if (cmd === 'auto-review' || cmd === 'autoreview') return autoReviewCommand(sub, rest);
   if (cmd === 'update-check') return updateCheck(tail);
   if (cmd === 'help') return help(tail);
@@ -139,7 +139,7 @@ Usage:
   sks --mad [--high]
   sks auto-review status|enable|start [--high]
   sks --Auto-review [--high]
-  sks warp [--workspace name]
+  sks warp open [--workspace name]
   sks warp status [--once]
   sks dollar-commands [--json]
   sks dfix
@@ -216,10 +216,6 @@ function version() {
 
 function shouldShowWizard() {
   return Boolean(input.isTTY && output.isTTY && process.env.SKS_NO_WIZARD !== '1' && process.env.CI !== 'true');
-}
-
-function shouldLaunchWarpUi() {
-  return Boolean(input.isTTY && output.isTTY && process.env.SKS_NO_WARP !== '1' && process.env.CI !== 'true');
 }
 
 function isAutoReviewFlag(value) {
@@ -593,12 +589,13 @@ Examples:
   $DFix Change the CTA label to "Start"
 
 Purpose:
-  Fast design/content fixes only. DFix bypasses the general SKS prompt pipeline and uses an ultralight task list.
+  Fast design/content fixes only. DFix bypasses the general SKS prompt pipeline and uses an ultralight, no-record task list.
 
 Rules:
   List the exact micro-edits, inspect only needed files, apply only those edits.
-  Do not run mission state, ambiguity gates, TriWiki refresh, Context7 routing, subagents, Goal, Research, eval, or broad redesign.
+  Do not run mission state, ambiguity gates, TriWiki/TriFix/reflection/state recording, Context7 routing, subagents, Goal, Research, eval, or broad redesign.
   Run only cheap verification when useful.
+  Start the final answer with "DFix 완료 요약:" and include one "DFix 솔직모드:" line for verified, not verified, and remaining issues.
 `);
 }
 
@@ -1104,7 +1101,7 @@ async function warpCommand(sub = 'start', args = []) {
     if (flag(args, '--json')) console.log(JSON.stringify(result, null, 2));
     return;
   }
-  console.error('Usage: sks warp [check|status|banner] [--workspace name]');
+  console.error('Usage: sks warp open|start|check|status|banner [--workspace name]');
   process.exitCode = 1;
 }
 
@@ -1421,7 +1418,7 @@ function usage(args = []) {
     bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and warp.'],
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [warp|codex|context7|all] [--yes]', '', 'warp on macOS uses Homebrew only after approval.'],
-    warp: ['warp', '', '  sks', '  sks warp check', '  sks warp status --once', '  sks deps install warp'],
+    warp: ['warp', '', '  sks warp open', '  sks warp check', '  sks warp status --once', '  sks deps install warp', '', 'Warp launch is explicit. Running bare `sks` prints help and never opens Warp by itself.'],
     team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-warp latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
     goal: ['Goal', '', '  sks goal create "task"', '  sks goal status latest', '  sks goal pause latest', '  sks goal resume latest', '  sks goal clear latest'],
@@ -1932,9 +1929,10 @@ async function selftest() {
     maxOutputBytes: 64 * 1024
   });
   if (dfixPromptHook.code !== 0) throw new Error(`selftest failed: DFix prompt hook exited ${dfixPromptHook.code}: ${dfixPromptHook.stderr}`);
+  if (await exists(path.join(tmp, '.sneakoscope', 'state', 'light-route-stop.json'))) throw new Error('selftest failed: DFix prompt hook created persistent light-route state');
   const dfixStopHook = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'stop'], {
     cwd: tmp,
-    input: JSON.stringify({ cwd: tmp, last_assistant_message: 'DFix 완료 요약: CTA 라벨만 변경했습니다. 검증: 대상 파일 확인 통과. 남은 문제: 없음.' }),
+    input: JSON.stringify({ cwd: tmp, last_assistant_message: 'DFix 완료 요약: CTA 라벨만 변경했습니다.\nDFix 솔직모드: 검증=대상 파일 확인 통과, 미검증=없음, 남은 문제=없음.' }),
     timeoutMs: 15000,
     maxOutputBytes: 64 * 1024
   });
@@ -2024,10 +2022,23 @@ async function selftest() {
   if (!warpSyntax.ok || !warpLaunchYaml.includes('name: "sks-mad-selftest"') || !warpLaunchYaml.includes('commands:')) throw new Error('selftest failed: MAD Warp launch configuration was not generated with name and command');
   const warpOpenArgs = buildWarpOpenArgs(workspacePlan);
   if (!warpOpenArgs.includes('open') || !warpOpenArgs.some((arg) => String(arg).includes('warp://launch/sks-mad-selftest.yaml'))) throw new Error('selftest failed: MAD Warp launch URI is not stable by workspace name');
+  if (!isWarpShellSession({ TERM_PROGRAM: 'WarpTerminal' })) throw new Error('selftest failed: Warp shell session env was not detected');
+  const warpNestedDecision = warpOpenLaunchDecision({ env: { TERM_PROGRAM: 'WarpTerminal' } });
+  if (warpNestedDecision.open || !warpNestedDecision.current_session) throw new Error('selftest failed: nested Warp launch was not redirected to current session');
   const oldWarpConfigDir = process.env.SKS_WARP_LAUNCH_CONFIG_DIR;
   process.env.SKS_WARP_LAUNCH_CONFIG_DIR = path.join(tmp, 'warp-launch-configs');
   const writtenWarpConfig = await writeWarpLaunchConfig({ ...workspacePlan, command: 'codex', title: 'sks-mad-selftest' }, [{ cwd: tmp, command: 'codex --profile sks-mad-high', focused: true }]);
   if (!(await exists(writtenWarpConfig.config_path)) || !writtenWarpConfig.record.launch_uri.includes('warp://launch/')) throw new Error('selftest failed: Warp launch configuration was not persisted for URI launch');
+  const currentSessionLaunch = await launchWarpUi(['--workspace', 'sks-current-session-selftest'], {
+    root: tmp,
+    codex: { bin: 'printf', version: 'mock' },
+    app: { ok: true, guidance: [] },
+    warp: { ok: true, version: 'Warp.app' },
+    env: { TERM_PROGRAM: 'WarpTerminal' },
+    dryRunCurrentSession: true,
+    quiet: true
+  });
+  if (!currentSessionLaunch.opened?.current_session || currentSessionLaunch.opened?.skipped) throw new Error('selftest failed: Warp shell launch did not stay in the current session');
   if (oldWarpConfigDir === undefined) delete process.env.SKS_WARP_LAUNCH_CONFIG_DIR;
   else process.env.SKS_WARP_LAUNCH_CONFIG_DIR = oldWarpConfigDir;
   if (warpStatusKind({ ok: false, bin: null }) !== 'missing') throw new Error('selftest failed: missing warp was not labeled missing');
@@ -2525,7 +2536,10 @@ async function selftest() {
   if (hookDfixJson.hookSpecificOutput?.additionalContext?.includes('Mission:')) throw new Error('selftest failed: $DFix created route mission state');
   if (!hookDfixJson.hookSpecificOutput?.additionalContext?.includes('DFix ultralight pipeline active')) throw new Error('selftest failed: $DFix hook missing ultralight pipeline guidance');
   if (!hookDfixJson.hookSpecificOutput?.additionalContext?.includes('Task list:')) throw new Error('selftest failed: $DFix hook missing micro task list');
+  if (!hookDfixJson.hookSpecificOutput?.additionalContext?.includes('DFix 완료 요약')) throw new Error('selftest failed: $DFix hook missing no-record final marker guidance');
+  if (!hookDfixJson.hookSpecificOutput?.additionalContext?.includes('DFix 솔직모드')) throw new Error('selftest failed: $DFix hook missing lightweight Honest Mode guidance');
   if (!hookDfixJson.systemMessage?.includes('DFix ultralight')) throw new Error('selftest failed: $DFix hook missing ultralight system message');
+  if (await exists(path.join(hookDfixTmp, '.sneakoscope', 'state', 'light-route-stop.json'))) throw new Error('selftest failed: $DFix hook created persistent light-route state');
   const hookDfixState = await readJson(stateFile(hookDfixTmp), {});
   if (String(hookDfixState.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS')) throw new Error('selftest failed: $DFix state entered clarification gate');
   const inferredDfixPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '버튼 라벨 바꿔줘' });
@@ -2808,6 +2822,8 @@ async function selftest() {
   if (maxTextParsed.agentSessions !== 6 || maxTextParsed.roleCounts.executor !== 6) throw new Error('selftest failed: team max-agent text parsing');
   const roleParsed = parseTeamCreateArgs(['executor:5', 'reviewer:2', 'user:1', '작업']);
   if (roleParsed.roleCounts.executor !== 5 || roleParsed.roleCounts.reviewer !== 2 || roleParsed.agentSessions !== 5 || roleParsed.prompt !== '작업') throw new Error('selftest failed: team role-count parsing');
+  const openWarpFlagParsed = parseTeamCreateArgs(['--open-warp', '작업']);
+  if (openWarpFlagParsed.prompt !== '작업') throw new Error('selftest failed: team --open-warp leaked into prompt');
   const roleTeamPlan = buildTeamPlan(teamId, '역할 팀 테스트', { roleCounts: roleParsed.roleCounts });
   if (roleTeamPlan.roster.debate_team.length !== 5) throw new Error('selftest failed: executor role count not reflected in debate team size');
   if (roleTeamPlan.roster.analysis_team.length !== 5) throw new Error('selftest failed: executor role count not reflected in analysis scout team');
