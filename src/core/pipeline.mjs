@@ -81,7 +81,7 @@ export function dfixQuickContext(prompt, route = routePrompt(prompt)) {
     '2. Inspect only the files needed to locate that target.',
     '3. Apply only the listed design/content edit; for UI/UX micro-edits read design.md when present, and use imagegen for any image/logo/raster asset.',
     '4. Run only cheap verification when useful, such as syntax check, focused test, or local render smoke.',
-    '5. Final response: one short completion summary explaining what changed, plus verification or the exact blocker.'
+    '5. Final response: one short DFix completion summary explaining what changed, plus cheap verification or the exact blocker. Do not enter repeated full-route Honest Mode loops.'
   ].join('\n');
 }
 
