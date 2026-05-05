@@ -219,7 +219,7 @@ export function parseTeamSpecArgs(args = []) {
       i++;
       continue;
     }
-    if (arg === '--json') continue;
+    if (arg === '--json' || arg === '--open-warp' || arg === '--warp-open') continue;
     cleanArgs.push(args[i]);
   }
   return { cleanArgs, ...normalizeTeamSpec({ roleCounts, agentSessions: explicitSession }) };

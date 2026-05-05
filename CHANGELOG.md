@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.6.96] - 2026-05-06
+
+### Fixed
+
+- Simplify `$DFix` finalization so it no longer creates a persistent light-route state record; DFix now uses an explicit completion marker plus a one-line DFix-specific Honest Mode check while remaining free of TriWiki/TriFix/reflection recording.
+- Stop bare `sks` and default `sks team` creation from opening Warp automatically; Warp launch now requires an explicit `sks warp open`, `sks --mad`, auto-review start, or `sks team --open-warp`.
+- Reuse the current Warp terminal for explicit single-session launches when SKS is already running inside Warp, preventing nested Warp windows.
+
 ## [0.6.93] - 2026-05-05
 
 ### Changed
@@ -28,7 +36,7 @@
 
 ### Fixed
 
-- Prevent `$DFix` turns from being pulled into repeated full-route Honest Mode stop-hook loopbacks; DFix now records a one-shot ultralight finalization context and keeps only cheap verification for micro-edits.
+- Prevent `$DFix` turns from being pulled into repeated full-route Honest Mode stop-hook loopbacks; DFix uses one-shot ultralight finalization context and keeps only cheap verification for micro-edits.
 
 ## [0.6.89] - 2026-05-04
 

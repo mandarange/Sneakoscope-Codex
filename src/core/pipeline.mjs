@@ -82,7 +82,7 @@ export function dfixQuickContext(prompt, route = routePrompt(prompt)) {
     '2. Inspect only the files needed to locate that target.',
     '3. Apply only the listed design/content edit; for UI/UX micro-edits read design.md when present, and use imagegen for any image/logo/raster asset.',
     '4. Run only cheap verification when useful, such as syntax check, focused test, or local render smoke.',
-    '5. Final response: one short DFix completion summary explaining what changed, plus cheap verification or the exact blocker. Do not enter repeated full-route Honest Mode loops.'
+    '5. Final response: start with `DFix 완료 요약:` and include one `DFix 솔직모드:` line with verified / not verified / remaining issue status. Do not create TriWiki/TriFix/reflection/state records and do not enter repeated full-route Honest Mode loops.'
   ].join('\n');
 }
 

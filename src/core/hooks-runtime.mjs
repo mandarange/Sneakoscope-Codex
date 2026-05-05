@@ -16,7 +16,6 @@ const LIGHT_ROUTE_STOP_ARTIFACT = 'light-route-stop.json';
 const STOP_REPEAT_GUARD_WINDOW_MS = 10 * 60 * 1000;
 const STOP_REPEAT_GUARD_MAX_ENTRIES = 25;
 const DEFAULT_STOP_REPEAT_GUARD_LIMIT = 2;
-const LIGHT_ROUTE_STOP_WINDOW_MS = 10 * 60 * 1000;
 
 async function loadHookPayload() {
   const raw = await readStdin();
@@ -114,7 +113,6 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
     const route = routePrompt(prompt);
     const bypassActiveRoute = route?.id === 'DFix' || route?.id === 'Answer';
     const goalOverlay = activeGoalOverlayContext(state, route);
-    if (route?.id === 'DFix') await recordLightRouteStop(root, route, payload, prompt);
     if (isClarificationAwaiting(state) && !looksLikeClarificationCancel(prompt)) {
       const activeContext = await activeRouteContext(root, state);
       const teamDigest = await teamLiveDigest(root, state);
@@ -237,7 +235,8 @@ async function hookPermission(root, state, payload, noQuestion) {
 }
 
 async function hookStop(root, state, payload, noQuestion) {
-  if (!noQuestion && await consumeLightRouteStop(root, payload)) {
+  const last = extractLastMessage(payload);
+  if (!noQuestion && (hasDfixLightCompletion(last) || await consumeLightRouteStop(root, payload))) {
     return {
       continue: true,
       systemMessage: 'SKS: DFix ultralight finalization accepted; full-route Honest Mode loopback is not required.'
@@ -246,7 +245,6 @@ async function hookStop(root, state, payload, noQuestion) {
   const routeDecision = await evaluateStop(root, state, payload, { noQuestion });
   if (routeDecision) return routeDecision;
   if (!noQuestion) {
-    const last = extractLastMessage(payload);
     if (!hasHonestMode(last)) {
       const reason = 'SKS Honest Mode is required before finishing. Re-check the actual goal, verify evidence/tests, state gaps honestly, and only then provide the final answer. Include a short "SKS Honest Mode" or "솔직모드" section.';
       const repeatDecision = await finalizationRepeatDecision(root, state, payload, reason, 'honest_mode_missing');
@@ -279,24 +277,6 @@ async function hookStop(root, state, payload, noQuestion) {
   };
 }
 
-async function recordLightRouteStop(root, route = {}, payload = {}, prompt = '') {
-  const now = nowIso();
-  const expires = new Date(Date.parse(now) + LIGHT_ROUTE_STOP_WINDOW_MS).toISOString();
-  const file = path.join(root, '.sneakoscope', 'state', LIGHT_ROUTE_STOP_ARTIFACT);
-  await writeJsonAtomic(file, {
-    schema_version: 1,
-    route: route.id || null,
-    route_command: route.command || null,
-    mode: route.mode || null,
-    conversation_id: conversationId(payload),
-    prompt_hash: sha256(String(prompt || '')).slice(0, 16),
-    created_at: now,
-    expires_at: expires,
-    pending_stop_bypass: true,
-    stop_policy: 'dfix_ultralight_bypasses_full_route_honest_mode'
-  }).catch(() => null);
-}
-
 async function consumeLightRouteStop(root, payload = {}) {
   const file = path.join(root, '.sneakoscope', 'state', LIGHT_ROUTE_STOP_ARTIFACT);
   const record = await readJson(file, null).catch(() => null);
@@ -313,6 +293,17 @@ async function consumeLightRouteStop(root, payload = {}) {
     consumed_at: nowIso()
   }).catch(() => null);
   return true;
+}
+
+function hasDfixLightCompletion(text) {
+  const s = String(text || '');
+  const marker = /^\s*(?:\*\*)?\s*(?:\$?DFix|dfix)\s*(?:완료\s*요약|completion\s+summary)\s*[:：]/im.test(s);
+  if (!marker) return false;
+  const honest = /^\s*(?:\*\*)?\s*(?:\$?DFix|dfix)\s*(?:솔직모드|honest(?:\s+mode)?)\s*[:：]/im.test(s);
+  if (!honest) return false;
+  const verification = /(검증|확인|통과|verified|verification|checked|evidence|근거)/i.test(s);
+  const gap = /(미검증|남은|문제|gap|remaining|not verified|not run|blocker|차단|불가|없음|none)/i.test(s);
+  return verification && gap;
 }
 
 function explicitConversationId(payload = {}) {
