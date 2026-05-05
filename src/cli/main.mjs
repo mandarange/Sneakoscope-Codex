@@ -523,7 +523,7 @@ async function updateCheck(args = []) {
   if (result.update_available) console.log('Run:     npm i -g sneakoscope');
 }
 
-const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: questions -> $Answer, small design/content -> $DFix, code -> $Team. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
+const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: questions -> $Answer, small design/content -> $DFix, Computer Use UI/browser speed work -> $Computer-Use, code -> $Team. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
 
 function commands(args = []) {
   if (flag(args, '--json')) return console.log(JSON.stringify({ aliases: ['sks', 'sneakoscope'], dollar_commands: DOLLAR_COMMANDS, app_skill_aliases: DOLLAR_COMMAND_ALIASES, commands: COMMAND_CATALOG }, null, 2));
@@ -2249,6 +2249,31 @@ async function selftest() {
   const hookState = await readJson(stateFile(hookGoalTmp), {});
   if (hookState.phase !== 'GOAL_READY' || hookState.mode !== 'GOAL') throw new Error('selftest failed: $Goal hook did not set ready state');
   if (!(await exists(path.join(missionDir(hookGoalTmp, hookState.mission_id), GOAL_WORKFLOW_ARTIFACT)))) throw new Error('selftest failed: $Goal hook did not write goal workflow artifact');
+  const hookGoalDelegationTmp = tmpdir();
+  await initProject(hookGoalDelegationTmp, {});
+  const hookGoalDelegationPayload = JSON.stringify({ cwd: hookGoalDelegationTmp, prompt: '$Goal 설치 화면 문제 근본적으로 구현 수정해줘' });
+  const hookGoalDelegationResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookGoalDelegationTmp, input: hookGoalDelegationPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookGoalDelegationResult.code !== 0) throw new Error(`selftest failed: $Goal implementation delegation hook exited ${hookGoalDelegationResult.code}: ${hookGoalDelegationResult.stderr}`);
+  const hookGoalDelegationJson = JSON.parse(hookGoalDelegationResult.stdout);
+  const hookGoalDelegationContext = hookGoalDelegationJson.hookSpecificOutput?.additionalContext || '';
+  const hookGoalDelegationBridgeMatch = hookGoalDelegationContext.match(/Goal bridge mission: (M-[A-Za-z0-9-]+)/);
+  if (!hookGoalDelegationBridgeMatch || !hookGoalDelegationContext.includes('Delegated execution route: $Team')) throw new Error('selftest failed: $Goal implementation prompt did not prepare a bridge plus Team delegation');
+  if (!hookGoalDelegationContext.includes('MANDATORY ambiguity-removal gate activated') || !hookGoalDelegationContext.includes('Route: $Team')) throw new Error('selftest failed: $Goal implementation delegation did not prepare Team ambiguity gate');
+  const hookGoalDelegationState = await readJson(stateFile(hookGoalDelegationTmp), {});
+  if (hookGoalDelegationState.mode !== 'TEAM' || hookGoalDelegationState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookGoalDelegationState.implementation_allowed !== false) throw new Error('selftest failed: $Goal implementation delegation did not leave Team gate current');
+  if (!(await exists(path.join(missionDir(hookGoalDelegationTmp, hookGoalDelegationBridgeMatch[1]), GOAL_WORKFLOW_ARTIFACT)))) throw new Error('selftest failed: $Goal implementation delegation did not write bridge workflow artifact');
+  const activeGoalMissionId = hookState.mission_id;
+  const hookGoalOverlayPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '설치 화면 문제 근본적으로 구현 수정해줘' });
+  const hookGoalOverlayResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookGoalTmp, input: hookGoalOverlayPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookGoalOverlayResult.code !== 0) throw new Error(`selftest failed: active Goal overlay hook exited ${hookGoalOverlayResult.code}: ${hookGoalOverlayResult.stderr}`);
+  const hookGoalOverlayJson = JSON.parse(hookGoalOverlayResult.stdout);
+  const hookGoalOverlayContext = hookGoalOverlayJson.hookSpecificOutput?.additionalContext || '';
+  if (!hookGoalOverlayContext.includes('MANDATORY ambiguity-removal gate activated') || !hookGoalOverlayContext.includes('Route: $Team')) throw new Error('selftest failed: active Goal hijacked a plain Korean implementation prompt instead of preparing Team');
+  if (!hookGoalOverlayContext.includes(`Active Goal overlay: existing Goal mission ${activeGoalMissionId}`) || !hookGoalOverlayContext.includes('goal-workflow.json')) throw new Error('selftest failed: active Goal overlay context was not included with the new route');
+  if (hookGoalOverlayContext.indexOf('MANDATORY ambiguity-removal gate activated') > hookGoalOverlayContext.indexOf('Active Goal overlay:')) throw new Error('selftest failed: active Goal overlay appeared before the newly prepared Team gate');
+  const hookGoalOverlayState = await readJson(stateFile(hookGoalTmp), {});
+  if (hookGoalOverlayState.mission_id === activeGoalMissionId || hookGoalOverlayState.mode !== 'TEAM' || hookGoalOverlayState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookGoalOverlayState.implementation_allowed !== false) throw new Error('selftest failed: active Goal overlay did not leave a new Team ambiguity mission current');
+  if (!(await exists(path.join(missionDir(hookGoalTmp, hookGoalOverlayState.mission_id), 'required-answers.schema.json')))) throw new Error('selftest failed: active Goal overlay Team mission did not write ambiguity schema');
   const hookUpdateCurrentTmp = tmpdir();
   await initProject(hookUpdateCurrentTmp, {});
   const hookUpdateCurrentPayload = JSON.stringify({ cwd: hookUpdateCurrentTmp, prompt: '상태 확인해줘' });
@@ -2796,6 +2821,7 @@ async function selftest() {
   if (!warpTeam.launch_uri?.includes(encodeURIComponent(`sks-team-${teamId}.yaml`))) throw new Error('selftest failed: Team warp launch URI is not named for visibility');
   if (routeReasoning(routePrompt('$Research frontier idea'), '$Research frontier idea').effort !== 'xhigh') throw new Error('selftest failed: research reasoning not xhigh');
   if (routeReasoning(routePrompt('$From-Chat-IMG 채팅 이미지 작업'), '$From-Chat-IMG 채팅 이미지 작업').effort !== 'xhigh') throw new Error('selftest failed: From-Chat-IMG reasoning not xhigh');
+  if (routeReasoning(routePrompt('$Computer-Use localhost UI smoke'), '$Computer-Use localhost UI smoke').effort !== 'low') throw new Error('selftest failed: Computer Use fast lane reasoning not low');
   if (routeReasoning(routePrompt('$DB migration'), '$DB migration').effort !== 'high') throw new Error('selftest failed: logical reasoning not high');
   const lowReasoning = routeReasoning({ id: 'LowSmoke', reasoningPolicy: 'low' }, 'small metadata read');
   if (lowReasoning.effort !== 'low' || lowReasoning.profile !== 'sks-task-low') throw new Error('selftest failed: low reasoning did not route to sks-task-low');
@@ -2835,13 +2861,19 @@ async function selftest() {
   if (routePrompt('implement feature')?.id !== 'Team') throw new Error('selftest failed: implementation prompt did not default to Team');
   if (routePrompt('$SKS implement feature')?.id !== 'Team') throw new Error('selftest failed: $SKS implementation prompt did not promote to Team');
   if (routePrompt('$From-Chat-IMG 채팅 기록 이미지와 첨부 이미지로 고객사 요청 수정 작업 수행해줘')?.id !== 'Team') throw new Error('selftest failed: explicit chat capture client work did not promote to Team');
+  if (routePrompt('$Computer-Use localhost 화면 빠르게 검증해줘')?.id !== 'ComputerUse') throw new Error('selftest failed: $Computer-Use did not route to ComputerUse fast lane');
+  if (routePrompt('$CU localhost 화면 빠르게 검증해줘')?.id !== 'ComputerUse') throw new Error('selftest failed: $CU did not route to ComputerUse fast lane');
+  if (routePrompt('computer use 사용하는 파이프라인은 마지막에 triwiki honest mode만 실행되게 조정해줘')?.id !== 'ComputerUse') throw new Error('selftest failed: Computer Use pipeline request was misrouted away from fast lane');
+  if (routePrompt('triwiki나 honest mode가 마지막에만 실행되게 computer use 파이프라인 조정해줘')?.id !== 'ComputerUse') throw new Error('selftest failed: Computer Use directive was hijacked by Wiki route');
   if (routePrompt('$SKS show me available workflows')?.id !== 'SKS') throw new Error('selftest failed: $SKS workflow discovery should remain SKS');
   if (routeRequiresSubagents(routePrompt('이 파이프라인은 왜 이렇게 동작해?'), '이 파이프라인은 왜 이렇게 동작해?')) throw new Error('selftest failed: Answer route requires subagents');
   if (!routeRequiresSubagents(routePrompt('implement feature'), 'implement feature')) throw new Error('selftest failed: default Team implementation route does not require subagents');
   if (!routeRequiresSubagents(routePrompt('$Team implement feature'), '$Team implement feature')) throw new Error('selftest failed: Team route does not require subagents');
+  if (routeRequiresSubagents(routePrompt('$Computer-Use localhost UI smoke'), '$Computer-Use localhost UI smoke')) throw new Error('selftest failed: Computer Use fast lane requires subagents');
   if (!routeRequiresSubagents(routePrompt('$Goal implement feature'), '$Goal implement feature')) throw new Error('selftest failed: Goal implementation route does not require subagents');
   if (routeRequiresSubagents(routePrompt('$Help commands'), '$Help commands')) throw new Error('selftest failed: Help route incorrectly requires subagents');
   if (!reflectionRequiredForRoute(routePrompt('$Team implement feature'))) throw new Error('selftest failed: Team route does not require reflection');
+  if (reflectionRequiredForRoute(routePrompt('$Computer-Use localhost UI smoke'))) throw new Error('selftest failed: Computer Use fast lane requires full-route reflection');
   if (!reflectionRequiredForRoute(routePrompt('$DB migration'))) throw new Error('selftest failed: DB route does not require reflection');
   if (reflectionRequiredForRoute(routePrompt('$DFix button label'))) throw new Error('selftest failed: DFix route incorrectly requires reflection');
   if (reflectionRequiredForRoute(routePrompt('이 파이프라인은 왜 이렇게 동작해?'))) throw new Error('selftest failed: Answer route incorrectly requires reflection');

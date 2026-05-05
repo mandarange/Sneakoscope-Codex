@@ -45,6 +45,8 @@ export const RECOMMENDED_SKILLS = [
   'design-system-builder',
   'design-ui-editor',
   'imagegen',
+  'computer-use',
+  'computer-use-fast',
   'db-safety-guard',
   REFLECTION_SKILL_NAME,
   'honest-mode'
@@ -216,16 +218,32 @@ export const ROUTES = [
     examples: ['$QA-LOOP dogfood UI and API against local dev', '$QA-LOOP deployed smoke only']
   },
   {
+    id: 'ComputerUse',
+    command: '$Computer-Use',
+    mode: 'COMPUTER_USE',
+    route: 'Computer Use fast lane',
+    description: 'Maximum-speed Codex Computer Use lane for UI/browser/visual tasks: skip Team debate and upfront TriWiki loops, run only focused Computer Use steps, then finish with evidence, TriWiki refresh/validate, and Honest Mode.',
+    requiredSkills: ['computer-use', 'honest-mode'],
+    dollarAliases: ['$CU'],
+    appSkillAliases: ['computer-use-fast', 'cu'],
+    lifecycle: ['fast_intake', 'focused_computer_use_steps', 'evidence_summary', 'final_triwiki_refresh_validate', 'honest_mode'],
+    context7Policy: 'optional',
+    reasoningPolicy: 'low',
+    stopGate: 'none',
+    cliEntrypoint: 'Codex App prompt route only: $Computer-Use <target/task>',
+    examples: ['$Computer-Use check the local UI as fast as possible', '$CU localhost screen smoke']
+  },
+  {
     id: 'Goal',
     command: '$Goal',
     mode: 'GOAL',
-    route: 'native Codex goal workflow',
-    description: 'Bridge SKS pipeline work into Codex native persisted /goal workflows for create, pause, resume, and clear.',
-    requiredSkills: ['goal', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
-    lifecycle: ['goal_workflow_artifact', 'native_goal_create_or_control', 'runtime_continuation', 'post_route_reflection', 'honest_mode'],
-    context7Policy: 'required',
-    reasoningPolicy: 'high',
-    stopGate: 'honest_mode',
+    route: 'native /goal persistence bridge',
+    description: 'Fast overlay that records a bridge artifact for Codex native persisted /goal create, pause, resume, and clear controls; implementation continues through the selected SKS execution route.',
+    requiredSkills: ['goal', 'honest-mode'],
+    lifecycle: ['goal_bridge_artifact', 'native_goal_create_or_control', 'selected_sks_route_continuation', 'honest_mode'],
+    context7Policy: 'if_external_docs',
+    reasoningPolicy: 'medium',
+    stopGate: 'none',
     cliEntrypoint: 'sks goal create|pause|resume|clear|status',
     examples: ['$Goal persist this migration workflow with native /goal continuation']
   },
@@ -371,7 +389,7 @@ export const COMMAND_CATALOG = [
   { name: 'doctor', usage: 'sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]', description: 'Check and repair SKS generated files, while blocking setup if another Codex harness is detected.' },
   { name: 'init', usage: 'sks init [--force] [--local-only] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
   { name: 'selftest', usage: 'sks selftest [--mock]', description: 'Run local smoke tests without calling a model.' },
-  { name: 'goal', usage: 'sks goal create|pause|resume|clear|status ...', description: 'Prepare and control SKS bridge artifacts for Codex native persisted /goal workflows.' },
+  { name: 'goal', usage: 'sks goal create|pause|resume|clear|status ...', description: 'Prepare and control the fast SKS bridge overlay for Codex native persisted /goal workflows.' },
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run frontier-style research missions with novelty and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
@@ -455,6 +473,7 @@ export function routePrompt(prompt) {
     return route;
   }
   if (hasFromChatImgSignal(text)) return routeById('Team');
+  if (looksLikeComputerUseFastLane(text)) return routeById('ComputerUse');
   if (looksLikeFastDesignFix(text)) return routeById('DFix');
   if (looksLikeQuestionShapedDirective(text)) return routeById('Team');
   if (looksLikeAnswerOnlyRequest(text)) return routeById('Answer');
@@ -464,10 +483,17 @@ export function routePrompt(prompt) {
   if (/\b(qa[-\s]?loop|qaloop|e2e\s+qa|qa\s+e2e)\b/i.test(text)) return routeById('QALoop');
   if (/\b(autoresearch|experiment|benchmark|SEO|GEO|ranking|optimi[sz]e|improve metric|discoverability|visibility|github stars?|npm downloads?|검색|노출|스타|다운로드)\b/i.test(text)) return routeById('AutoResearch');
   if (/\b(research|hypothesis|falsify|novelty|frontier|조사|연구)\b/i.test(text)) return routeById('Research');
-  if (/(wiki\s+(refresh|pack|validate|prune)|triwiki\s+(refresh|pack|validate)|위키\s*(갱신|리프레시|정리|검증|패킹)|트라이위키|triwiki)/i.test(text)) return routeById('Wiki');
+  if (/(wiki\s+(refresh|pack|validate|prune)|triwiki\s+(refresh|pack|validate)|위키\s*(갱신|리프레시|정리|검증|패킹)|트라이위키|triwiki)/i.test(text) && !looksLikeDirectWorkRequest(text)) return routeById('Wiki');
   if (/\b(GX|vgraph|visual context|render cartridge|wiki coordinate|rgba|trig|llm wiki)\b/i.test(text)) return routeById('GX');
   if (looksLikeTeamDefaultWork(text)) return routeById('Team');
   return routeById('SKS');
+}
+
+export function looksLikeComputerUseFastLane(prompt = '') {
+  const text = String(prompt || '');
+  const computerUseCue = /\b(computer\s*use|codex\s+computer\s+use|computer-use)\b|컴퓨터\s*유즈|컴퓨터\s*사용|컴퓨터유즈/i.test(text);
+  if (!computerUseCue) return false;
+  return /\b(ui|browser|visual|screen|screenshot|e2e|qa|dogfood|fast|lane|pipeline|localhost|web|app|page)\b|화면|브라우저|시각|스크린|캡처|검증|빠른|고속|파이프라인|작업|속도/i.test(text);
 }
 
 export function looksLikeTeamDefaultWork(prompt = '') {
@@ -515,16 +541,17 @@ export function routeRequiresSubagents(route, prompt = '') {
   if (!route) return false;
   if (route.id === 'Team') return true;
   if (route.id === 'SKS') return looksLikeTeamDefaultWork(prompt);
-  if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki') return false;
+  if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse') return false;
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
-  if (route.id === 'Goal' || route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
+  if (route.id === 'Goal') return looksLikeExecutionWork(prompt) || looksLikeTeamDefaultWork(stripDollarCommand(prompt));
+  if (route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
   if (route.id === 'DFix') return looksLikeCodeChangingWork(prompt) && !looksLikeFastDesignFix(prompt);
   return looksLikeExecutionWork(prompt);
 }
 
 export function reflectionRequiredForRoute(route) {
   const id = String(route?.id || route?.mode || route?.route || route || '').replace(/^\$/, '');
-  return /^(team|qaloop|qa-loop|goal|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
+  return /^(team|qaloop|qa-loop|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
 }
 
 export function looksLikeCodeChangingWork(prompt = '') {
@@ -539,6 +566,14 @@ export function looksLikeExecutionWork(prompt = '') {
 
 export function subagentExecutionPolicyText(route, prompt = '') {
   const required = routeRequiresSubagents(route, prompt);
+  if (route?.id === 'Goal') {
+    if (!required) return 'Subagent policy: Goal itself is a lightweight native /goal persistence overlay; subagents are not required for bridge creation/control.';
+    return [
+      'Subagent policy: Goal itself remains a lightweight native /goal persistence overlay.',
+      'Because the prompt also asks for code-changing or execution work, continue that work through the selected SKS execution route and apply that route\'s worker/reviewer policy there.',
+      noUnrequestedFallbackCodePolicyText()
+    ].join(' ');
+  }
   if (!required) {
     return 'Subagent policy: optional for this route; use subagents only when parallel exploration materially helps.';
   }

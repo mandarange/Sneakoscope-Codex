@@ -2,7 +2,7 @@
 
 ![](https://github.com/mandarange/Sneakoscope-Codex/raw/dev/docs/assets/sneakoscope-codex-logo.png)
 
-Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, warp-native CLI workspaces, Team/Goal/QA/Research routes, Context7 evidence checks, DB safety, TriWiki context tracking, Honest Mode, and release-readiness gates.
+Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, warp-native CLI workspaces, Team/QA/Research routes, a maximum-speed Computer Use lane, a fast Goal bridge for native `/goal` persistence, Context7 evidence checks, DB safety, TriWiki context tracking, Honest Mode, and release-readiness gates.
 
 ## Quick Start
 
@@ -48,7 +48,8 @@ sks selftest --mock
 | Team orchestration | Runs substantial work through ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode. |
 | From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
 | QA loop | Dogfoods UI/API behavior with safety gates, Codex Computer Use-only UI evidence, safe fixes, and rechecks. |
-| Goal | Bridges SKS pipeline state to Codex native persisted `/goal` create, pause, resume, and clear workflows. |
+| Computer Use fast lane | Uses `$Computer-Use` / `$CU` for UI/browser/visual work that needs maximum speed: skip Team debate and upfront TriWiki loops, use Codex Computer Use directly, then refresh/validate TriWiki and run Honest Mode at final closeout. |
+| Goal | Provides a fast SKS bridge overlay for Codex native persisted `/goal` create, pause, resume, and clear controls; implementation continues through the selected SKS execution route. |
 | TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, and `attention.hydrate_first`. |
 | Context7 | Requires current docs for external packages, APIs, MCPs, SDKs, and framework/runtime behavior when correctness depends on current guidance. |
 | DB safety | Treats SQL, migrations, Supabase, RLS, and destructive operations as high risk. |
@@ -201,7 +202,7 @@ Agent sessions communicate through the bounded Team transcript. Use `sks team me
 
 When the Team route reaches `session_cleanup`, SKS marks the Warp launch record complete and asks `watch --follow` / `lane --follow` panes to show a cleanup summary and stop. You can also run `sks team cleanup-warp <mission-id|latest>` manually, or `sks team cleanup-warp latest --close` to remove the generated Launch Configuration. Warp's public URI/Launch Configuration surface does not expose a live pane-close API, so the panes remain user-controlled.
 
-### QA, Goal, Research, DB, Wiki, GX
+### QA, Computer Use, Goal, Research, DB, Wiki, GX
 
 ```sh
 sks qa-loop prepare "http://localhost:3000"
@@ -221,6 +222,10 @@ sks perf workflow --json --intent "small CLI change" --changed src/cli/main.mjs,
 sks proof-field scan --json --intent "small CLI change"
 sks code-structure scan --json
 ```
+
+`sks goal` and `$Goal` only prepare/control the native `/goal` persistence bridge. They do not replace Team, QA, DB, or other implementation routes; use the selected execution route for the actual work and verification. Context7 is only needed for Goal when external API/library documentation becomes relevant.
+
+Use `$Computer-Use` or `$CU` inside Codex App when the task specifically needs Codex Computer Use speed for UI/browser/visual work. This lane intentionally skips Team debate, QA-LOOP clarification, subagents, and upfront TriWiki refresh. It still requires Codex Computer Use as the evidence source, and it defers TriWiki refresh/validate plus Honest Mode to the final closeout.
 
 ## Codex App Usage
 
@@ -276,7 +281,8 @@ Use these inside Codex App or another agent prompt. They are prompt commands, no
 | `$Answer` | You want an answer only and no implementation should start. |
 | `$SKS` | You need setup, status, usage, or workflow help. |
 | `$QA-LOOP` | You want UI/API dogfooding, safe fixes, and rechecks. |
-| `$Goal` | You want Codex native persisted `/goal` continuation for a workflow. |
+| `$Computer-Use` / `$CU` | You want the fastest Codex Computer Use lane for UI/browser/visual inspection or small safe fixes. |
+| `$Goal` | You want a fast SKS bridge overlay for Codex native persisted `/goal` continuation. |
 | `$Research` | You need frontier-style research with hypotheses and falsification. |
 | `$AutoResearch` | You want iterative improve/test/keep-or-discard optimization. |
 | `$DB` | You need database, Supabase, migration, SQL, or MCP safety checks. |
