@@ -36,6 +36,7 @@ export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
   const fastDesign = route?.id === 'DFix';
   if (fastDesign) return dfixQuickContext(prompt, route);
   if (route?.id === 'Answer') return answerOnlyContext(prompt, route);
+  if (route?.id === 'ComputerUse') return computerUseFastContext(prompt, route);
   const lines = [
     `SKS skill-first pipeline active. Route: ${route?.command || '$SKS'} (${route?.route || 'general SKS workflow'}).`,
     reasoningInstruction(reasoning),
@@ -111,6 +112,7 @@ export async function prepareRoute(root, prompt, state = {}) {
   if (!route) return { route: null, additionalContext: promptPipelineContext(prompt, null) };
   if (route.id === 'DFix') return prepareDfixQuickRoute(route, task);
   if (route.id === 'Answer') return prepareAnswerOnlyRoute(route, task);
+  if (route.id === 'ComputerUse') return prepareComputerUseFastRoute(route, task);
   if (route.id === 'Wiki') return prepareWikiQuickRoute(route, task);
   if (route.id === 'Goal') return prepareGoal(root, route, task, routeNeedsContext7(route, prompt));
   const required = routeNeedsContext7(route, prompt);
@@ -141,6 +143,30 @@ async function prepareAnswerOnlyRoute(route, task) {
     route,
     additionalContext: answerOnlyContext(task, route)
   };
+}
+
+async function prepareComputerUseFastRoute(route, task) {
+  return {
+    route,
+    additionalContext: computerUseFastContext(task, route)
+  };
+}
+
+export function computerUseFastContext(prompt, route = routePrompt(prompt)) {
+  const task = stripDollarCommand(prompt) || String(prompt || '').trim();
+  return [
+    `Computer Use fast lane active. Route: ${route?.command || '$Computer-Use'} (${route?.route || 'Computer Use fast lane'}).`,
+    'Speed contract: do not enter Team, QA-LOOP clarification, repeated upfront TriWiki refresh, Context7, subagent orchestration, debate, reflection, or broad planning unless the user explicitly requests that heavier route.',
+    `Task: ${task}`,
+    'Execution order:',
+    '1. Infer the smallest UI/browser/visual target and acceptance from the prompt and current app context.',
+    '2. Use Codex Computer Use directly for the focused screen/browser action or inspection. Do not substitute Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or other browser automation for UI/browser evidence.',
+    '3. If Computer Use is unavailable, mark UI/browser evidence unverified and stop with the exact blocker instead of switching tools.',
+    '4. Apply only safe, directly requested fixes when the prompt asks for correction; otherwise report observed evidence only.',
+    '5. At the end only, run `sks wiki refresh` or `sks wiki pack`, then `sks wiki validate .sneakoscope/wiki/context-pack.json` when the repo/runtime is available.',
+    '6. Final response must include a short completion summary plus SKS Honest Mode: evidence used, tests/checks run, and any unverified UI/browser claims.',
+    CODEX_COMPUTER_USE_ONLY_POLICY
+  ].join('\n');
 }
 
 async function prepareWikiQuickRoute(route, task) {
@@ -187,8 +213,27 @@ export async function activeRouteContext(root, state) {
 async function prepareGoal(root, route, task, required) {
   const { id, dir, mission } = await createMission(root, { mode: 'goal', prompt: task });
   const workflow = await writeGoalWorkflow(dir, mission, { action: 'create', prompt: task });
-  await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, native_goal: workflow.native_goal, stop_gate: 'honest_mode' });
-  await setCurrent(root, routeState(id, route, 'GOAL_READY', required, { prompt: task, native_goal: workflow.native_goal, stop_gate: 'honest_mode', implementation_allowed: true, questions_allowed: true }));
+  await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, native_goal: workflow.native_goal, stop_gate: route.stopGate });
+  const executionRoute = routePrompt(task);
+  const shouldDelegateExecution = routeRequiresSubagents(route, task)
+    && executionRoute
+    && !['Answer', 'DFix', 'Goal', 'Help'].includes(executionRoute.id);
+  if (shouldDelegateExecution) {
+    await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'goal.delegated_execution_route', route: executionRoute.id, command: executionRoute.command });
+    const delegated = await prepareRoute(root, task, {});
+    return {
+      route,
+      additionalContext: [
+        `$Goal bridge prepared as a lightweight native /goal persistence overlay.
+Goal bridge mission: ${id}
+Goal artifact: .sneakoscope/missions/${id}/${GOAL_WORKFLOW_ARTIFACT}
+Native Codex control: ${workflow.native_goal.slash_command}
+Delegated execution route: ${executionRoute.command}. The delegated route mission is authoritative for implementation, verification, and final gates.`,
+        delegated.additionalContext
+      ].filter(Boolean).join('\n\n')
+    };
+  }
+  await setCurrent(root, routeState(id, route, 'GOAL_READY', required, { prompt: task, native_goal: workflow.native_goal, stop_gate: route.stopGate, implementation_allowed: true, questions_allowed: true }));
   return routeContext(route, id, task, required, `Use Codex native ${workflow.native_goal.slash_command} control for persisted continuation, then continue the relevant SKS route gates for any implementation work.`);
 }
 

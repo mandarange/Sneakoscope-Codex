@@ -113,6 +113,7 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
     const command = dollarCommand(prompt);
     const route = routePrompt(prompt);
     const bypassActiveRoute = route?.id === 'DFix' || route?.id === 'Answer';
+    const goalOverlay = activeGoalOverlayContext(state, route);
     if (route?.id === 'DFix') await recordLightRouteStop(root, route, payload, prompt);
     if (isClarificationAwaiting(state) && !looksLikeClarificationCancel(prompt)) {
       const activeContext = await activeRouteContext(root, state);
@@ -123,8 +124,9 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
     const teamDigest = bypassActiveRoute ? null : await teamLiveDigest(root, state);
     const activeContext = await activeRouteContext(root, state);
     const contexts = [updateContext];
-    if (activeContext && !command && !bypassActiveRoute) contexts.push(routePipelineContext(prompt), activeContext);
+    if (activeContext && !command && !bypassActiveRoute && !goalOverlay) contexts.push(routePipelineContext(prompt), activeContext);
     else contexts.push((await prepareRoute(root, prompt, state)).additionalContext);
+    if (goalOverlay) contexts.push(goalOverlay);
     if (teamDigest?.context) contexts.push(teamDigest.context);
     const additionalContext = contexts.filter(Boolean).join('\n\n');
     return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
@@ -144,6 +146,16 @@ function isClarificationAwaiting(state = {}) {
 
 function looksLikeClarificationCancel(prompt = '') {
   return /^(cancel|reset|restart|new mission|새로|취소|중단|리셋|다시 시작)\b/i.test(String(prompt || '').trim());
+}
+
+function activeGoalOverlayContext(state = {}, route = null) {
+  if (state.mode !== 'GOAL' || !state.mission_id) return '';
+  if (!route || route.id === 'Goal' || route.id === 'DFix' || route.id === 'Answer') return '';
+  return [
+    `Active Goal overlay: existing Goal mission ${state.mission_id} remains available for lightweight continuation context only.`,
+    `Do not let that active Goal hijack this new ${route.command || '$SKS'} prompt. The newly prepared route mission and gate are authoritative for this turn.`,
+    `Goal artifact: .sneakoscope/missions/${state.mission_id}/goal-workflow.json. Use Codex native /goal controls only if the user explicitly returns to $Goal.`
+  ].join('\n');
 }
 
 async function hookPreTool(root, state, payload, noQuestion) {
@@ -771,6 +783,7 @@ function visibleHookMessage(name, text = '') {
     if (body.includes('SKS answer-only pipeline active')) return 'SKS: answer-only research context injected.';
     if (body.includes('SKS wiki pipeline active')) return 'SKS: wiki refresh context injected.';
     if (body.includes('$Goal route prepared')) return 'SKS: Goal workflow bridge prepared for native Codex /goal continuation.';
+    if (body.includes('Computer Use fast lane active')) return 'SKS: Computer Use fast lane injected; defer TriWiki/Honest Mode to final closeout.';
     if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: clarification questions must be shown in chat before the route can continue.';
     if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team route, live transcript, and subagent plan injected.';
     if (body.includes('$QA-LOOP route prepared') || body.includes('QA-LOOP')) return 'SKS: QA-LOOP route and safety checklist injected.';

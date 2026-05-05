@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.6.93] - 2026-05-05
+
+### Changed
+
+- Bump the deployment package version after the Computer Use fast-lane routing update so the next npm publish ships a fresh patch version.
+
+## [0.6.92] - 2026-05-05
+
+### Added
+
+- Add `$Computer-Use` / `$CU` as a maximum-speed Codex Computer Use lane for UI/browser/visual tasks, deferring TriWiki refresh/validate and Honest Mode to final closeout while preserving the Computer Use-only evidence policy.
+
+### Fixed
+
+- Prevent Computer Use pipeline-tuning requests that mention TriWiki or Honest Mode from being misrouted into `$Wiki`.
+
+## [0.6.91] - 2026-05-05
+
+### Changed
+
+- Clarify `$Goal`/`sks goal` as a fast SKS bridge overlay for Codex native `/goal` persistence, with implementation continuing through the selected SKS execution route and Context7 only required when external docs are involved.
+
 ## [0.6.90] - 2026-05-05
 
 ### Fixed

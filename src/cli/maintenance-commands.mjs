@@ -354,7 +354,7 @@ async function goalCreate(args) {
   if (!prompt) throw new Error('Missing goal task prompt.');
   const { id, dir, mission } = await createMission(root, { mode: 'goal', prompt });
   const workflow = await writeGoalWorkflow(dir, mission, { action: 'create', prompt });
-  await setCurrent(root, { mission_id: id, mode: 'GOAL', route: 'Goal', route_command: '$Goal', phase: 'GOAL_READY', questions_allowed: true, implementation_allowed: true, native_goal: workflow.native_goal, stop_gate: 'honest_mode' });
+  await setCurrent(root, { mission_id: id, mode: 'GOAL', route: 'Goal', route_command: '$Goal', phase: 'GOAL_READY', questions_allowed: true, implementation_allowed: true, native_goal: workflow.native_goal, stop_gate: 'none' });
   console.log(`Goal mission created: ${id}`);
   console.log(`Artifact: ${path.relative(root, path.join(dir, GOAL_WORKFLOW_ARTIFACT))}`);
   console.log(`Bridge: ${path.relative(root, path.join(dir, GOAL_BRIDGE_ARTIFACT))}`);
@@ -367,7 +367,7 @@ async function goalControl(action, args) {
   if (!id) throw new Error(`Usage: sks goal ${action} <mission-id|latest>`);
   const { dir } = await loadMission(root, id);
   const workflow = await updateGoalWorkflow(dir, action);
-  await setCurrent(root, { mission_id: id, mode: 'GOAL', route: 'Goal', route_command: '$Goal', phase: `GOAL_${String(action).toUpperCase()}`, native_goal: workflow.native_goal, questions_allowed: true, implementation_allowed: action !== 'pause' && action !== 'clear' });
+  await setCurrent(root, { mission_id: id, mode: 'GOAL', route: 'Goal', route_command: '$Goal', phase: `GOAL_${String(action).toUpperCase()}`, native_goal: workflow.native_goal, questions_allowed: true, implementation_allowed: action !== 'pause' && action !== 'clear', stop_gate: 'none' });
   console.log(`Goal ${action}: ${id}`);
   console.log(`Native Codex control: ${workflow.native_goal.slash_command}`);
 }
