@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, readJson, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
+import { AWESOME_DESIGN_MD_REFERENCE, DESIGN_SYSTEM_SSOT, GETDESIGN_REFERENCE } from './routes.mjs';
 
 export const PPT_AUDIENCE_STRATEGY_ARTIFACT = 'ppt-audience-strategy.json';
 export const PPT_GATE_ARTIFACT = 'ppt-gate.json';
@@ -314,8 +315,27 @@ export function buildPptStyleTokens(contract = {}) {
     design_policy: {
       priority: 'information_first',
       visual_style: 'simple_restrained_detailed',
+      design_ssot: {
+        authority: DESIGN_SYSTEM_SSOT.authority_file,
+        builder_prompt: DESIGN_SYSTEM_SSOT.builder_prompt,
+        route_local_artifact: PPT_STYLE_TOKENS_ARTIFACT,
+        rule: 'PPT style tokens are a route-local projection of the design SSOT; source inputs are fused here and are not independent authorities.'
+      },
+      source_inputs: [
+        {
+          id: GETDESIGN_REFERENCE.id,
+          url: GETDESIGN_REFERENCE.url,
+          role: 'source_input_for_ssot'
+        },
+        {
+          id: AWESOME_DESIGN_MD_REFERENCE.id,
+          url: AWESOME_DESIGN_MD_REFERENCE.url,
+          role: 'source_input_for_ssot'
+        }
+      ],
       avoid: ['over-designed decoration', 'ornamental gradients', 'nested cards', 'low-contrast gray body text', 'excessive motion or effects'],
       detail_strategy: ['precise spacing', 'clear hierarchy', 'thin rules', 'disciplined alignment', 'subtle accent color only when it clarifies meaning'],
+      anti_generic_ai_style: 'select a concrete DESIGN.md visual system before adding decorative styling; do not default to generic cards, gradients, or vague SaaS visuals',
       image_policy: 'use images only when they improve comprehension; prefer Codex App built-in image generation via https://developers.openai.com/codex/app/features#image-generation when generated assets are needed'
     }
   };
@@ -464,6 +484,8 @@ export function buildPptRenderReport({ contract = {}, audience, sourceLedger, st
     design_policy_checks: [
       { id: 'information_first', passed: styleTokens.design_policy?.priority === 'information_first' },
       { id: 'restrained_detail', passed: styleTokens.design_policy?.visual_style === 'simple_restrained_detailed' },
+      { id: 'design_ssot_declared', passed: styleTokens.design_policy?.design_ssot?.authority === DESIGN_SYSTEM_SSOT.authority_file },
+      { id: 'curated_design_md_input_fused', passed: (styleTokens.design_policy?.source_inputs || []).some((entry) => entry.url === AWESOME_DESIGN_MD_REFERENCE.url && entry.role === 'source_input_for_ssot') },
       { id: 'no_decorative_overdesign', passed: !String(html).includes('gradient') }
     ],
     broken_links: [],

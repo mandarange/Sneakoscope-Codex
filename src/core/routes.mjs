@@ -50,10 +50,23 @@ export const GETDESIGN_REFERENCE = {
   purpose: 'Ground DESIGN.md, UI/UX design systems, and presentation-like HTML/PDF artifacts in current design references.'
 };
 
-export const RECOMMENDED_DESIGN_REFERENCES = [GETDESIGN_REFERENCE];
+export const DESIGN_SYSTEM_SSOT = {
+  id: 'design-system-ssot',
+  authority_file: 'design.md',
+  builder_prompt: 'docs/Design-Sys-Prompt.md',
+  rule: 'design.md is the single design decision authority. When it is missing, synthesize it from the builder prompt plus approved source inputs; external references must be fused into design.md or route artifacts and must not become parallel design authorities.'
+};
+
+export const AWESOME_DESIGN_MD_REFERENCE = {
+  id: 'awesome-design-md',
+  url: 'https://github.com/VoltAgent/awesome-design-md',
+  purpose: 'Curated ready-to-use DESIGN.md examples extracted from public brand and product websites; use only as source input to the design SSOT, not as a parallel authority.'
+};
+
+export const RECOMMENDED_DESIGN_REFERENCES = [GETDESIGN_REFERENCE, AWESOME_DESIGN_MD_REFERENCE];
 
 export function getdesignReferencePolicyText() {
-  return `Getdesign reference policy: when creating or improving design.md, UI/UX design systems, or presentation-like HTML/PDF artifacts, consult getdesign.md (${GETDESIGN_REFERENCE.url}) and its official docs. Prefer the official Codex skill when available (${GETDESIGN_REFERENCE.codex_skill_install}); otherwise use the generated getdesign-reference skill plus official Web/API/CLI/SDK docs. Do not claim an official getdesign MCP server is configured unless a current official MCP surface is actually available.`;
+  return `Design SSOT policy: ${DESIGN_SYSTEM_SSOT.authority_file} is the single design decision authority. If it is missing, create or update it through ${DESIGN_SYSTEM_SSOT.builder_prompt}; getdesign.md (${GETDESIGN_REFERENCE.url}), its official docs, and curated DESIGN.md examples at ${AWESOME_DESIGN_MD_REFERENCE.url} are source inputs to fuse into that SSOT or into route-local style tokens, not parallel authorities. Prefer the official Codex skill when available (${GETDESIGN_REFERENCE.codex_skill_install}); otherwise use the generated getdesign-reference skill plus official Web/API/CLI/SDK docs and curated DESIGN.md examples as inputs. Do not claim an official getdesign MCP server is configured unless a current official MCP surface is actually available.`;
 }
 
 export const RECOMMENDED_SKILLS = [
