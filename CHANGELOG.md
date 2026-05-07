@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-05-07
+
+### Fixed
+
+- Auto-run global forced SKS bootstrap from npm postinstall when the install cwd looks like a project, so first installs and upgrades refresh project hooks, skills, and readiness without requiring `sks setup --bootstrap --install-scope global --force`.
+- Keep postinstall bootstrap targeted at `INIT_CWD` and add an explicit `SKS_POSTINSTALL_NO_BOOTSTRAP=1` opt-out for users who need package install without project mutation.
+- Raise the unpacked package size gate by 1 KiB for the automatic postinstall bootstrap selftest coverage while keeping the package at 49 files.
+
 ## [0.7.1] - 2026-05-07
 
 ### Fixed
