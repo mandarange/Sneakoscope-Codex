@@ -15,7 +15,7 @@ import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge }
 import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, ROUTES, hasFromChatImgSignal, routePrompt, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, routePrompt, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested } from '../core/team-live.mjs';
 import { ARTIFACT_FILES, writeValidationReport } from '../core/artifact-schemas.mjs';
@@ -29,7 +29,7 @@ import { GOAL_BRIDGE_ARTIFACT, GOAL_WORKFLOW_ARTIFACT, updateGoalWorkflow, write
 import { scanCodeStructure, writeCodeStructureReport } from '../core/code-structure.mjs';
 import { writeMemorySweepReport } from '../core/memory-governor.mjs';
 import { cleanupWarpTeamView, launchWarpTeamView } from '../core/warp-ui.mjs';
-import { writeSkillForgeReport } from '../core/skill-forge.mjs';
+import { loadSkillDreamState, recordSkillDreamEvent, runSkillDream, writeSkillForgeReport } from '../core/skill-forge.mjs';
 import { writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
 import { checkDbOperation, checkSqlFile, classifyCommand, classifySql, loadDbSafetyPolicy, safeSupabaseMcpConfig, scanDbSafety } from '../core/db-safety.mjs';
 import { harnessGrowthReport, writeHarnessGrowthReport } from '../core/evaluation.mjs';
@@ -573,6 +573,58 @@ export async function proofFieldCommand(sub, args = []) {
   console.log(`Report: ${path.relative(root, report.report_path)}`);
 }
 
+export async function skillDreamCommand(sub, args = []) {
+  const action = sub && !String(sub).startsWith('--') ? sub : 'status';
+  const actionArgs = action === sub ? args : [sub, ...args].filter(Boolean);
+  if (!['status', 'run', 'record', 'help', '--help'].includes(action)) {
+    console.error('Usage: sks skill-dream status|run|record [--json]');
+    process.exitCode = 1;
+    return;
+  }
+  if (action === 'help' || action === '--help') {
+    console.log('Usage: sks skill-dream status|run|record [--json]');
+    console.log('Records cheap generated-skill usage counters and periodically reports keep, merge, prune, and improvement candidates. Reports never delete skills automatically.');
+    return;
+  }
+  const root = await sksRoot();
+  if (action === 'record') {
+    const skills = readFlagValue(actionArgs, '--skills', '').split(',').map((x) => x.trim()).filter(Boolean);
+    const result = await recordSkillDreamEvent(root, {
+      route: readFlagValue(actionArgs, '--route', positionalArgs(actionArgs).join(' ') || 'manual'),
+      command: readFlagValue(actionArgs, '--command', null),
+      required_skills: skills,
+      prompt_signature: readFlagValue(actionArgs, '--prompt-signature', null)
+    }, { known_skill_names: knownGeneratedSkillNames() });
+    if (flag(actionArgs, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log('SKS Skill Dream Record');
+    console.log(`Events since last run: ${result.state.counters.events_since_last_run}`);
+    console.log(`Due: ${result.due.due ? 'yes' : 'no'} (${result.due.reason_codes.join(', ')})`);
+    if (result.report) console.log(`Report: ${path.relative(root, result.report.report_path)}`);
+    return;
+  }
+  if (action === 'run') {
+    const report = await runSkillDream(root, { force: true, known_skill_names: knownGeneratedSkillNames() });
+    if (flag(actionArgs, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log('SKS Skill Dream');
+    console.log(`Inventory: ${report.inventory.total} skills (${report.inventory.generated} generated, ${report.inventory.unknown_or_user} unknown/user)`);
+    console.log(`Keep: ${report.keep.length}`);
+    console.log(`Merge candidates: ${report.merge_candidates.length}`);
+    console.log(`Prune candidates: ${report.prune_candidates.length}`);
+    console.log(`Improve candidates: ${report.improve_candidates.length}`);
+    console.log(`Apply mode: ${report.apply_mode}; no auto delete: ${report.no_auto_delete ? 'yes' : 'no'}`);
+    console.log(`Report: ${path.relative(root, report.report_path)}`);
+    return;
+  }
+  const state = await loadSkillDreamState(root);
+  if (flag(actionArgs, '--json')) return console.log(JSON.stringify(state, null, 2));
+  console.log('SKS Skill Dream Status');
+  console.log(`State: .sneakoscope/skills/dream-state.json`);
+  console.log(`Events since last run: ${state.counters.events_since_last_run}/${state.policy.min_events_between_runs}`);
+  console.log(`Cooldown: ${state.policy.min_interval_hours}h`);
+  console.log(`Last run: ${state.last_run_at || 'never'}`);
+  console.log(`Next: ${state.next_run?.due ? 'due' : (state.next_run?.reason_codes || ['not due']).join(', ')}`);
+}
+
 export async function harnessCommand(sub, args = []) {
   const action = sub || 'fixture';
   if (!['fixture', 'review'].includes(action)) {
@@ -900,6 +952,19 @@ export async function projectWikiClaims(root) {
     evidence_count: 3,
     required_weight: 1.45,
     trust_score: 0.95
+  });
+  out.push({
+    id: 'wiki-positive-recall-priming-guard',
+    text: 'TriWiki compact recall should phrase selected guidance as the positive target behavior; anti-goal or failure-pattern wording should stay hydratable by source/hash instead of being pasted into the active recall text.',
+    authority: 'code',
+    risk: 'high',
+    status: 'supported',
+    freshness: 'fresh',
+    source: 'src/core/triwiki-attention.mjs',
+    file: 'src/core/triwiki-attention.mjs',
+    evidence_count: 3,
+    required_weight: 1.42,
+    trust_score: 0.94
   });
   out.push(...(await memoryWikiClaims(root)));
   out.push(...(await userRequestSignalWikiClaims(root)));
@@ -1236,7 +1301,7 @@ export async function statsCommand(args) {
 
 function positionalArgs(args = []) {
   const out = [];
-  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines', '--intent', '--changed']);
+  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines', '--intent', '--changed', '--route', '--skills', '--prompt-signature']);
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]);
     if (valueFlags.has(arg)) {
@@ -1251,6 +1316,10 @@ function positionalArgs(args = []) {
 function readFlagValue(args, name, fallback) {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
+}
+
+function knownGeneratedSkillNames() {
+  return Array.from(new Set([...DOLLAR_SKILL_NAMES, ...RECOMMENDED_SKILLS]));
 }
 
 function cartridgeName(args, fallback = 'architecture-atlas') {

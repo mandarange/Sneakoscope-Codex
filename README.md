@@ -2,7 +2,7 @@
 
 ![](https://github.com/mandarange/Sneakoscope-Codex/raw/dev/docs/assets/sneakoscope-codex-logo.png)
 
-Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, warp-native CLI workspaces, Team/QA/Research routes, a maximum-speed Computer Use lane, a fast Goal bridge for native `/goal` persistence, Context7 evidence checks, DB safety, TriWiki context tracking, Honest Mode, and release-readiness gates.
+Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, warp-native CLI workspaces, Team/QA/Research routes, a maximum-speed Computer Use lane, a fast Goal bridge for native `/goal` persistence, Context7 evidence checks, DB safety, TriWiki context tracking, lightweight skill dreaming, Honest Mode, and release-readiness gates.
 
 ## Quick Start
 
@@ -45,7 +45,8 @@ sks selftest --mock
 | --- | --- |
 | CLI runtime | `sks warp open` and `sks --mad` explicitly launch Codex CLI with Warp; bare `sks` only prints help/readiness surfaces. |
 | Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
-| Team orchestration | Runs substantial work through ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode. |
+| Team orchestration | Runs substantial work through ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode; narrow work should use Proof Field evidence to skip unrelated pipeline work instead of expanding Team. |
+| Skill dreaming | Records cheap generated-skill usage counters in JSON and only periodically scans `.agents/skills` for keep, merge, prune, and improvement candidates. Reports are recommendation-only and never delete skills automatically. |
 | From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
 | QA loop | Dogfoods UI/API behavior with safety gates, Codex Computer Use-only UI evidence, safe fixes, and rechecks. |
 | Computer Use fast lane | Uses `$Computer-Use` / `$CU` for UI/browser/visual work that needs maximum speed: skip Team debate and upfront TriWiki loops, use Codex Computer Use directly, then refresh/validate TriWiki and run Honest Mode at final closeout. |
@@ -220,8 +221,14 @@ sks validate-artifacts latest --json
 sks perf run --json
 sks perf workflow --json --intent "small CLI change" --changed src/cli/main.mjs,src/core/routes.mjs
 sks proof-field scan --json --intent "small CLI change"
+sks skill-dream status
+sks skill-dream run --json
 sks code-structure scan --json
 ```
+
+`sks proof-field scan` is SKS's lightweight outcome rubric: it maps the goal to proof cones, records unrelated work that can be skipped with evidence, reports a simplicity score, and names escalation triggers for when the route must return to the full Team/Honest proof path. When `execution_lane.lane` is `proof_field_fast_lane`, SKS can keep the parent-owned minimal patch plus listed verification and skip Team debate, fresh executor teams, broad route rework, and unrelated checks. Database, security, visual-forensic, unknown, broad, failed, or unsupported-claim signals fail closed to the normal Team/Honest path.
+
+`sks skill-dream` keeps generated skill complexity bounded without doing a heavy evaluation on every prompt. Route use writes compact counters to `.sneakoscope/skills/dream-state.json`; after the configured count/cooldown threshold, or when you run `sks skill-dream run`, SKS scans `.agents/skills` and writes `.sneakoscope/reports/skill-dream-latest.json` with keep, merge, prune, and improvement candidates. The report is intentionally advisory: deleting or merging skills requires explicit approval.
 
 `sks goal` and `$Goal` only prepare/control the native `/goal` persistence bridge. They do not replace Team, QA, DB, or other implementation routes; use the selected execution route for the actual work and verification. Context7 is only needed for Goal when external API/library documentation becomes relevant.
 

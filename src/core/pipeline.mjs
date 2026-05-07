@@ -10,9 +10,9 @@ import { GOAL_WORKFLOW_ARTIFACT, writeGoalWorkflow } from './goal-workflow.mjs';
 import { writeCodeStructureReport } from './code-structure.mjs';
 import { writeMemorySweepReport } from './memory-governor.mjs';
 import { writeMistakeMemoryReport } from './mistake-memory.mjs';
-import { writeSkillForgeReport } from './skill-forge.mjs';
+import { recordSkillDreamEvent, skillDreamPolicyText, writeSkillForgeReport } from './skill-forge.mjs';
 import { writeResearchPlan } from './research.mjs';
-import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, hasFromChatImgSignal, hasMadSksSignal, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
+import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, hasFromChatImgSignal, hasMadSksSignal, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
 import { formatRoleCounts, initTeamLive, parseTeamSpecText } from './team-live.mjs';
 
@@ -52,6 +52,9 @@ export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
     'Stance: infer the user intent aggressively from rough wording and local context, but ask short ambiguity-removal questions before work when a missing answer can change the target, scope, safety boundary, or acceptance criteria.',
     subagentExecutionPolicyText(route, prompt),
     noUnrequestedFallbackCodePolicyText(),
+    outcomeRubricPolicyText(),
+    speedLanePolicyText(),
+    skillDreamPolicyText(),
     'Design routing: UI/UX reads design.md first; if missing, use design-system-builder from docs/Design-Sys-Prompt.md with plan-tool clarification and a default font recommendation. Existing designs use design-ui-editor plus design-artifact-expert. Image/logo/raster assets use imagegen.',
     triwikiContextTrackingText(),
     triwikiStagePolicyText(),
@@ -110,25 +113,51 @@ export async function prepareRoute(root, prompt, state = {}) {
   const task = stripDollarCommand(stripMadSksSignal(prompt)) || stripMadSksSignal(stripDollarCommand(prompt)) || String(prompt || '').trim();
   const explicit = Boolean(dollarCommand(prompt));
   if (!route) return { route: null, additionalContext: promptPipelineContext(prompt, null) };
-  if (route.id === 'DFix') return prepareDfixQuickRoute(route, task);
-  if (route.id === 'Answer') return prepareAnswerOnlyRoute(route, task);
-  if (route.id === 'ComputerUse') return prepareComputerUseFastRoute(route, task);
-  if (route.id === 'Wiki') return prepareWikiQuickRoute(route, task);
-  if (route.id === 'Goal') return prepareGoal(root, route, task, routeNeedsContext7(route, prompt));
+  const dreamContext = await routeSkillDreamContext(root, route, task);
+  if (route.id === 'DFix') return withSkillDreamContext(await prepareDfixQuickRoute(route, task), dreamContext);
+  if (route.id === 'Answer') return withSkillDreamContext(await prepareAnswerOnlyRoute(route, task), dreamContext);
+  if (route.id === 'ComputerUse') return withSkillDreamContext(await prepareComputerUseFastRoute(route, task), dreamContext);
+  if (route.id === 'Wiki') return withSkillDreamContext(await prepareWikiQuickRoute(route, task), dreamContext);
+  if (route.id === 'Goal') return withSkillDreamContext(await prepareGoal(root, route, task, routeNeedsContext7(route, prompt)), dreamContext);
   const required = routeNeedsContext7(route, prompt);
   const reasoning = routeReasoning(route, prompt);
   const subagentsRequired = routeRequiresSubagents(route, prompt);
-  if (route.id !== 'Help') return prepareClarificationGate(root, route, task, required, { madSksAuthorization });
-  if (route.id === 'Team') return prepareTeam(root, route, task, required);
-  if (route.id === 'Research') return prepareResearch(root, route, task, required);
-  if (route.id === 'AutoResearch') return prepareAutoResearch(root, route, task, required);
-  if (route.id === 'DB') return prepareDb(root, route, task, required);
-  if (route.id === 'GX') return prepareGx(root, route, task, required);
-  if (explicit || required) return prepareLightRoute(root, route, task, required);
-  return {
+  if (route.id !== 'Help') return withSkillDreamContext(await prepareClarificationGate(root, route, task, required, { madSksAuthorization }), dreamContext);
+  if (route.id === 'Team') return withSkillDreamContext(await prepareTeam(root, route, task, required), dreamContext);
+  if (route.id === 'Research') return withSkillDreamContext(await prepareResearch(root, route, task, required), dreamContext);
+  if (route.id === 'AutoResearch') return withSkillDreamContext(await prepareAutoResearch(root, route, task, required), dreamContext);
+  if (route.id === 'DB') return withSkillDreamContext(await prepareDb(root, route, task, required), dreamContext);
+  if (route.id === 'GX') return withSkillDreamContext(await prepareGx(root, route, task, required), dreamContext);
+  if (explicit || required) return withSkillDreamContext(await prepareLightRoute(root, route, task, required), dreamContext);
+  return withSkillDreamContext({
     route,
     additionalContext: `${promptPipelineContext(prompt, route)}\n\nReasoning: ${reasoning.effort} (${reasoning.reason}); temporary profile ${reasoning.profile}.\nRequired skills: ${route.requiredSkills.join(', ')}.\nSubagents required: ${subagentsRequired ? 'yes' : 'no'}.`
-  };
+  }, dreamContext);
+}
+
+async function routeSkillDreamContext(root, route, task) {
+  try {
+    const result = await recordSkillDreamEvent(root, {
+      route: route.id,
+      command: route.command,
+      required_skills: route.requiredSkills || [],
+      prompt: task
+    });
+    if (!result.report) return '';
+    return [
+      'Skill dreaming threshold reached.',
+      `Report: ${path.relative(root, result.report.report_path)}`,
+      `Mode: ${result.report.apply_mode}; no_auto_delete=${result.report.no_auto_delete}.`,
+      'Review keep/merge/prune/improve candidates before adding more generated skills.'
+    ].join('\n');
+  } catch (err) {
+    return `Skill dreaming record failed: ${err.message || err}. Do not claim .sneakoscope/skills/dream-state.json was updated.`;
+  }
+}
+
+function withSkillDreamContext(result, dreamContext) {
+  if (!dreamContext) return result;
+  return { ...result, additionalContext: `${result.additionalContext || ''}\n\n${dreamContext}`.trim() };
 }
 
 async function prepareDfixQuickRoute(route, task) {
@@ -586,9 +615,9 @@ function context7ToolName(payload) {
 
 function context7Stage(payload) {
   const hay = JSON.stringify(payload || {});
-  if (!/(context7|resolve-library-id|get-library-docs|query-docs)/i.test(hay)) return null;
-  if (/resolve-library-id/i.test(hay)) return 'resolve-library-id';
-  if (/get-library-docs|query-docs/i.test(hay)) return 'get-library-docs';
+  if (!/(context7|resolve[-_]?library[-_]?id|get[-_]?library[-_]?docs|query[-_]?docs)/i.test(hay)) return null;
+  if (/resolve[-_]?library[-_]?id/i.test(hay)) return 'resolve-library-id';
+  if (/get[-_]?library[-_]?docs|query[-_]?docs/i.test(hay)) return 'get-library-docs';
   return 'context7';
 }
 

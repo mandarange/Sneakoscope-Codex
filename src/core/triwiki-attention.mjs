@@ -156,9 +156,28 @@ function attentionRow(claim, anchor, reason = '') {
   return reason ? [claim.id, reason] : [claim.id, anchor?.rgba, anchor?.h];
 }
 
+const NEGATIVE_PRIMING_RE = /\b(do\s+not|don't|dont|never|avoid|forbid(?:den)?|must\s+not|unsupported|conflicted)\b|하지\s*마|하지\s*말|말아야|금지|안\s*(?:돼|됨|된다)|비\s*상식/i;
+
+export function negativePrimingRisk(claim = {}) {
+  return NEGATIVE_PRIMING_RE.test(String(claim.text || claim.claim || ''));
+}
+
+export function positiveRecallText(claim = {}) {
+  const text = String(claim.text || claim.claim || '').trim();
+  if (!negativePrimingRisk({ ...claim, text })) return text;
+  const route = `${claim.id || ''} ${claim.source || ''} ${claim.file || ''} ${text}`.toLowerCase();
+  if (/dfix/.test(route)) return 'Keep DFix on the ultralight route with a concise completion summary and cheap verification.';
+  if (/computer[-_\s]?use|playwright|selenium|puppeteer|browser automation|chrome mcp/.test(route)) return 'Use Codex Computer Use as the UI/browser evidence source for visual verification claims.';
+  if (/fallback|substitute|compatibility shim|mock behavior/.test(route)) return 'Implement the requested path directly and block with evidence when that path is impossible.';
+  if (/clarification|ambiguity|question|ask|질문|모호/.test(route)) return 'Infer safely from current code and TriWiki, then ask only scope-changing questions.';
+  if (/triwiki|wiki|cache|attention|hydrate|memory|메모리/.test(route)) return 'Use positive TriWiki target recall: selected cache-hit anchors first, with source hydration before risky claims.';
+  return `Follow the positive target behavior for ${claim.id || claim.source || 'this guardrail'}; hydrate source before acting on the guardrail.`;
+}
+
 function hydrateReason(claim = {}) {
   const action = trustAction(claim);
   if (action !== 'use') return `trust_action:${action}`;
+  if (negativePrimingRisk(claim)) return 'negative_priming:hydrate_source';
   if (['high', 'critical'].includes(claim.risk)) return `risk:${claim.risk}`;
   if (claim.status !== 'supported') return `status:${claim.status || 'unknown'}`;
   return '';
@@ -227,7 +246,8 @@ export function contextCapsule({ mission, role = 'worker', contractHash = null, 
     claims: claimsWithTrust,
     q4,
     q3,
-    maxAnchors: budget.maxWikiAnchors ?? (role.includes('verifier') ? 16 : 7)
+    maxAnchors: budget.maxWikiAnchors ?? (role.includes('verifier') ? 16 : 7),
+    pinAnchorIds: selected.map((claim) => claim.id)
   });
   const wiki = budget.verboseWiki ? fullWiki : compactWikiCoordinateIndex(fullWiki);
   const anchorRows = Array.isArray(wiki.a) ? wiki.a : [];
@@ -251,13 +271,15 @@ export function contextCapsule({ mission, role = 'worker', contractHash = null, 
     }),
     claims: selected.map((c) => {
       const anchor = anchorsById.get(c.id);
+      const text = positiveRecallText(c);
       const row = {
         id: c.id,
-        text: c.text,
+        text,
         source: c.source,
         rgba: anchor?.rgba,
         h: anchor?.h
       };
+      if (text !== String(c.text || '')) row.text_policy = 'positive_recall_negation_suppressed';
       if (budget.verboseClaims) {
         row.status = c.status;
         row.risk = c.risk;

@@ -86,10 +86,14 @@ export async function runWorkflowPerfBench(root, opts = {}) {
       proof_field_build_ms_p95: proofFieldMsP95,
       workflow_scan_ms_p95: workflowScanMsP95,
       decision_mode: proofField?.fast_lane_decision?.mode || null,
+      execution_lane: proofField?.execution_lane?.lane || null,
       fast_lane_eligible: Boolean(proofField?.fast_lane_decision?.eligible),
+      fast_lane_allowed: Boolean(proofField?.execution_lane?.fast_lane_allowed),
       proof_cone_count: proofField?.proof_cones?.length || 0,
       verification_count: verification.length,
       negative_work_skipped_count: estimatedSavedWork,
+      simplicity_score: Number(proofField?.simplicity_scorecard?.score || 0),
+      outcome_criteria_passed: (proofField?.simplicity_scorecard?.criteria || []).filter((item) => item.passed).length,
       proof_field_valid: proofValidation.ok
     },
     proof_field: proofField,
@@ -106,6 +110,8 @@ export function validateWorkflowPerfReport(report = {}) {
   if (report.theory !== 'Potential Proof Field') issues.push('theory');
   if (!report.metrics || !Number.isFinite(Number(report.metrics.proof_field_build_ms_p95))) issues.push('proof_field_build_ms_p95');
   if (!report.metrics?.decision_mode) issues.push('decision_mode');
+  if (!report.metrics?.execution_lane) issues.push('execution_lane');
+  if (!Number.isFinite(Number(report.metrics?.simplicity_score))) issues.push('simplicity_score');
   if (!report.proof_field || !validateProofFieldReport(report.proof_field).ok) issues.push('proof_field');
   if (!report.recommendation?.mode) issues.push('recommendation');
   return { ok: issues.length === 0, issues };
@@ -128,7 +134,7 @@ function workflowRecommendation(proofField, validation) {
   if (decision.eligible) {
     return {
       mode: 'fast_lane',
-      reason: 'selected proof cones are narrow and all unrelated work is safely cached as negative work',
+      reason: `selected proof cones are narrow, execution lane ${proofField.execution_lane?.lane || 'unknown'}, outcome score ${proofField.simplicity_scorecard?.score ?? 'n/a'}, and unrelated work is cached as negative work`,
       next: decision.verification
     };
   }

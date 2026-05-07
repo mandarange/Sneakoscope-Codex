@@ -7,7 +7,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|warp|auto-review|team|qa-loop|goal|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|warp|auto-review|team|qa-loop|goal|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field|skill-dream';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_COMPUTER_USE_ONLY_POLICY = 'Pipeline UI/browser verification and visual inspection must use Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or any other browser automation substitute; if Codex Computer Use is unavailable, mark the UI/browser evidence unverified instead of substituting another tool.';
 export const FORBIDDEN_BROWSER_AUTOMATION_RE = /\b(playwright|chrome\s+mcp|browser\s+use|selenium|puppeteer)\b/i;
@@ -132,6 +132,14 @@ export function noUnrequestedFallbackCodePolicyText() {
   return 'No unrequested fallback implementation code: every pipeline stage, executor, reviewer, auto-review profile, and MAD/MAD-SKS invocation must implement only the requested contract. Do not invent alternate code paths, substitute features, compatibility shims, mock behavior, or hidden fallbacks unless the user explicitly requested them or the sealed decision contract names them; if the requested path is impossible, block with evidence instead.';
 }
 
+export function outcomeRubricPolicyText() {
+  return 'Outcome rubric policy: before adding pipeline stages, use the existing Proof Field, route gate, reflection, and Honest Mode evidence as a compact rubric: goal fit, minimum touched surface, bounded verification, and explicit escalation triggers. Prefer deleting or skipping unrelated work with evidence over adding a background loop; only add a new mechanism when it reduces net route weight or closes a proven gate gap.';
+}
+
+export function speedLanePolicyText() {
+  return 'Proof Field speed lane policy: after the intended write scope is known, run or mentally apply `sks proof-field scan --intent "<goal>" --changed <files>`. If `execution_lane.lane` is `proof_field_fast_lane`, keep the parent-owned minimal patch, listed verification, TriWiki validate, and Honest Mode while skipping Team debate, fresh executor teams, broad route rework, and unrelated checks. If blockers include database, security, visual-forensic, unknown surface, broad change set, failed verification, or unsupported claims, fail closed to the normal Team/Honest path.';
+}
+
 export function hasFromChatImgSignal(prompt = '') {
   return /(?:^|\s)\$?from-chat-img(?:\s|:|$)/i.test(String(prompt || ''));
 }
@@ -192,7 +200,7 @@ export const ROUTES = [
     command: '$Team',
     mode: 'TEAM',
     route: 'multi-agent team orchestration',
-    description: 'Run parallel analysis scouts, refresh TriWiki, debate, compile a concrete runtime task graph with worker inboxes, form a fresh executor team, then clean up team sessions before final evidence.',
+    description: 'Run substantial work through Team only when the proof cone is broad enough: scouts, TriWiki, debate, runtime task graph, fresh executors, review, cleanup, reflection, and Honest Mode.',
     requiredSkills: ['team', 'pipeline-runner', 'context7-docs', 'prompt-pipeline', REFLECTION_SKILL_NAME, 'honest-mode'],
     dollarAliases: ['$From-Chat-IMG'],
     appSkillAliases: ['from-chat-img'],
@@ -252,7 +260,7 @@ export const ROUTES = [
     command: '$Research',
     mode: 'RESEARCH',
     route: 'research mission',
-    description: 'Frontier discovery, hypotheses, falsification, and testable predictions.',
+    description: 'Frontier discovery using a compact outcome rubric: hypotheses, falsification, smallest useful mechanism, and testable predictions.',
     requiredSkills: ['research', 'research-discovery', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
     lifecycle: ['research_plan', 'report', 'novelty_ledger', 'falsification', 'research_gate', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'required',
@@ -396,6 +404,7 @@ export const COMMAND_CATALOG = [
   { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and Warp views.' },
   { name: 'perf', usage: 'sks perf run|workflow [--json] [--iterations N] [--intent "task"] [--changed file1,file2]', description: 'Measure structured GPT-5.5/SKS performance budgets, including Proof Field workflow decisions and fast-lane evidence.' },
   { name: 'proof-field', usage: 'sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]', description: 'Analyze Potential Proof Field cones, negative-work cache, and fast-lane eligibility for a change set.' },
+  { name: 'skill-dream', usage: 'sks skill-dream status|run|record [--json]', description: 'Track generated-skill usage in lightweight JSON and periodically report keep, merge, prune, and improvement candidates without deleting skills automatically.' },
   { name: 'code-structure', usage: 'sks code-structure scan [--json]', description: 'Scan handwritten source files for 1000/2000/3000-line structure gates and split-review exceptions.' },
   { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, effort decisions, visual maps, dogfood reports, skills, mistake memory, Team dashboard state, and Honest Mode.' },
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate ...', description: 'Build, refresh, prune, and validate RGBA/trig LLM Wiki context packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
