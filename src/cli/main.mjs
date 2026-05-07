@@ -3065,6 +3065,9 @@ async function selftest() {
   if (installUxSchema.domain_hints.includes('uiux') || installUxSlotIds.includes('VISUAL_REGRESSION_REQUIRED')) throw new Error('selftest failed: CLI UX install prompt should not ask visual UI questions');
   if (installUxSlotIds.some((id) => /^(D|SUPA)/.test(id) && id !== 'DEPENDENCY_CHANGE_ALLOWED')) throw new Error('selftest failed: non-data MCP setup prompt asked guarded slots');
   if (installUxSlotIds.includes('MID_RUN_UNKNOWN_POLICY')) throw new Error('selftest failed: no-question fallback ladder should be inferred, not asked');
+  const dbQuestionGateSchema = buildQuestionSchema('DB_SCHEMA_CHANGE_ALLOWED DATABASE_TARGET_ENVIRONMENT DATABASE_WRITE_MODE SUPABASE_MCP_POLICY DB_READ_ONLY_QUERY_LIMIT 이런 질문은 사용자에게 묻지 말고 알아서 판단해줘');
+  const dbQuestionGateSlotIds = dbQuestionGateSchema.slots.map((s) => s.id);
+  if (dbQuestionGateSlotIds.length) throw new Error(`selftest failed: predictable DB safety prompt should auto-seal, got ${dbQuestionGateSlotIds.join(',')}`);
   const { id, dir, mission } = await createMission(tmp, { mode: 'goal', prompt: '로그인 세션 만료 UX 개선 supabase db' });
   const schema = buildQuestionSchema(mission.prompt);
   await writeQuestions(dir, schema);
