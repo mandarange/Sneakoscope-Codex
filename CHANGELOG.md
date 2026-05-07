@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.7.21] - 2026-05-08
+
+### Fixed
+
+- Make update-check selftest cases explicitly enable the mocked update check so inherited `SKS_DISABLE_UPDATE_CHECK=1` environments cannot skip the effective installed-version assertion.
+
 ## [0.7.20] - 2026-05-08
 
 ### Fixed

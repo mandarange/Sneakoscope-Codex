@@ -2134,11 +2134,12 @@ async function selftest() {
   if (!(await exists(path.join(missionDir(hookGoalTmp, hookGoalOverlayState.mission_id), 'required-answers.schema.json')))) throw new Error('selftest failed: active Goal overlay Team mission did not write ambiguity schema');
   const hookUpdateCurrentTmp = tmpdir();
   await initProject(hookUpdateCurrentTmp, {});
+  const hookUpdateCurrentEnv = { SKS_DISABLE_UPDATE_CHECK: '0', SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9', SKS_INSTALLED_SKS_VERSION: '9.9.9' };
   const hookUpdateCurrentPayload = JSON.stringify({ cwd: hookUpdateCurrentTmp, prompt: '상태 확인해줘' });
   const hookUpdateCurrentResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], {
     cwd: hookUpdateCurrentTmp,
     input: hookUpdateCurrentPayload,
-    env: { SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9', SKS_INSTALLED_SKS_VERSION: '9.9.9' },
+    env: hookUpdateCurrentEnv,
     timeoutMs: 15000,
     maxOutputBytes: 256 * 1024
   });
@@ -2160,7 +2161,7 @@ async function selftest() {
   const hookUpdatePendingResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], {
     cwd: hookUpdatePendingTmp,
     input: hookUpdatePendingPayload,
-    env: { SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9', SKS_INSTALLED_SKS_VERSION: '9.9.9' },
+    env: hookUpdateCurrentEnv,
     timeoutMs: 15000,
     maxOutputBytes: 256 * 1024
   });
@@ -2181,7 +2182,7 @@ async function selftest() {
   const hookUpdateSkippedResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], {
     cwd: hookUpdateSkippedTmp,
     input: hookUpdateSkippedPayload,
-    env: { SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9', SKS_INSTALLED_SKS_VERSION: '9.9.9' },
+    env: hookUpdateCurrentEnv,
     timeoutMs: 15000,
     maxOutputBytes: 256 * 1024
   });
@@ -2197,7 +2198,7 @@ async function selftest() {
   const hookUpdateOldResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], {
     cwd: hookUpdateOldTmp,
     input: hookUpdateOldPayload,
-    env: { SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9', SKS_INSTALLED_SKS_VERSION: '0.0.0' },
+    env: { ...hookUpdateCurrentEnv, SKS_INSTALLED_SKS_VERSION: '0.0.0' },
     timeoutMs: 15000,
     maxOutputBytes: 256 * 1024
   });
