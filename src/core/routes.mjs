@@ -7,8 +7,9 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|warp|auto-review|team|qa-loop|goal|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field|skill-dream';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|goal|research|db|codex-app|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field|skill-dream';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
+export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/codex/app/features#image-generation';
 export const CODEX_COMPUTER_USE_ONLY_POLICY = 'Pipeline UI/browser verification and visual inspection must use Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or any other browser automation substitute; if Codex Computer Use is unavailable, mark the UI/browser evidence unverified instead of substituting another tool.';
 export const FORBIDDEN_BROWSER_AUTOMATION_RE = /\b(playwright|chrome\s+mcp|browser\s+use|selenium|puppeteer)\b/i;
 
@@ -34,6 +35,27 @@ export const RECOMMENDED_MCP_SERVERS = [
   }
 ];
 
+export const GETDESIGN_REFERENCE = {
+  id: 'getdesign',
+  url: 'https://getdesign.md/',
+  docs_url: 'https://docs.getdesign.app/',
+  official_urls_url: 'https://docs.getdesign.app/resources/official-urls/',
+  codex_guide_url: 'https://docs.getdesign.app/guides/use-with-codex/',
+  codex_skill: 'MohtashamMurshid/getdesign',
+  codex_skill_install: 'skills add MohtashamMurshid/getdesign',
+  npm_cli: '@getdesign/cli',
+  npm_sdk: '@getdesign/sdk',
+  official_mcp_available: false,
+  surfaces: ['web', 'api', 'cli', 'sdk', 'skill'],
+  purpose: 'Ground DESIGN.md, UI/UX design systems, and presentation-like HTML/PDF artifacts in current design references.'
+};
+
+export const RECOMMENDED_DESIGN_REFERENCES = [GETDESIGN_REFERENCE];
+
+export function getdesignReferencePolicyText() {
+  return `Getdesign reference policy: when creating or improving design.md, UI/UX design systems, or presentation-like HTML/PDF artifacts, consult getdesign.md (${GETDESIGN_REFERENCE.url}) and its official docs. Prefer the official Codex skill when available (${GETDESIGN_REFERENCE.codex_skill_install}); otherwise use the generated getdesign-reference skill plus official Web/API/CLI/SDK docs. Do not claim an official getdesign MCP server is configured unless a current official MCP surface is actually available.`;
+}
+
 export const RECOMMENDED_SKILLS = [
   'reasoning-router',
   'pipeline-runner',
@@ -44,6 +66,7 @@ export const RECOMMENDED_SKILLS = [
   'design-artifact-expert',
   'design-system-builder',
   'design-ui-editor',
+  'getdesign-reference',
   'imagegen',
   'computer-use',
   'computer-use-fast',
@@ -133,7 +156,7 @@ export function noUnrequestedFallbackCodePolicyText() {
 }
 
 export function outcomeRubricPolicyText() {
-  return 'Outcome rubric policy: before adding pipeline stages, use the existing Proof Field, route gate, reflection, and Honest Mode evidence as a compact rubric: goal fit, minimum touched surface, bounded verification, and explicit escalation triggers. Prefer deleting or skipping unrelated work with evidence over adding a background loop; only add a new mechanism when it reduces net route weight or closes a proven gate gap.';
+  return 'Outcome rubric policy: before adding pipeline stages, use the existing Proof Field, route gate, reflection, and Honest Mode evidence as a compact rubric: goal fit, minimum touched surface, bounded verification, and explicit escalation triggers. Apply Hyperplan-derived adversarial lenses inside that rubric: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative. Prefer deleting or skipping unrelated work with evidence over adding a background loop; only add a new mechanism when it reduces net route weight or closes a proven gate gap.';
 }
 
 export function speedLanePolicyText() {
@@ -208,7 +231,7 @@ export const ROUTES = [
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'team-gate.json',
-    cliEntrypoint: 'sks team "task" [executor:5 reviewer:2 user:1] | sks team log|tail|watch|lane|status|event|message|cleanup-warp',
+    cliEntrypoint: 'sks team "task" [executor:5 reviewer:2 user:1] | sks team log|tail|watch|lane|status|event|message|cleanup-tmux',
     examples: ['$Team executor:5 agree on the best plan and implement it', '$From-Chat-IMG 채팅+첨부 이미지 작업 지시서']
   },
   {
@@ -224,6 +247,20 @@ export const ROUTES = [
     stopGate: 'qa-gate.json',
     cliEntrypoint: 'sks qa-loop prepare|answer|run|status',
     examples: ['$QA-LOOP dogfood UI and API against local dev', '$QA-LOOP deployed smoke only']
+  },
+  {
+    id: 'PPT',
+    command: '$PPT',
+    mode: 'PPT',
+    route: 'HTML/PDF presentation pipeline',
+    description: 'Create restrained, information-first HTML/PDF presentation artifacts after delivery context, audience profile, STP, decision context, pain-point, research, design-system, and verification questions are sealed.',
+    requiredSkills: ['ppt', 'design-artifact-expert', 'getdesign-reference', 'imagegen', 'prompt-pipeline', REFLECTION_SKILL_NAME, 'honest-mode'],
+    lifecycle: ['stp_audience_questions', 'audience_strategy_artifact', 'contract_sealed', 'source_ledger', 'storyboard_aha_moments', 'design_system', 'html_artifact', 'pdf_export', 'render_qa', 'post_route_reflection', 'honest_mode'],
+    context7Policy: 'if_external_docs',
+    reasoningPolicy: 'high',
+    stopGate: 'ppt-gate.json',
+    cliEntrypoint: 'Codex App prompt route only: $PPT <topic>',
+    examples: ['$PPT 우리 SaaS 소개자료를 HTML 기반 PDF로 만들어줘', '$PPT 투자자용 피치덱 만들어줘']
   },
   {
     id: 'ComputerUse',
@@ -376,16 +413,17 @@ export const COMMAND_CATALOG = [
   { name: 'commands', usage: 'sks commands [--json]', description: 'List every user-facing command with a short description.' },
   { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
-  { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/warp, and print ready true/false.' },
+  { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/tmux, and print ready true/false.' },
   { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
-  { name: 'deps', usage: 'sks deps check|install [warp|codex|context7|all] [--yes]', description: 'Check or guided-install Node/npm PATH, Codex CLI/App, Context7, Browser Use, Computer Use, warp, and Homebrew on macOS.' },
+  { name: 'deps', usage: 'sks deps check|install [tmux|codex|context7|all] [--yes]', description: 'Check or guided-install Node/npm PATH, Codex CLI/App, Context7, Browser Use, Computer Use, tmux, and Homebrew on macOS.' },
   { name: 'codex-app', usage: 'sks codex-app [check|open]', description: 'Check Codex App install and first-party MCP/plugin readiness, then show app setup files and examples.' },
-  { name: 'warp', usage: 'sks warp open|check|status [--workspace name]', description: 'Explicitly open the SKS warp runtime, or check/status without launching Warp.' },
-  { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot warp Codex CLI workspace with the SKS MAD full-access auto-review profile.' },
-  { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS warp with the auto-review profile.' },
+  { name: 'tmux', usage: 'sks tmux open|check|status [--workspace name]', description: 'Explicitly open the SKS tmux runtime, or check/status without launching tmux.' },
+  { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot tmux Codex CLI workspace with the SKS MAD full-access auto-review profile.' },
+  { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS tmux with the auto-review profile.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Team.' },
   { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight design/content fix mode.' },
   { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Dogfood UI/API as human proxy with safety gates, safe fixes, rechecks, Codex Computer Use-only UI evidence, report.' },
+  { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $PPT HTML/PDF artifacts from a sealed presentation decision contract.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
   { name: 'pipeline', usage: 'sks pipeline status|resume|plan|answer ...', description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
@@ -401,7 +439,7 @@ export const COMMAND_CATALOG = [
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run frontier-style research missions with novelty and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
-  { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and Warp views.' },
+  { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and tmux views.' },
   { name: 'perf', usage: 'sks perf run|workflow [--json] [--iterations N] [--intent "task"] [--changed file1,file2]', description: 'Measure structured GPT-5.5/SKS performance budgets, including Proof Field workflow decisions and fast-lane evidence.' },
   { name: 'proof-field', usage: 'sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]', description: 'Analyze Potential Proof Field cones, negative-work cache, and fast-lane eligibility for a change set.' },
   { name: 'skill-dream', usage: 'sks skill-dream status|run|record [--json]', description: 'Track generated-skill usage in lightweight JSON and periodically report keep, merge, prune, and improvement candidates without deleting skills automatically.' },
@@ -409,7 +447,7 @@ export const COMMAND_CATALOG = [
   { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, effort decisions, visual maps, dogfood reports, skills, mistake memory, Team dashboard state, and Honest Mode.' },
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate ...', description: 'Build, refresh, prune, and validate RGBA/trig LLM Wiki context packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:2 user:1]|log|tail|watch|lane|status|dashboard|event|message|cleanup-warp ...', description: 'Create and observe a scout-first Team mission with color-coded Warp lanes, transcript messages, and cleanup-aware follow panes.' },
+  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:2 user:1]|log|tail|watch|lane|status|dashboard|event|message|cleanup-tmux ...', description: 'Create and observe a scout-first Team mission with color-coded tmux lanes, transcript messages, and cleanup-aware follow panes.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
@@ -464,6 +502,16 @@ export function looksLikeFastDesignFix(prompt) {
   return designCue && changeCue && (!looksLikeAnswerOnlyRequest(text) || looksLikeDirectWorkRequest(text));
 }
 
+export function looksLikePresentationArtifactRequest(prompt = '') {
+  const text = String(prompt || '');
+  const lower = text.toLowerCase();
+  const cue = /\b(ppt|presentation|deck|slide|slides|pitch\s*deck|proposal\s*deck)\b|발표자료|발표\s*자료|소개자료|제안서|피치덱|슬라이드|pdf\s*자료/i.test(text);
+  if (!cue) return false;
+  const meta = /커맨드|command|route|routing|파이프라인|pipeline|schema|스키마|모호성|ambiguity|질문|게이트|gate/i.test(text);
+  if (meta) return false;
+  return /만들|작성|생성|제작|디자인|export|pdf|html|create|generate|build|write|make/i.test(text) || /\b(ppt|presentation|deck|slides?)\b/.test(lower);
+}
+
 export function routePrompt(prompt) {
   const command = dollarCommand(prompt);
   const text = String(prompt || '');
@@ -482,6 +530,7 @@ export function routePrompt(prompt) {
     return route;
   }
   if (hasFromChatImgSignal(text)) return routeById('Team');
+  if (looksLikePresentationArtifactRequest(text)) return routeById('PPT');
   if (looksLikeComputerUseFastLane(text)) return routeById('ComputerUse');
   if (looksLikeFastDesignFix(text)) return routeById('DFix');
   if (looksLikeQuestionShapedDirective(text)) return routeById('Team');
@@ -551,6 +600,7 @@ export function routeRequiresSubagents(route, prompt = '') {
   if (route.id === 'Team') return true;
   if (route.id === 'SKS') return looksLikeTeamDefaultWork(prompt);
   if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse') return false;
+  if (route.id === 'PPT') return false;
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
   if (route.id === 'Goal') return looksLikeExecutionWork(prompt) || looksLikeTeamDefaultWork(stripDollarCommand(prompt));
   if (route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
@@ -560,7 +610,7 @@ export function routeRequiresSubagents(route, prompt = '') {
 
 export function reflectionRequiredForRoute(route) {
   const id = String(route?.id || route?.mode || route?.route || route || '').replace(/^\$/, '');
-  return /^(team|qaloop|qa-loop|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
+  return /^(team|qaloop|qa-loop|ppt|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
 }
 
 export function looksLikeCodeChangingWork(prompt = '') {

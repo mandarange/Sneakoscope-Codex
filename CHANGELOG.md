@@ -2,6 +2,91 @@
 
 ## [Unreleased]
 
+## [0.7.16] - 2026-05-08
+
+### Changed
+
+- Bump the deployment package version after the clarification-gate hard-pause fix so the next npm publish ships a fresh patch version.
+
+## [0.7.15] - 2026-05-08
+
+### Fixed
+
+- Keep mandatory ambiguity-removal questions hard-paused until explicit user answers are sealed with `answers.json` and `sks pipeline answer`, instead of allowing repeated Stop hook blocks to fall through into the next pipeline phase.
+- Add regression coverage proving clarification gates do not write compliance hard-blockers while waiting for answers, and that `pipeline status` projects `clarification-gate` blockers before the contract is sealed.
+
+## [0.7.14] - 2026-05-08
+
+### Added
+
+- Add report-only route economy probes to Proof Field and workflow perf: contract clarity scoring, workflow complexity scoring, Team trigger matrices, and fail-closed verification stage cache keys.
+- Add gate projection to `sks pipeline status` so active route gates, subagent evidence, Context7 evidence, and reflection freshness can be inspected as a single report-only blocker projection.
+
+## [0.7.13] - 2026-05-08
+
+### Changed
+
+- Make `$PPT` artifact generation parallel-friendly by running independent strategy, render, and file-write groups with `Promise.all`.
+- Add `ppt-parallel-report.json` plus gate/selftest coverage so `$PPT` records which presentation build phases ran as parallel groups.
+
+## [0.7.12] - 2026-05-08
+
+### Changed
+
+- Replace the CLI runtime with direct tmux 3.x sessions and split panes across `sks tmux open`, `sks --mad`, dependency checks, doctor/bootstrap readiness, Team live lanes, cleanup, generated quick references, and README setup.
+- Remove the remaining current-source tmux predecessor traces from command discovery, dependency repair, package keywords, Team skill wording, and runtime documentation.
+
+## [0.7.11] - 2026-05-08
+
+### Fixed
+
+- Preserve `$PPT` editable source HTML under `source-html/artifact.html` while keeping the exported PDF as the user-facing artifact.
+- Add `$PPT` cleanup reporting and gate/selftest coverage so PPT-only temporary build files are removed after completion and stale root `artifact.html` output does not remain.
+
+## [0.7.10] - 2026-05-08
+
+### Fixed
+
+- Close the `$PPT` artifact loopback by adding `sks ppt build|status`, deterministic HTML/PDF artifact generation, storyboard/source/style/render-report files, and a passing `ppt-gate.json` only after the sealed contract has 3+ pain-point/solution/aha mappings.
+- Make `$PPT` presentation design explicitly simple, restrained, and information-first, with design detail carried by hierarchy, spacing, alignment, thin rules, source clarity, and subtle accents instead of decorative overdesign.
+- Make the generated `imagegen` skill prefer official Codex App built-in image generation via `$imagegen` / `gpt-image-2`, with API generation reserved for approved larger batches using `OPENAI_API_KEY`.
+- Split postinstall and Context7 CLI helpers out of `src/cli/main.mjs` so the main CLI entrypoint stays below the 3000-line split-review gate.
+
+## [0.7.9] - 2026-05-08
+
+### Fixed
+
+- Complete the `$PPT` presentation pipeline surface by generating the `ppt` Codex App skill, materializing `ppt-audience-strategy.json` / `ppt-gate.json` after sealed answers, and adding selftest coverage that `$PPT` ambiguity removal asks for delivery context, audience profile, STP strategy, decision context, and pain-point to solution mapping before artifact creation.
+- Raise the package file-count budget to 50 for the new generated `$PPT` skill while keeping packed and unpacked byte budgets unchanged.
+
+## [0.7.8] - 2026-05-08
+
+### Fixed
+
+- Stop treating every MCP tool name as a database tool, so Codex Computer Use MCP calls such as opening Microsoft Edge by bundle id are not blocked by the SKS DB safety gate during no-question runs.
+- Add selftest coverage proving Computer Use MCP payloads pass the DB safety hook while Supabase execute_sql remains guarded.
+
+## [0.7.7] - 2026-05-08
+
+### Changed
+
+- Infer predictable UI/UX ambiguity slots such as state behavior and visual-regression preference so SKS no longer asks users for defaults like "judge for yourself" or `yes_if_available`.
+- Add getdesign.md as the generated design-reference policy for design.md, UI/UX systems, and presentation-like HTML/PDF artifacts, with npm postinstall opportunistically wiring the official Codex skill when the `skills` CLI is available.
+
+## [0.7.6] - 2026-05-07
+
+### Fixed
+
+- Keep ambiguity-gated routes hard-paused after visible questions are shown: pre-tool and permission hooks now block implementation, tests, route materialization, and unrelated tools until explicit user answers are converted to `answers.json` and `sks pipeline answer` seals the contract.
+- Add selftest coverage proving pending Team clarification blocks normal tool execution while still allowing the `pipeline answer` command that resumes the route.
+
+## [0.7.5] - 2026-05-07
+
+### Changed
+
+- Embed Hyperplan-style adversarial planning lenses into the existing Proof Field and Team debate rubric, so SKS challenges framing, subtracts unnecessary surface, demands evidence, tests integration risk, and considers a simpler alternative without adding a new route or heavier pipeline stage.
+- Add selftest coverage that Proof Field reports and scorecards carry the adversarial lenses, and document the lightweight Hyperplan adaptation in the README.
+
 ## [0.7.4] - 2026-05-07
 
 ### Changed
@@ -83,8 +168,8 @@
 ### Fixed
 
 - Simplify `$DFix` finalization so it no longer creates a persistent light-route state record; DFix now uses an explicit completion marker plus a one-line DFix-specific Honest Mode check while remaining free of TriWiki/TriFix/reflection recording.
-- Stop bare `sks` and default `sks team` creation from opening Warp automatically; Warp launch now requires an explicit `sks warp open`, `sks --mad`, auto-review start, or `sks team --open-warp`.
-- Reuse the current Warp terminal for explicit single-session launches when SKS is already running inside Warp, preventing nested Warp windows.
+- Stop bare `sks` and default `sks team` creation from opening tmux automatically; tmux launch now requires an explicit `sks tmux open`, `sks --mad`, auto-review start, or `sks team --open-tmux`.
+- Reuse the current tmux terminal for explicit single-session launches when SKS is already running inside tmux, preventing nested tmux windows.
 
 ## [0.6.93] - 2026-05-05
 
@@ -145,20 +230,20 @@
 
 ### Changed
 
-- Bump the deployment package version after the Warp Team cleanup, message, and color-lane UX work so the next npm release has a fresh patch version.
+- Bump the deployment package version after the tmux Team cleanup, message, and color-lane UX work so the next npm release has a fresh patch version.
 
 ## [0.6.84] - 2026-05-02
 
 ### Changed
 
-- Improve Warp Team sessions with cleanup-aware `watch`/`lane` follow loops, bounded `sks team message` inter-agent communication, terminal titles, and stronger color-coded lane banners.
+- Improve tmux Team sessions with cleanup-aware `watch`/`lane` follow loops, bounded `sks team message` inter-agent communication, terminal titles, and stronger color-coded lane banners.
 
 ## [0.6.83] - 2026-05-02
 
 ### Changed
 
-- Replace the SKS CLI runtime from cmux to Warp Launch Configurations, including `sks`, `sks warp`, `sks --mad`, dependency checks, doctor/bootstrap readiness, Team live lanes, generated quick references, and README usage.
-- Remove cmux runtime support and its socket/workspace control path from the source tree.
+- Replace the SKS CLI runtime with terminal multiplexer sessions, including `sks`, `sks tmux`, `sks --mad`, dependency checks, doctor/bootstrap readiness, Team live lanes, generated quick references, and README usage.
+- Remove the previous runtime support and its socket/workspace control path from the source tree.
 
 ## [0.6.81] - 2026-05-02
 
@@ -195,10 +280,10 @@
 
 ### Changed
 
-- Make `sks team` open a tmux-style cmux orchestration workspace with a live mission overview pane plus split per-agent lanes.
+- Make `sks team` open a terminal multiplexer orchestration workspace with a live mission overview pane plus split per-agent lanes.
 - Render `sks team watch` as a readable live cockpit instead of raw transcript JSON by default, with `--raw` preserving the old tail output.
-- Color-code and rename cmux Team lanes by role, expose role status badges, and collapse agent panes back to the overview through `sks team cleanup-cmux` or the `session_cleanup` live event.
-- Repair external cmux socket launch by restarting cmux with a non-persistent `CMUX_SOCKET_MODE=allowAll` fallback when default `cmuxOnly` control rejects SKS with `Broken pipe`.
+- Color-code and rename tmux Team lanes by role, expose role status badges, and collapse agent panes back to the overview through `sks team cleanup-tmux` or the `session_cleanup` live event.
+- Repair external terminal socket launch by restarting the multiplexer with a non-persistent permissive socket mode when default control rejects SKS with `Broken pipe`.
 
 ## [0.6.76] - 2026-05-01
 
@@ -244,9 +329,9 @@
 
 ### Changed
 
-- Make cmux readiness checks validate workspace socket health, not only the cmux executable version, so `sks deps check`, `sks doctor`, `sks cmux check`, and `sks --mad` report unhealthy app/socket states before launch.
-- Make `sks team` create a named cmux Team workspace and target each split/send by returned workspace and surface refs, so visible Team lanes open as split panes instead of relying on ambient cmux environment variables.
-- Select the newly created cmux Team workspace after launch and report the actual opened lane count, so split panes are brought to the visible workspace instead of opening behind the current cmux view.
+- Make tmux readiness checks validate workspace socket health, not only the tmux executable version, so `sks deps check`, `sks doctor`, `sks tmux check`, and `sks --mad` report unhealthy app/socket states before launch.
+- Make `sks team` create a named tmux Team workspace and target each split/send by returned workspace and surface refs, so visible Team lanes open as split panes instead of relying on ambient tmux environment variables.
+- Select the newly created tmux Team workspace after launch and report the actual opened lane count, so split panes are brought to the visible workspace instead of opening behind the current tmux view.
 
 ## [0.6.72] - 2026-04-30
 
@@ -258,21 +343,21 @@
 
 ### Changed
 
-- Persist SKS-created cmux workspace refs so repeated `sks --mad --high` launches can reuse the last workspace even when cmux workspace listing is incomplete or unstable.
-- Block duplicate workspace creation when cmux workspace inspection fails, instead of silently falling through to another `new-workspace` request.
+- Persist SKS-created tmux workspace refs so repeated `sks --mad --high` launches can reuse the last workspace even when tmux workspace listing is incomplete or unstable.
+- Block duplicate workspace creation when tmux workspace inspection fails, instead of silently falling through to another `new-workspace` request.
 
 ## [0.6.70] - 2026-04-30
 
 ### Changed
 
-- Make `sks --mad` reuse its named cmux workspace and close duplicate SKS-named MAD workspaces instead of creating another workspace on every launch.
+- Make `sks --mad` reuse its named tmux workspace and close duplicate SKS-named MAD workspaces instead of creating another workspace on every launch.
 - Add pipeline, Team inbox, generated agent, auto-review, and MAD/MAD-SKS policy text that blocks unrequested fallback implementation code.
 
 ## [0.6.69] - 2026-04-30
 
 ### Changed
 
-- Add `sks team lane` per-agent monitoring for cmux Team panes, showing agent status, assigned runtime tasks, recent agent events, and a fallback global tail.
+- Add `sks team lane` per-agent monitoring for tmux Team panes, showing agent status, assigned runtime tasks, recent agent events, and a fallback global tail.
 - Promote explicit `$From-Chat-IMG` work-order analysis to xhigh temporary reasoning and generated skill metadata.
 - Allow runtime commands to work outside any project by falling back to a per-user global SKS root, with `sks root` showing the active project/global root.
 
@@ -286,21 +371,21 @@
 
 ### Changed
 
-- Merge the verified 0.6.66 MAD cmux repair line from `dev` into `main`, preserving the public README emphasis for From-Chat-IMG and TriWiki voxels.
+- Merge the verified 0.6.66 MAD tmux repair line from `dev` into `main`, preserving the public README emphasis for From-Chat-IMG and TriWiki voxels.
 
 ## [0.6.66] - 2026-04-29
 
 ### Changed
 
 - Make `sks --mad` check npm for a newer Sneakoscope release before launch and prompt y/n for updating in interactive terminals.
-- Make MAD dependency repair install missing Codex CLI with `@latest`, install or upgrade cmux through Homebrew, and re-probe real cmux app bundle binaries after cask installation.
-- Update README MAD/cmux troubleshooting docs for update prompts, `--yes`, and direct cmux app bundle discovery.
+- Make MAD dependency repair install missing Codex CLI with `@latest`, install or upgrade tmux through Homebrew, and re-probe real tmux app bundle binaries after cask installation.
+- Update README MAD/tmux troubleshooting docs for update prompts, `--yes`, and direct tmux app bundle discovery.
 
 ## [0.6.65] - 2026-04-29
 
 ### Changed
 
-- Make `sks --mad` launch the cmux MAD profile as full-access high reasoning with Codex automatic approval review enabled via `approvals_reviewer = "auto_review"`.
+- Make `sks --mad` launch the tmux MAD profile as full-access high reasoning with Codex automatic approval review enabled via `approvals_reviewer = "auto_review"`.
 - Align SKS auto-review profile generation with current OpenAI Codex docs by using `auto_review` instead of the legacy `guardian_subagent` reviewer value.
 
 ## [0.6.64] - 2026-04-29
@@ -313,21 +398,21 @@
 
 ### Changed
 
-- Make `sks --mad --high` attempt Homebrew cmux installation and re-probe before launch when cmux is missing, with a concise launch blocker if installation cannot complete.
-- Replace the first cmux banner box with a stronger SKS/cmux ASCII mark for the CLI workspace header.
+- Make `sks --mad --high` attempt Homebrew tmux installation and re-probe before launch when tmux is missing, with a concise launch blocker if installation cannot complete.
+- Replace the first tmux banner box with a stronger SKS/tmux ASCII mark for the CLI workspace header.
 
 ## [0.6.62] - 2026-04-29
 
 ### Changed
 
-- Make plain `sks --mad --high` wake the cmux app before creating the `sks-mad-high` Codex CLI workspace, so the command opens the cmux UI path directly.
+- Make plain `sks --mad --high` wake the tmux app before creating the `sks-mad-high` Codex CLI workspace, so the command opens the tmux UI path directly.
 
 ## [0.6.61] - 2026-04-29
 
 ### Changed
 
-- Replace the SKS terminal runtime with a cmux-based Codex CLI workspace flow, including cmux dependency checks, help/discovery surfaces, setup guidance, and Team cmux live lanes.
-- Add `sks --mad --high` as an explicit one-shot cmux launch that writes and uses the `sks-mad-high` full-access high-reasoning Codex profile without changing the normal default route.
+- Replace the SKS terminal runtime with a tmux-based Codex CLI workspace flow, including tmux dependency checks, help/discovery surfaces, setup guidance, and Team tmux live lanes.
+- Add `sks --mad --high` as an explicit one-shot tmux launch that writes and uses the `sks-mad-high` full-access high-reasoning Codex profile without changing the normal default route.
 
 ## [0.6.60] - 2026-04-29
 
@@ -485,5 +570,5 @@
 
 ## [0.6.37] - 2026-04-28
 
-- Add Korean `ㅅㅋㅅ` branding, cmux/setup guidance, Team live event logging, Codex CLI readiness handling, design/image skills, and Team-default execution routing.
+- Add Korean `ㅅㅋㅅ` branding, tmux/setup guidance, Team live event logging, Codex CLI readiness handling, design/image skills, and Team-default execution routing.
 - Fix Korean execution-prompt routing, Team continuation after ambiguity gates, Context7 readiness checks, changelog release checks, and Honest Mode loop-back/no-gap handling.

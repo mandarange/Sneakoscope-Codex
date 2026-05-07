@@ -66,6 +66,15 @@ function addInferred(out, notes, id, value, note) {
   notes[id] = note;
 }
 
+function looksLikePresentationArtifactPrompt(lower) {
+  const presentationCue = /^\s*\$ppt\b/.test(lower)
+    || /\b(ppt|presentation|deck|slide|slides|pitch\s*deck|proposal\s*deck)\b/.test(lower)
+    || /발표자료|발표\s*자료|소개자료|제안서|피치덱|슬라이드|pdf\s*자료/.test(lower);
+  if (!presentationCue) return false;
+  const pipelineMeta = /커맨드|command|route|routing|파이프라인|pipeline|schema|스키마|모호성|ambiguity|질문|게이트|gate/.test(lower);
+  return !pipelineMeta || /^\s*\$ppt\b/.test(lower);
+}
+
 export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   const text = `${prompt || ''}\n${explicitAnswers.GOAL_PRECISE || ''}`;
   const lower = text.toLowerCase();
@@ -78,8 +87,10 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
     .trim();
   const version = String(text || '').match(/\bv?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1] || null;
   const versionWork = /버전|version|bump|release|publish:dry|npm\s+pack/.test(lower);
-  const installWork = /bootstrap|postinstall|doctor|deps|warp|homebrew|first install|최초\s*설치|설치\s*ux|셋업|setup/.test(lower);
+  const installWork = /bootstrap|postinstall|doctor|deps|tmux|homebrew|first install|최초\s*설치|설치\s*ux|셋업|setup/.test(lower);
   const questionGateWork = /모호|ambiguity|clarification|질문|triwiki|추론|infer|predict|예측|answers?\.json|decision-contract/.test(lower);
+  const uiuxWork = /\b(ui|modal|screen|button|visual|design|layout|component|prototype|frontend)\b|화면|버튼|모달|디자인|레이아웃|컴포넌트|프론트|시각|발표자료|디자인\s*시스템/.test(lower);
+  const presentationWork = looksLikePresentationArtifactPrompt(lower);
   const dbWork = new RegExp(["\\bdb\\b", "database", "schema", "migration", "tab" + "le", "col" + "umn", "rls", "supabase", "postgres", "sql", "테이블", "마이그레이션", "스키마", "컬럼", "열", "행", "데이터베이스"].join("|")).test(lower);
   const dbSchemaWork = new RegExp(["schema", "migration", "migrate", "tab" + "le", "col" + "umn", "rls", "policy", "alt" + "er", "cre" + "ate\\s+tab" + "le", "add\\s+col" + "umn", "remove\\s+col" + "umn", "마이그레이션", "스키마", "테이블", "컬럼", "열", "정책"].join("|")).test(lower);
   const dbReadOnlyTargetWork = /(production|prod|live|운영|프로덕션).*(read|inspect|query|조회|확인)|((read|inspect|query|조회|확인).*(production|prod|live|운영|프로덕션))/.test(lower);
@@ -98,6 +109,7 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
     chat_capture: 'From-Chat-IMG로 채팅 요구사항과 첨부 원본 이미지를 매칭해 고객사 작업 지시서를 만들고 반영한다',
     priority: '강한 불만과 반복 요청을 TriWiki 우선순위 신호로 기록한다',
     questions: '예측 가능한 답은 추론하고 실제 모호한 항목만 질문한다',
+    presentation: '청중과 STP 전략에 맞는 HTML 기반 발표자료/PDF 산출물을 만든다',
     install: 'SKS 최초 설치와 bootstrap을 한 번에 준비 상태까지 연결한다'
   };
   const criteria = {
@@ -105,6 +117,7 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
     chat_capture: ['From-Chat-IMG activates chat-image intake only here', 'all visible chat requirements are listed before implementation', `${FROM_CHAT_IMG_COVERAGE_ARTIFACT} maps every customer request, screenshot region, and attachment to work-order item(s)`, `${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} is updated as each request, image match, work item, scoped QA-LOOP, and verification step is completed`, `${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} records temporary TriWiki-backed session context with retention metadata`, `${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} proves QA-LOOP ran over the exact customer-request work-order range after implementation`, 'unresolved_items is empty before Team completion', 'scoped_qa_loop_completed is true with zero unresolved QA findings', 'Codex Computer Use visual inspection strengthens matches when available; no Playwright or browser automation substitute is allowed', CODEX_COMPUTER_USE_ONLY_POLICY, 'client requests follow normal SKS gates and verification'],
     priority: ['strong feedback raises required_weight', 'request topics are counted in wiki packs', 'future inference uses priority signals'],
     questions: ['predictable answers are inferred', 'partial answers can seal contracts', 'only unresolved changing slots remain visible'],
+    presentation: ['audience profile and STP strategy are explicit before artifact creation', 'target pain points map to proposed solution moments', 'decision context and likely objections are sealed before storyboarding', 'presentation format, device, and delivery context are fixed before design work'],
     install: ['bootstrap/deps initialize readiness', 'missing runtime deps show repair actions', 'readiness output is concrete']
   };
   if (!hasAnswer(explicitAnswers.GOAL_PRECISE)) {
@@ -112,8 +125,8 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
       inferred,
       notes,
       'GOAL_PRECISE',
-      kind ? goals[kind] : (normalizedPrompt ? `사용자 요청을 현재 코드 기준으로 구현한다: ${normalizedPrompt}` : '사용자 요청을 현재 코드 기준으로 구현한다'),
-      kind || 'prompt-derived-goal'
+      presentationWork ? goals.presentation : (kind ? goals[kind] : (normalizedPrompt ? `사용자 요청을 현재 코드 기준으로 구현한다: ${normalizedPrompt}` : '사용자 요청을 현재 코드 기준으로 구현한다')),
+      presentationWork ? 'presentation' : (kind || 'prompt-derived-goal')
     );
   }
   if (!hasAnswer(explicitAnswers.ACCEPTANCE_CRITERIA)) {
@@ -121,12 +134,12 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
       inferred,
       notes,
       'ACCEPTANCE_CRITERIA',
-      kind ? criteria[kind] : [
+      presentationWork ? criteria.presentation : (kind ? criteria[kind] : [
         'requested behavior is implemented in the relevant code path',
         'relevant tests/checks pass or any unavailable check is explicitly justified',
         'final response states what was changed, verified, and left unverified'
-      ],
-      kind || 'default-implementation-criteria'
+      ]),
+      presentationWork ? 'presentation' : (kind || 'default-implementation-criteria')
     );
   }
 
@@ -147,6 +160,27 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
       'no destructive commands or live data writes',
       'no unrequested fallback implementation code'
     ], 'safety');
+  }
+  if (uiuxWork) {
+    if (!hasAnswer(explicitAnswers.UI_STATE_BEHAVIOR)) {
+      addInferred(
+        inferred,
+        notes,
+        'UI_STATE_BEHAVIOR',
+        'infer_from_task_context_and_existing_design_system; preserve existing loading/error/empty/retry behavior unless explicitly requested; add only standard states required by the touched surface',
+        'uiux-inferred-default'
+      );
+    }
+    if (!hasAnswer(explicitAnswers.VISUAL_REGRESSION_REQUIRED)) {
+      const visualRequired = /스크린샷\s*필수|시각\s*검증\s*필수|visual\s*regression\s*required|screenshot\s*required/.test(lower);
+      addInferred(
+        inferred,
+        notes,
+        'VISUAL_REGRESSION_REQUIRED',
+        visualRequired ? 'yes' : 'yes_if_available',
+        'uiux-inferred-default'
+      );
+    }
   }
   if (dbWork) {
     const schemaChangeAllowed = questionGateWork ? 'no' : (dbSchemaWork ? 'yes_if_needed' : 'no');
@@ -178,7 +212,8 @@ export function buildQuestionSchema(prompt) {
   const domainHints = [];
   if (/결제|payment|billing|invoice|checkout|order/.test(lower)) domainHints.push('payment');
   if (/로그인|auth|session|token|인증/.test(lower)) domainHints.push('auth');
-  if (/\b(ui|modal|screen|button|visual|design)\b|화면|버튼|모달|디자인/.test(lower)) domainHints.push('uiux');
+  if (/\b(ui|modal|screen|button|visual|design|layout|component|prototype|frontend)\b|화면|버튼|모달|디자인|레이아웃|컴포넌트|프론트|시각|발표자료|디자인\s*시스템/.test(lower)) domainHints.push('uiux');
+  if (looksLikePresentationArtifactPrompt(lower)) domainHints.push('presentation');
   if (/db|database|schema|migration|테이블|마이그레이션|supabase|postgres|sql/.test(lower)) domainHints.push('db');
   const slots = [
     { id: 'GOAL_PRECISE', question: '이번 작업의 최종 목표를 한 문장으로 정확히 정의해주세요.', required: true, type: 'string' },
@@ -214,6 +249,15 @@ export function buildQuestionSchema(prompt) {
     slots.push(
       { id: 'UI_STATE_BEHAVIOR', question: '로딩, 에러, 빈 상태, 재시도 등 UI 상태별 기대 동작을 지정해주세요.', required: true, type: 'string' },
       { id: 'VISUAL_REGRESSION_REQUIRED', question: '스크린샷/시각 검증이 필요한가요?', required: true, type: 'enum', options: ['no', 'yes_if_available', 'yes'] }
+    );
+  }
+  if (domainHints.includes('presentation')) {
+    slots.push(
+      { id: 'PRESENTATION_DELIVERY_CONTEXT', question: '발표자료 사용 환경을 지정해주세요: 세로형 발표자료/모바일 문서/대형 화면 발표/인쇄 PDF 중 무엇인지, 발표 시간과 언어/톤은 무엇인가요?', required: true, type: 'string' },
+      { id: 'PRESENTATION_AUDIENCE_PROFILE', question: '누구에게 발표하나요? 의사결정자/실무자/투자자/고객 등 역할, 평균 연령대, 직업/직무/산업, 주제 이해도와 관심도를 적어주세요.', required: true, type: 'string' },
+      { id: 'PRESENTATION_STP_STRATEGY', question: 'STP 전략을 적어주세요: Segmentation(청중 세그먼트), Targeting(핵심 타깃), Positioning(그들에게 각인시킬 한 문장 포지션)은 무엇인가요?', required: true, type: 'string' },
+      { id: 'PRESENTATION_PAINPOINT_SOLUTION_MAP', question: '타깃의 핵심 페인포인트와 이를 어떻게 해결해 줄 수 있는지 3개 이상 연결해 주세요. 가능하면 각 항목마다 기대되는 아하모먼트도 함께 적어주세요.', required: true, type: 'array_or_string' },
+      { id: 'PRESENTATION_DECISION_CONTEXT', question: '발표 후 청중이 승인/구매/이해/실행해야 하는 다음 행동은 무엇이고, 그 결정을 막을 반대논리나 리스크는 무엇인가요?', required: true, type: 'string' }
     );
   }
   if (domainHints.includes('db')) {

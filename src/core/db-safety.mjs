@@ -198,7 +198,7 @@ export function classifyToolPayload(payload = {}) {
   const sqlClass = classifySql(combined);
   const commandClass = classifyCommand(strings.find((s) => /\b(supabase|psql|prisma|drizzle|knex|sequelize)\b/i.test(s)) || '');
   const toolReasons = [];
-  if (/supabase|postgres|database|execute_sql|apply_migration|mcp/.test(toolName)) toolReasons.push('database_tool');
+  if (/supabase|postgres|database|execute_sql|apply_migration|sql_query|db_|_db\b|migration/.test(toolName)) toolReasons.push('database_tool');
   if (/delete_project|pause_project|restore_project|delete_branch|reset_branch|merge_branch/.test(toolName)) toolReasons.push('dangerous_supabase_management_tool');
   let level = 'none';
   for (const candidate of [sqlClass.level, commandClass.level]) {

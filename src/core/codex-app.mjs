@@ -118,7 +118,7 @@ export async function codexAppIntegrationStatus(opts = {}) {
 export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady }) {
   const lines = [];
   if (!appInstalled) {
-    lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS warp launch can still run with Codex CLI alone, but Codex Computer Use evidence will be unavailable until Codex App is ready.');
+    lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS tmux launch can still run with Codex CLI alone, but Codex Computer Use evidence will be unavailable until Codex App is ready.');
     lines.push(`Docs: ${CODEX_APP_DOCS_URL}`);
   }
   if (!codex?.bin) lines.push('Install Codex CLI too: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
