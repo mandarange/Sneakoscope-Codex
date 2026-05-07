@@ -25,7 +25,7 @@ import { defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evalu
 import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence } from '../core/pipeline.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, initTeamLive, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane } from '../core/team-live.mjs';
@@ -34,7 +34,7 @@ import { selectEffort, writeEffortDecision } from '../core/effort-orchestrator.m
 import { createWorkOrderLedger } from '../core/work-order-ledger.mjs';
 import { buildFromChatImgVisualMap } from '../core/from-chat-img-forensics.mjs';
 import { classifyDogfoodFinding, createDogfoodReport, writeDogfoodReport } from '../core/dogfood-loop.mjs';
-import { createSkillCandidate, decideSkillInjection, writeSkillCandidate, writeSkillForgeReport, writeSkillInjectionDecision } from '../core/skill-forge.mjs';
+import { createSkillCandidate, decideSkillInjection, skillDreamFixture, writeSkillCandidate, writeSkillForgeReport, writeSkillInjectionDecision } from '../core/skill-forge.mjs';
 import { classifyToolError, harnessGrowthReport } from '../core/evaluation.mjs';
 import { runWorkflowPerfBench, validateWorkflowPerfReport } from '../core/perf-bench.mjs';
 import { proofFieldFixture, validateProofFieldReport } from '../core/proof-field.mjs';
@@ -45,7 +45,7 @@ import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
 import { buildWarpLaunchConfigYaml, buildWarpLaunchPlan, buildWarpOpenArgs, isWarpShellSession, runWarpLaunchConfigSyntaxCheck, warpOpenLaunchDecision, warpReadiness, warpStatusKind, defaultWarpWorkspaceName, formatWarpBanner, launchWarpTeamView, launchWarpUi, platformWarpInstallHint, runWarpStatus, sanitizeWarpWorkspaceName, teamLaneStyle, writeWarpLaunchConfig } from '../core/warp-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
-import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
+import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
@@ -104,6 +104,7 @@ export async function main(args) {
   if (cmd === 'validate-artifacts') return validateArtifactsCommand(tail);
   if (cmd === 'perf') return perfCommand(sub, rest);
   if (cmd === 'proof-field') return proofFieldCommand(sub, rest);
+  if (cmd === 'skill-dream') return skillDreamCommand(sub, rest);
   if (cmd === 'code-structure') return codeStructureCommand(sub, rest);
   if (cmd === 'memory') return memoryCommand(sub, rest);
   if (cmd === 'gx') return gxCommand(sub, rest);
@@ -182,6 +183,7 @@ Usage:
   sks eval compare --baseline old.json --candidate new.json [--json]
   sks perf run|workflow [--json] [--intent "task"] [--changed file1,file2]
   sks proof-field scan [--json] [--intent "task"]
+  sks skill-dream status|run|record [--json]
   sks harness fixture [--json]
   sks code-structure scan [--json]
   sks wiki coords --rgba 12,34,56,255
@@ -1426,6 +1428,7 @@ function usage(args = []) {
     dollar: ['Dollar Commands', '', formatDollarCommandsCompact('  '), '', 'Terminal: sks dollar-commands [--json]'],
     wiki: ['TriWiki', '', '  sks wiki pack', '  sks wiki refresh [--prune]', '  sks wiki sweep latest --json', '  sks wiki validate .sneakoscope/wiki/context-pack.json', '  sks wiki prune --dry-run --json', '', 'Packs include attention.use_first and attention.hydrate_first for compact recall plus source hydration. Sweep records intentional forgetting and promotion candidates.'],
     harness: ['Harness Growth', '', '  sks harness fixture --json', '  sks harness review --json', '', 'Runs deterministic fixtures for deliberate forgetting, skill cards, harness experiments, tool error taxonomy, permission profiles, MultiAgentV2, and Warp cockpit views.'],
+    'skill-dream': ['Skill Dreaming', '', '  sks skill-dream status', '  sks skill-dream run --json', '  sks skill-dream record --route team --skills team,prompt-pipeline', '', 'Records cheap JSON usage counters in .sneakoscope/skills/dream-state.json and periodically writes recommendation-only keep/merge/prune/improve reports. It never deletes or merges skills automatically.'],
     'code-structure': ['Code Structure', '', '  sks code-structure scan', '  sks code-structure scan --json', '', 'Flags handwritten source files above 1000/2000/3000-line thresholds and records split-review exceptions.'],
     gx: ['GX', '', '  sks gx init architecture-atlas', '  sks gx render architecture-atlas --format all', '  sks gx validate architecture-atlas']
   };
@@ -2748,10 +2751,10 @@ async function selftest() {
   await writeJsonAtomic(path.join(fromChatCoverageDir, 'team-gate.json'), { ...passedTeamGate, from_chat_img_required: true, from_chat_img_request_coverage: true });
   const coveredFromChatStop = await evaluateStop(fromChatCoverageTmp, fromChatCoverageState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (coveredFromChatStop?.decision !== 'block' || String(coveredFromChatStop.reason || '').includes('from-chat-img') || !String(coveredFromChatStop.reason || '').includes(TEAM_SESSION_CLEANUP_ARTIFACT)) throw new Error('selftest failed: valid From-Chat-IMG artifacts did not hand off to session cleanup gate');
-  await recordContext7Evidence(routeGateTmp, gateState, { tool_name: 'resolve-library-id', library: 'react' });
+  await recordContext7Evidence(routeGateTmp, gateState, { tool_name: 'mcp__context7__resolve_library_id', library: 'react' });
   const resolveOnlyStop = await evaluateStop(routeGateTmp, gateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (resolveOnlyStop?.decision !== 'block') throw new Error('selftest failed: resolve-only Context7 evidence unblocked route');
-  await recordContext7Evidence(routeGateTmp, gateState, { tool_name: 'query-docs', library_id: '/facebook/react' });
+  await recordContext7Evidence(routeGateTmp, gateState, { tool_name: 'mcp__context7__query_docs', library_id: '/facebook/react' });
   const missingCleanupStop = await evaluateStop(routeGateTmp, gateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (missingCleanupStop?.decision !== 'block' || !String(missingCleanupStop.reason || '').includes(TEAM_SESSION_CLEANUP_ARTIFACT)) throw new Error('selftest failed: Team route did not block missing session cleanup gate');
   await writeJsonAtomic(path.join(gateDir, TEAM_SESSION_CLEANUP_ARTIFACT), passedTeamSessionCleanup);
@@ -2863,6 +2866,8 @@ async function selftest() {
   if (!validateSkillCandidate(skillCandidate).ok) throw new Error('selftest failed: active skill candidate rejected');
   const injection = decideSkillInjection({ route: 'from-chat-img', task_signature: 'reference images', skills: [skillCandidate, { ...skillCandidate, id: 'deprecated', status: 'deprecated' }] });
   if (!validateSkillInjectionDecision(injection).ok || injection.injected.length !== 1) throw new Error('selftest failed: skill injection did not respect active/top-K filtering');
+  const skillDream = await skillDreamFixture(path.join(tmp, 'skill-dream-fixture'));
+  if (!skillDream.passed) throw new Error('selftest failed: skill dreaming did not keep used skills, recommend unused generated skills, and preserve custom skills');
   const promptContext = buildPromptContext({ stable: ['stable'], policies: ['policy'], dynamic: ['dynamic'] });
   if (promptContext.blocks[0]?.cache_region !== 'stable_prefix' || promptContext.blocks.at(-1)?.cache_region !== 'dynamic_suffix') throw new Error('selftest failed: prompt context did not place dynamic context last');
   const repeatedMistake = await recordMistake(teamDir, { route: 'from-chat-img', gate: 'visual-map', reason: 'unmatched-reference' });
@@ -2961,13 +2966,14 @@ async function selftest() {
   if (!harnessReport.forgetting.fixture.passed || !harnessReport.warp.views.includes('Harness Experiments View') || !harnessReport.reliability.tool_error_taxonomy.includes('Unknown')) throw new Error('selftest failed: harness growth fixture incomplete');
   const proofField = await proofFieldFixture();
   if (!proofField.validation.ok || !validateProofFieldReport(proofField.report).ok) throw new Error('selftest failed: proof field report invalid');
-  if (!proofField.checks.route_cone_selected || !proofField.checks.cli_cone_selected || !proofField.checks.catastrophic_guard_present || !proofField.checks.negative_release_work_recorded) throw new Error('selftest failed: proof field fixture checks incomplete');
+  if (!proofField.checks.route_cone_selected || !proofField.checks.cli_cone_selected || !proofField.checks.catastrophic_guard_present || !proofField.checks.negative_release_work_recorded || !proofField.checks.outcome_rubric_present || !proofField.checks.simplicity_score_usable || !proofField.checks.execution_fast_lane_selected) throw new Error('selftest failed: proof field fixture checks incomplete');
+  if (!speedLanePolicyText().includes('proof_field_fast_lane') || !proofField.report.execution_lane?.skip_when_fast?.includes('planning_debate')) throw new Error('selftest failed: Proof Field speed lane policy missing');
   const workflowPerf = await runWorkflowPerfBench(tmp, {
     iterations: 2,
     intent: 'small CLI help surface update',
     changedFiles: ['src/cli/maintenance-commands.mjs', 'src/core/routes.mjs']
   });
-  if (!validateWorkflowPerfReport(workflowPerf).ok || workflowPerf.metrics.decision_mode !== 'fast_lane' || !workflowPerf.metrics.fast_lane_eligible) throw new Error('selftest failed: workflow perf proof field did not produce a valid fast lane report');
+  if (!validateWorkflowPerfReport(workflowPerf).ok || workflowPerf.metrics.decision_mode !== 'fast_lane' || workflowPerf.metrics.execution_lane !== 'proof_field_fast_lane' || !workflowPerf.metrics.fast_lane_eligible || !workflowPerf.metrics.fast_lane_allowed || Number(workflowPerf.metrics.simplicity_score) < 0.75 || Number(workflowPerf.metrics.outcome_criteria_passed) < 3) throw new Error('selftest failed: workflow perf proof field did not produce a valid outcome-scored fast lane report');
   if (classifyToolError({ message: 'operation timed out' }) !== 'Timeout' || classifyToolError({ message: 'unclassified weirdness' }) !== 'Unknown') throw new Error('selftest failed: tool error taxonomy classification');
   const coord = rgbaToWikiCoord({ r: 12, g: 34, b: 56, a: 255 });
   if (coord.schema !== 'sks.wiki-coordinate.v1' || coord.xyzw.length !== 4) throw new Error('selftest failed: RGBA wiki coordinate conversion');
@@ -3001,6 +3007,33 @@ async function selftest() {
   if (!wikiPack.claims?.some((claim) => claim.id === 'selftest-memory-priority')) throw new Error('selftest failed: memory required_weight claim was not selected in TriWiki pack');
   if (!wikiPack.claims?.some((claim) => claim.id === 'wiki-stack-current-docs-policy')) throw new Error('selftest failed: stack current-docs policy claim missing from TriWiki pack');
   if (!wikiPack.claims?.some((claim) => claim.id === 'wiki-stack-current-docs-vercel-duration')) throw new Error('selftest failed: Vercel duration current-docs claim missing from TriWiki pack');
+  const cacheHitPack = contextCapsule({
+    mission: { id: 'cache-hit-selftest', coord: { rgba: { r: 24, g: 24, b: 24, a: 255 } } },
+    role: 'worker',
+    claims: [
+      { id: 'cache-hit-core-1', text: 'Selected high-similarity claim must keep an anchor for attention cache hits.', authority: 'code', risk: 'low', status: 'supported', freshness: 'fresh', trust_score: 0.82, coord: { rgba: { r: 24, g: 24, b: 24, a: 255 } } },
+      { id: 'cache-hit-core-2', text: 'Second selected high-similarity claim must keep an anchor for attention cache hits.', authority: 'code', risk: 'low', status: 'supported', freshness: 'fresh', trust_score: 0.82, coord: { rgba: { r: 24, g: 24, b: 25, a: 255 } } },
+      ...Array.from({ length: 8 }, (_, i) => ({ id: `cache-hit-distractor-${i}`, text: `High-priority distractor ${i}`, authority: 'code', risk: 'critical', status: 'supported', freshness: 'fresh', trust_score: 0.99, coord: { rgba: { r: 180 + i, g: 180, b: 180, a: 255 } } }))
+    ],
+    q4: { mode: 'cache-hit-selftest' },
+    q3: ['triwiki', 'cache-hit'],
+    budget: { maxClaims: 2, maxWikiAnchors: 2, maxAttentionUse: 2 }
+  });
+  const cacheHitUseIds = new Set(cacheHitPack.attention?.use_first?.map((row) => row[0]) || []);
+  if (!cacheHitUseIds.has('cache-hit-core-1') || !cacheHitUseIds.has('cache-hit-core-2')) throw new Error('selftest failed: selected TriWiki claims were not pinned as attention cache-hit anchors');
+  const primingPack = contextCapsule({
+    mission: { id: 'positive-recall-selftest', coord: { rgba: { r: 64, g: 96, b: 128, a: 255 } } },
+    role: 'worker',
+    claims: [
+      { id: 'positive-recall-guard', text: 'Do not imagine elephant during TriWiki recall.', authority: 'code', risk: 'high', status: 'supported', freshness: 'fresh', required_weight: 1.4, trust_score: 0.95, coord: { rgba: { r: 64, g: 96, b: 128, a: 255 } } }
+    ],
+    q4: { mode: 'positive-recall-selftest' },
+    q3: ['triwiki', 'positive-recall'],
+    budget: { maxClaims: 1, maxWikiAnchors: 1, maxAttentionUse: 1, maxAttentionHydrate: 1 }
+  });
+  const primingClaim = primingPack.claims?.find((claim) => claim.id === 'positive-recall-guard');
+  if (!primingClaim || /elephant|do\s+not/i.test(primingClaim.text || '') || primingClaim.text_policy !== 'positive_recall_negation_suppressed') throw new Error('selftest failed: TriWiki compact recall did not suppress negative priming text');
+  if (!primingPack.attention?.hydrate_first?.some((row) => row[0] === 'positive-recall-guard' && String(row[1]).includes('negative_priming'))) throw new Error('selftest failed: negative priming claim was not source-hydration gated');
   const dryRunPack = await writeWikiContextPack(tmp, ['--max-anchors', '4'], { dryRun: true });
   if (wikiVoxelRowCount(dryRunPack.pack.wiki) !== 4) throw new Error('selftest failed: dry-run wiki pack did not build voxel rows');
   if (await exists(dryRunPack.file)) throw new Error('selftest failed: wiki refresh dry-run wrote context pack');

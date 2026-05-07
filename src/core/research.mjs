@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { appendJsonlBounded, nowIso, readJson, writeJsonAtomic, writeTextAtomic, exists } from './fsx.mjs';
+import { OUTCOME_RUBRIC } from './proof-field.mjs';
 
 export function createResearchPlan(prompt, opts = {}) {
   const depth = opts.depth || 'frontier';
@@ -8,24 +9,21 @@ export function createResearchPlan(prompt, opts = {}) {
     prompt,
     depth,
     created_at: nowIso(),
-    methodology: 'frontier-discovery-loop',
-    objective: 'Find non-obvious, testable insights or hypotheses, not a summary.',
+    methodology: 'frontier-discovery-outcome-loop',
+    objective: 'Find the shortest useful mechanism that can be falsified or applied, not a broad summary.',
+    outcome_rubric: OUTCOME_RUBRIC,
     rules: [
       'Do not claim novelty without a novelty ledger entry.',
       'Separate facts, inferences, hypotheses, and speculations.',
       'Actively seek disconfirming evidence before synthesis.',
-      'Prefer testable mechanisms, predictions, or experiments over vague ideas.',
-      'Keep raw notes bounded; summarize claims and evidence into structured files.',
+      'Prefer the smallest testable mechanism or implementation probe over a new long-running loop.',
       'Do not ask the user mid-run; resolve scope using the research plan and safety policy.'
     ],
     phases: [
-      { id: 'R0_FRAME', goal: 'Frame the research question, assumptions, constraints, and what would count as a discovery.' },
-      { id: 'R1_MAP', goal: 'Map the nearby concept space, known baselines, and hidden assumptions.' },
-      { id: 'R2_DIVERGE', goal: 'Generate multiple competing hypotheses across mechanisms, analogies, edge cases, and failure modes.' },
-      { id: 'R3_FALSIFY', goal: 'Attack each hypothesis with counterexamples, missing evidence, and alternative explanations.' },
-      { id: 'R4_SYNTHESIZE', goal: 'Combine surviving pieces into new candidate insights with explicit causal stories.' },
-      { id: 'R5_TEST', goal: 'Design cheap experiments, predictions, or implementation probes that could validate or refute the insight.' },
-      { id: 'R6_LEDGER', goal: 'Write novelty, confidence, evidence, falsifiers, and next-step status to the ledger.' }
+      { id: 'R0_FRAME', goal: 'Frame the target outcome, constraints, and what would make the idea useful.' },
+      { id: 'R1_HYPOTHESIZE', goal: 'Generate a small set of competing mechanisms, including the simplest baseline.' },
+      { id: 'R2_FALSIFY', goal: 'Attack each mechanism with counterexamples, missing evidence, and failure modes.' },
+      { id: 'R3_APPLY', goal: 'Keep the smallest surviving mechanism, define a cheap probe, and write the novelty ledger.' }
     ],
     required_artifacts: [
       'research-report.md',
@@ -45,6 +43,9 @@ export function researchPlanMarkdown(plan) {
   lines.push('');
   lines.push('## Rules');
   for (const rule of plan.rules) lines.push(`- ${rule}`);
+  lines.push('');
+  lines.push('## Outcome Rubric');
+  for (const item of plan.outcome_rubric || []) lines.push(`- ${item.id}: ${item.description}`);
   lines.push('');
   lines.push('## Phases');
   for (const phase of plan.phases) lines.push(`- ${phase.id}: ${phase.goal}`);

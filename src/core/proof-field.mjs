@@ -2,6 +2,7 @@ import path from 'node:path';
 import { nowIso, readText, rel, runProcess, sha256, writeJsonAtomic } from './fsx.mjs';
 
 export const PROOF_FIELD_SCHEMA_VERSION = 1;
+export const FAST_LANE_MIN_SCORE = 0.75;
 
 export const INVARIANT_LEDGER = Object.freeze([
   { id: 'db-catastrophic-guard', severity: 'critical', description: 'Database/table wipe, all-row DML, reset, and dangerous project/branch operations remain blocked.' },
@@ -10,6 +11,23 @@ export const INVARIANT_LEDGER = Object.freeze([
   { id: 'triwiki-hydratable-context', severity: 'high', description: 'TriWiki context must remain coordinate+voxel backed and hydratable by source/hash/anchor.' },
   { id: 'no-unrequested-fallback-code', severity: 'high', description: 'Do not add substitute paths, mocks, shims, or fallback behavior unless explicitly requested.' }
 ]);
+
+export const OUTCOME_RUBRIC = Object.freeze([
+  { id: 'goal_fit', description: 'The selected work directly satisfies the user goal without drifting into adjacent pipeline work.' },
+  { id: 'minimum_surface', description: 'Only touched surfaces inside the proof cone are included; unrelated routes, docs, DB, visual, or release work are skipped with evidence.' },
+  { id: 'bounded_verification', description: 'Verification is enough to prove the selected cone and no broader than the risk requires.' },
+  { id: 'escalation_defined', description: 'The path names the exact failure signals that should promote the work back to the full Team/Honest proof path.' }
+]);
+
+export const SPEED_LANE_POLICY = Object.freeze({
+  min_score: FAST_LANE_MIN_SCORE,
+  fast_lane: 'proof_field_fast_lane',
+  balanced_lane: 'proof_field_balanced_lane',
+  full_lane: 'full_team_honest_path',
+  skip_when_fast: ['parallel_analysis_scouting', 'planning_debate', 'fresh_executor_team', 'broad_route_rework'],
+  always_keep: ['listed_verification', 'honest_mode', 'triwiki_validate_before_final'],
+  fail_closed_on: ['database_surface', 'security_surface', 'visual_forensic_surface', 'unknown_surface', 'broad_change_set', 'verification_failed', 'unsupported_claim']
+});
 
 export const PROOF_CONE_DEFINITIONS = Object.freeze([
   {
@@ -64,6 +82,8 @@ export async function buildProofField(root, opts = {}) {
   const negativeWork = buildNegativeWorkCache(selectedCones, risk);
   const fastLane = fastLaneDecision({ changedFiles, selectedCones, risk, negativeWork });
   const sourceHash = await sourceDigest(root, changedFiles);
+  const simplicity = outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane });
+  const executionLane = executionLaneDecision({ fastLane, simplicity });
   return {
     schema_version: PROOF_FIELD_SCHEMA_VERSION,
     generated_at: nowIso(),
@@ -72,10 +92,14 @@ export async function buildProofField(root, opts = {}) {
     source_hash: sourceHash,
     changed_files: changedFiles,
     invariant_ledger: INVARIANT_LEDGER,
+    outcome_rubric: OUTCOME_RUBRIC,
+    speed_lane_policy: SPEED_LANE_POLICY,
+    simplicity_scorecard: simplicity,
+    execution_lane: executionLane,
     proof_cones: selectedCones,
     negative_work_cache: negativeWork,
     fast_lane_decision: fastLane,
-    next_action: nextAction(fastLane)
+    next_action: nextAction(fastLane, simplicity)
   };
 }
 
@@ -90,6 +114,12 @@ export function validateProofFieldReport(report = {}) {
   const issues = [];
   if (report.schema_version !== PROOF_FIELD_SCHEMA_VERSION) issues.push('schema_version');
   if (!Array.isArray(report.invariant_ledger) || !report.invariant_ledger.length) issues.push('invariant_ledger');
+  if (!Array.isArray(report.outcome_rubric) || report.outcome_rubric.length !== OUTCOME_RUBRIC.length) issues.push('outcome_rubric');
+  if (!Number.isFinite(Number(report.simplicity_scorecard?.score))) issues.push('simplicity_scorecard');
+  if (!Array.isArray(report.simplicity_scorecard?.criteria) || report.simplicity_scorecard.criteria.length !== OUTCOME_RUBRIC.length) issues.push('simplicity_criteria');
+  if (!report.speed_lane_policy || Number(report.speed_lane_policy.min_score) !== FAST_LANE_MIN_SCORE) issues.push('speed_lane_policy');
+  if (!report.execution_lane?.lane) issues.push('execution_lane');
+  if (report.execution_lane?.lane === SPEED_LANE_POLICY.fast_lane && report.execution_lane?.score < FAST_LANE_MIN_SCORE) issues.push('execution_lane_score');
   if (!Array.isArray(report.proof_cones)) issues.push('proof_cones');
   if (!Array.isArray(report.negative_work_cache)) issues.push('negative_work_cache');
   if (!report.fast_lane_decision?.mode) issues.push('fast_lane_decision');
@@ -109,7 +139,10 @@ export async function proofFieldFixture() {
       route_cone_selected: report.proof_cones.some((cone) => cone.id === 'route_surface'),
       cli_cone_selected: report.proof_cones.some((cone) => cone.id === 'cli_runtime'),
       catastrophic_guard_present: report.invariant_ledger.some((item) => item.id === 'db-catastrophic-guard'),
-      negative_release_work_recorded: report.negative_work_cache.some((item) => item.id === 'full_release_gate' && item.disposition === 'skip_with_evidence')
+      negative_release_work_recorded: report.negative_work_cache.some((item) => item.id === 'full_release_gate' && item.disposition === 'skip_with_evidence'),
+      outcome_rubric_present: report.outcome_rubric.length === OUTCOME_RUBRIC.length,
+      simplicity_score_usable: Number(report.simplicity_scorecard?.score) >= FAST_LANE_MIN_SCORE,
+      execution_fast_lane_selected: report.execution_lane?.lane === SPEED_LANE_POLICY.fast_lane
     }
   };
 }
@@ -201,9 +234,50 @@ function fastLaneDecision({ changedFiles, selectedCones, risk, negativeWork }) {
   };
 }
 
-function nextAction(decision) {
-  if (decision.mode === 'fast_lane') return 'apply minimal patch, run listed verification, then Honest Mode against the proof field report';
-  if (decision.mode === 'balanced') return 'narrow the change set or run parent-led implementation with listed verification and reviewer escalation if checks fail';
+function outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane }) {
+  const skipped = negativeWork.filter((item) => item.disposition === 'skip_with_evidence').length;
+  const criteria = [
+    { id: 'goal_fit', passed: Boolean(intent || changedFiles.length), evidence: intent ? 'intent provided' : 'changed files define scope' },
+    { id: 'minimum_surface', passed: changedFiles.length <= 3 && !risk.flags.unknown_surface, evidence: `${changedFiles.length} changed file(s), ${selectedCones.length} proof cone(s)` },
+    { id: 'bounded_verification', passed: fastLane.verification.length > 0 && fastLane.verification.length <= 4, evidence: `${fastLane.verification.length} focused verification command(s)` },
+    { id: 'escalation_defined', passed: Array.isArray(fastLane.escalate_on) && fastLane.escalate_on.length > 0, evidence: `${fastLane.escalate_on.length} escalation trigger(s)` }
+  ];
+  const passed = criteria.filter((item) => item.passed).length;
+  return {
+    schema_version: 1,
+    score: Number((passed / OUTCOME_RUBRIC.length).toFixed(2)),
+    criteria,
+    unrelated_work_skipped: skipped,
+    decision_mode: fastLane.mode
+  };
+}
+
+function executionLaneDecision({ fastLane, simplicity }) {
+  const score = Number(simplicity?.score || 0);
+  const fast = Boolean(fastLane?.eligible) && score >= FAST_LANE_MIN_SCORE;
+  const lane = fast
+    ? SPEED_LANE_POLICY.fast_lane
+    : (fastLane?.mode === 'full_proof' ? SPEED_LANE_POLICY.full_lane : SPEED_LANE_POLICY.balanced_lane);
+  return {
+    schema_version: 1,
+    lane,
+    score,
+    fast_lane_allowed: fast,
+    skip_when_fast: fast ? SPEED_LANE_POLICY.skip_when_fast : [],
+    keep: SPEED_LANE_POLICY.always_keep,
+    verification: fastLane?.verification || [],
+    blockers: fastLane?.blockers || [],
+    escalate_on: [...new Set([...(fastLane?.escalate_on || []), ...SPEED_LANE_POLICY.fail_closed_on])],
+    reason: fast
+      ? `Proof Field score ${score} >= ${FAST_LANE_MIN_SCORE} with no fast-lane blockers`
+      : `Fast lane not allowed: mode=${fastLane?.mode || 'unknown'}, score=${score}, blockers=${(fastLane?.blockers || []).join(', ') || 'none'}`
+  };
+}
+
+function nextAction(decision, simplicity) {
+  const score = Number.isFinite(Number(simplicity?.score)) ? ` outcome_score=${simplicity.score}` : '';
+  if (decision.mode === 'fast_lane') return `apply minimal patch, run listed verification, then Honest Mode against the proof field report;${score}`;
+  if (decision.mode === 'balanced') return `narrow the change set or run parent-led implementation with listed verification and reviewer escalation if checks fail;${score}`;
   return 'use full Team/Honest proof path; fast lane is intentionally blocked for this risk state';
 }
 

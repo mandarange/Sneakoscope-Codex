@@ -166,10 +166,13 @@ export function wikiAnchorFromClaim(claim = {}, index = 0) {
   };
 }
 
-export function buildWikiCoordinateIndex({ mission = {}, claims = [], q4 = {}, q3 = [], maxAnchors = 24 } = {}) {
+export function buildWikiCoordinateIndex({ mission = {}, claims = [], q4 = {}, q3 = [], maxAnchors = 24, pinAnchorIds = [] } = {}) {
   const missionCoord = normalizeWikiCoord(mission.coord || {}, mission.id || JSON.stringify(q3 || []));
   const claimsById = new Map((claims || []).map((claim, index) => [String(claim.id || `claim-${index + 1}`), claim]));
-  const anchors = (claims || [])
+  const limit = Math.max(0, Number(maxAnchors) || 0);
+  const pinned = new Set((pinAnchorIds || []).map((id) => String(id)).filter(Boolean));
+  const compareAnchor = (a, b) => b.pri - a.pri || b.sim - a.sim || a.id.localeCompare(b.id);
+  const candidates = (claims || [])
     .map((claim, index) => {
       const anchor = wikiAnchorFromClaim(claim, index);
       const coord = { domainAngle: anchor.c[0], layerRadius: anchor.c[1], phase: anchor.c[2], concentration: anchor.c[3] };
@@ -178,8 +181,13 @@ export function buildWikiCoordinateIndex({ mission = {}, claims = [], q4 = {}, q
       const risk = riskScore(claim.risk);
       return { ...anchor, sim: round6(wikiCoordSimilarity(missionCoord, coord)), pri: round4((required * 0.52) + (trust * 0.3) + (risk * 0.18)) };
     })
-    .sort((a, b) => b.pri - a.pri || b.sim - a.sim || a.id.localeCompare(b.id))
-    .slice(0, Math.max(0, Number(maxAnchors) || 0));
+    .sort(compareAnchor);
+  const pinnedAnchors = candidates.filter((anchor) => pinned.has(anchor.id)).sort(compareAnchor).slice(0, limit);
+  const pinnedAnchorIds = new Set(pinnedAnchors.map((anchor) => anchor.id));
+  const anchors = [
+    ...pinnedAnchors,
+    ...candidates.filter((anchor) => !pinnedAnchorIds.has(anchor.id)).slice(0, Math.max(0, limit - pinnedAnchors.length))
+  ];
   return {
     schema: WIKI_COORD_SCHEMA,
     channel_map: {
