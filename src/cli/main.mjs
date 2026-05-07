@@ -253,19 +253,16 @@ async function postinstall() {
   else if (globalSkills.status === 'partial') console.log(`Codex App global $ skills: partial in ${globalSkills.root}; missing ${globalSkills.missing_skills.join(', ')}. Run \`sks doctor --fix\`.`);
   else if (globalSkills.status === 'skipped') console.log(`Codex App global $ skills: skipped (${globalSkills.reason}).`);
   else if (globalSkills.status === 'failed') console.log(`Codex App global $ skills: auto setup failed. Run \`sks doctor --fix\`. ${globalSkills.error || ''}`.trim());
-  if (process.env.SKS_POSTINSTALL_BOOTSTRAP === '1' || await shouldOfferPostinstallBootstrap(installRoot)) {
-    const answer = (await askPostinstallQuestion('Run SKS bootstrap for this project now? [Y/n] ')).trim();
-    const runNow = process.env.SKS_POSTINSTALL_BOOTSTRAP === '1'
-      || answer === ''
-      || /^(y|yes|예|네|응)$/i.test(answer);
-    if (runNow) {
-      await bootstrap(['--from-postinstall']);
-      return;
-    }
+  const bootstrapDecision = await postinstallBootstrapDecision(installRoot);
+  if (bootstrapDecision.run) {
+    console.log(`SKS bootstrap: ${bootstrapDecision.reason}.`);
+    await runPostinstallBootstrap(installRoot);
+    return;
   }
   console.log('\nNext:');
   console.log('  sks bootstrap');
-  console.log('\nThis initializes the current project, installs SKS Codex App skills, verifies Codex App/Context7 readiness, and checks warp/runtime dependencies.');
+  console.log(`\nSKS bootstrap was not run automatically: ${bootstrapDecision.reason}.`);
+  console.log('This initializes the current project, installs SKS Codex App skills, verifies Codex App/Context7 readiness, and checks warp/runtime dependencies.');
   console.log('Dependency repair: sks deps check; sks deps install warp');
   console.log('Open runtime after readiness is green: sks\n');
 }
@@ -295,9 +292,23 @@ function shouldAskPostinstallQuestion() {
   return Boolean(input.isTTY && output.isTTY && process.env.CI !== 'true' && process.env.SKS_POSTINSTALL_NO_PROMPT !== '1');
 }
 
-async function shouldOfferPostinstallBootstrap(root) {
-  if (process.env.SKS_POSTINSTALL_NO_BOOTSTRAP === '1') return false;
-  return shouldAskPostinstallQuestion() && await isProjectSetupCandidate(path.resolve(root || process.cwd()));
+async function postinstallBootstrapDecision(root) {
+  if (process.env.SKS_POSTINSTALL_NO_BOOTSTRAP === '1') return { run: false, reason: 'SKS_POSTINSTALL_NO_BOOTSTRAP=1' };
+  if (process.env.SKS_POSTINSTALL_BOOTSTRAP === '0') return { run: false, reason: 'SKS_POSTINSTALL_BOOTSTRAP=0' };
+  const candidate = await isProjectSetupCandidate(path.resolve(root || process.cwd()));
+  if (!candidate && process.env.SKS_POSTINSTALL_BOOTSTRAP !== '1') return { run: false, reason: 'no project marker found in install cwd' };
+  if (process.env.SKS_POSTINSTALL_BOOTSTRAP === '1') return { run: true, reason: 'forced by SKS_POSTINSTALL_BOOTSTRAP=1' };
+  return { run: true, reason: 'auto-running sks setup --bootstrap --install-scope global --force' };
+}
+
+async function runPostinstallBootstrap(root) {
+  const previousCwd = process.cwd();
+  process.chdir(path.resolve(root || previousCwd));
+  try {
+    await bootstrap(['--from-postinstall', '--install-scope', 'global', '--force']);
+  } finally {
+    process.chdir(previousCwd);
+  }
 }
 
 async function askPostinstallQuestion(question) {
@@ -2097,25 +2108,29 @@ async function selftest() {
   if (postinstallConflictPrompt.code !== 0 || !String(postinstallConflictPrompt.stdout || '').includes('Goal: completely remove the conflicting Codex harnesses')) throw new Error('selftest failed: interactive postinstall prompt did not print cleanup prompt');
   const postinstallSetupTmp = tmpdir();
   await writeJsonAtomic(path.join(postinstallSetupTmp, 'package.json'), { name: 'postinstall-setup-smoke', version: '0.0.0' });
-  const postinstallSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallSetupTmp, env: { INIT_CWD: postinstallSetupTmp, HOME: path.join(postinstallSetupTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  const postinstallSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallSetupTmp, env: { INIT_CWD: postinstallSetupTmp, HOME: path.join(postinstallSetupTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
   if (postinstallSetup.code !== 0) throw new Error(`selftest failed: postinstall setup exited ${postinstallSetup.code}: ${postinstallSetup.stderr}`);
   if (await exists(path.join(postinstallSetupTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest failed: postinstall installed deprecated agent-team fallback skill');
-  if (!String(postinstallSetup.stdout || '').includes('Next:') || !String(postinstallSetup.stdout || '').includes('sks bootstrap')) throw new Error('selftest failed: postinstall did not print bootstrap next step');
-  if (await exists(path.join(postinstallSetupTmp, '.codex', 'hooks.json'))) throw new Error('selftest failed: postinstall mutated project before bootstrap approval');
+  if (!String(postinstallSetup.stdout || '').includes('SKS bootstrap: auto-running sks setup --bootstrap --install-scope global --force') || !String(postinstallSetup.stdout || '').includes('SKS Ready')) throw new Error('selftest failed: postinstall did not auto-run global forced bootstrap');
+  if (!(await exists(path.join(postinstallSetupTmp, '.codex', 'hooks.json')))) throw new Error('selftest failed: postinstall did not create project hooks during automatic bootstrap');
   if (!String(postinstallSetup.stdout || '').includes('Codex App global $ skills: installed')) throw new Error('selftest failed: postinstall did not report automatic global Codex App skills');
+  const postinstallSetupManifest = await readJson(path.join(postinstallSetupTmp, '.sneakoscope', 'manifest.json'));
+  if (postinstallSetupManifest.installation?.scope !== 'global') throw new Error('selftest failed: postinstall automatic bootstrap did not use global install scope');
+  for (const rel of ['.agents/skills/team/SKILL.md', '.codex/config.toml', '.codex/hooks.json', '.sneakoscope/harness-guard.json', '.codex/SNEAKOSCOPE.md', 'AGENTS.md', '.gitignore']) {
+    if (!(await exists(path.join(postinstallSetupTmp, rel)))) throw new Error(`selftest failed: automatic postinstall bootstrap did not create ${rel}`);
+  }
+  const postinstallSetupGitignore = await safeReadText(path.join(postinstallSetupTmp, '.gitignore'));
+  if (!postinstallSetupGitignore.includes('.sneakoscope/') || !postinstallSetupGitignore.includes('.codex/') || !postinstallSetupGitignore.includes('.agents/') || !postinstallSetupGitignore.includes('AGENTS.md')) throw new Error('selftest failed: automatic postinstall bootstrap did not ignore SKS generated files');
   for (const { command } of DOLLAR_COMMANDS) {
     const skillName = command.slice(1).toLowerCase();
     if (!(await exists(path.join(postinstallSetupTmp, 'home', '.agents', 'skills', skillName, 'SKILL.md')))) throw new Error(`selftest failed: postinstall global ${command} skill not installed`);
   }
-  const postinstallBootstrapTmp = tmpdir();
-  await writeJsonAtomic(path.join(postinstallBootstrapTmp, 'package.json'), { name: 'postinstall-bootstrap-smoke', version: '0.0.0' });
-  const postinstallBootstrap = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallBootstrapTmp, input: 'y\n', env: { INIT_CWD: postinstallBootstrapTmp, HOME: path.join(postinstallBootstrapTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1', SKS_SKIP_CLI_TOOLS: '1', SKS_POSTINSTALL_PROMPT: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
-  if (postinstallBootstrap.code !== 0 || !String(postinstallBootstrap.stdout || '').includes('SKS Ready')) throw new Error(`selftest failed: approved postinstall bootstrap did not run: ${postinstallBootstrap.stderr}`);
-  for (const rel of ['.agents/skills/team/SKILL.md', '.codex/config.toml', '.codex/hooks.json', '.sneakoscope/harness-guard.json', '.codex/SNEAKOSCOPE.md', 'AGENTS.md', '.gitignore']) {
-    if (!(await exists(path.join(postinstallBootstrapTmp, rel)))) throw new Error(`selftest failed: bootstrap did not create ${rel}`);
-  }
-  const postinstallBootstrapGitignore = await safeReadText(path.join(postinstallBootstrapTmp, '.gitignore'));
-  if (!postinstallBootstrapGitignore.includes('.sneakoscope/') || !postinstallBootstrapGitignore.includes('.codex/') || !postinstallBootstrapGitignore.includes('.agents/') || !postinstallBootstrapGitignore.includes('AGENTS.md')) throw new Error('selftest failed: bootstrap did not ignore SKS generated files');
+  const oldNoBootstrap = process.env.SKS_POSTINSTALL_NO_BOOTSTRAP;
+  process.env.SKS_POSTINSTALL_NO_BOOTSTRAP = '1';
+  const noBootstrapDecision = await postinstallBootstrapDecision(postinstallSetupTmp);
+  if (oldNoBootstrap === undefined) delete process.env.SKS_POSTINSTALL_NO_BOOTSTRAP;
+  else process.env.SKS_POSTINSTALL_NO_BOOTSTRAP = oldNoBootstrap;
+  if (noBootstrapDecision.run || noBootstrapDecision.reason !== 'SKS_POSTINSTALL_NO_BOOTSTRAP=1') throw new Error('selftest failed: postinstall bootstrap opt-out decision');
   const bootstrapJsonTmp = tmpdir();
   await writeJsonAtomic(path.join(bootstrapJsonTmp, 'package.json'), { name: 'bootstrap-json-smoke', version: '0.0.0' });
   const bootstrapJson = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'bootstrap', '--json'], { cwd: bootstrapJsonTmp, env: { HOME: path.join(bootstrapJsonTmp, 'home'), SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
