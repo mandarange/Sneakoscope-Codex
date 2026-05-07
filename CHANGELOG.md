@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.7.18] - 2026-05-08
+
+### Changed
+
+- Make `design.md` the explicit design decision SSOT while treating getdesign and `VoltAgent/awesome-design-md` as source inputs that must be fused into that SSOT or route-local `$PPT` style tokens.
+- Add regression coverage for the fused design SSOT policy in generated `$PPT`, `getdesign-reference`, `design-system-builder`, prompt-pipeline, install manifest, and `$PPT` style-token artifacts.
+
 ## [0.7.16] - 2026-05-08
 
 ### Changed
