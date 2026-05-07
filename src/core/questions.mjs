@@ -97,6 +97,8 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   const dbLocalWork = /\blocal\b|localhost|local_dev|dev\s*db|로컬|개발\s*db/.test(lower);
   const dbPreviewWork = /preview|staging|branch|preview_branch|스테이징|프리뷰|브랜치/.test(lower);
   const dbApplyMigrationWork = /(apply|run|execute|적용|실행).*(migration|migrate|마이그레이션)|((migration|migrate|마이그레이션).*(apply|run|execute|적용|실행))/.test(lower);
+  const paymentWork = /결제|payment|billing|invoice|checkout|order/.test(lower);
+  const authWork = /로그인|auth|session|token|인증/.test(lower);
   const prioritySignalWork = /화|짜증|답답|;;|!!|강력|기억|우선|자주|반복|카운팅|count|frequency|frequent|priority|weight/.test(lower);
   const cliSurfaceWork = /\b(cli|command|route|usage|help|sks)\b|명령|커맨드|사용법/.test(lower);
   const chatCaptureWork = hasFromChatImgSignal(text)
@@ -203,6 +205,46 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
     if (!hasAnswer(explicitAnswers.DB_MAX_BLAST_RADIUS)) addInferred(inferred, notes, 'DB_MAX_BLAST_RADIUS', 'no_live_dml', 'db-blast-radius-safe-default');
     if (!hasAnswer(explicitAnswers.DB_MIGRATION_APPLY_ALLOWED)) addInferred(inferred, notes, 'DB_MIGRATION_APPLY_ALLOWED', migrationApplyAllowed, 'migration-apply-safe-default');
     if (!hasAnswer(explicitAnswers.DB_READ_ONLY_QUERY_LIMIT)) addInferred(inferred, notes, 'DB_READ_ONLY_QUERY_LIMIT', '1000', 'read-only-query-limit-default');
+  }
+  if (paymentWork) {
+    if (!hasAnswer(explicitAnswers.PAYMENT_SUCCESS_INVARIANT)) {
+      addInferred(
+        inferred,
+        notes,
+        'PAYMENT_SUCCESS_INVARIANT',
+        '이미 성공 처리된 결제는 중복 승인, 중복 배송, 중복 포인트 지급, 중복 영수증 발행이 발생하면 안 됩니다. 성공 상태, 결제 금액, 주문 연결은 보존하고 후속 재시도는 멱등 처리합니다.',
+        'payment-safe-default'
+      );
+    }
+    if (!hasAnswer(explicitAnswers.PAYMENT_RETRY_POLICY)) {
+      addInferred(
+        inferred,
+        notes,
+        'PAYMENT_RETRY_POLICY',
+        '일시적 실패만 최대 3회 재시도하고 backoff는 1초, 3초, 10초로 증가시킵니다. 최종 실패 시 failed 상태로 확정하고 재시도 가능한 오류를 보여주며, 이미 성공한 결제는 재시도하지 않습니다.',
+        'payment-safe-default'
+      );
+    }
+  }
+  if (authWork) {
+    if (!hasAnswer(explicitAnswers.AUTH_SESSION_EXPIRED_BEHAVIOR)) {
+      addInferred(
+        inferred,
+        notes,
+        'AUTH_SESSION_EXPIRED_BEHAVIOR',
+        '세션/토큰 만료 시 API는 401을 반환하고 UI는 로그인 화면으로 이동하되, 가능하면 진행 중이던 작업 맥락과 return path를 보존합니다.',
+        'auth-safe-default'
+      );
+    }
+    if (!hasAnswer(explicitAnswers.AUTH_PROTOCOL_CHANGE_ALLOWED)) {
+      addInferred(
+        inferred,
+        notes,
+        'AUTH_PROTOCOL_CHANGE_ALLOWED',
+        'yes_if_needed',
+        'auth-safe-default'
+      );
+    }
   }
   return { answers: inferred, notes };
 }

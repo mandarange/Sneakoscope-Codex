@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, readJson, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
-import { AWESOME_DESIGN_MD_REFERENCE, DESIGN_SYSTEM_SSOT, GETDESIGN_REFERENCE } from './routes.mjs';
+import { AWESOME_DESIGN_MD_REFERENCE, DESIGN_SYSTEM_SSOT, GETDESIGN_REFERENCE, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST } from './routes.mjs';
 
 export const PPT_AUDIENCE_STRATEGY_ARTIFACT = 'ppt-audience-strategy.json';
 export const PPT_GATE_ARTIFACT = 'ppt-gate.json';
@@ -315,6 +315,15 @@ export function buildPptStyleTokens(contract = {}) {
     design_policy: {
       priority: 'information_first',
       visual_style: 'simple_restrained_detailed',
+      pipeline_allowlist: {
+        required_skills: [...PPT_PIPELINE_SKILL_ALLOWLIST],
+        conditional_skills: [...PPT_CONDITIONAL_SKILL_ALLOWLIST],
+        allowed_mcp_servers: [...PPT_PIPELINE_MCP_ALLOWLIST],
+        ignore_installed_out_of_pipeline_skills: true,
+        ignored_design_skills_even_if_installed: ['design-artifact-expert', 'design-ui-editor', 'design-system-builder'],
+        anti_ai_design_goal: 'prevent AI-like generic presentation design by forcing decisions through audience, sources, getdesign reference, and the design SSOT instead of freeform decorative design skills',
+        rule: 'PPT design and render work must use only the route allowlist. Installed skills or MCP servers outside this allowlist are ignored unless the sealed PPT contract explicitly activates a conditional entry.'
+      },
       design_ssot: {
         authority: DESIGN_SYSTEM_SSOT.authority_file,
         builder_prompt: DESIGN_SYSTEM_SSOT.builder_prompt,
@@ -335,7 +344,7 @@ export function buildPptStyleTokens(contract = {}) {
       ],
       avoid: ['over-designed decoration', 'ornamental gradients', 'nested cards', 'low-contrast gray body text', 'excessive motion or effects'],
       detail_strategy: ['precise spacing', 'clear hierarchy', 'thin rules', 'disciplined alignment', 'subtle accent color only when it clarifies meaning'],
-      anti_generic_ai_style: 'select a concrete DESIGN.md visual system before adding decorative styling; do not default to generic cards, gradients, or vague SaaS visuals',
+      anti_generic_ai_style: 'prevent AI-like design: select a concrete DESIGN.md or route-local visual system before styling; do not default to generic cards, gradients, vague SaaS visuals, oversized decoration, or unsupported image-like flourishes',
       image_policy: 'use images only when they improve comprehension; prefer Codex App built-in image generation via https://developers.openai.com/codex/app/features#image-generation when generated assets are needed'
     }
   };
@@ -486,6 +495,9 @@ export function buildPptRenderReport({ contract = {}, audience, sourceLedger, st
       { id: 'restrained_detail', passed: styleTokens.design_policy?.visual_style === 'simple_restrained_detailed' },
       { id: 'design_ssot_declared', passed: styleTokens.design_policy?.design_ssot?.authority === DESIGN_SYSTEM_SSOT.authority_file },
       { id: 'curated_design_md_input_fused', passed: (styleTokens.design_policy?.source_inputs || []).some((entry) => entry.url === AWESOME_DESIGN_MD_REFERENCE.url && entry.role === 'source_input_for_ssot') },
+      { id: 'ppt_skill_allowlist_enforced', passed: JSON.stringify(styleTokens.design_policy?.pipeline_allowlist?.required_skills || []) === JSON.stringify([...PPT_PIPELINE_SKILL_ALLOWLIST]) },
+      { id: 'out_of_pipeline_design_skills_ignored', passed: styleTokens.design_policy?.pipeline_allowlist?.ignore_installed_out_of_pipeline_skills === true && (styleTokens.design_policy?.pipeline_allowlist?.ignored_design_skills_even_if_installed || []).includes('design-artifact-expert') },
+      { id: 'ppt_mcp_allowlist_scoped', passed: (styleTokens.design_policy?.pipeline_allowlist?.allowed_mcp_servers || []).every((entry) => entry.mcp === 'context7' && /external_documentation/.test(entry.condition || '')) },
       { id: 'no_decorative_overdesign', passed: !String(html).includes('gradient') }
     ],
     broken_links: [],
