@@ -14,7 +14,7 @@ import { containsUserQuestion, noQuestionContinuationReason } from '../core/no-q
 import { evaluateDoneGate, defaultDoneGate } from '../core/hproof.mjs';
 import { emitHook } from '../core/hooks-runtime.mjs';
 import { storageReport, enforceRetention, pruneWikiArtifacts } from '../core/retention.mjs';
-import { classifySql, classifyCommand, checkDbOperation, handleMadSksUserConfirmation } from '../core/db-safety.mjs';
+import { classifySql, classifyCommand, checkDbOperation, handleMadSksUserConfirmation, loadDbSafetyPolicy, scanDbSafety } from '../core/db-safety.mjs';
 import { checkHarnessModification, harnessGuardStatus, isHarnessSourceProject } from '../core/harness-guard.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
 import { context7Docs, context7Resolve, context7Text, context7Tools } from '../core/context7-client.mjs';
@@ -26,7 +26,7 @@ import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, wri
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
 import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
-import { context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence } from '../core/pipeline.mjs';
+import { PIPELINE_PLAN_ARTIFACT, buildPipelinePlan, context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence, validatePipelinePlan, writePipelinePlan } from '../core/pipeline.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, initTeamLive, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane } from '../core/team-live.mjs';
 import { ARTIFACT_FILES, validateDogfoodReport, validateEffortDecision, validateFromChatImgVisualMap, validateSkillCandidate, validateSkillInjectionDecision, validateTeamDashboardState, validateWorkOrderLedger } from '../core/artifact-schemas.mjs';
@@ -37,7 +37,7 @@ import { classifyDogfoodFinding, createDogfoodReport, writeDogfoodReport } from 
 import { createSkillCandidate, decideSkillInjection, skillDreamFixture, writeSkillCandidate, writeSkillForgeReport, writeSkillInjectionDecision } from '../core/skill-forge.mjs';
 import { classifyToolError, harnessGrowthReport } from '../core/evaluation.mjs';
 import { runWorkflowPerfBench, validateWorkflowPerfReport } from '../core/perf-bench.mjs';
-import { proofFieldFixture, validateProofFieldReport } from '../core/proof-field.mjs';
+import { buildProofField, proofFieldFixture, validateProofFieldReport } from '../core/proof-field.mjs';
 import { recordMistake, writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
 import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
@@ -149,7 +149,7 @@ Usage:
   sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N]
   sks qa-loop status <mission-id|latest>
   sks context7 check|setup|tools|resolve|docs|evidence ...
-  sks pipeline status|resume [--json]
+  sks pipeline status|resume|plan [--json] [--proof-field]
   sks pipeline answer <mission-id|latest> <answers.json>
   sks guard check [--json]
   sks conflicts check|prompt [--json]
@@ -730,13 +730,16 @@ async function pipeline(sub = 'status', args = []) {
   const root = await sksRoot();
   const action = sub || 'status';
   if (action === 'answer') return pipelineAnswer(root, args);
+  if (action === 'plan') return pipelinePlan(root, args);
   const state = await readJson(stateFile(root), {});
   const evidence = await context7Evidence(root, state);
+  const plan = state.mission_id ? await readJson(path.join(missionDir(root, state.mission_id), PIPELINE_PLAN_ARTIFACT), null) : null;
   const stop = await evaluateStop(root, state, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   const result = {
     root,
     state,
     context7: evidence,
+    plan: plan ? pipelinePlanSummary(plan, root, state.mission_id) : null,
     stop_gate: state.stop_gate || null,
     next_action: stop?.reason || 'No active blocking route gate detected.'
   };
@@ -747,10 +750,90 @@ async function pipeline(sub = 'status', args = []) {
   console.log(`Route:     ${state.route_command || state.route || 'none'}`);
   console.log(`Phase:     ${state.phase || 'IDLE'}`);
   console.log(`Mission:   ${state.mission_id || 'none'}`);
+  if (plan) {
+    console.log(`Plan:      ${path.relative(root, path.join(missionDir(root, state.mission_id), PIPELINE_PLAN_ARTIFACT))}`);
+    console.log(`Lane:      ${plan.runtime_lane?.lane || 'unknown'} (${plan.runtime_lane?.source || 'unknown'})`);
+    console.log(`Stages:    keep ${plan.stage_summary?.kept ?? '?'} / skip ${plan.stage_summary?.skipped ?? '?'}`);
+  }
   console.log(`Reasoning: ${state.reasoning_effort || 'medium'}${state.reasoning_profile ? ` (${state.reasoning_profile})` : ''}${state.reasoning_temporary ? ' temporary' : ''}`);
   console.log(`Stop gate: ${state.stop_gate || 'none'}`);
   console.log(`Context7:  ${state.context7_required ? (evidence.ok ? 'ok' : 'required-missing') : 'optional'} (${evidence.count || 0} event(s))`);
   console.log(`Next:      ${result.next_action}`);
+}
+
+async function pipelinePlan(root, args = []) {
+  const state = await readJson(stateFile(root), {});
+  const missionArg = pipelineMissionArg(args);
+  const id = await resolveMissionId(root, missionArg);
+  let dir = null;
+  let mission = {};
+  let routeContext = {};
+  if (id) {
+    const loaded = await loadMission(root, id);
+    dir = loaded.dir;
+    mission = loaded.mission || {};
+    routeContext = await readJson(path.join(dir, 'route-context.json'), {});
+    const existing = await readJson(path.join(dir, PIPELINE_PLAN_ARTIFACT), null);
+    if (existing && !flag(args, '--refresh') && !flag(args, '--proof-field')) {
+      if (flag(args, '--json')) return console.log(JSON.stringify({ ok: validatePipelinePlan(existing).ok, plan_path: path.join(dir, PIPELINE_PLAN_ARTIFACT), plan: existing }, null, 2));
+      return printPipelinePlan(root, id, existing);
+    }
+  }
+  const intent = readOption(args, '--intent', routeContext.task || mission.prompt || state.prompt || '');
+  const route = ROUTES.find((candidate) => candidate.id === routeContext.route || candidate.command === routeContext.command || candidate.id === state.route || candidate.command === state.route_command)
+    || routePrompt(routeContext.command || state.route_command || intent || '$SKS');
+  const changedRaw = readOption(args, '--changed', '');
+  const proofField = flag(args, '--proof-field') ? await buildProofField(root, { intent, changedFiles: changedRaw ? changedRaw.split(',') : undefined }) : null;
+  const contract = dir ? await readJson(path.join(dir, 'decision-contract.json'), {}) : {};
+  const ambiguity = {
+    required: Boolean(routeContext.clarification_gate || state.ambiguity_gate_required),
+    passed: Boolean(state.ambiguity_gate_passed || state.clarification_passed),
+    status: state.clarification_required ? 'awaiting_answers' : (state.ambiguity_gate_passed ? 'contract_sealed' : undefined),
+    contract_hash: contract?.sealed_hash || null
+  };
+  const planInput = { missionId: id || null, route, task: intent, required: Boolean(routeContext.context7_required || state.context7_required), ambiguity, proofField };
+  const plan = dir ? await writePipelinePlan(dir, planInput) : buildPipelinePlan(planInput);
+  const validation = validatePipelinePlan(plan);
+  if (flag(args, '--json')) return console.log(JSON.stringify({ ok: validation.ok, validation, plan_path: dir ? path.join(dir, PIPELINE_PLAN_ARTIFACT) : null, plan }, null, 2));
+  printPipelinePlan(root, id || 'none', plan);
+}
+
+function pipelineMissionArg(args = []) {
+  const valueFlags = new Set(['--intent', '--changed']);
+  for (let i = 0; i < args.length; i++) {
+    const arg = String(args[i]);
+    if (valueFlags.has(arg)) {
+      i++;
+      continue;
+    }
+    if (!arg.startsWith('--')) return arg;
+  }
+  return 'latest';
+}
+
+function pipelinePlanSummary(plan, root, id) {
+  return {
+    path: id ? path.join(missionDir(root, id), PIPELINE_PLAN_ARTIFACT) : null,
+    validation: validatePipelinePlan(plan),
+    lane: plan.runtime_lane?.lane || null,
+    source: plan.runtime_lane?.source || null,
+    kept: plan.stage_summary?.kept ?? null,
+    skipped: plan.stage_summary?.skipped ?? null,
+    next_actions: plan.next_actions || []
+  };
+}
+
+function printPipelinePlan(root, id, plan) {
+  const validation = validatePipelinePlan(plan);
+  console.log('SKS Pipeline Plan\n');
+  console.log(`Mission:   ${id}`);
+  console.log(`Route:     ${plan.route?.command || plan.route?.id || 'unknown'}`);
+  console.log(`Lane:      ${plan.runtime_lane?.lane || 'unknown'} (${plan.runtime_lane?.source || 'unknown'})`);
+  console.log(`Valid:     ${validation.ok ? 'yes' : `no (${validation.issues.join(', ')})`}`);
+  if (id && id !== 'none') console.log(`Artifact:  ${path.relative(root, path.join(missionDir(root, id), PIPELINE_PLAN_ARTIFACT))}`);
+  console.log(`Stages:    keep ${plan.stage_summary?.kept ?? 0}, skip ${plan.stage_summary?.skipped ?? 0}, n/a ${plan.stage_summary?.not_applicable ?? 0}`);
+  console.log(`Verify:    ${(plan.verification || []).join('; ')}`);
+  console.log(`Next:      ${(plan.next_actions || []).join(' -> ')}`);
 }
 
 async function pipelineAnswer(root, args = []) {
@@ -772,6 +855,7 @@ async function pipelineAnswer(root, args = []) {
     || routePrompt(routeContext.command || routeContext.route || '$SKS');
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.clarification.contract_sealed', route: route?.id || routeContext.route, hash: result.contract.sealed_hash });
   const materialized = await materializeAfterPipelineAnswer(root, id, dir, mission, route, routeContext, result.contract);
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: materialized.prompt || routeContext.task || mission.prompt || '', required: Boolean(routeContext.context7_required), ambiguity: { required: true, passed: true, status: 'contract_sealed', contract_hash: result.contract.sealed_hash } });
   if (route?.id === 'QALoop') await writeQaLoopArtifacts(dir, mission, result.contract);
   await setCurrent(root, {
     mission_id: id,
@@ -793,16 +877,19 @@ async function pipelineAnswer(root, args = []) {
     ambiguity_gate_required: true,
     ambiguity_gate_passed: true,
     implementation_allowed: true,
+    pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
+    pipeline_plan_path: PIPELINE_PLAN_ARTIFACT,
     reasoning_effort: route ? routeReasoning(route, routeContext.task || mission.prompt || '').effort : 'medium',
     reasoning_profile: route ? routeReasoning(route, routeContext.task || mission.prompt || '').profile : 'sks-task-medium',
     reasoning_temporary: true,
     prompt: materialized.prompt || routeContext.task || mission.prompt || '',
     ...materialized.state
   });
-  if (flag(args, '--json')) return console.log(JSON.stringify({ ok: true, mission_id: id, route: route?.id || routeContext.route, hash: result.contract.sealed_hash, validation: result.validation }, null, 2));
+  if (flag(args, '--json')) return console.log(JSON.stringify({ ok: true, mission_id: id, route: route?.id || routeContext.route, hash: result.contract.sealed_hash, validation: result.validation, pipeline_plan: path.join(dir, PIPELINE_PLAN_ARTIFACT) }, null, 2));
   console.log(`SKS ambiguity gate passed for ${id}`);
   console.log(`Route: ${route?.command || routeContext.command || '$SKS'}`);
   console.log(`Hash: ${result.contract.sealed_hash}`);
+  console.log(`Plan: ${path.relative(root, path.join(dir, PIPELINE_PLAN_ARTIFACT))}`);
   console.log('Next: continue the original route lifecycle using decision-contract.json.');
 }
 
@@ -1624,10 +1711,11 @@ async function doctor(args) {
   let conflictScan = await scanHarnessConflicts(root);
   let repairApplied = false;
   let globalSkillsRepair = null;
+  const globalCommand = await globalSksCommand();
   if (flag(args, '--fix') && !conflictScan.hard_block) {
-    const fixScope = requestedScope || 'global';
     const existingManifest = await readJson(path.join(root, '.sneakoscope', 'manifest.json'), null);
-    await initProject(root, { installScope: fixScope, globalCommand: await globalSksCommand(), localOnly: flag(args, '--local-only') || Boolean(existingManifest?.git?.local_only), force: true, repair: true });
+    const fixScope = requestedScope || normalizeInstallScope(existingManifest?.installation?.scope || 'global');
+    await initProject(root, { installScope: fixScope, globalCommand, localOnly: flag(args, '--local-only') || Boolean(existingManifest?.git?.local_only), force: true, repair: true });
     if (!flag(args, '--local-only')) globalSkillsRepair = await ensureGlobalCodexSkillsDuringInstall({ force: true });
     repairApplied = true;
     conflictScan = await scanHarnessConflicts(root);
@@ -1639,7 +1727,7 @@ async function doctor(args) {
   const pkgBytes = await dirSize(packageRoot()).catch(() => 0);
   const manifest = await readJson(path.join(root, '.sneakoscope', 'manifest.json'), null);
   const installScope = requestedScope || normalizeInstallScope(manifest?.installation?.scope || 'global');
-  const install = await installStatus(root, installScope);
+  const install = await installStatus(root, installScope, { globalCommand });
   const dbPolicyExists = await exists(path.join(root, '.sneakoscope', 'db-safety.json'));
   const dbScan = await scanDbSafety(root).catch((err) => ({ ok: false, findings: [{ id: 'db_safety_scan_failed', severity: 'high', reason: err.message }] }));
   const context7Status = await checkContext7(root);
@@ -1781,7 +1869,10 @@ async function installStatus(root, scope, opts = {}) {
   const discoveredGlobalBin = await discoverGlobalSksCommand();
   const configuredGlobalBin = await configuredSksBin(opts.globalCommand);
   const globalBin = configuredGlobalBin || discoveredGlobalBin;
-  const commandPrefix = sksCommandPrefix(scope, { globalCommand: globalBin || undefined });
+  const sourceProject = await isHarnessSourceProject(root).catch(() => false);
+  const sourceBin = path.join(root, 'bin', 'sks.mjs');
+  const sourceBinExists = sourceProject && await exists(sourceBin);
+  const commandPrefix = sourceBinExists ? 'node ./bin/sks.mjs' : sksCommandPrefix(scope, { globalCommand: globalBin || undefined });
   const projectBin = path.join(root, 'node_modules', 'sneakoscope', 'bin', 'sks.mjs');
   const projectBinExists = await exists(projectBin);
   return {
@@ -1790,7 +1881,9 @@ async function installStatus(root, scope, opts = {}) {
     command_prefix: commandPrefix,
     global_bin: globalBin,
     project_bin: projectBin,
-    ok: scope === 'project' ? projectBinExists : Boolean(globalBin)
+    source_project: sourceProject,
+    source_bin: sourceBinExists ? sourceBin : null,
+    ok: sourceBinExists || (scope === 'project' ? projectBinExists : Boolean(globalBin))
   };
 }
 
@@ -1951,18 +2044,47 @@ async function selftest() {
   const guardStatus = await harnessGuardStatus(tmp);
   if (!guardStatus.ok || !guardStatus.locked || guardStatus.source_exception) throw new Error('selftest failed: harness guard not locked in installed project');
   const repairTmp = tmpdir();
-  await initProject(repairTmp, {});
+  await writeJsonAtomic(path.join(repairTmp, 'package.json'), { name: 'sneakoscope', version: '0.0.0', type: 'module' });
+  await ensureDir(path.join(repairTmp, 'bin'));
+  await writeTextAtomic(path.join(repairTmp, 'bin', 'sks.mjs'), '#!/usr/bin/env node\n');
+  await ensureDir(path.join(repairTmp, 'src', 'core'));
+  await writeTextAtomic(path.join(repairTmp, 'src', 'core', 'init.mjs'), '// source-project marker\n');
+  await writeTextAtomic(path.join(repairTmp, 'src', 'core', 'hooks-runtime.mjs'), '// source-project marker\n');
+  await initProject(repairTmp, { installScope: 'project', localOnly: true });
   await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'team', 'SKILL.md'), 'tampered\n');
   await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'), '---\nname: agent-team\ndescription: Fallback Codex App picker alias for $Team.\n---\n');
   await ensureDir(path.join(repairTmp, '.agents', 'skills', 'custom-keep'));
   await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'custom-keep', 'SKILL.md'), '---\nname: custom-keep\ndescription: User custom skill, not generated by SKS.\n---\n');
   await writeTextAtomic(path.join(repairTmp, '.codex', 'skills', 'team', 'SKILL.md'), 'legacy mirror\n');
-  await initProject(repairTmp, { force: true, repair: true });
+  await writeTextAtomic(path.join(repairTmp, '.codex', 'hooks.json'), '{ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "tampered hook" }] }] } }\n');
+  await writeTextAtomic(path.join(repairTmp, '.codex', 'SNEAKOSCOPE.md'), 'tampered quick reference\n');
+  await writeJsonAtomic(path.join(repairTmp, '.sneakoscope', 'policy.json'), { broken: true });
+  const existingAgentsMd = await safeReadText(path.join(repairTmp, 'AGENTS.md'));
+  await writeTextAtomic(path.join(repairTmp, 'AGENTS.md'), existingAgentsMd.replace(/<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->[\s\S]*?<!-- END Sneakoscope Codex GX MANAGED BLOCK -->\n?/, '<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->\ntampered managed block\n<!-- END Sneakoscope Codex GX MANAGED BLOCK -->\n'));
+  const doctorRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'doctor', '--fix', '--local-only', '--json'], {
+    cwd: repairTmp,
+    env: { HOME: path.join(repairTmp, 'home'), SKS_DISABLE_UPDATE_CHECK: '1' },
+    timeoutMs: 30000,
+    maxOutputBytes: 1024 * 1024
+  });
+  if (doctorRepair.code !== 0) throw new Error(`selftest failed: doctor --fix exited ${doctorRepair.code}: ${doctorRepair.stderr}`);
+  const doctorRepairJson = JSON.parse(doctorRepair.stdout || '{}');
+  if (!doctorRepairJson.repair?.applied || doctorRepairJson.install?.scope !== 'project' || !doctorRepairJson.install?.ok || !doctorRepairJson.install?.source_project) throw new Error('selftest failed: doctor --fix did not preserve project source install scope');
+  const repairedManifest = await readJson(path.join(repairTmp, '.sneakoscope', 'manifest.json'));
+  if (repairedManifest.installation?.scope !== 'project' || repairedManifest.installation?.hook_command_prefix !== 'node ./bin/sks.mjs') throw new Error('selftest failed: doctor --fix rewrote project source install scope to the wrong command prefix');
   const repairedTeamSkill = await safeReadText(path.join(repairTmp, '.agents', 'skills', 'team', 'SKILL.md'));
   if (!repairedTeamSkill.includes('SKS Team orchestration') || repairedTeamSkill.includes('tampered')) throw new Error('selftest failed: doctor repair did not regenerate team skill');
   if (await exists(path.join(repairTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest failed: doctor repair did not remove deprecated agent-team alias skill');
   if (!(await exists(path.join(repairTmp, '.agents', 'skills', 'custom-keep', 'SKILL.md')))) throw new Error('selftest failed: doctor repair removed a user-owned custom skill');
   if (await exists(path.join(repairTmp, '.codex', 'skills', 'team', 'SKILL.md'))) throw new Error('selftest failed: doctor repair did not remove legacy .codex/skills');
+  const repairedQuickReference = await safeReadText(path.join(repairTmp, '.codex', 'SNEAKOSCOPE.md'));
+  if (!repairedQuickReference.includes('Install scope: `project`') || repairedQuickReference.includes('tampered')) throw new Error('selftest failed: doctor --fix did not regenerate quick reference');
+  const repairedHooks = await safeReadText(path.join(repairTmp, '.codex', 'hooks.json'));
+  if (!repairedHooks.includes('node ./bin/sks.mjs hook stop') || repairedHooks.includes('tampered hook')) throw new Error('selftest failed: doctor --fix did not regenerate Codex hooks');
+  const repairedPolicy = await readJson(path.join(repairTmp, '.sneakoscope', 'policy.json'));
+  if (repairedPolicy.broken || repairedPolicy.installation?.scope !== 'project' || !repairedPolicy.prompt_pipeline?.dollar_commands?.includes('$Team')) throw new Error('selftest failed: doctor --fix did not regenerate policy');
+  const repairedAgentsMd = await safeReadText(path.join(repairTmp, 'AGENTS.md'));
+  if (!repairedAgentsMd.includes('Do not create unrequested fallback implementation code') || repairedAgentsMd.includes('tampered managed block')) throw new Error('selftest failed: doctor --fix did not repair AGENTS managed block');
   const conflictTmp = tmpdir();
   await ensureDir(path.join(conflictTmp, '.omx'));
   const conflictScan = await scanHarnessConflicts(conflictTmp, { home: path.join(conflictTmp, 'home') });
@@ -2388,6 +2510,7 @@ async function selftest() {
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('Codex plan-tool interaction')) throw new Error('selftest failed: $Team ambiguity gate did not inject plan-tool guidance');
   const hookTeamState = await readJson(stateFile(hookTeamTmp), {});
   if (hookTeamState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookTeamState.implementation_allowed !== false) throw new Error('selftest failed: $Team hook did not lock execution behind ambiguity gate');
+  if (!hookTeamState.pipeline_plan_ready || !(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), PIPELINE_PLAN_ARTIFACT)))) throw new Error('selftest failed: $Team hook did not write a pending pipeline plan');
   if (await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-plan.json'))) throw new Error('selftest failed: Team plan was created before ambiguity gate passed');
   const hookTeamPendingResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 새 작업으로 넘어가' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookTeamPendingResult.code !== 0) throw new Error(`selftest failed: pending clarification hook exited ${hookTeamPendingResult.code}: ${hookTeamPendingResult.stderr}`);
@@ -2425,8 +2548,9 @@ async function selftest() {
   const pipelineAnswerResult = await runProcess(process.execPath, [hookBin, 'pipeline', 'answer', 'latest', hookTeamAnswersPath], { cwd: hookTeamTmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (pipelineAnswerResult.code !== 0) throw new Error(`selftest failed: pipeline answer exited ${pipelineAnswerResult.code}: ${pipelineAnswerResult.stderr}`);
   const answeredTeamState = await readJson(stateFile(hookTeamTmp), {});
-  if (answeredTeamState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || !answeredTeamState.ambiguity_gate_passed || answeredTeamState.implementation_allowed !== true || !answeredTeamState.team_plan_ready) throw new Error('selftest failed: pipeline answer did not materialize Team after ambiguity gate');
+  if (answeredTeamState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || !answeredTeamState.ambiguity_gate_passed || answeredTeamState.implementation_allowed !== true || !answeredTeamState.team_plan_ready || !answeredTeamState.pipeline_plan_ready) throw new Error('selftest failed: pipeline answer did not materialize Team after ambiguity gate');
   if (!(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'decision-contract.json')))) throw new Error('selftest failed: pipeline answer did not seal decision contract');
+  if (validatePipelinePlan(await readJson(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), PIPELINE_PLAN_ARTIFACT))).ok !== true) throw new Error('selftest failed: pipeline answer did not refresh a valid pipeline plan');
   if (!(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-plan.json'))) || !(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-live.md')))) throw new Error('selftest failed: Team artifacts missing after ambiguity gate passed');
   const honestLoopTmp = tmpdir();
   await initProject(honestLoopTmp, {});
@@ -2968,12 +3092,17 @@ async function selftest() {
   if (!proofField.validation.ok || !validateProofFieldReport(proofField.report).ok) throw new Error('selftest failed: proof field report invalid');
   if (!proofField.checks.route_cone_selected || !proofField.checks.cli_cone_selected || !proofField.checks.catastrophic_guard_present || !proofField.checks.negative_release_work_recorded || !proofField.checks.outcome_rubric_present || !proofField.checks.simplicity_score_usable || !proofField.checks.execution_fast_lane_selected) throw new Error('selftest failed: proof field fixture checks incomplete');
   if (!speedLanePolicyText().includes('proof_field_fast_lane') || !proofField.report.execution_lane?.skip_when_fast?.includes('planning_debate')) throw new Error('selftest failed: Proof Field speed lane policy missing');
+  const fastPipelinePlan = buildPipelinePlan({ route: routePrompt('$Team small CLI help update'), task: 'small CLI help surface update', proofField: proofField.report });
+  if (!validatePipelinePlan(fastPipelinePlan).ok || fastPipelinePlan.runtime_lane?.lane !== 'proof_field_fast_lane' || !fastPipelinePlan.skipped_stages.includes('planning_debate') || !fastPipelinePlan.invariants.includes('no_unrequested_fallback_code')) throw new Error('selftest failed: pipeline plan did not encode fast lane stage skips and fallback guard');
+  const broadProofField = await buildProofField(tmp, { intent: 'database security route refactor', changedFiles: ['src/core/db-safety.mjs', 'src/core/routes.mjs', 'src/cli/main.mjs', 'README.md'] });
+  const broadPipelinePlan = buildPipelinePlan({ route: routePrompt('$Team database security route refactor'), task: 'database security route refactor', proofField: broadProofField });
+  if (!validatePipelinePlan(broadPipelinePlan).ok || broadPipelinePlan.runtime_lane?.lane === 'proof_field_fast_lane' || broadPipelinePlan.skipped_stages.includes('planning_debate')) throw new Error('selftest failed: pipeline plan did not fail closed for broad/security work');
   const workflowPerf = await runWorkflowPerfBench(tmp, {
     iterations: 2,
     intent: 'small CLI help surface update',
     changedFiles: ['src/cli/maintenance-commands.mjs', 'src/core/routes.mjs']
   });
-  if (!validateWorkflowPerfReport(workflowPerf).ok || workflowPerf.metrics.decision_mode !== 'fast_lane' || workflowPerf.metrics.execution_lane !== 'proof_field_fast_lane' || !workflowPerf.metrics.fast_lane_eligible || !workflowPerf.metrics.fast_lane_allowed || Number(workflowPerf.metrics.simplicity_score) < 0.75 || Number(workflowPerf.metrics.outcome_criteria_passed) < 3) throw new Error('selftest failed: workflow perf proof field did not produce a valid outcome-scored fast lane report');
+  if (!validateWorkflowPerfReport(workflowPerf).ok || workflowPerf.metrics.decision_mode !== 'fast_lane' || workflowPerf.metrics.execution_lane !== 'proof_field_fast_lane' || workflowPerf.metrics.pipeline_lane !== 'proof_field_fast_lane' || !workflowPerf.metrics.fast_lane_eligible || !workflowPerf.metrics.fast_lane_allowed || Number(workflowPerf.metrics.simplicity_score) < 0.75 || Number(workflowPerf.metrics.outcome_criteria_passed) < 3) throw new Error('selftest failed: workflow perf proof field did not produce a valid outcome-scored fast lane report');
   if (classifyToolError({ message: 'operation timed out' }) !== 'Timeout' || classifyToolError({ message: 'unclassified weirdness' }) !== 'Unknown') throw new Error('selftest failed: tool error taxonomy classification');
   const coord = rgbaToWikiCoord({ r: 12, g: 34, b: 56, a: 255 });
   if (coord.schema !== 'sks.wiki-coordinate.v1' || coord.xyzw.length !== 4) throw new Error('selftest failed: RGBA wiki coordinate conversion');
