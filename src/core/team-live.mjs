@@ -72,7 +72,7 @@ export function defaultTeamDashboard(id, prompt, opts = {}) {
       lane: `sks team lane ${id} --agent <agent> --follow`,
       event: `sks team event ${id} --agent <agent> --phase <phase> --message "..."`,
       message: `sks team message ${id} --from <agent> --to <agent|all> --message "..."`,
-      cleanup: `sks team cleanup-warp ${id}`
+      cleanup: `sks team cleanup-tmux ${id}`
     },
     agents: Object.fromEntries([...new Set([...DEFAULT_AGENTS, ...spec.roster.all_agents.map((agent) => agent.id)])].map((name) => [name, { status: 'pending', phase: null, last_seen: null }])),
     phases: ['parallel_analysis_scouting', 'triwiki_refresh', 'debate_team', 'triwiki_refresh_after_consensus', 'parallel_development_team', 'triwiki_refresh_after_implementation', 'strict_review_and_user_acceptance', 'session_cleanup'],
@@ -98,12 +98,13 @@ ${prompt}
 
 ## How to Read
 
-- This file is the Codex App-visible replacement for warp-style team panes.
+- This file is the Codex App-visible replacement for tmux-style team panes.
 - Use at most ${spec.agentSessions} subagent sessions at a time unless the mission is recreated with a different budget.
 - Team mode has three bundles: parallel analysis scouts first, debate team second, then fresh parallel development team.
 - Use relevant TriWiki context before every stage, hydrate low-trust claims from source during the stage, refresh after findings/artifact changes, and validate before handoffs or final claims.
 - Analysis scouts are read-only and split repo, docs, tests, risk, API, and user-flow investigation before the parent refreshes TriWiki for debate.
 - executor:N means build N debate participants and then a separate N-person executor development team.
+- Debate uses compact Hyperplan-derived adversarial lenses: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative.
 - User personas are intentionally impatient, self-interested, stubborn, low-context, and dislike inconvenience.
 - Executors are capable developers with disjoint ownership.
 - Reviewers are strict and adversarial about correctness, safety, tests, and evidence.
@@ -123,7 +124,7 @@ sks team watch ${id}
 sks team lane ${id} --agent analysis_scout_1 --follow
 sks team event ${id} --agent analysis_scout_1 --phase parallel_analysis_scouting --message "mapped repo slice"
 sks team message ${id} --from analysis_scout_1 --to executor_1 --message "handoff note"
-sks team cleanup-warp ${id}
+sks team cleanup-tmux ${id}
 \`\`\`
 
 ## Roster
@@ -219,7 +220,7 @@ export function parseTeamSpecArgs(args = []) {
       i++;
       continue;
     }
-    if (arg === '--json' || arg === '--open-warp' || arg === '--warp-open') continue;
+    if (arg === '--json' || arg === '--open-tmux' || arg === '--tmux-open') continue;
     cleanArgs.push(args[i]);
   }
   return { cleanArgs, ...normalizeTeamSpec({ roleCounts, agentSessions: explicitSession }) };
@@ -263,9 +264,9 @@ export function buildTeamRoster(roleCounts = DEFAULT_TEAM_ROLE_COUNTS) {
   const counts = normalizeTeamRoleCounts(roleCounts);
   const bundleSize = normalizeTeamAgentSessions(counts.executor);
   const debateUsers = numberedAgents('debate_user', counts.user, 'Impatient final user voice: low-context, self-interested, stubborn, dislikes inconvenience, rejects clever work that feels annoying.', 'user');
-  const debatePlanners = numberedAgents('debate_planner', counts.planner, 'Pragmatic planner: turns vague intent into one objective, required clarification questions, constraints, acceptance criteria, and disjoint work slices.', 'planner');
-  const debateReviewers = numberedAgents('debate_reviewer', counts.reviewer, 'Strict debate reviewer: adversarial about correctness, safety, DB risk, tests, regressions, and unsupported assumptions.', 'reviewer');
-  const debateExecutorPool = numberedAgents('debate_executor', bundleSize, 'Capable developer voice in debate: estimates implementation shape, ownership boundaries, dependencies, and risks before coding starts.', 'executor');
+  const debatePlanners = numberedAgents('debate_planner', counts.planner, 'Pragmatic planner: distills only defensible findings into one objective, required clarification questions, constraints, acceptance criteria, and disjoint work slices.', 'planner');
+  const debateReviewers = numberedAgents('debate_reviewer', counts.reviewer, 'Strict debate reviewer: applies validator/researcher lenses to correctness, safety, DB risk, tests, regressions, and unsupported assumptions.', 'reviewer');
+  const debateExecutorPool = numberedAgents('debate_executor', bundleSize, 'Capable developer voice in debate: applies skeptic/architect lenses to implementation shape, ownership boundaries, dependencies, coupling, and risks before coding starts.', 'executor');
   const debateTeam = composeDebateTeam({ users: debateUsers, planners: debatePlanners, reviewers: debateReviewers, executors: debateExecutorPool, bundleSize });
   const analysisScouts = numberedAgents('analysis_scout', bundleSize, 'Read-only analysis scout: quickly maps one independent slice of repo/docs/tests/API risk, records source paths and evidence, and returns TriWiki-ready findings.', 'scout');
   const developmentExecutors = numberedAgents('executor', bundleSize, 'Capable developer executor: owns one disjoint implementation slice and coordinates without reverting others.', 'executor');
@@ -362,7 +363,7 @@ export async function requestTeamSessionCleanup(dir, opts = {}) {
     cleanup_requested_at: opts.ts || nowIso(),
     cleanup_requested_by: opts.agent || 'parent_orchestrator',
     cleanup_reason: opts.reason || 'Team session cleanup requested.',
-    final_message: opts.finalMessage || 'Team session ended. Lane follow loops may stop; Warp panes remain user-controlled.'
+    final_message: opts.finalMessage || 'Team session ended. Lane follow loops may stop; tmux panes remain user-controlled.'
   };
   await writeJsonAtomic(files.control, next);
   return next;
@@ -382,7 +383,7 @@ export function renderTeamCleanupSummary(control = {}) {
     `Requested by: ${control.cleanup_requested_by || 'unknown'}`,
     `Reason: ${control.cleanup_reason || 'Team session cleanup requested.'}`,
     '',
-    control.final_message || 'Team session ended. Warp panes remain user-controlled.'
+    control.final_message || 'Team session ended. tmux panes remain user-controlled.'
   ].join('\n');
 }
 
@@ -468,10 +469,10 @@ export async function renderTeamWatch(dir, opts = {}) {
     '',
     '## Split-Screen Map',
     '- This overview pane follows the whole mission transcript.',
-    '- Neighbor warp panes follow individual `sks team lane ... --agent <name>` views.',
+    '- Neighbor tmux panes follow individual `sks team lane ... --agent <name>` views.',
     '- Use `sks team event ...` to mirror scout, debate, executor, review, and verification status into the live panes.',
     '- Use `sks team message ... --from <agent> --to <agent|all>` for bounded inter-agent communication in transcript/lane views.',
-    '- Use `sks team cleanup-warp ...` at session end; follow loops show cleanup and exit while Warp panes remain user-controlled.',
+    '- Use `sks team cleanup-tmux ...` at session end; follow loops show cleanup and exit while tmux panes remain user-controlled.',
     '',
     '## Cockpit Views',
     '- Mission / Goal | Agents | MultiAgentV2 | Work Orders | Skills | Memory Health | Forget Queue',

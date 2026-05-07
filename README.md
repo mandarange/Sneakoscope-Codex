@@ -2,7 +2,7 @@
 
 ![](https://github.com/mandarange/Sneakoscope-Codex/raw/dev/docs/assets/sneakoscope-codex-logo.png)
 
-Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, warp-native CLI workspaces, Team/QA/Research routes, inspectable pipeline plans, a maximum-speed Computer Use lane, a fast Goal bridge for native `/goal` persistence, Context7 evidence checks, DB safety, TriWiki context tracking, lightweight skill dreaming, Honest Mode, and release-readiness gates.
+Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, tmux-native CLI workspaces, Team/QA/Research routes, inspectable pipeline plans, a maximum-speed Computer Use lane, a fast Goal bridge for native `/goal` persistence, Context7 evidence checks, DB safety, TriWiki context tracking, lightweight skill dreaming, Honest Mode, and release-readiness gates.
 
 ## Quick Start
 
@@ -43,17 +43,19 @@ sks selftest --mock
 
 | Area | What it does |
 | --- | --- |
-| CLI runtime | `sks warp open` and `sks --mad` explicitly launch Codex CLI with Warp; bare `sks` only prints help/readiness surfaces. |
-| Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
+| CLI runtime | `sks tmux open` and `sks --mad` explicitly launch Codex CLI with tmux; bare `sks` only prints help/readiness surfaces. |
+| Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
 | Pipeline plans | Writes `pipeline-plan.json` for stateful routes so the runtime lane, kept stages, skipped stages, verification commands, and no-unrequested-fallback invariant are visible with `sks pipeline plan`. |
 | Team orchestration | Runs substantial work through ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode; narrow work should use Proof Field evidence to skip unrelated pipeline work instead of expanding Team. |
 | Skill dreaming | Records cheap generated-skill usage counters in JSON and only periodically scans `.agents/skills` for keep, merge, prune, and improvement candidates. Reports are recommendation-only and never delete skills automatically. |
 | From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
 | QA loop | Dogfoods UI/API behavior with safety gates, Codex Computer Use-only UI evidence, safe fixes, and rechecks. |
+| PPT pipeline | Uses `$PPT` for simple, restrained, information-first HTML/PDF presentation artifacts, first asking delivery context, audience profile, STP strategy, decision context, and 3+ pain-point to solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in `ppt-parallel-report.json`; editable source HTML is preserved under `source-html/`, PPT-only temporary build files are cleaned after completion, and generated image assets must prefer Codex App built-in image generation through `$imagegen`. |
 | Computer Use fast lane | Uses `$Computer-Use` / `$CU` for UI/browser/visual work that needs maximum speed: skip Team debate and upfront TriWiki loops, use Codex Computer Use directly, then refresh/validate TriWiki and run Honest Mode at final closeout. |
 | Goal | Provides a fast SKS bridge overlay for Codex native persisted `/goal` create, pause, resume, and clear controls; implementation continues through the selected SKS execution route. |
 | TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, and `attention.hydrate_first`. |
 | Context7 | Requires current docs for external packages, APIs, MCPs, SDKs, and framework/runtime behavior when correctness depends on current guidance. |
+| getdesign.md | Grounds `design.md`, UI/UX design systems, and presentation-like HTML/PDF artifacts in the official getdesign.md reference and Codex skill path. |
 | DB safety | Treats SQL, migrations, Supabase, RLS, and destructive operations as high risk. |
 | Release hygiene | Checks versioning, changelog, package contents, tarball size, syntax, selftests, and dry-run publishing. |
 
@@ -63,21 +65,21 @@ sks selftest --mock
 - npm
 - Codex CLI for terminal workflows
 - Codex App for app-facing workflows, with Codex Computer Use required for UI/browser evidence
-- Warp for the CLI-first runtime
+- tmux for the CLI-first runtime
 - Context7 MCP for current-docs-gated routes
 
-Install Warp from [warp.dev/download](https://www.warp.dev/download). On macOS, Homebrew users can also install it with:
+Install tmux from [tmux.dev/download](https://www.tmux.dev/download). On macOS, Homebrew users can also install it with:
 
 ```sh
-brew install --cask warp
+brew install tmux
 ```
 
 `sks --mad` is stricter than the normal runtime path:
 
 - Checks npm for a newer `sneakoscope` before launch and asks whether to update when the terminal can answer y/n.
 - Installs the latest Codex CLI with `npm i -g @openai/codex@latest` when it is missing and you approve or pass `--yes`.
-- Requires Warp to be installed before opening the Launch Configuration.
-- Writes a named Warp Launch Configuration and opens it through `warp://launch/<name>.yaml`.
+- Requires tmux 3.x or newer before opening the session.
+- Creates or reuses a named detached tmux session, splits panes, and prints the attach command.
 
 ## Installation
 
@@ -94,6 +96,8 @@ sks bootstrap
 `sks` commands work even when no project root is present. Project-aware commands use the nearest `.sneakoscope`, `.dcodex`, or `.git` root; if none exists, SKS uses a per-user global runtime root. `sks bootstrap` still initializes the current project when you want project-local hooks, skills, and TriWiki state.
 
 Project setup writes shared `.gitignore` entries for generated SKS files: `.sneakoscope/`, `.codex/`, `.agents/`, and managed `AGENTS.md`. Use `sks setup --local-only` when you want those excludes kept only in `.git/info/exclude`.
+
+During npm postinstall, SKS also installs generated Codex App skills and tries the official getdesign Codex skill command, `skills add MohtashamMurshid/getdesign`, when the `skills` CLI is available. If that CLI is missing, setup still installs the generated `getdesign-reference` skill so UI/UX and presentation design-system work keeps using [getdesign.md](https://getdesign.md/) as a required reference.
 
 ### One-Shot Install
 
@@ -148,30 +152,30 @@ sks --version
 ```sh
 sks bootstrap
 sks deps check
-sks deps install warp
+sks deps install tmux
 sks codex-app check
 sks doctor --fix
 sks fix-path
 ```
 
-### Open Codex CLI With Warp
+### Open Codex CLI With tmux
 
 ```sh
-sks warp open
-sks warp check
-sks warp status --once
+sks tmux open
+sks tmux check
+sks tmux status --once
 ```
 
-`sks warp open` writes a Warp Launch Configuration for Codex CLI and opens it through Warp's public URI scheme only when that is explicitly requested. When it is already running inside Warp, SKS runs Codex in the current terminal session instead of opening another Warp window. `sks` and `sks warp check` are diagnostic/help surfaces and do not start a workspace.
+`sks tmux open` creates or reuses a named tmux session for Codex CLI only when that is explicitly requested. `sks` and `sks tmux check` are diagnostic/help surfaces and do not start a workspace.
 
-### MAD Warp Launch
+### MAD tmux Launch
 
 ```sh
 sks --mad
 sks --mad --yes
 ```
 
-This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning Warp launch with `approval_policy = "on-request"` and `approvals_reviewer = "auto_review"`. It is scoped to that explicit command and does not change normal SKS/DB safety defaults. Repeat launches overwrite the same named SKS MAD Launch Configuration.
+This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `approval_policy = "on-request"` and `approvals_reviewer = "auto_review"`. It is scoped to that explicit command and does not change normal SKS/DB safety defaults. Repeat launches reuse the same named SKS MAD tmux session.
 
 MAD does not disable the pipeline contract: stages, executors, reviewers, and auto-review policy still must not invent unrequested fallback implementation code. If the requested path cannot be implemented, SKS should block with evidence rather than add substitute behavior.
 
@@ -190,19 +194,19 @@ sks team "implement this feature" executor:3 reviewer:1
 sks team watch latest
 sks team lane latest --agent analysis_scout_1 --follow
 sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"
-sks team cleanup-warp latest
+sks team cleanup-tmux latest
 sks team status latest
 sks team dashboard latest
 sks team log latest
 ```
 
-Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named Warp Team Launch Configuration with split live lanes when Warp is available. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
+Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named tmux Team session with split live lanes when tmux is available. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
 
-The Warp Team launch is a live orchestration screen: the first pane follows `sks team watch <mission-id> --follow` as the mission overview, and neighboring split panes follow individual `sks team lane <mission-id> --agent <name> --follow` views. SKS gives lanes role-specific colors, labels, and terminal titles, so scouts, planning/debate voices, executors, reviewers, and safety lanes are visually distinct while the same evidence is mirrored into `team-transcript.jsonl`, `team-live.md`, and `team-dashboard.json`.
+The tmux Team launch is a live orchestration screen: the first pane follows `sks team watch <mission-id> --follow` as the mission overview, and neighboring split panes follow individual `sks team lane <mission-id> --agent <name> --follow` views. SKS gives lanes role-specific colors, labels, and terminal titles, so scouts, planning/debate voices, executors, reviewers, and safety lanes are visually distinct while the same evidence is mirrored into `team-transcript.jsonl`, `team-live.md`, and `team-dashboard.json`.
 
 Agent sessions communicate through the bounded Team transcript. Use `sks team message <mission-id|latest> --from <agent> --to <agent|all> --message "..."` to add direct or broadcast messages; lane panes show messages addressed to that agent plus the fallback global tail.
 
-When the Team route reaches `session_cleanup`, SKS marks the Warp launch record complete and asks `watch --follow` / `lane --follow` panes to show a cleanup summary and stop. You can also run `sks team cleanup-warp <mission-id|latest>` manually, or `sks team cleanup-warp latest --close` to remove the generated Launch Configuration. Warp's public URI/Launch Configuration surface does not expose a live pane-close API, so the panes remain user-controlled.
+When the Team route reaches `session_cleanup`, SKS marks the tmux session record complete and asks `watch --follow` / `lane --follow` panes to show a cleanup summary and stop. You can also run `sks team cleanup-tmux <mission-id|latest>` manually, or `sks team cleanup-tmux latest --close` to kill the recorded tmux session.
 
 ### QA, Computer Use, Goal, Research, DB, Wiki, GX
 
@@ -230,7 +234,7 @@ sks code-structure scan --json
 
 `sks pipeline plan` is the 0.7 runtime map. It reads or refreshes `.sneakoscope/missions/<id>/pipeline-plan.json`, then shows which lane is active, which stages are kept or skipped, which verification commands are required, and whether the no-unrequested-fallback invariant is present.
 
-`sks proof-field scan` is SKS's lightweight outcome rubric: it maps the goal to proof cones, records unrelated work that can be skipped with evidence, reports a simplicity score, and names escalation triggers for when the route must return to the full Team/Honest proof path. When `execution_lane.lane` is `proof_field_fast_lane`, SKS can keep the parent-owned minimal patch plus listed verification and skip Team debate, fresh executor teams, broad route rework, and unrelated checks. Database, security, visual-forensic, unknown, broad, failed, or unsupported-claim signals fail closed to the normal Team/Honest path. Use `sks pipeline plan --proof-field` after changed files are known to bind that Proof Field decision to the mission plan.
+`sks proof-field scan` is SKS's lightweight outcome rubric: it maps the goal to proof cones, records unrelated work that can be skipped with evidence, reports a simplicity score, and names escalation triggers for when the route must return to the full Team/Honest proof path. The rubric embeds Hyperplan-style adversarial pressure as compact lenses instead of a new command: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative. When `execution_lane.lane` is `proof_field_fast_lane`, SKS can keep the parent-owned minimal patch plus listed verification and skip Team debate, fresh executor teams, broad route rework, and unrelated checks. Database, security, visual-forensic, unknown, broad, failed, or unsupported-claim signals fail closed to the normal Team/Honest path. Use `sks pipeline plan --proof-field` after changed files are known to bind that Proof Field decision to the mission plan.
 
 `sks skill-dream` keeps generated skill complexity bounded without doing a heavy evaluation on every prompt. Route use writes compact counters to `.sneakoscope/skills/dream-state.json`; after the configured count/cooldown threshold, or when you run `sks skill-dream run`, SKS scans `.agents/skills` and writes `.sneakoscope/reports/skill-dream-latest.json` with keep, merge, prune, and improvement candidates. The report is intentionally advisory: deleting or merging skills requires explicit approval.
 
@@ -278,7 +282,7 @@ Default setup adds these generated SKS paths to the project `.gitignore`; `--loc
 
 Use `sks dollar-commands` to confirm that terminal discovery and Codex App prompt commands agree.
 
-TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks harness fixture` validates the broader Harness Growth Factory contract: deliberate forgetting fixtures, skill card metadata, experiment schema, tool-error taxonomy, permission profiles, MultiAgentV2 defaults, and Warp cockpit view coverage. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
+TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks harness fixture` validates the broader Harness Growth Factory contract: deliberate forgetting fixtures, skill card metadata, experiment schema, tool-error taxonomy, permission profiles, MultiAgentV2 defaults, and tmux cockpit view coverage. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
 
 ## Prompt `$` Commands
 
@@ -318,8 +322,8 @@ sks selftest --mock
 ### Start A CLI Workspace
 
 ```sh
-sks warp check
-sks warp open
+sks tmux check
+sks tmux open
 ```
 
 For the high-reasoning full-access profile:
@@ -381,14 +385,14 @@ npm install -g .
 
 If the global command is stale, reinstall globally from the repo or from npm.
 
-### Warp is missing
+### tmux is missing
 
 ```sh
-sks deps install warp
-sks warp check
+sks deps install tmux
+sks tmux check
 ```
 
-Install Warp from [warp.dev/download](https://www.warp.dev/download) or run `brew install --cask warp` on macOS, then re-run `sks warp check`.
+Install tmux from [tmux.dev/download](https://www.tmux.dev/download) or run `brew install tmux` on macOS, then re-run `sks tmux check`.
 
 ### Codex App tools are missing
 

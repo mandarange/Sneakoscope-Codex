@@ -23,10 +23,23 @@ import { rustInfo } from '../core/rust-accelerator.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
 import { defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
+import {
+  PPT_AUDIENCE_STRATEGY_ARTIFACT,
+  PPT_CLEANUP_REPORT_ARTIFACT,
+  PPT_GATE_ARTIFACT,
+  PPT_HTML_ARTIFACT,
+  PPT_PARALLEL_REPORT_ARTIFACT,
+  PPT_PDF_ARTIFACT,
+  PPT_RENDER_REPORT_ARTIFACT,
+  PPT_SOURCE_HTML_DIR,
+  PPT_TEMP_DIR,
+  writePptBuildArtifacts,
+  writePptRouteArtifacts
+} from '../core/ppt.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
-import { PIPELINE_PLAN_ARTIFACT, buildPipelinePlan, context7Evidence, evaluateStop, recordContext7Evidence, recordSubagentEvidence, validatePipelinePlan, writePipelinePlan } from '../core/pipeline.mjs';
+import { ALLOWED_REASONING_EFFORTS, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, GETDESIGN_REFERENCE, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { PIPELINE_PLAN_ARTIFACT, buildPipelinePlan, context7Evidence, evaluateStop, projectGateStatus, recordContext7Evidence, recordSubagentEvidence, validatePipelinePlan, writePipelinePlan } from '../core/pipeline.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, initTeamLive, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane } from '../core/team-live.mjs';
 import { ARTIFACT_FILES, validateDogfoodReport, validateEffortDecision, validateFromChatImgVisualMap, validateSkillCandidate, validateSkillInjectionDecision, validateTeamDashboardState, validateWorkOrderLedger } from '../core/artifact-schemas.mjs';
@@ -43,8 +56,10 @@ import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
-import { buildWarpLaunchConfigYaml, buildWarpLaunchPlan, buildWarpOpenArgs, isWarpShellSession, runWarpLaunchConfigSyntaxCheck, warpOpenLaunchDecision, warpReadiness, warpStatusKind, defaultWarpWorkspaceName, formatWarpBanner, launchWarpTeamView, launchWarpUi, platformWarpInstallHint, runWarpStatus, sanitizeWarpWorkspaceName, teamLaneStyle, writeWarpLaunchConfig } from '../core/warp-ui.mjs';
+import { buildTmuxLaunchPlan, buildTmuxOpenArgs, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
+import { context7Command } from './context7-command.mjs';
+import { askPostinstallQuestion, checkContext7, checkRequiredSkills, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, globalCodexSkillsRoot, postinstall, postinstallBootstrapDecision } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 
 const flag = (args, name) => args.includes(name);
@@ -68,9 +83,9 @@ export async function main(args) {
   if (!cmd) return help();
   if (cmd === '--help' || cmd === '-h') return help();
   if (cmd === '--version' || cmd === '-v' || cmd === 'version') return version();
-  if (cmd === 'postinstall') return postinstall();
+  if (cmd === 'postinstall') return postinstall({ bootstrap });
   if (cmd === 'wizard' || cmd === 'ui') return wizard(tail);
-  if (cmd === 'warp') return !sub || String(sub).startsWith('--') ? warpCommand('check', tail) : warpCommand(sub, rest);
+  if (cmd === 'tmux') return !sub || String(sub).startsWith('--') ? tmuxCommand('check', tail) : tmuxCommand(sub, rest);
   if (cmd === 'auto-review' || cmd === 'autoreview') return autoReviewCommand(sub, rest);
   if (cmd === 'update-check') return updateCheck(tail);
   if (cmd === 'help') return help(tail);
@@ -84,7 +99,8 @@ export async function main(args) {
   if (cmd === 'dollar-commands' || cmd === 'dollars' || cmd === '$') return dollarCommands(tail);
   if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
   if (cmd === 'qa-loop') return qaLoopCommand(sub, rest);
-  if (cmd === 'context7') return context7(sub, rest);
+  if (cmd === 'ppt') return pptCommand(sub, rest);
+  if (cmd === 'context7') return context7Command(sub, rest);
   if (cmd === 'pipeline') return pipeline(sub, rest);
   if (cmd === 'guard') return guard(sub, rest);
   if (cmd === 'conflicts') return conflicts(sub, rest);
@@ -135,19 +151,21 @@ Usage:
   sks root [--json]
   sks quickstart
   sks bootstrap [--install-scope global|project] [--local-only] [--json]
-  sks deps check|install [warp|codex|context7|all] [--yes] [--json]
+  sks deps check|install [tmux|codex|context7|all] [--yes] [--json]
   sks codex-app
   sks --mad [--high]
   sks auto-review status|enable|start [--high]
   sks --Auto-review [--high]
-  sks warp open [--workspace name]
-  sks warp status [--once]
+  sks tmux open [--workspace name]
+  sks tmux status [--once]
   sks dollar-commands [--json]
   sks dfix
   sks qa-loop prepare "target"
   sks qa-loop answer <mission-id|latest> <answers.json>
   sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N]
   sks qa-loop status <mission-id|latest>
+  sks ppt build <mission-id|latest> [--json]
+  sks ppt status <mission-id|latest> [--json]
   sks context7 check|setup|tools|resolve|docs|evidence ...
   sks pipeline status|resume|plan [--json] [--proof-field]
   sks pipeline answer <mission-id|latest> <answers.json>
@@ -168,7 +186,7 @@ Usage:
   sks team log|tail|watch|lane|status|dashboard [mission-id|latest]
   sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."
   sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."
-  sks team cleanup-warp [mission-id|latest]
+  sks team cleanup-tmux [mission-id|latest]
   sks research prepare "topic" [--depth frontier]
   sks research run <mission-id|latest> [--mock] [--max-cycles N]
   sks research status <mission-id|latest>
@@ -226,230 +244,6 @@ function isAutoReviewFlag(value) {
 
 function isMadHighLaunch(args = []) {
   return /^--(?:mad|MAD|mad-sks)$/i.test(String(args[0] || ''));
-}
-
-async function postinstall() {
-  const installRoot = path.resolve(process.env.INIT_CWD || process.cwd());
-  const conflictScan = await scanHarnessConflicts(installRoot);
-  if (conflictScan.hard_block) {
-    await postinstallHarnessConflictNotice(conflictScan);
-    return;
-  }
-  console.log('\nSKS installed.');
-  const shim = await ensureSksCommandDuringInstall();
-  if (shim.status === 'present') console.log(`SKS command: available (${shim.command}).`);
-  else if (shim.status === 'created') console.log(`SKS command: shim created at ${shim.command}.`);
-  else if (shim.status === 'created_not_on_path') console.log(`SKS command: shim created at ${shim.command}. Add ${path.dirname(shim.command)} to PATH, or run npx -y -p sneakoscope sks.`);
-  else if (shim.status === 'skipped') console.log(`SKS command: skipped (${shim.reason}).`);
-  else console.log(`SKS command: shim unavailable. Use npx -y -p sneakoscope sks. ${shim.error || ''}`.trim());
-  const context7Install = await ensureGlobalContext7DuringInstall();
-  if (context7Install.status === 'present') console.log('Context7 MCP: already configured for Codex.');
-  else if (context7Install.status === 'installed') console.log('Context7 MCP: configured for Codex.');
-  else if (context7Install.status === 'codex_missing') console.log('Context7 MCP: Codex CLI missing. Install @openai/codex or set SKS_CODEX_BIN, then run `sks context7 setup --scope global` or `sks setup` in a project.');
-  else if (context7Install.status === 'skipped') console.log(`Context7 MCP: skipped (${context7Install.reason}).`);
-  else if (context7Install.status === 'failed') console.log(`Context7 MCP: auto setup failed. Run \`sks context7 setup --scope global\` or \`sks setup\`. ${context7Install.error || ''}`.trim());
-  const globalSkills = await ensureGlobalCodexSkillsDuringInstall();
-  if (globalSkills.status === 'installed') console.log(`Codex App global $ skills: installed in ${globalSkills.root} (${globalSkills.installed_count} skills).`);
-  else if (globalSkills.status === 'partial') console.log(`Codex App global $ skills: partial in ${globalSkills.root}; missing ${globalSkills.missing_skills.join(', ')}. Run \`sks doctor --fix\`.`);
-  else if (globalSkills.status === 'skipped') console.log(`Codex App global $ skills: skipped (${globalSkills.reason}).`);
-  else if (globalSkills.status === 'failed') console.log(`Codex App global $ skills: auto setup failed. Run \`sks doctor --fix\`. ${globalSkills.error || ''}`.trim());
-  const bootstrapDecision = await postinstallBootstrapDecision(installRoot);
-  if (bootstrapDecision.run) {
-    console.log(`SKS bootstrap: ${bootstrapDecision.reason}.`);
-    await runPostinstallBootstrap(installRoot);
-    return;
-  }
-  console.log('\nNext:');
-  console.log('  sks bootstrap');
-  console.log(`\nSKS bootstrap was not run automatically: ${bootstrapDecision.reason}.`);
-  console.log('This initializes the current project, installs SKS Codex App skills, verifies Codex App/Context7 readiness, and checks warp/runtime dependencies.');
-  console.log('Dependency repair: sks deps check; sks deps install warp');
-  console.log('Open runtime after readiness is green: sks\n');
-}
-
-async function postinstallHarnessConflictNotice(conflictScan) {
-  console.log('\nSneakoscope Codex package installed, but SKS setup is blocked.');
-  console.log(formatHarnessConflictReport(conflictScan, { includePrompt: false }));
-  console.log('\nWhat this means: npm can finish installing the package, but `sks setup` and `sks doctor --fix` will refuse to activate SKS until the conflicting harness is removed with human approval.');
-  console.log('No files were removed by postinstall.');
-  console.log('Cleanup requires a human-approved Codex App session. Recommended model: GPT-5.5, reasoning: high.');
-  if (shouldAskPostinstallQuestion()) {
-    const answer = await askPostinstallQuestion('Show the cleanup prompt now? [y/N] ');
-    if (/^(y|yes|예|네|응)$/i.test(answer.trim())) {
-      console.log('\nCleanup prompt:\n');
-      console.log(llmHarnessCleanupPrompt(conflictScan));
-    } else {
-      console.log('Cleanup prompt skipped. You can print it later with: sks conflicts prompt');
-    }
-  } else {
-    console.log('Print the cleanup prompt later with: sks conflicts prompt');
-  }
-  console.log('After approved cleanup, rerun: sks setup && sks doctor --fix && sks selftest --mock\n');
-}
-
-function shouldAskPostinstallQuestion() {
-  if (process.env.SKS_POSTINSTALL_PROMPT === '1') return true;
-  return Boolean(input.isTTY && output.isTTY && process.env.CI !== 'true' && process.env.SKS_POSTINSTALL_NO_PROMPT !== '1');
-}
-
-async function postinstallBootstrapDecision(root) {
-  if (process.env.SKS_POSTINSTALL_NO_BOOTSTRAP === '1') return { run: false, reason: 'SKS_POSTINSTALL_NO_BOOTSTRAP=1' };
-  if (process.env.SKS_POSTINSTALL_BOOTSTRAP === '0') return { run: false, reason: 'SKS_POSTINSTALL_BOOTSTRAP=0' };
-  const candidate = await isProjectSetupCandidate(path.resolve(root || process.cwd()));
-  if (!candidate && process.env.SKS_POSTINSTALL_BOOTSTRAP !== '1') return { run: false, reason: 'no project marker found in install cwd' };
-  if (process.env.SKS_POSTINSTALL_BOOTSTRAP === '1') return { run: true, reason: 'forced by SKS_POSTINSTALL_BOOTSTRAP=1' };
-  return { run: true, reason: 'auto-running sks setup --bootstrap --install-scope global --force' };
-}
-
-async function runPostinstallBootstrap(root) {
-  const previousCwd = process.cwd();
-  process.chdir(path.resolve(root || previousCwd));
-  try {
-    await bootstrap(['--from-postinstall', '--install-scope', 'global', '--force']);
-  } finally {
-    process.chdir(previousCwd);
-  }
-}
-
-async function askPostinstallQuestion(question) {
-  const rl = readline.createInterface({ input, output });
-  try {
-    return await rl.question(question);
-  } finally {
-    rl.close();
-  }
-}
-
-async function ensureSksCommandDuringInstall(opts = {}) {
-  if (process.env.SKS_SKIP_POSTINSTALL_SHIM === '1' && !opts.force) return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_SHIM=1' };
-  const pathEnv = opts.pathEnv ?? process.env.PATH ?? '';
-  const existing = await findCommandOnPath('sks', pathEnv);
-  if (isStableSksBin(existing)) return { status: 'present', command: existing };
-  const nodeBin = opts.nodeBin || process.execPath;
-  const target = opts.target || path.join(packageRoot(), 'bin', 'sks.mjs');
-  const dirs = candidateShimDirs(pathEnv, opts.home || process.env.HOME);
-  const script = process.platform === 'win32'
-    ? `@echo off\r\n"${nodeBin}" "${target}" %*\r\n`
-    : `#!/bin/sh\nexec "${nodeBin}" "${target}" "$@"\n`;
-  const suffix = process.platform === 'win32' ? '.cmd' : '';
-  let createdFallback = null;
-  let lastError = '';
-  for (const entry of dirs) {
-    const dest = path.join(entry.dir, `sks${suffix}`);
-    try {
-      await ensureDir(entry.dir);
-      await writeTextAtomic(dest, script);
-      if (process.platform !== 'win32') await fsp.chmod(dest, 0o755).catch(() => {});
-      if (entry.onPath) return { status: 'created', command: dest };
-      createdFallback ||= dest;
-    } catch (err) {
-      lastError = err.message;
-    }
-  }
-  if (createdFallback) return { status: 'created_not_on_path', command: createdFallback };
-  return { status: 'failed', error: lastError };
-}
-
-function candidateShimDirs(pathEnv, home) {
-  const seen = new Set();
-  const out = [];
-  for (const raw of String(pathEnv || '').split(path.delimiter).filter(Boolean)) {
-    const dir = path.resolve(raw);
-    if (seen.has(dir) || isTransientNpmBinPath(dir)) continue;
-    seen.add(dir);
-    out.push({ dir, onPath: true });
-  }
-  for (const raw of [home && path.join(home, '.local', 'bin'), home && path.join(home, 'bin')].filter(Boolean)) {
-    const dir = path.resolve(raw);
-    if (seen.has(dir)) continue;
-    seen.add(dir);
-    out.push({ dir, onPath: false });
-  }
-  return out;
-}
-
-async function findCommandOnPath(name, pathEnv) {
-  const suffixes = process.platform === 'win32' ? ['.cmd', '.exe', ''] : [''];
-  for (const dir of String(pathEnv || '').split(path.delimiter).filter(Boolean)) {
-    for (const suffix of suffixes) {
-      const candidate = path.join(dir, `${name}${suffix}`);
-      if (await exists(candidate)) return candidate;
-    }
-  }
-  return null;
-}
-
-async function ensureGlobalContext7DuringInstall() {
-  if (process.env.SKS_SKIP_POSTINSTALL_CONTEXT7 === '1') return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_CONTEXT7=1' };
-  const codex = await getCodexInfo().catch(() => ({}));
-  if (!codex.bin) return { status: 'codex_missing' };
-  const list = await runProcess(codex.bin, ['mcp', 'list'], { timeoutMs: 8000, maxOutputBytes: 32 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
-  if (list.code === 0 && /context7/i.test(`${list.stdout}\n${list.stderr}`)) return { status: 'present' };
-  const add = await runProcess(codex.bin, ['mcp', 'add', 'context7', '--', 'npx', '-y', '@upstash/context7-mcp@latest'], { timeoutMs: 30000, maxOutputBytes: 64 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
-  if (add.code === 0) return { status: 'installed' };
-  return { status: 'failed', error: `${add.stderr || add.stdout || 'codex mcp add failed'}`.trim() };
-}
-
-async function ensureGlobalCodexSkillsDuringInstall(opts = {}) {
-  if (process.env.SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS === '1' && !opts.force) return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS=1' };
-  const home = opts.home || process.env.HOME || os.homedir();
-  if (!home) return { status: 'skipped', reason: 'home directory unavailable' };
-  const root = globalCodexSkillsRoot(home);
-  try {
-    const install = await installSkills(home);
-    const skills = await checkRequiredSkills(home, root);
-    return { status: skills.ok ? 'installed' : 'partial', root, installed_count: install.installed_skills.length, removed_aliases: install.removed_agent_skill_aliases, missing_skills: skills.missing };
-  } catch (err) {
-    return { status: 'failed', root, error: err.message };
-  }
-}
-
-async function ensureRelatedCliTools(args = []) {
-  const skip = flag(args, '--skip-cli-tools') || process.env.SKS_SKIP_CLI_TOOLS === '1';
-  const codex = await ensureCodexCliTool({ skip });
-  const warp = await warpReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
-  return {
-    codex,
-    warp: {
-      ok: Boolean(warp.ok),
-      app: warp.app || null,
-      cli: warp.cli || null,
-      version: warp.version || null,
-      launch_config_dir: warp.launch_config_dir || null,
-      uri_scheme: warp.uri_scheme || null,
-      install_hint: warp.ok ? null : platformWarpInstallHint(),
-      error: warp.error || null
-    }
-  };
-}
-
-async function ensureCodexCliTool({ skip = false } = {}) {
-  if (skip) return { status: 'skipped', reason: 'SKS_SKIP_CLI_TOOLS=1 or --skip-cli-tools' };
-  const before = await getCodexInfo().catch(() => ({}));
-  if (before.bin) return { status: 'present', bin: before.bin, version: before.version || null };
-  const npmBin = await which('npm');
-  if (!npmBin) return { status: 'failed', error: 'npm not found on PATH; install Codex CLI manually with npm i -g @openai/codex@latest.' };
-  const install = await runProcess(npmBin, ['i', '-g', '@openai/codex@latest'], {
-    timeoutMs: 120000,
-    maxOutputBytes: 128 * 1024
-  }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
-  if (install.code !== 0) {
-    return { status: 'failed', error: `${install.stderr || install.stdout || 'npm i -g @openai/codex@latest failed'}`.trim() };
-  }
-  const after = await getCodexInfo().catch(() => ({}));
-  return {
-    status: after.bin ? 'installed' : 'installed_not_on_path',
-    bin: after.bin || null,
-    version: after.version || null,
-    hint: after.bin ? null : 'npm completed, but codex is not on PATH. Restart the shell or set SKS_CODEX_BIN.'
-  };
-}
-
-async function isProjectSetupCandidate(root) {
-  for (const marker of ['package.json', '.git', '.codex', '.agents', 'AGENTS.md']) {
-    if (await exists(path.join(root, marker))) return true;
-  }
-  return false;
 }
 
 async function wizard(args = []) {
@@ -532,7 +326,7 @@ async function updateCheck(args = []) {
   if (result.update_available) console.log('Run:     npm i -g sneakoscope');
 }
 
-const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: questions -> $Answer, small design/content -> $DFix, Computer Use UI/browser speed work -> $Computer-Use, code -> $Team. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
+const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: questions -> $Answer, small design/content -> $DFix, presentation/PDF artifacts -> $PPT, Computer Use UI/browser speed work -> $Computer-Use, code -> $Team. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
 
 function commands(args = []) {
   if (flag(args, '--json')) return console.log(JSON.stringify({ aliases: ['sks', 'sneakoscope'], dollar_commands: DOLLAR_COMMANDS, app_skill_aliases: DOLLAR_COMMAND_ALIASES, commands: COMMAND_CATALOG }, null, 2));
@@ -612,129 +406,59 @@ Rules:
 `);
 }
 
-async function context7(sub = 'check', args = []) {
-  const action = sub || 'check';
-  const setupScope = action === 'setup' ? readOption(args, '--scope', flag(args, '--global') ? 'global' : 'project') : null;
-  const root = action === 'setup' && setupScope === 'project' ? await projectRoot() : await sksRoot();
-  if (action === 'check') {
-    const result = await checkContext7(root);
-    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-    console.log('SKS Context7 MCP\n');
-    console.log(`Project config: ${result.project.ok ? 'ok' : 'missing'} ${result.project.path}`);
-    console.log(`Global config:  ${result.global.ok ? 'ok' : 'missing'} ${result.global.path}`);
-    console.log(`Codex mcp list: ${result.codex_mcp_list.ok ? 'ok' : result.codex_mcp_list.checked ? 'missing' : 'not checked'}`);
-    console.log(`Ready:          ${result.ok ? 'yes' : 'no'}`);
-    if (!result.ok) console.log('\nRun: sks context7 setup --scope project');
+async function pptCommand(sub = 'status', args = []) {
+  const root = await sksRoot();
+  const action = sub || 'status';
+  const missionArg = args.find((arg) => !String(arg).startsWith('--')) || 'latest';
+  const id = await resolveMissionId(root, missionArg);
+  if (!id) throw new Error('Usage: sks ppt build|status <mission-id|latest> [--json]');
+  const { dir } = await loadMission(root, id);
+  if (action === 'build') {
+    const contract = await readJson(path.join(dir, 'decision-contract.json'), null);
+    if (!contract) throw new Error(`PPT build requires a sealed decision-contract.json for ${id}`);
+    const result = await writePptBuildArtifacts(dir, contract);
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'ppt.build.completed', ok: result.ok, files: result.files });
+    if (flag(args, '--json')) return console.log(JSON.stringify({ ok: result.ok, mission_id: id, files: result.files, gate: result.gate, report: result.report }, null, 2));
+    console.log('SKS PPT build\n');
+    console.log(`Mission: ${id}`);
+    console.log(`HTML:    ${path.relative(root, result.files.html)}`);
+    console.log(`PDF:     ${path.relative(root, result.files.pdf)}`);
+    console.log(`Report:  ${path.relative(root, result.files.render_report)}`);
+    console.log(`Cleanup: ${path.relative(root, result.files.cleanup_report)}`);
+    console.log(`Parallel:${' '.repeat(1)}${path.relative(root, result.files.parallel_report)}`);
+    console.log(`Gate:    ${result.ok ? 'passed' : 'blocked'} (${path.relative(root, result.files.gate)})`);
     return;
   }
-  if (action === 'tools') {
-    const result = await context7Tools({ timeoutMs: readNumberOption(args, '--timeout-ms', 30000) });
-    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-    console.log('SKS Context7 Local MCP Tools\n');
-    console.log(`Server: ${result.server.info?.name || 'context7'} ${result.server.info?.version || ''}`.trim());
-    console.log(`Command: ${result.server.command} ${result.server.args.join(' ')}`);
-    console.log(`Tools:  ${result.tool_names.join(', ') || 'none'}`);
-    if (!result.tool_names.includes('resolve-library-id') || !result.tool_names.some((name) => name === 'query-docs' || name === 'get-library-docs')) {
-      process.exitCode = 1;
-      console.log('\nContext7 local MCP is missing the required resolve/docs tools.');
-    }
+  if (action === 'status') {
+    const gate = await readJson(path.join(dir, PPT_GATE_ARTIFACT), null);
+    const report = await readJson(path.join(dir, PPT_RENDER_REPORT_ARTIFACT), null);
+    const status = {
+      ok: Boolean(gate?.passed),
+      mission_id: id,
+      gate,
+      report,
+      files: {
+        html: path.join(dir, PPT_HTML_ARTIFACT),
+        source_html: path.join(dir, PPT_HTML_ARTIFACT),
+        pdf: path.join(dir, PPT_PDF_ARTIFACT),
+        render_report: path.join(dir, PPT_RENDER_REPORT_ARTIFACT),
+        cleanup_report: path.join(dir, PPT_CLEANUP_REPORT_ARTIFACT),
+        parallel_report: path.join(dir, PPT_PARALLEL_REPORT_ARTIFACT),
+        gate: path.join(dir, PPT_GATE_ARTIFACT)
+      }
+    };
+    if (flag(args, '--json')) return console.log(JSON.stringify(status, null, 2));
+    console.log('SKS PPT status\n');
+    console.log(`Mission: ${id}`);
+    console.log(`Gate:    ${status.ok ? 'passed' : 'not passed'}`);
+    console.log(`HTML:    ${path.relative(root, status.files.html)}`);
+    console.log(`PDF:     ${path.relative(root, status.files.pdf)}`);
+    console.log(`Report:  ${path.relative(root, status.files.render_report)}`);
+    console.log(`Cleanup: ${path.relative(root, status.files.cleanup_report)}`);
+    console.log(`Parallel:${' '.repeat(1)}${path.relative(root, status.files.parallel_report)}`);
     return;
   }
-  if (action === 'resolve') {
-    const positional = positionalArgs(args);
-    const libraryName = positional.join(' ').trim();
-    if (!libraryName) throw new Error('Usage: sks context7 resolve <library-name> [--query "..."] [--json]');
-    const result = await context7Resolve(libraryName, {
-      query: readOption(args, '--query', libraryName),
-      timeoutMs: readNumberOption(args, '--timeout-ms', 30000)
-    });
-    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-    console.log('SKS Context7 Resolve\n');
-    console.log(`Library: ${libraryName}`);
-    console.log(`ID:      ${result.library_id || 'not resolved'}`);
-    console.log(`Server:  ${result.server.info?.name || 'context7'} ${result.server.info?.version || ''}`.trim());
-    const text = context7Text(result.result).split(/\n/).slice(0, 24).join('\n').trim();
-    if (text) console.log(`\n${text}`);
-    if (!result.ok || !result.library_id) process.exitCode = 1;
-    return;
-  }
-  if (action === 'docs') {
-    const positional = positionalArgs(args);
-    const libraryNameOrId = positional.join(' ').trim();
-    if (!libraryNameOrId) throw new Error('Usage: sks context7 docs <library-name|/org/project> [--query "..."] [--topic "..."] [--tokens N] [--json]');
-    const result = await context7Docs(libraryNameOrId, {
-      query: readOption(args, '--query', readOption(args, '--topic', libraryNameOrId)),
-      topic: readOption(args, '--topic', libraryNameOrId),
-      tokens: readNumberOption(args, '--tokens', 2000),
-      timeoutMs: readNumberOption(args, '--timeout-ms', 30000)
-    });
-    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-    printContext7DocsResult(result, { title: 'SKS Context7 Docs' });
-    if (!result.ok) process.exitCode = 1;
-    return;
-  }
-  if (action === 'evidence') {
-    const positional = positionalArgs(args);
-    const missionArg = positional.shift();
-    const libraryNameOrId = positional.join(' ').trim();
-    if (!missionArg || !libraryNameOrId) throw new Error('Usage: sks context7 evidence <mission-id|latest> <library-name|/org/project> [--query "..."] [--topic "..."] [--tokens N] [--json]');
-    const missionId = await resolveMissionId(root, missionArg);
-    if (!missionId) throw new Error('No mission found for Context7 evidence.');
-    const result = await context7Docs(libraryNameOrId, {
-      query: readOption(args, '--query', readOption(args, '--topic', libraryNameOrId)),
-      topic: readOption(args, '--topic', libraryNameOrId),
-      tokens: readNumberOption(args, '--tokens', 2000),
-      timeoutMs: readNumberOption(args, '--timeout-ms', 30000)
-    });
-    const state = { ...(await readJson(stateFile(root), {})), mission_id: missionId };
-    await recordContext7Evidence(root, state, { tool_name: 'resolve-library-id', library: libraryNameOrId, library_id: result.library_id, source: result.resolve ? 'sks context7 evidence' : 'sks context7 evidence explicit-library-id' });
-    if (result.docs_tool) {
-      await recordContext7Evidence(root, state, { tool_name: result.docs_tool, library_id: result.library_id, source: 'sks context7 evidence' });
-    }
-    const evidence = await context7Evidence(root, state);
-    const out = { ...result, mission_id: missionId, evidence };
-    if (flag(args, '--json')) return console.log(JSON.stringify(out, null, 2));
-    printContext7DocsResult(result, { title: 'SKS Context7 Evidence' });
-    console.log(`\nMission:  ${missionId}`);
-    console.log(`Evidence: ${evidence.ok ? 'ok' : 'missing'} resolve=${evidence.resolve ? 'yes' : 'no'} docs=${evidence.docs ? 'yes' : 'no'} events=${evidence.count}`);
-    if (!result.ok || !evidence.ok) process.exitCode = 1;
-    return;
-  }
-  if (action === 'setup') {
-    const scope = setupScope;
-    const transport = readOption(args, '--transport', flag(args, '--remote') ? 'remote' : 'local');
-    if (!['project', 'global'].includes(scope)) throw new Error('Invalid Context7 scope. Use project or global.');
-    if (!['local', 'remote'].includes(transport)) throw new Error('Invalid Context7 transport. Use local or remote.');
-    if (scope === 'project') {
-      const changed = await ensureProjectContext7Config(root, transport);
-      const result = await checkContext7(root);
-      if (flag(args, '--json')) return console.log(JSON.stringify({ changed, ...result }, null, 2));
-      console.log(`Context7 project MCP ${changed ? 'configured' : 'already configured'} in .codex/config.toml`);
-      console.log(`Ready: ${result.ok ? 'yes' : 'no'}`);
-      return;
-    }
-    const codex = await getCodexInfo();
-    if (!codex.bin) throw new Error('Codex CLI missing. Install separately: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
-    const cmdArgs = transport === 'remote'
-      ? ['mcp', 'add', 'context7', '--url', 'https://mcp.context7.com/mcp']
-      : ['mcp', 'add', 'context7', '--', 'npx', '-y', '@upstash/context7-mcp@latest'];
-    const result = await runProcess(codex.bin, cmdArgs, { timeoutMs: 30000, maxOutputBytes: 64 * 1024 });
-    if (flag(args, '--json')) return console.log(JSON.stringify({ command: `${codex.bin} ${cmdArgs.join(' ')}`, result }, null, 2));
-    if (result.code !== 0) throw new Error(result.stderr || result.stdout || 'codex mcp add failed');
-    console.log('Context7 global MCP configured.');
-    return;
-  }
-  throw new Error(`Unknown context7 command: ${action}`);
-}
-
-function printContext7DocsResult(result, opts = {}) {
-  console.log(`${opts.title || 'SKS Context7 Docs'}\n`);
-  console.log(`Library ID: ${result.library_id || 'not resolved'}`);
-  console.log(`Docs tool:  ${result.docs_tool || 'missing'}`);
-  console.log(`Server:     ${result.server?.info?.name || 'context7'} ${result.server?.info?.version || ''}`.trim());
-  const text = context7Text(result.docs).split(/\n/).slice(0, 48).join('\n').trim();
-  if (text) console.log(`\n${text}`);
-  if (result.error) console.log(`\nError: ${result.error}`);
+  throw new Error(`Unknown ppt command: ${action}`);
 }
 
 async function pipeline(sub = 'status', args = []) {
@@ -745,11 +469,13 @@ async function pipeline(sub = 'status', args = []) {
   const state = await readJson(stateFile(root), {});
   const evidence = await context7Evidence(root, state);
   const plan = state.mission_id ? await readJson(path.join(missionDir(root, state.mission_id), PIPELINE_PLAN_ARTIFACT), null) : null;
+  const gateProjection = await projectGateStatus(root, state);
   const stop = await evaluateStop(root, state, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   const result = {
     root,
     state,
     context7: evidence,
+    gate_projection: gateProjection,
     plan: plan ? pipelinePlanSummary(plan, root, state.mission_id) : null,
     stop_gate: state.stop_gate || null,
     next_action: stop?.reason || 'No active blocking route gate detected.'
@@ -768,6 +494,7 @@ async function pipeline(sub = 'status', args = []) {
   }
   console.log(`Reasoning: ${state.reasoning_effort || 'medium'}${state.reasoning_profile ? ` (${state.reasoning_profile})` : ''}${state.reasoning_temporary ? ' temporary' : ''}`);
   console.log(`Stop gate: ${state.stop_gate || 'none'}`);
+  console.log(`Gate projection: ${gateProjection.ok ? 'ok' : `blocked (${gateProjection.blockers.join(', ')})`}`);
   console.log(`Context7:  ${state.context7_required ? (evidence.ok ? 'ok' : 'required-missing') : 'optional'} (${evidence.count || 0} event(s))`);
   console.log(`Next:      ${result.next_action}`);
 }
@@ -796,10 +523,11 @@ async function pipelinePlan(root, args = []) {
   const changedRaw = readOption(args, '--changed', '');
   const proofField = flag(args, '--proof-field') ? await buildProofField(root, { intent, changedFiles: changedRaw ? changedRaw.split(',') : undefined }) : null;
   const contract = dir ? await readJson(path.join(dir, 'decision-contract.json'), {}) : {};
+  const contractSealed = contract?.status === 'sealed' || Boolean(contract?.sealed_at || contract?.sealed_hash);
   const ambiguity = {
-    required: Boolean(routeContext.clarification_gate || state.ambiguity_gate_required),
-    passed: Boolean(state.ambiguity_gate_passed || state.clarification_passed),
-    status: state.clarification_required ? 'awaiting_answers' : (state.ambiguity_gate_passed ? 'contract_sealed' : undefined),
+    required: Boolean(routeContext.clarification_gate || state.ambiguity_gate_required || contractSealed),
+    passed: Boolean(state.ambiguity_gate_passed || state.clarification_passed || contractSealed),
+    status: state.clarification_required ? 'awaiting_answers' : ((state.ambiguity_gate_passed || contractSealed) ? 'contract_sealed' : undefined),
     contract_hash: contract?.sealed_hash || null
   };
   const planInput = { missionId: id || null, route, task: intent, required: Boolean(routeContext.context7_required || state.context7_required), ambiguity, proofField };
@@ -934,6 +662,25 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
         supabase_mcp_schema_cleanup_allowed: true,
         direct_execute_sql_allowed: true,
         catastrophic_safety_guard_active: true
+      }
+    };
+  }
+  if (route?.id === 'PPT') {
+    await writePptRouteArtifacts(dir, contract);
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), {
+      ts: nowIso(),
+      type: 'ppt.materialized_after_ambiguity_gate',
+      route: route.id,
+      audience_strategy_artifact: PPT_AUDIENCE_STRATEGY_ARTIFACT,
+      gate: PPT_GATE_ARTIFACT
+    });
+    return {
+      phase: 'PPT_AUDIENCE_STRATEGY_READY',
+      prompt: routeContext.task || mission.prompt || '',
+      state: {
+        ppt_audience_strategy_ready: true,
+        ppt_gate_ready: true,
+        ...madSksState
       }
     };
   }
@@ -1120,43 +867,6 @@ async function reasoningCommand(args = []) {
   console.log('Lifecycle:  temporary; return to default/user-selected profile after the route gate passes');
 }
 
-async function checkContext7(root) {
-  const projectPath = path.join(root, '.codex', 'config.toml');
-  const globalPath = path.join(process.env.HOME || '', '.codex', 'config.toml');
-  const projectText = await safeReadText(projectPath);
-  const globalText = await safeReadText(globalPath);
-  const codex = await getCodexInfo().catch(() => ({}));
-  let list = { checked: false, ok: false, stdout: '', stderr: '' };
-  if (codex.bin) {
-    const out = await runProcess(codex.bin, ['mcp', 'list'], { timeoutMs: 8000, maxOutputBytes: 32 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
-    list = { checked: true, ok: out.code === 0 && /context7/i.test(`${out.stdout}\n${out.stderr}`), stdout: out.stdout || '', stderr: out.stderr || '' };
-  }
-  const result = {
-    project: { path: projectPath, ok: hasContext7ConfigText(projectText) },
-    global: { path: globalPath, ok: hasContext7ConfigText(globalText) },
-    codex_mcp_list: list
-  };
-  result.ok = result.project.ok || result.codex_mcp_list.ok || (result.global.ok && !list.checked);
-  return result;
-}
-
-async function ensureProjectContext7Config(root, transport = 'local') {
-  const configPath = path.join(root, '.codex', 'config.toml');
-  await ensureDir(path.dirname(configPath));
-  const current = await safeReadText(configPath);
-  const block = context7ConfigToml(transport).trim();
-  const existingBlock = /(^|\n)\[mcp_servers\.context7\]\n[\s\S]*?(?=\n\[[^\]]+\]|\s*$)/;
-  if (existingBlock.test(current)) {
-    const next = current.replace(existingBlock, `$1${block}\n`);
-    if (next === current) return false;
-    await writeTextAtomic(configPath, next.endsWith('\n') ? next : `${next}\n`);
-    return true;
-  }
-  if (hasContext7ConfigText(current)) return false;
-  await writeTextAtomic(configPath, `${current.trimEnd()}${current.trim() ? '\n\n' : ''}${block}\n`);
-  return true;
-}
-
 function readOption(args, name, fallback) {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
@@ -1169,23 +879,23 @@ function readNumberOption(args, name, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-async function warpCommand(sub = 'start', args = []) {
+async function tmuxCommand(sub = 'start', args = []) {
   const action = sub || 'start';
   if (action === 'status' || action === 'banner') {
     if (flag(args, '--json')) {
       const status = await codexAppIntegrationStatus();
       return console.log(JSON.stringify(status, null, 2));
     }
-    await runWarpStatus(action === 'banner' ? ['--once', ...args] : args);
+    await runTmuxStatus(action === 'banner' ? ['--once', ...args] : args);
     return;
   }
   if (action === 'check') {
     const root = await sksRoot();
-    const plan = await buildWarpLaunchPlan({ root, session: readOption(args, '--session', null) });
+    const plan = await buildTmuxLaunchPlan({ root, session: readOption(args, '--session', null) });
     if (flag(args, '--json')) return console.log(JSON.stringify(plan, null, 2));
-    console.log(formatWarpBanner(plan.app));
+    console.log(formatTmuxBanner(plan.app));
     console.log('');
-    console.log(`warp:      ${plan.warp.ok ? 'ok' : 'missing'} ${plan.warp.version || ''}`.trim());
+    console.log(`tmux:      ${plan.tmux.ok ? 'ok' : 'missing'} ${plan.tmux.version || ''}`.trim());
     console.log(`Workspace: ${plan.workspace}`);
     console.log(`Project:   ${plan.root}`);
     console.log(`Ready:     ${plan.ready ? 'yes' : 'no'}`);
@@ -1197,16 +907,16 @@ async function warpCommand(sub = 'start', args = []) {
     return;
   }
   if (['start', 'attach', 'connect', 'open'].includes(action)) {
-    const result = await launchWarpUi(args);
+    const result = await launchTmuxUi(args);
     if (flag(args, '--json')) console.log(JSON.stringify(result, null, 2));
     return;
   }
-  console.error('Usage: sks warp open|start|check|status|banner [--workspace name]');
+  console.error('Usage: sks tmux open|start|check|status|banner [--workspace name]');
   process.exitCode = 1;
 }
 
 async function madHighCommand(args = []) {
-  const cleanArgs = args.filter((arg) => !['--mad', '--MAD', '--mad-sks', '--high', '--no-auto-install-warp'].includes(arg));
+  const cleanArgs = args.filter((arg) => !['--mad', '--MAD', '--mad-sks', '--high', '--no-auto-install-tmux'].includes(arg));
   if (flag(args, '--json')) {
     const profile = await enableMadHighProfile();
     return console.log(JSON.stringify(profile, null, 2));
@@ -1230,11 +940,11 @@ async function madHighCommand(args = []) {
   }
   const profile = await enableMadHighProfile();
   console.log(`SKS MAD auto-review profile ready: ${madHighProfileName()}`);
-  console.log('Scope: explicit warp launch only; full access uses Codex auto_review approvals when approval prompts are raised.');
-  const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', `sks-mad-${defaultWarpWorkspaceName(process.cwd())}`));
-  return launchWarpUi([...cleanArgs, '--workspace', workspace], {
+  console.log('Scope: explicit tmux launch only; full access uses Codex auto_review approvals when approval prompts are raised.');
+  const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
+  return launchTmuxUi([...cleanArgs, '--workspace', workspace], {
     codexArgs: ['--profile', profile.profile_name],
-    autoInstallWarp: !flag(args, '--no-auto-install-warp'),
+    autoInstallTmux: !flag(args, '--no-auto-install-tmux'),
     conciseBlockers: true
   });
 }
@@ -1270,12 +980,12 @@ async function ensureMadLaunchDependencies(args = []) {
     const codex = await getCodexInfo().catch(() => ({}));
     if (!codex.bin) actions.push(await installCodexDependency(args, { prompt: 'Codex CLI missing. Install latest Codex CLI with npm i -g @openai/codex@latest?' }));
   }
-  if (!flag(args, '--no-auto-install-warp')) {
-    const warp = await warpReadiness().catch(() => ({ ok: false }));
-    if (!warp.ok) actions.push(await installWarpDependency(args));
+  if (!flag(args, '--no-auto-install-tmux')) {
+    const tmux = await tmuxReadiness().catch(() => ({ ok: false }));
+    if (!tmux.ok) actions.push(await installTmuxDependency(args));
   }
   const status = await depsStatus(await sksRoot());
-  return { ready: Boolean(status.codex_cli.ok && status.warp.ok), actions, status };
+  return { ready: Boolean(status.codex_cli.ok && status.tmux.ok), actions, status };
 }
 
 async function deps(sub = 'check', args = []) {
@@ -1289,7 +999,7 @@ async function deps(sub = 'check', args = []) {
     return;
   }
   if (action === 'install') return depsInstall(args);
-  console.error('Usage: sks deps check|install [warp|codex|context7|all] [--yes] [--json]');
+  console.error('Usage: sks deps check|install [tmux|codex|context7|all] [--yes] [--json]');
   process.exitCode = 1;
 }
 
@@ -1299,7 +1009,7 @@ async function depsStatus(root = null, opts = {}) {
   const codex = opts.codex || await getCodexInfo().catch(() => ({}));
   const app = opts.codexApp || await codexAppIntegrationStatus({ codex });
   const context7 = opts.context7 || await checkContext7(root);
-  const warp = opts.warp || await warpReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
+  const tmux = opts.tmux || await tmuxReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
   const brew = process.platform === 'darwin' ? await which('brew').catch(() => null) : null;
   const globalBin = await discoverGlobalSksCommand();
   const npmPrefix = npmBin ? await runProcess(npmBin, ['prefix', '-g'], { timeoutMs: 8000, maxOutputBytes: 4096 }).catch(() => null) : null;
@@ -1307,10 +1017,10 @@ async function depsStatus(root = null, opts = {}) {
   const npmPrefixDir = npmPrefix?.code === 0 ? npmPrefix.stdout.trim().split(/\r?\n/).pop() : null;
   const npmBinDir = npmPrefixDir ? (process.platform === 'win32' ? npmPrefixDir : path.join(npmPrefixDir, 'bin')) : null;
   const nodeOk = Number(process.versions.node.split('.')[0]) >= 20;
-  const homebrewNeeded = process.platform === 'darwin' && !warp.ok;
+  const homebrewNeeded = process.platform === 'darwin' && !tmux.ok;
   return {
     root,
-    ready: Boolean(nodeOk && npmBin && globalBin && codex.bin && context7.ok && warp.ok),
+    ready: Boolean(nodeOk && npmBin && globalBin && codex.bin && context7.ok && tmux.ok),
     node: { ok: nodeOk, version: process.version },
     npm: { ok: Boolean(npmBin), bin: npmBin, global_bin_dir: npmBinDir, global_bin_on_path: npmBinDir ? pathText.split(path.delimiter).includes(npmBinDir) : null },
     sneakoscope: { ok: Boolean(globalBin), bin: globalBin },
@@ -1319,13 +1029,13 @@ async function depsStatus(root = null, opts = {}) {
     context7,
     browser_use: { ok: app.mcp.has_browser_use, cache: app.plugins.browser_use_cache },
     computer_use: { ok: app.mcp.has_computer_use, cache: app.plugins.computer_use_cache },
-    warp: { ok: Boolean(warp.ok), app: warp.app || null, cli: warp.cli || null, version: warp.version || null, launch_config_dir: warp.launch_config_dir || null, uri_scheme: warp.uri_scheme || null, install_hint: warp.ok ? null : platformWarpInstallHint(), error: warp.error || null },
-    homebrew: process.platform === 'darwin' ? { ok: Boolean(brew), bin: brew, required_for_warp_install: homebrewNeeded } : { ok: null, bin: null, required_for_warp_install: false },
-    next_actions: depsNextActions({ npmBin, globalBin, codex, app, context7, warp, brew, nodeOk })
+    tmux: { ok: Boolean(tmux.ok), bin: tmux.bin || null, version: tmux.version || null, min_version: tmux.min_version || '3.0', current_session: Boolean(tmux.current_session), install_hint: tmux.ok ? null : platformTmuxInstallHint(), error: tmux.error || null },
+    homebrew: process.platform === 'darwin' ? { ok: Boolean(brew), bin: brew, required_for_tmux_install: homebrewNeeded } : { ok: null, bin: null, required_for_tmux_install: false },
+    next_actions: depsNextActions({ npmBin, globalBin, codex, app, context7, tmux, brew, nodeOk })
   };
 }
 
-function depsNextActions({ npmBin, globalBin, codex, app, context7, warp, brew, nodeOk }) {
+function depsNextActions({ npmBin, globalBin, codex, app, context7, tmux, brew, nodeOk }) {
   const out = [];
   if (!nodeOk) out.push('Install Node.js 20.11+.');
   if (!npmBin) out.push('Install npm or use a Node.js distribution that includes npm.');
@@ -1333,7 +1043,7 @@ function depsNextActions({ npmBin, globalBin, codex, app, context7, warp, brew, 
   if (!codex.bin) out.push('Run: sks deps install codex');
   if (!context7.ok) out.push('Run: sks deps install context7');
   if (!app.ok) out.push('Run: sks codex-app check');
-  if (!warp.ok) out.push(process.platform === 'darwin' && !brew ? 'Install Warp from https://www.warp.dev/download, or install Homebrew then run: sks deps install warp' : 'Run: sks deps install warp');
+  if (!tmux.ok) out.push(process.platform === 'darwin' && !brew ? 'Install tmux from https://www.tmux.dev/download, or install Homebrew then run: sks deps install tmux' : 'Run: sks deps install tmux');
   return out;
 }
 
@@ -1348,7 +1058,7 @@ function printDepsStatus(status) {
   console.log(`Context7:    ${status.context7.ok ? 'ok' : 'missing'}`);
   console.log(`Browser Use: ${status.browser_use.ok ? 'ok' : 'missing'}`);
   console.log(`Computer Use:${status.computer_use.ok ? ' ok' : ' missing'}`);
-  console.log(`warp:        ${warpStatusKind(status.warp)} ${status.warp.version || status.warp.error || ''}`.trimEnd());
+  console.log(`tmux:        ${tmuxStatusKind(status.tmux)} ${status.tmux.version || status.tmux.error || ''}`.trimEnd());
   if (process.platform === 'darwin') console.log(`Homebrew:    ${status.homebrew.ok ? 'ok' : 'missing'} ${status.homebrew.bin || ''}`.trimEnd());
   console.log(`Ready:       ${status.ready ? 'true' : 'false'}`);
   if (status.next_actions.length) {
@@ -1360,11 +1070,11 @@ function printDepsStatus(status) {
 async function depsInstall(args = []) {
   const root = await sksRoot();
   const target = positionalArgs(args)[0] || 'all';
-  const wants = target === 'all' ? ['codex', 'context7', 'warp'] : [target];
+  const wants = target === 'all' ? ['codex', 'context7', 'tmux'] : [target];
   const actions = [];
   if (wants.includes('codex')) actions.push(await installCodexDependency(args));
   if (wants.includes('context7')) actions.push(await installContext7Dependency(root));
-  if (wants.includes('warp')) actions.push(await installWarpDependency(args));
+  if (wants.includes('tmux')) actions.push(await installTmuxDependency(args));
   const status = await depsStatus(root);
   const result = { target, actions, status };
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
@@ -1389,12 +1099,12 @@ async function installContext7Dependency(root) {
   return { target: 'context7', status: changed ? 'project_configured' : 'already_configured', command: 'sks context7 check' };
 }
 
-async function installWarpDependency(args = []) {
-  const before = await warpReadiness().catch(() => ({ ok: false }));
-  if (before.ok) return { target: 'warp', status: 'present', version: before.version || null, app: before.app || null, cli: before.cli || null };
-  const command = process.platform === 'darwin' ? 'brew install --cask warp' : platformWarpInstallHint();
-  if (flag(args, '--dry-run')) return { target: 'warp', status: 'dry_run', command };
-  return { target: 'warp', status: 'manual_required', command, error: before.error || 'Warp app not found' };
+async function installTmuxDependency(args = []) {
+  const before = await tmuxReadiness().catch(() => ({ ok: false }));
+  if (before.ok) return { target: 'tmux', status: 'present', version: before.version || null, app: before.app || null, cli: before.cli || null };
+  const command = process.platform === 'darwin' ? 'brew install tmux' : platformTmuxInstallHint();
+  if (flag(args, '--dry-run')) return { target: 'tmux', status: 'dry_run', command };
+  return { target: 'tmux', status: 'manual_required', command, error: before.error || 'tmux not found' };
 }
 
 async function confirmInstall(question, args = []) {
@@ -1444,8 +1154,8 @@ async function autoReviewCommand(sub = 'status', args = []) {
     if (flag(args, '--json')) return console.log(JSON.stringify(status, null, 2));
     console.log(`SKS Auto-Review enabled: ${profile}`);
     const sessionArg = readOption(cleanArgs, '--session', null);
-    const session = sessionArg || sanitizeWarpWorkspaceName(`${profile}-${defaultWarpWorkspaceName(process.cwd())}`);
-    return launchWarpUi([...cleanArgs, '--session', session], { codexArgs: ['--profile', profile] });
+    const session = sessionArg || sanitizeTmuxSessionName(`${profile}-${defaultTmuxSessionName(process.cwd())}`);
+    return launchTmuxUi([...cleanArgs, '--session', session], { codexArgs: ['--profile', profile] });
   }
   console.error('Usage: sks auto-review status|enable|disable|start [--high] [--json]');
   console.error('Alias: sks --Auto-review [--high]');
@@ -1480,7 +1190,7 @@ async function codexAppHelp(args = []) {
     'ㅅㅋㅅ Codex App', '',
     formatCodexAppStatus(status), '',
     `Skills: project=${skills.project.ok ? 'ok' : `missing ${skills.project.missing.length}`} global=${skills.global.ok ? 'ok' : `missing ${skills.global.missing.length}`}`, '',
-    'Setup:', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks warp check', '',
+    'Setup:', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks tmux check', '',
     'Generated files:', '  .codex/config.toml', '  .codex/hooks.json', '  .agents/skills/', '  .codex/agents/', '  .codex/SNEAKOSCOPE.md', '  AGENTS.md', '',
     'Git ignore:', '  default setup writes .gitignore entries for .sneakoscope/, .codex/, .agents/, AGENTS.md', '  --local-only writes those patterns to .git/info/exclude instead', '',
     'Prompt routes:', formatDollarCommandsCompact('  ')
@@ -1513,19 +1223,20 @@ Examples:
 function usage(args = []) {
   const topic = String(args[0] || 'overview').toLowerCase();
   const blocks = {
-    overview: ['ㅅㅋㅅ Usage', '', 'Discover:', '  sks commands', '  sks quickstart', '  sks root', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks warp check', '  sks dollar-commands', '', `Topics: ${USAGE_TOPICS}`],
+    overview: ['ㅅㅋㅅ Usage', '', 'Discover:', '  sks commands', '  sks quickstart', '  sks root', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks tmux check', '  sks dollar-commands', '', `Topics: ${USAGE_TOPICS}`],
     install: ['Install', '', '  npm i -g sneakoscope', '  sks root', '  sks', '', 'Project bootstrap:', '  sks bootstrap', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
-    bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and warp.'],
+    bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and tmux.'],
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
-    deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [warp|codex|context7|all] [--yes]', '', 'warp on macOS uses Homebrew only after approval.'],
-    warp: ['warp', '', '  sks warp open', '  sks warp check', '  sks warp status --once', '  sks deps install warp', '', 'Warp launch is explicit. Running bare `sks` prints help and never opens Warp by itself.'],
-    team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-warp latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
+    deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew only after approval.'],
+    tmux: ['tmux', '', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'tmux launch is explicit. Running bare `sks` prints help and never opens tmux by itself.'],
+    team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
+    ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT asks delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and generated image assets prefer Codex App built-in image generation through imagegen.'],
     goal: ['Goal', '', '  sks goal create "task"', '  sks goal status latest', '  sks goal pause latest', '  sks goal resume latest', '  sks goal clear latest'],
     'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
     dollar: ['Dollar Commands', '', formatDollarCommandsCompact('  '), '', 'Terminal: sks dollar-commands [--json]'],
     wiki: ['TriWiki', '', '  sks wiki pack', '  sks wiki refresh [--prune]', '  sks wiki sweep latest --json', '  sks wiki validate .sneakoscope/wiki/context-pack.json', '  sks wiki prune --dry-run --json', '', 'Packs include attention.use_first and attention.hydrate_first for compact recall plus source hydration. Sweep records intentional forgetting and promotion candidates.'],
-    harness: ['Harness Growth', '', '  sks harness fixture --json', '  sks harness review --json', '', 'Runs deterministic fixtures for deliberate forgetting, skill cards, harness experiments, tool error taxonomy, permission profiles, MultiAgentV2, and Warp cockpit views.'],
+    harness: ['Harness Growth', '', '  sks harness fixture --json', '  sks harness review --json', '', 'Runs deterministic fixtures for deliberate forgetting, skill cards, harness experiments, tool error taxonomy, permission profiles, MultiAgentV2, and tmux cockpit views.'],
     'skill-dream': ['Skill Dreaming', '', '  sks skill-dream status', '  sks skill-dream run --json', '  sks skill-dream record --route team --skills team,prompt-pipeline', '', 'Records cheap JSON usage counters in .sneakoscope/skills/dream-state.json and periodically writes recommendation-only keep/merge/prune/improve reports. It never deletes or merges skills automatically.'],
     'code-structure': ['Code Structure', '', '  sks code-structure scan', '  sks code-structure scan --json', '', 'Flags handwritten source files above 1000/2000/3000-line thresholds and records split-review exceptions.'],
     gx: ['GX', '', '  sks gx init architecture-atlas', '  sks gx render architecture-atlas --format all', '  sks gx validate architecture-atlas']
@@ -1550,13 +1261,13 @@ async function bootstrap(args = []) {
   const cliTools = await ensureRelatedCliTools(args);
   const context7Status = await checkContext7(root);
   const appRuntime = await codexAppIntegrationStatus({ codex: await getCodexInfo().catch(() => ({})) });
-  const deps = await depsStatus(root, { context7: context7Status, codexApp: appRuntime, warp: cliTools.warp });
+  const deps = await depsStatus(root, { context7: context7Status, codexApp: appRuntime, tmux: cliTools.tmux });
   const install = await installStatus(root, installScope, { globalCommand });
   const versioningInfo = await versioningStatus(root);
   const skills = await checkRequiredSkills(root);
   const guard = await harnessGuardStatus(root);
   const files = await codexAppFilesStatus(root, skills, versioningInfo);
-  const ready = Boolean(!conflicts.hard_block && install.ok && files.ok && skills.ok && guard.ok && context7Status.ok && appRuntime.ok && deps.warp.ok);
+  const ready = Boolean(!conflicts.hard_block && install.ok && files.ok && skills.ok && guard.ok && context7Status.ok && appRuntime.ok && deps.tmux.ok);
   const result = {
     root,
     ready,
@@ -1567,7 +1278,7 @@ async function bootstrap(args = []) {
     codex_app: appRuntime,
     global_skills: globalSkills,
     context7: context7Status,
-    warp: deps.warp,
+    tmux: deps.tmux,
     harness_guard: guard,
     deps,
     next: ready ? ['sks', '$Team implement ...', '$QA-LOOP run ...'] : deps.next_actions
@@ -1580,7 +1291,7 @@ async function bootstrap(args = []) {
   console.log(`Hooks:         ${files.hooks.ok ? 'ok' : 'missing'}`);
   console.log(`Harness guard: ${guard.ok ? 'ok' : 'blocked'}`);
   console.log(`Context7:      ${context7Status.ok ? 'ok' : 'missing'}`);
-  console.log(`warp:          ${deps.warp.ok ? 'ok' : 'missing'}${deps.warp.version ? ` ${deps.warp.version}` : ''}`);
+  console.log(`tmux:          ${deps.tmux.ok ? 'ok' : 'missing'}${deps.tmux.version ? ` ${deps.tmux.version}` : ''}`);
   console.log(`ready:         ${ready ? 'true' : 'false'}`);
   if (!ready) {
     console.log('\nNext:');
@@ -1659,7 +1370,7 @@ async function setup(args) {
   console.log('ㅅㅋㅅ Setup\n');
   console.log(`Project:   ${root}`);
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
-  console.log(`CLI tools: Codex ${formatCodexCliToolStatus(cliTools.codex)}; warp ${warpStatusKind(cliTools.warp)} ${cliTools.warp.version || cliTools.warp.error || ''}`.trimEnd());
+  console.log(`CLI tools: Codex ${formatCodexCliToolStatus(cliTools.codex)}; tmux ${tmuxStatusKind(cliTools.tmux)} ${cliTools.tmux.version || cliTools.tmux.error || ''}`.trimEnd());
   console.log(`Hooks:     ${path.relative(root, hooksPath)}`);
   console.log(`Version:   ${versioningInfo.enabled ? (versioningInfo.hook_installed ? 'auto-bump enabled' : 'auto-bump hook missing') : 'not enabled'}${versioningInfo.package_version ? ` (${versioningInfo.package_version})` : ''}`);
   if (localOnly) console.log('Git:       local-only (.git/info/exclude; user AGENTS preserved, SKS managed block refreshed)');
@@ -1667,12 +1378,12 @@ async function setup(args) {
   console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .agents/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
   console.log(`Global $:  ${globalSkills.status === 'installed' ? 'ok' : globalSkills.status} ${globalSkills.root || ''}`.trimEnd());
   console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser Use=${appRuntime.mcp.has_browser_use ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'}`);
-  console.log(`Prompt:    intent-first routing, $Answer fact-check route, $DFix ultralight design/content route, Context7 gate`);
+  console.log(`Prompt:    intent-first routing, $Answer fact-check route, $DFix ultralight design/content route, $PPT HTML/PDF presentation route, Context7 gate`);
   console.log(`Skills:    .agents/skills`);
   console.log(`Next:      sks context7 check; sks selftest --mock; sks commands; sks dollar-commands`);
   if (cliTools.codex.status === 'failed') console.log(`\nCodex CLI install failed. Run manually: npm i -g @openai/codex. ${cliTools.codex.error || ''}`.trim());
   if (cliTools.codex.status === 'installed_not_on_path') console.log(`\nCodex CLI installed but not on PATH. ${cliTools.codex.hint}`);
-  if (!cliTools.warp.ok) console.log(`\nwarp ${warpStatusKind(cliTools.warp)}. Install: ${cliTools.warp.install_hint}`);
+  if (!cliTools.tmux.ok) console.log(`\ntmux ${tmuxStatusKind(cliTools.tmux)}. Install: ${cliTools.tmux.install_hint}`);
   if (!install.ok && install.scope === 'global') console.log('\nGlobal command missing. Run: npm i -g sneakoscope');
   if (!install.ok && install.scope === 'project') console.log('\nProject package missing. Run: npm i -D sneakoscope');
   if (!appRuntime.ok) console.log('\nCodex App and first-party Codex Computer Use are required for SKS QA/visual evidence; Browser Use is not a UI verification substitute. Run: sks codex-app check');
@@ -1743,7 +1454,7 @@ async function doctor(args) {
   const dbScan = await scanDbSafety(root).catch((err) => ({ ok: false, findings: [{ id: 'db_safety_scan_failed', severity: 'high', reason: err.message }] }));
   const context7Status = await checkContext7(root);
   const appRuntime = await codexAppIntegrationStatus({ codex });
-  const warpStatus = await warpReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
+  const tmuxStatus = await tmuxReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
   const skillStatus = await checkRequiredSkills(root);
   const globalSkillStatus = await checkRequiredSkills(null, globalCodexSkillsRoot());
   const guardStatus = await harnessGuardStatus(root);
@@ -1764,7 +1475,7 @@ async function doctor(args) {
     sneakoscope: { ok: await exists(path.join(root, '.sneakoscope')) },
     context7: context7Status,
     codex_app_runtime: appRuntime,
-    runtime: { warp: { ok: Boolean(warpStatus.ok), app: warpStatus.app || null, cli: warpStatus.cli || null, version: warpStatus.version || null, launch_config_dir: warpStatus.launch_config_dir || null, uri_scheme: warpStatus.uri_scheme || null, install_hint: warpStatus.ok ? null : platformWarpInstallHint(), error: warpStatus.error || null } },
+    runtime: { tmux: { ok: Boolean(tmuxStatus.ok), bin: tmuxStatus.bin || null, version: tmuxStatus.version || null, min_version: tmuxStatus.min_version || '3.0', current_session: Boolean(tmuxStatus.current_session), install_hint: tmuxStatus.ok ? null : platformTmuxInstallHint(), error: tmuxStatus.error || null } },
     harness_guard: guardStatus,
     versioning: versioningInfo,
     db_guard: { ok: dbPolicyExists && dbScan.ok, policy: dbPolicyExists ? await loadDbSafetyPolicy(root) : null, scan: dbScan },
@@ -1776,7 +1487,7 @@ async function doctor(args) {
     },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) }, storage
   };
-  result.ready = !result.harness_conflicts.hard_block && nodeOk && Boolean(codex.bin) && install.ok && result.sneakoscope.ok && result.context7.ok && appRuntime.ok && result.runtime.warp.ok && result.harness_guard.ok && result.versioning.ok && result.db_guard.ok && result.codex_app.ok && result.skills.ok && result.global_skills.ok;
+  result.ready = !result.harness_conflicts.hard_block && nodeOk && Boolean(codex.bin) && install.ok && result.sneakoscope.ok && result.context7.ok && appRuntime.ok && result.runtime.tmux.ok && result.harness_guard.ok && result.versioning.ok && result.db_guard.ok && result.codex_app.ok && result.skills.ok && result.global_skills.ok;
   if (result.harness_conflicts.hard_block) process.exitCode = 1;
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log('ㅅㅋㅅ Doctor\n');
@@ -1792,7 +1503,7 @@ async function doctor(args) {
   console.log(`State:     ${result.sneakoscope.ok ? 'ok' : 'missing .sneakoscope'}`);
   console.log(`Context7:  ${result.context7.ok ? 'ok' : 'missing MCP config'} project=${result.context7.project.ok ? 'ok' : 'missing'} global=${result.context7.global.ok ? 'ok' : 'missing'}`);
   console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser Use=${appRuntime.mcp.has_browser_use ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'}`);
-  console.log(`warp:      ${warpStatusKind(result.runtime.warp)} ${result.runtime.warp.version || result.runtime.warp.error || ''}`.trimEnd());
+  console.log(`tmux:      ${tmuxStatusKind(result.runtime.tmux)} ${result.runtime.tmux.version || result.runtime.tmux.error || ''}`.trimEnd());
   console.log(`Guard:     ${result.harness_guard.ok ? 'ok' : 'blocked'}${result.harness_guard.source_exception ? ' source-exception' : ''}`);
   console.log(`Version:   ${result.versioning.ok ? 'ok' : 'missing'}${result.versioning.enabled ? ` ${result.versioning.package_version || ''}` : ` ${result.versioning.reason || 'disabled'}`}`);
   console.log(`DB Guard:  ${result.db_guard.ok ? 'ok' : 'blocked'} ${dbScan.findings?.length || 0} finding(s)`);
@@ -1809,13 +1520,13 @@ async function doctor(args) {
   if (result.harness_conflicts.hard_block) console.log(`\n${formatHarnessConflictReport(conflictScan)}`);
   if (!result.context7.ok) console.log('Context7 MCP missing. Run: sks context7 setup --scope project');
   if (!appRuntime.ok) console.log('Codex App or first-party MCP/plugin tools missing. Run: sks codex-app check');
-  if (!result.runtime.warp.ok) console.log('Warp missing. Run: sks deps install warp');
+  if (!result.runtime.tmux.ok) console.log('tmux missing. Run: sks deps install tmux');
   if (!result.harness_guard.ok) console.log('Harness guard failed. Run: sks setup from a real terminal, then sks guard check.');
   if (!result.versioning.ok) console.log('Versioning hook missing. Run: sks versioning hook, or sks doctor --fix.');
   if (!result.skills.ok) console.log(`Missing skills: ${result.skills.missing.join(', ')}. Run: sks setup`);
   if (!result.global_skills.ok) console.log(`Missing global $ skills: ${result.global_skills.missing.join(', ')}. Run: npm i -g sneakoscope, or sks setup from a non-local-only run.`);
   const blocked = [];
-  if (!result.runtime.warp.ok) blocked.push(['Warp is missing', 'sks deps install warp']);
+  if (!result.runtime.tmux.ok) blocked.push(['tmux is missing', 'sks deps install tmux']);
   if (!appRuntime.ok) blocked.push(['Codex App or first-party MCP/plugin tools need setup', 'sks codex-app check']);
   if (blocked.length) {
     console.log('\nBlocked:');
@@ -1826,27 +1537,11 @@ async function doctor(args) {
   if (!result.ready && !flag(args, '--fix')) console.log('Run: sks doctor --fix');
 }
 
-async function checkRequiredSkills(root, skillRoot = path.join(root, '.agents', 'skills')) {
-  const expected = Array.from(new Set([
-    ...DOLLAR_SKILL_NAMES,
-    ...RECOMMENDED_SKILLS
-  ])).sort();
-  const missing = [];
-  for (const name of expected) {
-    if (!(await exists(path.join(skillRoot, name, 'SKILL.md')))) missing.push(name);
-  }
-  return { ok: missing.length === 0, root: skillRoot, expected, missing };
-}
-
 async function codexAppSkillReadiness(root = null) {
   root ||= await sksRoot();
   const project = await checkRequiredSkills(root);
   const global = await checkRequiredSkills(null, globalCodexSkillsRoot());
   return { ok: project.ok || global.ok, project, global };
-}
-
-function globalCodexSkillsRoot(home = process.env.HOME || os.homedir()) {
-  return path.join(home, '.agents', 'skills');
 }
 
 async function init(args) {
@@ -2028,6 +1723,27 @@ async function selftest() {
   if (trippedStop) throw new Error('selftest failed: compliance loop guard did not terminally trip');
   const loopBlocker = await readJson(path.join(loopMission.dir, 'hard-blocker.json'), null);
   if (loopBlocker?.reason !== 'compliance_loop_guard_tripped') throw new Error('selftest failed: compliance loop guard did not write hard blocker');
+  const clarificationMission = await createMission(tmp, { mode: 'team', prompt: 'visible question gate selftest' });
+  await writeTextAtomic(path.join(clarificationMission.dir, 'questions.md'), '# Questions\n\n1. GOAL_PRECISE: What should be changed?\n');
+  await writeJsonAtomic(path.join(clarificationMission.dir, 'required-answers.schema.json'), { slots: [{ id: 'GOAL_PRECISE', question: 'What should be changed?' }] });
+  const clarificationState = {
+    mission_id: clarificationMission.id,
+    mode: 'TEAM',
+    route_command: '$Team',
+    phase: 'TEAM_CLARIFICATION_AWAITING_ANSWERS',
+    clarification_required: true,
+    implementation_allowed: false,
+    ambiguity_gate_required: true,
+    ambiguity_gate_passed: false,
+    stop_gate: 'clarification-gate'
+  };
+  for (let i = 0; i < 5; i++) {
+    const stop = await evaluateStop(tmp, clarificationState, { last_assistant_message: 'continuing implementation without visible questions' });
+    if (stop?.decision !== 'block' || !String(stop.reason || '').includes('waiting for mandatory ambiguity-removal answers')) throw new Error('selftest failed: clarification gate did not hard-pause without visible questions');
+  }
+  if (await exists(path.join(clarificationMission.dir, 'hard-blocker.json'))) throw new Error('selftest failed: clarification gate used compliance hard-blocker instead of waiting for answers');
+  const visibleQuestionStop = await evaluateStop(tmp, clarificationState, { last_assistant_message: 'Required questions still pending:\n1. GOAL_PRECISE: What should be changed?\n\nUse sks pipeline answer latest answers.json.' });
+  if (visibleQuestionStop?.continue !== true) throw new Error('selftest failed: visible clarification question block did not allow the question-only turn to stop');
   await setCurrent(tmp, loopState);
   const dfixPromptHook = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'user-prompt-submit'], {
     cwd: tmp,
@@ -2100,15 +1816,15 @@ async function selftest() {
   await ensureDir(path.join(conflictTmp, '.omx'));
   const conflictScan = await scanHarnessConflicts(conflictTmp, { home: path.join(conflictTmp, 'home') });
   if (!conflictScan.hard_block || !formatHarnessConflictReport(conflictScan).includes('GPT-5.5')) throw new Error('selftest failed: OMX conflict did not block with cleanup prompt');
-  const postinstallConflict = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  const postinstallConflict = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (postinstallConflict.code !== 0) throw new Error('selftest failed: postinstall conflict notice should not make npm install fail');
   const postinstallConflictOutput = String(`${postinstallConflict.stdout}\n${postinstallConflict.stderr}`);
   if (!postinstallConflictOutput.includes('SKS setup is blocked') || postinstallConflictOutput.includes('Cleanup prompt:')) throw new Error('selftest failed: postinstall conflict notice did not stay informational');
-  const postinstallConflictPrompt = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, input: 'y\n', env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_POSTINSTALL_PROMPT: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  const postinstallConflictPrompt = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, input: 'y\n', env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_POSTINSTALL_PROMPT: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (postinstallConflictPrompt.code !== 0 || !String(postinstallConflictPrompt.stdout || '').includes('Goal: completely remove the conflicting Codex harnesses')) throw new Error('selftest failed: interactive postinstall prompt did not print cleanup prompt');
   const postinstallSetupTmp = tmpdir();
   await writeJsonAtomic(path.join(postinstallSetupTmp, 'package.json'), { name: 'postinstall-setup-smoke', version: '0.0.0' });
-  const postinstallSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallSetupTmp, env: { INIT_CWD: postinstallSetupTmp, HOME: path.join(postinstallSetupTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
+  const postinstallSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallSetupTmp, env: { INIT_CWD: postinstallSetupTmp, HOME: path.join(postinstallSetupTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
   if (postinstallSetup.code !== 0) throw new Error(`selftest failed: postinstall setup exited ${postinstallSetup.code}: ${postinstallSetup.stderr}`);
   if (await exists(path.join(postinstallSetupTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest failed: postinstall installed deprecated agent-team fallback skill');
   if (!String(postinstallSetup.stdout || '').includes('SKS bootstrap: auto-running sks setup --bootstrap --install-scope global --force') || !String(postinstallSetup.stdout || '').includes('SKS Ready')) throw new Error('selftest failed: postinstall did not auto-run global forced bootstrap');
@@ -2116,6 +1832,7 @@ async function selftest() {
   if (!String(postinstallSetup.stdout || '').includes('Codex App global $ skills: installed')) throw new Error('selftest failed: postinstall did not report automatic global Codex App skills');
   const postinstallSetupManifest = await readJson(path.join(postinstallSetupTmp, '.sneakoscope', 'manifest.json'));
   if (postinstallSetupManifest.installation?.scope !== 'global') throw new Error('selftest failed: postinstall automatic bootstrap did not use global install scope');
+  if (!postinstallSetupManifest.recommended_design_references?.some((entry) => entry.id === 'getdesign' && entry.codex_skill_install === GETDESIGN_REFERENCE.codex_skill_install)) throw new Error('selftest failed: postinstall manifest missing getdesign reference');
   for (const rel of ['.agents/skills/team/SKILL.md', '.codex/config.toml', '.codex/hooks.json', '.sneakoscope/harness-guard.json', '.codex/SNEAKOSCOPE.md', 'AGENTS.md', '.gitignore']) {
     if (!(await exists(path.join(postinstallSetupTmp, rel)))) throw new Error(`selftest failed: automatic postinstall bootstrap did not create ${rel}`);
   }
@@ -2125,6 +1842,7 @@ async function selftest() {
     const skillName = command.slice(1).toLowerCase();
     if (!(await exists(path.join(postinstallSetupTmp, 'home', '.agents', 'skills', skillName, 'SKILL.md')))) throw new Error(`selftest failed: postinstall global ${command} skill not installed`);
   }
+  if (!(await exists(path.join(postinstallSetupTmp, 'home', '.agents', 'skills', 'getdesign-reference', 'SKILL.md')))) throw new Error('selftest failed: postinstall global getdesign-reference skill not installed');
   const oldNoBootstrap = process.env.SKS_POSTINSTALL_NO_BOOTSTRAP;
   process.env.SKS_POSTINSTALL_NO_BOOTSTRAP = '1';
   const noBootstrapDecision = await postinstallBootstrapDecision(postinstallSetupTmp);
@@ -2138,7 +1856,7 @@ async function selftest() {
   if (!bootstrapResult.project_setup?.ok || typeof bootstrapResult.ready !== 'boolean') throw new Error('selftest failed: bootstrap json did not report project setup and ready boolean');
   const depsCheck = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'deps', 'check', '--json'], { cwd: bootstrapJsonTmp, env: { HOME: path.join(bootstrapJsonTmp, 'home') }, timeoutMs: 20000, maxOutputBytes: 256 * 1024 });
   const depsResult = JSON.parse(depsCheck.stdout);
-  if (!depsResult.node?.ok || !('warp' in depsResult) || !('homebrew' in depsResult)) throw new Error('selftest failed: deps check json missing expected fields');
+  if (!depsResult.node?.ok || !('tmux' in depsResult) || !('homebrew' in depsResult)) throw new Error('selftest failed: deps check json missing expected fields');
   const globalCwd = tmpdir();
   const globalRuntimeRoot = path.join(tmpdir(), 'sks-global-root');
   const globalRootProbe = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'root', '--json'], { cwd: globalCwd, env: { SKS_GLOBAL_ROOT: globalRuntimeRoot }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
@@ -2156,32 +1874,13 @@ async function selftest() {
   const madProfileText = await safeReadText(madProfilePath);
   if (madProfile.profile_name !== 'sks-mad-high' || !madProfileText.includes('sandbox_mode = "danger-full-access"') || !madProfileText.includes('approval_policy = "on-request"') || !madProfileText.includes('approvals_reviewer = "auto_review"') || !madProfileText.includes('model_reasoning_effort = "high"') || !madProfileText.includes('unrequested fallback implementation code')) throw new Error('selftest failed: MAD high profile is not full-access auto-review high with fallback-code guard');
   if (!isMadHighLaunch(['--mad', '--high']) || isMadHighLaunch(['db', '--mad'])) throw new Error('selftest failed: MAD high launch flag parsing is not top-level only');
-  const workspacePlan = { workspace: 'sks-mad-selftest', root: tmp, codexArgs: ['--profile', 'sks-mad-high'] };
-  const warpLaunchYaml = buildWarpLaunchConfigYaml({ ...workspacePlan, command: 'codex', title: 'sks-mad-selftest' }, [{ cwd: tmp, command: 'codex --profile sks-mad-high', focused: true }]);
-  const warpSyntax = runWarpLaunchConfigSyntaxCheck(warpLaunchYaml);
-  if (!warpSyntax.ok || !warpLaunchYaml.includes('name: "sks-mad-selftest"') || !warpLaunchYaml.includes('commands:')) throw new Error('selftest failed: MAD Warp launch configuration was not generated with name and command');
-  const warpOpenArgs = buildWarpOpenArgs(workspacePlan);
-  if (!warpOpenArgs.includes('open') || !warpOpenArgs.some((arg) => String(arg).includes('warp://launch/sks-mad-selftest.yaml'))) throw new Error('selftest failed: MAD Warp launch URI is not stable by workspace name');
-  if (!isWarpShellSession({ TERM_PROGRAM: 'WarpTerminal' })) throw new Error('selftest failed: Warp shell session env was not detected');
-  const warpNestedDecision = warpOpenLaunchDecision({ env: { TERM_PROGRAM: 'WarpTerminal' } });
-  if (warpNestedDecision.open || !warpNestedDecision.current_session) throw new Error('selftest failed: nested Warp launch was not redirected to current session');
-  const oldWarpConfigDir = process.env.SKS_WARP_LAUNCH_CONFIG_DIR;
-  process.env.SKS_WARP_LAUNCH_CONFIG_DIR = path.join(tmp, 'warp-launch-configs');
-  const writtenWarpConfig = await writeWarpLaunchConfig({ ...workspacePlan, command: 'codex', title: 'sks-mad-selftest' }, [{ cwd: tmp, command: 'codex --profile sks-mad-high', focused: true }]);
-  if (!(await exists(writtenWarpConfig.config_path)) || !writtenWarpConfig.record.launch_uri.includes('warp://launch/')) throw new Error('selftest failed: Warp launch configuration was not persisted for URI launch');
-  const currentSessionLaunch = await launchWarpUi(['--workspace', 'sks-current-session-selftest'], {
-    root: tmp,
-    codex: { bin: 'printf', version: 'mock' },
-    app: { ok: true, guidance: [] },
-    warp: { ok: true, version: 'Warp.app' },
-    env: { TERM_PROGRAM: 'WarpTerminal' },
-    dryRunCurrentSession: true,
-    quiet: true
-  });
-  if (!currentSessionLaunch.opened?.current_session || currentSessionLaunch.opened?.skipped) throw new Error('selftest failed: Warp shell launch did not stay in the current session');
-  if (oldWarpConfigDir === undefined) delete process.env.SKS_WARP_LAUNCH_CONFIG_DIR;
-  else process.env.SKS_WARP_LAUNCH_CONFIG_DIR = oldWarpConfigDir;
-  if (warpStatusKind({ ok: false, bin: null }) !== 'missing') throw new Error('selftest failed: missing warp was not labeled missing');
+  const workspacePlan = { session: 'sks-mad-selftest', root: tmp, codexArgs: ['--profile', 'sks-mad-high'] };
+  const tmuxSyntax = runTmuxLaunchPlanSyntaxCheck(workspacePlan);
+  if (!tmuxSyntax.ok || !tmuxSyntax.command.includes('tmux attach-session -t sks-mad-selftest')) throw new Error('selftest failed: MAD tmux attach plan is not stable by session name');
+  const tmuxOpenArgs = buildTmuxOpenArgs(workspacePlan);
+  if (tmuxOpenArgs.join(' ') !== 'attach-session -t sks-mad-selftest') throw new Error('selftest failed: MAD tmux attach args are not stable by session name');
+  if (!isTmuxShellSession({ TMUX: '/tmp/tmux-501/default,1,0' })) throw new Error('selftest failed: tmux shell session env was not detected');
+  if (tmuxStatusKind({ ok: false, bin: null }) !== 'missing') throw new Error('selftest failed: missing tmux was not labeled missing');
   const guardBlocked = await checkHarnessModification(tmp, { tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
   if (guardBlocked.action !== 'block') throw new Error('selftest failed: harness guard allowed skill tampering');
   const setupBlocked = await checkHarnessModification(tmp, { command: 'sks setup --force' });
@@ -2325,16 +2024,19 @@ async function selftest() {
   const promptPipelineText = await safeReadText(path.join(tmp, '.agents', 'skills', 'prompt-pipeline', 'SKILL.md'));
   if (!promptPipelineText.includes('TriWiki context-tracking SSOT')) throw new Error('selftest failed: prompt pipeline missing TriWiki context-tracking SSOT');
   if (!promptPipelineText.includes('before every route stage') || !promptPipelineText.includes('sks wiki refresh')) throw new Error('selftest failed: prompt pipeline missing per-stage TriWiki policy');
-  if (!promptPipelineText.includes('design.md') || !promptPipelineText.includes('imagegen')) throw new Error('selftest failed: prompt pipeline missing design/image asset routing');
+  if (!promptPipelineText.includes('design.md') || !promptPipelineText.includes('imagegen') || !promptPipelineText.includes('getdesign-reference')) throw new Error('selftest failed: prompt pipeline missing design/image/getdesign routing');
+  if (!promptPipelineText.includes(CODEX_APP_IMAGE_GENERATION_DOC_URL)) throw new Error('selftest failed: prompt pipeline missing Codex App image generation policy');
   if (!promptPipelineText.includes('From-Chat-IMG') || !promptPipelineText.includes('Do not assume ordinary image prompts are chat captures')) throw new Error('selftest failed: prompt pipeline missing explicit From-Chat-IMG gating');
   const fromChatImgSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'from-chat-img', 'SKILL.md'));
   if (!fromChatImgSkillText.includes('normal Team pipeline') || !fromChatImgSkillText.includes('Codex Computer Use visual inspection') || !fromChatImgSkillText.includes(CODEX_COMPUTER_USE_ONLY_POLICY) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT) || !fromChatImgSkillText.includes(FROM_CHAT_IMG_QA_LOOP_ARTIFACT)) throw new Error('selftest failed: from-chat-img skill missing Team/Computer Use-only inspection checklist guidance');
   if (fromChatImgSkillText.includes('Computer Use/browser visual inspection')) throw new Error('selftest failed: from-chat-img skill still allows browser visual inspection wording');
   const fromChatImgSkillMeta = await safeReadText(path.join(tmp, '.agents', 'skills', 'from-chat-img', 'agents', 'openai.yaml'));
   if (!fromChatImgSkillMeta.includes('model_reasoning_effort: xhigh')) throw new Error('selftest failed: from-chat-img skill metadata is not xhigh');
-  for (const supportSkill of ['reasoning-router', 'pipeline-runner', 'context7-docs', 'seo-geo-optimizer', 'reflection', 'design-system-builder', 'design-ui-editor', 'imagegen']) {
+  for (const supportSkill of ['reasoning-router', 'pipeline-runner', 'context7-docs', 'seo-geo-optimizer', 'reflection', 'design-system-builder', 'design-ui-editor', 'getdesign-reference', 'imagegen']) {
     if (!(await exists(path.join(tmp, '.agents', 'skills', supportSkill, 'SKILL.md')))) throw new Error(`selftest failed: ${supportSkill} skill not installed`);
   }
+  const imagegenSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'imagegen', 'SKILL.md'));
+  if (!imagegenSkillText.includes(CODEX_APP_IMAGE_GENERATION_DOC_URL) || !imagegenSkillText.includes('$imagegen') || !imagegenSkillText.includes('gpt-image-2') || !imagegenSkillText.includes('OPENAI_API_KEY')) throw new Error('selftest failed: imagegen skill missing official Codex App image generation priority');
   if (!(await exists(path.join(tmp, '.agents', 'skills', 'reasoning-router', 'agents', 'openai.yaml')))) throw new Error('selftest failed: skill metadata missing');
   const hookGuardPayload = JSON.stringify({ cwd: tmp, tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
   const hookGuardResult = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'pre-tool'], { cwd: tmp, input: hookGuardPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
@@ -2402,7 +2104,7 @@ async function selftest() {
   if (!(await exists(path.join(missionDir(hookGoalTmp, hookState.mission_id), GOAL_WORKFLOW_ARTIFACT)))) throw new Error('selftest failed: $Goal hook did not write goal workflow artifact');
   const hookGoalDelegationTmp = tmpdir();
   await initProject(hookGoalDelegationTmp, {});
-  const hookGoalDelegationPayload = JSON.stringify({ cwd: hookGoalDelegationTmp, prompt: '$Goal 설치 화면 문제 근본적으로 구현 수정해줘' });
+  const hookGoalDelegationPayload = JSON.stringify({ cwd: hookGoalDelegationTmp, prompt: '$Goal 결제 재시도 정책 근본적으로 구현 수정해줘' });
   const hookGoalDelegationResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookGoalDelegationTmp, input: hookGoalDelegationPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookGoalDelegationResult.code !== 0) throw new Error(`selftest failed: $Goal implementation delegation hook exited ${hookGoalDelegationResult.code}: ${hookGoalDelegationResult.stderr}`);
   const hookGoalDelegationJson = JSON.parse(hookGoalDelegationResult.stdout);
@@ -2414,7 +2116,7 @@ async function selftest() {
   if (hookGoalDelegationState.mode !== 'TEAM' || hookGoalDelegationState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookGoalDelegationState.implementation_allowed !== false) throw new Error('selftest failed: $Goal implementation delegation did not leave Team gate current');
   if (!(await exists(path.join(missionDir(hookGoalDelegationTmp, hookGoalDelegationBridgeMatch[1]), GOAL_WORKFLOW_ARTIFACT)))) throw new Error('selftest failed: $Goal implementation delegation did not write bridge workflow artifact');
   const activeGoalMissionId = hookState.mission_id;
-  const hookGoalOverlayPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '설치 화면 문제 근본적으로 구현 수정해줘' });
+  const hookGoalOverlayPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '결제 재시도 정책 근본적으로 구현 수정해줘' });
   const hookGoalOverlayResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookGoalTmp, input: hookGoalOverlayPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookGoalOverlayResult.code !== 0) throw new Error(`selftest failed: active Goal overlay hook exited ${hookGoalOverlayResult.code}: ${hookGoalOverlayResult.stderr}`);
   const hookGoalOverlayJson = JSON.parse(hookGoalOverlayResult.stdout);
@@ -2514,14 +2216,14 @@ async function selftest() {
   if (hookKoreanSksState.phase !== 'TEAM_CLARIFICATION_CONTRACT_SEALED' || hookKoreanSksState.implementation_allowed !== true || !hookKoreanSksState.ambiguity_gate_passed) throw new Error('selftest failed: Korean Team auto-seal');
   const hookTeamTmp = tmpdir();
   await initProject(hookTeamTmp, {});
-  const hookTeamPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 버튼 UX 수정 executor:2 reviewer:1 user:1' });
+  const hookTeamPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 결제 재시도 정책 수정 executor:2 reviewer:1 user:1' });
   const hookTeamResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: hookTeamPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookTeamResult.code !== 0) throw new Error(`selftest failed: $Team hook exited ${hookTeamResult.code}: ${hookTeamResult.stderr}`);
   const hookTeamJson = JSON.parse(hookTeamResult.stdout);
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: $Team hook did not force ambiguity gate before Team execution');
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('VISIBLE RESPONSE CONTRACT') || !String(hookTeamJson.systemMessage || '').includes('clarification questions')) throw new Error('selftest failed: $Team ambiguity gate did not force visible question response');
   if (hookTeamJson.hookSpecificOutput?.additionalContext?.includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Team goal');
-  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('UI_STATE_BEHAVIOR')) throw new Error('selftest failed: missing Team UI question');
+  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('PAYMENT_RETRY_POLICY')) throw new Error('selftest failed: missing Team payment question');
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('Codex plan-tool interaction')) throw new Error('selftest failed: $Team ambiguity gate did not inject plan-tool guidance');
   const hookTeamState = await readJson(stateFile(hookTeamTmp), {});
   if (hookTeamState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookTeamState.implementation_allowed !== false) throw new Error('selftest failed: $Team hook did not lock execution behind ambiguity gate');
@@ -2533,13 +2235,13 @@ async function selftest() {
   const hookTeamPendingState = await readJson(stateFile(hookTeamTmp), {});
   const hookTeamPendingContext = hookTeamPendingJson.hookSpecificOutput?.additionalContext || '';
   if (hookTeamPendingState.mission_id !== hookTeamState.mission_id) throw new Error('selftest failed: pending clarification allowed a new route mission to replace the visible question sheet');
-  if (!hookTeamPendingContext.includes('Required questions still pending') || !hookTeamPendingContext.includes('VISIBLE RESPONSE CONTRACT') || !hookTeamPendingContext.includes('UI_STATE_BEHAVIOR')) throw new Error('selftest failed: pending clarification did not re-expose the question sheet');
+  if (!hookTeamPendingContext.includes('Required questions still pending') || !hookTeamPendingContext.includes('VISIBLE RESPONSE CONTRACT') || !hookTeamPendingContext.includes('PAYMENT_RETRY_POLICY')) throw new Error('selftest failed: pending clarification did not re-expose the question sheet');
   if (hookTeamPendingContext.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: pending clarification prepared a new ambiguity gate instead of reusing the active one');
   const hookTeamStopResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, last_assistant_message: 'I need three decisions before implementation, but I will not paste the Required questions block.' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (hookTeamStopResult.code !== 0) throw new Error(`selftest failed: Team stop hook exited ${hookTeamStopResult.code}: ${hookTeamStopResult.stderr}`);
   const hookTeamStopJson = JSON.parse(hookTeamStopResult.stdout);
   if (hookTeamStopJson.decision !== 'block' || !String(hookTeamStopJson.reason || '').includes('mandatory ambiguity-removal')) throw new Error('selftest failed: Stop hook did not block missing Team ambiguity answers');
-  if (!String(hookTeamStopJson.reason || '').includes('Required questions') || !String(hookTeamStopJson.reason || '').includes('UI_STATE_BEHAVIOR')) throw new Error('selftest failed: missing Team stop UI question');
+  if (!String(hookTeamStopJson.reason || '').includes('Required questions') || !String(hookTeamStopJson.reason || '').includes('PAYMENT_RETRY_POLICY')) throw new Error('selftest failed: missing Team stop payment question');
   if (String(hookTeamStopJson.reason || '').includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Team stop goal');
   if (!String(hookTeamStopJson.reason || '').includes('sks pipeline answer')) throw new Error('selftest failed: Stop hook did not provide pipeline answer command');
   if (!String(hookTeamStopJson.reason || '').includes('Codex plan-tool interaction')) throw new Error('selftest failed: Stop hook did not reprint plan-tool guidance');
@@ -2552,6 +2254,14 @@ async function selftest() {
   ].join('\n');
   const visibleQuestionDecision = await evaluateStop(hookTeamTmp, hookTeamState, { last_assistant_message: visibleQuestionsBlock }, { noQuestion: false });
   if (!visibleQuestionDecision?.continue) throw new Error('selftest failed: visible Required questions block was not accepted by clarification stop gate');
+  const hookTeamPreToolBlocked = await runProcess(process.execPath, [hookBin, 'hook', 'pre-tool'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, command: 'npm run selftest' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (hookTeamPreToolBlocked.code !== 0) throw new Error(`selftest failed: pending clarification pre-tool hook exited ${hookTeamPreToolBlocked.code}: ${hookTeamPreToolBlocked.stderr}`);
+  const hookTeamPreToolBlockedJson = JSON.parse(hookTeamPreToolBlocked.stdout);
+  if (hookTeamPreToolBlockedJson.decision !== 'block' || !String(hookTeamPreToolBlockedJson.reason || '').includes('ambiguity gate is paused')) throw new Error('selftest failed: pending clarification allowed implementation tool use before answers');
+  const hookTeamAnswerToolAllowed = await runProcess(process.execPath, [hookBin, 'hook', 'pre-tool'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, command: 'node ./bin/sks.mjs pipeline answer latest answers.json' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (hookTeamAnswerToolAllowed.code !== 0) throw new Error(`selftest failed: pipeline-answer pre-tool hook exited ${hookTeamAnswerToolAllowed.code}: ${hookTeamAnswerToolAllowed.stderr}`);
+  const hookTeamAnswerToolAllowedJson = JSON.parse(hookTeamAnswerToolAllowed.stdout);
+  if (hookTeamAnswerToolAllowedJson.decision === 'block') throw new Error('selftest failed: pending clarification blocked the pipeline answer command');
   const nonGoalsSlot = hookTeamSchema.slots.find((s) => s.id === 'NON_GOALS');
   if (nonGoalsSlot && !nonGoalsSlot.allow_empty) throw new Error('selftest failed: NON_GOALS does not allow an empty array answer');
   if (!nonGoalsSlot && !Array.isArray(hookTeamSchema.inferred_answers?.NON_GOALS)) throw new Error('selftest failed: NON_GOALS was neither asked nor inferred');
@@ -2964,19 +2674,19 @@ async function selftest() {
   if (maxTextParsed.agentSessions !== 6 || maxTextParsed.roleCounts.executor !== 6) throw new Error('selftest failed: team max-agent text parsing');
   const roleParsed = parseTeamCreateArgs(['executor:5', 'reviewer:2', 'user:1', '작업']);
   if (roleParsed.roleCounts.executor !== 5 || roleParsed.roleCounts.reviewer !== 2 || roleParsed.agentSessions !== 5 || roleParsed.prompt !== '작업') throw new Error('selftest failed: team role-count parsing');
-  const openWarpFlagParsed = parseTeamCreateArgs(['--open-warp', '작업']);
-  if (openWarpFlagParsed.prompt !== '작업') throw new Error('selftest failed: team --open-warp leaked into prompt');
+  const openTmuxFlagParsed = parseTeamCreateArgs(['--open-tmux', '작업']);
+  if (openTmuxFlagParsed.prompt !== '작업') throw new Error('selftest failed: team --open-tmux leaked into prompt');
   const roleTeamPlan = buildTeamPlan(teamId, '역할 팀 테스트', { roleCounts: roleParsed.roleCounts });
   if (roleTeamPlan.roster.debate_team.length !== 5) throw new Error('selftest failed: executor role count not reflected in debate team size');
   if (roleTeamPlan.roster.analysis_team.length !== 5) throw new Error('selftest failed: executor role count not reflected in analysis scout team');
   if (roleTeamPlan.roster.development_team.filter((agent) => agent.role === 'executor').length !== 5) throw new Error('selftest failed: executor role count not reflected in development team');
   if (!roleTeamPlan.roster.debate_team.some((agent) => /inconvenience/.test(agent.persona))) throw new Error('selftest failed: user friction persona missing from debate team');
-  const warpTeam = await launchWarpTeamView({ root: tmp, missionId: teamId, plan: roleTeamPlan, json: true });
-  if (!warpTeam.agents?.length || !warpTeam.agents.some((entry) => entry.agent === 'analysis_scout_1') || !warpTeam.agents.every((entry) => String(entry.command || '').includes('team lane') && String(entry.command || '').includes('--agent'))) throw new Error('selftest failed: Team warp view did not expose agent live lanes');
-  if (!warpTeam.overview?.command?.includes('team watch') || !warpTeam.lanes?.some((entry) => entry.role === 'overview') || !warpTeam.lanes?.some((entry) => entry.agent === 'analysis_scout_1')) throw new Error('selftest failed: Team warp view did not expose orchestration overview plus agent lanes');
-  if (teamLaneStyle('analysis_scout_1').role !== 'scout' || teamLaneStyle('executor_1').role !== 'execution' || teamLaneStyle('reviewer_1').role !== 'review') throw new Error('selftest failed: Team warp role palette did not classify lane roles');
-  if (!String(warpTeam.cleanup_policy || '').includes('mark-complete') || !warpTeam.lanes.every((entry) => entry.style?.color && entry.title)) throw new Error('selftest failed: Team warp view did not expose color/title metadata and cleanup policy');
-  if (!warpTeam.launch_uri?.includes(encodeURIComponent(`sks-team-${teamId}.yaml`))) throw new Error('selftest failed: Team warp launch URI is not named for visibility');
+  const tmuxTeam = await launchTmuxTeamView({ root: tmp, missionId: teamId, plan: roleTeamPlan, json: true });
+  if (!tmuxTeam.agents?.length || !tmuxTeam.agents.some((entry) => entry.agent === 'analysis_scout_1') || !tmuxTeam.agents.every((entry) => String(entry.command || '').includes('team lane') && String(entry.command || '').includes('--agent'))) throw new Error('selftest failed: Team tmux view did not expose agent live lanes');
+  if (!tmuxTeam.overview?.command?.includes('team watch') || !tmuxTeam.lanes?.some((entry) => entry.role === 'overview') || !tmuxTeam.lanes?.some((entry) => entry.agent === 'analysis_scout_1')) throw new Error('selftest failed: Team tmux view did not expose orchestration overview plus agent lanes');
+  if (teamLaneStyle('analysis_scout_1').role !== 'scout' || teamLaneStyle('executor_1').role !== 'execution' || teamLaneStyle('reviewer_1').role !== 'review') throw new Error('selftest failed: Team tmux role palette did not classify lane roles');
+  if (!String(tmuxTeam.cleanup_policy || '').includes('mark-complete') || !tmuxTeam.lanes.every((entry) => entry.style?.color && entry.title)) throw new Error('selftest failed: Team tmux view did not expose color/title metadata and cleanup policy');
+  if (tmuxTeam.session !== `sks-team-${teamId}` || !tmuxTeam.attach_command?.includes(`sks-team-${teamId}`)) throw new Error('selftest failed: Team tmux session is not named for visibility');
   if (routeReasoning(routePrompt('$Research frontier idea'), '$Research frontier idea').effort !== 'xhigh') throw new Error('selftest failed: research reasoning not xhigh');
   if (routeReasoning(routePrompt('$From-Chat-IMG 채팅 이미지 작업'), '$From-Chat-IMG 채팅 이미지 작업').effort !== 'xhigh') throw new Error('selftest failed: From-Chat-IMG reasoning not xhigh');
   if (routeReasoning(routePrompt('$Computer-Use localhost UI smoke'), '$Computer-Use localhost UI smoke').effort !== 'low') throw new Error('selftest failed: Computer Use fast lane reasoning not low');
@@ -3060,6 +2770,63 @@ async function selftest() {
   const teamLaneCli = await runProcess(process.execPath, [hookBin, 'team', 'lane', teamId, '--agent', 'analysis_scout_1', '--lines', '4'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (teamLaneCli.code !== 0 || !String(teamLaneCli.stdout || '').includes('SKS Team Agent Lane') || !String(teamLaneCli.stdout || '').includes('analysis_scout_1')) throw new Error('selftest failed: sks team lane CLI did not render an agent lane');
   await writeTextAtomic(path.join(teamDir, 'team-analysis.md'), '- claim: analysis scout mapped route registry | source: src/core/routes.mjs | risk: high | confidence: supported\n');
+  const buttonUxSchema = buildQuestionSchema('$Team 버튼 UX 수정');
+  const buttonUxSlotIds = buttonUxSchema.slots.map((s) => s.id);
+  if (buttonUxSlotIds.includes('UI_STATE_BEHAVIOR') || buttonUxSlotIds.includes('VISUAL_REGRESSION_REQUIRED')) throw new Error('selftest failed: predictable UI defaults should be inferred, not asked');
+  if (buttonUxSchema.inferred_answers.UI_STATE_BEHAVIOR !== 'infer_from_task_context_and_existing_design_system; preserve existing loading/error/empty/retry behavior unless explicitly requested; add only standard states required by the touched surface') throw new Error('selftest failed: UI state default inference missing');
+  if (buttonUxSchema.inferred_answers.VISUAL_REGRESSION_REQUIRED !== 'yes_if_available') throw new Error('selftest failed: visual regression default inference missing');
+  const pptRoute = routePrompt('$PPT 투자자용 피치덱 만들어줘');
+  if (pptRoute?.id !== 'PPT') throw new Error('selftest failed: $PPT did not route to presentation pipeline');
+  const pptSchema = buildQuestionSchema('$PPT 투자자용 피치덱 만들어줘');
+  const pptSlotIds = pptSchema.slots.map((s) => s.id);
+  for (const id of ['PRESENTATION_DELIVERY_CONTEXT', 'PRESENTATION_AUDIENCE_PROFILE', 'PRESENTATION_STP_STRATEGY', 'PRESENTATION_PAINPOINT_SOLUTION_MAP', 'PRESENTATION_DECISION_CONTEXT']) {
+    if (!pptSlotIds.includes(id)) throw new Error(`selftest failed: PPT schema missing ${id}`);
+  }
+  const pptSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'ppt', 'SKILL.md'));
+  if (!pptSkillText.includes('STP') || !pptSkillText.includes('target audience profile') || !pptSkillText.includes('decision context') || !pptSkillText.includes('3+ pain-point to solution mappings')) throw new Error('selftest failed: generated PPT skill missing STP/audience/pain-point guidance');
+  if (!pptSkillText.includes('simple, restrained, and information-first') || !pptSkillText.includes('over-designed decoration') || !pptSkillText.includes(CODEX_APP_IMAGE_GENERATION_DOC_URL)) throw new Error('selftest failed: generated PPT skill missing restrained design/imagegen guidance');
+  if (!pptSkillText.includes('source-html/') || !pptSkillText.includes('temporary build files') || !pptSkillText.includes('ppt-parallel-report.json')) throw new Error('selftest failed: generated PPT skill missing source preservation/temp cleanup/parallel guidance');
+  if (routeRequiresSubagents(pptRoute, '$PPT 투자자용 피치덱 만들어줘')) throw new Error('selftest failed: PPT route should not require subagents by default');
+  if (!reflectionRequiredForRoute(pptRoute)) throw new Error('selftest failed: PPT route should require reflection');
+  const pptMission = await createMission(tmp, { mode: 'ppt', prompt: '$PPT 투자자용 피치덱 만들어줘' });
+  await writeQuestions(pptMission.dir, pptSchema);
+  const pptAnswers = {
+    PRESENTATION_DELIVERY_CONTEXT: '대형 화면 16:9 발표, 한국어, 10분',
+    PRESENTATION_AUDIENCE_PROFILE: '투자자, 평균 40대, VC/전략투자 직무, SaaS 이해도 높음, 의사결정권 있음',
+    PRESENTATION_STP_STRATEGY: 'Segmentation: 초기 B2B SaaS 투자자; Targeting: 운영 효율 SaaS에 관심 있는 VC; Positioning: 작은 도입으로 반복 운영비를 줄이는 팀',
+    PRESENTATION_PAINPOINT_SOLUTION_MAP: ['반복 리서치 비용 -> 자동화된 근거 수집 -> 비용 절감 아하', '검토 자료 품질 편차 -> 표준화된 스토리보드 -> 신뢰 아하', '도입 리스크 -> 작은 파일럿 -> 낮은 리스크 아하'],
+    PRESENTATION_DECISION_CONTEXT: '파일럿 투자 승인이 목표이며, 시장 차별성과 실행 리스크가 주요 반대논리'
+  };
+  await writeJsonAtomic(path.join(pptMission.dir, 'answers.json'), pptAnswers);
+  const pptSeal = await sealContract(pptMission.dir, pptMission.mission);
+  if (!pptSeal.ok) throw new Error('selftest failed: PPT answers rejected');
+  await materializeAfterPipelineAnswer(tmp, pptMission.id, pptMission.dir, pptMission.mission, pptRoute, { route: 'PPT', command: '$PPT', mode: 'PPT', task: pptMission.mission.prompt, context7_required: false }, pptSeal.contract);
+  const pptAudienceStrategy = await readJson(path.join(pptMission.dir, PPT_AUDIENCE_STRATEGY_ARTIFACT));
+  if (!pptAudienceStrategy?.source_answers?.PRESENTATION_STP_STRATEGY || pptAudienceStrategy.painpoint_solution_map.length !== 3) throw new Error('selftest failed: PPT audience strategy was not materialized from sealed answers');
+  const pptGate = await readJson(path.join(pptMission.dir, PPT_GATE_ARTIFACT));
+  if (pptGate.passed !== false || pptGate.audience_strategy_sealed !== true || pptGate.painpoint_count !== 3) throw new Error('selftest failed: PPT gate did not initialize with sealed audience strategy');
+  const pptBuildResult = await runProcess(process.execPath, [hookBin, 'ppt', 'build', pptMission.id, '--json'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (pptBuildResult.code !== 0) throw new Error(`selftest failed: sks ppt build failed: ${pptBuildResult.stderr || pptBuildResult.stdout}`);
+  const pptBuild = JSON.parse(pptBuildResult.stdout);
+  if (!pptBuild.ok || !pptBuild.gate?.passed || !pptBuild.gate?.parallel_build_recorded || !pptBuild.gate?.html_artifact_created || !pptBuild.gate?.source_html_preserved || !pptBuild.gate?.pdf_exported_or_explicitly_deferred || !pptBuild.gate?.render_qa_recorded || !pptBuild.gate?.temp_cleanup_recorded) throw new Error('selftest failed: PPT build did not pass artifact gate');
+  if (!PPT_HTML_ARTIFACT.startsWith(`${PPT_SOURCE_HTML_DIR}/`)) throw new Error('selftest failed: PPT HTML source must be stored in source-html folder');
+  const pptHtml = await safeReadText(path.join(pptMission.dir, PPT_HTML_ARTIFACT));
+  if (!pptHtml.includes('<html') || pptHtml.includes('gradient')) throw new Error('selftest failed: PPT HTML artifact missing or over-designed');
+  const audienceScript = pptHtml.match(/id="ppt-audience-strategy">([^<]+)<\/script>/);
+  if (!audienceScript) throw new Error('selftest failed: PPT HTML missing audience strategy script data');
+  JSON.parse(audienceScript[1]);
+  const pptPdfBytes = await fsp.readFile(path.join(pptMission.dir, PPT_PDF_ARTIFACT));
+  if (pptPdfBytes.subarray(0, 5).toString('utf8') !== '%PDF-') throw new Error('selftest failed: PPT PDF artifact does not have a PDF header');
+  const pptRenderReport = await readJson(path.join(pptMission.dir, PPT_RENDER_REPORT_ARTIFACT));
+  if (!pptRenderReport.passed || !pptRenderReport.design_policy_checks.every((check) => check.passed)) throw new Error('selftest failed: PPT render report did not pass design policy checks');
+  const pptParallelReport = await readJson(path.join(pptMission.dir, PPT_PARALLEL_REPORT_ARTIFACT));
+  if (!pptParallelReport.passed || pptParallelReport.parallel_group_count < 2 || !pptParallelReport.parallel_groups.some((group) => group.id === 'render_targets' && group.executed_in_parallel)) throw new Error('selftest failed: PPT parallel report did not record parallel build groups');
+  const pptCleanupReport = await readJson(path.join(pptMission.dir, PPT_CLEANUP_REPORT_ARTIFACT));
+  if (!pptCleanupReport.source_html_preserved || !pptCleanupReport.temp_cleanup_completed || pptCleanupReport.source_html_path !== PPT_HTML_ARTIFACT) throw new Error('selftest failed: PPT cleanup report did not preserve source HTML');
+  if (await exists(path.join(pptMission.dir, PPT_TEMP_DIR))) throw new Error('selftest failed: PPT temp directory was not cleaned');
+  if (await exists(path.join(pptMission.dir, 'artifact.html'))) throw new Error('selftest failed: legacy root PPT HTML should not remain after source-html preservation');
+  const pptStatusResult = await runProcess(process.execPath, [hookBin, 'ppt', 'status', pptMission.id, '--json'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (pptStatusResult.code !== 0 || !JSON.parse(pptStatusResult.stdout).ok) throw new Error('selftest failed: sks ppt status did not report the built gate');
   const installUxSchema = buildQuestionSchema('SKS first install/bootstrap UX and Context7 MCP setup improvement');
   const installUxSlotIds = installUxSchema.slots.map((s) => s.id);
   if (installUxSchema.domain_hints.includes('uiux') || installUxSlotIds.includes('VISUAL_REGRESSION_REQUIRED')) throw new Error('selftest failed: CLI UX install prompt should not ask visual UI questions');
@@ -3083,6 +2850,8 @@ async function selftest() {
   if (classifyCommand('supabase db reset').level !== 'destructive') throw new Error('selftest failed: supabase db reset not detected');
   const dbDecision = await checkDbOperation(tmp, { mission_id: id }, { tool_name: 'mcp__supabase__execute_sql', sql: 'drop table users;' }, { duringNoQuestion: true });
   if (dbDecision.action !== 'block') throw new Error('selftest failed: destructive MCP SQL allowed');
+  const computerUseDecision = await checkDbOperation(tmp, { mission_id: id }, { tool_name: 'mcp__computer_use__open_app', bundle_id: 'com.microsoft.edgemac', action: 'open_app' }, { duringNoQuestion: true });
+  if (computerUseDecision.action !== 'allow') throw new Error('selftest failed: Computer Use MCP was blocked by DB safety gate');
   const madMission = await createMission(tmp, { mode: 'mad-sks', prompt: '$MAD-SKS selftest scoped DB override' });
   await writeJsonAtomic(path.join(madMission.dir, 'team-gate.json'), { schema_version: 1, passed: false, team_roster_confirmed: true });
   const madState = { mission_id: madMission.id, mode: 'TEAM', route_command: '$Team', stop_gate: 'team-gate.json', mad_sks_active: true, mad_sks_modifier: true, mad_sks_gate_file: 'team-gate.json' };
@@ -3105,16 +2874,17 @@ async function selftest() {
   if (!evalReport.candidate.wiki?.valid) throw new Error('selftest failed: wiki coordinate index invalid in eval');
   if (evalReport.candidate.wiki?.voxel_schema !== 'sks.wiki-voxel.v1' || evalReport.candidate.wiki?.voxel_rows < 1) throw new Error('selftest failed: eval did not include voxel overlay metrics');
   const harnessReport = harnessGrowthReport({});
-  if (!harnessReport.forgetting.fixture.passed || !harnessReport.warp.views.includes('Harness Experiments View') || !harnessReport.reliability.tool_error_taxonomy.includes('Unknown')) throw new Error('selftest failed: harness growth fixture incomplete');
+  if (!harnessReport.forgetting.fixture.passed || !harnessReport.tmux.views.includes('Harness Experiments View') || !harnessReport.reliability.tool_error_taxonomy.includes('Unknown')) throw new Error('selftest failed: harness growth fixture incomplete');
   const proofField = await proofFieldFixture();
   if (!proofField.validation.ok || !validateProofFieldReport(proofField.report).ok) throw new Error('selftest failed: proof field report invalid');
-  if (!proofField.checks.route_cone_selected || !proofField.checks.cli_cone_selected || !proofField.checks.catastrophic_guard_present || !proofField.checks.negative_release_work_recorded || !proofField.checks.outcome_rubric_present || !proofField.checks.simplicity_score_usable || !proofField.checks.execution_fast_lane_selected) throw new Error('selftest failed: proof field fixture checks incomplete');
+  if (!proofField.checks.route_cone_selected || !proofField.checks.cli_cone_selected || !proofField.checks.catastrophic_guard_present || !proofField.checks.negative_release_work_recorded || !proofField.checks.outcome_rubric_present || !proofField.checks.adversarial_lenses_present || !proofField.checks.route_economy_present || !proofField.checks.simplicity_score_usable || !proofField.checks.execution_fast_lane_selected) throw new Error('selftest failed: proof field fixture checks incomplete');
   if (!speedLanePolicyText().includes('proof_field_fast_lane') || !proofField.report.execution_lane?.skip_when_fast?.includes('planning_debate')) throw new Error('selftest failed: Proof Field speed lane policy missing');
   const fastPipelinePlan = buildPipelinePlan({ route: routePrompt('$Team small CLI help update'), task: 'small CLI help surface update', proofField: proofField.report });
   if (!validatePipelinePlan(fastPipelinePlan).ok || fastPipelinePlan.runtime_lane?.lane !== 'proof_field_fast_lane' || !fastPipelinePlan.skipped_stages.includes('planning_debate') || !fastPipelinePlan.invariants.includes('no_unrequested_fallback_code')) throw new Error('selftest failed: pipeline plan did not encode fast lane stage skips and fallback guard');
   const broadProofField = await buildProofField(tmp, { intent: 'database security route refactor', changedFiles: ['src/core/db-safety.mjs', 'src/core/routes.mjs', 'src/cli/main.mjs', 'README.md'] });
   const broadPipelinePlan = buildPipelinePlan({ route: routePrompt('$Team database security route refactor'), task: 'database security route refactor', proofField: broadProofField });
   if (!validatePipelinePlan(broadPipelinePlan).ok || broadPipelinePlan.runtime_lane?.lane === 'proof_field_fast_lane' || broadPipelinePlan.skipped_stages.includes('planning_debate')) throw new Error('selftest failed: pipeline plan did not fail closed for broad/security work');
+  if (broadPipelinePlan.route_economy?.mode !== 'report_only' || !broadPipelinePlan.route_economy.active_team_triggers?.includes('broad_change_set') || !broadPipelinePlan.route_economy.verification_stage_cache_key) throw new Error('selftest failed: route economy projection missing from pipeline plan');
   const workflowPerf = await runWorkflowPerfBench(tmp, {
     iterations: 2,
     intent: 'small CLI help surface update',

@@ -105,6 +105,11 @@ export async function runWorkflowPerfBench(root, opts = {}) {
       verification_count: verification.length,
       negative_work_skipped_count: estimatedSavedWork,
       simplicity_score: Number(proofField?.simplicity_scorecard?.score || 0),
+      contract_clarity_score: Number(proofField?.contract_clarity?.score || 0),
+      workflow_complexity_score: Number(proofField?.workflow_complexity?.score || 0),
+      workflow_complexity_band: proofField?.workflow_complexity?.band || null,
+      team_trigger_count: proofField?.team_trigger_matrix?.active_triggers?.length || 0,
+      verification_stage_cache_key: proofField?.verification_stage_cache?.cache_key || null,
       outcome_criteria_passed: (proofField?.simplicity_scorecard?.criteria || []).filter((item) => item.passed).length,
       proof_field_valid: proofValidation.ok,
       pipeline_plan_valid: planValidation.ok
@@ -129,6 +134,10 @@ export function validateWorkflowPerfReport(report = {}) {
   if (!report.metrics?.execution_lane) issues.push('execution_lane');
   if (!report.metrics?.pipeline_lane) issues.push('pipeline_lane');
   if (!Number.isFinite(Number(report.metrics?.simplicity_score))) issues.push('simplicity_score');
+  if (!Number.isFinite(Number(report.metrics?.contract_clarity_score))) issues.push('contract_clarity_score');
+  if (!Number.isFinite(Number(report.metrics?.workflow_complexity_score))) issues.push('workflow_complexity_score');
+  if (!report.metrics?.workflow_complexity_band) issues.push('workflow_complexity_band');
+  if (!report.metrics?.verification_stage_cache_key) issues.push('verification_stage_cache_key');
   if (!report.proof_field || !validateProofFieldReport(report.proof_field).ok) issues.push('proof_field');
   if (!report.pipeline_plan || !validatePipelinePlan(report.pipeline_plan).ok) issues.push('pipeline_plan');
   if (!report.recommendation?.mode) issues.push('recommendation');

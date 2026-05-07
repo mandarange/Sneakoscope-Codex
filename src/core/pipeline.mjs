@@ -12,8 +12,9 @@ import { writeMemorySweepReport } from './memory-governor.mjs';
 import { writeMistakeMemoryReport } from './mistake-memory.mjs';
 import { recordSkillDreamEvent, skillDreamPolicyText, writeSkillForgeReport } from './skill-forge.mjs';
 import { writeResearchPlan } from './research.mjs';
+import { PPT_REQUIRED_GATE_FIELDS } from './ppt.mjs';
 import { SPEED_LANE_POLICY } from './proof-field.mjs';
-import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, hasFromChatImgSignal, hasMadSksSignal, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
 import { formatRoleCounts, initTeamLive, parseTeamSpecText } from './team-live.mjs';
 
@@ -64,6 +65,7 @@ export function buildPipelinePlan(input = {}) {
   const verification = planVerification(route, proof);
   const skipped = stages.filter((stage) => stage.status === 'skipped').map((stage) => stage.id);
   const kept = stages.filter((stage) => stage.status !== 'skipped' && stage.status !== 'not_applicable').map((stage) => stage.id);
+  const routeEconomy = routeEconomyPlan(proof);
   return {
     schema_version: PIPELINE_PLAN_SCHEMA_VERSION,
     generated_at: nowIso(),
@@ -93,6 +95,7 @@ export function buildPipelinePlan(input = {}) {
     verification,
     invariants: ['no_unrequested_fallback_code', 'listed_verification', 'triwiki_validate_before_final', 'honest_mode'],
     proof_field: proof,
+    route_economy: routeEconomy,
     skill_dream: input.skillDream || { attached: false, reason: 'skill dreaming uses cheap counters and only runs inventory at threshold' },
     next_actions: planNextActions(route, task, ambiguity, lane),
     no_unrequested_fallback_code: true
@@ -112,6 +115,7 @@ export function validatePipelinePlan(plan = {}) {
   if (!plan.runtime_lane?.lane) issues.push('runtime_lane');
   if (!Array.isArray(plan.stages) || !plan.stages.length) issues.push('stages');
   if (!Array.isArray(plan.verification) || !plan.verification.length) issues.push('verification');
+  if (!plan.route_economy?.mode) issues.push('route_economy');
   if (plan.no_unrequested_fallback_code !== true || !plan.invariants?.includes('no_unrequested_fallback_code')) issues.push('fallback_guard');
   if (!plan.next_actions?.length) issues.push('next_actions');
   return { ok: issues.length === 0, issues };
@@ -146,7 +150,37 @@ function normalizeProofField(report) {
     keep: report.execution_lane?.keep || SPEED_LANE_POLICY.always_keep,
     verification: report.execution_lane?.verification || report.fast_lane_decision?.verification || [],
     proof_cones: (report.proof_cones || []).map((cone) => cone.id),
-    source_hash: report.source_hash || null
+    source_hash: report.source_hash || null,
+    contract_clarity: report.contract_clarity || null,
+    workflow_complexity: report.workflow_complexity || null,
+    team_trigger_matrix: report.team_trigger_matrix || null,
+    verification_stage_cache: report.verification_stage_cache || null
+  };
+}
+
+function routeEconomyPlan(proof = {}) {
+  if (!proof.attached) {
+    return {
+      schema_version: 1,
+      mode: 'unavailable',
+      report_only: true,
+      reason: proof.reason || 'Proof Field not attached yet'
+    };
+  }
+  const triggers = proof.team_trigger_matrix?.active_triggers || [];
+  return {
+    schema_version: 1,
+    mode: 'report_only',
+    report_only: true,
+    contract_clarity_score: Number(proof.contract_clarity?.score || 0),
+    contract_clarity_passed: proof.contract_clarity?.passed === true,
+    ask_recommended: proof.contract_clarity?.ask_recommended === true,
+    workflow_complexity_score: Number(proof.workflow_complexity?.score || 0),
+    workflow_complexity_band: proof.workflow_complexity?.band || null,
+    team_trigger_count: triggers.length,
+    active_team_triggers: triggers,
+    verification_stage_cache_key: proof.verification_stage_cache?.cache_key || null,
+    deletion_policy: 'do_not_delete_or_skip_pipeline_stages_until_report_only_metrics_are_calibrated'
   };
 }
 
@@ -232,7 +266,7 @@ export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
     outcomeRubricPolicyText(),
     speedLanePolicyText(),
     skillDreamPolicyText(),
-    'Design routing: UI/UX reads design.md first; if missing, use design-system-builder from docs/Design-Sys-Prompt.md with plan-tool clarification and a default font recommendation. Existing designs use design-ui-editor plus design-artifact-expert. Image/logo/raster assets use imagegen.',
+    `Design routing: UI/UX reads design.md first; if missing, use design-system-builder from docs/Design-Sys-Prompt.md with plan-tool clarification and a default font recommendation. Existing designs use design-ui-editor plus design-artifact-expert. Image/logo/raster assets use imagegen, which must prefer Codex App built-in image generation documented at ${CODEX_APP_IMAGE_GENERATION_DOC_URL}. ${getdesignReferencePolicyText()}`,
     triwikiContextTrackingText(),
     triwikiStagePolicyText(),
     stackCurrentDocsPolicyText(),
@@ -244,6 +278,7 @@ export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
   if (reflectionRequiredForRoute(route)) lines.push(reflectionInstructionText());
   if (route?.id === 'Team') lines.push(`Team route: scouts, TriWiki refresh, debate, consensus, runtime graph compile with concrete task ids and worker inboxes, close planning agents, fresh executors, review/integration, ${TEAM_SESSION_CLEANUP_ARTIFACT}, reflection, and Honest Mode.`);
   if (route?.id === 'Goal') lines.push('Goal route: write SKS goal bridge artifacts, then use Codex native /goal persistence for create, pause, resume, and clear continuation controls.');
+  if (route?.id === 'PPT') lines.push(`PPT route: before design or PDF work, seal delivery context, audience profile including average age/job/industry, STP strategy, decision context, and at least three pain-point to solution mappings. Keep the visual system simple, restrained, and information-first; design detail should come from hierarchy, spacing, alignment, rules, and subtle accents rather than decorative overdesign. If generated image assets are needed, prefer Codex App built-in image generation through the imagegen skill (${CODEX_APP_IMAGE_GENERATION_DOC_URL}). Then build source ledger, storyboard with aha moments, style tokens, editable source HTML under source-html/, PDF artifact, render QA, PPT-only temporary build file cleanup, and ppt-parallel-report.json so independent strategy/render/file-write phases stay parallel-friendly, then reflection and Honest Mode.`);
   if (route?.id === 'AutoResearch') lines.push('AutoResearch route: load autoresearch-loop plus seo-geo-optimizer when SEO/GEO, discoverability, README, npm, GitHub stars, ranking, or AI-search visibility is relevant.');
   if (route?.id === 'DB') lines.push('DB route: scan/check database risk first; destructive DB operations remain forbidden.');
   if (route?.id === 'GX') lines.push('GX route: use deterministic vgraph/beta render, validate, drift, and snapshot artifacts.');
@@ -562,7 +597,7 @@ async function prepareTeam(root, route, task, required) {
     team_model: {
       phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'runtime_task_graph', 'development_team', 'triwiki_stage_refresh', 'review'],
       analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents. Each scout owns one investigation slice and returns TriWiki-ready findings with source paths, risks, and suggested implementation slices.`,
-      debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices.`,
+      debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices applying compact Hyperplan-derived adversarial lenses.`,
       development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`
     },
     context_tracking: triwikiContextTracking(),
@@ -571,7 +606,7 @@ async function prepareTeam(root, route, task, required) {
       { id: 'team_roster_confirmation', goal: `Before any implementation, materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}. Implementation cannot be considered complete unless team-gate.json has team_roster_confirmed=true.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
       { id: 'parallel_analysis_scouting', goal: `Before scouting, read TriWiki context. ${fromChatImgRequired ? `From-Chat-IMG active: use Codex Computer Use visual inspection, list every visible customer request, match every screenshot image region to attachments, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, then require scoped QA-LOOP evidence in ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} after the customer-request work is done. ${CODEX_COMPUTER_USE_ONLY_POLICY}` : `From-Chat-IMG inactive: do not assume ordinary images are chat captures. ${CODEX_COMPUTER_USE_ONLY_POLICY}`} Spawn exactly ${roster.bundle_size} read-only analysis_scout_N agents in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, and record source-backed findings.`, agents: roster.analysis_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
       { id: 'triwiki_refresh', goal: `Parent orchestrator updates Team analysis artifacts, then runs ${triwikiContextTracking().refresh_command} or ${triwikiContextTracking().pack_command}, prunes with ${triwikiContextTracking().prune_command} when stale/oversized wiki state would pollute handoffs, and runs ${triwikiContextTracking().validate_command} so the next stage uses current TriWiki context.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
-      { id: 'planning_debate', goal: `Before debate, read the refreshed TriWiki pack. Debate team of exactly ${roster.bundle_size} participants maps user inconvenience, options, constraints, affected files, DB/test risk, and tradeoffs while hydrating low-trust claims from source.`, agents: roster.debate_team.map((agent) => agent.id) },
+      { id: 'planning_debate', goal: `Before debate, read the refreshed TriWiki pack. Debate team of exactly ${roster.bundle_size} participants maps user inconvenience, options, constraints, affected files, DB/test risk, and tradeoffs while applying compact Hyperplan-derived lenses: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative. Hydrate low-trust claims from source.`, agents: roster.debate_team.map((agent) => agent.id) },
       { id: 'consensus', goal: `Seal one objective with acceptance criteria and disjoint implementation slices, then refresh/validate TriWiki so implementation receives current consensus context.` },
       { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}; remap symbolic plan nodes to concrete task ids, allocate role/path/domain worker lanes, and write ${TEAM_INBOX_DIR} before executor work starts.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
       { id: 'parallel_implementation', goal: `Before implementation, read relevant TriWiki context and current source. Close debate agents, then spawn a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership. Refresh TriWiki after implementation changes or blockers.`, agents: roster.development_team.map((agent) => agent.id) },
@@ -582,7 +617,7 @@ async function prepareTeam(root, route, task, required) {
       markdown: 'team-live.md',
       transcript: 'team-transcript.jsonl',
       dashboard: 'team-dashboard.json',
-      warp: 'CLI Team entrypoints open warp live lanes for the visible Team agent budget when warp is available.',
+      tmux: 'CLI Team entrypoints open tmux live lanes for the visible Team agent budget when tmux is available.',
       commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow', 'sks team event latest --agent <name> --phase <phase> --message "..."']
     },
     required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
@@ -590,7 +625,7 @@ async function prepareTeam(root, route, task, required) {
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
   const contextTracking = triwikiContextTracking();
-  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReasoning: high for team logic, temporary for this route only.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\n1. Run exactly ${roster.bundle_size} read-only analysis_scout_N agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Review, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent analysis_scout_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
+  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReasoning: high for team logic, temporary for this route only.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\n1. Run exactly ${roster.bundle_size} read-only analysis_scout_N agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants through the compact Hyperplan-derived adversarial lens pass, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Review, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent analysis_scout_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
   await initTeamLive(id, dir, cleanTask, { agentSessions, roleCounts, roster });
   const runtime = await writeTeamRuntimeArtifacts(dir, plan, {});
   await writeMemorySweepReport(root, dir, { missionId: id }).catch(() => null);
@@ -689,6 +724,7 @@ function clarificationVisibleResponseContract(id) {
 VISIBLE RESPONSE CONTRACT:
 - This turn is clarification-only.
 - Do not call tools, do not start implementation, and do not advance to the next route phase.
+- Elapsed time, repeated hook resumes, or assistant self-continuation do not count as answers.
 - Reply to the user with the Required questions block so it is visible in chat.
 - Tell the user they can answer directly by slot id; after they answer, convert the reply to answers.json and run \`${answerCommand}\`.`;
 }
@@ -917,11 +953,76 @@ function reflectionStopReason(state = {}, status = {}) {
   return `SKS ${route} must run reflection before final. Write .sneakoscope/missions/${id}/${REFLECTION_ARTIFACT}, record real lessons in ${REFLECTION_MEMORY_PATH} when present, refresh/pack and validate TriWiki, then pass .sneakoscope/missions/${id}/${REFLECTION_GATE}.${missing}`;
 }
 
+export async function projectGateStatus(root, state = {}) {
+  const gates = [];
+  const id = state?.mission_id || null;
+  if (clarificationGatePending(state)) {
+    gates.push({
+      id: 'clarification-gate',
+      ok: false,
+      missing: ['explicit_user_answers', 'pipeline_answer'],
+      source: id ? `.sneakoscope/missions/${id}/questions.md` : null
+    });
+  }
+  if (state?.context7_required) {
+    const evidence = await context7Evidence(root, state);
+    gates.push({
+      id: 'context7-evidence',
+      ok: evidence.ok,
+      missing: evidence.ok ? [] : ['resolve-library-id', 'query-docs'],
+      source: id ? `.sneakoscope/missions/${id}/context7-evidence.jsonl` : '.sneakoscope/state/context7-evidence.jsonl'
+    });
+  }
+  if (state?.subagents_required) {
+    const evidence = await subagentEvidence(root, state);
+    gates.push({
+      id: 'subagent-evidence',
+      ok: evidence.ok,
+      missing: evidence.ok ? [] : ['spawn_agent_or_exception_evidence'],
+      source: id ? `.sneakoscope/missions/${id}/subagent-evidence.jsonl` : '.sneakoscope/state/subagent-evidence.jsonl'
+    });
+  }
+  if (id && state?.stop_gate && !['none', 'honest_mode'].includes(state.stop_gate)) {
+    const active = await passedActiveGate(root, state);
+    gates.push({
+      id: active.file || state.stop_gate,
+      ok: active.ok,
+      missing: active.missing || (active.ok ? [] : ['passed']),
+      source: active.file ? `.sneakoscope/missions/${id}/${active.file}` : null
+    });
+  }
+  const reflection = await reflectionGateStatus(root, state);
+  if (reflectionRequiredForState(state)) {
+    gates.push({
+      id: REFLECTION_GATE,
+      ok: reflection.ok,
+      missing: reflection.missing || [],
+      source: id ? `.sneakoscope/missions/${id}/${REFLECTION_GATE}` : null
+    });
+  }
+  const blockers = gates.filter((gate) => !gate.ok).flatMap((gate) => gate.missing.map((item) => `${gate.id}:${item}`));
+  return {
+    schema_version: 1,
+    generated_at: nowIso(),
+    mission_id: id,
+    mode: state?.mode || null,
+    report_only: true,
+    ok: blockers.length === 0,
+    blockers,
+    gates
+  };
+}
+
 export async function evaluateStop(root, state, payload, opts = {}) {
   const last = extractLastMessage(payload);
-  if (state?.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS')) {
+  if (clarificationGatePending(state)) {
     if (await hasVisibleClarificationQuestionBlock(root, state, last)) return { continue: true };
-    return complianceBlock(root, state, await clarificationStopReason(root, state, 'route'), { gate: 'clarification' });
+    return {
+      decision: 'block',
+      reason: await clarificationStopReason(root, state, 'route'),
+      gate: 'clarification',
+      missing: ['explicit_user_answers', 'pipeline_answer']
+    };
   }
   if (state?.context7_required && !(await hasContext7DocsEvidence(root, state))) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires Context7 evidence before completion. Use Context7 resolve-library-id, then query-docs (or legacy get-library-docs), so SKS can record context7-evidence.jsonl.`, { gate: 'context7-evidence' });
@@ -950,6 +1051,16 @@ export async function evaluateStop(root, state, payload, opts = {}) {
   const reflection = await reflectionGateStatus(root, state);
   if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
   return null;
+}
+
+function clarificationGatePending(state = {}) {
+  return Boolean(state?.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS'))
+    || Boolean(
+      state?.mission_id
+      && state.implementation_allowed === false
+      && state.ambiguity_gate_required === true
+      && state.ambiguity_gate_passed !== true
+    );
 }
 
 async function complianceBlock(root, state = {}, reason = '', detail = {}) {
@@ -1053,6 +1164,14 @@ function missingRequiredGateFields(file, state, gate = {}) {
     return ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'ui_computer_use_evidence', 'honest_mode_complete']
       .filter((key) => gate[key] !== true);
   }
+  if (file === 'ppt-gate.json' || mode === 'PPT') {
+    const required = [...PPT_REQUIRED_GATE_FIELDS];
+    if (Number(gate.painpoint_count || 0) < 3) required.push('painpoint_count>=3');
+    return required.filter((key) => {
+      if (key === 'painpoint_count>=3') return Number(gate.painpoint_count || 0) < 3;
+      return gate[key] !== true;
+    });
+  }
   return [];
 }
 
@@ -1151,6 +1270,7 @@ function gateFilesForState(state) {
   if (state.mode === 'DB') return ['db-review.json'];
   if (state.mode === 'GX') return ['gx-gate.json'];
   if (state.mode === 'QALOOP') return ['qa-gate.json'];
+  if (state.mode === 'PPT') return ['ppt-gate.json'];
   return ['done-gate.json'];
 }
 

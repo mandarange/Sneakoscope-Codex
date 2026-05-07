@@ -29,7 +29,7 @@ import { PIPELINE_PLAN_ARTIFACT, validatePipelinePlan, writePipelinePlan } from 
 import { GOAL_BRIDGE_ARTIFACT, GOAL_WORKFLOW_ARTIFACT, updateGoalWorkflow, writeGoalWorkflow } from '../core/goal-workflow.mjs';
 import { scanCodeStructure, writeCodeStructureReport } from '../core/code-structure.mjs';
 import { writeMemorySweepReport } from '../core/memory-governor.mjs';
-import { cleanupWarpTeamView, launchWarpTeamView } from '../core/warp-ui.mjs';
+import { cleanupTmuxTeamView, launchTmuxTeamView } from '../core/tmux-ui.mjs';
 import { loadSkillDreamState, recordSkillDreamEvent, runSkillDream, writeSkillForgeReport } from '../core/skill-forge.mjs';
 import { writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
 import { checkDbOperation, checkSqlFile, classifyCommand, classifySql, loadDbSafetyPolicy, safeSupabaseMcpConfig, scanDbSafety } from '../core/db-safety.mjs';
@@ -56,8 +56,8 @@ Use outside a project:
   sks deps check
   sks team "global mission"
 
-If warp is missing:
-  sks deps install warp
+If tmux is missing:
+  sks deps install tmux
 
 Initialize this project for CLI and Codex App:
   sks setup --bootstrap
@@ -70,7 +70,7 @@ Open from terminal:
 Verify:
   sks deps check
   sks codex-app check
-  sks warp check
+  sks tmux check
   sks auto-review status
   sks doctor --fix
   sks context7 check
@@ -529,6 +529,8 @@ export async function perfCommand(sub, args = []) {
     console.log(`Mode: ${report.metrics.decision_mode}`);
     console.log(`Fast lane: ${report.metrics.fast_lane_eligible ? 'yes' : 'no'}`);
     console.log(`Proof Field p95: ${report.metrics.proof_field_build_ms_p95}ms`);
+    console.log(`Contract clarity: ${report.metrics.contract_clarity_score}`);
+    console.log(`Workflow complexity: ${report.metrics.workflow_complexity_band} (${report.metrics.workflow_complexity_score})`);
     console.log(`Proof cones: ${report.metrics.proof_cone_count}`);
     console.log(`Negative work skipped: ${report.metrics.negative_work_skipped_count}`);
     console.log(`Next: ${report.recommendation.next.join('; ')}`);
@@ -569,6 +571,9 @@ export async function proofFieldCommand(sub, args = []) {
   console.log(`Mode: ${report.fast_lane_decision.mode}`);
   console.log(`Eligible: ${report.fast_lane_decision.eligible ? 'yes' : 'no'}`);
   if (report.fast_lane_decision.blockers.length) console.log(`Blockers: ${report.fast_lane_decision.blockers.join(', ')}`);
+  console.log(`Contract clarity: ${report.contract_clarity.score}${report.contract_clarity.ask_recommended ? ' (ask recommended)' : ''}`);
+  console.log(`Workflow complexity: ${report.workflow_complexity.band} (${report.workflow_complexity.score})`);
+  if (report.team_trigger_matrix.active_triggers.length) console.log(`Team triggers: ${report.team_trigger_matrix.active_triggers.join(', ')}`);
   console.log(`Proof cones: ${report.proof_cones.map((cone) => cone.id).join(', ')}`);
   console.log(`Verification: ${report.fast_lane_decision.verification.join('; ')}`);
   console.log(`Report: ${path.relative(root, report.report_path)}`);
@@ -640,7 +645,7 @@ export async function harnessCommand(sub, args = []) {
   if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
   console.log('SKS Harness Growth');
   console.log(`Forgetting fixture: ${report.forgetting.fixture.passed ? 'pass' : 'fail'}`);
-  console.log(`Warp views: ${report.warp.views.length}`);
+  console.log(`tmux views: ${report.tmux.views.length}`);
   console.log(`Tool taxonomy: ${report.reliability.tool_error_taxonomy.join(', ')}`);
   console.log(`Unknown errors recorded as bugs: ${report.reliability.unknown_errors_are_bugs ? 'yes' : 'no'}`);
 }
@@ -1172,7 +1177,7 @@ function userRequestSignal(prompt = '') {
   const topicRules = [
     ['ambiguity-questions', /모호|ambiguity|clarification|질문|답변|answers?\.json|decision-contract|추론|예측/],
     ['triwiki-priority-memory', /triwiki|wiki|메모리|memory|기억|우선|반복|자주|카운팅|count|frequency|weight/],
-    ['install-bootstrap', /bootstrap|postinstall|doctor|deps|warp|homebrew|최초\s*설치|셋업|setup/],
+    ['install-bootstrap', /bootstrap|postinstall|doctor|deps|tmux|homebrew|최초\s*설치|셋업|setup/],
     ['version-release', /버전|version|publish:dry|release|npm\s+pack/],
     ['qa-loop', /qa|e2e|검증|리포트|report/],
     ['team-pipeline', /team|subagent|세션|cleanup|reflection|회고|반성/],
@@ -1416,15 +1421,15 @@ export async function gxCommand(sub, args) {
 }
 
 export async function team(args) {
-  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'cleanup-warp']);
+  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'cleanup-tmux']);
   if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
-  const openWarp = flag(args, '--open-warp') || flag(args, '--warp-open');
-  const cleanCreateArgs = args.filter((arg) => !['--open-warp', '--warp-open'].includes(String(arg)));
+  const openTmux = flag(args, '--open-tmux') || flag(args, '--tmux-open');
+  const cleanCreateArgs = args.filter((arg) => !['--open-tmux', '--tmux-open'].includes(String(arg)));
   const opts = parseTeamCreateArgs(cleanCreateArgs);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   if (!prompt) {
-    console.error('Usage: sks team "task" [executor:5 reviewer:2 user:1] [--agents N] [--open-warp] [--json]');
-    console.error('       sks team log|tail|watch|lane|status|message|cleanup-warp [mission-id|latest]');
+    console.error('Usage: sks team "task" [executor:5 reviewer:2 user:1] [--agents N] [--open-tmux] [--json]');
+    console.error('       sks team log|tail|watch|lane|status|message|cleanup-tmux [mission-id|latest]');
     console.error('       sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
     console.error('       sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."');
     process.exitCode = 1;
@@ -1490,7 +1495,7 @@ export async function team(args) {
     questions: path.join(dir, 'questions.md'),
     codex_agents: ['analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']
   };
-  result.warp = await launchWarpTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: flag(args, '--json') || !openWarp });
+  result.tmux = await launchTmuxTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: flag(args, '--json') || !openTmux });
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
   console.log(`Plan: ${path.relative(root, result.plan)}`);
@@ -1501,13 +1506,13 @@ export async function team(args) {
   console.log(`Runtime graph: ${path.relative(root, result.team_graph)}`);
   console.log(`Worker inbox: ${path.relative(root, result.worker_inbox_dir)}`);
   console.log(`Live: ${path.relative(root, result.live)}`);
-  if (result.warp.ready) {
-    const warpState = result.warp.created ? 'opened' : 'not opened; use --open-warp for a launch configuration';
-    console.log(`warp: ${warpState} ${result.warp.opened_lane_count || result.warp.agents.length} agent lane(s) in ${result.warp.workspace_ref || result.warp.workspace}`);
+  if (result.tmux.ready) {
+    const tmuxState = result.tmux.created ? 'opened' : 'not opened; use --open-tmux for a tmux session';
+    console.log(`tmux: ${tmuxState} ${result.tmux.opened_lane_count || result.tmux.agents.length} agent lane(s) in ${result.tmux.session || result.tmux.workspace}`);
   }
-  else console.log(`warp: blocked (${Array.from(new Set(result.warp.blockers || [])).join('; ')})`);
+  else console.log(`tmux: blocked (${Array.from(new Set(result.tmux.blockers || [])).join('; ')})`);
   console.log(`Watch: sks team watch ${id}`);
-  console.log('Use $Team in Codex App or the Warp launch view from this CLI flow to run scouts, debate/consensus, runtime graph/inbox handoff, then a fresh implementation team with disjoint ownership.');
+  console.log('Use $Team in Codex App or the tmux launch view from this CLI flow to run scouts, debate/consensus, runtime graph/inbox handoff, then a fresh implementation team with disjoint ownership.');
 }
 
 export function parseTeamCreateArgs(args) {
@@ -1540,7 +1545,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
     team_model: {
       phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'runtime_task_graph', 'development_team', 'triwiki_stage_refresh', 'review', 'session_cleanup'],
       analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents. Each scout owns one investigation slice, records source paths/evidence, and returns TriWiki-ready findings before debate or implementation starts.`,
-      debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices.`,
+      debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices applying compact Hyperplan-derived adversarial lenses.`,
       development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`
     },
     team_runtime: teamRuntimePlanMetadata(),
@@ -1584,7 +1589,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
       },
       {
         id: 'planning_debate',
-        goal: 'Debate team reads the current TriWiki pack, maps user inconvenience, code risk, constraints, DB safety, tests, and viable approaches, and hydrates low-trust claims from source immediately.',
+        goal: 'Debate team reads the current TriWiki pack, maps user inconvenience, code risk, constraints, DB safety, tests, and viable approaches, applies compact Hyperplan-derived lenses, and hydrates low-trust claims from source immediately.',
         agents: roster.debate_team.map((agent) => agent.id),
         max_parallel_subagents: agentSessions,
         write_policy: 'read-only'
@@ -1654,7 +1659,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
       markdown: 'team-live.md',
       transcript: 'team-transcript.jsonl',
       dashboard: 'team-dashboard.json',
-      warp: 'sks team opens a warp workspace with one live multi-line lane per visible Team agent budget when warp is available.',
+      tmux: 'sks team opens a tmux workspace with one live multi-line lane per visible Team agent budget when tmux is available.',
       commands: [
         'sks team status <mission-id>',
         'sks team log <mission-id>',
@@ -1663,7 +1668,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
         'sks team lane <mission-id> --agent <name> --follow',
         'sks team event <mission-id> --agent <name> --phase <phase> --message "..."',
         'sks team message <mission-id> --from <agent> --to <agent|all> --message "..."',
-        'sks team cleanup-warp <mission-id>'
+        'sks team cleanup-tmux <mission-id>'
       ]
     },
     required_artifacts: requiredArtifacts,
@@ -1774,19 +1779,19 @@ async function teamCommand(sub, args) {
       artifact: readFlagValue(args, '--artifact', ''),
       message
     });
-    const warpCleanup = /^session_cleanup$|^team_cleanup$|^cleanup$/i.test(String(phase || ''))
+    const tmuxCleanup = /^session_cleanup$|^team_cleanup$|^cleanup$/i.test(String(phase || ''))
       ? await requestTeamSessionCleanup(dir, {
         missionId: id,
         agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
         reason: message,
-        finalMessage: 'Team cleanup event received. Follow panes may stop; Warp panes remain user-controlled.'
-      }).then(() => cleanupWarpTeamView({ root, missionId: id, closeWorkspace: flag(args, '--close-workspace') })).catch((err) => ({ ok: false, reason: err.message || 'warp cleanup failed' }))
+        finalMessage: 'Team cleanup event received. Follow panes may stop; tmux panes remain user-controlled.'
+      }).then(() => cleanupTmuxTeamView({ root, missionId: id, closeSession: flag(args, '--close-session') || flag(args, '--close') })).catch((err) => ({ ok: false, reason: err.message || 'tmux cleanup failed' }))
       : null;
     if (flag(args, '--json')) return console.log(JSON.stringify(record, null, 2));
     console.log(`${record.ts} [${record.phase}] ${record.agent}: ${record.message}`);
-    if (warpCleanup) {
-      if (warpCleanup.ok) console.log(`warp cleanup: marked complete (${warpCleanup.reason || 'record updated'})`);
-      else console.log(`warp cleanup: skipped (${warpCleanup.reason || 'not available'})`);
+    if (tmuxCleanup) {
+      if (tmuxCleanup.ok) console.log(`tmux cleanup: marked complete (${tmuxCleanup.reason || 'record updated'})`);
+      else console.log(`tmux cleanup: skipped (${tmuxCleanup.reason || 'not available'})`);
     }
     return;
   }
@@ -1810,12 +1815,12 @@ async function teamCommand(sub, args) {
     console.log(`${record.ts} [${record.phase}] ${record.agent} -> ${record.to}: ${record.message}`);
     return;
   }
-  if (sub === 'cleanup-warp') {
+  if (sub === 'cleanup-tmux') {
     const control = await requestTeamSessionCleanup(dir, {
       missionId: id,
       agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
       reason: readFlagValue(args, '--reason', 'Team session ended; clean up live follow panes.'),
-      finalMessage: 'Team session ended. Lane/watch follow loops will stop after showing this cleanup summary; Warp panes remain user-controlled.'
+      finalMessage: 'Team session ended. Lane/watch follow loops will stop after showing this cleanup summary; tmux panes remain user-controlled.'
     });
     await appendTeamEvent(dir, {
       agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
@@ -1823,16 +1828,16 @@ async function teamCommand(sub, args) {
       type: 'cleanup',
       message: control.cleanup_reason || 'Team session cleanup requested.'
     });
-    const cleanup = await cleanupWarpTeamView({ root, missionId: id, closeWorkspace: flag(args, '--close-workspace') || flag(args, '--close') });
+    const cleanup = await cleanupTmuxTeamView({ root, missionId: id, closeSession: flag(args, '--close-session') || flag(args, '--close') });
     cleanup.control = control;
     if (flag(args, '--json')) return console.log(JSON.stringify(cleanup, null, 2));
     if (!cleanup.ok) {
-      console.error(`warp cleanup skipped: ${cleanup.reason || 'not available'}`);
+      console.error(`tmux cleanup skipped: ${cleanup.reason || 'not available'}`);
       process.exitCode = cleanup.skipped ? 0 : 2;
       return;
     }
-    if (cleanup.removed_config) console.log(`warp cleanup: removed generated launch config ${cleanup.config_path}`);
-    else console.log(`warp cleanup: marked complete (${cleanup.reason || 'record updated'})`);
+    if (cleanup.killed_session) console.log(`tmux cleanup: killed session ${cleanup.session}`);
+    else console.log(`tmux cleanup: marked complete (${cleanup.reason || 'record updated'})`);
     console.log(renderTeamCleanupSummary(control));
     return;
   }

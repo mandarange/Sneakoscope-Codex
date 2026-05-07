@@ -13,10 +13,10 @@ export const INVARIANT_LEDGER = Object.freeze([
 ]);
 
 export const OUTCOME_RUBRIC = Object.freeze([
-  { id: 'goal_fit', description: 'The selected work directly satisfies the user goal without drifting into adjacent pipeline work.' },
-  { id: 'minimum_surface', description: 'Only touched surfaces inside the proof cone are included; unrelated routes, docs, DB, visual, or release work are skipped with evidence.' },
-  { id: 'bounded_verification', description: 'Verification is enough to prove the selected cone and no broader than the risk requires.' },
-  { id: 'escalation_defined', description: 'The path names the exact failure signals that should promote the work back to the full Team/Honest proof path.' }
+  { id: 'goal_fit', description: 'The selected work directly satisfies the user goal without drifting into adjacent pipeline work.', adversarial_lens: 'creative: challenge the literal framing and keep only the user goal that survives.' },
+  { id: 'minimum_surface', description: 'Only touched surfaces inside the proof cone are included; unrelated routes, docs, DB, visual, or release work are skipped with evidence.', adversarial_lens: 'skeptic+architect: subtract unneeded surface and reject coupling that does not pay for itself now.' },
+  { id: 'bounded_verification', description: 'Verification is enough to prove the selected cone and no broader than the risk requires.', adversarial_lens: 'researcher+validator: require current evidence and test the integration edge that can actually break.' },
+  { id: 'escalation_defined', description: 'The path names the exact failure signals that should promote the work back to the full Team/Honest proof path.', adversarial_lens: 'validator+architect: name the failure signal before work starts and fail closed when it appears.' }
 ]);
 
 export const SPEED_LANE_POLICY = Object.freeze({
@@ -82,8 +82,12 @@ export async function buildProofField(root, opts = {}) {
   const negativeWork = buildNegativeWorkCache(selectedCones, risk);
   const fastLane = fastLaneDecision({ changedFiles, selectedCones, risk, negativeWork });
   const sourceHash = await sourceDigest(root, changedFiles);
-  const simplicity = outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane });
-  const executionLane = executionLaneDecision({ fastLane, simplicity });
+  const contractClarity = contractClarityScore({ intent, changedFiles, selectedCones, risk });
+  const workflowComplexity = workflowComplexityScore({ changedFiles, selectedCones, risk, verification: fastLane.verification });
+  const teamTriggerMatrix = teamTriggerDecision({ intent, changedFiles, risk });
+  const verificationStageCache = verificationStageCachePlan({ sourceHash, changedFiles, verification: fastLane.verification });
+  const simplicity = outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane, workflowComplexity });
+  const executionLane = executionLaneDecision({ fastLane, simplicity, workflowComplexity, teamTriggerMatrix });
   return {
     schema_version: PROOF_FIELD_SCHEMA_VERSION,
     generated_at: nowIso(),
@@ -94,6 +98,10 @@ export async function buildProofField(root, opts = {}) {
     invariant_ledger: INVARIANT_LEDGER,
     outcome_rubric: OUTCOME_RUBRIC,
     speed_lane_policy: SPEED_LANE_POLICY,
+    contract_clarity: contractClarity,
+    workflow_complexity: workflowComplexity,
+    team_trigger_matrix: teamTriggerMatrix,
+    verification_stage_cache: verificationStageCache,
     simplicity_scorecard: simplicity,
     execution_lane: executionLane,
     proof_cones: selectedCones,
@@ -115,9 +123,16 @@ export function validateProofFieldReport(report = {}) {
   if (report.schema_version !== PROOF_FIELD_SCHEMA_VERSION) issues.push('schema_version');
   if (!Array.isArray(report.invariant_ledger) || !report.invariant_ledger.length) issues.push('invariant_ledger');
   if (!Array.isArray(report.outcome_rubric) || report.outcome_rubric.length !== OUTCOME_RUBRIC.length) issues.push('outcome_rubric');
+  if (!report.outcome_rubric?.every((item) => item.adversarial_lens)) issues.push('outcome_adversarial_lenses');
   if (!Number.isFinite(Number(report.simplicity_scorecard?.score))) issues.push('simplicity_scorecard');
   if (!Array.isArray(report.simplicity_scorecard?.criteria) || report.simplicity_scorecard.criteria.length !== OUTCOME_RUBRIC.length) issues.push('simplicity_criteria');
+  if (!report.simplicity_scorecard?.criteria?.every((item) => item.adversarial_lens)) issues.push('simplicity_adversarial_lenses');
   if (!report.speed_lane_policy || Number(report.speed_lane_policy.min_score) !== FAST_LANE_MIN_SCORE) issues.push('speed_lane_policy');
+  if (!Number.isFinite(Number(report.contract_clarity?.score))) issues.push('contract_clarity');
+  if (!Array.isArray(report.contract_clarity?.components) || report.contract_clarity.components.length < 1) issues.push('contract_clarity_components');
+  if (!Number.isFinite(Number(report.workflow_complexity?.score))) issues.push('workflow_complexity');
+  if (!Array.isArray(report.team_trigger_matrix?.triggers)) issues.push('team_trigger_matrix');
+  if (report.verification_stage_cache?.report_only !== true || !report.verification_stage_cache?.cache_key) issues.push('verification_stage_cache');
   if (!report.execution_lane?.lane) issues.push('execution_lane');
   if (report.execution_lane?.lane === SPEED_LANE_POLICY.fast_lane && report.execution_lane?.score < FAST_LANE_MIN_SCORE) issues.push('execution_lane_score');
   if (!Array.isArray(report.proof_cones)) issues.push('proof_cones');
@@ -141,6 +156,8 @@ export async function proofFieldFixture() {
       catastrophic_guard_present: report.invariant_ledger.some((item) => item.id === 'db-catastrophic-guard'),
       negative_release_work_recorded: report.negative_work_cache.some((item) => item.id === 'full_release_gate' && item.disposition === 'skip_with_evidence'),
       outcome_rubric_present: report.outcome_rubric.length === OUTCOME_RUBRIC.length,
+      adversarial_lenses_present: report.outcome_rubric.every((item) => item.adversarial_lens) && report.simplicity_scorecard.criteria.every((item) => item.adversarial_lens),
+      route_economy_present: report.contract_clarity?.report_only === true && report.workflow_complexity?.report_only === true && report.team_trigger_matrix?.report_only === true && report.verification_stage_cache?.report_only === true,
       simplicity_score_usable: Number(report.simplicity_scorecard?.score) >= FAST_LANE_MIN_SCORE,
       execution_fast_lane_selected: report.execution_lane?.lane === SPEED_LANE_POLICY.fast_lane
     }
@@ -234,14 +251,126 @@ function fastLaneDecision({ changedFiles, selectedCones, risk, negativeWork }) {
   };
 }
 
-function outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane }) {
+function contractClarityScore({ intent, changedFiles, selectedCones, risk }) {
+  const components = [
+    {
+      id: 'goal_fit',
+      floor: 0.7,
+      score: intent ? 1 : 0.25,
+      evidence: intent ? 'intent provided' : 'missing explicit intent'
+    },
+    {
+      id: 'safety_scope_clarity',
+      floor: 0.7,
+      score: risk.flags.unknown_surface ? 0.4 : 1,
+      evidence: risk.flags.unknown_surface ? 'unknown surface present' : `risk flags classified: ${Object.entries(risk.flags).filter(([, value]) => value).map(([key]) => key).join(', ') || 'none'}`
+    },
+    {
+      id: 'acceptance_observability',
+      floor: 0.6,
+      score: /accept|verify|test|done|complete|검증|완료|구현|개선/i.test(intent || '') ? 1 : 0.65,
+      evidence: /accept|verify|test|done|complete|검증|완료|구현|개선/i.test(intent || '') ? 'observable outcome language present' : 'acceptance inferred from proof cones'
+    },
+    {
+      id: 'write_scope_certainty',
+      floor: 0.7,
+      score: changedFiles.length > 0 && changedFiles.length <= 3 ? 1 : (changedFiles.length > 0 ? 0.55 : 0.2),
+      evidence: `${changedFiles.length} changed file(s) in proposed scope`
+    },
+    {
+      id: 'context_confidence',
+      floor: 0.7,
+      score: selectedCones.length > 0 && !risk.flags.unknown_surface ? 1 : 0.45,
+      evidence: `${selectedCones.length} proof cone(s), unknown_surface=${risk.flags.unknown_surface}`
+    }
+  ];
+  const score = Number((components.reduce((sum, item) => sum + item.score, 0) / components.length).toFixed(2));
+  const failed = components.filter((item) => item.score < item.floor).map((item) => item.id);
+  return {
+    schema_version: 1,
+    report_only: true,
+    score,
+    passed: score >= 0.8 && failed.length === 0,
+    ask_recommended: failed.length > 0,
+    failed_floors: failed,
+    components
+  };
+}
+
+function workflowComplexityScore({ changedFiles, selectedCones, risk, verification }) {
+  const surfaces = new Set(selectedCones.flatMap((cone) => cone.surfaces || []));
+  const weighted = {
+    changed_files: Math.min(changedFiles.length, 8) / 8 * 0.3,
+    proof_cones: Math.min(selectedCones.length, 4) / 4 * 0.2,
+    risk_flags: Math.min(risk.score, 4) / 4 * 0.25,
+    verification: Math.min((verification || []).length, 6) / 6 * 0.15,
+    surfaces: Math.min(surfaces.size, 6) / 6 * 0.1
+  };
+  const score = Number(Object.values(weighted).reduce((sum, value) => sum + value, 0).toFixed(2));
+  const band = score >= 0.67 ? 'frontier' : (score >= 0.34 ? 'balanced' : 'focused');
+  return {
+    schema_version: 1,
+    report_only: true,
+    score,
+    band,
+    inputs: {
+      changed_file_count: changedFiles.length,
+      proof_cone_count: selectedCones.length,
+      route_surface_count: surfaces.size,
+      risk_flag_count: risk.score,
+      verification_count: (verification || []).length
+    },
+    weighted
+  };
+}
+
+function teamTriggerDecision({ intent, changedFiles, risk }) {
+  const triggers = [
+    { id: 'explicit_team', active: /\$?team\b/i.test(intent || ''), reason: 'user explicitly selected Team' },
+    { id: 'broad_change_set', active: changedFiles.length > 3, reason: `${changedFiles.length} changed file(s)` },
+    { id: 'database_surface', active: risk.flags.database, reason: 'database risk flag present' },
+    { id: 'security_surface', active: risk.flags.security, reason: 'security risk flag present' },
+    { id: 'visual_forensic_surface', active: risk.flags.visual_forensic, reason: 'visual forensic risk flag present' },
+    { id: 'unknown_surface', active: risk.flags.unknown_surface, reason: 'unknown proof cone selected' },
+    { id: 'unsupported_claim', active: false, reason: 'only activated by Honest/H-Proof evidence' },
+    { id: 'verification_failed', active: false, reason: 'only activated after verification failure' }
+  ];
+  const active = triggers.filter((trigger) => trigger.active).map((trigger) => trigger.id);
+  return {
+    schema_version: 1,
+    report_only: true,
+    full_team_recommended: active.length > 0,
+    active_triggers: active,
+    triggers
+  };
+}
+
+function verificationStageCachePlan({ sourceHash, changedFiles, verification }) {
+  const stage1 = [...new Set(verification || [])].filter((command) => /packcheck|selftest|commands --json|wiki validate|eval run/i.test(command));
+  const cacheInput = { source_hash: sourceHash || null, changed_files: changedFiles, stage1 };
+  return {
+    schema_version: 1,
+    report_only: true,
+    status: sourceHash ? 'planned' : 'source_hash_missing',
+    cache_key: sha256(JSON.stringify(cacheInput)).slice(0, 16),
+    source_hash: sourceHash || null,
+    stage1_commands: stage1,
+    invalidates_on: ['source_hash_changed', 'command_changed', 'cwd_changed', 'env_changed'],
+    reuse_policy: 'fail_closed'
+  };
+}
+
+function outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane, workflowComplexity }) {
   const skipped = negativeWork.filter((item) => item.disposition === 'skip_with_evidence').length;
   const criteria = [
     { id: 'goal_fit', passed: Boolean(intent || changedFiles.length), evidence: intent ? 'intent provided' : 'changed files define scope' },
-    { id: 'minimum_surface', passed: changedFiles.length <= 3 && !risk.flags.unknown_surface, evidence: `${changedFiles.length} changed file(s), ${selectedCones.length} proof cone(s)` },
+    { id: 'minimum_surface', passed: changedFiles.length <= 3 && !risk.flags.unknown_surface, evidence: `${changedFiles.length} changed file(s), ${selectedCones.length} proof cone(s), complexity=${workflowComplexity?.band || 'unknown'}` },
     { id: 'bounded_verification', passed: fastLane.verification.length > 0 && fastLane.verification.length <= 4, evidence: `${fastLane.verification.length} focused verification command(s)` },
     { id: 'escalation_defined', passed: Array.isArray(fastLane.escalate_on) && fastLane.escalate_on.length > 0, evidence: `${fastLane.escalate_on.length} escalation trigger(s)` }
-  ];
+  ].map((criterion) => ({
+    ...criterion,
+    adversarial_lens: OUTCOME_RUBRIC.find((item) => item.id === criterion.id)?.adversarial_lens || null
+  }));
   const passed = criteria.filter((item) => item.passed).length;
   return {
     schema_version: 1,
@@ -252,7 +381,7 @@ function outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeW
   };
 }
 
-function executionLaneDecision({ fastLane, simplicity }) {
+function executionLaneDecision({ fastLane, simplicity, workflowComplexity, teamTriggerMatrix }) {
   const score = Number(simplicity?.score || 0);
   const fast = Boolean(fastLane?.eligible) && score >= FAST_LANE_MIN_SCORE;
   const lane = fast
@@ -270,7 +399,7 @@ function executionLaneDecision({ fastLane, simplicity }) {
     escalate_on: [...new Set([...(fastLane?.escalate_on || []), ...SPEED_LANE_POLICY.fail_closed_on])],
     reason: fast
       ? `Proof Field score ${score} >= ${FAST_LANE_MIN_SCORE} with no fast-lane blockers`
-      : `Fast lane not allowed: mode=${fastLane?.mode || 'unknown'}, score=${score}, blockers=${(fastLane?.blockers || []).join(', ') || 'none'}`
+      : `Fast lane not allowed: mode=${fastLane?.mode || 'unknown'}, score=${score}, complexity=${workflowComplexity?.band || 'unknown'}, team_triggers=${(teamTriggerMatrix?.active_triggers || []).join(', ') || 'none'}, blockers=${(fastLane?.blockers || []).join(', ') || 'none'}`
   };
 }
 

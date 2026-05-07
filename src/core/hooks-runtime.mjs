@@ -165,6 +165,9 @@ async function hookPreTool(root, state, payload, noQuestion) {
   if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
     return { decision: 'block', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
   }
+  if (clarificationGateLocked(state) && !clarificationAnswerToolAllowed(payload)) {
+    return { decision: 'block', permissionDecision: 'deny', reason: clarificationPauseBlockReason(state) };
+  }
   const command = extractCommand(payload);
   if (noQuestion && looksInteractiveCommand(command)) return { decision: 'block', reason: interactiveCommandReason(command) };
   return { continue: true };
@@ -226,12 +229,48 @@ async function hookPermission(root, state, payload, noQuestion) {
   if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
     return { decision: 'deny', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
   }
+  if (clarificationGateLocked(state) && !clarificationAnswerToolAllowed(payload)) {
+    return { decision: 'deny', permissionDecision: 'deny', reason: clarificationPauseBlockReason(state) };
+  }
   if (!noQuestion) return { continue: true };
   return {
     decision: 'deny',
     permissionDecision: 'deny',
     reason: 'SKS no-question mode forbids mid-loop approval prompts. Choose a non-approval safe alternative using the active plan.'
   };
+}
+
+function clarificationGateLocked(state = {}) {
+  if (isClarificationAwaiting(state)) return true;
+  return Boolean(
+    state?.mission_id
+    && state.implementation_allowed === false
+    && state.ambiguity_gate_required === true
+    && state.ambiguity_gate_passed !== true
+  );
+}
+
+function clarificationAnswerToolAllowed(payload = {}) {
+  const command = extractCommand(payload);
+  if (/\bpipeline\s+answer\b/i.test(command) && /\b(?:sks|sks\.mjs|bin\/sks\.mjs|node)\b/i.test(command)) return true;
+  if (!payloadMentionsAnswersJson(payload)) return false;
+  if (!command) return true;
+  if (/\bpipeline\s+answer\b/i.test(command)) return true;
+  return !/\b(npm|git|selftest|packcheck|release:check|publish:dry|publish:npm|doctor|team|qa-loop|wiki|db|test)\b/i.test(command);
+}
+
+function payloadMentionsAnswersJson(payload = {}) {
+  try {
+    return /\banswers\.json\b/i.test(JSON.stringify(payload || {}));
+  } catch {
+    return false;
+  }
+}
+
+function clarificationPauseBlockReason(state = {}) {
+  const id = state?.mission_id || 'latest';
+  const route = state.route_command || state.route || state.mode || 'route';
+  return `SKS ${route} ambiguity gate is paused and waiting for explicit user answers. Do not run implementation, tests, route materialization, or unrelated tools yet. The only allowed actions are creating .sneakoscope/missions/${id}/answers.json from the user's reply and running "sks pipeline answer ${id} answers.json"; elapsed time or repeated hook resumes never count as answers.`;
 }
 
 async function hookStop(root, state, payload, noQuestion) {
