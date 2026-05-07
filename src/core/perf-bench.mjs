@@ -2,6 +2,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { dirSize, fileSize, nowIso, packageRoot, runProcess, writeJsonAtomic } from './fsx.mjs';
 import { buildProofField, validateProofFieldReport } from './proof-field.mjs';
+import { buildPipelinePlan, validatePipelinePlan } from './pipeline.mjs';
 
 export const DEFAULT_PERF_BUDGETS = {
   cli_startup_ms_p95: 250,
@@ -10,6 +11,7 @@ export const DEFAULT_PERF_BUDGETS = {
   artifact_validation_ms_p95: 150,
   dashboard_render_ms_p95: 100,
   proof_field_build_ms_p95: 150,
+  pipeline_plan_build_ms_p95: 50,
   workflow_scan_ms_p95: 1000,
   fast_selftest_ms_p95: 5000,
   package_size_kb_max: 1024,
@@ -60,7 +62,9 @@ export async function runWorkflowPerfBench(root, opts = {}) {
   const intent = String(opts.intent || '').trim();
   const changedFiles = normalizeChangedFiles(opts.changedFiles);
   const proofFieldBuild = [];
+  const pipelinePlanBuild = [];
   let proofField = null;
+  let pipelinePlan = null;
   for (let i = 0; i < iterations; i++) {
     const t0 = performance.now();
     proofField = await buildProofField(root, {
@@ -68,8 +72,12 @@ export async function runWorkflowPerfBench(root, opts = {}) {
       changedFiles: changedFiles.length ? changedFiles : undefined
     });
     proofFieldBuild.push(performance.now() - t0);
+    const t1 = performance.now();
+    pipelinePlan = buildPipelinePlan({ task: intent, proofField });
+    pipelinePlanBuild.push(performance.now() - t1);
   }
   const proofValidation = validateProofFieldReport(proofField);
+  const planValidation = validatePipelinePlan(pipelinePlan);
   const verification = proofField?.fast_lane_decision?.verification || [];
   const negativeWork = proofField?.negative_work_cache || [];
   const estimatedSavedWork = negativeWork.filter((item) => item.disposition === 'skip_with_evidence').length;
@@ -84,9 +92,13 @@ export async function runWorkflowPerfBench(root, opts = {}) {
     budgets: DEFAULT_PERF_BUDGETS,
     metrics: {
       proof_field_build_ms_p95: proofFieldMsP95,
-      workflow_scan_ms_p95: workflowScanMsP95,
+      pipeline_plan_build_ms_p95: Math.round(percentile(pipelinePlanBuild, 95)),
+      workflow_scan_ms_p95: workflowScanMsP95 + Math.round(percentile(pipelinePlanBuild, 95)),
       decision_mode: proofField?.fast_lane_decision?.mode || null,
       execution_lane: proofField?.execution_lane?.lane || null,
+      pipeline_lane: pipelinePlan?.runtime_lane?.lane || null,
+      pipeline_stage_count: pipelinePlan?.stages?.length || 0,
+      pipeline_skipped_stage_count: pipelinePlan?.skipped_stages?.length || 0,
       fast_lane_eligible: Boolean(proofField?.fast_lane_decision?.eligible),
       fast_lane_allowed: Boolean(proofField?.execution_lane?.fast_lane_allowed),
       proof_cone_count: proofField?.proof_cones?.length || 0,
@@ -94,12 +106,15 @@ export async function runWorkflowPerfBench(root, opts = {}) {
       negative_work_skipped_count: estimatedSavedWork,
       simplicity_score: Number(proofField?.simplicity_scorecard?.score || 0),
       outcome_criteria_passed: (proofField?.simplicity_scorecard?.criteria || []).filter((item) => item.passed).length,
-      proof_field_valid: proofValidation.ok
+      proof_field_valid: proofValidation.ok,
+      pipeline_plan_valid: planValidation.ok
     },
     proof_field: proofField,
+    pipeline_plan: pipelinePlan,
     recommendation: workflowRecommendation(proofField, proofValidation),
     raw: {
-      proof_field_build_ms: proofFieldBuild.map((value) => Math.round(value))
+      proof_field_build_ms: proofFieldBuild.map((value) => Math.round(value)),
+      pipeline_plan_build_ms: pipelinePlanBuild.map((value) => Math.round(value))
     }
   };
 }
@@ -109,10 +124,13 @@ export function validateWorkflowPerfReport(report = {}) {
   if (report.schema_version !== 1) issues.push('schema_version');
   if (report.theory !== 'Potential Proof Field') issues.push('theory');
   if (!report.metrics || !Number.isFinite(Number(report.metrics.proof_field_build_ms_p95))) issues.push('proof_field_build_ms_p95');
+  if (!Number.isFinite(Number(report.metrics?.pipeline_plan_build_ms_p95))) issues.push('pipeline_plan_build_ms_p95');
   if (!report.metrics?.decision_mode) issues.push('decision_mode');
   if (!report.metrics?.execution_lane) issues.push('execution_lane');
+  if (!report.metrics?.pipeline_lane) issues.push('pipeline_lane');
   if (!Number.isFinite(Number(report.metrics?.simplicity_score))) issues.push('simplicity_score');
   if (!report.proof_field || !validateProofFieldReport(report.proof_field).ok) issues.push('proof_field');
+  if (!report.pipeline_plan || !validatePipelinePlan(report.pipeline_plan).ok) issues.push('pipeline_plan');
   if (!report.recommendation?.mode) issues.push('recommendation');
   return { ok: issues.length === 0, issues };
 }

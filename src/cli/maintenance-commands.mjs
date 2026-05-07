@@ -25,6 +25,7 @@ import { writeFromChatImgArtifacts } from '../core/from-chat-img-forensics.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
 import { runPerfBench, runWorkflowPerfBench } from '../core/perf-bench.mjs';
 import { writeProofFieldReport } from '../core/proof-field.mjs';
+import { PIPELINE_PLAN_ARTIFACT, validatePipelinePlan, writePipelinePlan } from '../core/pipeline.mjs';
 import { GOAL_BRIDGE_ARTIFACT, GOAL_WORKFLOW_ARTIFACT, updateGoalWorkflow, writeGoalWorkflow } from '../core/goal-workflow.mjs';
 import { scanCodeStructure, writeCodeStructureReport } from '../core/code-structure.mjs';
 import { writeMemorySweepReport } from '../core/memory-governor.mjs';
@@ -1462,6 +1463,9 @@ export async function team(args) {
   let dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team analysis scouts' });
   await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
   dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team analysis scouts' });
+  const route = routePrompt(`$Team ${prompt}`) || ROUTES.find((candidate) => candidate.id === 'Team');
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: prompt, required: false, ambiguity: { required: false, status: 'team_cli_direct' } });
+  await setCurrent(root, { mission_id: id, route: 'Team', route_command: '$Team', mode: 'TEAM', phase: 'TEAM_PARALLEL_ANALYSIS_SCOUTING', questions_allowed: false, implementation_allowed: true, context7_required: false, context7_verified: false, subagents_required: true, subagents_verified: false, reflection_required: true, visible_progress_required: true, context_tracking: 'triwiki', required_skills: route?.requiredSkills || ['team'], stop_gate: 'team-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, team_live_ready: true, from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, prompt });
   const result = {
     mission_id: id,
     mission_dir: dir,
@@ -1477,6 +1481,7 @@ export async function team(args) {
     dashboard_state: path.join(dir, ARTIFACT_FILES.team_dashboard_state),
     effort_decision: path.join(dir, ARTIFACT_FILES.effort_decision),
     work_order_ledger: path.join(dir, ARTIFACT_FILES.work_order_ledger),
+    pipeline_plan: path.join(dir, PIPELINE_PLAN_ARTIFACT),
     dashboard_state_valid: dashboardState.ok,
     context_pack: path.join(root, '.sneakoscope', 'wiki', 'context-pack.json'),
     agent_sessions: agentSessions,
@@ -1489,6 +1494,7 @@ export async function team(args) {
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
   console.log(`Plan: ${path.relative(root, result.plan)}`);
+  console.log(`Pipeline plan: ${path.relative(root, result.pipeline_plan)}`);
   console.log(`Agent sessions: ${agentSessions}`);
   console.log(`Role counts: ${formatRoleCounts(roleCounts)}`);
   console.log(`Workflow: ${path.relative(root, result.workflow)}`);

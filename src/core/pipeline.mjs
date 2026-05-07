@@ -12,12 +12,15 @@ import { writeMemorySweepReport } from './memory-governor.mjs';
 import { writeMistakeMemoryReport } from './mistake-memory.mjs';
 import { recordSkillDreamEvent, skillDreamPolicyText, writeSkillForgeReport } from './skill-forge.mjs';
 import { writeResearchPlan } from './research.mjs';
+import { SPEED_LANE_POLICY } from './proof-field.mjs';
 import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, hasFromChatImgSignal, hasMadSksSignal, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
 import { formatRoleCounts, initTeamLive, parseTeamSpecText } from './team-live.mjs';
 
 export { routePrompt };
 
+export const PIPELINE_PLAN_ARTIFACT = 'pipeline-plan.json';
+export const PIPELINE_PLAN_SCHEMA_VERSION = 1;
 const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
@@ -25,9 +28,183 @@ const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 const COMPLIANCE_LOOP_GUARD_ARTIFACT = 'compliance-loop-guard.json';
 const HARD_BLOCKER_ARTIFACT = 'hard-blocker.json';
 const DEFAULT_COMPLIANCE_LOOP_LIMIT = 3;
+const CLARIFICATION_BYPASS_ROUTES = new Set(['Answer', 'DFix', 'Help', 'Wiki', 'ComputerUse', 'Goal']);
+const LIGHTWEIGHT_ROUTES = new Set(['Answer', 'DFix', 'Help', 'Wiki']);
+const FULL_ROUTE_STAGES = Object.freeze([
+  'route_classification',
+  'skill_dream_counter',
+  'ambiguity_gate',
+  'pipeline_plan',
+  'proof_field_scan',
+  'triwiki_use_first',
+  'context7_evidence',
+  'parallel_analysis_scouting',
+  'planning_debate',
+  'route_materialization',
+  'fresh_executor_team',
+  'broad_route_rework',
+  'focused_implementation',
+  'listed_verification',
+  'triwiki_validate_before_final',
+  'reflection',
+  'honest_mode'
+]);
 
 function reflectionInstructionText(commandPrefix = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write ${REFLECTION_ARTIFACT}; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass ${REFLECTION_GATE}.`;
+}
+
+export function buildPipelinePlan(input = {}) {
+  const route = input.route || routePrompt(input.task || '$SKS');
+  const task = String(input.task || '').trim();
+  const ambiguity = normalizeAmbiguity(input.ambiguity, route);
+  const proof = normalizeProofField(input.proofField);
+  const lane = selectPipelineLane(route, task, proof);
+  const stages = buildPipelineStages(route, task, ambiguity, lane, Boolean(input.required));
+  const verification = planVerification(route, proof);
+  const skipped = stages.filter((stage) => stage.status === 'skipped').map((stage) => stage.id);
+  const kept = stages.filter((stage) => stage.status !== 'skipped' && stage.status !== 'not_applicable').map((stage) => stage.id);
+  return {
+    schema_version: PIPELINE_PLAN_SCHEMA_VERSION,
+    generated_at: nowIso(),
+    mission_id: input.missionId || null,
+    route: {
+      id: route?.id || 'SKS',
+      command: route?.command || '$SKS',
+      mode: route?.mode || 'SKS',
+      stop_gate: route?.stopGate || 'honest_mode',
+      required_skills: route?.requiredSkills || [],
+      context7_required: Boolean(input.required),
+      subagents_required: routeRequiresSubagents(route, task),
+      reflection_required: reflectionRequiredForRoute(route)
+    },
+    task,
+    ambiguity_gate: ambiguity,
+    runtime_lane: lane,
+    stages,
+    stage_summary: {
+      total: stages.length,
+      kept: kept.length,
+      skipped: skipped.length,
+      not_applicable: stages.filter((stage) => stage.status === 'not_applicable').length
+    },
+    skipped_stages: skipped,
+    kept_stages: kept,
+    verification,
+    invariants: ['no_unrequested_fallback_code', 'listed_verification', 'triwiki_validate_before_final', 'honest_mode'],
+    proof_field: proof,
+    skill_dream: input.skillDream || { attached: false, reason: 'skill dreaming uses cheap counters and only runs inventory at threshold' },
+    next_actions: planNextActions(route, task, ambiguity, lane),
+    no_unrequested_fallback_code: true
+  };
+}
+
+export async function writePipelinePlan(dir, input = {}) {
+  const plan = buildPipelinePlan(input);
+  await writeJsonAtomic(path.join(dir, PIPELINE_PLAN_ARTIFACT), plan);
+  return plan;
+}
+
+export function validatePipelinePlan(plan = {}) {
+  const issues = [];
+  if (plan.schema_version !== PIPELINE_PLAN_SCHEMA_VERSION) issues.push('schema_version');
+  if (!plan.route?.id || !plan.route?.command) issues.push('route');
+  if (!plan.runtime_lane?.lane) issues.push('runtime_lane');
+  if (!Array.isArray(plan.stages) || !plan.stages.length) issues.push('stages');
+  if (!Array.isArray(plan.verification) || !plan.verification.length) issues.push('verification');
+  if (plan.no_unrequested_fallback_code !== true || !plan.invariants?.includes('no_unrequested_fallback_code')) issues.push('fallback_guard');
+  if (!plan.next_actions?.length) issues.push('next_actions');
+  return { ok: issues.length === 0, issues };
+}
+
+function normalizeAmbiguity(value = {}, route) {
+  const required = value.required ?? !CLARIFICATION_BYPASS_ROUTES.has(route?.id);
+  const slots = Number(value.slots || 0);
+  let status = value.status || (required ? 'required' : 'not_required');
+  if (required && value.auto_sealed) status = 'auto_sealed';
+  else if (required && slots > 0) status = 'awaiting_answers';
+  else if (required && value.passed) status = 'contract_sealed';
+  return {
+    required: Boolean(required),
+    status,
+    slots,
+    auto_sealed: Boolean(value.auto_sealed),
+    passed: Boolean(value.passed || value.auto_sealed || status === 'contract_sealed'),
+    contract_hash: value.contract_hash || null
+  };
+}
+
+function normalizeProofField(report) {
+  if (!report) return { attached: false, reason: 'not built during route intake; attach with sks pipeline plan --proof-field after concrete scope/changed files are known' };
+  return {
+    attached: true,
+    lane: report.execution_lane?.lane || null,
+    fast_lane_allowed: Boolean(report.execution_lane?.fast_lane_allowed),
+    score: Number(report.execution_lane?.score || report.simplicity_scorecard?.score || 0),
+    blockers: report.execution_lane?.blockers || report.fast_lane_decision?.blockers || [],
+    skip_when_fast: report.execution_lane?.skip_when_fast || [],
+    keep: report.execution_lane?.keep || SPEED_LANE_POLICY.always_keep,
+    verification: report.execution_lane?.verification || report.fast_lane_decision?.verification || [],
+    proof_cones: (report.proof_cones || []).map((cone) => cone.id),
+    source_hash: report.source_hash || null
+  };
+}
+
+function selectPipelineLane(route, task, proof) {
+  if (proof.attached && proof.lane) {
+    return {
+      lane: proof.lane,
+      source: 'proof_field',
+      fast_lane_allowed: Boolean(proof.fast_lane_allowed),
+      reason: proof.fast_lane_allowed ? 'Proof Field allowed the fast lane.' : `Proof Field selected ${proof.lane}.`,
+      blockers: proof.blockers || [],
+      skip_when_fast: proof.fast_lane_allowed ? SPEED_LANE_POLICY.skip_when_fast : [],
+      keep: proof.keep || SPEED_LANE_POLICY.always_keep
+    };
+  }
+  if (route?.id === 'ComputerUse') return { lane: 'computer_use_fast_lane', source: 'route_policy', fast_lane_allowed: true, reason: 'Computer Use route is intentionally direct and defers wiki/honest checks to closeout.', blockers: [], skip_when_fast: ['parallel_analysis_scouting', 'planning_debate', 'fresh_executor_team'], keep: ['focused_implementation', 'triwiki_validate_before_final', 'honest_mode'] };
+  if (LIGHTWEIGHT_ROUTES.has(route?.id)) return { lane: `${String(route.id).toLowerCase()}_lightweight_lane`, source: 'route_policy', fast_lane_allowed: true, reason: 'Lightweight route bypasses full mission orchestration by design.', blockers: [], skip_when_fast: SPEED_LANE_POLICY.skip_when_fast, keep: ['focused_implementation', 'listed_verification', 'honest_mode'] };
+  if (routeRequiresSubagents(route, task)) return { lane: SPEED_LANE_POLICY.full_lane, source: 'route_policy', fast_lane_allowed: false, reason: 'No Proof Field attached and this route normally requires full Team evidence.', blockers: ['proof_field_not_attached'], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
+  return { lane: SPEED_LANE_POLICY.balanced_lane, source: 'route_policy', fast_lane_allowed: false, reason: 'Balanced parent-owned route until Proof Field proves a narrower lane.', blockers: ['proof_field_not_attached'], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
+}
+
+function buildPipelineStages(route, task, ambiguity, lane, context7Required) {
+  return FULL_ROUTE_STAGES.map((id) => {
+    const optional = optionalStage(route, task, ambiguity, context7Required, id);
+    const skippedByFast = lane.fast_lane_allowed && SPEED_LANE_POLICY.skip_when_fast.includes(id);
+    const skipped = skippedByFast || optional.skip;
+    return {
+      id,
+      status: skipped ? (optional.notApplicable ? 'not_applicable' : 'skipped') : (id === 'ambiguity_gate' && ambiguity.passed ? 'passed' : 'keep'),
+      reason: skippedByFast ? 'proof_field_fast_lane' : optional.reason
+    };
+  });
+}
+
+function optionalStage(route, task, ambiguity, context7Required, id) {
+  if (id === 'ambiguity_gate' && ambiguity?.required === false) return { skip: true, notApplicable: true, reason: 'ambiguity_gate_not_required_for_entrypoint' };
+  if (id === 'ambiguity_gate' && CLARIFICATION_BYPASS_ROUTES.has(route?.id)) return { skip: true, notApplicable: true, reason: 'route_bypasses_clarification' };
+  if (id === 'context7_evidence' && !context7Required) return { skip: true, notApplicable: true, reason: 'context7_not_required_by_route' };
+  if (id === 'reflection' && !reflectionRequiredForRoute(route)) return { skip: true, notApplicable: true, reason: 'reflection_not_required_for_route' };
+  if (['parallel_analysis_scouting', 'planning_debate', 'fresh_executor_team'].includes(id) && !routeRequiresSubagents(route, task)) return { skip: true, notApplicable: true, reason: 'subagent_team_not_required_by_route' };
+  return { skip: false, reason: 'required_by_lane' };
+}
+
+function planVerification(route, proof) {
+  const out = new Set(proof.verification || []);
+  if (route?.id === 'Team') out.add('sks validate-artifacts latest --json');
+  if (reflectionRequiredForRoute(route)) out.add('sks wiki validate .sneakoscope/wiki/context-pack.json');
+  out.add('npm run packcheck');
+  out.add('npm run selftest -- --mock');
+  return [...out];
+}
+
+function planNextActions(route, task, ambiguity, lane) {
+  if (ambiguity.required && !ambiguity.passed) return ['ask ambiguity-removal questions', 'write answers.json', 'run sks pipeline answer <mission-id> answers.json'];
+  const actions = ['read pipeline-plan.json before work', 'execute kept stages only', 'run listed verification'];
+  if (!lane.fast_lane_allowed && routeRequiresSubagents(route, task)) actions.splice(1, 0, 'materialize full Team artifacts before implementation');
+  actions.push('refresh/validate TriWiki when required', 'finish with completion summary and Honest Mode');
+  return actions;
 }
 
 export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
@@ -215,34 +392,47 @@ export async function activeRouteContext(root, state) {
   if (!state?.route && !state?.mode) return '';
   const id = state.route || state.mode;
   const reasoningNote = state.reasoning_effort ? ` Temporary reasoning remains ${state.reasoning_effort} (${state.reasoning_profile}); return to the default profile after this route completes.` : '';
+  const planNote = await activePipelinePlanNote(root, state);
   if (state.honest_loop_required || /HONEST_LOOPBACK_AFTER_CLARIFICATION/.test(String(state.phase || ''))) {
-    return `SKS Honest Mode found unresolved gaps for ${state.route_command || state.route || state.mode}. Do not ask ambiguity questions again. Continue from the sealed decision-contract.json, inspect .sneakoscope/missions/${state.mission_id}/honest-loopback.json, fix gaps, rerun verification, refresh/validate TriWiki, then retry final Honest Mode.${reasoningNote}`;
+    return `SKS Honest Mode found unresolved gaps for ${state.route_command || state.route || state.mode}. Do not ask ambiguity questions again. Continue from the sealed decision-contract.json, inspect .sneakoscope/missions/${state.mission_id}/honest-loopback.json, fix gaps, rerun verification, refresh/validate TriWiki, then retry final Honest Mode.${reasoningNote}${planNote}`;
   }
   if (state.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS')) return clarificationAwaitingAnswersContext(root, state);
   if (state.clarification_passed && String(state.phase || '').includes('CLARIFICATION_CONTRACT_SEALED')) {
-    return `Mandatory ambiguity-removal gate passed for ${state.route_command || state.route || state.mode}. Use the sealed decision-contract.json before executing the route. Before the next route phase, read relevant TriWiki context, hydrate low-trust claims from source, and refresh/validate TriWiki again after new findings or artifact changes. Next atomic action: continue the original route lifecycle with the clarified goal, constraints, non-goals, risk boundary, and test scope.`;
+    return `Mandatory ambiguity-removal gate passed for ${state.route_command || state.route || state.mode}. Use the sealed decision-contract.json and ${PIPELINE_PLAN_ARTIFACT} before executing the route. Before the next route phase, read relevant TriWiki context, hydrate low-trust claims from source, and refresh/validate TriWiki again after new findings or artifact changes. Next atomic action: continue the original route lifecycle with the clarified goal, constraints, non-goals, risk boundary, and test scope.${planNote}`;
   }
   if (state.mode === 'TEAM') {
     const context7 = state.context7_required && !(await hasContext7DocsEvidence(root, state))
       ? ' Context7 evidence is still required before completion: use resolve-library-id, then query-docs (or legacy get-library-docs).'
       : '';
     const roles = state.role_counts ? ` Role counts: ${formatRoleCounts(state.role_counts)}.` : '';
-    return `Active Team mission ${state.mission_id || 'latest'} must keep the user-visible live transcript updated. Agent session budget: ${state.agent_sessions || 3}.${roles} Run scouts, TriWiki refresh, debate, consensus, fresh development, review/integration, then close or account for every Team subagent session and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final. After each subagent status/result/handoff, run: sks team event ${state.mission_id || 'latest'} --agent <name> --phase <phase> --message "...". Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}`;
+    return `Active Team mission ${state.mission_id || 'latest'} must keep the user-visible live transcript updated. Agent session budget: ${state.agent_sessions || 3}.${roles} Run scouts, TriWiki refresh, debate, consensus, fresh development, review/integration, then close or account for every Team subagent session and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final. After each subagent status/result/handoff, run: sks team event ${state.mission_id || 'latest'} --agent <name> --phase <phase> --message "...". Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}${planNote}`;
   }
   if (state.subagents_required && !(await hasSubagentEvidence(root, state))) {
-    return `Active SKS route ${id} requires subagent execution evidence before code-changing work can be considered complete. Spawn worker/reviewer subagents for disjoint write scopes, or record an explicit unavailable/unsplittable subagent evidence event before editing.${reasoningNote}`;
+    return `Active SKS route ${id} requires subagent execution evidence before code-changing work can be considered complete. Spawn worker/reviewer subagents for disjoint write scopes, or record an explicit unavailable/unsplittable subagent evidence event before editing.${reasoningNote}${planNote}`;
   }
-  if (state.mode === 'GOAL') return `Active Goal mission ${state.mission_id || 'latest'} uses Codex native /goal continuation. Inspect .sneakoscope/missions/${state.mission_id || 'latest'}/${GOAL_WORKFLOW_ARTIFACT}, then use /goal create, pause, resume, or clear in the Codex runtime as appropriate.`;
+  if (state.mode === 'GOAL') return `Active Goal mission ${state.mission_id || 'latest'} uses Codex native /goal continuation. Inspect .sneakoscope/missions/${state.mission_id || 'latest'}/${GOAL_WORKFLOW_ARTIFACT}, then use /goal create, pause, resume, or clear in the Codex runtime as appropriate.${planNote}`;
   if (state.context7_required && !(await hasContext7DocsEvidence(root, state))) {
-    return `Active SKS route ${id} still requires Context7 evidence. Use resolve-library-id, then query-docs (or legacy get-library-docs) for relevant docs/APIs before completing.${reasoningNote}`;
+    return `Active SKS route ${id} still requires Context7 evidence. Use resolve-library-id, then query-docs (or legacy get-library-docs) for relevant docs/APIs before completing.${reasoningNote}${planNote}`;
   }
-  return '';
+  return planNote.trim();
+}
+
+async function activePipelinePlanNote(root, state = {}) {
+  if (!state?.mission_id) return '';
+  const plan = await readJson(path.join(missionDir(root, state.mission_id), PIPELINE_PLAN_ARTIFACT), null);
+  if (!plan) return '';
+  const lane = plan.runtime_lane?.lane || 'unknown';
+  const kept = plan.stage_summary?.kept ?? plan.kept_stages?.length ?? 0;
+  const skipped = plan.stage_summary?.skipped ?? plan.skipped_stages?.length ?? 0;
+  const next = Array.isArray(plan.next_actions) && plan.next_actions.length ? ` Next planned action: ${plan.next_actions[0]}.` : '';
+  return ` Pipeline plan: .sneakoscope/missions/${state.mission_id}/${PIPELINE_PLAN_ARTIFACT} (${lane}; kept=${kept}, skipped=${skipped}).${next}`;
 }
 
 async function prepareGoal(root, route, task, required) {
   const { id, dir, mission } = await createMission(root, { mode: 'goal', prompt: task });
   const workflow = await writeGoalWorkflow(dir, mission, { action: 'create', prompt: task });
   await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, native_goal: workflow.native_goal, stop_gate: route.stopGate });
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'not_required' } });
   const executionRoute = routePrompt(task);
   const shouldDelegateExecution = routeRequiresSubagents(route, task)
     && executionRoute
@@ -262,7 +452,7 @@ Delegated execution route: ${executionRoute.command}. The delegated route missio
       ].filter(Boolean).join('\n\n')
     };
   }
-  await setCurrent(root, routeState(id, route, 'GOAL_READY', required, { prompt: task, native_goal: workflow.native_goal, stop_gate: route.stopGate, implementation_allowed: true, questions_allowed: true }));
+  await setCurrent(root, routeState(id, route, 'GOAL_READY', required, { prompt: task, native_goal: workflow.native_goal, stop_gate: route.stopGate, implementation_allowed: true, questions_allowed: true, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
   return routeContext(route, id, task, required, `Use Codex native ${workflow.native_goal.slash_command} control for persisted continuation, then continue the relevant SKS route gates for any implementation work.`);
 }
 
@@ -276,6 +466,7 @@ async function prepareClarificationGate(root, route, task, required, opts = {}) 
   if (schema.slots.length === 0) {
     await writeJsonAtomic(path.join(dir, 'answers.json'), schema.inferred_answers || {});
     const result = await sealContract(dir, mission);
+    const plan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: true, slots: 0, auto_sealed: result.ok, passed: result.ok, contract_hash: result.contract?.sealed_hash || null } });
     await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'route.clarification.auto_sealed', route: route.id, slots: 0, ok: result.ok });
     await setCurrent(root, routeState(id, route, result.ok ? `${route.mode}_CLARIFICATION_CONTRACT_SEALED` : `${route.mode}_CLARIFICATION_AWAITING_ANSWERS`, required, {
       prompt: task,
@@ -285,6 +476,8 @@ async function prepareClarificationGate(root, route, task, required, opts = {}) 
       clarification_passed: result.ok,
       ambiguity_gate_required: true,
       ambiguity_gate_passed: result.ok,
+      pipeline_plan_ready: validatePipelinePlan(plan).ok,
+      pipeline_plan_path: PIPELINE_PLAN_ARTIFACT,
       original_stop_gate: route.stopGate,
       stop_gate: route.stopGate
     }));
@@ -296,12 +489,14 @@ Ambiguity gate auto-sealed for ${route.command}: all contract answers were infer
 Mission: ${id}
 Decision contract: .sneakoscope/missions/${id}/decision-contract.json
 Resolved answers: .sneakoscope/missions/${id}/resolved-answers.json
+Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
 Next atomic action: continue the original route lifecycle with the sealed decision-contract.json.`
     };
   }
+  const plan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: true, slots: schema.slots.length, status: 'awaiting_answers' } });
   await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'route.clarification.questions_created', route: route.id, slots: schema.slots.length });
   const phase = `${route.mode}_CLARIFICATION_AWAITING_ANSWERS`;
-  await setCurrent(root, routeState(id, route, phase, required, { prompt: task, questions_allowed: true, implementation_allowed: false, clarification_required: true, ambiguity_gate_required: true, original_stop_gate: route.stopGate, stop_gate: 'clarification-gate' }));
+  await setCurrent(root, routeState(id, route, phase, required, { prompt: task, questions_allowed: true, implementation_allowed: false, clarification_required: true, ambiguity_gate_required: true, pipeline_plan_ready: validatePipelinePlan(plan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, original_stop_gate: route.stopGate, stop_gate: 'clarification-gate' }));
   const answerCommand = 'sks pipeline answer latest answers.json, then continue the original route lifecycle';
   const title = 'MANDATORY ambiguity-removal gate activated.';
   return {
@@ -313,6 +508,7 @@ Task: ${task}
 State: ${phase}
 Question file: .sneakoscope/missions/${id}/questions.md
 Answer schema: .sneakoscope/missions/${id}/required-answers.schema.json
+Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
 
 Do not execute the route yet. Ask the user the required ambiguity-removal questions now. After the user answers, convert the answers to answers.json, run "${answerCommand}".
 ${clarificationVisibleResponseContract(id)}
@@ -402,14 +598,16 @@ async function prepareTeam(root, route, task, required) {
   await writeMistakeMemoryReport(dir, { mission_id: id, route: 'team', task: cleanTask }).catch(() => null);
   await writeCodeStructureReport(root, dir, { missionId: id, exception: 'Team prepare records split-review risk; extraction happens only when the mission scope includes the touched file.' }).catch(() => null);
   await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
-  await setCurrent(root, routeState(id, route, 'TEAM_PARALLEL_ANALYSIS_SCOUTING', required, { prompt: cleanTask, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, context_tracking: 'triwiki', from_chat_img_required: fromChatImgRequired }));
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: cleanTask, required, ambiguity: { required: false, status: 'direct_team_cli' } });
+  await setCurrent(root, routeState(id, route, 'TEAM_PARALLEL_ANALYSIS_SCOUTING', required, { prompt: cleanTask, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, context_tracking: 'triwiki', from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
   return routeContext(route, id, cleanTask, required, `Run scouts, refresh/validate TriWiki, debate, close debate agents, form a fresh ${roster.bundle_size}-person executor team, then close/clean Team sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection.`);
 }
 
 async function prepareResearch(root, route, task, required) {
   const { id, dir } = await createMission(root, { mode: 'research', prompt: task });
   await writeResearchPlan(dir, task, {});
-  await setCurrent(root, routeState(id, route, 'RESEARCH_PREPARED', required, { prompt: task }));
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
+  await setCurrent(root, routeState(id, route, 'RESEARCH_PREPARED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
   return routeContext(route, id, task, required, 'Run sks research run latest, produce research-report.md, novelty-ledger.json, falsification evidence, and pass research-gate.json.');
 }
 
@@ -418,7 +616,8 @@ async function prepareAutoResearch(root, route, task, required) {
   await writeJsonAtomic(path.join(dir, 'autoresearch-plan.json'), { schema_version: 1, task, loop: ['program', 'hypothesis', 'experiment', 'measure', 'keep_or_discard', 'falsify', 'honest_conclusion'] });
   await writeJsonAtomic(path.join(dir, 'experiment-ledger.json'), { schema_version: 1, entries: [] });
   await writeJsonAtomic(path.join(dir, 'autoresearch-gate.json'), { passed: false, experiment_ledger_present: true, metric_present: false, keep_or_discard_decision: false, falsification_present: false, honest_conclusion: false, context7_evidence: false });
-  await setCurrent(root, routeState(id, route, 'AUTORESEARCH_EXPERIMENT_LOOP', required, { prompt: task }));
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
+  await setCurrent(root, routeState(id, route, 'AUTORESEARCH_EXPERIMENT_LOOP', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
   return routeContext(route, id, task, required, 'Run the smallest useful experiment loop, update experiment-ledger.json, falsify the result, and pass autoresearch-gate.json.');
 }
 
@@ -427,21 +626,24 @@ async function prepareDb(root, route, task, required) {
   const scan = await scanDbSafety(root).catch((err) => ({ ok: false, findings: [{ id: 'db_scan_failed', severity: 'high', reason: err.message }] }));
   await writeJsonAtomic(path.join(dir, 'db-safety-scan.json'), scan);
   await writeJsonAtomic(path.join(dir, 'db-review.json'), { passed: false, scan_ok: scan.ok, destructive_operation_zero: true, safe_mcp_policy: false, context7_evidence: false, notes: [] });
-  await setCurrent(root, routeState(id, route, 'DB_REVIEW_REQUIRED', required, { prompt: task }));
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
+  await setCurrent(root, routeState(id, route, 'DB_REVIEW_REQUIRED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
   return routeContext(route, id, task, required, 'Run sks db policy/scan/check as needed, keep DB operations read-only, record safe MCP policy, and pass db-review.json.');
 }
 
 async function prepareGx(root, route, task, required) {
   const { id, dir } = await createMission(root, { mode: 'gx', prompt: task });
   await writeJsonAtomic(path.join(dir, 'gx-gate.json'), { passed: false, vgraph_beta_render: false, validation: false, drift_snapshot: false, context7_evidence: false });
-  await setCurrent(root, routeState(id, route, 'GX_VALIDATE_REQUIRED', required, { prompt: task }));
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
+  await setCurrent(root, routeState(id, route, 'GX_VALIDATE_REQUIRED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
   return routeContext(route, id, task, required, 'Run sks gx init/render/validate/drift/snapshot, then pass gx-gate.json.');
 }
 
 async function prepareLightRoute(root, route, task, required) {
   const { id, dir } = await createMission(root, { mode: route.id.toLowerCase(), prompt: task });
   await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, task, required_skills: route.requiredSkills, context7_required: required, context_tracking: triwikiContextTracking(), stop_gate: 'honest_mode' });
-  await setCurrent(root, routeState(id, route, 'ROUTE_CONTEXT_READY', required, { prompt: task, stop_gate: 'none' }));
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'light_route' } });
+  await setCurrent(root, routeState(id, route, 'ROUTE_CONTEXT_READY', required, { prompt: task, stop_gate: 'none', pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
   return routeContext(route, id, task, required, 'Load the route skill context, execute the smallest matching action, and finish with Honest Mode.');
 }
 
@@ -459,6 +661,7 @@ function routeContext(route, id, task, required, next) {
 ${route.command} route prepared.
 Mission: ${id}
 Task: ${task}
+Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
 Required skills: ${route.requiredSkills.join(', ')}
 Stop gate: ${route.stopGate}
 Subagents: ${routeRequiresSubagents(route, task) ? 'required before code-changing execution; spawn parallel workers/reviewers with disjoint ownership or record explicit unavailable/unsplittable evidence.' : 'optional'}
@@ -475,7 +678,8 @@ async function clarificationAwaitingAnswersContext(root, state) {
   if (!id) return '';
   const schema = await readJson(path.join(missionDir(root, id), 'required-answers.schema.json'), null);
   const questionBlock = schema ? `\n\nRequired questions still pending:\n${formatRequiredQuestions(schema)}` : '';
-  return `Active SKS route ${state.route_command || state.route || state.mode} is waiting for mandatory ambiguity-removal answers. If the user answered, write answers.json, run "sks pipeline answer ${id} answers.json", then continue the original route lifecycle. If required answers are missing, use the Codex plan tool first, then ask only those questions. Do not execute the route before this gate passes.${clarificationVisibleResponseContract(id, false)}${clarificationPlanHint({ command: state.route_command || state.route || '$SKS', route: state.route || state.mode || 'SKS route' }, id, false)}${questionBlock}`;
+  const planNote = await activePipelinePlanNote(root, state);
+  return `Active SKS route ${state.route_command || state.route || state.mode} is waiting for mandatory ambiguity-removal answers. If the user answered, write answers.json, run "sks pipeline answer ${id} answers.json", then continue the original route lifecycle. If required answers are missing, use the Codex plan tool first, then ask only those questions. Do not execute the route before this gate passes.${planNote}${clarificationVisibleResponseContract(id, false)}${clarificationPlanHint({ command: state.route_command || state.route || '$SKS', route: state.route || state.mode || 'SKS route' }, id, false)}${questionBlock}`;
 }
 
 function clarificationVisibleResponseContract(id) {
