@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.7.20] - 2026-05-08
+
+### Fixed
+
+- Add the release changelog section matching the current package version so `npm run release:check` passes after the patch bump.
+
 ## [0.7.19] - 2026-05-08
 
 ### Fixed
