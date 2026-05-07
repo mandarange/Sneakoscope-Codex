@@ -38,7 +38,7 @@ import {
 } from '../core/ppt.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, COMMAND_CATALOG, DESIGN_SYSTEM_SSOT, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, GETDESIGN_REFERENCE, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, COMMAND_CATALOG, DESIGN_SYSTEM_SSOT, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, GETDESIGN_REFERENCE, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { PIPELINE_PLAN_ARTIFACT, buildPipelinePlan, context7Evidence, evaluateStop, projectGateStatus, recordContext7Evidence, recordSubagentEvidence, validatePipelinePlan, writePipelinePlan } from '../core/pipeline.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, initTeamLive, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane } from '../core/team-live.mjs';
@@ -1231,7 +1231,7 @@ function usage(args = []) {
     tmux: ['tmux', '', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'tmux launch is explicit. Running bare `sks` prints help and never opens tmux by itself.'],
     team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
-    ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT asks delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and generated image assets prefer Codex App built-in image generation through imagegen.'],
+    ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT asks delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and installed skills/MCPs outside the $PPT allowlist are ignored. Design uses getdesign-reference plus the built-in PPT design pipeline; imagegen and Context7 are conditional only when the sealed PPT contract needs raster assets or current external docs.'],
     goal: ['Goal', '', '  sks goal create "task"', '  sks goal status latest', '  sks goal pause latest', '  sks goal resume latest', '  sks goal clear latest'],
     'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
     dollar: ['Dollar Commands', '', formatDollarCommandsCompact('  '), '', 'Terminal: sks dollar-commands [--json]'],
@@ -2095,7 +2095,7 @@ async function selftest() {
   const hookGoalTmp = tmpdir();
   await initProject(hookGoalTmp, {});
   const hookBin = path.join(packageRoot(), 'bin', 'sks.mjs');
-  const hookPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '$Goal 로그인 세션 만료 UX 개선 supabase db' });
+  const hookPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '$Goal 로그인 세션 만료 UX 개선' });
   const hookResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookGoalTmp, input: hookPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookResult.code !== 0) throw new Error(`selftest failed: $Goal hook exited ${hookResult.code}: ${hookResult.stderr}`);
   const hookJson = JSON.parse(hookResult.stdout);
@@ -2109,7 +2109,7 @@ async function selftest() {
   if (!(await exists(path.join(missionDir(hookGoalTmp, hookState.mission_id), GOAL_WORKFLOW_ARTIFACT)))) throw new Error('selftest failed: $Goal hook did not write goal workflow artifact');
   const hookGoalDelegationTmp = tmpdir();
   await initProject(hookGoalDelegationTmp, {});
-  const hookGoalDelegationPayload = JSON.stringify({ cwd: hookGoalDelegationTmp, prompt: '$Goal 결제 재시도 정책 근본적으로 구현 수정해줘' });
+  const hookGoalDelegationPayload = JSON.stringify({ cwd: hookGoalDelegationTmp, prompt: '$Goal $Team 발표자료 만들어줘' });
   const hookGoalDelegationResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookGoalDelegationTmp, input: hookGoalDelegationPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookGoalDelegationResult.code !== 0) throw new Error(`selftest failed: $Goal implementation delegation hook exited ${hookGoalDelegationResult.code}: ${hookGoalDelegationResult.stderr}`);
   const hookGoalDelegationJson = JSON.parse(hookGoalDelegationResult.stdout);
@@ -2121,7 +2121,7 @@ async function selftest() {
   if (hookGoalDelegationState.mode !== 'TEAM' || hookGoalDelegationState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookGoalDelegationState.implementation_allowed !== false) throw new Error('selftest failed: $Goal implementation delegation did not leave Team gate current');
   if (!(await exists(path.join(missionDir(hookGoalDelegationTmp, hookGoalDelegationBridgeMatch[1]), GOAL_WORKFLOW_ARTIFACT)))) throw new Error('selftest failed: $Goal implementation delegation did not write bridge workflow artifact');
   const activeGoalMissionId = hookState.mission_id;
-  const hookGoalOverlayPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '결제 재시도 정책 근본적으로 구현 수정해줘' });
+  const hookGoalOverlayPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '$Team 발표자료 만들어줘' });
   const hookGoalOverlayResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookGoalTmp, input: hookGoalOverlayPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookGoalOverlayResult.code !== 0) throw new Error(`selftest failed: active Goal overlay hook exited ${hookGoalOverlayResult.code}: ${hookGoalOverlayResult.stderr}`);
   const hookGoalOverlayJson = JSON.parse(hookGoalOverlayResult.stdout);
@@ -2219,16 +2219,29 @@ async function selftest() {
   if (hookKoreanSksContext.includes('SKS answer-only pipeline active')) throw new Error('selftest failed: Korean implementation prompt still used answer-only pipeline');
   const hookKoreanSksState = await readJson(stateFile(hookKoreanSksTmp), {});
   if (hookKoreanSksState.phase !== 'TEAM_CLARIFICATION_CONTRACT_SEALED' || hookKoreanSksState.implementation_allowed !== true || !hookKoreanSksState.ambiguity_gate_passed) throw new Error('selftest failed: Korean Team auto-seal');
+  const hookPaymentTeamTmp = tmpdir();
+  await initProject(hookPaymentTeamTmp, {});
+  const hookPaymentTeamPayload = JSON.stringify({ cwd: hookPaymentTeamTmp, prompt: '$Team 결제 재시도 정책과 로그인 세션 만료 버그 수정 executor:2 reviewer:1 user:1' });
+  const hookPaymentTeamResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookPaymentTeamTmp, input: hookPaymentTeamPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookPaymentTeamResult.code !== 0) throw new Error(`selftest failed: payment/auth Team hook exited ${hookPaymentTeamResult.code}: ${hookPaymentTeamResult.stderr}`);
+  const hookPaymentTeamJson = JSON.parse(hookPaymentTeamResult.stdout);
+  const hookPaymentTeamContext = hookPaymentTeamJson.hookSpecificOutput?.additionalContext || '';
+  if (!hookPaymentTeamContext.includes('Ambiguity gate auto-sealed')) throw new Error('selftest failed: predictable payment/auth Team prompt did not auto-seal');
+  if (hookPaymentTeamContext.includes('PAYMENT_RETRY_POLICY') || hookPaymentTeamContext.includes('AUTH_PROTOCOL_CHANGE_ALLOWED')) throw new Error('selftest failed: predictable payment/auth policy defaults were asked instead of inferred');
+  const hookPaymentTeamState = await readJson(stateFile(hookPaymentTeamTmp), {});
+  if (hookPaymentTeamState.phase !== 'TEAM_CLARIFICATION_CONTRACT_SEALED' || hookPaymentTeamState.implementation_allowed !== true || !hookPaymentTeamState.ambiguity_gate_passed) throw new Error('selftest failed: predictable payment/auth Team state was not executable after auto-seal');
+  const hookPaymentTeamSchema = await readJson(path.join(missionDir(hookPaymentTeamTmp, hookPaymentTeamState.mission_id), 'required-answers.schema.json'));
+  if (hookPaymentTeamSchema.slots.length !== 0 || hookPaymentTeamSchema.inferred_answers?.PAYMENT_RETRY_POLICY === undefined || hookPaymentTeamSchema.inferred_answers?.AUTH_SESSION_EXPIRED_BEHAVIOR === undefined) throw new Error('selftest failed: predictable payment/auth defaults were not recorded as inferred answers');
   const hookTeamTmp = tmpdir();
   await initProject(hookTeamTmp, {});
-  const hookTeamPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 결제 재시도 정책 수정 executor:2 reviewer:1 user:1' });
+  const hookTeamPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 발표자료 만들어줘 executor:2 reviewer:1 user:1' });
   const hookTeamResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: hookTeamPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookTeamResult.code !== 0) throw new Error(`selftest failed: $Team hook exited ${hookTeamResult.code}: ${hookTeamResult.stderr}`);
   const hookTeamJson = JSON.parse(hookTeamResult.stdout);
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: $Team hook did not force ambiguity gate before Team execution');
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('VISIBLE RESPONSE CONTRACT') || !String(hookTeamJson.systemMessage || '').includes('clarification questions')) throw new Error('selftest failed: $Team ambiguity gate did not force visible question response');
   if (hookTeamJson.hookSpecificOutput?.additionalContext?.includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Team goal');
-  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('PAYMENT_RETRY_POLICY')) throw new Error('selftest failed: missing Team payment question');
+  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('PRESENTATION_DELIVERY_CONTEXT')) throw new Error('selftest failed: missing Team presentation question');
   if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('Codex plan-tool interaction')) throw new Error('selftest failed: $Team ambiguity gate did not inject plan-tool guidance');
   const hookTeamState = await readJson(stateFile(hookTeamTmp), {});
   if (hookTeamState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookTeamState.implementation_allowed !== false) throw new Error('selftest failed: $Team hook did not lock execution behind ambiguity gate');
@@ -2240,13 +2253,13 @@ async function selftest() {
   const hookTeamPendingState = await readJson(stateFile(hookTeamTmp), {});
   const hookTeamPendingContext = hookTeamPendingJson.hookSpecificOutput?.additionalContext || '';
   if (hookTeamPendingState.mission_id !== hookTeamState.mission_id) throw new Error('selftest failed: pending clarification allowed a new route mission to replace the visible question sheet');
-  if (!hookTeamPendingContext.includes('Required questions still pending') || !hookTeamPendingContext.includes('VISIBLE RESPONSE CONTRACT') || !hookTeamPendingContext.includes('PAYMENT_RETRY_POLICY')) throw new Error('selftest failed: pending clarification did not re-expose the question sheet');
+  if (!hookTeamPendingContext.includes('Required questions still pending') || !hookTeamPendingContext.includes('VISIBLE RESPONSE CONTRACT') || !hookTeamPendingContext.includes('PRESENTATION_DELIVERY_CONTEXT')) throw new Error('selftest failed: pending clarification did not re-expose the question sheet');
   if (hookTeamPendingContext.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: pending clarification prepared a new ambiguity gate instead of reusing the active one');
   const hookTeamStopResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, last_assistant_message: 'I need three decisions before implementation, but I will not paste the Required questions block.' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (hookTeamStopResult.code !== 0) throw new Error(`selftest failed: Team stop hook exited ${hookTeamStopResult.code}: ${hookTeamStopResult.stderr}`);
   const hookTeamStopJson = JSON.parse(hookTeamStopResult.stdout);
   if (hookTeamStopJson.decision !== 'block' || !String(hookTeamStopJson.reason || '').includes('mandatory ambiguity-removal')) throw new Error('selftest failed: Stop hook did not block missing Team ambiguity answers');
-  if (!String(hookTeamStopJson.reason || '').includes('Required questions') || !String(hookTeamStopJson.reason || '').includes('PAYMENT_RETRY_POLICY')) throw new Error('selftest failed: missing Team stop payment question');
+  if (!String(hookTeamStopJson.reason || '').includes('Required questions') || !String(hookTeamStopJson.reason || '').includes('PRESENTATION_DELIVERY_CONTEXT')) throw new Error('selftest failed: missing Team stop presentation question');
   if (String(hookTeamStopJson.reason || '').includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Team stop goal');
   if (!String(hookTeamStopJson.reason || '').includes('sks pipeline answer')) throw new Error('selftest failed: Stop hook did not provide pipeline answer command');
   if (!String(hookTeamStopJson.reason || '').includes('Codex plan-tool interaction')) throw new Error('selftest failed: Stop hook did not reprint plan-tool guidance');
@@ -2782,6 +2795,8 @@ async function selftest() {
   if (buttonUxSchema.inferred_answers.VISUAL_REGRESSION_REQUIRED !== 'yes_if_available') throw new Error('selftest failed: visual regression default inference missing');
   const pptRoute = routePrompt('$PPT 투자자용 피치덱 만들어줘');
   if (pptRoute?.id !== 'PPT') throw new Error('selftest failed: $PPT did not route to presentation pipeline');
+  if (JSON.stringify(pptRoute.requiredSkills) !== JSON.stringify(PPT_PIPELINE_SKILL_ALLOWLIST)) throw new Error(`selftest failed: PPT route required skills are not allowlisted: ${pptRoute.requiredSkills.join(',')}`);
+  if (pptRoute.requiredSkills.includes('design-artifact-expert') || pptRoute.requiredSkills.includes('design-ui-editor') || pptRoute.requiredSkills.includes('design-system-builder')) throw new Error('selftest failed: PPT route still requires generic design skills');
   const pptSchema = buildQuestionSchema('$PPT 투자자용 피치덱 만들어줘');
   const pptSlotIds = pptSchema.slots.map((s) => s.id);
   for (const id of ['PRESENTATION_DELIVERY_CONTEXT', 'PRESENTATION_AUDIENCE_PROFILE', 'PRESENTATION_STP_STRATEGY', 'PRESENTATION_PAINPOINT_SOLUTION_MAP', 'PRESENTATION_DECISION_CONTEXT']) {
@@ -2790,6 +2805,7 @@ async function selftest() {
   const pptSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'ppt', 'SKILL.md'));
   if (!pptSkillText.includes('STP') || !pptSkillText.includes('target audience profile') || !pptSkillText.includes('decision context') || !pptSkillText.includes('3+ pain-point to solution mappings')) throw new Error('selftest failed: generated PPT skill missing STP/audience/pain-point guidance');
   if (!pptSkillText.includes('simple, restrained, and information-first') || !pptSkillText.includes('over-designed decoration') || !pptSkillText.includes(CODEX_APP_IMAGE_GENERATION_DOC_URL) || !pptSkillText.includes(AWESOME_DESIGN_MD_REFERENCE.url) || !pptSkillText.includes('only design decision SSOT') || !pptSkillText.includes('instead of treating references as parallel authorities')) throw new Error('selftest failed: generated PPT skill missing restrained design/imagegen/fused-SSOT guidance');
+  if (!pptSkillText.includes('PPT pipeline allowlist') || !pptSkillText.includes('ignore installed skills and MCPs') || !pptSkillText.includes('prevent AI-like generic presentation design') || !pptSkillText.includes('Do not use generic design skills such as design-artifact-expert')) throw new Error('selftest failed: generated PPT skill missing pipeline allowlist enforcement');
   if (!pptSkillText.includes('source-html/') || !pptSkillText.includes('temporary build files') || !pptSkillText.includes('ppt-parallel-report.json')) throw new Error('selftest failed: generated PPT skill missing source preservation/temp cleanup/parallel guidance');
   if (routeRequiresSubagents(pptRoute, '$PPT 투자자용 피치덱 만들어줘')) throw new Error('selftest failed: PPT route should not require subagents by default');
   if (!reflectionRequiredForRoute(pptRoute)) throw new Error('selftest failed: PPT route should require reflection');
@@ -2819,6 +2835,7 @@ async function selftest() {
   if (!pptHtml.includes('<html') || pptHtml.includes('gradient')) throw new Error('selftest failed: PPT HTML artifact missing or over-designed');
   const pptStyleTokens = await readJson(path.join(pptMission.dir, 'ppt-style-tokens.json'));
   if (pptStyleTokens.design_policy?.design_ssot?.authority !== DESIGN_SYSTEM_SSOT.authority_file || !pptStyleTokens.design_policy?.source_inputs?.some((entry) => entry.url === AWESOME_DESIGN_MD_REFERENCE.url && entry.role === 'source_input_for_ssot') || !pptStyleTokens.design_policy?.anti_generic_ai_style) throw new Error('selftest failed: PPT style tokens missing fused design SSOT/source-input anti-generic policy');
+  if (JSON.stringify(pptStyleTokens.design_policy?.pipeline_allowlist?.required_skills || []) !== JSON.stringify(PPT_PIPELINE_SKILL_ALLOWLIST) || !pptStyleTokens.design_policy?.pipeline_allowlist?.ignore_installed_out_of_pipeline_skills || !(pptStyleTokens.design_policy?.pipeline_allowlist?.ignored_design_skills_even_if_installed || []).includes('design-artifact-expert') || !/AI-like/.test(pptStyleTokens.design_policy?.pipeline_allowlist?.anti_ai_design_goal || '')) throw new Error('selftest failed: PPT style tokens missing skill/MCP allowlist enforcement');
   const audienceScript = pptHtml.match(/id="ppt-audience-strategy">([^<]+)<\/script>/);
   if (!audienceScript) throw new Error('selftest failed: PPT HTML missing audience strategy script data');
   JSON.parse(audienceScript[1]);
@@ -2842,7 +2859,7 @@ async function selftest() {
   const dbQuestionGateSchema = buildQuestionSchema('DB_SCHEMA_CHANGE_ALLOWED DATABASE_TARGET_ENVIRONMENT DATABASE_WRITE_MODE SUPABASE_MCP_POLICY DB_READ_ONLY_QUERY_LIMIT 이런 질문은 사용자에게 묻지 말고 알아서 판단해줘');
   const dbQuestionGateSlotIds = dbQuestionGateSchema.slots.map((s) => s.id);
   if (dbQuestionGateSlotIds.length) throw new Error(`selftest failed: predictable DB safety prompt should auto-seal, got ${dbQuestionGateSlotIds.join(',')}`);
-  const { id, dir, mission } = await createMission(tmp, { mode: 'goal', prompt: '로그인 세션 만료 UX 개선 supabase db' });
+  const { id, dir, mission } = await createMission(tmp, { mode: 'goal', prompt: '발표자료 만들어줘' });
   const schema = buildQuestionSchema(mission.prompt);
   await writeQuestions(dir, schema);
   if (validateAnswers(schema, {}).ok) throw new Error('selftest failed: empty answers valid');

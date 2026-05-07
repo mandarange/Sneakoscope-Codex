@@ -65,6 +65,32 @@ export const AWESOME_DESIGN_MD_REFERENCE = {
 
 export const RECOMMENDED_DESIGN_REFERENCES = [GETDESIGN_REFERENCE, AWESOME_DESIGN_MD_REFERENCE];
 
+export const PPT_PIPELINE_SKILL_ALLOWLIST = Object.freeze([
+  'ppt',
+  'getdesign-reference',
+  'prompt-pipeline',
+  REFLECTION_SKILL_NAME,
+  'honest-mode'
+]);
+
+export const PPT_CONDITIONAL_SKILL_ALLOWLIST = Object.freeze([
+  {
+    skill: 'imagegen',
+    condition: 'only_when_the_sealed_ppt_contract_explicitly_requires_generated_raster_assets'
+  }
+]);
+
+export const PPT_PIPELINE_MCP_ALLOWLIST = Object.freeze([
+  {
+    mcp: 'context7',
+    condition: 'only_when_current_external_documentation_is_required_for_sources_or_package_api_usage'
+  }
+]);
+
+export function pptPipelineAllowlistPolicyText() {
+  return `PPT pipeline allowlist: during $PPT design/render work, ignore installed skills and MCPs that are not explicitly part of the $PPT pipeline. The purpose is to prevent AI-like generic presentation design: decorative gradients, nested cards, vague SaaS visuals, and style choices not grounded in the audience, source material, getdesign reference, or the project design SSOT. Required skills are ${PPT_PIPELINE_SKILL_ALLOWLIST.join(', ')}. Do not use generic design skills such as design-artifact-expert, design-ui-editor, or design-system-builder for $PPT just because they are installed. $PPT design must use getdesign-reference plus the built-in PPT design implementation pipeline: ${DESIGN_SYSTEM_SSOT.authority_file} when present, ${DESIGN_SYSTEM_SSOT.builder_prompt} as the builder prompt when missing, and route-local ppt-style-tokens.json as the fused design projection. Conditional skills/MCPs are allowed only when their condition is sealed in the contract: ${PPT_CONDITIONAL_SKILL_ALLOWLIST.map((entry) => `${entry.skill}=${entry.condition}`).join('; ')}; ${PPT_PIPELINE_MCP_ALLOWLIST.map((entry) => `${entry.mcp}=${entry.condition}`).join('; ')}.`;
+}
+
 export function getdesignReferencePolicyText() {
   return `Design SSOT policy: ${DESIGN_SYSTEM_SSOT.authority_file} is the single design decision authority. If it is missing, create or update it through ${DESIGN_SYSTEM_SSOT.builder_prompt}; getdesign.md (${GETDESIGN_REFERENCE.url}), its official docs, and curated DESIGN.md examples at ${AWESOME_DESIGN_MD_REFERENCE.url} are source inputs to fuse into that SSOT or into route-local style tokens, not parallel authorities. Prefer the official Codex skill when available (${GETDESIGN_REFERENCE.codex_skill_install}); otherwise use the generated getdesign-reference skill plus official Web/API/CLI/SDK docs and curated DESIGN.md examples as inputs. Do not claim an official getdesign MCP server is configured unless a current official MCP surface is actually available.`;
 }
@@ -267,7 +293,7 @@ export const ROUTES = [
     mode: 'PPT',
     route: 'HTML/PDF presentation pipeline',
     description: 'Create restrained, information-first HTML/PDF presentation artifacts after delivery context, audience profile, STP, decision context, pain-point, research, design-system, and verification questions are sealed.',
-    requiredSkills: ['ppt', 'design-artifact-expert', 'getdesign-reference', 'imagegen', 'prompt-pipeline', REFLECTION_SKILL_NAME, 'honest-mode'],
+    requiredSkills: [...PPT_PIPELINE_SKILL_ALLOWLIST],
     lifecycle: ['stp_audience_questions', 'audience_strategy_artifact', 'contract_sealed', 'source_ledger', 'storyboard_aha_moments', 'design_system', 'html_artifact', 'pdf_export', 'render_qa', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'if_external_docs',
     reasoningPolicy: 'high',
