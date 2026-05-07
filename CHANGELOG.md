@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-05-07
+
+### Changed
+
+- Raise the package size gates to 384 KiB packed and 1536 KiB unpacked so release preparation has practical headroom instead of failing on tiny harness growth.
+
+## [0.7.3] - 2026-05-07
+
+### Fixed
+
+- Infer conservative DB safety defaults for predictable ambiguity-gate prompts so SKS no longer asks users to fill static database policy slots when the safe answer is already clear.
+- Add selftest coverage proving a DB safety question-block prompt auto-seals with zero visible slots.
+- Raise the package size gates to 269 KiB packed and 1037 KiB unpacked for the DB clarification inference coverage while keeping the package at 49 files.
+
 ## [0.7.2] - 2026-05-07
 
 ### Fixed

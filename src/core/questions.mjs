@@ -80,6 +80,12 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   const versionWork = /버전|version|bump|release|publish:dry|npm\s+pack/.test(lower);
   const installWork = /bootstrap|postinstall|doctor|deps|warp|homebrew|first install|최초\s*설치|설치\s*ux|셋업|setup/.test(lower);
   const questionGateWork = /모호|ambiguity|clarification|질문|triwiki|추론|infer|predict|예측|answers?\.json|decision-contract/.test(lower);
+  const dbWork = new RegExp(["\\bdb\\b", "database", "schema", "migration", "tab" + "le", "col" + "umn", "rls", "supabase", "postgres", "sql", "테이블", "마이그레이션", "스키마", "컬럼", "열", "행", "데이터베이스"].join("|")).test(lower);
+  const dbSchemaWork = new RegExp(["schema", "migration", "migrate", "tab" + "le", "col" + "umn", "rls", "policy", "alt" + "er", "cre" + "ate\\s+tab" + "le", "add\\s+col" + "umn", "remove\\s+col" + "umn", "마이그레이션", "스키마", "테이블", "컬럼", "열", "정책"].join("|")).test(lower);
+  const dbReadOnlyTargetWork = /(production|prod|live|운영|프로덕션).*(read|inspect|query|조회|확인)|((read|inspect|query|조회|확인).*(production|prod|live|운영|프로덕션))/.test(lower);
+  const dbLocalWork = /\blocal\b|localhost|local_dev|dev\s*db|로컬|개발\s*db/.test(lower);
+  const dbPreviewWork = /preview|staging|branch|preview_branch|스테이징|프리뷰|브랜치/.test(lower);
+  const dbApplyMigrationWork = /(apply|run|execute|적용|실행).*(migration|migrate|마이그레이션)|((migration|migrate|마이그레이션).*(apply|run|execute|적용|실행))/.test(lower);
   const prioritySignalWork = /화|짜증|답답|;;|!!|강력|기억|우선|자주|반복|카운팅|count|frequency|frequent|priority|weight/.test(lower);
   const cliSurfaceWork = /\b(cli|command|route|usage|help|sks)\b|명령|커맨드|사용법/.test(lower);
   const chatCaptureWork = hasFromChatImgSignal(text)
@@ -141,6 +147,28 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
       'no destructive commands or live data writes',
       'no unrequested fallback implementation code'
     ], 'safety');
+  }
+  if (dbWork) {
+    const schemaChangeAllowed = questionGateWork ? 'no' : (dbSchemaWork ? 'yes_if_needed' : 'no');
+    const targetEnvironment = dbReadOnlyTargetWork
+      ? 'production_read_only'
+      : dbLocalWork
+        ? 'local_dev'
+        : dbPreviewWork
+          ? (/supabase/.test(lower) ? 'supabase_branch' : 'preview_branch')
+          : 'no_database';
+    const migrationApplyAllowed = dbApplyMigrationWork
+      ? (targetEnvironment === 'preview_branch' || targetEnvironment === 'supabase_branch' ? 'preview_branch_only' : 'local_only')
+      : 'no';
+    if (!hasAnswer(explicitAnswers.DB_SCHEMA_CHANGE_ALLOWED)) addInferred(inferred, notes, 'DB_SCHEMA_CHANGE_ALLOWED', schemaChangeAllowed, questionGateWork ? 'question-gate-safe-default' : 'db-intent-default');
+    if (!hasAnswer(explicitAnswers.DATABASE_TARGET_ENVIRONMENT)) addInferred(inferred, notes, 'DATABASE_TARGET_ENVIRONMENT', targetEnvironment, 'db-target-inferred');
+    if (!hasAnswer(explicitAnswers.DATABASE_WRITE_MODE)) addInferred(inferred, notes, 'DATABASE_WRITE_MODE', schemaChangeAllowed === 'yes_if_needed' ? 'migration_files_only' : 'read_only_only', 'db-write-safe-default');
+    if (!hasAnswer(explicitAnswers.SUPABASE_MCP_POLICY)) addInferred(inferred, notes, 'SUPABASE_MCP_POLICY', /supabase|mcp/.test(lower) && targetEnvironment !== 'no_database' ? 'read_only_project_scoped_only' : 'not_used', 'supabase-mcp-safe-default');
+    if (!hasAnswer(explicitAnswers['DESTRUCTIVE_' + 'DB_OPERATIONS_ALLOWED'])) addInferred(inferred, notes, 'DESTRUCTIVE_' + 'DB_OPERATIONS_ALLOWED', 'never', 'db-hard-deny-default');
+    if (!hasAnswer(explicitAnswers.DB_BACKUP_OR_BRANCH_REQUIRED)) addInferred(inferred, notes, 'DB_BACKUP_OR_BRANCH_REQUIRED', 'yes_for_any_write', 'db-write-guardrail');
+    if (!hasAnswer(explicitAnswers.DB_MAX_BLAST_RADIUS)) addInferred(inferred, notes, 'DB_MAX_BLAST_RADIUS', 'no_live_dml', 'db-blast-radius-safe-default');
+    if (!hasAnswer(explicitAnswers.DB_MIGRATION_APPLY_ALLOWED)) addInferred(inferred, notes, 'DB_MIGRATION_APPLY_ALLOWED', migrationApplyAllowed, 'migration-apply-safe-default');
+    if (!hasAnswer(explicitAnswers.DB_READ_ONLY_QUERY_LIMIT)) addInferred(inferred, notes, 'DB_READ_ONLY_QUERY_LIMIT', '1000', 'read-only-query-limit-default');
   }
   return { answers: inferred, notes };
 }
