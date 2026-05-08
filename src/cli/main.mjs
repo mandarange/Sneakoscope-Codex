@@ -56,11 +56,13 @@ import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
+import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs';
 import { buildTmuxLaunchPlan, buildTmuxOpenArgs, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
 import { askPostinstallQuestion, checkContext7, checkRequiredSkills, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, globalCodexSkillsRoot, postinstall, postinstallBootstrapDecision } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
+import { openClawCommand } from './openclaw-command.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
@@ -88,7 +90,7 @@ export async function main(args) {
   if (cmd === 'dollar-commands' || cmd === 'dollars' || cmd === '$') return dollarCommands(tail);
   if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
   const handlers = {
-    postinstall: () => postinstall({ bootstrap }), wizard: () => wizard(tail), ui: () => wizard(tail), 'update-check': () => updateCheck(tail), help: () => help(tail), commands: () => commands(tail), usage: () => usage(tail), root: () => rootCommand(tail), quickstart: () => quickstartCommand(), 'codex-app': () => codexAppHelp(tail), bootstrap: () => bootstrap(tail), deps: () => deps(sub, rest),
+    postinstall: () => postinstall({ bootstrap }), wizard: () => wizard(tail), ui: () => wizard(tail), 'update-check': () => updateCheck(tail), help: () => help(tail), commands: () => commands(tail), usage: () => usage(tail), root: () => rootCommand(tail), quickstart: () => quickstartCommand(), 'codex-app': () => codexAppHelp(tail), openclaw: () => openClawCommand(tail), bootstrap: () => bootstrap(tail), deps: () => deps(sub, rest),
     'qa-loop': () => qaLoopCommand(sub, rest), ppt: () => pptCommand(sub, rest), context7: () => context7Command(sub, rest), pipeline: () => pipeline(sub, rest), guard: () => guard(sub, rest), conflicts: () => conflicts(sub, rest), versioning: () => versioning(sub, rest), reasoning: () => reasoningCommand(tail), aliases: () => aliases(), setup: () => setup(tail), 'fix-path': () => fixPath(tail), doctor: () => doctor(tail), init: () => init(tail), selftest: () => selftest(tail),
     goal: () => goalCommand(sub, rest), research: () => researchCommand(sub, rest), hook: () => emitHook(sub), profile: () => profileCommand(sub, rest), hproof: () => hproofCommand(sub, rest), 'validate-artifacts': () => validateArtifactsCommand(tail), perf: () => perfCommand(sub, rest), 'proof-field': () => proofFieldCommand(sub, rest), 'skill-dream': () => skillDreamCommand(sub, rest), 'code-structure': () => codeStructureCommand(sub, rest), memory: () => memoryCommand(sub, rest), gx: () => gxCommand(sub, rest),
     team: () => team(tail), db: () => dbCommand(sub, rest), eval: () => evalCommand(sub, rest), harness: () => harnessCommand(sub, rest), wiki: () => wikiCommand(sub, rest), gc: () => gcCommand(tail), stats: () => statsCommand(tail)
@@ -116,6 +118,7 @@ Usage:
   sks bootstrap [--install-scope global|project] [--local-only] [--json]
   sks deps check|install [tmux|codex|context7|all] [--yes] [--json]
   sks codex-app
+  sks openclaw install|path|print [--dir path] [--force] [--json]
   sks --mad [--high]
   sks auto-review status|enable|start [--high]
   sks --Auto-review [--high]
@@ -1192,6 +1195,7 @@ function usage(args = []) {
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew only after approval.'],
     tmux: ['tmux', '', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'tmux launch is explicit. Running bare `sks` prints help and never opens tmux by itself.'],
+    openclaw: ['OpenClaw', '', '  sks openclaw install', '  sks openclaw path', '  sks openclaw print SKILL.md', '', 'Installs an OpenClaw skill package under ~/.openclaw/skills/sneakoscope-codex so OpenClaw agents can attach skills: [sneakoscope-codex] with the shell tool and call local SKS commands from a project root.'],
     team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
     ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT asks delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and installed skills/MCPs outside the $PPT allowlist are ignored. Design uses getdesign-reference plus the built-in PPT design pipeline; imagegen and Context7 are conditional only when the sealed PPT contract needs raster assets or current external docs.'],
@@ -1653,7 +1657,7 @@ function readMaxCycles(args, fallback) {
 
 function positionalArgs(args = []) {
   const out = [];
-  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines']);
+  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines', '--dir']);
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]);
     if (valueFlags.has(arg)) {
@@ -2062,7 +2066,16 @@ async function selftest() {
   if (!DOLLAR_DEFAULT_PIPELINE_TEXT.includes('$Team')) throw new Error('selftest failed: dollar-commands missing Team default routing guidance');
   if (!DOLLAR_DEFAULT_PIPELINE_TEXT.includes('$From-Chat-IMG')) throw new Error('selftest failed: dollar-commands missing From-Chat-IMG guidance');
   if (!DOLLAR_DEFAULT_PIPELINE_TEXT.includes('$MAD-SKS')) throw new Error('selftest failed: dollar-commands missing MAD-SKS scoped override guidance');
-  if (!COMMAND_CATALOG.some((c) => c.name === 'context7') || !COMMAND_CATALOG.some((c) => c.name === 'pipeline') || !COMMAND_CATALOG.some((c) => c.name === 'qa-loop') || !COMMAND_CATALOG.some((c) => c.name === 'root')) throw new Error('selftest failed: context7/pipeline/qa-loop/root commands missing from catalog');
+  if (!COMMAND_CATALOG.some((c) => c.name === 'context7') || !COMMAND_CATALOG.some((c) => c.name === 'pipeline') || !COMMAND_CATALOG.some((c) => c.name === 'qa-loop') || !COMMAND_CATALOG.some((c) => c.name === 'root') || !COMMAND_CATALOG.some((c) => c.name === 'openclaw')) throw new Error('selftest failed: context7/pipeline/qa-loop/root/openclaw commands missing from catalog');
+  const openClawTmp = tmpdir();
+  const openClawResult = await installOpenClawSkill({ targetDir: path.join(openClawTmp, 'skills', OPENCLAW_SKILL_NAME) });
+  if (!openClawResult.ok) throw new Error(`selftest failed: OpenClaw skill install blocked: ${openClawResult.reason}`);
+  const openClawSkillText = await safeReadText(path.join(openClawResult.target_dir, 'SKILL.md'));
+  const openClawManifestText = await safeReadText(path.join(openClawResult.target_dir, 'manifest.yaml'));
+  const openClawConfigText = await safeReadText(path.join(openClawResult.target_dir, 'openclaw-agent-config.example.yaml'));
+  if (!openClawSkillText.includes('sks root') || !openClawSkillText.includes('$Team') || !openClawSkillText.includes('OpenClaw agent must have the built-in `shell` tool enabled')) throw new Error('selftest failed: OpenClaw skill missing SKS agent guidance');
+  if (!openClawManifestText.includes('generated_by: sneakoscope') || !openClawManifestText.includes(`version: ${PACKAGE_VERSION}`)) throw new Error('selftest failed: OpenClaw manifest missing generated marker or version');
+  if (!openClawConfigText.includes(`- ${OPENCLAW_SKILL_NAME}`) || !openClawConfigText.includes('- shell')) throw new Error('selftest failed: OpenClaw agent config example missing skill or shell tool');
   const registryDollarCommands = DOLLAR_COMMANDS.map((c) => c.command);
   const manifest = await readJson(path.join(tmp, '.sneakoscope', 'manifest.json'));
   const policy = await readJson(path.join(tmp, '.sneakoscope', 'policy.json'));

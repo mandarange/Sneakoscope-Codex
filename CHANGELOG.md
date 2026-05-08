@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.7.26] - 2026-05-08
+
+### Added
+
+- Add `sks openclaw install|path|print` to generate an OpenClaw skill package that lets OpenClaw agents attach `sneakoscope-codex`, enable the shell tool, and discover/use SKS workflows from a target repo root.
+- Document OpenClaw agent setup, config YAML, sandbox note, and useful SKS commands in the README.
+- Raise the package file-count budget to 54 for the new OpenClaw generator and CLI handler modules while keeping packed and unpacked byte budgets unchanged.
+
 ## [0.7.25] - 2026-05-08
 
 ### Fixed
