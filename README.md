@@ -166,7 +166,7 @@ sks tmux check
 sks tmux status --once
 ```
 
-Bare `sks` creates or reuses the default named tmux session for Codex CLI and attaches to it in an interactive terminal. By default it launches Codex in the SKS fast-high runtime (`--model gpt-5.5 -c model_reasoning_effort="high"`). Override with `SKS_CODEX_MODEL`, `SKS_CODEX_REASONING`, or disable the default with `SKS_CODEX_FAST_HIGH=0`. Use `sks tmux open` when you need explicit `--workspace` / `--session` flags, `sks tmux check` for readiness without launching, and `sks help` for CLI help. Use `--no-attach` or `SKS_TMUX_NO_AUTO_ATTACH=1` when you only want SKS to create/reuse the session and print the manual attach command.
+Bare `sks` creates or reuses the default named tmux session for Codex CLI and attaches to it in an interactive terminal. By default it launches Codex in the SKS fast-high runtime (`--model gpt-5.5 -c model_reasoning_effort="high"`) with a short animated SKS ASCII intro. Override with `SKS_CODEX_MODEL`, `SKS_CODEX_REASONING`, disable the default model profile with `SKS_CODEX_FAST_HIGH=0`, or disable the intro animation with `SKS_TMUX_LOGO_ANIMATION=0`. Use `sks tmux open` when you need explicit `--workspace` / `--session` flags, `sks tmux check` for readiness without launching, and `sks help` for CLI help. Use `--no-attach` or `SKS_TMUX_NO_AUTO_ATTACH=1` when you only want SKS to create/reuse the session and print the manual attach command.
 
 Before opening tmux, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens tmux with the updated Codex CLI.
 
@@ -183,7 +183,7 @@ Bare `sks` asks this before opening Codex when codex-lb is not configured:
 Authenticate and route Codex through codex-lb? [y/N]
 ```
 
-Answering `y` asks for the hosted domain and API key, writes `~/.codex/config.toml`, stores the key in `~/.codex/sks-codex-lb.env` with mode `0600`, and sources that env file before launching Codex in tmux. When codex-lb is configured from this prompt, SKS opens a fresh tmux session for that launch so the new key is loaded by the Codex process immediately. The generated provider config follows the codex-lb README's Codex CLI API-key setup:
+Answering `y` asks for the hosted domain and API key, writes `~/.codex/config.toml`, stores the key in `~/.codex/sks-codex-lb.env` with mode `0600`, syncs Codex CLI API-key auth through `codex login --with-api-key`, and sources that env file before launching Codex in tmux. When codex-lb is configured from this prompt, SKS opens a fresh tmux session for that launch so the new key is loaded by the Codex process immediately. The generated provider config follows the codex-lb README's Codex CLI API-key setup:
 
 ```toml
 model_provider = "codex-lb"

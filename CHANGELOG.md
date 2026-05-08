@@ -3,12 +3,20 @@
 ## [Unreleased]
 
 
+
+## [0.7.42] - 2026-05-08
+
+### Fixed
+
+- Add a polished animated ASCII SKS intro for tmux launches, with a static fallback through `SKS_TMUX_LOGO_ANIMATION=0`.
+- Keep release metadata aligned after the explicit SKS version bump.
+
 ## [0.7.41] - 2026-05-08
 
 ### Fixed
 
 - Ship the codex-lb pre-launch auth flow in English, collecting host domain and API key before Codex opens.
-- Load the codex-lb API key from the SKS-managed env file when launching Codex and use a fresh tmux session after first-time setup so the key is applied immediately.
+- Load the codex-lb API key from the SKS-managed env file, sync Codex CLI API-key login for the interactive TUI, and use a fresh tmux session after first-time setup so the key is applied immediately.
 - Keep release metadata aligned after the explicit SKS version bump.
 
 ## [0.7.40] - 2026-05-08
