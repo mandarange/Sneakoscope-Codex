@@ -42,7 +42,7 @@ sks selftest --mock
 
 | Area | What it does |
 | --- | --- |
-| CLI runtime | Bare `sks` opens or reuses the default tmux Codex CLI workspace. `sks tmux open` remains the explicit form for session/workspace flags, and `sks --mad` launches the high-reasoning auto-review profile. |
+| CLI runtime | Bare `sks` opens or reuses the default tmux Codex CLI workspace. `sks tmux open` remains the explicit form for session/workspace flags, and `sks --mad` launches the explicit full-access high-reasoning profile. |
 | Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
 | OpenClaw agents | Generates an OpenClaw skill package so OpenClaw agents can attach `sneakoscope-codex`, enable the `shell` tool, and discover/use SKS commands from the target repo root. |
 | Pipeline plans | Writes `pipeline-plan.json` for stateful routes so the runtime lane, kept stages, skipped stages, verification commands, and no-unrequested-fallback invariant are visible with `sks pipeline plan`. |
@@ -204,7 +204,7 @@ sks --mad
 sks --mad --yes
 ```
 
-This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `approval_policy = "on-request"` and `approvals_reviewer = "auto_review"`, then attaches to the session in an interactive terminal. It is scoped to that explicit command and does not change normal SKS/DB safety defaults. Repeat launches reuse the same named SKS MAD tmux session.
+This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `sandbox_mode = "danger-full-access"` and `approval_policy = "never"`, then launches Codex with `--sandbox danger-full-access --ask-for-approval never` and attaches to the session in an interactive terminal. It is scoped to that explicit command and does not change normal SKS/DB safety defaults. Repeat launches reuse the same named SKS MAD tmux session.
 
 MAD does not disable the pipeline contract: stages, executors, reviewers, and auto-review policy still must not invent unrequested fallback implementation code. If the requested path cannot be implemented, SKS should block with evidence rather than add substitute behavior.
 
