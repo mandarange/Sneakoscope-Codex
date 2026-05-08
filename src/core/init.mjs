@@ -415,15 +415,118 @@ export async function initProject(root, opts = {}) {
     };
   }
 
-  function installPolicy(scope, commandPrefix) {
-    return {
-      scope,
-      default_scope: 'global',
-      hook_command_prefix: commandPrefix,
-      global_install: 'npm i -g sneakoscope',
-      project_install: 'npm i -D sneakoscope && npx sks setup --install-scope project'
-    };
+function installPolicy(scope, commandPrefix) {
+  return {
+    scope,
+    default_scope: 'global',
+    hook_command_prefix: commandPrefix,
+    global_install: 'npm i -g sneakoscope',
+    project_install: 'npm i -D sneakoscope && npx sks setup --install-scope project'
+  };
+}
+
+function mergeManagedCodexConfigToml(existingContent = '') {
+  let next = String(existingContent || '').trimEnd();
+  next = upsertTomlTableKey(next, 'features', 'codex_hooks = true');
+  next = upsertTomlTableKey(next, 'features', 'multi_agent = true');
+  next = upsertTomlTableKey(next, 'agents', 'max_threads = 6');
+  next = upsertTomlTableKey(next, 'agents', 'max_depth = 1');
+  for (const block of managedCodexConfigBlocks()) {
+    next = upsertTomlTable(next, block.table, block.text);
   }
+  return `${next.trim()}\n`;
+}
+
+function managedCodexConfigBlocks() {
+  return [
+    { table: 'mcp_servers.context7', text: context7ConfigToml().trim() },
+    { table: 'agents.analysis_scout', text: agentConfigBlock('analysis_scout', 'Read-only SKS scout.', './agents/analysis-scout.toml', ['Scout', 'Mapper']) },
+    { table: 'agents.team_consensus', text: agentConfigBlock('team_consensus', 'SKS planning/debate agent.', './agents/team-consensus.toml', ['Consensus', 'Atlas']) },
+    { table: 'agents.implementation_worker', text: agentConfigBlock('implementation_worker', 'SKS bounded implementation worker.', './agents/implementation-worker.toml', ['Builder', 'Mason']) },
+    { table: 'agents.db_safety_reviewer', text: agentConfigBlock('db_safety_reviewer', 'Read-only DB safety reviewer.', './agents/db-safety-reviewer.toml', ['Sentinel', 'Ledger']) },
+    { table: 'agents.qa_reviewer', text: agentConfigBlock('qa_reviewer', 'Read-only QA reviewer.', './agents/qa-reviewer.toml', ['Verifier', 'Scout']) },
+    { table: 'profiles.sks-task-low', text: profileConfigBlock('sks-task-low', 'low') },
+    { table: 'profiles.sks-task-medium', text: profileConfigBlock('sks-task-medium', 'medium') },
+    { table: 'profiles.sks-logic-high', text: profileConfigBlock('sks-logic-high', 'high') },
+    { table: 'profiles.sks-fast-high', text: profileConfigBlock('sks-fast-high', 'high') },
+    { table: 'profiles.sks-research-xhigh', text: profileConfigBlock('sks-research-xhigh', 'xhigh') },
+    { table: 'profiles.sks-research', text: profileConfigBlock('sks-research', 'xhigh', { approval: 'never' }) },
+    { table: 'profiles.sks-team', text: profileConfigBlock('sks-team', 'high') },
+    { table: 'profiles.sks-mad-high', text: profileConfigBlock('sks-mad-high', 'high', { sandbox: 'danger-full-access', approvalsReviewer: 'auto_review' }) },
+    {
+      table: 'auto_review',
+      text: '[auto_review]\npolicy = "Deny destructive database operations, credential exfiltration, persistent security weakening, broad file deletion, writes outside the workspace, and unrequested fallback implementation code unless explicitly authorized by the user or sealed decision contract."'
+    },
+    { table: 'profiles.sks-default', text: profileConfigBlock('sks-default', 'high') }
+  ];
+}
+
+function agentConfigBlock(table, description, configFile, nicknames = []) {
+  return [
+    `[agents.${table}]`,
+    `description = "${description}"`,
+    `config_file = "${configFile}"`,
+    `nickname_candidates = [${nicknames.map((name) => `"${name}"`).join(', ')}]`
+  ].join('\n');
+}
+
+function profileConfigBlock(profile, effort, opts = {}) {
+  return [
+    `[profiles.${profile}]`,
+    'model = "gpt-5.5"',
+    `approval_policy = "${opts.approval || 'on-request'}"`,
+    ...(opts.approvalsReviewer ? [`approvals_reviewer = "${opts.approvalsReviewer}"`] : []),
+    `sandbox_mode = "${opts.sandbox || 'workspace-write'}"`,
+    `model_reasoning_effort = "${effort}"`
+  ].join('\n');
+}
+
+function upsertTomlTableKey(text, table, line) {
+  const key = String(line).split('=')[0].trim();
+  let lines = String(text || '').split('\n');
+  if (lines.length === 1 && lines[0] === '') lines = [];
+  const header = `[${table}]`;
+  let start = lines.findIndex((x) => x.trim() === header);
+  if (start === -1) {
+    const prefix = lines.length && lines[lines.length - 1].trim() ? ['', header, line] : [header, line];
+    return [...lines, ...prefix].join('\n').replace(/\n{3,}/g, '\n\n');
+  }
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  for (let i = start + 1; i < end; i++) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i])) {
+      lines[i] = line;
+      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+    }
+  }
+  lines.splice(start + 1, 0, line);
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function upsertTomlTable(text, table, block) {
+  let lines = String(text || '').trimEnd().split('\n');
+  if (lines.length === 1 && lines[0] === '') lines = [];
+  const header = `[${table}]`;
+  const start = lines.findIndex((x) => x.trim() === header);
+  const blockLines = String(block || '').trim().split('\n');
+  if (start === -1) {
+    return [...lines, ...(lines.length ? [''] : []), ...blockLines].join('\n').replace(/\n{3,}/g, '\n\n');
+  }
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  lines.splice(start, end - start, ...blockLines);
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+}
 
   const currentState = path.join(sine, 'state', 'current.json');
   if (!(await exists(currentState)) || opts.force) {
@@ -441,26 +544,9 @@ export async function initProject(root, opts = {}) {
     created.push('AGENTS.md managed block');
   }
 
-  await writeTextAtomic(path.join(root, '.codex', 'config.toml'), `[features]\ncodex_hooks = true\nmulti_agent = true\n\n[agents]\nmax_threads = 6\nmax_depth = 1\n\n${context7ConfigToml()}\n[agents.analysis_scout]\ndescription = "Read-only SKS scout."\nconfig_file = "./agents/analysis-scout.toml"\nnickname_candidates = ["Scout", "Mapper"]\n\n[agents.team_consensus]\ndescription = "SKS planning/debate agent."\nconfig_file = "./agents/team-consensus.toml"\nnickname_candidates = ["Consensus", "Atlas"]\n\n[agents.implementation_worker]\ndescription = "SKS bounded implementation worker."\nconfig_file = "./agents/implementation-worker.toml"\nnickname_candidates = ["Builder", "Mason"]\n\n[agents.db_safety_reviewer]\ndescription = "Read-only DB safety reviewer."\nconfig_file = "./agents/db-safety-reviewer.toml"\nnickname_candidates = ["Sentinel", "Ledger"]\n\n[agents.qa_reviewer]\ndescription = "Read-only QA reviewer."\nconfig_file = "./agents/qa-reviewer.toml"\nnickname_candidates = ["Verifier", "Scout"]\n\n[profiles.sks-task-medium]\nmodel = "gpt-5.5"\napproval_policy = "on-request"\nsandbox_mode = "workspace-write"\nmodel_reasoning_effort = "medium"\n\n[profiles.sks-logic-high]\nmodel = "gpt-5.5"\napproval_policy = "on-request"\nsandbox_mode = "workspace-write"\nmodel_reasoning_effort = "high"\n\n[profiles.sks-research-xhigh]\nmodel = "gpt-5.5"\napproval_policy = "on-request"\nsandbox_mode = "workspace-write"\nmodel_reasoning_effort = "xhigh"\n\n[profiles.sks-research]\nmodel = "gpt-5.5"\napproval_policy = "never"\nsandbox_mode = "workspace-write"\nmodel_reasoning_effort = "xhigh"\n\n[profiles.sks-team]\nmodel = "gpt-5.5"\napproval_policy = "on-request"\nsandbox_mode = "workspace-write"\nmodel_reasoning_effort = "high"\n\n[profiles.sks-mad-high]
-model = "gpt-5.5"
-approval_policy = "on-request"
-approvals_reviewer = "auto_review"
-sandbox_mode = "danger-full-access"
-model_reasoning_effort = "high"
-
-[auto_review]
-policy = "Deny destructive database operations, credential exfiltration, persistent security weakening, broad file deletion, writes outside the workspace, and unrequested fallback implementation code unless explicitly authorized by the user or sealed decision contract."
-
-[profiles.sks-default]\nmodel = "gpt-5.5"\napproval_policy = "on-request"\nsandbox_mode = "workspace-write"\nmodel_reasoning_effort = "medium"\n`);
   const generatedCodexConfigPath = path.join(root, '.codex', 'config.toml');
-  let generatedCodexConfig = await readText(generatedCodexConfigPath, '');
-  if (!generatedCodexConfig.includes('[profiles.sks-task-low]')) {
-    generatedCodexConfig = generatedCodexConfig.replace(
-      '[profiles.sks-task-medium]',
-      '[profiles.sks-task-low]\nmodel = "gpt-5.5"\napproval_policy = "on-request"\nsandbox_mode = "workspace-write"\nmodel_reasoning_effort = "low"\n\n[profiles.sks-task-medium]'
-    );
-    await writeTextAtomic(generatedCodexConfigPath, generatedCodexConfig);
-  }
+  const existingCodexConfig = await readText(generatedCodexConfigPath, '');
+  await writeTextAtomic(generatedCodexConfigPath, mergeManagedCodexConfigToml(existingCodexConfig));
   created.push('.codex/config.toml');
 
   await writeTextAtomic(path.join(root, '.codex', 'SNEAKOSCOPE.md'), codexAppQuickReference(installScope, hookCommandPrefix));

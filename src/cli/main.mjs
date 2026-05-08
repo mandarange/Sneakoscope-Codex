@@ -61,7 +61,7 @@ import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs'
 import { buildTmuxLaunchPlan, buildTmuxOpenArgs, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
-import { askPostinstallQuestion, checkContext7, checkRequiredSkills, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, globalCodexSkillsRoot, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, shouldAutoApproveInstall } from './install-helpers.mjs';
+import { askPostinstallQuestion, checkContext7, checkRequiredSkills, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, shouldAutoApproveInstall } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 import { openClawCommand } from './openclaw-command.mjs';
 
@@ -1106,11 +1106,7 @@ async function installContext7Dependency(root) {
 }
 
 async function installTmuxDependency(args = []) {
-  const before = await tmuxReadiness().catch(() => ({ ok: false }));
-  if (before.ok) return { target: 'tmux', status: 'present', version: before.version || null, app: before.app || null, cli: before.cli || null };
-  const command = process.platform === 'darwin' ? 'brew install tmux' : platformTmuxInstallHint();
-  if (flag(args, '--dry-run')) return { target: 'tmux', status: 'dry_run', command };
-  return { target: 'tmux', status: 'manual_required', command, error: before.error || 'tmux not found' };
+  return ensureTmuxCliTool(args, { dryRun: flag(args, '--dry-run') });
 }
 
 async function confirmInstall(question, args = []) {
@@ -1237,11 +1233,11 @@ function usage(args = []) {
   const topic = String(args[0] || 'overview').toLowerCase();
   const blocks = {
     overview: ['ㅅㅋㅅ Usage', '', 'Discover:', '  sks commands', '  sks quickstart', '  sks root', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks tmux check', '  sks dollar-commands', '', `Topics: ${USAGE_TOPICS}`],
-    install: ['Install', '', '  npm i -g sneakoscope', '  sks root', '  sks', '', 'Project bootstrap:', '  sks bootstrap', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
+    install: ['Install', '', '1. Global install:', '  npm i -g sneakoscope', '', '2. Bootstrap and check dependencies:', '  sks bootstrap', '  sks deps check', '', '3. Confirm Codex App commands:', '  sks codex-app check', '  sks dollar-commands', '', '4. Optional codex-lb key setup for CLI sks runs:', '  # Add the codex-lb provider to ~/.codex/config.toml, then:', '  export CODEX_LB_API_KEY="sk-clb-..."', '  sks', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
     bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and tmux.'],
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
-    deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew only after approval.'],
-    tmux: ['tmux', '', '  sks', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'Running bare `sks` opens or reuses the default tmux Codex CLI session. Before launch, SKS checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. Use `sks tmux open` when you need explicit session/workspace flags, and `sks help` for CLI help.'],
+    deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew after Y/n approval for missing installs or Homebrew-managed upgrades. If PATH resolves an npm-managed tmux, SKS prompts for npm i -g tmux@latest instead. Unknown non-Homebrew tmux paths are reported as conflicts.'],
+    tmux: ['tmux', '', '  sks', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'Running bare `sks` opens or reuses the default tmux Codex CLI session in fast-high mode: --model gpt-5.5 -c model_reasoning_effort="high". Override with SKS_CODEX_MODEL or SKS_CODEX_REASONING. Before launch, SKS checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. Use `sks tmux open` when you need explicit session/workspace flags, and `sks help` for CLI help.'],
     openclaw: ['OpenClaw', '', '  sks openclaw install', '  sks openclaw path', '  sks openclaw print SKILL.md', '', 'Installs an OpenClaw skill package under ~/.openclaw/skills/sneakoscope-codex so OpenClaw agents can attach skills: [sneakoscope-codex] with the shell tool and call local SKS commands from a project root.'],
     team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
@@ -1937,6 +1933,8 @@ async function selftest() {
   if (!tmuxSyntax.ok || !tmuxSyntax.command.includes('tmux attach-session -t sks-mad-selftest')) throw new Error('selftest failed: MAD tmux attach plan is not stable by session name');
   const tmuxOpenArgs = buildTmuxOpenArgs(workspacePlan);
   if (tmuxOpenArgs.join(' ') !== 'attach-session -t sks-mad-selftest') throw new Error('selftest failed: MAD tmux attach args are not stable by session name');
+  const defaultFastHighPlan = await buildTmuxLaunchPlan({ root: tmp, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
+  if (defaultFastHighPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="high"') throw new Error('selftest failed: default sks tmux launch is not fast-high');
   if (!shouldAutoAttachTmux(['--mad'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux launch does not auto-attach in an interactive terminal');
   if (shouldAutoAttachTmux(['--mad', '--json'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux json mode should not auto-attach');
   if (shouldAutoAttachTmux(['--mad', '--no-attach'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux --no-attach should remain print-only');
@@ -2547,9 +2545,16 @@ async function selftest() {
   const codexConfigText = await safeReadText(path.join(tmp, '.codex', 'config.toml'));
   if (!codexConfigText.includes('multi_agent = true')) throw new Error('selftest failed: multi_agent not enabled');
   if (!hasContext7ConfigText(codexConfigText)) throw new Error('selftest failed: Context7 MCP not configured');
-  if (!codexConfigText.includes('[profiles.sks-task-low]') || !codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest failed: GPT-5.5 reasoning profiles not configured');
+  if (!codexConfigText.includes('[profiles.sks-task-low]') || !codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-fast-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest failed: GPT-5.5 reasoning profiles not configured');
   if (!codexConfigText.includes('[agents.analysis_scout]')) throw new Error('selftest failed: analysis_scout agent not configured');
   if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest failed: team_consensus agent not configured');
+  const preservedConfigTmp = tmpdir();
+  await ensureDir(path.join(preservedConfigTmp, '.codex'));
+  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), '[features]\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
+  await initProject(preservedConfigTmp, {});
+  const preservedConfig = await safeReadText(path.join(preservedConfigTmp, '.codex', 'config.toml'));
+  if (!preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true')) throw new Error('selftest failed: Codex config merge dropped user Fast mode settings');
+  if (!preservedConfig.includes('codex_hooks = true') || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error('selftest failed: Codex config merge did not add SKS managed settings');
   const autoReviewHome = path.join(tmp, 'auto-review-home');
   const autoReviewEnv = { HOME: autoReviewHome };
   const autoReviewEnabled = await enableAutoReview({ env: autoReviewEnv, high: true });

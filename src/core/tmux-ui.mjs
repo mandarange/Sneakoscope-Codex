@@ -14,6 +14,19 @@ export const SKS_TMUX_LOGO = [
   'Sneakoscope Codex tmux'
 ].join('\n');
 
+export const DEFAULT_SKS_CODEX_MODEL = 'gpt-5.5';
+export const DEFAULT_SKS_CODEX_REASONING = 'high';
+
+export function defaultCodexLaunchArgs(env = process.env) {
+  if (/^(0|false|off|none)$/i.test(String(env.SKS_CODEX_FAST_HIGH || '').trim())) return [];
+  const model = String(env.SKS_CODEX_MODEL || DEFAULT_SKS_CODEX_MODEL).trim();
+  const effort = String(env.SKS_CODEX_REASONING || DEFAULT_SKS_CODEX_REASONING).trim();
+  const args = [];
+  if (model) args.push('--model', model);
+  if (effort) args.push('-c', `model_reasoning_effort="${effort}"`);
+  return args;
+}
+
 export function sanitizeTmuxSessionName(input) {
   const base = String(input || 'sks').trim().replace(/[^A-Za-z0-9_.:-]+/g, '-').replace(/^-+|-+$/g, '');
   return (base || 'sks').slice(0, 80);
@@ -177,7 +190,7 @@ export async function buildTmuxLaunchPlan(opts = {}) {
   const codex = opts.codex || await getCodexInfo().catch(() => ({}));
   const tmux = opts.tmux || await tmuxReadiness(opts);
   const app = opts.app || await codexAppIntegrationStatus({ codex });
-  const codexArgs = Array.isArray(opts.codexArgs) ? opts.codexArgs : [];
+  const codexArgs = Array.isArray(opts.codexArgs) ? opts.codexArgs : defaultCodexLaunchArgs(opts.env || process.env);
   return {
     root,
     session,
