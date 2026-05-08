@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.7.33] - 2026-05-08
+
+### Fixed
+
+- Add the release changelog section matching the current package version after the versioning hook advanced the package to `0.7.33`.
+
 ## [0.7.32] - 2026-05-08
 
 ### Fixed
