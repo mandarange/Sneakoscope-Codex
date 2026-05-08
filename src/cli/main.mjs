@@ -2043,9 +2043,11 @@ async function selftest() {
   if (!firstVersionBump.ok || firstVersionBump.version !== '0.1.1' || !firstVersionBump.changed) throw new Error('selftest failed: first version bump did not advance patch version');
   const bumpedPackage = await readJson(path.join(versionTmp, 'package.json'));
   const bumpedLock = await readJson(path.join(versionTmp, 'package-lock.json'));
+  const bumpedChangelog = await safeReadText(path.join(versionTmp, 'CHANGELOG.md'));
   if (bumpedPackage.version !== '0.1.1' || bumpedLock.version !== '0.1.1' || bumpedLock.packages[''].version !== '0.1.1') throw new Error('selftest failed: package lock versions not synced');
+  if (!bumpedChangelog.includes('## [0.1.1]') || !bumpedChangelog.includes('automatic SKS version guard')) throw new Error('selftest failed: version bump did not sync changelog section');
   const firstCached = await runProcess('git', ['diff', '--cached', '--name-only'], { cwd: versionTmp, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  if (!firstCached.stdout.includes('package.json') || !firstCached.stdout.includes('package-lock.json')) throw new Error('selftest failed: version files not staged');
+  if (!firstCached.stdout.includes('package.json') || !firstCached.stdout.includes('package-lock.json') || !firstCached.stdout.includes('CHANGELOG.md')) throw new Error('selftest failed: version files not staged');
   await runProcess('git', ['commit', '--no-verify', '-m', 'first versioned commit'], { cwd: versionTmp, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   await writeJsonAtomic(versionStatus.state_path, { schema_version: 1, last_version: '0.1.5', updated_at: nowIso(), pid: process.pid, changed: true });
   await writeTextAtomic(path.join(versionTmp, 'CHANGELOG.md'), 'collision selftest\n');

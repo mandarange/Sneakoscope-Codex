@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+
+## [0.7.38] - 2026-05-08
+
+### Fixed
+
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+
+## [0.7.37] - 2026-05-08
+
+### Fixed
+
+- Publish the hook update-check selftest fix under the version actually produced by the automatic SKS version guard.
+- Make automatic SKS version bumps create and stage the matching changelog section so publish cannot silently advance beyond the verified changelog entry.
+
 ## [0.7.36] - 2026-05-08
 
 ### Fixed
