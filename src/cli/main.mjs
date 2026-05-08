@@ -2238,7 +2238,7 @@ async function selftest() {
   if (String(hookUpdateCurrentContext).includes('Update SKS now') || String(hookUpdateCurrentContext).includes('Skip update for this conversation')) throw new Error('selftest failed: hook prompted for update even though installed SKS is current');
   const hookUpdateCurrentState = await readJson(path.join(hookUpdateCurrentTmp, '.sneakoscope', 'state', 'update-check.json'), {});
   if (hookUpdateCurrentState.pending_offer) throw new Error('selftest failed: current installed SKS left a pending update offer');
-  if (hookUpdateCurrentState.current !== '9.9.9' || hookUpdateCurrentState.runtime_current !== PACKAGE_VERSION || hookUpdateCurrentState.installed_current !== '9.9.9') throw new Error('selftest failed: hook did not record effective installed SKS version');
+  if (hookUpdateCurrentState.current !== '9.9.9' || hookUpdateCurrentState.runtime_current !== PACKAGE_VERSION || hookUpdateCurrentState.installed_current !== '9.9.9') throw new Error(`selftest failed: hook did not record effective installed SKS version: ${JSON.stringify({ expected: { current: '9.9.9', runtime_current: PACKAGE_VERSION, installed_current: '9.9.9' }, actual: hookUpdateCurrentState })}`);
   const hookUpdatePendingTmp = tmpdir();
   await initProject(hookUpdatePendingTmp, {});
   await writeJsonAtomic(path.join(hookUpdatePendingTmp, '.sneakoscope', 'state', 'update-check.json'), {
