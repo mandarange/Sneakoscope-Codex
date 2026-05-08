@@ -11,11 +11,10 @@ Install globally, then run `sks` from either a project or any global shell locat
 ```sh
 npm i -g sneakoscope
 sks root
-sks bootstrap
 sks
 ```
 
-`sks root` tells you whether SKS found a project root or is using the per-user global runtime root. Outside a repo/project marker, runtime commands such as `sks`, `sks deps check`, `sks pipeline status`, and `sks team ...` use that global root instead of writing `.sneakoscope` into the random current directory.
+`npm i -g sneakoscope` automatically refreshes the `sks` command shim, global Codex App `$` skills, and SKS bootstrap surface. When the install is run from a project, postinstall bootstraps that project. When it is run outside a repo/project marker, postinstall bootstraps the per-user global runtime root instead of writing `.sneakoscope` into a random current directory. `sks root` tells you which root SKS will use.
 
 If you only want a one-shot run without keeping `sks` installed globally:
 
@@ -91,10 +90,9 @@ Use this when you want `sks` available from any repo:
 ```sh
 npm i -g sneakoscope
 sks root
-sks bootstrap
 ```
 
-`sks` commands work even when no project root is present. Project-aware commands use the nearest `.sneakoscope`, `.dcodex`, or `.git` root; if none exists, SKS uses a per-user global runtime root. `sks bootstrap` still initializes the current project when you want project-local hooks, skills, and TriWiki state.
+`sks` commands work even when no project root is present. Project-aware commands use the nearest `.sneakoscope`, `.dcodex`, or `.git` root; if none exists, SKS uses a per-user global runtime root. Global npm install/upgrade automatically bootstraps the current project when a project marker is present, otherwise it bootstraps the global runtime root. Run `sks bootstrap` manually only when you intentionally want to initialize or repair the current project after install.
 
 Project setup writes shared `.gitignore` entries for generated SKS files: `.sneakoscope/`, `.codex/`, `.agents/`, and managed `AGENTS.md`. Setup, doctor repair, and npm postinstall refreshes also compare the previous SKS generated-file manifest with the current package templates and prune stale SKS-generated legacy skills or agent files while preserving user-owned custom skills. Use `sks setup --local-only` when you want those excludes kept only in `.git/info/exclude`.
 
