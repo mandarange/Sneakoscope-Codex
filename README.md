@@ -170,7 +170,20 @@ Bare `sks` creates or reuses the default named tmux session for Codex CLI and at
 
 Before opening tmux, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens tmux with the updated Codex CLI.
 
-If you use [codex-lb](https://github.com/Soju06/codex-lb), start it first, create an API key in its dashboard, then add this provider to `~/.codex/config.toml`:
+If you use [codex-lb](https://github.com/Soju06/codex-lb), start it first, create an API key in its dashboard, then run:
+
+```sh
+sks codex-lb setup --host https://your-codex-lb.example.com --api-key "sk-clb-..."
+sks
+```
+
+Bare `sks` asks this before opening Codex when codex-lb is not configured:
+
+```text
+Authenticate and route Codex through codex-lb? [y/N]
+```
+
+Answering `y` asks for the hosted domain and API key, writes `~/.codex/config.toml`, stores the key in `~/.codex/sks-codex-lb.env` with mode `0600`, and sources that env file before launching Codex in tmux. When codex-lb is configured from this prompt, SKS opens a fresh tmux session for that launch so the new key is loaded by the Codex process immediately. The generated provider config follows the codex-lb README's Codex CLI API-key setup:
 
 ```toml
 model_provider = "codex-lb"
@@ -182,13 +195,6 @@ wire_api = "responses"
 env_key = "CODEX_LB_API_KEY"
 supports_websockets = true
 requires_openai_auth = true
-```
-
-Then run:
-
-```sh
-export CODEX_LB_API_KEY="sk-clb-..."
-sks
 ```
 
 ### MAD tmux Launch
@@ -431,7 +437,7 @@ sks dollar-commands
 4. Optional codex-lb key setup for CLI `sks` runs.
 
 ```sh
-export CODEX_LB_API_KEY="sk-clb-..."
+sks codex-lb setup --host <domain> --api-key <key>
 sks
 ```
 

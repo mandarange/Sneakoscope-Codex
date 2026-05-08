@@ -3,7 +3,7 @@ import os from 'node:os';
 import fsp from 'node:fs/promises';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { ensureDir, exists, globalSksRoot, packageRoot, runProcess, which, writeTextAtomic } from '../core/fsx.mjs';
+import { ensureDir, exists, globalSksRoot, packageRoot, readText, runProcess, which, writeTextAtomic } from '../core/fsx.mjs';
 import { getCodexInfo } from '../core/codex-adapter.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
 import { installSkills } from '../core/init.mjs';
@@ -111,6 +111,132 @@ export async function askPostinstallQuestion(question) {
   } finally {
     rl.close();
   }
+}
+
+export function codexLbConfigPath(home = process.env.HOME || os.homedir()) {
+  return path.join(home, '.codex', 'config.toml');
+}
+
+export function codexLbEnvPath(home = process.env.HOME || os.homedir()) {
+  return path.join(home, '.codex', 'sks-codex-lb.env');
+}
+
+export function normalizeCodexLbBaseUrl(input = '') {
+  let host = String(input || '').trim();
+  if (!host) host = 'http://127.0.0.1:2455';
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(host)) host = `https://${host}`;
+  host = host.replace(/\/+$/, '');
+  return /\/backend-api\/codex$/i.test(host) ? host : `${host}/backend-api/codex`;
+}
+
+export async function configureCodexLb(opts = {}) {
+  const home = opts.home || process.env.HOME || os.homedir();
+  const configPath = opts.configPath || codexLbConfigPath(home);
+  const envPath = opts.envPath || codexLbEnvPath(home);
+  const baseUrl = normalizeCodexLbBaseUrl(opts.host || opts.baseUrl);
+  const apiKey = String(opts.apiKey || '').trim();
+  if (!apiKey) return { ok: false, status: 'missing_api_key', config_path: configPath, env_path: envPath };
+  await ensureDir(path.dirname(configPath));
+  const current = await readText(configPath, '');
+  const next = upsertCodexLbConfig(current, baseUrl);
+  await writeTextAtomic(configPath, next);
+  await writeTextAtomic(envPath, `export CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
+  await fsp.chmod(envPath, 0o600).catch(() => {});
+  process.env.CODEX_LB_API_KEY = apiKey;
+  return { ok: true, status: 'configured', config_path: configPath, env_path: envPath, base_url: baseUrl, env_key: 'CODEX_LB_API_KEY' };
+}
+
+export async function codexLbStatus(opts = {}) {
+  const home = opts.home || process.env.HOME || os.homedir();
+  const configPath = opts.configPath || codexLbConfigPath(home);
+  const envPath = opts.envPath || codexLbEnvPath(home);
+  const config = await readText(configPath, '');
+  const envExists = await exists(envPath);
+  const envText = envExists ? await readText(envPath, '') : '';
+  const envKeyConfigured = /^(\s*export\s+)?CODEX_LB_API_KEY\s*=.+$/m.test(envText);
+  const providerConfigured = /\[model_providers\.codex-lb\]/.test(config);
+  const selected = /model_provider\s*=\s*"codex-lb"/.test(config);
+  return {
+    ok: selected && providerConfigured && envKeyConfigured,
+    config_path: configPath,
+    env_path: envPath,
+    provider_configured: providerConfigured,
+    selected,
+    env_file: envExists,
+    env_key_configured: envKeyConfigured,
+    base_url: config.match(/base_url\s*=\s*"([^"]+)"/)?.[1] || null
+  };
+}
+
+export async function maybePromptCodexLbSetupForLaunch(args = [], opts = {}) {
+  if (args.includes('--json') || args.includes('--skip-codex-lb') || process.env.SKS_SKIP_CODEX_LB_PROMPT === '1') return { status: 'skipped' };
+  if (!canAskYesNo()) return { status: 'non_interactive' };
+  const status = await codexLbStatus(opts);
+  if (status.ok) return { status: 'present', ...status };
+  const useCodexLb = (await askPostinstallQuestion('\nAuthenticate and route Codex through codex-lb? [y/N] ')).trim();
+  if (!/^(y|yes|예|네|응)$/i.test(useCodexLb)) return { status: 'continued_to_codex' };
+  const host = (await askPostinstallQuestion('codex-lb host domain [http://127.0.0.1:2455]: ')).trim() || 'http://127.0.0.1:2455';
+  const apiKey = (await askPostinstallQuestion('codex-lb API key: ')).trim();
+  const configured = await configureCodexLb({ ...opts, host, apiKey });
+  if (configured.ok) console.log(`codex-lb configured: ${configured.base_url}`);
+  else console.log('codex-lb setup skipped: API key was empty.');
+  return configured;
+}
+
+function upsertCodexLbConfig(text = '', baseUrl) {
+  let next = upsertTopLevelTomlString(text, 'model_provider', 'codex-lb');
+  const block = [
+    '[model_providers.codex-lb]',
+    'name = "OpenAI"',
+    `base_url = "${baseUrl}"`,
+    'wire_api = "responses"',
+    'env_key = "CODEX_LB_API_KEY"',
+    'supports_websockets = true',
+    'requires_openai_auth = true'
+  ].join('\n');
+  next = upsertTomlTable(next, 'model_providers.codex-lb', block);
+  return `${next.trim()}\n`;
+}
+
+function upsertTopLevelTomlString(text, key, value) {
+  const line = `${key} = "${value}"`;
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  for (let i = 0; i < end; i++) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i])) {
+      lines[i] = line;
+      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+    }
+  }
+  lines.splice(end, 0, line);
+  return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function upsertTomlTable(text, table, block) {
+  let lines = String(text || '').trimEnd().split('\n');
+  if (lines.length === 1 && lines[0] === '') lines = [];
+  const header = `[${table}]`;
+  const start = lines.findIndex((x) => x.trim() === header);
+  const blockLines = String(block || '').trim().split('\n');
+  if (start === -1) return [...lines, ...(lines.length ? [''] : []), ...blockLines].join('\n').replace(/\n{3,}/g, '\n\n');
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  lines.splice(start, end - start, ...blockLines);
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function shellSingleQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export async function ensureSksCommandDuringInstall(opts = {}) {

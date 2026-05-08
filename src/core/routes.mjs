@@ -456,6 +456,7 @@ export const COMMAND_CATALOG = [
   { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
   { name: 'deps', usage: 'sks deps check|install [tmux|codex|context7|all] [--yes]', description: 'Check or guided-install Node/npm PATH, Codex CLI/App, Context7, Browser Use, Computer Use, tmux, and Homebrew on macOS.' },
   { name: 'codex-app', usage: 'sks codex-app [check|open]', description: 'Check Codex App install and first-party MCP/plugin readiness, then show app setup files and examples.' },
+  { name: 'codex-lb', usage: 'sks codex-lb status|setup --host <domain> --api-key <key>', description: 'Configure codex-lb as the Codex CLI provider by writing ~/.codex/config.toml and the CODEX_LB_API_KEY env file.' },
   { name: 'openclaw', usage: 'sks openclaw install|path|print [--dir path] [--force] [--json]', description: 'Generate an OpenClaw skill package so OpenClaw agents can discover and use local SKS workflows.' },
   { name: 'tmux', usage: 'sks | sks tmux open|check|status [--workspace name]', description: 'Open the default SKS tmux runtime with bare sks, or use tmux subcommands for explicit launch/check/status.' },
   { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot tmux Codex CLI workspace with the SKS MAD full-access auto-review profile.' },

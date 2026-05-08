@@ -108,6 +108,7 @@ export function codexLaunchCommand(root, codexBin, codexArgs = []) {
     `printf '\\nProject: %s\\n' ${shellEscape(root)}`,
     'printf \'Runtime: tmux session for Codex CLI\\n\'',
     'printf \'Prompt:  use canonical $ commands, for example $Team or $QA-LOOP\\n\\n\'',
+    '[ -f "$HOME/.codex/sks-codex-lb.env" ] && . "$HOME/.codex/sks-codex-lb.env"',
     'sleep 1',
     `exec ${[shellEscape(codexBin), ...extraArgs.map(shellEscape), '--cd', shellEscape(root)].join(' ')}`
   ].join('; ');
