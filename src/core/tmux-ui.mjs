@@ -6,33 +6,115 @@ import { getCodexInfo } from './codex-adapter.mjs';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.mjs';
 
 export const SKS_TMUX_LOGO = [
-  '   _____   __ __   _____',
-  '  / ___/  / //_/  / ___/',
-  '  \\__ \\  / ,<     \\__ \\ ',
-  ' ___/ / / /| |   ___/ / ',
-  '/____/ /_/ |_|  /____/  ',
-  '      SNEAKOSCOPE CODEX'
+  '        _______   __  __   _______',
+  '      / _____/  / /_/ /  / _____/|',
+  '     / /____   / __  /  / /____ | |',
+  '     \\____  \\ / / / /   \\____  \\| |',
+  ' ____/ /  /_/ /_/  ____/ /| | | |',
+  '/_____/   /_/\\__/ /_____/ |_|/ /',
+  ' \\_____\\   \\_\\ \\_\\ \\_____\\|_| /',
+  '        SNEAKOSCOPE CODEX'
 ].join('\n');
 
 const SKS_TMUX_LOGO_FRAMES = [
   [
-    '      __ __',
-    '     / //_/        .',
-    '    / ,<       .',
-    '   / /| |   .',
-    '  /_/ |_|',
-    '      S K S'
+    '                 ||',
+    '                 ||        .',
+    '                 ||      .:',
+    '                 ||    .::',
+    '                 ||  .:::',
+    '                 ||.::::',
+    '                 SKS'
   ].join('\n'),
   [
-    '   _____   __ __   _____',
-    '  / ___/  / //_/  / ___/',
-    '  \\__ \\  / ,<     \\__ \\ ',
-    '     / / /| |      / /  ',
-    '    /_/ /_/ |_|   /_/   ',
-    '      SNEAKOSCOPE'
+    '              //||',
+    '            .// ||        ..',
+    '           //   ||     ..::',
+    '          //    ||   ..::::',
+    '         //     || ..::::',
+    '        //      ||::::',
+    '             S K S'
+  ].join('\n'),
+  [
+    '            ______        __        ______',
+    '         . / ___/|     . / /__   . / ___/|',
+    '        / / /__ | |   / //_/   / / /__ | |',
+    '       / /\\__ \\ | |  / ,<     / /\\__ \\ | |',
+    '      / /___/ / | | / /| |   / /___/ / | |',
+    '     /_/_____/  |/ /_/ |_|  /_/_____/  |/',
+    '             SNEAKOSCOPE'
+  ].join('\n'),
+  [
+    '         _______    __  __    _______',
+    '      . / _____/ . / /_/ / . / _____/|',
+    '     / / /____   / __  /  / / /____ | |',
+    '    / /\\____  \\ / / / /  / /\\____  \\| |',
+    '   / /_____/ / /_/ /_/  / /_____/ /| |',
+    '  /_/______/  /_/\\__/  /_/______/ |_|/',
+    '          SNEAKOSCOPE'
+  ].join('\n'),
+  [
+    '      _____   __  __   _____',
+    '    / ___/  / /_/ /  / ___/|   .',
+    '   / /__   / __  /  / /__ | |  ::',
+    '   \\__ \\  / / / /   \\__ \\| |  :::',
+    ' ___/ /  /_/ /_/ ___/ /| | | :::',
+    '/____/   /_/\\__/ /____/ |_|/::',
+    '  \\___\\   \\_\\ \\_\\ \\____\\|_|:',
+    '        SNEAKOSCOPE'
+  ].join('\n'),
+  [
+    '        _______   __  __   _______',
+    '      / _____/  / /_/ /  / _____/|',
+    '     / /____   / __  /  / /____ | |',
+    '     \\____  \\ / / / /   \\____  \\| |',
+    ' ____/ /  /_/ /_/  ____/ /| | | |',
+    '/_____/   /_/\\__/ /_____/ |_|/ /',
+    ' \\_____\\   \\_\\ \\_\\ \\_____\\|_| /',
+    '        SNEAKOSCOPE CODEX'
+  ].join('\n'),
+  [
+    '    _______      __      _______',
+    '   |\\_____ \\  . / /_.   |\\_____ \\',
+    '   | |____\\ \\  / __/    | |____\\ \\',
+    '   | |\\____\\ \\/ / /     | |\\____\\ \\',
+    '   | | |___/ /_/ /__    | | |___/ /',
+    '   \\|_|/____/\\__/__/    \\|_|/____/',
+    '        SNEAKOSCOPE'
+  ].join('\n'),
+  [
+    '         ||\\\\',
+    '     ..  || \\\\.',
+    '   ..::  ||   \\\\',
+    ' ..::::  ||    \\\\',
+    '::::     ||     \\\\',
+    '         ||      \\\\',
+    '             S K S'
+  ].join('\n'),
+  [
+    '                 ||',
+    '             .   ||',
+    '           .::   ||',
+    '         .::::   ||',
+    '       .::::     ||',
+    '     .::::       ||',
+    '                 SKS'
   ].join('\n'),
   SKS_TMUX_LOGO
 ];
+
+const SKS_TMUX_LOGO_ANIMATION_STEPS = Object.freeze([
+  { frame: 0, color: '39', bold: false, delay: '0.045' },
+  { frame: 1, color: '39', bold: false, delay: '0.045' },
+  { frame: 2, color: '45', bold: false, delay: '0.05' },
+  { frame: 3, color: '51', bold: false, delay: '0.055' },
+  { frame: 4, color: '51', bold: true, delay: '0.07' },
+  { frame: 5, color: '51', bold: true, delay: '0.07' },
+  { frame: 6, color: '45', bold: false, delay: '0.05' },
+  { frame: 7, color: '39', bold: false, delay: '0.045' },
+  { frame: 8, color: '39', bold: false, delay: '0.045' },
+  { frame: 9, color: '51', bold: true, delay: '0.16' }
+]);
 
 export const DEFAULT_SKS_CODEX_MODEL = 'gpt-5.5';
 export const DEFAULT_SKS_CODEX_REASONING = 'high';
@@ -135,17 +217,14 @@ export function codexLaunchCommand(root, codexBin, codexArgs = []) {
 
 export function sksLogoIntroCommand() {
   const staticLogo = `clear; printf '\\033[1;38;5;51m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO)}`;
-  const animated = [
-    'clear',
-    `printf '\\033[38;5;39m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO_FRAMES[0])}`,
-    'sleep 0.07',
-    'clear',
-    `printf '\\033[1;38;5;45m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO_FRAMES[1])}`,
-    'sleep 0.08',
-    'clear',
-    `printf '\\033[1;38;5;51m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO_FRAMES[2])}`,
-    'sleep 0.15'
-  ].join('; ');
+  const animated = SKS_TMUX_LOGO_ANIMATION_STEPS.flatMap((step) => {
+    const style = `${step.bold ? '1;' : ''}38;5;${step.color}`;
+    return [
+      'clear',
+      `printf '\\033[${style}m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO_FRAMES[step.frame])}`,
+      `sleep ${step.delay}`
+    ];
+  }).join('; ');
   return `if [ "\${SKS_TMUX_LOGO_ANIMATION:-1}" = "0" ]; then ${staticLogo}; else ${animated}; fi`;
 }
 

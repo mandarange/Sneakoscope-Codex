@@ -679,6 +679,7 @@ export function subagentExecutionPolicyText(route, prompt = '') {
   }
   return [
     'Subagent policy: REQUIRED for code-changing or execution work in this route.',
+    'The selected SKS route itself authorizes route-owned worker/reviewer subagents; the user does not need to separately ask for subagents when the default Team pipeline is active.',
     'Before editing, the parent orchestrator must visibly state the SKS route, split independent write scopes, and spawn worker/reviewer subagents whenever the tools are available.',
     'Run workers in parallel only with disjoint ownership. The parent owns integration, verification, and final evidence.',
     'If subagent tools are unavailable or the work cannot be safely split, record that as explicit subagent evidence before editing.',

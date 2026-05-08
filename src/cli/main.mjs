@@ -1005,11 +1005,11 @@ async function madHighCommand(args = []) {
     return;
   }
   const profile = await enableMadHighProfile();
-  console.log(`SKS MAD auto-review profile ready: ${madHighProfileName()}`);
-  console.log('Scope: explicit tmux launch only; full access uses Codex auto_review approvals when approval prompts are raised.');
+  console.log(`SKS MAD full-access profile ready: ${madHighProfileName()}`);
+  console.log('Scope: explicit tmux launch only; Codex opens with danger-full-access sandbox and approval_policy=never.');
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
   return launchTmuxUi([...cleanArgs, '--workspace', workspace], {
-    codexArgs: ['--profile', profile.profile_name],
+    codexArgs: profile.launch_args,
     autoInstallTmux: !flag(args, '--no-auto-install-tmux'),
     conciseBlockers: true
   });
@@ -1927,6 +1927,7 @@ async function selftest() {
   if (postinstallConflictPrompt.code !== 0 || !String(postinstallConflictPrompt.stdout || '').includes('Goal: completely remove the conflicting Codex harnesses')) throw new Error('selftest failed: interactive postinstall prompt did not print cleanup prompt');
   const postinstallSetupTmp = tmpdir();
   await writeJsonAtomic(path.join(postinstallSetupTmp, 'package.json'), { name: 'postinstall-setup-smoke', version: '0.0.0' });
+  await ensureDir(path.join(postinstallSetupTmp, '.git'));
   const postinstallSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallSetupTmp, env: { INIT_CWD: postinstallSetupTmp, HOME: path.join(postinstallSetupTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
   if (postinstallSetup.code !== 0) throw new Error(`selftest failed: postinstall setup exited ${postinstallSetup.code}: ${postinstallSetup.stderr}`);
   if (await exists(path.join(postinstallSetupTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest failed: postinstall installed deprecated agent-team fallback skill');
@@ -1964,6 +1965,7 @@ async function selftest() {
   if (!String(postinstallNoMarker.stdout || '').includes('no project marker found; auto-running global SKS runtime bootstrap')) throw new Error('selftest failed: no-marker postinstall did not report global runtime bootstrap');
   if (!(await exists(path.join(postinstallNoMarkerGlobalRoot, '.sneakoscope', 'manifest.json')))) throw new Error('selftest failed: no-marker postinstall did not bootstrap global runtime root');
   if (await exists(path.join(postinstallNoMarkerCwd, '.sneakoscope'))) throw new Error('selftest failed: no-marker postinstall polluted install cwd');
+  if (await exists(path.join(postinstallNoMarkerGlobalRoot, '.gitignore'))) throw new Error('selftest failed: global runtime bootstrap without project git wrote shared .gitignore');
   const bootstrapJsonTmp = tmpdir();
   await writeJsonAtomic(path.join(bootstrapJsonTmp, 'package.json'), { name: 'bootstrap-json-smoke', version: '0.0.0' });
   const bootstrapJson = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'bootstrap', '--json'], { cwd: bootstrapJsonTmp, env: { HOME: path.join(bootstrapJsonTmp, 'home'), SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
@@ -1987,9 +1989,9 @@ async function selftest() {
   const madProfilePath = path.join(tmp, 'mad-codex-config.toml');
   const madProfile = await enableMadHighProfile({ configPath: madProfilePath });
   const madProfileText = await safeReadText(madProfilePath);
-  if (madProfile.profile_name !== 'sks-mad-high' || !madProfileText.includes('sandbox_mode = "danger-full-access"') || !madProfileText.includes('approval_policy = "on-request"') || !madProfileText.includes('approvals_reviewer = "auto_review"') || !madProfileText.includes('model_reasoning_effort = "high"') || !madProfileText.includes('unrequested fallback implementation code')) throw new Error('selftest failed: MAD high profile is not full-access auto-review high with fallback-code guard');
+  if (madProfile.profile_name !== 'sks-mad-high' || !madProfileText.includes('sandbox_mode = "danger-full-access"') || !madProfileText.includes('approval_policy = "never"') || !madProfileText.includes('approvals_reviewer = "auto_review"') || !madProfile.launch_args.includes('--sandbox') || !madProfile.launch_args.includes('danger-full-access') || !madProfile.launch_args.includes('--ask-for-approval') || !madProfile.launch_args.includes('never') || !madProfileText.includes('model_reasoning_effort = "high"') || !madProfileText.includes('unrequested fallback implementation code')) throw new Error('selftest failed: MAD high profile is not Codex full-access high with fallback-code guard');
   if (!isMadHighLaunch(['--mad', '--high']) || isMadHighLaunch(['db', '--mad'])) throw new Error('selftest failed: MAD high launch flag parsing is not top-level only');
-  const workspacePlan = { session: 'sks-mad-selftest', root: tmp, codexArgs: ['--profile', 'sks-mad-high'] };
+  const workspacePlan = { session: 'sks-mad-selftest', root: tmp, codexArgs: madProfile.launch_args };
   const tmuxSyntax = runTmuxLaunchPlanSyntaxCheck(workspacePlan);
   if (!tmuxSyntax.ok || !tmuxSyntax.command.includes('tmux attach-session -t sks-mad-selftest')) throw new Error('selftest failed: MAD tmux attach plan is not stable by session name');
   const tmuxOpenArgs = buildTmuxOpenArgs(workspacePlan);
@@ -2626,6 +2628,7 @@ async function selftest() {
   if (!codexConfigText.includes('multi_agent = true')) throw new Error('selftest failed: multi_agent not enabled');
   if (!hasContext7ConfigText(codexConfigText)) throw new Error('selftest failed: Context7 MCP not configured');
   if (!codexConfigText.includes('[profiles.sks-task-low]') || !codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-fast-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest failed: GPT-5.5 reasoning profiles not configured');
+  if (!/\[profiles\.sks-mad-high\][\s\S]*?approval_policy = "never"[\s\S]*?sandbox_mode = "danger-full-access"/.test(codexConfigText)) throw new Error('selftest failed: generated sks-mad-high profile is not full access');
   if (!codexConfigText.includes('[agents.analysis_scout]')) throw new Error('selftest failed: analysis_scout agent not configured');
   if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest failed: team_consensus agent not configured');
   const preservedConfigTmp = tmpdir();
@@ -2633,7 +2636,7 @@ async function selftest() {
   await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), '[features]\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
   await initProject(preservedConfigTmp, {});
   const preservedConfig = await safeReadText(path.join(preservedConfigTmp, '.codex', 'config.toml'));
-  if (!preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true')) throw new Error('selftest failed: Codex config merge dropped user Fast mode settings');
+  if (!preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true') || !preservedConfig.includes('enabled = true') || !preservedConfig.includes('default_profile = "sks-fast-high"')) throw new Error('selftest failed: Codex config merge dropped or failed to enable Fast mode settings');
   if (!preservedConfig.includes('codex_hooks = true') || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error('selftest failed: Codex config merge did not add SKS managed settings');
   const autoReviewHome = path.join(tmp, 'auto-review-home');
   const autoReviewEnv = { HOME: autoReviewHome };
@@ -3034,6 +3037,7 @@ async function selftest() {
   if (!pptHtml.includes('<html') || pptHtml.includes('gradient')) throw new Error('selftest failed: PPT HTML artifact missing or over-designed');
   const pptStyleTokens = await readJson(path.join(pptMission.dir, 'ppt-style-tokens.json'));
   if (pptStyleTokens.design_policy?.design_ssot?.authority !== DESIGN_SYSTEM_SSOT.authority_file || !pptStyleTokens.design_policy?.source_inputs?.some((entry) => entry.url === AWESOME_DESIGN_MD_REFERENCE.url && entry.role === 'source_input_for_ssot') || !pptStyleTokens.design_policy?.anti_generic_ai_style) throw new Error('selftest failed: PPT style tokens missing fused design SSOT/source-input anti-generic policy');
+  if (!pptStyleTokens.design_policy?.design_reference_selection?.primary?.id?.startsWith('awesome-design-md:') || !pptStyleTokens.design_policy?.design_reference_selection?.selected_sources?.length || !pptStyleTokens.layout?.composition || !pptStyleTokens.layout?.treatment) throw new Error('selftest failed: PPT style tokens did not select and apply a concrete awesome-design-md reference profile');
   if (JSON.stringify(pptStyleTokens.design_policy?.pipeline_allowlist?.required_skills || []) !== JSON.stringify(PPT_PIPELINE_SKILL_ALLOWLIST) || !pptStyleTokens.design_policy?.pipeline_allowlist?.ignore_installed_out_of_pipeline_skills || !(pptStyleTokens.design_policy?.pipeline_allowlist?.ignored_design_skills_even_if_installed || []).includes('design-artifact-expert') || !/AI-like/.test(pptStyleTokens.design_policy?.pipeline_allowlist?.anti_ai_design_goal || '')) throw new Error('selftest failed: PPT style tokens missing skill/MCP allowlist enforcement');
   const audienceScript = pptHtml.match(/id="ppt-audience-strategy">([^<]+)<\/script>/);
   if (!audienceScript) throw new Error('selftest failed: PPT HTML missing audience strategy script data');

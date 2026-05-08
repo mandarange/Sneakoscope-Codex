@@ -16,6 +16,99 @@ export const PPT_CLEANUP_REPORT_ARTIFACT = 'ppt-cleanup-report.json';
 export const PPT_PARALLEL_REPORT_ARTIFACT = 'ppt-parallel-report.json';
 export const PPT_TEMP_DIR = 'ppt-tmp';
 
+const PPT_DESIGN_REFERENCE_PROFILES = Object.freeze([
+  {
+    id: 'awesome-design-md:ibm',
+    name: 'IBM Carbon enterprise',
+    source_url: 'https://raw.githubusercontent.com/VoltAgent/awesome-design-md/main/design-md/ibm/DESIGN.md',
+    source_summary: 'enterprise Carbon-style system: white surfaces, charcoal text, IBM Blue as the single accent, flat square tiles, thin rules, no shadow',
+    keywords: ['enterprise', 'b2b', 'investor', 'vc', 'strategy', 'proposal', 'board', 'finance', 'risk', 'compliance', '운영', '투자', '의사결정', '리스크', '전략'],
+    tokens: {
+      bg: '#ffffff',
+      text: '#161616',
+      muted: '#525252',
+      primary: '#0f62fe',
+      accent: '#393939',
+      surface: '#f4f4f4',
+      rule: '#e0e0e0',
+      display_px: 64,
+      body_px: 28,
+      caption_px: 15,
+      line_height: 1.36,
+      radius_px: 2,
+      treatment: 'flat_thin_rules_no_shadow',
+      composition: 'enterprise_evidence_grid',
+      mono_label: 'uppercase technical labels, sparse blue accent, source-visible rows'
+    },
+    applied_rules: [
+      'use white/charcoal enterprise canvas',
+      'reserve IBM Blue for one decision/action accent',
+      'prefer thin rules and square evidence rows over decorative cards',
+      'avoid shadows, gradients, and ornamental surfaces'
+    ]
+  },
+  {
+    id: 'awesome-design-md:vercel',
+    name: 'Vercel developer infrastructure',
+    source_url: 'https://raw.githubusercontent.com/VoltAgent/awesome-design-md/main/design-md/vercel/DESIGN.md',
+    source_summary: 'developer-infrastructure minimalism: white canvas, near-black type, shadow-as-border, mono technical labels, functional blue/red/pink workflow accents',
+    keywords: ['developer', 'devtools', 'api', 'sdk', 'cloud', 'infra', 'saas', 'technical', 'codex', 'ai', 'agent', '배포', '개발자', '기술', '자동화'],
+    tokens: {
+      bg: '#ffffff',
+      text: '#171717',
+      muted: '#4d4d4d',
+      primary: '#0072f5',
+      accent: '#ff5b4f',
+      surface: '#fafafa',
+      rule: '#ebebeb',
+      display_px: 66,
+      body_px: 28,
+      caption_px: 14,
+      line_height: 1.34,
+      radius_px: 8,
+      treatment: 'shadow_as_border_minimal_depth',
+      composition: 'technical_pipeline_grid',
+      mono_label: 'mono labels, workflow accent only when it clarifies sequence'
+    },
+    applied_rules: [
+      'use near-black text on a white technical canvas',
+      'show structure through shadow-as-border or one-pixel rules',
+      'use mono labels for sources and technical evidence',
+      'keep color functional rather than decorative'
+    ]
+  },
+  {
+    id: 'awesome-design-md:linear',
+    name: 'Linear precision operations',
+    source_url: 'https://github.com/VoltAgent/awesome-design-md',
+    source_summary: 'ultra-minimal precise product-management system: restrained neutral surfaces, exact spacing, one controlled purple accent',
+    keywords: ['roadmap', 'product', 'ops', 'workflow', 'issue', 'planning', 'productivity', '운영', '워크플로우', '프로덕트', '계획'],
+    tokens: {
+      bg: '#f7f8fb',
+      text: '#101114',
+      muted: '#5f6673',
+      primary: '#5e6ad2',
+      accent: '#26a69a',
+      surface: '#ffffff',
+      rule: '#dfe3ea',
+      display_px: 62,
+      body_px: 27,
+      caption_px: 14,
+      line_height: 1.38,
+      radius_px: 6,
+      treatment: 'precise_subtle_product_grid',
+      composition: 'operational_decision_matrix',
+      mono_label: 'compact status labels, dense but quiet operations layout'
+    },
+    applied_rules: [
+      'use a quiet operational canvas with dense hierarchy',
+      'keep the purple accent sparse and semantic',
+      'make comparison rows easy to scan',
+      'avoid marketing-style hero composition'
+    ]
+  }
+]);
+
 export const PPT_REQUIRED_GATE_FIELDS = Object.freeze([
   'clarification_contract_sealed',
   'audience_strategy_sealed',
@@ -282,6 +375,13 @@ export function buildPptStoryboard(contract = {}, audience = buildPptAudienceStr
 
 export function buildPptStyleTokens(contract = {}) {
   const korean = /[ㄱ-ㅎ가-힣]/.test(`${contract.prompt || ''} ${JSON.stringify(contract.answers || {})}`);
+  const reference = selectPptDesignReference(contract);
+  const refTokens = reference.applied_token_profile.color;
+  const fontStack = korean
+    ? '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+    : reference.primary.id.endsWith(':ibm')
+      ? '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, Arial, sans-serif'
+      : '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, "Helvetica Neue", Arial, sans-serif';
   return {
     schema_version: 1,
     created_at: nowIso(),
@@ -294,23 +394,31 @@ export function buildPptStyleTokens(contract = {}) {
       gutter_px: 24
     },
     color: {
-      bg: '#f7f8fa',
-      text: '#111318',
-      muted: '#5b6270',
-      primary: '#0b5cff',
-      accent: '#00a88f',
-      surface: '#ffffff',
-      rule: '#d7dce5'
+      bg: refTokens.bg,
+      text: refTokens.text,
+      muted: refTokens.muted,
+      primary: refTokens.primary,
+      accent: refTokens.accent,
+      surface: refTokens.surface,
+      rule: refTokens.rule
     },
     typography: {
       language: korean ? 'ko' : 'en',
-      font_stack: korean
-        ? '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
-        : '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, "Helvetica Neue", Arial, sans-serif',
-      display_px: 76,
-      body_px: 30,
-      caption_px: 16,
-      line_height: korean ? 1.42 : 1.32
+      font_stack: fontStack,
+      display_px: refTokens.display_px,
+      body_px: refTokens.body_px,
+      caption_px: refTokens.caption_px,
+      line_height: korean ? Math.max(1.4, refTokens.line_height) : refTokens.line_height,
+      letter_spacing: 0
+    },
+    layout: {
+      composition: refTokens.composition,
+      treatment: refTokens.treatment,
+      radius_px: refTokens.radius_px,
+      rule_px: 1,
+      source_rail: true,
+      evidence_grid: true,
+      mono_label: refTokens.mono_label
     },
     design_policy: {
       priority: 'information_first',
@@ -328,8 +436,9 @@ export function buildPptStyleTokens(contract = {}) {
         authority: DESIGN_SYSTEM_SSOT.authority_file,
         builder_prompt: DESIGN_SYSTEM_SSOT.builder_prompt,
         route_local_artifact: PPT_STYLE_TOKENS_ARTIFACT,
-        rule: 'PPT style tokens are a route-local projection of the design SSOT; source inputs are fused here and are not independent authorities.'
+        rule: 'PPT style tokens are a route-local projection of the design SSOT; source inputs are selected, fused, and applied here rather than kept as independent authorities.'
       },
+      design_reference_selection: reference,
       source_inputs: [
         {
           id: GETDESIGN_REFERENCE.id,
@@ -343,31 +452,112 @@ export function buildPptStyleTokens(contract = {}) {
         }
       ],
       avoid: ['over-designed decoration', 'ornamental gradients', 'nested cards', 'low-contrast gray body text', 'excessive motion or effects'],
-      detail_strategy: ['precise spacing', 'clear hierarchy', 'thin rules', 'disciplined alignment', 'subtle accent color only when it clarifies meaning'],
-      anti_generic_ai_style: 'prevent AI-like design: select a concrete DESIGN.md or route-local visual system before styling; do not default to generic cards, gradients, vague SaaS visuals, oversized decoration, or unsupported image-like flourishes',
+      detail_strategy: ['precise spacing', 'clear hierarchy', 'thin rules', 'disciplined alignment', 'visible source rails', 'subtle accent color only when it clarifies meaning'],
+      anti_generic_ai_style: 'prevent AI-like design: select and apply a concrete awesome-design-md reference profile before styling; do not default to generic cards, gradients, vague SaaS visuals, oversized decoration, or unsupported image-like flourishes',
       image_policy: 'use images only when they improve comprehension; prefer Codex App built-in image generation via https://developers.openai.com/codex/app/features#image-generation when generated assets are needed'
     }
   };
 }
 
+export function selectPptDesignReference(contract = {}) {
+  const text = cleanText(`${contract.prompt || ''} ${JSON.stringify(contract.answers || {})}`).toLowerCase();
+  const scored = PPT_DESIGN_REFERENCE_PROFILES.map((profile) => {
+    const score = profile.keywords.reduce((sum, keyword) => sum + (text.includes(String(keyword).toLowerCase()) ? 1 : 0), 0);
+    return { profile, score };
+  }).sort((a, b) => b.score - a.score);
+  const primary = scored[0]?.score > 0 ? scored[0].profile : PPT_DESIGN_REFERENCE_PROFILES[0];
+  const secondary = scored.find((entry) => entry.profile.id !== primary.id && entry.score > 0)?.profile || PPT_DESIGN_REFERENCE_PROFILES.find((entry) => entry.id !== primary.id);
+  return {
+    source: AWESOME_DESIGN_MD_REFERENCE.url,
+    selection_method: 'keyword_match_against_sealed_ppt_contract',
+    primary: {
+      id: primary.id,
+      name: primary.name,
+      source_url: primary.source_url,
+      source_summary: primary.source_summary,
+      applied_rules: primary.applied_rules
+    },
+    secondary: secondary ? {
+      id: secondary.id,
+      name: secondary.name,
+      source_url: secondary.source_url,
+      source_summary: secondary.source_summary,
+      applied_rules: secondary.applied_rules.slice(0, 2)
+    } : null,
+    selected_sources: [primary, secondary].filter(Boolean).map((profile) => ({
+      id: profile.id,
+      name: profile.name,
+      source_url: profile.source_url,
+      role: profile.id === primary.id ? 'primary_style_reference' : 'secondary_guardrail_reference'
+    })),
+    applied_token_profile: {
+      color: primary.tokens,
+      composition: primary.tokens.composition,
+      treatment: primary.tokens.treatment
+    },
+    selection_reason: scored[0]?.score > 0
+      ? `matched ${scored[0].score} contract keyword(s) to ${primary.name}`
+      : `no strong domain match; defaulted to ${primary.name} for restrained business presentation output`
+  };
+}
+
 export function buildPptHtml({ contract = {}, audience, sourceLedger, storyboard, styleTokens }) {
   const title = escapeHtml(storyboard.title);
+  const referenceName = escapeHtml(styleTokens.design_policy?.design_reference_selection?.primary?.name || 'selected design reference');
+  const audienceRaw = escapeHtml(audience?.audience_profile?.raw || 'Audience context');
+  const stpRaw = escapeHtml(audience?.stp?.raw || 'STP context');
+  const decisionRaw = escapeHtml(audience?.decision_context?.raw || storyboard.thesis || '');
+  const surfaceRule = styleTokens.layout?.treatment === 'shadow_as_border_minimal_depth'
+    ? `box-shadow: 0 0 0 1px ${styleTokens.color.rule}; border: 0;`
+    : `border: 1px solid ${styleTokens.color.rule}; box-shadow: none;`;
   const css = `@page { size: 16in 9in; margin: 0; }
 * { box-sizing: border-box; }
 body { margin: 0; background: ${styleTokens.color.bg}; color: ${styleTokens.color.text}; font-family: ${styleTokens.typography.font_stack}; }
-.page { width: 100vw; min-height: 100vh; page-break-after: always; padding: 72px 96px; display: grid; align-content: center; gap: 26px; }
-.kicker { color: ${styleTokens.color.primary}; font-size: 18px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; }
-h1 { margin: 0; font-size: 72px; line-height: 1.08; letter-spacing: 0; max-width: 1120px; }
-p { margin: 0; color: ${styleTokens.color.muted}; font-size: 28px; line-height: ${styleTokens.typography.line_height}; max-width: 920px; }
-.panel { border-left: 6px solid ${styleTokens.color.primary}; padding-left: 26px; }
-.source { font-size: 14px; color: ${styleTokens.color.muted}; align-self: end; }`;
+.page { width: 100vw; min-height: 100vh; page-break-after: always; padding: 64px 88px 54px; display: grid; grid-template-rows: auto 1fr auto; gap: 34px; }
+.topline { display: grid; grid-template-columns: 1fr auto; align-items: end; border-bottom: 1px solid ${styleTokens.color.rule}; padding-bottom: 14px; }
+.kicker { color: ${styleTokens.color.primary}; font-size: ${styleTokens.typography.caption_px}px; font-weight: 600; letter-spacing: 0; text-transform: uppercase; }
+.reference { color: ${styleTokens.color.muted}; font-size: ${styleTokens.typography.caption_px}px; letter-spacing: 0; }
+.content { display: grid; grid-template-columns: minmax(0, 6fr) minmax(320px, 4fr); gap: 58px; align-items: center; }
+h1 { margin: 0; font-size: ${styleTokens.typography.display_px}px; line-height: 1.08; letter-spacing: 0; max-width: 1040px; font-weight: 600; }
+p { margin: 0; color: ${styleTokens.color.muted}; font-size: ${styleTokens.typography.body_px}px; line-height: ${styleTokens.typography.line_height}; max-width: 920px; }
+.claim { display: grid; gap: 26px; }
+.evidence { ${surfaceRule} border-radius: ${styleTokens.layout.radius_px}px; background: ${styleTokens.color.surface}; display: grid; }
+.evidence-row { padding: 22px 24px; border-bottom: 1px solid ${styleTokens.color.rule}; }
+.evidence-row:last-child { border-bottom: 0; }
+.label { color: ${styleTokens.color.primary}; font-size: ${styleTokens.typography.caption_px}px; font-weight: 600; letter-spacing: 0; text-transform: uppercase; margin-bottom: 8px; }
+.value { color: ${styleTokens.color.text}; font-size: 20px; line-height: 1.42; }
+.source { display: grid; grid-template-columns: 1fr auto; gap: 24px; color: ${styleTokens.color.muted}; font-size: ${styleTokens.typography.caption_px}px; border-top: 1px solid ${styleTokens.color.rule}; padding-top: 14px; }
+.accent { width: 64px; height: 3px; background: ${styleTokens.color.accent}; }`;
   const pages = storyboard.pages.map((page) => `<section class="page">
-  <div class="kicker">${escapeHtml(page.kind)} / ${page.number}</div>
-  <div class="panel">
-    <h1>${escapeHtml(page.claim)}</h1>
-    <p>${escapeHtml(page.support)}</p>
+  <header class="topline">
+    <div class="kicker">${escapeHtml(page.kind)} / ${page.number}</div>
+    <div class="reference">${referenceName}</div>
+  </header>
+  <main class="content">
+    <div class="claim">
+      <div class="accent"></div>
+      <h1>${escapeHtml(page.claim)}</h1>
+      <p>${escapeHtml(page.support)}</p>
+    </div>
+    <aside class="evidence" aria-label="decision evidence">
+      <div class="evidence-row">
+        <div class="label">Audience</div>
+        <div class="value">${audienceRaw}</div>
+      </div>
+      <div class="evidence-row">
+        <div class="label">STP</div>
+        <div class="value">${stpRaw}</div>
+      </div>
+      <div class="evidence-row">
+        <div class="label">Decision</div>
+        <div class="value">${decisionRaw}</div>
+      </div>
+    </aside>
+  </main>
+  <div class="source">
+    <span>Sources: ${escapeHtml((page.source_ids || []).join(', ') || 'none')}</span>
+    <span>${escapeHtml(styleTokens.layout?.composition || 'presentation-grid')}</span>
   </div>
-  <div class="source">Sources: ${escapeHtml((page.source_ids || []).join(', ') || 'none')}</div>
 </section>`).join('\n');
   return `<!doctype html>
 <html lang="${styleTokens.typography.language}">
@@ -495,6 +685,9 @@ export function buildPptRenderReport({ contract = {}, audience, sourceLedger, st
       { id: 'restrained_detail', passed: styleTokens.design_policy?.visual_style === 'simple_restrained_detailed' },
       { id: 'design_ssot_declared', passed: styleTokens.design_policy?.design_ssot?.authority === DESIGN_SYSTEM_SSOT.authority_file },
       { id: 'curated_design_md_input_fused', passed: (styleTokens.design_policy?.source_inputs || []).some((entry) => entry.url === AWESOME_DESIGN_MD_REFERENCE.url && entry.role === 'source_input_for_ssot') },
+      { id: 'concrete_design_reference_selected', passed: Boolean(styleTokens.design_policy?.design_reference_selection?.primary?.id && styleTokens.design_policy?.design_reference_selection?.selected_sources?.length) },
+      { id: 'reference_rules_applied_to_tokens', passed: Boolean(styleTokens.layout?.composition && styleTokens.layout?.treatment && styleTokens.design_policy?.design_reference_selection?.applied_token_profile) },
+      { id: 'html_uses_reference_layout', passed: typeof html === 'string' && html.includes('decision evidence') && html.includes(styleTokens.layout?.composition || 'presentation-grid') },
       { id: 'ppt_skill_allowlist_enforced', passed: JSON.stringify(styleTokens.design_policy?.pipeline_allowlist?.required_skills || []) === JSON.stringify([...PPT_PIPELINE_SKILL_ALLOWLIST]) },
       { id: 'out_of_pipeline_design_skills_ignored', passed: styleTokens.design_policy?.pipeline_allowlist?.ignore_installed_out_of_pipeline_skills === true && (styleTokens.design_policy?.pipeline_allowlist?.ignored_design_skills_even_if_installed || []).includes('design-artifact-expert') },
       { id: 'ppt_mcp_allowlist_scoped', passed: (styleTokens.design_policy?.pipeline_allowlist?.allowed_mcp_servers || []).every((entry) => entry.mcp === 'context7' && /external_documentation/.test(entry.condition || '')) },

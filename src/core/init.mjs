@@ -113,8 +113,9 @@ export async function initProject(root, opts = {}) {
     '.sneakoscope/state', '.sneakoscope/missions', '.sneakoscope/db', '.sneakoscope/bus', '.sneakoscope/hproof', '.sneakoscope/db', '.sneakoscope/wiki', '.sneakoscope/skills', '.sneakoscope/memory/q0_raw', '.sneakoscope/memory/q1_evidence', '.sneakoscope/memory/q2_facts', '.sneakoscope/memory/q3_tags', '.sneakoscope/memory/q4_bits', '.sneakoscope/gx/cartridges', '.sneakoscope/model/fingerprints', '.sneakoscope/genome/candidates', '.sneakoscope/trajectories/raw', '.sneakoscope/locks', '.sneakoscope/tmp', '.sneakoscope/arenas', '.sneakoscope/reports', '.codex', '.codex/agents', '.agents/skills'
   ];
   for (const d of dirs) await ensureDir(path.join(root, d));
+  const sharedIgnoreWanted = !localOnly && await shouldWriteSharedGitIgnore(root, installScope);
   const localExclude = localOnly ? await ensureLocalOnlyGitExclude(root) : null;
-  const sharedIgnore = localOnly ? null : await ensureSharedGitIgnore(root);
+  const sharedIgnore = sharedIgnoreWanted ? await ensureSharedGitIgnore(root) : null;
   if (localExclude?.path) created.push(`${path.relative(root, localExclude.path)} local-only excludes`);
   if (sharedIgnore?.changed) created.push(`${path.relative(root, sharedIgnore.path)} SKS generated files ignore`);
 
@@ -429,6 +430,10 @@ function mergeManagedCodexConfigToml(existingContent = '') {
   let next = String(existingContent || '').trimEnd();
   next = upsertTomlTableKey(next, 'features', 'codex_hooks = true');
   next = upsertTomlTableKey(next, 'features', 'multi_agent = true');
+  next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
+  next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
+  next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
+  next = upsertTomlTableKey(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
   next = upsertTomlTableKey(next, 'agents', 'max_threads = 6');
   next = upsertTomlTableKey(next, 'agents', 'max_depth = 1');
   for (const block of managedCodexConfigBlocks()) {
@@ -452,7 +457,7 @@ function managedCodexConfigBlocks() {
     { table: 'profiles.sks-research-xhigh', text: profileConfigBlock('sks-research-xhigh', 'xhigh') },
     { table: 'profiles.sks-research', text: profileConfigBlock('sks-research', 'xhigh', { approval: 'never' }) },
     { table: 'profiles.sks-team', text: profileConfigBlock('sks-team', 'high') },
-    { table: 'profiles.sks-mad-high', text: profileConfigBlock('sks-mad-high', 'high', { sandbox: 'danger-full-access', approvalsReviewer: 'auto_review' }) },
+    { table: 'profiles.sks-mad-high', text: profileConfigBlock('sks-mad-high', 'high', { approval: 'never', sandbox: 'danger-full-access', approvalsReviewer: 'auto_review' }) },
     {
       table: 'auto_review',
       text: '[auto_review]\npolicy = "Deny destructive database operations, credential exfiltration, persistent security weakening, broad file deletion, writes outside the workspace, and unrequested fallback implementation code unless explicitly authorized by the user or sealed decision contract."'
@@ -611,6 +616,13 @@ async function ensureSharedGitIgnore(root) {
     : `${markerStart}\n${missing.join('\n')}\n${markerEnd}\n`;
   await writeTextAtomic(ignorePath, `${current.trimEnd()}${current.trim() ? '\n\n' : ''}${block}`);
   return { path: ignorePath, patterns, changed: true };
+}
+
+async function shouldWriteSharedGitIgnore(root, installScope) {
+  if (normalizeInstallScope(installScope) === 'project') return true;
+  if (await exists(path.join(root, '.git'))) return true;
+  if (await exists(path.join(root, '.gitignore'))) return true;
+  return false;
 }
 
 async function ensureLocalOnlyGitExclude(root) {

@@ -64,7 +64,7 @@ export async function enableMadHighProfile(opts = {}) {
   let next = upsertTable(current, `profiles.${MAD_HIGH_PROFILE}`, [
     `[profiles.${MAD_HIGH_PROFILE}]`,
     'model = "gpt-5.5"',
-    'approval_policy = "on-request"',
+    'approval_policy = "never"',
     `approvals_reviewer = "${AUTO_REVIEW_REVIEWER}"`,
     'sandbox_mode = "danger-full-access"',
     'model_reasoning_effort = "high"'
@@ -75,9 +75,9 @@ export async function enableMadHighProfile(opts = {}) {
   return {
     config_path: configPath,
     profile_name: MAD_HIGH_PROFILE,
-    launch_args: ['--profile', MAD_HIGH_PROFILE],
+    launch_args: ['--profile', MAD_HIGH_PROFILE, '--sandbox', 'danger-full-access', '--ask-for-approval', 'never'],
     sandbox_mode: 'danger-full-access',
-    approval_policy: 'on-request',
+    approval_policy: 'never',
     approvals_reviewer: AUTO_REVIEW_REVIEWER,
     model_reasoning_effort: 'high',
     scope: 'explicit_launch_only'

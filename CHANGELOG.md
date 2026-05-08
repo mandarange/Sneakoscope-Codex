@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 
+## [0.7.43] - 2026-05-08
+
+### Fixed
+
+- Clarify that the default SKS Team pipeline authorizes route-owned worker/reviewer subagents without a separate user request.
+- Make `sks --mad` launch Codex in explicit full-access mode with `danger-full-access` sandboxing and `approval_policy=never`.
+- Make the tmux launch intro use a detailed rotating 3D-style SKS ASCII animation with more frame steps.
+- Ship the install `.gitignore`, Fast mode, and PPT design-reference pipeline fixes under a fresh npm patch version.
+
 
 ## [0.7.42] - 2026-05-08
 
