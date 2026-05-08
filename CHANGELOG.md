@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 
+
+## [0.7.44] - 2026-05-08
+
+### Fixed
+
+- Stop clear auth-worded CLI rendering tasks from asking generic `RISK_AND_BOUNDARY` questions when conservative safety defaults can be inferred.
+- Materialize Team runtime artifacts immediately after an auto-sealed ambiguity gate so Team missions can proceed to scouting instead of sitting at a sealed contract.
+- Make the tmux/Codex intro stable: animate only for non-tmux unauthenticated launches, redraw frames in place, and show static 3D ASCII inside tmux.
+
 ## [0.7.43] - 2026-05-08
 
 ### Fixed

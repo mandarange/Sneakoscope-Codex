@@ -504,10 +504,14 @@ async function prepareClarificationGate(root, route, task, required, opts = {}) 
   if (schema.slots.length === 0) {
     await writeJsonAtomic(path.join(dir, 'answers.json'), schema.inferred_answers || {});
     const result = await sealContract(dir, mission);
-    const plan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: true, slots: 0, auto_sealed: result.ok, passed: result.ok, contract_hash: result.contract?.sealed_hash || null } });
+    const materialized = result.ok && route?.id === 'Team'
+      ? await materializeAutoSealedTeam(root, id, dir, route, task, result.contract?.sealed_hash || null)
+      : {};
+    const effectiveTask = materialized.prompt || task;
+    const plan = await writePipelinePlan(dir, { missionId: id, route, task: effectiveTask, required, ambiguity: { required: true, slots: 0, auto_sealed: result.ok, passed: result.ok, contract_hash: result.contract?.sealed_hash || null } });
     await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'route.clarification.auto_sealed', route: route.id, slots: 0, ok: result.ok });
-    await setCurrent(root, routeState(id, route, result.ok ? `${route.mode}_CLARIFICATION_CONTRACT_SEALED` : `${route.mode}_CLARIFICATION_AWAITING_ANSWERS`, required, {
-      prompt: task,
+    await setCurrent(root, routeState(id, route, result.ok ? (materialized.phase || `${route.mode}_CLARIFICATION_CONTRACT_SEALED`) : `${route.mode}_CLARIFICATION_AWAITING_ANSWERS`, required, {
+      prompt: effectiveTask,
       questions_allowed: false,
       implementation_allowed: result.ok,
       clarification_required: false,
@@ -517,8 +521,10 @@ async function prepareClarificationGate(root, route, task, required, opts = {}) 
       pipeline_plan_ready: validatePipelinePlan(plan).ok,
       pipeline_plan_path: PIPELINE_PLAN_ARTIFACT,
       original_stop_gate: route.stopGate,
-      stop_gate: route.stopGate
+      stop_gate: route.stopGate,
+      ...(materialized.state || {})
     }));
+    const materializedLine = materialized.phase ? `\nTeam runtime artifacts were materialized immediately; state advanced to ${materialized.phase}.` : '';
     return {
       route,
       additionalContext: `${promptPipelineContext(task, route)}
@@ -528,6 +534,7 @@ Mission: ${id}
 Decision contract: .sneakoscope/missions/${id}/decision-contract.json
 Resolved answers: .sneakoscope/missions/${id}/resolved-answers.json
 Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
+${materializedLine}
 Next atomic action: continue the original route lifecycle with the sealed decision-contract.json.`
     };
   }
@@ -579,6 +586,91 @@ function applyMadSksAuthorizationToSchema(schema = {}) {
   };
   schema.slots = (schema.slots || []).filter((slot) => !/^(DB_|DATABASE_|DESTRUCTIVE_DB_|SUPABASE_MCP_POLICY$)/.test(slot.id));
   return schema;
+}
+
+async function materializeAutoSealedTeam(root, id, dir, route, task, contractHash = null) {
+  const spec = parseTeamSpecText(task);
+  const cleanTask = spec.prompt || task;
+  const fromChatImgRequired = hasFromChatImgSignal(cleanTask);
+  const { agentSessions, roleCounts, roster } = spec;
+  const plan = {
+    schema_version: 1,
+    mission_id: id,
+    task: cleanTask,
+    agent_session_count: agentSessions,
+    default_agent_session_count: 3,
+    role_counts: roleCounts,
+    session_policy: `Use at most ${agentSessions} subagent sessions at a time; the parent orchestrator is not counted.`,
+    bundle_size: roster.bundle_size,
+    roster,
+    contract_hash: contractHash,
+    team_model: {
+      phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'runtime_task_graph', 'development_team', 'review'],
+      analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents.`,
+      debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants.`,
+      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices.`
+    },
+    context_tracking: triwikiContextTracking(),
+    team_runtime: teamRuntimePlanMetadata(),
+    phases: [
+      { id: 'team_roster_confirmation', goal: `Materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
+      { id: 'parallel_analysis_scouting', goal: `Read TriWiki context, then spawn exactly ${roster.bundle_size} read-only analysis_scout_N agents in parallel. ${fromChatImgRequired ? `From-Chat-IMG active: ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'}`, agents: roster.analysis_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
+      { id: 'triwiki_refresh', goal: `Refresh or pack TriWiki and run ${triwikiContextTracking().validate_command}.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
+      { id: 'planning_debate', goal: 'Run read-only planning debate, map constraints and implementation slices, then seal one objective.', agents: roster.debate_team.map((agent) => agent.id) },
+      { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR}.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
+      { id: 'parallel_implementation', goal: `Close debate agents, then spawn a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership.`, agents: roster.development_team.map((agent) => agent.id) },
+      { id: 'review_integration', goal: 'Review, integrate, verify, and record evidence before final.', agents: roster.validation_team.map((agent) => agent.id) },
+      { id: 'session_cleanup', goal: `Close or account for Team subagent sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.`, agents: ['parent_orchestrator'] }
+    ],
+    live_visibility: {
+      markdown: 'team-live.md',
+      transcript: 'team-transcript.jsonl',
+      dashboard: 'team-dashboard.json',
+      tmux: 'CLI Team entrypoints open tmux live lanes for the visible Team agent budget when tmux is available.',
+      commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow']
+    },
+    required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
+  };
+  await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
+  await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'auto_sealed_team_spec' });
+  const contextTracking = triwikiContextTracking();
+  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}.\n\nAuto-sealed ambiguity gate: no user question was required. Continue directly with Team scouting, debate, runtime task graph, implementation, review, cleanup, reflection, and Honest Mode.\n`);
+  await initTeamLive(id, dir, cleanTask, { agentSessions, roleCounts, roster });
+  const runtime = await writeTeamRuntimeArtifacts(dir, plan, { contractHash });
+  await writeMemorySweepReport(root, dir, { missionId: id }).catch(() => null);
+  await writeSkillForgeReport(dir, { mission_id: id, route: 'team', task_signature: cleanTask }).catch(() => null);
+  await writeMistakeMemoryReport(dir, { mission_id: id, route: 'team', task: cleanTask }).catch(() => null);
+  await writeCodeStructureReport(root, dir, { missionId: id, exception: 'Team auto-seal records split-review risk; extraction happens only when the mission scope includes the touched file.' }).catch(() => null);
+  await writeJsonAtomic(path.join(dir, 'team-gate.json'), {
+    passed: false,
+    team_roster_confirmed: true,
+    analysis_artifact: false,
+    triwiki_refreshed: false,
+    triwiki_validated: false,
+    consensus_artifact: false,
+    ...runtime.gate_fields,
+    implementation_team_fresh: false,
+    review_artifact: false,
+    integration_evidence: false,
+    session_cleanup: false,
+    context7_evidence: false,
+    ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}),
+    contract_hash: contractHash
+  });
+  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'team.materialized_after_auto_sealed_ambiguity_gate', route: route.id, bundle_size: roster.bundle_size, agent_sessions: agentSessions });
+  return {
+    phase: 'TEAM_PARALLEL_ANALYSIS_SCOUTING',
+    prompt: cleanTask,
+    state: {
+      agent_sessions: agentSessions,
+      role_counts: roleCounts,
+      team_roster_confirmed: true,
+      team_plan_ready: true,
+      team_graph_ready: runtime.ok,
+      team_live_ready: true,
+      from_chat_img_required: fromChatImgRequired
+    }
+  };
 }
 
 async function prepareTeam(root, route, task, required) {
