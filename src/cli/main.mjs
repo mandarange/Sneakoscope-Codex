@@ -18,7 +18,7 @@ import { classifySql, classifyCommand, checkDbOperation, handleMadSksUserConfirm
 import { checkHarnessModification, harnessGuardStatus, isHarnessSourceProject } from '../core/harness-guard.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
 import { context7Docs, context7Resolve, context7Text, context7Tools } from '../core/context7-client.mjs';
-import { installVersionGitHook, runVersionPreCommit, versioningStatus } from '../core/version-manager.mjs';
+import { bumpProjectVersion, installVersionGitHook, runVersionPreCommit, versioningStatus } from '../core/version-manager.mjs';
 import { rustInfo } from '../core/rust-accelerator.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
 import { defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evaluation.mjs';
@@ -819,7 +819,7 @@ async function versioning(sub = 'status', args = []) {
     return;
   }
   if (action === 'bump') {
-    const res = await runVersionPreCommit(root, { force: true });
+    const res = await bumpProjectVersion(root, { force: true });
     if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
     if (!res.ok) {
       console.error(`Version bump failed: ${res.reason || 'unknown'}`);
@@ -839,7 +839,7 @@ async function versioning(sub = 'status', args = []) {
       return;
     }
     if (res.skipped) return;
-    console.log(res.changed ? `SKS versioning: ${res.previous_version} -> ${res.version}` : `SKS versioning: ${res.version} already unique`);
+    console.log(res.changed ? `SKS versioning synced: ${res.version}` : `SKS versioning: ${res.version} verified`);
     return;
   }
   console.error('Usage: sks versioning status|bump|pre-commit [--json]');
@@ -2035,9 +2035,12 @@ async function selftest() {
   const versionHookText = await safeReadText(versionStatus.hook_path);
   if (!versionHookText.includes('versioning pre-commit')) throw new Error('selftest failed: versioning hook command missing');
   if (versionHookText.indexOf('versioning pre-commit') > versionHookText.indexOf('exit 0')) throw new Error('selftest failed: versioning hook was appended after an early exit');
+  await writeTextAtomic(path.join(versionTmp, 'CHANGELOG.md'), '# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-05-08\n\n### Fixed\n\n- Initial version selftest fixture.\n');
   await writeTextAtomic(path.join(versionTmp, 'README.md'), 'version selftest\n');
-  await runProcess('git', ['add', 'README.md'], { cwd: versionTmp, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  const firstVersionBump = await runVersionPreCommit(versionTmp);
+  await runProcess('git', ['add', 'README.md', 'CHANGELOG.md'], { cwd: versionTmp, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  const preCommitVerify = await runVersionPreCommit(versionTmp);
+  if (!preCommitVerify.ok || preCommitVerify.version !== '0.1.0' || preCommitVerify.changed) throw new Error('selftest failed: pre-commit should verify current version without bumping');
+  const firstVersionBump = await bumpProjectVersion(versionTmp);
   if (!firstVersionBump.ok || firstVersionBump.version !== '0.1.1' || !firstVersionBump.changed) throw new Error('selftest failed: first version bump did not advance patch version');
   const bumpedPackage = await readJson(path.join(versionTmp, 'package.json'));
   const bumpedLock = await readJson(path.join(versionTmp, 'package-lock.json'));
@@ -2050,7 +2053,7 @@ async function selftest() {
   await writeJsonAtomic(versionStatus.state_path, { schema_version: 1, last_version: '0.1.5', updated_at: nowIso(), pid: process.pid, changed: true });
   await writeTextAtomic(path.join(versionTmp, 'CHANGELOG.md'), 'collision selftest\n');
   await runProcess('git', ['add', 'CHANGELOG.md'], { cwd: versionTmp, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  const collisionBump = await runVersionPreCommit(versionTmp);
+  const collisionBump = await bumpProjectVersion(versionTmp);
   if (!collisionBump.ok || collisionBump.version !== '0.1.6') throw new Error('selftest failed: version collision state did not bump above last seen version');
   const localOnlyTmp = tmpdir();
   await ensureDir(path.join(localOnlyTmp, '.git'));

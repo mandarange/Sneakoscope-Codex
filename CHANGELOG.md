@@ -2,27 +2,16 @@
 
 ## [Unreleased]
 
-
-
-
-
-## [0.7.41] - 2026-05-08
-
-### Fixed
-
-- Keep release metadata aligned after the automatic SKS version guard advances the package version.
-
 ## [0.7.40] - 2026-05-08
 
 ### Fixed
 
-- Keep release metadata aligned after the automatic SKS version guard advances the package version.
-
-## [0.7.39] - 2026-05-08
-
-### Fixed
-
-- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+- Preserve user-owned Codex config such as Fast mode UI settings when SKS setup or global postinstall refreshes `.codex/config.toml`.
+- Launch the default SKS tmux Codex CLI workspace in fast-high mode while allowing environment overrides.
+- Add codex-lb CLI API key setup guidance and provider config documentation.
+- Repair tmux dependency handling so Homebrew-managed tmux uses Homebrew, npm-managed tmux uses npm, and unknown tmux paths are reported as conflicts.
+- Make source-repo version drift checks use the local `bin/sks.mjs` runtime instead of stale global `sks`.
+- Stop the pre-commit version guard from automatically bumping package and changelog versions on every commit; explicit `sks versioning bump` remains the release bump path.
 
 ## [0.7.38] - 2026-05-08
 

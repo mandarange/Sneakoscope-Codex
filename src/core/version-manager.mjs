@@ -88,7 +88,7 @@ export async function runVersionPreCommit(root, opts = {}) {
   if (!pkg?.version) return { ok: true, skipped: true, reason: 'package_json_version_missing' };
   const git = await gitPaths(root);
   if (!git.ok) return { ok: true, skipped: true, reason: git.reason || 'not_git' };
-  return withVersionLock(git.common_dir, async () => bumpProjectVersion(root, { ...opts, policy, git }));
+  return withVersionLock(git.common_dir, async () => verifyProjectVersion(root, { ...opts, policy, git }));
 }
 
 export async function bumpProjectVersion(root, opts = {}) {
@@ -147,6 +147,43 @@ export async function bumpProjectVersion(root, opts = {}) {
     synced_files: [...synced.relative_files, ...sourceVersion.relative_files, ...changelog.relative_files],
     staged_files: staged.relative_files,
     lock_scope: git.common_dir
+  };
+}
+
+export async function verifyProjectVersion(root, opts = {}) {
+  const git = opts.git || await gitPaths(root);
+  const pkgPath = path.join(root, 'package.json');
+  const pkg = await readJson(pkgPath);
+  const current = parseSemver(pkg.version);
+  if (!current) return { ok: false, reason: `Unsupported package.json version: ${pkg.version}` };
+  const version = formatSemver(current);
+  const sourceVersion = await syncSourcePackageVersion(root, version);
+  const synced = await syncPackageLockVersions(root, version);
+  if (!await changelogHasVersionSection(root, version)) {
+    return { ok: false, reason: 'changelog_section_missing', version, expected: `## [${version}]` };
+  }
+  const staged = await stageVersionFiles(root, [...synced.files, ...sourceVersion.files]);
+  if (!staged.ok) return { ok: false, reason: 'git_add_version_files_failed', stderr: staged.stderr };
+  const statePath = git.ok ? path.join(git.common_dir, VERSION_STATE_FILE) : null;
+  if (statePath) {
+    await writeJsonAtomic(statePath, {
+      schema_version: 1,
+      last_version: version,
+      updated_at: nowIso(),
+      pid: process.pid,
+      mode: 'verify',
+      changed: Boolean(synced.files.length || sourceVersion.files.length)
+    });
+  }
+  return {
+    ok: true,
+    changed: Boolean(synced.files.length || sourceVersion.files.length),
+    version,
+    previous_version: version,
+    synced_files: [...synced.relative_files, ...sourceVersion.relative_files],
+    staged_files: staged.relative_files,
+    lock_scope: git.common_dir,
+    mode: 'verify'
   };
 }
 
@@ -255,6 +292,13 @@ async function syncChangelogVersionSection(root, version) {
   if (next === text) return { files: [], relative_files: [] };
   await writeTextAtomic(file, next);
   return { files: [file], relative_files: [path.relative(root, file)] };
+}
+
+async function changelogHasVersionSection(root, version) {
+  const file = path.join(root, 'CHANGELOG.md');
+  const text = await readFileMaybe(file);
+  const sectionRe = new RegExp(`^##\\s+\\[${escapeRegExp(version)}\\]\\s+-\\s+\\d{4}-\\d{2}-\\d{2}\\s*$`, 'm');
+  return sectionRe.test(text);
 }
 
 async function stageVersionFiles(root, files) {
