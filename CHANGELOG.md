@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.7.32] - 2026-05-08
+
+### Fixed
+
+- Keep the release gate aligned after the version guard advanced the package during install/bootstrap pipeline repair, and make the hook update-check selftest failure report the recorded state for diagnosis.
+
 ## [0.7.31] - 2026-05-08
 
 ### Fixed
