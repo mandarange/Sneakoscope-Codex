@@ -143,7 +143,8 @@ export async function configureCodexLb(opts = {}) {
   await writeTextAtomic(envPath, `export CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
   await fsp.chmod(envPath, 0o600).catch(() => {});
   process.env.CODEX_LB_API_KEY = apiKey;
-  return { ok: true, status: 'configured', config_path: configPath, env_path: envPath, base_url: baseUrl, env_key: 'CODEX_LB_API_KEY' };
+  const codexLogin = await syncCodexApiKeyLogin(apiKey, { home });
+  return { ok: true, status: 'configured', config_path: configPath, env_path: envPath, base_url: baseUrl, env_key: 'CODEX_LB_API_KEY', codex_login: codexLogin };
 }
 
 export async function codexLbStatus(opts = {}) {
@@ -172,7 +173,11 @@ export async function maybePromptCodexLbSetupForLaunch(args = [], opts = {}) {
   if (args.includes('--json') || args.includes('--skip-codex-lb') || process.env.SKS_SKIP_CODEX_LB_PROMPT === '1') return { status: 'skipped' };
   if (!canAskYesNo()) return { status: 'non_interactive' };
   const status = await codexLbStatus(opts);
-  if (status.ok) return { status: 'present', ...status };
+  if (status.ok) {
+    const codexLogin = await ensureCodexLbLoginFromEnv(status, opts);
+    if (codexLogin.status === 'synced') console.log('codex-lb auth synced with Codex CLI.');
+    return { status: 'present', ...status, codex_login: codexLogin };
+  }
   const useCodexLb = (await askPostinstallQuestion('\nAuthenticate and route Codex through codex-lb? [y/N] ')).trim();
   if (!/^(y|yes|예|네|응)$/i.test(useCodexLb)) return { status: 'continued_to_codex' };
   const host = (await askPostinstallQuestion('codex-lb host domain [http://127.0.0.1:2455]: ')).trim() || 'http://127.0.0.1:2455';
@@ -181,6 +186,28 @@ export async function maybePromptCodexLbSetupForLaunch(args = [], opts = {}) {
   if (configured.ok) console.log(`codex-lb configured: ${configured.base_url}`);
   else console.log('codex-lb setup skipped: API key was empty.');
   return configured;
+}
+
+async function ensureCodexLbLoginFromEnv(status = {}, opts = {}) {
+  const home = opts.home || process.env.HOME || os.homedir();
+  const envPath = opts.envPath || status.env_path || codexLbEnvPath(home);
+  const apiKey = parseCodexLbEnvKey(await readText(envPath, ''));
+  if (!apiKey) return { ok: false, status: 'missing_env_key' };
+  return syncCodexApiKeyLogin(apiKey, { ...opts, home });
+}
+
+async function syncCodexApiKeyLogin(apiKey, opts = {}) {
+  const home = opts.home || process.env.HOME || os.homedir();
+  const codexHome = opts.codexHome || path.join(home, '.codex');
+  const codexBin = opts.codexBin || (await getCodexInfo().catch(() => ({}))).bin || await which('codex').catch(() => null);
+  if (!codexBin) return { ok: false, status: 'codex_missing' };
+  await ensureDir(codexHome);
+  const env = { HOME: home, CODEX_HOME: codexHome, CODEX_LB_API_KEY: apiKey };
+  const current = await runProcess(codexBin, ['login', 'status'], { env, timeoutMs: 10000, maxOutputBytes: 8192 });
+  if (current.code === 0 && !/not logged in/i.test(`${current.stdout}\n${current.stderr}`)) return { ok: true, status: 'present' };
+  const login = await runProcess(codexBin, ['login', '--with-api-key'], { input: `${apiKey}\n`, env, timeoutMs: 15000, maxOutputBytes: 8192 });
+  if (login.code === 0) return { ok: true, status: 'synced' };
+  return { ok: false, status: 'login_failed', error: (login.stderr || login.stdout || 'codex login failed').trim() };
 }
 
 function upsertCodexLbConfig(text = '', baseUrl) {
@@ -233,6 +260,15 @@ function upsertTomlTable(text, table, block) {
 
 function shellSingleQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function parseCodexLbEnvKey(text = '') {
+  const match = String(text || '').match(/^\s*(?:export\s+)?CODEX_LB_API_KEY\s*=\s*(.+?)\s*$/m);
+  if (!match) return '';
+  const raw = match[1].trim();
+  if (raw.startsWith("'") && raw.endsWith("'")) return raw.slice(1, -1).replace(/'\\''/g, "'");
+  if (raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1).replace(/\\"/g, '"');
+  return raw;
 }
 
 function escapeRegExp(value) {

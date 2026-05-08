@@ -6,13 +6,33 @@ import { getCodexInfo } from './codex-adapter.mjs';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.mjs';
 
 export const SKS_TMUX_LOGO = [
-  '   _____ __ __ _____',
-  '  / ___// //_// ___/',
-  '  \\__ \\/ ,<   \\__ \\   ㅅㅋㅅ',
-  ' ___/ / /| | ___/ /',
-  '/____/_/ |_|/____/',
-  'Sneakoscope Codex tmux'
+  '   _____   __ __   _____',
+  '  / ___/  / //_/  / ___/',
+  '  \\__ \\  / ,<     \\__ \\ ',
+  ' ___/ / / /| |   ___/ / ',
+  '/____/ /_/ |_|  /____/  ',
+  '      SNEAKOSCOPE CODEX'
 ].join('\n');
+
+const SKS_TMUX_LOGO_FRAMES = [
+  [
+    '      __ __',
+    '     / //_/        .',
+    '    / ,<       .',
+    '   / /| |   .',
+    '  /_/ |_|',
+    '      S K S'
+  ].join('\n'),
+  [
+    '   _____   __ __   _____',
+    '  / ___/  / //_/  / ___/',
+    '  \\__ \\  / ,<     \\__ \\ ',
+    '     / / /| |      / /  ',
+    '    /_/ /_/ |_|   /_/   ',
+    '      SNEAKOSCOPE'
+  ].join('\n'),
+  SKS_TMUX_LOGO
+];
 
 export const DEFAULT_SKS_CODEX_MODEL = 'gpt-5.5';
 export const DEFAULT_SKS_CODEX_REASONING = 'high';
@@ -103,8 +123,7 @@ export function tmuxStatusKind(tmux = {}) {
 export function codexLaunchCommand(root, codexBin, codexArgs = []) {
   const extraArgs = Array.isArray(codexArgs) ? codexArgs : [];
   return [
-    'clear',
-    `printf '%s\\n' ${shellEscape(SKS_TMUX_LOGO)}`,
+    sksLogoIntroCommand(),
     `printf '\\nProject: %s\\n' ${shellEscape(root)}`,
     'printf \'Runtime: tmux session for Codex CLI\\n\'',
     'printf \'Prompt:  use canonical $ commands, for example $Team or $QA-LOOP\\n\\n\'',
@@ -112,6 +131,22 @@ export function codexLaunchCommand(root, codexBin, codexArgs = []) {
     'sleep 1',
     `exec ${[shellEscape(codexBin), ...extraArgs.map(shellEscape), '--cd', shellEscape(root)].join(' ')}`
   ].join('; ');
+}
+
+export function sksLogoIntroCommand() {
+  const staticLogo = `clear; printf '\\033[1;38;5;51m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO)}`;
+  const animated = [
+    'clear',
+    `printf '\\033[38;5;39m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO_FRAMES[0])}`,
+    'sleep 0.07',
+    'clear',
+    `printf '\\033[1;38;5;45m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO_FRAMES[1])}`,
+    'sleep 0.08',
+    'clear',
+    `printf '\\033[1;38;5;51m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO_FRAMES[2])}`,
+    'sleep 0.15'
+  ].join('; ');
+  return `if [ "\${SKS_TMUX_LOGO_ANIMATION:-1}" = "0" ]; then ${staticLogo}; else ${animated}; fi`;
 }
 
 function terminalTitleCommand(title = '') {

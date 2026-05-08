@@ -2007,9 +2007,11 @@ async function selftest() {
   const codexLbSetupJson = JSON.parse(codexLbSetup.stdout);
   const codexLbConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
   const codexLbEnv = await safeReadText(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'));
-  if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !codexLbConfig.includes('model_provider = "codex-lb"') || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'")) throw new Error('selftest failed: codex-lb setup did not write provider config and env key');
+  const codexLbAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !codexLbConfig.includes('model_provider = "codex-lb"') || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || !codexLbAuth.includes('"auth_mode": "apikey"')) throw new Error('selftest failed: codex-lb setup did not write provider config, env key, and Codex API-key auth');
   const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest failed: tmux launch command does not source codex-lb env file');
+  if (!codexLbLaunch.includes('SKS_TMUX_LOGO_ANIMATION') || !codexLbLaunch.includes('SNEAKOSCOPE CODEX')) throw new Error('selftest failed: tmux launch command does not include the animated SKS logo intro');
   if (!shouldAutoAttachTmux(['--mad'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux launch does not auto-attach in an interactive terminal');
   if (shouldAutoAttachTmux(['--mad', '--json'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux json mode should not auto-attach');
   if (shouldAutoAttachTmux(['--mad', '--no-attach'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux --no-attach should remain print-only');
