@@ -95,7 +95,7 @@ sks bootstrap
 
 `sks` commands work even when no project root is present. Project-aware commands use the nearest `.sneakoscope`, `.dcodex`, or `.git` root; if none exists, SKS uses a per-user global runtime root. `sks bootstrap` still initializes the current project when you want project-local hooks, skills, and TriWiki state.
 
-Project setup writes shared `.gitignore` entries for generated SKS files: `.sneakoscope/`, `.codex/`, `.agents/`, and managed `AGENTS.md`. Use `sks setup --local-only` when you want those excludes kept only in `.git/info/exclude`.
+Project setup writes shared `.gitignore` entries for generated SKS files: `.sneakoscope/`, `.codex/`, `.agents/`, and managed `AGENTS.md`. Setup, doctor repair, and npm postinstall refreshes also compare the previous SKS generated-file manifest with the current package templates and prune stale SKS-generated legacy skills or agent files while preserving user-owned custom skills. Use `sks setup --local-only` when you want those excludes kept only in `.git/info/exclude`.
 
 During npm postinstall, SKS also installs generated Codex App skills and tries the official getdesign Codex skill command, `skills add MohtashamMurshid/getdesign`, when the `skills` CLI is available. If that CLI is missing, setup still installs the generated `getdesign-reference` skill. Design work still flows through one authority: `design.md`. When `design.md` is missing, `docs/Design-Sys-Prompt.md` is the builder prompt and getdesign plus curated DESIGN.md examples such as [VoltAgent/awesome-design-md](https://github.com/VoltAgent/awesome-design-md) are inputs to fuse into that SSOT or into route-local `$PPT` style tokens.
 
