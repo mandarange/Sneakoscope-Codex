@@ -254,6 +254,88 @@ export async function ensureCodexCliTool({ skip = false } = {}) {
   };
 }
 
+export async function maybePromptCodexUpdateForLaunch(args = [], opts = {}) {
+  if (hasFlag(args, '--json') || hasFlag(args, '--skip-cli-tools') || hasFlag(args, '--skip-codex-update') || process.env.SKS_SKIP_CODEX_UPDATE === '1') return { status: 'skipped' };
+  const latest = await npmPackageVersion('@openai/codex');
+  const codex = await getCodexInfo().catch(() => ({}));
+  const current = codexCliVersionNumber(codex.version);
+  const command = 'npm i -g @openai/codex@latest';
+  const label = opts.label || 'tmux launch';
+  const missing = !codex.bin;
+  const updateAvailable = Boolean(latest.version && current && compareVersions(latest.version, current) > 0);
+  if (!missing && !updateAvailable) return { status: 'current', latest: latest.version || null, current, bin: codex.bin || null, error: latest.error || null };
+  const prompt = missing
+    ? `Codex CLI missing. Install @openai/codex${latest.version ? ` ${latest.version}` : '@latest'} before ${label}? [Y/n] `
+    : `Codex CLI ${current} -> ${latest.version} update before ${label}? [Y/n] `;
+  if (shouldAutoApproveInstall(args)) return installCodexLatest(command, latest.version, current);
+  if (!canAskYesNo()) {
+    const reason = missing ? 'Codex CLI missing' : `Codex CLI update available: ${current} -> ${latest.version}`;
+    console.log(`${reason}. Run: ${command}`);
+    return { status: missing ? 'missing' : 'available', latest: latest.version || null, current, command, bin: codex.bin || null };
+  }
+  const answer = (await askPostinstallQuestion(prompt)).trim();
+  const yes = answer === '' || /^(y|yes|예|네|응)$/i.test(answer);
+  if (!yes) return { status: 'skipped_by_user', latest: latest.version || null, current, command, bin: codex.bin || null };
+  return installCodexLatest(command, latest.version, current);
+}
+
+export function shouldAutoApproveInstall(args = [], env = process.env) {
+  return hasFlag(args, '--yes') || hasFlag(args, '-y') || isOpenClawRuntime(env);
+}
+
+function canAskYesNo() {
+  return Boolean(input.isTTY && output.isTTY && process.env.CI !== 'true');
+}
+
+function hasFlag(args = [], name) {
+  return args.includes(name);
+}
+
+function isOpenClawRuntime(env = process.env) {
+  return ['SKS_OPENCLAW', 'OPENCLAW', 'OPENCLAW_AGENT', 'OPENCLAW_RUN_ID', 'OPENCLAW_SESSION_ID']
+    .some((key) => /^(1|true|yes|y)$/i.test(String(env[key] || '').trim()));
+}
+
+async function installCodexLatest(command, latestVersion, previousVersion = null) {
+  const npm = await which('npm').catch(() => null);
+  if (!npm) return { status: 'failed', latest: latestVersion || null, previous: previousVersion || null, command, error: 'npm not found on PATH' };
+  const install = await runProcess(npm, ['i', '-g', '@openai/codex@latest'], { timeoutMs: 180000, maxOutputBytes: 128 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  if (install.code !== 0) return { status: 'failed', latest: latestVersion || null, previous: previousVersion || null, command, error: `${install.stderr || install.stdout || command + ' failed'}`.trim() };
+  const after = await getCodexInfo().catch(() => ({}));
+  const afterVersion = codexCliVersionNumber(after.version);
+  if (!after.bin) return { status: 'updated_not_reflected', latest: latestVersion || null, previous: previousVersion || null, version: afterVersion || null, command, error: 'npm completed, but codex is not on PATH. Restart the shell or set SKS_CODEX_BIN.' };
+  if (latestVersion && afterVersion && compareVersions(afterVersion, latestVersion) < 0) {
+    return { status: 'updated_not_reflected', latest: latestVersion, previous: previousVersion || null, version: afterVersion, bin: after.bin, command, error: `npm completed, but PATH still resolves Codex CLI ${afterVersion}; expected ${latestVersion}.` };
+  }
+  console.log(`Codex CLI ready: ${previousVersion || 'missing'} -> ${after.version || after.bin}`);
+  return { status: previousVersion ? 'updated' : 'installed', latest: latestVersion || null, previous: previousVersion || null, version: afterVersion || null, raw_version: after.version || null, bin: after.bin || null, command };
+}
+
+function codexCliVersionNumber(versionText = '') {
+  const match = String(versionText || '').match(/(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/);
+  return match ? match[1] : null;
+}
+
+async function npmPackageVersion(name) {
+  const envName = `SKS_NPM_VIEW_${String(name || '').replace(/[^A-Za-z0-9]+/g, '_').toUpperCase()}_VERSION`;
+  if (process.env[envName]) return { version: process.env[envName] };
+  const npm = await which('npm').catch(() => null);
+  if (!npm) return { error: 'npm not found' };
+  const result = await runProcess(npm, ['view', name, 'version'], { timeoutMs: 5000, maxOutputBytes: 4096 });
+  if (result.code !== 0) return { error: `${result.stderr || result.stdout || 'npm view failed'}`.trim() };
+  return { version: result.stdout.trim().split(/\s+/).pop() };
+}
+
+function compareVersions(a, b) {
+  const pa = String(a || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+  const pb = String(b || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length, 3); i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+  }
+  return 0;
+}
+
 async function isProjectSetupCandidate(root) {
   const markers = ['package.json', '.git', 'AGENTS.md', '.codex', '.sneakoscope'];
   for (const marker of markers) {

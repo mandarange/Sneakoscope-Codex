@@ -43,7 +43,7 @@ sks selftest --mock
 
 | Area | What it does |
 | --- | --- |
-| CLI runtime | `sks tmux open` and `sks --mad` explicitly launch Codex CLI with tmux; bare `sks` only prints help/readiness surfaces. |
+| CLI runtime | Bare `sks` opens or reuses the default tmux Codex CLI workspace. `sks tmux open` remains the explicit form for session/workspace flags, and `sks --mad` launches the high-reasoning auto-review profile. |
 | Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
 | OpenClaw agents | Generates an OpenClaw skill package so OpenClaw agents can attach `sneakoscope-codex`, enable the `shell` tool, and discover/use SKS commands from the target repo root. |
 | Pipeline plans | Writes `pipeline-plan.json` for stateful routes so the runtime lane, kept stages, skipped stages, verification commands, and no-unrequested-fallback invariant are visible with `sks pipeline plan`. |
@@ -75,9 +75,9 @@ Install tmux from [tmux.dev/download](https://www.tmux.dev/download). On macOS, 
 brew install tmux
 ```
 
-`sks --mad` is stricter than the normal runtime path:
+The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex` versions before opening tmux and prompts to update when the terminal can answer y/n. If you approve the Codex CLI update, SKS installs `@openai/codex@latest` and opens tmux with the version visible on PATH. `sks --mad` is stricter than the normal runtime path:
 
-- Checks npm for a newer `sneakoscope` before launch and asks whether to update when the terminal can answer y/n.
+- Checks npm for newer `sneakoscope` and `@openai/codex` versions before launch and asks whether to update when the terminal can answer y/n.
 - Installs the latest Codex CLI with `npm i -g @openai/codex@latest` when it is missing and you approve or pass `--yes`.
 - Requires tmux 3.x or newer before opening the session.
 - Creates or reuses a named detached tmux session, splits panes, and prints the attach command.
@@ -162,12 +162,15 @@ sks fix-path
 ### Open Codex CLI With tmux
 
 ```sh
+sks
 sks tmux open
 sks tmux check
 sks tmux status --once
 ```
 
-`sks tmux open` creates or reuses a named tmux session for Codex CLI only when that is explicitly requested. `sks` and `sks tmux check` are diagnostic/help surfaces and do not start a workspace.
+Bare `sks` creates or reuses the default named tmux session for Codex CLI. Use `sks tmux open` when you need explicit `--workspace` / `--session` flags, `sks tmux check` for readiness without launching, and `sks help` for CLI help.
+
+Before opening tmux, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens tmux with the updated Codex CLI.
 
 ### MAD tmux Launch
 
@@ -331,9 +334,13 @@ agents:
   coding-agent:
     tools:
       - shell
+    env:
+      SKS_OPENCLAW: "1"
     skills:
       - sneakoscope-codex
 ```
+
+`SKS_OPENCLAW=1` tells SKS that commands are running from OpenClaw. In that mode, SKS auto-approves update/install prompts such as the Codex CLI update check before tmux launch, instead of waiting for a human `Y/n` response.
 
 Then prompt the OpenClaw agent from the target repo root:
 
@@ -344,11 +351,11 @@ Run sks root, inspect AGENTS.md, then use the SKS Team route to implement this f
 Useful commands for OpenClaw agents:
 
 ```sh
-sks root
-sks commands
-sks dollar-commands
-sks deps check
-sks proof-field scan --intent "small CLI change" --changed src/cli/main.mjs
+SKS_OPENCLAW=1 sks root
+SKS_OPENCLAW=1 sks commands
+SKS_OPENCLAW=1 sks dollar-commands
+SKS_OPENCLAW=1 sks deps check
+SKS_OPENCLAW=1 sks proof-field scan --intent "small CLI change" --changed src/cli/main.mjs
 ```
 
 If OpenClaw runs the skill inside a sandbox, grant shell execution only for the trusted local workspace. Database, Supabase, migration, and destructive filesystem work should still follow the repo's SKS safety route and require explicit write scope.
@@ -393,8 +400,10 @@ sks selftest --mock
 
 ```sh
 sks tmux check
-sks tmux open
+sks
 ```
+
+`sks tmux open` is the equivalent explicit launch form when you want to pass tmux session flags.
 
 For the high-reasoning full-access profile:
 

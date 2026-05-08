@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.7.28] - 2026-05-08
+
+### Changed
+
+- Check npm `@openai/codex@latest` before tmux launches, prompt `Y/n` when the installed Codex CLI is missing or outdated, and continue the same launch with the updated binary after approval.
+- Treat `SKS_OPENCLAW=1` OpenClaw runs as auto-approved for SKS update/install prompts, and include that environment flag in generated OpenClaw guidance.
+- Document the Codex CLI update preflight in the README default tmux runtime flow.
+
+## [0.7.27] - 2026-05-08
+
+### Changed
+
+- Make bare `sks` open or reuse the default tmux Codex CLI workspace, keeping `sks tmux open` as the explicit launch form for session/workspace flags.
+- Update CLI help, generated quick reference wording, and README runtime guidance so the default tmux launch surface is discoverable.
+
 ## [0.7.26] - 2026-05-08
 
 ### Added
