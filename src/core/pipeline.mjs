@@ -10,6 +10,7 @@ import { GOAL_WORKFLOW_ARTIFACT, writeGoalWorkflow } from './goal-workflow.mjs';
 import { writeCodeStructureReport } from './code-structure.mjs';
 import { writeMemorySweepReport } from './memory-governor.mjs';
 import { writeMistakeMemoryReport } from './mistake-memory.mjs';
+import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from './mistake-recall.mjs';
 import { recordSkillDreamEvent, skillDreamPolicyText, writeSkillForgeReport } from './skill-forge.mjs';
 import { writeResearchPlan } from './research.mjs';
 import { PPT_REQUIRED_GATE_FIELDS } from './ppt.mjs';
@@ -993,6 +994,15 @@ export async function projectGateStatus(root, state = {}) {
       source: active.file ? `.sneakoscope/missions/${id}/${active.file}` : null
     });
   }
+  const mistakeRecall = await mistakeRecallGateStatus(root, state);
+  if (id && (!mistakeRecall.ok || mistakeRecall.source)) {
+    gates.push({
+      id: MISTAKE_RECALL_ARTIFACT,
+      ok: mistakeRecall.ok,
+      missing: mistakeRecall.missing || [],
+      source: `.sneakoscope/missions/${id}/${MISTAKE_RECALL_ARTIFACT}`
+    });
+  }
   const reflection = await reflectionGateStatus(root, state);
   if (reflectionRequiredForState(state)) {
     gates.push({
@@ -1031,6 +1041,10 @@ export async function evaluateStop(root, state, payload, opts = {}) {
   }
   if (state?.subagents_required && !(await hasSubagentEvidence(root, state))) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires subagent execution evidence before completion. Spawn worker/reviewer subagents for disjoint code-changing work, or record explicit evidence that subagents were unavailable or unsafe to split.`, { gate: 'subagent-evidence' });
+  }
+  const mistakeRecall = await mistakeRecallGateStatus(root, state);
+  if (!mistakeRecall.ok) {
+    return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} found relevant TriWiki mistake memory that is not bound to the decision contract. Re-run pipeline answer or seal the contract so ${MISTAKE_RECALL_ARTIFACT} is consumed before finishing.`, { gate: MISTAKE_RECALL_ARTIFACT, missing: mistakeRecall.missing });
   }
   if (opts.noQuestion) {
     if (containsUserQuestion(last)) return complianceBlock(root, state, noQuestionContinuationReason(), { gate: 'no-question' });

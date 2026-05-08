@@ -241,6 +241,28 @@ export function buildTmuxOpenArgs(plan = {}) {
   return ['attach-session', '-t', sanitizeTmuxSessionName(plan.session || plan.workspace || defaultTmuxSessionName(plan.root))];
 }
 
+export function shouldAutoAttachTmux(args = [], env = process.env, streams = {}) {
+  const stdin = streams.stdin || process.stdin;
+  const stdout = streams.stdout || process.stdout;
+  if (args.includes('--json') || args.includes('--status-only') || args.includes('--quiet') || args.includes('--no-attach')) return false;
+  if (String(env.SKS_TMUX_NO_AUTO_ATTACH || '') === '1') return false;
+  return Boolean(stdin?.isTTY && stdout?.isTTY);
+}
+
+function attachTmuxSession(plan = {}, args = [], opts = {}) {
+  const session = sanitizeTmuxSessionName(plan.session || plan.workspace || defaultTmuxSessionName(plan.root));
+  const tmuxBin = plan.tmux?.bin || 'tmux';
+  const attachArgs = isTmuxShellSession(opts.env || process.env) ? ['switch-client', '-t', session] : buildTmuxOpenArgs({ ...plan, session });
+  console.log(`Attaching: ${[path.basename(tmuxBin), ...attachArgs].join(' ')}`);
+  const attached = spawnSync(tmuxBin, attachArgs, { stdio: 'inherit' });
+  return {
+    ok: attached.status === 0,
+    status: attached.status,
+    signal: attached.signal || null,
+    command: [tmuxBin, ...attachArgs].join(' ')
+  };
+}
+
 export function runTmuxLaunchPlanSyntaxCheck(plan = {}) {
   const args = buildTmuxOpenArgs(plan);
   return {
@@ -292,7 +314,16 @@ export async function launchTmuxUi(args = [], opts = {}) {
     else console.log(`tmux: not created (${created.stderr || 'tmux failed'})`);
     if (created.ok) console.log(`Attach: ${created.attach_command}`);
   }
-  return { plan, created: Boolean(created.ok), session: created.session || plan.session, opened: created };
+  let attached = null;
+  if (created.ok && shouldAutoAttachTmux(args)) {
+    attached = attachTmuxSession({ ...plan, session: created.session || plan.session }, args);
+    if (!attached.ok) {
+      const status = attached.signal || (attached.status ?? 'unknown');
+      console.error(`SKS tmux attach failed (${status}). Run manually: ${created.attach_command}`);
+      process.exitCode = attached.status || 1;
+    }
+  }
+  return { plan, created: Boolean(created.ok), session: created.session || plan.session, opened: created, attached };
 }
 
 function printTmuxLaunchBlocked(plan, opts = {}) {

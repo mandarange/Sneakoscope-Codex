@@ -29,8 +29,9 @@ export async function versioningStatus(root) {
   const hookInstalled = hookText.includes(`BEGIN ${VERSION_HOOK_MARKER}`);
   const policy = await versionPolicy(root);
   const state = await readJson(path.join(git.common_dir, VERSION_STATE_FILE), {});
+  const runtimeDrift = await runtimeDriftStatus(root, version);
   return {
-    ok: !policy.enabled || hookInstalled || !version,
+    ok: (!policy.enabled || hookInstalled || !version) && runtimeDrift.ok,
     enabled: Boolean(policy.enabled && version),
     package_version: version,
     bump: policy.bump,
@@ -38,7 +39,38 @@ export async function versioningStatus(root) {
     hook_path: git.hook_path,
     state_path: path.join(git.common_dir, VERSION_STATE_FILE),
     last_version: state.last_version || null,
+    runtime_drift: runtimeDrift,
     reason: version ? null : 'package_json_version_missing'
+  };
+}
+
+async function runtimeDriftStatus(root, packageVersion) {
+  if (!packageVersion || process.env.SKS_RUNTIME_DRIFT_CHECK === '0') {
+    return { ok: true, checked: false, reason: packageVersion ? 'disabled' : 'package_json_version_missing' };
+  }
+  const result = await runProcess('sks', ['--version'], {
+    cwd: root,
+    timeoutMs: 5000,
+    maxOutputBytes: 16 * 1024,
+    env: { SKS_RUNTIME_DRIFT_CHECK: '0' }
+  });
+  if (result.code !== 0) {
+    return { ok: true, checked: false, reason: 'sks_binary_unavailable', stderr: result.stderr?.trim() || null };
+  }
+  const match = String(result.stdout || '').match(/(\d+\.\d+\.\d+)/);
+  const runtimeVersion = match?.[1] || null;
+  const runtime = parseSemver(runtimeVersion);
+  const source = parseSemver(packageVersion);
+  if (!runtime || !source) {
+    return { ok: true, checked: true, reason: 'version_parse_unavailable', runtime_version: runtimeVersion, package_version: packageVersion };
+  }
+  const comparison = compareSemver(runtime, source);
+  return {
+    ok: comparison >= 0,
+    checked: true,
+    runtime_version: runtimeVersion,
+    package_version: packageVersion,
+    relation: comparison === 0 ? 'same' : (comparison > 0 ? 'runtime_newer' : 'runtime_older')
   };
 }
 

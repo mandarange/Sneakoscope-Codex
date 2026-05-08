@@ -230,14 +230,24 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   const authWork = /로그인|auth|session|token|인증/.test(lower);
   const prioritySignalWork = /화|짜증|답답|;;|!!|강력|기억|우선|자주|반복|카운팅|count|frequency|frequent|priority|weight/.test(lower);
   const cliSurfaceWork = /\b(cli|command|route|usage|help|sks)\b|명령|커맨드|사용법/.test(lower);
+  const explicitRouteWork = /^\s*\$(?:research|team|goal|dfix|ppt|qa-loop|wiki|db|gx|computer-use|cu|autoresearch|sks|answer|help)\b/i.test(String(prompt || ''));
+  const triwikiAuditWork = /(triwiki|tri\s*wiki|wiki|복셀|voxel)/.test(lower)
+    && /(검수|연구|개선|정상|동작|작동|반복|실수|mistake|repeat|audit|inspect|prevent|방지)/.test(lower);
   const chatCaptureWork = hasFromChatImgSignal(text)
     && /(chat|conversation|message|messenger|kakao|screenshot|capture|채팅|대화|메신저|카톡|캡처|스크린샷)/i.test(text)
     && /(image|photo|attachment|attached|이미지|사진|첨부)/i.test(text)
     && /(client|customer|request|change|modify|fix|match|ocr|extract|text|고객사|클라이언트|요청|수정|변경|매칭|추출|글자|텍스트)/i.test(text);
-  const kind = versionWork ? 'version' : chatCaptureWork ? 'chat_capture' : prioritySignalWork ? 'priority' : questionGateWork ? 'questions' : installWork ? 'install' : null;
+  const effectivePrioritySignalWork = prioritySignalWork
+    && !explicitRouteWork
+    && !triwikiAuditWork
+    && !versionWork
+    && !presentationWork
+    && !chatCaptureWork;
+  const kind = versionWork ? 'version' : chatCaptureWork ? 'chat_capture' : triwikiAuditWork ? 'triwiki_audit' : effectivePrioritySignalWork ? 'priority' : questionGateWork ? 'questions' : installWork ? 'install' : null;
   const goals = {
     version: version ? `sneakoscope 버전을 ${version}로 올린다` : 'sneakoscope 버전을 다음 patch 버전으로 올린다',
     chat_capture: 'From-Chat-IMG로 채팅 요구사항과 첨부 원본 이미지를 매칭해 고객사 작업 지시서를 만들고 반영한다',
+    triwiki_audit: 'TriWiki가 반복 실수를 막는지 검수하고, 실패 경로를 코드와 검증으로 개선한다',
     priority: '강한 불만과 반복 요청을 TriWiki 우선순위 신호로 기록한다',
     questions: '예측 가능한 답은 추론하고 실제 모호한 항목만 질문한다',
     presentation: '청중과 STP 전략에 맞는 HTML 기반 발표자료/PDF 산출물을 만든다',
@@ -246,6 +256,7 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   const criteria = {
     version: [version ? `version refs are ${version}` : 'version refs advance consistently', 'publish:dry gate passes', 'npm publish is not run'],
     chat_capture: ['From-Chat-IMG activates chat-image intake only here', 'all visible chat requirements are listed before implementation', `${FROM_CHAT_IMG_COVERAGE_ARTIFACT} maps every customer request, screenshot region, and attachment to work-order item(s)`, `${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} is updated as each request, image match, work item, scoped QA-LOOP, and verification step is completed`, `${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} records temporary TriWiki-backed session context with retention metadata`, `${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} proves QA-LOOP ran over the exact customer-request work-order range after implementation`, 'unresolved_items is empty before Team completion', 'scoped_qa_loop_completed is true with zero unresolved QA findings', 'Codex Computer Use visual inspection strengthens matches when available; no Playwright or browser automation substitute is allowed', CODEX_COMPUTER_USE_ONLY_POLICY, 'client requests follow normal SKS gates and verification'],
+    triwiki_audit: ['TriWiki ingestion, voxel attention, and contract consumption paths are inspected against current code', 'repeat-mistake prevention gaps are fixed in the relevant code path or blocked with evidence', 'regression coverage proves fresh/high-weight mistake memory can influence future missions', 'final status separates supported behavior from anything still unverified'],
     priority: ['strong feedback raises required_weight', 'request topics are counted in wiki packs', 'future inference uses priority signals'],
     questions: ['predictable answers are inferred', 'partial answers can seal contracts', 'only unresolved changing slots remain visible'],
     presentation: ['audience profile and STP strategy are explicit before artifact creation', 'target pain points map to proposed solution moments', 'decision context and likely objections are sealed before storyboarding', 'presentation format, device, and delivery context are fixed before design work'],

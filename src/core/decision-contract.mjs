@@ -2,6 +2,7 @@ import path from 'node:path';
 import { readJson, writeJsonAtomic, nowIso, sha256 } from './fsx.mjs';
 import { validateQaLoopAnswers } from './qa-loop.mjs';
 import { inferAnswersForPrompt } from './questions.mjs';
+import { bindMistakeRecallToAnswers, buildMistakeRecallLedger, mistakeRecallContractSummary, writeMistakeRecallArtifacts } from './mistake-recall.mjs';
 
 function isEmptyAnswer(v, slot = {}) {
   if (v === undefined || v === null) return true;
@@ -38,7 +39,7 @@ export function validateAnswers(schema, answers) {
   return { ok: errors.length === 0, errors, resolved, totalRequired: schema.slots.filter((s) => s.required).length };
 }
 
-export function buildDecisionContract({ mission, schema, answers }) {
+export function buildDecisionContract({ mission, schema, answers, mistakeRecall = null }) {
   const madSks = answers.MAD_SKS_MODE === 'explicit_invocation_only';
   const defaults = {
     if_multiple_valid_implementations: 'choose_smallest_reversible_change',
@@ -111,6 +112,7 @@ export function buildDecisionContract({ mission, schema, answers }) {
     acceptance_criteria: Array.isArray(answers.ACCEPTANCE_CRITERIA) ? answers.ACCEPTANCE_CRITERIA : String(answers.ACCEPTANCE_CRITERIA || '').split('\n').map((x) => x.trim()).filter(Boolean),
     non_goals: Array.isArray(answers.NON_GOALS) ? answers.NON_GOALS : String(answers.NON_GOALS || '').split('\n').map((x) => x.trim()).filter(Boolean),
     test_scope: answers.TEST_SCOPE,
+    triwiki_mistake_recall: mistakeRecallContractSummary(mistakeRecall),
     approved_defaults: defaults,
     decision_ladder: [
       'seed_contract',
@@ -134,21 +136,41 @@ export async function sealContract(missionDir, mission) {
   const schema = await readJson(path.join(missionDir, 'required-answers.schema.json'));
   const explicitAnswers = await readJson(path.join(missionDir, 'answers.json'));
   const inferred = inferAnswersForPrompt(mission?.prompt || schema?.prompt || '', explicitAnswers);
-  const answers = {
+  const baseAnswers = {
     ...(schema.inferred_answers || {}),
     ...inferred.answers,
     ...explicitAnswers
   };
+  const root = rootFromMissionDir(missionDir);
+  const mistakeRecall = await buildMistakeRecallLedger(root, {
+    prompt: mission?.prompt || schema?.prompt || '',
+    answers: baseAnswers
+  });
+  const answers = bindMistakeRecallToAnswers(baseAnswers, mistakeRecall);
   const validation = validateAnswers(schema, answers);
   if (!validation.ok) return { ok: false, validation };
-  const contract = buildDecisionContract({ mission, schema, answers });
+  const contract = buildDecisionContract({ mission, schema, answers, mistakeRecall });
+  const mistakeRecallConsumption = await writeMistakeRecallArtifacts(missionDir, mistakeRecall, contract);
   await writeJsonAtomic(path.join(missionDir, 'resolved-answers.json'), {
     explicit_answers: explicitAnswers,
     inferred_answers: { ...(schema.inferred_answers || {}), ...inferred.answers },
     inference_notes: { ...(schema.inference_notes || {}), ...inferred.notes },
-    answers
+    answers,
+    mistake_recall: {
+      artifact: 'mistake-recall-ledger.json',
+      consumed: mistakeRecallConsumption.ok,
+      required: mistakeRecall.required
+    }
   });
   await writeJsonAtomic(path.join(missionDir, 'decision-contract.json'), contract);
   await writeJsonAtomic(path.join(missionDir, 'answer-validation.json'), validation);
   return { ok: true, validation, contract };
+}
+
+function rootFromMissionDir(missionDir) {
+  const resolved = path.resolve(missionDir);
+  const parts = resolved.split(path.sep);
+  const idx = parts.lastIndexOf('.sneakoscope');
+  if (idx > 0) return parts.slice(0, idx).join(path.sep) || path.sep;
+  return path.resolve(resolved, '..', '..', '..');
 }
