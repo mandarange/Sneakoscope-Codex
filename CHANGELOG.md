@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.7.35] - 2026-05-08
+
+### Fixed
+
+- Make TriWiki repeat-mistake prevention enforceable by preserving high-priority tail memory claims, binding relevant mistake recall into decision contracts, promoting voxel priority/conflict signals into source hydration, and gating completion on consumed recall evidence.
+- Warn during `sks versioning status` when the source package version is newer than the bare global `sks` runtime.
+
+## [0.7.34] - 2026-05-08
+
+### Fixed
+
+- Make `sks --mad` and explicit tmux launches attach automatically in interactive terminals after creating or reusing the session, while preserving print-only behavior for `--json`, `--quiet`, `--status-only`, `--no-attach`, and `SKS_TMUX_NO_AUTO_ATTACH=1`.
+
 ## [0.7.33] - 2026-05-08
 
 ### Fixed
@@ -369,7 +382,7 @@
 
 ### Added
 
-- Add `sks harness fixture|review` and `harness-growth-report.json` for deliberate forgetting fixtures, skill card metadata, harness experiment schema, permission profiles, MultiAgentV2 defaults, Cmux cockpit view coverage, and tool-error taxonomy.
+- Add `sks harness fixture|review` and `harness-growth-report.json` for deliberate forgetting fixtures, skill card metadata, harness experiment schema, permission profiles, MultiAgentV2 defaults, terminal cockpit view coverage, and tool-error taxonomy.
 - Record failed tool calls into `tool-errors.jsonl` with InvalidArguments, UnexpectedEnvironment, ProviderError, UserAborted, Timeout, PermissionDenied, NetworkDenied, ResourceExhausted, Conflict, or Unknown classification; Unknown is marked as a harness bug.
 
 ### Changed
@@ -417,7 +430,7 @@
 
 ### Added
 
-- Add schema-backed GPT-5.5 performance artifacts for Work Order Ledgers, effort decisions, From-Chat-IMG visual maps, dogfood reports, Skill Forge, mistake memory, Team dashboard state, Cmux pane plans, and Honest Mode reports.
+- Add schema-backed GPT-5.5 performance artifacts for Work Order Ledgers, effort decisions, From-Chat-IMG visual maps, dogfood reports, Skill Forge, mistake memory, Team dashboard state, terminal pane plans, and Honest Mode reports.
 - Add `sks validate-artifacts` and `sks perf run` so mission evidence and performance budgets are locally checkable.
 - Add lightweight effort orchestration, prompt-context ordering, Skill Forge, mistake memory, dogfood, From-Chat-IMG work-order, and Team dashboard renderer modules.
 

@@ -52,12 +52,13 @@ import { classifyToolError, harnessGrowthReport } from '../core/evaluation.mjs';
 import { runWorkflowPerfBench, validateWorkflowPerfReport } from '../core/perf-bench.mjs';
 import { buildProofField, proofFieldFixture, validateProofFieldReport } from '../core/proof-field.mjs';
 import { recordMistake, writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
+import { MISTAKE_RECALL_ARTIFACT, contractConsumesMistakeRecall } from '../core/mistake-recall.mjs';
 import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
 import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs';
-import { buildTmuxLaunchPlan, buildTmuxOpenArgs, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
+import { buildTmuxLaunchPlan, buildTmuxOpenArgs, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
 import { askPostinstallQuestion, checkContext7, checkRequiredSkills, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, globalCodexSkillsRoot, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, shouldAutoApproveInstall } from './install-helpers.mjs';
@@ -803,6 +804,11 @@ async function versioning(sub = 'status', args = []) {
     console.log(`Bump:      ${status.bump || 'patch'}`);
     console.log(`Hook:      ${status.hook_installed ? 'installed' : 'missing'}${status.hook_path ? ` ${status.hook_path}` : ''}`);
     console.log(`Last seen: ${status.last_version || 'none'}`);
+    if (status.runtime_drift?.checked) {
+      const drift = status.runtime_drift;
+      console.log(`Runtime:   ${drift.runtime_version || 'unknown'} (${drift.relation || 'unknown'})`);
+      if (!drift.ok) console.log(`Warning:   source package is ${drift.package_version}, but bare sks resolves to ${drift.runtime_version}. Use node ./bin/sks.mjs in this repo or reinstall/update the global package before trusting runtime behavior.`);
+    }
     if (!status.ok) console.log('Run: sks doctor --fix');
     return;
   }
@@ -1925,6 +1931,10 @@ async function selftest() {
   if (!tmuxSyntax.ok || !tmuxSyntax.command.includes('tmux attach-session -t sks-mad-selftest')) throw new Error('selftest failed: MAD tmux attach plan is not stable by session name');
   const tmuxOpenArgs = buildTmuxOpenArgs(workspacePlan);
   if (tmuxOpenArgs.join(' ') !== 'attach-session -t sks-mad-selftest') throw new Error('selftest failed: MAD tmux attach args are not stable by session name');
+  if (!shouldAutoAttachTmux(['--mad'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux launch does not auto-attach in an interactive terminal');
+  if (shouldAutoAttachTmux(['--mad', '--json'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux json mode should not auto-attach');
+  if (shouldAutoAttachTmux(['--mad', '--no-attach'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux --no-attach should remain print-only');
+  if (shouldAutoAttachTmux(['--mad'], { SKS_TMUX_NO_AUTO_ATTACH: '1' }, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: SKS_TMUX_NO_AUTO_ATTACH should disable tmux auto-attach');
   if (!isTmuxShellSession({ TMUX: '/tmp/tmux-501/default,1,0' })) throw new Error('selftest failed: tmux shell session env was not detected');
   if (tmuxStatusKind({ ok: false, bin: null }) !== 'missing') throw new Error('selftest failed: missing tmux was not labeled missing');
   const bareDefault = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs')], {
@@ -3014,12 +3024,27 @@ async function selftest() {
   const coord = rgbaToWikiCoord({ r: 12, g: 34, b: 56, a: 255 });
   if (coord.schema !== 'sks.wiki-coordinate.v1' || coord.xyzw.length !== 4) throw new Error('selftest failed: RGBA wiki coordinate conversion');
   await writeTextAtomic(path.join(tmp, '.sneakoscope', 'memory', 'q2_facts', 'selftest.md'), '- claim: Selftest memory claim must be selected before lower-weight mission notes. | id: selftest-memory-priority | source: src/cli/main.mjs | risk: high | status: supported | evidence_count: 3 | required_weight: 1.0 | trust_score: 0.9\n');
+  await writeTextAtomic(path.join(tmp, '.sneakoscope', 'memory', 'q2_facts', 'tail-repeat.md'), [
+    ...Array.from({ length: 60 }, (_, i) => `- claim: Low priority filler memory ${i}. | id: tail-filler-${i} | source: src/cli/main.mjs | risk: low | status: supported | evidence_count: 1 | required_weight: 0.1 | trust_score: 0.5`),
+    '- claim: TriWiki repeated mistake recall must preserve recent high-weight tail lessons. | id: tail-repeat-mistake | source: src/core/mistake-recall.mjs | risk: high | status: supported | freshness: fresh | evidence_count: 4 | required_weight: 1.2 | trust_score: 0.95'
+  ].join('\n'));
   await createMission(tmp, { mode: 'sks', prompt: '모호한 질문은 그만 물어봐야지;; triwiki로 예측해' });
   await createMission(tmp, { mode: 'sks', prompt: 'triwiki에서 자주 요청하는 것들은 카운팅해서 더 우선 참고해줘' });
+  const projectClaims = await projectWikiClaims(tmp);
+  if (!projectClaims.some((claim) => claim.id === 'tail-repeat-mistake')) throw new Error('selftest failed: tail high-weight memory claim was dropped from TriWiki ingestion');
+  const recallPrompt = 'triwiki 반복 실수 방지 개선 selftest';
+  const recallMission = await createMission(tmp, { mode: 'team', prompt: recallPrompt });
+  await writeJsonAtomic(path.join(recallMission.dir, 'required-answers.schema.json'), { prompt: recallPrompt, slots: [{ id: 'GOAL_PRECISE', required: true }, { id: 'ACCEPTANCE_CRITERIA', required: true, type: 'array' }] });
+  await writeJsonAtomic(path.join(recallMission.dir, 'answers.json'), { GOAL_PRECISE: recallPrompt, ACCEPTANCE_CRITERIA: ['repeat mistake memory is consumed'] });
+  const recallSeal = await sealContract(recallMission.dir, { id: recallMission.id, prompt: recallPrompt, mode: 'team' });
+  if (!recallSeal.ok) throw new Error('selftest failed: mistake recall contract did not seal');
+  const recallLedger = await readJson(path.join(recallMission.dir, MISTAKE_RECALL_ARTIFACT), null);
+  if (!recallLedger?.required || !recallLedger.matches?.some((match) => match.id === 'tail-repeat-mistake')) throw new Error('selftest failed: mistake recall did not match tail TriWiki lesson');
+  if (!contractConsumesMistakeRecall(recallSeal.contract, recallLedger).ok) throw new Error('selftest failed: mistake recall was not consumed by decision contract');
   const wikiPack = contextCapsule({
     mission: { id: 'selftest-wiki', coord: { rgba: { r: 48, g: 132, b: 212, a: 240 } } },
     role: 'verifier',
-    claims: await projectWikiClaims(tmp),
+    claims: projectClaims,
     q4: { mode: 'selftest' },
     q3: ['sks', 'llm-wiki', 'wiki-coordinate'],
     budget: { maxWikiAnchors: 48, includeTrustSummary: true }
@@ -3070,6 +3095,17 @@ async function selftest() {
   const primingClaim = primingPack.claims?.find((claim) => claim.id === 'positive-recall-guard');
   if (!primingClaim || /elephant|do\s+not/i.test(primingClaim.text || '') || primingClaim.text_policy !== 'positive_recall_negation_suppressed') throw new Error('selftest failed: TriWiki compact recall did not suppress negative priming text');
   if (!primingPack.attention?.hydrate_first?.some((row) => row[0] === 'positive-recall-guard' && String(row[1]).includes('negative_priming'))) throw new Error('selftest failed: negative priming claim was not source-hydration gated');
+  const voxelPromotionPack = contextCapsule({
+    mission: { id: 'voxel-promotion-selftest', coord: { rgba: { r: 70, g: 100, b: 130, a: 255 } } },
+    role: 'worker',
+    claims: [
+      { id: 'voxel-priority-hydrate', text: 'TriWiki memory repeat prevention should hydrate source evidence when priority route layers are high.', authority: 'code', risk: 'low', status: 'supported', freshness: 'fresh', required_weight: 1.25, trust_score: 0.95, coord: { rgba: { r: 70, g: 100, b: 130, a: 255 } } }
+    ],
+    q4: { mode: 'voxel-promotion-selftest' },
+    q3: ['triwiki', 'memory'],
+    budget: { maxClaims: 1, maxWikiAnchors: 1, maxAttentionUse: 1, maxAttentionHydrate: 1 }
+  });
+  if (!voxelPromotionPack.attention?.hydrate_first?.some((row) => row[0] === 'voxel-priority-hydrate' && String(row[1]).startsWith('voxel:priority_route'))) throw new Error('selftest failed: voxel priority route did not promote hydration');
   const dryRunPack = await writeWikiContextPack(tmp, ['--max-anchors', '4'], { dryRun: true });
   if (wikiVoxelRowCount(dryRunPack.pack.wiki) !== 4) throw new Error('selftest failed: dry-run wiki pack did not build voxel rows');
   if (await exists(dryRunPack.file)) throw new Error('selftest failed: wiki refresh dry-run wrote context pack');

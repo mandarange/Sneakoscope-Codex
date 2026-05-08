@@ -991,7 +991,7 @@ async function memoryWikiClaims(root) {
       continue;
     }
     if (!text.trim()) continue;
-    const rows = parseMemoryClaimRows(text, relFile).slice(0, 24);
+    const rows = selectMemoryClaimRows(parseMemoryClaimRows(text, relFile), 48);
     let index = 0;
     for (const row of rows) {
       const source = row.source || relFile;
@@ -1013,6 +1013,48 @@ async function memoryWikiClaims(root) {
     }
   }
   return claims;
+}
+
+function selectMemoryClaimRows(rows = [], limit = 48) {
+  const prepared = (rows || []).map((row, index) => ({ row, index, total: rows.length }));
+  if (prepared.length <= limit) return prepared.map((item) => item.row);
+  const picked = new Map();
+  const add = (item) => {
+    if (!item?.row) return;
+    const key = item.row.id || `${item.index}:${item.row.text}`;
+    if (!picked.has(key)) picked.set(key, item);
+  };
+  const required = prepared.filter(({ row }) =>
+    Number(row.required_weight || 0) >= 0.95
+    || Number(row.trust_score || 0) >= 0.9
+    || row.risk === 'critical'
+    || (row.risk === 'high' && Number(row.evidence_count || 0) >= 3)
+  );
+  for (const item of required) add(item);
+  for (const item of prepared.slice(-12)) add(item);
+  const already = new Set([...picked.values()].map((item) => item.index));
+  const scored = prepared
+    .filter((item) => !already.has(item.index))
+    .map((item) => ({ ...item, score: memoryRowPriorityScore(item) }))
+    .sort((a, b) => (b.score - a.score) || (a.index - b.index));
+  for (const item of scored) {
+    if (picked.size >= limit) break;
+    add(item);
+  }
+  return [...picked.values()]
+    .sort((a, b) => a.index - b.index)
+    .slice(0, limit)
+    .map((item) => item.row);
+}
+
+function memoryRowPriorityScore({ row, index, total }) {
+  const required = Number(row.required_weight || 0);
+  const trust = Number(row.trust_score || 0);
+  const evidence = Number(row.evidence_count || 0);
+  const recency = total > 1 ? index / (total - 1) : 1;
+  const risk = { low: 0, medium: 0.35, high: 0.9, critical: 1.25 }[row.risk || 'medium'] ?? 0.35;
+  const freshness = { fresh: 0.45, unknown: 0.1, stale: -0.4 }[row.freshness || 'unknown'] ?? 0.1;
+  return required * 8 + trust * 4 + Math.log1p(Math.max(0, evidence)) + recency * 2 + risk + freshness;
 }
 
 async function listMemoryClaimFiles(base) {
@@ -1065,6 +1107,7 @@ function normalizeMemoryClaimRow(row, relFile) {
       risk: row.risk,
       status: row.status || row.confidence,
       freshness: row.freshness,
+      updated_at: row.updated_at || row.updatedAt || row.created_at || row.createdAt,
       evidence_count: Number.isFinite(Number(row.evidence_count)) ? Number(row.evidence_count) : undefined,
       required_weight: Number.isFinite(Number(row.required_weight)) ? Number(row.required_weight) : undefined,
       trust_score: Number.isFinite(Number(row.trust_score)) ? Number(row.trust_score) : undefined
@@ -1082,6 +1125,7 @@ function normalizeMemoryClaimRow(row, relFile) {
     risk: extractClaimField(clean, 'risk') || 'high',
     status,
     freshness: extractClaimField(clean, 'freshness') || 'fresh',
+    updated_at: extractClaimField(clean, 'updated_at') || extractClaimField(clean, 'updatedAt') || extractClaimField(clean, 'created_at'),
     evidence_count: parseOptionalNumber(extractClaimField(clean, 'evidence_count')),
     required_weight: parseOptionalNumber(extractClaimField(clean, 'required_weight')),
     trust_score: parseOptionalNumber(extractClaimField(clean, 'trust_score'))

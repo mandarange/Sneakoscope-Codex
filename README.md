@@ -53,7 +53,7 @@ sks selftest --mock
 | PPT pipeline | Uses `$PPT` for simple, restrained, information-first HTML/PDF presentation artifacts, first asking delivery context, audience profile, STP strategy, decision context, and 3+ pain-point to solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in `ppt-parallel-report.json`; editable source HTML is preserved under `source-html/`, PPT-only temporary build files are cleaned after completion, installed skills/MCPs outside the `$PPT` allowlist are ignored, generated image assets may use `$imagegen` only when sealed in the contract, and `ppt-style-tokens.json` records the design SSOT plus fused source inputs. |
 | Computer Use fast lane | Uses `$Computer-Use` / `$CU` for UI/browser/visual work that needs maximum speed: skip Team debate and upfront TriWiki loops, use Codex Computer Use directly, then refresh/validate TriWiki and run Honest Mode at final closeout. |
 | Goal | Provides a fast SKS bridge overlay for Codex native persisted `/goal` create, pause, resume, and clear controls; implementation continues through the selected SKS execution route. |
-| TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, and `attention.hydrate_first`. |
+| TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, `attention.hydrate_first`, and prompt-bound mistake recall ledgers. |
 | Context7 | Requires current docs for external packages, APIs, MCPs, SDKs, and framework/runtime behavior when correctness depends on current guidance. |
 | Design SSOT | Treats `design.md` as the only design decision source of truth. `docs/Design-Sys-Prompt.md` is the builder prompt; getdesign.md, official getdesign docs, and curated DESIGN.md examples from `VoltAgent/awesome-design-md` are source inputs that must be fused into `design.md` or route-local style tokens instead of becoming parallel authorities. |
 | DB safety | Treats SQL, migrations, Supabase, RLS, and destructive operations as high risk. |
@@ -166,7 +166,7 @@ sks tmux check
 sks tmux status --once
 ```
 
-Bare `sks` creates or reuses the default named tmux session for Codex CLI. Use `sks tmux open` when you need explicit `--workspace` / `--session` flags, `sks tmux check` for readiness without launching, and `sks help` for CLI help.
+Bare `sks` creates or reuses the default named tmux session for Codex CLI and attaches to it in an interactive terminal. Use `sks tmux open` when you need explicit `--workspace` / `--session` flags, `sks tmux check` for readiness without launching, and `sks help` for CLI help. Use `--no-attach` or `SKS_TMUX_NO_AUTO_ATTACH=1` when you only want SKS to create/reuse the session and print the manual attach command.
 
 Before opening tmux, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens tmux with the updated Codex CLI.
 
@@ -177,7 +177,7 @@ sks --mad
 sks --mad --yes
 ```
 
-This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `approval_policy = "on-request"` and `approvals_reviewer = "auto_review"`. It is scoped to that explicit command and does not change normal SKS/DB safety defaults. Repeat launches reuse the same named SKS MAD tmux session.
+This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `approval_policy = "on-request"` and `approvals_reviewer = "auto_review"`, then attaches to the session in an interactive terminal. It is scoped to that explicit command and does not change normal SKS/DB safety defaults. Repeat launches reuse the same named SKS MAD tmux session.
 
 MAD does not disable the pipeline contract: stages, executors, reviewers, and auto-review policy still must not invent unrequested fallback implementation code. If the requested path cannot be implemented, SKS should block with evidence rather than add substitute behavior.
 
@@ -435,7 +435,7 @@ sks wiki refresh
 sks wiki validate .sneakoscope/wiki/context-pack.json
 ```
 
-TriWiki is the long-running context source of truth. It keeps compact high-trust recall in `attention.use_first` and source-hydration targets in `attention.hydrate_first`.
+TriWiki is the long-running context source of truth. It keeps compact high-trust recall in `attention.use_first`, source-hydration targets in `attention.hydrate_first`, and binds relevant prior-mistake claims into the current decision contract when they match the prompt.
 
 ## Safety Model
 

@@ -1,4 +1,4 @@
-import { buildWikiCoordinateIndex, compactWikiCoordinateIndex, normalizeWikiCoord, wikiCoordSimilarity } from './wiki-coordinate.mjs';
+import { WIKI_VOXEL_LAYERS, buildWikiCoordinateIndex, compactWikiCoordinateIndex, normalizeWikiCoord, wikiCoordSimilarity } from './wiki-coordinate.mjs';
 
 const TAU = 2 * Math.PI;
 
@@ -183,6 +183,51 @@ function hydrateReason(claim = {}) {
   return '';
 }
 
+function voxelHydrateCandidates(wiki = {}, anchors = new Map(), max = 4) {
+  const overlay = wiki.vx || wiki.voxel_overlay;
+  const rows = Array.isArray(overlay?.v) ? overlay.v : [];
+  const layers = Array.isArray(overlay?.l) ? overlay.l : WIKI_VOXEL_LAYERS;
+  const idx = Object.fromEntries(layers.map((layer, index) => [layer, index]));
+  return rows
+    .map((row) => {
+      const id = row?.[1];
+      const values = Array.isArray(row?.[2]) ? row[2] : [];
+      const anchor = anchors.get(id);
+      if (!id || !anchor) return null;
+      const prio = Number(values[idx.prio] || 0);
+      const conflict = Number(values[idx.conflict] || 0);
+      const route = Number(values[idx.route] || 0);
+      const trust = Number(values[idx.trust] || 0);
+      const fresh = Number(values[idx.fresh] || 0);
+      let reason = '';
+      if (conflict >= 0.35) reason = `voxel:conflict:${conflict.toFixed(2)}`;
+      else if (prio >= 0.92 && route >= 0.4) reason = `voxel:priority_route:${prio.toFixed(2)}`;
+      else if (prio >= 0.75 && fresh <= 0.25) reason = `voxel:stale_priority:${prio.toFixed(2)}`;
+      if (!reason) return null;
+      return {
+        id,
+        anchor,
+        reason,
+        score: conflict * 3 + prio * 2 + route + (1 - trust) * 0.8 + (1 - fresh) * 0.5
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.score - a.score) || String(a.id).localeCompare(String(b.id)))
+    .slice(0, max);
+}
+
+function uniqueAttentionRows(rows = [], max = 4) {
+  const out = [];
+  const seen = new Set();
+  for (const row of rows) {
+    if (!Array.isArray(row) || !row[0] || seen.has(row[0])) continue;
+    seen.add(row[0]);
+    out.push(row);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
 export function buildTriWikiAttention({ selected = [], wiki = {}, role = 'worker', maxUse = 4, maxHydrate = 4 } = {}) {
   const anchors = attentionAnchorMap(wiki);
   const ranked = [...(selected || [])]
@@ -199,11 +244,18 @@ export function buildTriWikiAttention({ selected = [], wiki = {}, role = 'worker
     .filter((claim) => trustAction(claim) === 'use')
     .slice(0, maxUse)
     .map((claim) => attentionRow(claim, anchors.get(claim.id)));
-  const hydrateFirst = ranked
+  const selectedHydrateRows = ranked
     .map((claim) => ({ claim, reason: hydrateReason(claim) }))
     .filter((item) => item.reason)
-    .slice(0, maxHydrate)
     .map((item) => attentionRow(item.claim, anchors.get(item.claim.id), item.reason));
+  const negativeHydrateRows = selectedHydrateRows.filter((row) => String(row[1] || '').includes('negative_priming'));
+  const voxelRows = voxelHydrateCandidates(wiki, anchors, maxHydrate)
+    .map((item) => attentionRow({ id: item.id }, item.anchor, item.reason));
+  const hydrateFirst = uniqueAttentionRows([
+    ...negativeHydrateRows,
+    ...voxelRows,
+    ...selectedHydrateRows
+  ], maxHydrate);
   return {
     mode: 'aggressive_triwiki_active_recall',
     use_first: useFirst,
