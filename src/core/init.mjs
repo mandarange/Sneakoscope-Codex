@@ -11,6 +11,8 @@ import { SKILL_DREAM_POLICY, skillDreamPolicyText } from './skill-forge.mjs';
 
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
 const SKS_GENERATED_GIT_PATTERNS = ['.sneakoscope/', '.codex/', '.agents/', 'AGENTS.md'];
+const SKS_SKILL_MANIFEST_FILE = '.sks-generated.json';
+const GENERATED_PRUNE_POLICY = 'remove_previous_sks_generated_paths_absent_from_current_manifest';
 
 function reflectionInstructionText(commandPrefix = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write reflection.md; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass reflection-gate.json.`;
@@ -101,6 +103,8 @@ export async function initProject(root, opts = {}) {
   const requestedHookCommandPrefix = opts.hookCommandPrefix || sksCommandPrefix(installScope, { globalCommand: opts.globalCommand });
   const hookCommandPrefix = sourceProject ? 'node ./bin/sks.mjs' : requestedHookCommandPrefix;
   const sine = path.join(root, '.sneakoscope');
+  const manifestPath = path.join(sine, 'manifest.json');
+  const previousManifest = await readJson(manifestPath, null);
   if (opts.repair) {
     const repair = await repairSksGeneratedArtifacts(root, { resetState: Boolean(opts.resetState) });
     if (repair.removed.length) created.push(`repaired generated SKS files (${repair.removed.length})`);
@@ -114,7 +118,7 @@ export async function initProject(root, opts = {}) {
   if (localExclude?.path) created.push(`${path.relative(root, localExclude.path)} local-only excludes`);
   if (sharedIgnore?.changed) created.push(`${path.relative(root, sharedIgnore.path)} SKS generated files ignore`);
 
-  await writeJsonAtomic(path.join(sine, 'manifest.json'), {
+  const manifest = {
     package: 'sneakoscope',
     version: PACKAGE_VERSION,
     initialized_at: nowIso(),
@@ -197,7 +201,8 @@ export async function initProject(root, opts = {}) {
     },
     database_safety: 'destructive_db_operations_denied_always',
     gx_renderer: 'deterministic_svg_html'
-  });
+  };
+  await writeJsonAtomic(manifestPath, manifest);
   created.push('.sneakoscope/manifest.json');
 
   const dbSafetyPath = path.join(sine, 'db-safety.json');
@@ -467,16 +472,36 @@ policy = "Deny destructive database operations, credential exfiltration, persist
 
   const skillInstall = await installSkills(root);
   created.push('.agents/skills/*');
+  if (skillInstall.removed_stale_generated_skills.length) created.push(`stale generated skills removed (${skillInstall.removed_stale_generated_skills.length})`);
+  if (skillInstall.removed_agent_skill_aliases.length) created.push(`deprecated generated skill aliases removed (${skillInstall.removed_agent_skill_aliases.length})`);
   if (skillInstall.removed_codex_skill_mirrors.length) created.push(`.codex/skills generated mirrors removed (${skillInstall.removed_codex_skill_mirrors.length})`);
-  await installCodexAgents(root);
+  const agentInstall = await installCodexAgents(root);
   created.push('.codex/agents/*');
+  const generatedFiles = currentGeneratedFileInventory(skillInstall, agentInstall);
+  const generatedCleanup = await pruneStaleGeneratedFiles(root, previousManifest, generatedFiles);
+  if (generatedCleanup.pruned.length) created.push(`stale generated files pruned (${generatedCleanup.pruned.length})`);
+  manifest.generated_files = {
+    schema_version: 1,
+    generated_by: 'sneakoscope',
+    prune_policy: GENERATED_PRUNE_POLICY,
+    files: generatedFiles
+  };
+  manifest.generated_cleanup = {
+    schema_version: 1,
+    last_run_at: nowIso(),
+    previous_version: previousManifest?.version || null,
+    current_version: PACKAGE_VERSION,
+    pruned: generatedCleanup.pruned,
+    already_absent: generatedCleanup.already_absent || []
+  };
+  await writeJsonAtomic(manifestPath, manifest);
   await writeHarnessGuardPolicy(root);
   created.push('.sneakoscope/harness-guard.json');
   const versionHookCommand = sourceProject ? 'node ./bin/sks.mjs' : hookCommandPrefix;
   const versionHook = await installVersionGitHook(root, versionHookCommand);
   if (versionHook.installed) created.push('.git/hooks/pre-commit SKS version guard');
   else created.push(`version guard skipped (${versionHook.reason})`);
-  return { created };
+  return { created, generated_cleanup: generatedCleanup, skill_install: skillInstall };
 }
 
 async function ensureSharedGitIgnore(root) {
@@ -601,11 +626,55 @@ export async function installSkills(root) {
     await writeSkillMetadata(dir, name);
   }
   const skillNames = Object.keys(skills);
+  const removedStaleGeneratedSkills = await removeStaleGeneratedSkillsFromManifest(root, skillNames);
+  await writeGeneratedSkillManifest(root, skillNames);
   return {
     installed_skills: skillNames,
+    generated_files: generatedSkillFiles(skillNames),
+    removed_stale_generated_skills: removedStaleGeneratedSkills,
     removed_agent_skill_aliases: await removeGeneratedAgentSkillAliases(root, skillNames),
     removed_codex_skill_mirrors: await removeGeneratedCodexSkillMirrors(root, skillNames)
   };
+}
+
+function generatedSkillFiles(skillNames) {
+  return skillNames.flatMap((name) => [
+    `.agents/skills/${name}/SKILL.md`,
+    `.agents/skills/${name}/agents/openai.yaml`
+  ]).sort();
+}
+
+function generatedSkillManifestPath(root) {
+  return path.join(root, '.agents', 'skills', SKS_SKILL_MANIFEST_FILE);
+}
+
+async function writeGeneratedSkillManifest(root, skillNames) {
+  const manifestPath = generatedSkillManifestPath(root);
+  await writeJsonAtomic(manifestPath, {
+    schema_version: 1,
+    generated_by: 'sneakoscope',
+    version: PACKAGE_VERSION,
+    prune_policy: GENERATED_PRUNE_POLICY,
+    skills: [...skillNames].sort(),
+    files: generatedSkillFiles(skillNames)
+  });
+}
+
+async function removeStaleGeneratedSkillsFromManifest(root, skillNames) {
+  const previous = await readJson(generatedSkillManifestPath(root), null);
+  const previousSkills = Array.isArray(previous?.skills) ? previous.skills : [];
+  if (!previousSkills.length) return [];
+  const current = new Set(skillNames);
+  const removed = [];
+  for (const name of previousSkills) {
+    const skillName = String(name || '').trim();
+    if (!skillName || current.has(skillName) || !/^[a-z0-9-]+$/.test(skillName)) continue;
+    const dir = path.join(root, '.agents', 'skills', skillName);
+    if (!(await exists(dir))) continue;
+    await fsp.rm(dir, { recursive: true, force: true });
+    removed.push(path.relative(root, dir));
+  }
+  return removed.sort();
 }
 
 function enrichSkillContent(name, content) {
@@ -704,4 +773,89 @@ async function installCodexAgents(root) {
   for (const [file, content] of Object.entries(agents)) {
     await writeTextAtomic(path.join(dir, file), content);
   }
+  return {
+    installed_agents: Object.keys(agents),
+    generated_files: Object.keys(agents).map((file) => `.codex/agents/${file}`).sort()
+  };
+}
+
+function currentGeneratedFileInventory(skillInstall = {}, agentInstall = {}) {
+  return Array.from(new Set([
+    '.codex/config.toml',
+    '.codex/SNEAKOSCOPE.md',
+    '.codex/hooks.json',
+    '.sneakoscope/harness-guard.json',
+    '.sneakoscope/db-safety.json',
+    '.sneakoscope/policy.json',
+    '.agents/skills/.sks-generated.json',
+    ...(Array.isArray(skillInstall.generated_files) ? skillInstall.generated_files : []),
+    ...(Array.isArray(agentInstall.generated_files) ? agentInstall.generated_files : [])
+  ])).sort();
+}
+
+async function pruneStaleGeneratedFiles(root, previousManifest, currentFiles) {
+  const previousFiles = Array.isArray(previousManifest?.generated_files?.files) ? previousManifest.generated_files.files : [];
+  if (!previousFiles.length) return { pruned: [] };
+  const current = new Set(currentFiles);
+  const pruned = [];
+  const already_absent = [];
+  for (const rel of previousFiles) {
+    const relPath = normalizeGeneratedRelPath(rel);
+    if (!relPath || current.has(relPath) || !isPrunableGeneratedPath(relPath)) continue;
+    const removed = await removeGeneratedRelPath(root, relPath);
+    if (removed) pruned.push(removed);
+    else already_absent.push(relPath);
+  }
+  return { pruned: pruned.sort(), already_absent: already_absent.sort() };
+}
+
+function normalizeGeneratedRelPath(value) {
+  const rel = String(value || '').trim().replaceAll('\\', '/');
+  if (!rel || rel.startsWith('/') || rel.includes('\0')) return null;
+  if (rel.split('/').some((part) => part === '..')) return null;
+  return rel;
+}
+
+function isPrunableGeneratedPath(rel) {
+  if (rel.startsWith('.agents/skills/')) return true;
+  if (rel.startsWith('.codex/agents/')) return true;
+  if (rel.startsWith('.codex/skills/')) return true;
+  return new Set([
+    '.codex/config.toml',
+    '.codex/SNEAKOSCOPE.md',
+    '.codex/hooks.json',
+    '.sneakoscope/harness-guard.json',
+    '.sneakoscope/db-safety.json',
+    '.sneakoscope/policy.json'
+  ]).has(rel);
+}
+
+async function removeGeneratedRelPath(root, rel) {
+  const absRoot = path.resolve(root);
+  const abs = path.resolve(absRoot, rel);
+  if (abs !== absRoot && !abs.startsWith(`${absRoot}${path.sep}`)) return null;
+  if (!(await exists(abs))) return null;
+  await fsp.rm(abs, { recursive: true, force: true });
+  await removeEmptyGeneratedParents(root, rel);
+  return rel;
+}
+
+async function removeEmptyGeneratedParents(root, rel) {
+  const parts = rel.split('/');
+  if (parts.length <= 1) return;
+  const stopDirs = new Set([
+    path.resolve(root, '.agents', 'skills'),
+    path.resolve(root, '.codex', 'agents'),
+    path.resolve(root, '.codex', 'skills'),
+    path.resolve(root, '.codex'),
+    path.resolve(root, '.sneakoscope')
+  ]);
+  let dir = path.resolve(root, ...parts.slice(0, -1));
+  while (!stopDirs.has(dir) && dir.startsWith(path.resolve(root))) {
+    await removeDirIfEmpty(dir);
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  if (rel.startsWith('.codex/skills/')) await removeDirIfEmpty(path.join(root, '.codex', 'skills'));
 }

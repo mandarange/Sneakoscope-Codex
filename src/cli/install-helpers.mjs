@@ -186,7 +186,14 @@ export async function ensureGlobalCodexSkillsDuringInstall(opts = {}) {
   try {
     const install = await installSkills(home);
     const skills = await checkRequiredSkills(home, root);
-    return { status: skills.ok ? 'installed' : 'partial', root, installed_count: install.installed_skills.length, removed_aliases: install.removed_agent_skill_aliases, missing_skills: skills.missing };
+    return {
+      status: skills.ok ? 'installed' : 'partial',
+      root,
+      installed_count: install.installed_skills.length,
+      removed_aliases: install.removed_agent_skill_aliases,
+      removed_stale_generated_skills: install.removed_stale_generated_skills,
+      missing_skills: skills.missing
+    };
   } catch (err) {
     return { status: 'failed', root, error: err.message };
   }

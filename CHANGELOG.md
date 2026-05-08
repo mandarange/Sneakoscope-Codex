@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.7.25] - 2026-05-08
+
+### Fixed
+
+- Prune stale SKS-generated skills and generated app/agent files during setup, doctor repair, and postinstall refresh by comparing the previous generated manifest with the current generated surface.
+- Preserve user-owned custom skills while removing prior-version SKS generated legacy files, and report the cleanup in doctor JSON output.
+
 ## [0.7.24] - 2026-05-08
 
 ### Changed
