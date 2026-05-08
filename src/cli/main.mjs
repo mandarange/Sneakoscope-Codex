@@ -83,54 +83,17 @@ export async function main(args) {
   if (!cmd) return help();
   if (cmd === '--help' || cmd === '-h') return help();
   if (cmd === '--version' || cmd === '-v' || cmd === 'version') return version();
-  if (cmd === 'postinstall') return postinstall({ bootstrap });
-  if (cmd === 'wizard' || cmd === 'ui') return wizard(tail);
   if (cmd === 'tmux') return !sub || String(sub).startsWith('--') ? tmuxCommand('check', tail) : tmuxCommand(sub, rest);
   if (cmd === 'auto-review' || cmd === 'autoreview') return autoReviewCommand(sub, rest);
-  if (cmd === 'update-check') return updateCheck(tail);
-  if (cmd === 'help') return help(tail);
-  if (cmd === 'commands') return commands(tail);
-  if (cmd === 'usage') return usage(tail);
-  if (cmd === 'root') return rootCommand(tail);
-  if (cmd === 'quickstart') return quickstartCommand();
-  if (cmd === 'codex-app') return codexAppHelp(tail);
-  if (cmd === 'bootstrap') return bootstrap(tail);
-  if (cmd === 'deps') return deps(sub, rest);
   if (cmd === 'dollar-commands' || cmd === 'dollars' || cmd === '$') return dollarCommands(tail);
   if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
-  if (cmd === 'qa-loop') return qaLoopCommand(sub, rest);
-  if (cmd === 'ppt') return pptCommand(sub, rest);
-  if (cmd === 'context7') return context7Command(sub, rest);
-  if (cmd === 'pipeline') return pipeline(sub, rest);
-  if (cmd === 'guard') return guard(sub, rest);
-  if (cmd === 'conflicts') return conflicts(sub, rest);
-  if (cmd === 'versioning') return versioning(sub, rest);
-  if (cmd === 'reasoning') return reasoningCommand(tail);
-  if (cmd === 'aliases') return aliases();
-  if (cmd === 'setup') return setup(tail);
-  if (cmd === 'fix-path') return fixPath(tail);
-  if (cmd === 'doctor') return doctor(tail);
-  if (cmd === 'init') return init(tail);
-  if (cmd === 'selftest') return selftest(tail);
-  if (cmd === 'goal') return goalCommand(sub, rest);
-  if (cmd === 'research') return researchCommand(sub, rest);
-  if (cmd === 'hook') return emitHook(sub);
-  if (cmd === 'profile') return profileCommand(sub, rest);
-  if (cmd === 'hproof') return hproofCommand(sub, rest);
-  if (cmd === 'validate-artifacts') return validateArtifactsCommand(tail);
-  if (cmd === 'perf') return perfCommand(sub, rest);
-  if (cmd === 'proof-field') return proofFieldCommand(sub, rest);
-  if (cmd === 'skill-dream') return skillDreamCommand(sub, rest);
-  if (cmd === 'code-structure') return codeStructureCommand(sub, rest);
-  if (cmd === 'memory') return memoryCommand(sub, rest);
-  if (cmd === 'gx') return gxCommand(sub, rest);
-  if (cmd === 'team') return team(tail);
-  if (cmd === 'db') return dbCommand(sub, rest);
-  if (cmd === 'eval') return evalCommand(sub, rest);
-  if (cmd === 'harness') return harnessCommand(sub, rest);
-  if (cmd === 'wiki') return wikiCommand(sub, rest);
-  if (cmd === 'gc') return gcCommand(tail);
-  if (cmd === 'stats') return statsCommand(tail);
+  const handlers = {
+    postinstall: () => postinstall({ bootstrap }), wizard: () => wizard(tail), ui: () => wizard(tail), 'update-check': () => updateCheck(tail), help: () => help(tail), commands: () => commands(tail), usage: () => usage(tail), root: () => rootCommand(tail), quickstart: () => quickstartCommand(), 'codex-app': () => codexAppHelp(tail), bootstrap: () => bootstrap(tail), deps: () => deps(sub, rest),
+    'qa-loop': () => qaLoopCommand(sub, rest), ppt: () => pptCommand(sub, rest), context7: () => context7Command(sub, rest), pipeline: () => pipeline(sub, rest), guard: () => guard(sub, rest), conflicts: () => conflicts(sub, rest), versioning: () => versioning(sub, rest), reasoning: () => reasoningCommand(tail), aliases: () => aliases(), setup: () => setup(tail), 'fix-path': () => fixPath(tail), doctor: () => doctor(tail), init: () => init(tail), selftest: () => selftest(tail),
+    goal: () => goalCommand(sub, rest), research: () => researchCommand(sub, rest), hook: () => emitHook(sub), profile: () => profileCommand(sub, rest), hproof: () => hproofCommand(sub, rest), 'validate-artifacts': () => validateArtifactsCommand(tail), perf: () => perfCommand(sub, rest), 'proof-field': () => proofFieldCommand(sub, rest), 'skill-dream': () => skillDreamCommand(sub, rest), 'code-structure': () => codeStructureCommand(sub, rest), memory: () => memoryCommand(sub, rest), gx: () => gxCommand(sub, rest),
+    team: () => team(tail), db: () => dbCommand(sub, rest), eval: () => evalCommand(sub, rest), harness: () => harnessCommand(sub, rest), wiki: () => wikiCommand(sub, rest), gc: () => gcCommand(tail), stats: () => statsCommand(tail)
+  };
+  if (handlers[cmd]) return handlers[cmd]();
   console.error(`Unknown command: ${cmd}`);
   process.exitCode = 1;
 }
@@ -2792,8 +2755,13 @@ async function selftest() {
   const buttonUxSchema = buildQuestionSchema('$Team 버튼 UX 수정');
   const buttonUxSlotIds = buttonUxSchema.slots.map((s) => s.id);
   if (buttonUxSlotIds.includes('UI_STATE_BEHAVIOR') || buttonUxSlotIds.includes('VISUAL_REGRESSION_REQUIRED')) throw new Error('selftest failed: predictable UI defaults should be inferred, not asked');
+  if (buttonUxSlotIds.length) throw new Error(`selftest failed: clear small UI work should auto-seal, got ${buttonUxSlotIds.join(',')}`);
   if (buttonUxSchema.inferred_answers.UI_STATE_BEHAVIOR !== 'infer_from_task_context_and_existing_design_system; preserve existing loading/error/empty/retry behavior unless explicitly requested; add only standard states required by the touched surface') throw new Error('selftest failed: UI state default inference missing');
   if (buttonUxSchema.inferred_answers.VISUAL_REGRESSION_REQUIRED !== 'yes_if_available') throw new Error('selftest failed: visual regression default inference missing');
+  const vagueSchema = buildQuestionSchema('뭔가 개선해줘');
+  const vagueSlotIds = vagueSchema.slots.map((s) => s.id);
+  if (!vagueSlotIds.includes('INTENT_TARGET') || vagueSlotIds.includes('GOAL_PRECISE') || vagueSlotIds.includes('ACCEPTANCE_CRITERIA')) throw new Error(`selftest failed: vague work should ask dynamic intent questions only, got ${vagueSlotIds.join(',')}`);
+  if (vagueSchema.ambiguity_assessment?.method !== 'weighted_clarity_interview' || !vagueSchema.ambiguity_assessment?.adversarial_lenses?.includes('challenge_framing')) throw new Error('selftest failed: ambiguity schema missing weighted clarity / planning lenses');
   const pptRoute = routePrompt('$PPT 투자자용 피치덱 만들어줘');
   if (pptRoute?.id !== 'PPT') throw new Error('selftest failed: $PPT did not route to presentation pipeline');
   if (JSON.stringify(pptRoute.requiredSkills) !== JSON.stringify(PPT_PIPELINE_SKILL_ALLOWLIST)) throw new Error(`selftest failed: PPT route required skills are not allowlisted: ${pptRoute.requiredSkills.join(',')}`);

@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.7.24] - 2026-05-08
+
+### Changed
+
+- Bump the deployment package version after the score-based ambiguity-question rebuild so the next publish can ship a fresh patch release.
+
+## [0.7.23] - 2026-05-08
+
+### Changed
+
+- Replace fixed ambiguity-question templates with a weighted clarity gate that scores goal, constraints, success criteria, and codebase context before asking only the lowest-clarity execution-changing questions.
+- Add Ouroboros-style ambiguity threshold metadata and Prometheus/Hyperplan-style planning lenses to the generated question schema and visible `questions.md` output.
+- Update Team and prompt-pipeline skill guidance plus README documentation so user-facing surfaces describe score-based minimal clarification instead of static `GOAL_PRECISE` / `ACCEPTANCE_CRITERIA` prompts.
+
 ## [0.7.21] - 2026-05-08
 
 ### Fixed
