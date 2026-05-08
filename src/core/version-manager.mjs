@@ -108,15 +108,17 @@ export async function bumpProjectVersion(root, opts = {}) {
     pkg.version = formatSemver(target);
     await writeJsonAtomic(pkgPath, pkg);
   }
-  const sourceVersion = await syncSourcePackageVersion(root, formatSemver(target));
-  const synced = await syncPackageLockVersions(root, formatSemver(target));
-  const staged = await stageVersionFiles(root, [pkgPath, ...synced.files, ...sourceVersion.files]);
+  const targetVersion = formatSemver(target);
+  const sourceVersion = await syncSourcePackageVersion(root, targetVersion);
+  const changelog = await syncChangelogVersionSection(root, targetVersion);
+  const synced = await syncPackageLockVersions(root, targetVersion);
+  const staged = await stageVersionFiles(root, [pkgPath, ...synced.files, ...sourceVersion.files, ...changelog.files]);
   if (!staged.ok) return { ok: false, reason: 'git_add_version_files_failed', stderr: staged.stderr };
   if (statePath) {
     await writeJsonAtomic(statePath, {
       schema_version: 1,
-      last_version: formatSemver(target),
-      previous_version: pkg.version === formatSemver(target) && !changed ? formatSemver(current) : formatSemver(current),
+      last_version: targetVersion,
+      previous_version: pkg.version === targetVersion && !changed ? formatSemver(current) : formatSemver(current),
       updated_at: nowIso(),
       pid: process.pid,
       bump: policy.bump || DEFAULT_BUMP,
@@ -125,19 +127,19 @@ export async function bumpProjectVersion(root, opts = {}) {
   }
   await writeJsonAtomic(path.join(root, '.sneakoscope', 'version', 'last.json'), {
     schema_version: 1,
-    version: formatSemver(target),
+    version: targetVersion,
     previous_version: formatSemver(current),
     changed,
-    synced_files: [...synced.relative_files, ...sourceVersion.relative_files],
+    synced_files: [...synced.relative_files, ...sourceVersion.relative_files, ...changelog.relative_files],
     staged_files: staged.relative_files,
     updated_at: nowIso()
   }).catch(() => {});
   return {
     ok: true,
     changed,
-    version: formatSemver(target),
+    version: targetVersion,
     previous_version: formatSemver(current),
-    synced_files: [...synced.relative_files, ...sourceVersion.relative_files],
+    synced_files: [...synced.relative_files, ...sourceVersion.relative_files, ...changelog.relative_files],
     staged_files: staged.relative_files,
     lock_scope: git.common_dir
   };
@@ -230,12 +232,36 @@ async function syncSourcePackageVersion(root, version) {
   return { files: [file], relative_files: [path.relative(root, file)] };
 }
 
+async function syncChangelogVersionSection(root, version) {
+  const file = path.join(root, 'CHANGELOG.md');
+  let text = await readFileMaybe(file);
+  const date = nowIso().slice(0, 10);
+  const sectionRe = new RegExp(`^##\\s+\\[${escapeRegExp(version)}\\]\\s+-\\s+\\d{4}-\\d{2}-\\d{2}\\s*$`, 'm');
+  if (sectionRe.test(text)) return { files: [], relative_files: [] };
+
+  if (!text.trim()) text = '# Changelog\n\n## [Unreleased]\n\n';
+  if (!/^#\s+Changelog\s*$/m.test(text)) text = `# Changelog\n\n${text.replace(/^\s+/, '')}`;
+  if (!/^##\s+\[Unreleased\]\s*$/m.test(text)) {
+    text = text.replace(/^#\s+Changelog\s*$/m, (title) => `${title}\n\n## [Unreleased]`);
+  }
+
+  const managedSection = `\n## [${version}] - ${date}\n\n### Fixed\n\n- Keep release metadata aligned after the automatic SKS version guard advances the package version.\n`;
+  const next = text.replace(/^##\s+\[Unreleased\]\s*$/m, (heading) => `${heading}\n${managedSection}`);
+  if (next === text) return { files: [], relative_files: [] };
+  await writeTextAtomic(file, next);
+  return { files: [file], relative_files: [path.relative(root, file)] };
+}
+
 async function stageVersionFiles(root, files) {
   const existing = [];
   for (const file of files) if (await exists(file)) existing.push(path.relative(root, file));
   if (!existing.length) return { ok: true, relative_files: [] };
   const result = await git(root, ['add', '--', ...existing]);
   return { ok: result.code === 0, relative_files: existing, stderr: result.stderr };
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function parseSemver(value) {
