@@ -131,6 +131,10 @@ function promptHasRisk(lower) {
   return /(운영|production|prod|live|배포|publish|release|결제|payment|billing|auth|인증|보안|security|db|database|supabase|postgres|sql|schema|migration|마이그레이션|삭제|delete|drop|truncate|reset|권한|permission|credential|secret)/.test(lower);
 }
 
+function promptNeedsExplicitRiskBoundary(lower) {
+  return /(drop|truncate|wipe|reset\s+(?:db|database)|delete\s+all|all-row|전체\s*(?:삭제|초기화)|운영\s*(?:db|데이터|삭제|쓰기|변경)|production\s*(?:db|database|delete|write|mutation)|prod\s*(?:db|database|delete|write|mutation)|credential|secret|api\s*key|토큰\s*(?:노출|삭제|교체)|권한\s*(?:상승|확대)|permission\s*(?:escalation|widening))/.test(lower);
+}
+
 function promptHasContextTarget(text, lower) {
   return promptHasTarget(text, lower)
     || /https?:\/\/\S+/.test(text)
@@ -146,8 +150,11 @@ export function buildAmbiguityAssessment(prompt, explicitAnswers = {}) {
   const acceptance = promptHasExplicitAcceptance(lower) || hasAnswer(explicitAnswers.ACCEPTANCE_CRITERIA) || hasAnswer(explicitAnswers.SUCCESS_CRITERIA_OR_ACCEPTANCE);
   const risk = promptHasRisk(lower);
   const contextTarget = promptHasContextTarget(text, lower) || hasAnswer(explicitAnswers.CODEBASE_CONTEXT_TARGET);
+  const actionable = target && action && !underspecified;
+  const hardRiskNeedsBoundary = promptNeedsExplicitRiskBoundary(lower);
   const predictableSafetyDefault = /(재시도|retry|세션\s*만료|session\s*expired|session\s*expiry|token\s*expired)/.test(lower);
-  const hasPolicy = hasAnswer(explicitAnswers.RISK_BOUNDARY) || hasAnswer(explicitAnswers.RISK_AND_BOUNDARY) || predictableSafetyDefault || /(하지\s*마|금지|no\s+|never|묻지|보존|preserve|safe|안전|검증|approval|승인|알아서|판단|추론|infer|default|기본)/.test(lower);
+  const predictableImplementationBoundary = actionable && risk && !hardRiskNeedsBoundary;
+  const hasPolicy = hasAnswer(explicitAnswers.RISK_BOUNDARY) || hasAnswer(explicitAnswers.RISK_AND_BOUNDARY) || predictableSafetyDefault || predictableImplementationBoundary || /(하지\s*마|금지|no\s+|never|묻지|보존|preserve|safe|안전|검증|approval|승인|알아서|판단|추론|infer|default|기본)/.test(lower);
   const hasMultipleChoiceRisk = /(\bor\b|또는|아니면|선택|둘 중|여러|multiple|대안)/.test(lower) && !/(알아서|판단|infer|추론|default|기본)/.test(lower);
 
   const goalClarity = underspecified ? (target || action ? 0.45 : 0.2) : (target && action ? 0.9 : target || action ? 0.62 : 0.25);
@@ -169,7 +176,7 @@ export function buildAmbiguityAssessment(prompt, explicitAnswers = {}) {
   const unresolved = [];
   if (components.goal.clarity_score < CLARITY_FLOORS.goal) unresolved.push('intent_target_or_required_outcome');
   if (components.success.clarity_score < CLARITY_FLOORS.success && (!target || !action || risk)) unresolved.push('success_criteria_or_acceptance');
-  if (components.constraints.clarity_score < CLARITY_FLOORS.constraints || hasMultipleChoiceRisk) unresolved.push('risk_boundary_or_choice');
+  if ((components.constraints.clarity_score < CLARITY_FLOORS.constraints && hardRiskNeedsBoundary) || hasMultipleChoiceRisk) unresolved.push('risk_boundary_or_choice');
   if (components.context.clarity_score < CLARITY_FLOORS.context) unresolved.push('codebase_context_target');
   const uniqueUnresolved = [...new Set(unresolved)];
   return {

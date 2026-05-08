@@ -6,99 +6,96 @@ import { getCodexInfo } from './codex-adapter.mjs';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.mjs';
 
 export const SKS_TMUX_LOGO = [
-  '        _______   __  __   _______',
-  '      / _____/  / /_/ /  / _____/|',
-  '     / /____   / __  /  / /____ | |',
-  '     \\____  \\ / / / /   \\____  \\| |',
-  ' ____/ /  /_/ /_/  ____/ /| | | |',
-  '/_____/   /_/\\__/ /_____/ |_|/ /',
-  ' \\_____\\   \\_\\ \\_\\ \\_____\\|_| /',
-  '        SNEAKOSCOPE CODEX'
+  '        _______     __  __     _______',
+  '      / _____/|   / /_/ /|   / _____/|',
+  '     / /____| |  / __  / |  / /____| |',
+  '     \\____  \\ | / / / /| |  \\____  \\ |',
+  ' ____/ /  | |/_/ /_/ / | |____/ /  | |',
+  '/_____/   |//_/\\__/ /  |//_____/   |/',
+  '\\_____\\___/ \\_\\ \\_\\/___/ \\_____\\___/',
+  '          SNEAKOSCOPE CODEX'
 ].join('\n');
 
 const SKS_TMUX_LOGO_FRAMES = [
   [
-    '                 ||',
-    '                 ||        .',
-    '                 ||      .:',
-    '                 ||    .::',
-    '                 ||  .:::',
-    '                 ||.::::',
-    '                 SKS'
+    '             ||',
+    '             ||',
+    '             ||',
+    '             ||',
+    '             ||',
+    '             ||',
+    '             SKS',
+    '        SNEAKOSCOPE CODEX'
   ].join('\n'),
   [
-    '              //||',
-    '            .// ||        ..',
-    '           //   ||     ..::',
-    '          //    ||   ..::::',
-    '         //     || ..::::',
-    '        //      ||::::',
-    '             S K S'
+    '          //||',
+    '        //  ||        .',
+    '       //   ||      .:',
+    '      //    ||    .::',
+    '     //     ||  .:::',
+    '    //      ||.::::',
+    '          S K S',
+    '        SNEAKOSCOPE CODEX'
   ].join('\n'),
   [
-    '            ______        __        ______',
-    '         . / ___/|     . / /__   . / ___/|',
-    '        / / /__ | |   / //_/   / / /__ | |',
-    '       / /\\__ \\ | |  / ,<     / /\\__ \\ | |',
-    '      / /___/ / | | / /| |   / /___/ / | |',
-    '     /_/_____/  |/ /_/ |_|  /_/_____/  |/',
-    '             SNEAKOSCOPE'
-  ].join('\n'),
-  [
-    '         _______    __  __    _______',
-    '      . / _____/ . / /_/ / . / _____/|',
-    '     / / /____   / __  /  / / /____ | |',
-    '    / /\\____  \\ / / / /  / /\\____  \\| |',
-    '   / /_____/ / /_/ /_/  / /_____/ /| |',
-    '  /_/______/  /_/\\__/  /_/______/ |_|/',
-    '          SNEAKOSCOPE'
-  ].join('\n'),
-  [
-    '      _____   __  __   _____',
-    '    / ___/  / /_/ /  / ___/|   .',
-    '   / /__   / __  /  / /__ | |  ::',
-    '   \\__ \\  / / / /   \\__ \\| |  :::',
-    ' ___/ /  /_/ /_/ ___/ /| | | :::',
-    '/____/   /_/\\__/ /____/ |_|/::',
-    '  \\___\\   \\_\\ \\_\\ \\____\\|_|:',
-    '        SNEAKOSCOPE'
+    '        _______     __  __     _______',
+    '      / _____/|   / /_/ /|   / _____/|',
+    '     / /____| |  / __  / |  / /____| |',
+    '     \\____  \\ | / / / /| |  \\____  \\ |',
+    ' ____/ /  | |/_/ /_/ / | |____/ /  | |',
+    '/_____/   |//_/\\__/ /  |//_____/   |/',
+    '\\_____\\___/ \\_\\ \\_\\/___/ \\_____\\___/',
+    '          SNEAKOSCOPE CODEX'
   ].join('\n'),
   [
     '        _______   __  __   _______',
     '      / _____/  / /_/ /  / _____/|',
     '     / /____   / __  /  / /____ | |',
     '     \\____  \\ / / / /   \\____  \\| |',
-    ' ____/ /  /_/ /_/  ____/ /| | | |',
-    '/_____/   /_/\\__/ /_____/ |_|/ /',
-    ' \\_____\\   \\_\\ \\_\\ \\_____\\|_| /',
+    ' ____/ /  /_/ /_/ /  ____/ /  | |',
+    '/_____/   /_/\\__/  /_____/   |/',
+    ' \\_____\\  \\_\\ \\_\\  \\_____\\___/',
+    '          SNEAKOSCOPE CODEX'
+  ].join('\n'),
+  [
+    '        _______     __  __     _______',
+    '      / _____/|   / /_/ /|   / _____/|',
+    '     / /____| |  / __  / |  / /____| |',
+    '     \\____  \\ | / / / /| |  \\____  \\ |',
+    ' ____/ /  | |/_/ /_/ / | |____/ /  | |',
+    '/_____/   |//_/\\__/ /  |//_____/   |/',
+    '\\_____\\___/ \\_\\ \\_\\/___/ \\_____\\___/',
+    '          SNEAKOSCOPE CODEX'
+  ].join('\n'),
+  [
+    '        _______   __  __   _______',
+    '      |\\_____ \\  / /_/ /  |\\_____ \\',
+    '      | |____\\ \\/ __  /   | |____\\ \\',
+    '      | |\\____\\/ / / /    | |\\____\\ \\',
+    '      | | |___/ /_/ /__   | | |___/ /',
+    '      \\|_|/____/\\__/__/   \\|_|/____/',
+    '           S K S',
     '        SNEAKOSCOPE CODEX'
   ].join('\n'),
   [
-    '    _______      __      _______',
-    '   |\\_____ \\  . / /_.   |\\_____ \\',
-    '   | |____\\ \\  / __/    | |____\\ \\',
-    '   | |\\____\\ \\/ / /     | |\\____\\ \\',
-    '   | | |___/ /_/ /__    | | |___/ /',
-    '   \\|_|/____/\\__/__/    \\|_|/____/',
-    '        SNEAKOSCOPE'
+    '             ||\\\\',
+    '        .    ||  \\\\',
+    '       ::.   ||   \\\\',
+    '      ::::.  ||    \\\\',
+    '     ::::::. ||     \\\\',
+    '    :::::::::||      \\\\',
+    '          S K S',
+    '        SNEAKOSCOPE CODEX'
   ].join('\n'),
   [
-    '         ||\\\\',
-    '     ..  || \\\\.',
-    '   ..::  ||   \\\\',
-    ' ..::::  ||    \\\\',
-    '::::     ||     \\\\',
-    '         ||      \\\\',
-    '             S K S'
-  ].join('\n'),
-  [
-    '                 ||',
-    '             .   ||',
-    '           .::   ||',
-    '         .::::   ||',
-    '       .::::     ||',
-    '     .::::       ||',
-    '                 SKS'
+    '             ||',
+    '             ||',
+    '             ||',
+    '             ||',
+    '             ||',
+    '             ||',
+    '             SKS',
+    '        SNEAKOSCOPE CODEX'
   ].join('\n'),
   SKS_TMUX_LOGO
 ];
@@ -205,7 +202,7 @@ export function tmuxStatusKind(tmux = {}) {
 export function codexLaunchCommand(root, codexBin, codexArgs = []) {
   const extraArgs = Array.isArray(codexArgs) ? codexArgs : [];
   return [
-    sksLogoIntroCommand(),
+    sksLogoIntroCommand(codexBin),
     `printf '\\nProject: %s\\n' ${shellEscape(root)}`,
     'printf \'Runtime: tmux session for Codex CLI\\n\'',
     'printf \'Prompt:  use canonical $ commands, for example $Team or $QA-LOOP\\n\\n\'',
@@ -215,17 +212,25 @@ export function codexLaunchCommand(root, codexBin, codexArgs = []) {
   ].join('; ');
 }
 
-export function sksLogoIntroCommand() {
+export function sksLogoIntroCommand(codexBin = 'codex') {
   const staticLogo = `clear; printf '\\033[1;38;5;51m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO)}`;
-  const animated = SKS_TMUX_LOGO_ANIMATION_STEPS.flatMap((step) => {
-    const style = `${step.bold ? '1;' : ''}38;5;${step.color}`;
-    return [
-      'clear',
-      `printf '\\033[${style}m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO_FRAMES[step.frame])}`,
-      `sleep ${step.delay}`
-    ];
-  }).join('; ');
-  return `if [ "\${SKS_TMUX_LOGO_ANIMATION:-1}" = "0" ]; then ${staticLogo}; else ${animated}; fi`;
+  const authenticatedCheck = `${shellEscape(codexBin)} login status >/dev/null 2>&1`;
+  const animated = [
+    'clear',
+    'trap \'printf "\\033[0m\\033[?25h"\' EXIT INT TERM',
+    `printf '\\033[?25l'`,
+    ...SKS_TMUX_LOGO_ANIMATION_STEPS.flatMap((step) => {
+      const style = `${step.bold ? '1;' : ''}38;5;${step.color}`;
+      return [
+        `printf '\\033[H\\033[J\\033[${style}m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO_FRAMES[step.frame])}`,
+        `sleep ${step.delay}`
+      ];
+    }),
+    `printf '\\033[H\\033[J\\033[1;38;5;51m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO)}`,
+    `printf '\\033[?25h'`,
+    'trap - EXIT INT TERM'
+  ].join('; ');
+  return `if [ -n "\${TMUX:-}" ] || [ "\${SKS_TMUX_LOGO_ANIMATION:-1}" = "0" ] || ${authenticatedCheck}; then ${staticLogo}; else ${animated}; fi`;
 }
 
 function terminalTitleCommand(title = '') {

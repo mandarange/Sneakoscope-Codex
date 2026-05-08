@@ -2407,7 +2407,8 @@ async function selftest() {
   if (!hookKoreanSksContext.includes('Route: $Team')) throw new Error('selftest failed: Korean implementation prompt did not promote to Team route');
   if (hookKoreanSksContext.includes('SKS answer-only pipeline active')) throw new Error('selftest failed: Korean implementation prompt still used answer-only pipeline');
   const hookKoreanSksState = await readJson(stateFile(hookKoreanSksTmp), {});
-  if (hookKoreanSksState.phase !== 'TEAM_CLARIFICATION_CONTRACT_SEALED' || hookKoreanSksState.implementation_allowed !== true || !hookKoreanSksState.ambiguity_gate_passed) throw new Error('selftest failed: Korean Team auto-seal');
+  if (hookKoreanSksState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || hookKoreanSksState.implementation_allowed !== true || !hookKoreanSksState.ambiguity_gate_passed || !hookKoreanSksState.team_plan_ready) throw new Error('selftest failed: Korean Team auto-seal did not materialize Team');
+  if (!(await exists(path.join(missionDir(hookKoreanSksTmp, hookKoreanSksState.mission_id), 'team-plan.json')))) throw new Error('selftest failed: Korean Team auto-seal did not write team-plan.json');
   const hookPaymentTeamTmp = tmpdir();
   await initProject(hookPaymentTeamTmp, {});
   const hookPaymentTeamPayload = JSON.stringify({ cwd: hookPaymentTeamTmp, prompt: '$Team 결제 재시도 정책과 로그인 세션 만료 버그 수정 executor:2 reviewer:1 user:1' });
@@ -2418,9 +2419,10 @@ async function selftest() {
   if (!hookPaymentTeamContext.includes('Ambiguity gate auto-sealed')) throw new Error('selftest failed: predictable payment/auth Team prompt did not auto-seal');
   if (hookPaymentTeamContext.includes('PAYMENT_RETRY_POLICY') || hookPaymentTeamContext.includes('AUTH_PROTOCOL_CHANGE_ALLOWED')) throw new Error('selftest failed: predictable payment/auth policy defaults were asked instead of inferred');
   const hookPaymentTeamState = await readJson(stateFile(hookPaymentTeamTmp), {});
-  if (hookPaymentTeamState.phase !== 'TEAM_CLARIFICATION_CONTRACT_SEALED' || hookPaymentTeamState.implementation_allowed !== true || !hookPaymentTeamState.ambiguity_gate_passed) throw new Error('selftest failed: predictable payment/auth Team state was not executable after auto-seal');
+  if (hookPaymentTeamState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || hookPaymentTeamState.implementation_allowed !== true || !hookPaymentTeamState.ambiguity_gate_passed || !hookPaymentTeamState.team_plan_ready) throw new Error('selftest failed: predictable payment/auth Team did not materialize after auto-seal');
   const hookPaymentTeamSchema = await readJson(path.join(missionDir(hookPaymentTeamTmp, hookPaymentTeamState.mission_id), 'required-answers.schema.json'));
   if (hookPaymentTeamSchema.slots.length !== 0 || hookPaymentTeamSchema.inferred_answers?.PAYMENT_RETRY_POLICY === undefined || hookPaymentTeamSchema.inferred_answers?.AUTH_SESSION_EXPIRED_BEHAVIOR === undefined) throw new Error('selftest failed: predictable payment/auth defaults were not recorded as inferred answers');
+  if (!(await exists(path.join(missionDir(hookPaymentTeamTmp, hookPaymentTeamState.mission_id), 'team-plan.json')))) throw new Error('selftest failed: predictable payment/auth Team auto-seal did not write team-plan.json');
   const hookTeamTmp = tmpdir();
   await initProject(hookTeamTmp, {});
   const hookTeamPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 발표자료 만들어줘 executor:2 reviewer:1 user:1' });
@@ -2991,6 +2993,10 @@ async function selftest() {
   if (buttonUxSlotIds.length) throw new Error(`selftest failed: clear small UI work should auto-seal, got ${buttonUxSlotIds.join(',')}`);
   if (buttonUxSchema.inferred_answers.UI_STATE_BEHAVIOR !== 'infer_from_task_context_and_existing_design_system; preserve existing loading/error/empty/retry behavior unless explicitly requested; add only standard states required by the touched surface') throw new Error('selftest failed: UI state default inference missing');
   if (buttonUxSchema.inferred_answers.VISUAL_REGRESSION_REQUIRED !== 'yes_if_available') throw new Error('selftest failed: visual regression default inference missing');
+  const predictableAuthCliSchema = buildQuestionSchema('회전 아스키 아트는 제일 처음 인증 안됐을때만 codex cli처럼 애니메이션으로 보이게 하고 tmux에서는 정적 3d 아스키 아트로 보여줘');
+  const predictableAuthCliSlotIds = predictableAuthCliSchema.slots.map((s) => s.id);
+  if (predictableAuthCliSlotIds.length) throw new Error(`selftest failed: clear auth-worded CLI rendering work should auto-seal, got ${predictableAuthCliSlotIds.join(',')}`);
+  if (!predictableAuthCliSchema.inferred_answers.RISK_BOUNDARY?.includes('no destructive commands or live data writes')) throw new Error('selftest failed: predictable auth-worded CLI work did not infer conservative risk boundary');
   const vagueSchema = buildQuestionSchema('뭔가 개선해줘');
   const vagueSlotIds = vagueSchema.slots.map((s) => s.id);
   if (!vagueSlotIds.includes('INTENT_TARGET') || vagueSlotIds.includes('GOAL_PRECISE') || vagueSlotIds.includes('ACCEPTANCE_CRITERIA')) throw new Error(`selftest failed: vague work should ask dynamic intent questions only, got ${vagueSlotIds.join(',')}`);
