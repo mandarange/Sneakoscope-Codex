@@ -457,7 +457,7 @@ export const COMMAND_CATALOG = [
   { name: 'deps', usage: 'sks deps check|install [tmux|codex|context7|all] [--yes]', description: 'Check or guided-install Node/npm PATH, Codex CLI/App, Context7, Browser Use, Computer Use, tmux, and Homebrew on macOS.' },
   { name: 'codex-app', usage: 'sks codex-app [check|open]', description: 'Check Codex App install and first-party MCP/plugin readiness, then show app setup files and examples.' },
   { name: 'openclaw', usage: 'sks openclaw install|path|print [--dir path] [--force] [--json]', description: 'Generate an OpenClaw skill package so OpenClaw agents can discover and use local SKS workflows.' },
-  { name: 'tmux', usage: 'sks tmux open|check|status [--workspace name]', description: 'Explicitly open the SKS tmux runtime, or check/status without launching tmux.' },
+  { name: 'tmux', usage: 'sks | sks tmux open|check|status [--workspace name]', description: 'Open the default SKS tmux runtime with bare sks, or use tmux subcommands for explicit launch/check/status.' },
   { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot tmux Codex CLI workspace with the SKS MAD full-access auto-review profile.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS tmux with the auto-review profile.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Team.' },

@@ -85,6 +85,8 @@ Use this skill when the user asks an OpenClaw agent to work in a codebase that u
 
 The OpenClaw agent must have the built-in \`shell\` tool enabled. Prefer running commands in the target repository root.
 
+Set \`SKS_OPENCLAW=1\` for SKS shell commands. In OpenClaw mode, SKS treats update/install prompts as automatically approved so \`sks\` can update \`sneakoscope\` or \`@openai/codex\` before launching tmux without pausing for a human \`Y/n\` answer.
+
 ## Core Commands
 
 - \`${sksCommand} root\` checks whether SKS is using a project root or the global runtime root.
@@ -97,7 +99,7 @@ The OpenClaw agent must have the built-in \`shell\` tool enabled. Prefer running
 
 ## Agent Operating Rules
 
-1. Before substantive work, run \`${sksCommand} root\` and inspect the repository's \`AGENTS.md\` if present.
+1. Before substantive work, run \`SKS_OPENCLAW=1 ${sksCommand} root\` and inspect the repository's \`AGENTS.md\` if present.
 2. For implementation, prefer the repository's requested SKS route. General code work normally routes to \`$Team\`; tiny design or copy edits can use \`$DFix\`; UI/browser dogfood uses \`$QA-LOOP\`; database or Supabase work uses \`$DB\`.
 3. Do not invent fallback implementation code when the requested SKS path is blocked. Report the blocker with command output and source paths.
 4. For database, migration, and Supabase tasks, default to read-only inspection unless the user explicitly authorizes a write/migration scope.
@@ -117,6 +119,8 @@ function openClawSkillReadme({ sksCommand, skillName, version }) {
 Version: ${version}
 
 This OpenClaw skill lets an OpenClaw agent discover and use Sneakoscope Codex through the local \`${sksCommand}\` command.
+
+OpenClaw agents should set \`SKS_OPENCLAW=1\` when running SKS commands. That mode auto-approves SKS dependency/update prompts, including the Codex CLI update preflight before tmux launch.
 
 ## Install
 
@@ -155,6 +159,8 @@ function openClawAgentConfigExample({ skillName }) {
       - terminal
     tools:
       - shell
+    env:
+      SKS_OPENCLAW: "1"
     skills:
       - ${skillName}
 `;

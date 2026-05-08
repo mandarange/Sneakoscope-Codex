@@ -60,7 +60,7 @@ import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs'
 import { buildTmuxLaunchPlan, buildTmuxOpenArgs, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
-import { askPostinstallQuestion, checkContext7, checkRequiredSkills, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, globalCodexSkillsRoot, postinstall, postinstallBootstrapDecision } from './install-helpers.mjs';
+import { askPostinstallQuestion, checkContext7, checkRequiredSkills, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, globalCodexSkillsRoot, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, shouldAutoApproveInstall } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 import { openClawCommand } from './openclaw-command.mjs';
 
@@ -82,7 +82,7 @@ export async function main(args) {
   if (isAutoReviewFlag(args[0])) return autoReviewCommand('start', args.slice(1));
   const [cmd, sub, ...rest] = args;
   const tail = sub === undefined ? [] : [sub, ...rest];
-  if (!cmd) return help();
+  if (!cmd) return defaultTmuxCommand();
   if (cmd === '--help' || cmd === '-h') return help();
   if (cmd === '--version' || cmd === '-v' || cmd === 'version') return version();
   if (cmd === 'tmux') return !sub || String(sub).startsWith('--') ? tmuxCommand('check', tail) : tmuxCommand(sub, rest);
@@ -100,6 +100,26 @@ export async function main(args) {
   process.exitCode = 1;
 }
 
+async function defaultTmuxCommand(args = []) {
+  const update = await maybePromptSksUpdateForLaunch(args, { label: 'default tmux launch' });
+  if (update.status === 'updated') {
+    console.log(`SKS updated from ${PACKAGE_VERSION} to ${update.latest}. Rerun: sks`);
+    return;
+  }
+  if (update.status === 'failed') {
+    console.error(`SKS update failed: ${update.error}`);
+    process.exitCode = 1;
+    return;
+  }
+  const codexUpdate = await maybePromptCodexUpdateForLaunch(args, { label: 'default tmux launch' });
+  if (codexUpdate.status === 'failed' || codexUpdate.status === 'updated_not_reflected') {
+    console.error(`Codex CLI update failed: ${codexUpdate.error || 'updated version was not visible on PATH'}`);
+    process.exitCode = 1;
+    return;
+  }
+  return launchTmuxUi(args, { conciseBlockers: true });
+}
+
 function help(args = []) {
   const topic = args[0];
   if (topic) return usage([topic]);
@@ -107,6 +127,7 @@ function help(args = []) {
 Sneakoscope Codex
 
 Usage:
+  sks
   sks help [topic]
   sks version
   sks update-check [--json]
@@ -873,6 +894,12 @@ async function tmuxCommand(sub = 'start', args = []) {
     return;
   }
   if (['start', 'attach', 'connect', 'open'].includes(action)) {
+    const codexUpdate = await maybePromptCodexUpdateForLaunch(args, { label: 'tmux launch' });
+    if (codexUpdate.status === 'failed' || codexUpdate.status === 'updated_not_reflected') {
+      console.error(`Codex CLI update failed: ${codexUpdate.error || 'updated version was not visible on PATH'}`);
+      process.exitCode = 1;
+      return;
+    }
     const result = await launchTmuxUi(args);
     if (flag(args, '--json')) console.log(JSON.stringify(result, null, 2));
     return;
@@ -887,13 +914,19 @@ async function madHighCommand(args = []) {
     const profile = await enableMadHighProfile();
     return console.log(JSON.stringify(profile, null, 2));
   }
-  const update = await maybePromptSksUpdateForMad(args);
+  const update = await maybePromptSksUpdateForLaunch(args, { label: 'MAD launch' });
   if (update.status === 'updated') {
     console.log(`SKS updated from ${PACKAGE_VERSION} to ${update.latest}. Rerun: sks --mad`);
     return;
   }
   if (update.status === 'failed') {
     console.error(`SKS update failed: ${update.error}`);
+    process.exitCode = 1;
+    return;
+  }
+  const codexUpdate = await maybePromptCodexUpdateForLaunch(args, { label: 'MAD launch' });
+  if (codexUpdate.status === 'failed' || codexUpdate.status === 'updated_not_reflected') {
+    console.error(`Codex CLI update failed: ${codexUpdate.error || 'updated version was not visible on PATH'}`);
     process.exitCode = 1;
     return;
   }
@@ -915,18 +948,19 @@ async function madHighCommand(args = []) {
   });
 }
 
-async function maybePromptSksUpdateForMad(args = []) {
+async function maybePromptSksUpdateForLaunch(args = [], opts = {}) {
   if (flag(args, '--json') || flag(args, '--skip-update-check') || process.env.SKS_SKIP_UPDATE_CHECK === '1') return { status: 'skipped' };
   const latest = await npmPackageVersion('sneakoscope');
   const currentPackage = await effectivePackageVersion();
   if (!latest.version || compareVersions(latest.version, currentPackage) <= 0) return { status: 'current', latest: latest.version || null, error: latest.error || null };
   const command = 'npm i -g sneakoscope@latest';
-  if (flag(args, '--yes') || flag(args, '-y')) return installSksLatest(command, latest.version);
+  if (shouldAutoApproveInstall(args)) return installSksLatest(command, latest.version);
   if (!canAskYesNo()) {
     console.log(`SKS update available: ${currentPackage} -> ${latest.version}. Run: ${command}`);
     return { status: 'available', latest: latest.version, command };
   }
-  const answer = (await askPostinstallQuestion(`SKS ${currentPackage} -> ${latest.version} update before MAD launch? [Y/n] `)).trim();
+  const label = opts.label || 'launch';
+  const answer = (await askPostinstallQuestion(`SKS ${currentPackage} -> ${latest.version} update before ${label}? [Y/n] `)).trim();
   const yes = answer === '' || /^(y|yes|예|네|응)$/i.test(answer);
   if (!yes) return { status: 'skipped_by_user', latest: latest.version, command };
   return installSksLatest(command, latest.version);
@@ -1074,7 +1108,7 @@ async function installTmuxDependency(args = []) {
 }
 
 async function confirmInstall(question, args = []) {
-  if (flag(args, '--yes') || flag(args, '-y')) return true;
+  if (shouldAutoApproveInstall(args)) return true;
   if (!canAskYesNo()) return false;
   return /^(y|yes|예|네|응)$/i.test((await askPostinstallQuestion(`${question} [y/N] `)).trim());
 }
@@ -1119,6 +1153,12 @@ async function autoReviewCommand(sub = 'status', args = []) {
     const status = await enableAutoReview({ high });
     if (flag(args, '--json')) return console.log(JSON.stringify(status, null, 2));
     console.log(`SKS Auto-Review enabled: ${profile}`);
+    const codexUpdate = await maybePromptCodexUpdateForLaunch(args, { label: 'auto-review tmux launch' });
+    if (codexUpdate.status === 'failed' || codexUpdate.status === 'updated_not_reflected') {
+      console.error(`Codex CLI update failed: ${codexUpdate.error || 'updated version was not visible on PATH'}`);
+      process.exitCode = 1;
+      return;
+    }
     const sessionArg = readOption(cleanArgs, '--session', null);
     const session = sessionArg || sanitizeTmuxSessionName(`${profile}-${defaultTmuxSessionName(process.cwd())}`);
     return launchTmuxUi([...cleanArgs, '--session', session], { codexArgs: ['--profile', profile] });
@@ -1179,6 +1219,7 @@ Codex App prompt commands:
 ${formatDollarCommandsCompact('  ')}
 
 Examples:
+  sks
   sks setup
   sneakoscope setup
   sks commands
@@ -1194,7 +1235,7 @@ function usage(args = []) {
     bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and tmux.'],
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew only after approval.'],
-    tmux: ['tmux', '', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'tmux launch is explicit. Running bare `sks` prints help and never opens tmux by itself.'],
+    tmux: ['tmux', '', '  sks', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'Running bare `sks` opens or reuses the default tmux Codex CLI session. Before launch, SKS checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. Use `sks tmux open` when you need explicit session/workspace flags, and `sks help` for CLI help.'],
     openclaw: ['OpenClaw', '', '  sks openclaw install', '  sks openclaw path', '  sks openclaw print SKILL.md', '', 'Installs an OpenClaw skill package under ~/.openclaw/skills/sneakoscope-codex so OpenClaw agents can attach skills: [sneakoscope-codex] with the shell tool and call local SKS commands from a project root.'],
     team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
@@ -1876,6 +1917,39 @@ async function selftest() {
   if (tmuxOpenArgs.join(' ') !== 'attach-session -t sks-mad-selftest') throw new Error('selftest failed: MAD tmux attach args are not stable by session name');
   if (!isTmuxShellSession({ TMUX: '/tmp/tmux-501/default,1,0' })) throw new Error('selftest failed: tmux shell session env was not detected');
   if (tmuxStatusKind({ ok: false, bin: null }) !== 'missing') throw new Error('selftest failed: missing tmux was not labeled missing');
+  const bareDefault = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs')], {
+    cwd: globalCwd,
+    env: { SKS_GLOBAL_ROOT: globalRuntimeRoot, SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: PACKAGE_VERSION, PATH: '' },
+    timeoutMs: 15000,
+    maxOutputBytes: 64 * 1024
+  });
+  if (bareDefault.code !== 1 || !String(bareDefault.stderr || '').includes('SKS tmux launch blocked') || String(bareDefault.stdout || '').includes('Usage:')) throw new Error('selftest failed: bare sks did not route to default tmux launch');
+  const fakeCodexBin = path.join(tmp, 'fake-codex-bin');
+  await ensureDir(fakeCodexBin);
+  const fakeCodexPath = path.join(fakeCodexBin, 'codex');
+  await writeTextAtomic(fakeCodexPath, '#!/bin/sh\necho "codex-cli 0.1.0"\n');
+  await fsp.chmod(fakeCodexPath, 0o755);
+  const codexUpdatePrompt = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs')], {
+    cwd: globalCwd,
+    env: { SKS_GLOBAL_ROOT: globalRuntimeRoot, SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: PACKAGE_VERSION, SKS_NPM_VIEW__OPENAI_CODEX_VERSION: '99.0.0', PATH: fakeCodexBin },
+    timeoutMs: 15000,
+    maxOutputBytes: 64 * 1024
+  });
+  if (!String(codexUpdatePrompt.stdout || '').includes('Codex CLI update available: 0.1.0 -> 99.0.0') || String(codexUpdatePrompt.stdout || '').includes('Usage:')) throw new Error('selftest failed: bare sks did not recommend Codex CLI update before tmux launch');
+  const openClawAutoBin = path.join(tmp, 'openclaw-auto-bin');
+  await ensureDir(openClawAutoBin);
+  const openClawCodexPath = path.join(openClawAutoBin, 'codex');
+  await writeTextAtomic(openClawCodexPath, '#!/bin/sh\necho "codex-cli 0.1.0"\n');
+  await writeTextAtomic(path.join(openClawAutoBin, 'npm'), '#!/bin/sh\nDIR="${0%/*}"\nif [ "$1" = "i" ]; then\n  printf \'#!/bin/sh\\necho "codex-cli 99.0.0"\\n\' > "$DIR/codex"\n  chmod +x "$DIR/codex"\n  exit 0\nfi\necho "unexpected npm $*" >&2\nexit 1\n');
+  await fsp.chmod(openClawCodexPath, 0o755);
+  await fsp.chmod(path.join(openClawAutoBin, 'npm'), 0o755);
+  const openClawAutoUpdate = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs')], {
+    cwd: globalCwd,
+    env: { SKS_GLOBAL_ROOT: globalRuntimeRoot, SKS_OPENCLAW: '1', SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: PACKAGE_VERSION, SKS_NPM_VIEW__OPENAI_CODEX_VERSION: '99.0.0', PATH: openClawAutoBin },
+    timeoutMs: 15000,
+    maxOutputBytes: 64 * 1024
+  });
+  if (!String(openClawAutoUpdate.stdout || '').includes('Codex CLI ready: 0.1.0 -> codex-cli 99.0.0')) throw new Error('selftest failed: OpenClaw mode did not auto-approve Codex CLI update before tmux launch');
   const guardBlocked = await checkHarnessModification(tmp, { tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
   if (guardBlocked.action !== 'block') throw new Error('selftest failed: harness guard allowed skill tampering');
   const setupBlocked = await checkHarnessModification(tmp, { command: 'sks setup --force' });
@@ -2073,9 +2147,9 @@ async function selftest() {
   const openClawSkillText = await safeReadText(path.join(openClawResult.target_dir, 'SKILL.md'));
   const openClawManifestText = await safeReadText(path.join(openClawResult.target_dir, 'manifest.yaml'));
   const openClawConfigText = await safeReadText(path.join(openClawResult.target_dir, 'openclaw-agent-config.example.yaml'));
-  if (!openClawSkillText.includes('sks root') || !openClawSkillText.includes('$Team') || !openClawSkillText.includes('OpenClaw agent must have the built-in `shell` tool enabled')) throw new Error('selftest failed: OpenClaw skill missing SKS agent guidance');
+  if (!openClawSkillText.includes('sks root') || !openClawSkillText.includes('$Team') || !openClawSkillText.includes('OpenClaw agent must have the built-in `shell` tool enabled') || !openClawSkillText.includes('SKS_OPENCLAW=1')) throw new Error('selftest failed: OpenClaw skill missing SKS agent guidance');
   if (!openClawManifestText.includes('generated_by: sneakoscope') || !openClawManifestText.includes(`version: ${PACKAGE_VERSION}`)) throw new Error('selftest failed: OpenClaw manifest missing generated marker or version');
-  if (!openClawConfigText.includes(`- ${OPENCLAW_SKILL_NAME}`) || !openClawConfigText.includes('- shell')) throw new Error('selftest failed: OpenClaw agent config example missing skill or shell tool');
+  if (!openClawConfigText.includes(`- ${OPENCLAW_SKILL_NAME}`) || !openClawConfigText.includes('- shell') || !openClawConfigText.includes('SKS_OPENCLAW')) throw new Error('selftest failed: OpenClaw agent config example missing skill, shell tool, or OpenClaw env');
   const registryDollarCommands = DOLLAR_COMMANDS.map((c) => c.command);
   const manifest = await readJson(path.join(tmp, '.sneakoscope', 'manifest.json'));
   const policy = await readJson(path.join(tmp, '.sneakoscope', 'policy.json'));
