@@ -45,6 +45,7 @@ sks selftest --mock
 | --- | --- |
 | CLI runtime | `sks tmux open` and `sks --mad` explicitly launch Codex CLI with tmux; bare `sks` only prints help/readiness surfaces. |
 | Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
+| OpenClaw agents | Generates an OpenClaw skill package so OpenClaw agents can attach `sneakoscope-codex`, enable the `shell` tool, and discover/use SKS commands from the target repo root. |
 | Pipeline plans | Writes `pipeline-plan.json` for stateful routes so the runtime lane, kept stages, skipped stages, verification commands, and no-unrequested-fallback invariant are visible with `sks pipeline plan`. |
 | Team orchestration | Runs substantial work through score-based ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode; narrow work should use Proof Field evidence to skip unrelated pipeline work instead of expanding Team. |
 | Skill dreaming | Records cheap generated-skill usage counters in JSON and only periodically scans `.agents/skills` for keep, merge, prune, and improvement candidates. Reports are recommendation-only and never delete skills automatically. |
@@ -300,6 +301,57 @@ Default setup adds these generated SKS paths to the project `.gitignore`; `--loc
 Use `sks dollar-commands` to confirm that terminal discovery and Codex App prompt commands agree.
 
 TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks harness fixture` validates the broader Harness Growth Factory contract: deliberate forgetting fixtures, skill card metadata, experiment schema, tool-error taxonomy, permission profiles, MultiAgentV2 defaults, and tmux cockpit view coverage. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
+
+## OpenClaw Agent Usage
+
+Sneakoscope can generate an OpenClaw skill package for agents that need to operate SKS-enabled repositories.
+
+```sh
+sks openclaw install
+sks openclaw path
+```
+
+By default this writes:
+
+```text
+~/.openclaw/skills/sneakoscope-codex/
+```
+
+The generated skill contains `manifest.yaml`, `SKILL.md`, a skill README, and `openclaw-agent-config.example.yaml`. If you use a custom OpenClaw home, set `OPENCLAW_HOME` or pass `--dir`:
+
+```sh
+OPENCLAW_HOME=/opt/openclaw sks openclaw install
+sks openclaw install --dir /opt/openclaw/skills/sneakoscope-codex
+```
+
+Attach the skill to an OpenClaw agent with the built-in `shell` tool enabled:
+
+```yaml
+agents:
+  coding-agent:
+    tools:
+      - shell
+    skills:
+      - sneakoscope-codex
+```
+
+Then prompt the OpenClaw agent from the target repo root:
+
+```text
+Run sks root, inspect AGENTS.md, then use the SKS Team route to implement this fix and verify it.
+```
+
+Useful commands for OpenClaw agents:
+
+```sh
+sks root
+sks commands
+sks dollar-commands
+sks deps check
+sks proof-field scan --intent "small CLI change" --changed src/cli/main.mjs
+```
+
+If OpenClaw runs the skill inside a sandbox, grant shell execution only for the trusted local workspace. Database, Supabase, migration, and destructive filesystem work should still follow the repo's SKS safety route and require explicit write scope.
 
 ## Prompt `$` Commands
 
