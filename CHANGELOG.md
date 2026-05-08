@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.7.36] - 2026-05-08
+
+### Fixed
+
+- Keep hook update-check selftest verification stable when the on-disk SKS runtime version advances before the child hook process records update state.
+
 ## [0.7.35] - 2026-05-08
 
 ### Fixed
