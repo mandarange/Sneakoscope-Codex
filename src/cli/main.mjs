@@ -1885,6 +1885,16 @@ async function selftest() {
   if (oldNoBootstrap === undefined) delete process.env.SKS_POSTINSTALL_NO_BOOTSTRAP;
   else process.env.SKS_POSTINSTALL_NO_BOOTSTRAP = oldNoBootstrap;
   if (noBootstrapDecision.run || noBootstrapDecision.reason !== 'SKS_POSTINSTALL_NO_BOOTSTRAP=1') throw new Error('selftest failed: postinstall bootstrap opt-out decision');
+  const postinstallNoMarkerTmp = tmpdir();
+  const postinstallNoMarkerHome = path.join(postinstallNoMarkerTmp, 'home');
+  const postinstallNoMarkerCwd = path.join(postinstallNoMarkerTmp, 'cwd');
+  const postinstallNoMarkerGlobalRoot = path.join(postinstallNoMarkerTmp, 'global-root');
+  await ensureDir(postinstallNoMarkerCwd);
+  const postinstallNoMarker = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallNoMarkerCwd, env: { INIT_CWD: postinstallNoMarkerCwd, HOME: postinstallNoMarkerHome, SKS_GLOBAL_ROOT: postinstallNoMarkerGlobalRoot, SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
+  if (postinstallNoMarker.code !== 0) throw new Error(`selftest failed: no-marker postinstall bootstrap exited ${postinstallNoMarker.code}: ${postinstallNoMarker.stderr}`);
+  if (!String(postinstallNoMarker.stdout || '').includes('no project marker found; auto-running global SKS runtime bootstrap')) throw new Error('selftest failed: no-marker postinstall did not report global runtime bootstrap');
+  if (!(await exists(path.join(postinstallNoMarkerGlobalRoot, '.sneakoscope', 'manifest.json')))) throw new Error('selftest failed: no-marker postinstall did not bootstrap global runtime root');
+  if (await exists(path.join(postinstallNoMarkerCwd, '.sneakoscope'))) throw new Error('selftest failed: no-marker postinstall polluted install cwd');
   const bootstrapJsonTmp = tmpdir();
   await writeJsonAtomic(path.join(bootstrapJsonTmp, 'package.json'), { name: 'bootstrap-json-smoke', version: '0.0.0' });
   const bootstrapJson = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'bootstrap', '--json'], { cwd: bootstrapJsonTmp, env: { HOME: path.join(bootstrapJsonTmp, 'home'), SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
@@ -2092,6 +2102,9 @@ async function selftest() {
   if (!promptPipelineSkillExists) throw new Error('selftest failed: prompt pipeline skill not installed');
   const promptPipelineText = await safeReadText(path.join(tmp, '.agents', 'skills', 'prompt-pipeline', 'SKILL.md'));
   if (!promptPipelineText.includes('TriWiki context-tracking SSOT')) throw new Error('selftest failed: prompt pipeline missing TriWiki context-tracking SSOT');
+  if (!promptPipelineText.includes('Codex App pipeline activation:') || !promptPipelineText.includes('sks hook user-prompt-submit') || !promptPipelineText.includes('hookSpecificOutput.additionalContext')) throw new Error('selftest failed: prompt pipeline missing Codex App pipeline activation fallback');
+  const teamSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'team', 'SKILL.md'));
+  if (!teamSkillText.includes('Codex App pipeline activation:') || !teamSkillText.includes('sks pipeline status') || !teamSkillText.includes('mission/pipeline artifacts')) throw new Error('selftest failed: Team skill missing pipeline activation fallback');
   if (!promptPipelineText.includes('before every route stage') || !promptPipelineText.includes('sks wiki refresh')) throw new Error('selftest failed: prompt pipeline missing per-stage TriWiki policy');
   if (!promptPipelineText.includes('single design decision authority') || !promptPipelineText.includes('imagegen') || !promptPipelineText.includes('getdesign-reference') || !promptPipelineText.includes(AWESOME_DESIGN_MD_REFERENCE.url) || !promptPipelineText.includes('not parallel authorities')) throw new Error('selftest failed: prompt pipeline missing design SSOT/source-input routing');
   if (!promptPipelineText.includes(CODEX_APP_IMAGE_GENERATION_DOC_URL)) throw new Error('selftest failed: prompt pipeline missing Codex App image generation policy');

@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.7.31] - 2026-05-08
+
+### Fixed
+
+- Make `npm i -g sneakoscope` automatically bootstrap the global SKS runtime root when install/upgrade runs outside a project, so Codex App `$` skills and pipeline fallback behavior are refreshed without requiring a separate `sks bootstrap`.
+
+## [0.7.30] - 2026-05-08
+
+### Fixed
+
+- Add a Codex App pipeline-activation fallback to generated stateful SKS skills so `$Team`, `$SKS`, and related routes run `sks hook user-prompt-submit` and materialize mission/pipeline artifacts even when project hooks are not visibly injecting context.
+
+## [0.7.29] - 2026-05-08
+
+### Fixed
+
+- Keep the Codex CLI update preflight release-ready after the version hook advanced the package again, including OpenClaw auto-approve coverage and the extracted install helper path.
+
 ## [0.7.28] - 2026-05-08
 
 ### Changed

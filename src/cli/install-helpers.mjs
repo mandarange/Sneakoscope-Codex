@@ -3,7 +3,7 @@ import os from 'node:os';
 import fsp from 'node:fs/promises';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { ensureDir, exists, packageRoot, runProcess, which, writeTextAtomic } from '../core/fsx.mjs';
+import { ensureDir, exists, globalSksRoot, packageRoot, runProcess, which, writeTextAtomic } from '../core/fsx.mjs';
 import { getCodexInfo } from '../core/codex-adapter.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
 import { installSkills } from '../core/init.mjs';
@@ -83,15 +83,20 @@ function shouldAskPostinstallQuestion() {
 export async function postinstallBootstrapDecision(root) {
   if (process.env.SKS_POSTINSTALL_NO_BOOTSTRAP === '1') return { run: false, reason: 'SKS_POSTINSTALL_NO_BOOTSTRAP=1' };
   if (process.env.SKS_POSTINSTALL_BOOTSTRAP === '0') return { run: false, reason: 'SKS_POSTINSTALL_BOOTSTRAP=0' };
-  const candidate = await isProjectSetupCandidate(path.resolve(root || process.cwd()));
-  if (!candidate && process.env.SKS_POSTINSTALL_BOOTSTRAP !== '1') return { run: false, reason: 'no project marker found in install cwd' };
-  if (process.env.SKS_POSTINSTALL_BOOTSTRAP === '1') return { run: true, reason: 'forced by SKS_POSTINSTALL_BOOTSTRAP=1' };
-  return { run: true, reason: 'auto-running sks setup --bootstrap --install-scope global --force' };
+  const installRoot = path.resolve(root || process.cwd());
+  const candidate = await isProjectSetupCandidate(installRoot);
+  const target = candidate ? installRoot : globalSksRoot();
+  if (process.env.SKS_POSTINSTALL_BOOTSTRAP === '1') return { run: true, target, reason: 'forced by SKS_POSTINSTALL_BOOTSTRAP=1' };
+  if (candidate) return { run: true, target, reason: 'auto-running sks setup --bootstrap --install-scope global --force' };
+  return { run: true, target, reason: 'no project marker found; auto-running global SKS runtime bootstrap' };
 }
 
 async function runPostinstallBootstrap(root, bootstrap) {
   const previousCwd = process.cwd();
-  process.chdir(path.resolve(root || previousCwd));
+  const decision = await postinstallBootstrapDecision(root);
+  const target = path.resolve(decision.target || root || previousCwd);
+  await ensureDir(target);
+  process.chdir(target);
   try {
     await bootstrap(['--from-postinstall', '--install-scope', 'global', '--force']);
   } finally {

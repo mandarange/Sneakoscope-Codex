@@ -680,8 +680,11 @@ async function removeStaleGeneratedSkillsFromManifest(root, skillNames) {
 function enrichSkillContent(name, content) {
   if (!['sks', 'answer', 'wiki', 'team', 'qa-loop', 'ppt', 'computer-use', 'computer-use-fast', 'cu', 'goal', 'research', 'autoresearch', 'db', 'gx', 'reflection', 'prompt-pipeline', 'pipeline-runner', 'context7-docs', 'turbo-context-pack', 'hproof-evidence-bind'].includes(name)) return content;
   const text = String(content || '').trimEnd();
-  if (text.includes('TriWiki context-tracking SSOT')) return text;
-  return `${text}
+  const activation = pipelineActivationText(name);
+  if (text.includes('TriWiki context-tracking SSOT')) {
+    return activation && !text.includes('Codex App pipeline activation:') ? `${text}\n\n${activation}` : text;
+  }
+  return `${text}${activation ? `\n\n${activation}` : ''}
 
 Context tracking:
 - Ask only ambiguity that can change scope, safety, behavior, or acceptance; infer the rest from TriWiki/current code and seal answers before execution.
@@ -690,6 +693,16 @@ Context tracking:
 - Keep non-selected claims hydratable by id, hash, source path, and RGBA/trig coordinate. Hydrate low-trust claims before relying on them.
 - Hook output is limited; use mission files, team events, or normal updates for live detail.
 `;
+}
+
+function pipelineActivationText(name) {
+  const stateful = new Set(['sks', 'team', 'qa-loop', 'ppt', 'computer-use', 'computer-use-fast', 'cu', 'goal', 'research', 'autoresearch', 'db', 'gx', 'prompt-pipeline', 'pipeline-runner']);
+  if (!stateful.has(name)) return '';
+  return `Codex App pipeline activation:
+- If the SKS UserPromptSubmit hook already injected route context, follow that context.
+- If no SKS hook context is visible in the current turn, immediately run \`sks hook user-prompt-submit\` from the target repo root with JSON input containing the current prompt, for example: \`printf '%s' '{"prompt":"<user prompt>","cwd":"<repo root>"}' | sks hook user-prompt-submit\`.
+- Use the returned \`hookSpecificOutput.additionalContext\` as authoritative route context before answering or editing. If it creates a mission, continue through \`sks pipeline status\`, \`sks pipeline plan\`, and \`sks pipeline answer\` as directed.
+- Do not treat this skill text alone as completion of the SKS route; a stateful SKS route must materialize mission/pipeline artifacts or explicitly report why the hook could not run.`;
 }
 
 async function writeSkillMetadata(dir, name) {
