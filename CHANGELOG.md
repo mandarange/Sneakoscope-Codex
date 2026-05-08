@@ -2,13 +2,22 @@
 
 ## [Unreleased]
 
+
+## [0.7.41] - 2026-05-08
+
+### Fixed
+
+- Ship the codex-lb pre-launch auth flow in English, collecting host domain and API key before Codex opens.
+- Load the codex-lb API key from the SKS-managed env file when launching Codex and use a fresh tmux session after first-time setup so the key is applied immediately.
+- Keep release metadata aligned after the explicit SKS version bump.
+
 ## [0.7.40] - 2026-05-08
 
 ### Fixed
 
 - Preserve user-owned Codex config such as Fast mode UI settings when SKS setup or global postinstall refreshes `.codex/config.toml`.
 - Launch the default SKS tmux Codex CLI workspace in fast-high mode while allowing environment overrides.
-- Add codex-lb CLI API key setup guidance and provider config documentation.
+- Add a pre-launch SKS codex-lb y/n auth prompt plus `sks codex-lb setup --host <domain> --api-key <key>` so hosted domain and key values are applied directly before Codex CLI opens.
 - Repair tmux dependency handling so Homebrew-managed tmux uses Homebrew, npm-managed tmux uses npm, and unknown tmux paths are reported as conflicts.
 - Make source-repo version drift checks use the local `bin/sks.mjs` runtime instead of stale global `sks`.
 - Stop the pre-commit version guard from automatically bumping package and changelog versions on every commit; explicit `sks versioning bump` remains the release bump path.

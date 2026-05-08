@@ -58,10 +58,10 @@ import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
 import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs';
-import { buildTmuxLaunchPlan, buildTmuxOpenArgs, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
+import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
-import { askPostinstallQuestion, checkContext7, checkRequiredSkills, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, shouldAutoApproveInstall } from './install-helpers.mjs';
+import { askPostinstallQuestion, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, shouldAutoApproveInstall } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 import { openClawCommand } from './openclaw-command.mjs';
 
@@ -91,7 +91,7 @@ export async function main(args) {
   if (cmd === 'dollar-commands' || cmd === 'dollars' || cmd === '$') return dollarCommands(tail);
   if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
   const handlers = {
-    postinstall: () => postinstall({ bootstrap }), wizard: () => wizard(tail), ui: () => wizard(tail), 'update-check': () => updateCheck(tail), help: () => help(tail), commands: () => commands(tail), usage: () => usage(tail), root: () => rootCommand(tail), quickstart: () => quickstartCommand(), 'codex-app': () => codexAppHelp(tail), openclaw: () => openClawCommand(tail), bootstrap: () => bootstrap(tail), deps: () => deps(sub, rest),
+    postinstall: () => postinstall({ bootstrap }), wizard: () => wizard(tail), ui: () => wizard(tail), 'update-check': () => updateCheck(tail), help: () => help(tail), commands: () => commands(tail), usage: () => usage(tail), root: () => rootCommand(tail), quickstart: () => quickstartCommand(), 'codex-app': () => codexAppHelp(tail), 'codex-lb': () => codexLbCommand(sub, rest), openclaw: () => openClawCommand(tail), bootstrap: () => bootstrap(tail), deps: () => deps(sub, rest),
     'qa-loop': () => qaLoopCommand(sub, rest), ppt: () => pptCommand(sub, rest), context7: () => context7Command(sub, rest), pipeline: () => pipeline(sub, rest), guard: () => guard(sub, rest), conflicts: () => conflicts(sub, rest), versioning: () => versioning(sub, rest), reasoning: () => reasoningCommand(tail), aliases: () => aliases(), setup: () => setup(tail), 'fix-path': () => fixPath(tail), doctor: () => doctor(tail), init: () => init(tail), selftest: () => selftest(tail),
     goal: () => goalCommand(sub, rest), research: () => researchCommand(sub, rest), hook: () => emitHook(sub), profile: () => profileCommand(sub, rest), hproof: () => hproofCommand(sub, rest), 'validate-artifacts': () => validateArtifactsCommand(tail), perf: () => perfCommand(sub, rest), 'proof-field': () => proofFieldCommand(sub, rest), 'skill-dream': () => skillDreamCommand(sub, rest), 'code-structure': () => codeStructureCommand(sub, rest), memory: () => memoryCommand(sub, rest), gx: () => gxCommand(sub, rest),
     team: () => team(tail), db: () => dbCommand(sub, rest), eval: () => evalCommand(sub, rest), harness: () => harnessCommand(sub, rest), wiki: () => wikiCommand(sub, rest), gc: () => gcCommand(tail), stats: () => statsCommand(tail)
@@ -118,7 +118,12 @@ async function defaultTmuxCommand(args = []) {
     process.exitCode = 1;
     return;
   }
-  return launchTmuxUi(args, { conciseBlockers: true });
+  const lb = await maybePromptCodexLbSetupForLaunch(args);
+  if (lb.status === 'missing_api_key') {
+    process.exitCode = 1;
+    return;
+  }
+  return launchTmuxUi(args, codexLbImmediateLaunchOpts(args, lb, { conciseBlockers: true }));
 }
 
 function help(args = []) {
@@ -140,6 +145,7 @@ Usage:
   sks bootstrap [--install-scope global|project] [--local-only] [--json]
   sks deps check|install [tmux|codex|context7|all] [--yes] [--json]
   sks codex-app
+  sks codex-lb setup --host <domain> --api-key <key>
   sks openclaw install|path|print [--dir path] [--force] [--json]
   sks --mad [--high]
   sks auto-review status|enable|start [--high]
@@ -906,12 +912,67 @@ async function tmuxCommand(sub = 'start', args = []) {
       process.exitCode = 1;
       return;
     }
-    const result = await launchTmuxUi(args);
+    const lb = await maybePromptCodexLbSetupForLaunch(args);
+    if (lb.status === 'missing_api_key') {
+      process.exitCode = 1;
+      return;
+    }
+    const result = await launchTmuxUi(args, codexLbImmediateLaunchOpts(args, lb));
     if (flag(args, '--json')) console.log(JSON.stringify(result, null, 2));
     return;
   }
   console.error('Usage: sks tmux open|start|check|status|banner [--workspace name]');
   process.exitCode = 1;
+}
+
+async function codexLbCommand(action = 'status', args = []) {
+  const sub = action || 'status';
+  const json = flag(args, '--json');
+  if (sub === 'status' || sub === 'check') {
+    const status = await codexLbStatus();
+    if (json) return console.log(JSON.stringify(status, null, 2));
+    console.log('SKS codex-lb\n');
+    console.log(`Configured: ${status.ok ? 'yes' : 'no'}`);
+    console.log(`Selected:   ${status.selected ? 'yes' : 'no'}`);
+    console.log(`Provider:   ${status.provider_configured ? 'yes' : 'no'}`);
+    console.log(`Env file:   ${status.env_file ? status.env_path : 'missing'}`);
+    if (status.base_url) console.log(`Base URL:   ${status.base_url}`);
+    if (!status.ok) console.log('\nRun: sks codex-lb setup --host <domain> --api-key <key>');
+    return;
+  }
+  if (sub === 'setup') {
+    const host = readOption(args, '--host', readOption(args, '--domain', null));
+    const apiKey = readOption(args, '--api-key', readOption(args, '--key', null));
+    if (!host || !apiKey) {
+      if (json) return console.log(JSON.stringify({ ok: false, reason: 'missing_host_or_api_key' }, null, 2));
+      console.error('Usage: sks codex-lb setup --host <domain> --api-key <key>');
+      process.exitCode = 1;
+      return;
+    }
+    const result = await configureCodexLb({ host, apiKey });
+    if (json) return console.log(JSON.stringify(result, null, 2));
+    if (!result.ok) {
+      console.error(`codex-lb setup failed: ${result.status}`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`codex-lb configured: ${result.base_url}`);
+    console.log(`Config: ${result.config_path}`);
+    console.log(`Key env: ${result.env_path}`);
+    return;
+  }
+  console.error('Usage: sks codex-lb status|setup --host <domain> --api-key <key> [--json]');
+  process.exitCode = 1;
+}
+
+function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
+  if (!lb?.ok || lb.status !== 'configured') return opts;
+  if (readOption(args, '--session', null) || readOption(args, '--workspace', null)) return opts;
+  const root = readOption(args, '--root', process.cwd());
+  const session = sanitizeTmuxSessionName(`sks-codex-lb-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
+  console.log(`codex-lb key loaded for this launch: ${lb.env_path}`);
+  console.log(`Using fresh tmux session: ${session}`);
+  return { ...opts, session };
 }
 
 async function madHighCommand(args = []) {
@@ -1233,7 +1294,7 @@ function usage(args = []) {
   const topic = String(args[0] || 'overview').toLowerCase();
   const blocks = {
     overview: ['ㅅㅋㅅ Usage', '', 'Discover:', '  sks commands', '  sks quickstart', '  sks root', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks tmux check', '  sks dollar-commands', '', `Topics: ${USAGE_TOPICS}`],
-    install: ['Install', '', '1. Global install:', '  npm i -g sneakoscope', '', '2. Bootstrap and check dependencies:', '  sks bootstrap', '  sks deps check', '', '3. Confirm Codex App commands:', '  sks codex-app check', '  sks dollar-commands', '', '4. Optional codex-lb key setup for CLI sks runs:', '  # Add the codex-lb provider to ~/.codex/config.toml, then:', '  export CODEX_LB_API_KEY="sk-clb-..."', '  sks', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
+    install: ['Install', '', '1. Global install:', '  npm i -g sneakoscope', '', '2. Bootstrap and check dependencies:', '  sks bootstrap', '  sks deps check', '', '3. Confirm Codex App commands:', '  sks codex-app check', '  sks dollar-commands', '', '4. Optional codex-lb key setup for CLI sks runs:', '  sks codex-lb setup --host <domain> --api-key <key>', '  sks', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
     bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and tmux.'],
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew after Y/n approval for missing installs or Homebrew-managed upgrades. If PATH resolves an npm-managed tmux, SKS prompts for npm i -g tmux@latest instead. Unknown non-Homebrew tmux paths are reported as conflicts.'],
@@ -1935,6 +1996,20 @@ async function selftest() {
   if (tmuxOpenArgs.join(' ') !== 'attach-session -t sks-mad-selftest') throw new Error('selftest failed: MAD tmux attach args are not stable by session name');
   const defaultFastHighPlan = await buildTmuxLaunchPlan({ root: tmp, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
   if (defaultFastHighPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="high"') throw new Error('selftest failed: default sks tmux launch is not fast-high');
+  const codexLbHome = path.join(tmp, 'codex-lb-home');
+  const codexLbSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key', 'sk-test', '--json'], {
+    cwd: tmp,
+    env: { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global') },
+    timeoutMs: 15000,
+    maxOutputBytes: 64 * 1024
+  });
+  if (codexLbSetup.code !== 0) throw new Error(`selftest failed: codex-lb setup exited ${codexLbSetup.code}: ${codexLbSetup.stderr}`);
+  const codexLbSetupJson = JSON.parse(codexLbSetup.stdout);
+  const codexLbConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
+  const codexLbEnv = await safeReadText(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'));
+  if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !codexLbConfig.includes('model_provider = "codex-lb"') || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'")) throw new Error('selftest failed: codex-lb setup did not write provider config and env key');
+  const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
+  if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest failed: tmux launch command does not source codex-lb env file');
   if (!shouldAutoAttachTmux(['--mad'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux launch does not auto-attach in an interactive terminal');
   if (shouldAutoAttachTmux(['--mad', '--json'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux json mode should not auto-attach');
   if (shouldAutoAttachTmux(['--mad', '--no-attach'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux --no-attach should remain print-only');
