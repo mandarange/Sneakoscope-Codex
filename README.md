@@ -166,9 +166,30 @@ sks tmux check
 sks tmux status --once
 ```
 
-Bare `sks` creates or reuses the default named tmux session for Codex CLI and attaches to it in an interactive terminal. Use `sks tmux open` when you need explicit `--workspace` / `--session` flags, `sks tmux check` for readiness without launching, and `sks help` for CLI help. Use `--no-attach` or `SKS_TMUX_NO_AUTO_ATTACH=1` when you only want SKS to create/reuse the session and print the manual attach command.
+Bare `sks` creates or reuses the default named tmux session for Codex CLI and attaches to it in an interactive terminal. By default it launches Codex in the SKS fast-high runtime (`--model gpt-5.5 -c model_reasoning_effort="high"`). Override with `SKS_CODEX_MODEL`, `SKS_CODEX_REASONING`, or disable the default with `SKS_CODEX_FAST_HIGH=0`. Use `sks tmux open` when you need explicit `--workspace` / `--session` flags, `sks tmux check` for readiness without launching, and `sks help` for CLI help. Use `--no-attach` or `SKS_TMUX_NO_AUTO_ATTACH=1` when you only want SKS to create/reuse the session and print the manual attach command.
 
 Before opening tmux, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens tmux with the updated Codex CLI.
+
+If you use [codex-lb](https://github.com/Soju06/codex-lb), start it first, create an API key in its dashboard, then add this provider to `~/.codex/config.toml`:
+
+```toml
+model_provider = "codex-lb"
+
+[model_providers.codex-lb]
+name = "OpenAI"
+base_url = "http://127.0.0.1:2455/backend-api/codex"
+wire_api = "responses"
+env_key = "CODEX_LB_API_KEY"
+supports_websockets = true
+requires_openai_auth = true
+```
+
+Then run:
+
+```sh
+export CODEX_LB_API_KEY="sk-clb-..."
+sks
+```
 
 ### MAD tmux Launch
 
@@ -385,12 +406,38 @@ Use these inside Codex App or another agent prompt. They are prompt commands, no
 
 ### First Install Checklist
 
+1. Install SKS.
+
 ```sh
 npm i -g sneakoscope
+```
+
+2. Bootstrap and check dependencies.
+
+```sh
 sks bootstrap
 sks deps check
+```
+
+On macOS, missing tmux installs and Homebrew-managed tmux upgrades ask `Y/n` before running `brew install tmux` or `brew upgrade tmux`. If PATH resolves an npm-managed `tmux`, SKS prompts for `npm i -g tmux@latest` instead of using Homebrew. Unknown non-Homebrew `tmux` paths are reported as conflicts so the user can remove, upgrade with the owning package manager, or reorder PATH first.
+
+3. Confirm Codex App command surfaces.
+
+```sh
 sks codex-app check
 sks dollar-commands
+```
+
+4. Optional codex-lb key setup for CLI `sks` runs.
+
+```sh
+export CODEX_LB_API_KEY="sk-clb-..."
+sks
+```
+
+5. Run a local smoke test.
+
+```sh
 sks selftest --mock
 ```
 

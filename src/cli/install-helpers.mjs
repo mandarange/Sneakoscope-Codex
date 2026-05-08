@@ -222,6 +222,7 @@ async function ensureGlobalGetdesignSkillDuringInstall() {
 export async function ensureRelatedCliTools(args = []) {
   const skip = args.includes('--skip-cli-tools') || process.env.SKS_SKIP_CLI_TOOLS === '1';
   const codex = await ensureCodexCliTool({ skip });
+  const tmuxRepair = skip ? { status: 'skipped', reason: 'SKS_SKIP_CLI_TOOLS=1 or --skip-cli-tools' } : await ensureTmuxCliTool(args);
   const tmux = await tmuxReadiness().catch((err) => ({ ok: false, version: null, error: err.message }));
   return {
     codex,
@@ -231,6 +232,7 @@ export async function ensureRelatedCliTools(args = []) {
       version: tmux.version || null,
       min_version: tmux.min_version || '3.0',
       current_session: Boolean(tmux.current_session),
+      repair: tmuxRepair,
       install_hint: tmux.ok ? null : platformTmuxInstallHint(),
       error: tmux.error || null
     }
@@ -257,6 +259,86 @@ export async function ensureCodexCliTool({ skip = false } = {}) {
     version: after.version || null,
     hint: after.bin ? null : 'npm completed, but codex is not on PATH. Restart the shell or set SKS_CODEX_BIN.'
   };
+}
+
+export async function ensureTmuxCliTool(args = [], opts = {}) {
+  const before = await tmuxReadiness().catch((err) => ({ ok: false, error: err.message }));
+  if (before.ok) return { target: 'tmux', status: 'present', bin: before.bin || null, version: before.version || null };
+  const command = process.platform === 'darwin' ? 'brew install tmux' : platformTmuxInstallHint();
+  if (process.platform !== 'darwin') return { target: 'tmux', status: 'manual_required', command, error: before.error || 'tmux not found' };
+  const brew = await which('brew').catch(() => null);
+  if (!brew) return { target: 'tmux', status: 'manual_required', command: 'Install Homebrew, then run: brew install tmux', error: before.error || 'tmux not found' };
+  const origin = await tmuxInstallOrigin(before.bin, brew);
+  if (before.bin && origin.manager === 'npm') {
+    const repairCommand = 'npm i -g tmux@latest';
+    if (args.includes('--dry-run') || opts.dryRun) return { target: 'tmux', status: 'dry_run', manager: 'npm', command: repairCommand, error: before.error || null };
+    const npmBin = await which('npm').catch(() => null);
+    if (!npmBin) return { target: 'tmux', status: 'manual_required', manager: 'npm', command: repairCommand, error: 'npm not found on PATH' };
+    const question = `npm-managed tmux ${before.version || 'unknown'} is not ready. Upgrade with ${repairCommand}?`;
+    if (!await confirmInstallYesDefault(question, args)) return { target: 'tmux', status: 'needs_approval', manager: 'npm', command: repairCommand, error: before.error || null };
+    const install = await runProcess(npmBin, ['i', '-g', 'tmux@latest'], { timeoutMs: 180000, maxOutputBytes: 128 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+    if (install.code !== 0) return { target: 'tmux', status: 'failed', manager: 'npm', command: repairCommand, error: `${install.stderr || install.stdout || repairCommand + ' failed'}`.trim() };
+    const after = await tmuxReadiness().catch((err) => ({ ok: false, error: err.message }));
+    if (!after.ok) return { target: 'tmux', status: 'installed_not_ready', manager: 'npm', command: repairCommand, error: after.error || 'tmux upgraded with npm but is still not ready' };
+    return { target: 'tmux', status: 'upgraded', manager: 'npm', command: repairCommand, bin: after.bin || null, version: after.version || null };
+  }
+  if (before.bin && origin.manager !== 'homebrew') {
+    return {
+      target: 'tmux',
+      status: 'conflicting_tmux',
+      bin: before.bin,
+      version: before.version || null,
+      manager: origin.manager,
+      command,
+      error: `${before.error || 'tmux is not ready'}; PATH resolves an unknown non-Homebrew tmux (${origin.reason}). Remove, upgrade with its owning package manager, or reorder PATH first, then run: ${command}`
+    };
+  }
+  const repairCommand = before.bin ? 'brew upgrade tmux' : command;
+  if (args.includes('--dry-run') || opts.dryRun) return { target: 'tmux', status: 'dry_run', command: repairCommand, error: before.error || null };
+  const question = before.bin
+    ? `Homebrew tmux ${before.version || 'unknown'} is too old. Upgrade to latest tmux with ${repairCommand}?`
+    : `tmux is missing. Install latest tmux with ${repairCommand}?`;
+  if (!await confirmInstallYesDefault(question, args)) return { target: 'tmux', status: 'needs_approval', command: repairCommand, error: before.error || null };
+  const brewArgs = before.bin ? ['upgrade', 'tmux'] : ['install', 'tmux'];
+  const install = await runProcess(brew, brewArgs, { timeoutMs: 180000, maxOutputBytes: 128 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  if (install.code !== 0) return { target: 'tmux', status: 'failed', command: repairCommand, error: `${install.stderr || install.stdout || repairCommand + ' failed'}`.trim() };
+  const after = await tmuxReadiness().catch((err) => ({ ok: false, error: err.message }));
+  if (!after.ok) return { target: 'tmux', status: 'installed_not_ready', command: repairCommand, error: after.error || 'tmux installed but not ready' };
+  return { target: 'tmux', status: before.bin ? 'upgraded' : 'installed', command: repairCommand, bin: after.bin || null, version: after.version || null };
+}
+
+async function confirmInstallYesDefault(question, args = []) {
+  if (shouldAutoApproveInstall(args)) return true;
+  if (!canAskYesNo()) return false;
+  const answer = (await askPostinstallQuestion(`${question} [Y/n] `)).trim();
+  return answer === '' || /^(y|yes|예|네|응)$/i.test(answer);
+}
+
+async function tmuxInstallOrigin(bin, brewBin) {
+  if (!bin) return { manager: 'missing', reason: 'tmux not found on PATH' };
+  const resolved = await fsp.realpath(bin).catch(() => path.resolve(bin));
+  if (brewBin) {
+    const brewPrefix = await runProcess(brewBin, ['--prefix'], { timeoutMs: 5000, maxOutputBytes: 4096 }).catch(() => null);
+    const prefix = brewPrefix?.code === 0 ? brewPrefix.stdout.trim().split(/\r?\n/).pop() : '';
+    const brewTmux = await runProcess(brewBin, ['list', '--versions', 'tmux'], { timeoutMs: 5000, maxOutputBytes: 4096 }).catch(() => null);
+    if (prefix && resolved.startsWith(path.resolve(prefix) + path.sep) && brewTmux?.code === 0) {
+      return { manager: 'homebrew', reason: `${resolved} under ${prefix}` };
+    }
+  }
+  const npmBin = await which('npm').catch(() => null);
+  if (npmBin) {
+    const npmPrefix = await runProcess(npmBin, ['prefix', '-g'], { timeoutMs: 5000, maxOutputBytes: 4096 }).catch(() => null);
+    const prefix = npmPrefix?.code === 0 ? npmPrefix.stdout.trim().split(/\r?\n/).pop() : '';
+    const npmBinDir = prefix ? (process.platform === 'win32' ? prefix : path.join(prefix, 'bin')) : '';
+    const npmRoot = prefix ? path.join(prefix, 'lib', 'node_modules') : '';
+    if ((npmBinDir && path.resolve(bin).startsWith(path.resolve(npmBinDir) + path.sep)) || (npmRoot && resolved.startsWith(path.resolve(npmRoot) + path.sep))) {
+      return { manager: 'npm', reason: `${bin} resolves through npm global prefix ${prefix}` };
+    }
+  }
+  if (/\/node_modules\/(?:\.bin\/)?tmux(?:$|\/)/.test(resolved.split(path.sep).join('/'))) {
+    return { manager: 'npm', reason: `${resolved} is inside node_modules` };
+  }
+  return { manager: 'unknown', reason: `${bin} resolves to ${resolved}` };
 }
 
 export async function maybePromptCodexUpdateForLaunch(args = [], opts = {}) {
