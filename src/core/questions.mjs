@@ -60,6 +60,134 @@ function hasAnswer(value) {
   return true;
 }
 
+const AMBIGUITY_READY_THRESHOLD = 0.2;
+const CLARITY_FLOORS = {
+  goal: 0.75,
+  constraints: 0.65,
+  success: 0.7,
+  context: 0.6
+};
+const CLARITY_WEIGHTS = {
+  goal: 0.35,
+  constraints: 0.25,
+  success: 0.25,
+  context: 0.15
+};
+
+function clamp01(n) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
+
+function hasAny(re, text) {
+  return re.test(text);
+}
+
+function scoreComponent(name, clarity, weight, justification) {
+  return {
+    name,
+    clarity_score: Number(clamp01(clarity).toFixed(2)),
+    weight,
+    ambiguity_contribution: Number(((1 - clamp01(clarity)) * weight).toFixed(3)),
+    justification
+  };
+}
+
+function summarizeAnswer(value) {
+  if (Array.isArray(value)) return value.map((v) => String(v || '').trim()).filter(Boolean).join('; ');
+  return String(value || '').trim();
+}
+
+function promptedGoalFromAnswers(explicitAnswers = {}) {
+  const target = summarizeAnswer(explicitAnswers.INTENT_TARGET);
+  const outcome = summarizeAnswer(explicitAnswers.REQUIRED_OUTCOME || explicitAnswers.SUCCESS_CRITERIA_OR_ACCEPTANCE);
+  if (target && outcome) return `${target}: ${outcome}`;
+  return target || outcome || '';
+}
+
+function promptHasExplicitAcceptance(lower) {
+  return /완료\s*기준|성공\s*기준|acceptance|criteria|definition of done|검증|테스트|pass|green|확인|완성도|완전히|처음부터|바로\s*보이|노출|표시|end[- ]?to[- ]?end/.test(lower);
+}
+
+function promptHasTarget(text, lower) {
+  return /[`'"][^`'"]+[`'"]/.test(text)
+    || /(?:^|\s)(?:src|bin|scripts|docs|README|CHANGELOG|package\.json|\.sneakoscope|\.agents|\.codex|[A-Za-z0-9_.-]+\/)[^\s,)]*/.test(text)
+    || /\$[A-Za-z0-9_-]+/.test(text)
+    || /(모호성|질문|파이프라인|게이트|라우트|화면|버튼|모달|디자인|레이아웃|컴포넌트|프론트|리드미|코덱스|결제|로그인|인증|세션|codex|route|pipeline|ambiguity|clarification|question|decision[- ]?contract|hyperplan|prometheus|ouroboros|openagent|payment|billing|auth|session|팀|team|qa|ppt|db|ui|ux|설치|버전|readme|changelog)/.test(lower);
+}
+
+function promptHasAction(lower) {
+  return /(구현|수정|개선|고쳐|만들|추가|삭제|정리|리팩터|바꿔|교체|재설계|처음부터|알려|보이게|보여|노출|표시|rebuild|rewrite|implement|fix|improve|add|remove|refactor|change|replace|redesign|reverse engineer)/.test(lower);
+}
+
+function promptIsUnderspecified(lower) {
+  const trimmed = lower.trim();
+  return trimmed.length < 12
+    || /^(이거|저거|그거|뭔가|문제|고쳐줘|수정해줘|개선해줘|해줘|fix this|improve this|do it)\s*[.!?。]*$/.test(trimmed)
+    || /^(이거|저거|그거)\s+(고쳐|수정|개선|해줘)/.test(trimmed);
+}
+
+function promptHasRisk(lower) {
+  return /(운영|production|prod|live|배포|publish|release|결제|payment|billing|auth|인증|보안|security|db|database|supabase|postgres|sql|schema|migration|마이그레이션|삭제|delete|drop|truncate|reset|권한|permission|credential|secret)/.test(lower);
+}
+
+function promptHasContextTarget(text, lower) {
+  return promptHasTarget(text, lower)
+    || /https?:\/\/\S+/.test(text)
+    || /(프로젝트|repo|repository|codebase|코드베이스|현재 코드|current code|기존|existing|local|로컬)/.test(lower);
+}
+
+export function buildAmbiguityAssessment(prompt, explicitAnswers = {}) {
+  const text = String(prompt || '');
+  const lower = text.toLowerCase();
+  const target = promptHasTarget(text, lower) || hasAnswer(explicitAnswers.INTENT_TARGET) || hasAnswer(explicitAnswers.GOAL_PRECISE);
+  const action = promptHasAction(lower) || hasAnswer(explicitAnswers.REQUIRED_OUTCOME) || hasAnswer(explicitAnswers.GOAL_PRECISE);
+  const underspecified = promptIsUnderspecified(lower);
+  const acceptance = promptHasExplicitAcceptance(lower) || hasAnswer(explicitAnswers.ACCEPTANCE_CRITERIA) || hasAnswer(explicitAnswers.SUCCESS_CRITERIA_OR_ACCEPTANCE);
+  const risk = promptHasRisk(lower);
+  const contextTarget = promptHasContextTarget(text, lower) || hasAnswer(explicitAnswers.CODEBASE_CONTEXT_TARGET);
+  const predictableSafetyDefault = /(재시도|retry|세션\s*만료|session\s*expired|session\s*expiry|token\s*expired)/.test(lower);
+  const hasPolicy = hasAnswer(explicitAnswers.RISK_BOUNDARY) || hasAnswer(explicitAnswers.RISK_AND_BOUNDARY) || predictableSafetyDefault || /(하지\s*마|금지|no\s+|never|묻지|보존|preserve|safe|안전|검증|approval|승인|알아서|판단|추론|infer|default|기본)/.test(lower);
+  const hasMultipleChoiceRisk = /(\bor\b|또는|아니면|선택|둘 중|여러|multiple|대안)/.test(lower) && !/(알아서|판단|infer|추론|default|기본)/.test(lower);
+
+  const goalClarity = underspecified ? (target || action ? 0.45 : 0.2) : (target && action ? 0.9 : target || action ? 0.62 : 0.25);
+  const constraintClarity = risk ? (hasPolicy ? 0.78 : 0.64) : 0.82;
+  const successClarity = acceptance ? 0.86 : (target && action && !risk ? 0.73 : target && action ? 0.66 : 0.38);
+  const contextClarity = contextTarget ? 0.82 : (underspecified ? 0.35 : 0.62);
+  const components = {
+    goal: scoreComponent('goal_clarity', goalClarity, CLARITY_WEIGHTS.goal, target && action ? 'target and action are present' : 'target or action is missing'),
+    constraints: scoreComponent('constraint_clarity', constraintClarity, CLARITY_WEIGHTS.constraints, risk ? (hasPolicy ? 'risk cues include a policy boundary' : 'risk cues need a boundary') : 'no high-risk cue detected'),
+    success: scoreComponent('success_criteria_clarity', successClarity, CLARITY_WEIGHTS.success, acceptance ? 'success or verification language is explicit' : 'success criteria can be inferred only if goal/risk are clear enough'),
+    context: scoreComponent('context_clarity', contextClarity, CLARITY_WEIGHTS.context, contextTarget ? 'target context is named or discoverable' : 'target context is not discoverable from prompt')
+  };
+  const overall = Object.values(components).reduce((sum, item) => sum + item.ambiguity_contribution, 0);
+  const floorFailures = [];
+  if (components.goal.clarity_score < CLARITY_FLOORS.goal) floorFailures.push('goal_clarity');
+  if (components.constraints.clarity_score < CLARITY_FLOORS.constraints) floorFailures.push('constraint_clarity');
+  if (components.success.clarity_score < CLARITY_FLOORS.success) floorFailures.push('success_criteria_clarity');
+  if (components.context.clarity_score < CLARITY_FLOORS.context) floorFailures.push('context_clarity');
+  const unresolved = [];
+  if (components.goal.clarity_score < CLARITY_FLOORS.goal) unresolved.push('intent_target_or_required_outcome');
+  if (components.success.clarity_score < CLARITY_FLOORS.success && (!target || !action || risk)) unresolved.push('success_criteria_or_acceptance');
+  if (components.constraints.clarity_score < CLARITY_FLOORS.constraints || hasMultipleChoiceRisk) unresolved.push('risk_boundary_or_choice');
+  if (components.context.clarity_score < CLARITY_FLOORS.context) unresolved.push('codebase_context_target');
+  const uniqueUnresolved = [...new Set(unresolved)];
+  return {
+    schema_version: 1,
+    method: 'weighted_clarity_interview',
+    inspired_by: ['ouroboros_ambiguity_threshold', 'prometheus_interview_plan_first', 'hyperplan_adversarial_lenses'],
+    threshold: AMBIGUITY_READY_THRESHOLD,
+    overall_score: Number(overall.toFixed(3)),
+    ready_for_contract: overall <= AMBIGUITY_READY_THRESHOLD && floorFailures.length === 0,
+    component_floors_passed: floorFailures.length === 0,
+    floor_failures: floorFailures,
+    components,
+    unresolved_dimensions: uniqueUnresolved,
+    question_budget: risk ? 3 : 2,
+    adversarial_lenses: ['challenge_framing', 'subtract_unneeded_surface', 'demand_evidence', 'test_integration_risk', 'consider_simpler_alternative']
+  };
+}
+
 function addInferred(out, notes, id, value, note) {
   if (!hasAnswer(value) && !(Array.isArray(value) && value.length === 0)) return;
   out[id] = value;
@@ -78,6 +206,7 @@ function looksLikePresentationArtifactPrompt(lower) {
 export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   const text = `${prompt || ''}\n${explicitAnswers.GOAL_PRECISE || ''}`;
   const lower = text.toLowerCase();
+  const ambiguity = buildAmbiguityAssessment(prompt, explicitAnswers);
   const inferred = {};
   const notes = {};
   const normalizedPrompt = String(prompt || '')
@@ -122,26 +251,30 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
     presentation: ['audience profile and STP strategy are explicit before artifact creation', 'target pain points map to proposed solution moments', 'decision context and likely objections are sealed before storyboarding', 'presentation format, device, and delivery context are fixed before design work'],
     install: ['bootstrap/deps initialize readiness', 'missing runtime deps show repair actions', 'readiness output is concrete']
   };
-  if (!hasAnswer(explicitAnswers.GOAL_PRECISE)) {
+  const explicitPromptedGoal = promptedGoalFromAnswers(explicitAnswers);
+  const canInferCoreGoal = explicitPromptedGoal || !ambiguity.unresolved_dimensions.includes('intent_target_or_required_outcome');
+  if (!hasAnswer(explicitAnswers.GOAL_PRECISE) && canInferCoreGoal) {
     addInferred(
       inferred,
       notes,
       'GOAL_PRECISE',
-      presentationWork ? goals.presentation : (kind ? goals[kind] : (normalizedPrompt ? `사용자 요청을 현재 코드 기준으로 구현한다: ${normalizedPrompt}` : '사용자 요청을 현재 코드 기준으로 구현한다')),
-      presentationWork ? 'presentation' : (kind || 'prompt-derived-goal')
+      explicitPromptedGoal || (presentationWork ? goals.presentation : (kind ? goals[kind] : (normalizedPrompt ? `사용자 요청을 현재 코드 기준으로 구현한다: ${normalizedPrompt}` : '사용자 요청을 현재 코드 기준으로 구현한다'))),
+      explicitPromptedGoal ? 'user-answered-dynamic-intent' : (presentationWork ? 'presentation' : (kind || 'prompt-derived-goal'))
     );
   }
-  if (!hasAnswer(explicitAnswers.ACCEPTANCE_CRITERIA)) {
+  const explicitAcceptance = explicitAnswers.SUCCESS_CRITERIA_OR_ACCEPTANCE;
+  const canInferAcceptance = hasAnswer(explicitAcceptance) || Boolean(kind || presentationWork || paymentWork || authWork) || !ambiguity.unresolved_dimensions.includes('success_criteria_or_acceptance');
+  if (!hasAnswer(explicitAnswers.ACCEPTANCE_CRITERIA) && canInferAcceptance) {
     addInferred(
       inferred,
       notes,
       'ACCEPTANCE_CRITERIA',
-      presentationWork ? criteria.presentation : (kind ? criteria[kind] : [
+      hasAnswer(explicitAcceptance) ? explicitAcceptance : (presentationWork ? criteria.presentation : (kind ? criteria[kind] : [
         'requested behavior is implemented in the relevant code path',
         'relevant tests/checks pass or any unavailable check is explicitly justified',
         'final response states what was changed, verified, and left unverified'
-      ]),
-      presentationWork ? 'presentation' : (kind || 'default-implementation-criteria')
+      ])),
+      hasAnswer(explicitAcceptance) ? 'user-answered-dynamic-acceptance' : (presentationWork ? 'presentation' : (kind || 'default-implementation-criteria'))
     );
   }
 
@@ -157,11 +290,12 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   }
   if (!hasAnswer(explicitAnswers.RISK_BOUNDARY)) {
     addInferred(inferred, notes, 'RISK_BOUNDARY', [
+      ...(hasAnswer(explicitAnswers.RISK_AND_BOUNDARY) ? [summarizeAnswer(explicitAnswers.RISK_AND_BOUNDARY)] : []),
       'no npm publish unless explicitly requested',
       'do not revert unrelated changes',
       'no destructive commands or live data writes',
       'no unrequested fallback implementation code'
-    ], 'safety');
+    ], hasAnswer(explicitAnswers.RISK_AND_BOUNDARY) ? 'user-answered-dynamic-risk-boundary' : 'safety');
   }
   if (uiuxWork) {
     if (!hasAnswer(explicitAnswers.UI_STATE_BEHAVIOR)) {
@@ -257,35 +391,46 @@ export function buildQuestionSchema(prompt) {
   if (/\b(ui|modal|screen|button|visual|design|layout|component|prototype|frontend)\b|화면|버튼|모달|디자인|레이아웃|컴포넌트|프론트|시각|발표자료|디자인\s*시스템/.test(lower)) domainHints.push('uiux');
   if (looksLikePresentationArtifactPrompt(lower)) domainHints.push('presentation');
   if (/db|database|schema|migration|테이블|마이그레이션|supabase|postgres|sql/.test(lower)) domainHints.push('db');
-  const slots = [
-    { id: 'GOAL_PRECISE', question: '이번 작업의 최종 목표를 한 문장으로 정확히 정의해주세요.', required: true, type: 'string' },
-    { id: 'ACCEPTANCE_CRITERIA', question: '완료 기준을 항목으로 적어주세요. 최소 2개 이상 권장합니다.', required: true, type: 'array_or_string' },
-    { id: 'NON_GOALS', question: '이번 작업에서 제외할 범위가 있나요? 없으면 빈 배열로 답해주세요.', required: true, type: 'array_or_string', allow_empty: true },
-    { id: 'PUBLIC_API_CHANGE_ALLOWED', question: 'public API 또는 외부 계약 변경을 허용하나요?', required: true, type: 'enum', options: ['no', 'yes_if_needed', 'yes'] },
-    { id: 'DB_SCHEMA_CHANGE_ALLOWED', question: 'DB schema 또는 migration 변경을 허용하나요?', required: true, type: 'enum', options: ['no', 'yes_if_needed', 'yes_with_migration'] },
-    { id: 'DEPENDENCY_CHANGE_ALLOWED', question: '새 dependency 추가를 허용하나요?', required: true, type: 'enum', options: ['no', 'yes_if_already_approved', 'yes'] },
-    { id: 'TEST_SCOPE', question: '완료 전 실행 또는 정당화해야 할 테스트 범위를 지정해주세요.', required: true, type: 'array_or_string', examples: ['unit', 'integration', 'e2e', 'lint', 'typecheck'] },
-    { id: 'MID_RUN_UNKNOWN_POLICY', question: '실행 중 새 모호성이 생기면 사용자에게 묻지 않고 어떤 해결 순서로 판단할까요? 이 항목은 대체 구현 또는 fallback 코드를 새로 만드는 허가가 아닙니다.', required: true, type: 'array', options: ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'] },
-    { id: 'RISK_BOUNDARY', question: '보안, 결제, 데이터 손상, 권한, 인증 등 절대 넘으면 안 되는 위험 경계를 적어주세요.', required: true, type: 'array_or_string' },
-
-    { id: 'DATABASE_TARGET_ENVIRONMENT', question: 'DB 관련 작업의 대상 환경을 지정해주세요. production write는 Sneakoscope Codex가 허용하지 않습니다.', required: true, type: 'enum', options: ['no_database', 'local_dev', 'preview_branch', 'supabase_branch', 'production_read_only'] },
-    { id: 'DATABASE_WRITE_MODE', question: 'DB 쓰기 정책을 선택해주세요. Supabase/Postgres MCP live write는 기본 차단됩니다.', required: true, type: 'enum', options: ['read_only_only', 'migration_files_only', 'non_destructive_writes_to_local_or_branch_only'] },
-    { id: 'SUPABASE_MCP_POLICY', question: 'Supabase MCP를 사용한다면 어떤 안전 정책을 적용할까요?', required: true, type: 'enum', options: ['not_used', 'read_only_project_scoped_only', 'branch_only_no_live_writes'] },
-    { id: 'DESTRUCTIVE_DB_OPERATIONS_ALLOWED', question: 'DROP/TRUNCATE/DB reset/mass DELETE/branch reset/project delete 같은 파괴적 DB 작업을 허용하나요? Sneakoscope Codex는 never만 허용합니다.', required: true, type: 'enum', options: ['never'] },
-    { id: 'DB_BACKUP_OR_BRANCH_REQUIRED', question: 'DB 쓰기가 필요한 경우 local/preview branch 또는 백업이 있어야만 진행하도록 할까요?', required: true, type: 'enum', options: ['yes_for_any_write'] },
-    { id: 'DB_MAX_BLAST_RADIUS', question: 'DML이 꼭 필요한 경우 허용 가능한 최대 영향 범위를 적어주세요. 기본 권장값은 no_live_dml입니다.', required: true, type: 'string' }
-  ];
-  if (domainHints.includes('payment')) {
+  const ambiguity = buildAmbiguityAssessment(prompt);
+  const slots = [];
+  const presentationSpecific = domainHints.includes('presentation');
+  if (!presentationSpecific && ambiguity.unresolved_dimensions.includes('intent_target_or_required_outcome')) {
     slots.push(
-      { id: 'PAYMENT_SUCCESS_INVARIANT', question: '이미 성공 처리된 결제에 대해서는 어떤 invariant를 보존해야 하나요?', required: true, type: 'string' },
-      { id: 'PAYMENT_RETRY_POLICY', question: '재시도 횟수, backoff, 실패 최종 상태 정책을 지정해주세요.', required: true, type: 'string' }
+      { id: 'INTENT_TARGET', question: '실제로 바꿀 대상과 원하는 결과를 한 문장으로만 적어주세요. 파일/화면/기능명이 있으면 같이 적어주세요.', required: true, type: 'string' }
     );
   }
-  if (domainHints.includes('auth')) {
+  if (!presentationSpecific && ambiguity.unresolved_dimensions.includes('success_criteria_or_acceptance')) {
     slots.push(
-      { id: 'AUTH_SESSION_EXPIRED_BEHAVIOR', question: '세션/토큰 만료 시 사용자가 보게 될 UX 또는 API 동작을 지정해주세요.', required: true, type: 'string' },
-      { id: 'AUTH_PROTOCOL_CHANGE_ALLOWED', question: '인증 프로토콜 변경을 허용하나요?', required: true, type: 'enum', options: ['no', 'yes_if_needed', 'yes'] }
+      { id: 'SUCCESS_CRITERIA_OR_ACCEPTANCE', question: '완료라고 판단할 수 있는 관찰 가능한 기준을 1~3개만 적어주세요. 모르면 “현재 코드 기준으로 판단”이라고 적어도 됩니다.', required: true, type: 'array_or_string' }
     );
+  }
+  if (ambiguity.unresolved_dimensions.includes('risk_boundary_or_choice')) {
+    slots.push(
+      { id: 'RISK_AND_BOUNDARY', question: '여러 선택지가 있거나 위험한 변경이 있다면 반드시 지켜야 할 경계만 적어주세요. 없으면 “기존 동작 보존, 파괴적 작업 금지”라고 답해주세요.', required: true, type: 'string' }
+    );
+  }
+  if (ambiguity.unresolved_dimensions.includes('codebase_context_target')) {
+    slots.push(
+      { id: 'CODEBASE_CONTEXT_TARGET', question: '이 요청이 가리키는 repo/브랜치/화면/파일/최근 오류 맥락을 알려주세요.', required: true, type: 'string' }
+    );
+  }
+  if (domainHints.includes('payment')) {
+    const inferred = inferAnswersForPrompt(prompt);
+    if (!hasAnswer(inferred.answers.PAYMENT_SUCCESS_INVARIANT)) {
+      slots.push({ id: 'PAYMENT_SUCCESS_INVARIANT', question: '이미 성공 처리된 결제에 대해서는 어떤 invariant를 보존해야 하나요?', required: true, type: 'string' });
+    }
+    if (!hasAnswer(inferred.answers.PAYMENT_RETRY_POLICY)) {
+      slots.push({ id: 'PAYMENT_RETRY_POLICY', question: '재시도 횟수, backoff, 실패 최종 상태 정책을 지정해주세요.', required: true, type: 'string' });
+    }
+  }
+  if (domainHints.includes('auth')) {
+    const inferred = inferAnswersForPrompt(prompt);
+    if (!hasAnswer(inferred.answers.AUTH_SESSION_EXPIRED_BEHAVIOR)) {
+      slots.push({ id: 'AUTH_SESSION_EXPIRED_BEHAVIOR', question: '세션/토큰 만료 시 사용자가 보게 될 UX 또는 API 동작을 지정해주세요.', required: true, type: 'string' });
+    }
+    if (!hasAnswer(inferred.answers.AUTH_PROTOCOL_CHANGE_ALLOWED)) {
+      slots.push({ id: 'AUTH_PROTOCOL_CHANGE_ALLOWED', question: '인증 프로토콜 변경을 허용하나요?', required: true, type: 'enum', options: ['no', 'yes_if_needed', 'yes'] });
+    }
   }
   if (domainHints.includes('uiux')) {
     slots.push(
@@ -308,15 +453,22 @@ export function buildQuestionSchema(prompt) {
       { id: 'DB_READ_ONLY_QUERY_LIMIT', question: 'MCP/SQL read-only 조회 시 기본 LIMIT를 몇으로 둘까요?', required: true, type: 'string' }
     );
   }
-  const skippedByDefault = new RegExp('^(D' + 'B_|D' + 'ATABASE_|D' + 'ESTRUCTIVE_D' + 'B_|SUPA' + 'BASE_)');
   const inferred = inferAnswersForPrompt(prompt);
-  const inferredSlots = new Set(['MID_RUN_UNKNOWN_POLICY', ...Object.keys(inferred.answers)]);
-  const askedSlots = slots.filter((s) => !inferredSlots.has(s.id) && (domainHints.includes('db') || !skippedByDefault.test(s.id)));
+  const inferredSlots = new Set(Object.keys(inferred.answers));
+  const askedSlots = slots
+    .filter((s) => {
+      if (inferredSlots.has(s.id)) return false;
+      if (s.id === 'INTENT_TARGET' && hasAnswer(inferred.answers.GOAL_PRECISE)) return false;
+      if (s.id === 'SUCCESS_CRITERIA_OR_ACCEPTANCE' && hasAnswer(inferred.answers.ACCEPTANCE_CRITERIA)) return false;
+      return true;
+    })
+    .slice(0, domainHints.includes('presentation') ? slots.length : ambiguity.question_budget);
   return {
-    schema_version: 1,
-    description: 'Only slots that can change scope, safety, behavior, or acceptance are asked. The rest is inferred from TriWiki/current code defaults. After the contract is sealed, SKS resolves with the decision ladder instead of asking mid-run questions.',
+    schema_version: 2,
+    description: 'SKS scores goal, constraints, success criteria, and codebase context first, then asks only the lowest-clarity questions that can change execution. The rest is inferred from the prompt, TriWiki/current-code defaults, and conservative SKS safety policy. After the contract is sealed, SKS resolves with the decision ladder instead of asking mid-run questions.',
     prompt,
     domain_hints: domainHints,
+    ambiguity_assessment: ambiguity,
     inferred_answers: inferred.answers,
     inference_notes: inferred.notes,
     slots: askedSlots
@@ -339,6 +491,15 @@ export function questionsMarkdown(schema) {
     lines.push('사용자 의도가 실제로 모호한 항목만 묻고, 나머지는 TriWiki/current-code 기본값으로 추론합니다.');
   }
   if (schema.description) lines.push(schema.description);
+  if (schema.ambiguity_assessment) {
+    lines.push('');
+    lines.push('## Ambiguity Assessment');
+    lines.push('');
+    lines.push(`- method: ${schema.ambiguity_assessment.method}`);
+    lines.push(`- score: ${schema.ambiguity_assessment.overall_score} (ready threshold <= ${schema.ambiguity_assessment.threshold})`);
+    lines.push(`- unresolved dimensions: ${(schema.ambiguity_assessment.unresolved_dimensions || []).join(', ') || 'none'}`);
+    lines.push(`- question budget: ${schema.ambiguity_assessment.question_budget}`);
+  }
   if (schema.inferred_answers && Object.keys(schema.inferred_answers).length) {
     lines.push('');
     lines.push('## Inferred Answers');
