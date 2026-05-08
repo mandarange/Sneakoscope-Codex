@@ -48,7 +48,11 @@ async function runtimeDriftStatus(root, packageVersion) {
   if (!packageVersion || process.env.SKS_RUNTIME_DRIFT_CHECK === '0') {
     return { ok: true, checked: false, reason: packageVersion ? 'disabled' : 'package_json_version_missing' };
   }
-  const result = await runProcess('sks', ['--version'], {
+  const localBin = path.join(root, 'bin', 'sks.mjs');
+  const useLocalBin = await exists(localBin);
+  const command = useLocalBin ? process.execPath : 'sks';
+  const args = useLocalBin ? [localBin, '--version'] : ['--version'];
+  const result = await runProcess(command, args, {
     cwd: root,
     timeoutMs: 5000,
     maxOutputBytes: 16 * 1024,
@@ -68,6 +72,7 @@ async function runtimeDriftStatus(root, packageVersion) {
   return {
     ok: comparison >= 0,
     checked: true,
+    command: [command, ...args].join(' '),
     runtime_version: runtimeVersion,
     package_version: packageVersion,
     relation: comparison === 0 ? 'same' : (comparison > 0 ? 'runtime_newer' : 'runtime_older')
