@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.7.48] - 2026-05-09
+
+### Added
+
+- Centralize the MAD-SKS live full-access permission profile in a reusable gate module so hooks, skills, and MCP-style safety checks share one decision function.
+- Make `sks --mad` create an active MAD-SKS tmux permission mission so DB hooks inside the launched workspace allow live server work, Supabase MCP DB writes, direct SQL, targeted DML, and needed migrations while keeping catastrophic wipe safeguards.
+- Expose Team tmux sessions as a single-window split-pane live UI with overview and color-coded lane metadata.
+
+### Fixed
+
+- Keep npm install/upgrade repair aligned with the new MAD-SKS and Team tmux behavior so generated setup policy and skill text no longer preserve stale safe-default wording.
+- Reduce tmux/Team terminal noise by replacing large lane banners and verbose create output with mission, lane, status, watch, and artifact pointers only.
+- Update the package file-count release budget for the new permission gate module.
+
 ## [0.7.47] - 2026-05-09
 
 ### Fixed

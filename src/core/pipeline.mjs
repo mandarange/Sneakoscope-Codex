@@ -15,6 +15,7 @@ import { recordSkillDreamEvent, skillDreamPolicyText, writeSkillForgeReport } fr
 import { writeResearchPlan } from './research.mjs';
 import { PPT_REQUIRED_GATE_FIELDS } from './ppt.mjs';
 import { SPEED_LANE_POLICY } from './proof-field.mjs';
+import { permissionGateSummary } from './permission-gates.mjs';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
 import { formatRoleCounts, initTeamLive, parseTeamSpecText } from './team-live.mjs';
@@ -593,7 +594,7 @@ function applyMadSksAuthorizationToSchema(schema = {}) {
   schema.inference_notes = {
     ...(schema.inference_notes || {}),
     MAD_SKS_MODE: 'explicit dollar command modifier is the permission boundary',
-    DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'MAD-SKS opens Supabase MCP DB cleanup while blocking only catastrophic database wipe operations'
+    DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'MAD-SKS opens live-server DB changes, Supabase MCP cleanup, direct SQL, and needed migrations while blocking only catastrophic database wipe operations'
   };
   schema.slots = (schema.slots || []).filter((slot) => !/^(DB_|DATABASE_|DESTRUCTIVE_DB_|SUPABASE_MCP_POLICY$)/.test(slot.id));
   return schema;
@@ -608,7 +609,10 @@ async function materializeAutoSealedMadSks(dir, id, route, routeContext = {}, co
     supabase_mcp_schema_cleanup_allowed: true,
     direct_execute_sql_allowed: true,
     normal_db_writes_allowed: true,
+    live_server_writes_allowed: true,
+    migration_apply_allowed: true,
     catastrophic_safety_guard_active: true,
+    permission_profile: permissionGateSummary(),
     contract_hash: contract.sealed_hash || null
   });
   await appendJsonl(path.join(dir, 'events.jsonl'), {
@@ -628,6 +632,8 @@ async function materializeAutoSealedMadSks(dir, id, route, routeContext = {}, co
       supabase_mcp_schema_cleanup_allowed: true,
       direct_execute_sql_allowed: true,
       normal_db_writes_allowed: true,
+      live_server_writes_allowed: true,
+      migration_apply_allowed: true,
       catastrophic_safety_guard_active: true
     }
   };
@@ -646,7 +652,10 @@ async function materializeMadSksAuthorization(dir, id, route, routeContext = {},
     supabase_mcp_schema_cleanup_allowed: true,
     direct_execute_sql_allowed: true,
     normal_db_writes_allowed: true,
+    live_server_writes_allowed: true,
+    migration_apply_allowed: true,
     catastrophic_safety_guard_active: true,
+    permission_profile: permissionGateSummary(),
     contract_hash: contract.sealed_hash || null
   });
   await appendJsonl(path.join(dir, 'events.jsonl'), {
@@ -663,6 +672,8 @@ async function materializeMadSksAuthorization(dir, id, route, routeContext = {},
     supabase_mcp_schema_cleanup_allowed: true,
     direct_execute_sql_allowed: true,
     normal_db_writes_allowed: true,
+    live_server_writes_allowed: true,
+    migration_apply_allowed: true,
     catastrophic_safety_guard_active: true
   };
 }

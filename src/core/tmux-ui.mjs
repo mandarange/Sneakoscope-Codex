@@ -254,6 +254,18 @@ function colorizedLaneBannerCommand(lines = [], color = '') {
   return `printf '\\033[1;${code}m%s\\033[0m\\n' ${shellEscape(text)}`;
 }
 
+function compactTeamPaneBanner({ missionId, agentId, phase, style, overview = false } = {}) {
+  const role = overview ? 'overview' : `${style.label} (${style.color_name})`;
+  return [
+    `SKS Team ${missionId}`,
+    overview ? 'Overview: live orchestration' : `Agent: ${agentId}`,
+    `Lane: ${role}${phase ? ` | Phase: ${phase}` : ''}`,
+    overview ? 'Follow: team watch' : `Follow: team lane --agent ${agentId}`,
+    `Cleanup: sks team cleanup-tmux ${missionId}`,
+    ''
+  ];
+}
+
 export const TMUX_TEAM_LANE_STYLES = Object.freeze({
   overview: Object.freeze({ role: 'overview', label: 'overview', color_name: 'Blue', color: 'blue', icon: 'layout-dashboard' }),
   scout: Object.freeze({ role: 'scout', label: 'scout', color_name: 'Cyan', color: 'cyan', icon: 'search' }),
@@ -285,7 +297,7 @@ export function teamAgentCommand(root, missionId, agentId, phase) {
   return [
     terminalTitleCommand(title),
     'clear',
-    colorizedLaneBannerCommand([...SKS_TMUX_LOGO.split('\n'), '', `Team mission: ${missionId}`, `Agent: ${agentId}`, `Lane: ${style.label} (${style.color_name})`, `Phase: ${phase}`, 'Messages: sks team message ... --to ' + agentId, 'Cleanup: sks team cleanup-tmux ' + missionId], style.color),
+    colorizedLaneBannerCommand(compactTeamPaneBanner({ missionId, agentId, phase, style }), style.color),
     `cd ${shellEscape(root)}`,
     `node ${shellEscape(path.join(packageRoot(), 'bin', 'sks.mjs'))} team lane ${shellEscape(missionId)} --agent ${shellEscape(agentId)} --phase ${shellEscape(phase)} --follow --lines 12`
   ].join('; ');
@@ -297,7 +309,7 @@ export function teamOverviewCommand(root, missionId) {
   return [
     terminalTitleCommand(title),
     'clear',
-    colorizedLaneBannerCommand([...SKS_TMUX_LOGO.split('\n'), '', `Team mission: ${missionId}`, 'View: live orchestration overview', `Lane: ${style.label} (${style.color_name})`, 'Messages: sks team message ... --to <agent|all>', 'Cleanup: sks team cleanup-tmux ' + missionId], style.color),
+    colorizedLaneBannerCommand(compactTeamPaneBanner({ missionId, agentId: 'mission_overview', style, overview: true }), style.color),
     `cd ${shellEscape(root)}`,
     `node ${shellEscape(path.join(packageRoot(), 'bin', 'sks.mjs'))} team watch ${shellEscape(missionId)} --follow --lines 18`
   ].join('; ');
@@ -495,6 +507,14 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
   }));
   const overview = { agent: 'mission_overview', role: 'overview', command: teamOverviewCommand(launch.root, missionId), style: teamLaneStyle('mission_overview'), title: teamLaneTitle('mission_overview') };
   const lanes = [overview, ...commands.map((entry) => ({ ...entry, role: entry.style.role }))];
+  const splitUi = {
+    mode: 'single_window_split_panes',
+    window: 'sks',
+    layout: 'tiled',
+    live_updates: true,
+    panes_show: ['overview', 'scout', 'planning', 'execution', 'review', 'safety'],
+    user_attach_command: launch.attach_command
+  };
   const result = {
     ready: launch.ready,
     tmux: launch.tmux,
@@ -503,6 +523,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
     overview,
     agents: commands,
     lanes,
+    split_ui: splitUi,
     cleanup_policy: 'mark-complete; tmux panes remain user controlled',
     blockers: launch.blockers,
     attach_command: launch.attach_command
@@ -520,6 +541,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
     mission_id: missionId,
     session: result.session,
     attach_command: created.attach_command || launch.attach_command,
+    split_ui: splitUi,
     cleanup_policy: result.cleanup_policy,
     panes: created.panes || [],
     lanes: lanes.map((entry) => ({

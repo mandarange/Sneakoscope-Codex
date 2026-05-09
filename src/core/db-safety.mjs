@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { exists, readJson, writeJsonAtomic, readText, nowIso, appendJsonlBounded } from './fsx.mjs';
 import { missionDir, setCurrent } from './mission.mjs';
+import { evaluateMadSksPermissionGate, isMadSksRouteState } from './permission-gates.mjs';
 
 export const DEFAULT_DB_SAFETY_POLICY = Object.freeze({
   schema_version: 1,
@@ -229,33 +230,6 @@ function hasTableRemovalRisk(cls = {}) {
   return ['drop_table', 'truncate'].some((reason) => reasons.has(reason));
 }
 
-function hasMadSksCatastrophicDbRisk(cls = {}) {
-  const reasons = new Set([
-    ...(cls.reasons || []),
-    ...(cls.sql?.reasons || []),
-    ...(cls.command?.reasons || [])
-  ]);
-  return [
-    'drop_database',
-    'drop_schema',
-    'drop_table',
-    'truncate',
-    'delete_without_where',
-    'update_without_where',
-    'supabase_db_reset',
-    'prisma_migrate_reset',
-    'postgres_database_admin_command'
-  ].some((reason) => reasons.has(reason))
-    || cls.toolReasons?.includes?.('dangerous_supabase_management_tool');
-}
-
-function isMadSksRouteState(state = {}) {
-  return state.mad_sks_active === true
-    || String(state.mode || '').toUpperCase() === 'MADSKS'
-    || String(state.route_command || '').toUpperCase() === '$MAD-SKS'
-    || String(state.route || '').toUpperCase() === 'MADSKS';
-}
-
 async function madSksOverrideState(root, state = {}) {
   if (!isMadSksRouteState(state) || !state.mission_id || state.mad_sks_active === false) return { active: false };
   const gateFile = state.mad_sks_gate_file || state.stop_gate || MAD_SKS_GATE_FILE;
@@ -279,31 +253,35 @@ export function evaluateDbSafety({ classification, policy = DEFAULT_DB_SAFETY_PO
   if (cls.level === 'safe') return { allowed: true, action: 'allow', reasons: ['read_only_operation'], classification: cls };
   if (cls.level === 'possible_db') return { allowed: !noQuestion, action: noQuestion ? 'block' : 'warn', reasons: noQuestion ? ['unknown_database_operation_blocked_during_no_question_run'] : ['unknown_database_operation'], classification: cls };
   if (madSks?.active && (cls.level === 'write' || cls.level === 'destructive')) {
-    if (hasMadSksCatastrophicDbRisk(cls)) {
+    const madGate = evaluateMadSksPermissionGate({ classification: cls, active: true });
+    if (!madGate.allowed) {
       return {
         allowed: false,
         action: 'block',
-        reasons: ['mad_sks_catastrophic_db_operation_blocked'],
+        reasons: madGate.reasons,
         classification: cls,
         effective,
         mad_sks: {
           active: true,
           catastrophic_safety_guard_active: true,
-          blocked_categories: ['whole_database_or_table_removal', 'all_rows_delete_or_update', 'dangerous_project_management']
+          blocked_categories: madGate.blocked_categories,
+          permission_profile: madGate.profile
         }
       };
     }
     return {
       allowed: true,
       action: 'allow',
-      reasons: ['mad_sks_scoped_override_active'],
+      reasons: madGate.reasons,
       classification: cls,
       effective,
       mad_sks: {
         active: true,
         sks_db_constraints_removed: true,
         catastrophic_safety_guard_active: true,
-        supabase_mcp_schema_cleanup_allowed: true
+        supabase_mcp_schema_cleanup_allowed: true,
+        live_server_writes_allowed: true,
+        permission_profile: madGate.profile
       }
     };
   }
@@ -416,7 +394,7 @@ export function dbBlockReason(decision) {
   if ((decision.reasons || []).includes('mad_sks_catastrophic_db_operation_blocked')) {
     return [
       'Sneakoscope Codex MAD-SKS catastrophic database safeguard blocked this operation.',
-      'MAD-SKS opens Supabase MCP column/schema cleanup, direct execute SQL, and normal DB writes only while the mission gate is active.',
+      'MAD-SKS opens live-server changes, Supabase MCP column/schema cleanup, direct execute SQL, migrations when required, and normal DB writes only while the mission gate is active.',
       'Whole database/table removal, all-row value wipes, database reset, and dangerous project or branch management remain blocked.'
     ].join(' ');
   }

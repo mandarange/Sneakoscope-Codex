@@ -56,6 +56,7 @@ import { createSkillCandidate, decideSkillInjection, skillDreamFixture, writeSki
 import { classifyToolError, harnessGrowthReport } from '../core/evaluation.mjs';
 import { runWorkflowPerfBench, validateWorkflowPerfReport } from '../core/perf-bench.mjs';
 import { buildProofField, proofFieldFixture, validateProofFieldReport } from '../core/proof-field.mjs';
+import { permissionGateSummary } from '../core/permission-gates.mjs';
 import { recordMistake, writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
 import { MISTAKE_RECALL_ARTIFACT, contractConsumesMistakeRecall } from '../core/mistake-recall.mjs';
 import { buildPromptContext } from '../core/prompt-context-builder.mjs';
@@ -702,7 +703,11 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
       permissions_deactivated: false,
       supabase_mcp_schema_cleanup_allowed: true,
       direct_execute_sql_allowed: true,
+      normal_db_writes_allowed: true,
+      live_server_writes_allowed: true,
+      migration_apply_allowed: true,
       catastrophic_safety_guard_active: true,
+      permission_profile: permissionGateSummary(),
       contract_hash: contract.sealed_hash || null
     });
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), {
@@ -721,6 +726,9 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
         mad_sks_gate_ready: true,
         supabase_mcp_schema_cleanup_allowed: true,
         direct_execute_sql_allowed: true,
+        normal_db_writes_allowed: true,
+        live_server_writes_allowed: true,
+        migration_apply_allowed: true,
         catastrophic_safety_guard_active: true
       }
     };
@@ -813,7 +821,11 @@ async function materializeMadSksAuthorization(dir, id, route, routeContext = {},
     deactivates_when_gate_passed: gateFile,
     supabase_mcp_schema_cleanup_allowed: true,
     direct_execute_sql_allowed: true,
+    normal_db_writes_allowed: true,
+    live_server_writes_allowed: true,
+    migration_apply_allowed: true,
     catastrophic_safety_guard_active: true,
+    permission_profile: permissionGateSummary(),
     contract_hash: contract.sealed_hash || null
   };
   await writeJsonAtomic(path.join(dir, 'mad-sks-authorization.json'), artifact);
@@ -830,6 +842,9 @@ async function materializeMadSksAuthorization(dir, id, route, routeContext = {},
     mad_sks_gate_file: gateFile,
     supabase_mcp_schema_cleanup_allowed: true,
     direct_execute_sql_allowed: true,
+    normal_db_writes_allowed: true,
+    live_server_writes_allowed: true,
+    migration_apply_allowed: true,
     catastrophic_safety_guard_active: true
   };
 }
@@ -1071,14 +1086,76 @@ async function madHighCommand(args = []) {
     return;
   }
   const profile = await enableMadHighProfile();
-  console.log(`SKS MAD full-access profile ready: ${madHighProfileName()}`);
-  console.log('Scope: explicit tmux launch only; Codex opens with danger-full-access sandbox and approval_policy=never.');
+  const madLaunch = await activateMadTmuxPermissionState(process.cwd());
+  console.log(`SKS MAD ready: ${madHighProfileName()} | gate ${madLaunch.mission_id}`);
+  console.log('Live full-access active; catastrophic DB wipe/all-row/project-management guards remain.');
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
   return launchTmuxUi([...cleanArgs, '--workspace', workspace], {
     codexArgs: profile.launch_args,
     autoInstallTmux: !flag(args, '--no-auto-install-tmux'),
     conciseBlockers: true
   });
+}
+
+async function activateMadTmuxPermissionState(cwd = process.cwd()) {
+  const root = await sksRoot();
+  if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
+  const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad tmux live full-access session' });
+  const gate = {
+    schema_version: 1,
+    passed: false,
+    mad_sks_permission_active: true,
+    permissions_deactivated: false,
+    live_server_writes_allowed: true,
+    supabase_mcp_schema_cleanup_allowed: true,
+    direct_execute_sql_allowed: true,
+    normal_db_writes_allowed: true,
+    migration_apply_allowed: true,
+    catastrophic_safety_guard_active: true,
+    permission_profile: permissionGateSummary(),
+    activated_by: 'sks --mad',
+    cwd: path.resolve(cwd || process.cwd())
+  };
+  await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
+  await writeJsonAtomic(path.join(dir, 'route-context.json'), {
+    route: 'MadSKS',
+    command: '$MAD-SKS',
+    mode: 'MADSKS',
+    task: gate.activated_by,
+    mad_sks_authorization: true,
+    tmux_launch: true,
+    permission_profile: gate.permission_profile
+  });
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), {
+    ts: nowIso(),
+    type: 'mad_sks.tmux_permission_opened',
+    route: 'MadSKS',
+    live_server_writes_allowed: true,
+    catastrophic_safety_guard_active: true
+  });
+  await setCurrent(root, {
+    mission_id: id,
+    route: 'MadSKS',
+    route_command: '$MAD-SKS',
+    mode: 'MADSKS',
+    phase: 'MADSKS_TMUX_PERMISSION_ACTIVE',
+    questions_allowed: false,
+    implementation_allowed: true,
+    mad_sks_active: true,
+    mad_sks_modifier: true,
+    mad_sks_gate_file: 'mad-sks-gate.json',
+    mad_sks_gate_ready: true,
+    live_server_writes_allowed: true,
+    supabase_mcp_schema_cleanup_allowed: true,
+    direct_execute_sql_allowed: true,
+    normal_db_writes_allowed: true,
+    migration_apply_allowed: true,
+    catastrophic_safety_guard_active: true,
+    permission_profile: gate.permission_profile,
+    stop_gate: 'mad-sks-gate.json',
+    prompt: gate.activated_by
+  });
+  return { mission_id: id, dir, gate };
 }
 
 async function maybePromptSksUpdateForLaunch(args = [], opts = {}) {
@@ -2348,7 +2425,7 @@ async function selftest() {
   const madStandaloneResult = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'user-prompt-submit'], { cwd: madStandaloneTmp, input: madStandalonePayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (madStandaloneResult.code !== 0) throw new Error(`selftest failed: standalone MAD-SKS hook exited ${madStandaloneResult.code}: ${madStandaloneResult.stderr}`);
   const madStandaloneState = await readJson(stateFile(madStandaloneTmp), {});
-  if (madStandaloneState.mode !== 'MADSKS' || madStandaloneState.mad_sks_active !== true || madStandaloneState.mad_sks_gate_file !== 'mad-sks-gate.json') throw new Error('selftest failed: standalone MAD-SKS auto-seal did not activate scoped permissions');
+  if (madStandaloneState.mode !== 'MADSKS' || madStandaloneState.mad_sks_active !== true || madStandaloneState.mad_sks_gate_file !== 'mad-sks-gate.json' || madStandaloneState.normal_db_writes_allowed !== true || madStandaloneState.live_server_writes_allowed !== true || madStandaloneState.migration_apply_allowed !== true) throw new Error('selftest failed: standalone MAD-SKS auto-seal did not activate live full-access scoped permissions');
   const madStandaloneWrite = 'cre' + 'ate table mad_selftest (id uuid primary key);';
   const madStandaloneCreateDecision = await checkDbOperation(madStandaloneTmp, madStandaloneState, { ['tool' + '_name']: 'mcp__data' + 'base__execute_' + 'sql', ['s' + 'ql']: madStandaloneWrite }, { duringNoQuestion: false });
   if (madStandaloneCreateDecision.action !== 'allow') throw new Error('selftest failed: standalone MAD-SKS did not allow ordinary DDL');
@@ -2358,7 +2435,7 @@ async function selftest() {
   const madModifierResult = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'user-prompt-submit'], { cwd: madModifierTmp, input: madModifierPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (madModifierResult.code !== 0) throw new Error(`selftest failed: MAD-SKS Team hook exited ${madModifierResult.code}: ${madModifierResult.stderr}`);
   const madModifierState = await readJson(stateFile(madModifierTmp), {});
-  if (madModifierState.mode !== 'TEAM' || madModifierState.mad_sks_active !== true || madModifierState.mad_sks_gate_file !== 'team-gate.json') throw new Error('selftest failed: MAD-SKS Team auto-seal did not activate scoped permissions');
+  if (madModifierState.mode !== 'TEAM' || madModifierState.mad_sks_active !== true || madModifierState.mad_sks_gate_file !== 'team-gate.json' || madModifierState.normal_db_writes_allowed !== true || madModifierState.live_server_writes_allowed !== true || madModifierState.migration_apply_allowed !== true) throw new Error('selftest failed: MAD-SKS Team auto-seal did not activate live full-access scoped permissions');
   if (routePrompt('위키 갱신해줘')?.id !== 'Wiki') throw new Error('selftest failed: wiki refresh text did not route to Wiki');
   const koreanReadmeInstallPrompt = '리드미에 Codex App에서도 $ 표기 쓰는 법을 알려줘야지. 설치단계에서 바로 보이게 해줘야지';
   if (routePrompt(koreanReadmeInstallPrompt)?.id !== 'Team') throw new Error('selftest failed: Korean README implementation prompt did not route to Team by default');
@@ -3004,6 +3081,8 @@ async function selftest() {
   const tmuxTeam = await launchTmuxTeamView({ root: tmp, missionId: teamId, plan: roleTeamPlan, json: true });
   if (!tmuxTeam.agents?.length || !tmuxTeam.agents.some((entry) => entry.agent === 'analysis_scout_1') || !tmuxTeam.agents.every((entry) => String(entry.command || '').includes('team lane') && String(entry.command || '').includes('--agent'))) throw new Error('selftest failed: Team tmux view did not expose agent live lanes');
   if (!tmuxTeam.overview?.command?.includes('team watch') || !tmuxTeam.lanes?.some((entry) => entry.role === 'overview') || !tmuxTeam.lanes?.some((entry) => entry.agent === 'analysis_scout_1')) throw new Error('selftest failed: Team tmux view did not expose orchestration overview plus agent lanes');
+  if (tmuxTeam.split_ui?.mode !== 'single_window_split_panes' || tmuxTeam.split_ui?.layout !== 'tiled' || tmuxTeam.split_ui?.live_updates !== true) throw new Error('selftest failed: Team tmux view did not expose single-window split UI metadata');
+  if (String(tmuxTeam.overview?.command || '').includes('SNEAKOSCOPE CODEX') || !String(tmuxTeam.overview?.command || '').includes('Follow: team watch')) throw new Error('selftest failed: Team tmux pane banner is too noisy or missing compact follow hint');
   if (teamLaneStyle('analysis_scout_1').role !== 'scout' || teamLaneStyle('executor_1').role !== 'execution' || teamLaneStyle('reviewer_1').role !== 'review') throw new Error('selftest failed: Team tmux role palette did not classify lane roles');
   if (!String(tmuxTeam.cleanup_policy || '').includes('mark-complete') || !tmuxTeam.lanes.every((entry) => entry.style?.color && entry.title)) throw new Error('selftest failed: Team tmux view did not expose color/title metadata and cleanup policy');
   if (tmuxTeam.session !== `sks-team-${teamId}` || !tmuxTeam.attach_command?.includes(`sks-team-${teamId}`)) throw new Error('selftest failed: Team tmux session is not named for visibility');
@@ -3241,7 +3320,9 @@ async function selftest() {
   const madState = { mission_id: madMission.id, mode: 'TEAM', route_command: '$Team', stop_gate: 'team-gate.json', mad_sks_active: true, mad_sks_modifier: true, mad_sks_gate_file: 'team-gate.json' };
   const columnCleanupSql = 'alter table users ' + 'dr' + 'op column legacy_name;';
   const madColumnCleanupDecision = await checkDbOperation(tmp, madState, { tool_name: 'mcp__supabase__execute_sql', sql: columnCleanupSql }, { duringNoQuestion: false });
-  if (madColumnCleanupDecision.action !== 'allow') throw new Error('selftest failed: MAD-SKS column cleanup was not allowed');
+  if (madColumnCleanupDecision.action !== 'allow' || !madColumnCleanupDecision.mad_sks?.permission_profile?.allowed?.includes('direct_execute_sql_writes')) throw new Error('selftest failed: MAD-SKS column cleanup was not allowed through the modular permission gate');
+  const madLiveDmlDecision = await checkDbOperation(tmp, madState, { tool_name: 'mcp__supabase__execute_sql', sql: "update users set name = 'fixed' where id = 'selftest';" }, { duringNoQuestion: false });
+  if (madLiveDmlDecision.action !== 'allow' || !madLiveDmlDecision.mad_sks?.live_server_writes_allowed) throw new Error('selftest failed: MAD-SKS targeted live DML was not allowed');
   const tableRemovalSql = 'dr' + 'op table users;';
   const madTableRemovalDecision = await checkDbOperation(tmp, madState, { tool_name: 'mcp__supabase__execute_sql', sql: tableRemovalSql }, { duringNoQuestion: false });
   if (madTableRemovalDecision.action !== 'block') throw new Error('selftest failed: MAD-SKS catastrophic table removal was not blocked');

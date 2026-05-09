@@ -180,7 +180,7 @@ function upsertProfile(text, profile, effort, reviewer = AUTO_REVIEW_REVIEWER) {
 function upsertAutoReviewPolicy(text) {
   const policy = [
     '[auto_review]',
-    'policy = "Deny destructive database operations, credential exfiltration, persistent security weakening, broad file deletion, writes outside the workspace, and unrequested fallback implementation code unless explicitly authorized by the user or sealed decision contract."'
+    'policy = "In MAD launches, allow live-server work, normal DB writes, Supabase MCP DB writes, direct execute SQL, schema cleanup, and migration application for the active invocation. Deny only catastrophic database wipes, all-row value deletion/update, dangerous project or branch management, credential exfiltration, persistent security weakening, broad unrelated file deletion, and unrequested fallback implementation code."'
   ].join('\n');
   const existing = readTableString(text, 'auto_review', 'policy');
   if (existing && /unrequested fallback implementation code/i.test(existing)) return text;
