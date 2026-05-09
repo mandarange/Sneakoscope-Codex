@@ -30,6 +30,11 @@ export async function postinstall({ bootstrap }) {
   else if (context7Install.status === 'codex_missing') console.log('Context7 MCP: Codex CLI missing. Install @openai/codex or set SKS_CODEX_BIN, then run `sks context7 setup --scope global` or `sks setup` in a project.');
   else if (context7Install.status === 'skipped') console.log(`Context7 MCP: skipped (${context7Install.reason}).`);
   else if (context7Install.status === 'failed') console.log(`Context7 MCP: auto setup failed. Run \`sks context7 setup --scope global\` or \`sks setup\`. ${context7Install.error || ''}`.trim());
+  const fastModeRepair = await ensureGlobalCodexFastModeDuringInstall();
+  if (fastModeRepair.status === 'updated') console.log(`Codex App Fast mode: restored in ${fastModeRepair.config_path}.`);
+  else if (fastModeRepair.status === 'present') console.log('Codex App Fast mode: config already compatible.');
+  else if (fastModeRepair.status === 'skipped') console.log(`Codex App Fast mode: skipped (${fastModeRepair.reason}).`);
+  else if (fastModeRepair.status === 'failed') console.log(`Codex App Fast mode: auto repair failed. Run \`sks setup\`. ${fastModeRepair.error || ''}`.trim());
   const globalSkills = await ensureGlobalCodexSkillsDuringInstall();
   if (globalSkills.status === 'installed') console.log(`Codex App global $ skills: installed in ${globalSkills.root} (${globalSkills.installed_count} skills).`);
   else if (globalSkills.status === 'partial') console.log(`Codex App global $ skills: partial in ${globalSkills.root}; missing ${globalSkills.missing_skills.join(', ')}. Run \`sks doctor --fix\`.`);
@@ -138,7 +143,7 @@ export async function configureCodexLb(opts = {}) {
   if (!apiKey) return { ok: false, status: 'missing_api_key', config_path: configPath, env_path: envPath };
   await ensureDir(path.dirname(configPath));
   const current = await readText(configPath, '');
-  const next = upsertCodexLbConfig(current, baseUrl);
+  const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, baseUrl));
   await writeTextAtomic(configPath, next);
   await writeTextAtomic(envPath, `export CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
   await fsp.chmod(envPath, 0o600).catch(() => {});
@@ -223,6 +228,77 @@ function upsertCodexLbConfig(text = '', baseUrl) {
   ].join('\n');
   next = upsertTomlTable(next, 'model_providers.codex-lb', block);
   return `${next.trim()}\n`;
+}
+
+export async function ensureGlobalCodexFastModeDuringInstall(opts = {}) {
+  if (process.env.SKS_SKIP_CODEX_FAST_MODE_REPAIR === '1') return { status: 'skipped', reason: 'SKS_SKIP_CODEX_FAST_MODE_REPAIR=1' };
+  const home = opts.home || process.env.HOME || os.homedir();
+  const configPath = opts.configPath || codexLbConfigPath(home);
+  try {
+    await ensureDir(path.dirname(configPath));
+    const current = await readText(configPath, '');
+    const next = normalizeCodexFastModeUiConfig(current);
+    if (next === ensureTrailingNewline(current)) return { status: 'present', config_path: configPath };
+    await writeTextAtomic(configPath, next);
+    return { status: 'updated', config_path: configPath };
+  } catch (err) {
+    return { status: 'failed', config_path: configPath, error: err.message };
+  }
+}
+
+export function normalizeCodexFastModeUiConfig(text = '') {
+  let next = removeLegacyTopLevelCodexModeLocks(text);
+  next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
+  next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
+  next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
+  return ensureTrailingNewline(next);
+}
+
+function removeLegacyTopLevelCodexModeLocks(text = '') {
+  const legacy = {
+    model: new Set(['gpt-5.5']),
+    model_reasoning_effort: new Set(['high']),
+    service_tier: new Set(['fast'])
+  };
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  return lines.filter((line, index) => {
+    if (index >= end) return true;
+    const match = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=\s*"([^"]*)"\s*(?:#.*)?$/);
+    if (!match) return true;
+    return !legacy[match[1]]?.has(match[2]);
+  }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function upsertTomlTableKey(text, table, line) {
+  const key = String(line).split('=')[0].trim();
+  const lines = String(text || '').trimEnd().split('\n');
+  if (lines.length === 1 && lines[0] === '') lines.length = 0;
+  const header = `[${table}]`;
+  const start = lines.findIndex((x) => x.trim() === header);
+  if (start === -1) return [...lines, ...(lines.length ? [''] : []), header, line].join('\n').replace(/\n{3,}/g, '\n\n');
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  const keyRe = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
+  for (let i = start + 1; i < end; i++) {
+    if (keyRe.test(lines[i])) {
+      lines[i] = line;
+      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+    }
+  }
+  lines.splice(end, 0, line);
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function ensureTrailingNewline(text = '') {
+  const value = String(text || '').trimEnd();
+  return value ? `${value}\n` : '';
 }
 
 function upsertTopLevelTomlString(text, key, value) {

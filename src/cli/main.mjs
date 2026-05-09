@@ -26,10 +26,15 @@ import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, wri
 import {
   PPT_AUDIENCE_STRATEGY_ARTIFACT,
   PPT_CLEANUP_REPORT_ARTIFACT,
+  PPT_FACT_LEDGER_ARTIFACT,
   PPT_GATE_ARTIFACT,
   PPT_HTML_ARTIFACT,
+  PPT_IMAGE_ASSET_LEDGER_ARTIFACT,
+  PPT_ITERATION_REPORT_ARTIFACT,
   PPT_PARALLEL_REPORT_ARTIFACT,
   PPT_PDF_ARTIFACT,
+  PPT_REVIEW_LEDGER_ARTIFACT,
+  PPT_REVIEW_POLICY_ARTIFACT,
   PPT_RENDER_REPORT_ARTIFACT,
   PPT_SOURCE_HTML_DIR,
   PPT_TEMP_DIR,
@@ -418,6 +423,10 @@ async function pptCommand(sub = 'status', args = []) {
     console.log(`Mission: ${id}`);
     console.log(`HTML:    ${path.relative(root, result.files.html)}`);
     console.log(`PDF:     ${path.relative(root, result.files.pdf)}`);
+    console.log(`Facts:   ${path.relative(root, result.files.fact_ledger)}`);
+    console.log(`Images:  ${path.relative(root, result.files.image_asset_ledger)}`);
+    console.log(`Review:  ${path.relative(root, result.files.review_ledger)}`);
+    console.log(`Loop:    ${path.relative(root, result.files.iteration_report)}`);
     console.log(`Report:  ${path.relative(root, result.files.render_report)}`);
     console.log(`Cleanup: ${path.relative(root, result.files.cleanup_report)}`);
     console.log(`Parallel:${' '.repeat(1)}${path.relative(root, result.files.parallel_report)}`);
@@ -436,6 +445,11 @@ async function pptCommand(sub = 'status', args = []) {
         html: path.join(dir, PPT_HTML_ARTIFACT),
         source_html: path.join(dir, PPT_HTML_ARTIFACT),
         pdf: path.join(dir, PPT_PDF_ARTIFACT),
+        fact_ledger: path.join(dir, PPT_FACT_LEDGER_ARTIFACT),
+        image_asset_ledger: path.join(dir, PPT_IMAGE_ASSET_LEDGER_ARTIFACT),
+        review_policy: path.join(dir, PPT_REVIEW_POLICY_ARTIFACT),
+        review_ledger: path.join(dir, PPT_REVIEW_LEDGER_ARTIFACT),
+        iteration_report: path.join(dir, PPT_ITERATION_REPORT_ARTIFACT),
         render_report: path.join(dir, PPT_RENDER_REPORT_ARTIFACT),
         cleanup_report: path.join(dir, PPT_CLEANUP_REPORT_ARTIFACT),
         parallel_report: path.join(dir, PPT_PARALLEL_REPORT_ARTIFACT),
@@ -448,6 +462,10 @@ async function pptCommand(sub = 'status', args = []) {
     console.log(`Gate:    ${status.ok ? 'passed' : 'not passed'}`);
     console.log(`HTML:    ${path.relative(root, status.files.html)}`);
     console.log(`PDF:     ${path.relative(root, status.files.pdf)}`);
+    console.log(`Facts:   ${path.relative(root, status.files.fact_ledger)}`);
+    console.log(`Images:  ${path.relative(root, status.files.image_asset_ledger)}`);
+    console.log(`Review:  ${path.relative(root, status.files.review_ledger)}`);
+    console.log(`Loop:    ${path.relative(root, status.files.iteration_report)}`);
     console.log(`Report:  ${path.relative(root, status.files.render_report)}`);
     console.log(`Cleanup: ${path.relative(root, status.files.cleanup_report)}`);
     console.log(`Parallel:${' '.repeat(1)}${path.relative(root, status.files.parallel_report)}`);
@@ -1304,7 +1322,7 @@ function usage(args = []) {
     openclaw: ['OpenClaw', '', '  sks openclaw install', '  sks openclaw path', '  sks openclaw print SKILL.md', '', 'Installs an OpenClaw skill package under ~/.openclaw/skills/sneakoscope-codex so OpenClaw agents can attach skills: [sneakoscope-codex] with the shell tool and call local SKS commands from a project root.'],
     team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
-    ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT asks delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and installed skills/MCPs outside the $PPT allowlist are ignored. Design uses getdesign-reference plus the built-in PPT design pipeline; imagegen and Context7 are conditional only when the sealed PPT contract needs raster assets or current external docs.'],
+    ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT asks delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, render QA, fact-ledger validation, and bounded review-loop validation. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and installed skills/MCPs outside the $PPT allowlist are ignored. Design uses getdesign-reference plus the built-in PPT design pipeline; imagegen/gpt-image-2 and Context7 are conditional only when the sealed PPT contract needs raster assets, slide visual critique, or current external docs. Missing required image-review evidence blocks instead of being simulated.'],
     goal: ['Goal', '', '  sks goal create "task"', '  sks goal status latest', '  sks goal pause latest', '  sks goal resume latest', '  sks goal clear latest'],
     'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks codex-app remote-control --status', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
     dollar: ['Dollar Commands', '', formatDollarCommandsCompact('  '), '', 'Terminal: sks dollar-commands [--json]'],
@@ -1759,6 +1777,13 @@ async function safeReadText(file, fallback = '') {
   try { return await fsp.readFile(file, 'utf8'); } catch { return fallback; }
 }
 
+function hasTopLevelCodexModeLock(text = '') {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
+  return /^model\s*=|^model_reasoning_effort\s*=|^service_tier\s*=/m.test(top);
+}
+
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
 function readMaxCycles(args, fallback) {
   const i = args.indexOf('--max-cycles');
@@ -2001,6 +2026,8 @@ async function selftest() {
   const defaultFastHighPlan = await buildTmuxLaunchPlan({ root: tmp, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
   if (defaultFastHighPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="high"') throw new Error('selftest failed: default sks tmux launch is not fast-high');
   const codexLbHome = path.join(tmp, 'codex-lb-home');
+  await ensureDir(path.join(codexLbHome, '.codex'));
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n');
   const codexLbSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key', 'sk-test', '--json'], {
     cwd: tmp,
     env: { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global') },
@@ -2013,6 +2040,7 @@ async function selftest() {
   const codexLbEnv = await safeReadText(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'));
   const codexLbAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !codexLbConfig.includes('model_provider = "codex-lb"') || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || !codexLbAuth.includes('"auth_mode": "apikey"')) throw new Error('selftest failed: codex-lb setup did not write provider config, env key, and Codex API-key auth');
+  if (!codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('[user.fast_mode]') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest failed: codex-lb setup did not preserve Codex App Fast mode UI');
   const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest failed: tmux launch command does not source codex-lb env file');
   if (!codexLbLaunch.includes('SKS_TMUX_LOGO_ANIMATION') || !codexLbLaunch.includes('SNEAKOSCOPE CODEX')) throw new Error('selftest failed: tmux launch command does not include the animated SKS logo intro');
@@ -2662,11 +2690,12 @@ async function selftest() {
   if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest failed: team_consensus agent not configured');
   const preservedConfigTmp = tmpdir();
   await ensureDir(path.join(preservedConfigTmp, '.codex'));
-  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), '[features]\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
+  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[features]\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
   await initProject(preservedConfigTmp, {});
   const preservedConfig = await safeReadText(path.join(preservedConfigTmp, '.codex', 'config.toml'));
   if (!preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true') || !preservedConfig.includes('enabled = true') || !preservedConfig.includes('default_profile = "sks-fast-high"')) throw new Error('selftest failed: Codex config merge dropped or failed to enable Fast mode settings');
   if (!preservedConfig.includes('codex_hooks = true') || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error('selftest failed: Codex config merge did not add SKS managed settings');
+  if (hasTopLevelCodexModeLock(preservedConfig)) throw new Error('selftest failed: Codex config merge left top-level legacy mode locks that hide Fast mode UI');
   const autoReviewHome = path.join(tmp, 'auto-review-home');
   const autoReviewEnv = { HOME: autoReviewHome };
   const autoReviewEnabled = await enableAutoReview({ env: autoReviewEnv, high: true });
@@ -3042,6 +3071,7 @@ async function selftest() {
   if (!pptSkillText.includes('simple, restrained, and information-first') || !pptSkillText.includes('over-designed decoration') || !pptSkillText.includes(CODEX_APP_IMAGE_GENERATION_DOC_URL) || !pptSkillText.includes(AWESOME_DESIGN_MD_REFERENCE.url) || !pptSkillText.includes('only design decision SSOT') || !pptSkillText.includes('instead of treating references as parallel authorities')) throw new Error('selftest failed: generated PPT skill missing restrained design/imagegen/fused-SSOT guidance');
   if (!pptSkillText.includes('PPT pipeline allowlist') || !pptSkillText.includes('ignore installed skills and MCPs') || !pptSkillText.includes('prevent AI-like generic presentation design') || !pptSkillText.includes('Do not use generic design skills such as design-artifact-expert')) throw new Error('selftest failed: generated PPT skill missing pipeline allowlist enforcement');
   if (!pptSkillText.includes('source-html/') || !pptSkillText.includes('temporary build files') || !pptSkillText.includes('ppt-parallel-report.json')) throw new Error('selftest failed: generated PPT skill missing source preservation/temp cleanup/parallel guidance');
+  if (!pptSkillText.includes('ppt-fact-ledger.json') || !pptSkillText.includes('ppt-image-asset-ledger.json') || !pptSkillText.includes('OpenAI Image API') || !pptSkillText.includes('ppt-review-ledger.json') || !pptSkillText.includes('ppt-iteration-report.json') || !pptSkillText.includes('never simulate missing gpt-image-2 output')) throw new Error('selftest failed: generated PPT skill missing fact/image/review loop anti-fake guidance');
   if (routeRequiresSubagents(pptRoute, '$PPT 투자자용 피치덱 만들어줘')) throw new Error('selftest failed: PPT route should not require subagents by default');
   if (!reflectionRequiredForRoute(pptRoute)) throw new Error('selftest failed: PPT route should require reflection');
   const pptMission = await createMission(tmp, { mode: 'ppt', prompt: '$PPT 투자자용 피치덱 만들어줘' });
@@ -3061,10 +3091,20 @@ async function selftest() {
   if (!pptAudienceStrategy?.source_answers?.PRESENTATION_STP_STRATEGY || pptAudienceStrategy.painpoint_solution_map.length !== 3) throw new Error('selftest failed: PPT audience strategy was not materialized from sealed answers');
   const pptGate = await readJson(path.join(pptMission.dir, PPT_GATE_ARTIFACT));
   if (pptGate.passed !== false || pptGate.audience_strategy_sealed !== true || pptGate.painpoint_count !== 3) throw new Error('selftest failed: PPT gate did not initialize with sealed audience strategy');
+  await writeJsonAtomic(path.join(pptMission.dir, PPT_FACT_LEDGER_ARTIFACT), {
+    schema_version: 1,
+    web_research_performed: true,
+    external_research_required: true,
+    sources: [{ id: 'web-source-selftest', type: 'verified_web_source', url: 'https://example.com/ppt-source', support_status: 'verified' }],
+    claims: [{ id: 'claim-selftest-market-risk', text: '시장 차별성과 실행 리스크는 외부 근거가 필요한 주장으로 분리된다.', source_ids: ['web-source-selftest'], support_status: 'supported', criticality: 'high', slide_refs: [2] }],
+    unsupported_critical_claims: [],
+    unsupported_critical_claims_count: 0,
+    passed: true
+  });
   const pptBuildResult = await runProcess(process.execPath, [hookBin, 'ppt', 'build', pptMission.id, '--json'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (pptBuildResult.code !== 0) throw new Error(`selftest failed: sks ppt build failed: ${pptBuildResult.stderr || pptBuildResult.stdout}`);
   const pptBuild = JSON.parse(pptBuildResult.stdout);
-  if (!pptBuild.ok || !pptBuild.gate?.passed || !pptBuild.gate?.parallel_build_recorded || !pptBuild.gate?.html_artifact_created || !pptBuild.gate?.source_html_preserved || !pptBuild.gate?.pdf_exported_or_explicitly_deferred || !pptBuild.gate?.render_qa_recorded || !pptBuild.gate?.temp_cleanup_recorded) throw new Error('selftest failed: PPT build did not pass artifact gate');
+  if (!pptBuild.ok || !pptBuild.gate?.passed || !pptBuild.gate?.fact_ledger_created || !pptBuild.gate?.unsupported_critical_claims_zero || !pptBuild.gate?.image_asset_ledger_created || !pptBuild.gate?.image_asset_policy_satisfied || !pptBuild.gate?.review_policy_created || !pptBuild.gate?.review_ledger_created || !pptBuild.gate?.bounded_iteration_complete || !pptBuild.gate?.critical_review_issues_zero || !pptBuild.gate?.parallel_build_recorded || !pptBuild.gate?.html_artifact_created || !pptBuild.gate?.source_html_preserved || !pptBuild.gate?.pdf_exported_or_explicitly_deferred || !pptBuild.gate?.render_qa_recorded || !pptBuild.gate?.temp_cleanup_recorded) throw new Error('selftest failed: PPT build did not pass artifact gate');
   if (!PPT_HTML_ARTIFACT.startsWith(`${PPT_SOURCE_HTML_DIR}/`)) throw new Error('selftest failed: PPT HTML source must be stored in source-html folder');
   const pptHtml = await safeReadText(path.join(pptMission.dir, PPT_HTML_ARTIFACT));
   if (!pptHtml.includes('<html') || pptHtml.includes('gradient')) throw new Error('selftest failed: PPT HTML artifact missing or over-designed');
@@ -3075,8 +3115,19 @@ async function selftest() {
   const audienceScript = pptHtml.match(/id="ppt-audience-strategy">([^<]+)<\/script>/);
   if (!audienceScript) throw new Error('selftest failed: PPT HTML missing audience strategy script data');
   JSON.parse(audienceScript[1]);
+  if (!pptHtml.includes('id="ppt-fact-ledger"') || !pptHtml.includes('id="ppt-image-asset-ledger"') || !pptHtml.includes('id="ppt-review-policy"')) throw new Error('selftest failed: PPT HTML missing fact/image/review embedded ledgers');
   const pptPdfBytes = await fsp.readFile(path.join(pptMission.dir, PPT_PDF_ARTIFACT));
   if (pptPdfBytes.subarray(0, 5).toString('utf8') !== '%PDF-') throw new Error('selftest failed: PPT PDF artifact does not have a PDF header');
+  const pptFactLedger = await readJson(path.join(pptMission.dir, PPT_FACT_LEDGER_ARTIFACT));
+  if (!pptFactLedger.passed || pptFactLedger.unsupported_critical_claims_count !== 0 || !Array.isArray(pptFactLedger.claims)) throw new Error('selftest failed: PPT fact ledger did not pass unsupported-claim gate');
+  const pptImageAssetLedger = await readJson(path.join(pptMission.dir, PPT_IMAGE_ASSET_LEDGER_ARTIFACT));
+  if (!pptImageAssetLedger.passed || pptImageAssetLedger.required !== false || pptImageAssetLedger.planned_count !== 0 || pptImageAssetLedger.provider?.model !== 'gpt-image-2') throw new Error('selftest failed: PPT image asset ledger did not pass optional no-cost state');
+  const pptReviewPolicy = await readJson(path.join(pptMission.dir, PPT_REVIEW_POLICY_ARTIFACT));
+  if (pptReviewPolicy.visual_review?.model !== 'gpt-image-2' || pptReviewPolicy.max_full_deck_passes !== 2 || pptReviewPolicy.max_slide_retries !== 2 || pptReviewPolicy.score_threshold < 0.88) throw new Error('selftest failed: PPT review policy missing bounded gpt-image-2 loop settings');
+  const pptReviewLedger = await readJson(path.join(pptMission.dir, PPT_REVIEW_LEDGER_ARTIFACT));
+  if (!pptReviewLedger.passed || !pptReviewLedger.p0_p1_zero || pptReviewLedger.image_review_status !== 'not_required_or_not_available') throw new Error('selftest failed: PPT review ledger did not pass deterministic no-blocker state');
+  const pptIterationReport = await readJson(path.join(pptMission.dir, PPT_ITERATION_REPORT_ARTIFACT));
+  if (!pptIterationReport.passed || pptIterationReport.loop_policy?.max_full_deck_passes !== 2 || pptIterationReport.stop_reason !== 'score_threshold_met_and_no_p0_p1_issues') throw new Error('selftest failed: PPT iteration report did not record bounded pass termination');
   const pptRenderReport = await readJson(path.join(pptMission.dir, PPT_RENDER_REPORT_ARTIFACT));
   if (!pptRenderReport.passed || !pptRenderReport.design_policy_checks.every((check) => check.passed)) throw new Error('selftest failed: PPT render report did not pass design policy checks');
   const pptParallelReport = await readJson(path.join(pptMission.dir, PPT_PARALLEL_REPORT_ARTIFACT));
@@ -3087,6 +3138,31 @@ async function selftest() {
   if (await exists(path.join(pptMission.dir, 'artifact.html'))) throw new Error('selftest failed: legacy root PPT HTML should not remain after source-html preservation');
   const pptStatusResult = await runProcess(process.execPath, [hookBin, 'ppt', 'status', pptMission.id, '--json'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (pptStatusResult.code !== 0 || !JSON.parse(pptStatusResult.stdout).ok) throw new Error('selftest failed: sks ppt status did not report the built gate');
+  const requiredImagePptMission = await createMission(tmp, { mode: 'ppt', prompt: '$PPT 이미지 리소스 포함 투자자용 피치덱 만들어줘' });
+  await writeQuestions(requiredImagePptMission.dir, pptSchema);
+  await writeJsonAtomic(path.join(requiredImagePptMission.dir, 'answers.json'), {
+    ...pptAnswers,
+    PRESENTATION_IMAGE_ASSETS_REQUIRED: 'yes',
+    PRESENTATION_IMAGE_ASSET_REQUESTS: ['한국 B2B SaaS 운영 효율을 상징하는 첫 장용 히어로 이미지']
+  });
+  const requiredImageSeal = await sealContract(requiredImagePptMission.dir, requiredImagePptMission.mission);
+  if (!requiredImageSeal.ok) throw new Error('selftest failed: PPT required-image answers rejected');
+  await materializeAfterPipelineAnswer(tmp, requiredImagePptMission.id, requiredImagePptMission.dir, requiredImagePptMission.mission, pptRoute, { route: 'PPT', command: '$PPT', mode: 'PPT', task: requiredImagePptMission.mission.prompt, context7_required: false }, requiredImageSeal.contract);
+  await writeJsonAtomic(path.join(requiredImagePptMission.dir, PPT_FACT_LEDGER_ARTIFACT), {
+    schema_version: 1,
+    web_research_performed: true,
+    external_research_required: true,
+    sources: [{ id: 'web-source-required-image-selftest', type: 'verified_web_source', url: 'https://example.com/ppt-source-image', support_status: 'verified' }],
+    claims: [{ id: 'claim-required-image-selftest', text: '이미지 리소스 요구사항은 사실 검증과 별도 게이트로 차단되어야 한다.', source_ids: ['web-source-required-image-selftest'], support_status: 'supported', criticality: 'high', slide_refs: [1] }],
+    unsupported_critical_claims: [],
+    unsupported_critical_claims_count: 0,
+    passed: true
+  });
+  const requiredImageBuildResult = await runProcess(process.execPath, [hookBin, 'ppt', 'build', requiredImagePptMission.id, '--json'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1', OPENAI_API_KEY: '' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (requiredImageBuildResult.code !== 0) throw new Error(`selftest failed: required-image PPT build command failed: ${requiredImageBuildResult.stderr || requiredImageBuildResult.stdout}`);
+  const requiredImageBuild = JSON.parse(requiredImageBuildResult.stdout);
+  const requiredImageLedger = await readJson(path.join(requiredImagePptMission.dir, PPT_IMAGE_ASSET_LEDGER_ARTIFACT));
+  if (requiredImageBuild.ok || requiredImageBuild.gate?.passed || !requiredImageBuild.gate?.image_asset_ledger_created || requiredImageBuild.gate?.image_asset_policy_satisfied !== false || !requiredImageLedger.required || requiredImageLedger.passed || !requiredImageLedger.blockers?.includes('missing_OPENAI_API_KEY_for_required_gpt_image_2_assets') || requiredImageLedger.generated_count !== 0) throw new Error('selftest failed: required PPT image assets were not blocked without real gpt-image-2 credentials');
   const installUxSchema = buildQuestionSchema('SKS first install/bootstrap UX and Context7 MCP setup improvement');
   const installUxSlotIds = installUxSchema.slots.map((s) => s.id);
   if (installUxSchema.domain_hints.includes('uiux') || installUxSlotIds.includes('VISUAL_REGRESSION_REQUIRED')) throw new Error('selftest failed: CLI UX install prompt should not ask visual UI questions');
