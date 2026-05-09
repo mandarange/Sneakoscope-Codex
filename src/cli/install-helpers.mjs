@@ -248,17 +248,25 @@ export async function ensureGlobalCodexFastModeDuringInstall(opts = {}) {
 
 export function normalizeCodexFastModeUiConfig(text = '') {
   let next = removeLegacyTopLevelCodexModeLocks(text);
+  next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
+  next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
+  next = upsertTomlTableKey(next, 'features', 'fast_mode = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
+  next = upsertTomlTableKey(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
+  next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'model = "gpt-5.5"');
+  next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'service_tier = "fast"');
+  next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'approval_policy = "on-request"');
+  next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'sandbox_mode = "workspace-write"');
+  next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'model_reasoning_effort = "high"');
   return ensureTrailingNewline(next);
 }
 
 function removeLegacyTopLevelCodexModeLocks(text = '') {
   const legacy = {
     model: new Set(['gpt-5.5']),
-    model_reasoning_effort: new Set(['high']),
-    service_tier: new Set(['fast'])
+    model_reasoning_effort: new Set(['high'])
   };
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
@@ -269,6 +277,23 @@ function removeLegacyTopLevelCodexModeLocks(text = '') {
     if (!match) return true;
     return !legacy[match[1]]?.has(match[2]);
   }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function removeTomlTableKey(text, table, key) {
+  const lines = String(text || '').trimEnd().split('\n');
+  if (lines.length === 1 && lines[0] === '') return '';
+  const header = `[${table}]`;
+  const start = lines.findIndex((x) => x.trim() === header);
+  if (start === -1) return String(text || '');
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  const keyPattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`);
+  return lines.filter((line, index) => index <= start || index >= end || !keyPattern.test(line)).join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 function upsertTomlTableKey(text, table, line) {

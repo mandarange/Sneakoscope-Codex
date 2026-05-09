@@ -428,8 +428,11 @@ function installPolicy(scope, commandPrefix) {
 
 function mergeManagedCodexConfigToml(existingContent = '') {
   let next = removeLegacyTopLevelCodexModeLocks(String(existingContent || '').trimEnd());
+  next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
+  next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
   next = upsertTomlTableKey(next, 'features', 'codex_hooks = true');
   next = upsertTomlTableKey(next, 'features', 'multi_agent = true');
+  next = upsertTomlTableKey(next, 'features', 'fast_mode = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
@@ -445,8 +448,7 @@ function mergeManagedCodexConfigToml(existingContent = '') {
 function removeLegacyTopLevelCodexModeLocks(text = '') {
   const legacy = {
     model: new Set(['gpt-5.5']),
-    model_reasoning_effort: new Set(['high']),
-    service_tier: new Set(['fast'])
+    model_reasoning_effort: new Set(['high'])
   };
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
@@ -457,6 +459,38 @@ function removeLegacyTopLevelCodexModeLocks(text = '') {
     if (!match) return true;
     return !legacy[match[1]]?.has(match[2]);
   }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function upsertTopLevelTomlString(text, key, value) {
+  const line = `${key} = "${value}"`;
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  for (let i = 0; i < end; i += 1) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i])) {
+      lines[i] = line;
+      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+    }
+  }
+  lines.splice(end, 0, line);
+  return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function removeTomlTableKey(text, table, key) {
+  const lines = String(text || '').trimEnd().split('\n');
+  if (lines.length === 1 && lines[0] === '') return '';
+  const header = `[${table}]`;
+  const start = lines.findIndex((x) => x.trim() === header);
+  if (start === -1) return String(text || '');
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  const keyPattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`);
+  return lines.filter((line, index) => index <= start || index >= end || !keyPattern.test(line)).join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 function managedCodexConfigBlocks() {
@@ -470,7 +504,7 @@ function managedCodexConfigBlocks() {
     { table: 'profiles.sks-task-low', text: profileConfigBlock('sks-task-low', 'low') },
     { table: 'profiles.sks-task-medium', text: profileConfigBlock('sks-task-medium', 'medium') },
     { table: 'profiles.sks-logic-high', text: profileConfigBlock('sks-logic-high', 'high') },
-    { table: 'profiles.sks-fast-high', text: profileConfigBlock('sks-fast-high', 'high') },
+    { table: 'profiles.sks-fast-high', text: profileConfigBlock('sks-fast-high', 'high', { serviceTier: 'fast' }) },
     { table: 'profiles.sks-research-xhigh', text: profileConfigBlock('sks-research-xhigh', 'xhigh') },
     { table: 'profiles.sks-research', text: profileConfigBlock('sks-research', 'xhigh', { approval: 'never' }) },
     { table: 'profiles.sks-team', text: profileConfigBlock('sks-team', 'high') },
@@ -496,6 +530,7 @@ function profileConfigBlock(profile, effort, opts = {}) {
   return [
     `[profiles.${profile}]`,
     'model = "gpt-5.5"',
+    ...(opts.serviceTier ? [`service_tier = "${opts.serviceTier}"`] : []),
     `approval_policy = "${opts.approval || 'on-request'}"`,
     ...(opts.approvalsReviewer ? [`approvals_reviewer = "${opts.approvalsReviewer}"`] : []),
     `sandbox_mode = "${opts.sandbox || 'workspace-write'}"`,

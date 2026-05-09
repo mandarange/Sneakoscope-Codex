@@ -412,12 +412,13 @@ export function buildQuestionSchema(prompt) {
   const ambiguity = buildAmbiguityAssessment(prompt);
   const slots = [];
   const presentationSpecific = domainHints.includes('presentation');
-  if (!presentationSpecific && ambiguity.unresolved_dimensions.includes('intent_target_or_required_outcome')) {
+  const intentMissing = ambiguity.unresolved_dimensions.includes('intent_target_or_required_outcome');
+  if (!presentationSpecific && intentMissing) {
     slots.push(
       { id: 'INTENT_TARGET', question: '실제로 바꿀 대상과 원하는 결과를 한 문장으로만 적어주세요. 파일/화면/기능명이 있으면 같이 적어주세요.', required: true, type: 'string' }
     );
   }
-  if (!presentationSpecific && ambiguity.unresolved_dimensions.includes('success_criteria_or_acceptance')) {
+  if (!presentationSpecific && !intentMissing && ambiguity.unresolved_dimensions.includes('success_criteria_or_acceptance')) {
     slots.push(
       { id: 'SUCCESS_CRITERIA_OR_ACCEPTANCE', question: '완료라고 판단할 수 있는 관찰 가능한 기준을 1~3개만 적어주세요. 모르면 “현재 코드 기준으로 판단”이라고 적어도 됩니다.', required: true, type: 'array_or_string' }
     );
@@ -427,7 +428,7 @@ export function buildQuestionSchema(prompt) {
       { id: 'RISK_AND_BOUNDARY', question: '여러 선택지가 있거나 위험한 변경이 있다면 반드시 지켜야 할 경계만 적어주세요. 없으면 “기존 동작 보존, 파괴적 작업 금지”라고 답해주세요.', required: true, type: 'string' }
     );
   }
-  if (ambiguity.unresolved_dimensions.includes('codebase_context_target')) {
+  if (!intentMissing && ambiguity.unresolved_dimensions.includes('codebase_context_target')) {
     slots.push(
       { id: 'CODEBASE_CONTEXT_TARGET', question: '이 요청이 가리키는 repo/브랜치/화면/파일/최근 오류 맥락을 알려주세요.', required: true, type: 'string' }
     );
@@ -504,7 +505,7 @@ export function questionsMarkdown(schema) {
     lines.push('UI 수준 E2E와 시각 검증은 Codex Computer Use 증거가 없으면 검증 완료로 주장할 수 없습니다. Chrome MCP, Browser Use, Playwright, Selenium, Puppeteer, 기타 브라우저 자동화는 UI/브라우저 검증 증거로 인정하지 않습니다.');
     lines.push('개발 서버가 아닌 배포/스테이징 도메인에서는 삭제성 테스트를 절대 실행하지 않습니다.');
   } else {
-    lines.push('이 질문들에 모두 답변하고 Decision Contract가 봉인된 뒤에만 실행됩니다.');
+    lines.push('실행을 바꿀 수 있는 질문에만 답변하면 Decision Contract가 봉인된 뒤 실행됩니다.');
     lines.push('봉인 후 실행 중에는 사용자에게 새 질문을 하지 않고 decision ladder로 해결합니다.');
     lines.push('사용자 의도가 실제로 모호한 항목만 묻고, 나머지는 TriWiki/current-code 기본값으로 추론합니다.');
   }
@@ -540,7 +541,7 @@ export function questionsMarkdown(schema) {
     lines.push(`- type: ${s.type}`);
     lines.push('');
   }
-  lines.push('## answers.json template');
+  lines.push('## Internal Answer Payload Template');
   lines.push('');
   lines.push('```json');
   const example = {};

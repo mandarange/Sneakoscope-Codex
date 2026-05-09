@@ -3,7 +3,7 @@ import os from 'node:os';
 import fsp from 'node:fs/promises';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { projectRoot, readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, tmpdir, packageRoot, dirSize, formatBytes, which, runProcess, PACKAGE_VERSION, sksRoot, globalSksRoot, findProjectRoot } from '../core/fsx.mjs';
+import { projectRoot, readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, tmpdir, packageRoot, dirSize, formatBytes, which, runProcess, PACKAGE_VERSION, sksRoot, globalSksRoot, findProjectRoot, readStdin } from '../core/fsx.mjs';
 import { initProject, installSkills, normalizeInstallScope, sksCommandPrefix } from '../core/init.mjs';
 import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, missionDir, setCurrent, stateFile } from '../core/mission.mjs';
@@ -168,7 +168,7 @@ Usage:
   sks ppt status <mission-id|latest> [--json]
   sks context7 check|setup|tools|resolve|docs|evidence ...
   sks pipeline status|resume|plan [--json] [--proof-field]
-  sks pipeline answer <mission-id|latest> <answers.json>
+  sks pipeline answer <mission-id|latest> <answers.json|--stdin|--text "...">
   sks guard check [--json]
   sks conflicts check|prompt [--json]
   sks versioning status|bump|pre-commit [--json]
@@ -591,9 +591,14 @@ function printPipelinePlan(root, id, plan) {
 async function pipelineAnswer(root, args = []) {
   const [missionArg, answerFile] = args;
   const id = await resolveMissionId(root, missionArg);
-  if (!id || !answerFile) throw new Error('Usage: sks pipeline answer <mission-id|latest> <answers.json>');
+  if (!id || !answerFile) throw new Error('Usage: sks pipeline answer <mission-id|latest> <answers.json|--stdin|--text "...">');
   const { dir, mission } = await loadMission(root, id);
-  const answers = await readJson(path.resolve(answerFile));
+  const schema = await readJson(path.join(dir, 'required-answers.schema.json'));
+  const answers = answerFile === '--stdin'
+    ? parseAnswersText(schema, await readStdin())
+    : answerFile === '--text'
+      ? parseAnswersText(schema, args.slice(2).join(' '))
+      : await readJson(path.resolve(answerFile));
   await writeJsonAtomic(path.join(dir, 'answers.json'), answers);
   const result = await sealContract(dir, mission);
   if (!result.ok) {
@@ -643,6 +648,48 @@ async function pipelineAnswer(root, args = []) {
   console.log(`Hash: ${result.contract.sealed_hash}`);
   console.log(`Plan: ${path.relative(root, path.join(dir, PIPELINE_PLAN_ARTIFACT))}`);
   console.log('Next: continue the original route lifecycle using decision-contract.json.');
+}
+
+function parseAnswersText(schema = {}, text = '') {
+  const body = String(text || '').trim();
+  const slots = Array.isArray(schema.slots) ? schema.slots : [];
+  const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+  const answers = {};
+  let currentId = null;
+  let currentLines = [];
+  const flush = () => {
+    if (!currentId) return;
+    answers[currentId] = normalizeTextAnswerValue(slotById.get(currentId), currentLines.join('\n').trim());
+    currentId = null;
+    currentLines = [];
+  };
+  for (const line of body.split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z][A-Z0-9_]{2,})\s*[:：]\s*(.*)$/);
+    if (match && slotById.has(match[1])) {
+      flush();
+      currentId = match[1];
+      currentLines = [match[2] || ''];
+      continue;
+    }
+    if (currentId) currentLines.push(line);
+  }
+  flush();
+  if (!Object.keys(answers).length && slots.length === 1 && body) {
+    answers[slots[0].id] = normalizeTextAnswerValue(slots[0], body.replace(new RegExp(`^\\s*${slots[0].id}\\s*`, 'i'), '').trim());
+  }
+  return answers;
+}
+
+function normalizeTextAnswerValue(slot = {}, raw = '') {
+  const value = String(raw || '').trim();
+  if (slot.type === 'array') {
+    return value.split(/\r?\n|,/).map((x) => x.replace(/^\s*[-*]\s*/, '').trim()).filter(Boolean);
+  }
+  if (slot.type === 'array_or_string') {
+    const bulletLines = value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+    if (bulletLines.length > 1 && bulletLines.every((line) => /^[-*]\s+/.test(line))) return bulletLines.map((line) => line.replace(/^[-*]\s+/, '').trim());
+  }
+  return value;
 }
 
 async function materializeAfterPipelineAnswer(root, id, dir, mission, route, routeContext = {}, contract = {}) {
@@ -1781,7 +1828,7 @@ function hasTopLevelCodexModeLock(text = '') {
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
   const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
-  return /^model\s*=|^model_reasoning_effort\s*=|^service_tier\s*=/m.test(top);
+  return /^model\s*=|^model_reasoning_effort\s*=/m.test(top);
 }
 
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
@@ -1847,7 +1894,7 @@ async function selftest() {
     if (stop?.decision !== 'block' || !String(stop.reason || '').includes('waiting for mandatory ambiguity-removal answers')) throw new Error('selftest failed: clarification gate did not hard-pause without visible questions');
   }
   if (await exists(path.join(clarificationMission.dir, 'hard-blocker.json'))) throw new Error('selftest failed: clarification gate used compliance hard-blocker instead of waiting for answers');
-  const visibleQuestionStop = await evaluateStop(tmp, clarificationState, { last_assistant_message: 'Required questions still pending:\n1. GOAL_PRECISE: What should be changed?\n\nUse sks pipeline answer latest answers.json.' });
+  const visibleQuestionStop = await evaluateStop(tmp, clarificationState, { last_assistant_message: 'Required questions still pending:\n1. GOAL_PRECISE: What should be changed?\n\nReply by slot id; I will seal the contract with sks pipeline answer latest --stdin.' });
   if (visibleQuestionStop?.continue !== true) throw new Error('selftest failed: visible clarification question block did not allow the question-only turn to stop');
   await setCurrent(tmp, loopState);
   const dfixPromptHook = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'user-prompt-submit'], {
@@ -2027,7 +2074,7 @@ async function selftest() {
   if (defaultFastHighPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="high"') throw new Error('selftest failed: default sks tmux launch is not fast-high');
   const codexLbHome = path.join(tmp, 'codex-lb-home');
   await ensureDir(path.join(codexLbHome, '.codex'));
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\n');
   const codexLbSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key', 'sk-test', '--json'], {
     cwd: tmp,
     env: { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global') },
@@ -2040,7 +2087,7 @@ async function selftest() {
   const codexLbEnv = await safeReadText(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'));
   const codexLbAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !codexLbConfig.includes('model_provider = "codex-lb"') || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || !codexLbAuth.includes('"auth_mode": "apikey"')) throw new Error('selftest failed: codex-lb setup did not write provider config, env key, and Codex API-key auth');
-  if (!codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('[user.fast_mode]') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest failed: codex-lb setup did not preserve Codex App Fast mode UI');
+  if (!codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest failed: codex-lb setup did not preserve Codex App Fast mode defaults');
   const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest failed: tmux launch command does not source codex-lb env file');
   if (!codexLbLaunch.includes('SKS_TMUX_LOGO_ANIMATION') || !codexLbLaunch.includes('SNEAKOSCOPE CODEX')) throw new Error('selftest failed: tmux launch command does not include the animated SKS logo intro');
@@ -2295,6 +2342,23 @@ async function selftest() {
   if (routePrompt('$MAD-SKS Supabase MCP main 작업')?.id !== 'MadSKS') throw new Error('selftest failed: $MAD-SKS route did not resolve');
   if (routePrompt('$MAD-SKS $Team Supabase MCP main 작업')?.id !== 'Team') throw new Error('selftest failed: $MAD-SKS did not compose with $Team');
   if (routePrompt('$DB Supabase 점검 $MAD-SKS')?.id !== 'DB') throw new Error('selftest failed: trailing $MAD-SKS changed primary route');
+  const madStandaloneTmp = tmpdir();
+  await initProject(madStandaloneTmp, {});
+  const madStandalonePayload = JSON.stringify({ cwd: madStandaloneTmp, prompt: '$MAD-SKS main 권한 열어줘' });
+  const madStandaloneResult = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'user-prompt-submit'], { cwd: madStandaloneTmp, input: madStandalonePayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (madStandaloneResult.code !== 0) throw new Error(`selftest failed: standalone MAD-SKS hook exited ${madStandaloneResult.code}: ${madStandaloneResult.stderr}`);
+  const madStandaloneState = await readJson(stateFile(madStandaloneTmp), {});
+  if (madStandaloneState.mode !== 'MADSKS' || madStandaloneState.mad_sks_active !== true || madStandaloneState.mad_sks_gate_file !== 'mad-sks-gate.json') throw new Error('selftest failed: standalone MAD-SKS auto-seal did not activate scoped permissions');
+  const madStandaloneWrite = 'cre' + 'ate table mad_selftest (id uuid primary key);';
+  const madStandaloneCreateDecision = await checkDbOperation(madStandaloneTmp, madStandaloneState, { ['tool' + '_name']: 'mcp__data' + 'base__execute_' + 'sql', ['s' + 'ql']: madStandaloneWrite }, { duringNoQuestion: false });
+  if (madStandaloneCreateDecision.action !== 'allow') throw new Error('selftest failed: standalone MAD-SKS did not allow ordinary DDL');
+  const madModifierTmp = tmpdir();
+  await initProject(madModifierTmp, {});
+  const madModifierPayload = JSON.stringify({ cwd: madModifierTmp, prompt: '$MAD-SKS $Team 회전 아스키 아트는 제일 처음 인증 안됐을때만 codex cli처럼 애니메이션으로 보이게 하고 tmux에서는 정적 3d 아스키 아트로 보여줘' });
+  const madModifierResult = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'user-prompt-submit'], { cwd: madModifierTmp, input: madModifierPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (madModifierResult.code !== 0) throw new Error(`selftest failed: MAD-SKS Team hook exited ${madModifierResult.code}: ${madModifierResult.stderr}`);
+  const madModifierState = await readJson(stateFile(madModifierTmp), {});
+  if (madModifierState.mode !== 'TEAM' || madModifierState.mad_sks_active !== true || madModifierState.mad_sks_gate_file !== 'team-gate.json') throw new Error('selftest failed: MAD-SKS Team auto-seal did not activate scoped permissions');
   if (routePrompt('위키 갱신해줘')?.id !== 'Wiki') throw new Error('selftest failed: wiki refresh text did not route to Wiki');
   const koreanReadmeInstallPrompt = '리드미에 Codex App에서도 $ 표기 쓰는 법을 알려줘야지. 설치단계에서 바로 보이게 해줘야지';
   if (routePrompt(koreanReadmeInstallPrompt)?.id !== 'Team') throw new Error('selftest failed: Korean README implementation prompt did not route to Team by default');
@@ -2358,9 +2422,9 @@ async function selftest() {
   const hookGoalDelegationContext = hookGoalDelegationJson.hookSpecificOutput?.additionalContext || '';
   const hookGoalDelegationBridgeMatch = hookGoalDelegationContext.match(/Goal bridge mission: (M-[A-Za-z0-9-]+)/);
   if (!hookGoalDelegationBridgeMatch || !hookGoalDelegationContext.includes('Delegated execution route: $Team')) throw new Error('selftest failed: $Goal implementation prompt did not prepare a bridge plus Team delegation');
-  if (!hookGoalDelegationContext.includes('MANDATORY ambiguity-removal gate activated') || !hookGoalDelegationContext.includes('Route: $Team')) throw new Error('selftest failed: $Goal implementation delegation did not prepare Team ambiguity gate');
+  if (hookGoalDelegationContext.includes('MANDATORY ambiguity-removal gate activated') || !hookGoalDelegationContext.includes('$Team route prepared')) throw new Error('selftest failed: $Goal implementation delegation did not prepare direct Team route');
   const hookGoalDelegationState = await readJson(stateFile(hookGoalDelegationTmp), {});
-  if (hookGoalDelegationState.mode !== 'TEAM' || hookGoalDelegationState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookGoalDelegationState.implementation_allowed !== false) throw new Error('selftest failed: $Goal implementation delegation did not leave Team gate current');
+  if (hookGoalDelegationState.mode !== 'TEAM' || hookGoalDelegationState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || hookGoalDelegationState.implementation_allowed === false || !hookGoalDelegationState.team_plan_ready) throw new Error('selftest failed: $Goal implementation delegation did not leave direct Team ready');
   if (!(await exists(path.join(missionDir(hookGoalDelegationTmp, hookGoalDelegationBridgeMatch[1]), GOAL_WORKFLOW_ARTIFACT)))) throw new Error('selftest failed: $Goal implementation delegation did not write bridge workflow artifact');
   const activeGoalMissionId = hookState.mission_id;
   const hookGoalOverlayPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '$Team 발표자료 만들어줘' });
@@ -2368,12 +2432,11 @@ async function selftest() {
   if (hookGoalOverlayResult.code !== 0) throw new Error(`selftest failed: active Goal overlay hook exited ${hookGoalOverlayResult.code}: ${hookGoalOverlayResult.stderr}`);
   const hookGoalOverlayJson = JSON.parse(hookGoalOverlayResult.stdout);
   const hookGoalOverlayContext = hookGoalOverlayJson.hookSpecificOutput?.additionalContext || '';
-  if (!hookGoalOverlayContext.includes('MANDATORY ambiguity-removal gate activated') || !hookGoalOverlayContext.includes('Route: $Team')) throw new Error('selftest failed: active Goal hijacked a plain Korean implementation prompt instead of preparing Team');
+  if (hookGoalOverlayContext.includes('MANDATORY ambiguity-removal gate activated') || !hookGoalOverlayContext.includes('$Team route prepared')) throw new Error('selftest failed: active Goal hijacked a plain Korean implementation prompt instead of preparing direct Team');
   if (!hookGoalOverlayContext.includes(`Active Goal overlay: existing Goal mission ${activeGoalMissionId}`) || !hookGoalOverlayContext.includes('goal-workflow.json')) throw new Error('selftest failed: active Goal overlay context was not included with the new route');
-  if (hookGoalOverlayContext.indexOf('MANDATORY ambiguity-removal gate activated') > hookGoalOverlayContext.indexOf('Active Goal overlay:')) throw new Error('selftest failed: active Goal overlay appeared before the newly prepared Team gate');
   const hookGoalOverlayState = await readJson(stateFile(hookGoalTmp), {});
-  if (hookGoalOverlayState.mission_id === activeGoalMissionId || hookGoalOverlayState.mode !== 'TEAM' || hookGoalOverlayState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookGoalOverlayState.implementation_allowed !== false) throw new Error('selftest failed: active Goal overlay did not leave a new Team ambiguity mission current');
-  if (!(await exists(path.join(missionDir(hookGoalTmp, hookGoalOverlayState.mission_id), 'required-answers.schema.json')))) throw new Error('selftest failed: active Goal overlay Team mission did not write ambiguity schema');
+  if (hookGoalOverlayState.mission_id === activeGoalMissionId || hookGoalOverlayState.mode !== 'TEAM' || hookGoalOverlayState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || hookGoalOverlayState.implementation_allowed === false || !hookGoalOverlayState.team_plan_ready) throw new Error('selftest failed: active Goal overlay did not leave a new direct Team mission current');
+  if (!(await exists(path.join(missionDir(hookGoalTmp, hookGoalOverlayState.mission_id), 'team-plan.json')))) throw new Error('selftest failed: active Goal overlay Team mission did not write team-plan.json');
   const hookUpdateCurrentTmp = tmpdir();
   await initProject(hookUpdateCurrentTmp, {});
   const hookUpdateCurrentEnv = { SKS_DISABLE_UPDATE_CHECK: '0', SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9', SKS_INSTALLED_SKS_VERSION: '9.9.9' };
@@ -2458,7 +2521,7 @@ async function selftest() {
   if (hookKoreanSksResult.code !== 0) throw new Error(`selftest failed: Korean SKS hook exited ${hookKoreanSksResult.code}: ${hookKoreanSksResult.stderr}`);
   const hookKoreanSksJson = JSON.parse(hookKoreanSksResult.stdout);
   const hookKoreanSksContext = hookKoreanSksJson.hookSpecificOutput?.additionalContext || '';
-  if (!hookKoreanSksContext.includes('Ambiguity gate auto-sealed') || hookKoreanSksContext.includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: Korean prompt did not auto-infer');
+  if (!hookKoreanSksContext.includes('$Team route prepared') || hookKoreanSksContext.includes('GOAL_PRECISE: 이번 작업의 최종 목표') || hookKoreanSksContext.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: Korean prompt did not prepare direct Team route');
   if (!hookKoreanSksContext.includes('Route: $Team')) throw new Error('selftest failed: Korean implementation prompt did not promote to Team route');
   if (hookKoreanSksContext.includes('SKS answer-only pipeline active')) throw new Error('selftest failed: Korean implementation prompt still used answer-only pipeline');
   const hookKoreanSksState = await readJson(stateFile(hookKoreanSksTmp), {});
@@ -2471,12 +2534,10 @@ async function selftest() {
   if (hookPaymentTeamResult.code !== 0) throw new Error(`selftest failed: payment/auth Team hook exited ${hookPaymentTeamResult.code}: ${hookPaymentTeamResult.stderr}`);
   const hookPaymentTeamJson = JSON.parse(hookPaymentTeamResult.stdout);
   const hookPaymentTeamContext = hookPaymentTeamJson.hookSpecificOutput?.additionalContext || '';
-  if (!hookPaymentTeamContext.includes('Ambiguity gate auto-sealed')) throw new Error('selftest failed: predictable payment/auth Team prompt did not auto-seal');
+  if (!hookPaymentTeamContext.includes('$Team route prepared') || hookPaymentTeamContext.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: predictable payment/auth Team prompt did not prepare direct Team route');
   if (hookPaymentTeamContext.includes('PAYMENT_RETRY_POLICY') || hookPaymentTeamContext.includes('AUTH_PROTOCOL_CHANGE_ALLOWED')) throw new Error('selftest failed: predictable payment/auth policy defaults were asked instead of inferred');
   const hookPaymentTeamState = await readJson(stateFile(hookPaymentTeamTmp), {});
   if (hookPaymentTeamState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || hookPaymentTeamState.implementation_allowed !== true || !hookPaymentTeamState.ambiguity_gate_passed || !hookPaymentTeamState.team_plan_ready) throw new Error('selftest failed: predictable payment/auth Team did not materialize after auto-seal');
-  const hookPaymentTeamSchema = await readJson(path.join(missionDir(hookPaymentTeamTmp, hookPaymentTeamState.mission_id), 'required-answers.schema.json'));
-  if (hookPaymentTeamSchema.slots.length !== 0 || hookPaymentTeamSchema.inferred_answers?.PAYMENT_RETRY_POLICY === undefined || hookPaymentTeamSchema.inferred_answers?.AUTH_SESSION_EXPIRED_BEHAVIOR === undefined) throw new Error('selftest failed: predictable payment/auth defaults were not recorded as inferred answers');
   if (!(await exists(path.join(missionDir(hookPaymentTeamTmp, hookPaymentTeamState.mission_id), 'team-plan.json')))) throw new Error('selftest failed: predictable payment/auth Team auto-seal did not write team-plan.json');
   const hookTeamTmp = tmpdir();
   await initProject(hookTeamTmp, {});
@@ -2484,63 +2545,48 @@ async function selftest() {
   const hookTeamResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: hookTeamPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookTeamResult.code !== 0) throw new Error(`selftest failed: $Team hook exited ${hookTeamResult.code}: ${hookTeamResult.stderr}`);
   const hookTeamJson = JSON.parse(hookTeamResult.stdout);
-  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: $Team hook did not force ambiguity gate before Team execution');
-  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('VISIBLE RESPONSE CONTRACT') || !String(hookTeamJson.systemMessage || '').includes('clarification questions')) throw new Error('selftest failed: $Team ambiguity gate did not force visible question response');
-  if (hookTeamJson.hookSpecificOutput?.additionalContext?.includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Team goal');
-  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('PRESENTATION_DELIVERY_CONTEXT')) throw new Error('selftest failed: missing Team presentation question');
-  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('Codex plan-tool interaction')) throw new Error('selftest failed: $Team ambiguity gate did not inject plan-tool guidance');
+  if (hookTeamJson.hookSpecificOutput?.additionalContext?.includes('MANDATORY ambiguity-removal gate activated') || hookTeamJson.hookSpecificOutput?.additionalContext?.includes('VISIBLE RESPONSE CONTRACT')) throw new Error('selftest failed: $Team hook still forced ambiguity questions');
+  if (!hookTeamJson.hookSpecificOutput?.additionalContext?.includes('$Team route prepared')) throw new Error('selftest failed: $Team hook did not prepare direct Team route');
   const hookTeamState = await readJson(stateFile(hookTeamTmp), {});
-  if (hookTeamState.phase !== 'TEAM_CLARIFICATION_AWAITING_ANSWERS' || hookTeamState.implementation_allowed !== false) throw new Error('selftest failed: $Team hook did not lock execution behind ambiguity gate');
-  if (!hookTeamState.pipeline_plan_ready || !(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), PIPELINE_PLAN_ARTIFACT)))) throw new Error('selftest failed: $Team hook did not write a pending pipeline plan');
-  if (await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-plan.json'))) throw new Error('selftest failed: Team plan was created before ambiguity gate passed');
+  if (hookTeamState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || hookTeamState.implementation_allowed === false || !hookTeamState.team_plan_ready) throw new Error('selftest failed: $Team hook did not prepare direct Team mission');
+  if (!hookTeamState.pipeline_plan_ready || !(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), PIPELINE_PLAN_ARTIFACT)))) throw new Error('selftest failed: $Team hook did not write a pipeline plan');
+  if (!(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-plan.json')))) throw new Error('selftest failed: Team plan was not created directly');
   const hookTeamPendingResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 새 작업으로 넘어가' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookTeamPendingResult.code !== 0) throw new Error(`selftest failed: pending clarification hook exited ${hookTeamPendingResult.code}: ${hookTeamPendingResult.stderr}`);
   const hookTeamPendingJson = JSON.parse(hookTeamPendingResult.stdout);
   const hookTeamPendingState = await readJson(stateFile(hookTeamTmp), {});
   const hookTeamPendingContext = hookTeamPendingJson.hookSpecificOutput?.additionalContext || '';
-  if (hookTeamPendingState.mission_id !== hookTeamState.mission_id) throw new Error('selftest failed: pending clarification allowed a new route mission to replace the visible question sheet');
-  if (!hookTeamPendingContext.includes('Required questions still pending') || !hookTeamPendingContext.includes('VISIBLE RESPONSE CONTRACT') || !hookTeamPendingContext.includes('PRESENTATION_DELIVERY_CONTEXT')) throw new Error('selftest failed: pending clarification did not re-expose the question sheet');
-  if (hookTeamPendingContext.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: pending clarification prepared a new ambiguity gate instead of reusing the active one');
-  const hookTeamStopResult = await runProcess(process.execPath, [hookBin, 'hook', 'stop'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, last_assistant_message: 'I need three decisions before implementation, but I will not paste the Required questions block.' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
-  if (hookTeamStopResult.code !== 0) throw new Error(`selftest failed: Team stop hook exited ${hookTeamStopResult.code}: ${hookTeamStopResult.stderr}`);
-  const hookTeamStopJson = JSON.parse(hookTeamStopResult.stdout);
-  if (hookTeamStopJson.decision !== 'block' || !String(hookTeamStopJson.reason || '').includes('mandatory ambiguity-removal')) throw new Error('selftest failed: Stop hook did not block missing Team ambiguity answers');
-  if (!String(hookTeamStopJson.reason || '').includes('Required questions') || !String(hookTeamStopJson.reason || '').includes('PRESENTATION_DELIVERY_CONTEXT')) throw new Error('selftest failed: missing Team stop presentation question');
-  if (String(hookTeamStopJson.reason || '').includes('GOAL_PRECISE: 이번 작업의 최종 목표')) throw new Error('selftest failed: static Team stop goal');
-  if (!String(hookTeamStopJson.reason || '').includes('sks pipeline answer')) throw new Error('selftest failed: Stop hook did not provide pipeline answer command');
-  if (!String(hookTeamStopJson.reason || '').includes('Codex plan-tool interaction')) throw new Error('selftest failed: Stop hook did not reprint plan-tool guidance');
-  if (!String(hookTeamStopJson.reason || '').includes('VISIBLE RESPONSE CONTRACT')) throw new Error('selftest failed: Stop hook did not force visible clarification response');
-  const hookTeamSchema = await readJson(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'required-answers.schema.json'));
+  if (hookTeamPendingState.mission_id === hookTeamState.mission_id || hookTeamPendingContext.includes('Required questions still pending') || hookTeamPendingContext.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: direct Team follow-up was blocked by stale clarification behavior');
+  if (hookTeamPendingState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || !hookTeamPendingState.team_plan_ready) throw new Error('selftest failed: direct Team follow-up did not prepare a fresh Team mission');
+  const qaClarificationTmp = tmpdir();
+  await initProject(qaClarificationTmp, {});
+  const hookQaClarificationResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: qaClarificationTmp, input: JSON.stringify({ cwd: qaClarificationTmp, prompt: '$QA-LOOP 로그인 QA 해줘' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookQaClarificationResult.code !== 0) throw new Error(`selftest failed: QA clarification hook exited ${hookQaClarificationResult.code}: ${hookQaClarificationResult.stderr}`);
+  const hookQaClarificationState = await readJson(stateFile(qaClarificationTmp), {});
+  const hookQaClarificationSchema = await readJson(path.join(missionDir(qaClarificationTmp, hookQaClarificationState.mission_id), 'required-answers.schema.json'));
+  const hookTeamSchema = hookQaClarificationSchema;
   const visibleQuestionsBlock = [
     'Required questions',
     ...hookTeamSchema.slots.map((slot, idx) => `${idx + 1}. ${slot.id}: ${slot.question}`),
-    'Reply by slot id, then I will write answers.json and run sks pipeline answer latest answers.json.'
+    'Reply by slot id, then I will seal the contract with sks pipeline answer latest --stdin.'
   ].join('\n');
-  const visibleQuestionDecision = await evaluateStop(hookTeamTmp, hookTeamState, { last_assistant_message: visibleQuestionsBlock }, { noQuestion: false });
+  const visibleQuestionDecision = await evaluateStop(qaClarificationTmp, hookQaClarificationState, { last_assistant_message: visibleQuestionsBlock }, { noQuestion: false });
   if (!visibleQuestionDecision?.continue) throw new Error('selftest failed: visible Required questions block was not accepted by clarification stop gate');
-  const hookTeamPreToolBlocked = await runProcess(process.execPath, [hookBin, 'hook', 'pre-tool'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, command: 'npm run selftest' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  const hookTeamPreToolBlocked = await runProcess(process.execPath, [hookBin, 'hook', 'pre-tool'], { cwd: qaClarificationTmp, input: JSON.stringify({ cwd: qaClarificationTmp, command: 'npm run selftest' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (hookTeamPreToolBlocked.code !== 0) throw new Error(`selftest failed: pending clarification pre-tool hook exited ${hookTeamPreToolBlocked.code}: ${hookTeamPreToolBlocked.stderr}`);
   const hookTeamPreToolBlockedJson = JSON.parse(hookTeamPreToolBlocked.stdout);
   if (hookTeamPreToolBlockedJson.decision !== 'block' || !String(hookTeamPreToolBlockedJson.reason || '').includes('ambiguity gate is paused')) throw new Error('selftest failed: pending clarification allowed implementation tool use before answers');
-  const hookTeamAnswerToolAllowed = await runProcess(process.execPath, [hookBin, 'hook', 'pre-tool'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, command: 'node ./bin/sks.mjs pipeline answer latest answers.json' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  const hookTeamAnswerToolAllowed = await runProcess(process.execPath, [hookBin, 'hook', 'pre-tool'], { cwd: qaClarificationTmp, input: JSON.stringify({ cwd: qaClarificationTmp, command: 'node ./bin/sks.mjs pipeline answer latest --stdin' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (hookTeamAnswerToolAllowed.code !== 0) throw new Error(`selftest failed: pipeline-answer pre-tool hook exited ${hookTeamAnswerToolAllowed.code}: ${hookTeamAnswerToolAllowed.stderr}`);
   const hookTeamAnswerToolAllowedJson = JSON.parse(hookTeamAnswerToolAllowed.stdout);
   if (hookTeamAnswerToolAllowedJson.decision === 'block') throw new Error('selftest failed: pending clarification blocked the pipeline answer command');
   const nonGoalsSlot = hookTeamSchema.slots.find((s) => s.id === 'NON_GOALS');
   if (nonGoalsSlot && !nonGoalsSlot.allow_empty) throw new Error('selftest failed: NON_GOALS does not allow an empty array answer');
   if (!nonGoalsSlot && !Array.isArray(hookTeamSchema.inferred_answers?.NON_GOALS)) throw new Error('selftest failed: NON_GOALS was neither asked nor inferred');
-  const hookTeamAnswers = {};
-  for (const s of hookTeamSchema.slots) hookTeamAnswers[s.id] = s.options ? (s.type === 'array' ? [s.options[0]] : s.options[0]) : (s.type.includes('array') ? ['selftest'] : (s.id === 'DB_MAX_BLAST_RADIUS' ? 'no_live_dml' : 'selftest'));
-  hookTeamAnswers.NON_GOALS = [];
-  const hookTeamAnswersPath = path.join(hookTeamTmp, 'team-answers.json');
-  await writeJsonAtomic(hookTeamAnswersPath, hookTeamAnswers);
-  const pipelineAnswerResult = await runProcess(process.execPath, [hookBin, 'pipeline', 'answer', 'latest', hookTeamAnswersPath], { cwd: hookTeamTmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  if (pipelineAnswerResult.code !== 0) throw new Error(`selftest failed: pipeline answer exited ${pipelineAnswerResult.code}: ${pipelineAnswerResult.stderr}`);
-  const answeredTeamState = await readJson(stateFile(hookTeamTmp), {});
-  if (answeredTeamState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || !answeredTeamState.ambiguity_gate_passed || answeredTeamState.implementation_allowed !== true || !answeredTeamState.team_plan_ready || !answeredTeamState.pipeline_plan_ready) throw new Error('selftest failed: pipeline answer did not materialize Team after ambiguity gate');
-  if (!(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'decision-contract.json')))) throw new Error('selftest failed: pipeline answer did not seal decision contract');
-  if (validatePipelinePlan(await readJson(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), PIPELINE_PLAN_ARTIFACT))).ok !== true) throw new Error('selftest failed: pipeline answer did not refresh a valid pipeline plan');
-  if (!(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-plan.json'))) || !(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-live.md')))) throw new Error('selftest failed: Team artifacts missing after ambiguity gate passed');
+  const textParsedAnswers = parseAnswersText({ slots: [{ id: 'INTENT_TARGET', type: 'string', required: true }] }, 'INTENT_TARGET: compact contract sealing');
+  if (textParsedAnswers.INTENT_TARGET !== 'compact contract sealing') throw new Error('selftest failed: text answer parser did not parse slot-id answers');
+  const textParsedImplicitAnswer = parseAnswersText({ slots: [{ id: 'INTENT_TARGET', type: 'string', required: true }] }, 'compact contract sealing');
+  if (textParsedImplicitAnswer.INTENT_TARGET !== 'compact contract sealing') throw new Error('selftest failed: text answer parser did not infer the only missing slot');
   const honestLoopTmp = tmpdir();
   await initProject(honestLoopTmp, {});
   const { id: honestLoopId, dir: honestLoopDir } = await createMission(honestLoopTmp, { mode: 'sks', prompt: 'honest loopback selftest' });
@@ -2690,12 +2736,13 @@ async function selftest() {
   if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest failed: team_consensus agent not configured');
   const preservedConfigTmp = tmpdir();
   await ensureDir(path.join(preservedConfigTmp, '.codex'));
-  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[features]\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
+  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\nkeep = true\n\n[features]\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
   await initProject(preservedConfigTmp, {});
   const preservedConfig = await safeReadText(path.join(preservedConfigTmp, '.codex', 'config.toml'));
-  if (!preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true') || !preservedConfig.includes('enabled = true') || !preservedConfig.includes('default_profile = "sks-fast-high"')) throw new Error('selftest failed: Codex config merge dropped or failed to enable Fast mode settings');
+  if (!preservedConfig.includes('service_tier = "fast"') || !preservedConfig.includes('fast_mode = true') || !preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true') || !preservedConfig.includes('enabled = true') || !preservedConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(preservedConfig)) throw new Error('selftest failed: Codex config merge dropped or failed to enable Fast mode defaults');
+  if (preservedConfig.includes('fast_default_opt_out = true') || !preservedConfig.includes('keep = true')) throw new Error('selftest failed: Codex config merge did not remove stale Fast opt-out notice while preserving other notice keys');
   if (!preservedConfig.includes('codex_hooks = true') || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error('selftest failed: Codex config merge did not add SKS managed settings');
-  if (hasTopLevelCodexModeLock(preservedConfig)) throw new Error('selftest failed: Codex config merge left top-level legacy mode locks that hide Fast mode UI');
+  if (hasTopLevelCodexModeLock(preservedConfig)) throw new Error('selftest failed: Codex config merge left top-level legacy model/reasoning locks that hide Fast mode UI');
   const autoReviewHome = path.join(tmp, 'auto-review-home');
   const autoReviewEnv = { HOME: autoReviewHome };
   const autoReviewEnabled = await enableAutoReview({ env: autoReviewEnv, high: true });
@@ -3056,6 +3103,7 @@ async function selftest() {
   const vagueSchema = buildQuestionSchema('뭔가 개선해줘');
   const vagueSlotIds = vagueSchema.slots.map((s) => s.id);
   if (!vagueSlotIds.includes('INTENT_TARGET') || vagueSlotIds.includes('GOAL_PRECISE') || vagueSlotIds.includes('ACCEPTANCE_CRITERIA')) throw new Error(`selftest failed: vague work should ask dynamic intent questions only, got ${vagueSlotIds.join(',')}`);
+  if (vagueSlotIds.length !== 1) throw new Error(`selftest failed: vague work should ask only the execution-changing intent question, got ${vagueSlotIds.join(',')}`);
   if (vagueSchema.ambiguity_assessment?.method !== 'weighted_clarity_interview' || !vagueSchema.ambiguity_assessment?.adversarial_lenses?.includes('challenge_framing')) throw new Error('selftest failed: ambiguity schema missing weighted clarity / planning lenses');
   const pptRoute = routePrompt('$PPT 투자자용 피치덱 만들어줘');
   if (pptRoute?.id !== 'PPT') throw new Error('selftest failed: $PPT did not route to presentation pipeline');
