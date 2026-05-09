@@ -568,6 +568,7 @@ export function routePrompt(prompt) {
     }
     const route = routeByDollarCommand(command) || null;
     if (route?.id === 'SKS' && looksLikeTeamDefaultWork(stripDollarCommand(text))) return routeById('Team');
+    if (route?.id === 'Team') return route;
     return route;
   }
   if (hasFromChatImgSignal(text)) return routeById('Team');

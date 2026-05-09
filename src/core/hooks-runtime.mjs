@@ -113,7 +113,7 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
     const route = routePrompt(prompt);
     const bypassActiveRoute = route?.id === 'DFix' || route?.id === 'Answer';
     const goalOverlay = activeGoalOverlayContext(state, route);
-    if (isClarificationAwaiting(state) && !looksLikeClarificationCancel(prompt)) {
+    if (isBlockingClarificationAwaiting(state) && !looksLikeClarificationCancel(prompt)) {
       const activeContext = await activeRouteContext(root, state);
       const teamDigest = await teamLiveDigest(root, state);
       const additionalContext = [updateContext, activeContext, teamDigest?.context].filter(Boolean).join('\n\n');
@@ -140,6 +140,12 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
 function isClarificationAwaiting(state = {}) {
   return Boolean(state.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS'))
     || ['QALOOP_CLARIFICATION_AWAITING_ANSWERS'].includes(String(state.phase || ''));
+}
+
+function isBlockingClarificationAwaiting(state = {}) {
+  if (!isClarificationAwaiting(state)) return false;
+  return ['QALoop', 'PPT'].includes(String(state.route || ''))
+    || ['QALOOP', 'PPT'].includes(String(state.mode || ''));
 }
 
 function looksLikeClarificationCancel(prompt = '') {
@@ -241,12 +247,13 @@ async function hookPermission(root, state, payload, noQuestion) {
 }
 
 function clarificationGateLocked(state = {}) {
-  if (isClarificationAwaiting(state)) return true;
+  if (isBlockingClarificationAwaiting(state)) return true;
   return Boolean(
     state?.mission_id
     && state.implementation_allowed === false
     && state.ambiguity_gate_required === true
     && state.ambiguity_gate_passed !== true
+    && isBlockingClarificationAwaiting(state)
   );
 }
 
@@ -270,7 +277,7 @@ function payloadMentionsAnswersJson(payload = {}) {
 function clarificationPauseBlockReason(state = {}) {
   const id = state?.mission_id || 'latest';
   const route = state.route_command || state.route || state.mode || 'route';
-  return `SKS ${route} ambiguity gate is paused and waiting for explicit user answers. Do not run implementation, tests, route materialization, or unrelated tools yet. The only allowed actions are creating .sneakoscope/missions/${id}/answers.json from the user's reply and running "sks pipeline answer ${id} answers.json"; elapsed time or repeated hook resumes never count as answers.`;
+  return `SKS ${route} ambiguity gate is paused and waiting for explicit user answers. Do not run implementation, tests, route materialization, or unrelated tools yet. The only allowed action is sealing the user's reply with "sks pipeline answer ${id} --stdin"; elapsed time or repeated hook resumes never count as answers.`;
 }
 
 async function hookStop(root, state, payload, noQuestion) {

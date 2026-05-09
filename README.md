@@ -183,10 +183,11 @@ Bare `sks` asks this before opening Codex when codex-lb is not configured:
 Authenticate and route Codex through codex-lb? [y/N]
 ```
 
-Answering `y` asks for the hosted domain and API key, writes `~/.codex/config.toml`, stores the key in `~/.codex/sks-codex-lb.env` with mode `0600`, syncs Codex CLI API-key auth through `codex login --with-api-key`, and sources that env file before launching Codex in tmux. When codex-lb is configured from this prompt, SKS opens a fresh tmux session for that launch so the new key is loaded by the Codex process immediately. SKS keeps Codex App Fast mode selection visible by avoiding legacy top-level `model`, `model_reasoning_effort`, and `service_tier` locks in `~/.codex/config.toml`; route-specific reasoning stays in named profiles or explicit tmux launch args. The generated provider config follows the codex-lb README's Codex CLI API-key setup:
+Answering `y` asks for the hosted domain and API key, writes `~/.codex/config.toml`, stores the key in `~/.codex/sks-codex-lb.env` with mode `0600`, syncs Codex CLI API-key auth through `codex login --with-api-key`, and sources that env file before launching Codex in tmux. When codex-lb is configured from this prompt, SKS opens a fresh tmux session for that launch so the new key is loaded by the Codex process immediately. SKS keeps Codex App Fast mode visible and defaulted by writing `service_tier = "fast"`, `[features].fast_mode = true`, and the `sks-fast-high` profile while removing only legacy top-level `model` and `model_reasoning_effort` locks; route-specific reasoning stays in named profiles or explicit tmux launch args. The generated provider config follows the codex-lb README's Codex CLI API-key setup:
 
 ```toml
 model_provider = "codex-lb"
+service_tier = "fast"
 
 [model_providers.codex-lb]
 name = "OpenAI"
