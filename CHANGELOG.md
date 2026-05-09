@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+
+## [0.7.49] - 2026-05-09
+
+### Fixed
+
+- Add `sks codex-lb repair` and `sks auth repair` so stored codex-lb API-key auth can be re-synced without re-entering the key.
+- Make `sks --mad` sync codex-lb/Codex CLI auth before launch and open a fresh session when the repaired key must be loaded immediately.
+- Stop DB safety pre-tool checks from treating ordinary file-edit patch text such as `Update File` as SQL `UPDATE` operations.
+
 ## [0.7.48] - 2026-05-09
 
 ### Added
