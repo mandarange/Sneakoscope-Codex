@@ -657,7 +657,7 @@ function codexAppQuickReference(scope, commandPrefix) {
     `Install scope: \`${scope}\``,
     `Command: \`${commandPrefix} <command>\``,
     'Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, .agents/skills, .codex/agents, .sneakoscope/missions.',
-    `Discover: ${commandPrefix} bootstrap; ${commandPrefix} deps check; ${commandPrefix} commands; ${commandPrefix} codex-app check; ${commandPrefix} tmux check; ${commandPrefix} dollar-commands; ${commandPrefix} pipeline status; ${commandPrefix} pipeline plan.`,
+    `Discover: ${commandPrefix} bootstrap; ${commandPrefix} deps check; ${commandPrefix} commands; ${commandPrefix} codex-app check; ${commandPrefix} codex-app remote-control --status; ${commandPrefix} tmux check; ${commandPrefix} dollar-commands; ${commandPrefix} pipeline status; ${commandPrefix} pipeline plan.`,
     'dollar-commands:',
     ...DOLLAR_COMMANDS.map((c) => `- \`${c.command}\`: ${c.route}`),
     `Picker skills: ${DOLLAR_COMMAND_ALIASES.map((x) => x.app_skill).join(', ')}.`,
@@ -668,7 +668,7 @@ function codexAppQuickReference(scope, commandPrefix) {
     `Context Tracking: TriWiki SSOT. Before each route phase read only the latest coordinate+voxel overlay pack at .sneakoscope/wiki/context-pack.json; coordinate-only legacy packs are invalid. Use attention.use_first for compact high-trust recall and hydrate attention.hydrate_first from source before risky/lower-trust decisions. During every stage hydrate low-trust claims from source/hash/RGBA anchors; after changes run ${commandPrefix} wiki refresh or pack; before handoff/final run ${commandPrefix} wiki validate .sneakoscope/wiki/context-pack.json.`,
     stackCurrentDocsPolicyText(commandPrefix),
     `Team tmux view: ${commandPrefix} team "task" prepares live watch/lane commands without opening a Team tmux view by default; add --open-tmux when you explicitly want a named Team tmux session with an overview watch pane plus color-coded split per-agent lanes; ${commandPrefix} team lane latest --agent analysis_scout_1 --follow shows one agent's status, assigned runtime tasks, recent agent events, direct messages, and fallback global tail; ${commandPrefix} team message latest --from analysis_scout_1 --to executor_1 --message "handoff note" mirrors bounded agent communication into transcript/lane panes; ${commandPrefix} team cleanup-tmux latest marks the SKS session record complete and asks follow panes to show a cleanup summary then stop.`,
-    `Runtime: open Codex App once, then run ${commandPrefix} bootstrap and ${commandPrefix} deps check. Bare ${commandPrefix} opens or reuses the default tmux/Codex CLI session; before launch it checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. ${commandPrefix} tmux open is the explicit form for session/workspace flags.`,
+    `Runtime: open Codex App once, then run ${commandPrefix} bootstrap and ${commandPrefix} deps check. Bare ${commandPrefix} opens or reuses the default tmux/Codex CLI session; before launch it checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. ${commandPrefix} codex-app remote-control wraps the Codex CLI 0.130.0+ headless remote-control entrypoint. ${commandPrefix} tmux open is the explicit form for session/workspace flags.`,
     `Guard: generated harness files are immutable outside the engine source repo; check ${commandPrefix} guard check; conflicts use ${commandPrefix} conflicts prompt with human approval.`
   ].join('\n') + '\n';
 }

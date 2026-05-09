@@ -5,6 +5,8 @@ import { exists, runProcess } from './fsx.mjs';
 import { getCodexInfo } from './codex-adapter.mjs';
 
 export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/features';
+export const CODEX_CHANGELOG_URL = 'https://developers.openai.com/codex/changelog';
+export const CODEX_REMOTE_CONTROL_MIN_VERSION = '0.130.0';
 
 export function codexAppCandidatePaths(home = os.homedir(), env = process.env) {
   const candidates = [];
@@ -80,6 +82,7 @@ export async function codexAppIntegrationStatus(opts = {}) {
   const appPath = await findCodexApp(opts);
   const codex = opts.codex || await getCodexInfo().catch(() => ({}));
   const mcpList = await codexMcpList({ ...opts, codex });
+  const remoteControl = codexRemoteControlStatusFromInfo(codex);
   const mcpText = `${mcpList.stdout}\n${mcpList.stderr}`;
   const browserUsePath = await findPluginCache('browser-use', opts);
   const computerUsePath = await findPluginCache('computer-use', opts);
@@ -99,6 +102,7 @@ export async function codexAppIntegrationStatus(opts = {}) {
       bin: codex.bin || null,
       version: codex.version || null
     },
+    remote_control: remoteControl,
     mcp: {
       checked: mcpList.checked,
       ok: mcpList.ok,
@@ -111,23 +115,80 @@ export async function codexAppIntegrationStatus(opts = {}) {
       computer_use_cache: computerUsePath,
       browser_use_cache: browserUsePath
     },
-    guidance: codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady })
+    guidance: codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady, remoteControl })
   };
 }
 
-export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady }) {
+export async function codexRemoteControlStatus(opts = {}) {
+  const codex = opts.codex || await getCodexInfo().catch(() => ({}));
+  return codexRemoteControlStatusFromInfo(codex);
+}
+
+export function codexRemoteControlStatusFromInfo(codex = {}) {
+  const current = codexCliVersionNumber(codex.version);
+  const versionKnown = Boolean(current);
+  const supported = Boolean(codex.bin && current && compareVersions(current, CODEX_REMOTE_CONTROL_MIN_VERSION) >= 0);
+  return {
+    ok: supported,
+    min_version: CODEX_REMOTE_CONTROL_MIN_VERSION,
+    docs_url: CODEX_CHANGELOG_URL,
+    codex_cli: {
+      ok: Boolean(codex.bin),
+      bin: codex.bin || null,
+      version: codex.version || null,
+      version_number: current
+    },
+    command: codex.bin ? `${codex.bin} remote-control` : 'codex remote-control',
+    reason: supported
+      ? 'available'
+      : !codex.bin
+        ? 'codex_cli_missing'
+        : versionKnown
+          ? `requires_codex_cli_${CODEX_REMOTE_CONTROL_MIN_VERSION}_or_newer`
+          : 'codex_cli_version_unknown'
+  };
+}
+
+export function codexSupportsRemoteControl(versionText) {
+  const current = codexCliVersionNumber(versionText);
+  return Boolean(current && compareVersions(current, CODEX_REMOTE_CONTROL_MIN_VERSION) >= 0);
+}
+
+export function formatCodexRemoteControlStatus(status) {
+  const lines = [
+    'Codex remote-control',
+    '',
+    `Codex CLI: ${status.codex_cli.ok ? 'ok' : 'missing'}${status.codex_cli.version ? ` ${status.codex_cli.version}` : ''}`,
+    `Minimum:   ${status.min_version}`,
+    `Ready:     ${status.ok ? 'yes' : 'no'}`,
+    `Command:   ${status.command}`,
+    '',
+    status.ok
+      ? 'Run: sks codex-app remote-control -- <codex remote-control args>'
+      : remoteControlGuidance(status)
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
+export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady, remoteControl }) {
   const lines = [];
   if (!appInstalled) {
     lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS tmux launch can still run with Codex CLI alone, but Codex Computer Use evidence will be unavailable until Codex App is ready.');
     lines.push(`Docs: ${CODEX_APP_DOCS_URL}`);
   }
   if (!codex?.bin) lines.push('Install Codex CLI too: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
+  if (remoteControl?.ok) {
+    lines.push('Codex remote-control is available for headless remotely controllable app-server sessions: sks codex-app remote-control.');
+    lines.push('Codex CLI 0.130.0+ app-server threads can pick up config changes without restarting the app-server; restart older CLI/TUI sessions if they were launched before config changes.');
+  } else if (codex?.bin) {
+    lines.push(remoteControlGuidance(remoteControl || codexRemoteControlStatusFromInfo(codex)));
+  }
   if (mcpList?.checked && !mcpList.ok) {
     lines.push(`Codex MCP/config check failed: ${summarizeCodexMcpError(mcpList.stderr || mcpList.stdout)}`);
     lines.push('Verify with: codex mcp list');
   }
   if (appInstalled && (!computerUseReady || !browserUseReady)) {
-    lines.push('Open Codex App settings, enable recommended MCP/plugin tools, then restart Codex CLI sessions.');
+    lines.push('Open Codex App settings and enable recommended MCP/plugin tools. Codex CLI 0.130.0+ remote-control/app-server sessions can pick up config changes live; restart older CLI/TUI sessions.');
     lines.push('Required for SKS QA-LOOP UI/browser evidence: Codex Computer Use only. Browser Use can support non-UI browser context, but it does not satisfy UI-level E2E verification.');
     lines.push('Verify with: codex mcp list');
   }
@@ -141,6 +202,7 @@ export function formatCodexAppStatus(status, { includeRaw = false } = {}) {
     '',
     `Codex App:   ${status.app.installed ? 'ok' : 'missing'}${status.app.path ? ` ${status.app.path}` : ''}`,
     `Codex CLI:   ${status.codex_cli.ok ? 'ok' : 'missing'}${status.codex_cli.version ? ` ${status.codex_cli.version}` : ''}`,
+    `Remote Ctrl: ${status.remote_control?.ok ? 'ok' : 'missing'}${status.remote_control?.codex_cli?.version_number ? ` min ${status.remote_control.min_version}` : ''}`,
     `Computer Use:${status.mcp.has_computer_use ? ' ok' : ' missing'}`,
     `Browser Use: ${status.mcp.has_browser_use ? 'ok' : 'missing'}`,
     `Ready:       ${status.ok ? 'yes' : 'no'}`,
@@ -161,4 +223,25 @@ function summarizeCodexMcpError(text) {
   const errorLine = cleanLines.find((line) => line.startsWith('Error:'));
   if (errorLine && variantLine && errorLine !== variantLine) return `${errorLine}; ${variantLine}`;
   return variantLine || errorLine || cleanLines[0] || 'codex mcp list failed';
+}
+
+function remoteControlGuidance(status = {}) {
+  if (!status.codex_cli?.ok) return 'Codex remote-control requires Codex CLI 0.130.0+. Install with: npm i -g @openai/codex@latest';
+  if (status.reason === 'codex_cli_version_unknown') return 'Codex remote-control requires Codex CLI 0.130.0+, but the installed CLI version could not be parsed. Check: codex --version';
+  return `Codex remote-control requires Codex CLI ${CODEX_REMOTE_CONTROL_MIN_VERSION}+. Update with: npm i -g @openai/codex@latest`;
+}
+
+function codexCliVersionNumber(versionText = '') {
+  const match = String(versionText || '').match(/(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/);
+  return match ? match[1] : null;
+}
+
+function compareVersions(a, b) {
+  const pa = String(a || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+  const pb = String(b || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length, 3); i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+  }
+  return 0;
 }
