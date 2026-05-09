@@ -43,7 +43,7 @@ sks selftest --mock
 | Area | What it does |
 | --- | --- |
 | CLI runtime | Bare `sks` opens or reuses the default tmux Codex CLI workspace. `sks tmux open` remains the explicit form for session/workspace flags, and `sks --mad` launches the explicit full-access high-reasoning profile. |
-| Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. |
+| Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. `sks codex-app remote-control` wraps Codex CLI 0.130.0+ headless remote control without falling back to older app-server internals. |
 | OpenClaw agents | Generates an OpenClaw skill package so OpenClaw agents can attach `sneakoscope-codex`, enable the `shell` tool, and discover/use SKS commands from the target repo root. |
 | Pipeline plans | Writes `pipeline-plan.json` for stateful routes so the runtime lane, kept stages, skipped stages, verification commands, and no-unrequested-fallback invariant are visible with `sks pipeline plan`. |
 | Team orchestration | Runs substantial work through score-based ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode; narrow work should use Proof Field evidence to skip unrelated pipeline work instead of expanding Team. |
@@ -299,8 +299,17 @@ After installing, run:
 ```sh
 sks bootstrap
 sks codex-app check
+sks codex-app remote-control --status
 sks dollar-commands
 ```
+
+For headless remotely controllable Codex App/server sessions on Codex CLI 0.130.0 or newer, run:
+
+```sh
+sks codex-app remote-control -- --help
+```
+
+`sks codex-app check` reports whether the installed Codex CLI is new enough. Codex CLI 0.130.0+ app-server/remote-control threads can pick up config changes live; older CLI/TUI sessions should still be restarted after `.codex/config.toml` or MCP/plugin changes.
 
 Then open Codex App and use prompt commands directly in the chat. Examples:
 

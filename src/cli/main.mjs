@@ -57,6 +57,7 @@ import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
+import { codexAppRemoteControlCommand } from './codex-app-command.mjs';
 import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs';
 import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
@@ -1233,6 +1234,7 @@ async function autoReviewCommand(sub = 'status', args = []) {
 
 async function codexAppHelp(args = []) {
   const action = args[0] || 'help';
+  if (action === 'remote-control' || action === 'remote') return codexAppRemoteControlCommand(args.slice(1));
   if (action === 'check' || action === 'status') {
     const status = await codexAppIntegrationStatus();
     const skills = await codexAppSkillReadiness();
@@ -1259,7 +1261,7 @@ async function codexAppHelp(args = []) {
     'ㅅㅋㅅ Codex App', '',
     formatCodexAppStatus(status), '',
     `Skills: project=${skills.project.ok ? 'ok' : `missing ${skills.project.missing.length}`} global=${skills.global.ok ? 'ok' : `missing ${skills.global.missing.length}`}`, '',
-    'Setup:', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks tmux check', '',
+    'Setup:', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks codex-app remote-control --status', '  sks tmux check', '',
     'Generated files:', '  .codex/config.toml', '  .codex/hooks.json', '  .agents/skills/', '  .codex/agents/', '  .codex/SNEAKOSCOPE.md', '  AGENTS.md', '',
     'Git ignore:', '  default setup writes .gitignore entries for .sneakoscope/, .codex/, .agents/, AGENTS.md', '  --local-only writes those patterns to .git/info/exclude instead', '',
     'Prompt routes:', formatDollarCommandsCompact('  ')
@@ -1304,7 +1306,7 @@ function usage(args = []) {
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
     ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT asks delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and installed skills/MCPs outside the $PPT allowlist are ignored. Design uses getdesign-reference plus the built-in PPT design pipeline; imagegen and Context7 are conditional only when the sealed PPT contract needs raster assets or current external docs.'],
     goal: ['Goal', '', '  sks goal create "task"', '  sks goal status latest', '  sks goal pause latest', '  sks goal resume latest', '  sks goal clear latest'],
-    'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
+    'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks codex-app remote-control --status', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
     dollar: ['Dollar Commands', '', formatDollarCommandsCompact('  '), '', 'Terminal: sks dollar-commands [--json]'],
     wiki: ['TriWiki', '', '  sks wiki pack', '  sks wiki refresh [--prune]', '  sks wiki sweep latest --json', '  sks wiki validate .sneakoscope/wiki/context-pack.json', '  sks wiki prune --dry-run --json', '', 'Packs include attention.use_first and attention.hydrate_first for compact recall plus source hydration. Sweep records intentional forgetting and promotion candidates.'],
     harness: ['Harness Growth', '', '  sks harness fixture --json', '  sks harness review --json', '', 'Runs deterministic fixtures for deliberate forgetting, skill cards, harness experiments, tool error taxonomy, permission profiles, MultiAgentV2, and tmux cockpit views.'],
@@ -2053,6 +2055,31 @@ async function selftest() {
     maxOutputBytes: 64 * 1024
   });
   if (!String(openClawAutoUpdate.stdout || '').includes('Codex CLI ready: 0.1.0 -> codex-cli 99.0.0')) throw new Error('selftest failed: OpenClaw mode did not auto-approve Codex CLI update before tmux launch');
+  const remoteControlBin = path.join(tmp, 'remote-control-bin');
+  await ensureDir(remoteControlBin);
+  await writeTextAtomic(path.join(remoteControlBin, 'codex'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 0.130.0"; exit 0; fi\nif [ "$1" = "remote-control" ]; then echo "remote-control $*"; exit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
+  await fsp.chmod(path.join(remoteControlBin, 'codex'), 0o755);
+  const remoteControlStatus = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-app', 'remote-control', '--dry-run', '--json'], {
+    cwd: globalCwd,
+    env: { SKS_GLOBAL_ROOT: globalRuntimeRoot, PATH: remoteControlBin },
+    timeoutMs: 15000,
+    maxOutputBytes: 64 * 1024
+  });
+  if (remoteControlStatus.code !== 0) throw new Error(`selftest failed: Codex remote-control status exited ${remoteControlStatus.code}: ${remoteControlStatus.stderr}`);
+  const remoteControlJson = JSON.parse(remoteControlStatus.stdout);
+  if (!remoteControlJson.ok || remoteControlJson.min_version !== '0.130.0' || !String(remoteControlJson.command || '').includes('remote-control')) throw new Error('selftest failed: Codex remote-control status did not report 0.130.0 readiness');
+  const remoteControlOldBin = path.join(tmp, 'remote-control-old-bin');
+  await ensureDir(remoteControlOldBin);
+  await writeTextAtomic(path.join(remoteControlOldBin, 'codex'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 0.129.0"; exit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
+  await fsp.chmod(path.join(remoteControlOldBin, 'codex'), 0o755);
+  const remoteControlOldStatus = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-app', 'remote-control', '--dry-run'], {
+    cwd: globalCwd,
+    env: { SKS_GLOBAL_ROOT: globalRuntimeRoot, PATH: remoteControlOldBin },
+    timeoutMs: 15000,
+    maxOutputBytes: 64 * 1024
+  });
+  if (remoteControlOldStatus.code !== 1 || !String(`${remoteControlOldStatus.stdout}\n${remoteControlOldStatus.stderr}`).includes('Codex CLI 0.130.0+')) throw new Error('selftest failed: Codex remote-control did not block older Codex CLI versions');
+  if (!COMMAND_CATALOG.find((entry) => entry.name === 'codex-app')?.usage.includes('remote-control')) throw new Error('selftest failed: codex-app command catalog does not advertise remote-control');
   const guardBlocked = await checkHarnessModification(tmp, { tool_name: 'apply_patch', command: '*** Update File: .agents/skills/team/SKILL.md\n+tamper\n' });
   if (guardBlocked.action !== 'block') throw new Error('selftest failed: harness guard allowed skill tampering');
   const setupBlocked = await checkHarnessModification(tmp, { command: 'sks setup --force' });
