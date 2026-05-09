@@ -1,13 +1,19 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { nowIso, readJson, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
+import { nowIso, readJson, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
 import { AWESOME_DESIGN_MD_REFERENCE, DESIGN_SYSTEM_SSOT, GETDESIGN_REFERENCE, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST } from './routes.mjs';
 
 export const PPT_AUDIENCE_STRATEGY_ARTIFACT = 'ppt-audience-strategy.json';
 export const PPT_GATE_ARTIFACT = 'ppt-gate.json';
 export const PPT_SOURCE_LEDGER_ARTIFACT = 'ppt-source-ledger.json';
+export const PPT_FACT_LEDGER_ARTIFACT = 'ppt-fact-ledger.json';
 export const PPT_STORYBOARD_ARTIFACT = 'ppt-storyboard.json';
 export const PPT_STYLE_TOKENS_ARTIFACT = 'ppt-style-tokens.json';
+export const PPT_IMAGE_ASSET_LEDGER_ARTIFACT = 'ppt-image-asset-ledger.json';
+export const PPT_ASSET_DIR = 'assets';
+export const PPT_REVIEW_POLICY_ARTIFACT = 'ppt-review-policy.json';
+export const PPT_REVIEW_LEDGER_ARTIFACT = 'ppt-review-ledger.json';
+export const PPT_ITERATION_REPORT_ARTIFACT = 'ppt-iteration-report.json';
 export const PPT_SOURCE_HTML_DIR = 'source-html';
 export const PPT_HTML_ARTIFACT = `${PPT_SOURCE_HTML_DIR}/artifact.html`;
 export const PPT_PDF_ARTIFACT = 'artifact.pdf';
@@ -113,8 +119,16 @@ export const PPT_REQUIRED_GATE_FIELDS = Object.freeze([
   'clarification_contract_sealed',
   'audience_strategy_sealed',
   'source_ledger_created',
+  'fact_ledger_created',
+  'unsupported_critical_claims_zero',
   'storyboard_created',
   'style_tokens_created',
+  'image_asset_ledger_created',
+  'image_asset_policy_satisfied',
+  'review_policy_created',
+  'review_ledger_created',
+  'bounded_iteration_complete',
+  'critical_review_issues_zero',
   'parallel_build_recorded',
   'html_artifact_created',
   'source_html_preserved',
@@ -136,6 +150,44 @@ function asArray(value) {
 function cleanText(value, fallback = '') {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim();
   return text || fallback;
+}
+
+function compactId(prefix, text) {
+  return `${prefix}-${sha256(cleanText(text, prefix)).slice(0, 10)}`;
+}
+
+function contractText(contract = {}) {
+  return cleanText(`${contract.prompt || ''} ${JSON.stringify(contract.answers || {})}`);
+}
+
+function extractUrls(value = '') {
+  return [...String(value || '').matchAll(/\bhttps?:\/\/[^\s<>"')]+/g)]
+    .map((match) => match[0].replace(/[.,;:!?]+$/, ''));
+}
+
+function hasExternalFactCue(text = '') {
+  return /(market|competitor|benchmark|statistic|growth|revenue|share|survey|latest|recent|source|citation|fact|research|web|시장|경쟁|벤치마크|통계|성장률|매출|점유율|설문|최신|최근|출처|근거|팩트|사실|자료|웹\s*조사|리서치)/i.test(String(text || ''));
+}
+
+function hasVisualReviewCue(text = '') {
+  return /(gpt-image-2|imagegen|image review|visual review|i2i|toss|토스|시니어\s*디자이너|디자인\s*리뷰|시각\s*리뷰|이미지\s*리뷰|슬라이드별\s*리뷰)/i.test(String(text || ''));
+}
+
+function hasImageAssetCue(text = '') {
+  return /(image asset|visual asset|generated image|hero image|illustration|photo|photorealistic|mockup|product shot|background image|gpt-image-2|imagegen|이미지\s*리소스|이미지\s*자산|이미지\s*생성|사진|일러스트|히어로\s*이미지|비주얼\s*자산|배경\s*이미지|목업|제품\s*컷)/i.test(String(text || ''));
+}
+
+function safeFileSlug(value = '') {
+  return cleanText(value, 'asset').toLowerCase().replace(/[^a-z0-9가-힣]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'asset';
+}
+
+function parseBooleanish(value) {
+  if (value === true || value === false) return value;
+  const text = cleanText(value).toLowerCase();
+  if (!text) return null;
+  if (/^(1|true|yes|y|required|필수|예|네)$/i.test(text)) return true;
+  if (/^(0|false|no|n|optional|불필요|아니오|아니요)$/i.test(text)) return false;
+  return null;
 }
 
 function titleFromContract(contract = {}) {
@@ -193,7 +245,8 @@ export function createPptParallelReporter(contract = {}) {
     dependency_graph: [
       { id: 'strategy_inputs', depends_on: ['sealed_decision_contract'], can_run_parallel: ['audience_strategy', 'source_ledger', 'style_tokens'] },
       { id: 'storyboard_phase', depends_on: ['audience_strategy'] },
-      { id: 'render_targets', depends_on: ['storyboard', 'style_tokens', 'source_ledger'], can_run_parallel: ['html_source', 'pdf_export'] },
+      { id: 'image_asset_phase', depends_on: ['storyboard', 'style_tokens'], can_run_parallel: ['planned_image_assets'] },
+      { id: 'render_targets', depends_on: ['storyboard', 'style_tokens', 'source_ledger', 'image_asset_ledger'], can_run_parallel: ['html_source', 'pdf_export'] },
       { id: 'artifact_writes', depends_on: ['strategy_inputs', 'storyboard_phase', 'render_targets'], can_run_parallel: ['json_artifacts', 'html_source_write', 'pdf_write'] },
       { id: 'final_reports', depends_on: ['artifact_writes', 'cleanup'], can_run_parallel: ['cleanup_report_write', 'parallel_report_write'] }
     ],
@@ -315,6 +368,440 @@ export function buildPptSourceLedger(contract = {}) {
     notes: [
       'This ledger intentionally contains only sealed user answers. Add web sources before making market, competitor, or benchmark claims.'
     ]
+  };
+}
+
+export function buildPptFactLedger(contract = {}, sourceLedger = buildPptSourceLedger(contract), existing = null) {
+  const text = contractText(contract);
+  const sourceUrls = extractUrls(text);
+  const preservedSources = Array.isArray(existing?.sources) ? existing.sources : [];
+  const preservedClaims = Array.isArray(existing?.claims) ? existing.claims : [];
+  const urlSources = sourceUrls.map((url, index) => ({
+    id: `web-source-${index + 1}`,
+    type: 'web_source_url',
+    url,
+    confidence: 'needs_route_worker_verification',
+    support_status: 'pending_verification'
+  }));
+  const userClaims = (sourceLedger.sources || []).map((source) => ({
+    id: compactId('claim-user', `${source.slot || source.id}:${source.value || ''}`),
+    text: cleanText(source.value || source.slot || source.id),
+    source_ids: [source.id],
+    support_status: 'supported_user_input',
+    criticality: 'medium',
+    slide_refs: [],
+    verification_note: 'User-provided input can support intent and context, but must not be treated as an external market fact.'
+  }));
+  const allSources = [...preservedSources, ...(sourceLedger.sources || []), ...urlSources].filter((source, index, arr) => {
+    const key = source.url || `${source.type}:${source.id}:${source.value}`;
+    return arr.findIndex((candidate) => (candidate.url || `${candidate.type}:${candidate.id}:${candidate.value}`) === key) === index;
+  });
+  const webResearchPerformed = Boolean(existing?.web_research_performed)
+    || allSources.some((source) => ['web_source', 'verified_web_source', 'web_source_url'].includes(source.type) && source.support_status === 'verified');
+  const externalResearchRequired = Boolean(existing?.external_research_required) || hasExternalFactCue(text);
+  const unsupportedCriticalClaims = externalResearchRequired && !webResearchPerformed
+    ? [{
+      id: 'external-research-required',
+      text: 'The sealed PPT request implies external facts or current market/source material, but no verified web-source evidence has been recorded.',
+      criticality: 'high',
+      support_status: 'unsupported',
+      required_action: 'Use web/Context7 evidence in the route worker, write verified sources/claims into ppt-fact-ledger.json, then rebuild.'
+    }]
+    : [];
+  const preservedUnsupported = preservedClaims.filter((claim) => claim.support_status === 'unsupported' && claim.criticality !== 'low');
+  const claims = [
+    ...preservedClaims.filter((claim) => claim.support_status !== 'unsupported' || claim.criticality === 'low'),
+    ...userClaims,
+    ...unsupportedCriticalClaims
+  ].filter((claim, index, arr) => arr.findIndex((candidate) => candidate.id === claim.id) === index);
+  const unsupportedCriticalClaimsCount = unsupportedCriticalClaims.length + preservedUnsupported.length;
+  return {
+    schema_version: 1,
+    created_at: nowIso(),
+    contract_hash: contract.sealed_hash || null,
+    purpose: 'fact-verified material ledger for $PPT source-backed claims',
+    external_research_required: externalResearchRequired,
+    web_research_performed: webResearchPerformed,
+    source_policy: 'Do not invent external facts. If the deck needs market, benchmark, competitor, regulatory, current, or statistical claims, verified web/Context7 sources must be recorded here before the PPT gate can pass.',
+    sources: allSources,
+    claims,
+    unsupported_critical_claims: [...preservedUnsupported, ...unsupportedCriticalClaims],
+    unsupported_critical_claims_count: unsupportedCriticalClaimsCount,
+    passed: unsupportedCriticalClaimsCount === 0,
+    notes: [
+      webResearchPerformed
+        ? 'Verified web research evidence was present in the existing fact ledger.'
+        : 'No verified web evidence is claimed by the deterministic CLI builder.',
+      'Route workers may pre-write this ledger with verified sources and claims; the build step preserves those entries and refuses to fake missing evidence.'
+    ]
+  };
+}
+
+function imageAssetRequired(contract = {}) {
+  const answers = contract.answers || {};
+  const explicit = parseBooleanish(answers.PRESENTATION_IMAGE_ASSETS_REQUIRED);
+  if (explicit !== null) return explicit;
+  return hasImageAssetCue(contractText(contract));
+}
+
+function imageAssetRequests(contract = {}) {
+  const answers = contract.answers || {};
+  const rows = [
+    ...asArray(answers.PRESENTATION_IMAGE_ASSET_REQUESTS),
+    ...asArray(answers.IMAGE_ASSET_REQUESTS),
+    ...asArray(answers.GENERATED_IMAGE_ASSETS)
+  ];
+  return rows.map((row) => cleanText(row)).filter(Boolean);
+}
+
+function buildImageAssetPrompt({ contract = {}, page = {}, request = '', styleTokens = {} }) {
+  const audience = cleanText(contract.answers?.PRESENTATION_AUDIENCE_PROFILE, 'business presentation audience');
+  const thesis = cleanText(contract.answers?.PRESENTATION_DECISION_CONTEXT || contract.answers?.GOAL_PRECISE || contract.prompt, 'presentation thesis');
+  const reference = styleTokens.design_policy?.design_reference_selection?.primary?.name || 'restrained information-first design system';
+  const base = request || `${page.kind || 'presentation'} visual for: ${page.claim || thesis}`;
+  return [
+    base,
+    `Audience: ${audience}.`,
+    `Narrative purpose: ${cleanText(page.support || thesis)}.`,
+    `Style: ${reference}, premium Korean business presentation, restrained, information-first, realistic but not stock-like.`,
+    'Create a clean 16:9 slide visual asset with no embedded text, no logos, no watermarks, no UI chrome, no fake charts, and enough negative space for overlaid typography.'
+  ].join(' ');
+}
+
+export function planPptImageAssets(contract = {}, storyboard = buildPptStoryboard(contract), styleTokens = buildPptStyleTokens(contract)) {
+  const required = imageAssetRequired(contract);
+  const requests = imageAssetRequests(contract);
+  if (!required && requests.length === 0) return [];
+  const pages = storyboard.pages || [];
+  const maxAssets = Math.max(1, Math.min(6, Number(contract.answers?.PRESENTATION_IMAGE_ASSET_MAX || process.env.SKS_PPT_IMAGEGEN_MAX_ASSETS || 3) || 3));
+  const selected = requests.length
+    ? requests.map((request, index) => ({ request, page: pages[index] || pages[0] || { number: index + 1, kind: 'visual' } }))
+    : [
+      pages.find((page) => page.kind === 'cover') || pages[0],
+      ...pages.filter((page) => page.kind === 'aha-proof').slice(0, 2)
+    ].filter(Boolean);
+  return selected.slice(0, maxAssets).map(({ request, page }, index) => {
+    const id = compactId('ppt-image', `${index + 1}:${request || page?.claim || page?.kind}`);
+    return {
+      id,
+      slide: page?.number || index + 1,
+      role: index === 0 ? 'hero_visual' : 'supporting_visual',
+      status: 'planned',
+      prompt: buildImageAssetPrompt({ contract, page, request, styleTokens }),
+      model: 'gpt-image-2',
+      size: cleanText(contract.answers?.PRESENTATION_IMAGE_SIZE, '1536x1024'),
+      quality: cleanText(contract.answers?.PRESENTATION_IMAGE_QUALITY, 'medium'),
+      output_format: 'png',
+      rel_path: path.join(PPT_ASSET_DIR, `${safeFileSlug(id)}.png`),
+      html_src: `../${path.join(PPT_ASSET_DIR, `${safeFileSlug(id)}.png`)}`
+    };
+  });
+}
+
+async function generatePptImageAsset(asset, dir, apiKey) {
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-image-2',
+      prompt: asset.prompt,
+      size: asset.size,
+      quality: asset.quality,
+      n: 1
+    })
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = json?.error?.message || `OpenAI image generation failed with HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  const b64 = json?.data?.[0]?.b64_json;
+  if (!b64) throw new Error('OpenAI image generation response did not include data[0].b64_json');
+  const target = path.join(dir, asset.rel_path);
+  await fsp.mkdir(path.dirname(target), { recursive: true });
+  await fsp.writeFile(target, Buffer.from(b64, 'base64'));
+  return {
+    ...asset,
+    status: 'generated',
+    generated_at: nowIso(),
+    output_path: asset.rel_path,
+    byte_size: Buffer.byteLength(Buffer.from(b64, 'base64'))
+  };
+}
+
+async function existingGeneratedImageAssets(dir, existing = {}) {
+  const assets = Array.isArray(existing?.assets) ? existing.assets : [];
+  const checked = [];
+  for (const asset of assets) {
+    if (asset.status !== 'generated' || !asset.output_path) continue;
+    const target = path.join(dir, asset.output_path);
+    try {
+      const stat = await fsp.stat(target);
+      checked.push({ ...asset, byte_size: stat.size });
+    } catch {}
+  }
+  return checked;
+}
+
+export async function buildPptImageAssetLedger(dir, contract = {}, storyboard = buildPptStoryboard(contract), styleTokens = buildPptStyleTokens(contract), existing = null) {
+  const required = imageAssetRequired(contract);
+  const plannedAssets = planPptImageAssets(contract, storyboard, styleTokens);
+  const reused = await existingGeneratedImageAssets(dir, existing || {});
+  const reusedIds = new Set(reused.map((asset) => asset.id));
+  const pending = plannedAssets.filter((asset) => !reusedIds.has(asset.id));
+  const imagegenDisabled = /^(0|false|no)$/i.test(String(process.env.SKS_PPT_IMAGEGEN ?? 'auto'));
+  const apiKey = process.env.OPENAI_API_KEY || '';
+  const blockers = [];
+  const generated = [...reused];
+  const failed = [];
+  if (pending.length > 0 && required && imagegenDisabled) {
+    blockers.push('imagegen_disabled_by_SKS_PPT_IMAGEGEN');
+  } else if (pending.length > 0 && required && !apiKey) {
+    blockers.push('missing_OPENAI_API_KEY_for_required_gpt_image_2_assets');
+  } else if (pending.length > 0 && required && apiKey) {
+    for (const asset of pending) {
+      try {
+        generated.push(await generatePptImageAsset(asset, dir, apiKey));
+      } catch (err) {
+        failed.push({ ...asset, status: 'failed', error: cleanText(err?.message, 'image generation failed') });
+      }
+    }
+  }
+  const assets = [
+    ...generated,
+    ...failed,
+    ...pending
+      .filter((asset) => !generated.some((generatedAsset) => generatedAsset.id === asset.id) && !failed.some((failedAsset) => failedAsset.id === asset.id))
+      .map((asset) => ({ ...asset, status: required ? 'blocked' : 'planned_optional' }))
+  ];
+  const generatedCount = generated.length;
+  const requiredCount = required ? plannedAssets.length : 0;
+  const passed = !required || (requiredCount > 0 && generatedCount >= requiredCount && failed.length === 0 && blockers.length === 0);
+  return {
+    schema_version: 1,
+    created_at: nowIso(),
+    contract_hash: contract.sealed_hash || null,
+    required,
+    policy: 'Generate required PPT image resources with real gpt-image-2 calls when OPENAI_API_KEY is available; never fabricate image files or mark missing generations as successful.',
+    api_docs: 'https://developers.openai.com/api/docs/guides/image-generation',
+    codex_app_imagegen_doc: 'https://developers.openai.com/codex/app/features#image-generation',
+    provider: {
+      model: 'gpt-image-2',
+      endpoint: 'POST /v1/images/generations',
+      output: 'base64_png',
+      api_key_available: Boolean(apiKey),
+      imagegen_disabled: imagegenDisabled
+    },
+    planned_count: plannedAssets.length,
+    required_count: requiredCount,
+    generated_count: generatedCount,
+    failed_count: failed.length,
+    blockers,
+    assets,
+    passed,
+    notes: [
+      required
+        ? 'The sealed PPT contract requires generated image assets; missing API credentials or generation failures block the PPT gate.'
+        : 'No generated image asset requirement was detected; assets remain optional and are not generated to avoid unrequested API cost.',
+      'The API call follows the official Image API shape for gpt-image-2 and writes decoded base64 image bytes under assets/.'
+    ]
+  };
+}
+
+export function buildPptReviewPolicy(contract = {}, storyboard = buildPptStoryboard(contract), styleTokens = buildPptStyleTokens(contract)) {
+  const text = contractText(contract);
+  const explicitlyRequired = hasVisualReviewCue(text);
+  return {
+    schema_version: 1,
+    created_at: nowIso(),
+    contract_hash: contract.sealed_hash || null,
+    policy: 'bounded_ppt_design_review_loop',
+    score_threshold: 0.88,
+    minimum_delta_to_continue: 0.03,
+    max_full_deck_passes: 2,
+    max_slide_retries: 2,
+    final_narrative_passes: 1,
+    stop_conditions: [
+      'P0/P1 issues are zero',
+      'overall_score >= 0.88',
+      'improvement_delta < 0.03 after at least one repair pass',
+      'max_full_deck_passes or max_slide_retries reached',
+      'required external evidence or Codex App image generation evidence is unavailable'
+    ],
+    severity_policy: {
+      P0: 'blocks final output',
+      P1: 'blocks final output',
+      P2: 'fix when it changes audience comprehension or decision confidence',
+      P3: 'record as accepted residual unless cheap and local'
+    },
+    visual_review: {
+      model: 'gpt-image-2',
+      persona: '대한민국 TOSS UI/UX 시니어 총괄 디자이너',
+      codex_app_imagegen_doc: 'https://developers.openai.com/codex/app/features#image-generation',
+      model_doc: 'https://developers.openai.com/api/docs/models/gpt-image-2',
+      mode: explicitlyRequired ? 'required_by_contract' : 'codex_app_when_available',
+      required_for_gate: explicitlyRequired,
+      evidence_artifact: PPT_REVIEW_LEDGER_ARTIFACT,
+      loop_shape: 'Export each slide/page image, run image-to-image visual critique through Codex App imagegen/gpt-image-2 when available, analyze the returned review image with LLM vision, convert findings into issue rows, patch HTML, and rerun only failed/changed/high-risk slides.'
+    },
+    deterministic_review: {
+      always_run: true,
+      checks: ['fact_ledger', 'painpoint_count', 'storyboard_flow', 'style_token_specificity', 'html_pdf_export', 'review_loop_bounds'],
+      slide_count: storyboard.pages?.length || 0,
+      design_profile: styleTokens.design_policy?.design_reference_selection?.primary?.id || null
+    }
+  };
+}
+
+function reviewIssue({ id, severity = 'P2', slide = null, title, detail, source = 'deterministic_qa', action = 'fix_or_accept_residual' }) {
+  return {
+    id,
+    severity,
+    slide,
+    title,
+    detail,
+    source,
+    action,
+    status: ['P0', 'P1'].includes(severity) ? 'open_blocking' : 'accepted_or_fix_when_local'
+  };
+}
+
+export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, factLedger, imageAssetLedger, renderReport, reviewPolicy }) {
+  const issues = [];
+  if (!factLedger?.passed) {
+    issues.push(reviewIssue({
+      id: 'fact-ledger-critical-unsupported',
+      severity: 'P1',
+      title: 'Unsupported critical external fact requirement',
+      detail: 'External research is required or claimed, but verified web evidence was not recorded.',
+      action: 'Add verified web/Context7 sources and claim bindings before final PPT output.'
+    }));
+  }
+  if (imageAssetLedger?.passed !== true) {
+    issues.push(reviewIssue({
+      id: 'gpt-image-2-assets-missing',
+      severity: imageAssetLedger?.required ? 'P1' : 'P3',
+      title: 'Generated image assets not complete',
+      detail: imageAssetLedger?.required
+        ? `The sealed PPT contract requires generated image resources, but ${imageAssetLedger.generated_count || 0}/${imageAssetLedger.required_count || 0} assets were generated.`
+        : 'Optional generated image assets were planned but not generated.',
+      source: 'ppt_image_asset_ledger',
+      action: imageAssetLedger?.required
+        ? 'Set OPENAI_API_KEY and rerun sks ppt build, or provide generated asset evidence before final output.'
+        : 'Generate only if the sealed PPT contract needs image resources.'
+    }));
+  }
+  if ((storyboard?.aha_moments || []).length < 3) {
+    issues.push(reviewIssue({
+      id: 'aha-moments-under-three',
+      severity: 'P1',
+      title: 'Too few aha moments',
+      detail: 'The presentation needs at least three painpoint/solution/aha turns before artifact work.',
+      action: 'Add or infer at least three distinct painpoint to solution mappings.'
+    }));
+  }
+  if (!renderReport?.passed) {
+    issues.push(reviewIssue({
+      id: 'render-report-failed',
+      severity: 'P1',
+      title: 'Render QA failed',
+      detail: 'HTML/PDF export or render checks did not pass.',
+      action: 'Fix source HTML/PDF generation and rerun render QA.'
+    }));
+  }
+  if (!styleTokens?.design_policy?.design_reference_selection?.primary?.id) {
+    issues.push(reviewIssue({
+      id: 'missing-design-reference-selection',
+      severity: 'P1',
+      title: 'No concrete design reference selected',
+      detail: 'The PPT style token artifact must bind the deck to a getdesign/design.md-derived reference profile.',
+      action: 'Select and record a concrete style reference before rendering.'
+    }));
+  }
+  const visualRequired = reviewPolicy?.visual_review?.required_for_gate === true;
+  const imageEvidence = Array.isArray(contract.answers?.PRESENTATION_IMAGE_REVIEW_EVIDENCE)
+    ? contract.answers.PRESENTATION_IMAGE_REVIEW_EVIDENCE
+    : asArray(contract.answers?.PRESENTATION_IMAGE_REVIEW_EVIDENCE);
+  if (visualRequired && imageEvidence.length === 0) {
+    issues.push(reviewIssue({
+      id: 'codex-app-imagegen-review-missing',
+      severity: 'P1',
+      title: 'Required gpt-image-2 visual review evidence missing',
+      detail: 'The sealed PPT contract explicitly requested image/gpt-image-2 visual critique, but no Codex App imagegen review evidence was supplied.',
+      source: 'codex_app_imagegen_gate',
+      action: 'Run the bounded gpt-image-2 slide review loop in Codex App and record evidence paths before final output.'
+    }));
+  }
+  const blocking = issues.filter((issue) => ['P0', 'P1'].includes(issue.severity));
+  const slideCount = storyboard?.pages?.length || 0;
+  const scoreDeductions = (blocking.length * 0.16) + (issues.length - blocking.length) * 0.04;
+  const overallScore = Number(Math.max(0, Math.min(1, 0.96 - scoreDeductions)).toFixed(3));
+  return {
+    schema_version: 1,
+    created_at: nowIso(),
+    contract_hash: contract.sealed_hash || null,
+    reviewer_model_policy: reviewPolicy?.visual_review || null,
+    deterministic_review_ran: true,
+    image_review_ran: imageEvidence.length > 0,
+    image_review_evidence: imageEvidence,
+    image_review_status: imageEvidence.length > 0 ? 'evidence_provided' : (visualRequired ? 'missing_required_evidence' : 'not_required_or_not_available'),
+    slide_count: slideCount,
+    issues,
+    blocking_issue_count: blocking.length,
+    p0_p1_zero: blocking.length === 0,
+    scorecard: {
+      fact_source_integrity: factLedger?.passed ? 0.94 : 0.62,
+      image_asset_completion: imageAssetLedger?.passed ? 0.9 : (imageAssetLedger?.required ? 0.35 : 0.8),
+      narrative_flow: (storyboard?.aha_moments || []).length >= 3 ? 0.92 : 0.62,
+      design_token_fit: styleTokens?.design_policy?.design_reference_selection?.primary?.id ? 0.92 : 0.58,
+      slide_readability: renderReport?.passed ? 0.91 : 0.6,
+      export_integrity: renderReport?.passed ? 0.94 : 0.5,
+      visual_review_completion: visualRequired ? (imageEvidence.length > 0 ? 0.9 : 0.35) : 0.86,
+      overall_score: overallScore
+    },
+    passed: blocking.length === 0 && overallScore >= 0.88,
+    notes: [
+      'This ledger is an executable deterministic QA pass, not a fake gpt-image-2 result.',
+      'When image review is required, missing Codex App imagegen evidence blocks the gate instead of being simulated.'
+    ]
+  };
+}
+
+export function buildPptIterationReport({ contract = {}, reviewPolicy, reviewLedger }) {
+  const score = reviewLedger?.scorecard?.overall_score || 0;
+  const blocking = reviewLedger?.blocking_issue_count || 0;
+  const passed = blocking === 0 && score >= (reviewPolicy?.score_threshold || 0.88);
+  return {
+    schema_version: 1,
+    created_at: nowIso(),
+    contract_hash: contract.sealed_hash || null,
+    loop_policy: {
+      max_full_deck_passes: reviewPolicy?.max_full_deck_passes || 2,
+      max_slide_retries: reviewPolicy?.max_slide_retries || 2,
+      final_narrative_passes: reviewPolicy?.final_narrative_passes || 1,
+      score_threshold: reviewPolicy?.score_threshold || 0.88,
+      minimum_delta_to_continue: reviewPolicy?.minimum_delta_to_continue || 0.03
+    },
+    passes: [
+      {
+        pass: 1,
+        type: 'deterministic_full_deck_review',
+        score,
+        blocking_issue_count: blocking,
+        status: passed ? 'passed' : 'blocked',
+        changed_slides_for_next_pass: (reviewLedger?.issues || []).map((issue) => issue.slide).filter(Boolean)
+      }
+    ],
+    final_narrative_pass: {
+      ran: passed,
+      status: passed ? 'passed' : 'skipped_until_blockers_resolved'
+    },
+    stopped: true,
+    stop_reason: passed ? 'score_threshold_met_and_no_p0_p1_issues' : 'blocking_issues_require_route_worker_or_user_evidence',
+    passed
   };
 }
 
@@ -501,7 +988,7 @@ export function selectPptDesignReference(contract = {}) {
   };
 }
 
-export function buildPptHtml({ contract = {}, audience, sourceLedger, storyboard, styleTokens }) {
+export function buildPptHtml({ contract = {}, audience, sourceLedger, factLedger, imageAssetLedger, reviewPolicy, storyboard, styleTokens }) {
   const title = escapeHtml(storyboard.title);
   const referenceName = escapeHtml(styleTokens.design_policy?.design_reference_selection?.primary?.name || 'selected design reference');
   const audienceRaw = escapeHtml(audience?.audience_profile?.raw || 'Audience context');
@@ -522,13 +1009,18 @@ h1 { margin: 0; font-size: ${styleTokens.typography.display_px}px; line-height: 
 p { margin: 0; color: ${styleTokens.color.muted}; font-size: ${styleTokens.typography.body_px}px; line-height: ${styleTokens.typography.line_height}; max-width: 920px; }
 .claim { display: grid; gap: 26px; }
 .evidence { ${surfaceRule} border-radius: ${styleTokens.layout.radius_px}px; background: ${styleTokens.color.surface}; display: grid; }
+.image-asset { padding: 12px; border-bottom: 1px solid ${styleTokens.color.rule}; }
+.image-asset img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: ${styleTokens.layout.radius_px}px; }
 .evidence-row { padding: 22px 24px; border-bottom: 1px solid ${styleTokens.color.rule}; }
 .evidence-row:last-child { border-bottom: 0; }
 .label { color: ${styleTokens.color.primary}; font-size: ${styleTokens.typography.caption_px}px; font-weight: 600; letter-spacing: 0; text-transform: uppercase; margin-bottom: 8px; }
 .value { color: ${styleTokens.color.text}; font-size: 20px; line-height: 1.42; }
 .source { display: grid; grid-template-columns: 1fr auto; gap: 24px; color: ${styleTokens.color.muted}; font-size: ${styleTokens.typography.caption_px}px; border-top: 1px solid ${styleTokens.color.rule}; padding-top: 14px; }
 .accent { width: 64px; height: 3px; background: ${styleTokens.color.accent}; }`;
-  const pages = storyboard.pages.map((page) => `<section class="page">
+  const generatedAssets = (imageAssetLedger?.assets || []).filter((asset) => asset.status === 'generated' && asset.html_src);
+  const pages = storyboard.pages.map((page) => {
+    const asset = generatedAssets.find((candidate) => Number(candidate.slide) === Number(page.number));
+    return `<section class="page">
   <header class="topline">
     <div class="kicker">${escapeHtml(page.kind)} / ${page.number}</div>
     <div class="reference">${referenceName}</div>
@@ -540,6 +1032,7 @@ p { margin: 0; color: ${styleTokens.color.muted}; font-size: ${styleTokens.typog
       <p>${escapeHtml(page.support)}</p>
     </div>
     <aside class="evidence" aria-label="decision evidence">
+      ${asset ? `<div class="image-asset"><img src="${escapeHtml(asset.html_src)}" alt="${escapeHtml(asset.role || 'generated presentation visual')}"></div>` : ''}
       <div class="evidence-row">
         <div class="label">Audience</div>
         <div class="value">${audienceRaw}</div>
@@ -558,7 +1051,8 @@ p { margin: 0; color: ${styleTokens.color.muted}; font-size: ${styleTokens.typog
     <span>Sources: ${escapeHtml((page.source_ids || []).join(', ') || 'none')}</span>
     <span>${escapeHtml(styleTokens.layout?.composition || 'presentation-grid')}</span>
   </div>
-</section>`).join('\n');
+</section>`;
+  }).join('\n');
   return `<!doctype html>
 <html lang="${styleTokens.typography.language}">
 <head>
@@ -571,6 +1065,9 @@ p { margin: 0; color: ${styleTokens.color.muted}; font-size: ${styleTokens.typog
 ${pages}
 <script type="application/json" id="ppt-audience-strategy">${jsonScript(audience)}</script>
 <script type="application/json" id="ppt-source-ledger">${jsonScript(sourceLedger)}</script>
+<script type="application/json" id="ppt-fact-ledger">${jsonScript(factLedger || null)}</script>
+<script type="application/json" id="ppt-image-asset-ledger">${jsonScript(imageAssetLedger || null)}</script>
+<script type="application/json" id="ppt-review-policy">${jsonScript(reviewPolicy || null)}</script>
 </body>
 </html>
 `;
@@ -661,14 +1158,14 @@ function makePdf(storyboard, styleTokens) {
   return Buffer.from(body, 'binary');
 }
 
-export function buildPptRenderReport({ contract = {}, audience, sourceLedger, storyboard, styleTokens, html, pdfBytes }) {
+export function buildPptRenderReport({ contract = {}, audience, sourceLedger, factLedger, imageAssetLedger, storyboard, styleTokens, html, pdfBytes }) {
   const painpointCount = audience?.painpoint_solution_map?.length || 0;
   const pageCount = storyboard?.pages?.length || 0;
   return {
     schema_version: 1,
     created_at: nowIso(),
     contract_hash: contract.sealed_hash || null,
-    passed: painpointCount >= 3 && pageCount > 0 && Buffer.isBuffer(pdfBytes) && pdfBytes.length > 0 && typeof html === 'string' && html.includes('<html'),
+    passed: painpointCount >= 3 && pageCount > 0 && Buffer.isBuffer(pdfBytes) && pdfBytes.length > 0 && typeof html === 'string' && html.includes('<html') && factLedger?.unsupported_critical_claims_count === 0 && imageAssetLedger?.passed === true,
     page_count: pageCount,
     dimensions: { pdf_media_box: '842x595 points', html_page: '16:9 landscape' },
     font_status: {
@@ -691,12 +1188,19 @@ export function buildPptRenderReport({ contract = {}, audience, sourceLedger, st
       { id: 'ppt_skill_allowlist_enforced', passed: JSON.stringify(styleTokens.design_policy?.pipeline_allowlist?.required_skills || []) === JSON.stringify([...PPT_PIPELINE_SKILL_ALLOWLIST]) },
       { id: 'out_of_pipeline_design_skills_ignored', passed: styleTokens.design_policy?.pipeline_allowlist?.ignore_installed_out_of_pipeline_skills === true && (styleTokens.design_policy?.pipeline_allowlist?.ignored_design_skills_even_if_installed || []).includes('design-artifact-expert') },
       { id: 'ppt_mcp_allowlist_scoped', passed: (styleTokens.design_policy?.pipeline_allowlist?.allowed_mcp_servers || []).every((entry) => entry.mcp === 'context7' && /external_documentation/.test(entry.condition || '')) },
-      { id: 'no_decorative_overdesign', passed: !String(html).includes('gradient') }
+      { id: 'no_decorative_overdesign', passed: !String(html).includes('gradient') },
+      { id: 'fact_ledger_embedded', passed: typeof html === 'string' && html.includes('ppt-fact-ledger') },
+      { id: 'unsupported_critical_claims_zero', passed: factLedger?.unsupported_critical_claims_count === 0 },
+      { id: 'image_asset_ledger_embedded', passed: typeof html === 'string' && html.includes('ppt-image-asset-ledger') },
+      { id: 'image_asset_policy_satisfied', passed: imageAssetLedger?.passed === true },
+      { id: 'review_policy_embedded', passed: typeof html === 'string' && html.includes('ppt-review-policy') }
     ],
     broken_links: [],
     source_coverage: {
       source_count: sourceLedger.sources.length,
-      unsupported_external_claims: 0
+      unsupported_external_claims: factLedger?.unsupported_critical_claims_count || 0,
+      image_assets_required: imageAssetLedger?.required === true,
+      image_assets_generated: imageAssetLedger?.generated_count || 0
     },
     editable_source_html: PPT_HTML_ARTIFACT,
     parallel_build_report: PPT_PARALLEL_REPORT_ARTIFACT,
@@ -776,6 +1280,11 @@ export async function buildPptCleanupReport(dir) {
     retained_paths: [
       PPT_HTML_ARTIFACT,
       PPT_PDF_ARTIFACT,
+      PPT_FACT_LEDGER_ARTIFACT,
+      PPT_IMAGE_ASSET_LEDGER_ARTIFACT,
+      PPT_REVIEW_POLICY_ARTIFACT,
+      PPT_REVIEW_LEDGER_ARTIFACT,
+      PPT_ITERATION_REPORT_ARTIFACT,
       PPT_RENDER_REPORT_ARTIFACT,
       PPT_CLEANUP_REPORT_ARTIFACT,
       PPT_PARALLEL_REPORT_ARTIFACT
@@ -804,8 +1313,16 @@ export function defaultPptGate(contract = {}) {
     painpoint_count: painpoints.length,
     minimum_three_painpoints_expected: true,
     source_ledger_created: false,
+    fact_ledger_created: false,
+    unsupported_critical_claims_zero: false,
     storyboard_created: false,
     style_tokens_created: false,
+    image_asset_ledger_created: false,
+    image_asset_policy_satisfied: false,
+    review_policy_created: false,
+    review_ledger_created: false,
+    bounded_iteration_complete: false,
+    critical_review_issues_zero: false,
     parallel_build_recorded: false,
     html_artifact_created: false,
     source_html_preserved: false,
@@ -816,8 +1333,13 @@ export function defaultPptGate(contract = {}) {
     required_artifacts: [
       PPT_AUDIENCE_STRATEGY_ARTIFACT,
       'ppt-source-ledger.json',
+      'ppt-fact-ledger.json',
       'ppt-storyboard.json',
       'ppt-style-tokens.json',
+      'ppt-image-asset-ledger.json',
+      'ppt-review-policy.json',
+      'ppt-review-ledger.json',
+      'ppt-iteration-report.json',
       PPT_HTML_ARTIFACT,
       'artifact.pdf or explicit PDF deferral note',
       'ppt-render-report.json',
@@ -827,6 +1349,9 @@ export function defaultPptGate(contract = {}) {
     notes: [
       'Do not pass this gate until the HTML/PDF artifact work is actually complete or the PDF export is explicitly deferred with evidence.',
       'Audience strategy must stay linked to STP, target pain points, proof, and three or more aha moments.',
+      'Fact ledger must keep user input separate from verified web evidence and block unsupported critical external claims.',
+      'Image asset ledger must generate required resources with real gpt-image-2/Image API calls when credentials are available, or block with evidence instead of faking files.',
+      'Review loop must be bounded by score thresholds, P0/P1 issue count, max passes, and explicit imagegen evidence requirements when requested.',
       'Preserve the editable HTML source under source-html/ and remove PPT-only temporary build files before completion.',
       'Record independent PPT build phases in ppt-parallel-report.json so research/design/render work can stay parallel-friendly.'
     ]
@@ -846,6 +1371,8 @@ export async function writePptRouteArtifacts(dir, contract = {}) {
 
 export async function writePptBuildArtifacts(dir, contract = null) {
   const sealed = contract || await readJson(path.join(dir, 'decision-contract.json'));
+  const existingFactLedger = await readJson(path.join(dir, PPT_FACT_LEDGER_ARTIFACT), null);
+  const existingImageAssetLedger = await readJson(path.join(dir, PPT_IMAGE_ASSET_LEDGER_ARTIFACT), null);
   const parallel = createPptParallelReporter(sealed);
   const initial = await parallel.group('strategy_inputs', {
     audience: async () => buildPptAudienceStrategy(sealed),
@@ -853,19 +1380,33 @@ export async function writePptBuildArtifacts(dir, contract = null) {
     styleTokens: async () => buildPptStyleTokens(sealed)
   });
   const { audience, sourceLedger, styleTokens } = initial;
+  const factLedger = buildPptFactLedger(sealed, sourceLedger, existingFactLedger);
   const { storyboard } = await parallel.group('storyboard_phase', {
     storyboard: async () => buildPptStoryboard(sealed, audience)
   });
+  const { imageAssetLedger } = await parallel.group('image_asset_phase', {
+    imageAssetLedger: async () => buildPptImageAssetLedger(dir, sealed, storyboard, styleTokens, existingImageAssetLedger)
+  });
+  const { reviewPolicy } = await parallel.group('review_policy_phase', {
+    reviewPolicy: async () => buildPptReviewPolicy(sealed, storyboard, styleTokens)
+  });
   const { html, pdfBytes } = await parallel.group('render_targets', {
-    html: async () => buildPptHtml({ contract: sealed, audience, sourceLedger, storyboard, styleTokens }),
+    html: async () => buildPptHtml({ contract: sealed, audience, sourceLedger, factLedger, imageAssetLedger, reviewPolicy, storyboard, styleTokens }),
     pdfBytes: async () => makePdf(storyboard, styleTokens)
   });
-  const report = buildPptRenderReport({ contract: sealed, audience, sourceLedger, storyboard, styleTokens, html, pdfBytes });
+  const report = buildPptRenderReport({ contract: sealed, audience, sourceLedger, factLedger, imageAssetLedger, storyboard, styleTokens, html, pdfBytes });
+  const reviewLedger = buildPptReviewLedger({ contract: sealed, storyboard, styleTokens, factLedger, imageAssetLedger, renderReport: report, reviewPolicy });
+  const iterationReport = buildPptIterationReport({ contract: sealed, reviewPolicy, reviewLedger });
   await parallel.group('artifact_writes', {
     audience_strategy: async () => writeJsonAtomic(path.join(dir, PPT_AUDIENCE_STRATEGY_ARTIFACT), audience),
     source_ledger: async () => writeJsonAtomic(path.join(dir, PPT_SOURCE_LEDGER_ARTIFACT), sourceLedger),
+    fact_ledger: async () => writeJsonAtomic(path.join(dir, PPT_FACT_LEDGER_ARTIFACT), factLedger),
+    image_asset_ledger: async () => writeJsonAtomic(path.join(dir, PPT_IMAGE_ASSET_LEDGER_ARTIFACT), imageAssetLedger),
     storyboard: async () => writeJsonAtomic(path.join(dir, PPT_STORYBOARD_ARTIFACT), storyboard),
     style_tokens: async () => writeJsonAtomic(path.join(dir, PPT_STYLE_TOKENS_ARTIFACT), styleTokens),
+    review_policy: async () => writeJsonAtomic(path.join(dir, PPT_REVIEW_POLICY_ARTIFACT), reviewPolicy),
+    review_ledger: async () => writeJsonAtomic(path.join(dir, PPT_REVIEW_LEDGER_ARTIFACT), reviewLedger),
+    iteration_report: async () => writeJsonAtomic(path.join(dir, PPT_ITERATION_REPORT_ARTIFACT), iterationReport),
     html_source: async () => writeTextAtomic(path.join(dir, PPT_HTML_ARTIFACT), html),
     pdf: async () => fsp.writeFile(path.join(dir, PPT_PDF_ARTIFACT), pdfBytes),
     render_report: async () => writeJsonAtomic(path.join(dir, PPT_RENDER_REPORT_ARTIFACT), report)
@@ -879,11 +1420,19 @@ export async function writePptBuildArtifacts(dir, contract = null) {
   const baseGate = defaultPptGate(sealed);
   const gate = {
     ...baseGate,
-    passed: report.passed && cleanupReport.source_html_preserved && cleanupReport.temp_cleanup_completed && parallelReport.passed,
+    passed: report.passed && imageAssetLedger.passed && reviewLedger.passed && iterationReport.passed && cleanupReport.source_html_preserved && cleanupReport.temp_cleanup_completed && parallelReport.passed,
     audience_strategy_sealed: baseGate.audience_strategy_sealed,
     source_ledger_created: true,
+    fact_ledger_created: true,
+    unsupported_critical_claims_zero: factLedger.unsupported_critical_claims_count === 0,
     storyboard_created: true,
     style_tokens_created: true,
+    image_asset_ledger_created: true,
+    image_asset_policy_satisfied: imageAssetLedger.passed,
+    review_policy_created: true,
+    review_ledger_created: true,
+    bounded_iteration_complete: iterationReport.passed,
+    critical_review_issues_zero: reviewLedger.p0_p1_zero,
     parallel_build_recorded: parallelReport.passed,
     html_artifact_created: true,
     source_html_preserved: cleanupReport.source_html_preserved,
@@ -892,9 +1441,13 @@ export async function writePptBuildArtifacts(dir, contract = null) {
     temp_cleanup_recorded: cleanupReport.temp_cleanup_completed,
     honest_mode_complete: true,
     render_report_passed: report.passed,
+    fact_ledger_passed: factLedger.passed,
+    image_asset_ledger_passed: imageAssetLedger.passed,
+    review_ledger_passed: reviewLedger.passed,
+    iteration_report_passed: iterationReport.passed,
     cleanup_report_passed: cleanupReport.source_html_preserved && cleanupReport.temp_cleanup_completed,
     parallel_report_passed: parallelReport.passed,
-    output_files: [PPT_HTML_ARTIFACT, PPT_PDF_ARTIFACT, PPT_RENDER_REPORT_ARTIFACT, PPT_CLEANUP_REPORT_ARTIFACT, PPT_PARALLEL_REPORT_ARTIFACT],
+    output_files: [PPT_HTML_ARTIFACT, PPT_PDF_ARTIFACT, PPT_FACT_LEDGER_ARTIFACT, PPT_IMAGE_ASSET_LEDGER_ARTIFACT, PPT_REVIEW_POLICY_ARTIFACT, PPT_REVIEW_LEDGER_ARTIFACT, PPT_ITERATION_REPORT_ARTIFACT, PPT_RENDER_REPORT_ARTIFACT, PPT_CLEANUP_REPORT_ARTIFACT, PPT_PARALLEL_REPORT_ARTIFACT],
     updated_at: nowIso()
   };
   await writeJsonAtomic(path.join(dir, PPT_GATE_ARTIFACT), gate);
@@ -907,8 +1460,13 @@ export async function writePptBuildArtifacts(dir, contract = null) {
     files: {
       audience_strategy: path.join(dir, PPT_AUDIENCE_STRATEGY_ARTIFACT),
       source_ledger: path.join(dir, PPT_SOURCE_LEDGER_ARTIFACT),
+      fact_ledger: path.join(dir, PPT_FACT_LEDGER_ARTIFACT),
+      image_asset_ledger: path.join(dir, PPT_IMAGE_ASSET_LEDGER_ARTIFACT),
       storyboard: path.join(dir, PPT_STORYBOARD_ARTIFACT),
       style_tokens: path.join(dir, PPT_STYLE_TOKENS_ARTIFACT),
+      review_policy: path.join(dir, PPT_REVIEW_POLICY_ARTIFACT),
+      review_ledger: path.join(dir, PPT_REVIEW_LEDGER_ARTIFACT),
+      iteration_report: path.join(dir, PPT_ITERATION_REPORT_ARTIFACT),
       html: path.join(dir, PPT_HTML_ARTIFACT),
       source_html: path.join(dir, PPT_HTML_ARTIFACT),
       pdf: path.join(dir, PPT_PDF_ARTIFACT),
