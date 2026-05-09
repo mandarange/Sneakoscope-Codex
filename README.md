@@ -79,7 +79,7 @@ The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex`
 - Checks npm for newer `sneakoscope` and `@openai/codex` versions before launch and asks whether to update when the terminal can answer y/n.
 - Installs the latest Codex CLI with `npm i -g @openai/codex@latest` when it is missing and you approve or pass `--yes`.
 - Requires tmux 3.x or newer before opening the session.
-- Creates or reuses a named detached tmux session, splits panes, and prints the attach command.
+- Creates or reuses a named detached tmux session and prints only the session, gate, attach, and blocker details needed to act.
 
 ## Installation
 
@@ -205,7 +205,7 @@ sks --mad
 sks --mad --yes
 ```
 
-This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `sandbox_mode = "danger-full-access"` and `approval_policy = "never"`, then launches Codex with `--sandbox danger-full-access --ask-for-approval never` and attaches to the session in an interactive terminal. It is scoped to that explicit command and does not change normal SKS/DB safety defaults. Repeat launches reuse the same named SKS MAD tmux session.
+This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `sandbox_mode = "danger-full-access"` and `approval_policy = "never"`, opens an active MAD-SKS permission gate for that tmux run, then launches Codex with `--sandbox danger-full-access --ask-for-approval never` and attaches to the session in an interactive terminal. While the gate is active, live server work, Supabase MCP database writes, direct SQL, targeted DML, schema cleanup, and needed migrations are allowed. Catastrophic database wipe/all-row/project-management safeguards remain active. Repeat launches reuse the same named SKS MAD tmux session.
 
 MAD does not disable the pipeline contract: stages, executors, reviewers, and auto-review policy still must not invent unrequested fallback implementation code. If the requested path cannot be implemented, SKS should block with evidence rather than add substitute behavior.
 
@@ -230,9 +230,9 @@ sks team dashboard latest
 sks team log latest
 ```
 
-Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named tmux Team session with split live lanes when tmux is available. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
+Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named tmux Team session with split live lanes when tmux is available. The default terminal output stays compact: mission id, agent count, role count, tmux status, watch command, and artifact directory. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
 
-The tmux Team launch is a live orchestration screen: the first pane follows `sks team watch <mission-id> --follow` as the mission overview, and neighboring split panes follow individual `sks team lane <mission-id> --agent <name> --follow` views. SKS gives lanes role-specific colors, labels, and terminal titles, so scouts, planning/debate voices, executors, reviewers, and safety lanes are visually distinct while the same evidence is mirrored into `team-transcript.jsonl`, `team-live.md`, and `team-dashboard.json`.
+The tmux Team launch is a live orchestration screen in one tmux window: the first pane follows `sks team watch <mission-id> --follow` as the mission overview, and neighboring split panes follow individual `sks team lane <mission-id> --agent <name> --follow` views. Pane headers show only mission, lane, phase, follow command, and cleanup command. SKS gives lanes role-specific colors, labels, and terminal titles, so scouts, planning/debate voices, executors, reviewers, and safety lanes are visually distinct while detailed evidence is mirrored into `team-transcript.jsonl`, `team-live.md`, and `team-dashboard.json`.
 
 Agent sessions communicate through the bounded Team transcript. Use `sks team message <mission-id|latest> --from <agent> --to <agent|all> --message "..."` to add direct or broadcast messages; lane panes show messages addressed to that agent plus the fallback global tail.
 

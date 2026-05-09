@@ -1542,21 +1542,16 @@ export async function team(args) {
   result.tmux = await launchTmuxTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: flag(args, '--json') || !openTmux });
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
-  console.log(`Plan: ${path.relative(root, result.plan)}`);
-  console.log(`Pipeline plan: ${path.relative(root, result.pipeline_plan)}`);
   console.log(`Agent sessions: ${agentSessions}`);
   console.log(`Role counts: ${formatRoleCounts(roleCounts)}`);
-  console.log(`Workflow: ${path.relative(root, result.workflow)}`);
-  console.log(`Runtime graph: ${path.relative(root, result.team_graph)}`);
-  console.log(`Worker inbox: ${path.relative(root, result.worker_inbox_dir)}`);
-  console.log(`Live: ${path.relative(root, result.live)}`);
   if (result.tmux.ready) {
     const tmuxState = result.tmux.created ? 'opened' : 'not opened; use --open-tmux for a tmux session';
     console.log(`tmux: ${tmuxState} ${result.tmux.opened_lane_count || result.tmux.agents.length} agent lane(s) in ${result.tmux.session || result.tmux.workspace}`);
+    if (result.tmux.split_ui?.mode) console.log(`tmux UI: ${result.tmux.split_ui.mode} (${result.tmux.split_ui.layout})`);
   }
   else console.log(`tmux: blocked (${Array.from(new Set(result.tmux.blockers || [])).join('; ')})`);
   console.log(`Watch: sks team watch ${id}`);
-  console.log('Use $Team in Codex App or the tmux launch view from this CLI flow to run scouts, debate/consensus, runtime graph/inbox handoff, then a fresh implementation team with disjoint ownership.');
+  console.log(`Artifacts: .sneakoscope/missions/${id}`);
 }
 
 export function parseTeamCreateArgs(args) {

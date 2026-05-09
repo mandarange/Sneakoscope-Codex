@@ -378,7 +378,7 @@ export const ROUTES = [
     command: '$MAD-SKS',
     mode: 'MADSKS',
     route: 'explicit scoped database authorization modifier',
-    description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily open Supabase MCP column/schema cleanup, direct execute SQL, and normal DB write permissions for the active invocation, while blocking only catastrophic database-wipe operations.',
+    description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily open live server work, Supabase MCP DB writes, direct execute SQL, schema cleanup, migration application, and normal targeted DB writes for the active invocation, while blocking only catastrophic database-wipe/all-row/project-management operations.',
     requiredSkills: ['mad-sks', 'db-safety-guard', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
     lifecycle: ['explicit_invocation', 'auto_sealed_permission_scope', 'scoped_db_cleanup_override', 'catastrophic_db_guard', 'permission_deactivation', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'required',
