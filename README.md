@@ -174,6 +174,7 @@ If you use [codex-lb](https://github.com/Soju06/codex-lb), start it first, creat
 
 ```sh
 sks codex-lb setup --host https://your-codex-lb.example.com --api-key "sk-clb-..."
+sks codex-lb repair
 sks
 ```
 
@@ -183,7 +184,11 @@ Bare `sks` asks this before opening Codex when codex-lb is not configured:
 Authenticate and route Codex through codex-lb? [y/N]
 ```
 
-Answering `y` asks for the hosted domain and API key, writes `~/.codex/config.toml`, stores the key in `~/.codex/sks-codex-lb.env` with mode `0600`, syncs Codex CLI API-key auth through `codex login --with-api-key`, and sources that env file before launching Codex in tmux. When codex-lb is configured from this prompt, SKS opens a fresh tmux session for that launch so the new key is loaded by the Codex process immediately. SKS keeps Codex App Fast mode visible and defaulted by writing `service_tier = "fast"`, `[features].fast_mode = true`, and the `sks-fast-high` profile while removing only legacy top-level `model` and `model_reasoning_effort` locks; route-specific reasoning stays in named profiles or explicit tmux launch args. The generated provider config follows the codex-lb README's Codex CLI API-key setup:
+Answering `y` asks for the hosted domain and API key, writes `~/.codex/config.toml`, stores the key in `~/.codex/sks-codex-lb.env` with mode `0600`, syncs Codex CLI API-key auth through `codex login --with-api-key`, and sources that env file before launching Codex in tmux. When codex-lb is configured from this prompt, SKS opens a fresh tmux session for that launch so the new key is loaded by the Codex process immediately. SKS keeps Codex App Fast mode visible and defaulted by writing `service_tier = "fast"`, `[features].fast_mode = true`, and the `sks-fast-high` profile while removing only legacy top-level `model` and `model_reasoning_effort` locks; route-specific reasoning stays in named profiles or explicit tmux launch args.
+
+If Codex CLI auth drifts after a tmux/MAD launch, run `sks codex-lb repair` or `sks auth repair`. This reuses the stored `~/.codex/sks-codex-lb.env` key and re-syncs Codex CLI API-key auth without asking for the key again. To replace the key or host, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
+
+The generated provider config follows the codex-lb README's Codex CLI API-key setup:
 
 ```toml
 model_provider = "codex-lb"
@@ -205,7 +210,7 @@ sks --mad
 sks --mad --yes
 ```
 
-This creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `sandbox_mode = "danger-full-access"` and `approval_policy = "never"`, opens an active MAD-SKS permission gate for that tmux run, then launches Codex with `--sandbox danger-full-access --ask-for-approval never` and attaches to the session in an interactive terminal. While the gate is active, live server work, Supabase MCP database writes, direct SQL, targeted DML, schema cleanup, and needed migrations are allowed. Catastrophic database wipe/all-row/project-management safeguards remain active. Repeat launches reuse the same named SKS MAD tmux session.
+This syncs existing codex-lb/Codex CLI auth before launch, creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `sandbox_mode = "danger-full-access"` and `approval_policy = "never"`, opens an active MAD-SKS permission gate for that tmux run, then launches Codex with `--sandbox danger-full-access --ask-for-approval never` and attaches to the session in an interactive terminal. If codex-lb is configured and no explicit `--workspace`/`--session` was passed, SKS opens a fresh tmux session so the repaired key is loaded by the Codex process immediately. While the gate is active, live server work, Supabase MCP database writes, direct SQL, targeted DML, schema cleanup, and needed migrations are allowed. Catastrophic database wipe/all-row/project-management safeguards remain active. Repeat launches reuse the same named SKS MAD tmux session unless auth repair requires a fresh codex-lb session.
 
 MAD does not disable the pipeline contract: stages, executors, reviewers, and auto-review policy still must not invent unrequested fallback implementation code. If the requested path cannot be implemented, SKS should block with evidence rather than add substitute behavior.
 
@@ -448,6 +453,7 @@ sks dollar-commands
 
 ```sh
 sks codex-lb setup --host <domain> --api-key <key>
+sks codex-lb repair
 sks
 ```
 

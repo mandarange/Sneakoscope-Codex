@@ -14,7 +14,7 @@ import { containsUserQuestion, noQuestionContinuationReason } from '../core/no-q
 import { evaluateDoneGate, defaultDoneGate } from '../core/hproof.mjs';
 import { emitHook } from '../core/hooks-runtime.mjs';
 import { storageReport, enforceRetention, pruneWikiArtifacts } from '../core/retention.mjs';
-import { classifySql, classifyCommand, checkDbOperation, handleMadSksUserConfirmation, loadDbSafetyPolicy, scanDbSafety } from '../core/db-safety.mjs';
+import { classifySql, classifyCommand, classifyToolPayload, checkDbOperation, handleMadSksUserConfirmation, loadDbSafetyPolicy, scanDbSafety } from '../core/db-safety.mjs';
 import { checkHarnessModification, harnessGuardStatus, isHarnessSourceProject } from '../core/harness-guard.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
 import { context7Docs, context7Resolve, context7Text, context7Tools } from '../core/context7-client.mjs';
@@ -68,7 +68,7 @@ import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs'
 import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
-import { askPostinstallQuestion, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, shouldAutoApproveInstall } from './install-helpers.mjs';
+import { askPostinstallQuestion, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, shouldAutoApproveInstall } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 import { openClawCommand } from './openclaw-command.mjs';
 
@@ -98,7 +98,7 @@ export async function main(args) {
   if (cmd === 'dollar-commands' || cmd === 'dollars' || cmd === '$') return dollarCommands(tail);
   if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
   const handlers = {
-    postinstall: () => postinstall({ bootstrap }), wizard: () => wizard(tail), ui: () => wizard(tail), 'update-check': () => updateCheck(tail), help: () => help(tail), commands: () => commands(tail), usage: () => usage(tail), root: () => rootCommand(tail), quickstart: () => quickstartCommand(), 'codex-app': () => codexAppHelp(tail), 'codex-lb': () => codexLbCommand(sub, rest), openclaw: () => openClawCommand(tail), bootstrap: () => bootstrap(tail), deps: () => deps(sub, rest),
+    postinstall: () => postinstall({ bootstrap }), wizard: () => wizard(tail), ui: () => wizard(tail), 'update-check': () => updateCheck(tail), help: () => help(tail), commands: () => commands(tail), usage: () => usage(tail), root: () => rootCommand(tail), quickstart: () => quickstartCommand(), 'codex-app': () => codexAppHelp(tail), 'codex-lb': () => codexLbCommand(sub, rest), auth: () => codexLbCommand(sub, rest), openclaw: () => openClawCommand(tail), bootstrap: () => bootstrap(tail), deps: () => deps(sub, rest),
     'qa-loop': () => qaLoopCommand(sub, rest), ppt: () => pptCommand(sub, rest), context7: () => context7Command(sub, rest), pipeline: () => pipeline(sub, rest), guard: () => guard(sub, rest), conflicts: () => conflicts(sub, rest), versioning: () => versioning(sub, rest), reasoning: () => reasoningCommand(tail), aliases: () => aliases(), setup: () => setup(tail), 'fix-path': () => fixPath(tail), doctor: () => doctor(tail), init: () => init(tail), selftest: () => selftest(tail),
     goal: () => goalCommand(sub, rest), research: () => researchCommand(sub, rest), hook: () => emitHook(sub), profile: () => profileCommand(sub, rest), hproof: () => hproofCommand(sub, rest), 'validate-artifacts': () => validateArtifactsCommand(tail), perf: () => perfCommand(sub, rest), 'proof-field': () => proofFieldCommand(sub, rest), 'skill-dream': () => skillDreamCommand(sub, rest), 'code-structure': () => codeStructureCommand(sub, rest), memory: () => memoryCommand(sub, rest), gx: () => gxCommand(sub, rest),
     team: () => team(tail), db: () => dbCommand(sub, rest), eval: () => evalCommand(sub, rest), harness: () => harnessCommand(sub, rest), wiki: () => wikiCommand(sub, rest), gc: () => gcCommand(tail), stats: () => statsCommand(tail)
@@ -152,7 +152,8 @@ Usage:
   sks bootstrap [--install-scope global|project] [--local-only] [--json]
   sks deps check|install [tmux|codex|context7|all] [--yes] [--json]
   sks codex-app
-  sks codex-lb setup --host <domain> --api-key <key>
+  sks codex-lb status|repair|setup --host <domain> --api-key <key>
+  sks auth status|repair|setup --host <domain> --api-key <key>
   sks openclaw install|path|print [--dir path] [--force] [--json]
   sks --mad [--high]
   sks auto-review status|enable|start [--high]
@@ -1019,14 +1020,29 @@ async function codexLbCommand(action = 'status', args = []) {
     console.log(`Env file:   ${status.env_file ? status.env_path : 'missing'}`);
     if (status.base_url) console.log(`Base URL:   ${status.base_url}`);
     if (!status.ok) console.log('\nRun: sks codex-lb setup --host <domain> --api-key <key>');
+    else console.log('\nRepair auth: sks codex-lb repair');
     return;
   }
-  if (sub === 'setup') {
+  if (sub === 'repair' || sub === 'resync' || sub === 'login') {
+    const result = await repairCodexLbAuth();
+    if (json) return console.log(JSON.stringify(result, null, 2));
+    if (!result.ok) {
+      if (result.status === 'not_configured') console.error('codex-lb auth repair failed: codex-lb is not fully configured. Run: sks codex-lb setup --host <domain> --api-key <key>');
+      else console.error(`codex-lb auth repair failed: ${result.status}${result.codex_login?.error ? `: ${result.codex_login.error}` : ''}`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log('codex-lb auth repaired for Codex CLI.');
+    console.log(`Config: ${result.config_path}`);
+    console.log(`Key env: ${result.env_path}`);
+    return;
+  }
+  if (sub === 'setup' || sub === 'reconfigure') {
     const host = readOption(args, '--host', readOption(args, '--domain', null));
     const apiKey = readOption(args, '--api-key', readOption(args, '--key', null));
     if (!host || !apiKey) {
       if (json) return console.log(JSON.stringify({ ok: false, reason: 'missing_host_or_api_key' }, null, 2));
-      console.error('Usage: sks codex-lb setup --host <domain> --api-key <key>');
+      console.error('Usage: sks codex-lb setup|reconfigure --host <domain> --api-key <key>');
       process.exitCode = 1;
       return;
     }
@@ -1042,7 +1058,7 @@ async function codexLbCommand(action = 'status', args = []) {
     console.log(`Key env: ${result.env_path}`);
     return;
   }
-  console.error('Usage: sks codex-lb status|setup --host <domain> --api-key <key> [--json]');
+  console.error('Usage: sks codex-lb status|repair|setup --host <domain> --api-key <key> [--json]');
   process.exitCode = 1;
 }
 
@@ -1085,12 +1101,24 @@ async function madHighCommand(args = []) {
     process.exitCode = 1;
     return;
   }
+  const lb = await maybePromptCodexLbSetupForLaunch(args);
+  if (lb.status === 'missing_api_key') {
+    process.exitCode = 1;
+    return;
+  }
   const profile = await enableMadHighProfile();
   const madLaunch = await activateMadTmuxPermissionState(process.cwd());
   console.log(`SKS MAD ready: ${madHighProfileName()} | gate ${madLaunch.mission_id}`);
   console.log('Live full-access active; catastrophic DB wipe/all-row/project-management guards remain.');
-  const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
+  const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
+  const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, {
+    codexArgs: profile.launch_args,
+    autoInstallTmux: !flag(args, '--no-auto-install-tmux'),
+    conciseBlockers: true
+  });
+  const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
   return launchTmuxUi([...cleanArgs, '--workspace', workspace], {
+    ...launchOpts,
     codexArgs: profile.launch_args,
     autoInstallTmux: !flag(args, '--no-auto-install-tmux'),
     conciseBlockers: true
@@ -1438,7 +1466,7 @@ function usage(args = []) {
   const topic = String(args[0] || 'overview').toLowerCase();
   const blocks = {
     overview: ['ㅅㅋㅅ Usage', '', 'Discover:', '  sks commands', '  sks quickstart', '  sks root', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks tmux check', '  sks dollar-commands', '', `Topics: ${USAGE_TOPICS}`],
-    install: ['Install', '', '1. Global install:', '  npm i -g sneakoscope', '', '2. Bootstrap and check dependencies:', '  sks bootstrap', '  sks deps check', '', '3. Confirm Codex App commands:', '  sks codex-app check', '  sks dollar-commands', '', '4. Optional codex-lb key setup for CLI sks runs:', '  sks codex-lb setup --host <domain> --api-key <key>', '  sks', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
+    install: ['Install', '', '1. Global install:', '  npm i -g sneakoscope', '', '2. Bootstrap and check dependencies:', '  sks bootstrap', '  sks deps check', '', '3. Confirm Codex App commands:', '  sks codex-app check', '  sks dollar-commands', '', '4. Optional codex-lb key setup for CLI sks runs:', '  sks codex-lb setup --host <domain> --api-key <key>', '  sks codex-lb repair', '  sks', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
     bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and tmux.'],
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew after Y/n approval for missing installs or Homebrew-managed upgrades. If PATH resolves an npm-managed tmux, SKS prompts for npm i -g tmux@latest instead. Unknown non-Homebrew tmux paths are reported as conflicts.'],
@@ -2151,10 +2179,16 @@ async function selftest() {
   if (defaultFastHighPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="high"') throw new Error('selftest failed: default sks tmux launch is not fast-high');
   const codexLbHome = path.join(tmp, 'codex-lb-home');
   await ensureDir(path.join(codexLbHome, '.codex'));
+  const codexLbFakeBin = path.join(tmp, 'codex-lb-fake-bin');
+  await ensureDir(codexLbFakeBin);
+  const codexLbFakeCodex = path.join(codexLbFakeBin, 'codex');
+  await writeTextAtomic(codexLbFakeCodex, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"codex-cli 99.0.0\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"status\" ]; then echo \"logged in with browser auth\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"--with-api-key\" ]; then read key; mkdir -p \"$HOME/.codex\"; printf '{\\\"auth_mode\\\":\\\"apikey\\\",\\\"key\\\":\\\"%s\\\"}\\n' \"$key\" > \"$HOME/.codex/auth.json\"; printf '%s\\n' \"$key\" >> \"$HOME/.codex/login-calls.log\"; exit 0; fi\necho \"fake codex unsupported\" >&2\nexit 1\n");
+  await fsp.chmod(codexLbFakeCodex, 0o755);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\n');
+  const codexLbEnvForSelftest = { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global'), PATH: `${codexLbFakeBin}${path.delimiter}${process.env.PATH || ''}` };
   const codexLbSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key', 'sk-test', '--json'], {
     cwd: tmp,
-    env: { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global') },
+    env: codexLbEnvForSelftest,
     timeoutMs: 15000,
     maxOutputBytes: 64 * 1024
   });
@@ -2163,11 +2197,21 @@ async function selftest() {
   const codexLbConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
   const codexLbEnv = await safeReadText(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'));
   const codexLbAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
-  if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !codexLbConfig.includes('model_provider = "codex-lb"') || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || !codexLbAuth.includes('"auth_mode": "apikey"')) throw new Error('selftest failed: codex-lb setup did not write provider config, env key, and Codex API-key auth');
+  if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !codexLbConfig.includes('model_provider = "codex-lb"') || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || !/(\"auth_mode\"\s*:\s*\"apikey\")/.test(codexLbAuth)) throw new Error('selftest failed: codex-lb setup did not write provider config, env key, and Codex API-key auth');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
+  const codexLbRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'auth', 'repair', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (codexLbRepair.code !== 0) throw new Error(`selftest failed: codex-lb repair exited ${codexLbRepair.code}: ${codexLbRepair.stderr}`);
+  const codexLbRepairJson = JSON.parse(codexLbRepair.stdout);
+  const codexLbRepairedAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  if (!codexLbRepairJson.ok || codexLbRepairJson.status !== 'repaired' || !codexLbRepairedAuth.includes('"auth_mode":"apikey"') || !codexLbRepairedAuth.includes('sk-test')) throw new Error('selftest failed: codex-lb repair did not force API-key auth from stored env key');
+  const codexLbStatusText = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'status'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (!String(codexLbStatusText.stdout || '').includes('Repair auth: sks codex-lb repair')) throw new Error('selftest failed: codex-lb status did not advertise repair command');
   if (!codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest failed: codex-lb setup did not preserve Codex App Fast mode defaults');
   const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest failed: tmux launch command does not source codex-lb env file');
   if (!codexLbLaunch.includes('SKS_TMUX_LOGO_ANIMATION') || !codexLbLaunch.includes('SNEAKOSCOPE CODEX')) throw new Error('selftest failed: tmux launch command does not include the animated SKS logo intro');
+  const madLaunchSource = await safeReadText(path.join(packageRoot(), 'src', 'cli', 'main.mjs'));
+  if (!madLaunchSource.includes('const lb = await maybePromptCodexLbSetupForLaunch(args)') || !madLaunchSource.includes("const launchLb = lb.status === 'present'") || !madLaunchSource.includes('codexLbImmediateLaunchOpts(cleanArgs, launchLb')) throw new Error('selftest failed: MAD launch does not sync codex-lb auth and fresh-session launch options');
   if (!shouldAutoAttachTmux(['--mad'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux launch does not auto-attach in an interactive terminal');
   if (shouldAutoAttachTmux(['--mad', '--json'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux json mode should not auto-attach');
   if (shouldAutoAttachTmux(['--mad', '--no-attach'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest failed: MAD tmux --no-attach should remain print-only');
@@ -3310,6 +3354,10 @@ async function selftest() {
   await setCurrent(tmp, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_RUNNING_NO_QUESTIONS' });
   if (!containsUserQuestion('확인해 주세요?')) throw new Error('selftest failed: question guard');
   if (classifySql('drop table users;').level !== 'destructive') throw new Error('selftest failed: destructive sql not detected');
+  const patchPayloadClass = classifyToolPayload({ tool_name: 'apply_patch', command: '*** Update File: src/example.mjs\n+ok\n' });
+  if (patchPayloadClass.level !== 'none') throw new Error('selftest failed: apply_patch file edits should not be classified as DB writes');
+  const supabaseWritePayloadClass = classifyToolPayload({ tool_name: 'mcp__supabase__execute_sql', sql: "update users set name = 'x' where id = '1';" });
+  if (supabaseWritePayloadClass.level !== 'write' || !supabaseWritePayloadClass.toolReasons.includes('database_tool')) throw new Error('selftest failed: Supabase execute_sql write classification was weakened');
   if (classifyCommand('supabase db reset').level !== 'destructive') throw new Error('selftest failed: supabase db reset not detected');
   const dbDecision = await checkDbOperation(tmp, { mission_id: id }, { tool_name: 'mcp__supabase__execute_sql', sql: 'drop table users;' }, { duringNoQuestion: true });
   if (dbDecision.action !== 'block') throw new Error('selftest failed: destructive MCP SQL allowed');

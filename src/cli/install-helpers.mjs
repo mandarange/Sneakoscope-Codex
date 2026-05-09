@@ -148,7 +148,7 @@ export async function configureCodexLb(opts = {}) {
   await writeTextAtomic(envPath, `export CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
   await fsp.chmod(envPath, 0o600).catch(() => {});
   process.env.CODEX_LB_API_KEY = apiKey;
-  const codexLogin = await syncCodexApiKeyLogin(apiKey, { home });
+  const codexLogin = await syncCodexApiKeyLogin(apiKey, { home, force: true });
   return { ok: true, status: 'configured', config_path: configPath, env_path: envPath, base_url: baseUrl, env_key: 'CODEX_LB_API_KEY', codex_login: codexLogin };
 }
 
@@ -171,6 +171,29 @@ export async function codexLbStatus(opts = {}) {
     env_file: envExists,
     env_key_configured: envKeyConfigured,
     base_url: config.match(/base_url\s*=\s*"([^"]+)"/)?.[1] || null
+  };
+}
+
+export async function repairCodexLbAuth(opts = {}) {
+  const status = await codexLbStatus(opts);
+  if (!status.ok) {
+    return {
+      ok: false,
+      status: 'not_configured',
+      config_path: status.config_path,
+      env_path: status.env_path,
+      codex_lb: status
+    };
+  }
+  const codexLogin = await ensureCodexLbLoginFromEnv(status, opts);
+  return {
+    ok: Boolean(codexLogin.ok),
+    status: codexLogin.ok ? 'repaired' : codexLogin.status,
+    config_path: status.config_path,
+    env_path: status.env_path,
+    base_url: status.base_url,
+    codex_lb: status,
+    codex_login: codexLogin
   };
 }
 
@@ -198,7 +221,7 @@ async function ensureCodexLbLoginFromEnv(status = {}, opts = {}) {
   const envPath = opts.envPath || status.env_path || codexLbEnvPath(home);
   const apiKey = parseCodexLbEnvKey(await readText(envPath, ''));
   if (!apiKey) return { ok: false, status: 'missing_env_key' };
-  return syncCodexApiKeyLogin(apiKey, { ...opts, home });
+  return syncCodexApiKeyLogin(apiKey, { ...opts, home, force: true });
 }
 
 async function syncCodexApiKeyLogin(apiKey, opts = {}) {
@@ -208,8 +231,10 @@ async function syncCodexApiKeyLogin(apiKey, opts = {}) {
   if (!codexBin) return { ok: false, status: 'codex_missing' };
   await ensureDir(codexHome);
   const env = { HOME: home, CODEX_HOME: codexHome, CODEX_LB_API_KEY: apiKey };
-  const current = await runProcess(codexBin, ['login', 'status'], { env, timeoutMs: 10000, maxOutputBytes: 8192 });
-  if (current.code === 0 && !/not logged in/i.test(`${current.stdout}\n${current.stderr}`)) return { ok: true, status: 'present' };
+  if (!opts.force) {
+    const current = await runProcess(codexBin, ['login', 'status'], { env, timeoutMs: 10000, maxOutputBytes: 8192 });
+    if (current.code === 0 && !/not logged in/i.test(`${current.stdout}\n${current.stderr}`)) return { ok: true, status: 'present' };
+  }
   const login = await runProcess(codexBin, ['login', '--with-api-key'], { input: `${apiKey}\n`, env, timeoutMs: 15000, maxOutputBytes: 8192 });
   if (login.code === 0) return { ok: true, status: 'synced' };
   return { ok: false, status: 'login_failed', error: (login.stderr || login.stdout || 'codex login failed').trim() };
