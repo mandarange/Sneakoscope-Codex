@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, sha256, writeJsonAtomic } from './fsx.mjs';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL } from './routes.mjs';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY } from './routes.mjs';
 
 export const IMAGE_UX_REVIEW_GATE_ARTIFACT = 'image-ux-review-gate.json';
 export const IMAGE_UX_REVIEW_POLICY_ARTIFACT = 'image-ux-review-policy.json';
@@ -67,6 +67,7 @@ export function buildImageUxReviewPolicy(contract = {}) {
       preferred_surface: 'Codex App built-in image generation via $imagegen',
       codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
       api_image_generation_doc: IMAGE_UX_REVIEW_API_DOC_URL,
+      required_policy: CODEX_IMAGEGEN_REQUIRED_POLICY,
       output_artifact: IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
       anti_substitution_rule: 'A text-only visual review cannot satisfy this route. Missing generated annotated review images block the gate instead of being simulated.',
       reference_image_flow: [
@@ -169,6 +170,7 @@ export function buildImageUxGeneratedReviewLedger(contract = {}, inventory = bui
     passed: sourceScreens.length > 0 && blockers.length === 0,
     notes: [
       'This ledger records real generated review images. It must not be marked passed from prose-only critique.',
+      CODEX_IMAGEGEN_REQUIRED_POLICY,
       'Route workers should attach generated image paths, Codex App output ids, or API output paths before passing the gate.'
     ]
   };
