@@ -137,9 +137,14 @@ export function classifyCommand(command = '') {
   const low = c.toLowerCase();
   const reasons = [];
   if (!low.trim()) return { level: 'none', kind: 'none', reasons: [], command: c };
+  const supabaseMigrationApply = [];
+  if (/\bsupabase\s+migration\s+up\b/.test(low)) supabaseMigrationApply.push('supabase_migration_up', 'supabase_migration_apply');
+  if (/\bsupabase\s+db\s+push\b/.test(low)) supabaseMigrationApply.push('supabase_db_push', 'supabase_migration_apply');
+  const supabaseMigrationRead = [];
+  if (/\bsupabase\s+db\s+(diff|pull)\b/.test(low)) supabaseMigrationRead.push('supabase_migration_schema_read');
+  if (/\bsupabase\s+migration\s+(list|new|squash)\b/.test(low)) supabaseMigrationRead.push('supabase_migration_file_work');
   const hard = [
     [/\bsupabase\s+db\s+reset\b/, 'supabase_db_reset'],
-    [/\bsupabase\s+db\s+push\b/, 'supabase_db_push'],
     [/\bsupabase\s+migration\s+repair\b/, 'supabase_migration_repair'],
     [/\bprisma\s+migrate\s+reset\b/, 'prisma_migrate_reset'],
     [/\bprisma\s+db\s+push\b/, 'prisma_db_push'],
@@ -152,6 +157,25 @@ export function classifyCommand(command = '') {
   const maybeSql = extractSqlLiterals(c).join('\n');
   const sqlClass = maybeSql ? classifySql(maybeSql) : { level: 'none', reasons: [] };
   if (reasons.length) return { level: 'destructive', kind: 'db_command', reasons, sql: sqlClass, command: c };
+  if (supabaseMigrationApply.length) {
+    const level = sqlClass.level === 'destructive' ? 'destructive' : 'write';
+    return {
+      level,
+      kind: 'db_migration',
+      reasons: [...new Set([...supabaseMigrationApply, ...(sqlClass.reasons || [])])],
+      sql: sqlClass,
+      command: c
+    };
+  }
+  if (supabaseMigrationRead.length && !['write', 'destructive'].includes(sqlClass.level)) {
+    return {
+      level: 'safe',
+      kind: 'db_migration',
+      reasons: [...new Set([...supabaseMigrationRead, ...(sqlClass.reasons || [])])],
+      sql: sqlClass,
+      command: c
+    };
+  }
   if (/\b(psql|supabase|prisma|drizzle-kit|knex|sequelize)\b/.test(low)) {
     if (sqlClass.level === 'destructive' || sqlClass.level === 'write') return { level: sqlClass.level, kind: 'db_command', reasons: sqlClass.reasons, sql: sqlClass, command: c };
     return { level: sqlClass.level === 'safe' ? 'safe' : 'possible_db', kind: 'db_command', reasons: sqlClass.reasons, sql: sqlClass, command: c };
@@ -199,10 +223,15 @@ export function classifyToolPayload(payload = {}) {
   const sqlClass = classifySql(combined);
   const commandClass = classifyCommand(strings.find((s) => /\b(supabase|psql|prisma|drizzle|knex|sequelize)\b/i.test(s)) || '');
   const toolReasons = [];
+  const reasons = [];
   if (/\b(apply_patch|edit|write|create|remove|rename|str_replace|file_write|fs_write)\b/i.test(toolName) && !/supabase|postgres|database|execute_sql|apply_migration|sql_query|db_|_db\b|migration/.test(toolName)) {
-    return { level: 'none', toolName, toolReasons, sql: sqlClass, command: commandClass, stringsExamined: strings.length };
+    return { level: 'none', toolName, toolReasons, reasons, sql: sqlClass, command: commandClass, stringsExamined: strings.length };
   }
   if (/supabase|postgres|database|execute_sql|apply_migration|sql_query|db_|_db\b|migration/.test(toolName)) toolReasons.push('database_tool');
+  if (/apply_migration|migration_apply/i.test(toolName)) {
+    toolReasons.push('migration_apply_tool');
+    reasons.push('supabase_migration_apply');
+  }
   if (/delete_project|pause_project|restore_project|delete_branch|reset_branch|merge_branch/.test(toolName)) toolReasons.push('dangerous_supabase_management_tool');
   let level = 'none';
   for (const candidate of [sqlClass.level, commandClass.level]) {
@@ -211,8 +240,9 @@ export function classifyToolPayload(payload = {}) {
     else if ((candidate === 'safe' || candidate === 'possible_db') && level === 'none') level = candidate;
   }
   if (toolReasons.includes('dangerous_supabase_management_tool')) level = 'destructive';
+  if (toolReasons.includes('migration_apply_tool') && level !== 'destructive') level = 'write';
   if (toolReasons.includes('database_tool') && level === 'none') level = 'possible_db';
-  return { level, toolName, toolReasons, sql: sqlClass, command: commandClass, stringsExamined: strings.length };
+  return { level, toolName, toolReasons, reasons, sql: sqlClass, command: commandClass, stringsExamined: strings.length };
 }
 
 function contractAllowsDbWrite(contract = {}) {
@@ -290,6 +320,12 @@ export function evaluateDbSafety({ classification, policy = DEFAULT_DB_SAFETY_PO
   }
   if (cls.level === 'destructive') reasons.push('destructive_database_operation_blocked_always');
   if (cls.level === 'write') {
+    const reasonSet = new Set([
+      ...(cls.reasons || []),
+      ...(cls.sql?.reasons || []),
+      ...(cls.command?.reasons || [])
+    ]);
+    if (reasonSet.has('supabase_db_push')) reasons.push('supabase_db_push_requires_active_mad_sks');
     if (effective.mode === 'read_only_only') reasons.push('database_write_mode_is_read_only_only');
     if (effective.env === 'production' || effective.env === 'production_read_only') reasons.push('production_database_writes_forbidden');
     if (!['local_dev', 'preview_branch', 'supabase_branch'].includes(effective.env)) reasons.push('database_write_target_not_local_or_branch');
