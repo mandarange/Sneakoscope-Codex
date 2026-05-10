@@ -50,8 +50,8 @@ sks selftest --mock
 | Skill dreaming | Records cheap generated-skill usage counters in JSON and only periodically scans `.agents/skills` for keep, merge, prune, and improvement candidates. Reports are recommendation-only and never delete skills automatically. |
 | From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
 | QA loop | Dogfoods UI/API behavior with safety gates, Codex Computer Use-only UI evidence, safe fixes, and rechecks. |
-| PPT pipeline | Uses `$PPT` for simple, restrained, information-first HTML/PDF presentation artifacts, first asking delivery context, audience profile, STP strategy, decision context, and 3+ pain-point to solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in `ppt-parallel-report.json`; editable source HTML is preserved under `source-html/`, PPT-only temporary build files are cleaned after completion, installed skills/MCPs outside the `$PPT` allowlist are ignored, generated image assets may use `$imagegen` only when sealed in the contract, and `ppt-style-tokens.json` records the design SSOT plus fused source inputs. |
-| Image UX Review | Uses `$Image-UX-Review` / `$UX-Review` for UI/UX audits where source screenshots are first turned into generated annotated review images through Codex App `$imagegen`/`gpt-image-2`; those generated images are then read back into `image-ux-issue-ledger.json`, optional requested fixes are rechecked, and text-only screenshot critique cannot pass `image-ux-review-gate.json`. |
+| PPT pipeline | Uses `$PPT` for simple, restrained, information-first HTML/PDF presentation artifacts, first asking delivery context, audience profile, STP strategy, decision context, and 3+ pain-point to solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in `ppt-parallel-report.json`; editable source HTML is preserved under `source-html/`, PPT-only temporary build files are cleaned after completion, installed skills/MCPs outside the `$PPT` allowlist are ignored, generated image assets must use real `$imagegen`/`gpt-image-2` output when sealed in the contract, and `ppt-style-tokens.json` records the design SSOT plus fused source inputs. |
+| Image UX Review | Uses `$Image-UX-Review` / `$UX-Review` for UI/UX audits where source screenshots are first turned into generated annotated review images through Codex App `$imagegen`/`gpt-image-2`; those generated images are then read back into `image-ux-issue-ledger.json`, optional requested fixes are rechecked, and missing generated review images or text-only screenshot critique cannot pass `image-ux-review-gate.json`. |
 | Computer Use fast lane | Uses `$Computer-Use` / `$CU` for UI/browser/visual work that needs maximum speed: skip Team debate and upfront TriWiki loops, use Codex Computer Use directly, then refresh/validate TriWiki and run Honest Mode at final closeout. |
 | Goal | Provides a fast SKS bridge overlay for Codex native persisted `/goal` create, pause, resume, and clear controls; implementation continues through the selected SKS execution route. |
 | TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, `attention.hydrate_first`, and prompt-bound mistake recall ledgers. |
@@ -65,7 +65,7 @@ sks selftest --mock
 - Node.js `>=20.11`
 - npm
 - Codex CLI for terminal workflows
-- Codex App for app-facing workflows, with Codex Computer Use required for UI/browser evidence
+- Codex App for app-facing workflows, with Codex Computer Use required for UI/browser evidence and `$imagegen`/`gpt-image-2` required for generated raster assets or generated image-review evidence
 - tmux for the CLI-first runtime
 - Context7 MCP for current-docs-gated routes
 
@@ -551,7 +551,7 @@ sks codex-app check
 codex mcp list
 ```
 
-Codex App workflows need the app installed. QA and visual-evidence workflows require first-party Codex Computer Use; Browser Use may support non-UI browser context, but it is not valid UI/browser verification evidence.
+Codex App workflows need the app installed. QA and UI/browser visual-evidence workflows require first-party Codex Computer Use; Browser Use may support non-UI browser context, but it is not valid UI/browser verification evidence. Generated raster assets and image-review evidence require real Codex App `$imagegen`/`gpt-image-2` output, or the route must stay blocked/unverified.
 
 ### Setup is blocked by another harness
 
@@ -586,7 +586,7 @@ npm run sizecheck
 npm run release:check
 ```
 
-Package pipeline UI/browser verification and visual inspection evidence must come from Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or other browser automation as substitutes for that evidence.
+Package pipeline UI/browser verification and visual inspection evidence must come from Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or other browser automation as substitutes for that evidence. Package image-generation evidence must come from real `$imagegen`/`gpt-image-2` output when generated raster assets or generated image-review evidence are required.
 
 Dry-run publish:
 

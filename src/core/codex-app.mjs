@@ -78,20 +78,38 @@ export async function codexMcpList(opts = {}) {
   };
 }
 
+export async function codexFeatureList(opts = {}) {
+  const codex = opts.codex || await getCodexInfo().catch(() => ({}));
+  if (!codex.bin) return { ok: false, checked: false, stdout: '', stderr: 'Codex CLI missing.' };
+  const out = await runProcess(codex.bin, ['features', 'list'], {
+    timeoutMs: opts.timeoutMs || 10000,
+    maxOutputBytes: 64 * 1024
+  }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  return {
+    ok: out.code === 0,
+    checked: true,
+    stdout: out.stdout || '',
+    stderr: out.stderr || ''
+  };
+}
+
 export async function codexAppIntegrationStatus(opts = {}) {
   const appPath = await findCodexApp(opts);
   const codex = opts.codex || await getCodexInfo().catch(() => ({}));
   const mcpList = await codexMcpList({ ...opts, codex });
+  const featureList = await codexFeatureList({ ...opts, codex });
   const remoteControl = codexRemoteControlStatusFromInfo(codex);
   const mcpText = `${mcpList.stdout}\n${mcpList.stderr}`;
+  const featureText = `${featureList.stdout}\n${featureList.stderr}`;
   const browserUsePath = await findPluginCache('browser-use', opts);
   const computerUsePath = await findPluginCache('computer-use', opts);
   const computerUseMcpListed = /computer[-_ ]?use/i.test(mcpText);
   const browserUseMcpListed = /browser[-_ ]?use/i.test(mcpText);
+  const imageGenerationReady = codexFeatureEnabled(featureText, 'image_generation');
   const computerUseReady = computerUseMcpListed || Boolean(computerUsePath);
   const browserUseReady = browserUseMcpListed || Boolean(browserUsePath);
   const appInstalled = Boolean(appPath);
-  const ready = appInstalled && Boolean(codex.bin) && mcpList.ok && computerUseReady && browserUseReady;
+  const ready = appInstalled && Boolean(codex.bin) && mcpList.ok && featureList.ok && imageGenerationReady && computerUseReady && browserUseReady;
   return {
     ok: ready,
     app: {
@@ -115,11 +133,19 @@ export async function codexAppIntegrationStatus(opts = {}) {
       stdout: mcpList.stdout,
       stderr: mcpList.stderr
     },
+    features: {
+      checked: featureList.checked,
+      ok: featureList.ok,
+      image_generation: imageGenerationReady,
+      image_generation_source: imageGenerationReady ? 'codex_features_list' : 'missing',
+      stdout: featureList.stdout,
+      stderr: featureList.stderr
+    },
     plugins: {
       computer_use_cache: computerUsePath,
       browser_use_cache: browserUsePath
     },
-    guidance: codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl })
+    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, imageGenerationReady, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl })
   };
 }
 
@@ -174,10 +200,10 @@ export function formatCodexRemoteControlStatus(status) {
   return lines.filter(Boolean).join('\n');
 }
 
-export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl }) {
+export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, imageGenerationReady, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl }) {
   const lines = [];
   if (!appInstalled) {
-    lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS tmux launch can still run with Codex CLI alone, but Codex Computer Use evidence will be unavailable until Codex App is ready.');
+    lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS tmux launch can still run with Codex CLI alone, but Codex Computer Use and imagegen/gpt-image-2 evidence will be unavailable until Codex App is ready.');
     lines.push(`Docs: ${CODEX_APP_DOCS_URL}`);
   }
   if (!codex?.bin) lines.push('Install Codex CLI too: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
@@ -191,10 +217,19 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseRead
     lines.push(`Codex MCP/config check failed: ${summarizeCodexMcpError(mcpList.stderr || mcpList.stdout)}`);
     lines.push('Verify with: codex mcp list');
   }
+  if (featureList?.checked && !featureList.ok) {
+    lines.push(`Codex feature check failed: ${summarizeCodexMcpError(featureList.stderr || featureList.stdout)}`);
+    lines.push('Verify with: codex features list');
+  }
   if (appInstalled && (!computerUseReady || !browserUseReady)) {
     lines.push('Open Codex App settings and enable recommended MCP/plugin tools. Codex CLI 0.130.0+ remote-control/app-server sessions can pick up config changes live; restart older CLI/TUI sessions.');
     lines.push('Required for SKS QA-LOOP UI/browser evidence: Codex Computer Use only. Browser Use can support non-UI browser context, but it does not satisfy UI-level E2E verification.');
     lines.push('Verify with: codex mcp list');
+  }
+  if (imageGenerationReady) {
+    lines.push('Image generation is enabled; required raster assets and generated image-review evidence must invoke $imagegen/gpt-image-2 and record real output.');
+  } else if (appInstalled || codex?.bin) {
+    lines.push('Codex image_generation was not visible from `codex features list`. Required imagegen/gpt-image-2 evidence must stay blocked or unverified until $imagegen is available in Codex App.');
   }
   if (computerUseReady && !computerUseMcpListed) {
     lines.push('Computer Use plugin files are installed, but this check cannot prove the current thread exposes the live Computer Use tools. Start a new Codex App thread and invoke @Computer or @AppName; if the tool is still absent from the model tool list, mark UI/browser evidence unverified.');
@@ -202,7 +237,7 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseRead
   if (browserUseReady && !browserUseMcpListed) {
     lines.push('Browser Use plugin files are installed, but `codex mcp list` does not list a browser-use MCP server. Treat Browser Use as plugin-scoped, not as SKS UI verification evidence.');
   }
-  if (!lines.length) lines.push('Codex App, Codex CLI, Computer Use, and Browser Use checks look ready. UI-level E2E and visual verification still require Codex Computer Use evidence.');
+  if (!lines.length) lines.push('Codex App, Codex CLI, Computer Use, Browser Use, and image generation checks look ready. UI-level E2E still requires Codex Computer Use evidence; generated image evidence still requires $imagegen/gpt-image-2 output.');
   return lines;
 }
 
@@ -215,11 +250,13 @@ export function formatCodexAppStatus(status, { includeRaw = false } = {}) {
     `Remote Ctrl: ${status.remote_control?.ok ? 'ok' : 'missing'}${status.remote_control?.codex_cli?.version_number ? ` min ${status.remote_control.min_version}` : ''}`,
     `Computer Use:${status.mcp.has_computer_use ? status.mcp.computer_use_source === 'plugin_cache' ? ' installed (verify @Computer in thread)' : ' ok' : ' missing'}`,
     `Browser Use: ${status.mcp.has_browser_use ? status.mcp.browser_use_source === 'plugin_cache' ? 'installed (plugin scoped)' : 'ok' : 'missing'}`,
+    `Image Gen:   ${status.features?.image_generation ? 'ok ($imagegen/gpt-image-2)' : status.features?.checked ? 'missing' : 'not checked'}`,
     `Ready:       ${status.ok ? 'yes' : 'no'}`,
     '',
     ...status.guidance.map((line) => `- ${line}`)
   ];
   if (includeRaw && status.mcp.stdout) lines.push('', status.mcp.stdout.trim());
+  if (includeRaw && status.features?.stdout) lines.push('', status.features.stdout.trim());
   return lines.join('\n');
 }
 
@@ -233,6 +270,15 @@ function summarizeCodexMcpError(text) {
   const errorLine = cleanLines.find((line) => line.startsWith('Error:'));
   if (errorLine && variantLine && errorLine !== variantLine) return `${errorLine}; ${variantLine}`;
   return variantLine || errorLine || cleanLines[0] || 'codex mcp list failed';
+}
+
+function codexFeatureEnabled(text, featureName) {
+  const name = escapeRegExp(featureName);
+  return new RegExp(`(?:^|\\n)\\s*${name}\\s+\\S+\\s+true\\b`, 'i').test(String(text || ''));
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function remoteControlGuidance(status = {}) {
