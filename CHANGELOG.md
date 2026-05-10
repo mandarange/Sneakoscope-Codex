@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 
+## [0.7.54] - 2026-05-10
+
+### Fixed
+
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+- Allow active `$MAD-SKS` and top-level `sks --mad` permission gates to run required Supabase migration application, including Supabase MCP `apply_migration`, `supabase migration up`, and `supabase db push`, while keeping default/non-MAD DB push and catastrophic reset/wipe safeguards blocked.
+
+
 ## [0.7.53] - 2026-05-10
 
 ### Fixed
