@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [0.7.52] - 2026-05-10
+
+### Fixed
+
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+- Treat Codex App Markdown-linked `$research`, `$QA-LOOP`, and related picker skills as explicit SKS routes so Computer Use wording cannot hijack QA/research prompts into the fast lane.
+- Clarify `sks codex-app check` Computer Use readiness by distinguishing installed plugin files from live `@Computer` tool exposure in the current Codex App thread.
+- Extend the Computer Use-only policy text to require `@Computer` or `@AppName` in a fresh Codex App thread when live UI/browser evidence is needed.
+
+## [0.7.51] - 2026-05-10
+
+### Fixed
+
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+- Add the `$Image-UX-Review` / `$UX-Review` route so UI/UX audits require a source screenshot -> `$imagegen`/`gpt-image-2` generated annotated review image -> issue ledger evidence chain instead of passing from text-only critique.
+- Add Image UX Review route artifacts, generated skills, CLI status inspection, README guidance, and selftest coverage for missing generated-review-image blockers.
+- Raise the release size/file-count guard for the new Image UX Review route module and expanded CLI selftests.
+
+## [0.7.50] - 2026-05-09
+
+### Fixed
+
+- Fix Team review orchestration so default and lower explicit reviewer counts materialize at least five reviewer/QA validation lanes.
+- Keep Team tmux review visibility without hiding the scout, executor, and planning representative lanes.
+- Resolve `latest` mission selection from mission metadata timestamps instead of lexicographic ids, so same-second duplicate missions do not hide the actually active Goal/Team completion state.
+
+### Changed
+
+- Centralize the Team review-lane policy in a reusable gate module used by runtime plans and selftests.
+- Update generated harness text, Team selftests, release size gates, and user-facing examples for the default minimum of five QA/reviewer lanes.
 
 ## [0.7.49] - 2026-05-09
 

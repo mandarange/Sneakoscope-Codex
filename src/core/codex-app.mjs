@@ -86,8 +86,10 @@ export async function codexAppIntegrationStatus(opts = {}) {
   const mcpText = `${mcpList.stdout}\n${mcpList.stderr}`;
   const browserUsePath = await findPluginCache('browser-use', opts);
   const computerUsePath = await findPluginCache('computer-use', opts);
-  const computerUseReady = /computer[-_ ]?use/i.test(mcpText) || Boolean(computerUsePath);
-  const browserUseReady = /browser[-_ ]?use/i.test(mcpText) || Boolean(browserUsePath);
+  const computerUseMcpListed = /computer[-_ ]?use/i.test(mcpText);
+  const browserUseMcpListed = /browser[-_ ]?use/i.test(mcpText);
+  const computerUseReady = computerUseMcpListed || Boolean(computerUsePath);
+  const browserUseReady = browserUseMcpListed || Boolean(browserUsePath);
   const appInstalled = Boolean(appPath);
   const ready = appInstalled && Boolean(codex.bin) && mcpList.ok && computerUseReady && browserUseReady;
   return {
@@ -108,6 +110,8 @@ export async function codexAppIntegrationStatus(opts = {}) {
       ok: mcpList.ok,
       has_computer_use: computerUseReady,
       has_browser_use: browserUseReady,
+      computer_use_source: computerUseMcpListed ? 'mcp_list' : computerUsePath ? 'plugin_cache' : 'missing',
+      browser_use_source: browserUseMcpListed ? 'mcp_list' : browserUsePath ? 'plugin_cache' : 'missing',
       stdout: mcpList.stdout,
       stderr: mcpList.stderr
     },
@@ -115,7 +119,7 @@ export async function codexAppIntegrationStatus(opts = {}) {
       computer_use_cache: computerUsePath,
       browser_use_cache: browserUsePath
     },
-    guidance: codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady, remoteControl })
+    guidance: codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl })
   };
 }
 
@@ -170,7 +174,7 @@ export function formatCodexRemoteControlStatus(status) {
   return lines.filter(Boolean).join('\n');
 }
 
-export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady, remoteControl }) {
+export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl }) {
   const lines = [];
   if (!appInstalled) {
     lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS tmux launch can still run with Codex CLI alone, but Codex Computer Use evidence will be unavailable until Codex App is ready.');
@@ -192,6 +196,12 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, computerUseRead
     lines.push('Required for SKS QA-LOOP UI/browser evidence: Codex Computer Use only. Browser Use can support non-UI browser context, but it does not satisfy UI-level E2E verification.');
     lines.push('Verify with: codex mcp list');
   }
+  if (computerUseReady && !computerUseMcpListed) {
+    lines.push('Computer Use plugin files are installed, but this check cannot prove the current thread exposes the live Computer Use tools. Start a new Codex App thread and invoke @Computer or @AppName; if the tool is still absent from the model tool list, mark UI/browser evidence unverified.');
+  }
+  if (browserUseReady && !browserUseMcpListed) {
+    lines.push('Browser Use plugin files are installed, but `codex mcp list` does not list a browser-use MCP server. Treat Browser Use as plugin-scoped, not as SKS UI verification evidence.');
+  }
   if (!lines.length) lines.push('Codex App, Codex CLI, Computer Use, and Browser Use checks look ready. UI-level E2E and visual verification still require Codex Computer Use evidence.');
   return lines;
 }
@@ -203,8 +213,8 @@ export function formatCodexAppStatus(status, { includeRaw = false } = {}) {
     `Codex App:   ${status.app.installed ? 'ok' : 'missing'}${status.app.path ? ` ${status.app.path}` : ''}`,
     `Codex CLI:   ${status.codex_cli.ok ? 'ok' : 'missing'}${status.codex_cli.version ? ` ${status.codex_cli.version}` : ''}`,
     `Remote Ctrl: ${status.remote_control?.ok ? 'ok' : 'missing'}${status.remote_control?.codex_cli?.version_number ? ` min ${status.remote_control.min_version}` : ''}`,
-    `Computer Use:${status.mcp.has_computer_use ? ' ok' : ' missing'}`,
-    `Browser Use: ${status.mcp.has_browser_use ? 'ok' : 'missing'}`,
+    `Computer Use:${status.mcp.has_computer_use ? status.mcp.computer_use_source === 'plugin_cache' ? ' installed (verify @Computer in thread)' : ' ok' : ' missing'}`,
+    `Browser Use: ${status.mcp.has_browser_use ? status.mcp.browser_use_source === 'plugin_cache' ? 'installed (plugin scoped)' : 'ok' : 'missing'}`,
     `Ready:       ${status.ok ? 'yes' : 'no'}`,
     '',
     ...status.guidance.map((line) => `- ${line}`)

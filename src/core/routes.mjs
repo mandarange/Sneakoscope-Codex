@@ -7,10 +7,11 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|goal|research|db|codex-app|openclaw|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field|skill-dream';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|codex-app|openclaw|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field|skill-dream';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/codex/app/features#image-generation';
-export const CODEX_COMPUTER_USE_ONLY_POLICY = 'Pipeline UI/browser verification and visual inspection must use Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or any other browser automation substitute; if Codex Computer Use is unavailable, mark the UI/browser evidence unverified instead of substituting another tool.';
+export const OPENAI_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
+export const CODEX_COMPUTER_USE_ONLY_POLICY = 'Pipeline UI/browser verification and visual inspection must use Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or any other browser automation substitute; if Codex Computer Use is unavailable, mark the UI/browser evidence unverified instead of substituting another tool. In Codex App prompts, invoke @Computer or @AppName in a new thread when live Computer Use tools are needed; SKS hooks and skills can require the policy but cannot attach missing host tools to an already-started turn.';
 export const FORBIDDEN_BROWSER_AUTOMATION_RE = /\b(playwright|chrome\s+mcp|browser\s+use|selenium|puppeteer)\b/i;
 
 export function evidenceMentionsForbiddenBrowserAutomation(value, seen = new Set()) {
@@ -95,6 +96,10 @@ export function getdesignReferencePolicyText() {
   return `Design SSOT policy: ${DESIGN_SYSTEM_SSOT.authority_file} is the single design decision authority. If it is missing, create or update it through ${DESIGN_SYSTEM_SSOT.builder_prompt}; getdesign.md (${GETDESIGN_REFERENCE.url}), its official docs, and curated DESIGN.md examples at ${AWESOME_DESIGN_MD_REFERENCE.url} are source inputs to fuse into that SSOT or into route-local style tokens, not parallel authorities. Prefer the official Codex skill when available (${GETDESIGN_REFERENCE.codex_skill_install}); otherwise use the generated getdesign-reference skill plus official Web/API/CLI/SDK docs and curated DESIGN.md examples as inputs. Do not claim an official getdesign MCP server is configured unless a current official MCP surface is actually available.`;
 }
 
+export function imageUxReviewPipelinePolicyText() {
+  return `Image UX review pipeline: the core mechanism is not text-only screenshot critique. Capture or receive source UI screenshots, then use Codex App imagegen/$imagegen with gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to create new annotated review images from those screenshots as reference inputs. The generated review image must visibly mark numbered callouts, P0/P1/P2/P3 labels, eye-flow, hierarchy, contrast, alignment, density, affordance problems, and a small corrected mini-comp or before/after strip when useful. Then analyze that generated review image with vision/OCR and convert the visible callouts into image-ux-issue-ledger.json rows. Missing generated review images block image-ux-review-gate.json; never pass this route from a hand-written text-only substitute. For larger API-backed batches, use the official OpenAI image generation/editing path only when OPENAI_API_KEY and the route contract allow API-priced generation (${OPENAI_IMAGE_GENERATION_DOC_URL}).`;
+}
+
 export const RECOMMENDED_SKILLS = [
   'reasoning-router',
   'pipeline-runner',
@@ -107,6 +112,7 @@ export const RECOMMENDED_SKILLS = [
   'design-ui-editor',
   'getdesign-reference',
   'imagegen',
+  'image-ux-review',
   'computer-use',
   'computer-use-fast',
   'db-safety-guard',
@@ -270,7 +276,7 @@ export const ROUTES = [
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'team-gate.json',
-    cliEntrypoint: 'sks team "task" [executor:5 reviewer:2 user:1] | sks team log|tail|watch|lane|status|event|message|cleanup-tmux',
+    cliEntrypoint: 'sks team "task" [executor:5 reviewer:6 user:1] | sks team log|tail|watch|lane|status|event|message|cleanup-tmux',
     examples: ['$Team executor:5 agree on the best plan and implement it', '$From-Chat-IMG 채팅+첨부 이미지 작업 지시서']
   },
   {
@@ -300,6 +306,22 @@ export const ROUTES = [
     stopGate: 'ppt-gate.json',
     cliEntrypoint: 'Codex App prompt route only: $PPT <topic>',
     examples: ['$PPT 우리 SaaS 소개자료를 HTML 기반 PDF로 만들어줘', '$PPT 투자자용 피치덱 만들어줘']
+  },
+  {
+    id: 'ImageUXReview',
+    command: '$Image-UX-Review',
+    mode: 'IMAGE_UX_REVIEW',
+    route: 'image-generation UI/UX review loop',
+    description: 'Review UI/UX through the imagegen/gpt-image-2 visual critique loop: source screenshots become generated annotated review images, those images become issue ledgers, then fixes are rechecked.',
+    requiredSkills: ['image-ux-review', 'imagegen', 'computer-use', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
+    dollarAliases: ['$UX-Review'],
+    appSkillAliases: ['ux-review', 'visual-review', 'ui-ux-review'],
+    lifecycle: ['target_and_capture_inventory', 'source_screenshots', 'gpt_image_2_annotated_review_image', 'generated_image_text_extraction', 'issue_ledger', 'optional_safe_fixes', 'changed_screen_recheck', 'post_route_reflection', 'honest_mode'],
+    context7Policy: 'if_external_docs',
+    reasoningPolicy: 'high',
+    stopGate: 'image-ux-review-gate.json',
+    cliEntrypoint: 'Codex App prompt route: $Image-UX-Review <target>; inspect with sks image-ux-review status latest',
+    examples: ['$Image-UX-Review localhost 화면을 이미지 생성 리뷰 루프로 검수해줘', '$UX-Review 이 스크린샷을 gpt-image-2 콜아웃 리뷰로 분석하고 고쳐줘']
   },
   {
     id: 'ComputerUse',
@@ -466,6 +488,7 @@ export const COMMAND_CATALOG = [
   { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight design/content fix mode.' },
   { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Dogfood UI/API as human proxy with safety gates, safe fixes, rechecks, Codex Computer Use-only UI evidence, report.' },
   { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $PPT HTML/PDF artifacts from a sealed presentation decision contract.' },
+  { name: 'image-ux-review', usage: 'sks image-ux-review status <mission-id|latest> [--json]', description: 'Inspect $Image-UX-Review gpt-image-2/imagegen annotated UI/UX review artifacts.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
   { name: 'pipeline', usage: 'sks pipeline status|resume|plan|answer ...', description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
@@ -489,7 +512,7 @@ export const COMMAND_CATALOG = [
   { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, effort decisions, visual maps, dogfood reports, skills, mistake memory, Team dashboard state, and Honest Mode.' },
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate ...', description: 'Build, refresh, prune, and validate RGBA/trig LLM Wiki context packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:2 user:1]|log|tail|watch|lane|status|dashboard|event|message|cleanup-tmux ...', description: 'Create and observe a scout-first Team mission with color-coded tmux lanes, transcript messages, and cleanup-aware follow panes.' },
+  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:6 user:1]|log|tail|watch|lane|status|dashboard|event|message|cleanup-tmux ...', description: 'Create and observe a scout-first Team mission with at least five reviewer/QA validation lanes, color-coded tmux lanes, transcript messages, and cleanup-aware follow panes.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
@@ -520,21 +543,33 @@ export function routeByDollarCommand(commandName) {
   ].includes(key)) || null;
 }
 
+function leadingDollarCommandMatch(prompt) {
+  const text = String(prompt || '').trim();
+  return text.match(/^\$([A-Za-z][A-Za-z0-9_-]*)(?:\s|:|$)/)
+    || text.match(/^\[\$([A-Za-z][A-Za-z0-9_-]*)\]\([^)]+\)(?:\s|:|$)/);
+}
+
 export function dollarCommand(prompt) {
-  const match = String(prompt || '').trim().match(/^\$([A-Za-z][A-Za-z0-9_-]*)(?:\s|:|$)/);
+  const match = leadingDollarCommandMatch(prompt);
   return match ? match[1].toUpperCase() : null;
 }
 
 export function hasMadSksSignal(prompt = '') {
-  return /(?:^|\s)\$MAD-SKS(?:\s|:|$)/i.test(String(prompt || ''));
+  return /(?:^|\s)(?:\$MAD-SKS|\[\$MAD-SKS\]\([^)]+\))(?:\s|:|$)/i.test(String(prompt || ''));
 }
 
 export function stripMadSksSignal(prompt = '') {
-  return String(prompt || '').replace(/(?:^|\s)\$MAD-SKS(?:\s|:)?/ig, ' ').replace(/\s+/g, ' ').trim();
+  return String(prompt || '')
+    .replace(/(?:^|\s)(?:\$MAD-SKS|\[\$MAD-SKS\]\([^)]+\))(?:\s|:)?/ig, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function stripDollarCommand(prompt) {
-  return String(prompt || '').trim().replace(/^\$[A-Za-z][A-Za-z0-9_-]*(?:\s|:)?\s*/, '').trim();
+  return String(prompt || '').trim()
+    .replace(/^\$[A-Za-z][A-Za-z0-9_-]*(?:\s|:)?\s*/, '')
+    .replace(/^\[\$[A-Za-z][A-Za-z0-9_-]*\]\([^)]+\)(?:\s|:)?\s*/, '')
+    .trim();
 }
 
 export function looksLikeFastDesignFix(prompt) {
@@ -552,6 +587,15 @@ export function looksLikePresentationArtifactRequest(prompt = '') {
   const meta = /커맨드|command|route|routing|파이프라인|pipeline|schema|스키마|모호성|ambiguity|질문|게이트|gate/i.test(text);
   if (meta) return false;
   return /만들|작성|생성|제작|디자인|export|pdf|html|create|generate|build|write|make/i.test(text) || /\b(ppt|presentation|deck|slides?)\b/.test(lower);
+}
+
+export function looksLikeImageUxReviewRequest(prompt = '') {
+  const text = String(prompt || '');
+  const reviewCue = /(ui\/?ux|ux|ui|screen|screenshot|visual|interface|화면|스크린|캡처|비주얼|인터페이스|사용성|유아이|유엑스)/i.test(text)
+    && /(review|critique|audit|inspect|analy[sz]e|검수|리뷰|분석|평가|진단)/i.test(text);
+  const imagegenCue = /(gpt-image-2|imagegen|\$imagegen|image\s*generation|generated\s*review|annotated\s*review|callout|이미지\s*생성|생성\s*이미지|콜아웃|주석\s*이미지)/i.test(text);
+  const commandCue = /\$?(?:image-ux-review|ux-review|visual-review|ui-ux-review)\b/i.test(text);
+  return commandCue || (reviewCue && imagegenCue);
 }
 
 export function routePrompt(prompt) {
@@ -574,6 +618,7 @@ export function routePrompt(prompt) {
   }
   if (hasFromChatImgSignal(text)) return routeById('Team');
   if (looksLikePresentationArtifactRequest(text)) return routeById('PPT');
+  if (looksLikeImageUxReviewRequest(text)) return routeById('ImageUXReview');
   if (looksLikeComputerUseFastLane(text)) return routeById('ComputerUse');
   if (looksLikeFastDesignFix(text)) return routeById('DFix');
   if (looksLikeQuestionShapedDirective(text)) return routeById('Team');
@@ -644,6 +689,7 @@ export function routeRequiresSubagents(route, prompt = '') {
   if (route.id === 'SKS') return looksLikeTeamDefaultWork(prompt);
   if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse') return false;
   if (route.id === 'PPT') return false;
+  if (route.id === 'ImageUXReview') return false;
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
   if (route.id === 'Goal') return looksLikeExecutionWork(prompt) || looksLikeTeamDefaultWork(stripDollarCommand(prompt));
   if (route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
@@ -653,7 +699,7 @@ export function routeRequiresSubagents(route, prompt = '') {
 
 export function reflectionRequiredForRoute(route) {
   const id = String(route?.id || route?.mode || route?.route || route || '').replace(/^\$/, '');
-  return /^(team|qaloop|qa-loop|ppt|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
+  return /^(team|qaloop|qa-loop|ppt|imageuxreview|image-ux-review|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
 }
 
 export function looksLikeCodeChangingWork(prompt = '') {
@@ -696,6 +742,7 @@ export function routeReasoning(route, prompt = '') {
   const base = ALLOWED_REASONING_EFFORTS.has(route?.reasoningPolicy) ? route.reasoningPolicy : 'medium';
   if (hasFromChatImgSignal(text)) return reasoning('xhigh', 'from_chat_img_image_work_order_analysis');
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
+  if (route?.id === 'ImageUXReview') return reasoning('high', 'image_generation_visual_review_route');
   if (/\b(research|autoresearch|hypothesis|falsify|novelty|frontier|benchmark|experiment|SEO|GEO|ranking|연구|실험|가설|검증)\b/i.test(text)) return reasoning('xhigh', 'research_level_prompt');
   if (base === 'xhigh') return reasoning('xhigh', 'route_policy_xhigh');
   if (base === 'high' || /\b(architecture|design|migration|database|security|parallel|orchestrat|refactor|algorithm|logic|tradeoff|검토|설계|마이그레이션|보안|병렬|팀|논리)\b/i.test(text)) return reasoning('high', 'logical_or_safety_work');
