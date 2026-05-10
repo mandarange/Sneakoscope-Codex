@@ -1560,7 +1560,7 @@ function usage(args = []) {
     bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and tmux.'],
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew after Y/n approval for missing installs or Homebrew-managed upgrades. If PATH resolves an npm-managed tmux, SKS prompts for npm i -g tmux@latest instead. Unknown non-Homebrew tmux paths are reported as conflicts.'],
-    tmux: ['tmux', '', '  sks', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'Running bare `sks` opens or reuses the default tmux Codex CLI session in fast-high mode: --model gpt-5.5 -c model_reasoning_effort="high". Override with SKS_CODEX_MODEL or SKS_CODEX_REASONING. Before launch, SKS checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. Use `sks tmux open` when you need explicit session/workspace flags, and `sks help` for CLI help.'],
+    tmux: ['tmux', '', '  sks', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'Running bare `sks` opens or reuses the default tmux Codex CLI session in fast-high mode: --model gpt-5.5 -c model_reasoning_effort="high". SKS always forces gpt-5.5; SKS_CODEX_MODEL and SKS_CODEX_FAST_HIGH=0 cannot downgrade or remove that model pin. Use SKS_CODEX_REASONING only for reasoning effort. Before launch, SKS checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. Use `sks tmux open` when you need explicit session/workspace flags, and `sks help` for CLI help.'],
     openclaw: ['OpenClaw', '', '  sks openclaw install', '  sks openclaw path', '  sks openclaw print SKILL.md', '', 'Installs an OpenClaw skill package under ~/.openclaw/skills/sneakoscope-codex so OpenClaw agents can attach skills: [sneakoscope-codex] with the shell tool and call local SKS commands from a project root.'],
     team: ['Team', '', '  sks team "task" executor:5 reviewer:6 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
@@ -2024,7 +2024,8 @@ function hasTopLevelCodexModeLock(text = '') {
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
   const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
-  return /^model\s*=|^model_reasoning_effort\s*=/m.test(top);
+  const model = top.match(/^model\s*=\s*"([^"]+)"/m)?.[1];
+  return (Boolean(model) && model !== 'gpt-5.5') || /^model_reasoning_effort\s*=/m.test(top);
 }
 
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
@@ -2274,6 +2275,8 @@ async function selftest() {
   if (tmuxOpenArgs.join(' ') !== 'attach-session -t sks-mad-selftest') throw new Error('selftest failed: MAD tmux attach args are not stable by session name');
   const defaultFastHighPlan = await buildTmuxLaunchPlan({ root: tmp, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
   if (defaultFastHighPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="high"') throw new Error('selftest failed: default sks tmux launch is not fast-high');
+  const forcedModelPlan = await buildTmuxLaunchPlan({ root: tmp, env: { SKS_CODEX_MODEL: 'gpt-5.4-mini', SKS_CODEX_FAST_HIGH: '0', SKS_CODEX_REASONING: 'medium' }, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
+  if (forcedModelPlan.codexArgs.includes('gpt-5.4-mini') || forcedModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="medium"') throw new Error('selftest failed: sks tmux launch allowed a non-GPT-5.5 model override');
   const codexLbHome = path.join(tmp, 'codex-lb-home');
   await ensureDir(path.join(codexLbHome, '.codex'));
   const codexLbFakeBin = path.join(tmp, 'codex-lb-fake-bin');
@@ -2281,7 +2284,7 @@ async function selftest() {
   const codexLbFakeCodex = path.join(codexLbFakeBin, 'codex');
   await writeTextAtomic(codexLbFakeCodex, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"codex-cli 99.0.0\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"status\" ]; then echo \"logged in with browser auth\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"--with-api-key\" ]; then read key; mkdir -p \"$HOME/.codex\"; printf '{\\\"auth_mode\\\":\\\"apikey\\\",\\\"key\\\":\\\"%s\\\"}\\n' \"$key\" > \"$HOME/.codex/auth.json\"; printf '%s\\n' \"$key\" >> \"$HOME/.codex/login-calls.log\"; exit 0; fi\necho \"fake codex unsupported\" >&2\nexit 1\n");
   await fsp.chmod(codexLbFakeCodex, 0o755);
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\n\n[features]\ncodex_hooks = true\n');
   const codexLbEnvForSelftest = { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global'), PATH: `${codexLbFakeBin}${path.delimiter}${process.env.PATH || ''}` };
   const codexLbSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key', 'sk-test', '--json'], {
     cwd: tmp,
@@ -2303,7 +2306,7 @@ async function selftest() {
   if (!codexLbRepairJson.ok || codexLbRepairJson.status !== 'repaired' || !codexLbRepairedAuth.includes('"auth_mode":"apikey"') || !codexLbRepairedAuth.includes('sk-test')) throw new Error('selftest failed: codex-lb repair did not force API-key auth from stored env key');
   const codexLbStatusText = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'status'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (!String(codexLbStatusText.stdout || '').includes('Repair auth: sks codex-lb repair')) throw new Error('selftest failed: codex-lb status did not advertise repair command');
-  if (!codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest failed: codex-lb setup did not preserve Codex App Fast mode defaults');
+  if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('hooks = true') || codexLbConfig.includes('codex_hooks = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest failed: codex-lb setup did not preserve Codex App Fast mode defaults, force GPT-5.5, or migrate the hooks feature flag');
   const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest failed: tmux launch command does not source codex-lb env file');
   if (!codexLbLaunch.includes('SKS_TMUX_LOGO_ANIMATION') || !codexLbLaunch.includes('SNEAKOSCOPE CODEX')) throw new Error('selftest failed: tmux launch command does not include the animated SKS logo intro');
@@ -2979,6 +2982,7 @@ async function selftest() {
   if (!wikiJson.systemMessage?.includes('wiki refresh')) throw new Error('selftest failed: Wiki route missing system message');
   const codexConfigText = await safeReadText(path.join(tmp, '.codex', 'config.toml'));
   if (!codexConfigText.includes('multi_agent = true')) throw new Error('selftest failed: multi_agent not enabled');
+  if (!codexConfigText.includes('hooks = true') || codexConfigText.includes('codex_hooks = true')) throw new Error('selftest failed: Codex hooks feature flag not migrated to hooks');
   if (!hasContext7ConfigText(codexConfigText)) throw new Error('selftest failed: Context7 MCP not configured');
   if (!codexConfigText.includes('[profiles.sks-task-low]') || !codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-fast-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest failed: GPT-5.5 reasoning profiles not configured');
   if (!/\[profiles\.sks-mad-high\][\s\S]*?approval_policy = "never"[\s\S]*?sandbox_mode = "danger-full-access"/.test(codexConfigText)) throw new Error('selftest failed: generated sks-mad-high profile is not full access');
@@ -2986,12 +2990,12 @@ async function selftest() {
   if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest failed: team_consensus agent not configured');
   const preservedConfigTmp = tmpdir();
   await ensureDir(path.join(preservedConfigTmp, '.codex'));
-  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\nkeep = true\n\n[features]\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
+  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\nkeep = true\n\n[features]\ncodex_hooks = true\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
   await initProject(preservedConfigTmp, {});
   const preservedConfig = await safeReadText(path.join(preservedConfigTmp, '.codex', 'config.toml'));
-  if (!preservedConfig.includes('service_tier = "fast"') || !preservedConfig.includes('fast_mode = true') || !preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true') || !preservedConfig.includes('enabled = true') || !preservedConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(preservedConfig)) throw new Error('selftest failed: Codex config merge dropped or failed to enable Fast mode defaults');
+  if (!/^model = "gpt-5\.5"/m.test(preservedConfig) || !preservedConfig.includes('service_tier = "fast"') || !preservedConfig.includes('fast_mode = true') || !preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true') || !preservedConfig.includes('enabled = true') || !preservedConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(preservedConfig)) throw new Error('selftest failed: Codex config merge dropped or failed to enable Fast mode defaults and GPT-5.5');
   if (preservedConfig.includes('fast_default_opt_out = true') || !preservedConfig.includes('keep = true')) throw new Error('selftest failed: Codex config merge did not remove stale Fast opt-out notice while preserving other notice keys');
-  if (!preservedConfig.includes('codex_hooks = true') || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error('selftest failed: Codex config merge did not add SKS managed settings');
+  if (!preservedConfig.includes('hooks = true') || preservedConfig.includes('codex_hooks = true') || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error('selftest failed: Codex config merge did not add SKS managed settings or remove the legacy hooks flag');
   if (hasTopLevelCodexModeLock(preservedConfig)) throw new Error('selftest failed: Codex config merge left top-level legacy model/reasoning locks that hide Fast mode UI');
   const autoReviewHome = path.join(tmp, 'auto-review-home');
   const autoReviewEnv = { HOME: autoReviewHome };
@@ -3208,6 +3212,7 @@ async function selftest() {
   await writeJsonAtomic(path.join(teamDir, 'team-plan.json'), teamPlan);
   if (teamPlan.agent_session_count !== 5) throw new Error('selftest failed: team default sessions not 5');
   if (teamPlan.role_counts.executor !== 3 || teamPlan.role_counts.user !== 1 || teamPlan.role_counts.reviewer !== 5) throw new Error('selftest failed: team default role counts invalid');
+  if (teamPlan.codex_config_required?.features?.hooks !== true || teamPlan.codex_config_required?.features?.codex_hooks === true) throw new Error('selftest failed: team plan Codex config still uses legacy hooks feature flag');
   if (!teamPlan.review_gate?.passed || teamPlan.review_gate.required_reviewer_lanes !== 5) throw new Error('selftest failed: team review policy gate did not pass default plan');
   const underProvisionedReviewCount = 2;
   const blockedReviewGate = evaluateTeamReviewPolicyGate({ roleCounts: { reviewer: underProvisionedReviewCount }, agentSessions: 3, roster: { validation_team: [{ id: 'reviewer_1', role: 'reviewer' }] } });

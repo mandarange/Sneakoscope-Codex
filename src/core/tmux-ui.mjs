@@ -118,8 +118,7 @@ export const DEFAULT_SKS_CODEX_MODEL = 'gpt-5.5';
 export const DEFAULT_SKS_CODEX_REASONING = 'high';
 
 export function defaultCodexLaunchArgs(env = process.env) {
-  if (/^(0|false|off|none)$/i.test(String(env.SKS_CODEX_FAST_HIGH || '').trim())) return [];
-  const model = String(env.SKS_CODEX_MODEL || DEFAULT_SKS_CODEX_MODEL).trim();
+  const model = DEFAULT_SKS_CODEX_MODEL;
   const effort = String(env.SKS_CODEX_REASONING || DEFAULT_SKS_CODEX_REASONING).trim();
   const args = [];
   if (model) args.push('--model', model);

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+
+## [0.7.53] - 2026-05-10
+
+### Fixed
+
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+- Force generated and repaired Codex config plus SKS tmux launches to use `gpt-5.5`, preventing `gpt-5.4-mini` or other model defaults from slipping in through missing top-level model pins or `SKS_CODEX_MODEL` overrides.
+
 ## [0.7.52] - 2026-05-10
 
 ### Fixed
