@@ -18,6 +18,7 @@ import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/w
 import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, routePrompt, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested } from '../core/team-live.mjs';
+import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../core/team-review-policy.mjs';
 import { ARTIFACT_FILES, writeValidationReport } from '../core/artifact-schemas.mjs';
 import { writeEffortDecision } from '../core/effort-orchestrator.mjs';
 import { createWorkOrderLedger, writeWorkOrderLedger } from '../core/work-order-ledger.mjs';
@@ -1472,7 +1473,7 @@ export async function team(args) {
   const opts = parseTeamCreateArgs(cleanCreateArgs);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   if (!prompt) {
-    console.error('Usage: sks team "task" [executor:5 reviewer:2 user:1] [--agents N] [--open-tmux] [--json]');
+    console.error('Usage: sks team "task" [executor:5 reviewer:6 user:1] [--agents N] [--open-tmux] [--json]');
     console.error('       sks team log|tail|watch|lane|status|message|cleanup-tmux [mission-id|latest]');
     console.error('       sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
     console.error('       sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."');
@@ -1544,6 +1545,7 @@ export async function team(args) {
   console.log(`Team mission created: ${id}`);
   console.log(`Agent sessions: ${agentSessions}`);
   console.log(`Role counts: ${formatRoleCounts(roleCounts)}`);
+  console.log(`Review policy: minimum ${MIN_TEAM_REVIEWER_LANES} reviewer/QA validation lanes`);
   if (result.tmux.ready) {
     const tmuxState = result.tmux.created ? 'opened' : 'not opened; use --open-tmux for a tmux session';
     console.log(`tmux: ${tmuxState} ${result.tmux.opened_lane_count || result.tmux.agents.length} agent lane(s) in ${result.tmux.session || result.tmux.workspace}`);
@@ -1576,22 +1578,26 @@ export function buildTeamPlan(id, prompt, opts = {}) {
     mode: 'team',
     prompt,
     agent_session_count: agentSessions,
-    default_agent_session_count: 3,
+    default_agent_session_count: MIN_TEAM_REVIEWER_LANES,
     role_counts: roleCounts,
     session_policy: `Use at most ${agentSessions} subagent sessions at a time; parent orchestrator is not counted.`,
+    review_policy: teamReviewPolicy(),
+    review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
     bundle_size: roster.bundle_size,
     roster,
     team_model: {
       phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'runtime_task_graph', 'development_team', 'triwiki_stage_refresh', 'review', 'session_cleanup'],
       analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents. Each scout owns one investigation slice, records source paths/evidence, and returns TriWiki-ready findings before debate or implementation starts.`,
       debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices applying compact Hyperplan-derived adversarial lenses.`,
-      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`
+      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`,
+      review_team: `Validation runs at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA lanes before integration or final.`
     },
     team_runtime: teamRuntimePlanMetadata(),
     persona_axioms: [
       'Final users are intentionally low-context, impatient, self-interested, stubborn, and hostile to inconvenience.',
       'Executors are capable developers and must receive disjoint write ownership.',
       'Reviewers are strict, skeptical, and block unsupported correctness, DB safety, test, or evidence claims.',
+      MIN_TEAM_REVIEW_POLICY_TEXT,
       'Analysis scouts run before debate, then the debate team closes before a fresh development team starts parallel implementation.'
     ],
     reasoning: { effort: 'high', profile: 'sks-logic-high', temporary: true, restore_after_completion: true },
@@ -1659,8 +1665,9 @@ export function buildTeamPlan(id, prompt, opts = {}) {
       },
       {
         id: 'review_and_integrate',
-        goal: 'Strict reviewers read/validate current TriWiki context, check correctness, DB safety, tests, and evidence; user personas validate practical inconvenience; parent integrates final result and refreshes after review findings.',
-        agents: roster.validation_team.map((agent) => agent.id).concat(['parent_orchestrator'])
+        goal: `Strict reviewers read/validate current TriWiki context, run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes, check correctness, DB safety, tests, and evidence; user personas validate practical inconvenience; parent integrates final result and refreshes after review findings.`,
+        agents: roster.validation_team.map((agent) => agent.id).concat(['parent_orchestrator']),
+        min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES
       },
       {
         id: 'session_cleanup',
@@ -1689,6 +1696,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
       'Planning agents do not edit files.',
       'Implementation workers receive disjoint ownership scopes.',
       'Workers are told they are not alone in the codebase and must not revert others edits.',
+      MIN_TEAM_REVIEW_POLICY_TEXT,
       'Team completion requires session cleanup evidence with zero outstanding subagent sessions before reflection.',
       'Context tracking uses the latest coordinate+voxel TriWiki pack as the SSOT throughout the whole pipeline; coordinate-only legacy packs are invalid, and team handoffs/final claims must preserve id, hash, source path, and RGBA/trig coordinate anchors.',
       'SKS hooks, DB safety rules, no-question run rules, and H-Proof gates remain active.',
@@ -1729,18 +1737,19 @@ ${plan.prompt}
 \`\`\`text
 ${plan.prompt_command || '$Team'} ${plan.prompt}
 
-Use high reasoning for the Team route only, then return to the default/user-selected profile after completion. Use at most ${plan.agent_session_count || 3} subagent sessions at a time; the parent orchestrator is not counted.
+Use high reasoning for the Team route only, then return to the default/user-selected profile after completion. Use at most ${plan.agent_session_count || MIN_TEAM_REVIEWER_LANES} subagent sessions at a time; the parent orchestrator is not counted. ${plan.review_policy?.text || MIN_TEAM_REVIEW_POLICY_TEXT}
 
-Before each stage, read the relevant latest coordinate+voxel TriWiki context pack and hydrate low-trust claims from source. Coordinate-only legacy packs are invalid; refresh and validate before using TriWiki for pipeline decisions. First run exactly ${plan.roster.bundle_size} read-only analysis_scout_N agents in parallel. Split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation into independent slices, then capture source-backed findings in team-analysis.md. Refresh and validate TriWiki before debate. Then run the debate team with exactly ${plan.roster.bundle_size} participants using the refreshed pack. Use the concrete roster below: final-user voices are stubborn and inconvenience-averse, executor voices are capable developers, reviewers are strict, and planners force consensus. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices, then refresh and validate TriWiki again. Compile the Team runtime graph into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so symbolic plan nodes become concrete runtime task ids before worker handoff. Close the debate team. Then form a fresh development team with exactly ${plan.roster.bundle_size} executor_N developers implementing slices in parallel with non-overlapping ownership. Refresh TriWiki after implementation changes or blockers. Review with the validation team, validate TriWiki again, integrate results in the parent thread, close or account for all Team sessions in team-session-cleanup.json, run verification, and report evidence.
+Before each stage, read the relevant latest coordinate+voxel TriWiki context pack and hydrate low-trust claims from source. Coordinate-only legacy packs are invalid; refresh and validate before using TriWiki for pipeline decisions. First run exactly ${plan.roster.bundle_size} read-only analysis_scout_N agents in parallel. Split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation into independent slices, then capture source-backed findings in team-analysis.md. Refresh and validate TriWiki before debate. Then run the debate team with exactly ${plan.roster.bundle_size} participants using the refreshed pack. Use the concrete roster below: final-user voices are stubborn and inconvenience-averse, executor voices are capable developers, reviewers are strict, and planners force consensus. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices, then refresh and validate TriWiki again. Compile the Team runtime graph into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so symbolic plan nodes become concrete runtime task ids before worker handoff. Close the debate team. Then form a fresh development team with exactly ${plan.roster.bundle_size} executor_N developers implementing slices in parallel with non-overlapping ownership. Refresh TriWiki after implementation changes or blockers. Review with at least ${plan.review_policy?.minimum_reviewer_lanes || MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes, validate TriWiki again, integrate results in the parent thread, close or account for all Team sessions in team-session-cleanup.json, run verification, and report evidence.
 \`\`\`
 
 ## Session Budget
 
-- Default: 3 subagent sessions.
-- This mission: ${plan.agent_session_count || 3} subagent sessions.
+- Default: ${plan.default_agent_session_count || MIN_TEAM_REVIEWER_LANES} subagent sessions.
+- This mission: ${plan.agent_session_count || MIN_TEAM_REVIEWER_LANES} subagent sessions.
 - Bundle size: ${plan.roster.bundle_size}
 - Role counts: ${formatRoleCounts(plan.role_counts)}
 - The parent orchestrator is not counted.
+- Minimum review: ${plan.review_policy?.minimum_reviewer_lanes || MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes before integration or final.
 - Use the full available session budget for analysis when independent slices exist; use fewer agents only when the work cannot be split cleanly.
 - Runtime graph: write ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR}; worker handoff starts from concrete runtime task ids and scope-aware inboxes.
 - Before reflection/final, close or account for all Team subagent sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.
@@ -1890,7 +1899,7 @@ async function teamCommand(sub, args) {
     }
     console.log(`Team mission: ${id}`);
     console.log(`Updated: ${dashboard.updated_at || 'unknown'}`);
-    console.log(`Agent sessions: ${dashboard.agent_session_count || 3}`);
+    console.log(`Agent sessions: ${dashboard.agent_session_count || MIN_TEAM_REVIEWER_LANES}`);
     if (dashboard.role_counts) console.log(`Role counts: ${formatRoleCounts(dashboard.role_counts)}`);
     for (const entry of dashboard.latest_messages || []) console.log(`${entry.ts} [${entry.phase}] ${entry.agent}: ${entry.message}`);
     return;

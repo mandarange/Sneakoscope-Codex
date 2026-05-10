@@ -2,7 +2,7 @@
 
 ![](https://github.com/mandarange/Sneakoscope-Codex/raw/dev/docs/assets/sneakoscope-codex-logo.png)
 
-Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, tmux-native CLI workspaces, Team/QA/Research routes, inspectable pipeline plans, a maximum-speed Computer Use lane, a fast Goal bridge for native `/goal` persistence, Context7 evidence checks, DB safety, TriWiki context tracking, design-system SSOT routing, lightweight skill dreaming, Honest Mode, and release-readiness gates.
+Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, tmux-native CLI workspaces, Team/QA/Research routes, inspectable pipeline plans, a maximum-speed Computer Use lane, an imagegen/gpt-image-2 UI/UX review route, a fast Goal bridge for native `/goal` persistence, Context7 evidence checks, DB safety, TriWiki context tracking, design-system SSOT routing, lightweight skill dreaming, Honest Mode, and release-readiness gates.
 
 ## Quick Start
 
@@ -43,7 +43,7 @@ sks selftest --mock
 | Area | What it does |
 | --- | --- |
 | CLI runtime | Bare `sks` opens or reuses the default tmux Codex CLI workspace. `sks tmux open` remains the explicit form for session/workspace flags, and `sks --mad` launches the explicit full-access high-reasoning profile. |
-| Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. `sks codex-app remote-control` wraps Codex CLI 0.130.0+ headless remote control without falling back to older app-server internals. |
+| Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Image-UX-Review`, `$UX-Review`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. `sks codex-app remote-control` wraps Codex CLI 0.130.0+ headless remote control without falling back to older app-server internals. |
 | OpenClaw agents | Generates an OpenClaw skill package so OpenClaw agents can attach `sneakoscope-codex`, enable the `shell` tool, and discover/use SKS commands from the target repo root. |
 | Pipeline plans | Writes `pipeline-plan.json` for stateful routes so the runtime lane, kept stages, skipped stages, verification commands, and no-unrequested-fallback invariant are visible with `sks pipeline plan`. |
 | Team orchestration | Runs substantial work through score-based ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode; narrow work should use Proof Field evidence to skip unrelated pipeline work instead of expanding Team. |
@@ -51,6 +51,7 @@ sks selftest --mock
 | From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
 | QA loop | Dogfoods UI/API behavior with safety gates, Codex Computer Use-only UI evidence, safe fixes, and rechecks. |
 | PPT pipeline | Uses `$PPT` for simple, restrained, information-first HTML/PDF presentation artifacts, first asking delivery context, audience profile, STP strategy, decision context, and 3+ pain-point to solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in `ppt-parallel-report.json`; editable source HTML is preserved under `source-html/`, PPT-only temporary build files are cleaned after completion, installed skills/MCPs outside the `$PPT` allowlist are ignored, generated image assets may use `$imagegen` only when sealed in the contract, and `ppt-style-tokens.json` records the design SSOT plus fused source inputs. |
+| Image UX Review | Uses `$Image-UX-Review` / `$UX-Review` for UI/UX audits where source screenshots are first turned into generated annotated review images through Codex App `$imagegen`/`gpt-image-2`; those generated images are then read back into `image-ux-issue-ledger.json`, optional requested fixes are rechecked, and text-only screenshot critique cannot pass `image-ux-review-gate.json`. |
 | Computer Use fast lane | Uses `$Computer-Use` / `$CU` for UI/browser/visual work that needs maximum speed: skip Team debate and upfront TriWiki loops, use Codex Computer Use directly, then refresh/validate TriWiki and run Honest Mode at final closeout. |
 | Goal | Provides a fast SKS bridge overlay for Codex native persisted `/goal` create, pause, resume, and clear controls; implementation continues through the selected SKS execution route. |
 | TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, `attention.hydrate_first`, and prompt-bound mistake recall ledgers. |
@@ -225,7 +226,8 @@ Answer `y` to install `sneakoscope@latest`, then rerun `sks --mad`. Answer `n` t
 ### Team Missions
 
 ```sh
-sks team "implement this feature" executor:3 reviewer:1
+sks team "implement this feature"
+sks team "wide refactor" executor:5 reviewer:6
 sks team watch latest
 sks team lane latest --agent analysis_scout_1 --follow
 sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"
@@ -234,6 +236,8 @@ sks team status latest
 sks team dashboard latest
 sks team log latest
 ```
+
+By default, Team missions keep at least five QA/reviewer lanes active. Use explicit role counts only when you need to raise or otherwise pin the lane mix for a specific mission.
 
 Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named tmux Team session with split live lanes when tmux is available. The default terminal output stays compact: mission id, agent count, role count, tmux status, watch command, and artifact directory. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
 

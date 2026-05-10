@@ -237,7 +237,7 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   const authWork = /로그인|auth|session|token|인증/.test(lower);
   const prioritySignalWork = /화|짜증|답답|;;|!!|강력|기억|우선|자주|반복|카운팅|count|frequency|frequent|priority|weight/.test(lower);
   const cliSurfaceWork = /\b(cli|command|route|usage|help|sks)\b|명령|커맨드|사용법/.test(lower);
-  const explicitRouteWork = /^\s*\$(?:research|team|goal|dfix|ppt|qa-loop|wiki|db|gx|computer-use|cu|autoresearch|sks|answer|help)\b/i.test(String(prompt || ''));
+  const explicitRouteWork = /^\s*(?:\$|\[\$)(?:research|team|goal|dfix|ppt|qa-loop|image-ux-review|ux-review|visual-review|ui-ux-review|wiki|db|gx|computer-use|cu|autoresearch|sks|answer|help)\b/i.test(String(prompt || ''));
   const triwikiAuditWork = /(triwiki|tri\s*wiki|wiki|복셀|voxel)/.test(lower)
     && /(검수|연구|개선|정상|동작|작동|반복|실수|mistake|repeat|audit|inspect|prevent|방지)/.test(lower);
   const chatCaptureWork = hasFromChatImgSignal(text)

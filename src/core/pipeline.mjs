@@ -14,11 +14,13 @@ import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from './mistake-reca
 import { recordSkillDreamEvent, skillDreamPolicyText, writeSkillForgeReport } from './skill-forge.mjs';
 import { writeResearchPlan } from './research.mjs';
 import { PPT_REQUIRED_GATE_FIELDS } from './ppt.mjs';
+import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, writeImageUxReviewRouteArtifacts } from './image-ux-review.mjs';
 import { SPEED_LANE_POLICY } from './proof-field.mjs';
 import { permissionGateSummary } from './permission-gates.mjs';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
 import { formatRoleCounts, initTeamLive, parseTeamSpecText } from './team-live.mjs';
+import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from './team-review-policy.mjs';
 
 export { routePrompt };
 
@@ -281,9 +283,10 @@ export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
     'Before final answer, include a user-visible completion summary that explains what changed and how it was verified, then run SKS Honest Mode: verify evidence/tests, state gaps, and confirm the goal is genuinely complete.'
   ];
   if (reflectionRequiredForRoute(route)) lines.push(reflectionInstructionText());
-  if (route?.id === 'Team') lines.push(`Team route: scouts, TriWiki refresh, debate, consensus, runtime graph compile with concrete task ids and worker inboxes, close planning agents, fresh executors, review/integration, ${TEAM_SESSION_CLEANUP_ARTIFACT}, reflection, and Honest Mode.`);
+  if (route?.id === 'Team') lines.push(`Team route: scouts, TriWiki refresh, debate, consensus, runtime graph compile with concrete task ids and worker inboxes, close planning agents, fresh executors, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, ${TEAM_SESSION_CLEANUP_ARTIFACT}, reflection, and Honest Mode. ${MIN_TEAM_REVIEW_POLICY_TEXT}`);
   if (route?.id === 'Goal') lines.push('Goal route: write SKS goal bridge artifacts, then use Codex native /goal persistence for create, pause, resume, and clear continuation controls.');
   if (route?.id === 'PPT') lines.push(`PPT route: before design or PDF work, seal delivery context, audience profile including average age/job/industry, STP strategy, decision context, and at least three pain-point to solution mappings. Keep the visual system simple, restrained, and information-first; design detail should come from hierarchy, spacing, alignment, rules, and subtle accents rather than decorative overdesign. ${pptPipelineAllowlistPolicyText()} If generated image assets or slide visual critique are needed, use gpt-image-2/imagegen only when that asset/review need is explicitly sealed in the $PPT contract, preferring Codex App built-in image generation (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) and using the OpenAI Image API when OPENAI_API_KEY is available; do not fabricate image files or image-review results when gpt-image-2 is unavailable. Then build source ledger, fact ledger, image asset ledger, storyboard with aha moments, style tokens, editable source HTML under source-html/, PDF artifact, render QA, bounded review ledger/iteration report, PPT-only temporary build file cleanup, and ppt-parallel-report.json so independent strategy/render/file-write phases stay parallel-friendly, then reflection and Honest Mode.`);
+  if (route?.id === 'ImageUXReview') lines.push(`Image UX Review route: ${imageUxReviewPipelinePolicyText()} Use ${IMAGE_UX_REVIEW_POLICY_ARTIFACT}, ${IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT}, ${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT}, and ${IMAGE_UX_REVIEW_GATE_ARTIFACT} as the route evidence set. The route may suggest safe fixes only when the user requested fixing; otherwise report findings and blockers.`);
   if (route?.id === 'AutoResearch') lines.push('AutoResearch route: load autoresearch-loop plus seo-geo-optimizer when SEO/GEO, discoverability, README, npm, GitHub stars, ranking, or AI-search visibility is relevant.');
   if (route?.id === 'DB') lines.push('DB route: scan/check database risk first; destructive DB operations remain forbidden.');
   if (route?.id === 'GX') lines.push('GX route: use deterministic vgraph/beta render, validate, drift, and snapshot artifacts.');
@@ -336,6 +339,7 @@ export async function prepareRoute(root, prompt, state = {}) {
   if (route.id === 'ComputerUse') return withSkillDreamContext(await prepareComputerUseFastRoute(route, task), dreamContext);
   if (route.id === 'Wiki') return withSkillDreamContext(await prepareWikiQuickRoute(route, task), dreamContext);
   if (route.id === 'Goal') return withSkillDreamContext(await prepareGoal(root, route, task, routeNeedsContext7(route, prompt)), dreamContext);
+  if (route.id === 'ImageUXReview') return withSkillDreamContext(await prepareImageUxReview(root, route, task, routeNeedsContext7(route, prompt)), dreamContext);
   const required = routeNeedsContext7(route, prompt);
   const reasoning = routeReasoning(route, prompt);
   const subagentsRequired = routeRequiresSubagents(route, prompt);
@@ -428,6 +432,45 @@ async function prepareWikiQuickRoute(route, task) {
   };
 }
 
+async function prepareImageUxReview(root, route, task, required) {
+  const { id, dir, mission } = await createMission(root, { mode: 'image-ux-review', prompt: task });
+  const contract = {
+    prompt: task,
+    answers: {
+      TARGET_SURFACE: task,
+      IMAGE_UX_REVIEW_SOURCE_IMAGES: []
+    },
+    sealed_hash: null,
+    mission_id: id
+  };
+  const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract);
+  await writeJsonAtomic(path.join(dir, 'route-context.json'), {
+    route: route.id,
+    command: route.command,
+    mode: route.mode,
+    task,
+    mission_id: mission.id,
+    required_skills: route.requiredSkills,
+    context7_required: required,
+    context_tracking: triwikiContextTracking(),
+    stop_gate: route.stopGate,
+    artifact_policy: 'imagegen_generated_review_image_required_before_issue_extraction'
+  });
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
+  await setCurrent(root, routeState(id, route, 'IMAGE_UX_REVIEW_READY', required, {
+    prompt: task,
+    implementation_allowed: true,
+    ambiguity_gate_required: false,
+    ambiguity_gate_passed: true,
+    stop_gate: route.stopGate,
+    image_ux_review_gate_ready: true,
+    image_ux_review_policy_ready: true,
+    pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
+    pipeline_plan_path: PIPELINE_PLAN_ARTIFACT
+  }));
+  return routeContext(route, id, task, required, `Capture or attach source UI screenshots, run Codex App $imagegen/gpt-image-2 to generate annotated review images, extract those generated images into ${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}, then update ${IMAGE_UX_REVIEW_GATE_ARTIFACT}. Initial gate blockers: ${(artifacts.gate.blockers || []).join(', ') || 'none'}.`);
+}
+
 export async function activeRouteContext(root, state) {
   if (!state?.route && !state?.mode) return '';
   const id = state.route || state.mode;
@@ -448,7 +491,7 @@ export async function activeRouteContext(root, state) {
       ? ' Context7 evidence is still required before completion: use resolve-library-id, then query-docs (or legacy get-library-docs).'
       : '';
     const roles = state.role_counts ? ` Role counts: ${formatRoleCounts(state.role_counts)}.` : '';
-    return `Active Team mission ${state.mission_id || 'latest'} must keep the user-visible live transcript updated. Agent session budget: ${state.agent_sessions || 3}.${roles} Run scouts, TriWiki refresh, debate, consensus, fresh development, review/integration, then close or account for every Team subagent session and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final. After each subagent status/result/handoff, run: sks team event ${state.mission_id || 'latest'} --agent <name> --phase <phase> --message "...". Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}${planNote}`;
+    return `Active Team mission ${state.mission_id || 'latest'} must keep the user-visible live transcript updated. Agent session budget: ${state.agent_sessions || MIN_TEAM_REVIEWER_LANES}.${roles} Run scouts, TriWiki refresh, debate, consensus, fresh development, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, then close or account for every Team subagent session and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final. ${MIN_TEAM_REVIEW_POLICY_TEXT} After each subagent status/result/handoff, run: sks team event ${state.mission_id || 'latest'} --agent <name> --phase <phase> --message "...". Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}${planNote}`;
   }
   if (state.subagents_required && !(await hasSubagentEvidence(root, state))) {
     return `Active SKS route ${id} requires subagent execution evidence before code-changing work can be considered complete. Spawn worker/reviewer subagents for disjoint write scopes, or record an explicit unavailable/unsplittable subagent evidence event before editing.${reasoningNote}${planNote}`;
@@ -688,9 +731,11 @@ async function materializeAutoSealedTeam(root, id, dir, route, task, contractHas
     mission_id: id,
     task: cleanTask,
     agent_session_count: agentSessions,
-    default_agent_session_count: 3,
+    default_agent_session_count: MIN_TEAM_REVIEWER_LANES,
     role_counts: roleCounts,
     session_policy: `Use at most ${agentSessions} subagent sessions at a time; the parent orchestrator is not counted.`,
+    review_policy: teamReviewPolicy(),
+    review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
     bundle_size: roster.bundle_size,
     roster,
     contract_hash: contractHash,
@@ -698,7 +743,8 @@ async function materializeAutoSealedTeam(root, id, dir, route, task, contractHas
       phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'runtime_task_graph', 'development_team', 'review'],
       analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents.`,
       debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants.`,
-      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices.`
+      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices.`,
+      review_team: `Validation runs at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA lanes before integration or final.`
     },
     context_tracking: triwikiContextTracking(),
     team_runtime: teamRuntimePlanMetadata(),
@@ -709,7 +755,7 @@ async function materializeAutoSealedTeam(root, id, dir, route, task, contractHas
       { id: 'planning_debate', goal: 'Run read-only planning debate, map constraints and implementation slices, then seal one objective.', agents: roster.debate_team.map((agent) => agent.id) },
       { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR}.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
       { id: 'parallel_implementation', goal: `Close debate agents, then spawn a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership.`, agents: roster.development_team.map((agent) => agent.id) },
-      { id: 'review_integration', goal: 'Review, integrate, verify, and record evidence before final.', agents: roster.validation_team.map((agent) => agent.id) },
+      { id: 'review_integration', goal: `${MIN_TEAM_REVIEW_POLICY_TEXT} Integrate, verify, and record evidence before final.`, agents: roster.validation_team.map((agent) => agent.id), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
       { id: 'session_cleanup', goal: `Close or account for Team subagent sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.`, agents: ['parent_orchestrator'] }
     ],
     live_visibility: {
@@ -724,7 +770,7 @@ async function materializeAutoSealedTeam(root, id, dir, route, task, contractHas
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'auto_sealed_team_spec' });
   const contextTracking = triwikiContextTracking();
-  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}.\n\nAuto-sealed ambiguity gate: no user question was required. Continue directly with Team scouting, debate, runtime task graph, implementation, review, cleanup, reflection, and Honest Mode.\n`);
+  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReview policy: ${MIN_TEAM_REVIEW_POLICY_TEXT}\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}.\n\nAuto-sealed ambiguity gate: no user question was required. Continue directly with Team scouting, debate, runtime task graph, implementation, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review, cleanup, reflection, and Honest Mode.\n`);
   await initTeamLive(id, dir, cleanTask, { agentSessions, roleCounts, roster });
   const runtime = await writeTeamRuntimeArtifacts(dir, plan, { contractHash });
   await writeMemorySweepReport(root, dir, { missionId: id }).catch(() => null);
@@ -774,16 +820,19 @@ async function prepareTeam(root, route, task, required, opts = {}) {
     mission_id: id,
     task: cleanTask,
     agent_session_count: agentSessions,
-    default_agent_session_count: 3,
+    default_agent_session_count: MIN_TEAM_REVIEWER_LANES,
     role_counts: roleCounts,
     session_policy: `Use at most ${agentSessions} subagent sessions at a time; the parent orchestrator is not counted.`,
+    review_policy: teamReviewPolicy(),
+    review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
     bundle_size: roster.bundle_size,
     roster,
     team_model: {
       phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'runtime_task_graph', 'development_team', 'triwiki_stage_refresh', 'review'],
       analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents. Each scout owns one investigation slice and returns TriWiki-ready findings with source paths, risks, and suggested implementation slices.`,
       debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices applying compact Hyperplan-derived adversarial lenses.`,
-      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`
+      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`,
+      review_team: `Validation runs at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA lanes before integration or final.`
     },
     context_tracking: triwikiContextTracking(),
     team_runtime: teamRuntimePlanMetadata(),
@@ -795,7 +844,7 @@ async function prepareTeam(root, route, task, required, opts = {}) {
       { id: 'consensus', goal: `Seal one objective with acceptance criteria and disjoint implementation slices, then refresh/validate TriWiki so implementation receives current consensus context.` },
       { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}; remap symbolic plan nodes to concrete task ids, allocate role/path/domain worker lanes, and write ${TEAM_INBOX_DIR} before executor work starts.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
       { id: 'parallel_implementation', goal: `Before implementation, read relevant TriWiki context and current source. Close debate agents, then spawn a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership. Refresh TriWiki after implementation changes or blockers.`, agents: roster.development_team.map((agent) => agent.id) },
-      { id: 'review_integration', goal: 'Before review and final output, read/validate current TriWiki context, integrate executor output, strict review correctness/DB safety/tests, validate user friction with validation_team, refresh after review findings, and record evidence.', agents: roster.validation_team.map((agent) => agent.id) },
+      { id: 'review_integration', goal: `Before review and final output, read/validate current TriWiki context, integrate executor output, run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes for correctness/DB safety/tests/evidence, validate user friction with validation_team, refresh after review findings, and record evidence.`, agents: roster.validation_team.map((agent) => agent.id), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
       { id: 'session_cleanup', goal: `Close or account for all Team subagent sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection or final.`, agents: ['parent_orchestrator'] }
     ],
     live_visibility: {
@@ -810,7 +859,7 @@ async function prepareTeam(root, route, task, required, opts = {}) {
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
   const contextTracking = triwikiContextTracking();
-  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReasoning: high for team logic, temporary for this route only.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\n1. Run exactly ${roster.bundle_size} read-only analysis_scout_N agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants through the compact Hyperplan-derived adversarial lens pass, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Review, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent analysis_scout_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
+  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReview policy: ${MIN_TEAM_REVIEW_POLICY_TEXT}\nReasoning: high for team logic, temporary for this route only.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\n1. Run exactly ${roster.bundle_size} read-only analysis_scout_N agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants through the compact Hyperplan-derived adversarial lens pass, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent analysis_scout_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
   await initTeamLive(id, dir, cleanTask, { agentSessions, roleCounts, roster });
   const runtime = await writeTeamRuntimeArtifacts(dir, plan, {});
   await writeMemorySweepReport(root, dir, { missionId: id }).catch(() => null);
@@ -823,7 +872,7 @@ async function prepareTeam(root, route, task, required, opts = {}) {
     : {};
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: cleanTask, required, ambiguity: { required: false, status: 'direct_team_cli' } });
   await setCurrent(root, routeState(id, route, 'TEAM_PARALLEL_ANALYSIS_SCOUTING', required, { prompt: cleanTask, implementation_allowed: true, ambiguity_gate_required: false, ambiguity_gate_passed: true, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_plan_ready: true, team_graph_ready: runtime.ok, context_tracking: 'triwiki', from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, ...madSksState }));
-  return routeContext(route, id, cleanTask, required, `Run scouts, refresh/validate TriWiki, debate, close debate agents, form a fresh ${roster.bundle_size}-person executor team, then close/clean Team sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection.`);
+  return routeContext(route, id, cleanTask, required, `Run scouts, refresh/validate TriWiki, debate, close debate agents, form a fresh ${roster.bundle_size}-person executor team, run minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, then close/clean Team sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection.`);
 }
 
 async function prepareResearch(root, route, task, required) {
@@ -1362,11 +1411,15 @@ function missingRequiredGateFields(file, state, gate = {}) {
       return gate[key] !== true;
     });
   }
+  if (file === IMAGE_UX_REVIEW_GATE_ARTIFACT || mode === 'IMAGE_UX_REVIEW') {
+    return IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS.filter((key) => gate[key] !== true);
+  }
   return [];
 }
 
 async function missingRequiredGateArtifacts(root, file, state, gate = {}) {
   const mode = String(state?.mode || '').toUpperCase();
+  if (file === IMAGE_UX_REVIEW_GATE_ARTIFACT || mode === 'IMAGE_UX_REVIEW') return missingImageUxReviewArtifacts(root, state, gate);
   if (file !== 'team-gate.json' && mode !== 'TEAM') return [];
   const missing = [];
   if (gate.team_roster_confirmed === true && !(await exists(path.join(missionDir(root, state.mission_id), 'team-roster.json')))) missing.push('team-roster.json');
@@ -1383,6 +1436,42 @@ async function missingRequiredGateArtifacts(root, file, state, gate = {}) {
   if (cleanup.passed !== true) missing.push(`${TEAM_SESSION_CLEANUP_ARTIFACT}:passed`);
   if (cleanup.all_sessions_closed !== true && cleanup.outstanding_sessions !== 0) missing.push(`${TEAM_SESSION_CLEANUP_ARTIFACT}:all_sessions_closed`);
   if (cleanup.live_transcript_finalized !== true) missing.push(`${TEAM_SESSION_CLEANUP_ARTIFACT}:live_transcript_finalized`);
+  return missing;
+}
+
+async function missingImageUxReviewArtifacts(root, state = {}, gate = {}) {
+  const missing = [];
+  const id = state?.mission_id;
+  if (!id) return [`${IMAGE_UX_REVIEW_GATE_ARTIFACT}:mission_id`];
+  const dir = missionDir(root, id);
+  const required = [
+    [IMAGE_UX_REVIEW_POLICY_ARTIFACT, 'policy_created'],
+    [IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, 'screen_inventory_created'],
+    [IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, 'imagegen_review_images_generated'],
+    [IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, 'issue_ledger_created'],
+    [IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, 'bounded_iteration_complete']
+  ];
+  for (const [artifact, field] of required) {
+    if (gate[field] === true && !(await exists(path.join(dir, artifact)))) missing.push(artifact);
+  }
+  const generated = await readJson(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), null);
+  if (gate.imagegen_review_images_generated === true) {
+    if (!generated) missing.push(IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT);
+    else {
+      if (generated.passed !== true) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:passed`);
+      if (!Array.isArray(generated.generated_review_images) || generated.generated_review_images.length === 0) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:generated_review_images`);
+      if (String(generated.provider?.model || '') !== 'gpt-image-2') missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:gpt-image-2`);
+    }
+  }
+  const issues = await readJson(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), null);
+  if (gate.generated_review_images_analyzed === true || gate.p0_p1_zero === true) {
+    if (!issues) missing.push(IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT);
+    else {
+      if (issues.passed !== true && gate.p0_p1_zero === true) missing.push(`${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}:passed`);
+      if (issues.extraction_source !== IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT) missing.push(`${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}:extraction_source`);
+      if (Number(issues.blocking_issue_count || 0) !== 0 && gate.p0_p1_zero === true) missing.push(`${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}:blocking_issue_count`);
+    }
+  }
   return missing;
 }
 
@@ -1461,6 +1550,7 @@ function gateFilesForState(state) {
   if (state.mode === 'GX') return ['gx-gate.json'];
   if (state.mode === 'QALOOP') return ['qa-gate.json'];
   if (state.mode === 'PPT') return ['ppt-gate.json'];
+  if (state.mode === 'IMAGE_UX_REVIEW') return [IMAGE_UX_REVIEW_GATE_ARTIFACT];
   return ['done-gate.json'];
 }
 

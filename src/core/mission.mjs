@@ -46,8 +46,20 @@ export async function findLatestMission(root) {
   if (!(await exists(dir))) return null;
   const fs = await import('node:fs/promises');
   const entries = await fs.readdir(dir, { withFileTypes: true });
-  const ids = entries.filter((e) => e.isDirectory() && e.name.startsWith('M-')).map((e) => e.name).sort();
-  return ids.at(-1) || null;
+  const ids = entries.filter((e) => e.isDirectory() && e.name.startsWith('M-')).map((e) => e.name);
+  const candidates = await Promise.all(ids.map(async (id) => {
+    const dirPath = missionDir(root, id);
+    const stat = await fs.stat(dirPath).catch(() => null);
+    const mission = await readJson(path.join(dirPath, 'mission.json'), {}).catch(() => ({}));
+    const createdMs = Date.parse(mission.created_at || mission.updated_at || '');
+    return {
+      id,
+      createdMs: Number.isFinite(createdMs) ? createdMs : 0,
+      mtimeMs: stat?.mtimeMs || 0
+    };
+  }));
+  candidates.sort((a, b) => (a.createdMs - b.createdMs) || (a.mtimeMs - b.mtimeMs) || a.id.localeCompare(b.id));
+  return candidates.at(-1)?.id || null;
 }
 
 export async function setCurrent(root, patch) {

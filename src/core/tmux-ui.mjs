@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { exists, nowIso, packageRoot, readJson, runProcess, sha256, sksRoot, which, writeJsonAtomic } from './fsx.mjs';
 import { getCodexInfo } from './codex-adapter.mjs';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.mjs';
+import { MIN_TEAM_REVIEWER_LANES } from './team-review-policy.mjs';
 
 export const SKS_TMUX_LOGO = [
   '        _______     __  __     _______',
@@ -483,25 +484,48 @@ function printTmuxLaunchBlocked(plan, opts = {}) {
   for (const blocker of Array.from(new Set(plan.blockers))) console.log(`- ${blocker}`);
 }
 
-export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFile = null, json = false } = {}) {
-  const launch = await buildTmuxLaunchPlan({ root, session: `sks-team-${missionId}` });
-  const agents = [
-    ...(plan.roster?.analysis_team || []),
-    ...(plan.roster?.debate_team || []),
-    ...(plan.roster?.development_team || []),
-    ...(plan.roster?.validation_team || [])
-  ];
-  const uniqueAgents = [];
+function uniqueAgentIds(agents = []) {
+  const ids = [];
   const seen = new Set();
   for (const agent of agents) {
-    const id = agent.id || String(agent);
-    if (seen.has(id)) continue;
+    const id = agent?.id || String(agent || '');
+    if (!id || seen.has(id)) continue;
     seen.add(id);
-    uniqueAgents.push(id);
+    ids.push(id);
   }
-  const commands = uniqueAgents.slice(0, Math.max(1, plan.agent_session_count || 3)).map((agentId, index) => ({
+  return ids;
+}
+
+function teamViewAgentIds(plan = {}) {
+  const roster = plan.roster || {};
+  const analysis = uniqueAgentIds(roster.analysis_team || []);
+  const debate = uniqueAgentIds(roster.debate_team || []);
+  const development = uniqueAgentIds(roster.development_team || []);
+  const validation = uniqueAgentIds(roster.validation_team || []);
+  const reviewers = validation.filter((id) => teamLaneStyle(id).role === 'review');
+  const reviewerTarget = Math.max(MIN_TEAM_REVIEWER_LANES, Number(plan.review_policy?.minimum_reviewer_lanes) || 0, Number(plan.role_counts?.reviewer) || 0);
+  const reviewLanes = reviewers.slice(0, reviewerTarget);
+  const representative = [analysis[0], development[0], debate[0]].filter(Boolean);
+  const ordered = [...reviewLanes, ...representative, ...analysis, ...debate, ...development, ...validation];
+  const limit = Math.max(Number(plan.agent_session_count) || MIN_TEAM_REVIEWER_LANES, reviewLanes.length + representative.length);
+  return uniqueAgentIds(ordered).slice(0, Math.max(1, limit));
+}
+
+function teamLanePhase(agentId = '') {
+  const role = teamLaneStyle(agentId).role;
+  if (role === 'review') return 'review';
+  if (role === 'execution') return 'implementation';
+  if (role === 'scout') return 'analysis';
+  if (role === 'safety') return 'safety';
+  return 'team';
+}
+
+export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFile = null, json = false } = {}) {
+  const launch = await buildTmuxLaunchPlan({ root, session: `sks-team-${missionId}` });
+  const visibleAgents = teamViewAgentIds(plan);
+  const commands = visibleAgents.map((agentId) => ({
     agent: agentId,
-    command: teamAgentCommand(launch.root, missionId, agentId, index === 0 ? 'analysis' : 'team', promptFile),
+    command: teamAgentCommand(launch.root, missionId, agentId, teamLanePhase(agentId), promptFile),
     style: teamLaneStyle(agentId),
     title: teamLaneTitle(agentId)
   }));

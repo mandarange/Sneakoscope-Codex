@@ -41,12 +41,22 @@ import {
   writePptBuildArtifacts,
   writePptRouteArtifacts
 } from '../core/ppt.mjs';
+import {
+  IMAGE_UX_REVIEW_GATE_ARTIFACT,
+  IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
+  IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
+  IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT,
+  IMAGE_UX_REVIEW_POLICY_ARTIFACT,
+  IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT,
+  writeImageUxReviewRouteArtifacts
+} from '../core/image-ux-review.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
 import { ALLOWED_REASONING_EFFORTS, AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, COMMAND_CATALOG, DESIGN_SYSTEM_SSOT, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, GETDESIGN_REFERENCE, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { PIPELINE_PLAN_ARTIFACT, buildPipelinePlan, context7Evidence, evaluateStop, projectGateStatus, recordContext7Evidence, recordSubagentEvidence, validatePipelinePlan, writePipelinePlan } from '../core/pipeline.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, initTeamLive, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane } from '../core/team-live.mjs';
+import { evaluateTeamReviewPolicyGate } from '../core/team-review-policy.mjs';
 import { ARTIFACT_FILES, validateDogfoodReport, validateEffortDecision, validateFromChatImgVisualMap, validateSkillCandidate, validateSkillInjectionDecision, validateTeamDashboardState, validateWorkOrderLedger } from '../core/artifact-schemas.mjs';
 import { selectEffort, writeEffortDecision } from '../core/effort-orchestrator.mjs';
 import { createWorkOrderLedger } from '../core/work-order-ledger.mjs';
@@ -99,7 +109,7 @@ export async function main(args) {
   if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
   const handlers = {
     postinstall: () => postinstall({ bootstrap }), wizard: () => wizard(tail), ui: () => wizard(tail), 'update-check': () => updateCheck(tail), help: () => help(tail), commands: () => commands(tail), usage: () => usage(tail), root: () => rootCommand(tail), quickstart: () => quickstartCommand(), 'codex-app': () => codexAppHelp(tail), 'codex-lb': () => codexLbCommand(sub, rest), auth: () => codexLbCommand(sub, rest), openclaw: () => openClawCommand(tail), bootstrap: () => bootstrap(tail), deps: () => deps(sub, rest),
-    'qa-loop': () => qaLoopCommand(sub, rest), ppt: () => pptCommand(sub, rest), context7: () => context7Command(sub, rest), pipeline: () => pipeline(sub, rest), guard: () => guard(sub, rest), conflicts: () => conflicts(sub, rest), versioning: () => versioning(sub, rest), reasoning: () => reasoningCommand(tail), aliases: () => aliases(), setup: () => setup(tail), 'fix-path': () => fixPath(tail), doctor: () => doctor(tail), init: () => init(tail), selftest: () => selftest(tail),
+    'qa-loop': () => qaLoopCommand(sub, rest), ppt: () => pptCommand(sub, rest), 'image-ux-review': () => imageUxReviewCommand(sub, rest), 'ux-review': () => imageUxReviewCommand(sub, rest), 'visual-review': () => imageUxReviewCommand(sub, rest), 'ui-ux-review': () => imageUxReviewCommand(sub, rest), context7: () => context7Command(sub, rest), pipeline: () => pipeline(sub, rest), guard: () => guard(sub, rest), conflicts: () => conflicts(sub, rest), versioning: () => versioning(sub, rest), reasoning: () => reasoningCommand(tail), aliases: () => aliases(), setup: () => setup(tail), 'fix-path': () => fixPath(tail), doctor: () => doctor(tail), init: () => init(tail), selftest: () => selftest(tail),
     goal: () => goalCommand(sub, rest), research: () => researchCommand(sub, rest), hook: () => emitHook(sub), profile: () => profileCommand(sub, rest), hproof: () => hproofCommand(sub, rest), 'validate-artifacts': () => validateArtifactsCommand(tail), perf: () => perfCommand(sub, rest), 'proof-field': () => proofFieldCommand(sub, rest), 'skill-dream': () => skillDreamCommand(sub, rest), 'code-structure': () => codeStructureCommand(sub, rest), memory: () => memoryCommand(sub, rest), gx: () => gxCommand(sub, rest),
     team: () => team(tail), db: () => dbCommand(sub, rest), eval: () => evalCommand(sub, rest), harness: () => harnessCommand(sub, rest), wiki: () => wikiCommand(sub, rest), gc: () => gcCommand(tail), stats: () => statsCommand(tail)
   };
@@ -184,7 +194,7 @@ Usage:
   sks goal create "task"
   sks goal pause|resume|clear <mission-id|latest>
   sks goal status <mission-id|latest>
-  sks team "task" [executor:5 reviewer:2 user:1] [--json]
+  sks team "task" [executor:5 reviewer:6 user:1] [--json]
   sks team log|tail|watch|lane|status|dashboard [mission-id|latest]
   sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."
   sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."
@@ -328,7 +338,7 @@ async function updateCheck(args = []) {
   if (result.update_available) console.log('Run:     npm i -g sneakoscope');
 }
 
-const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: questions -> $Answer, small design/content -> $DFix, presentation/PDF artifacts -> $PPT, Computer Use UI/browser speed work -> $Computer-Use, code -> $Team. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
+const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: questions -> $Answer, small design/content -> $DFix, presentation/PDF artifacts -> $PPT, image-generation UI/UX reviews -> $Image-UX-Review/$UX-Review, Computer Use UI/browser speed work -> $Computer-Use, code -> $Team. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
 
 function commands(args = []) {
   if (flag(args, '--json')) return console.log(JSON.stringify({ aliases: ['sks', 'sneakoscope'], dollar_commands: DOLLAR_COMMANDS, app_skill_aliases: DOLLAR_COMMAND_ALIASES, commands: COMMAND_CATALOG }, null, 2));
@@ -474,6 +484,66 @@ async function pptCommand(sub = 'status', args = []) {
     return;
   }
   throw new Error(`Unknown ppt command: ${action}`);
+}
+
+async function imageUxReviewCommand(sub = 'status', args = []) {
+  const root = await sksRoot();
+  const action = sub || 'status';
+  if (action === 'help' || action === '--help' || action === '-h') {
+    console.log(`SKS Image UX Review
+
+Prompt commands:
+  $Image-UX-Review <target>
+  $UX-Review <target>
+
+Inspect artifacts:
+  sks image-ux-review status latest --json
+
+Core loop:
+  source UI screenshot -> $imagegen/gpt-image-2 generated annotated review image -> image-ux-issue-ledger.json -> optional requested fixes -> changed-screen recheck
+`);
+    return;
+  }
+  if (action !== 'status') throw new Error(`Unknown image-ux-review command: ${action}`);
+  const missionArg = args.find((arg) => !String(arg).startsWith('--')) || 'latest';
+  const id = await resolveMissionId(root, missionArg);
+  if (!id) throw new Error('Usage: sks image-ux-review status <mission-id|latest> [--json]');
+  const { dir } = await loadMission(root, id);
+  const gate = await readJson(path.join(dir, IMAGE_UX_REVIEW_GATE_ARTIFACT), null);
+  const policy = await readJson(path.join(dir, IMAGE_UX_REVIEW_POLICY_ARTIFACT), null);
+  const inventory = await readJson(path.join(dir, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT), null);
+  const generatedReviewLedger = await readJson(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), null);
+  const issueLedger = await readJson(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), null);
+  const iterationReport = await readJson(path.join(dir, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT), null);
+  const status = {
+    ok: Boolean(gate?.passed),
+    mission_id: id,
+    gate,
+    policy,
+    inventory,
+    generated_review_ledger: generatedReviewLedger,
+    issue_ledger: issueLedger,
+    iteration_report: iterationReport,
+    files: {
+      policy: path.join(dir, IMAGE_UX_REVIEW_POLICY_ARTIFACT),
+      inventory: path.join(dir, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT),
+      generated_review_ledger: path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT),
+      issue_ledger: path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT),
+      iteration_report: path.join(dir, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT),
+      gate: path.join(dir, IMAGE_UX_REVIEW_GATE_ARTIFACT)
+    }
+  };
+  if (flag(args, '--json')) return console.log(JSON.stringify(status, null, 2));
+  console.log('SKS Image UX Review status\n');
+  console.log(`Mission: ${id}`);
+  console.log(`Gate:    ${status.ok ? 'passed' : 'not passed'}`);
+  console.log(`Policy:  ${path.relative(root, status.files.policy)}`);
+  console.log(`Screens: ${path.relative(root, status.files.inventory)}`);
+  console.log(`Images:  ${path.relative(root, status.files.generated_review_ledger)}`);
+  console.log(`Issues:  ${path.relative(root, status.files.issue_ledger)}`);
+  console.log(`Loop:    ${path.relative(root, status.files.iteration_report)}`);
+  console.log(`Gate:    ${path.relative(root, status.files.gate)}`);
+  if (gate?.blockers?.length) console.log(`Blockers:${' '.repeat(1)}${gate.blockers.join(', ')}`);
 }
 
 async function pipeline(sub = 'status', args = []) {
@@ -749,6 +819,25 @@ async function materializeAfterPipelineAnswer(root, id, dir, mission, route, rou
       state: {
         ppt_audience_strategy_ready: true,
         ppt_gate_ready: true,
+        ...madSksState
+      }
+    };
+  }
+  if (route?.id === 'ImageUXReview') {
+    await writeImageUxReviewRouteArtifacts(dir, contract);
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), {
+      ts: nowIso(),
+      type: 'image_ux_review.materialized',
+      route: route.id,
+      gate: IMAGE_UX_REVIEW_GATE_ARTIFACT,
+      generated_review_ledger: IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT
+    });
+    return {
+      phase: 'IMAGE_UX_REVIEW_READY',
+      prompt: routeContext.task || mission.prompt || '',
+      state: {
+        image_ux_review_gate_ready: true,
+        image_ux_review_policy_ready: true,
         ...madSksState
       }
     };
@@ -1472,9 +1561,10 @@ function usage(args = []) {
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew after Y/n approval for missing installs or Homebrew-managed upgrades. If PATH resolves an npm-managed tmux, SKS prompts for npm i -g tmux@latest instead. Unknown non-Homebrew tmux paths are reported as conflicts.'],
     tmux: ['tmux', '', '  sks', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'Running bare `sks` opens or reuses the default tmux Codex CLI session in fast-high mode: --model gpt-5.5 -c model_reasoning_effort="high". Override with SKS_CODEX_MODEL or SKS_CODEX_REASONING. Before launch, SKS checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. Use `sks tmux open` when you need explicit session/workspace flags, and `sks help` for CLI help.'],
     openclaw: ['OpenClaw', '', '  sks openclaw install', '  sks openclaw path', '  sks openclaw print SKILL.md', '', 'Installs an OpenClaw skill package under ~/.openclaw/skills/sneakoscope-codex so OpenClaw agents can attach skills: [sneakoscope-codex] with the shell tool and call local SKS commands from a project root.'],
-    team: ['Team', '', '  sks team "task" executor:5 reviewer:2 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
+    team: ['Team', '', '  sks team "task" executor:5 reviewer:6 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
     ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT asks delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, render QA, fact-ledger validation, and bounded review-loop validation. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and installed skills/MCPs outside the $PPT allowlist are ignored. Design uses getdesign-reference plus the built-in PPT design pipeline; imagegen/gpt-image-2 and Context7 are conditional only when the sealed PPT contract needs raster assets, slide visual critique, or current external docs. Missing required image-review evidence blocks instead of being simulated.'],
+    'image-ux-review': ['Image UX Review', '', '  $Image-UX-Review localhost 화면을 이미지 생성 리뷰 루프로 검수해줘', '  $UX-Review 이 스크린샷을 gpt-image-2 콜아웃 리뷰로 분석하고 고쳐줘', '  sks image-ux-review status latest --json', '', '$Image-UX-Review captures or receives source UI screenshots, runs Codex App $imagegen/gpt-image-2 to create generated annotated review images with numbered callouts, then extracts those generated images into image-ux-issue-ledger.json. Text-only screenshot critique cannot pass image-ux-review-gate.json; missing generated review images remain an explicit blocker.'],
     goal: ['Goal', '', '  sks goal create "task"', '  sks goal status latest', '  sks goal pause latest', '  sks goal resume latest', '  sks goal clear latest'],
     'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks codex-app remote-control --status', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
     dollar: ['Dollar Commands', '', formatDollarCommandsCompact('  '), '', 'Terminal: sks dollar-commands [--json]'],
@@ -1967,6 +2057,12 @@ async function selftest() {
   const tmp = tmpdir();
   process.chdir(tmp);
   await initProject(tmp, {});
+  const latestMissionTmp = tmpdir();
+  await ensureDir(path.join(latestMissionTmp, '.sneakoscope', 'missions', 'M-20260509-193839-6917'));
+  await ensureDir(path.join(latestMissionTmp, '.sneakoscope', 'missions', 'M-20260509-193839-0551'));
+  await writeJsonAtomic(path.join(latestMissionTmp, '.sneakoscope', 'missions', 'M-20260509-193839-6917', 'mission.json'), { id: 'M-20260509-193839-6917', created_at: '2026-05-09T10:38:39.362Z' });
+  await writeJsonAtomic(path.join(latestMissionTmp, '.sneakoscope', 'missions', 'M-20260509-193839-0551', 'mission.json'), { id: 'M-20260509-193839-0551', created_at: '2026-05-09T10:38:39.363Z' });
+  if (await findLatestMission(latestMissionTmp) !== 'M-20260509-193839-0551') throw new Error('selftest failed: latest mission should use mission metadata time, not lexicographic id order');
   if (readMaxCycles(['--max-cycles', 'Infinity'], 8) !== 8) throw new Error('selftest failed: non-finite max cycles not sanitized');
   if (readMaxCycles(['--max-cycles', '0'], 8) !== 1) throw new Error('selftest failed: zero max cycles not bounded');
   const loopMission = await createMission(tmp, { mode: 'team', prompt: 'compliance loop guard selftest' });
@@ -2435,11 +2531,13 @@ async function selftest() {
   if (fromChatImgSkillText.includes('Computer Use/browser visual inspection')) throw new Error('selftest failed: from-chat-img skill still allows browser visual inspection wording');
   const fromChatImgSkillMeta = await safeReadText(path.join(tmp, '.agents', 'skills', 'from-chat-img', 'agents', 'openai.yaml'));
   if (!fromChatImgSkillMeta.includes('model_reasoning_effort: xhigh')) throw new Error('selftest failed: from-chat-img skill metadata is not xhigh');
-  for (const supportSkill of ['reasoning-router', 'pipeline-runner', 'context7-docs', 'seo-geo-optimizer', 'reflection', 'design-system-builder', 'design-ui-editor', 'getdesign-reference', 'imagegen']) {
+  for (const supportSkill of ['reasoning-router', 'pipeline-runner', 'context7-docs', 'seo-geo-optimizer', 'reflection', 'design-system-builder', 'design-ui-editor', 'getdesign-reference', 'imagegen', 'image-ux-review', 'visual-review', 'ui-ux-review']) {
     if (!(await exists(path.join(tmp, '.agents', 'skills', supportSkill, 'SKILL.md')))) throw new Error(`selftest failed: ${supportSkill} skill not installed`);
   }
   const imagegenSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'imagegen', 'SKILL.md'));
   if (!imagegenSkillText.includes(CODEX_APP_IMAGE_GENERATION_DOC_URL) || !imagegenSkillText.includes('$imagegen') || !imagegenSkillText.includes('gpt-image-2') || !imagegenSkillText.includes('OPENAI_API_KEY')) throw new Error('selftest failed: imagegen skill missing official Codex App image generation priority');
+  const imageUxReviewSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'image-ux-review', 'SKILL.md'));
+  if (!imageUxReviewSkillText.includes('gpt-image-2') || !imageUxReviewSkillText.includes('$imagegen') || !imageUxReviewSkillText.includes('generated annotated review image') || !imageUxReviewSkillText.includes('Text-only screenshot critique cannot satisfy this route') || !imageUxReviewSkillText.includes(IMAGE_UX_REVIEW_GATE_ARTIFACT) || !imageUxReviewSkillText.includes(IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT)) throw new Error('selftest failed: image-ux-review skill missing gpt-image-2 generated-image review gate guidance');
   const getdesignSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'getdesign-reference', 'SKILL.md')); if (!getdesignSkillText.includes(AWESOME_DESIGN_MD_REFERENCE.url) || !getdesignSkillText.includes('only design decision SSOT') || !getdesignSkillText.includes('source inputs')) throw new Error('selftest failed: getdesign-reference skill missing design SSOT source-input guidance');
   const designSystemBuilderSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'design-system-builder', 'SKILL.md')); if (!designSystemBuilderSkillText.includes(AWESOME_DESIGN_MD_REFERENCE.url) || !designSystemBuilderSkillText.includes('Fuse those inputs into one design.md SSOT') || !designSystemBuilderSkillText.includes('competing authorities')) throw new Error('selftest failed: design-system-builder skill missing fused design SSOT guidance');
   const designSysPromptText = await safeReadText(path.join(packageRoot(), 'docs', 'Design-Sys-Prompt.md')); if (!designSysPromptText.includes('Design SSOT contract') || !designSysPromptText.includes('builder prompt') || !designSysPromptText.includes('not a competing design authority')) throw new Error('selftest failed: Design-Sys-Prompt missing design SSOT contract');
@@ -2455,14 +2553,24 @@ async function selftest() {
   if (new Set(DOLLAR_COMMANDS.map((c) => c.command)).size !== DOLLAR_COMMANDS.length) throw new Error('selftest failed: duplicate dollar commands');
   if (!DOLLAR_COMMAND_ALIASES.some((alias) => alias.canonical === '$QA-LOOP' && alias.app_skill === '$qa-loop')) throw new Error('selftest failed: $QA-LOOP picker skill missing');
   if (!DOLLAR_COMMAND_ALIASES.some((alias) => alias.canonical === '$Team' && alias.app_skill === '$from-chat-img')) throw new Error('selftest failed: $From-Chat-IMG picker skill missing');
+  if (!DOLLAR_COMMAND_ALIASES.some((alias) => alias.canonical === '$Image-UX-Review' && alias.app_skill === '$visual-review')) throw new Error('selftest failed: $Image-UX-Review picker alias missing');
   if (!DOLLAR_COMMANDS.some((entry) => entry.command === '$From-Chat-IMG')) throw new Error('selftest failed: $From-Chat-IMG missing from dollar command list');
+  if (!DOLLAR_COMMANDS.some((entry) => entry.command === '$Image-UX-Review') || !DOLLAR_COMMANDS.some((entry) => entry.command === '$UX-Review')) throw new Error('selftest failed: Image UX Review missing from dollar command list');
   if (DOLLAR_COMMAND_ALIASES.some((alias) => ['$agent-team', '$qaloop', '$wiki-refresh', '$wikirefresh'].includes(alias.app_skill))) throw new Error('selftest failed: duplicate picker aliases still present');
   if (routePrompt('$agent-team run specialists')) throw new Error('selftest failed: deprecated $agent-team route still resolved');
   if (routePrompt('$QA-LOOP run UI E2E')?.id !== 'QALoop' || routePrompt('$QALoop deployed smoke')) throw new Error('selftest failed: QA-LOOP route is not standardized to $QA-LOOP');
+  if (routePrompt('[$qa-loop](/tmp/qa-loop/SKILL.md) localhost UI 검증, Codex Computer Use만 사용')?.id !== 'QALoop') throw new Error('selftest failed: markdown-linked $QA-LOOP was hijacked by heuristic routing');
+  if (routePrompt('[$research](/tmp/research/SKILL.md) Codex Computer Use 도구 노출 문제를 QA루프 관점에서 연구')?.id !== 'Research') throw new Error('selftest failed: markdown-linked $Research was not treated as explicit route');
   if (routePrompt('$WikiRefresh 갱신')) throw new Error('selftest failed: deprecated $WikiRefresh route still resolved');
   if (routePrompt('$MAD-SKS Supabase MCP main 작업')?.id !== 'MadSKS') throw new Error('selftest failed: $MAD-SKS route did not resolve');
   if (routePrompt('$MAD-SKS $Team Supabase MCP main 작업')?.id !== 'Team') throw new Error('selftest failed: $MAD-SKS did not compose with $Team');
   if (routePrompt('$DB Supabase 점검 $MAD-SKS')?.id !== 'DB') throw new Error('selftest failed: trailing $MAD-SKS changed primary route');
+  const imageUxRoute = routePrompt('$Image-UX-Review localhost 화면 검수');
+  if (imageUxRoute?.id !== 'ImageUXReview') throw new Error('selftest failed: $Image-UX-Review did not route to ImageUXReview');
+  if (routePrompt('$UX-Review 스크린샷 gpt-image-2 콜아웃 리뷰')?.id !== 'ImageUXReview') throw new Error('selftest failed: $UX-Review did not route to ImageUXReview');
+  if (routePrompt('UI UX를 gpt-image-2 이미지 생성 콜아웃으로 리뷰해줘')?.id !== 'ImageUXReview') throw new Error('selftest failed: image-generation UI/UX review prompt did not route to ImageUXReview');
+  if (routeRequiresSubagents(imageUxRoute, '$Image-UX-Review localhost 화면 검수')) throw new Error('selftest failed: ImageUXReview route should not require subagents');
+  if (!reflectionRequiredForRoute(imageUxRoute)) throw new Error('selftest failed: ImageUXReview route should require reflection');
   const madStandaloneTmp = tmpdir();
   await initProject(madStandaloneTmp, {});
   const madStandalonePayload = JSON.stringify({ cwd: madStandaloneTmp, prompt: '$MAD-SKS main 권한 열어줘' });
@@ -2491,7 +2599,8 @@ async function selftest() {
   if (!DOLLAR_DEFAULT_PIPELINE_TEXT.includes('$Team')) throw new Error('selftest failed: dollar-commands missing Team default routing guidance');
   if (!DOLLAR_DEFAULT_PIPELINE_TEXT.includes('$From-Chat-IMG')) throw new Error('selftest failed: dollar-commands missing From-Chat-IMG guidance');
   if (!DOLLAR_DEFAULT_PIPELINE_TEXT.includes('$MAD-SKS')) throw new Error('selftest failed: dollar-commands missing MAD-SKS scoped override guidance');
-  if (!COMMAND_CATALOG.some((c) => c.name === 'context7') || !COMMAND_CATALOG.some((c) => c.name === 'pipeline') || !COMMAND_CATALOG.some((c) => c.name === 'qa-loop') || !COMMAND_CATALOG.some((c) => c.name === 'root') || !COMMAND_CATALOG.some((c) => c.name === 'openclaw')) throw new Error('selftest failed: context7/pipeline/qa-loop/root/openclaw commands missing from catalog');
+  if (!DOLLAR_DEFAULT_PIPELINE_TEXT.includes('$Image-UX-Review')) throw new Error('selftest failed: dollar-commands missing Image UX Review guidance');
+  if (!COMMAND_CATALOG.some((c) => c.name === 'context7') || !COMMAND_CATALOG.some((c) => c.name === 'pipeline') || !COMMAND_CATALOG.some((c) => c.name === 'qa-loop') || !COMMAND_CATALOG.some((c) => c.name === 'image-ux-review') || !COMMAND_CATALOG.some((c) => c.name === 'root') || !COMMAND_CATALOG.some((c) => c.name === 'openclaw')) throw new Error('selftest failed: context7/pipeline/qa-loop/image-ux-review/root/openclaw commands missing from catalog');
   const openClawTmp = tmpdir();
   const openClawResult = await installOpenClawSkill({ targetDir: path.join(openClawTmp, 'skills', OPENCLAW_SKILL_NAME) });
   if (!openClawResult.ok) throw new Error(`selftest failed: OpenClaw skill install blocked: ${openClawResult.reason}`);
@@ -2522,6 +2631,25 @@ async function selftest() {
   const hookGoalTmp = tmpdir();
   await initProject(hookGoalTmp, {});
   const hookBin = path.join(packageRoot(), 'bin', 'sks.mjs');
+  const hookImageUxTmp = tmpdir();
+  await initProject(hookImageUxTmp, {});
+  const hookImageUxPayload = JSON.stringify({ cwd: hookImageUxTmp, prompt: '$Image-UX-Review localhost 화면을 gpt-image-2 콜아웃 리뷰로 검수해줘' });
+  const hookImageUxResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookImageUxTmp, input: hookImageUxPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookImageUxResult.code !== 0) throw new Error(`selftest failed: $Image-UX-Review hook exited ${hookImageUxResult.code}: ${hookImageUxResult.stderr}`);
+  const hookImageUxJson = JSON.parse(hookImageUxResult.stdout);
+  const imageUxContext = hookImageUxJson.hookSpecificOutput?.additionalContext || '';
+  if (!imageUxContext.includes('$Image-UX-Review route prepared') || !imageUxContext.includes('Codex App $imagegen/gpt-image-2')) throw new Error('selftest failed: $Image-UX-Review hook did not prepare imagegen loop context');
+  const hookImageUxState = await readJson(stateFile(hookImageUxTmp), {});
+  if (hookImageUxState.mode !== 'IMAGE_UX_REVIEW' || hookImageUxState.stop_gate !== IMAGE_UX_REVIEW_GATE_ARTIFACT || hookImageUxState.subagents_required !== false || hookImageUxState.reflection_required !== true) throw new Error('selftest failed: $Image-UX-Review hook did not set direct image UX review state');
+  const imageUxMissionDir = missionDir(hookImageUxTmp, hookImageUxState.mission_id);
+  const imageUxGate = await readJson(path.join(imageUxMissionDir, IMAGE_UX_REVIEW_GATE_ARTIFACT));
+  const imageUxGeneratedLedger = await readJson(path.join(imageUxMissionDir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT));
+  if (imageUxGate.passed || imageUxGate.imagegen_review_images_generated || !imageUxGate.blockers?.includes('source_screenshots_not_captured_yet') || !imageUxGate.blockers?.includes('no_source_screenshots_for_imagegen_review')) throw new Error('selftest failed: Image UX review gate did not block missing source/generated review images');
+  if (imageUxGeneratedLedger.provider?.model !== 'gpt-image-2' || imageUxGeneratedLedger.passed) throw new Error('selftest failed: Image UX generated review ledger did not record required gpt-image-2 blocker state');
+  const imageUxStatusResult = await runProcess(process.execPath, [hookBin, 'image-ux-review', 'status', 'latest', '--json'], { cwd: hookImageUxTmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (imageUxStatusResult.code !== 0) throw new Error(`selftest failed: sks image-ux-review status failed: ${imageUxStatusResult.stderr || imageUxStatusResult.stdout}`);
+  const imageUxStatus = JSON.parse(imageUxStatusResult.stdout);
+  if (imageUxStatus.ok || imageUxStatus.generated_review_ledger?.provider?.model !== 'gpt-image-2' || !imageUxStatus.files?.gate?.endsWith(IMAGE_UX_REVIEW_GATE_ARTIFACT)) throw new Error('selftest failed: sks image-ux-review status did not report gpt-image-2 gate blockers');
   const hookPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '$Goal 로그인 세션 만료 UX 개선' });
   const hookResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookGoalTmp, input: hookPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookResult.code !== 0) throw new Error(`selftest failed: $Goal hook exited ${hookResult.code}: ${hookResult.stderr}`);
@@ -2650,7 +2778,7 @@ async function selftest() {
   if (!(await exists(path.join(missionDir(hookKoreanSksTmp, hookKoreanSksState.mission_id), 'team-plan.json')))) throw new Error('selftest failed: Korean Team auto-seal did not write team-plan.json');
   const hookPaymentTeamTmp = tmpdir();
   await initProject(hookPaymentTeamTmp, {});
-  const hookPaymentTeamPayload = JSON.stringify({ cwd: hookPaymentTeamTmp, prompt: '$Team 결제 재시도 정책과 로그인 세션 만료 버그 수정 executor:2 reviewer:1 user:1' });
+  const hookPaymentTeamPayload = JSON.stringify({ cwd: hookPaymentTeamTmp, prompt: '$Team 결제 재시도 정책과 로그인 세션 만료 버그 수정 executor:2 user:1' });
   const hookPaymentTeamResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookPaymentTeamTmp, input: hookPaymentTeamPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookPaymentTeamResult.code !== 0) throw new Error(`selftest failed: payment/auth Team hook exited ${hookPaymentTeamResult.code}: ${hookPaymentTeamResult.stderr}`);
   const hookPaymentTeamJson = JSON.parse(hookPaymentTeamResult.stdout);
@@ -2662,7 +2790,7 @@ async function selftest() {
   if (!(await exists(path.join(missionDir(hookPaymentTeamTmp, hookPaymentTeamState.mission_id), 'team-plan.json')))) throw new Error('selftest failed: predictable payment/auth Team auto-seal did not write team-plan.json');
   const hookTeamTmp = tmpdir();
   await initProject(hookTeamTmp, {});
-  const hookTeamPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 발표자료 만들어줘 executor:2 reviewer:1 user:1' });
+  const hookTeamPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 발표자료 만들어줘 executor:2 user:1' });
   const hookTeamResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: hookTeamPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookTeamResult.code !== 0) throw new Error(`selftest failed: $Team hook exited ${hookTeamResult.code}: ${hookTeamResult.stderr}`);
   const hookTeamJson = JSON.parse(hookTeamResult.stdout);
@@ -3077,8 +3205,12 @@ async function selftest() {
   const { id: teamId, dir: teamDir } = await createMission(tmp, { mode: 'team', prompt: '병렬 구현 팀 테스트' });
   const teamPlan = buildTeamPlan(teamId, '병렬 구현 팀 테스트');
   await writeJsonAtomic(path.join(teamDir, 'team-plan.json'), teamPlan);
-  if (teamPlan.agent_session_count !== 3) throw new Error('selftest failed: team default sessions not 3');
-  if (teamPlan.role_counts.executor !== 3 || teamPlan.role_counts.user !== 1 || teamPlan.role_counts.reviewer !== 1) throw new Error('selftest failed: team default role counts invalid');
+  if (teamPlan.agent_session_count !== 5) throw new Error('selftest failed: team default sessions not 5');
+  if (teamPlan.role_counts.executor !== 3 || teamPlan.role_counts.user !== 1 || teamPlan.role_counts.reviewer !== 5) throw new Error('selftest failed: team default role counts invalid');
+  if (!teamPlan.review_gate?.passed || teamPlan.review_gate.required_reviewer_lanes !== 5) throw new Error('selftest failed: team review policy gate did not pass default plan');
+  const underProvisionedReviewCount = 2;
+  const blockedReviewGate = evaluateTeamReviewPolicyGate({ roleCounts: { reviewer: underProvisionedReviewCount }, agentSessions: 3, roster: { validation_team: [{ id: 'reviewer_1', role: 'reviewer' }] } });
+  if (blockedReviewGate.passed || !blockedReviewGate.blockers.includes('validation_team_reviewers_below_required')) throw new Error('selftest failed: team review policy gate did not block under-provisioned review');
   if (teamPlan.phases[0]?.id !== 'team_roster_confirmation' || teamPlan.phases[1]?.id !== 'parallel_analysis_scouting' || teamPlan.phases[2]?.id !== 'triwiki_refresh') throw new Error('selftest failed: team plan is not roster-first then scout-first');
   if (teamPlan.roster.debate_team.length !== 3 || !teamPlan.roster.debate_team.some((agent) => agent.id === 'debate_user_1') || !teamPlan.roster.development_team.some((agent) => agent.id === 'executor_3')) throw new Error('selftest failed: team roster missing default agents');
   if (teamPlan.roster.analysis_team.length !== teamPlan.role_counts.executor || !teamPlan.roster.analysis_team.some((agent) => agent.id === 'analysis_scout_3')) throw new Error('selftest failed: team analysis scout roster missing default agents');
@@ -3108,13 +3240,13 @@ async function selftest() {
   if (!teamWorkflow.includes('before every stage') || !teamWorkflow.includes('after findings/artifact changes')) throw new Error('selftest failed: team workflow missing per-stage TriWiki policy');
   const customTeamPlan = buildTeamPlan(teamId, '병렬 구현 팀 테스트', { agentSessions: 5 });
   if (customTeamPlan.agent_session_count !== 5) throw new Error('selftest failed: custom team sessions not honored');
-  if (parseTeamCreateArgs(['--agents', '4', '작업']).agentSessions !== 4) throw new Error('selftest failed: team --agents parsing');
+  if (parseTeamCreateArgs(['--agents', '4', '작업']).agentSessions !== 5) throw new Error('selftest failed: team --agents parsing');
   const maxAgentParsed = parseTeamCreateArgs(['--max-agents', '작업']);
   if (maxAgentParsed.agentSessions !== 6 || maxAgentParsed.roleCounts.executor !== 6) throw new Error('selftest failed: team --max-agents parsing');
   const maxTextParsed = parseTeamSpecText('가용가능한 최대 agents로 분석하고 구현');
   if (maxTextParsed.agentSessions !== 6 || maxTextParsed.roleCounts.executor !== 6) throw new Error('selftest failed: team max-agent text parsing');
-  const roleParsed = parseTeamCreateArgs(['executor:5', 'reviewer:2', 'user:1', '작업']);
-  if (roleParsed.roleCounts.executor !== 5 || roleParsed.roleCounts.reviewer !== 2 || roleParsed.agentSessions !== 5 || roleParsed.prompt !== '작업') throw new Error('selftest failed: team role-count parsing');
+  const roleParsed = parseTeamCreateArgs(['executor:5', 'reviewer:6', 'user:1', '작업']);
+  if (roleParsed.roleCounts.executor !== 5 || roleParsed.roleCounts.reviewer !== 6 || roleParsed.agentSessions !== 6 || roleParsed.prompt !== '작업') throw new Error('selftest failed: team role-count parsing');
   const openTmuxFlagParsed = parseTeamCreateArgs(['--open-tmux', '작업']);
   if (openTmuxFlagParsed.prompt !== '작업') throw new Error('selftest failed: team --open-tmux leaked into prompt');
   const roleTeamPlan = buildTeamPlan(teamId, '역할 팀 테스트', { roleCounts: roleParsed.roleCounts });
@@ -3195,7 +3327,7 @@ async function selftest() {
   await appendTeamEvent(teamDir, { agent: 'analysis_scout_1', phase: 'parallel_analysis_scouting', message: 'selftest mapped repo slice' });
   await appendTeamEvent(teamDir, { agent: 'team_consensus', phase: 'planning_debate', message: 'selftest mapped options' });
   const teamDashboard = await readTeamDashboard(teamDir);
-  if (teamDashboard?.agent_session_count !== 5 || teamDashboard?.role_counts?.executor !== 5) throw new Error('selftest failed: team dashboard session/role budget missing');
+  if (teamDashboard?.agent_session_count !== 6 || teamDashboard?.role_counts?.executor !== 5 || teamDashboard?.role_counts?.reviewer !== 6) throw new Error('selftest failed: team dashboard session/role budget missing');
   await writeTeamDashboardState(teamDir, { missionId: teamId, mission: { id: teamId, mode: 'team' }, effort: 'high', phase: 'verification' });
   const teamDashboardState = await readJson(path.join(teamDir, ARTIFACT_FILES.team_dashboard_state), {});
   if (!validateTeamDashboardState(teamDashboardState).ok || !renderTeamDashboardState(teamDashboardState).includes('Mission / Goal View')) throw new Error('selftest failed: Team dashboard state missing required cockpit panes');

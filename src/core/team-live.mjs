@@ -1,11 +1,13 @@
 import path from 'node:path';
 import { appendJsonlBounded, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
 import { triwikiContextTracking, triwikiContextTrackingText } from './routes.mjs';
+import { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_STAGE_AGENT_SESSIONS } from './team-review-policy.mjs';
+export { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, MIN_TEAM_REVIEW_STAGE_AGENT_SESSIONS, evaluateTeamReviewPolicyGate, teamReviewPolicy } from './team-review-policy.mjs';
 
 const MAX_LIVE_BYTES = 192 * 1024;
 const TEAM_RUNTIME_TASKS_ARTIFACT = 'team-runtime-tasks.json';
 const DEFAULT_AGENTS = ['parent_orchestrator', 'analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer'];
-export const DEFAULT_TEAM_ROLE_COUNTS = { user: 1, planner: 1, reviewer: 1, executor: 3 };
+export const DEFAULT_TEAM_ROLE_COUNTS = { user: 1, planner: 1, reviewer: MIN_TEAM_REVIEWER_LANES, executor: 3 };
 export const DEFAULT_MAX_TEAM_AGENT_SESSIONS = 6;
 const ROLE_ALIASES = {
   user: 'user',
@@ -107,6 +109,7 @@ ${prompt}
 - Debate uses compact Hyperplan-derived adversarial lenses: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative.
 - User personas are intentionally impatient, self-interested, stubborn, low-context, and dislike inconvenience.
 - Executors are capable developers with disjoint ownership.
+- Team reviewer lane policy enforces at least ${MIN_TEAM_REVIEWER_LANES} strict reviewers and enough review-stage parallel capacity.
 - Reviewers are strict and adversarial about correctness, safety, tests, and evidence.
 - Every useful subagent status, debate result, handoff, review finding, and integration decision must be appended here.
 - Before reflection/final, close or account for all Team subagent sessions and write team-session-cleanup.json.
@@ -247,7 +250,8 @@ export function normalizeTeamSpec(opts = {}) {
     roleCounts.executor = normalizeTeamAgentSessions(opts.agentSessions, roleCounts.executor);
   }
   const bundleSize = normalizeTeamAgentSessions(roleCounts.executor, DEFAULT_TEAM_ROLE_COUNTS.executor);
-  const agentSessions = normalizeTeamAgentSessions(opts.agentSessions ?? bundleSize);
+  const reviewStageSessions = normalizeTeamAgentSessions(roleCounts.reviewer, MIN_TEAM_REVIEW_STAGE_AGENT_SESSIONS);
+  const agentSessions = Math.max(normalizeTeamAgentSessions(opts.agentSessions ?? bundleSize), reviewStageSessions);
   return { agentSessions, bundleSize, roleCounts, roster: buildTeamRoster(roleCounts) };
 }
 
@@ -257,6 +261,7 @@ export function normalizeTeamRoleCounts(input = {}) {
     const role = normalizeTeamRole(key);
     if (role) counts[role] = normalizeTeamAgentSessions(value, counts[role] || 1);
   }
+  counts.reviewer = Math.max(MIN_TEAM_REVIEWER_LANES, counts.reviewer);
   return counts;
 }
 
