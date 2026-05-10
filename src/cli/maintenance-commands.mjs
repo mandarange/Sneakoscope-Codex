@@ -1602,7 +1602,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
     ],
     reasoning: { effort: 'high', profile: 'sks-logic-high', temporary: true, restore_after_completion: true },
     codex_config_required: {
-      features: { multi_agent: true, codex_hooks: true },
+      features: { multi_agent: true, hooks: true },
       agents: { max_threads: 6, max_depth: 1 },
       custom_agents_dir: '.codex/agents'
     },

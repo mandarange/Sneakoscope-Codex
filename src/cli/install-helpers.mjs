@@ -274,7 +274,10 @@ export async function ensureGlobalCodexFastModeDuringInstall(opts = {}) {
 export function normalizeCodexFastModeUiConfig(text = '') {
   let next = removeLegacyTopLevelCodexModeLocks(text);
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
+  next = removeTomlTableKey(next, 'features', 'codex_hooks');
+  next = upsertTopLevelTomlString(next, 'model', 'gpt-5.5');
   next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
+  next = upsertTomlTableKey(next, 'features', 'hooks = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
@@ -290,7 +293,6 @@ export function normalizeCodexFastModeUiConfig(text = '') {
 
 function removeLegacyTopLevelCodexModeLocks(text = '') {
   const legacy = {
-    model: new Set(['gpt-5.5']),
     model_reasoning_effort: new Set(['high'])
   };
   const lines = String(text || '').split('\n');
