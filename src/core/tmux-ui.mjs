@@ -123,8 +123,20 @@ export function defaultCodexLaunchArgs(env = process.env) {
   const effort = String(env.SKS_CODEX_REASONING || DEFAULT_SKS_CODEX_REASONING).trim();
   const args = [];
   if (model) args.push('--model', model);
+  args.push('-c', 'service_tier="fast"');
   if (effort) args.push('-c', `model_reasoning_effort="${effort}"`);
   return args;
+}
+
+function codexArgsWithFastServiceTier(args = []) {
+  const input = Array.isArray(args) ? args.map(String) : [];
+  for (let i = 0; i < input.length; i += 1) {
+    const arg = input[i];
+    const next = input[i + 1] || '';
+    if ((arg === '-c' || arg === '--config') && /^service_tier\s*=/.test(next.trim())) return input;
+    if (/^(?:-c|--config)=service_tier\s*=/.test(arg.trim())) return input;
+  }
+  return ['-c', 'service_tier="fast"', ...input];
 }
 
 export function sanitizeTmuxSessionName(input) {
@@ -323,7 +335,7 @@ export async function buildTmuxLaunchPlan(opts = {}) {
   const codex = opts.codex || await getCodexInfo().catch(() => ({}));
   const tmux = opts.tmux || await tmuxReadiness(opts);
   const app = opts.app || await codexAppIntegrationStatus({ codex });
-  const codexArgs = forceGpt55CodexArgs(Array.isArray(opts.codexArgs) ? opts.codexArgs : defaultCodexLaunchArgs(opts.env || process.env));
+  const codexArgs = forceGpt55CodexArgs(codexArgsWithFastServiceTier(Array.isArray(opts.codexArgs) ? opts.codexArgs : defaultCodexLaunchArgs(opts.env || process.env)));
   return {
     root,
     session,
@@ -355,8 +367,8 @@ export function formatTmuxBanner(status = null) {
     'CLI-first runtime:',
     '  sks                 open or attach the default tmux Codex CLI session',
     '  sks tmux open       open or attach a tmux Codex CLI session with explicit flags',
-    '  sks --mad           open one-shot MAD full-access auto-review tmux session',
-    '  sks team "task"     prepare Team mission and tmux multi-pane live view',
+    '  sks --mad           open one-shot MAD full-access auto-review tmux cockpit',
+    '  sks team "task"     prepare Team mission and open the tmux multi-pane live view',
     '',
     'Useful terminal commands:',
     '  sks commands',
@@ -424,7 +436,12 @@ export async function createTmuxSession(plan = {}, panes = [], opts = {}) {
   const root = path.resolve(plan.root || process.cwd());
   const normalizedPanes = panes.length ? panes : [{ cwd: root, command: plan.command || codexLaunchCommand(root, plan.codex?.bin || 'codex', plan.codexArgs), focused: true }];
   if (await hasTmuxSession(tmuxBin, session)) {
-    return { ok: true, reused: true, session, panes: [], attach_command: `tmux attach-session -t ${session}` };
+    if (opts.recreate || opts.replaceExisting) {
+      const killed = await tmuxRun(tmuxBin, ['kill-session', '-t', session], { timeoutMs: 5000 });
+      if (killed.code !== 0) return { ok: false, session, panes: [], stderr: killed.stderr || killed.stdout || 'tmux kill-session failed' };
+    } else {
+      return { ok: true, reused: true, session, panes: [], attach_command: `tmux attach-session -t ${session}` };
+    }
   }
   const first = normalizedPanes[0] || { cwd: root, command: 'pwd' };
   const detachedWidth = String(Math.max(120, Number(opts.width || opts.detachedWidth) || 180));
@@ -473,6 +490,65 @@ export async function launchTmuxUi(args = [], opts = {}) {
     }
   }
   return { plan, created: Boolean(created.ok), session: created.session || plan.session, opened: created, attached };
+}
+
+export async function launchMadTmuxUi(args = [], opts = {}) {
+  const rootArg = readOption(args, '--root', opts.root);
+  const sessionArg = readOption(args, '--session', readOption(args, '--workspace', opts.session || opts.workspace));
+  const plan = await buildTmuxLaunchPlan({ ...opts, root: rootArg, session: sessionArg });
+  if (args.includes('--json')) return { plan };
+  if (!plan.ready && !args.includes('--status-only')) {
+    printTmuxLaunchBlocked(plan, { concise: opts.conciseBlockers });
+    process.exitCode = 1;
+    return { plan };
+  }
+  if (args.includes('--status-only')) return { plan };
+  const missionId = opts.missionId || opts.madMissionId || 'latest';
+  const mainCommand = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs);
+  const statusCommand = [
+    terminalTitleCommand('mad: permission gate'),
+    `cd ${shellEscape(plan.root)}`,
+    'while :; do clear',
+    `printf '\\033[1;35mSKS MAD permission gate\\033[0m\\nMission: %s\\n\\n' ${shellEscape(missionId)}`,
+    `node ${shellEscape(path.join(packageRoot(), 'bin', 'sks.mjs'))} pipeline status ${shellEscape(missionId)} || true`,
+    'printf "\\nRefreshes every 3s. Cleanup when done by closing the MAD gate.\\n"',
+    'sleep 3',
+    'done'
+  ].join('; ');
+  const helpCommand = [
+    terminalTitleCommand('mad: live guide'),
+    'clear',
+    colorizedLaneBannerCommand(['SKS MAD tmux cockpit', 'Panes: Codex CLI | permission gate | live guide', 'Guard: catastrophic DB wipe/all-row/project-management operations remain blocked', ''], 'magenta'),
+    `cd ${shellEscape(plan.root)}`,
+    `printf 'Attach: tmux attach-session -t %s\\n' ${shellEscape(plan.session)}`,
+    `printf 'Mission: %s\\n\\n' ${shellEscape(missionId)}`,
+    `printf 'Commands:\\n  sks pipeline status %s\\n  sks db scan\\n  sks doctor\\n\\n' ${shellEscape(missionId)}`,
+    'printf "This pane stays open so the tmux layout is visibly multi-pane.\\n"',
+    'while :; do sleep 3600; done'
+  ].join('; ');
+  const panes = [
+    { cwd: plan.root, command: mainCommand, focused: true, role: 'codex', title: 'Codex CLI' },
+    { cwd: plan.root, command: statusCommand, role: 'mad_gate', title: 'MAD gate', vertical: false },
+    { cwd: plan.root, command: helpCommand, role: 'mad_guide', title: 'MAD guide', vertical: true }
+  ];
+  const created = await createTmuxSession({ ...plan, command: mainCommand }, panes, { layout: 'tiled', recreate: true });
+  if (created.ok) await writeTmuxSessionRecord(plan.root, { session: created.session, attach_command: created.attach_command, panes: created.panes, mode: 'mad_cockpit', mission_id: missionId }).catch(() => null);
+  if (!args.includes('--quiet')) {
+    console.log(`SKS MAD tmux cockpit: ${created.session || plan.session}`);
+    if (created.ok) console.log(`tmux: opened ${created.panes.length} pane(s)`);
+    else console.log(`tmux: not created (${created.stderr || 'tmux failed'})`);
+    if (created.ok) console.log(`Attach: ${created.attach_command}`);
+  }
+  let attached = null;
+  if (created.ok && shouldAutoAttachTmux(args)) {
+    attached = attachTmuxSession({ ...plan, session: created.session || plan.session }, args);
+    if (!attached.ok) {
+      const status = attached.signal || (attached.status ?? 'unknown');
+      console.error(`SKS tmux attach failed (${status}). Run manually: ${created.attach_command}`);
+      process.exitCode = attached.status || 1;
+    }
+  }
+  return { plan, created: Boolean(created.ok), session: created.session || plan.session, opened: created, attached, mode: 'mad_cockpit', mission_id: missionId };
 }
 
 function printTmuxLaunchBlocked(plan, opts = {}) {
@@ -524,7 +600,7 @@ function teamLanePhase(agentId = '') {
   return 'team';
 }
 
-export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFile = null, json = false } = {}) {
+export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFile = null, json = false, attach = false, args = [] } = {}) {
   const launch = await buildTmuxLaunchPlan({ root, session: `sks-team-${missionId}` });
   const visibleAgents = teamViewAgentIds(plan);
   const commands = visibleAgents.map((agentId) => ({
@@ -558,13 +634,14 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
   };
   if (json || !launch.ready) return result;
   const panes = lanes.map((lane, index) => ({ cwd: launch.root, command: lane.command, focused: index === 0, role: lane.role, title: lane.title, vertical: index > 1 }));
-  const created = await createTmuxSession(launch, panes);
+  const created = await createTmuxSession(launch, panes, { layout: 'tiled', recreate: true });
   result.created = Boolean(created.ok);
   result.opened = created;
   result.session = created.session || launch.session;
   result.opened_lane_count = created.panes?.length || lanes.length;
   result.all_lanes_opened = Boolean(created.ok);
   result.ready = Boolean(result.ready && created.ok);
+  result.attach_command = created.attach_command || launch.attach_command;
   await writeTmuxTeamRecord(launch.root, {
     mission_id: missionId,
     session: result.session,
@@ -579,6 +656,14 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
       title: entry.title || teamLaneTitle(entry.agent)
     }))
   }).catch(() => null);
+  if (created.ok && attach && shouldAutoAttachTmux(args)) {
+    result.attached = attachTmuxSession({ ...launch, session: result.session }, args);
+    if (!result.attached.ok) {
+      const status = result.attached.signal || (result.attached.status ?? 'unknown');
+      console.error(`SKS Team tmux attach failed (${status}). Run manually: ${result.attach_command}`);
+      process.exitCode = result.attached.status || 1;
+    }
+  }
   return result;
 }
 

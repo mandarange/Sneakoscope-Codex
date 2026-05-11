@@ -64,6 +64,7 @@ export async function enableMadHighProfile(opts = {}) {
   let next = upsertTable(current, `profiles.${MAD_HIGH_PROFILE}`, [
     `[profiles.${MAD_HIGH_PROFILE}]`,
     'model = "gpt-5.5"',
+    'service_tier = "fast"',
     'approval_policy = "never"',
     `approvals_reviewer = "${AUTO_REVIEW_REVIEWER}"`,
     'sandbox_mode = "danger-full-access"',
@@ -169,6 +170,7 @@ function upsertProfile(text, profile, effort, reviewer = AUTO_REVIEW_REVIEWER) {
   const block = [
     `[profiles.${profile}]`,
     'model = "gpt-5.5"',
+    'service_tier = "fast"',
     'approval_policy = "on-request"',
     `approvals_reviewer = "${reviewer}"`,
     'sandbox_mode = "workspace-write"',

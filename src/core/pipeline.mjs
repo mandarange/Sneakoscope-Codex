@@ -19,13 +19,24 @@ import { SPEED_LANE_POLICY } from './proof-field.mjs';
 import { permissionGateSummary } from './permission-gates.mjs';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
-import { formatRoleCounts, initTeamLive, parseTeamSpecText } from './team-live.mjs';
+import { formatAgentReasoning, formatRoleCounts, initTeamLive, parseTeamSpecText, teamReasoningPolicy } from './team-live.mjs';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from './team-review-policy.mjs';
 
 export { routePrompt };
 
 export const PIPELINE_PLAN_ARTIFACT = 'pipeline-plan.json';
 export const PIPELINE_PLAN_SCHEMA_VERSION = 1;
+
+function ambientGoalContinuation() {
+  return {
+    schema_version: 1,
+    enabled: true,
+    mode: 'ambient_codex_native_goal_overlay',
+    native_slash_command: '/goal',
+    non_disruptive: true,
+    rule: 'Use Codex native goal persistence when available to keep work resumable until completion; it never replaces the selected SKS route, Team, TriWiki, verification, reflection, or Honest Mode gates.'
+  };
+}
 const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
@@ -102,6 +113,7 @@ export function buildPipelinePlan(input = {}) {
     proof_field: proof,
     route_economy: routeEconomy,
     skill_dream: input.skillDream || { attached: false, reason: 'skill dreaming uses cheap counters and only runs inventory at threshold' },
+    goal_continuation: ambientGoalContinuation(),
     next_actions: planNextActions(route, task, ambiguity, lane),
     no_unrequested_fallback_code: true
   };
@@ -249,8 +261,8 @@ function planNextActions(route, task, ambiguity, lane) {
 export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
   const required = routeNeedsContext7(route, prompt);
   const reasoning = routeReasoning(route, prompt);
-  const fastDesign = route?.id === 'DFix';
-  if (fastDesign) return dfixQuickContext(prompt, route);
+  const directFix = route?.id === 'DFix';
+  if (directFix) return dfixQuickContext(prompt, route);
   if (route?.id === 'Answer') return answerOnlyContext(prompt, route);
   if (route?.id === 'ComputerUse') return computerUseFastContext(prompt, route);
   const lines = [
@@ -259,6 +271,7 @@ export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
     'Before work, load the required SKS skill context and follow the route lifecycle instead of treating the command as plain text.',
     'Codex App visibility: briefly surface what SKS is doing before tools run, mirror important worker/tool status to mission artifacts, and keep progress legible to the user.',
     'Hook visibility limit: hooks can inject context/status or block/continue a turn, but they cannot create arbitrary live chat bubbles; use team events, mission files, or normal assistant updates for live transcript details.',
+    'Ambient Goal continuation: even without an explicit $Goal keyword, use Codex native /goal persistence when it helps keep long work resumable and complete; do not let it replace or skip the selected SKS route gates.',
     'Ambiguity gate: execution routes must infer obvious contract answers first and ask only missing answers that can change target, scope, safety, behavior, or acceptance. DFix and Answer bypass this gate because they do not start implementation.',
     'Plan-first interaction: when ambiguity questions are truly required, show the user only the missing human decision(s), then seal the decision contract internally and execute/verify.',
     'Question-shaped directive policy: before using Answer, decide whether a question is a real information request or an implicit instruction/complaint about broken behavior. Rhetorical bug reports, mandatory-policy statements, and "why is this not happening?" execution complaints must route to Team, not Answer.',
@@ -297,13 +310,13 @@ export function dfixQuickContext(prompt, route = routePrompt(prompt)) {
   const task = stripDollarCommand(prompt) || String(prompt || '').trim();
   const routeLabel = route?.command || '$DFix';
   return [
-    `DFix ultralight pipeline active. Route: ${routeLabel} (${route?.route || 'fast design/content fix'}).`,
+    `DFix ultralight pipeline active. Route: ${routeLabel} (Direct Fix: tiny copy/config/docs/labels/spacing/translation/simple mechanical edits).`,
     'Bypass: do not enter the general SKS prompt pipeline, mission creation, ambiguity gate, TriWiki refresh, Context7 routing, subagent orchestration, Goal, Research, eval, or broad planning.',
     `Task: ${task}`,
     'Task list:',
-    '1. Infer the smallest visible design/content target from the request and current files.',
+    '1. Infer the smallest visible Direct Fix target from the request and current files.',
     '2. Inspect only the files needed to locate that target.',
-    `3. Apply only the listed design/content edit; for UI/UX micro-edits read design.md when present, and use imagegen for any image/logo/raster asset. ${CODEX_IMAGEGEN_REQUIRED_POLICY}`,
+    `3. Apply only the listed Direct Fix edit; keep broad implementation routed to Team, and for UI/UX micro-edits read design.md when present and use imagegen for any image/logo/raster asset. ${CODEX_IMAGEGEN_REQUIRED_POLICY}`,
     '4. Run only cheap verification when useful, such as syntax check, focused test, or local render smoke.',
     '5. Final response: start with `DFix 완료 요약:` and include one `DFix 솔직모드:` line with verified / not verified / remaining issue status. Do not create TriWiki/TriFix/reflection/state records and do not enter repeated full-route Honest Mode loops.'
   ].join('\n');
@@ -738,6 +751,8 @@ async function materializeAutoSealedTeam(root, id, dir, route, task, contractHas
     review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
     bundle_size: roster.bundle_size,
     roster,
+    goal_continuation: ambientGoalContinuation(),
+    reasoning: teamReasoningPolicy(cleanTask, roster),
     contract_hash: contractHash,
     team_model: {
       phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'runtime_task_graph', 'development_team', 'review'],
@@ -827,6 +842,8 @@ async function prepareTeam(root, route, task, required, opts = {}) {
     review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
     bundle_size: roster.bundle_size,
     roster,
+    goal_continuation: ambientGoalContinuation(),
+    reasoning: teamReasoningPolicy(cleanTask, roster),
     team_model: {
       phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'runtime_task_graph', 'development_team', 'triwiki_stage_refresh', 'review'],
       analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents. Each scout owns one investigation slice and returns TriWiki-ready findings with source paths, risks, and suggested implementation slices.`,
@@ -859,7 +876,7 @@ async function prepareTeam(root, route, task, required, opts = {}) {
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
   const contextTracking = triwikiContextTracking();
-  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReview policy: ${MIN_TEAM_REVIEW_POLICY_TEXT}\nReasoning: high for team logic, temporary for this route only.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\n1. Run exactly ${roster.bundle_size} read-only analysis_scout_N agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants through the compact Hyperplan-derived adversarial lens pass, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent analysis_scout_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
+  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReview policy: ${MIN_TEAM_REVIEW_POLICY_TEXT}\nReasoning: dynamic per-agent Fast reasoning; simple bounded lanes can use low, tool-heavy runtime lanes medium, and knowledge/safety/release lanes high or xhigh.\nGoal continuation: ambient Codex native /goal overlay is available when useful, without replacing Team route gates.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\nAnalysis scout reasoning:\n${roster.analysis_team.map((agent) => `- ${agent.id}: ${formatAgentReasoning(agent)}`).join('\n')}\n\n1. Run exactly ${roster.bundle_size} read-only analysis_scout_N agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants through the compact Hyperplan-derived adversarial lens pass, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent analysis_scout_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
   await initTeamLive(id, dir, cleanTask, { agentSessions, roleCounts, roster });
   const runtime = await writeTeamRuntimeArtifacts(dir, plan, {});
   await writeMemorySweepReport(root, dir, { missionId: id }).catch(() => null);
@@ -922,7 +939,7 @@ async function prepareLightRoute(root, route, task, required) {
 function routeState(id, route, phase, context7Required, extra = {}) {
   const reasoning = routeReasoning(route, extra.prompt || '');
   const subagentsRequired = routeRequiresSubagents(route, extra.prompt || '');
-  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: false, reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, ...extra };
+  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: false, reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, goal_continuation: ambientGoalContinuation(), ...extra };
 }
 
 function routeContext(route, id, task, required, next) {
@@ -941,6 +958,7 @@ TriWiki: use only the latest coordinate+voxel-overlay context pack before each r
 Final closeout: every pipeline final answer must summarize what was done, what changed for the user/repo, what was verified, and any remaining gaps.
 ${reflectionRequiredForRoute(route) ? `Reflection: ${reflectionInstructionText()}` : 'Reflection: not required for this lightweight route.'}
 Reasoning: ${routeReasoning(route, task).effort} temporary; return to default after completion.
+Goal continuation: ambient /goal overlay may be used for persistence when it helps completion, but route gates remain authoritative.
 Next atomic action: ${next}`
   };
 }

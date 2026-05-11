@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { appendJsonlBounded, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
-import { triwikiContextTracking, triwikiContextTrackingText } from './routes.mjs';
+import { reasoningProfileName, triwikiContextTracking, triwikiContextTrackingText } from './routes.mjs';
 import { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_STAGE_AGENT_SESSIONS } from './team-review-policy.mjs';
 export { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, MIN_TEAM_REVIEW_STAGE_AGENT_SESSIONS, evaluateTeamReviewPolicyGate, teamReviewPolicy } from './team-review-policy.mjs';
 
@@ -39,6 +39,87 @@ const ROLE_ALIASES = {
   verifiers: 'reviewer'
 };
 
+const TEAM_REASONING_POLICY_VERSION = 1;
+const XHIGH_SIGNAL_RE = /(frontier|autoresearch|novelty|hypothesis|falsify|forensic|from-chat-img|image\s*work\s*order|새로운\s*연구|가설|포렌식)/i;
+const HIGH_SIGNAL_RE = /(research|current docs?|library|framework|sdk|api|database|supabase|sql|migration|security|permission|mad|release|publish|deploy|commit|push|architecture|algorithm|policy|위험|보안|배포|커밋|푸쉬|마이그레이션|데이터베이스|권한|리서치|문서)/i;
+const MEDIUM_SIGNAL_RE = /(tmux|terminal|cli|cmd|warp|tool(?:\s|-)?call|hook|router|routing|orchestrat|pipeline|multi[-\s]?pane|pane|process|config|many files?|여러\s*파일|터미널|라우팅|파이프라인|훅|도구|툴)/i;
+const SIMPLE_SIGNAL_RE = /(tiny|simple|small|one[-\s]?line|typo|copy|label|spacing|rename|text|readme|docs?|config wording|간단|단순|오타|문구|라벨|간격|색상)/i;
+
+export function teamAgentReasoning(input = {}) {
+  const prompt = String(input.prompt || '');
+  const role = String(input.role || '').toLowerCase();
+  const id = String(input.id || input.agentId || '').toLowerCase();
+  const base = teamPromptReasoning(prompt);
+  let effort = base.effort;
+  let reason = base.reason;
+
+  if (/db|safety/.test(id) || role === 'safety') {
+    effort = base.effort === 'xhigh' ? 'xhigh' : 'high';
+    reason = 'db_or_safety_reviewer';
+  } else if (/review|qa/.test(id) || role === 'reviewer') {
+    effort = base.effort === 'low' ? 'medium' : base.effort;
+    reason = base.effort === 'low' ? 'review_requires_more_than_low' : base.reason;
+  } else if (/planner|consensus|debate/.test(id) || role === 'planner') {
+    effort = base.effort === 'low' ? 'medium' : base.effort;
+    reason = base.effort === 'low' ? 'planning_uses_medium_minimum' : base.reason;
+  } else if (/user/.test(id) || role === 'user') {
+    effort = 'low';
+    reason = 'user_persona_lane';
+  } else if (/executor|implementation/.test(id) || role === 'executor') {
+    effort = base.effort === 'xhigh' ? 'high' : base.effort;
+    reason = base.effort === 'xhigh' ? 'implementation_capped_at_high' : base.reason;
+  }
+
+  const profile = reasoningProfileName(effort);
+  return {
+    policy_version: TEAM_REASONING_POLICY_VERSION,
+    reasoning_effort: effort,
+    model_reasoning_effort: effort,
+    reasoning_profile: profile,
+    service_tier: 'fast',
+    fast_mode: true,
+    reasoning_reason: reason,
+    routing: 'dynamic_team_agent_reasoning'
+  };
+}
+
+export function teamPromptReasoning(prompt = '') {
+  const text = String(prompt || '');
+  if (XHIGH_SIGNAL_RE.test(text)) return { effort: 'xhigh', reason: 'research_forensic_or_frontier_signal' };
+  if (HIGH_SIGNAL_RE.test(text)) return { effort: 'high', reason: 'knowledge_safety_release_or_db_signal' };
+  if (SIMPLE_SIGNAL_RE.test(text) && !MEDIUM_SIGNAL_RE.test(text)) return { effort: 'low', reason: 'simple_bounded_code_or_content_change' };
+  if (MEDIUM_SIGNAL_RE.test(text)) return { effort: 'medium', reason: 'tooling_or_runtime_orchestration_signal' };
+  return { effort: 'medium', reason: 'default_team_balanced_reasoning' };
+}
+
+export function formatAgentReasoning(agent = {}) {
+  const effort = agent.reasoning_effort || agent.model_reasoning_effort || 'medium';
+  const profile = agent.reasoning_profile || reasoningProfileName(effort);
+  const reason = agent.reasoning_reason || 'default_team_balanced_reasoning';
+  return `${effort}/${profile}, fast, ${reason}`;
+}
+
+export function teamReasoningPolicy(prompt = '', roster = {}) {
+  const agents = Array.isArray(roster.all_agents) ? roster.all_agents : [];
+  const counts = {};
+  for (const agent of agents) counts[agent.reasoning_effort || 'medium'] = (counts[agent.reasoning_effort || 'medium'] || 0) + 1;
+  return {
+    schema_version: TEAM_REASONING_POLICY_VERSION,
+    dynamic: true,
+    service_tier: 'fast',
+    prompt_policy: teamPromptReasoning(prompt),
+    allowed_efforts: ['low', 'medium', 'high', 'xhigh'],
+    profile_map: {
+      low: reasoningProfileName('low'),
+      medium: reasoningProfileName('medium'),
+      high: reasoningProfileName('high'),
+      xhigh: reasoningProfileName('xhigh')
+    },
+    counts,
+    rule: 'Assign per-agent reasoning from prompt risk and role; simple bounded work can use low, tool-heavy runtime work medium, knowledge/research/safety/release work high or xhigh.'
+  };
+}
+
 export function teamLogPaths(dir) {
   return {
     live: path.join(dir, 'team-live.md'),
@@ -49,7 +130,7 @@ export function teamLogPaths(dir) {
 }
 
 export function defaultTeamDashboard(id, prompt, opts = {}) {
-  const spec = normalizeTeamSpec(opts);
+  const spec = normalizeTeamSpec({ ...opts, prompt });
   return {
     schema_version: 1,
     mission_id: id,
@@ -83,7 +164,7 @@ export function defaultTeamDashboard(id, prompt, opts = {}) {
 }
 
 export function teamLiveMarkdown(id, prompt, opts = {}) {
-  const spec = normalizeTeamSpec(opts);
+  const spec = normalizeTeamSpec({ ...opts, prompt });
   const contextTracking = triwikiContextTrackingText();
   return `# SKS Team Live Transcript
 
@@ -133,16 +214,16 @@ sks team cleanup-tmux ${id}
 ## Roster
 
 Analysis scouts (${spec.roster.analysis_team.length} scouts):
-${spec.roster.analysis_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+${spec.roster.analysis_team.map(formatRosterLine).join('\n')}
 
 Debate team (${spec.roster.debate_team.length} participants):
-${spec.roster.debate_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+${spec.roster.debate_team.map(formatRosterLine).join('\n')}
 
 Development team (${spec.roster.development_team.length} executors):
-${spec.roster.development_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+${spec.roster.development_team.map(formatRosterLine).join('\n')}
 
 Validation team:
-${spec.roster.validation_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+${spec.roster.validation_team.map(formatRosterLine).join('\n')}
 
 ## Live Events
 `;
@@ -223,7 +304,7 @@ export function parseTeamSpecArgs(args = []) {
       i++;
       continue;
     }
-    if (arg === '--json' || arg === '--open-tmux' || arg === '--tmux-open') continue;
+    if (arg === '--json' || arg === '--open-tmux' || arg === '--tmux-open' || arg === '--no-open-tmux' || arg === '--no-tmux' || arg === '--no-attach') continue;
     cleanArgs.push(args[i]);
   }
   return { cleanArgs, ...normalizeTeamSpec({ roleCounts, agentSessions: explicitSession }) };
@@ -241,7 +322,7 @@ export function parseTeamSpecText(text = '') {
     return '';
   }).replace(/\s+/g, ' ').trim();
   if (wantsMaxAgents && !explicitExecutor) roleCounts.executor = DEFAULT_MAX_TEAM_AGENT_SESSIONS;
-  return { prompt, ...normalizeTeamSpec({ roleCounts, agentSessions: wantsMaxAgents ? roleCounts.executor : undefined }) };
+  return { prompt, ...normalizeTeamSpec({ roleCounts, agentSessions: wantsMaxAgents ? roleCounts.executor : undefined, prompt }) };
 }
 
 export function normalizeTeamSpec(opts = {}) {
@@ -252,7 +333,7 @@ export function normalizeTeamSpec(opts = {}) {
   const bundleSize = normalizeTeamAgentSessions(roleCounts.executor, DEFAULT_TEAM_ROLE_COUNTS.executor);
   const reviewStageSessions = normalizeTeamAgentSessions(roleCounts.reviewer, MIN_TEAM_REVIEW_STAGE_AGENT_SESSIONS);
   const agentSessions = Math.max(normalizeTeamAgentSessions(opts.agentSessions ?? bundleSize), reviewStageSessions);
-  return { agentSessions, bundleSize, roleCounts, roster: buildTeamRoster(roleCounts) };
+  return { agentSessions, bundleSize, roleCounts, roster: buildTeamRoster(roleCounts, { prompt: opts.prompt || opts.task || '' }) };
 }
 
 export function normalizeTeamRoleCounts(input = {}) {
@@ -265,18 +346,19 @@ export function normalizeTeamRoleCounts(input = {}) {
   return counts;
 }
 
-export function buildTeamRoster(roleCounts = DEFAULT_TEAM_ROLE_COUNTS) {
+export function buildTeamRoster(roleCounts = DEFAULT_TEAM_ROLE_COUNTS, opts = {}) {
   const counts = normalizeTeamRoleCounts(roleCounts);
+  const prompt = String(opts.prompt || opts.task || '');
   const bundleSize = normalizeTeamAgentSessions(counts.executor);
-  const debateUsers = numberedAgents('debate_user', counts.user, 'Impatient final user voice: low-context, self-interested, stubborn, dislikes inconvenience, rejects clever work that feels annoying.', 'user');
-  const debatePlanners = numberedAgents('debate_planner', counts.planner, 'Pragmatic planner: distills only defensible findings into one objective, required clarification questions, constraints, acceptance criteria, and disjoint work slices.', 'planner');
-  const debateReviewers = numberedAgents('debate_reviewer', counts.reviewer, 'Strict debate reviewer: applies validator/researcher lenses to correctness, safety, DB risk, tests, regressions, and unsupported assumptions.', 'reviewer');
-  const debateExecutorPool = numberedAgents('debate_executor', bundleSize, 'Capable developer voice in debate: applies skeptic/architect lenses to implementation shape, ownership boundaries, dependencies, coupling, and risks before coding starts.', 'executor');
+  const debateUsers = numberedAgents('debate_user', counts.user, 'Impatient final user voice: low-context, self-interested, stubborn, dislikes inconvenience, rejects clever work that feels annoying.', 'user', { prompt });
+  const debatePlanners = numberedAgents('debate_planner', counts.planner, 'Pragmatic planner: distills only defensible findings into one objective, required clarification questions, constraints, acceptance criteria, and disjoint work slices.', 'planner', { prompt });
+  const debateReviewers = numberedAgents('debate_reviewer', counts.reviewer, 'Strict debate reviewer: applies validator/researcher lenses to correctness, safety, DB risk, tests, regressions, and unsupported assumptions.', 'reviewer', { prompt });
+  const debateExecutorPool = numberedAgents('debate_executor', bundleSize, 'Capable developer voice in debate: applies skeptic/architect lenses to implementation shape, ownership boundaries, dependencies, coupling, and risks before coding starts.', 'executor', { prompt });
   const debateTeam = composeDebateTeam({ users: debateUsers, planners: debatePlanners, reviewers: debateReviewers, executors: debateExecutorPool, bundleSize });
-  const analysisScouts = numberedAgents('analysis_scout', bundleSize, 'Read-only analysis scout: quickly maps one independent slice of repo/docs/tests/API risk, records source paths and evidence, and returns TriWiki-ready findings.', 'scout');
-  const developmentExecutors = numberedAgents('executor', bundleSize, 'Capable developer executor: owns one disjoint implementation slice and coordinates without reverting others.', 'executor');
-  const validationReviewers = numberedAgents('reviewer', counts.reviewer, 'Strict reviewer: adversarial about correctness, safety, DB risk, tests, regressions, and unsupported claims.', 'reviewer');
-  const validationUsers = numberedAgents('user', counts.user, 'Impatient final user acceptance persona: low-context, self-interested, stubborn, dislikes inconvenience, rejects clever work that feels annoying.', 'user');
+  const analysisScouts = numberedAgents('analysis_scout', bundleSize, 'Read-only analysis scout: quickly maps one independent slice of repo/docs/tests/API risk, records source paths and evidence, and returns TriWiki-ready findings.', 'scout', { prompt });
+  const developmentExecutors = numberedAgents('executor', bundleSize, 'Capable developer executor: owns one disjoint implementation slice and coordinates without reverting others.', 'executor', { prompt });
+  const validationReviewers = numberedAgents('reviewer', counts.reviewer, 'Strict reviewer: adversarial about correctness, safety, DB risk, tests, regressions, and unsupported claims.', 'reviewer', { prompt });
+  const validationUsers = numberedAgents('user', counts.user, 'Impatient final user acceptance persona: low-context, self-interested, stubborn, dislikes inconvenience, rejects clever work that feels annoying.', 'user', { prompt });
   return {
     role_counts: counts,
     bundle_size: bundleSize,
@@ -296,8 +378,15 @@ export function formatRoleCounts(roleCounts = DEFAULT_TEAM_ROLE_COUNTS) {
   return Object.entries(counts).map(([role, count]) => `${role}:${count}`).join(' ');
 }
 
-function numberedAgents(prefix, count, persona, role = prefix) {
-  return Array.from({ length: normalizeTeamAgentSessions(count, 1) }, (_, i) => ({ id: `${prefix}_${i + 1}`, role, index: i + 1, persona }));
+function numberedAgents(prefix, count, persona, role = prefix, opts = {}) {
+  return Array.from({ length: normalizeTeamAgentSessions(count, 1) }, (_, i) => {
+    const id = `${prefix}_${i + 1}`;
+    return { id, role, index: i + 1, persona, ...teamAgentReasoning({ prompt: opts.prompt || '', role, id }) };
+  });
+}
+
+function formatRosterLine(agent = {}) {
+  return `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`;
 }
 
 function composeDebateTeam({ users, planners, reviewers, executors, bundleSize }) {

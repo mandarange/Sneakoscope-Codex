@@ -42,7 +42,7 @@ sks selftest --mock
 
 | Area | What it does |
 | --- | --- |
-| CLI runtime | Bare `sks` opens or reuses the default tmux Codex CLI workspace. `sks tmux open` remains the explicit form for session/workspace flags, and `sks --mad` launches the explicit full-access high-reasoning profile. |
+| CLI runtime | Bare `sks` opens or reuses the default tmux Codex CLI workspace. `sks tmux open` remains the explicit form for session/workspace flags, and `sks --mad` launches a multi-pane MAD tmux cockpit with the explicit full-access high-reasoning profile. |
 | Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Image-UX-Review`, `$UX-Review`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. `sks codex-app remote-control` wraps Codex CLI 0.130.0+ headless remote control without falling back to older app-server internals. |
 | OpenClaw agents | Generates an OpenClaw skill package so OpenClaw agents can attach `sneakoscope-codex`, enable the `shell` tool, and discover/use SKS commands from the target repo root. |
 | Pipeline plans | Writes `pipeline-plan.json` for stateful routes so the runtime lane, kept stages, skipped stages, verification commands, and no-unrequested-fallback invariant are visible with `sks pipeline plan`. |
@@ -53,7 +53,7 @@ sks selftest --mock
 | PPT pipeline | Uses `$PPT` for simple, restrained, information-first HTML/PDF presentation artifacts, first asking delivery context, audience profile, STP strategy, decision context, and 3+ pain-point to solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in `ppt-parallel-report.json`; editable source HTML is preserved under `source-html/`, PPT-only temporary build files are cleaned after completion, installed skills/MCPs outside the `$PPT` allowlist are ignored, generated image assets must use real `$imagegen`/`gpt-image-2` output when sealed in the contract, and `ppt-style-tokens.json` records the design SSOT plus fused source inputs. |
 | Image UX Review | Uses `$Image-UX-Review` / `$UX-Review` for UI/UX audits where source screenshots are first turned into generated annotated review images through Codex App `$imagegen`/`gpt-image-2`; those generated images are then read back into `image-ux-issue-ledger.json`, optional requested fixes are rechecked, and missing generated review images or text-only screenshot critique cannot pass `image-ux-review-gate.json`. |
 | Computer Use fast lane | Uses `$Computer-Use` / `$CU` for UI/browser/visual work that needs maximum speed: skip Team debate and upfront TriWiki loops, use Codex Computer Use directly, then refresh/validate TriWiki and run Honest Mode at final closeout. |
-| Goal | Provides a fast SKS bridge overlay for Codex native persisted `/goal` create, pause, resume, and clear controls; implementation continues through the selected SKS execution route. |
+| Goal | Provides a fast SKS bridge overlay for Codex native persisted `/goal` create, pause, resume, and clear controls; an ambient non-disruptive Goal continuation overlay is also recorded in normal pipeline plans while implementation continues through the selected SKS execution route. |
 | TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, `attention.hydrate_first`, and prompt-bound mistake recall ledgers. |
 | Context7 | Requires current docs for external packages, APIs, MCPs, SDKs, and framework/runtime behavior when correctness depends on current guidance. |
 | Design SSOT | Treats `design.md` as the only design decision source of truth. `docs/Design-Sys-Prompt.md` is the builder prompt; getdesign.md, official getdesign docs, and curated DESIGN.md examples from `VoltAgent/awesome-design-md` are source inputs that must be fused into `design.md` or route-local style tokens instead of becoming parallel authorities. |
@@ -80,7 +80,7 @@ The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex`
 - Checks npm for newer `sneakoscope` and `@openai/codex` versions before launch and asks whether to update when the terminal can answer y/n.
 - Installs the latest Codex CLI with `npm i -g @openai/codex@latest` when it is missing and you approve or pass `--yes`.
 - Requires tmux 3.x or newer before opening the session.
-- Creates or reuses a named detached tmux session and prints only the session, gate, attach, and blocker details needed to act.
+- Creates a named detached tmux cockpit with multiple panes and prints only the session, gate, attach, and blocker details needed to act.
 
 ## Installation
 
@@ -167,7 +167,7 @@ sks tmux check
 sks tmux status --once
 ```
 
-Bare `sks` creates or reuses the default named tmux session for Codex CLI and attaches to it in an interactive terminal. By default it launches Codex in the SKS fast-high runtime (`--model gpt-5.5 -c model_reasoning_effort="high"`) with a static SKS 3D ASCII intro inside tmux; the animated intro is reserved for non-tmux unauthenticated Codex launches and can be disabled with `SKS_TMUX_LOGO_ANIMATION=0`. SKS always forces the model to `gpt-5.5`; `SKS_CODEX_MODEL` and `SKS_CODEX_FAST_HIGH=0` cannot downgrade or remove that model pin. You can still set `SKS_CODEX_REASONING` to change reasoning effort. Use `sks tmux open` when you need explicit `--workspace` / `--session` flags, `sks tmux check` for readiness without launching, and `sks help` for CLI help. Use `--no-attach` or `SKS_TMUX_NO_AUTO_ATTACH=1` when you only want SKS to create/reuse the session and print the manual attach command.
+Bare `sks` creates or reuses the default named tmux session for Codex CLI and attaches to it in an interactive terminal. By default it launches Codex in Fast service tier with `--model gpt-5.5`, `-c service_tier="fast"`, and the selected `model_reasoning_effort` with a static SKS 3D ASCII intro inside tmux; the animated intro is reserved for non-tmux unauthenticated Codex launches and can be disabled with `SKS_TMUX_LOGO_ANIMATION=0`. SKS always forces the model to `gpt-5.5`; `SKS_CODEX_MODEL` and `SKS_CODEX_FAST_HIGH=0` cannot downgrade or remove that model pin. You can still set `SKS_CODEX_REASONING` to change reasoning effort. Use `sks tmux open` when you need explicit `--workspace` / `--session` flags, `sks tmux check` for readiness without launching, and `sks help` for CLI help. Use `--no-attach` or `SKS_TMUX_NO_AUTO_ATTACH=1` when you only want SKS to create/reuse the session and print the manual attach command.
 
 Before opening tmux, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens tmux with the updated Codex CLI.
 
@@ -211,7 +211,7 @@ sks --mad
 sks --mad --yes
 ```
 
-This syncs existing codex-lb/Codex CLI auth before launch, creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `sandbox_mode = "danger-full-access"` and `approval_policy = "never"`, opens an active MAD-SKS permission gate for that tmux run, then launches Codex with `--sandbox danger-full-access --ask-for-approval never` and attaches to the session in an interactive terminal. If codex-lb is configured and no explicit `--workspace`/`--session` was passed, SKS opens a fresh tmux session so the repaired key is loaded by the Codex process immediately. While the gate is active, live server work, Supabase MCP database writes, direct SQL, targeted DML, schema cleanup, Supabase MCP `apply_migration`, and required Supabase CLI migration application such as `supabase migration up` or `supabase db push` are allowed. Catastrophic database wipe/all-row/project-management safeguards remain active. Repeat launches reuse the same named SKS MAD tmux session unless auth repair requires a fresh codex-lb session.
+This syncs existing codex-lb/Codex CLI auth before launch, creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux cockpit with `sandbox_mode = "danger-full-access"` and `approval_policy = "never"`, opens an active MAD-SKS permission gate for that tmux run, then launches a tiled cockpit: Codex CLI, MAD permission gate status, and live guide panes. The cockpit recreates the named session on launch so stale single-pane sessions do not hide the split layout, then attaches in an interactive terminal. If codex-lb is configured and no explicit `--workspace`/`--session` was passed, SKS opens a fresh tmux session so the repaired key is loaded by the Codex process immediately. While the gate is active, live server work, Supabase MCP database writes, direct SQL, targeted DML, schema cleanup, Supabase MCP `apply_migration`, and required Supabase CLI migration application such as `supabase migration up` or `supabase db push` are allowed. Catastrophic database wipe/all-row/project-management safeguards remain active.
 
 MAD does not disable the pipeline contract: stages, executors, reviewers, and auto-review policy still must not invent unrequested fallback implementation code. If the requested path cannot be implemented, SKS should block with evidence rather than add substitute behavior.
 
@@ -239,9 +239,11 @@ sks team log latest
 
 By default, Team missions keep at least five QA/reviewer lanes active. Use explicit role counts only when you need to raise or otherwise pin the lane mix for a specific mission.
 
-Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named tmux Team session with split live lanes when tmux is available. The default terminal output stays compact: mission id, agent count, role count, tmux status, watch command, and artifact directory. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
+Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and opens a named tmux Team session with split live lanes by default when tmux is available. Use `--no-open-tmux` for artifact-only mission creation. The default terminal output stays compact: mission id, agent count, role count, tmux status, watch command, and artifact directory. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
 
 The tmux Team launch is a live orchestration screen in one tmux window: the first pane follows `sks team watch <mission-id> --follow` as the mission overview, and neighboring split panes follow individual `sks team lane <mission-id> --agent <name> --follow` views. Pane headers show only mission, lane, phase, follow command, and cleanup command. SKS gives lanes role-specific colors, labels, and terminal titles, so scouts, planning/debate voices, executors, reviewers, and safety lanes are visually distinct while detailed evidence is mirrored into `team-transcript.jsonl`, `team-live.md`, and `team-dashboard.json`.
+
+Team roster and runtime artifacts now include per-agent Fast reasoning metadata. Simple bounded Team lanes can use low reasoning, tool-heavy runtime/CLI/tmux work uses medium, and knowledge, current-docs, safety, DB, release, commit, or research-heavy lanes use high or xhigh as appropriate instead of opening every scout at high.
 
 Agent sessions communicate through the bounded Team transcript. Use `sks team message <mission-id|latest> --from <agent> --to <agent|all> --message "..."` to add direct or broadcast messages; lane panes show messages addressed to that agent plus the fallback global tail.
 
@@ -412,7 +414,7 @@ Use these inside Codex App or another agent prompt. They are prompt commands, no
 | --- | --- |
 | `$Team` | You want implementation, code changes, or substantial repo work. |
 | `$From-Chat-IMG` | You have a chat screenshot plus original attachments and want each visible request mapped to work. |
-| `$DFix` | You need a tiny design/content edit such as copy, label, color, spacing, or translation, with no Team/TriWiki/reflection recording and only a one-line DFix Honest check. |
+| `$DFix` | You need Direct Fix work: tiny copy/config/docs/labels/spacing/translation/simple mechanical edits, with broad implementation still routed to Team and UI design specifics handled by the relevant UI/design route rules. |
 | `$Answer` | You want an answer only and no implementation should start. |
 | `$SKS` | You need setup, status, usage, or workflow help. |
 | `$QA-LOOP` | You want UI/API dogfooding, safe fixes, and rechecks. |

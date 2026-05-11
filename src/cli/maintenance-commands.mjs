@@ -15,9 +15,9 @@ import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge }
 import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, routePrompt, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, routePrompt, routeReasoning, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
-import { appendTeamEvent, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested } from '../core/team-live.mjs';
+import { appendTeamEvent, formatAgentReasoning, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested, teamReasoningPolicy } from '../core/team-live.mjs';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../core/team-review-policy.mjs';
 import { ARTIFACT_FILES, writeValidationReport } from '../core/artifact-schemas.mjs';
 import { writeEffortDecision } from '../core/effort-orchestrator.mjs';
@@ -42,6 +42,17 @@ const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 const REPOSITORY_URL = 'https://github.com/mandarange/Sneakoscope-Codex.git';
 
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
+
+function ambientGoalContinuation() {
+  return {
+    schema_version: 1,
+    enabled: true,
+    mode: 'ambient_codex_native_goal_overlay',
+    native_slash_command: '/goal',
+    non_disruptive: true,
+    rule: 'Use Codex native goal persistence to keep long work resumable when available, but never replace Team, TriWiki, verification, or Honest Mode route gates.'
+  };
+}
 
 export function quickstartCommand() {
   console.log(`ㅅㅋㅅ Quickstart
@@ -1468,12 +1479,13 @@ export async function gxCommand(sub, args) {
 export async function team(args) {
   const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'cleanup-tmux']);
   if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
-  const openTmux = flag(args, '--open-tmux') || flag(args, '--tmux-open');
-  const cleanCreateArgs = args.filter((arg) => !['--open-tmux', '--tmux-open'].includes(String(arg)));
+  const jsonOutput = flag(args, '--json');
+  const openTmux = !jsonOutput && !flag(args, '--no-open-tmux') && !flag(args, '--no-tmux');
+  const cleanCreateArgs = args.filter((arg) => !['--open-tmux', '--tmux-open', '--no-open-tmux', '--no-tmux', '--no-attach'].includes(String(arg)));
   const opts = parseTeamCreateArgs(cleanCreateArgs);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   if (!prompt) {
-    console.error('Usage: sks team "task" [executor:5 reviewer:6 user:1] [--agents N] [--open-tmux] [--json]');
+    console.error('Usage: sks team "task" [executor:5 reviewer:6 user:1] [--agents N] [--no-open-tmux] [--json]');
     console.error('       sks team log|tail|watch|lane|status|message|cleanup-tmux [mission-id|latest]');
     console.error('       sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
     console.error('       sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."');
@@ -1491,15 +1503,25 @@ export async function team(args) {
   const liveFiles = await initTeamLive(id, dir, prompt, { agentSessions, roleCounts, roster });
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
   const fromChatImgRequired = hasFromChatImgSignal(prompt);
+  const teamReasoning = teamReasoningPolicy(prompt, roster);
+  const promptEffort = teamReasoning.prompt_policy?.effort || 'medium';
   const runtime = await writeTeamRuntimeArtifacts(dir, plan, {});
   const effortDecision = await writeEffortDecision(dir, {
     mission_id: id,
     task_id: 'TEAM-INTAKE',
     route: fromChatImgRequired ? 'from-chat-img' : 'team',
     prompt,
-    tool_use: true,
-    multi_step_decision: true,
-    spans_many_files: true
+    tool_use: promptEffort === 'medium',
+    multi_step_decision: promptEffort !== 'low',
+    spans_many_files: promptEffort === 'high' || promptEffort === 'xhigh',
+    is_deterministic: promptEffort === 'low',
+    has_verified_skill: true,
+    high_risk: promptEffort === 'high' || promptEffort === 'xhigh',
+    risk_scores: {
+      security: /security|auth|permission|database|supabase|sql|보안|권한|데이터베이스/i.test(prompt) ? 0.8 : 0.1,
+      destructive_action: /delete|drop|reset|remove|삭제|초기화/i.test(prompt) ? 0.8 : 0.1,
+      user_impact: /release|publish|deploy|commit|push|production|배포|커밋|푸쉬|운영/i.test(prompt) ? 0.8 : 0.3
+    }
   });
   const workOrder = createWorkOrderLedger({
     missionId: id,
@@ -1514,8 +1536,9 @@ export async function team(args) {
   await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
   dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team analysis scouts' });
   const route = routePrompt(`$Team ${prompt}`) || ROUTES.find((candidate) => candidate.id === 'Team');
+  const routeReason = routeReasoning(route, prompt);
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: prompt, required: false, ambiguity: { required: false, status: 'team_cli_direct' } });
-  await setCurrent(root, { mission_id: id, route: 'Team', route_command: '$Team', mode: 'TEAM', phase: 'TEAM_PARALLEL_ANALYSIS_SCOUTING', questions_allowed: false, implementation_allowed: true, context7_required: false, context7_verified: false, subagents_required: true, subagents_verified: false, reflection_required: true, visible_progress_required: true, context_tracking: 'triwiki', required_skills: route?.requiredSkills || ['team'], stop_gate: 'team-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, team_live_ready: true, from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, prompt });
+  await setCurrent(root, { mission_id: id, route: 'Team', route_command: '$Team', mode: 'TEAM', phase: 'TEAM_PARALLEL_ANALYSIS_SCOUTING', questions_allowed: false, implementation_allowed: true, context7_required: false, context7_verified: false, subagents_required: true, subagents_verified: false, reflection_required: true, visible_progress_required: true, context_tracking: 'triwiki', required_skills: route?.requiredSkills || ['team'], stop_gate: 'team-gate.json', reasoning_effort: routeReason.effort, reasoning_profile: routeReason.profile, reasoning_temporary: true, team_agent_reasoning_policy: teamReasoning, goal_continuation: pipelinePlan.goal_continuation, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, team_live_ready: true, from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, prompt });
   const result = {
     mission_id: id,
     mission_dir: dir,
@@ -1540,14 +1563,14 @@ export async function team(args) {
     questions: path.join(dir, 'questions.md'),
     codex_agents: ['analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']
   };
-  result.tmux = await launchTmuxTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: flag(args, '--json') || !openTmux });
-  if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+  result.tmux = await launchTmuxTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: jsonOutput || !openTmux, attach: openTmux, args });
+  if (jsonOutput) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
   console.log(`Agent sessions: ${agentSessions}`);
   console.log(`Role counts: ${formatRoleCounts(roleCounts)}`);
   console.log(`Review policy: minimum ${MIN_TEAM_REVIEWER_LANES} reviewer/QA validation lanes`);
   if (result.tmux.ready) {
-    const tmuxState = result.tmux.created ? 'opened' : 'not opened; use --open-tmux for a tmux session';
+    const tmuxState = result.tmux.created ? 'opened' : 'not opened';
     console.log(`tmux: ${tmuxState} ${result.tmux.opened_lane_count || result.tmux.agents.length} agent lane(s) in ${result.tmux.session || result.tmux.workspace}`);
     if (result.tmux.split_ui?.mode) console.log(`tmux UI: ${result.tmux.split_ui.mode} (${result.tmux.split_ui.layout})`);
   }
@@ -1558,11 +1581,13 @@ export async function team(args) {
 
 export function parseTeamCreateArgs(args) {
   const spec = parseTeamSpecArgs(args);
-  return { prompt: spec.cleanArgs.join(' ').trim(), agentSessions: spec.agentSessions, roleCounts: spec.roleCounts, roster: spec.roster };
+  const prompt = spec.cleanArgs.join(' ').trim();
+  const normalized = normalizeTeamSpec({ agentSessions: spec.agentSessions, roleCounts: spec.roleCounts, prompt });
+  return { prompt, agentSessions: normalized.agentSessions, roleCounts: normalized.roleCounts, roster: normalized.roster };
 }
 
 export function buildTeamPlan(id, prompt, opts = {}) {
-  const spec = normalizeTeamSpec(opts);
+  const spec = normalizeTeamSpec({ ...opts, prompt });
   const { agentSessions, roleCounts, roster } = spec;
   const fromChatImgRequired = hasFromChatImgSignal(prompt);
   const fromChatImgCoveragePhase = fromChatImgRequired ? [{
@@ -1585,6 +1610,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
     review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
     bundle_size: roster.bundle_size,
     roster,
+    goal_continuation: ambientGoalContinuation(),
     team_model: {
       phases: ['parallel_analysis_scouts', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'runtime_task_graph', 'development_team', 'triwiki_stage_refresh', 'review', 'session_cleanup'],
       analysis_team: `Read-only parallel scouting with exactly ${roster.bundle_size} analysis_scout_N agents. Each scout owns one investigation slice, records source paths/evidence, and returns TriWiki-ready findings before debate or implementation starts.`,
@@ -1600,8 +1626,9 @@ export function buildTeamPlan(id, prompt, opts = {}) {
       MIN_TEAM_REVIEW_POLICY_TEXT,
       'Analysis scouts run before debate, then the debate team closes before a fresh development team starts parallel implementation.'
     ],
-    reasoning: { effort: 'high', profile: 'sks-logic-high', temporary: true, restore_after_completion: true },
+    reasoning: teamReasoningPolicy(prompt, roster),
     codex_config_required: {
+      service_tier: 'fast',
       features: { multi_agent: true, hooks: true },
       agents: { max_threads: 6, max_depth: 1 },
       custom_agents_dir: '.codex/agents'
@@ -1737,7 +1764,7 @@ ${plan.prompt}
 \`\`\`text
 ${plan.prompt_command || '$Team'} ${plan.prompt}
 
-Use high reasoning for the Team route only, then return to the default/user-selected profile after completion. Use at most ${plan.agent_session_count || MIN_TEAM_REVIEWER_LANES} subagent sessions at a time; the parent orchestrator is not counted. ${plan.review_policy?.text || MIN_TEAM_REVIEW_POLICY_TEXT}
+Use dynamic per-agent reasoning in Fast service tier: simple bounded lanes may use low, tool-heavy runtime lanes medium, and knowledge/safety/release lanes high or xhigh. Return to the default/user-selected profile after completion. Use at most ${plan.agent_session_count || MIN_TEAM_REVIEWER_LANES} subagent sessions at a time; the parent orchestrator is not counted. ${plan.review_policy?.text || MIN_TEAM_REVIEW_POLICY_TEXT}
 
 Before each stage, read the relevant latest coordinate+voxel TriWiki context pack and hydrate low-trust claims from source. Coordinate-only legacy packs are invalid; refresh and validate before using TriWiki for pipeline decisions. First run exactly ${plan.roster.bundle_size} read-only analysis_scout_N agents in parallel. Split repo, docs, tests, API, DB risk, UX friction, and implementation-surface investigation into independent slices, then capture source-backed findings in team-analysis.md. Refresh and validate TriWiki before debate. Then run the debate team with exactly ${plan.roster.bundle_size} participants using the refreshed pack. Use the concrete roster below: final-user voices are stubborn and inconvenience-averse, executor voices are capable developers, reviewers are strict, and planners force consensus. Synthesize one agreed objective with acceptance criteria and disjoint implementation slices, then refresh and validate TriWiki again. Compile the Team runtime graph into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so symbolic plan nodes become concrete runtime task ids before worker handoff. Close the debate team. Then form a fresh development team with exactly ${plan.roster.bundle_size} executor_N developers implementing slices in parallel with non-overlapping ownership. Refresh TriWiki after implementation changes or blockers. Review with at least ${plan.review_policy?.minimum_reviewer_lanes || MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes, validate TriWiki again, integrate results in the parent thread, close or account for all Team sessions in team-session-cleanup.json, run verification, and report evidence.
 \`\`\`
@@ -1752,6 +1779,7 @@ Before each stage, read the relevant latest coordinate+voxel TriWiki context pac
 - Minimum review: ${plan.review_policy?.minimum_reviewer_lanes || MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes before integration or final.
 - Use the full available session budget for analysis when independent slices exist; use fewer agents only when the work cannot be split cleanly.
 - Runtime graph: write ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR}; worker handoff starts from concrete runtime task ids and scope-aware inboxes.
+- Goal continuation: ${plan.goal_continuation?.enabled ? 'ambient Codex native /goal overlay is available without replacing Team gates.' : 'not enabled.'}
 - Before reflection/final, close or account for all Team subagent sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.
 ${plan.required_artifacts?.includes(FROM_CHAT_IMG_COVERAGE_ARTIFACT) ? `- From-Chat-IMG coverage: write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} before implementation; after implementation write ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}; do not pass team-gate.json until every visible customer request, screenshot image region, and attachment is mapped, every checklist box is checked, scoped QA-LOOP covers every work item with zero unresolved findings, and unresolved_items is empty.` : ''}
 
@@ -1765,7 +1793,7 @@ ${plan.required_artifacts?.includes(FROM_CHAT_IMG_COVERAGE_ARTIFACT) ? `- From-C
 
 ## Analysis Scouts
 
-${plan.roster.analysis_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+${plan.roster.analysis_team.map((agent) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
 
 Scout rules:
 - Read-only only.
@@ -1775,15 +1803,15 @@ Scout rules:
 
 ## Debate Team
 
-${plan.roster.debate_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+${plan.roster.debate_team.map((agent) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
 
 ## Development Team
 
-${plan.roster.development_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+${plan.roster.development_team.map((agent) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
 
 ## Validation Team
 
-${plan.roster.validation_team.map((agent) => `- ${agent.id}: ${agent.persona}`).join('\n')}
+${plan.roster.validation_team.map((agent) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
 
 ## Live Visibility
 
