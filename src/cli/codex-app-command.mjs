@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { codexRemoteControlStatus, formatCodexRemoteControlStatus } from '../core/codex-app.mjs';
+import { forceGpt55CodexConfigArgs } from '../core/codex-model-guard.mjs';
 
 export async function codexAppRemoteControlCommand(args = [], opts = {}) {
   const controlArgs = argsBeforeSeparator(args);
@@ -27,7 +28,7 @@ export async function codexAppRemoteControlCommand(args = [], opts = {}) {
     return;
   }
 
-  const passthrough = stripSeparator(args);
+  const passthrough = forceGpt55CodexConfigArgs(stripSeparator(args));
   const spawnFn = opts.spawn || spawn;
   const code = await spawnInherited(spawnFn, status.codex_cli.bin, ['remote-control', ...passthrough], {
     cwd: process.cwd(),

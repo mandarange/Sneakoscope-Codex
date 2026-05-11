@@ -5,7 +5,7 @@ import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { projectRoot, readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, tmpdir, packageRoot, dirSize, formatBytes, which, runProcess, PACKAGE_VERSION, sksRoot, globalSksRoot, findProjectRoot, readStdin } from '../core/fsx.mjs';
 import { initProject, installSkills, normalizeInstallScope, sksCommandPrefix } from '../core/init.mjs';
-import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
+import { buildCodexExecArgs, getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, missionDir, setCurrent, stateFile } from '../core/mission.mjs';
 import { buildQuestionSchema, writeQuestions } from '../core/questions.mjs';
 import { sealContract, validateAnswers } from '../core/decision-contract.mjs';
@@ -2277,6 +2277,10 @@ async function selftest() {
   if (defaultFastHighPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="high"') throw new Error('selftest failed: default sks tmux launch is not fast-high');
   const forcedModelPlan = await buildTmuxLaunchPlan({ root: tmp, env: { SKS_CODEX_MODEL: 'gpt-5.4-mini', SKS_CODEX_FAST_HIGH: '0', SKS_CODEX_REASONING: 'medium' }, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
   if (forcedModelPlan.codexArgs.includes('gpt-5.4-mini') || forcedModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="medium"') throw new Error('selftest failed: sks tmux launch allowed a non-GPT-5.5 model override');
+  const explicitBadModelPlan = await buildTmuxLaunchPlan({ root: tmp, codexArgs: ['--profile', 'legacy-5.4', '--model', 'gpt-5.4-mini', '-c', 'model="gpt-5.4"', '-c', 'model_reasoning_effort="low"'], tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
+  if (explicitBadModelPlan.codexArgs.join(' ').includes('gpt-5.4') || explicitBadModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 --profile legacy-5.4 -c model_reasoning_effort="low"') throw new Error('selftest failed: explicit tmux model override was not forced back to GPT-5.5');
+  const codexExecArgs = buildCodexExecArgs({ root: tmp, prompt: 'model guard selftest', profile: 'legacy-5.4', extraArgs: ['--model=gpt-5.4-mini', '--config', 'model = "gpt-5.4"', '-c', 'model_reasoning_effort="medium"'] });
+  if (codexExecArgs.join(' ').includes('gpt-5.4') || !codexExecArgs.includes('gpt-5.5') || codexExecArgs.includes('--model=gpt-5.4-mini')) throw new Error('selftest failed: codex exec args allowed a non-GPT-5.5 model override');
   const codexLbHome = path.join(tmp, 'codex-lb-home');
   await ensureDir(path.join(codexLbHome, '.codex'));
   const codexLbFakeBin = path.join(tmp, 'codex-lb-fake-bin');
@@ -2304,11 +2308,133 @@ async function selftest() {
   const codexLbRepairJson = JSON.parse(codexLbRepair.stdout);
   const codexLbRepairedAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   if (!codexLbRepairJson.ok || codexLbRepairJson.status !== 'repaired' || !codexLbRepairedAuth.includes('"auth_mode":"apikey"') || !codexLbRepairedAuth.includes('sk-test')) throw new Error('selftest failed: codex-lb repair did not force API-key auth from stored env key');
+  const codexLbLoginCallsBeforePostinstall = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
+  const codexLbPostinstall = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], {
+    cwd: tmp,
+    env: {
+      ...codexLbEnvForSelftest,
+      SKS_POSTINSTALL_NO_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_CONTEXT7: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0'
+    },
+    timeoutMs: 15000,
+    maxOutputBytes: 128 * 1024
+  });
+  if (codexLbPostinstall.code !== 0) throw new Error(`selftest failed: codex-lb postinstall auth preservation exited ${codexLbPostinstall.code}: ${codexLbPostinstall.stderr}`);
+  const codexLbPostinstallAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  const codexLbLoginCallsAfterPostinstall = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  if (!String(codexLbPostinstall.stdout || '').includes('codex-lb auth: preserved') || !codexLbPostinstallAuth.includes('"auth_mode":"apikey"') || !codexLbPostinstallAuth.includes('sk-test') || codexLbLoginCallsAfterPostinstall <= codexLbLoginCallsBeforePostinstall) throw new Error('selftest failed: postinstall did not preserve codex-lb Codex CLI API-key auth from stored env key');
+  const postinstallEnvKeys = ['HOME', 'PATH', 'INIT_CWD', 'SKS_GLOBAL_ROOT', 'SKS_POSTINSTALL_BOOTSTRAP', 'SKS_POSTINSTALL_NO_BOOTSTRAP', 'SKS_SKIP_POSTINSTALL_SHIM', 'SKS_SKIP_POSTINSTALL_CONTEXT7', 'SKS_SKIP_POSTINSTALL_GETDESIGN', 'SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS', 'SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH'];
+  const postinstallEnvBefore = Object.fromEntries(postinstallEnvKeys.map((key) => [key, process.env[key]]));
+  const codexLbLoginCallsBeforeBootstrap = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  try {
+    for (const key of postinstallEnvKeys) delete process.env[key];
+    Object.assign(process.env, {
+      HOME: codexLbHome,
+      PATH: `${codexLbFakeBin}${path.delimiter}${postinstallEnvBefore.PATH || ''}`,
+      INIT_CWD: tmp,
+      SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-postinstall-global'),
+      SKS_POSTINSTALL_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_CONTEXT7: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0'
+    });
+    await postinstall({ bootstrap: async () => writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n') });
+  } finally {
+    for (const key of postinstallEnvKeys) {
+      if (postinstallEnvBefore[key] === undefined) delete process.env[key];
+      else process.env[key] = postinstallEnvBefore[key];
+    }
+  }
+  const codexLbPostBootstrapAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  const codexLbLoginCallsAfterBootstrap = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  if (!codexLbPostBootstrapAuth.includes('"auth_mode":"apikey"') || !codexLbPostBootstrapAuth.includes('sk-test') || codexLbLoginCallsAfterBootstrap <= codexLbLoginCallsBeforeBootstrap) throw new Error('selftest failed: postinstall did not repair codex-lb auth after bootstrap drift');
+  const codexLbContext7Bin = path.join(tmp, 'codex-lb-context7-bin');
+  await ensureDir(codexLbContext7Bin);
+  await writeTextAtomic(path.join(codexLbContext7Bin, 'codex'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 99.0.0"; exit 0; fi\nif [ "$CODEX_LB_API_KEY" ]; then echo "context7 leaked CODEX_LB_API_KEY" >&2; exit 77; fi\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then echo ""; exit 0; fi\nif [ "$1" = "mcp" ] && [ "$2" = "add" ]; then echo "context7 added"; exit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
+  await fsp.chmod(path.join(codexLbContext7Bin, 'codex'), 0o755);
+  const codexLbContext7Postinstall = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], {
+    cwd: tmp,
+    env: {
+      ...codexLbEnvForSelftest,
+      PATH: `${codexLbContext7Bin}${path.delimiter}${process.env.PATH || ''}`,
+      CODEX_LB_API_KEY: 'sk-test',
+      SKS_POSTINSTALL_NO_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '1'
+    },
+    timeoutMs: 15000,
+    maxOutputBytes: 128 * 1024
+  });
+  if (codexLbContext7Postinstall.code !== 0 || String(`${codexLbContext7Postinstall.stdout}\n${codexLbContext7Postinstall.stderr}`).includes('leaked CODEX_LB_API_KEY')) throw new Error('selftest failed: postinstall Context7 setup leaked CODEX_LB_API_KEY to unrelated Codex subprocesses');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_API_KEY='unterminated\n");
+  const codexLbLoginCallsBeforeMalformed = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  const codexLbMalformedPostinstall = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], {
+    cwd: tmp,
+    env: {
+      ...codexLbEnvForSelftest,
+      SKS_POSTINSTALL_NO_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_CONTEXT7: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0'
+    },
+    timeoutMs: 15000,
+    maxOutputBytes: 128 * 1024
+  });
+  const codexLbLoginCallsAfterMalformed = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  if (codexLbMalformedPostinstall.code !== 0 || !String(codexLbMalformedPostinstall.stdout || '').includes('codex-lb auth: stored key missing') || codexLbLoginCallsAfterMalformed !== codexLbLoginCallsBeforeMalformed) throw new Error('selftest failed: malformed codex-lb env should not be passed to Codex login during postinstall');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_API_KEY='sk-test'\n");
+  const codexLbMissingCli = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], {
+    cwd: tmp,
+    env: {
+      HOME: codexLbHome,
+      SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-missing-cli-global'),
+      PATH: '',
+      SKS_POSTINSTALL_NO_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_CONTEXT7: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0'
+    },
+    timeoutMs: 15000,
+    maxOutputBytes: 128 * 1024
+  });
+  if (codexLbMissingCli.code !== 0 || !String(codexLbMissingCli.stdout || '').includes('codex-lb auth: repair skipped (codex_missing')) throw new Error('selftest failed: postinstall should handle configured codex-lb when Codex CLI is missing');
+  const codexLbNotConfiguredHome = path.join(tmp, 'codex-lb-not-configured-home');
+  const codexLbNotConfigured = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], {
+    cwd: tmp,
+    env: {
+      HOME: codexLbNotConfiguredHome,
+      SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-not-configured-global'),
+      PATH: '',
+      SKS_POSTINSTALL_NO_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_CONTEXT7: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0'
+    },
+    timeoutMs: 15000,
+    maxOutputBytes: 128 * 1024
+  });
+  if (codexLbNotConfigured.code !== 0 || String(codexLbNotConfigured.stdout || '').includes('codex-lb auth:')) throw new Error('selftest failed: postinstall should stay quiet when codex-lb is not configured');
   const codexLbStatusText = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'status'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (!String(codexLbStatusText.stdout || '').includes('Repair auth: sks codex-lb repair')) throw new Error('selftest failed: codex-lb status did not advertise repair command');
   if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('hooks = true') || codexLbConfig.includes('codex_hooks = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest failed: codex-lb setup did not preserve Codex App Fast mode defaults, force GPT-5.5, or migrate the hooks feature flag');
   const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest failed: tmux launch command does not source codex-lb env file');
+  if (!codexLbLaunch.includes("'--model' 'gpt-5.5'")) throw new Error('selftest failed: tmux launch command without args did not force GPT-5.5');
   if (!codexLbLaunch.includes('SKS_TMUX_LOGO_ANIMATION') || !codexLbLaunch.includes('SNEAKOSCOPE CODEX')) throw new Error('selftest failed: tmux launch command does not include the animated SKS logo intro');
   const madLaunchSource = await safeReadText(path.join(packageRoot(), 'src', 'cli', 'main.mjs'));
   if (!madLaunchSource.includes('const lb = await maybePromptCodexLbSetupForLaunch(args)') || !madLaunchSource.includes("const launchLb = lb.status === 'present'") || !madLaunchSource.includes('codexLbImmediateLaunchOpts(cleanArgs, launchLb')) throw new Error('selftest failed: MAD launch does not sync codex-lb auth and fresh-session launch options');
@@ -2353,7 +2479,7 @@ async function selftest() {
   if (!String(openClawAutoUpdate.stdout || '').includes('Codex CLI ready: 0.1.0 -> codex-cli 99.0.0')) throw new Error('selftest failed: OpenClaw mode did not auto-approve Codex CLI update before tmux launch');
   const remoteControlBin = path.join(tmp, 'remote-control-bin');
   await ensureDir(remoteControlBin);
-  await writeTextAtomic(path.join(remoteControlBin, 'codex'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 0.130.0"; exit 0; fi\nif [ "$1" = "remote-control" ]; then echo "remote-control $*"; exit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
+  await writeTextAtomic(path.join(remoteControlBin, 'codex'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 0.130.0"; exit 0; fi\nif [ "$1" = "remote-control" ]; then shift; for arg in "$@"; do if [ "$arg" = "--model" ]; then echo "remote-control rejects --model" >&2; exit 64; fi; done; echo "remote-control $*"; exit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
   await fsp.chmod(path.join(remoteControlBin, 'codex'), 0o755);
   const remoteControlStatus = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-app', 'remote-control', '--dry-run', '--json'], {
     cwd: globalCwd,
@@ -2364,6 +2490,14 @@ async function selftest() {
   if (remoteControlStatus.code !== 0) throw new Error(`selftest failed: Codex remote-control status exited ${remoteControlStatus.code}: ${remoteControlStatus.stderr}`);
   const remoteControlJson = JSON.parse(remoteControlStatus.stdout);
   if (!remoteControlJson.ok || remoteControlJson.min_version !== '0.130.0' || !String(remoteControlJson.command || '').includes('remote-control')) throw new Error('selftest failed: Codex remote-control status did not report 0.130.0 readiness');
+  const remoteControlLaunch = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-app', 'remote-control', '--', '--model', 'gpt-5.4-mini', '-c', 'model="gpt-5.4"', '--example'], {
+    cwd: globalCwd,
+    env: { SKS_GLOBAL_ROOT: globalRuntimeRoot, PATH: remoteControlBin },
+    timeoutMs: 15000,
+    maxOutputBytes: 64 * 1024
+  });
+  const remoteControlLaunchText = `${remoteControlLaunch.stdout}\n${remoteControlLaunch.stderr}`;
+  if (remoteControlLaunch.code !== 0 || remoteControlLaunchText.includes('gpt-5.4') || remoteControlLaunchText.includes('--model') || !remoteControlLaunchText.includes('-c model="gpt-5.5"')) throw new Error('selftest failed: Codex remote-control passthrough did not force GPT-5.5 with config syntax');
   const remoteControlOldBin = path.join(tmp, 'remote-control-old-bin');
   await ensureDir(remoteControlOldBin);
   await writeTextAtomic(path.join(remoteControlOldBin, 'codex'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 0.129.0"; exit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
@@ -2804,6 +2938,10 @@ async function selftest() {
   if (hookTeamState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || hookTeamState.implementation_allowed === false || !hookTeamState.team_plan_ready) throw new Error('selftest failed: $Team hook did not prepare direct Team mission');
   if (!hookTeamState.pipeline_plan_ready || !(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), PIPELINE_PLAN_ARTIFACT)))) throw new Error('selftest failed: $Team hook did not write a pipeline plan');
   if (!(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-plan.json')))) throw new Error('selftest failed: Team plan was not created directly');
+  const hookForbiddenModelResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team should be blocked before route work', model: 'gpt-5.5', metadata: { client: { modelId: 'gpt-5.4-mini' } } }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (hookForbiddenModelResult.code !== 0) throw new Error(`selftest failed: forbidden model hook exited ${hookForbiddenModelResult.code}: ${hookForbiddenModelResult.stderr}`);
+  const hookForbiddenModelJson = JSON.parse(hookForbiddenModelResult.stdout);
+  if (hookForbiddenModelJson.decision !== 'block' || !String(hookForbiddenModelJson.reason || '').includes('gpt-5.5') || !String(hookForbiddenModelJson.reason || '').includes('gpt-5.4-mini')) throw new Error('selftest failed: hook did not block GPT-5.4 client model metadata');
   const hookTeamPendingResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 새 작업으로 넘어가' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookTeamPendingResult.code !== 0) throw new Error(`selftest failed: pending clarification hook exited ${hookTeamPendingResult.code}: ${hookTeamPendingResult.stderr}`);
   const hookTeamPendingJson = JSON.parse(hookTeamPendingResult.stdout);

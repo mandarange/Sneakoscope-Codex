@@ -6,6 +6,7 @@ import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from '.
 import { checkHarnessModification, harnessGuardBlockReason } from './harness-guard.mjs';
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.mjs';
 import { classifyToolError } from './evaluation.mjs';
+import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.mjs';
 
 const TEAM_DIGEST_MAX_EVENTS = 4;
 const TEAM_DIGEST_MESSAGE_CHARS = 180;
@@ -91,12 +92,53 @@ export async function hookMain(name) {
   const root = await projectRoot(payload.cwd || process.cwd());
   const state = await loadState(root);
   const noQuestion = isNoQuestionRunning(state);
-  if (name === 'user-prompt-submit') return hookUserPrompt(root, state, payload, noQuestion);
+  if (name === 'user-prompt-submit') {
+    const modelBlock = blockForbiddenClientModel(payload);
+    if (modelBlock) return modelBlock;
+    return hookUserPrompt(root, state, payload, noQuestion);
+  }
   if (name === 'pre-tool') return hookPreTool(root, state, payload, noQuestion);
   if (name === 'post-tool') return hookPostTool(root, state, payload, noQuestion);
   if (name === 'permission-request') return hookPermission(root, state, payload, noQuestion);
   if (name === 'stop') return hookStop(root, state, payload, noQuestion);
   return { continue: true };
+}
+
+function blockForbiddenClientModel(payload = {}) {
+  const model = forbiddenClientModelFromPayload(payload);
+  if (!model || !isForbiddenCodexModel(model)) return null;
+  return {
+    decision: 'block',
+    reason: `SKS requires ${REQUIRED_CODEX_MODEL}; client payload requested ${model}. Switch the Codex client/session model to ${REQUIRED_CODEX_MODEL} and retry.`
+  };
+}
+
+function forbiddenClientModelFromPayload(payload = {}) {
+  const candidates = [
+    payload.model,
+    payload.model_id,
+    payload.modelId,
+    payload.client_model,
+    payload.clientModel,
+    ...clientModelCandidates(payload.client),
+    ...clientModelCandidates(payload.metadata),
+    ...clientModelCandidates(payload.context),
+    ...clientModelCandidates(payload.thread),
+    ...clientModelCandidates(payload.session)
+  ];
+  return candidates.find((value) => typeof value === 'string' && isForbiddenCodexModel(value)) || '';
+}
+
+function clientModelCandidates(value, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 4) return [];
+  const out = [];
+  for (const key of ['model', 'model_id', 'modelId', 'client_model', 'clientModel']) {
+    if (typeof value[key] === 'string') out.push(value[key]);
+  }
+  for (const key of ['client', 'metadata', 'context', 'thread', 'session']) {
+    out.push(...clientModelCandidates(value[key], depth + 1));
+  }
+  return out;
 }
 
 async function hookUserPrompt(root, state, payload, noQuestion) {

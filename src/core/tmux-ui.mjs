@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { exists, nowIso, packageRoot, readJson, runProcess, sha256, sksRoot, which, writeJsonAtomic } from './fsx.mjs';
 import { getCodexInfo } from './codex-adapter.mjs';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.mjs';
+import { REQUIRED_CODEX_MODEL, forceGpt55CodexArgs } from './codex-model-guard.mjs';
 import { MIN_TEAM_REVIEWER_LANES } from './team-review-policy.mjs';
 
 export const SKS_TMUX_LOGO = [
@@ -114,7 +115,7 @@ const SKS_TMUX_LOGO_ANIMATION_STEPS = Object.freeze([
   { frame: 9, color: '51', bold: true, delay: '0.16' }
 ]);
 
-export const DEFAULT_SKS_CODEX_MODEL = 'gpt-5.5';
+export const DEFAULT_SKS_CODEX_MODEL = REQUIRED_CODEX_MODEL;
 export const DEFAULT_SKS_CODEX_REASONING = 'high';
 
 export function defaultCodexLaunchArgs(env = process.env) {
@@ -200,7 +201,7 @@ export function tmuxStatusKind(tmux = {}) {
 }
 
 export function codexLaunchCommand(root, codexBin, codexArgs = []) {
-  const extraArgs = Array.isArray(codexArgs) ? codexArgs : [];
+  const extraArgs = forceGpt55CodexArgs(codexArgs);
   return [
     sksLogoIntroCommand(codexBin),
     `printf '\\nProject: %s\\n' ${shellEscape(root)}`,
@@ -322,7 +323,7 @@ export async function buildTmuxLaunchPlan(opts = {}) {
   const codex = opts.codex || await getCodexInfo().catch(() => ({}));
   const tmux = opts.tmux || await tmuxReadiness(opts);
   const app = opts.app || await codexAppIntegrationStatus({ codex });
-  const codexArgs = Array.isArray(opts.codexArgs) ? opts.codexArgs : defaultCodexLaunchArgs(opts.env || process.env);
+  const codexArgs = forceGpt55CodexArgs(Array.isArray(opts.codexArgs) ? opts.codexArgs : defaultCodexLaunchArgs(opts.env || process.env));
   return {
     root,
     session,

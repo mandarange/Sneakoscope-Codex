@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { exists, packageRoot, runProcess, which } from './fsx.mjs';
+import { forceGpt55CodexArgs } from './codex-model-guard.mjs';
 
 export async function findCodexBinary() {
   const env = process.env.SKS_CODEX_BIN || process.env.DCODEX_CODEX_BIN || process.env.CODEX_BIN;
@@ -25,17 +26,22 @@ export async function getCodexInfo() {
   return { bin, version, available: Boolean(bin) };
 }
 
+export function buildCodexExecArgs({ root, prompt, outputFile, json = true, profile = null, extraArgs = [] }) {
+  const args = ['exec', '--cd', root];
+  if (profile) args.push('--profile', profile);
+  if (json) args.push('--json');
+  if (outputFile) args.push('--output-last-message', outputFile);
+  args.push(...forceGpt55CodexArgs(extraArgs));
+  args.push(prompt);
+  return args;
+}
+
 export async function runCodexExec({ root, prompt, outputFile, json = true, profile = null, extraArgs = [], onStdout, onStderr, logDir = null, stdoutFile = null, stderrFile = null, maxBufferBytes = 256 * 1024, timeoutMs = null }) {
   const bin = await findCodexBinary();
   if (!bin) {
     return { code: 127, stdout: '', stderr: 'Codex CLI not found. Install @openai/codex or set SKS_CODEX_BIN.' };
   }
-  const args = ['exec', '--cd', root];
-  if (profile) args.push('--profile', profile);
-  if (json) args.push('--json');
-  if (outputFile) args.push('--output-last-message', outputFile);
-  args.push(...extraArgs);
-  args.push(prompt);
+  const args = buildCodexExecArgs({ root, prompt, outputFile, json, profile, extraArgs });
   const effectiveTimeoutMs = Number(timeoutMs || process.env.SKS_CODEX_TIMEOUT_MS || process.env.DCODEX_CODEX_TIMEOUT_MS || 30 * 60 * 1000);
   return runProcess(bin, args, {
     cwd: root,
