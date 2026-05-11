@@ -8,7 +8,7 @@ import { getCodexInfo } from '../core/codex-adapter.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
 import { installSkills } from '../core/init.mjs';
 import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext7ConfigText, RECOMMENDED_SKILLS } from '../core/routes.mjs';
-import { platformTmuxInstallHint, tmuxReadiness } from '../core/tmux-ui.mjs';
+import { codexLaunchCommand, platformTmuxInstallHint, tmuxReadiness } from '../core/tmux-ui.mjs';
 
 export async function postinstall({ bootstrap }) {
   const installRoot = path.resolve(process.env.INIT_CWD || process.cwd());
@@ -836,4 +836,169 @@ async function safeReadText(file, fallback = '') {
   } catch {
     return fallback;
   }
+}
+
+export async function selftestCodexLb(tmp) {
+  const codexLbHome = path.join(tmp, 'codex-lb-home');
+  await ensureDir(path.join(codexLbHome, '.codex'));
+  const codexLbFakeBin = path.join(tmp, 'codex-lb-fake-bin');
+  await ensureDir(codexLbFakeBin);
+  const codexLbFakeCodex = path.join(codexLbFakeBin, 'codex');
+  await writeTextAtomic(codexLbFakeCodex, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"codex-cli 99.0.0\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"status\" ]; then echo \"logged in with browser auth\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"--with-api-key\" ]; then read key; mkdir -p \"$HOME/.codex\"; printf '{\\\"auth_mode\\\":\\\"apikey\\\",\\\"key\\\":\\\"%s\\\"}\\n' \"$key\" > \"$HOME/.codex/auth.json\"; printf '%s\\n' \"$key\" >> \"$HOME/.codex/login-calls.log\"; exit 0; fi\necho \"fake codex unsupported\" >&2\nexit 1\n");
+  await fsp.chmod(codexLbFakeCodex, 0o755);
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\n\n[features]\ncodex_hooks = true\n');
+  const codexLbEnvForSelftest = { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global'), PATH: `${codexLbFakeBin}${path.delimiter}${process.env.PATH || ''}` };
+  const codexLbSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key', 'sk-test', '--json'], {
+    cwd: tmp,
+    env: codexLbEnvForSelftest,
+    timeoutMs: 15000,
+    maxOutputBytes: 64 * 1024
+  });
+  if (codexLbSetup.code !== 0) throw new Error(`selftest failed: codex-lb setup exited ${codexLbSetup.code}: ${codexLbSetup.stderr}`);
+  const codexLbSetupJson = JSON.parse(codexLbSetup.stdout);
+  const codexLbConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
+  const codexLbEnv = await safeReadText(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'));
+  const codexLbAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !codexLbConfig.includes('model_provider = "codex-lb"') || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || !/(\"auth_mode\"\s*:\s*\"apikey\")/.test(codexLbAuth)) throw new Error('selftest failed: codex-lb setup did not write provider config, env key, and Codex API-key auth');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
+  const codexLbRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'auth', 'repair', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (codexLbRepair.code !== 0) throw new Error(`selftest failed: codex-lb repair exited ${codexLbRepair.code}: ${codexLbRepair.stderr}`);
+  const codexLbRepairJson = JSON.parse(codexLbRepair.stdout);
+  const codexLbRepairedAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  if (!codexLbRepairJson.ok || codexLbRepairJson.status !== 'repaired' || !codexLbRepairedAuth.includes('"auth_mode":"apikey"') || !codexLbRepairedAuth.includes('sk-test')) throw new Error('selftest failed: codex-lb repair did not force API-key auth from stored env key');
+  const codexLbLoginCallsBeforePostinstall = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
+  const codexLbPostinstall = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], {
+    cwd: tmp,
+    env: {
+      ...codexLbEnvForSelftest,
+      SKS_POSTINSTALL_NO_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_CONTEXT7: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0'
+    },
+    timeoutMs: 15000,
+    maxOutputBytes: 128 * 1024
+  });
+  if (codexLbPostinstall.code !== 0) throw new Error(`selftest failed: codex-lb postinstall auth preservation exited ${codexLbPostinstall.code}: ${codexLbPostinstall.stderr}`);
+  const codexLbPostinstallAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  const codexLbLoginCallsAfterPostinstall = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  if (!String(codexLbPostinstall.stdout || '').includes('codex-lb auth: preserved') || !codexLbPostinstallAuth.includes('"auth_mode":"apikey"') || !codexLbPostinstallAuth.includes('sk-test') || codexLbLoginCallsAfterPostinstall <= codexLbLoginCallsBeforePostinstall) throw new Error('selftest failed: postinstall did not preserve codex-lb Codex CLI API-key auth from stored env key');
+  const postinstallEnvKeys = ['HOME', 'PATH', 'INIT_CWD', 'SKS_GLOBAL_ROOT', 'SKS_POSTINSTALL_BOOTSTRAP', 'SKS_POSTINSTALL_NO_BOOTSTRAP', 'SKS_SKIP_POSTINSTALL_SHIM', 'SKS_SKIP_POSTINSTALL_CONTEXT7', 'SKS_SKIP_POSTINSTALL_GETDESIGN', 'SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS', 'SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH'];
+  const postinstallEnvBefore = Object.fromEntries(postinstallEnvKeys.map((key) => [key, process.env[key]]));
+  const codexLbLoginCallsBeforeBootstrap = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  try {
+    for (const key of postinstallEnvKeys) delete process.env[key];
+    Object.assign(process.env, {
+      HOME: codexLbHome,
+      PATH: `${codexLbFakeBin}${path.delimiter}${postinstallEnvBefore.PATH || ''}`,
+      INIT_CWD: tmp,
+      SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-postinstall-global'),
+      SKS_POSTINSTALL_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_CONTEXT7: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0'
+    });
+    await postinstall({ bootstrap: async () => writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n') });
+  } finally {
+    for (const key of postinstallEnvKeys) {
+      if (postinstallEnvBefore[key] === undefined) delete process.env[key];
+      else process.env[key] = postinstallEnvBefore[key];
+    }
+  }
+  const codexLbPostBootstrapAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  const codexLbLoginCallsAfterBootstrap = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  if (!codexLbPostBootstrapAuth.includes('"auth_mode":"apikey"') || !codexLbPostBootstrapAuth.includes('sk-test') || codexLbLoginCallsAfterBootstrap <= codexLbLoginCallsBeforeBootstrap) throw new Error('selftest failed: postinstall did not repair codex-lb auth after bootstrap drift');
+  const codexLbContext7Bin = path.join(tmp, 'codex-lb-context7-bin');
+  await ensureDir(codexLbContext7Bin);
+  await writeTextAtomic(path.join(codexLbContext7Bin, 'codex'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 99.0.0"; exit 0; fi\nif [ "$CODEX_LB_API_KEY" ]; then echo "context7 leaked CODEX_LB_API_KEY" >&2; exit 77; fi\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then echo ""; exit 0; fi\nif [ "$1" = "mcp" ] && [ "$2" = "add" ]; then echo "context7 added"; exit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
+  await fsp.chmod(path.join(codexLbContext7Bin, 'codex'), 0o755);
+  const codexLbContext7Postinstall = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], {
+    cwd: tmp,
+    env: {
+      ...codexLbEnvForSelftest,
+      PATH: `${codexLbContext7Bin}${path.delimiter}${process.env.PATH || ''}`,
+      CODEX_LB_API_KEY: 'sk-test',
+      SKS_POSTINSTALL_NO_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '1'
+    },
+    timeoutMs: 15000,
+    maxOutputBytes: 128 * 1024
+  });
+  if (codexLbContext7Postinstall.code !== 0 || String(`${codexLbContext7Postinstall.stdout}\n${codexLbContext7Postinstall.stderr}`).includes('leaked CODEX_LB_API_KEY')) throw new Error('selftest failed: postinstall Context7 setup leaked CODEX_LB_API_KEY to unrelated Codex subprocesses');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_API_KEY='unterminated\n");
+  const codexLbLoginCallsBeforeMalformed = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  const codexLbMalformedPostinstall = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], {
+    cwd: tmp,
+    env: {
+      ...codexLbEnvForSelftest,
+      SKS_POSTINSTALL_NO_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_CONTEXT7: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0'
+    },
+    timeoutMs: 15000,
+    maxOutputBytes: 128 * 1024
+  });
+  const codexLbLoginCallsAfterMalformed = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
+  if (codexLbMalformedPostinstall.code !== 0 || !String(codexLbMalformedPostinstall.stdout || '').includes('codex-lb auth: stored key missing') || codexLbLoginCallsAfterMalformed !== codexLbLoginCallsBeforeMalformed) throw new Error('selftest failed: malformed codex-lb env should not be passed to Codex login during postinstall');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_API_KEY='sk-test'\n");
+  const codexLbMissingCli = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], {
+    cwd: tmp,
+    env: {
+      HOME: codexLbHome,
+      SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-missing-cli-global'),
+      PATH: '',
+      SKS_POSTINSTALL_NO_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_CONTEXT7: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0'
+    },
+    timeoutMs: 15000,
+    maxOutputBytes: 128 * 1024
+  });
+  if (codexLbMissingCli.code !== 0 || !String(codexLbMissingCli.stdout || '').includes('codex-lb auth: repair skipped (codex_missing')) throw new Error('selftest failed: postinstall should handle configured codex-lb when Codex CLI is missing');
+  const codexLbNotConfiguredHome = path.join(tmp, 'codex-lb-not-configured-home');
+  const codexLbNotConfigured = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], {
+    cwd: tmp,
+    env: {
+      HOME: codexLbNotConfiguredHome,
+      SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-not-configured-global'),
+      PATH: '',
+      SKS_POSTINSTALL_NO_BOOTSTRAP: '1',
+      SKS_SKIP_POSTINSTALL_SHIM: '1',
+      SKS_SKIP_POSTINSTALL_CONTEXT7: '1',
+      SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
+      SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
+      SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0'
+    },
+    timeoutMs: 15000,
+    maxOutputBytes: 128 * 1024
+  });
+  if (codexLbNotConfigured.code !== 0 || String(codexLbNotConfigured.stdout || '').includes('codex-lb auth:')) throw new Error('selftest failed: postinstall should stay quiet when codex-lb is not configured');
+  const codexLbStatusText = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'status'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (!String(codexLbStatusText.stdout || '').includes('Repair auth: sks codex-lb repair')) throw new Error('selftest failed: codex-lb status did not advertise repair command');
+  if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('hooks = true') || codexLbConfig.includes('codex_hooks = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest failed: codex-lb setup did not preserve Codex App Fast mode defaults, force GPT-5.5, or migrate the hooks feature flag');
+  const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
+  if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest failed: tmux launch command does not source codex-lb env file');
+  if (!codexLbLaunch.includes("'--model' 'gpt-5.5'")) throw new Error('selftest failed: tmux launch command without args did not force GPT-5.5');
+  if (!codexLbLaunch.includes('SKS_TMUX_LOGO_ANIMATION') || !codexLbLaunch.includes('SNEAKOSCOPE CODEX')) throw new Error('selftest failed: tmux launch command does not include the animated SKS logo intro');
+  const madLaunchSource = await safeReadText(path.join(packageRoot(), 'src', 'cli', 'main.mjs'));
+  if (!madLaunchSource.includes('const lb = await maybePromptCodexLbSetupForLaunch(args)') || !madLaunchSource.includes("const launchLb = lb.status === 'present'") || !madLaunchSource.includes('codexLbImmediateLaunchOpts(cleanArgs, launchLb')) throw new Error('selftest failed: MAD launch does not sync codex-lb auth and fresh-session launch options');
+
+}
+
+function hasTopLevelCodexModeLock(text = '') {
+  return /(^|\n)\s*model\s*=\s*"codex-lb"\s*(\n|$)/.test(text) || /(^|\n)\s*model_provider\s*=\s*"openai"\s*(\n|$)/.test(text);
 }
