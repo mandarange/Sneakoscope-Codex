@@ -52,9 +52,11 @@ export function compileTeamRuntime(plan, opts = {}) {
   if (!validation.ok) return { ok: false, validation, dag };
   const order = topologicalOrder(dag.nodes);
   const nodeIdToTaskId = {};
+  const agentReasoning = teamAgentReasoningById(plan?.roster || {});
   const tasks = order.map((node, index) => {
     const taskId = `${TASK_ID_PREFIX}${String(index + 1).padStart(3, '0')}`;
     nodeIdToTaskId[node.id] = taskId;
+    const reasoning = agentReasoning[node.agent || ''] || {};
     return {
       task_id: taskId,
       symbolic_id: node.id,
@@ -66,6 +68,10 @@ export function compileTeamRuntime(plan, opts = {}) {
       file_paths: node.file_paths || [],
       domains: node.domains || [],
       lane: node.lane || null,
+      reasoning_effort: reasoning.reasoning_effort || null,
+      reasoning_profile: reasoning.reasoning_profile || null,
+      service_tier: reasoning.service_tier || 'fast',
+      reasoning_reason: reasoning.reasoning_reason || null,
       depends_on: [],
       blocked_by: [],
       status: 'pending'
@@ -113,6 +119,23 @@ export function compileTeamRuntime(plan, opts = {}) {
     runtime_task_ids: runtimeTasks.map((task) => task.task_id)
   };
   return { ok: true, graph, runtime, report, validation, inboxes: groupTasksByWorker(runtimeTasks) };
+}
+
+function teamAgentReasoningById(roster = {}) {
+  const out = {};
+  const groups = ['analysis_team', 'debate_team', 'development_team', 'validation_team', 'all_agents'];
+  for (const group of groups) {
+    for (const agent of Array.isArray(roster[group]) ? roster[group] : []) {
+      if (!agent?.id || out[agent.id]) continue;
+      out[agent.id] = {
+        reasoning_effort: agent.reasoning_effort || agent.model_reasoning_effort || null,
+        reasoning_profile: agent.reasoning_profile || null,
+        service_tier: agent.service_tier || 'fast',
+        reasoning_reason: agent.reasoning_reason || null
+      };
+    }
+  }
+  return out;
 }
 
 export async function validateTeamRuntimeArtifacts(dir) {

@@ -227,15 +227,15 @@ export const ROUTES = [
     id: 'DFix',
     command: '$DFix',
     mode: 'DFIX',
-    route: 'fast design/content fix',
-    description: 'Small UI/content edits such as text color, copy, label, spacing, or translation. Bypasses the general SKS pipeline and runs an ultralight, no-record task-list path.',
+    route: 'fast direct fix',
+    description: 'Tiny simple direct edits such as copy, labels, typos, wording, spacing, colors, or clearly scoped one-line changes. Bypasses the general SKS pipeline and runs an ultralight, no-record task-list path.',
     requiredSkills: ['dfix'],
     lifecycle: ['micro_task_list', 'targeted_inspection', 'listed_edits_only', 'cheap_verification'],
     context7Policy: 'optional',
     reasoningPolicy: 'medium',
     stopGate: 'none',
     cliEntrypoint: 'sks dfix',
-    examples: ['$DFix 글자 색 바꿔줘', '$DFix 내용을 영어로 바꿔줘']
+    examples: ['$DFix 글자 색 바꿔줘', '$DFix README 오타 고쳐줘']
   },
   {
     id: 'Answer',
@@ -487,7 +487,7 @@ export const COMMAND_CATALOG = [
   { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot tmux Codex CLI workspace with the SKS MAD full-access auto-review profile.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS tmux with the auto-review profile.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Team.' },
-  { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight design/content fix mode.' },
+  { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight direct-fix mode.' },
   { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Dogfood UI/API as human proxy with safety gates, safe fixes, rechecks, Codex Computer Use-only UI evidence, report.' },
   { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $PPT HTML/PDF artifacts from a sealed presentation decision contract.' },
   { name: 'image-ux-review', usage: 'sks image-ux-review status <mission-id|latest> [--json]', description: 'Inspect $Image-UX-Review gpt-image-2/imagegen annotated UI/UX review artifacts.' },
@@ -574,11 +574,41 @@ export function stripDollarCommand(prompt) {
     .trim();
 }
 
-export function looksLikeFastDesignFix(prompt) {
+export function looksLikeTinyDirectFix(prompt) {
   const text = String(prompt || '');
-  const designCue = /(글자|텍스트|문구|내용|색|컬러|폰트|간격|여백|정렬|버튼|라벨|영어|한국어|번역|copy|text|color|font|spacing|padding|margin|align|label|button|translate)/i.test(text);
+  if (looksLikeDirectFixQuestion(text)) return false;
+  const broadCodeCue = /(구현|개발|리팩터|마이그레이션|버그|기능|로직|인증|데이터베이스|스키마|서버|API|테스트|동작|작동|implement|build|develop|refactor|rewrite|migrate|bug|feature|logic|auth|database|schema|server|endpoint|test|deploy|generator|workflow|flow|work(?:ing)?)/i.test(text);
+  if (broadCodeCue) return false;
+  const creationCue = /(?:\b(?:create|add|make|build|implement)\b.*\b(?:button|component|page|screen|form|modal|endpoint|feature|route|view|flow)\b)|(?:(?:버튼|컴포넌트|페이지|화면|폼|모달|엔드포인트|기능|플로우).*(?:만들|생성|추가|구현))/i.test(text);
+  if (creationCue && !/(라벨|문구|텍스트|글자|색|컬러|간격|여백|정렬|label|copy|text|color|spacing|padding|margin|align)/i.test(text)) return false;
+  const simpleSurfaceCue = /(글자|텍스트|문구|내용|색|컬러|폰트|간격|여백|정렬|라벨|영어|한국어|번역|오타|맞춤법|문장|제목|헤딩|README|문서|주석|메시지|버전|설정값|copy|text|color|font|spacing|padding|margin|align|label|translate|typo|spelling|grammar|wording|title|heading|docs?|comment|message|string|literal|placeholder|tooltip|config\s+value|package\.json|package-lock\.json|package\s+version|version\s*(?:to|만|으로))/i.test(text);
+  const behaviorCue = /(\b(?:submit|save|delete|navigate|redirect|validate|send|fetch|call|trigger|execute|toggle|upload|download)\b|\b(?:on\s*click|click\s+handler|handler|event)\b|submit(?:s|ting)?\s+(?:the\s+)?form|폼\s*제출|제출(?:하|되|하게)|클릭|핸들러|이벤트|저장|삭제|이동|검증|전송|호출|실행|토글|업로드|다운로드)/i.test(text);
+  if (behaviorCue && !simpleSurfaceCue) return false;
+  const directCue = simpleSurfaceCue || /(버튼|button)/i.test(text);
   const changeCue = /(바꿔|변경|수정|교체|고쳐|영어로|한국어로|change|replace|update|make|turn|translate|fix)/i.test(text);
-  return designCue && changeCue && (!looksLikeAnswerOnlyRequest(text) || looksLikeDirectWorkRequest(text));
+  return directCue && changeCue && (!looksLikeAnswerOnlyRequest(text) || looksLikeDirectWorkRequest(text));
+}
+
+function looksLikeDirectFixQuestion(prompt = '') {
+  const text = String(prompt || '').trim();
+  if (!text) return false;
+  if (looksLikePoliteDirectWorkRequest(text)) return false;
+  return looksLikeMethodQuestion(text)
+    && /(fix|change|replace|update|edit|typo|wording|label|color|spacing|고치|바꾸|변경|수정|교체|오타|문구|라벨|색|간격)/i.test(text)
+    && !/(해줘|고쳐줘|바꿔줘|변경해줘|수정해줘|교체해줘|please\s+(?:fix|change|replace|update|edit)|\b(?:fix|change|replace|update|edit)\b.*(?:for\s+me|now)$)/i.test(text);
+}
+
+function looksLikeMethodQuestion(prompt = '') {
+  const text = String(prompt || '').trim();
+  if (!text) return false;
+  return /(?:\?|^(?:how\s+(?:do|can|could|should|would)\s+(?:i|we)\b|how\s+to\b|what(?:'s| is)?\s+(?:the\s+)?(?:best\s+)?way\b|(?:can|could|should|would)\s+(?:i|we)\b)|^(?:어떻게|방법|왜|무엇|뭐|언제|어디|가능|맞아|인가|인지)\b)/i.test(text);
+}
+
+function looksLikePoliteDirectWorkRequest(prompt = '') {
+  const text = String(prompt || '').trim();
+  if (!text) return false;
+  return /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:fix|change|replace|update|edit|make|turn|translate|create|add|build|implement|delete|remove)\b/i.test(text)
+    || /(?:해줄\s*수|해\s*줄래|바꿔줄|고쳐줄|수정해줄|변경해줄|교체해줄)/i.test(text);
 }
 
 export function looksLikePresentationArtifactRequest(prompt = '') {
@@ -609,7 +639,6 @@ export function routePrompt(prompt) {
       const nestedCommand = dollarCommand(afterModifier);
       if (nestedCommand) return routeByDollarCommand(nestedCommand) || routeById('MadSKS');
       if (looksLikeAnswerOnlyRequest(afterModifier)) return routeById('Answer');
-      if (looksLikeFastDesignFix(afterModifier)) return routeById('DFix');
       if (looksLikeCodeChangingWork(afterModifier) || looksLikeDirectWorkRequest(afterModifier)) return routeById('Team');
       return routeById('MadSKS');
     }
@@ -622,7 +651,7 @@ export function routePrompt(prompt) {
   if (looksLikePresentationArtifactRequest(text)) return routeById('PPT');
   if (looksLikeImageUxReviewRequest(text)) return routeById('ImageUXReview');
   if (looksLikeComputerUseFastLane(text)) return routeById('ComputerUse');
-  if (looksLikeFastDesignFix(text)) return routeById('DFix');
+  if (looksLikeTinyDirectFix(text)) return routeById('DFix');
   if (looksLikeQuestionShapedDirective(text)) return routeById('Team');
   if (looksLikeAnswerOnlyRequest(text)) return routeById('Answer');
   if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql|mcp)\b/i.test(text)) return routeById('DB');
@@ -647,7 +676,7 @@ export function looksLikeComputerUseFastLane(prompt = '') {
 export function looksLikeTeamDefaultWork(prompt = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
-  if (looksLikeFastDesignFix(text) || looksLikeAnswerOnlyRequest(text)) return false;
+  if (looksLikeTinyDirectFix(text) || looksLikeAnswerOnlyRequest(text)) return false;
   return looksLikeCodeChangingWork(text) || looksLikeDirectWorkRequest(text);
 }
 
@@ -671,6 +700,8 @@ export function looksLikeQuestionShapedDirective(prompt = '') {
 
 export function looksLikeDirectWorkRequest(prompt = '') {
   const text = String(prompt || '');
+  if (looksLikeDirectFixQuestion(text)) return false;
+  if (looksLikeMethodQuestion(text) && !looksLikePoliteDirectWorkRequest(text) && !looksLikeQuestionShapedDirective(text)) return false;
   return looksLikeCodeChangingWork(text)
     || looksLikeChatCaptureRequest(text)
     || looksLikeQuestionShapedDirective(text)
@@ -695,7 +726,7 @@ export function routeRequiresSubagents(route, prompt = '') {
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
   if (route.id === 'Goal') return looksLikeExecutionWork(prompt) || looksLikeTeamDefaultWork(stripDollarCommand(prompt));
   if (route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
-  if (route.id === 'DFix') return looksLikeCodeChangingWork(prompt) && !looksLikeFastDesignFix(prompt);
+  if (route.id === 'DFix') return looksLikeCodeChangingWork(prompt) && !looksLikeTinyDirectFix(prompt);
   return looksLikeExecutionWork(prompt);
 }
 
@@ -705,7 +736,7 @@ export function reflectionRequiredForRoute(route) {
 }
 
 export function looksLikeCodeChangingWork(prompt = '') {
-  return /\b(implement|build|add|edit|modify|change|fix|refactor|rewrite|migrate|create|delete|remove|rename|update|patch|코드|구현|개발|수정|변경|추가|삭제|고쳐|바꿔|리팩터|마이그레이션)\b/i.test(String(prompt || ''));
+  return /\b(implement|build|make|add|edit|modify|change|fix|refactor|rewrite|migrate|create|delete|remove|rename|update|patch|코드|구현|개발|수정|변경|추가|삭제|고쳐|바꿔|리팩터|마이그레이션)\b/i.test(String(prompt || ''));
 }
 
 export function looksLikeExecutionWork(prompt = '') {
@@ -743,6 +774,7 @@ export function routeReasoning(route, prompt = '') {
   const text = String(prompt || '');
   const base = ALLOWED_REASONING_EFFORTS.has(route?.reasoningPolicy) ? route.reasoningPolicy : 'medium';
   if (hasFromChatImgSignal(text)) return reasoning('xhigh', 'from_chat_img_image_work_order_analysis');
+  if (route?.id === 'Team') return teamRouteReasoning(text);
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
   if (route?.id === 'ImageUXReview') return reasoning('high', 'image_generation_visual_review_route');
   if (/\b(research|autoresearch|hypothesis|falsify|novelty|frontier|benchmark|experiment|SEO|GEO|ranking|연구|실험|가설|검증)\b/i.test(text)) return reasoning('xhigh', 'research_level_prompt');
@@ -750,6 +782,14 @@ export function routeReasoning(route, prompt = '') {
   if (base === 'high' || /\b(architecture|design|migration|database|security|parallel|orchestrat|refactor|algorithm|logic|tradeoff|검토|설계|마이그레이션|보안|병렬|팀|논리)\b/i.test(text)) return reasoning('high', 'logical_or_safety_work');
   if (base === 'low') return reasoning('low', 'route_policy_low');
   return reasoning('medium', 'simple_fulfillment');
+}
+
+function teamRouteReasoning(text = '') {
+  if (/(frontier|autoresearch|novelty|hypothesis|falsify|forensic|from-chat-img|가설|포렌식)/i.test(text)) return reasoning('xhigh', 'team_research_or_forensic_signal');
+  if (/(research|current docs?|library|framework|sdk|api|database|supabase|sql|migration|security|permission|mad|release|publish|deploy|commit|push|architecture|algorithm|리서치|문서|데이터베이스|마이그레이션|보안|권한|배포|커밋|푸쉬)/i.test(text)) return reasoning('high', 'team_knowledge_safety_or_release_signal');
+  if (/(tmux|terminal|cli|cmd|warp|tool(?:\s|-)?call|hook|router|routing|pipeline|multi[-\s]?pane|pane|process|config|터미널|라우팅|파이프라인|훅|도구|툴)/i.test(text)) return reasoning('medium', 'team_tooling_or_runtime_signal');
+  if (/(tiny|simple|small|one[-\s]?line|typo|copy|label|spacing|rename|text|readme|docs?|간단|단순|오타|문구|라벨|간격|색상)/i.test(text)) return reasoning('low', 'team_simple_bounded_work_signal');
+  return reasoning('medium', 'team_default_balanced_reasoning');
 }
 
 export function reasoningProfileName(effort) {
@@ -761,7 +801,7 @@ export function reasoningProfileName(effort) {
 
 export function reasoningInstruction(info) {
   const profile = reasoningProfileName(info?.effort);
-  return `Temporary reasoning route: use ${info?.effort || 'medium'} reasoning (${profile}) for this SKS route only; do not persist profile changes, and return to the default/user-selected profile after the route gate passes.`;
+  return `Temporary reasoning route: use ${info?.effort || 'medium'} reasoning (${profile}) in Fast service tier for this SKS route only; do not persist profile changes, and return to the default/user-selected profile after the route gate passes.`;
 }
 
 function reasoning(effort, reason) {

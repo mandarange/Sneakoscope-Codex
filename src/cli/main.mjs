@@ -75,7 +75,7 @@ import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
 import { codexAppRemoteControlCommand } from './codex-app-command.mjs';
 import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs';
-import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
+import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, defaultCodexLaunchArgs, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchMadTmuxUi, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
 import { askPostinstallQuestion, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall } from './install-helpers.mjs';
@@ -338,7 +338,7 @@ async function updateCheck(args = []) {
   if (result.update_available) console.log('Run:     npm i -g sneakoscope');
 }
 
-const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: questions -> $Answer, small design/content -> $DFix, presentation/PDF artifacts -> $PPT, image-generation UI/UX reviews -> $Image-UX-Review/$UX-Review, Computer Use UI/browser speed work -> $Computer-Use, code -> $Team. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
+const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: questions -> $Answer, tiny Direct Fix edits -> $DFix, presentation/PDF artifacts -> $PPT, image-generation UI/UX reviews -> $Image-UX-Review/$UX-Review, Computer Use UI/browser speed work -> $Computer-Use, code -> $Team. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
 
 function commands(args = []) {
   if (flag(args, '--json')) return console.log(JSON.stringify({ aliases: ['sks', 'sneakoscope'], dollar_commands: DOLLAR_COMMANDS, app_skill_aliases: DOLLAR_COMMAND_ALIASES, commands: COMMAND_CATALOG }, null, 2));
@@ -397,18 +397,20 @@ function dollarCommandNames() {
 }
 
 function dfixHelp() {
-  console.log(`SKS DFix Mode
+  console.log(`SKS Direct Fix Mode
 
 Prompt command:
-  $DFix <small design/content request>
+  $DFix <tiny direct fix request>
 
 Examples:
   $DFix 글자 색 파란색으로 바꿔줘
   $DFix 내용을 영어로 바꿔줘
   $DFix Change the CTA label to "Start"
+  $DFix Fix the README typo
+  $DFix Update the package version
 
 Purpose:
-  Fast design/content fixes only. DFix bypasses the general SKS prompt pipeline and uses an ultralight, no-record task list.
+  Fast tiny direct edits only. Direct Fix bypasses the general SKS prompt pipeline and uses an ultralight, no-record task list.
 
 Rules:
   List the exact micro-edits, inspect only needed files, apply only those edits.
@@ -1206,11 +1208,12 @@ async function madHighCommand(args = []) {
     conciseBlockers: true
   });
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
-  return launchTmuxUi([...cleanArgs, '--workspace', workspace], {
+  return launchMadTmuxUi([...cleanArgs, '--workspace', workspace], {
     ...launchOpts,
     codexArgs: profile.launch_args,
     autoInstallTmux: !flag(args, '--no-auto-install-tmux'),
-    conciseBlockers: true
+    conciseBlockers: true,
+    missionId: madLaunch.mission_id
   });
 }
 
@@ -1712,7 +1715,7 @@ async function setup(args) {
   console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .agents/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
   console.log(`Global $:  ${globalSkills.status === 'installed' ? 'ok' : globalSkills.status} ${globalSkills.root || ''}`.trimEnd());
   console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser Use=${appRuntime.mcp.has_browser_use ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'} Image Gen=${appRuntime.features?.image_generation ? 'ok' : 'missing'}`);
-  console.log(`Prompt:    intent-first routing, $Answer fact-check route, $DFix ultralight design/content route, $PPT HTML/PDF presentation route, Context7 gate`);
+  console.log(`Prompt:    intent-first routing, $Answer fact-check route, $DFix ultralight Direct Fix route, $PPT HTML/PDF presentation route, Context7 gate`);
   console.log(`Skills:    .agents/skills`);
   console.log(`Next:      sks context7 check; sks selftest --mock; sks commands; sks dollar-commands`);
   if (cliTools.codex.status === 'failed') console.log(`\nCodex CLI install failed. Run manually: npm i -g @openai/codex. ${cliTools.codex.error || ''}`.trim());
@@ -2266,7 +2269,7 @@ async function selftest() {
   const madProfilePath = path.join(tmp, 'mad-codex-config.toml');
   const madProfile = await enableMadHighProfile({ configPath: madProfilePath });
   const madProfileText = await safeReadText(madProfilePath);
-  if (madProfile.profile_name !== 'sks-mad-high' || !madProfileText.includes('sandbox_mode = "danger-full-access"') || !madProfileText.includes('approval_policy = "never"') || !madProfileText.includes('approvals_reviewer = "auto_review"') || !madProfile.launch_args.includes('--sandbox') || !madProfile.launch_args.includes('danger-full-access') || !madProfile.launch_args.includes('--ask-for-approval') || !madProfile.launch_args.includes('never') || !madProfileText.includes('model_reasoning_effort = "high"') || !madProfileText.includes('unrequested fallback implementation code')) throw new Error('selftest failed: MAD high profile is not Codex full-access high with fallback-code guard');
+  if (madProfile.profile_name !== 'sks-mad-high' || !madProfileText.includes('sandbox_mode = "danger-full-access"') || !madProfileText.includes('approval_policy = "never"') || !madProfileText.includes('approvals_reviewer = "auto_review"') || !madProfileText.includes('service_tier = "fast"') || !madProfile.launch_args.includes('--sandbox') || !madProfile.launch_args.includes('danger-full-access') || !madProfile.launch_args.includes('--ask-for-approval') || !madProfile.launch_args.includes('never') || !madProfileText.includes('model_reasoning_effort = "high"') || !madProfileText.includes('unrequested fallback implementation code')) throw new Error('selftest failed: MAD high profile is not Codex full-access high with fallback-code guard');
   if (!isMadHighLaunch(['--mad', '--high']) || isMadHighLaunch(['db', '--mad'])) throw new Error('selftest failed: MAD high launch flag parsing is not top-level only');
   const workspacePlan = { session: 'sks-mad-selftest', root: tmp, codexArgs: madProfile.launch_args };
   const tmuxSyntax = runTmuxLaunchPlanSyntaxCheck(workspacePlan);
@@ -2274,11 +2277,11 @@ async function selftest() {
   const tmuxOpenArgs = buildTmuxOpenArgs(workspacePlan);
   if (tmuxOpenArgs.join(' ') !== 'attach-session -t sks-mad-selftest') throw new Error('selftest failed: MAD tmux attach args are not stable by session name');
   const defaultFastHighPlan = await buildTmuxLaunchPlan({ root: tmp, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
-  if (defaultFastHighPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="high"') throw new Error('selftest failed: default sks tmux launch is not fast-high');
+  if (defaultFastHighPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c service_tier="fast" -c model_reasoning_effort="high"') throw new Error('selftest failed: default sks tmux launch is not fast-high');
   const forcedModelPlan = await buildTmuxLaunchPlan({ root: tmp, env: { SKS_CODEX_MODEL: 'gpt-5.4-mini', SKS_CODEX_FAST_HIGH: '0', SKS_CODEX_REASONING: 'medium' }, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
-  if (forcedModelPlan.codexArgs.includes('gpt-5.4-mini') || forcedModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c model_reasoning_effort="medium"') throw new Error('selftest failed: sks tmux launch allowed a non-GPT-5.5 model override');
+  if (forcedModelPlan.codexArgs.includes('gpt-5.4-mini') || forcedModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c service_tier="fast" -c model_reasoning_effort="medium"') throw new Error('selftest failed: sks tmux launch allowed a non-GPT-5.5 model override');
   const explicitBadModelPlan = await buildTmuxLaunchPlan({ root: tmp, codexArgs: ['--profile', 'legacy-5.4', '--model', 'gpt-5.4-mini', '-c', 'model="gpt-5.4"', '-c', 'model_reasoning_effort="low"'], tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
-  if (explicitBadModelPlan.codexArgs.join(' ').includes('gpt-5.4') || explicitBadModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 --profile legacy-5.4 -c model_reasoning_effort="low"') throw new Error('selftest failed: explicit tmux model override was not forced back to GPT-5.5');
+  if (explicitBadModelPlan.codexArgs.join(' ').includes('gpt-5.4') || explicitBadModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c service_tier="fast" --profile legacy-5.4 -c model_reasoning_effort="low"') throw new Error('selftest failed: explicit tmux model override was not forced back to GPT-5.5');
   const codexExecArgs = buildCodexExecArgs({ root: tmp, prompt: 'model guard selftest', profile: 'legacy-5.4', extraArgs: ['--model=gpt-5.4-mini', '--config', 'model = "gpt-5.4"', '-c', 'model_reasoning_effort="medium"'] });
   if (codexExecArgs.join(' ').includes('gpt-5.4') || !codexExecArgs.includes('gpt-5.5') || codexExecArgs.includes('--model=gpt-5.4-mini')) throw new Error('selftest failed: codex exec args allowed a non-GPT-5.5 model override');
   await selftestCodexLb(tmp);
@@ -2545,8 +2548,27 @@ async function selftest() {
   if (routePrompt('[$research](/tmp/research/SKILL.md) Codex Computer Use 도구 노출 문제를 QA루프 관점에서 연구')?.id !== 'Research') throw new Error('selftest failed: markdown-linked $Research was not treated as explicit route');
   if (routePrompt('$WikiRefresh 갱신')) throw new Error('selftest failed: deprecated $WikiRefresh route still resolved');
   if (routePrompt('$MAD-SKS Supabase MCP main 작업')?.id !== 'MadSKS') throw new Error('selftest failed: $MAD-SKS route did not resolve');
+  if (routePrompt('$MAD-SKS 버튼 라벨만 바꿔줘')?.id === 'DFix') throw new Error('selftest failed: $MAD-SKS tiny label fix incorrectly routed to DFix');
   if (routePrompt('$MAD-SKS $Team Supabase MCP main 작업')?.id !== 'Team') throw new Error('selftest failed: $MAD-SKS did not compose with $Team');
+  if (routePrompt('$MAD-SKS $Team 버튼 라벨만 바꿔줘')?.id !== 'Team') throw new Error('selftest failed: $MAD-SKS $Team tiny fix did not stay on Team route');
   if (routePrompt('$DB Supabase 점검 $MAD-SKS')?.id !== 'DB') throw new Error('selftest failed: trailing $MAD-SKS changed primary route');
+  if (routePrompt('Fix the typo in README')?.id !== 'DFix') throw new Error('selftest failed: inferred typo Direct Fix did not route to DFix');
+  if (routePrompt('Update the package version to 1.2.3')?.id !== 'DFix') throw new Error('selftest failed: inferred package-version Direct Fix did not route to DFix');
+  if (routePrompt('package.json version만 1.2.3으로 바꿔줘')?.id !== 'DFix') throw new Error('selftest failed: inferred package.json version Direct Fix did not route to DFix');
+  if (routePrompt('How do I fix the typo in README?')?.id !== 'Answer') throw new Error('selftest failed: how-to Direct Fix question did not route to Answer');
+  if (routePrompt('How do I change README title?')?.id !== 'Answer') throw new Error('selftest failed: how-to README title question did not route to Answer');
+  if (routePrompt('How do I make a settings page?')?.id !== 'Answer') throw new Error('selftest failed: how-to create question did not route to Answer');
+  if (routePrompt('How to create a new form component?')?.id !== 'Answer') throw new Error('selftest failed: how-to form component question did not route to Answer');
+  if (routePrompt('How can I build a modal?')?.id !== 'Answer') throw new Error('selftest failed: how-can-I build question did not route to Answer');
+  if (routePrompt('Make a button')?.id !== 'Team') throw new Error('selftest failed: create-style button work did not route to Team');
+  if (routePrompt('Make a button that submits the form')?.id !== 'Team') throw new Error('selftest failed: form button creation did not route to Team');
+  if (routePrompt('Change button to submit the form')?.id !== 'Team') throw new Error('selftest failed: form button behavior change did not route to Team');
+  if (routePrompt('버튼이 폼 제출하게 바꿔줘')?.id !== 'Team') throw new Error('selftest failed: Korean form button behavior change did not route to Team');
+  if (routePrompt('Can you change the button to submit the form?')?.id !== 'Team') throw new Error('selftest failed: polite form button behavior request did not route to Team');
+  if (routePrompt('Change button label to Submit')?.id !== 'DFix') throw new Error('selftest failed: button label Direct Fix did not route to DFix');
+  if (routePrompt('Change button text to Submit')?.id !== 'DFix') throw new Error('selftest failed: button text Direct Fix did not route to DFix');
+  if (routePrompt('Can you change the button label to Save?')?.id !== 'DFix') throw new Error('selftest failed: polite button label Direct Fix did not route to DFix');
+  if (routePrompt('Make README generator work')?.id !== 'Team') throw new Error('selftest failed: README generator implementation did not route to Team');
   const imageUxRoute = routePrompt('$Image-UX-Review localhost 화면 검수');
   if (imageUxRoute?.id !== 'ImageUXReview') throw new Error('selftest failed: $Image-UX-Review did not route to ImageUXReview');
   if (routePrompt('$UX-Review 스크린샷 gpt-image-2 콜아웃 리뷰')?.id !== 'ImageUXReview') throw new Error('selftest failed: $UX-Review did not route to ImageUXReview');
@@ -2939,6 +2961,16 @@ async function selftest() {
   if (await exists(path.join(hookDfixTmp, '.sneakoscope', 'state', 'light-route-stop.json'))) throw new Error('selftest failed: $DFix hook created persistent light-route state');
   const hookDfixState = await readJson(stateFile(hookDfixTmp), {});
   if (String(hookDfixState.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS')) throw new Error('selftest failed: $DFix state entered clarification gate');
+  const explicitDfixDirectTmp = tmpdir();
+  await initProject(explicitDfixDirectTmp, {});
+  const explicitDfixDirectPayload = JSON.stringify({ cwd: explicitDfixDirectTmp, prompt: '$DFix Update the docs config wording to Direct Fix' });
+  const explicitDfixDirectResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: explicitDfixDirectTmp, input: explicitDfixDirectPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (explicitDfixDirectResult.code !== 0) throw new Error(`selftest failed: explicit Direct Fix docs/config hook exited ${explicitDfixDirectResult.code}: ${explicitDfixDirectResult.stderr}`);
+  const explicitDfixDirectJson = JSON.parse(explicitDfixDirectResult.stdout);
+  const explicitDfixDirectContext = explicitDfixDirectJson.hookSpecificOutput?.additionalContext || '';
+  if (!explicitDfixDirectContext.includes('DFix ultralight pipeline active')) throw new Error('selftest failed: explicit Direct Fix docs/config request did not use ultralight hook');
+  if (explicitDfixDirectContext.includes('SKS skill-first pipeline active') || explicitDfixDirectContext.includes('Mission:')) throw new Error('selftest failed: explicit Direct Fix docs/config request leaked general pipeline context');
+  if (await exists(path.join(explicitDfixDirectTmp, '.sneakoscope', 'state', 'light-route-stop.json'))) throw new Error('selftest failed: explicit Direct Fix docs/config hook created persistent light-route state');
   const inferredDfixPayload = JSON.stringify({ cwd: hookTeamTmp, prompt: '버튼 라벨 바꿔줘' });
   const inferredDfixResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: inferredDfixPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (inferredDfixResult.code !== 0) throw new Error(`selftest failed: inferred DFix hook exited ${inferredDfixResult.code}: ${inferredDfixResult.stderr}`);
@@ -3196,6 +3228,15 @@ async function selftest() {
   if (teamPlan.role_counts.executor !== 3 || teamPlan.role_counts.user !== 1 || teamPlan.role_counts.reviewer !== 5) throw new Error('selftest failed: team default role counts invalid');
   if (teamPlan.codex_config_required?.features?.hooks !== true || teamPlan.codex_config_required?.features?.codex_hooks === true) throw new Error('selftest failed: team plan Codex config still uses legacy hooks feature flag');
   if (!teamPlan.review_gate?.passed || teamPlan.review_gate.required_reviewer_lanes !== 5) throw new Error('selftest failed: team review policy gate did not pass default plan');
+  if (teamPlan.codex_config_required?.service_tier !== 'fast' || teamPlan.reasoning?.service_tier !== 'fast') throw new Error('selftest failed: team plan did not require Fast service tier');
+  if (!teamPlan.goal_continuation?.enabled || teamPlan.goal_continuation?.mode !== 'ambient_codex_native_goal_overlay') throw new Error('selftest failed: Team plan did not include ambient Goal continuation');
+  if (!teamPlan.roster.analysis_team.every((agent) => agent.service_tier === 'fast' && agent.reasoning_effort && agent.reasoning_profile)) throw new Error('selftest failed: analysis scouts missing dynamic Fast reasoning metadata');
+  const simpleTeamPlan = buildTeamPlan(teamId, '$Team 간단한 코드 수정');
+  if (!simpleTeamPlan.roster.analysis_team.some((agent) => agent.reasoning_effort === 'low')) throw new Error('selftest failed: simple Team prompt did not allow low-reasoning scouts');
+  const toolingTeamPlan = buildTeamPlan(teamId, '$Team tmux CLI tool-calling runtime fix');
+  if (!toolingTeamPlan.roster.analysis_team.some((agent) => agent.reasoning_effort === 'medium')) throw new Error('selftest failed: tool-heavy Team prompt did not assign medium-reasoning scouts');
+  const researchTeamPlan = buildTeamPlan(teamId, '$Team external library research and current docs update');
+  if (!researchTeamPlan.roster.analysis_team.some((agent) => agent.reasoning_effort === 'high')) throw new Error('selftest failed: research/docs Team prompt did not assign high-reasoning scouts');
   const underProvisionedReviewCount = 2;
   const blockedReviewGate = evaluateTeamReviewPolicyGate({ roleCounts: { reviewer: underProvisionedReviewCount }, agentSessions: 3, roster: { validation_team: [{ id: 'reviewer_1', role: 'reviewer' }] } });
   if (blockedReviewGate.passed || !blockedReviewGate.blockers.includes('validation_team_reviewers_below_required')) throw new Error('selftest failed: team review policy gate did not block under-provisioned review');
@@ -3237,6 +3278,8 @@ async function selftest() {
   if (roleParsed.roleCounts.executor !== 5 || roleParsed.roleCounts.reviewer !== 6 || roleParsed.agentSessions !== 6 || roleParsed.prompt !== '작업') throw new Error('selftest failed: team role-count parsing');
   const openTmuxFlagParsed = parseTeamCreateArgs(['--open-tmux', '작업']);
   if (openTmuxFlagParsed.prompt !== '작업') throw new Error('selftest failed: team --open-tmux leaked into prompt');
+  const noOpenTmuxFlagParsed = parseTeamCreateArgs(['--no-open-tmux', '작업']);
+  if (noOpenTmuxFlagParsed.prompt !== '작업') throw new Error('selftest failed: team --no-open-tmux leaked into prompt');
   const roleTeamPlan = buildTeamPlan(teamId, '역할 팀 테스트', { roleCounts: roleParsed.roleCounts });
   if (roleTeamPlan.roster.debate_team.length !== 5) throw new Error('selftest failed: executor role count not reflected in debate team size');
   if (roleTeamPlan.roster.analysis_team.length !== 5) throw new Error('selftest failed: executor role count not reflected in analysis scout team');
@@ -3251,6 +3294,28 @@ async function selftest() {
   if (teamLaneStyle('analysis_scout_1').role !== 'scout' || teamLaneStyle('executor_1').role !== 'execution' || teamLaneStyle('reviewer_1').role !== 'review') throw new Error('selftest failed: Team tmux role palette did not classify lane roles');
   if (!String(tmuxTeam.cleanup_policy || '').includes('mark-complete') || !tmuxTeam.lanes.every((entry) => entry.style?.color && entry.title)) throw new Error('selftest failed: Team tmux view did not expose color/title metadata and cleanup policy');
   if (tmuxTeam.session !== `sks-team-${teamId}` || !tmuxTeam.attach_command?.includes(`sks-team-${teamId}`)) throw new Error('selftest failed: Team tmux session is not named for visibility');
+  const fakeTmuxDir = path.join(tmp, 'fake-tmux');
+  await ensureDir(fakeTmuxDir);
+  const fakeTmuxLog = path.join(fakeTmuxDir, 'tmux.log');
+  const fakeTmuxBin = path.join(fakeTmuxDir, 'tmux');
+  await writeTextAtomic(fakeTmuxBin, `#!/usr/bin/env node\nconst fs = require('node:fs');\nconst log = process.env.SKS_FAKE_TMUX_LOG;\nif (log) fs.appendFileSync(log, process.argv.slice(2).join(' ') + '\\n');\nconst cmd = process.argv[2];\nif (cmd === 'has-session') process.exit(0);\nif (cmd === 'kill-session') process.exit(0);\nif (cmd === 'new-session') { console.log('%1'); process.exit(0); }\nif (cmd === 'split-window') { console.log('%2'); process.exit(0); }\nprocess.exit(0);\n`);
+  await fsp.chmod(fakeTmuxBin, 0o755);
+  const previousFakeTmuxLog = process.env.SKS_FAKE_TMUX_LOG;
+  process.env.SKS_FAKE_TMUX_LOG = fakeTmuxLog;
+  const recreatedTmux = await createTmuxSession({ root: tmp, session: 'sks-existing-selftest', tmux: { bin: fakeTmuxBin }, codex: { bin: process.execPath } }, [
+    { cwd: tmp, command: 'pwd', role: 'overview' },
+    { cwd: tmp, command: 'pwd', role: 'lane' }
+  ], { recreate: true });
+  const fakeTmuxLogText = await safeReadText(fakeTmuxLog);
+  if (!recreatedTmux.ok || !fakeTmuxLogText.includes('kill-session -t sks-existing-selftest') || !fakeTmuxLogText.includes('new-session') || !fakeTmuxLogText.includes('split-window')) throw new Error('selftest failed: tmux recreate did not replace stale existing session with split panes');
+  await writeTextAtomic(fakeTmuxLog, '');
+  const madCockpit = await launchMadTmuxUi(['--workspace', 'sks-mad-selftest-ui', '--no-attach'], { root: tmp, tmux: { ok: true, bin: fakeTmuxBin, version: '3.4' }, codex: { bin: process.execPath }, app: { ok: true, guidance: [] }, missionId: 'M-MAD-SELFTEST' });
+  const madTmuxLogText = await safeReadText(fakeTmuxLog);
+  if (!madCockpit.created || madCockpit.opened?.panes?.length !== 3 || !madTmuxLogText.includes('new-session') || !madTmuxLogText.includes('split-window')) throw new Error('selftest failed: MAD tmux launch did not create a multi-pane cockpit');
+  if (previousFakeTmuxLog === undefined) delete process.env.SKS_FAKE_TMUX_LOG;
+  else process.env.SKS_FAKE_TMUX_LOG = previousFakeTmuxLog;
+  const codexLaunchArgs = defaultCodexLaunchArgs({ SKS_CODEX_REASONING: 'low' }).join(' ');
+  if (!codexLaunchArgs.includes('service_tier="fast"') || !codexLaunchArgs.includes('model_reasoning_effort="low"')) throw new Error('selftest failed: Codex tmux launch args do not force Fast service tier plus dynamic reasoning');
   await initTeamLive(teamId, teamDir, '역할 팀 테스트', { agentSessions: roleTeamPlan.agent_session_count, roleCounts: roleTeamPlan.role_counts, roster: roleTeamPlan.roster });
   const teamWatch = await renderTeamWatch(teamDir, { missionId: teamId });
   if (!roleTeamPlan.roster.analysis_team.every((agent) => teamWatch.includes(`- ${agent.id}:`))) throw new Error('selftest failed: Team watch overview collapsed numbered analysis scout lanes');
@@ -3258,6 +3323,9 @@ async function selftest() {
   if (routeReasoning(routePrompt('$From-Chat-IMG 채팅 이미지 작업'), '$From-Chat-IMG 채팅 이미지 작업').effort !== 'xhigh') throw new Error('selftest failed: From-Chat-IMG reasoning not xhigh');
   if (routeReasoning(routePrompt('$Computer-Use localhost UI smoke'), '$Computer-Use localhost UI smoke').effort !== 'low') throw new Error('selftest failed: Computer Use fast lane reasoning not low');
   if (routeReasoning(routePrompt('$DB migration'), '$DB migration').effort !== 'high') throw new Error('selftest failed: logical reasoning not high');
+  if (routeReasoning(routePrompt('$Team 간단한 코드 수정'), '$Team 간단한 코드 수정').effort !== 'low') throw new Error('selftest failed: simple Team reasoning not low');
+  if (routeReasoning(routePrompt('$Team tmux CLI tool-calling fix'), '$Team tmux CLI tool-calling fix').effort !== 'medium') throw new Error('selftest failed: tool-heavy Team reasoning not medium');
+  if (routeReasoning(routePrompt('$Team library research current docs'), '$Team library research current docs').effort !== 'high') throw new Error('selftest failed: research/docs Team reasoning not high');
   const lowReasoning = routeReasoning({ id: 'LowSmoke', reasoningPolicy: 'low' }, 'small metadata read');
   if (lowReasoning.effort !== 'low' || lowReasoning.profile !== 'sks-task-low') throw new Error('selftest failed: low reasoning did not route to sks-task-low');
   const forensicEffort = selectEffort({ mission_id: 'selftest', task_id: 'TASK-IMG', route: 'from-chat-img', prompt: '$From-Chat-IMG screenshot match' });
@@ -3296,6 +3364,8 @@ async function selftest() {
   if (routePrompt('근데 왜 팀원 구성을 안하고 작업을 하는 경우가 이렇게 많지?')?.id !== 'Team') throw new Error('selftest failed: question-shaped Team complaint did not route to Team');
   if (routePrompt('$DF button label')) throw new Error('selftest failed: deprecated $DF route still resolved');
   if (routePrompt('implement feature')?.id !== 'Team') throw new Error('selftest failed: implementation prompt did not default to Team');
+  const broadMadTeamGoalPrompt = 'sks --mad tmux multi pane scout reasoning commit push $team $goal';
+  if (routePrompt(broadMadTeamGoalPrompt)?.id !== 'Team') throw new Error('selftest failed: broad MAD/Team/Goal tmux request was misrouted away from Team');
   if (routePrompt('$SKS implement feature')?.id !== 'Team') throw new Error('selftest failed: $SKS implementation prompt did not promote to Team');
   if (routePrompt('$From-Chat-IMG 채팅 기록 이미지와 첨부 이미지로 고객사 요청 수정 작업 수행해줘')?.id !== 'Team') throw new Error('selftest failed: explicit chat capture client work did not promote to Team');
   if (routePrompt('$Computer-Use localhost 화면 빠르게 검증해줘')?.id !== 'ComputerUse') throw new Error('selftest failed: $Computer-Use did not route to ComputerUse fast lane');

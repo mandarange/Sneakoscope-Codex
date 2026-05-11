@@ -100,7 +100,7 @@ Set \`SKS_OPENCLAW=1\` for SKS shell commands. In OpenClaw mode, SKS treats upda
 ## Agent Operating Rules
 
 1. Before substantive work, run \`SKS_OPENCLAW=1 ${sksCommand} root\` and inspect the repository's \`AGENTS.md\` if present.
-2. For implementation, prefer the repository's requested SKS route. General code work normally routes to \`$Team\`; tiny design or copy edits can use \`$DFix\`; UI/browser dogfood uses \`$QA-LOOP\`; database or Supabase work uses \`$DB\`.
+2. For implementation, prefer the repository's requested SKS route. General code work and broad implementation normally route to \`$Team\`; Direct Fix work, meaning tiny copy/config/docs/labels/spacing/translation/simple mechanical edits, can use \`$DFix\`; UI design specifics follow the repo's UI/design route rules; UI/browser dogfood uses \`$QA-LOOP\`; database or Supabase work uses \`$DB\`.
 3. Do not invent fallback implementation code when the requested SKS path is blocked. Report the blocker with command output and source paths.
 4. For database, migration, and Supabase tasks, default to read-only inspection unless the user explicitly authorizes a write/migration scope.
 5. Before claiming completion, run the most relevant verification command and summarize what passed, what was not verified, and any remaining blocker.
