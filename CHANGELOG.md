@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.7.55] - 2026-05-11
+
+### Fixed
+
+- Force all Codex launch, exec, remote-control, and hook-observed client model paths back to `gpt-5.5`, stripping `gpt-5.4` request overrides before they can reach the client runtime.
 
 ## [0.7.54] - 2026-05-10
 

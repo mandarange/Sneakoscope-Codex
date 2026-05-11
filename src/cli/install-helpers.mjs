@@ -50,14 +50,25 @@ export async function postinstall({ bootstrap }) {
   if (bootstrapDecision.run) {
     console.log(`SKS bootstrap: ${bootstrapDecision.reason}.`);
     await runPostinstallBootstrap(installRoot, bootstrap);
+    await reportPostinstallCodexLbAuth();
     return;
   }
+  await reportPostinstallCodexLbAuth();
   console.log('\nNext:');
   console.log('  sks bootstrap');
   console.log(`\nSKS bootstrap was not run automatically: ${bootstrapDecision.reason}.`);
   console.log('This initializes the current project, installs SKS Codex App skills, verifies Codex App/Context7 readiness, and checks tmux/runtime dependencies.');
   console.log('Dependency repair: sks deps check; sks deps install tmux');
   console.log('Open runtime after readiness is green: sks\n');
+}
+
+async function reportPostinstallCodexLbAuth() {
+  const codexLbAuth = await ensureCodexLbAuthDuringInstall();
+  if (codexLbAuth.status === 'synced' || codexLbAuth.status === 'present') console.log(`codex-lb auth: preserved from ${codexLbAuth.env_path}.`);
+  else if (codexLbAuth.status === 'skipped') console.log(`codex-lb auth: skipped (${codexLbAuth.reason}).`);
+  else if (codexLbAuth.status === 'missing_env_key') console.log('codex-lb auth: stored key missing. Run `sks codex-lb setup --host <domain> --api-key <key>` to repair.');
+  else if (codexLbAuth.status && codexLbAuth.status !== 'not_configured') console.log(`codex-lb auth: repair skipped (${codexLbAuth.status}${codexLbAuth.error ? `: ${codexLbAuth.error}` : ''}).`);
+  return codexLbAuth;
 }
 
 async function postinstallHarnessConflictNotice(conflictScan) {
@@ -159,7 +170,7 @@ export async function codexLbStatus(opts = {}) {
   const config = await readText(configPath, '');
   const envExists = await exists(envPath);
   const envText = envExists ? await readText(envPath, '') : '';
-  const envKeyConfigured = /^(\s*export\s+)?CODEX_LB_API_KEY\s*=.+$/m.test(envText);
+  const envKeyConfigured = Boolean(parseCodexLbEnvKey(envText));
   const providerConfigured = /\[model_providers\.codex-lb\]/.test(config);
   const selected = /model_provider\s*=\s*"codex-lb"/.test(config);
   return {
@@ -194,6 +205,24 @@ export async function repairCodexLbAuth(opts = {}) {
     base_url: status.base_url,
     codex_lb: status,
     codex_login: codexLogin
+  };
+}
+
+export async function ensureCodexLbAuthDuringInstall(opts = {}) {
+  if (process.env.SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH === '1' && !opts.force) return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH=1' };
+  const status = await codexLbStatus(opts);
+  if (!status.selected && !status.provider_configured && !status.env_file) return { status: 'not_configured', codex_lb: status };
+  if (!status.ok) return { status: status.env_key_configured ? 'not_configured' : 'missing_env_key', codex_lb: status, config_path: status.config_path, env_path: status.env_path };
+  const codexLogin = await ensureCodexLbLoginFromEnv(status, { ...opts, force: true });
+  return {
+    ok: Boolean(codexLogin.ok),
+    status: codexLogin.status,
+    config_path: status.config_path,
+    env_path: status.env_path,
+    base_url: status.base_url,
+    codex_lb: status,
+    codex_login: codexLogin,
+    error: codexLogin.error || null
   };
 }
 
@@ -237,7 +266,7 @@ async function syncCodexApiKeyLogin(apiKey, opts = {}) {
   }
   const login = await runProcess(codexBin, ['login', '--with-api-key'], { input: `${apiKey}\n`, env, timeoutMs: 15000, maxOutputBytes: 8192 });
   if (login.code === 0) return { ok: true, status: 'synced' };
-  return { ok: false, status: 'login_failed', error: (login.stderr || login.stdout || 'codex login failed').trim() };
+  return { ok: false, status: 'login_failed', error: redactSecretText(login.stderr || login.stdout || 'codex login failed', [apiKey]).trim() };
 }
 
 function upsertCodexLbConfig(text = '', baseUrl) {
@@ -394,9 +423,21 @@ function parseCodexLbEnvKey(text = '') {
   const match = String(text || '').match(/^\s*(?:export\s+)?CODEX_LB_API_KEY\s*=\s*(.+?)\s*$/m);
   if (!match) return '';
   const raw = match[1].trim();
-  if (raw.startsWith("'") && raw.endsWith("'")) return raw.slice(1, -1).replace(/'\\''/g, "'");
-  if (raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1).replace(/\\"/g, '"');
+  if (!raw) return '';
+  if (raw.startsWith("'")) return raw.endsWith("'") && raw.length > 1 ? raw.slice(1, -1).replace(/'\\''/g, "'") : '';
+  if (raw.startsWith('"')) return raw.endsWith('"') && raw.length > 1 ? raw.slice(1, -1).replace(/\\"/g, '"') : '';
+  if (raw.includes("'") || raw.includes('"') || /\s/.test(raw)) return '';
   return raw;
+}
+
+function redactSecretText(text = '', secrets = []) {
+  let out = String(text || '');
+  for (const secret of secrets) {
+    const value = String(secret || '');
+    if (!value) continue;
+    out = out.split(value).join('[redacted]');
+  }
+  return out;
 }
 
 function escapeRegExp(value) {
@@ -466,11 +507,18 @@ async function ensureGlobalContext7DuringInstall() {
   if (process.env.SKS_SKIP_POSTINSTALL_CONTEXT7 === '1') return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_CONTEXT7=1' };
   const codex = await getCodexInfo().catch(() => ({}));
   if (!codex.bin) return { status: 'codex_missing' };
-  const list = await runProcess(codex.bin, ['mcp', 'list'], { timeoutMs: 8000, maxOutputBytes: 32 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
+  const env = withoutSecretEnv(['CODEX_LB_API_KEY']);
+  const list = await runProcess(codex.bin, ['mcp', 'list'], { env, timeoutMs: 8000, maxOutputBytes: 32 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
   if (list.code === 0 && /context7/i.test(`${list.stdout}\n${list.stderr}`)) return { status: 'present' };
-  const add = await runProcess(codex.bin, ['mcp', 'add', 'context7', '--', 'npx', '-y', '@upstash/context7-mcp@latest'], { timeoutMs: 30000, maxOutputBytes: 64 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
+  const add = await runProcess(codex.bin, ['mcp', 'add', 'context7', '--', 'npx', '-y', '@upstash/context7-mcp@latest'], { env, timeoutMs: 30000, maxOutputBytes: 64 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
   if (add.code === 0) return { status: 'installed' };
   return { status: 'failed', error: `${add.stderr || add.stdout || 'codex mcp add failed'}`.trim() };
+}
+
+function withoutSecretEnv(keys = []) {
+  const env = { ...process.env };
+  for (const key of keys) env[key] = '';
+  return env;
 }
 
 export async function ensureGlobalCodexSkillsDuringInstall(opts = {}) {
