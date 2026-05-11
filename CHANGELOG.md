@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+
+## [0.7.56] - 2026-05-11
+
+### Fixed
+
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+
 ## [0.7.55] - 2026-05-11
 
 ### Fixed
