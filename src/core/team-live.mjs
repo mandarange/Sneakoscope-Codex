@@ -457,10 +457,7 @@ export async function renderTeamWatch(dir, opts = {}) {
   const control = await readTeamControl(dir);
   const runtime = await readJson(path.join(dir, TEAM_RUNTIME_TASKS_ARTIFACT), null);
   const missionId = opts.missionId || dashboard?.mission_id || runtime?.mission_id || path.basename(dir);
-  const agents = Object.entries(dashboard?.agents || {});
-  const visibleAgents = agents
-    .filter(([name]) => name !== 'parent_orchestrator')
-    .slice(0, Math.max(3, Number(dashboard?.agent_session_count) || 3));
+  const visibleAgents = visibleDashboardAgentEntries(dashboard);
   const events = (await readTeamTranscriptTail(dir, lines)).map(parseTranscriptLine).filter(Boolean);
   const runtimeTasks = Array.isArray(runtime?.tasks) ? runtime.tasks : Array.isArray(runtime) ? runtime : [];
   return [
@@ -497,6 +494,26 @@ export async function renderTeamWatch(dir, opts = {}) {
   ].filter((line) => line !== null).join('\n');
 }
 
+function visibleDashboardAgentEntries(dashboard = {}) {
+  const agents = dashboard?.agents || {};
+  const roster = dashboard?.roster || {};
+  const analysis = uniqueAgentIds(roster.analysis_team || []);
+  const debate = uniqueAgentIds(roster.debate_team || []);
+  const development = uniqueAgentIds(roster.development_team || []);
+  const validation = uniqueAgentIds(roster.validation_team || []);
+  const reviewers = validation.filter((id) => /review|qa|validation/i.test(id));
+  const reviewerTarget = Math.max(MIN_TEAM_REVIEWER_LANES, Number(dashboard?.role_counts?.reviewer) || 0);
+  const reviewLanes = reviewers.slice(0, reviewerTarget);
+  const phaseRepresentatives = [development[0], debate[0]].filter(Boolean);
+  const requiredVisible = [...analysis, ...reviewLanes, ...phaseRepresentatives];
+  const concreteAgentIds = Object.keys(agents).filter((name) => name !== 'parent_orchestrator' && !DEFAULT_AGENTS.includes(name));
+  const fallbackAgentIds = Object.keys(agents).filter((name) => name !== 'parent_orchestrator');
+  const limit = Math.max(3, Number(dashboard?.agent_session_count) || 3, requiredVisible.length);
+  return uniqueAgentIds([...requiredVisible, ...concreteAgentIds, ...debate, ...development, ...validation, ...fallbackAgentIds])
+    .slice(0, limit)
+    .map((id) => [id, agents[id] || { status: 'pending', phase: null, last_seen: null }]);
+}
+
 function normalizeEvent(event = {}) {
   return {
     ts: event.ts || nowIso(),
@@ -507,6 +524,18 @@ function normalizeEvent(event = {}) {
     message: String(event.message || '').slice(0, 4000),
     artifact: event.artifact ? String(event.artifact) : undefined
   };
+}
+
+function uniqueAgentIds(agents = []) {
+  const ids = [];
+  const seen = new Set();
+  for (const agent of agents) {
+    const id = agent?.id || String(agent || '');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
 }
 
 function parseTranscriptLine(line) {

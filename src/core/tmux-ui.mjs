@@ -427,13 +427,16 @@ export async function createTmuxSession(plan = {}, panes = [], opts = {}) {
     return { ok: true, reused: true, session, panes: [], attach_command: `tmux attach-session -t ${session}` };
   }
   const first = normalizedPanes[0] || { cwd: root, command: 'pwd' };
-  const create = await tmuxRun(tmuxBin, ['new-session', '-d', '-s', session, '-c', path.resolve(first.cwd || root), '-n', 'sks', '-P', '-F', '#{pane_id}', first.command || 'pwd']);
+  const detachedWidth = String(Math.max(120, Number(opts.width || opts.detachedWidth) || 180));
+  const detachedHeight = String(Math.max(36, Number(opts.height || opts.detachedHeight) || 48));
+  const create = await tmuxRun(tmuxBin, ['new-session', '-d', '-x', detachedWidth, '-y', detachedHeight, '-s', session, '-c', path.resolve(first.cwd || root), '-n', 'sks', '-P', '-F', '#{pane_id}', first.command || 'pwd']);
   if (create.code !== 0) return { ok: false, session, panes: [], stderr: create.stderr || create.stdout || 'tmux new-session failed' };
   const created = [{ pane_id: paneId(create.stdout), role: first.role || 'overview', title: first.title || 'overview' }];
   for (const pane of normalizedPanes.slice(1)) {
     const split = await tmuxRun(tmuxBin, ['split-window', '-t', session, pane.vertical ? '-v' : '-h', '-d', '-P', '-F', '#{pane_id}', '-c', path.resolve(pane.cwd || root), pane.command || 'pwd']);
     if (split.code !== 0) return { ok: false, session, panes: created, stderr: split.stderr || split.stdout || 'tmux split-window failed' };
     created.push({ pane_id: paneId(split.stdout), role: pane.role || 'lane', title: pane.title || null });
+    await tmuxRun(tmuxBin, ['select-layout', '-t', session, opts.layout || 'tiled']).catch(() => null);
   }
   await tmuxRun(tmuxBin, ['select-layout', '-t', session, opts.layout || 'tiled']).catch(() => null);
   return { ok: true, reused: false, session, panes: created, attach_command: `tmux attach-session -t ${session}` };
@@ -505,9 +508,10 @@ function teamViewAgentIds(plan = {}) {
   const reviewers = validation.filter((id) => teamLaneStyle(id).role === 'review');
   const reviewerTarget = Math.max(MIN_TEAM_REVIEWER_LANES, Number(plan.review_policy?.minimum_reviewer_lanes) || 0, Number(plan.role_counts?.reviewer) || 0);
   const reviewLanes = reviewers.slice(0, reviewerTarget);
-  const representative = [analysis[0], development[0], debate[0]].filter(Boolean);
-  const ordered = [...reviewLanes, ...representative, ...analysis, ...debate, ...development, ...validation];
-  const limit = Math.max(Number(plan.agent_session_count) || MIN_TEAM_REVIEWER_LANES, reviewLanes.length + representative.length);
+  const phaseRepresentatives = [development[0], debate[0]].filter(Boolean);
+  const requiredVisible = [...analysis, ...reviewLanes, ...phaseRepresentatives];
+  const ordered = [...requiredVisible, ...debate, ...development, ...validation];
+  const limit = Math.max(Number(plan.agent_session_count) || MIN_TEAM_REVIEWER_LANES, requiredVisible.length);
   return uniqueAgentIds(ordered).slice(0, Math.max(1, limit));
 }
 
