@@ -3,6 +3,25 @@
 ## [Unreleased]
 
 
+
+## [0.7.60] - 2026-05-12
+
+### Fixed
+
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+
+## [0.7.59] - 2026-05-12
+
+- Align generated Codex config with current OpenAI Codex docs by emitting `[features].codex_hooks = true` and treating the older `hooks = true` key as legacy.
+- Tune skill dreaming to the requested 10-route-event threshold while keeping the cooldown and recommendation-only safety model.
+
+### Fixed
+
+- Keep `sks --mad` as a single Codex tmux pane by default, leaving split panes for active Team scout/worker lanes.
+- Make accepted SKS update prompts run only `npm i -g sneakoscope@latest`, without chaining setup, doctor, project install, or pipeline work.
+- Remove stale generated `computer-use`, `browser-use`, and `browser` skill shadows during `sks doctor --fix` global repair and npm postinstall global skill setup.
+- Raise the tracked-file release budget for the expanded install/doctor selftest coverage while keeping `src/cli/main.mjs` flagged for future extraction.
+
 ## [0.7.58] - 2026-05-12
 
 ### Fixed

@@ -368,7 +368,7 @@ export function formatTmuxBanner(status = null) {
     'CLI-first runtime:',
     '  sks                 open or attach the default tmux Codex CLI session',
     '  sks tmux open       open or attach a tmux Codex CLI session with explicit flags',
-    '  sks --mad           open one-shot MAD full-access auto-review tmux cockpit',
+    '  sks --mad           open one-shot MAD full-access auto-review tmux session',
     '  sks team "task"     prepare Team mission and open the tmux multi-pane live view',
     '',
     'Useful terminal commands:',
@@ -506,36 +506,13 @@ export async function launchMadTmuxUi(args = [], opts = {}) {
   if (args.includes('--status-only')) return { plan };
   const missionId = opts.missionId || opts.madMissionId || 'latest';
   const mainCommand = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs);
-  const statusCommand = [
-    terminalTitleCommand('mad: permission gate'),
-    `cd ${shellEscape(plan.root)}`,
-    'while :; do clear',
-    `printf '\\033[1;35mSKS MAD permission gate\\033[0m\\nMission: %s\\n\\n' ${shellEscape(missionId)}`,
-    `node ${shellEscape(path.join(packageRoot(), 'bin', 'sks.mjs'))} pipeline status ${shellEscape(missionId)} || true`,
-    'printf "\\nRefreshes every 3s. Cleanup when done by closing the MAD gate.\\n"',
-    'sleep 3',
-    'done'
-  ].join('; ');
-  const helpCommand = [
-    terminalTitleCommand('mad: live guide'),
-    'clear',
-    colorizedLaneBannerCommand(['SKS MAD tmux cockpit', 'Panes: Codex CLI | permission gate | live guide', 'Guard: catastrophic DB wipe/all-row/project-management operations remain blocked', ''], 'magenta'),
-    `cd ${shellEscape(plan.root)}`,
-    `printf 'Attach: tmux attach-session -t %s\\n' ${shellEscape(plan.session)}`,
-    `printf 'Mission: %s\\n\\n' ${shellEscape(missionId)}`,
-    `printf 'Commands:\\n  sks pipeline status %s\\n  sks db scan\\n  sks doctor\\n\\n' ${shellEscape(missionId)}`,
-    'printf "This pane stays open so the tmux layout is visibly multi-pane.\\n"',
-    'while :; do sleep 3600; done'
-  ].join('; ');
   const panes = [
-    { cwd: plan.root, command: mainCommand, focused: true, role: 'codex', title: 'Codex CLI' },
-    { cwd: plan.root, command: statusCommand, role: 'mad_gate', title: 'MAD gate', vertical: false },
-    { cwd: plan.root, command: helpCommand, role: 'mad_guide', title: 'MAD guide', vertical: true }
+    { cwd: plan.root, command: mainCommand, focused: true, role: 'codex', title: 'Codex CLI' }
   ];
-  const created = await createTmuxSession({ ...plan, command: mainCommand }, panes, { layout: 'tiled', recreate: true });
-  if (created.ok) await writeTmuxSessionRecord(plan.root, { session: created.session, attach_command: created.attach_command, panes: created.panes, mode: 'mad_cockpit', mission_id: missionId }).catch(() => null);
+  const created = await createTmuxSession({ ...plan, command: mainCommand }, panes, { recreate: true });
+  if (created.ok) await writeTmuxSessionRecord(plan.root, { session: created.session, attach_command: created.attach_command, panes: created.panes, mode: 'mad_session', mission_id: missionId }).catch(() => null);
   if (!args.includes('--quiet')) {
-    console.log(`SKS MAD tmux cockpit: ${created.session || plan.session}`);
+    console.log(`SKS MAD tmux session: ${created.session || plan.session}`);
     if (created.ok) console.log(`tmux: opened ${created.panes.length} pane(s)`);
     else console.log(`tmux: not created (${created.stderr || 'tmux failed'})`);
     if (created.ok) console.log(`Attach: ${created.attach_command}`);
@@ -549,7 +526,7 @@ export async function launchMadTmuxUi(args = [], opts = {}) {
       process.exitCode = attached.status || 1;
     }
   }
-  return { plan, created: Boolean(created.ok), session: created.session || plan.session, opened: created, attached, mode: 'mad_cockpit', mission_id: missionId };
+  return { plan, created: Boolean(created.ok), session: created.session || plan.session, opened: created, attached, mode: 'mad_session', mission_id: missionId };
 }
 
 function printTmuxLaunchBlocked(plan, opts = {}) {

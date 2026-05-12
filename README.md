@@ -42,7 +42,7 @@ sks selftest --mock
 
 | Area | What it does |
 | --- | --- |
-| CLI runtime | Bare `sks` opens or reuses the default tmux Codex CLI workspace. `sks tmux open` remains the explicit form for session/workspace flags, and `sks --mad` launches a multi-pane MAD tmux cockpit with the explicit full-access high-reasoning profile. |
+| CLI runtime | Bare `sks` opens or reuses the default tmux Codex CLI workspace. `sks tmux open` remains the explicit form for session/workspace flags, and `sks --mad` launches a single-pane MAD tmux session with the explicit full-access high-reasoning profile. Split panes are reserved for active Team scout/worker lanes. |
 | Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Image-UX-Review`, `$UX-Review`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. `sks codex-app remote-control` wraps Codex CLI 0.130.0+ headless remote control without falling back to older app-server internals. |
 | OpenClaw agents | Generates an OpenClaw skill package so OpenClaw agents can attach `sneakoscope-codex`, enable the `shell` tool, and discover/use SKS commands from the target repo root. |
 | Pipeline plans | Writes `pipeline-plan.json` for stateful routes so the runtime lane, kept stages, skipped stages, verification commands, and no-unrequested-fallback invariant are visible with `sks pipeline plan`. |
@@ -80,7 +80,7 @@ The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex`
 - Checks npm for newer `sneakoscope` and `@openai/codex` versions before launch and asks whether to update when the terminal can answer y/n.
 - Installs the latest Codex CLI with `npm i -g @openai/codex@latest` when it is missing and you approve or pass `--yes`.
 - Requires tmux 3.x or newer before opening the session.
-- Creates a named detached tmux cockpit with multiple panes and prints only the session, gate, attach, and blocker details needed to act.
+- Creates a named detached single-pane tmux session and prints only the session, gate, attach, and blocker details needed to act.
 
 ## Installation
 
@@ -211,7 +211,7 @@ sks --mad
 sks --mad --yes
 ```
 
-This syncs existing codex-lb/Codex CLI auth before launch, creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux cockpit with `sandbox_mode = "danger-full-access"` and `approval_policy = "never"`, opens an active MAD-SKS permission gate for that tmux run, then launches a tiled cockpit: Codex CLI, MAD permission gate status, and live guide panes. The cockpit recreates the named session on launch so stale single-pane sessions do not hide the split layout, then attaches in an interactive terminal. If codex-lb is configured and no explicit `--workspace`/`--session` was passed, SKS opens a fresh tmux session so the repaired key is loaded by the Codex process immediately. While the gate is active, live server work, Supabase MCP database writes, direct SQL, targeted DML, schema cleanup, Supabase MCP `apply_migration`, and required Supabase CLI migration application such as `supabase migration up` or `supabase db push` are allowed. Catastrophic database wipe/all-row/project-management safeguards remain active.
+This syncs existing codex-lb/Codex CLI auth before launch, creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `sandbox_mode = "danger-full-access"` and `approval_policy = "never"`, opens an active MAD-SKS permission gate for that tmux run, then launches a single Codex CLI pane. The session recreates the named session on launch so stale split-pane MAD sessions collapse back to the single-pane default, then attaches in an interactive terminal. If codex-lb is configured and no explicit `--workspace`/`--session` was passed, SKS opens a fresh tmux session so the repaired key is loaded by the Codex process immediately. While the gate is active, live server work, Supabase MCP database writes, direct SQL, targeted DML, schema cleanup, Supabase MCP `apply_migration`, and required Supabase CLI migration application such as `supabase migration up` or `supabase db push` are allowed. Catastrophic database wipe/all-row/project-management safeguards remain active.
 
 MAD does not disable the pipeline contract: stages, executors, reviewers, and auto-review policy still must not invent unrequested fallback implementation code. If the requested path cannot be implemented, SKS should block with evidence rather than add substitute behavior.
 
@@ -283,11 +283,11 @@ SKS no longer starts from a fixed checklist such as `GOAL_PRECISE` and `ACCEPTAN
 
 The design borrows two useful ideas from external planning systems without copying their route weight: Ouroboros-style ambiguity thresholds decide whether the prompt is clear enough to proceed, while Prometheus/Hyperplan-style adversarial lenses challenge framing, remove unnecessary surface, demand evidence, test integration risk, and consider a simpler alternative before Team work starts.
 
-`sks skill-dream` keeps generated skill complexity bounded without doing a heavy evaluation on every prompt. Route use writes compact counters to `.sneakoscope/skills/dream-state.json`; after the configured count/cooldown threshold, or when you run `sks skill-dream run`, SKS scans `.agents/skills` and writes `.sneakoscope/reports/skill-dream-latest.json` with keep, merge, prune, and improvement candidates. The report is intentionally advisory: deleting or merging skills requires explicit approval.
+`sks skill-dream` keeps generated skill complexity bounded without doing a heavy evaluation on every prompt. Route use writes compact counters to `.sneakoscope/skills/dream-state.json`; after the configured 10-route-event threshold and cooldown, or when you run `sks skill-dream run`, SKS scans `.agents/skills` and writes `.sneakoscope/reports/skill-dream-latest.json` with keep, merge, prune, and improvement candidates. The report is intentionally advisory: deleting or merging skills requires explicit approval.
 
 `sks goal` and `$Goal` only prepare/control the native `/goal` persistence bridge. They do not replace Team, QA, DB, or other implementation routes; use the selected execution route for the actual work and verification. Context7 is only needed for Goal when external API/library documentation becomes relevant.
 
-Use `$Computer-Use` or `$CU` inside Codex App when the task specifically needs Codex Computer Use speed for UI/browser/visual work. This lane intentionally skips Team debate, QA-LOOP clarification, subagents, and upfront TriWiki refresh. It still requires Codex Computer Use as the evidence source, and it defers TriWiki refresh/validate plus Honest Mode to the final closeout.
+Use `$Computer-Use` or `$CU` inside Codex App when the task specifically needs Codex Computer Use speed for UI/browser/visual work. This lane intentionally skips Team debate, QA-LOOP clarification, subagents, and upfront TriWiki refresh. It still requires Codex Computer Use as the evidence source, and it defers TriWiki refresh/validate plus Honest Mode to the final closeout. SKS does not install a generated skill named `computer-use`, because that name is reserved for the first-party Codex Computer Use plugin; use `$CU` or `$computer-use-fast` from the SKS picker for the SKS route, and use `@Computer` for the OpenAI plugin.
 
 ### Create A Presentation
 
@@ -554,6 +554,8 @@ codex mcp list
 ```
 
 Codex App workflows need the app installed. QA and UI/browser visual-evidence workflows require first-party Codex Computer Use; Browser Use may support non-UI browser context, but it is not valid UI/browser verification evidence. Generated raster assets and image-review evidence require real Codex App `$imagegen`/`gpt-image-2` output, or the route must stay blocked/unverified.
+
+SKS setup removes old SKS-generated `computer-use` skills from `.agents/skills` so they cannot shadow the first-party Computer Use plugin. If a running Codex App thread was opened before setup or upgrade, start a fresh thread and invoke `@Computer` or Browser again so the host reloads plugin tools.
 
 ### Setup is blocked by another harness
 
