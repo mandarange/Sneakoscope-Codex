@@ -283,7 +283,7 @@ async function wizard(args = []) {
         const update = await askChoice(rl, 'Update SKS before setup?', ['yes', 'no'], 'yes');
         if (update === 'yes') {
           console.log('\nRun this update command, then rerun `sks`:');
-          console.log('  npm i -g sneakoscope\n');
+          console.log('  npm i -g sneakoscope@latest\n');
           return;
         }
         console.log('Skipping update for this setup run.\n');
@@ -345,7 +345,7 @@ async function updateCheck(args = []) {
   console.log(`Latest:  ${result.latest || 'unknown'}`);
   console.log(`Update:  ${result.update_available ? 'available' : 'not needed'}`);
   if (result.error) console.log(`Error:   ${result.error}`);
-  if (result.update_available) console.log('Run:     npm i -g sneakoscope');
+  if (result.update_available) console.log('Run:     npm i -g sneakoscope@latest');
 }
 
 const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: direct answers -> $Answer, tiny Direct Fix edits -> $DFix, presentation/PDF artifacts -> $PPT, image-generation UI/UX reviews -> $Image-UX-Review/$UX-Review, Computer Use UI/browser speed work -> $Computer-Use, code -> $Team. Execution routes infer their contract from prompt, TriWiki/current-code defaults, and conservative policy instead of surfacing prequestion sheets. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
@@ -1720,7 +1720,11 @@ async function doctor(args) {
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
   console.log(`Conflicts: ${result.harness_conflicts.hard_block ? 'blocked' : 'ok'} ${result.harness_conflicts.conflicts.length} finding(s)`);
   if (repairApplied) console.log('Repair:    regenerated SKS managed files from the installed package template');
-  if (globalSkillsRepair) console.log(`Global $ repair: ${globalSkillsRepair.status} ${globalSkillsRepair.root || ''}`.trimEnd());
+  if (globalSkillsRepair) {
+    const removed = globalSkillsRepair.removed_stale_generated_skills || [];
+    const cleanup = removed.length ? ` removed stale generated skill shadow(s): ${removed.join(', ')}` : '';
+    console.log(`Global $ repair: ${globalSkillsRepair.status} ${globalSkillsRepair.root || ''}${cleanup}`.trimEnd());
+  }
   if (flag(args, '--fix') && result.harness_conflicts.hard_block) console.log('Repair:    skipped because another Codex harness needs human-approved removal first');
   console.log(`Rust acc.: ${rust.available ? rust.version : 'optional-missing'}`);
   console.log(`State:     ${result.sneakoscope.ok ? 'ok' : 'missing .sneakoscope'}`);
@@ -1916,6 +1920,20 @@ function hasTopLevelCodexModeLock(text = '') {
   return (Boolean(model) && model !== 'gpt-5.5') || /^model_reasoning_effort\s*=/m.test(top);
 }
 
+function hasLegacyHooksFeatureFlag(text = '') {
+  const lines = String(text || '').split('\n');
+  const start = lines.findIndex((line) => line.trim() === '[features]');
+  if (start === -1) return false;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  return lines.slice(start + 1, end).some((line) => /^\s*hooks\s*=/.test(line));
+}
+
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
 function readMaxCycles(args, fallback) {
   const i = args.indexOf('--max-cycles');
@@ -2024,12 +2042,14 @@ async function selftest() {
   await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'), '---\nname: agent-team\ndescription: Fallback Codex App picker alias for $Team.\n---\n');
   await ensureDir(path.join(repairTmp, '.agents', 'skills', 'stale-sks-generated'));
   await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'stale-sks-generated', 'SKILL.md'), '---\nname: stale-sks-generated\ndescription: Old SKS generated skill that should disappear on update.\n---\n');
+  await ensureDir(path.join(repairTmp, '.agents', 'skills', 'computer-use'));
+  await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'computer-use', 'SKILL.md'), '---\nname: computer-use\ndescription: Maximum-speed $Computer-Use/$CU lane for Codex Computer Use UI/browser/visual tasks.\n---\n');
   await writeJsonAtomic(path.join(repairTmp, '.agents', 'skills', '.sks-generated.json'), {
     schema_version: 1,
     generated_by: 'sneakoscope',
     version: '0.0.1',
-    skills: ['team', 'stale-sks-generated'],
-    files: ['.agents/skills/team/SKILL.md', '.agents/skills/stale-sks-generated/SKILL.md']
+    skills: ['team', 'stale-sks-generated', 'computer-use'],
+    files: ['.agents/skills/team/SKILL.md', '.agents/skills/stale-sks-generated/SKILL.md', '.agents/skills/computer-use/SKILL.md']
   });
   const staleCodexAgentRel = '.codex/agents/stale-generated.toml';
   await writeTextAtomic(path.join(repairTmp, staleCodexAgentRel), 'name = "stale_generated"\n');
@@ -2050,6 +2070,8 @@ async function selftest() {
   await writeJsonAtomic(path.join(repairTmp, '.sneakoscope', 'policy.json'), { broken: true });
   const existingAgentsMd = await safeReadText(path.join(repairTmp, 'AGENTS.md'));
   await writeTextAtomic(path.join(repairTmp, 'AGENTS.md'), existingAgentsMd.replace(/<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->[\s\S]*?<!-- END Sneakoscope Codex GX MANAGED BLOCK -->\n?/, '<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->\ntampered managed block\n<!-- END Sneakoscope Codex GX MANAGED BLOCK -->\n'));
+  const stalePluginSkillNames = ['computer-use', 'browser-use', 'browser'];
+  const stalePluginSkillContent = (name) => `---\nname: ${name}\ndescription: Sneakoscope generated stale plugin collision for selftest.\n---\n\nCodex App pipeline activation:\n- stale selftest marker\n`;
   const doctorRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'doctor', '--fix', '--local-only', '--json'], {
     cwd: repairTmp,
     env: { HOME: path.join(repairTmp, 'home'), SKS_DISABLE_UPDATE_CHECK: '1' },
@@ -2065,6 +2087,7 @@ async function selftest() {
   if (!repairedTeamSkill.includes('SKS Team orchestration') || repairedTeamSkill.includes('tampered')) throw new Error('selftest failed: doctor repair did not regenerate team skill');
   if (await exists(path.join(repairTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest failed: doctor repair did not remove deprecated agent-team alias skill');
   if (await exists(path.join(repairTmp, '.agents', 'skills', 'stale-sks-generated', 'SKILL.md'))) throw new Error('selftest failed: doctor repair did not prune stale generated skill from previous SKS manifest');
+  if (await exists(path.join(repairTmp, '.agents', 'skills', 'computer-use', 'SKILL.md'))) throw new Error('selftest failed: doctor repair did not remove generated computer-use skill that shadows the first-party plugin');
   if (await exists(path.join(repairTmp, staleCodexAgentRel))) throw new Error('selftest failed: doctor repair did not prune stale generated agent file from previous SKS manifest');
   if (!doctorRepairJson.repair?.project?.skill_install?.removed_stale_generated_skills?.includes('.agents/skills/stale-sks-generated')) throw new Error('selftest failed: doctor repair did not report stale generated skill pruning');
   const generatedCleanupReport = doctorRepairJson.repair?.project?.generated_cleanup || {};
@@ -2079,6 +2102,29 @@ async function selftest() {
   if (repairedPolicy.broken || repairedPolicy.installation?.scope !== 'project' || !repairedPolicy.prompt_pipeline?.dollar_commands?.includes('$Team')) throw new Error('selftest failed: doctor --fix did not regenerate policy');
   const repairedAgentsMd = await safeReadText(path.join(repairTmp, 'AGENTS.md'));
   if (!repairedAgentsMd.includes('Do not create unrequested fallback implementation code') || repairedAgentsMd.includes('tampered managed block')) throw new Error('selftest failed: doctor --fix did not repair AGENTS managed block');
+  const doctorGlobalTmp = tmpdir();
+  await writeJsonAtomic(path.join(doctorGlobalTmp, 'package.json'), { name: 'doctor-global-skill-repair-smoke', version: '0.0.0' });
+  await initProject(doctorGlobalTmp, { installScope: 'global' });
+  const doctorGlobalHome = path.join(doctorGlobalTmp, 'home');
+  for (const name of stalePluginSkillNames) {
+    await ensureDir(path.join(doctorGlobalHome, '.agents', 'skills', name));
+    await writeTextAtomic(path.join(doctorGlobalHome, '.agents', 'skills', name, 'SKILL.md'), stalePluginSkillContent(name));
+  }
+  const doctorGlobalRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'doctor', '--fix', '--json'], {
+    cwd: doctorGlobalTmp,
+    env: { HOME: doctorGlobalHome, SKS_DISABLE_UPDATE_CHECK: '1' },
+    timeoutMs: 30000,
+    maxOutputBytes: 1024 * 1024
+  });
+  if (doctorGlobalRepair.code !== 0) throw new Error(`selftest failed: doctor --fix global skill repair exited ${doctorGlobalRepair.code}: ${doctorGlobalRepair.stderr}`);
+  const doctorGlobalRepairJson = JSON.parse(doctorGlobalRepair.stdout || '{}');
+  for (const name of stalePluginSkillNames) {
+    if (await exists(path.join(doctorGlobalHome, '.agents', 'skills', name, 'SKILL.md'))) throw new Error(`selftest failed: doctor --fix did not remove global generated ${name} plugin shadow skill`);
+  }
+  const doctorGlobalRemoved = doctorGlobalRepairJson.repair?.global_skills?.removed_stale_generated_skills || [];
+  for (const name of stalePluginSkillNames) {
+    if (!doctorGlobalRemoved.includes(`.agents/skills/${name}`)) throw new Error(`selftest failed: doctor --fix did not report global ${name} plugin shadow cleanup`);
+  }
   const conflictTmp = tmpdir();
   await ensureDir(path.join(conflictTmp, '.omx'));
   const conflictScan = await scanHarnessConflicts(conflictTmp, { home: path.join(conflictTmp, 'home') });
@@ -2092,12 +2138,18 @@ async function selftest() {
   const postinstallSetupTmp = tmpdir();
   await writeJsonAtomic(path.join(postinstallSetupTmp, 'package.json'), { name: 'postinstall-setup-smoke', version: '0.0.0' });
   await ensureDir(path.join(postinstallSetupTmp, '.git'));
+  const postinstallSetupHome = path.join(postinstallSetupTmp, 'home');
+  for (const name of stalePluginSkillNames) {
+    await ensureDir(path.join(postinstallSetupHome, '.agents', 'skills', name));
+    await writeTextAtomic(path.join(postinstallSetupHome, '.agents', 'skills', name, 'SKILL.md'), stalePluginSkillContent(name));
+  }
   const postinstallSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallSetupTmp, env: { INIT_CWD: postinstallSetupTmp, HOME: path.join(postinstallSetupTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
   if (postinstallSetup.code !== 0) throw new Error(`selftest failed: postinstall setup exited ${postinstallSetup.code}: ${postinstallSetup.stderr}`);
   if (await exists(path.join(postinstallSetupTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest failed: postinstall installed deprecated agent-team fallback skill');
   if (!String(postinstallSetup.stdout || '').includes('SKS bootstrap: auto-running sks setup --bootstrap --install-scope global --force') || !String(postinstallSetup.stdout || '').includes('SKS Ready')) throw new Error('selftest failed: postinstall did not auto-run global forced bootstrap');
   if (!(await exists(path.join(postinstallSetupTmp, '.codex', 'hooks.json')))) throw new Error('selftest failed: postinstall did not create project hooks during automatic bootstrap');
   if (!String(postinstallSetup.stdout || '').includes('Codex App global $ skills: installed')) throw new Error('selftest failed: postinstall did not report automatic global Codex App skills');
+  if (!String(postinstallSetup.stdout || '').includes('Removed stale generated skill shadow(s):')) throw new Error('selftest failed: postinstall did not report stale first-party plugin shadow cleanup');
   const postinstallSetupManifest = await readJson(path.join(postinstallSetupTmp, '.sneakoscope', 'manifest.json'));
   if (postinstallSetupManifest.installation?.scope !== 'global') throw new Error('selftest failed: postinstall automatic bootstrap did not use global install scope');
   if (postinstallSetupManifest.design_system_ssot?.authority_file !== DESIGN_SYSTEM_SSOT.authority_file || postinstallSetupManifest.design_system_ssot?.builder_prompt !== DESIGN_SYSTEM_SSOT.builder_prompt) throw new Error('selftest failed: postinstall manifest missing design SSOT policy');
@@ -2108,9 +2160,11 @@ async function selftest() {
   }
   const postinstallSetupGitignore = await safeReadText(path.join(postinstallSetupTmp, '.gitignore'));
   if (!postinstallSetupGitignore.includes('.sneakoscope/') || !postinstallSetupGitignore.includes('.codex/') || !postinstallSetupGitignore.includes('.agents/') || !postinstallSetupGitignore.includes('AGENTS.md')) throw new Error('selftest failed: automatic postinstall bootstrap did not ignore SKS generated files');
-  for (const { command } of DOLLAR_COMMANDS) {
-    const skillName = command.slice(1).toLowerCase();
-    if (!(await exists(path.join(postinstallSetupTmp, 'home', '.agents', 'skills', skillName, 'SKILL.md')))) throw new Error(`selftest failed: postinstall global ${command} skill not installed`);
+  for (const skillName of new Set(DOLLAR_SKILL_NAMES)) {
+    if (!(await exists(path.join(postinstallSetupTmp, 'home', '.agents', 'skills', skillName, 'SKILL.md')))) throw new Error(`selftest failed: postinstall global ${skillName} skill not installed`);
+  }
+  for (const name of stalePluginSkillNames) {
+    if (await exists(path.join(postinstallSetupHome, '.agents', 'skills', name, 'SKILL.md'))) throw new Error(`selftest failed: postinstall global skills shadow the first-party ${name} plugin`);
   }
   if (!(await exists(path.join(postinstallSetupTmp, 'home', '.agents', 'skills', 'getdesign-reference', 'SKILL.md')))) throw new Error('selftest failed: postinstall global getdesign-reference skill not installed');
   const oldNoBootstrap = process.env.SKS_POSTINSTALL_NO_BOOTSTRAP;
@@ -2375,15 +2429,16 @@ async function selftest() {
   if (globalSkillsResult.status !== 'installed') throw new Error(`selftest failed: global Codex App skills not installed: ${globalSkillsResult.status}`);
   const globalSkillStatus = await checkRequiredSkills(globalSkillsTmp, path.join(globalSkillsTmp, '.agents', 'skills'));
   if (!globalSkillStatus.ok) throw new Error(`selftest failed: global Codex App skills missing: ${globalSkillStatus.missing.join(', ')}`);
+  if (await exists(path.join(globalSkillsTmp, '.agents', 'skills', 'computer-use', 'SKILL.md'))) throw new Error('selftest failed: global generated skills shadow the first-party computer-use plugin');
   const codexSkillMirrorExists = await exists(path.join(tmp, '.codex', 'skills', 'research-discovery', 'SKILL.md'));
   if (codexSkillMirrorExists) throw new Error('selftest failed: generated .codex/skills mirror still installed');
   const codexAppSkillExists = await exists(path.join(tmp, '.agents', 'skills', 'research-discovery', 'SKILL.md'));
   if (!codexAppSkillExists) throw new Error('selftest failed: Codex App skill not installed');
-  for (const { command } of DOLLAR_COMMANDS) {
-    const skillName = command.slice(1).toLowerCase();
+  for (const skillName of new Set(DOLLAR_SKILL_NAMES)) {
     const dollarSkillExists = await exists(path.join(tmp, '.agents', 'skills', skillName, 'SKILL.md'));
-    if (!dollarSkillExists) throw new Error(`selftest failed: ${command} skill not installed`);
+    if (!dollarSkillExists) throw new Error(`selftest failed: ${skillName} skill not installed`);
   }
+  if (await exists(path.join(tmp, '.agents', 'skills', 'computer-use', 'SKILL.md'))) throw new Error('selftest failed: project generated skills shadow the first-party computer-use plugin');
   const promptPipelineSkillExists = await exists(path.join(tmp, '.agents', 'skills', 'prompt-pipeline', 'SKILL.md'));
   if (!promptPipelineSkillExists) throw new Error('selftest failed: prompt pipeline skill not installed');
   const promptPipelineText = await safeReadText(path.join(tmp, '.agents', 'skills', 'prompt-pipeline', 'SKILL.md'));
@@ -2652,6 +2707,19 @@ async function selftest() {
   if (!String(hookUpdateOldContext).includes('Update SKS now') || !String(hookUpdateOldContext).includes('Skip update for this conversation')) throw new Error('selftest failed: hook did not prompt when installed SKS is stale');
   const hookUpdateOldState = await readJson(path.join(hookUpdateOldTmp, '.sneakoscope', 'state', 'update-check.json'), {});
   if (hookUpdateOldState.pending_offer?.latest !== '9.9.9') throw new Error('selftest failed: stale installed SKS did not persist pending update offer');
+  const hookUpdateAcceptPayload = JSON.stringify({ cwd: hookUpdateOldTmp, prompt: 'Update SKS now' });
+  const hookUpdateAcceptResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], {
+    cwd: hookUpdateOldTmp,
+    input: hookUpdateAcceptPayload,
+    env: { ...hookUpdateCurrentEnv, SKS_INSTALLED_SKS_VERSION: '0.0.0' },
+    timeoutMs: 15000,
+    maxOutputBytes: 256 * 1024
+  });
+  if (hookUpdateAcceptResult.code !== 0) throw new Error(`selftest failed: accepted update hook exited ${hookUpdateAcceptResult.code}: ${hookUpdateAcceptResult.stderr}`);
+  const hookUpdateAcceptJson = JSON.parse(hookUpdateAcceptResult.stdout);
+  const hookUpdateAcceptContext = hookUpdateAcceptJson.hookSpecificOutput?.additionalContext || '';
+  if (!String(hookUpdateAcceptContext).includes('npm i -g sneakoscope@latest')) throw new Error('selftest failed: accepted update hook did not specify the exact npm latest command');
+  if (String(hookUpdateAcceptContext).includes('sks setup') || String(hookUpdateAcceptContext).includes('sks doctor') || String(hookUpdateAcceptContext).includes('npm i -D sneakoscope')) throw new Error('selftest failed: accepted update hook still routes through setup/doctor/project update commands');
   const hookKoreanSksTmp = tmpdir();
   await initProject(hookKoreanSksTmp, {});
   const hookKoreanSksPayload = JSON.stringify({ cwd: hookKoreanSksTmp, prompt: koreanReadmeInstallPrompt });
@@ -2862,7 +2930,7 @@ async function selftest() {
   if (!wikiJson.systemMessage?.includes('wiki refresh')) throw new Error('selftest failed: Wiki route missing system message');
   const codexConfigText = await safeReadText(path.join(tmp, '.codex', 'config.toml'));
   if (!codexConfigText.includes('multi_agent = true')) throw new Error('selftest failed: multi_agent not enabled');
-  if (!codexConfigText.includes('hooks = true') || codexConfigText.includes('codex_hooks = true')) throw new Error('selftest failed: Codex hooks feature flag not migrated to hooks');
+  if (!codexConfigText.includes('codex_hooks = true') || hasLegacyHooksFeatureFlag(codexConfigText)) throw new Error('selftest failed: Codex hooks feature flag not aligned with current codex_hooks setting');
   if (!hasContext7ConfigText(codexConfigText)) throw new Error('selftest failed: Context7 MCP not configured');
   if (!codexConfigText.includes('[profiles.sks-task-low]') || !codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-fast-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest failed: GPT-5.5 reasoning profiles not configured');
   if (!/\[profiles\.sks-mad-high\][\s\S]*?approval_policy = "never"[\s\S]*?sandbox_mode = "danger-full-access"/.test(codexConfigText)) throw new Error('selftest failed: generated sks-mad-high profile is not full access');
@@ -2870,12 +2938,12 @@ async function selftest() {
   if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest failed: team_consensus agent not configured');
   const preservedConfigTmp = tmpdir();
   await ensureDir(path.join(preservedConfigTmp, '.codex'));
-  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\nkeep = true\n\n[features]\ncodex_hooks = true\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
+  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\nkeep = true\n\n[features]\nhooks = true\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
   await initProject(preservedConfigTmp, {});
   const preservedConfig = await safeReadText(path.join(preservedConfigTmp, '.codex', 'config.toml'));
   if (!/^model = "gpt-5\.5"/m.test(preservedConfig) || !preservedConfig.includes('service_tier = "fast"') || !preservedConfig.includes('fast_mode = true') || !preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true') || !preservedConfig.includes('enabled = true') || !preservedConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(preservedConfig)) throw new Error('selftest failed: Codex config merge dropped or failed to enable Fast mode defaults and GPT-5.5');
   if (preservedConfig.includes('fast_default_opt_out = true') || !preservedConfig.includes('keep = true')) throw new Error('selftest failed: Codex config merge did not remove stale Fast opt-out notice while preserving other notice keys');
-  if (!preservedConfig.includes('hooks = true') || preservedConfig.includes('codex_hooks = true') || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error('selftest failed: Codex config merge did not add SKS managed settings or remove the legacy hooks flag');
+  if (!preservedConfig.includes('codex_hooks = true') || hasLegacyHooksFeatureFlag(preservedConfig) || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error('selftest failed: Codex config merge did not add current SKS hook settings or remove the legacy hooks flag');
   if (hasTopLevelCodexModeLock(preservedConfig)) throw new Error('selftest failed: Codex config merge left top-level legacy model/reasoning locks that hide Fast mode UI');
   const autoReviewHome = path.join(tmp, 'auto-review-home');
   const autoReviewEnv = { HOME: autoReviewHome };
@@ -3092,7 +3160,7 @@ async function selftest() {
   await writeJsonAtomic(path.join(teamDir, 'team-plan.json'), teamPlan);
   if (teamPlan.agent_session_count !== 5) throw new Error('selftest failed: team default sessions not 5');
   if (teamPlan.role_counts.executor !== 3 || teamPlan.role_counts.user !== 1 || teamPlan.role_counts.reviewer !== 5) throw new Error('selftest failed: team default role counts invalid');
-  if (teamPlan.codex_config_required?.features?.hooks !== true || teamPlan.codex_config_required?.features?.codex_hooks === true) throw new Error('selftest failed: team plan Codex config still uses legacy hooks feature flag');
+  if (teamPlan.codex_config_required?.features?.codex_hooks !== true || teamPlan.codex_config_required?.features?.hooks === true) throw new Error('selftest failed: team plan Codex config still uses legacy hooks feature flag');
   if (!teamPlan.review_gate?.passed || teamPlan.review_gate.required_reviewer_lanes !== 5) throw new Error('selftest failed: team review policy gate did not pass default plan');
   if (teamPlan.codex_config_required?.service_tier !== 'fast' || teamPlan.reasoning?.service_tier !== 'fast') throw new Error('selftest failed: team plan did not require Fast service tier');
   if (!teamPlan.goal_continuation?.enabled || teamPlan.goal_continuation?.mode !== 'ambient_codex_native_goal_overlay') throw new Error('selftest failed: Team plan did not include ambient Goal continuation');
@@ -3177,7 +3245,7 @@ async function selftest() {
   await writeTextAtomic(fakeTmuxLog, '');
   const madCockpit = await launchMadTmuxUi(['--workspace', 'sks-mad-selftest-ui', '--no-attach'], { root: tmp, tmux: { ok: true, bin: fakeTmuxBin, version: '3.4' }, codex: { bin: process.execPath }, app: { ok: true, guidance: [] }, missionId: 'M-MAD-SELFTEST' });
   const madTmuxLogText = await safeReadText(fakeTmuxLog);
-  if (!madCockpit.created || madCockpit.opened?.panes?.length !== 3 || !madTmuxLogText.includes('new-session') || !madTmuxLogText.includes('split-window')) throw new Error('selftest failed: MAD tmux launch did not create a multi-pane cockpit');
+  if (!madCockpit.created || madCockpit.mode !== 'mad_session' || madCockpit.opened?.panes?.length !== 1 || !madTmuxLogText.includes('new-session') || madTmuxLogText.includes('split-window')) throw new Error('selftest failed: MAD tmux launch should create one pane and leave split panes to Team lanes');
   if (previousFakeTmuxLog === undefined) delete process.env.SKS_FAKE_TMUX_LOG;
   else process.env.SKS_FAKE_TMUX_LOG = previousFakeTmuxLog;
   const codexLaunchArgs = defaultCodexLaunchArgs({ SKS_CODEX_REASONING: 'low' }).join(' ');

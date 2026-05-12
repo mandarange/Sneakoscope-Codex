@@ -533,7 +533,7 @@ async function updateCheckContext(root, payload, prompt) {
       pending_offer: null,
       accepted: { conversation_id: conv, latest: pending.latest, accepted_at: nowIso() }
     });
-    return `SKS update check: user accepted update to ${pending.latest}. Before doing other work, run the appropriate update command, then rerun sks setup and sks doctor --fix. Global install: npm i -g sneakoscope. Project install: npm i -D sneakoscope && npx sks setup --install-scope project.`;
+    return `SKS update check: user accepted update to ${pending.latest}. Before doing other work, run exactly this command and nothing else: npm i -g sneakoscope@latest. Do not start a pipeline route, run setup, or run doctor for this accepted update command.`;
   }
   if (updateState.skipped?.conversation_id === conv && updateState.skipped?.latest) {
     return `SKS update check: update ${updateState.skipped.latest} was skipped for this conversation only. Do not ask again in this conversation; check again next conversation.`;
@@ -562,7 +562,7 @@ async function updateCheckContext(root, payload, prompt) {
     pending_offer: { conversation_id: conv, latest: check.latest, offered_at: nowIso() },
     skipped: updateState.skipped?.conversation_id === conv ? null : updateState.skipped || null
   });
-  return `SKS update check: installed ${current}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run npm i -g sneakoscope for global installs, or npm i -D sneakoscope && npx sks setup --install-scope project for project installs, then run sks setup and sks doctor --fix. If they skip, do not ask again in this conversation, but check again next conversation.`;
+  return `SKS update check: installed ${current}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run exactly this command and nothing else: npm i -g sneakoscope@latest. Do not start a pipeline route, run setup, or run doctor for this accepted update command. If they skip, do not ask again in this conversation, but check again next conversation.`;
 }
 
 async function checkLatestVersion() {

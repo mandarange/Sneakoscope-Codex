@@ -8,7 +8,7 @@ export const SKILL_DREAM_POLICY = Object.freeze({
   schema_version: 1,
   state_path: '.sneakoscope/skills/dream-state.json',
   latest_report_path: '.sneakoscope/reports/skill-dream-latest.json',
-  min_events_between_runs: 12,
+  min_events_between_runs: 10,
   min_interval_hours: 24,
   max_events_retained: 160,
   max_skill_lines_before_compression: 80,
@@ -34,12 +34,12 @@ const PROTECTED_SKILL_NAMES = new Set([
 ]);
 
 const MERGE_GROUPS = [
-  { id: 'computer-use-aliases', skills: ['computer-use', 'computer-use-fast', 'cu'], action: 'keep_one_canonical_and_alias_the_rest_when_user_approves' },
+  { id: 'computer-use-aliases', skills: ['computer-use-fast', 'cu'], action: 'keep_one_canonical_and_alias_the_rest_when_user_approves; reserve computer-use for the first-party Codex plugin' },
   { id: 'research-loop-family', skills: ['research', 'research-discovery', 'autoresearch', 'autoresearch-loop'], action: 'compress_overlap_without_removing_distinct_route_semantics' }
 ];
 
 export function skillDreamPolicyText() {
-  return 'Skill dreaming policy: record only cheap route/skill usage counters in `.sneakoscope/skills/dream-state.json`; do not evaluate every conversation. Run `sks skill-dream run` or the automatic due check only after the configured event count and cooldown. Reports are recommendation-only: keep/merge/prune/improve candidates may update future generated skill wording, but skill deletion or merge requires explicit user approval.';
+  return 'Skill dreaming policy: record only cheap route/skill usage counters in `.sneakoscope/skills/dream-state.json`; do not evaluate every conversation. Run `sks skill-dream run` or the automatic due check only after the configured event count and cooldown, defaulting to one due check every 10 route events subject to cooldown. Reports are recommendation-only: keep/merge/prune/improve candidates may update future generated skill wording, but skill deletion or merge requires explicit user approval.';
 }
 
 export function createSkillCandidate(opts = {}) {

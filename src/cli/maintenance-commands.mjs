@@ -1778,7 +1778,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
     reasoning: teamReasoningPolicy(prompt, roster),
     codex_config_required: {
       service_tier: 'fast',
-      features: { multi_agent: true, hooks: true },
+      features: { multi_agent: true, codex_hooks: true },
       agents: { max_threads: 6, max_depth: 1 },
       custom_agents_dir: '.codex/agents'
     },

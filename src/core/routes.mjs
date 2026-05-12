@@ -14,6 +14,7 @@ export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com
 export const OPENAI_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
 export const CODEX_COMPUTER_USE_ONLY_POLICY = 'Pipeline UI/browser verification and visual inspection must use Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or any other browser automation substitute; if Codex Computer Use is unavailable, mark the UI/browser evidence unverified instead of substituting another tool. In Codex App prompts, invoke @Computer or @AppName in a new thread when live Computer Use tools are needed; SKS hooks and skills can require the policy but cannot attach missing host tools to an already-started turn.';
 export const CODEX_IMAGEGEN_REQUIRED_POLICY = 'Pipeline image generation, raster asset creation/editing, and generated image-review evidence must use real Codex App imagegen/$imagegen with gpt-image-2 when that evidence is required. Do not substitute placeholder SVG/HTML/CSS, prose-only critique, stock-like stand-ins, manually fabricated files, or missing-output ledgers for requested/generated raster assets or required generated review images. If imagegen/gpt-image-2 is unavailable, record the blocker and mark the image asset or review evidence unverified instead of passing the gate. In Codex App prompts, invoke $imagegen when live image generation is needed; SKS hooks and skills can require the policy but cannot attach missing host image-generation tools to an already-started turn.';
+export const RESERVED_CODEX_PLUGIN_SKILL_NAMES = Object.freeze(['computer-use', 'browser', 'browser-use']);
 export const FORBIDDEN_BROWSER_AUTOMATION_RE = /\b(playwright|chrome\s+mcp|browser\s+use|selenium|puppeteer)\b/i;
 
 export function evidenceMentionsForbiddenBrowserAutomation(value, seen = new Set()) {
@@ -115,7 +116,6 @@ export const RECOMMENDED_SKILLS = [
   'getdesign-reference',
   'imagegen',
   'image-ux-review',
-  'computer-use',
   'computer-use-fast',
   'db-safety-guard',
   REFLECTION_SKILL_NAME,
@@ -323,7 +323,7 @@ export const ROUTES = [
     mode: 'IMAGE_UX_REVIEW',
     route: 'image-generation UI/UX review loop',
     description: 'Review UI/UX through the imagegen/gpt-image-2 visual critique loop: source screenshots become generated annotated review images, those images become issue ledgers, then fixes are rechecked.',
-    requiredSkills: ['image-ux-review', 'imagegen', 'computer-use', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
+    requiredSkills: ['image-ux-review', 'imagegen', 'cu', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
     dollarAliases: ['$UX-Review'],
     appSkillAliases: ['ux-review', 'visual-review', 'ui-ux-review'],
     lifecycle: ['target_and_capture_inventory', 'source_screenshots', 'gpt_image_2_annotated_review_image', 'generated_image_text_extraction', 'issue_ledger', 'optional_safe_fixes', 'changed_screen_recheck', 'post_route_reflection', 'honest_mode'],
@@ -339,7 +339,7 @@ export const ROUTES = [
     mode: 'COMPUTER_USE',
     route: 'Computer Use fast lane',
     description: 'Maximum-speed Codex Computer Use lane for UI/browser/visual tasks: skip Team debate and upfront TriWiki loops, run only focused Computer Use steps, then finish with evidence, TriWiki refresh/validate, and Honest Mode.',
-    requiredSkills: ['computer-use', 'honest-mode'],
+    requiredSkills: ['cu', 'honest-mode'],
     dollarAliases: ['$CU'],
     appSkillAliases: ['computer-use-fast', 'cu'],
     lifecycle: ['fast_intake', 'focused_computer_use_steps', 'evidence_summary', 'final_triwiki_refresh_validate', 'honest_mode'],
@@ -467,13 +467,17 @@ export const DOLLAR_COMMANDS = ROUTES.flatMap(({ command, route, description, do
   { command, route, description },
   ...dollarAliases.map((alias) => ({ command: alias, route, description }))
 ]);
-export const DOLLAR_SKILL_NAMES = ROUTES.flatMap((route) => [
-  dollarSkillName(route.command),
-  ...(route.appSkillAliases || [])
-]);
+export function routeAppSkillNames(route) {
+  const canonical = dollarSkillName(route.command);
+  return [
+    ...(RESERVED_CODEX_PLUGIN_SKILL_NAMES.includes(canonical) ? [] : [canonical]),
+    ...(route.appSkillAliases || [])
+  ];
+}
+
+export const DOLLAR_SKILL_NAMES = ROUTES.flatMap((route) => routeAppSkillNames(route));
 export const DOLLAR_COMMAND_ALIASES = ROUTES.flatMap((route) => [
-  { canonical: route.command, app_skill: `$${dollarSkillName(route.command)}` },
-  ...(route.appSkillAliases || []).map((alias) => ({ canonical: route.command, app_skill: `$${alias}` }))
+  ...routeAppSkillNames(route).map((alias) => ({ canonical: route.command, app_skill: `$${alias}` }))
 ]);
 
 export const COMMAND_CATALOG = [
