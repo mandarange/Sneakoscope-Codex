@@ -7,6 +7,7 @@ import { checkHarnessModification, harnessGuardBlockReason } from './harness-gua
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.mjs';
 import { classifyToolError } from './evaluation.mjs';
 import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.mjs';
+import { stripVisibleDecisionAnswerBlocks } from './routes.mjs';
 
 const TEAM_DIGEST_MAX_EVENTS = 4;
 const TEAM_DIGEST_MESSAGE_CHARS = 180;
@@ -143,7 +144,7 @@ function clientModelCandidates(value, depth = 0) {
 
 async function hookUserPrompt(root, state, payload, noQuestion) {
   if (!noQuestion) {
-    const prompt = extractUserPrompt(payload);
+    const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
     const madSksConfirmation = await handleMadSksUserConfirmation(root, state, prompt);
     if (madSksConfirmation?.handled) {
       const teamDigest = await teamLiveDigest(root, state);
@@ -863,7 +864,7 @@ function visibleHookMessage(name, text = '') {
     if (body.includes('SKS wiki pipeline active')) return 'SKS: wiki refresh context injected.';
     if (body.includes('$Goal route prepared')) return 'SKS: Goal workflow bridge prepared for native Codex /goal continuation.';
     if (body.includes('Computer Use fast lane active')) return 'SKS: Computer Use fast lane injected; defer TriWiki/Honest Mode to final closeout.';
-    if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: clarification questions must be shown in chat before the route can continue.';
+    if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: stale clarification gate detected; continue from inferred route contract.';
     if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team route, live transcript, and subagent plan injected.';
     if (body.includes('$QA-LOOP route prepared') || body.includes('QA-LOOP')) return 'SKS: QA-LOOP route and safety checklist injected.';
     if (body.includes('Subagent policy: REQUIRED')) return 'SKS: route context injected; subagent execution gate is active.';
@@ -871,7 +872,7 @@ function visibleHookMessage(name, text = '') {
   }
   if (name === 'post-tool') return 'SKS: tool result inspected; Context7/subagent/DB evidence updated when relevant.';
   if (name === 'stop') {
-    if (body.includes('Required questions')) return 'SKS: clarification questions reprinted; waiting for answers.';
+    if (body.includes('Required questions')) return 'SKS: stale clarification wording detected; route should auto-seal from inferred defaults.';
     return body ? 'SKS: stop gate checked; continuing until route evidence passes.' : 'SKS: stop gate checked.';
   }
   if (name === 'permission-request') return body ? 'SKS: permission request evaluated by harness guards.' : 'SKS: permission request inspected.';

@@ -6,6 +6,90 @@ export const QA_LOOP_ROUTE = 'QALoop';
 const QA_REPORT_SUFFIX = 'qa-report.md';
 const UI_COMPUTER_USE_ONLY_ACK = 'use_codex_computer_use_only_no_chrome_mcp_no_browser_use_no_playwright_or_mark_ui_not_verified';
 
+function promptText(prompt = '') {
+  return String(prompt || '').trim();
+}
+
+function lowerPrompt(prompt = '') {
+  return promptText(prompt).toLowerCase();
+}
+
+function firstUrl(prompt = '') {
+  return promptText(prompt).match(/https?:\/\/[^\s)\]}>,]+/i)?.[0] || '';
+}
+
+function qaScopeFromPrompt(prompt = '') {
+  const lower = lowerPrompt(prompt);
+  const wantsUi = /\b(ui|browser|screen|visual)\b|화면|브라우저|시각|첫\s*화면|내비|네비/.test(lower);
+  const wantsApi = /\b(api|endpoint|http|request|response)\b|엔드포인트|응답|요청/.test(lower);
+  if (wantsUi && wantsApi) return 'ui_and_api_e2e';
+  if (wantsApi && !wantsUi) return 'api_e2e_only';
+  return 'ui_e2e_only';
+}
+
+function targetEnvironmentFromPrompt(prompt = '') {
+  const lower = lowerPrompt(prompt);
+  if (/\b(prod|production|deployed|live)\b|프로덕션|운영|배포된|실서비스/.test(lower)) return 'deployed_production_domain';
+  if (/\b(preview|staging|stage)\b|프리뷰|스테이징|스테이지/.test(lower)) return 'preview_or_staging_domain';
+  return 'local_dev_server';
+}
+
+function loginPolicyFromPrompt(prompt = '') {
+  const lower = lowerPrompt(prompt);
+  const required = /\b(login|log in|signin|sign in|auth|authenticated|credential)\b|로그인|인증|계정/.test(lower);
+  if (!required) {
+    return {
+      LOGIN_REQUIRED: 'no',
+      TEMP_TEST_CREDENTIALS_READY: 'not_required',
+      TEST_CREDENTIALS_RUNTIME_SOURCE: 'not_required'
+    };
+  }
+  return {
+    LOGIN_REQUIRED: 'yes',
+    TEMP_TEST_CREDENTIALS_READY: 'no_block_authenticated_tests',
+    TEST_CREDENTIALS_RUNTIME_SOURCE: 'not_required'
+  };
+}
+
+export function inferQaLoopAnswers(prompt = '') {
+  const text = promptText(prompt);
+  const environment = targetEnvironmentFromPrompt(text);
+  const url = firstUrl(text);
+  const local = environment === 'local_dev_server';
+  const login = loginPolicyFromPrompt(text);
+  const scope = qaScopeFromPrompt(text);
+  return {
+    GOAL_PRECISE: text ? `현재 요청 범위에서 QA-LOOP를 안전하게 실행한다: ${text}` : '현재 로컬 개발 환경에서 핵심 사용자 흐름을 안전하게 QA한다.',
+    QA_SCOPE: scope,
+    TARGET_ENVIRONMENT: environment,
+    TARGET_BASE_URL: url || (local ? 'http://localhost:3000' : 'unset_target_url'),
+    DEV_SERVER_COMMAND: local ? 'npm run dev' : 'none',
+    API_BASE_URL: 'same_as_target',
+    QA_MUTATION_POLICY: 'read_only_smoke_only',
+    DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED: 'never',
+    EXTERNAL_SIDE_EFFECT_POLICY: 'block_all_external_side_effects',
+    ...login,
+    CREDENTIAL_STORAGE_ACK: 'never_store_credentials_in_artifacts_or_wiki',
+    UI_COMPUTER_USE_ACK: UI_COMPUTER_USE_ONLY_ACK,
+    TEAM_MODE_ALLOWED: 'no_parent_only',
+    MAX_QA_CYCLES: '1',
+    ACCEPTANCE_CRITERIA: [
+      '앱 첫 화면 또는 지정된 대상이 정상 로드된다.',
+      '주요 내비게이션과 핵심 화면 진입에서 콘솔/화면상 치명 오류가 없다.',
+      '검증하지 못한 UI/API 범위는 통과로 주장하지 않고 QA 리포트에 남긴다.'
+    ],
+    NON_GOALS: [
+      '결제, 실제 이메일/SMS 발송, 관리자 권한 변경, 데이터 삭제, 프로덕션 데이터 변경은 테스트하지 않는다.'
+    ],
+    RISK_BOUNDARY: [
+      '실제 사용자 데이터, 인증 권한, 결제, 메시지 발송, 웹훅, 외부 서비스 상태를 생성/수정/삭제하지 않는다.',
+      'Codex Computer Use 증거가 없으면 UI/browser 검증 완료로 주장하지 않는다.',
+      '로그인이 필요하지만 임시 테스트 자격증명이 없으면 인증 구간은 차단/미검증으로 기록한다.'
+    ],
+    MID_RUN_UNKNOWN_POLICY: ['preserve_existing_behavior', 'defer_optional_scope', 'block_only_if_no_safe_path']
+  };
+}
+
 function qaReportDateStamp(date = new Date()) {
   return date.toISOString().slice(0, 10);
 }
@@ -27,12 +111,26 @@ function qaReportFileFromGate(gate = {}) {
 }
 
 export function buildQaLoopQuestionSchema(prompt) {
+  const inferred = inferQaLoopAnswers(prompt);
   return {
     schema_version: 1,
     route: QA_LOOP_ROUTE,
-    description: `QA-LOOP questions must be answered before execution. Login secrets and browser auth state are runtime-only and must not be saved to mission files or TriWiki. ${CODEX_COMPUTER_USE_ONLY_POLICY}`,
+    description: `QA-LOOP defaults are inferred from the prompt, TriWiki/current-code defaults, and conservative safety policy. Login secrets and browser auth state are runtime-only and must not be saved to mission files or TriWiki. ${CODEX_COMPUTER_USE_ONLY_POLICY}`,
     prompt,
-    slots: [
+    inferred_answers: inferred,
+    inference_notes: {
+      QA_SCOPE: 'prompt-and-safe-default',
+      TARGET_ENVIRONMENT: 'prompt-or-local-dev-default',
+      TARGET_BASE_URL: 'prompt-url-or-localhost-default',
+      QA_MUTATION_POLICY: 'safe-read-only-default',
+      LOGIN_REQUIRED: 'prompt-derived; authenticated paths are blocked if no temp credentials are ready'
+    },
+    slots: []
+  };
+}
+
+export function qaLoopQuestionSlots() {
+  return [
       { id: 'GOAL_PRECISE', question: 'Define the QA objective in one sentence.', required: true, type: 'string' },
       { id: 'QA_SCOPE', question: 'Which QA surface should run?', required: true, type: 'enum', options: ['ui_e2e_only', 'api_e2e_only', 'ui_and_api_e2e', 'all_available'] },
       { id: 'TARGET_ENVIRONMENT', question: 'Where should QA run?', required: true, type: 'enum', options: ['local_dev_server', 'preview_or_staging_domain', 'deployed_production_domain'] },
@@ -53,8 +151,7 @@ export function buildQaLoopQuestionSchema(prompt) {
       { id: 'NON_GOALS', question: 'List anything QA-LOOP must not test.', required: true, type: 'array_or_string', allow_empty: true },
       { id: 'RISK_BOUNDARY', question: 'List hard safety boundaries for data, auth, permissions, money, messages, and third-party systems.', required: true, type: 'array_or_string' },
       { id: 'MID_RUN_UNKNOWN_POLICY', question: 'If ambiguity appears during no-question QA, choose the resolution order. This does not authorize unrequested fallback implementation code.', required: true, type: 'array', options: ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'] }
-    ]
-  };
+    ];
 }
 
 export function validateQaLoopAnswers(schema, answers = {}) {
@@ -68,8 +165,8 @@ export function validateQaLoopAnswers(schema, answers = {}) {
   if (env === 'deployed_production_domain' && mutation !== 'read_only_smoke_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'production_deployed_qa_is_read_only_smoke_only' });
   if (answers.DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED !== 'never') errors.push({ slot: 'DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED', error: 'destructive_deployed_tests_never_allowed' });
   if (isUiScope(answers.QA_SCOPE) && answers.UI_COMPUTER_USE_ACK !== UI_COMPUTER_USE_ONLY_ACK) errors.push({ slot: 'UI_COMPUTER_USE_ACK', error: 'ui_e2e_requires_codex_computer_use_only_ack' });
-  if (answers.LOGIN_REQUIRED === 'yes' && answers.TEMP_TEST_CREDENTIALS_READY !== 'yes_temp_only') errors.push({ slot: 'TEMP_TEST_CREDENTIALS_READY', error: 'authenticated_tests_require_ephemeral_test_credentials_or_must_be_blocked' });
-  if (answers.LOGIN_REQUIRED === 'yes' && answers.TEST_CREDENTIALS_RUNTIME_SOURCE === 'not_required') errors.push({ slot: 'TEST_CREDENTIALS_RUNTIME_SOURCE', error: 'credential_runtime_source_required' });
+  if (answers.LOGIN_REQUIRED === 'yes' && !['yes_temp_only', 'no_block_authenticated_tests'].includes(answers.TEMP_TEST_CREDENTIALS_READY)) errors.push({ slot: 'TEMP_TEST_CREDENTIALS_READY', error: 'authenticated_tests_require_ephemeral_test_credentials_or_must_be_blocked' });
+  if (answers.LOGIN_REQUIRED === 'yes' && answers.TEMP_TEST_CREDENTIALS_READY === 'yes_temp_only' && answers.TEST_CREDENTIALS_RUNTIME_SOURCE === 'not_required') errors.push({ slot: 'TEST_CREDENTIALS_RUNTIME_SOURCE', error: 'credential_runtime_source_required' });
   if (answers.CREDENTIAL_STORAGE_ACK !== 'never_store_credentials_in_artifacts_or_wiki') errors.push({ slot: 'CREDENTIAL_STORAGE_ACK', error: 'credential_temp_only_ack_required' });
   return errors;
 }

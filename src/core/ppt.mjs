@@ -498,40 +498,6 @@ export function planPptImageAssets(contract = {}, storyboard = buildPptStoryboar
   });
 }
 
-async function generatePptImageAsset(asset, dir, apiKey) {
-  const response = await fetch('https://api.openai.com/v1/images/generations', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'gpt-image-2',
-      prompt: asset.prompt,
-      size: asset.size,
-      quality: asset.quality,
-      n: 1
-    })
-  });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message = json?.error?.message || `OpenAI image generation failed with HTTP ${response.status}`;
-    throw new Error(message);
-  }
-  const b64 = json?.data?.[0]?.b64_json;
-  if (!b64) throw new Error('OpenAI image generation response did not include data[0].b64_json');
-  const target = path.join(dir, asset.rel_path);
-  await fsp.mkdir(path.dirname(target), { recursive: true });
-  await fsp.writeFile(target, Buffer.from(b64, 'base64'));
-  return {
-    ...asset,
-    status: 'generated',
-    generated_at: nowIso(),
-    output_path: asset.rel_path,
-    byte_size: Buffer.byteLength(Buffer.from(b64, 'base64'))
-  };
-}
-
 async function existingGeneratedImageAssets(dir, existing = {}) {
   const assets = Array.isArray(existing?.assets) ? existing.assets : [];
   const checked = [];
@@ -553,60 +519,47 @@ export async function buildPptImageAssetLedger(dir, contract = {}, storyboard = 
   const reusedIds = new Set(reused.map((asset) => asset.id));
   const pending = plannedAssets.filter((asset) => !reusedIds.has(asset.id));
   const imagegenDisabled = /^(0|false|no)$/i.test(String(process.env.SKS_PPT_IMAGEGEN ?? 'auto'));
-  const apiKey = process.env.OPENAI_API_KEY || '';
   const blockers = [];
   const generated = [...reused];
-  const failed = [];
   if (pending.length > 0 && required && imagegenDisabled) {
     blockers.push('imagegen_disabled_by_SKS_PPT_IMAGEGEN');
-  } else if (pending.length > 0 && required && !apiKey) {
-    blockers.push('missing_OPENAI_API_KEY_for_required_gpt_image_2_assets');
-  } else if (pending.length > 0 && required && apiKey) {
-    for (const asset of pending) {
-      try {
-        generated.push(await generatePptImageAsset(asset, dir, apiKey));
-      } catch (err) {
-        failed.push({ ...asset, status: 'failed', error: cleanText(err?.message, 'image generation failed') });
-      }
-    }
+  } else if (pending.length > 0 && required) {
+    blockers.push('missing_codex_app_imagegen_gpt_image_2_asset_evidence');
   }
   const assets = [
     ...generated,
-    ...failed,
     ...pending
-      .filter((asset) => !generated.some((generatedAsset) => generatedAsset.id === asset.id) && !failed.some((failedAsset) => failedAsset.id === asset.id))
+      .filter((asset) => !generated.some((generatedAsset) => generatedAsset.id === asset.id))
       .map((asset) => ({ ...asset, status: required ? 'blocked' : 'planned_optional' }))
   ];
   const generatedCount = generated.length;
   const requiredCount = required ? plannedAssets.length : 0;
-  const passed = !required || (requiredCount > 0 && generatedCount >= requiredCount && failed.length === 0 && blockers.length === 0);
+  const passed = !required || (requiredCount > 0 && generatedCount >= requiredCount && blockers.length === 0);
   return {
     schema_version: 1,
     created_at: nowIso(),
     contract_hash: contract.sealed_hash || null,
     required,
-    policy: 'Generate required PPT image resources with real gpt-image-2 calls when OPENAI_API_KEY is available; never fabricate image files or mark missing generations as successful.',
-    api_docs: 'https://developers.openai.com/api/docs/guides/image-generation',
+    policy: 'Required PPT image resources must be generated through Codex App $imagegen/gpt-image-2 and recorded as real output files; direct API fallback, fabricated files, and placeholder ledgers do not satisfy this gate.',
     codex_app_imagegen_doc: 'https://developers.openai.com/codex/app/features#image-generation',
     provider: {
       model: 'gpt-image-2',
-      endpoint: 'POST /v1/images/generations',
-      output: 'base64_png',
-      api_key_available: Boolean(apiKey),
+      surface: 'codex_app_$imagegen',
+      output: 'codex_app_generated_raster_file',
       imagegen_disabled: imagegenDisabled
     },
     planned_count: plannedAssets.length,
     required_count: requiredCount,
     generated_count: generatedCount,
-    failed_count: failed.length,
+    failed_count: 0,
     blockers,
     assets,
     passed,
     notes: [
       required
-        ? 'The sealed PPT contract requires generated image assets; missing API credentials or generation failures block the PPT gate.'
+        ? 'The sealed PPT contract requires generated image assets; missing Codex App $imagegen/gpt-image-2 output blocks the PPT gate.'
         : 'No generated image asset requirement was detected; assets remain optional and are not generated to avoid unrequested API cost.',
-      'The API call follows the official Image API shape for gpt-image-2 and writes decoded base64 image bytes under assets/.'
+      'Run Codex App $imagegen/gpt-image-2 for each blocked asset, place the generated raster under assets/, then rerun the PPT build so existing generated files are verified.'
     ]
   };
 }
@@ -690,7 +643,7 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
         : 'Optional generated image assets were planned but not generated.',
       source: 'ppt_image_asset_ledger',
       action: imageAssetLedger?.required
-        ? 'Set OPENAI_API_KEY and rerun sks ppt build, or provide generated asset evidence before final output.'
+        ? 'Generate the required assets with Codex App $imagegen/gpt-image-2, place the real raster files under assets/, then rerun sks ppt build.'
         : 'Generate only if the sealed PPT contract needs image resources.'
     }));
   }
@@ -1350,7 +1303,7 @@ export function defaultPptGate(contract = {}) {
       'Do not pass this gate until the HTML/PDF artifact work is actually complete or the PDF export is explicitly deferred with evidence.',
       'Audience strategy must stay linked to STP, target pain points, proof, and three or more aha moments.',
       'Fact ledger must keep user input separate from verified web evidence and block unsupported critical external claims.',
-      'Image asset ledger must generate required resources with real gpt-image-2/Image API calls when credentials are available, or block with evidence instead of faking files.',
+      'Image asset ledger must require real Codex App $imagegen/gpt-image-2 output for required resources, or block with evidence instead of faking files.',
       'Review loop must be bounded by score thresholds, P0/P1 issue count, max passes, and explicit imagegen evidence requirements when requested.',
       'Preserve the editable HTML source under source-html/ and remove PPT-only temporary build files before completion.',
       'Record independent PPT build phases in ppt-parallel-report.json so research/design/render work can stay parallel-friendly.'

@@ -270,7 +270,7 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
     install: ['bootstrap/deps initialize readiness', 'missing runtime deps show repair actions', 'readiness output is concrete']
   };
   const explicitPromptedGoal = promptedGoalFromAnswers(explicitAnswers);
-  const canInferCoreGoal = explicitPromptedGoal || !ambiguity.unresolved_dimensions.includes('intent_target_or_required_outcome');
+  const canInferCoreGoal = true;
   if (!hasAnswer(explicitAnswers.GOAL_PRECISE) && canInferCoreGoal) {
     addInferred(
       inferred,
@@ -281,7 +281,7 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
     );
   }
   const explicitAcceptance = explicitAnswers.SUCCESS_CRITERIA_OR_ACCEPTANCE;
-  const canInferAcceptance = hasAnswer(explicitAcceptance) || Boolean(kind || presentationWork || paymentWork || authWork) || !ambiguity.unresolved_dimensions.includes('success_criteria_or_acceptance');
+  const canInferAcceptance = true;
   if (!hasAnswer(explicitAnswers.ACCEPTANCE_CRITERIA) && canInferAcceptance) {
     addInferred(
       inferred,
@@ -333,6 +333,57 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
         'VISUAL_REGRESSION_REQUIRED',
         visualRequired ? 'yes' : 'yes_if_available',
         'uiux-inferred-default'
+      );
+    }
+  }
+  if (presentationWork) {
+    if (!hasAnswer(explicitAnswers.PRESENTATION_DELIVERY_CONTEXT)) {
+      addInferred(
+        inferred,
+        notes,
+        'PRESENTATION_DELIVERY_CONTEXT',
+        'HTML 기반 PDF 발표자료. 한국어, 간결하고 실무적인 톤, 일반 데스크톱/문서 공유 환경을 기본으로 한다.',
+        'presentation-default'
+      );
+    }
+    if (!hasAnswer(explicitAnswers.PRESENTATION_AUDIENCE_PROFILE)) {
+      addInferred(
+        inferred,
+        notes,
+        'PRESENTATION_AUDIENCE_PROFILE',
+        '요청 문맥에서 명시된 대상이 없으면 의사결정 권한이 있는 비기술/반기술 비즈니스 이해관계자, 30-50대 실무 리더, 중간 수준의 주제 이해도를 기본 청중으로 둔다.',
+        'presentation-default'
+      );
+    }
+    if (!hasAnswer(explicitAnswers.PRESENTATION_STP_STRATEGY)) {
+      addInferred(
+        inferred,
+        notes,
+        'PRESENTATION_STP_STRATEGY',
+        'Segmentation: 문제를 겪는 실무/의사결정 청중. Targeting: 빠르게 판단해야 하는 핵심 승인자. Positioning: 복잡도를 낮추고 실행 판단을 쉽게 만드는 신뢰 가능한 제안.',
+        'presentation-default'
+      );
+    }
+    if (!hasAnswer(explicitAnswers.PRESENTATION_PAINPOINT_SOLUTION_MAP)) {
+      addInferred(
+        inferred,
+        notes,
+        'PRESENTATION_PAINPOINT_SOLUTION_MAP',
+        [
+          '현재 문제와 맥락을 빠르게 파악하기 어렵다 -> 핵심 메시지와 근거를 앞부분에 배치한다 -> 왜 지금 봐야 하는지 즉시 이해한다',
+          '의사결정 기준이 흩어져 있다 -> 선택지, 효과, 리스크를 같은 구조로 비교한다 -> 승인/보류 판단 기준이 선명해진다',
+          '실행 후 다음 행동이 모호하다 -> 마지막에 구체적인 액션과 검증 항목을 제시한다 -> 발표 후 바로 움직일 수 있다'
+        ],
+        'presentation-default'
+      );
+    }
+    if (!hasAnswer(explicitAnswers.PRESENTATION_DECISION_CONTEXT)) {
+      addInferred(
+        inferred,
+        notes,
+        'PRESENTATION_DECISION_CONTEXT',
+        '청중이 제안의 타당성을 이해하고 다음 실행 또는 승인 여부를 판단해야 한다. 주요 반대논리는 비용, 일정, 리스크, 근거 부족으로 둔다.',
+        'presentation-default'
       );
     }
   }
@@ -474,17 +525,10 @@ export function buildQuestionSchema(prompt) {
   }
   const inferred = inferAnswersForPrompt(prompt);
   const inferredSlots = new Set(Object.keys(inferred.answers));
-  const askedSlots = slots
-    .filter((s) => {
-      if (inferredSlots.has(s.id)) return false;
-      if (s.id === 'INTENT_TARGET' && hasAnswer(inferred.answers.GOAL_PRECISE)) return false;
-      if (s.id === 'SUCCESS_CRITERIA_OR_ACCEPTANCE' && hasAnswer(inferred.answers.ACCEPTANCE_CRITERIA)) return false;
-      return true;
-    })
-    .slice(0, domainHints.includes('presentation') ? slots.length : ambiguity.question_budget);
+  const askedSlots = [];
   return {
     schema_version: 2,
-    description: 'SKS scores goal, constraints, success criteria, and codebase context first, then asks only the lowest-clarity questions that can change execution. The rest is inferred from the prompt, TriWiki/current-code defaults, and conservative SKS safety policy. After the contract is sealed, SKS resolves with the decision ladder instead of asking mid-run questions.',
+    description: 'SKS infers goal, constraints, success criteria, and codebase context from the prompt, TriWiki/current-code defaults, and conservative SKS safety policy. After the contract is sealed, SKS resolves mid-run unknowns with the decision ladder instead of asking the user.',
     prompt,
     domain_hints: domainHints,
     ambiguity_assessment: ambiguity,
@@ -497,17 +541,17 @@ export function buildQuestionSchema(prompt) {
 export function questionsMarkdown(schema) {
   const lines = [];
   const isQaLoop = schema?.route === 'QALoop';
-  lines.push(isQaLoop ? '# Sneakoscope Codex QA-LOOP Prepare Questions' : '# Sneakoscope Codex Ambiguity Questions');
+  lines.push(isQaLoop ? '# Sneakoscope Codex QA-LOOP Inferred Contract' : '# Sneakoscope Codex Inferred Contract');
   lines.push('');
   if (isQaLoop) {
-    lines.push('QA-LOOP는 이 질문들에 모두 답변하고 Decision Contract가 봉인된 뒤에만 실행됩니다.');
+    lines.push('QA-LOOP는 prompt, TriWiki/current-code 기본값, 보수적 안전 정책으로 Decision Contract를 자동 봉인합니다.');
     lines.push('로그인이 필요하면 테스트 전용 계정 정보만 임시 런타임 입력으로 제공해야 하며, answers.json/리포트/로그/wiki에는 절대 저장하지 않습니다.');
     lines.push('UI 수준 E2E와 시각 검증은 Codex Computer Use 증거가 없으면 검증 완료로 주장할 수 없습니다. Chrome MCP, Browser Use, Playwright, Selenium, Puppeteer, 기타 브라우저 자동화는 UI/브라우저 검증 증거로 인정하지 않습니다.');
     lines.push('개발 서버가 아닌 배포/스테이징 도메인에서는 삭제성 테스트를 절대 실행하지 않습니다.');
   } else {
-    lines.push('실행을 바꿀 수 있는 질문에만 답변하면 Decision Contract가 봉인된 뒤 실행됩니다.');
+    lines.push('Decision Contract는 prompt, TriWiki/current-code 기본값, 보수적 안전 정책으로 자동 봉인됩니다.');
     lines.push('봉인 후 실행 중에는 사용자에게 새 질문을 하지 않고 decision ladder로 해결합니다.');
-    lines.push('사용자 의도가 실제로 모호한 항목만 묻고, 나머지는 TriWiki/current-code 기본값으로 추론합니다.');
+    lines.push('사용자에게 사전 질문지를 노출하지 않습니다.');
   }
   if (schema.description) lines.push(schema.description);
   if (schema.ambiguity_assessment) {
@@ -517,7 +561,7 @@ export function questionsMarkdown(schema) {
     lines.push(`- method: ${schema.ambiguity_assessment.method}`);
     lines.push(`- score: ${schema.ambiguity_assessment.overall_score} (ready threshold <= ${schema.ambiguity_assessment.threshold})`);
     lines.push(`- unresolved dimensions: ${(schema.ambiguity_assessment.unresolved_dimensions || []).join(', ') || 'none'}`);
-    lines.push(`- question budget: ${schema.ambiguity_assessment.question_budget}`);
+    lines.push(`- legacy question budget ignored: ${schema.ambiguity_assessment.question_budget}`);
   }
   if (schema.inferred_answers && Object.keys(schema.inferred_answers).length) {
     lines.push('');

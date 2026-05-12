@@ -13,11 +13,12 @@ import { writeMistakeMemoryReport } from './mistake-memory.mjs';
 import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from './mistake-recall.mjs';
 import { recordSkillDreamEvent, skillDreamPolicyText, writeSkillForgeReport } from './skill-forge.mjs';
 import { writeResearchPlan } from './research.mjs';
-import { PPT_REQUIRED_GATE_FIELDS } from './ppt.mjs';
+import { PPT_REQUIRED_GATE_FIELDS, writePptRouteArtifacts } from './ppt.mjs';
+import { writeQaLoopArtifacts } from './qa-loop.mjs';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, writeImageUxReviewRouteArtifacts } from './image-ux-review.mjs';
 import { SPEED_LANE_POLICY } from './proof-field.mjs';
 import { permissionGateSummary } from './permission-gates.mjs';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
 import { formatAgentReasoning, formatRoleCounts, initTeamLive, parseTeamSpecText, teamReasoningPolicy } from './team-live.mjs';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from './team-review-policy.mjs';
@@ -251,20 +252,22 @@ function planVerification(route, proof) {
 }
 
 function planNextActions(route, task, ambiguity, lane) {
-  if (ambiguity.required && !ambiguity.passed) return ['ask only execution-changing ambiguity questions', 'seal the decision contract from the user reply'];
+  if (ambiguity.required && !ambiguity.passed) return ['auto-seal execution contract from inferred answers', 'continue with decision-contract.json'];
   const actions = ['read pipeline-plan.json before work', 'execute kept stages only', 'run listed verification'];
   if (!lane.fast_lane_allowed && routeRequiresSubagents(route, task)) actions.splice(1, 0, 'materialize full Team artifacts before implementation');
   actions.push('refresh/validate TriWiki when required', 'finish with completion summary and Honest Mode');
   return actions;
 }
 
-export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
-  const required = routeNeedsContext7(route, prompt);
-  const reasoning = routeReasoning(route, prompt);
+export function promptPipelineContext(prompt, route = null) {
+  const cleanPrompt = stripVisibleDecisionAnswerBlocks(prompt);
+  route = route || routePrompt(cleanPrompt);
+  const required = routeNeedsContext7(route, cleanPrompt);
+  const reasoning = routeReasoning(route, cleanPrompt);
   const directFix = route?.id === 'DFix';
-  if (directFix) return dfixQuickContext(prompt, route);
-  if (route?.id === 'Answer') return answerOnlyContext(prompt, route);
-  if (route?.id === 'ComputerUse') return computerUseFastContext(prompt, route);
+  if (directFix) return dfixQuickContext(cleanPrompt, route);
+  if (route?.id === 'Answer') return answerOnlyContext(cleanPrompt, route);
+  if (route?.id === 'ComputerUse') return computerUseFastContext(cleanPrompt, route);
   const lines = [
     `SKS skill-first pipeline active. Route: ${route?.command || '$SKS'} (${route?.route || 'general SKS workflow'}).`,
     reasoningInstruction(reasoning),
@@ -272,14 +275,14 @@ export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
     'Codex App visibility: briefly surface what SKS is doing before tools run, mirror important worker/tool status to mission artifacts, and keep progress legible to the user.',
     'Hook visibility limit: hooks can inject context/status or block/continue a turn, but they cannot create arbitrary live chat bubbles; use team events, mission files, or normal assistant updates for live transcript details.',
     'Ambient Goal continuation: even without an explicit $Goal keyword, use Codex native /goal persistence when it helps keep long work resumable and complete; do not let it replace or skip the selected SKS route gates.',
-    'Ambiguity gate: execution routes must infer obvious contract answers first and ask only missing answers that can change target, scope, safety, behavior, or acceptance. DFix and Answer bypass this gate because they do not start implementation.',
+    'Route contract: execution routes infer contract answers from the prompt, TriWiki/current-code defaults, and conservative SKS policy. DFix and Answer bypass stateful execution because they do not start implementation.',
     'Plan-first interaction: when ambiguity questions are truly required, show the user only the missing human decision(s), then seal the decision contract internally and execute/verify.',
     'Question-shaped directive policy: before using Answer, decide whether a question is a real information request or an implicit instruction/complaint about broken behavior. Rhetorical bug reports, mandatory-policy statements, and "why is this not happening?" execution complaints must route to Team, not Answer.',
     'Best-practice prompt shape: extract Goal, Context, Constraints, and Done-when before implementation; keep questions compact and only ask for answers that can change scope, safety, user-facing behavior, or acceptance criteria.',
     chatCaptureIntakeText(),
     'Default execution routing: general implementation/code-changing prompts promote to Team so the normal path is parallel analysis, TriWiki refresh, debate/consensus, then fresh parallel executors. Answer, DFix, Help, Wiki maintenance, and safety-specific routes are intentional exceptions.',
-    'Stance: infer the user intent aggressively from rough wording and local context, but ask short ambiguity-removal questions before work when a missing answer can change the target, scope, safety boundary, or acceptance criteria.',
-    subagentExecutionPolicyText(route, prompt),
+    'Stance: infer the user intent aggressively from rough wording, local context, TriWiki, and conservative defaults; do not surface prequestion sheets before work.',
+    subagentExecutionPolicyText(route, cleanPrompt),
     noUnrequestedFallbackCodePolicyText(),
     outcomeRubricPolicyText(),
     speedLanePolicyText(),
@@ -298,7 +301,7 @@ export function promptPipelineContext(prompt, route = routePrompt(prompt)) {
   if (reflectionRequiredForRoute(route)) lines.push(reflectionInstructionText());
   if (route?.id === 'Team') lines.push(`Team route: scouts, TriWiki refresh, debate, consensus, runtime graph compile with concrete task ids and worker inboxes, close planning agents, fresh executors, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, ${TEAM_SESSION_CLEANUP_ARTIFACT}, reflection, and Honest Mode. ${MIN_TEAM_REVIEW_POLICY_TEXT}`);
   if (route?.id === 'Goal') lines.push('Goal route: write SKS goal bridge artifacts, then use Codex native /goal persistence for create, pause, resume, and clear continuation controls.');
-  if (route?.id === 'PPT') lines.push(`PPT route: before design or PDF work, seal delivery context, audience profile including average age/job/industry, STP strategy, decision context, and at least three pain-point to solution mappings. Keep the visual system simple, restrained, and information-first; design detail should come from hierarchy, spacing, alignment, rules, and subtle accents rather than decorative overdesign. ${pptPipelineAllowlistPolicyText()} If generated image assets or slide visual critique are needed, use gpt-image-2/imagegen only when that asset/review need is explicitly sealed in the $PPT contract, preferring Codex App built-in image generation (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) and using the OpenAI Image API when OPENAI_API_KEY is available; do not fabricate image files or image-review results when gpt-image-2 is unavailable. ${CODEX_IMAGEGEN_REQUIRED_POLICY} Then build source ledger, fact ledger, image asset ledger, storyboard with aha moments, style tokens, editable source HTML under source-html/, PDF artifact, render QA, bounded review ledger/iteration report, PPT-only temporary build file cleanup, and ppt-parallel-report.json so independent strategy/render/file-write phases stay parallel-friendly, then reflection and Honest Mode.`);
+  if (route?.id === 'PPT') lines.push(`PPT route: before design or PDF work, infer and seal delivery context, audience profile including average age/job/industry, STP strategy, decision context, and at least three pain-point to solution mappings from the prompt, TriWiki/current-code defaults, and conservative policy. Keep the visual system simple, restrained, and information-first; design detail should come from hierarchy, spacing, alignment, rules, and subtle accents rather than decorative overdesign. ${pptPipelineAllowlistPolicyText()} If generated image assets or slide visual critique are needed, required evidence must come from Codex App $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}); direct API fallback, placeholders, and prose-only substitutes do not satisfy the route gate. ${CODEX_IMAGEGEN_REQUIRED_POLICY} Then build source ledger, fact ledger, image asset ledger, storyboard with aha moments, style tokens, editable source HTML under source-html/, PDF artifact, render QA, bounded review ledger/iteration report, PPT-only temporary build file cleanup, and ppt-parallel-report.json so independent strategy/render/file-write phases stay parallel-friendly, then reflection and Honest Mode.`);
   if (route?.id === 'ImageUXReview') lines.push(`Image UX Review route: ${imageUxReviewPipelinePolicyText()} Use ${IMAGE_UX_REVIEW_POLICY_ARTIFACT}, ${IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT}, ${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT}, and ${IMAGE_UX_REVIEW_GATE_ARTIFACT} as the route evidence set. The route may suggest safe fixes only when the user requested fixing; otherwise report findings and blockers.`);
   if (route?.id === 'AutoResearch') lines.push('AutoResearch route: load autoresearch-loop plus seo-geo-optimizer when SEO/GEO, discoverability, README, npm, GitHub stars, ranking, or AI-search visibility is relevant.');
   if (route?.id === 'DB') lines.push('DB route: scan/check database risk first; destructive DB operations remain forbidden.');
@@ -341,21 +344,22 @@ export function answerOnlyContext(prompt, route = routePrompt(prompt)) {
 }
 
 export async function prepareRoute(root, prompt, state = {}) {
-  const route = routePrompt(prompt);
-  const madSksAuthorization = hasMadSksSignal(prompt);
-  const task = stripDollarCommand(stripMadSksSignal(prompt)) || stripMadSksSignal(stripDollarCommand(prompt)) || String(prompt || '').trim();
-  const explicit = Boolean(dollarCommand(prompt));
+  const cleanPrompt = stripVisibleDecisionAnswerBlocks(prompt);
+  const route = routePrompt(cleanPrompt);
+  const madSksAuthorization = hasMadSksSignal(cleanPrompt);
+  const task = stripDollarCommand(stripMadSksSignal(cleanPrompt)) || stripMadSksSignal(stripDollarCommand(cleanPrompt)) || String(cleanPrompt || '').trim();
+  const explicit = Boolean(dollarCommand(cleanPrompt));
   if (!route) return { route: null, additionalContext: promptPipelineContext(prompt, null) };
   const dreamContext = await routeSkillDreamContext(root, route, task);
   if (route.id === 'DFix') return withSkillDreamContext(await prepareDfixQuickRoute(route, task), dreamContext);
   if (route.id === 'Answer') return withSkillDreamContext(await prepareAnswerOnlyRoute(route, task), dreamContext);
   if (route.id === 'ComputerUse') return withSkillDreamContext(await prepareComputerUseFastRoute(route, task), dreamContext);
   if (route.id === 'Wiki') return withSkillDreamContext(await prepareWikiQuickRoute(route, task), dreamContext);
-  if (route.id === 'Goal') return withSkillDreamContext(await prepareGoal(root, route, task, routeNeedsContext7(route, prompt)), dreamContext);
-  if (route.id === 'ImageUXReview') return withSkillDreamContext(await prepareImageUxReview(root, route, task, routeNeedsContext7(route, prompt)), dreamContext);
-  const required = routeNeedsContext7(route, prompt);
-  const reasoning = routeReasoning(route, prompt);
-  const subagentsRequired = routeRequiresSubagents(route, prompt);
+  if (route.id === 'Goal') return withSkillDreamContext(await prepareGoal(root, route, task, routeNeedsContext7(route, cleanPrompt)), dreamContext);
+  if (route.id === 'ImageUXReview') return withSkillDreamContext(await prepareImageUxReview(root, route, task, routeNeedsContext7(route, cleanPrompt)), dreamContext);
+  const required = routeNeedsContext7(route, cleanPrompt);
+  const reasoning = routeReasoning(route, cleanPrompt);
+  const subagentsRequired = routeRequiresSubagents(route, cleanPrompt);
   if (QUESTION_GATE_ROUTES.has(route.id) || route.id === 'MadSKS') return withSkillDreamContext(await prepareClarificationGate(root, route, task, required, { madSksAuthorization }), dreamContext);
   if (route.id === 'Team') return withSkillDreamContext(await prepareTeam(root, route, task, required, { madSksAuthorization }), dreamContext);
   if (route.id === 'Research') return withSkillDreamContext(await prepareResearch(root, route, task, required), dreamContext);
@@ -497,7 +501,7 @@ export async function activeRouteContext(root, state) {
     return `Previous ${state.route_command || state.route || state.mode || 'SKS'} clarification state is non-blocking. Do not reprint old question sheets; prepare the current prompt normally and replace stale route state when needed.`;
   }
   if (state.clarification_passed && String(state.phase || '').includes('CLARIFICATION_CONTRACT_SEALED')) {
-    return `Mandatory ambiguity-removal gate passed for ${state.route_command || state.route || state.mode}. Use the sealed decision-contract.json and ${PIPELINE_PLAN_ARTIFACT} before executing the route. Before the next route phase, read relevant TriWiki context, hydrate low-trust claims from source, and refresh/validate TriWiki again after new findings or artifact changes. Next atomic action: continue the original route lifecycle with the clarified goal, constraints, non-goals, risk boundary, and test scope.${planNote}`;
+    return `Route contract sealed for ${state.route_command || state.route || state.mode}. Use decision-contract.json and ${PIPELINE_PLAN_ARTIFACT} before executing the route. Before the next route phase, read relevant TriWiki context, hydrate low-trust claims from source, and refresh/validate TriWiki again after new findings or artifact changes. Next atomic action: continue the original route lifecycle with the inferred goal, constraints, non-goals, risk boundary, and test scope.${planNote}`;
   }
   if (state.mode === 'TEAM') {
     const context7 = state.context7_required && !(await hasContext7DocsEvidence(root, state))
@@ -562,8 +566,8 @@ async function prepareClarificationGate(root, route, task, required, opts = {}) 
   await writeQuestions(dir, schema);
   const routeContext = { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, original_stop_gate: route.stopGate, clarification_gate: true, mad_sks_authorization: Boolean(opts.madSksAuthorization || route.id === 'MadSKS') };
   await writeJsonAtomic(path.join(dir, 'route-context.json'), routeContext);
-  if (schema.slots.length === 0) {
-    await writeJsonAtomic(path.join(dir, 'answers.json'), schema.inferred_answers || {});
+  {
+    await writeJsonAtomic(path.join(dir, 'answers.json'), autoAnswersForSchema(schema));
     const result = await sealContract(dir, mission);
     let materialized = {};
     if (result.ok && route?.id === 'Team') {
@@ -574,6 +578,29 @@ async function prepareClarificationGate(root, route, task, required, opts = {}) 
       }
     } else if (result.ok && route?.id === 'MadSKS') {
       materialized = await materializeAutoSealedMadSks(dir, id, route, routeContext, result.contract || {});
+    } else if (result.ok && route?.id === 'QALoop') {
+      const artifactResult = await writeQaLoopArtifacts(dir, mission, result.contract);
+      materialized = {
+        phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED',
+        prompt: routeContext.task || task,
+        state: {
+          qa_loop_artifacts_ready: true,
+          qa_report_file: artifactResult.report_file,
+          qa_checklist_count: artifactResult.checklist_count,
+          questions_allowed: false
+        }
+      };
+    } else if (result.ok && route?.id === 'PPT') {
+      await writePptRouteArtifacts(dir, result.contract);
+      materialized = {
+        phase: 'PPT_AUDIENCE_STRATEGY_READY',
+        prompt: routeContext.task || task,
+        state: {
+          ppt_audience_strategy_ready: true,
+          ppt_gate_ready: true,
+          questions_allowed: false
+        }
+      };
     }
     const effectiveTask = materialized.prompt || task;
     const plan = await writePipelinePlan(dir, { missionId: id, route, task: effectiveTask, required, ambiguity: { required: true, slots: 0, auto_sealed: result.ok, passed: result.ok, contract_hash: result.contract?.sealed_hash || null } });
@@ -592,12 +619,12 @@ async function prepareClarificationGate(root, route, task, required, opts = {}) 
       stop_gate: route.stopGate,
       ...(materialized.state || {})
     }));
-    const materializedLine = materialized.phase ? `\nTeam runtime artifacts were materialized immediately; state advanced to ${materialized.phase}.` : '';
+    const materializedLine = materialized.phase ? `\nRoute artifacts were materialized immediately; state advanced to ${materialized.phase}.` : '';
     return {
       route,
       additionalContext: `${promptPipelineContext(task, route)}
 
-Ambiguity gate auto-sealed for ${route.command}: all contract answers were inferred from the prompt, TriWiki/current-code defaults, and conservative SKS safety policy.
+Route contract auto-sealed for ${route.command}: contract answers were inferred from the prompt, TriWiki/current-code defaults, and conservative SKS safety policy.
 Mission: ${id}
 Decision contract: .sneakoscope/missions/${id}/decision-contract.json
 Resolved answers: .sneakoscope/missions/${id}/resolved-answers.json
@@ -606,31 +633,17 @@ ${materializedLine}
 Next atomic action: continue the original route lifecycle with the sealed decision-contract.json.`
     };
   }
-  const plan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: true, slots: schema.slots.length, status: 'awaiting_answers' } });
-  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'route.clarification.questions_created', route: route.id, slots: schema.slots.length });
-  const phase = `${route.mode}_CLARIFICATION_AWAITING_ANSWERS`;
-  await setCurrent(root, routeState(id, route, phase, required, { prompt: task, questions_allowed: true, implementation_allowed: false, clarification_required: true, ambiguity_gate_required: true, pipeline_plan_ready: validatePipelinePlan(plan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, original_stop_gate: route.stopGate, stop_gate: 'clarification-gate' }));
-  const answerCommand = 'sks pipeline answer latest --stdin';
-  const title = 'MANDATORY ambiguity-removal gate activated.';
-  return {
-    route,
-    additionalContext: `${title}
-Mission: ${id}
-Route: ${route.command} (${route.route})
-Task: ${task}
-State: ${phase}
-Question file: .sneakoscope/missions/${id}/questions.md
-Answer schema: .sneakoscope/missions/${id}/required-answers.schema.json
-Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
+}
 
-Do not execute the route yet. Ask only the required ambiguity-removal questions now. After the user answers, seal the decision contract internally with "${answerCommand}".
-${clarificationVisibleResponseContract(id)}
-${context7RequirementText(required)}
-${clarificationPlanHint(route, id)}
-
-Required questions:
-${formatRequiredQuestions(schema)}`
-  };
+function autoAnswersForSchema(schema = {}) {
+  const answers = { ...(schema.inferred_answers || {}) };
+  for (const slot of schema.slots || []) {
+    if (answers[slot.id] !== undefined) continue;
+    if (slot.options) answers[slot.id] = slot.type === 'array' ? [slot.options[0]] : slot.options[0];
+    else if (slot.type === 'array' || slot.type === 'array_or_string') answers[slot.id] = [];
+    else answers[slot.id] = slot.id === 'DB_MAX_BLAST_RADIUS' ? 'no_live_dml' : 'infer_from_prompt_triwiki_and_current_code';
+  }
+  return answers;
 }
 
 function applyMadSksAuthorizationToSchema(schema = {}) {
@@ -943,21 +956,22 @@ function routeState(id, route, phase, context7Required, extra = {}) {
 }
 
 function routeContext(route, id, task, required, next) {
+  const visibleTask = stripVisibleDecisionAnswerBlocks(task);
   return {
     route,
-    additionalContext: `${promptPipelineContext(task, route)}
+    additionalContext: `${promptPipelineContext(visibleTask, route)}
 
 ${route.command} route prepared.
 Mission: ${id}
-Task: ${task}
+Task: ${visibleTask}
 Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
 Required skills: ${route.requiredSkills.join(', ')}
 Stop gate: ${route.stopGate}
-Subagents: ${routeRequiresSubagents(route, task) ? 'required before code-changing execution; spawn parallel workers/reviewers with disjoint ownership or record explicit unavailable/unsplittable evidence.' : 'optional'}
+Subagents: ${routeRequiresSubagents(route, visibleTask) ? 'required before code-changing execution; spawn parallel workers/reviewers with disjoint ownership or record explicit unavailable/unsplittable evidence.' : 'optional'}
 TriWiki: use only the latest coordinate+voxel-overlay context pack before each route phase, hydrate low-trust claims during the phase, refresh after new findings or artifact changes, and validate before handoffs/final claims. Coordinate-only legacy packs are invalid and must be refreshed before pipeline decisions.
 Final closeout: every pipeline final answer must summarize what was done, what changed for the user/repo, what was verified, and any remaining gaps.
 ${reflectionRequiredForRoute(route) ? `Reflection: ${reflectionInstructionText()}` : 'Reflection: not required for this lightweight route.'}
-Reasoning: ${routeReasoning(route, task).effort} temporary; return to default after completion.
+Reasoning: ${routeReasoning(route, visibleTask).effort} temporary; return to default after completion.
 Goal continuation: ambient /goal overlay may be used for persistence when it helps completion, but route gates remain authoritative.
 Next atomic action: ${next}`
   };
@@ -966,10 +980,8 @@ Next atomic action: ${next}`
 async function clarificationAwaitingAnswersContext(root, state) {
   const id = state.mission_id;
   if (!id) return '';
-  const schema = await readJson(path.join(missionDir(root, id), 'required-answers.schema.json'), null);
-  const questionBlock = schema ? `\n\nRequired questions still pending:\n${formatRequiredQuestions(schema)}` : '';
   const planNote = await activePipelinePlanNote(root, state);
-  return `Active SKS route ${state.route_command || state.route || state.mode} is still paused for ambiguity answers. Keep this retry compact: if the user answered, seal the contract with "sks pipeline answer ${id} --stdin"; otherwise ask only the missing slot ids. Do not expose internal answer files to the user and do not execute the route before this gate passes.${planNote}${questionBlock}`;
+  return `Active SKS route ${state.route_command || state.route || state.mode} has stale prequestion state. Do not reprint old question sheets. Re-prepare the current prompt so the route auto-seals from prompt, TriWiki/current-code defaults, and conservative SKS policy, or seal the existing mission internally with "sks pipeline answer ${id} --stdin" using inferred answers.${planNote}`;
 }
 
 function clarificationVisibleResponseContract(id) {
@@ -977,11 +989,9 @@ function clarificationVisibleResponseContract(id) {
   return `
 
 VISIBLE RESPONSE CONTRACT:
-- This turn is clarification-only.
-- Do not call tools, do not start implementation, and do not advance to the next route phase.
-- Elapsed time, repeated hook resumes, or assistant self-continuation do not count as answers.
-- Reply to the user with the Required questions block so it is visible in chat.
-- Tell the user they can answer directly by slot id; after they answer, seal the contract internally with \`${answerCommand}\`.`;
+- This is stale compatibility text for old missions only.
+- Do not show a prequestion sheet in chat.
+- Seal internally with inferred answers using \`${answerCommand}\`, or re-prepare the current prompt so the route auto-seals.`;
 }
 
 function clarificationPlanHint(route, id) {
@@ -989,11 +999,10 @@ function clarificationPlanHint(route, id) {
   return `
 
 Codex plan-tool interaction:
-Before asking the user, call update_plan with:
-- in_progress: Ask mandatory ambiguity-removal questions for ${route.command || '$SKS'}
-- pending: Seal the user's answers internally with \`${command}\`
-- pending: Continue the original route lifecycle with the sealed decision-contract.json
-Then ask the questions in one compact message.`;
+Use update_plan only for real execution work:
+- in_progress: Auto-seal inferred route contract for ${route.command || '$SKS'}
+- pending: Continue the original route lifecycle with decision-contract.json
+Do not surface a prequestion sheet. Legacy answer command if needed: \`${command}\`.`;
 }
 
 function formatRequiredQuestions(schema) {
@@ -1007,17 +1016,14 @@ function formatRequiredQuestions(schema) {
 async function clarificationStopReason(root, state, kind) {
   const id = state?.mission_id || 'latest';
   const routeName = state?.route_command || state?.route || state?.mode || 'route';
-  const schema = state?.mission_id ? await readJson(path.join(missionDir(root, state.mission_id), 'required-answers.schema.json'), null) : null;
-  const questionBlock = schema ? `\n\nRequired questions (reply in chat by slot id):\n${formatRequiredQuestions(schema)}` : '';
   const files = state?.mission_id ? `
-Question file: .sneakoscope/missions/${state.mission_id}/questions.md
 Answer schema: .sneakoscope/missions/${state.mission_id}/required-answers.schema.json` : '';
   const command = `sks pipeline answer ${id} --stdin`;
-  const title = `SKS ${routeName} is waiting for mandatory ambiguity-removal answers.`;
+  const title = `SKS ${routeName} has stale prequestion state.`;
   return `${title}
-Do not finish or implement yet. Keep retries compact: show only the missing questions if they are not already visible, then wait for the user's answer.${files}
+Do not reprint old question sheets. Seal internally with inferred answers using "${command}", or re-prepare the current prompt so the route auto-seals.${files}
 
-After the user answers, seal the contract internally with "${command}", then continue the original ${routeName} route.${questionBlock}`;
+After the contract is sealed, continue the original ${routeName} route.`;
 }
 
 export async function recordContext7Evidence(root, state, payload) {
@@ -1226,7 +1232,7 @@ export async function projectGateStatus(root, state = {}) {
       source: id ? `.sneakoscope/missions/${id}/subagent-evidence.jsonl` : '.sneakoscope/state/subagent-evidence.jsonl'
     });
   }
-  if (id && state?.stop_gate && !['none', 'honest_mode'].includes(state.stop_gate)) {
+  if (id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate)) {
     const active = await passedActiveGate(root, state);
     gates.push({
       id: active.file || state.stop_gate,
@@ -1298,7 +1304,7 @@ export async function evaluateStop(root, state, payload, opts = {}) {
     const missing = gate.missing?.length ? ` Missing gate fields: ${gate.missing.join(', ')}.` : '';
     return complianceBlock(root, state, `SKS no-question run is not done. Continue autonomously, fix failing checks, update ${gate.file || 'the active gate file'}, and do not ask the user.${missing}`, { gate: gate.file || 'active-gate', missing: gate.missing });
   }
-  if (state?.mission_id && state?.stop_gate && !['none', 'honest_mode'].includes(state.stop_gate)) {
+  if (state?.mission_id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate)) {
     const gate = await passedActiveGate(root, state);
     if (!gate.ok) {
       const missing = gate.missing?.length ? ` Missing gate fields: ${gate.missing.join(', ')}.` : '';
@@ -1311,13 +1317,7 @@ export async function evaluateStop(root, state, payload, opts = {}) {
 }
 
 function clarificationGatePending(state = {}) {
-  return Boolean(state?.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS'))
-    || Boolean(
-      state?.mission_id
-      && state.implementation_allowed === false
-      && state.ambiguity_gate_required === true
-      && state.ambiguity_gate_passed !== true
-    );
+  return false;
 }
 
 async function complianceBlock(root, state = {}, reason = '', detail = {}) {
