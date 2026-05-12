@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "0.7.60",
+  "version": "0.7.62",
   "description": "Sneakoscope Codex: database-safe Codex CLI/App harness with Team, Goal, AutoResearch, TriWiki, and Honest Mode.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -89,5 +89,8 @@
     "mcp-safety",
     "db-guardian"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "figlet": "^1.11.0"
+  }
 }

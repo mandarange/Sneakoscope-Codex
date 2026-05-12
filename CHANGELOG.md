@@ -4,6 +4,26 @@
 
 
 
+
+
+## [0.7.62] - 2026-05-12
+
+### Fixed
+
+- Accept terminal sizes larger than the normalized tmux minimum in the dynamic resize selftest.
+- Let Codex App Git Actions proceed with normal commit/push permission requests during no-question routes while still denying force-push style requests in that mode.
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+
+## [0.7.61] - 2026-05-12
+
+### Fixed
+
+- Render the terminal SKS logo through `figlet` with plain ASCII output and show the active package version in CLI/tmux banners.
+- Add the `solution-scout` pipeline hook/skill so problem-solving prompts search for similar fixes before local implementation decisions.
+- Refit Team tmux split panes on attach and terminal resize with `window-size latest`, resize hooks, and tiled-layout recalculation for Warp-style resizing.
+- Strengthen the Computer Use-only policy to forbid installing or using Playwright packages as UI/browser verification substitutes.
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+
 ## [0.7.60] - 2026-05-12
 
 ### Fixed

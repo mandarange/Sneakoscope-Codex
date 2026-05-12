@@ -18,7 +18,7 @@ import { writeQaLoopArtifacts } from './qa-loop.mjs';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, writeImageUxReviewRouteArtifacts } from './image-ux-review.mjs';
 import { SPEED_LANE_POLICY } from './proof-field.mjs';
 import { permissionGateSummary } from './permission-gates.mjs';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, SOLUTION_SCOUT_STAGE_ID, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, looksLikeProblemSolvingRequest, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, solutionScoutPolicyText, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
 import { formatAgentReasoning, formatRoleCounts, initTeamLive, parseTeamSpecText, teamReasoningPolicy } from './team-live.mjs';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from './team-review-policy.mjs';
@@ -50,6 +50,7 @@ const QUESTION_GATE_ROUTES = new Set(['QALoop', 'PPT']);
 const LIGHTWEIGHT_ROUTES = new Set(['Answer', 'DFix', 'Help', 'Wiki']);
 const FULL_ROUTE_STAGES = Object.freeze([
   'route_classification',
+  SOLUTION_SCOUT_STAGE_ID,
   'skill_dream_counter',
   'ambiguity_gate',
   'pipeline_plan',
@@ -234,6 +235,9 @@ function buildPipelineStages(route, task, ambiguity, lane, context7Required) {
 }
 
 function optionalStage(route, task, ambiguity, context7Required, id) {
+  if (id === SOLUTION_SCOUT_STAGE_ID && !looksLikeProblemSolvingRequest(task)) return { skip: true, notApplicable: true, reason: 'no_problem_solving_signal' };
+  if (id === SOLUTION_SCOUT_STAGE_ID && ['Answer', 'Help', 'Wiki'].includes(route?.id)) return { skip: true, notApplicable: true, reason: 'route_not_code_repair' };
+  if (id === SOLUTION_SCOUT_STAGE_ID) return { skip: false, reason: 'problem_solving_request_requires_web_similarity_scout' };
   if (id === 'ambiguity_gate' && ambiguity?.required === false) return { skip: true, notApplicable: true, reason: 'ambiguity_gate_not_required_for_entrypoint' };
   if (id === 'ambiguity_gate' && CLARIFICATION_BYPASS_ROUTES.has(route?.id)) return { skip: true, notApplicable: true, reason: 'route_bypasses_clarification' };
   if (id === 'context7_evidence' && !context7Required) return { skip: true, notApplicable: true, reason: 'context7_not_required_by_route' };
@@ -252,9 +256,16 @@ function planVerification(route, proof) {
 }
 
 function planNextActions(route, task, ambiguity, lane) {
-  if (ambiguity.required && !ambiguity.passed) return ['auto-seal execution contract from inferred answers', 'continue with decision-contract.json'];
+  if (ambiguity.required && !ambiguity.passed) {
+    return [
+      'auto-seal execution contract from inferred answers',
+      ...(looksLikeProblemSolvingRequest(task) ? ['run Solution Scout web search for similar fixes before editing'] : []),
+      'continue with decision-contract.json'
+    ];
+  }
   const actions = ['read pipeline-plan.json before work', 'execute kept stages only', 'run listed verification'];
   if (!lane.fast_lane_allowed && routeRequiresSubagents(route, task)) actions.splice(1, 0, 'materialize full Team artifacts before implementation');
+  if (looksLikeProblemSolvingRequest(task)) actions.splice(1, 0, 'run Solution Scout web search for similar fixes before editing');
   actions.push('refresh/validate TriWiki when required', 'finish with completion summary and Honest Mode');
   return actions;
 }
@@ -283,6 +294,7 @@ export function promptPipelineContext(prompt, route = null) {
     'Default execution routing: general implementation/code-changing prompts promote to Team so the normal path is parallel analysis, TriWiki refresh, debate/consensus, then fresh parallel executors. Answer, DFix, Help, Wiki maintenance, and safety-specific routes are intentional exceptions.',
     'Stance: infer the user intent aggressively from rough wording, local context, TriWiki, and conservative defaults; do not surface prequestion sheets before work.',
     subagentExecutionPolicyText(route, cleanPrompt),
+    solutionScoutPolicyText(cleanPrompt),
     noUnrequestedFallbackCodePolicyText(),
     outcomeRubricPolicyText(),
     speedLanePolicyText(),
