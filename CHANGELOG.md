@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 
+## [0.7.57] - 2026-05-12
+
+### Fixed
+
+- Keep `npm publish` release checks passing after the MAD tmux launch changes by moving the MAD command path out of the oversized CLI entrypoint without increasing package file count.
+
 ## [0.7.56] - 2026-05-11
 
 ### Fixed

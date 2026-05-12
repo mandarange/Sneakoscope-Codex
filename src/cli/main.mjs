@@ -79,7 +79,7 @@ import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxS
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
 import { askPostinstallQuestion, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall } from './install-helpers.mjs';
-import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
+import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, madHighCommand as runMadHighCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 import { openClawCommand } from './openclaw-command.mjs';
 
 const flag = (args, name) => args.includes(name);
@@ -96,7 +96,7 @@ function installScopeFromArgs(args = [], fallback = 'global') {
 }
 
 export async function main(args) {
-  if (isMadHighLaunch(args)) return madHighCommand(args);
+  if (isMadHighLaunch(args)) return runMadHighCommand(args, { maybePromptSksUpdateForLaunch, maybePromptCodexUpdateForLaunch, ensureMadLaunchDependencies, printDepsInstallAction, maybePromptCodexLbSetupForLaunch, packageVersion: PACKAGE_VERSION });
   if (isAutoReviewFlag(args[0])) return autoReviewCommand('start', args.slice(1));
   const [cmd, sub, ...rest] = args;
   const tail = sub === undefined ? [] : [sub, ...rest];
@@ -141,6 +141,16 @@ async function defaultTmuxCommand(args = []) {
     return;
   }
   return launchTmuxUi(args, codexLbImmediateLaunchOpts(args, lb, { conciseBlockers: true }));
+}
+
+function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
+  if (!lb?.ok || lb.status !== 'configured') return opts;
+  if (readOption(args, '--session', null) || readOption(args, '--workspace', null)) return opts;
+  const root = readOption(args, '--root', process.cwd());
+  const session = sanitizeTmuxSessionName(`sks-codex-lb-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
+  console.log(`codex-lb key loaded for this launch: ${lb.env_path}`);
+  console.log(`Using fresh tmux session: ${session}`);
+  return { ...opts, session };
 }
 
 function help(args = []) {
@@ -1151,131 +1161,6 @@ async function codexLbCommand(action = 'status', args = []) {
   }
   console.error('Usage: sks codex-lb status|repair|setup --host <domain> --api-key <key> [--json]');
   process.exitCode = 1;
-}
-
-function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
-  if (!lb?.ok || lb.status !== 'configured') return opts;
-  if (readOption(args, '--session', null) || readOption(args, '--workspace', null)) return opts;
-  const root = readOption(args, '--root', process.cwd());
-  const session = sanitizeTmuxSessionName(`sks-codex-lb-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
-  console.log(`codex-lb key loaded for this launch: ${lb.env_path}`);
-  console.log(`Using fresh tmux session: ${session}`);
-  return { ...opts, session };
-}
-
-async function madHighCommand(args = []) {
-  const cleanArgs = args.filter((arg) => !['--mad', '--MAD', '--mad-sks', '--high', '--no-auto-install-tmux'].includes(arg));
-  if (flag(args, '--json')) {
-    const profile = await enableMadHighProfile();
-    return console.log(JSON.stringify(profile, null, 2));
-  }
-  const update = await maybePromptSksUpdateForLaunch(args, { label: 'MAD launch' });
-  if (update.status === 'updated') {
-    console.log(`SKS updated from ${PACKAGE_VERSION} to ${update.latest}. Rerun: sks --mad`);
-    return;
-  }
-  if (update.status === 'failed') {
-    console.error(`SKS update failed: ${update.error}`);
-    process.exitCode = 1;
-    return;
-  }
-  const codexUpdate = await maybePromptCodexUpdateForLaunch(args, { label: 'MAD launch' });
-  if (codexUpdate.status === 'failed' || codexUpdate.status === 'updated_not_reflected') {
-    console.error(`Codex CLI update failed: ${codexUpdate.error || 'updated version was not visible on PATH'}`);
-    process.exitCode = 1;
-    return;
-  }
-  const deps = await ensureMadLaunchDependencies(args);
-  if (!deps.ready) {
-    console.error('SKS MAD launch blocked by missing dependencies.');
-    for (const action of deps.actions) printDepsInstallAction(action);
-    process.exitCode = 1;
-    return;
-  }
-  const lb = await maybePromptCodexLbSetupForLaunch(args);
-  if (lb.status === 'missing_api_key') {
-    process.exitCode = 1;
-    return;
-  }
-  const profile = await enableMadHighProfile();
-  const madLaunch = await activateMadTmuxPermissionState(process.cwd());
-  console.log(`SKS MAD ready: ${madHighProfileName()} | gate ${madLaunch.mission_id}`);
-  console.log('Live full-access active; catastrophic DB wipe/all-row/project-management guards remain.');
-  const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
-  const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, {
-    codexArgs: profile.launch_args,
-    autoInstallTmux: !flag(args, '--no-auto-install-tmux'),
-    conciseBlockers: true
-  });
-  const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
-  return launchMadTmuxUi([...cleanArgs, '--workspace', workspace], {
-    ...launchOpts,
-    codexArgs: profile.launch_args,
-    autoInstallTmux: !flag(args, '--no-auto-install-tmux'),
-    conciseBlockers: true,
-    missionId: madLaunch.mission_id
-  });
-}
-
-async function activateMadTmuxPermissionState(cwd = process.cwd()) {
-  const root = await sksRoot();
-  if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
-  const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad tmux live full-access session' });
-  const gate = {
-    schema_version: 1,
-    passed: false,
-    mad_sks_permission_active: true,
-    permissions_deactivated: false,
-    live_server_writes_allowed: true,
-    supabase_mcp_schema_cleanup_allowed: true,
-    direct_execute_sql_allowed: true,
-    normal_db_writes_allowed: true,
-    migration_apply_allowed: true,
-    catastrophic_safety_guard_active: true,
-    permission_profile: permissionGateSummary(),
-    activated_by: 'sks --mad',
-    cwd: path.resolve(cwd || process.cwd())
-  };
-  await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
-  await writeJsonAtomic(path.join(dir, 'route-context.json'), {
-    route: 'MadSKS',
-    command: '$MAD-SKS',
-    mode: 'MADSKS',
-    task: gate.activated_by,
-    mad_sks_authorization: true,
-    tmux_launch: true,
-    permission_profile: gate.permission_profile
-  });
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), {
-    ts: nowIso(),
-    type: 'mad_sks.tmux_permission_opened',
-    route: 'MadSKS',
-    live_server_writes_allowed: true,
-    catastrophic_safety_guard_active: true
-  });
-  await setCurrent(root, {
-    mission_id: id,
-    route: 'MadSKS',
-    route_command: '$MAD-SKS',
-    mode: 'MADSKS',
-    phase: 'MADSKS_TMUX_PERMISSION_ACTIVE',
-    questions_allowed: false,
-    implementation_allowed: true,
-    mad_sks_active: true,
-    mad_sks_modifier: true,
-    mad_sks_gate_file: 'mad-sks-gate.json',
-    mad_sks_gate_ready: true,
-    live_server_writes_allowed: true,
-    supabase_mcp_schema_cleanup_allowed: true,
-    direct_execute_sql_allowed: true,
-    normal_db_writes_allowed: true,
-    migration_apply_allowed: true,
-    catastrophic_safety_guard_active: true,
-    permission_profile: gate.permission_profile,
-    stop_gate: 'mad-sks-gate.json',
-    prompt: gate.activated_by
-  });
-  return { mission_id: id, dir, gate };
 }
 
 async function maybePromptSksUpdateForLaunch(args = [], opts = {}) {
