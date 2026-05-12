@@ -15,7 +15,7 @@ import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge }
 import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, routePrompt, routeReasoning, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, routePrompt, routeReasoning, stackCurrentDocsPolicy, stripVisibleDecisionAnswerBlocks, triwikiContextTracking } from '../core/routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, formatAgentReasoning, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested, teamReasoningPolicy } from '../core/team-live.mjs';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../core/team-review-policy.mjs';
@@ -281,21 +281,38 @@ function qaRoute() {
 async function qaLoopPrepare(args) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
-  const prompt = promptOf(args);
+  const prompt = stripVisibleDecisionAnswerBlocks(promptOf(args));
   if (!prompt) throw new Error('Missing QA target prompt.');
   const { id, dir } = await createMission(root, { mode: 'qaloop', prompt });
   const schema = buildQaLoopQuestionSchema(prompt);
   const route = qaRoute();
   await writeQuestions(dir, schema);
   await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: 'QALoop', command: '$QA-LOOP', mode: 'QALOOP', task: prompt, required_skills: route?.requiredSkills || [], context7_required: false, original_stop_gate: 'qa-gate.json', clarification_gate: true });
+  if (schema.slots.length === 0) {
+    await writeJsonAtomic(path.join(dir, 'answers.json'), schema.inferred_answers || {});
+    const result = await sealContract(dir, { id, prompt, mode: 'qaloop' });
+    if (!result.ok) {
+      console.error('Inferred QA-LOOP answers failed validation.');
+      console.error(JSON.stringify(result.validation, null, 2));
+      process.exitCode = 2;
+      return;
+    }
+    const artifactResult = await writeQaLoopArtifacts(dir, { id, prompt, mode: 'qaloop' }, result.contract);
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.prepare.auto_sealed', slots: 0, hash: result.contract.sealed_hash, checklist_count: artifactResult.checklist_count });
+    await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED', questions_allowed: false, implementation_allowed: true, clarification_required: false, clarification_passed: true, ambiguity_gate_required: true, ambiguity_gate_passed: true, stop_gate: 'qa-gate.json', qa_loop_artifacts_ready: true, qa_report_file: artifactResult.report_file, qa_checklist_count: artifactResult.checklist_count, reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
+    console.log(`QA-LOOP mission created: ${id}`);
+    console.log('QA-LOOP contract auto-sealed from prompt, TriWiki/current-code defaults, and conservative safety policy.');
+    console.log(`Checklist: ${artifactResult.checklist_count} cases`);
+    console.log(`Report: ${path.relative(root, path.join(dir, artifactResult.report_file))}`);
+    console.log(`Run: sks qa-loop run ${id} --max-cycles ${schema.inferred_answers?.MAX_QA_CYCLES || 1}`);
+    return;
+  }
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.prepare.questions_created', slots: schema.slots.length });
   await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_AWAITING_ANSWERS', questions_allowed: true, implementation_allowed: false, clarification_required: true, ambiguity_gate_required: true, stop_gate: 'clarification-gate', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
   console.log(`QA-LOOP mission created: ${id}`);
-  console.log('QA-LOOP is locked until all required answers are supplied.');
-  console.log(`Questions: ${path.relative(root, path.join(dir, 'questions.md'))}`);
+  console.log('QA-LOOP could not auto-seal because required safe defaults were unavailable.');
   console.log(`Answer schema: ${path.relative(root, path.join(dir, 'required-answers.schema.json'))}`);
-  console.log('\nRequired questions:');
-  console.log(formatQuestionsForCli(schema));
+  console.log('Inspect the schema and provide answers with: sks qa-loop answer <mission-id> answers.json');
 }
 
 async function qaLoopAnswer(args) {

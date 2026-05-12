@@ -52,7 +52,7 @@ import {
 } from '../core/image-ux-review.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, COMMAND_CATALOG, DESIGN_SYSTEM_SSOT, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, GETDESIGN_REFERENCE, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stackCurrentDocsPolicy, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, COMMAND_CATALOG, DESIGN_SYSTEM_SSOT, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, GETDESIGN_REFERENCE, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_SKILLS, ROUTES, USAGE_TOPICS, context7ConfigToml, hasContext7ConfigText, hasFromChatImgSignal, looksLikeAnswerOnlyRequest, noUnrequestedFallbackCodePolicyText, reflectionRequiredForRoute, reasoningInstruction, routePrompt, routeReasoning, routeRequiresSubagents, speedLanePolicyText, stackCurrentDocsPolicy, stripVisibleDecisionAnswerBlocks, triwikiContextTracking } from '../core/routes.mjs';
 import { PIPELINE_PLAN_ARTIFACT, buildPipelinePlan, context7Evidence, evaluateStop, projectGateStatus, recordContext7Evidence, recordSubagentEvidence, validatePipelinePlan, writePipelinePlan } from '../core/pipeline.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, initTeamLive, parseTeamSpecText, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamWatch } from '../core/team-live.mjs';
@@ -348,7 +348,7 @@ async function updateCheck(args = []) {
   if (result.update_available) console.log('Run:     npm i -g sneakoscope');
 }
 
-const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: questions -> $Answer, tiny Direct Fix edits -> $DFix, presentation/PDF artifacts -> $PPT, image-generation UI/UX reviews -> $Image-UX-Review/$UX-Review, Computer Use UI/browser speed work -> $Computer-Use, code -> $Team. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
+const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: direct answers -> $Answer, tiny Direct Fix edits -> $DFix, presentation/PDF artifacts -> $PPT, image-generation UI/UX reviews -> $Image-UX-Review/$UX-Review, Computer Use UI/browser speed work -> $Computer-Use, code -> $Team. Execution routes infer their contract from prompt, TriWiki/current-code defaults, and conservative policy instead of surfacing prequestion sheets. Use $From-Chat-IMG only for chat screenshot plus original attachments. Use $MAD-SKS only as an explicit scoped DB authorization modifier that can be combined with another $ route. No route may invent unrequested fallback implementation code.';
 
 function commands(args = []) {
   if (flag(args, '--json')) return console.log(JSON.stringify({ aliases: ['sks', 'sneakoscope'], dollar_commands: DOLLAR_COMMANDS, app_skill_aliases: DOLLAR_COMMAND_ALIASES, commands: COMMAND_CATALOG }, null, 2));
@@ -1450,9 +1450,9 @@ function usage(args = []) {
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew after Y/n approval for missing installs or Homebrew-managed upgrades. If PATH resolves an npm-managed tmux, SKS prompts for npm i -g tmux@latest instead. Unknown non-Homebrew tmux paths are reported as conflicts.'],
     tmux: ['tmux', '', '  sks', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'Running bare `sks` opens or reuses the default tmux Codex CLI session in fast-high mode: --model gpt-5.5 -c model_reasoning_effort="high". SKS always forces gpt-5.5; SKS_CODEX_MODEL and SKS_CODEX_FAST_HIGH=0 cannot downgrade or remove that model pin. Use SKS_CODEX_REASONING only for reasoning effort. Before launch, SKS checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. Use `sks tmux open` when you need explicit session/workspace flags, and `sks help` for CLI help.'],
     openclaw: ['OpenClaw', '', '  sks openclaw install', '  sks openclaw path', '  sks openclaw print SKILL.md', '', 'Installs an OpenClaw skill package under ~/.openclaw/skills/sneakoscope-codex so OpenClaw agents can attach skills: [sneakoscope-codex] with the shell tool and call local SKS commands from a project root.'],
-    team: ['Team', '', '  sks team "task" executor:5 reviewer:6 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team runs questions -> contract -> scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
+    team: ['Team', '', '  sks team "task" executor:5 reviewer:6 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team auto-seals a route contract, opens scout-first tmux lanes when available, then runs scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
-    ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT asks delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, render QA, fact-ledger validation, and bounded review-loop validation. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and installed skills/MCPs outside the $PPT allowlist are ignored. Design uses getdesign-reference plus the built-in PPT design pipeline; imagegen/gpt-image-2 and Context7 are conditional only when the sealed PPT contract needs raster assets, slide visual critique, or current external docs. Missing required $imagegen/gpt-image-2 output blocks instead of being simulated.'],
+    ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT infers delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, render QA, fact-ledger validation, and bounded review-loop validation. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and installed skills/MCPs outside the $PPT allowlist are ignored. Design uses getdesign-reference plus the built-in PPT design pipeline; Codex App $imagegen/gpt-image-2 and Context7 are conditional only when the sealed PPT contract needs raster assets, slide visual critique, or current external docs. Missing required $imagegen/gpt-image-2 output blocks instead of being simulated.'],
     'image-ux-review': ['Image UX Review', '', '  $Image-UX-Review localhost 화면을 이미지 생성 리뷰 루프로 검수해줘', '  $UX-Review 이 스크린샷을 gpt-image-2 콜아웃 리뷰로 분석하고 고쳐줘', '  sks image-ux-review status latest --json', '', '$Image-UX-Review captures or receives source UI screenshots, runs Codex App $imagegen/gpt-image-2 to create generated annotated review images with numbered callouts, then extracts those generated images into image-ux-issue-ledger.json. Text-only screenshot critique cannot pass image-ux-review-gate.json; missing generated review images remain an explicit blocker.'],
     goal: ['Goal', '', '  sks goal create "task"', '  sks goal status latest', '  sks goal pause latest', '  sks goal resume latest', '  sks goal clear latest'],
     'codex-app': ['Codex App', '', '  sks bootstrap', '  sks codex-app check', '  sks codex-app remote-control --status', '  sks dollar-commands', '  cat .codex/SNEAKOSCOPE.md'],
@@ -1982,11 +1982,10 @@ async function selftest() {
   };
   for (let i = 0; i < 5; i++) {
     const stop = await evaluateStop(tmp, clarificationState, { last_assistant_message: 'continuing implementation without visible questions' });
-    if (stop?.decision !== 'block' || !String(stop.reason || '').includes('waiting for mandatory ambiguity-removal answers')) throw new Error('selftest failed: clarification gate did not hard-pause without visible questions');
+    if (stop?.gate === 'clarification' || /ambiguity|clarification|question/i.test(String(stop?.reason || ''))) throw new Error('selftest failed: stale clarification gate still hard-paused without visible questions');
   }
-  if (await exists(path.join(clarificationMission.dir, 'hard-blocker.json'))) throw new Error('selftest failed: clarification gate used compliance hard-blocker instead of waiting for answers');
   const visibleQuestionStop = await evaluateStop(tmp, clarificationState, { last_assistant_message: 'Required questions still pending:\n1. GOAL_PRECISE: What should be changed?\n\nReply by slot id; I will seal the contract with sks pipeline answer latest --stdin.' });
-  if (visibleQuestionStop?.continue !== true) throw new Error('selftest failed: visible clarification question block did not allow the question-only turn to stop');
+  if (visibleQuestionStop?.gate === 'clarification' || /ambiguity|clarification/i.test(String(visibleQuestionStop?.reason || ''))) throw new Error('selftest failed: visible stale clarification wording still blocked stop');
   await setCurrent(tmp, loopState);
   const dfixPromptHook = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'user-prompt-submit'], {
     cwd: tmp,
@@ -2405,7 +2404,7 @@ async function selftest() {
     if (!(await exists(path.join(tmp, '.agents', 'skills', supportSkill, 'SKILL.md')))) throw new Error(`selftest failed: ${supportSkill} skill not installed`);
   }
   const imagegenSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'imagegen', 'SKILL.md'));
-  if (!imagegenSkillText.includes(CODEX_APP_IMAGE_GENERATION_DOC_URL) || !imagegenSkillText.includes('$imagegen') || !imagegenSkillText.includes('gpt-image-2') || !imagegenSkillText.includes('OPENAI_API_KEY') || !imagegenSkillText.includes(CODEX_IMAGEGEN_REQUIRED_POLICY)) throw new Error('selftest failed: imagegen skill missing official Codex App image generation priority');
+  if (!imagegenSkillText.includes(CODEX_APP_IMAGE_GENERATION_DOC_URL) || !imagegenSkillText.includes('$imagegen') || !imagegenSkillText.includes('gpt-image-2') || !imagegenSkillText.includes('Direct API fallback does not satisfy SKS route evidence') || !imagegenSkillText.includes(CODEX_IMAGEGEN_REQUIRED_POLICY)) throw new Error('selftest failed: imagegen skill missing official Codex App image generation priority');
   const imageUxReviewSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'image-ux-review', 'SKILL.md'));
   if (!imageUxReviewSkillText.includes('gpt-image-2') || !imageUxReviewSkillText.includes('$imagegen') || !imageUxReviewSkillText.includes('generated annotated review image') || !imageUxReviewSkillText.includes('Text-only screenshot critique cannot satisfy this route') || !imageUxReviewSkillText.includes(IMAGE_UX_REVIEW_GATE_ARTIFACT) || !imageUxReviewSkillText.includes(IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT) || !imageUxReviewSkillText.includes(CODEX_IMAGEGEN_REQUIRED_POLICY)) throw new Error('selftest failed: image-ux-review skill missing gpt-image-2 generated-image review gate guidance');
   const getdesignSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'getdesign-reference', 'SKILL.md')); if (!getdesignSkillText.includes(AWESOME_DESIGN_MD_REFERENCE.url) || !getdesignSkillText.includes('only design decision SSOT') || !getdesignSkillText.includes('source inputs')) throw new Error('selftest failed: getdesign-reference skill missing design SSOT source-input guidance');
@@ -2430,6 +2429,7 @@ async function selftest() {
   if (routePrompt('$agent-team run specialists')) throw new Error('selftest failed: deprecated $agent-team route still resolved');
   if (routePrompt('$QA-LOOP run UI E2E')?.id !== 'QALoop' || routePrompt('$QALoop deployed smoke')) throw new Error('selftest failed: QA-LOOP route is not standardized to $QA-LOOP');
   if (routePrompt('[$qa-loop](/tmp/qa-loop/SKILL.md) localhost UI 검증, Codex Computer Use만 사용')?.id !== 'QALoop') throw new Error('selftest failed: markdown-linked $QA-LOOP was hijacked by heuristic routing');
+  if (stripVisibleDecisionAnswerBlocks('qa-loop [GOAL_PRECISE: local QA QA_SCOPE: ui_e2e_only TARGET_BASE_URL: http://localhost:3000] 다시 실행').includes('GOAL_PRECISE')) throw new Error('selftest failed: visible decision answer block sanitizer did not remove slot payload');
   if (routePrompt('[$research](/tmp/research/SKILL.md) Codex Computer Use 도구 노출 문제를 QA루프 관점에서 연구')?.id !== 'Research') throw new Error('selftest failed: markdown-linked $Research was not treated as explicit route');
   if (routePrompt('$WikiRefresh 갱신')) throw new Error('selftest failed: deprecated $WikiRefresh route still resolved');
   if (routePrompt('$MAD-SKS Supabase MCP main 작업')?.id !== 'MadSKS') throw new Error('selftest failed: $MAD-SKS route did not resolve');
@@ -2700,31 +2700,20 @@ async function selftest() {
   const hookTeamPendingContext = hookTeamPendingJson.hookSpecificOutput?.additionalContext || '';
   if (hookTeamPendingState.mission_id === hookTeamState.mission_id || hookTeamPendingContext.includes('Required questions still pending') || hookTeamPendingContext.includes('MANDATORY ambiguity-removal gate activated')) throw new Error('selftest failed: direct Team follow-up was blocked by stale clarification behavior');
   if (hookTeamPendingState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || !hookTeamPendingState.team_plan_ready) throw new Error('selftest failed: direct Team follow-up did not prepare a fresh Team mission');
-  const qaClarificationTmp = tmpdir();
-  await initProject(qaClarificationTmp, {});
-  const hookQaClarificationResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: qaClarificationTmp, input: JSON.stringify({ cwd: qaClarificationTmp, prompt: '$QA-LOOP 로그인 QA 해줘' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
-  if (hookQaClarificationResult.code !== 0) throw new Error(`selftest failed: QA clarification hook exited ${hookQaClarificationResult.code}: ${hookQaClarificationResult.stderr}`);
-  const hookQaClarificationState = await readJson(stateFile(qaClarificationTmp), {});
-  const hookQaClarificationSchema = await readJson(path.join(missionDir(qaClarificationTmp, hookQaClarificationState.mission_id), 'required-answers.schema.json'));
-  const hookTeamSchema = hookQaClarificationSchema;
-  const visibleQuestionsBlock = [
-    'Required questions',
-    ...hookTeamSchema.slots.map((slot, idx) => `${idx + 1}. ${slot.id}: ${slot.question}`),
-    'Reply by slot id, then I will seal the contract with sks pipeline answer latest --stdin.'
-  ].join('\n');
-  const visibleQuestionDecision = await evaluateStop(qaClarificationTmp, hookQaClarificationState, { last_assistant_message: visibleQuestionsBlock }, { noQuestion: false });
-  if (!visibleQuestionDecision?.continue) throw new Error('selftest failed: visible Required questions block was not accepted by clarification stop gate');
-  const hookTeamPreToolBlocked = await runProcess(process.execPath, [hookBin, 'hook', 'pre-tool'], { cwd: qaClarificationTmp, input: JSON.stringify({ cwd: qaClarificationTmp, command: 'npm run selftest' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  if (hookTeamPreToolBlocked.code !== 0) throw new Error(`selftest failed: pending clarification pre-tool hook exited ${hookTeamPreToolBlocked.code}: ${hookTeamPreToolBlocked.stderr}`);
-  const hookTeamPreToolBlockedJson = JSON.parse(hookTeamPreToolBlocked.stdout);
-  if (hookTeamPreToolBlockedJson.decision !== 'block' || !String(hookTeamPreToolBlockedJson.reason || '').includes('ambiguity gate is paused')) throw new Error('selftest failed: pending clarification allowed implementation tool use before answers');
-  const hookTeamAnswerToolAllowed = await runProcess(process.execPath, [hookBin, 'hook', 'pre-tool'], { cwd: qaClarificationTmp, input: JSON.stringify({ cwd: qaClarificationTmp, command: 'node ./bin/sks.mjs pipeline answer latest --stdin' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  if (hookTeamAnswerToolAllowed.code !== 0) throw new Error(`selftest failed: pipeline-answer pre-tool hook exited ${hookTeamAnswerToolAllowed.code}: ${hookTeamAnswerToolAllowed.stderr}`);
-  const hookTeamAnswerToolAllowedJson = JSON.parse(hookTeamAnswerToolAllowed.stdout);
-  if (hookTeamAnswerToolAllowedJson.decision === 'block') throw new Error('selftest failed: pending clarification blocked the pipeline answer command');
-  const nonGoalsSlot = hookTeamSchema.slots.find((s) => s.id === 'NON_GOALS');
+  const pptClarificationTmp = tmpdir();
+  await initProject(pptClarificationTmp, {});
+  const hookPptClarificationResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: pptClarificationTmp, input: JSON.stringify({ cwd: pptClarificationTmp, prompt: '$PPT 투자 제안서 만들어줘' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
+  if (hookPptClarificationResult.code !== 0) throw new Error(`selftest failed: PPT clarification hook exited ${hookPptClarificationResult.code}: ${hookPptClarificationResult.stderr}`);
+  const hookPptClarificationState = await readJson(stateFile(pptClarificationTmp), {});
+  const hookPptClarificationJson = JSON.parse(hookPptClarificationResult.stdout);
+  const hookPptContext = hookPptClarificationJson.hookSpecificOutput?.additionalContext || '';
+  const hookPptSchema = await readJson(path.join(missionDir(pptClarificationTmp, hookPptClarificationState.mission_id), 'required-answers.schema.json'));
+  if (hookPptClarificationState.phase !== 'PPT_AUDIENCE_STRATEGY_READY' || hookPptClarificationState.implementation_allowed !== true || hookPptSchema.slots.length !== 0) throw new Error('selftest failed: PPT hook did not auto-seal without visible questions');
+  if (hookPptContext.includes('Required questions') || hookPptContext.includes('VISIBLE RESPONSE CONTRACT') || hookPptContext.includes('MANDATORY ambiguity-removal gate')) throw new Error('selftest failed: PPT hook still exposed prequestion wording');
+  if (!(await exists(path.join(missionDir(pptClarificationTmp, hookPptClarificationState.mission_id), 'ppt-audience-strategy.json')))) throw new Error('selftest failed: PPT auto-seal did not materialize audience strategy');
+  const nonGoalsSlot = hookPptSchema.slots.find((s) => s.id === 'NON_GOALS');
   if (nonGoalsSlot && !nonGoalsSlot.allow_empty) throw new Error('selftest failed: NON_GOALS does not allow an empty array answer');
-  if (!nonGoalsSlot && !Array.isArray(hookTeamSchema.inferred_answers?.NON_GOALS)) throw new Error('selftest failed: NON_GOALS was neither asked nor inferred');
+  if (!nonGoalsSlot && !Array.isArray(hookPptSchema.inferred_answers?.NON_GOALS)) throw new Error('selftest failed: NON_GOALS was neither asked nor inferred');
   const textParsedAnswers = parseAnswersText({ slots: [{ id: 'INTENT_TARGET', type: 'string', required: true }] }, 'INTENT_TARGET: compact contract sealing');
   if (textParsedAnswers.INTENT_TARGET !== 'compact contract sealing') throw new Error('selftest failed: text answer parser did not parse slot-id answers');
   const textParsedImplicitAnswer = parseAnswersText({ slots: [{ id: 'INTENT_TARGET', type: 'string', required: true }] }, 'compact contract sealing');
@@ -2773,26 +2762,18 @@ async function selftest() {
   if (honestSummaryCaseJson.decision === 'block') throw new Error('selftest failed: summary block/pass wording was treated as unresolved gap');
   const hookQaTmp = tmpdir();
   await initProject(hookQaTmp, {});
-  const hookQaPayload = JSON.stringify({ cwd: hookQaTmp, prompt: '$QA-LOOP run UI and API E2E against local dev' });
+  const hookQaPayload = JSON.stringify({ cwd: hookQaTmp, prompt: '$QA-LOOP run API E2E against local dev' });
   const hookQaResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookQaTmp, input: hookQaPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookQaResult.code !== 0) throw new Error(`selftest failed: $QA-LOOP hook exited ${hookQaResult.code}: ${hookQaResult.stderr}`);
   const hookQaJson = JSON.parse(hookQaResult.stdout);
   const hookQaContext = hookQaJson.hookSpecificOutput?.additionalContext || '';
-  if (!hookQaContext.includes('MANDATORY ambiguity-removal gate activated') || !hookQaContext.includes('QA_SCOPE') || !hookQaContext.includes('UI_COMPUTER_USE_ACK')) throw new Error('selftest failed: $QA-LOOP hook did not provide QA-specific questions');
+  if (!hookQaContext.includes('Route contract auto-sealed') || hookQaContext.includes('MANDATORY ambiguity-removal gate activated') || hookQaContext.includes('Required questions:') || hookQaContext.includes('QA_SCOPE:') || hookQaContext.includes('UI_COMPUTER_USE_ACK:')) throw new Error('selftest failed: $QA-LOOP hook did not auto-seal without visible answer slots');
   if (!hookQaContext.includes('Codex Computer Use') || !hookQaContext.includes('Playwright') || !hookQaContext.includes('Chrome MCP')) throw new Error('selftest failed: $QA-LOOP hook did not state Computer Use-only UI policy');
   if (hookQaContext.includes('Browser Use 또는 Computer Use') || hookQaContext.includes('Browser/Computer Use evidence')) throw new Error('selftest failed: $QA-LOOP hook still allows Browser Use as UI evidence');
   const hookQaState = await readJson(stateFile(hookQaTmp), {});
-  if (hookQaState.phase !== 'QALOOP_CLARIFICATION_AWAITING_ANSWERS' || hookQaState.implementation_allowed !== false) throw new Error('selftest failed: $QA-LOOP hook did not lock execution behind ambiguity gate');
+  if (hookQaState.phase !== 'QALOOP_CLARIFICATION_CONTRACT_SEALED' || hookQaState.implementation_allowed !== true || hookQaState.clarification_required !== false || !hookQaState.ambiguity_gate_passed) throw new Error('selftest failed: $QA-LOOP hook did not auto-seal the ambiguity gate');
   const hookQaSchema = await readJson(path.join(missionDir(hookQaTmp, hookQaState.mission_id), 'required-answers.schema.json'));
-  const hookQaAnswers = {};
-  for (const s of hookQaSchema.slots) hookQaAnswers[s.id] = s.options ? (s.type === 'array' ? [s.options[0]] : s.options[0]) : (s.type.includes('array') ? ['selftest'] : 'selftest');
-  hookQaAnswers.QA_SCOPE = 'all_available';
-  hookQaAnswers.TARGET_BASE_URL = 'none';
-  hookQaAnswers.API_BASE_URL = 'same_as_target';
-  const hookQaAnswersPath = path.join(hookQaTmp, 'qa-answers.json');
-  await writeJsonAtomic(hookQaAnswersPath, hookQaAnswers);
-  const qaAnswerResult = await runProcess(process.execPath, [hookBin, 'pipeline', 'answer', 'latest', hookQaAnswersPath], { cwd: hookQaTmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  if (qaAnswerResult.code !== 0) throw new Error(`selftest failed: QA pipeline answer exited ${qaAnswerResult.code}: ${qaAnswerResult.stderr}`);
+  if (hookQaSchema.slots.length !== 0 || hookQaSchema.inferred_answers?.QA_SCOPE !== 'api_e2e_only') throw new Error('selftest failed: $QA-LOOP schema did not infer QA answers without visible slots');
   const qaMissionDir = missionDir(hookQaTmp, hookQaState.mission_id);
   const initialQaGate = await readJson(path.join(qaMissionDir, 'qa-gate.json'));
   const qaReportFile = initialQaGate.qa_report_file;
@@ -3304,8 +3285,8 @@ async function selftest() {
   if (!predictableAuthCliSchema.inferred_answers.RISK_BOUNDARY?.includes('no destructive commands or live data writes')) throw new Error('selftest failed: predictable auth-worded CLI work did not infer conservative risk boundary');
   const vagueSchema = buildQuestionSchema('뭔가 개선해줘');
   const vagueSlotIds = vagueSchema.slots.map((s) => s.id);
-  if (!vagueSlotIds.includes('INTENT_TARGET') || vagueSlotIds.includes('GOAL_PRECISE') || vagueSlotIds.includes('ACCEPTANCE_CRITERIA')) throw new Error(`selftest failed: vague work should ask dynamic intent questions only, got ${vagueSlotIds.join(',')}`);
-  if (vagueSlotIds.length !== 1) throw new Error(`selftest failed: vague work should ask only the execution-changing intent question, got ${vagueSlotIds.join(',')}`);
+  if (vagueSlotIds.length !== 0) throw new Error(`selftest failed: vague work should auto-seal inferred defaults without visible questions, got ${vagueSlotIds.join(',')}`);
+  if (!vagueSchema.inferred_answers?.GOAL_PRECISE || !vagueSchema.inferred_answers?.ACCEPTANCE_CRITERIA) throw new Error('selftest failed: vague work did not infer core contract defaults');
   if (vagueSchema.ambiguity_assessment?.method !== 'weighted_clarity_interview' || !vagueSchema.ambiguity_assessment?.adversarial_lenses?.includes('challenge_framing')) throw new Error('selftest failed: ambiguity schema missing weighted clarity / planning lenses');
   const pptRoute = routePrompt('$PPT 투자자용 피치덱 만들어줘');
   if (pptRoute?.id !== 'PPT') throw new Error('selftest failed: $PPT did not route to presentation pipeline');
@@ -3314,14 +3295,14 @@ async function selftest() {
   const pptSchema = buildQuestionSchema('$PPT 투자자용 피치덱 만들어줘');
   const pptSlotIds = pptSchema.slots.map((s) => s.id);
   for (const id of ['PRESENTATION_DELIVERY_CONTEXT', 'PRESENTATION_AUDIENCE_PROFILE', 'PRESENTATION_STP_STRATEGY', 'PRESENTATION_PAINPOINT_SOLUTION_MAP', 'PRESENTATION_DECISION_CONTEXT']) {
-    if (!pptSlotIds.includes(id)) throw new Error(`selftest failed: PPT schema missing ${id}`);
+    if (pptSlotIds.includes(id) || pptSchema.inferred_answers?.[id] === undefined) throw new Error(`selftest failed: PPT schema did not infer ${id}`);
   }
   const pptSkillText = await safeReadText(path.join(tmp, '.agents', 'skills', 'ppt', 'SKILL.md'));
-  if (!pptSkillText.includes('STP') || !pptSkillText.includes('target audience profile') || !pptSkillText.includes('decision context') || !pptSkillText.includes('3+ pain-point to solution mappings')) throw new Error('selftest failed: generated PPT skill missing STP/audience/pain-point guidance');
+  if (!pptSkillText.includes('STP') || !pptSkillText.includes('target audience profile') || !pptSkillText.includes('decision context') || !pptSkillText.includes('3+ pain-point to solution mappings') || !pptSkillText.includes('Do not surface a prequestion sheet')) throw new Error('selftest failed: generated PPT skill missing inferred STP/audience/pain-point guidance');
   if (!pptSkillText.includes('simple, restrained, and information-first') || !pptSkillText.includes('over-designed decoration') || !pptSkillText.includes(CODEX_APP_IMAGE_GENERATION_DOC_URL) || !pptSkillText.includes(CODEX_IMAGEGEN_REQUIRED_POLICY) || !pptSkillText.includes(AWESOME_DESIGN_MD_REFERENCE.url) || !pptSkillText.includes('only design decision SSOT') || !pptSkillText.includes('instead of treating references as parallel authorities')) throw new Error('selftest failed: generated PPT skill missing restrained design/imagegen/fused-SSOT guidance');
   if (!pptSkillText.includes('PPT pipeline allowlist') || !pptSkillText.includes('ignore installed skills and MCPs') || !pptSkillText.includes('prevent AI-like generic presentation design') || !pptSkillText.includes('Do not use generic design skills such as design-artifact-expert')) throw new Error('selftest failed: generated PPT skill missing pipeline allowlist enforcement');
   if (!pptSkillText.includes('source-html/') || !pptSkillText.includes('temporary build files') || !pptSkillText.includes('ppt-parallel-report.json')) throw new Error('selftest failed: generated PPT skill missing source preservation/temp cleanup/parallel guidance');
-  if (!pptSkillText.includes('ppt-fact-ledger.json') || !pptSkillText.includes('ppt-image-asset-ledger.json') || !pptSkillText.includes('OpenAI Image API') || !pptSkillText.includes('ppt-review-ledger.json') || !pptSkillText.includes('ppt-iteration-report.json') || !pptSkillText.includes('never simulate missing gpt-image-2 output')) throw new Error('selftest failed: generated PPT skill missing fact/image/review loop anti-fake guidance');
+  if (!pptSkillText.includes('ppt-fact-ledger.json') || !pptSkillText.includes('ppt-image-asset-ledger.json') || !pptSkillText.includes('direct API fallback') || !pptSkillText.includes('ppt-review-ledger.json') || !pptSkillText.includes('ppt-iteration-report.json') || !pptSkillText.includes('never simulate missing gpt-image-2 output')) throw new Error('selftest failed: generated PPT skill missing fact/image/review loop anti-fake guidance');
   if (routeRequiresSubagents(pptRoute, '$PPT 투자자용 피치덱 만들어줘')) throw new Error('selftest failed: PPT route should not require subagents by default');
   if (!reflectionRequiredForRoute(pptRoute)) throw new Error('selftest failed: PPT route should require reflection');
   const pptMission = await createMission(tmp, { mode: 'ppt', prompt: '$PPT 투자자용 피치덱 만들어줘' });
@@ -3408,11 +3389,11 @@ async function selftest() {
     unsupported_critical_claims_count: 0,
     passed: true
   });
-  const requiredImageBuildResult = await runProcess(process.execPath, [hookBin, 'ppt', 'build', requiredImagePptMission.id, '--json'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1', OPENAI_API_KEY: '' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  const requiredImageBuildResult = await runProcess(process.execPath, [hookBin, 'ppt', 'build', requiredImagePptMission.id, '--json'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1', SKS_FAKE_IMAGE_GATE_TOKEN: 'ignored-by-sks-route-gate' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (requiredImageBuildResult.code !== 0) throw new Error(`selftest failed: required-image PPT build command failed: ${requiredImageBuildResult.stderr || requiredImageBuildResult.stdout}`);
   const requiredImageBuild = JSON.parse(requiredImageBuildResult.stdout);
   const requiredImageLedger = await readJson(path.join(requiredImagePptMission.dir, PPT_IMAGE_ASSET_LEDGER_ARTIFACT));
-  if (requiredImageBuild.ok || requiredImageBuild.gate?.passed || !requiredImageBuild.gate?.image_asset_ledger_created || requiredImageBuild.gate?.image_asset_policy_satisfied !== false || !requiredImageLedger.required || requiredImageLedger.passed || !requiredImageLedger.blockers?.includes('missing_OPENAI_API_KEY_for_required_gpt_image_2_assets') || requiredImageLedger.generated_count !== 0) throw new Error('selftest failed: required PPT image assets were not blocked without real gpt-image-2 credentials');
+  if (requiredImageBuild.ok || requiredImageBuild.gate?.passed || !requiredImageBuild.gate?.image_asset_ledger_created || requiredImageBuild.gate?.image_asset_policy_satisfied !== false || !requiredImageLedger.required || requiredImageLedger.passed || !requiredImageLedger.blockers?.includes('missing_codex_app_imagegen_gpt_image_2_asset_evidence') || requiredImageLedger.generated_count !== 0) throw new Error('selftest failed: required PPT image assets were not blocked without Codex App imagegen evidence');
   const installUxSchema = buildQuestionSchema('SKS first install/bootstrap UX and Context7 MCP setup improvement');
   const installUxSlotIds = installUxSchema.slots.map((s) => s.id);
   if (installUxSchema.domain_hints.includes('uiux') || installUxSlotIds.includes('VISUAL_REGRESSION_REQUIRED')) throw new Error('selftest failed: CLI UX install prompt should not ask visual UI questions');
@@ -3424,9 +3405,8 @@ async function selftest() {
   const { id, dir, mission } = await createMission(tmp, { mode: 'goal', prompt: '발표자료 만들어줘' });
   const schema = buildQuestionSchema(mission.prompt);
   await writeQuestions(dir, schema);
-  if (validateAnswers(schema, {}).ok) throw new Error('selftest failed: empty answers valid');
-  const answers = {};
-  for (const s of schema.slots) answers[s.id] = s.options ? (s.type === 'array' ? [s.options[0]] : s.options[0]) : (s.type.includes('array') ? ['selftest'] : (s.id === 'DB_MAX_BLAST_RADIUS' ? 'no_live_dml' : 'selftest'));
+  if (!validateAnswers(schema, {}).ok || schema.slots.length !== 0) throw new Error('selftest failed: inferred empty answer set should be valid after prequestion removal');
+  const answers = { ...(schema.inferred_answers || {}) };
   await writeJsonAtomic(path.join(dir, 'answers.json'), answers);
   const sealed = await sealContract(dir, mission);
   if (!sealed.ok) throw new Error('selftest failed: answers rejected');

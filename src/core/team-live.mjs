@@ -231,11 +231,20 @@ ${spec.roster.validation_team.map(formatRosterLine).join('\n')}
 
 export async function initTeamLive(id, dir, prompt, opts = {}) {
   const files = teamLogPaths(dir);
+  const spec = normalizeTeamSpec({ ...opts, prompt });
   await writeJsonAtomic(files.dashboard, defaultTeamDashboard(id, prompt, opts));
   await writeJsonAtomic(files.control, defaultTeamControl(id));
   await writeTextAtomic(files.live, teamLiveMarkdown(id, prompt, opts));
   await writeTextAtomic(files.transcript, '');
   await appendTeamEvent(dir, { agent: 'parent_orchestrator', phase: 'mission_created', type: 'status', message: 'Team mission created and live transcript initialized.' });
+  for (const scout of spec.roster.analysis_team || []) {
+    await appendTeamEvent(dir, {
+      agent: scout.id,
+      phase: 'parallel_analysis_scouting',
+      type: 'assigned',
+      message: `${scout.id} scout lane assigned; waiting for read-only repository/docs/tests/API/risk slice activity.`
+    });
+  }
   return files;
 }
 

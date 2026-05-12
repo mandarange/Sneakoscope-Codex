@@ -6,6 +6,7 @@ import { getCodexInfo } from './codex-adapter.mjs';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.mjs';
 import { REQUIRED_CODEX_MODEL, forceGpt55CodexArgs } from './codex-model-guard.mjs';
 import { MIN_TEAM_REVIEWER_LANES } from './team-review-policy.mjs';
+import { appendTeamEvent } from './team-live.mjs';
 
 export const SKS_TMUX_LOGO = [
   '        _______     __  __     _______',
@@ -656,6 +657,20 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
       title: entry.title || teamLaneTitle(entry.agent)
     }))
   }).catch(() => null);
+  if (created.ok) {
+    const dir = path.join(launch.root, '.sneakoscope', 'missions', missionId);
+    if (await exists(dir)) {
+      for (const lane of lanes) {
+        if (!lane.agent || lane.agent === 'mission_overview') continue;
+        await appendTeamEvent(dir, {
+          agent: lane.agent,
+          phase: teamLanePhase(lane.agent),
+          type: 'tmux_lane_opened',
+          message: `tmux pane opened for ${lane.agent}; following live lane activity in split Team view.`
+        }).catch(() => null);
+      }
+    }
+  }
   if (created.ok && attach && shouldAutoAttachTmux(args)) {
     result.attached = attachTmuxSession({ ...launch, session: result.session }, args);
     if (!result.attached.ok) {

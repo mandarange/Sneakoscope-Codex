@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 
+## [0.7.58] - 2026-05-12
+
+### Fixed
+
+- Remove visible prequestion sheets from SKS execution routes by auto-sealing contracts from prompt, TriWiki/current-code defaults, and conservative policy.
+- Keep QA-LOOP UI verification restricted to official Codex Computer Use evidence and block browser automation substitutes.
+- Require Codex App `$imagegen`/`gpt-image-2` evidence for required PPT and UI/UX generated-image gates instead of direct API fallback or fabricated assets.
+- Show Team scout activity in tmux split panes by seeding scout assignment events and pane-open lane events for each visible agent.
+
 ## [0.7.57] - 2026-05-12
 
 ### Fixed
