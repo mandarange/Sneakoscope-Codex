@@ -7,6 +7,7 @@ import { getCodexInfo } from './codex-adapter.mjs';
 export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/features';
 export const CODEX_CHANGELOG_URL = 'https://developers.openai.com/codex/changelog';
 export const CODEX_REMOTE_CONTROL_MIN_VERSION = '0.130.0';
+const REQUIRED_CODEX_APP_FEATURE_FLAGS = ['codex_git_commit', 'hooks', 'fast_mode', 'computer_use', 'apps', 'plugins'];
 
 export function codexAppCandidatePaths(home = os.homedir(), env = process.env) {
   const candidates = [];
@@ -106,10 +107,12 @@ export async function codexAppIntegrationStatus(opts = {}) {
   const computerUseMcpListed = /computer[-_ ]?use/i.test(mcpText);
   const browserUseMcpListed = /browser[-_ ]?use/i.test(mcpText);
   const imageGenerationReady = codexFeatureEnabled(featureText, 'image_generation');
+  const requiredFeatureFlags = Object.fromEntries(REQUIRED_CODEX_APP_FEATURE_FLAGS.map((name) => [name, codexFeatureEnabled(featureText, name)]));
+  const requiredFeatureFlagsOk = Object.values(requiredFeatureFlags).every(Boolean);
   const computerUseReady = computerUseMcpListed || Boolean(computerUsePath);
   const browserUseReady = browserUseMcpListed || Boolean(browserUsePath);
   const appInstalled = Boolean(appPath);
-  const ready = appInstalled && Boolean(codex.bin) && mcpList.ok && featureList.ok && imageGenerationReady && computerUseReady && browserUseReady;
+  const ready = appInstalled && Boolean(codex.bin) && mcpList.ok && featureList.ok && requiredFeatureFlagsOk && imageGenerationReady && computerUseReady && browserUseReady;
   return {
     ok: ready,
     app: {
@@ -136,6 +139,9 @@ export async function codexAppIntegrationStatus(opts = {}) {
     features: {
       checked: featureList.checked,
       ok: featureList.ok,
+      ...requiredFeatureFlags,
+      required_flags: requiredFeatureFlags,
+      required_flags_ok: requiredFeatureFlagsOk,
       image_generation: imageGenerationReady,
       image_generation_source: imageGenerationReady ? 'codex_features_list' : 'missing',
       stdout: featureList.stdout,
@@ -145,7 +151,7 @@ export async function codexAppIntegrationStatus(opts = {}) {
       computer_use_cache: computerUsePath,
       browser_use_cache: browserUsePath
     },
-    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, imageGenerationReady, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl })
+    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags, requiredFeatureFlagsOk, imageGenerationReady, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl })
   };
 }
 
@@ -200,7 +206,7 @@ export function formatCodexRemoteControlStatus(status) {
   return lines.filter(Boolean).join('\n');
 }
 
-export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, imageGenerationReady, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl }) {
+export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, imageGenerationReady, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl }) {
   const lines = [];
   if (!appInstalled) {
     lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS tmux launch can still run with Codex CLI alone, but Codex Computer Use and imagegen/gpt-image-2 evidence will be unavailable until Codex App is ready.');
@@ -221,6 +227,11 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, im
     lines.push(`Codex feature check failed: ${summarizeCodexMcpError(featureList.stderr || featureList.stdout)}`);
     lines.push('Verify with: codex features list');
   }
+  if (featureList?.checked && featureList.ok && !requiredFeatureFlagsOk) {
+    const missing = missingRequiredFeatureFlags(requiredFeatureFlags);
+    lines.push(`Codex App feature flag(s) disabled or missing: ${missing.join(', ')}. Commit message generation and app-only tool paths can fail even when CLI chat works.`);
+    lines.push('Verify with: codex features list | rg "codex_git_commit|hooks|fast_mode|computer_use|apps|plugins"');
+  }
   if (appInstalled && (!computerUseReady || !browserUseReady)) {
     lines.push('Open Codex App settings and enable recommended MCP/plugin tools. Codex CLI 0.130.0+ remote-control/app-server sessions can pick up config changes live; restart older CLI/TUI sessions.');
     lines.push('Required for SKS QA-LOOP UI/browser evidence: Codex Computer Use only. Browser Use can support non-UI browser context, but it does not satisfy UI-level E2E verification.');
@@ -232,7 +243,7 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, im
     lines.push('Codex image_generation was not visible from `codex features list`. Required imagegen/gpt-image-2 evidence must stay blocked or unverified until $imagegen is available in Codex App.');
   }
   if (computerUseReady && !computerUseMcpListed) {
-    lines.push('Computer Use plugin files are installed, but this check cannot prove the current thread exposes the live Computer Use tools. Start a new Codex App thread and invoke @Computer or @AppName; if the tool is still absent from the model tool list, mark UI/browser evidence unverified.');
+    lines.push('Computer Use plugin files are installed, but this check cannot prove the current thread exposes the live Computer Use tools. Start a new Codex App thread and invoke @Computer or @AppName for the actual target app or screen; Codex App readiness itself should stay on `codex features list`, `codex mcp list`, and `sks codex-app check`.');
   }
   if (browserUseReady && !browserUseMcpListed) {
     lines.push('Browser Use plugin files are installed, but `codex mcp list` does not list a browser-use MCP server. Treat Browser Use as plugin-scoped, not as SKS UI verification evidence.');
@@ -248,6 +259,7 @@ export function formatCodexAppStatus(status, { includeRaw = false } = {}) {
     `Codex App:   ${status.app.installed ? 'ok' : 'missing'}${status.app.path ? ` ${status.app.path}` : ''}`,
     `Codex CLI:   ${status.codex_cli.ok ? 'ok' : 'missing'}${status.codex_cli.version ? ` ${status.codex_cli.version}` : ''}`,
     `Remote Ctrl: ${status.remote_control?.ok ? 'ok' : 'missing'}${status.remote_control?.codex_cli?.version_number ? ` min ${status.remote_control.min_version}` : ''}`,
+    `App Flags:  ${status.features?.required_flags_ok ? 'ok' : `missing ${missingRequiredFeatureFlags(status.features?.required_flags).join(', ') || 'required flags'}`}`,
     `Computer Use:${status.mcp.has_computer_use ? status.mcp.computer_use_source === 'plugin_cache' ? ' installed (verify @Computer in thread)' : ' ok' : ' missing'}`,
     `Browser Use: ${status.mcp.has_browser_use ? status.mcp.browser_use_source === 'plugin_cache' ? 'installed (plugin scoped)' : 'ok' : 'missing'}`,
     `Image Gen:   ${status.features?.image_generation ? 'ok ($imagegen/gpt-image-2)' : status.features?.checked ? 'missing' : 'not checked'}`,
@@ -273,12 +285,15 @@ function summarizeCodexMcpError(text) {
 }
 
 function codexFeatureEnabled(text, featureName) {
-  const name = escapeRegExp(featureName);
-  return new RegExp(`(?:^|\\n)\\s*${name}\\s+\\S+\\s+true\\b`, 'i').test(String(text || ''));
+  const expected = String(featureName || '').toLowerCase();
+  return String(text || '').split(/\r?\n/).some((line) => {
+    const parts = line.trim().split(/\s+/).filter(Boolean);
+    return parts[0]?.toLowerCase() === expected && parts[parts.length - 1]?.toLowerCase() === 'true';
+  });
 }
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function missingRequiredFeatureFlags(flags = {}) {
+  return REQUIRED_CODEX_APP_FEATURE_FLAGS.filter((name) => flags?.[name] !== true);
 }
 
 function remoteControlGuidance(status = {}) {

@@ -440,13 +440,17 @@ function installPolicy(scope, commandPrefix) {
 function mergeManagedCodexConfigToml(existingContent = '') {
   let next = removeLegacyTopLevelCodexModeLocks(String(existingContent || '').trimEnd());
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
-  next = removeTomlTableKey(next, 'features', 'hooks');
+  next = removeTomlTableKey(next, 'features', 'codex_hooks');
   next = upsertTopLevelTomlString(next, 'model', 'gpt-5.5');
   next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
-  next = upsertTomlTableKey(next, 'features', 'codex_hooks = true');
+  next = upsertTomlTableKey(next, 'features', 'hooks = true');
   next = upsertTomlTableKey(next, 'features', 'multi_agent = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
+  next = upsertTomlTableKey(next, 'features', 'codex_git_commit = true');
+  next = upsertTomlTableKey(next, 'features', 'computer_use = true');
+  next = upsertTomlTableKey(next, 'features', 'apps = true');
+  next = upsertTomlTableKey(next, 'features', 'plugins = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
@@ -733,7 +737,7 @@ function codexAppQuickReference(scope, commandPrefix) {
     `Context Tracking: TriWiki SSOT. Before each route phase read only the latest coordinate+voxel overlay pack at .sneakoscope/wiki/context-pack.json; coordinate-only legacy packs are invalid. Use attention.use_first for compact high-trust recall and hydrate attention.hydrate_first from source before risky/lower-trust decisions. During every stage hydrate low-trust claims from source/hash/RGBA anchors; after changes run ${commandPrefix} wiki refresh or pack; before handoff/final run ${commandPrefix} wiki validate .sneakoscope/wiki/context-pack.json.`,
     stackCurrentDocsPolicyText(commandPrefix),
     `Team review: ${MIN_TEAM_REVIEW_POLICY_TEXT}`,
-    `Team tmux view: ${commandPrefix} team "task" prepares live watch/lane commands and opens a named Team tmux multi-pane view by default when tmux is available; add --no-open-tmux for artifact-only creation. The view has an overview watch pane plus color-coded split per-agent lanes; ${commandPrefix} team lane latest --agent analysis_scout_1 --follow shows one agent's status, assigned runtime tasks, recent agent events, direct messages, and fallback global tail; ${commandPrefix} team message latest --from analysis_scout_1 --to executor_1 --message "handoff note" mirrors bounded agent communication into transcript/lane panes; ${commandPrefix} team cleanup-tmux latest marks the SKS session record complete and asks follow panes to show a cleanup summary then stop.`,
+    `Team tmux view: ${commandPrefix} team "task" prepares live watch/lane commands and reconciles managed Team panes inside the current SKS-owned tmux session when available; add --no-open-tmux for artifact-only creation or --separate-session to force the named sks-team-* fallback. Existing hook-created Team missions can be opened later with ${commandPrefix} team open-tmux latest. The view keeps the main Codex pane alive, adds an overview watch pane plus color-coded split per-agent lanes, and closes only SKS-managed Team panes as agent lanes finish or cleanup is requested; ${commandPrefix} team lane latest --agent analysis_scout_1 --follow shows one agent's status, assigned runtime tasks, recent agent events, direct messages, and fallback global tail; ${commandPrefix} team message latest --from analysis_scout_1 --to executor_1 --message "handoff note" mirrors bounded agent communication into transcript/lane panes; ${commandPrefix} team cleanup-tmux latest marks the SKS session record complete and asks managed panes/follow loops to close or show a cleanup summary.`,
     `Runtime: open Codex App once, then run ${commandPrefix} bootstrap and ${commandPrefix} deps check. Bare ${commandPrefix} opens or reuses the default tmux/Codex CLI session; before launch it checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. ${commandPrefix} codex-app remote-control wraps the Codex CLI 0.130.0+ headless remote-control entrypoint. ${commandPrefix} tmux open is the explicit form for session/workspace flags.`,
     `Guard: generated harness files are immutable outside the engine source repo; check ${commandPrefix} guard check; conflicts use ${commandPrefix} conflicts prompt with human approval.`
   ].join('\n') + '\n';

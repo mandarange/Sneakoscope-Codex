@@ -75,7 +75,7 @@ import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
 import { codexAppRemoteControlCommand } from './codex-app-command.mjs';
 import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs';
-import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, defaultCodexLaunchArgs, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, sksAsciiLogo, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchMadTmuxUi, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
+import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, defaultCodexLaunchArgs, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, sksAsciiLogo, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchMadTmuxUi, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, reconcileTmuxTeamCockpit, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
 import { askPostinstallQuestion, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall } from './install-helpers.mjs';
@@ -204,9 +204,11 @@ Usage:
   sks goal pause|resume|clear <mission-id|latest>
   sks goal status <mission-id|latest>
   sks team "task" [executor:5 reviewer:6 user:1] [--json]
-  sks team log|tail|watch|lane|status|dashboard [mission-id|latest]
+  sks team log|tail|watch|lane|status|dashboard|open-tmux|attach-tmux [mission-id|latest]
   sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."
   sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."
+  sks team open-tmux [mission-id|latest] [--no-attach|--separate-session]
+  sks team attach-tmux [mission-id|latest]
   sks team cleanup-tmux [mission-id|latest]
   sks research prepare "topic" [--depth frontier]
   sks research run <mission-id|latest> [--mock] [--max-cycles N]
@@ -1452,7 +1454,7 @@ function usage(args = []) {
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew after Y/n approval for missing installs or Homebrew-managed upgrades. If PATH resolves an npm-managed tmux, SKS prompts for npm i -g tmux@latest instead. Unknown non-Homebrew tmux paths are reported as conflicts.'],
     tmux: ['tmux', '', '  sks', '  sks tmux open', '  sks tmux check', '  sks tmux status --once', '  sks deps install tmux', '', 'Running bare `sks` opens or reuses the default tmux Codex CLI session in fast-high mode: --model gpt-5.5 -c model_reasoning_effort="high". SKS always forces gpt-5.5; SKS_CODEX_MODEL and SKS_CODEX_FAST_HIGH=0 cannot downgrade or remove that model pin. Use SKS_CODEX_REASONING only for reasoning effort. Before launch, SKS checks npm @openai/codex@latest and prompts Y/n when the installed Codex CLI is missing or outdated. Use `sks tmux open` when you need explicit session/workspace flags, and `sks help` for CLI help.'],
     openclaw: ['OpenClaw', '', '  sks openclaw install', '  sks openclaw path', '  sks openclaw print SKILL.md', '', 'Installs an OpenClaw skill package under ~/.openclaw/skills/sneakoscope-codex so OpenClaw agents can attach skills: [sneakoscope-codex] with the shell tool and call local SKS commands from a project root.'],
-    team: ['Team', '', '  sks team "task" executor:5 reviewer:6 user:1', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team auto-seals a route contract, opens scout-first tmux lanes when available, then runs scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
+    team: ['Team', '', '  sks team "task" executor:5 reviewer:6 user:1', '  sks team open-tmux latest', '  sks team watch latest', '  sks team lane latest --agent analysis_scout_1 --follow', '  sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"', '  sks team cleanup-tmux latest', '', '$Team auto-seals a route contract, opens scout-first tmux lanes when available, then runs scouts -> TriWiki attention -> debate -> runtime graph/inbox -> fresh executors -> review -> cleanup -> reflection -> Honest.'],
     'qa-loop': ['QA-LOOP', '', '  sks qa-loop prepare "QA this app"', '  sks qa-loop answer <MISSION_ID> answers.json', '  sks qa-loop run <MISSION_ID> --max-cycles 8', '', 'Report: YYYY-MM-DD-v<version>-qa-report.md'],
     ppt: ['PPT', '', '  $PPT 투자자용 피치덱을 HTML 기반 PDF로 만들어줘', '  $PPT 우리 SaaS 소개자료 만들어줘', '  sks ppt build latest --json', '  sks ppt status latest --json', '', '$PPT infers delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings before source research, design-system work, HTML/PDF export, render QA, fact-ledger validation, and bounded review-loop validation. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in ppt-parallel-report.json. The visual system must stay simple, restrained, and information-first; editable source HTML is kept under source-html/, PPT-only temporary build files are cleaned, and installed skills/MCPs outside the $PPT allowlist are ignored. Design uses getdesign-reference plus the built-in PPT design pipeline; Codex App $imagegen/gpt-image-2 and Context7 are conditional only when the sealed PPT contract needs raster assets, slide visual critique, or current external docs. Missing required $imagegen/gpt-image-2 output blocks instead of being simulated.'],
     'image-ux-review': ['Image UX Review', '', '  $Image-UX-Review localhost 화면을 이미지 생성 리뷰 루프로 검수해줘', '  $UX-Review 이 스크린샷을 gpt-image-2 콜아웃 리뷰로 분석하고 고쳐줘', '  sks image-ux-review status latest --json', '', '$Image-UX-Review captures or receives source UI screenshots, runs Codex App $imagegen/gpt-image-2 to create generated annotated review images with numbered callouts, then extracts those generated images into image-ux-issue-ledger.json. Text-only screenshot critique cannot pass image-ux-review-gate.json; missing generated review images remain an explicit blocker.'],
@@ -1922,7 +1924,7 @@ function hasTopLevelCodexModeLock(text = '') {
   return (Boolean(model) && model !== 'gpt-5.5') || /^model_reasoning_effort\s*=/m.test(top);
 }
 
-function hasLegacyHooksFeatureFlag(text = '') {
+function hasDeprecatedCodexHooksFeatureFlag(text = '') {
   const lines = String(text || '').split('\n');
   const start = lines.findIndex((line) => line.trim() === '[features]');
   if (start === -1) return false;
@@ -1933,7 +1935,13 @@ function hasLegacyHooksFeatureFlag(text = '') {
       break;
     }
   }
-  return lines.slice(start + 1, end).some((line) => /^\s*hooks\s*=/.test(line));
+  return lines.slice(start + 1, end).some((line) => /^\s*codex_hooks\s*=/.test(line));
+}
+
+const REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS = ['hooks', 'multi_agent', 'fast_mode', 'fast_mode_ui', 'codex_git_commit', 'computer_use', 'apps', 'plugins'];
+
+function missingGeneratedCodexAppFeatureFlags(text = '') {
+  return REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name) => !String(text || '').includes(`${name} = true`));
 }
 
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
@@ -2150,6 +2158,8 @@ async function selftest() {
   if (await exists(path.join(postinstallSetupTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest failed: postinstall installed deprecated agent-team fallback skill');
   if (!String(postinstallSetup.stdout || '').includes('SKS bootstrap: auto-running sks setup --bootstrap --install-scope global --force') || !String(postinstallSetup.stdout || '').includes('SKS Ready')) throw new Error('selftest failed: postinstall did not auto-run global forced bootstrap');
   if (!(await exists(path.join(postinstallSetupTmp, '.codex', 'hooks.json')))) throw new Error('selftest failed: postinstall did not create project hooks during automatic bootstrap');
+  const postinstallSetupConfig = await safeReadText(path.join(postinstallSetupTmp, '.codex', 'config.toml'));
+  if (missingGeneratedCodexAppFeatureFlags(postinstallSetupConfig).length || hasDeprecatedCodexHooksFeatureFlag(postinstallSetupConfig)) throw new Error('selftest failed: postinstall automatic bootstrap did not preserve required Codex App feature flags or migrate deprecated codex_hooks');
   if (!String(postinstallSetup.stdout || '').includes('Codex App global $ skills: installed')) throw new Error('selftest failed: postinstall did not report automatic global Codex App skills');
   if (!String(postinstallSetup.stdout || '').includes('Removed stale generated skill shadow(s):')) throw new Error('selftest failed: postinstall did not report stale first-party plugin shadow cleanup');
   const postinstallSetupManifest = await readJson(path.join(postinstallSetupTmp, '.sneakoscope', 'manifest.json'));
@@ -2184,6 +2194,8 @@ async function selftest() {
   if (postinstallNoMarker.code !== 0) throw new Error(`selftest failed: no-marker postinstall bootstrap exited ${postinstallNoMarker.code}: ${postinstallNoMarker.stderr}`);
   if (!String(postinstallNoMarker.stdout || '').includes('no project marker found; auto-running global SKS runtime bootstrap')) throw new Error('selftest failed: no-marker postinstall did not report global runtime bootstrap');
   if (!(await exists(path.join(postinstallNoMarkerGlobalRoot, '.sneakoscope', 'manifest.json')))) throw new Error('selftest failed: no-marker postinstall did not bootstrap global runtime root');
+  const postinstallNoMarkerConfig = await safeReadText(path.join(postinstallNoMarkerGlobalRoot, '.codex', 'config.toml'));
+  if (missingGeneratedCodexAppFeatureFlags(postinstallNoMarkerConfig).length || hasDeprecatedCodexHooksFeatureFlag(postinstallNoMarkerConfig)) throw new Error('selftest failed: no-marker postinstall bootstrap did not preserve required Codex App feature flags or migrate deprecated codex_hooks');
   if (await exists(path.join(postinstallNoMarkerCwd, '.sneakoscope'))) throw new Error('selftest failed: no-marker postinstall polluted install cwd');
   if (await exists(path.join(postinstallNoMarkerGlobalRoot, '.gitignore'))) throw new Error('selftest failed: global runtime bootstrap without project git wrote shared .gitignore');
   const bootstrapJsonTmp = tmpdir();
@@ -2938,8 +2950,8 @@ async function selftest() {
   if (wikiContext.includes('MANDATORY ambiguity-removal gate activated') || wikiContext.includes('Mission:')) throw new Error('selftest failed: Wiki route created ambiguity mission state');
   if (!wikiJson.systemMessage?.includes('wiki refresh')) throw new Error('selftest failed: Wiki route missing system message');
   const codexConfigText = await safeReadText(path.join(tmp, '.codex', 'config.toml'));
-  if (!codexConfigText.includes('multi_agent = true')) throw new Error('selftest failed: multi_agent not enabled');
-  if (!codexConfigText.includes('codex_hooks = true') || hasLegacyHooksFeatureFlag(codexConfigText)) throw new Error('selftest failed: Codex hooks feature flag not aligned with current codex_hooks setting');
+  const missingCodexConfigFlags = missingGeneratedCodexAppFeatureFlags(codexConfigText);
+  if (missingCodexConfigFlags.length || hasDeprecatedCodexHooksFeatureFlag(codexConfigText)) throw new Error(`selftest failed: generated Codex App feature flags missing or deprecated: ${missingCodexConfigFlags.join(', ')}`);
   if (!hasContext7ConfigText(codexConfigText)) throw new Error('selftest failed: Context7 MCP not configured');
   if (!codexConfigText.includes('[profiles.sks-task-low]') || !codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-fast-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest failed: GPT-5.5 reasoning profiles not configured');
   if (!/\[profiles\.sks-mad-high\][\s\S]*?approval_policy = "never"[\s\S]*?sandbox_mode = "danger-full-access"/.test(codexConfigText)) throw new Error('selftest failed: generated sks-mad-high profile is not full access');
@@ -2947,13 +2959,29 @@ async function selftest() {
   if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest failed: team_consensus agent not configured');
   const preservedConfigTmp = tmpdir();
   await ensureDir(path.join(preservedConfigTmp, '.codex'));
-  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\nkeep = true\n\n[features]\nhooks = true\nfast_mode_ui = true\n\n[user.fast_mode]\nvisible = true\n');
+  await writeTextAtomic(path.join(preservedConfigTmp, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\nkeep = true\n\n[features]\ncodex_hooks = true\nfast_mode_ui = false\ncodex_git_commit = false\ncomputer_use = false\napps = false\nplugins = false\ncustom_preview = true\n\n[user.fast_mode]\nvisible = true\n');
   await initProject(preservedConfigTmp, {});
   const preservedConfig = await safeReadText(path.join(preservedConfigTmp, '.codex', 'config.toml'));
   if (!/^model = "gpt-5\.5"/m.test(preservedConfig) || !preservedConfig.includes('service_tier = "fast"') || !preservedConfig.includes('fast_mode = true') || !preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true') || !preservedConfig.includes('enabled = true') || !preservedConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(preservedConfig)) throw new Error('selftest failed: Codex config merge dropped or failed to enable Fast mode defaults and GPT-5.5');
   if (preservedConfig.includes('fast_default_opt_out = true') || !preservedConfig.includes('keep = true')) throw new Error('selftest failed: Codex config merge did not remove stale Fast opt-out notice while preserving other notice keys');
-  if (!preservedConfig.includes('codex_hooks = true') || hasLegacyHooksFeatureFlag(preservedConfig) || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error('selftest failed: Codex config merge did not add current SKS hook settings or remove the legacy hooks flag');
+  const missingPreservedFlags = missingGeneratedCodexAppFeatureFlags(preservedConfig);
+  if (missingPreservedFlags.length || hasDeprecatedCodexHooksFeatureFlag(preservedConfig) || !preservedConfig.includes('custom_preview = true') || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error(`selftest failed: Codex config merge did not add required app feature flags, preserve existing feature flags, or remove deprecated codex_hooks: ${missingPreservedFlags.join(', ')}`);
   if (hasTopLevelCodexModeLock(preservedConfig)) throw new Error('selftest failed: Codex config merge left top-level legacy model/reasoning locks that hide Fast mode UI');
+  const appFeatureTmp = tmpdir();
+  const fakeCodexApp = path.join(appFeatureTmp, 'Codex.app');
+  const fakeCodexBinDir = path.join(appFeatureTmp, 'bin');
+  await ensureDir(fakeCodexApp);
+  await ensureDir(fakeCodexBinDir);
+  const fakeCodex = path.join(fakeCodexBinDir, 'codex');
+  await writeTextAtomic(fakeCodex, '#!/bin/sh\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then printf "%s\\n" "computer-use enabled" "browser-use enabled"; exit 0; fi\nif [ "$1" = "features" ] && [ "$2" = "list" ]; then cat <<EOF\napps                                    stable             true\ncodex_git_commit                        under development  true\ncomputer_use                            stable             true\nfast_mode                               stable             true\nhooks                                   stable             true\nimage_generation                        stable             true\nplugins                                 stable             true\nEOF\nexit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
+  await fsp.chmod(fakeCodex, 0o755);
+  const codexAppFeatureStatus = await codexAppIntegrationStatus({ codex: { bin: fakeCodex, version: 'codex-cli 99.0.0' }, home: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } });
+  if (!codexAppFeatureStatus.ok || !codexAppFeatureStatus.features?.required_flags_ok || !codexAppFeatureStatus.features?.codex_git_commit) throw new Error('selftest failed: codex-app check did not accept required app feature flags including under-development codex_git_commit');
+  const fakeCodexMissing = path.join(fakeCodexBinDir, 'codex-missing-git-commit');
+  await writeTextAtomic(fakeCodexMissing, '#!/bin/sh\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then printf "%s\\n" "computer-use enabled" "browser-use enabled"; exit 0; fi\nif [ "$1" = "features" ] && [ "$2" = "list" ]; then cat <<EOF\napps                                    stable             true\ncodex_git_commit                        under development  false\ncomputer_use                            stable             true\nfast_mode                               stable             true\nhooks                                   stable             true\nimage_generation                        stable             true\nplugins                                 stable             true\nEOF\nexit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
+  await fsp.chmod(fakeCodexMissing, 0o755);
+  const codexAppMissingFeatureStatus = await codexAppIntegrationStatus({ codex: { bin: fakeCodexMissing, version: 'codex-cli 99.0.0' }, home: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } });
+  if (codexAppMissingFeatureStatus.ok || codexAppMissingFeatureStatus.features?.required_flags_ok || codexAppMissingFeatureStatus.features?.codex_git_commit) throw new Error('selftest failed: codex-app check did not block disabled codex_git_commit feature flag');
   const autoReviewHome = path.join(tmp, 'auto-review-home');
   const autoReviewEnv = { HOME: autoReviewHome };
   const autoReviewEnabled = await enableAutoReview({ env: autoReviewEnv, high: true });
@@ -3169,7 +3197,9 @@ async function selftest() {
   await writeJsonAtomic(path.join(teamDir, 'team-plan.json'), teamPlan);
   if (teamPlan.agent_session_count !== 5) throw new Error('selftest failed: team default sessions not 5');
   if (teamPlan.role_counts.executor !== 3 || teamPlan.role_counts.user !== 1 || teamPlan.role_counts.reviewer !== 5) throw new Error('selftest failed: team default role counts invalid');
-  if (teamPlan.codex_config_required?.features?.codex_hooks !== true || teamPlan.codex_config_required?.features?.hooks === true) throw new Error('selftest failed: team plan Codex config still uses legacy hooks feature flag');
+  const teamPlanFeatureFlags = teamPlan.codex_config_required?.features || {};
+  const missingTeamPlanFeatureFlags = REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name) => teamPlanFeatureFlags[name] !== true);
+  if (missingTeamPlanFeatureFlags.length || teamPlanFeatureFlags.codex_hooks === true) throw new Error(`selftest failed: team plan Codex config missing required app flags or still uses deprecated codex_hooks: ${missingTeamPlanFeatureFlags.join(', ')}`);
   if (!teamPlan.review_gate?.passed || teamPlan.review_gate.required_reviewer_lanes !== 5) throw new Error('selftest failed: team review policy gate did not pass default plan');
   if (teamPlan.codex_config_required?.service_tier !== 'fast' || teamPlan.reasoning?.service_tier !== 'fast') throw new Error('selftest failed: team plan did not require Fast service tier');
   if (!teamPlan.goal_continuation?.enabled || teamPlan.goal_continuation?.mode !== 'ambient_codex_native_goal_overlay') throw new Error('selftest failed: Team plan did not include ambient Goal continuation');
@@ -3208,6 +3238,7 @@ async function selftest() {
   if (!fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_CHECKLIST_ARTIFACT)) || !fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT)) || !fromChatTeamPlan.invariants.some((item) => item.includes(FROM_CHAT_IMG_QA_LOOP_ARTIFACT))) throw new Error('selftest failed: From-Chat-IMG team plan missing checklist/temp TriWiki/QA invariants');
   const teamWorkflow = teamWorkflowMarkdown(teamPlan);
   if (!teamWorkflow.includes('SSOT: triwiki') || !teamWorkflow.includes('Analysis Scouts') || !teamWorkflow.includes('sks wiki validate')) throw new Error('selftest failed: team workflow missing scout-first TriWiki context tracking');
+  if (!teamWorkflow.includes('sks team open-tmux')) throw new Error('selftest failed: team workflow missing existing-mission tmux open command');
   if (!teamWorkflow.includes(TEAM_GRAPH_ARTIFACT) || !teamWorkflow.includes(TEAM_INBOX_DIR)) throw new Error('selftest failed: team workflow missing runtime graph/inbox guidance');
   if (!teamWorkflow.includes('before every stage') || !teamWorkflow.includes('after findings/artifact changes')) throw new Error('selftest failed: team workflow missing per-stage TriWiki policy');
   const customTeamPlan = buildTeamPlan(teamId, '병렬 구현 팀 테스트', { agentSessions: 5 });
@@ -3241,7 +3272,7 @@ async function selftest() {
   await ensureDir(fakeTmuxDir);
   const fakeTmuxLog = path.join(fakeTmuxDir, 'tmux.log');
   const fakeTmuxBin = path.join(fakeTmuxDir, 'tmux');
-  await writeTextAtomic(fakeTmuxBin, `#!/usr/bin/env node\nconst fs = require('node:fs');\nconst log = process.env.SKS_FAKE_TMUX_LOG;\nif (log) fs.appendFileSync(log, process.argv.slice(2).join(' ') + '\\n');\nconst cmd = process.argv[2];\nif (cmd === 'has-session') process.exit(0);\nif (cmd === 'kill-session') process.exit(0);\nif (cmd === 'new-session') { console.log('%1'); process.exit(0); }\nif (cmd === 'split-window') { console.log('%2'); process.exit(0); }\nif (cmd === 'list-windows') { console.log('@1'); process.exit(0); }\nprocess.exit(0);\n`);
+  await writeTextAtomic(fakeTmuxBin, `#!/usr/bin/env node\nconst fs = require('node:fs');\nconst log = process.env.SKS_FAKE_TMUX_LOG;\nif (log) fs.appendFileSync(log, process.argv.slice(2).join(' ') + '\\n');\nconst cmd = process.argv[2];\nif (cmd === 'has-session') process.exit(0);\nif (cmd === 'kill-session') process.exit(0);\nif (cmd === 'kill-pane') process.exit(0);\nif (cmd === 'new-session') { console.log('%1'); process.exit(0); }\nif (cmd === 'split-window') { console.log(process.env.SKS_FAKE_TMUX_SPLIT_ID || '%2'); process.exit(0); }\nif (cmd === 'list-windows') { console.log('@1'); process.exit(0); }\nif (cmd === 'display-message') { console.log(process.env.SKS_FAKE_TMUX_DISPLAY || 'sks-existing-selftest\\t@1\\t%1'); process.exit(0); }\nif (cmd === 'list-panes') { console.log(process.env.SKS_FAKE_TMUX_LIST || ''); process.exit(0); }\nif (cmd === 'set-option' || cmd === 'select-layout' || cmd === 'resize-window' || cmd === 'set-window-option' || cmd === 'set-hook') process.exit(0);\nprocess.exit(0);\n`);
   await fsp.chmod(fakeTmuxBin, 0o755);
   const previousFakeTmuxLog = process.env.SKS_FAKE_TMUX_LOG;
   process.env.SKS_FAKE_TMUX_LOG = fakeTmuxLog;
@@ -3253,6 +3284,48 @@ async function selftest() {
   if (!recreatedTmux.ok || !fakeTmuxLogText.includes('kill-session -t sks-existing-selftest') || !fakeTmuxLogText.includes('new-session') || !fakeTmuxLogText.includes('split-window')) throw new Error('selftest failed: tmux recreate did not replace stale existing session with split panes');
   if (!recreatedTmux.dynamic_resize?.enabled || !fakeTmuxLogText.includes('list-windows -t sks-existing-selftest -F #{window_id}') || !fakeTmuxLogText.includes('set-window-option -t @1 window-size latest') || !fakeTmuxLogText.includes('set-hook -t sks-existing-selftest client-resized') || !fakeTmuxLogText.includes('resize-window -t @1 -A')) throw new Error('selftest failed: tmux dynamic resize hooks were not installed for split panes');
   if (recreatedTmux.layout !== 'tiled' || Number(recreatedTmux.initial_size?.width || 0) < 120 || Number(recreatedTmux.initial_size?.height || 0) < 36) throw new Error('selftest failed: tmux dynamic resize metadata missing normalized initial size/layout');
+  await ensureDir(path.join(tmp, '.sneakoscope', 'state'));
+  await writeJsonAtomic(path.join(tmp, '.sneakoscope', 'state', 'tmux-sessions.json'), {
+    schema_version: 1,
+    sessions: {
+      'sks-existing-selftest': {
+        session: 'sks-existing-selftest',
+        root: tmp,
+        panes: [{ pane_id: '%1', role: 'codex', title: 'Codex CLI' }]
+      }
+    }
+  });
+  await writeTextAtomic(fakeTmuxLog, '');
+  process.env.SKS_FAKE_TMUX_DISPLAY = 'sks-existing-selftest\t@1\t%1';
+  process.env.SKS_FAKE_TMUX_LIST = '';
+  process.env.SKS_FAKE_TMUX_SPLIT_ID = '%80';
+  const cockpitOpen = await reconcileTmuxTeamCockpit({
+    root: tmp,
+    missionId: teamId,
+    plan: roleTeamPlan,
+    dashboard: { agents: { analysis_scout_1: { status: 'assigned' } } },
+    control: { status: 'running' },
+    tmux: { bin: fakeTmuxBin },
+    env: { ...process.env, TMUX: '/tmp/tmux-selftest/default,1,0' }
+  });
+  const cockpitOpenLog = await safeReadText(fakeTmuxLog);
+  if (!cockpitOpen.ok || cockpitOpen.opened_lane_count !== 2 || !cockpitOpenLog.includes('display-message -p') || !cockpitOpenLog.includes('split-window -t @1') || !cockpitOpenLog.includes('set-option -pt %80 @sks_team_managed 1') || !cockpitOpenLog.includes('select-layout -t @1 tiled')) throw new Error('selftest failed: dynamic Team cockpit did not split managed panes in the current SKS tmux session');
+  await writeTextAtomic(fakeTmuxLog, '');
+  process.env.SKS_FAKE_TMUX_LIST = `%81\tscout: analysis_scout_1\tnode\t1\t${teamId}\tanalysis_scout_1\tscout\n%82\tscout: analysis_scout_2\tnode\t1\t${teamId}\tanalysis_scout_2\tscout\n%83\tuser pane\tzsh\t\t\t\t`;
+  const cockpitClose = await reconcileTmuxTeamCockpit({
+    root: tmp,
+    missionId: teamId,
+    plan: roleTeamPlan,
+    dashboard: { agents: { analysis_scout_1: { status: 'completed' }, analysis_scout_2: { status: 'assigned' } } },
+    control: { status: 'running' },
+    tmux: { bin: fakeTmuxBin },
+    env: { ...process.env, TMUX: '/tmp/tmux-selftest/default,1,0' }
+  });
+  const cockpitCloseLog = await safeReadText(fakeTmuxLog);
+  if (!cockpitClose.ok || cockpitClose.closed_lane_count !== 1 || !cockpitCloseLog.includes('kill-pane -t %81') || cockpitCloseLog.includes('kill-pane -t %83')) throw new Error('selftest failed: dynamic Team cockpit did not close only stale managed panes');
+  delete process.env.SKS_FAKE_TMUX_DISPLAY;
+  delete process.env.SKS_FAKE_TMUX_LIST;
+  delete process.env.SKS_FAKE_TMUX_SPLIT_ID;
   await writeTextAtomic(fakeTmuxLog, '');
   const madCockpit = await launchMadTmuxUi(['--workspace', 'sks-mad-selftest-ui', '--no-attach'], { root: tmp, tmux: { ok: true, bin: fakeTmuxBin, version: '3.4' }, codex: { bin: process.execPath }, app: { ok: true, guidance: [] }, missionId: 'M-MAD-SELFTEST' });
   const madTmuxLogText = await safeReadText(fakeTmuxLog);
@@ -3344,6 +3417,7 @@ async function selftest() {
   if (!teamDashboard?.latest_messages?.some((entry) => entry.agent === 'team_consensus')) throw new Error('selftest failed: team live dashboard missing agent event');
   const teamLive = await readTeamLive(teamDir);
   if (!teamLive.includes('Analysis scouts') || !teamLive.includes('selftest mapped repo slice')) throw new Error('selftest failed: team live transcript missing analysis scout section/event');
+  if (!teamLive.includes('sks team open-tmux')) throw new Error('selftest failed: team live transcript missing existing-mission tmux open command');
   if (!teamLive.includes('selftest mapped options')) throw new Error('selftest failed: team live transcript missing event');
   if (!teamLive.includes('Context tracking SSOT: TriWiki')) throw new Error('selftest failed: team live transcript missing TriWiki context tracking');
   if (!(await readTeamTranscriptTail(teamDir, 1)).join('\n').includes('selftest mapped options')) throw new Error('selftest failed: team transcript tail missing event');

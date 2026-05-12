@@ -744,6 +744,7 @@ async function teamLiveDigest(root, state = {}) {
   const lines = events.map(formatTeamDigestEvent);
   const context = boundText([
     `SKS Team live digest: mission ${id}, phase ${phase}, source ${source}.`,
+    `Open tmux multi-view with: sks team open-tmux ${id}`,
     `Open live view with: sks team watch ${id}`,
     'Recent events:',
     ...lines.map((line) => `- ${line}`)
