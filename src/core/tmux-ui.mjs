@@ -1,119 +1,48 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { exists, nowIso, packageRoot, readJson, runProcess, sha256, sksRoot, which, writeJsonAtomic } from './fsx.mjs';
+import figlet from 'figlet';
+import { exists, nowIso, PACKAGE_VERSION, packageRoot, readJson, runProcess, sha256, sksRoot, which, writeJsonAtomic } from './fsx.mjs';
 import { getCodexInfo } from './codex-adapter.mjs';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.mjs';
 import { REQUIRED_CODEX_MODEL, forceGpt55CodexArgs } from './codex-model-guard.mjs';
 import { MIN_TEAM_REVIEWER_LANES } from './team-review-policy.mjs';
 import { appendTeamEvent } from './team-live.mjs';
 
-export const SKS_TMUX_LOGO = [
-  '        _______     __  __     _______',
-  '      / _____/|   / /_/ /|   / _____/|',
-  '     / /____| |  / __  / |  / /____| |',
-  '     \\____  \\ | / / / /| |  \\____  \\ |',
-  ' ____/ /  | |/_/ /_/ / | |____/ /  | |',
-  '/_____/   |//_/\\__/ /  |//_____/   |/',
-  '\\_____\\___/ \\_\\ \\_\\/___/ \\_____\\___/',
-  '          SNEAKOSCOPE CODEX'
-].join('\n');
+const SKS_FIGLET_FONT = 'Standard';
+
+function trimFiglet(text = '') {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+$/g, ''))
+    .join('\n')
+    .replace(/\n+$/g, '');
+}
+
+export function sksAsciiLogo(opts = {}) {
+  const version = opts.version || PACKAGE_VERSION;
+  const subtitle = opts.subtitle || 'SNEAKOSCOPE CODEX';
+  let logo = '';
+  try {
+    logo = figlet.textSync('SKS', {
+      font: SKS_FIGLET_FONT,
+      horizontalLayout: 'fitted',
+      verticalLayout: 'default'
+    });
+  } catch {
+    logo = '  ____   _  __ ____\n / ___| | |/ // ___|\n \\___ \\ | \' / \\___ \\\n  ___) || . \\  ___) |\n |____/ |_|\\_\\|____/';
+  }
+  return `${trimFiglet(logo)}\n${subtitle} v${version}`;
+}
+
+export const SKS_TMUX_LOGO = sksAsciiLogo();
 
 const SKS_TMUX_LOGO_FRAMES = [
-  [
-    '             ||',
-    '             ||',
-    '             ||',
-    '             ||',
-    '             ||',
-    '             ||',
-    '             SKS',
-    '        SNEAKOSCOPE CODEX'
-  ].join('\n'),
-  [
-    '          //||',
-    '        //  ||        .',
-    '       //   ||      .:',
-    '      //    ||    .::',
-    '     //     ||  .:::',
-    '    //      ||.::::',
-    '          S K S',
-    '        SNEAKOSCOPE CODEX'
-  ].join('\n'),
-  [
-    '        _______     __  __     _______',
-    '      / _____/|   / /_/ /|   / _____/|',
-    '     / /____| |  / __  / |  / /____| |',
-    '     \\____  \\ | / / / /| |  \\____  \\ |',
-    ' ____/ /  | |/_/ /_/ / | |____/ /  | |',
-    '/_____/   |//_/\\__/ /  |//_____/   |/',
-    '\\_____\\___/ \\_\\ \\_\\/___/ \\_____\\___/',
-    '          SNEAKOSCOPE CODEX'
-  ].join('\n'),
-  [
-    '        _______   __  __   _______',
-    '      / _____/  / /_/ /  / _____/|',
-    '     / /____   / __  /  / /____ | |',
-    '     \\____  \\ / / / /   \\____  \\| |',
-    ' ____/ /  /_/ /_/ /  ____/ /  | |',
-    '/_____/   /_/\\__/  /_____/   |/',
-    ' \\_____\\  \\_\\ \\_\\  \\_____\\___/',
-    '          SNEAKOSCOPE CODEX'
-  ].join('\n'),
-  [
-    '        _______     __  __     _______',
-    '      / _____/|   / /_/ /|   / _____/|',
-    '     / /____| |  / __  / |  / /____| |',
-    '     \\____  \\ | / / / /| |  \\____  \\ |',
-    ' ____/ /  | |/_/ /_/ / | |____/ /  | |',
-    '/_____/   |//_/\\__/ /  |//_____/   |/',
-    '\\_____\\___/ \\_\\ \\_\\/___/ \\_____\\___/',
-    '          SNEAKOSCOPE CODEX'
-  ].join('\n'),
-  [
-    '        _______   __  __   _______',
-    '      |\\_____ \\  / /_/ /  |\\_____ \\',
-    '      | |____\\ \\/ __  /   | |____\\ \\',
-    '      | |\\____\\/ / / /    | |\\____\\ \\',
-    '      | | |___/ /_/ /__   | | |___/ /',
-    '      \\|_|/____/\\__/__/   \\|_|/____/',
-    '           S K S',
-    '        SNEAKOSCOPE CODEX'
-  ].join('\n'),
-  [
-    '             ||\\\\',
-    '        .    ||  \\\\',
-    '       ::.   ||   \\\\',
-    '      ::::.  ||    \\\\',
-    '     ::::::. ||     \\\\',
-    '    :::::::::||      \\\\',
-    '          S K S',
-    '        SNEAKOSCOPE CODEX'
-  ].join('\n'),
-  [
-    '             ||',
-    '             ||',
-    '             ||',
-    '             ||',
-    '             ||',
-    '             ||',
-    '             SKS',
-    '        SNEAKOSCOPE CODEX'
-  ].join('\n'),
   SKS_TMUX_LOGO
 ];
 
 const SKS_TMUX_LOGO_ANIMATION_STEPS = Object.freeze([
-  { frame: 0, color: '39', bold: false, delay: '0.045' },
-  { frame: 1, color: '39', bold: false, delay: '0.045' },
-  { frame: 2, color: '45', bold: false, delay: '0.05' },
-  { frame: 3, color: '51', bold: false, delay: '0.055' },
-  { frame: 4, color: '51', bold: true, delay: '0.07' },
-  { frame: 5, color: '51', bold: true, delay: '0.07' },
-  { frame: 6, color: '45', bold: false, delay: '0.05' },
-  { frame: 7, color: '39', bold: false, delay: '0.045' },
-  { frame: 8, color: '39', bold: false, delay: '0.045' },
-  { frame: 9, color: '51', bold: true, delay: '0.16' }
+  { frame: 0, color: '51', bold: true, delay: '0.16' }
 ]);
 
 export const DEFAULT_SKS_CODEX_MODEL = REQUIRED_CODEX_MODEL;
@@ -360,7 +289,7 @@ export function formatTmuxBanner(status = null) {
   const lines = [
     SKS_TMUX_LOGO,
     '',
-    'ㅅㅋㅅ tmux runtime',
+    'SKS tmux runtime',
     '',
     'Canonical prompt commands:',
     '  $DFix  $Answer  $SKS  $Team  $QA-LOOP  $PPT  $Goal  $Research  $AutoResearch  $DB  $GX  $Wiki  $Help',
@@ -391,9 +320,60 @@ function paneId(stdout = '') {
   return id.startsWith('%') ? id : null;
 }
 
+function currentTerminalDimensions(opts = {}) {
+  const width = Number(opts.width || opts.detachedWidth || process.stdout?.columns || process.env.COLUMNS || 0);
+  const height = Number(opts.height || opts.detachedHeight || process.stdout?.rows || process.env.LINES || 0);
+  return {
+    width: String(Math.max(120, Number.isFinite(width) && width > 0 ? width : 120)),
+    height: String(Math.max(36, Number.isFinite(height) && height > 0 ? height : 36))
+  };
+}
+
 async function hasTmuxSession(bin, session) {
   const run = await tmuxRun(bin, ['has-session', '-t', session], { timeoutMs: 5000 });
   return run.code === 0;
+}
+
+async function tmuxWindowTarget(bin, session) {
+  const fallback = sanitizeTmuxSessionName(session);
+  const run = await tmuxRun(bin, ['list-windows', '-t', fallback, '-F', '#{window_id}'], { timeoutMs: 5000, maxOutputBytes: 4096 });
+  if (run.code !== 0) return fallback;
+  const windowId = String(run.stdout || '').split(/\r?\n/).map((line) => line.trim()).find((line) => /^@\d+$/.test(line));
+  return windowId || fallback;
+}
+
+function tmuxLayoutName(value = 'tiled') {
+  const layout = String(value || 'tiled').trim();
+  return /^(tiled|even-horizontal|even-vertical|main-horizontal|main-horizontal-mirrored|main-vertical|main-vertical-mirrored)$/.test(layout)
+    ? layout
+    : 'tiled';
+}
+
+async function enableTmuxDynamicResize(tmuxBin, session, opts = {}) {
+  const layout = tmuxLayoutName(opts.layout || 'tiled');
+  const safeSession = sanitizeTmuxSessionName(session);
+  const target = await tmuxWindowTarget(tmuxBin, safeSession);
+  const relayout = `resize-window -t ${target} -A; set-window-option -t ${target} window-size latest; select-layout -t ${target} ${layout}; select-layout -t ${target} -E; set-window-option -t ${target} window-size latest`;
+  const commands = [
+    ['set-window-option', '-t', target, 'window-size', 'latest'],
+    ['set-window-option', '-t', target, 'aggressive-resize', 'on'],
+    ['set-hook', '-t', safeSession, 'client-attached', relayout],
+    ['set-hook', '-t', safeSession, 'client-resized', relayout],
+    ['resize-window', '-t', target, '-A'],
+    ['set-window-option', '-t', target, 'window-size', 'latest'],
+    ['select-layout', '-t', target, layout],
+    ['select-layout', '-t', target, '-E'],
+    ['set-window-option', '-t', target, 'window-size', 'latest']
+  ];
+  const applied = [];
+  const failed = [];
+  for (const args of commands) {
+    const run = await tmuxRun(tmuxBin, args, { timeoutMs: 5000 });
+    const command = [path.basename(tmuxBin), ...args].join(' ');
+    if (run.code === 0) applied.push(command);
+    else failed.push({ command, stderr: run.stderr || run.stdout || 'tmux command failed' });
+  }
+  return { enabled: failed.length === 0, layout, applied, failed };
 }
 
 export function buildTmuxOpenArgs(plan = {}) {
@@ -445,19 +425,19 @@ export async function createTmuxSession(plan = {}, panes = [], opts = {}) {
     }
   }
   const first = normalizedPanes[0] || { cwd: root, command: 'pwd' };
-  const detachedWidth = String(Math.max(120, Number(opts.width || opts.detachedWidth) || 180));
-  const detachedHeight = String(Math.max(36, Number(opts.height || opts.detachedHeight) || 48));
-  const create = await tmuxRun(tmuxBin, ['new-session', '-d', '-x', detachedWidth, '-y', detachedHeight, '-s', session, '-c', path.resolve(first.cwd || root), '-n', 'sks', '-P', '-F', '#{pane_id}', first.command || 'pwd']);
+  const dimensions = currentTerminalDimensions(opts);
+  const layout = tmuxLayoutName(opts.layout || 'tiled');
+  const create = await tmuxRun(tmuxBin, ['new-session', '-d', '-x', dimensions.width, '-y', dimensions.height, '-s', session, '-c', path.resolve(first.cwd || root), '-n', 'sks', '-P', '-F', '#{pane_id}', first.command || 'pwd']);
   if (create.code !== 0) return { ok: false, session, panes: [], stderr: create.stderr || create.stdout || 'tmux new-session failed' };
   const created = [{ pane_id: paneId(create.stdout), role: first.role || 'overview', title: first.title || 'overview' }];
   for (const pane of normalizedPanes.slice(1)) {
     const split = await tmuxRun(tmuxBin, ['split-window', '-t', session, pane.vertical ? '-v' : '-h', '-d', '-P', '-F', '#{pane_id}', '-c', path.resolve(pane.cwd || root), pane.command || 'pwd']);
     if (split.code !== 0) return { ok: false, session, panes: created, stderr: split.stderr || split.stdout || 'tmux split-window failed' };
     created.push({ pane_id: paneId(split.stdout), role: pane.role || 'lane', title: pane.title || null });
-    await tmuxRun(tmuxBin, ['select-layout', '-t', session, opts.layout || 'tiled']).catch(() => null);
+    await tmuxRun(tmuxBin, ['select-layout', '-t', session, layout]).catch(() => null);
   }
-  await tmuxRun(tmuxBin, ['select-layout', '-t', session, opts.layout || 'tiled']).catch(() => null);
-  return { ok: true, reused: false, session, panes: created, attach_command: `tmux attach-session -t ${session}` };
+  const dynamic_resize = await enableTmuxDynamicResize(tmuxBin, session, { layout });
+  return { ok: true, reused: false, session, panes: created, attach_command: `tmux attach-session -t ${session}`, layout, initial_size: dimensions, dynamic_resize };
 }
 
 export async function launchTmuxUi(args = [], opts = {}) {
@@ -593,6 +573,9 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
     mode: 'single_window_split_panes',
     window: 'sks',
     layout: 'tiled',
+    dynamic_resize: true,
+    window_size: 'latest',
+    resize_hooks: ['client-attached', 'client-resized'],
     live_updates: true,
     panes_show: ['overview', 'scout', 'planning', 'execution', 'review', 'safety'],
     user_attach_command: launch.attach_command

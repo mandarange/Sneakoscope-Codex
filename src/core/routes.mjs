@@ -1,4 +1,25 @@
 const REFLECTION_SKILL_NAME = 'reflection';
+export const SOLUTION_SCOUT_SKILL_NAME = 'solution-scout';
+export const SOLUTION_SCOUT_STAGE_ID = 'solution_scout';
+
+export function looksLikeProblemSolvingRequest(prompt = '') {
+  const text = String(prompt || '').trim();
+  if (!text) return false;
+  const problemCue = /(문제|오류|에러|버그|고장|깨짐|실패|안\s*(?:됨|돼|되|나옴|보임|돌아|먹)|작동\s*안|해결|고쳐|수정|복구|troubleshoot|not\s+working|broken|bug|error|failure|fails?|crash|fix|repair|resolve|solve)/i.test(text);
+  const actionCue = /(해줘|해달|해라|되게|찾아|검색|기반|수정|진행|apply|implement|fix|repair|resolve|solve|troubleshoot|patch|update|change)/i.test(text);
+  return problemCue && actionCue;
+}
+
+export function solutionScoutPolicyText(prompt = '') {
+  if (!looksLikeProblemSolvingRequest(prompt)) return '';
+  return [
+    'Solution Scout hook: this prompt looks like a problem-solving or repair request.',
+    'Before code edits, run a short web search for similar error reports, bug fixes, docs notes, or prior resolution patterns using the concrete symptom, stack, package, and error text from the repo.',
+    'Prefer primary sources and official docs for package/API behavior; use Context7 when the fix depends on a library, SDK, MCP, package manager, or generated documentation.',
+    'Summarize the relevant external patterns in 2-3 bullets, then design the local SKS fix from current code/tests plus those patterns. Do not copy a workaround blindly.',
+    'If web search is unavailable or the issue is fully local and trivial, state that the external-similarity search is unverified and continue from local evidence only.'
+  ].join('\n');
+}
 export const FROM_CHAT_IMG_COVERAGE_ARTIFACT = 'from-chat-img-coverage-ledger.json';
 export const FROM_CHAT_IMG_WORK_ORDER_ARTIFACT = 'from-chat-img-work-order.md';
 export const FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT = 'from-chat-img-source-inventory.json';
@@ -12,7 +33,7 @@ export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
 export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/codex/app/features#image-generation';
 export const OPENAI_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
-export const CODEX_COMPUTER_USE_ONLY_POLICY = 'Pipeline UI/browser verification and visual inspection must use Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or any other browser automation substitute; if Codex Computer Use is unavailable, mark the UI/browser evidence unverified instead of substituting another tool. In Codex App prompts, invoke @Computer or @AppName in a new thread when live Computer Use tools are needed; SKS hooks and skills can require the policy but cannot attach missing host tools to an already-started turn.';
+export const CODEX_COMPUTER_USE_ONLY_POLICY = 'Pipeline UI/browser verification and visual inspection must use Codex Computer Use only. Do not use or install Playwright packages, Chrome MCP, Browser Use, Selenium, Puppeteer, or any other browser automation substitute; if Codex Computer Use is unavailable, mark the UI/browser evidence unverified instead of substituting another tool. In Codex App prompts, invoke @Computer or @AppName in a new thread when live Computer Use tools are needed; SKS hooks and skills can require the policy but cannot attach missing host tools to an already-started turn.';
 export const CODEX_IMAGEGEN_REQUIRED_POLICY = 'Pipeline image generation, raster asset creation/editing, and generated image-review evidence must use real Codex App imagegen/$imagegen with gpt-image-2 when that evidence is required. Do not substitute placeholder SVG/HTML/CSS, prose-only critique, stock-like stand-ins, manually fabricated files, or missing-output ledgers for requested/generated raster assets or required generated review images. If imagegen/gpt-image-2 is unavailable, record the blocker and mark the image asset or review evidence unverified instead of passing the gate. In Codex App prompts, invoke $imagegen when live image generation is needed; SKS hooks and skills can require the policy but cannot attach missing host image-generation tools to an already-started turn.';
 export const RESERVED_CODEX_PLUGIN_SKILL_NAMES = Object.freeze(['computer-use', 'browser', 'browser-use']);
 export const FORBIDDEN_BROWSER_AUTOMATION_RE = /\b(playwright|chrome\s+mcp|browser\s+use|selenium|puppeteer)\b/i;
@@ -106,6 +127,7 @@ export function imageUxReviewPipelinePolicyText() {
 export const RECOMMENDED_SKILLS = [
   'reasoning-router',
   'pipeline-runner',
+  'solution-scout',
   'context7-docs',
   'seo-geo-optimizer',
   'autoresearch-loop',
@@ -717,8 +739,8 @@ export function looksLikeDirectWorkRequest(prompt = '') {
   return looksLikeCodeChangingWork(text)
     || looksLikeChatCaptureRequest(text)
     || looksLikeQuestionShapedDirective(text)
-    || /(작업|파이프라인|구현|수정|변경|추가|적용|반영|처리|수행|검수|설치|리드미|README).*(해줘|해달|해라|해야|되게|줘야|줘야지|달라)/i.test(text)
-    || /(진행해|수행해|작업해|처리해|적용해|반영해|검수해|고쳐줘|바꿔줘|만들어줘|해줘야|해줘야지|해달라|해야지|되게 해|install|run|execute|test|deploy|commit|push)/i.test(text);
+    || /(작업|파이프라인|구현|수정|변경|추가|적용|반영|처리|수행|검수|설치|해결|리드미|README).*(해줘|해달|해라|해야|되게|줘야|줘야지|달라)/i.test(text)
+    || /(진행해|수행해|작업해|처리해|적용해|반영해|검수해|고쳐줘|바꿔줘|해결해줘|만들어줘|해줘야|해줘야지|해달라|해야지|되게 해|install|run|execute|test|deploy|commit|push)/i.test(text);
 }
 
 export function routeNeedsContext7(route, prompt = '') {
@@ -748,7 +770,7 @@ export function reflectionRequiredForRoute(route) {
 }
 
 export function looksLikeCodeChangingWork(prompt = '') {
-  return /\b(implement|build|make|add|edit|modify|change|fix|refactor|rewrite|migrate|create|delete|remove|rename|update|patch|코드|구현|개발|수정|변경|추가|삭제|고쳐|바꿔|리팩터|마이그레이션)\b/i.test(String(prompt || ''));
+  return /\b(implement|build|make|add|edit|modify|change|fix|refactor|rewrite|migrate|create|delete|remove|rename|update|patch|코드|구현|개발|수정|변경|추가|삭제|해결|고쳐|바꿔|리팩터|마이그레이션)\b/i.test(String(prompt || ''));
 }
 
 export function looksLikeExecutionWork(prompt = '') {

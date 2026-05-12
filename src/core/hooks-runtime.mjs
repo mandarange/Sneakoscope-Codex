@@ -281,12 +281,32 @@ async function hookPermission(root, state, payload, noQuestion) {
   if (clarificationGateLocked(state) && !clarificationAnswerToolAllowed(payload)) {
     return { decision: 'deny', permissionDecision: 'deny', reason: clarificationPauseBlockReason(state) };
   }
+  if (noQuestion && looksLikeUserGitAction(payload)) return { continue: true };
   if (!noQuestion) return { continue: true };
   return {
     decision: 'deny',
     permissionDecision: 'deny',
     reason: 'SKS no-question mode forbids mid-loop approval prompts. Choose a non-approval safe alternative using the active plan.'
   };
+}
+
+function looksLikeUserGitAction(payload = {}) {
+  const command = extractCommand(payload);
+  const haystack = [
+    command,
+    payload.action,
+    payload.intent,
+    payload.operation,
+    payload.permission,
+    payload.description,
+    payload.message,
+    payload.tool_name,
+    payload.toolName
+  ].filter(Boolean).join(' ');
+  if (/\b(?:reset\s+--hard|clean\s+-[^\s]*f|checkout\s+--|restore\s+|rm\s+|push\s+--force|push\s+-[^\s]*f)\b/i.test(command)) return false;
+  if (/\bcodex\b[\s_-]*(?:app\s*)?(?:git\s*)?(?:action|commit|push|pr)\b/i.test(haystack)) return true;
+  if (!/^\s*git\s+/i.test(command)) return false;
+  return /\bgit\s+(?:status|diff|add|commit|push|branch|remote|rev-parse|log)\b/i.test(command);
 }
 
 function clarificationGateLocked(state = {}) {

@@ -75,7 +75,7 @@ import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
 import { codexAppRemoteControlCommand } from './codex-app-command.mjs';
 import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs';
-import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, defaultCodexLaunchArgs, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchMadTmuxUi, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
+import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, defaultCodexLaunchArgs, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, sksAsciiLogo, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchMadTmuxUi, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
 import { askPostinstallQuestion, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall } from './install-helpers.mjs';
@@ -156,8 +156,7 @@ function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
 function help(args = []) {
   const topic = args[0];
   if (topic) return usage([topic]);
-  console.log(`ㅅㅋㅅ
-Sneakoscope Codex
+  console.log(`${sksAsciiLogo()}
 
 Usage:
   sks
@@ -272,7 +271,7 @@ async function wizard(args = []) {
   if (!shouldShowWizard() && !flag(args, '--force')) return help();
   const rl = readline.createInterface({ input, output });
   try {
-    console.log('ㅅㅋㅅ Setup UI\n');
+    console.log(`${sksAsciiLogo()}\nSetup UI\n`);
     const currentPackage = await effectivePackageVersion();
     console.log(`Current package: ${currentPackage}`);
     const latest = await npmPackageVersion('sneakoscope');
@@ -340,7 +339,7 @@ async function updateCheck(args = []) {
     error: latest.error || null
   };
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-  console.log('ㅅㅋㅅ Update Check');
+  console.log(`${sksAsciiLogo()}\nUpdate Check`);
   console.log(`Current: ${result.current}`);
   console.log(`Latest:  ${result.latest || 'unknown'}`);
   console.log(`Update:  ${result.update_available ? 'available' : 'not needed'}`);
@@ -352,7 +351,7 @@ const DOLLAR_DEFAULT_PIPELINE_TEXT = 'Default pipeline: direct answers -> $Answe
 
 function commands(args = []) {
   if (flag(args, '--json')) return console.log(JSON.stringify({ aliases: ['sks', 'sneakoscope'], dollar_commands: DOLLAR_COMMANDS, app_skill_aliases: DOLLAR_COMMAND_ALIASES, commands: COMMAND_CATALOG }, null, 2));
-  console.log('ㅅㅋㅅ Commands\n');
+  console.log(`${sksAsciiLogo()}\nCommands\n`);
   console.log('Aliases: sks, sneakoscope\n');
   const width = Math.max(...COMMAND_CATALOG.map((c) => c.usage.length));
   for (const c of COMMAND_CATALOG) console.log(`${c.usage.padEnd(width)}  ${c.description}`);
@@ -375,7 +374,7 @@ async function rootCommand(args = []) {
     using_global_root: !project
   };
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-  console.log('SKS Root\n');
+  console.log(`${sksAsciiLogo()}\nRoot\n`);
   console.log(`Mode:        ${result.mode}`);
   console.log(`Active root: ${active}`);
   console.log(`Project:     ${project || 'none'}`);
@@ -385,7 +384,7 @@ async function rootCommand(args = []) {
 
 function dollarCommands(args = []) {
   if (flag(args, '--json')) return console.log(JSON.stringify({ dollar_commands: DOLLAR_COMMANDS, app_skill_aliases: DOLLAR_COMMAND_ALIASES }, null, 2));
-  console.log('ㅅㅋㅅ $ Commands\n');
+  console.log(`${sksAsciiLogo()}\n$ Commands\n`);
   console.log('Use these inside Codex App or another agent prompt. Shells treat $ as variable syntax, so these are prompt commands, not terminal commands.\n');
   console.log(formatDollarCommandsDetailed());
   console.log(`\nCanonical Codex App picker skills: ${DOLLAR_COMMAND_ALIASES.map((x) => x.app_skill).join(', ')}`);
@@ -1406,7 +1405,8 @@ async function codexAppHelp(args = []) {
   const status = await codexAppIntegrationStatus();
   const skills = await codexAppSkillReadiness();
   console.log([
-    'ㅅㅋㅅ Codex App', '',
+    sksAsciiLogo(), '',
+    'Codex App', '',
     formatCodexAppStatus(status), '',
     `Skills: project=${skills.project.ok ? 'ok' : `missing ${skills.project.missing.length}`} global=${skills.global.ok ? 'ok' : `missing ${skills.global.missing.length}`}`, '',
     'Setup:', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks codex-app remote-control --status', '  sks tmux check', '',
@@ -1417,7 +1417,9 @@ async function codexAppHelp(args = []) {
 }
 
 function aliases() {
-  console.log(`ㅅㅋㅅ Aliases
+  console.log(`${sksAsciiLogo()}
+
+Aliases
 
 Binary aliases:
   sks
@@ -1443,7 +1445,7 @@ Examples:
 function usage(args = []) {
   const topic = String(args[0] || 'overview').toLowerCase();
   const blocks = {
-    overview: ['ㅅㅋㅅ Usage', '', 'Discover:', '  sks commands', '  sks quickstart', '  sks root', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks tmux check', '  sks dollar-commands', '', `Topics: ${USAGE_TOPICS}`],
+    overview: [sksAsciiLogo(), '', 'Usage', '', 'Discover:', '  sks commands', '  sks quickstart', '  sks root', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks tmux check', '  sks dollar-commands', '', `Topics: ${USAGE_TOPICS}`],
     install: ['Install', '', '1. Global install:', '  npm i -g sneakoscope', '', '2. Bootstrap and check dependencies:', '  sks bootstrap', '  sks deps check', '', '3. Confirm Codex App commands:', '  sks codex-app check', '  sks dollar-commands', '', '4. Optional codex-lb key setup for CLI sks runs:', '  sks codex-lb setup --host <domain> --api-key <key>', '  sks codex-lb repair', '  sks', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
     bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and tmux.'],
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
@@ -1589,7 +1591,7 @@ async function setup(args) {
     next: ['sks context7 check', 'sks selftest --mock', 'sks doctor', 'sks commands']
   };
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-  console.log('ㅅㅋㅅ Setup\n');
+  console.log(`${sksAsciiLogo()}\nSetup\n`);
   console.log(`Project:   ${root}`);
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
   console.log(`CLI tools: Codex ${formatCodexCliToolStatus(cliTools.codex)}; tmux ${tmuxStatusKind(cliTools.tmux)} ${cliTools.tmux.version || cliTools.tmux.error || ''}`.trimEnd());
@@ -1713,7 +1715,7 @@ async function doctor(args) {
   result.ready = !result.harness_conflicts.hard_block && nodeOk && Boolean(codex.bin) && install.ok && result.sneakoscope.ok && result.context7.ok && appRuntime.ok && result.runtime.tmux.ok && result.harness_guard.ok && result.versioning.ok && result.db_guard.ok && result.codex_app.ok && result.skills.ok && result.global_skills.ok;
   if (result.harness_conflicts.hard_block) process.exitCode = 1;
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-  console.log('ㅅㅋㅅ Doctor\n');
+  console.log(`${sksAsciiLogo()}\nDoctor\n`);
   console.log(`Node:      ${nodeOk ? 'ok' : 'fail'} ${process.version}`);
   console.log(`Project:   ${root}`);
   console.log(`Codex:     ${codex.bin ? 'ok' : 'missing'} ${codex.version || ''}`);
@@ -1779,7 +1781,7 @@ async function init(args) {
   const localOnly = flag(args, '--local-only');
   const globalCommand = await globalSksCommand();
   const res = await initProject(root, { force: flag(args, '--force'), installScope, globalCommand, localOnly });
-  console.log(`Initialized ㅅㅋㅅ in ${root}`);
+  console.log(`Initialized SKS in ${root}`);
   console.log(`Install scope: ${installScope} (${sksCommandPrefix(installScope, { globalCommand })})`);
   if (localOnly) console.log('Git mode: local-only (.git/info/exclude)');
   else console.log('Git mode: shared .gitignore');
@@ -2474,6 +2476,13 @@ async function selftest() {
   const camelHookGuardResult = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'pre-tool'], { cwd: tmp, input: camelHookGuardPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   const camelHookGuardJson = JSON.parse(camelHookGuardResult.stdout);
   if (camelHookGuardJson.decision !== 'block') throw new Error('selftest failed: hook did not block camelCase Codex tool payload');
+  await setCurrent(tmp, { mode: 'QALOOP', phase: 'QALOOP_RUNNING_NO_QUESTIONS', route: 'QALoop', implementation_allowed: true });
+  const codexGitPermissionResult = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'permission-request'], { cwd: tmp, input: JSON.stringify({ cwd: tmp, command: 'git push origin dev', action: 'Codex App Git Actions Push' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  const codexGitPermissionJson = JSON.parse(codexGitPermissionResult.stdout);
+  if (codexGitPermissionJson.hookSpecificOutput?.decision?.behavior === 'deny') throw new Error('selftest failed: Codex App git push permission was denied during no-question mode');
+  const codexGitForcePermissionResult = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'permission-request'], { cwd: tmp, input: JSON.stringify({ cwd: tmp, command: 'git push --force origin dev', action: 'Codex App Git Actions Push' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  const codexGitForcePermissionJson = JSON.parse(codexGitForcePermissionResult.stdout);
+  if (codexGitForcePermissionJson.hookSpecificOutput?.decision?.behavior !== 'deny') throw new Error('selftest failed: force-push permission should stay denied during no-question mode');
   if (new Set(DOLLAR_COMMANDS.map((c) => c.command)).size !== DOLLAR_COMMANDS.length) throw new Error('selftest failed: duplicate dollar commands');
   if (!DOLLAR_COMMAND_ALIASES.some((alias) => alias.canonical === '$QA-LOOP' && alias.app_skill === '$qa-loop')) throw new Error('selftest failed: $QA-LOOP picker skill missing');
   if (!DOLLAR_COMMAND_ALIASES.some((alias) => alias.canonical === '$Team' && alias.app_skill === '$from-chat-img')) throw new Error('selftest failed: $From-Chat-IMG picker skill missing');
@@ -3232,7 +3241,7 @@ async function selftest() {
   await ensureDir(fakeTmuxDir);
   const fakeTmuxLog = path.join(fakeTmuxDir, 'tmux.log');
   const fakeTmuxBin = path.join(fakeTmuxDir, 'tmux');
-  await writeTextAtomic(fakeTmuxBin, `#!/usr/bin/env node\nconst fs = require('node:fs');\nconst log = process.env.SKS_FAKE_TMUX_LOG;\nif (log) fs.appendFileSync(log, process.argv.slice(2).join(' ') + '\\n');\nconst cmd = process.argv[2];\nif (cmd === 'has-session') process.exit(0);\nif (cmd === 'kill-session') process.exit(0);\nif (cmd === 'new-session') { console.log('%1'); process.exit(0); }\nif (cmd === 'split-window') { console.log('%2'); process.exit(0); }\nprocess.exit(0);\n`);
+  await writeTextAtomic(fakeTmuxBin, `#!/usr/bin/env node\nconst fs = require('node:fs');\nconst log = process.env.SKS_FAKE_TMUX_LOG;\nif (log) fs.appendFileSync(log, process.argv.slice(2).join(' ') + '\\n');\nconst cmd = process.argv[2];\nif (cmd === 'has-session') process.exit(0);\nif (cmd === 'kill-session') process.exit(0);\nif (cmd === 'new-session') { console.log('%1'); process.exit(0); }\nif (cmd === 'split-window') { console.log('%2'); process.exit(0); }\nif (cmd === 'list-windows') { console.log('@1'); process.exit(0); }\nprocess.exit(0);\n`);
   await fsp.chmod(fakeTmuxBin, 0o755);
   const previousFakeTmuxLog = process.env.SKS_FAKE_TMUX_LOG;
   process.env.SKS_FAKE_TMUX_LOG = fakeTmuxLog;
@@ -3242,6 +3251,8 @@ async function selftest() {
   ], { recreate: true });
   const fakeTmuxLogText = await safeReadText(fakeTmuxLog);
   if (!recreatedTmux.ok || !fakeTmuxLogText.includes('kill-session -t sks-existing-selftest') || !fakeTmuxLogText.includes('new-session') || !fakeTmuxLogText.includes('split-window')) throw new Error('selftest failed: tmux recreate did not replace stale existing session with split panes');
+  if (!recreatedTmux.dynamic_resize?.enabled || !fakeTmuxLogText.includes('list-windows -t sks-existing-selftest -F #{window_id}') || !fakeTmuxLogText.includes('set-window-option -t @1 window-size latest') || !fakeTmuxLogText.includes('set-hook -t sks-existing-selftest client-resized') || !fakeTmuxLogText.includes('resize-window -t @1 -A')) throw new Error('selftest failed: tmux dynamic resize hooks were not installed for split panes');
+  if (recreatedTmux.layout !== 'tiled' || Number(recreatedTmux.initial_size?.width || 0) < 120 || Number(recreatedTmux.initial_size?.height || 0) < 36) throw new Error('selftest failed: tmux dynamic resize metadata missing normalized initial size/layout');
   await writeTextAtomic(fakeTmuxLog, '');
   const madCockpit = await launchMadTmuxUi(['--workspace', 'sks-mad-selftest-ui', '--no-attach'], { root: tmp, tmux: { ok: true, bin: fakeTmuxBin, version: '3.4' }, codex: { bin: process.execPath }, app: { ok: true, guidance: [] }, missionId: 'M-MAD-SELFTEST' });
   const madTmuxLogText = await safeReadText(fakeTmuxLog);
@@ -3669,6 +3680,6 @@ async function selftest() {
   const gc = await enforceRetention(tmp, { dryRun: true });
   if (!gc.report.exists) throw new Error('selftest failed: storage report');
   if (!gc.actions.some((action) => action.action === 'remove_from_chat_img_temp_triwiki')) throw new Error('selftest failed: From-Chat-IMG temporary TriWiki retention action missing');
-  console.log('ㅅㅋㅅ selftest passed.');
+  console.log(`${sksAsciiLogo()}\nselftest passed.`);
   console.log(`temp: ${tmp}`);
 }
