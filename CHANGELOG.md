@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+
+## [0.7.64] - 2026-05-12
+
+### Fixed
+
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+
 ### Fixed
 
 - Reconcile Team tmux lanes inside the current SKS-owned tmux session when available, while preserving the named `sks-team-*` view as a fallback and closing only SKS-managed agent panes during lifecycle cleanup.
