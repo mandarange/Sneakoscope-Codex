@@ -62,7 +62,7 @@ export async function findLatestMission(root) {
   return candidates.at(-1)?.id || null;
 }
 
-export async function setCurrent(root, patch) {
-  const current = await readJson(stateFile(root), {});
+export async function setCurrent(root, patch, opts = {}) {
+  const current = opts.replace ? {} : await readJson(stateFile(root), {});
   await writeJsonAtomic(stateFile(root), { ...current, ...patch, updated_at: nowIso() });
 }

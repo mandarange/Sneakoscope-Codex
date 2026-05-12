@@ -2,7 +2,19 @@
 
 ## [Unreleased]
 
+### Fixed
 
+- Reconcile Team tmux lanes inside the current SKS-owned tmux session when available, while preserving the named `sks-team-*` view as a fallback and closing only SKS-managed agent panes during lifecycle cleanup.
+- Clarify that Codex App readiness uses Codex-provided feature/MCP/status surfaces, while Codex Computer Use remains required for actual target UI/browser evidence.
+
+## [0.7.63] - 2026-05-12
+
+### Fixed
+
+- Keep release metadata aligned after the automatic SKS version guard advances the package version.
+- Migrate generated Codex configs and npm postinstall repair from deprecated `[features].codex_hooks = true` to `[features].hooks = true`.
+- Preserve and re-enable required Codex App feature flags, including `codex_git_commit`, during config normalization and selftest.
+- Add `sks team open-tmux` / `attach-tmux` so hook-created Team missions can reopen the split-pane tmux Scout view after mission creation.
 
 
 

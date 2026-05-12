@@ -30,7 +30,7 @@ import { PIPELINE_PLAN_ARTIFACT, validatePipelinePlan, writePipelinePlan } from 
 import { GOAL_BRIDGE_ARTIFACT, GOAL_WORKFLOW_ARTIFACT, updateGoalWorkflow, writeGoalWorkflow } from '../core/goal-workflow.mjs';
 import { scanCodeStructure, writeCodeStructureReport } from '../core/code-structure.mjs';
 import { writeMemorySweepReport } from '../core/memory-governor.mjs';
-import { cleanupTmuxTeamView, defaultTmuxSessionName, launchMadTmuxUi, launchTmuxTeamView, sanitizeTmuxSessionName } from '../core/tmux-ui.mjs';
+import { cleanupTmuxTeamView, defaultTmuxSessionName, launchMadTmuxUi, launchTmuxTeamView, reconcileTmuxTeamCockpit, sanitizeTmuxSessionName } from '../core/tmux-ui.mjs';
 import { loadSkillDreamState, recordSkillDreamEvent, runSkillDream, writeSkillForgeReport } from '../core/skill-forge.mjs';
 import { writeMistakeMemoryReport } from '../core/mistake-memory.mjs';
 import { checkDbOperation, checkSqlFile, classifyCommand, classifySql, loadDbSafetyPolicy, safeSupabaseMcpConfig, scanDbSafety } from '../core/db-safety.mjs';
@@ -516,7 +516,7 @@ async function goalCreate(args) {
   if (!prompt) throw new Error('Missing goal task prompt.');
   const { id, dir, mission } = await createMission(root, { mode: 'goal', prompt });
   const workflow = await writeGoalWorkflow(dir, mission, { action: 'create', prompt });
-  await setCurrent(root, { mission_id: id, mode: 'GOAL', route: 'Goal', route_command: '$Goal', phase: 'GOAL_READY', questions_allowed: true, implementation_allowed: true, native_goal: workflow.native_goal, stop_gate: 'none' });
+  await setCurrent(root, { mission_id: id, mode: 'GOAL', route: 'Goal', route_command: '$Goal', phase: 'GOAL_READY', questions_allowed: true, implementation_allowed: true, native_goal: workflow.native_goal, stop_gate: 'none' }, { replace: true });
   console.log(`Goal mission created: ${id}`);
   console.log(`Artifact: ${path.relative(root, path.join(dir, GOAL_WORKFLOW_ARTIFACT))}`);
   console.log(`Bridge: ${path.relative(root, path.join(dir, GOAL_BRIDGE_ARTIFACT))}`);
@@ -529,7 +529,7 @@ async function goalControl(action, args) {
   if (!id) throw new Error(`Usage: sks goal ${action} <mission-id|latest>`);
   const { dir } = await loadMission(root, id);
   const workflow = await updateGoalWorkflow(dir, action);
-  await setCurrent(root, { mission_id: id, mode: 'GOAL', route: 'Goal', route_command: '$Goal', phase: `GOAL_${String(action).toUpperCase()}`, native_goal: workflow.native_goal, questions_allowed: true, implementation_allowed: action !== 'pause' && action !== 'clear', stop_gate: 'none' });
+  await setCurrent(root, { mission_id: id, mode: 'GOAL', route: 'Goal', route_command: '$Goal', phase: `GOAL_${String(action).toUpperCase()}`, native_goal: workflow.native_goal, questions_allowed: true, implementation_allowed: action !== 'pause' && action !== 'clear', stop_gate: 'none' }, { replace: true });
   console.log(`Goal ${action}: ${id}`);
   console.log(`Native Codex control: ${workflow.native_goal.slash_command}`);
 }
@@ -1626,7 +1626,7 @@ export async function gxCommand(sub, args) {
 }
 
 export async function team(args) {
-  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'cleanup-tmux']);
+  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'open-tmux', 'attach-tmux', 'cleanup-tmux']);
   if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
   const jsonOutput = flag(args, '--json');
   const openTmux = !jsonOutput && !flag(args, '--no-open-tmux') && !flag(args, '--no-tmux');
@@ -1635,7 +1635,7 @@ export async function team(args) {
   const { prompt, agentSessions, roleCounts, roster } = opts;
   if (!prompt) {
     console.error('Usage: sks team "task" [executor:5 reviewer:6 user:1] [--agents N] [--no-open-tmux] [--json]');
-    console.error('       sks team log|tail|watch|lane|status|message|cleanup-tmux [mission-id|latest]');
+    console.error('       sks team log|tail|watch|lane|status|message|open-tmux|attach-tmux|cleanup-tmux [mission-id|latest]');
     console.error('       sks team event [mission-id|latest] --agent <name> --phase <phase> --message "..."');
     console.error('       sks team message [mission-id|latest] --from <agent> --to <agent|all> --message "..."');
     process.exitCode = 1;
@@ -1778,7 +1778,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
     reasoning: teamReasoningPolicy(prompt, roster),
     codex_config_required: {
       service_tier: 'fast',
-      features: { multi_agent: true, codex_hooks: true },
+      features: { multi_agent: true, hooks: true, fast_mode: true, fast_mode_ui: true, codex_git_commit: true, computer_use: true, apps: true, plugins: true },
       agents: { max_threads: 6, max_depth: 1 },
       custom_agents_dir: '.codex/agents'
     },
@@ -1887,6 +1887,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
         'sks team status <mission-id>',
         'sks team log <mission-id>',
         'sks team tail <mission-id>',
+        'sks team open-tmux <mission-id>',
         'sks team watch <mission-id>',
         'sks team lane <mission-id> --agent <name> --follow',
         'sks team event <mission-id> --agent <name> --phase <phase> --message "..."',
@@ -1967,7 +1968,7 @@ ${plan.roster.validation_team.map((agent) => `- ${agent.id}: ${agent.persona} [r
 - Keep team-live.md readable for the user inside Codex App.
 - Mirror every useful subagent status, debate result, handoff, review finding, and integration decision to team-transcript.jsonl.
 - Use \`sks team event ${plan.mission_id} --agent <name> --phase <phase> --message "..."\` when recording a live event from the parent thread.
-- The user can inspect the flow with \`sks team log ${plan.mission_id}\`, \`sks team tail ${plan.mission_id}\`, \`sks team watch ${plan.mission_id}\`, or \`sks team lane ${plan.mission_id} --agent analysis_scout_1 --follow\`.
+- The user can inspect the flow with \`sks team open-tmux ${plan.mission_id}\`, \`sks team log ${plan.mission_id}\`, \`sks team tail ${plan.mission_id}\`, \`sks team watch ${plan.mission_id}\`, or \`sks team lane ${plan.mission_id} --agent analysis_scout_1 --follow\`.
 
 ## Phases
 
@@ -1989,6 +1990,37 @@ async function teamCommand(sub, args) {
     return;
   }
   const { dir } = await loadMission(root, id);
+  if (sub === 'open-tmux' || sub === 'attach-tmux') {
+    const plan = await readJson(path.join(dir, 'team-plan.json'), null);
+    if (!plan) {
+      console.error(`Team plan missing for ${id}; cannot open tmux Team view.`);
+      process.exitCode = 2;
+      return;
+    }
+    const tmux = await launchTmuxTeamView({
+      root,
+      missionId: id,
+      plan,
+      promptFile: path.join(dir, 'team-workflow.md'),
+      json: flag(args, '--json'),
+      attach: sub === 'attach-tmux' || !flag(args, '--no-attach'),
+      args
+    });
+    if (flag(args, '--json')) return console.log(JSON.stringify(tmux, null, 2));
+    if (!tmux.ready) {
+      const reasons = [tmux.opened?.stderr, ...(tmux.blockers || [])].filter(Boolean);
+      console.error(`tmux Team view blocked for ${id}: ${reasons.join('; ') || 'tmux creation failed'}`);
+      if (tmux.attach_command) console.error(`Attach after repair: ${tmux.attach_command}`);
+      process.exitCode = 2;
+      return;
+    }
+    console.log(`tmux: opened ${tmux.opened_lane_count || tmux.lanes?.length || 0} Team lane(s) in ${tmux.session}`);
+    if (tmux.split_ui?.mode) console.log(`tmux UI: ${tmux.split_ui.mode} (${tmux.split_ui.layout})`);
+    if (tmux.split_ui?.current_session) console.log('tmux cockpit: reconciled inside the current SKS tmux window');
+    console.log(`Attach: ${tmux.attach_command}`);
+    console.log(`Watch: sks team watch ${id}`);
+    return;
+  }
   if (sub === 'event') {
     const message = readFlagValue(args, '--message', '');
     if (!message) {
@@ -1997,6 +2029,7 @@ async function teamCommand(sub, args) {
       return;
     }
     const phase = readFlagValue(args, '--phase', 'general');
+    const plan = await readJson(path.join(dir, 'team-plan.json'), null).catch(() => null);
     const record = await appendTeamEvent(dir, {
       agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
       phase,
@@ -2004,16 +2037,29 @@ async function teamCommand(sub, args) {
       artifact: readFlagValue(args, '--artifact', ''),
       message
     });
+    const cockpit = plan
+      ? await reconcileTmuxTeamCockpit({
+        root,
+        missionId: id,
+        plan,
+        promptFile: path.join(dir, 'team-workflow.md'),
+        close: /^session_cleanup$|^team_cleanup$|^cleanup$/i.test(String(phase || '')),
+        plannedFallback: false
+      }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'tmux cockpit reconcile failed' }))
+      : null;
     const tmuxCleanup = /^session_cleanup$|^team_cleanup$|^cleanup$/i.test(String(phase || ''))
       ? await requestTeamSessionCleanup(dir, {
         missionId: id,
         agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
         reason: message,
-        finalMessage: 'Team cleanup event received. Follow panes may stop; tmux panes remain user-controlled.'
+        finalMessage: 'Team cleanup event received. Managed tmux Team panes may close; follow loops may stop.'
       }).then(() => cleanupTmuxTeamView({ root, missionId: id, closeSession: flag(args, '--close-session') || flag(args, '--close') })).catch((err) => ({ ok: false, reason: err.message || 'tmux cleanup failed' }))
       : null;
     if (flag(args, '--json')) return console.log(JSON.stringify(record, null, 2));
     console.log(`${record.ts} [${record.phase}] ${record.agent}: ${record.message}`);
+    if (cockpit?.ok && (cockpit.opened_lane_count || cockpit.closed_lane_count)) {
+      console.log(`tmux cockpit: +${cockpit.opened_lane_count || 0} -${cockpit.closed_lane_count || 0} managed pane(s) in ${cockpit.session}`);
+    }
     if (tmuxCleanup) {
       if (tmuxCleanup.ok) console.log(`tmux cleanup: marked complete (${tmuxCleanup.reason || 'record updated'})`);
       else console.log(`tmux cleanup: skipped (${tmuxCleanup.reason || 'not available'})`);
@@ -2045,7 +2091,7 @@ async function teamCommand(sub, args) {
       missionId: id,
       agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
       reason: readFlagValue(args, '--reason', 'Team session ended; clean up live follow panes.'),
-      finalMessage: 'Team session ended. Lane/watch follow loops will stop after showing this cleanup summary; tmux panes remain user-controlled.'
+      finalMessage: 'Team session ended. Lane/watch follow loops will stop after showing this cleanup summary; managed tmux Team panes may close.'
     });
     await appendTeamEvent(dir, {
       agent: readFlagValue(args, '--agent', 'parent_orchestrator'),

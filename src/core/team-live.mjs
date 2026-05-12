@@ -151,6 +151,7 @@ export function defaultTeamDashboard(id, prompt, opts = {}) {
       status: `sks team status ${id}`,
       log: `sks team log ${id}`,
       tail: `sks team tail ${id}`,
+      open_tmux: `sks team open-tmux ${id}`,
       watch: `sks team watch ${id}`,
       lane: `sks team lane ${id} --agent <agent> --follow`,
       event: `sks team event ${id} --agent <agent> --phase <phase> --message "..."`,
@@ -204,6 +205,7 @@ ${prompt}
 sks team status ${id}
 sks team log ${id}
 sks team tail ${id}
+sks team open-tmux ${id}
 sks team watch ${id}
 sks team lane ${id} --agent analysis_scout_1 --follow
 sks team event ${id} --agent analysis_scout_1 --phase parallel_analysis_scouting --message "mapped repo slice"
@@ -313,7 +315,7 @@ export function parseTeamSpecArgs(args = []) {
       i++;
       continue;
     }
-    if (arg === '--json' || arg === '--open-tmux' || arg === '--tmux-open' || arg === '--no-open-tmux' || arg === '--no-tmux' || arg === '--no-attach') continue;
+    if (arg === '--json' || arg === '--open-tmux' || arg === '--tmux-open' || arg === '--no-open-tmux' || arg === '--no-tmux' || arg === '--no-attach' || arg === '--separate-session' || arg === '--new-session' || arg === '--legacy-team-session' || arg === '--no-dynamic-team-tmux') continue;
     cleanArgs.push(args[i]);
   }
   return { cleanArgs, ...normalizeTeamSpec({ roleCounts, agentSessions: explicitSession }) };
@@ -444,11 +446,28 @@ export async function appendTeamEvent(dir, event) {
     dashboard.agents[agent].last_seen = record.ts;
     await writeJsonAtomic(files.dashboard, dashboard);
   }
+  await reconcileTeamTmuxFromEvent(dir, record).catch(() => null);
   const current = await readText(files.live, teamLiveMarkdown('unknown', 'unknown'));
   const target = record.to ? ` -> ${record.to}` : '';
   const line = `\n- ${record.ts} [${record.phase || 'general'}] ${record.agent || 'unknown'}${target}: ${record.message || ''}${record.artifact ? ` (${record.artifact})` : ''}\n`;
   await writeTextAtomic(files.live, trimLiveMarkdown(`${current.trimEnd()}${line}`));
   return record;
+}
+
+async function reconcileTeamTmuxFromEvent(dir, record = {}) {
+  if (!process.env.TMUX || String(process.env.SKS_TMUX_EVENT_RECONCILE || '1') === '0') return null;
+  if (record.type === 'tmux_lane_opened') return null;
+  const missionId = path.basename(dir);
+  const root = path.resolve(dir, '..', '..', '..');
+  const cockpitState = await readJson(path.join(root, '.sneakoscope', 'state', 'tmux-cockpit.json'), {}).catch(() => ({}));
+  if (!cockpitState?.missions?.[missionId]) return null;
+  const plan = await readJson(path.join(dir, 'team-plan.json'), null).catch(() => null);
+  if (!plan) return null;
+  const { reconcileTmuxTeamCockpit } = await import('./tmux-ui.mjs');
+  const phase = String(record.phase || '');
+  const type = String(record.type || '');
+  const close = /^session_cleanup$|^team_cleanup$|^cleanup$/i.test(phase) || /^cleanup$/i.test(type);
+  return reconcileTmuxTeamCockpit({ root, missionId, plan, close, plannedFallback: false });
 }
 
 export async function readTeamControl(dir) {
@@ -466,7 +485,7 @@ export async function requestTeamSessionCleanup(dir, opts = {}) {
     cleanup_requested_at: opts.ts || nowIso(),
     cleanup_requested_by: opts.agent || 'parent_orchestrator',
     cleanup_reason: opts.reason || 'Team session cleanup requested.',
-    final_message: opts.finalMessage || 'Team session ended. Lane follow loops may stop; tmux panes remain user-controlled.'
+    final_message: opts.finalMessage || 'Team session ended. Lane follow loops may stop; managed tmux Team panes may close.'
   };
   await writeJsonAtomic(files.control, next);
   return next;
@@ -486,7 +505,7 @@ export function renderTeamCleanupSummary(control = {}) {
     `Requested by: ${control.cleanup_requested_by || 'unknown'}`,
     `Reason: ${control.cleanup_reason || 'Team session cleanup requested.'}`,
     '',
-    control.final_message || 'Team session ended. tmux panes remain user-controlled.'
+    control.final_message || 'Team session ended. managed tmux Team panes may close.'
   ].join('\n');
 }
 
@@ -569,6 +588,8 @@ export async function renderTeamWatch(dir, opts = {}) {
     '',
     '## Split-Screen Map',
     '- This overview pane follows the whole mission transcript.',
+    '- Run `sks team open-tmux ...` to materialize or reopen the split-pane Team tmux view for an existing mission.',
+    '- Inside an SKS-owned tmux session, Team panes are reconciled in the current window and managed panes may close as agent lanes finish.',
     '- Neighbor tmux panes follow individual `sks team lane ... --agent <name>` views.',
     '- Use `sks team event ...` to mirror scout, debate, executor, review, and verification status into the live panes.',
     '- Use `sks team message ... --from <agent> --to <agent|all>` for bounded inter-agent communication in transcript/lane views.',

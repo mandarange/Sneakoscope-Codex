@@ -307,12 +307,17 @@ export async function ensureGlobalCodexFastModeDuringInstall(opts = {}) {
 export function normalizeCodexFastModeUiConfig(text = '') {
   let next = removeLegacyTopLevelCodexModeLocks(text);
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
-  next = removeTomlTableKey(next, 'features', 'hooks');
+  next = removeTomlTableKey(next, 'features', 'codex_hooks');
   next = upsertTopLevelTomlString(next, 'model', 'gpt-5.5');
   next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
-  next = upsertTomlTableKey(next, 'features', 'codex_hooks = true');
+  next = upsertTomlTableKey(next, 'features', 'hooks = true');
+  next = upsertTomlTableKey(next, 'features', 'multi_agent = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
+  next = upsertTomlTableKey(next, 'features', 'codex_git_commit = true');
+  next = upsertTomlTableKey(next, 'features', 'computer_use = true');
+  next = upsertTomlTableKey(next, 'features', 'apps = true');
+  next = upsertTomlTableKey(next, 'features', 'plugins = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
@@ -993,7 +998,7 @@ export async function selftestCodexLb(tmp) {
   if (codexLbNotConfigured.code !== 0 || String(codexLbNotConfigured.stdout || '').includes('codex-lb auth:')) throw new Error('selftest failed: postinstall should stay quiet when codex-lb is not configured');
   const codexLbStatusText = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'status'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (!String(codexLbStatusText.stdout || '').includes('Repair auth: sks codex-lb repair')) throw new Error('selftest failed: codex-lb status did not advertise repair command');
-  if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('codex_hooks = true') || hasLegacyHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest failed: codex-lb setup did not preserve Codex App Fast mode defaults, force GPT-5.5, or migrate the hooks feature flag');
+  if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('hooks = true') || hasDeprecatedCodexHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('multi_agent = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('codex_git_commit = true') || !codexLbConfig.includes('computer_use = true') || !codexLbConfig.includes('apps = true') || !codexLbConfig.includes('plugins = true') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest failed: codex-lb setup did not preserve Codex App feature flags, Fast mode defaults, Codex Git commit generation, force GPT-5.5, or migrate the hooks feature flag');
   const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest failed: tmux launch command does not source codex-lb env file');
   if (!codexLbLaunch.includes("'--model' 'gpt-5.5'")) throw new Error('selftest failed: tmux launch command without args did not force GPT-5.5');
@@ -1007,7 +1012,7 @@ function hasTopLevelCodexModeLock(text = '') {
   return /(^|\n)\s*model\s*=\s*"codex-lb"\s*(\n|$)/.test(text) || /(^|\n)\s*model_provider\s*=\s*"openai"\s*(\n|$)/.test(text);
 }
 
-function hasLegacyHooksFeatureFlag(text = '') {
+function hasDeprecatedCodexHooksFeatureFlag(text = '') {
   const lines = String(text || '').split('\n');
   const start = lines.findIndex((line) => line.trim() === '[features]');
   if (start === -1) return false;
@@ -1018,5 +1023,5 @@ function hasLegacyHooksFeatureFlag(text = '') {
       break;
     }
   }
-  return lines.slice(start + 1, end).some((line) => /^\s*hooks\s*=/.test(line));
+  return lines.slice(start + 1, end).some((line) => /^\s*codex_hooks\s*=/.test(line));
 }
