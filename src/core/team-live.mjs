@@ -6,6 +6,7 @@ export { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, MIN_TEAM_REVIEW_S
 
 const MAX_LIVE_BYTES = 192 * 1024;
 const TEAM_RUNTIME_TASKS_ARTIFACT = 'team-runtime-tasks.json';
+const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 const DEFAULT_AGENTS = ['parent_orchestrator', 'analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer'];
 export const DEFAULT_TEAM_ROLE_COUNTS = { user: 1, planner: 1, reviewer: MIN_TEAM_REVIEWER_LANES, executor: 3 };
 export const DEFAULT_MAX_TEAM_AGENT_SESSIONS = 6;
@@ -471,7 +472,19 @@ async function reconcileTeamTmuxFromEvent(dir, record = {}) {
 }
 
 export async function readTeamControl(dir) {
-  return readJson(teamLogPaths(dir).control, defaultTeamControl(path.basename(dir)));
+  const control = await readJson(teamLogPaths(dir).control, defaultTeamControl(path.basename(dir)));
+  const cleanup = await readJson(path.join(dir, TEAM_SESSION_CLEANUP_ARTIFACT), null).catch(() => null);
+  if (!cleanup || (cleanup.passed !== true && cleanup.live_transcript_finalized !== true && cleanup.all_sessions_closed !== true)) return control;
+  return {
+    ...defaultTeamControl(path.basename(dir)),
+    ...control,
+    status: 'ended',
+    cleanup_requested: true,
+    cleanup_requested_at: cleanup.updated_at || cleanup.completed_at || cleanup.closed_at || control.cleanup_requested_at || 'artifact',
+    cleanup_requested_by: cleanup.agent || control.cleanup_requested_by || 'parent_orchestrator',
+    cleanup_reason: cleanup.reason || control.cleanup_reason || `${TEAM_SESSION_CLEANUP_ARTIFACT} passed.`,
+    final_message: cleanup.final_message || control.final_message || 'Team session ended. Lane follow loops stop and managed tmux Team panes should close.'
+  };
 }
 
 export async function requestTeamSessionCleanup(dir, opts = {}) {
@@ -532,26 +545,30 @@ export async function renderTeamAgentLane(dir, opts = {}) {
   const missionId = opts.missionId || dashboard?.mission_id || runtime?.mission_id || path.basename(dir);
   const status = dashboard?.agents?.[agent] || {};
   const runtimeTasks = Array.isArray(runtime?.tasks) ? runtime.tasks : Array.isArray(runtime) ? runtime : [];
-  const assignedTasks = runtimeTasks.filter((task) => task?.worker === agent || task?.agent_hint === agent);
   const eventWindow = await readTeamTranscriptTail(dir, Math.max(lines * 8, 80));
   const parsedWindow = eventWindow.map(parseTranscriptLine).filter(Boolean);
-  const agentEvents = parsedWindow.filter((event) => event?.agent === agent || eventAddressedTo(event, agent)).slice(-lines);
-  const directMessages = parsedWindow.filter((event) => event?.type === 'message' && eventAddressedTo(event, agent)).slice(-lines);
-  const globalTail = (await readTeamTranscriptTail(dir, lines)).map(parseTranscriptLine).filter(Boolean);
+  const aliases = teamLaneAliases(agent, parsedWindow, dashboard, runtimeTasks);
+  const aliasSet = new Set(aliases);
+  const statusAliases = aliases.length > 1 ? [...aliases.slice(1), aliases[0]] : aliases;
+  const laneStatus = statusAliases.map((id) => dashboard?.agents?.[id]).find((entry) => entry && entry.status && entry.status !== 'pending') || status;
+  const assignedTasks = runtimeTasks.filter((task) => aliasSet.has(task?.worker) || aliasSet.has(task?.agent_hint));
+  const agentEvents = parsedWindow.filter((event) => aliasSet.has(event?.agent) || aliases.some((id) => eventAddressedTo(event, id))).slice(-lines);
+  const directMessages = parsedWindow.filter((event) => event?.type === 'message' && aliases.some((id) => eventAddressedTo(event, id))).slice(-lines);
   const laneStyle = teamLaneTextStyle(agent);
   return [
     `# SKS Team Agent Lane`,
     '',
     `Mission: ${missionId}`,
     `Agent: ${agent}`,
+    aliases.length > 1 ? `Mirrored agents: ${aliases.slice(1).join(', ')}` : null,
     `Lane color: ${laneStyle.color_name}`,
     `Requested phase: ${phase || 'any'}`,
     teamCleanupRequested(control) ? `Cleanup: requested at ${control.cleanup_requested_at || 'unknown'}` : null,
     '',
     `## Agent Status`,
-    `- status: ${status.status || 'pending'}`,
-    `- phase: ${status.phase || 'unknown'}`,
-    `- last_seen: ${status.last_seen || 'never'}`,
+    `- status: ${laneStatus.status || 'pending'}`,
+    `- phase: ${laneStatus.phase || 'unknown'}`,
+    `- last_seen: ${laneStatus.last_seen || 'never'}`,
     '',
     `## Assigned Runtime Tasks`,
     ...(runtime ? formatRuntimeTasks(assignedTasks) : ['- team-runtime-tasks.json not available yet.']),
@@ -561,9 +578,11 @@ export async function renderTeamAgentLane(dir, opts = {}) {
     '',
     `## Direct Messages`,
     ...(directMessages.length ? directMessages.map(formatTranscriptEvent) : ['- No direct or broadcast messages in the bounded tail.']),
-    '',
-    `## Fallback Global Tail`,
-    ...(globalTail.length ? globalTail.map(formatTranscriptEvent) : ['- No transcript events yet.']),
+    opts.includeGlobalTail ? '' : null,
+    opts.includeGlobalTail ? `## Global Tail` : null,
+    ...(opts.includeGlobalTail
+      ? (await readTeamTranscriptTail(dir, lines)).map(parseTranscriptLine).filter(Boolean).map(formatTranscriptEvent)
+      : []),
     teamCleanupRequested(control) ? ['', renderTeamCleanupSummary(control)].join('\n') : null
   ].filter((line) => line !== null).join('\n');
 }
@@ -683,6 +702,32 @@ function eventAddressedTo(event = {}, agent = '') {
   const target = String(event.to || '').trim().toLowerCase();
   const name = String(agent || '').trim().toLowerCase();
   return target === name || target === 'all' || target === '*' || target === 'broadcast';
+}
+
+function teamLaneAliases(agent = '', events = [], dashboard = null, runtimeTasks = []) {
+  const primary = String(agent || '').trim();
+  if (!primary) return [];
+  const aliases = [primary];
+  const ordinal = numberedLaneOrdinal(primary);
+  if (!ordinal) return aliases;
+  const role = teamLaneTextStyle(primary).role;
+  const candidates = uniqueAgentIds([
+    ...Object.keys(dashboard?.agents || {}),
+    ...events.map((event) => event?.agent).filter(Boolean),
+    ...runtimeTasks.flatMap((task) => [task?.worker, task?.agent_hint]).filter(Boolean)
+  ])
+    .filter((id) => id !== primary)
+    .filter((id) => !DEFAULT_AGENTS.includes(id))
+    .filter((id) => teamLaneTextStyle(id).role === role)
+    .filter((id) => !numberedLaneOrdinal(id));
+  const concrete = candidates[ordinal - 1];
+  if (concrete) aliases.push(concrete);
+  return aliases;
+}
+
+function numberedLaneOrdinal(agent = '') {
+  const match = String(agent || '').match(/_(\d+)$/);
+  return match ? Number(match[1]) : 0;
 }
 
 function teamLaneTextStyle(agentId = '') {

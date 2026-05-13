@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, packageRoot, dirSize, formatBytes, PACKAGE_VERSION, sksRoot } from '../core/fsx.mjs';
+import { readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, packageRoot, dirSize, formatBytes, PACKAGE_VERSION, sksRoot, readStdin } from '../core/fsx.mjs';
 import { initProject } from '../core/init.mjs';
 import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, missionDir, setCurrent, stateFile } from '../core/mission.mjs';
@@ -640,7 +640,7 @@ export async function dbCommand(sub, args = []) {
     return;
   }
   if (sub === 'scan-payload') {
-    const raw = await fsp.readFile(0, 'utf8');
+    const raw = await readStdin();
     const payload = raw.trim() ? JSON.parse(raw) : {};
     const decision = await checkDbOperation(root, {}, payload, { duringNoQuestion: false });
     console.log(JSON.stringify(decision, null, 2));
