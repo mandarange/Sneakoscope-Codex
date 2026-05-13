@@ -204,7 +204,7 @@ function recursivelyCollectStrings(obj, out = [], depth = 0) {
   if (Array.isArray(obj)) { for (const x of obj) recursivelyCollectStrings(x, out, depth + 1); return out; }
   if (typeof obj === 'object') {
     for (const [k, v] of Object.entries(obj)) {
-      if (/^(sql|query|statement|command|migration|body|input|text)$/i.test(k) || typeof v === 'object') recursivelyCollectStrings(v, out, depth + 1);
+      if (/^(sql|query|statement|command|migration|body|input|text|action|purpose|intent|description)$/i.test(k) || typeof v === 'object') recursivelyCollectStrings(v, out, depth + 1);
     }
   }
   return out;
@@ -214,6 +214,12 @@ function looksLikeSqlText(text = '') {
   const s = stripSqlComments(text).trim();
   return /^(select|with|show|explain|describe|insert|update|delete|drop|truncate|alter|create|grant|revoke)\b/i.test(s)
     || /;\s*(select|with|show|explain|describe|insert|update|delete|drop|truncate|alter|create|grant|revoke)\b/i.test(s);
+}
+
+function hasReadOnlyDbInspectionIntent(text = '') {
+  const s = String(text || '').toLowerCase();
+  if (/\b(insert|update|delete|drop|truncate|alter|create|grant|revoke|write|mutate|migration|apply|push|reset|repair)\b|삭제|수정|변경|쓰기|삽입|생성|초기화|적용/i.test(s)) return false;
+  return /\b(read.?only|select|with|show|explain|describe|inspect|list|get|fetch|count|schema)\b|조회|확인|읽|보기|목록|스키마/i.test(s);
 }
 
 export function classifyToolPayload(payload = {}) {
@@ -241,7 +247,14 @@ export function classifyToolPayload(payload = {}) {
   }
   if (toolReasons.includes('dangerous_supabase_management_tool')) level = 'destructive';
   if (toolReasons.includes('migration_apply_tool') && level !== 'destructive') level = 'write';
-  if (toolReasons.includes('database_tool') && level === 'none') level = 'possible_db';
+  if (toolReasons.includes('database_tool') && level === 'none') {
+    if (hasReadOnlyDbInspectionIntent([toolName, ...strings].join(' '))) {
+      level = 'safe';
+      reasons.push('read_only_database_inspection_intent');
+    } else {
+      level = 'possible_db';
+    }
+  }
   return { level, toolName, toolReasons, reasons, sql: sqlClass, command: commandClass, stringsExamined: strings.length };
 }
 

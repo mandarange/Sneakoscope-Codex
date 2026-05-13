@@ -3,6 +3,17 @@
 ## [Unreleased]
 
 
+## [0.7.65] - 2026-05-13
+
+### Fixed
+
+- Restore clarification and ambiguity gates as hard pauses, so SKS waits for explicit user answers instead of advancing to implementation or later pipeline stages.
+- Block non-answer tools and permission requests while a clarification gate is waiting, allowing only `sks pipeline answer` or answers-file sealing commands through.
+- Render Team tmux panes from lane-specific agent events instead of duplicating the global transcript tail.
+- Close SKS-managed Team tmux panes when session cleanup is recorded, including from stored pane metadata outside the active tmux client.
+- Clean up legacy Team tmux sessions and unrecorded Team lane panes by mission/session naming when older pane metadata is absent.
+- Allow read-only live SQL inspection through DB safety without MAD-SKS while blocking writes and destructive SQL.
+
 ## [0.7.64] - 2026-05-12
 
 ### Fixed

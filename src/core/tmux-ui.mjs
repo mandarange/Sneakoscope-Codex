@@ -119,6 +119,9 @@ const TERMINAL_TEAM_AGENT_STATUSES = new Set([
   'tmux_lane_closed'
 ]);
 
+const LEGACY_TEAM_PANE_TITLE_RE = /^(?:overview: mission_overview|scout: analysis_scout|plan: (?:debate|consensus|planner|user)|exec: (?:executor|implementation|worker)|review: (?:reviewer|qa|validation)|safety:)/;
+const GENERIC_TEAM_AGENT_IDS = new Set(['parent_orchestrator', 'analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']);
+
 export function isTmuxShellSession(env = process.env) {
   return Boolean(String(env.TMUX || '').trim());
 }
@@ -395,6 +398,11 @@ function teamCockpitAgentIds(plan = {}, dashboard = null, control = null, opts =
   const visible = teamViewAgentIds(plan).filter((id) => id && id !== 'mission_overview');
   const agents = dashboard?.agents && typeof dashboard.agents === 'object' ? dashboard.agents : null;
   if (!agents) return opts.plannedFallback ? visible : [];
+  const concrete = concreteDashboardAgentIds(agents, visible).filter((id) => {
+    const status = String(agents[id]?.status || '').trim().toLowerCase();
+    return status && status !== 'pending' && !isTerminalTeamAgentStatus(status);
+  });
+  if (concrete.length) return uniqueAgentIds(concrete);
   const active = [];
   for (const id of visible) {
     const entry = agents[id] || {};
@@ -405,6 +413,17 @@ function teamCockpitAgentIds(plan = {}, dashboard = null, control = null, opts =
   }
   if (!active.length && opts.plannedFallback) return visible;
   return uniqueAgentIds(active);
+}
+
+function concreteDashboardAgentIds(agents = {}, planned = []) {
+  const plannedSet = new Set(planned);
+  const concrete = Object.keys(agents)
+    .filter((id) => id && !plannedSet.has(id))
+    .filter((id) => !GENERIC_TEAM_AGENT_IDS.has(id))
+    .filter((id) => !/_(?:\d+)$/.test(id));
+  if (!concrete.length) return [];
+  const plannedRoles = new Set(planned.map((id) => teamLaneStyle(id).role));
+  return concrete.filter((id) => plannedRoles.has(teamLaneStyle(id).role));
 }
 
 function teamCockpitLanes(plan = {}, dashboard = null, control = null, opts = {}) {
@@ -439,6 +458,10 @@ function parseTmuxPaneLines(stdout = '') {
       role: role || ''
     };
   }).filter((pane) => /^%\d+$/.test(pane.pane_id || ''));
+}
+
+function isLegacyTeamPane(pane = {}) {
+  return LEGACY_TEAM_PANE_TITLE_RE.test(String(pane.title || '').trim());
 }
 
 async function listTmuxWindowPanes(bin, windowId) {
@@ -784,7 +807,13 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
 
 export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFile = null, json = false, attach = false, args = [] } = {}) {
   const launch = await buildTmuxLaunchPlan({ root, session: `sks-team-${missionId}` });
-  const visibleAgents = teamViewAgentIds(plan);
+  const missionDir = path.join(launch.root, '.sneakoscope', 'missions', missionId);
+  const dashboard = await readTeamDashboard(missionDir).catch(() => null);
+  const control = await readTeamControl(missionDir).catch(() => null);
+  const plannedAgents = teamViewAgentIds(plan);
+  const concreteAgents = concreteDashboardAgentIds(dashboard?.agents || {}, plannedAgents);
+  const cleanupRequested = teamCleanupRequested(control);
+  const visibleAgents = cleanupRequested ? [] : (json ? plannedAgents : (concreteAgents.length ? concreteAgents : plannedAgents));
   const commands = visibleAgents.map((agentId) => ({
     agent: agentId,
     command: teamAgentCommand(launch.root, missionId, agentId, teamLanePhase(agentId), promptFile),
@@ -792,7 +821,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
     title: teamLaneTitle(agentId)
   }));
   const overview = { agent: 'mission_overview', role: 'overview', command: teamOverviewCommand(launch.root, missionId), style: teamLaneStyle('mission_overview'), title: teamLaneTitle('mission_overview') };
-  const lanes = [overview, ...commands.map((entry) => ({ ...entry, role: entry.style.role }))];
+  const lanes = cleanupRequested ? [] : [overview, ...commands.map((entry) => ({ ...entry, role: entry.style.role }))];
   const splitUi = {
     mode: 'single_window_split_panes',
     window: 'sks',
@@ -813,14 +842,14 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
     agents: commands,
     lanes,
     split_ui: splitUi,
-    cleanup_policy: 'mark-complete; tmux panes remain user controlled',
+    cleanup_policy: 'mark-complete; close SKS-managed Team panes; main Codex pane remains user controlled',
     blockers: launch.blockers,
     attach_command: launch.attach_command
   };
   if (json || !launch.ready) return result;
   const wantsSeparateSession = args.includes('--separate-session') || args.includes('--new-session') || args.includes('--legacy-team-session') || args.includes('--no-dynamic-team-tmux');
   if (!wantsSeparateSession) {
-    const cockpit = await reconcileTmuxTeamCockpit({ root: launch.root, missionId, plan, promptFile, plannedFallback: true });
+    const cockpit = await reconcileTmuxTeamCockpit({ root: launch.root, missionId, plan, promptFile, dashboard, control, plannedFallback: true });
     result.dynamic_cockpit = cockpit;
     if (cockpit.ok) {
       result.created = true;
@@ -962,8 +991,25 @@ async function readTmuxTeamRecord(root, missionId) {
 export async function cleanupTmuxTeamView({ root, missionId = 'latest', closeSession = false } = {}) {
   const resolvedRoot = path.resolve(root || await sksRoot());
   const record = await readTmuxTeamRecord(resolvedRoot, missionId);
-  if (!record?.session) return { ok: false, skipped: true, reason: 'no recorded tmux Team session', mission_id: missionId };
+  if (!record?.session) {
+    const legacy = await cleanupLegacyTmuxTeamSurfaces(resolvedRoot, missionId, { closeSession }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'legacy tmux cleanup failed' }));
+    return {
+      ok: legacy.ok,
+      skipped: legacy.closed_lane_count === 0 && !legacy.killed_session,
+      reason: legacy.reason,
+      mission_id: missionId,
+      legacy_cleanup: legacy,
+      requested_close_surfaces: legacy.requested_close_surfaces || 0,
+      closed_surfaces: legacy.closed_lane_count || (legacy.killed_session ? 1 : 0)
+    };
+  }
   const dynamicCleanup = await reconcileTmuxTeamCockpit({ root: resolvedRoot, missionId: record.mission_id || missionId, close: true }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'dynamic tmux cleanup failed' }));
+  const recordedCleanup = dynamicCleanup?.ok
+    ? null
+    : await cleanupRecordedTmuxTeamPanes(resolvedRoot, record.mission_id || missionId, record).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'recorded tmux cleanup failed' }));
+  const legacyCleanup = (dynamicCleanup?.closed_lane_count || recordedCleanup?.closed_lane_count)
+    ? null
+    : await cleanupLegacyTmuxTeamSurfaces(resolvedRoot, record.mission_id || missionId, { closeSession: false }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'legacy tmux cleanup failed' }));
   let killed_session = false;
   if ((closeSession || closeSession === true) && record.mode !== 'current_session_dynamic_panes') {
     const tmuxBin = await findTmuxBin() || 'tmux';
@@ -979,13 +1025,110 @@ export async function cleanupTmuxTeamView({ root, missionId = 'latest', closeSes
     close_session: Boolean(closeSession),
     killed_session,
     dynamic_cleanup: dynamicCleanup,
-    requested_close_surfaces: closeSession ? 1 : (dynamicCleanup?.closed_lane_count || 0),
-    closed_surfaces: killed_session ? 1 : (dynamicCleanup?.closed_lane_count || 0),
+    recorded_cleanup: recordedCleanup,
+    legacy_cleanup: legacyCleanup,
+    requested_close_surfaces: closeSession ? 1 : (dynamicCleanup?.closed_lane_count || recordedCleanup?.closed_lane_count || legacyCleanup?.requested_close_surfaces || 0),
+    closed_surfaces: killed_session ? 1 : (dynamicCleanup?.closed_lane_count || recordedCleanup?.closed_lane_count || legacyCleanup?.closed_lane_count || 0),
     reason: dynamicCleanup?.ok
       ? 'cleanup closed managed Team panes in the current SKS tmux session.'
+      : recordedCleanup?.ok
+        ? 'cleanup closed recorded managed Team panes by stored tmux pane ids.'
+        : legacyCleanup?.ok
+          ? legacyCleanup.reason
       : closeSession
         ? 'tmux kill-session requested for recorded Team session.'
-        : 'cleanup marks the SKS tmux Team record complete; panes remain user-controlled.'
+        : 'cleanup marks the SKS tmux Team record complete; no managed panes were reachable.'
+  };
+}
+
+async function cleanupLegacyTmuxTeamSurfaces(root, missionId, opts = {}) {
+  const id = String(missionId || '').trim();
+  const tmuxBin = await findTmuxBin() || 'tmux';
+  const current = await currentTmuxTarget(tmuxBin).catch(() => ({ ok: false }));
+  const closed = [];
+  const failed = [];
+  let killed_session = false;
+  let session_kill_requested = false;
+  const session = id && id !== 'latest' ? sanitizeTmuxSessionName(`sks-team-${id}`) : '';
+  if (session && await hasTmuxSession(tmuxBin, session)) {
+    if (current.ok && current.session === session) {
+      const panes = await listTmuxWindowPanes(tmuxBin, current.window_id);
+      if (panes.ok) {
+        for (const pane of panes.panes.filter((entry) => entry.pane_id !== current.pane_id && isLegacyTeamPane(entry))) {
+          const kill = await tmuxRun(tmuxBin, ['kill-pane', '-t', pane.pane_id], { timeoutMs: 5000 });
+          if (kill.code === 0) closed.push({ pane_id: pane.pane_id, title: pane.title });
+          else failed.push({ pane_id: pane.pane_id, title: pane.title, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
+        }
+      }
+    } else {
+      session_kill_requested = true;
+      const kill = await tmuxRun(tmuxBin, ['kill-session', '-t', session], { timeoutMs: 5000 });
+      killed_session = kill.code === 0;
+      if (!killed_session) failed.push({ session, stderr: kill.stderr || kill.stdout || 'tmux kill-session failed' });
+    }
+  }
+  if (current.ok) {
+    const panes = await listTmuxWindowPanes(tmuxBin, current.window_id);
+    if (panes.ok) {
+      for (const pane of panes.panes.filter((entry) => !entry.managed && entry.pane_id !== current.pane_id && isLegacyTeamPane(entry))) {
+        if (closed.some((entry) => entry.pane_id === pane.pane_id)) continue;
+        const kill = await tmuxRun(tmuxBin, ['kill-pane', '-t', pane.pane_id], { timeoutMs: 5000 });
+        if (kill.code === 0) closed.push({ pane_id: pane.pane_id, title: pane.title });
+        else failed.push({ pane_id: pane.pane_id, title: pane.title, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
+      }
+      if (closed.length) {
+        await tmuxRun(tmuxBin, ['select-layout', '-t', current.window_id, 'tiled'], { timeoutMs: 5000 }).catch(() => null);
+        await tmuxRun(tmuxBin, ['select-layout', '-t', current.window_id, '-E'], { timeoutMs: 5000 }).catch(() => null);
+      }
+    }
+  }
+  return {
+    ok: failed.length === 0,
+    skipped: !killed_session && closed.length === 0,
+    session: session || null,
+    killed_session,
+    closed_lane_count: closed.length,
+    requested_close_surfaces: (session_kill_requested ? 1 : 0) + closed.length,
+    closed,
+    failed,
+    reason: killed_session
+      ? 'cleanup closed legacy Team tmux session by mission id.'
+      : closed.length
+        ? 'cleanup closed legacy Team panes by lane title.'
+        : 'cleanup found no legacy Team panes for this mission.'
+  };
+}
+
+async function cleanupRecordedTmuxTeamPanes(root, missionId, record = {}) {
+  const id = record.mission_id || missionId;
+  const cockpitState = await readJson(tmuxCockpitStatePath(root), {}).catch(() => ({}));
+  const cockpit = cockpitState?.missions?.[id] || {};
+  const target = cockpit.window_id || record.window_id || cockpit.session || record.session;
+  if (!target) return { ok: false, skipped: true, reason: 'no recorded tmux target', closed_lane_count: 0 };
+  const tmuxBin = await findTmuxBin() || 'tmux';
+  const paneList = await listTmuxWindowPanes(tmuxBin, target);
+  if (!paneList.ok) return { ok: false, skipped: true, reason: paneList.stderr, closed_lane_count: 0 };
+  const managed = paneList.panes.filter((pane) => pane.managed && pane.mission_id === id);
+  const closed = [];
+  const failed = [];
+  for (const pane of managed) {
+    const kill = await tmuxRun(tmuxBin, ['kill-pane', '-t', pane.pane_id], { timeoutMs: 5000 });
+    if (kill.code === 0) closed.push({ pane_id: pane.pane_id, agent: pane.agent, role: pane.role });
+    else failed.push({ pane_id: pane.pane_id, agent: pane.agent, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
+  }
+  if (closed.length) {
+    await tmuxRun(tmuxBin, ['select-layout', '-t', target, 'tiled'], { timeoutMs: 5000 }).catch(() => null);
+    await tmuxRun(tmuxBin, ['select-layout', '-t', target, '-E'], { timeoutMs: 5000 }).catch(() => null);
+  }
+  return {
+    ok: failed.length === 0,
+    skipped: false,
+    session: cockpit.session || record.session,
+    window_id: cockpit.window_id || record.window_id || null,
+    closed_lane_count: closed.length,
+    closed,
+    failed,
+    reason: closed.length ? 'closed recorded managed panes' : 'no recorded managed panes found'
   };
 }
 

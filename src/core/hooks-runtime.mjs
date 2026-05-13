@@ -181,14 +181,17 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
 }
 
 function isClarificationAwaiting(state = {}) {
-  return Boolean(state.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS'))
-    || ['QALOOP_CLARIFICATION_AWAITING_ANSWERS'].includes(String(state.phase || ''));
+  const phase = String(state.phase || '');
+  const stopGate = String(state.stop_gate || '');
+  const gateAwaiting = phase.includes('CLARIFICATION_AWAITING_ANSWERS') || stopGate === 'clarification-gate';
+  if (!gateAwaiting) return false;
+  if (!state?.mission_id) return false;
+  if (state.ambiguity_gate_required !== true || state.ambiguity_gate_passed === true) return false;
+  return Boolean(state.clarification_required || state.implementation_allowed === false);
 }
 
 function isBlockingClarificationAwaiting(state = {}) {
-  if (!isClarificationAwaiting(state)) return false;
-  return ['QALoop', 'PPT'].includes(String(state.route || ''))
-    || ['QALOOP', 'PPT'].includes(String(state.mode || ''));
+  return isClarificationAwaiting(state);
 }
 
 function looksLikeClarificationCancel(prompt = '') {
@@ -316,7 +319,7 @@ function clarificationGateLocked(state = {}) {
     && state.implementation_allowed === false
     && state.ambiguity_gate_required === true
     && state.ambiguity_gate_passed !== true
-    && isBlockingClarificationAwaiting(state)
+    && (String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS') || String(state.stop_gate || '') === 'clarification-gate')
   );
 }
 

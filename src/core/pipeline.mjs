@@ -509,8 +509,7 @@ export async function activeRouteContext(root, state) {
     return `SKS Honest Mode found unresolved gaps for ${state.route_command || state.route || state.mode}. Do not ask ambiguity questions again. Continue from the sealed decision-contract.json, inspect .sneakoscope/missions/${state.mission_id}/honest-loopback.json, fix gaps, rerun verification, refresh/validate TriWiki, then retry final Honest Mode.${reasoningNote}${planNote}`;
   }
   if (state.clarification_required && String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS')) {
-    if (['QALoop', 'PPT'].includes(String(state.route || '')) || ['QALOOP', 'PPT'].includes(String(state.mode || ''))) return clarificationAwaitingAnswersContext(root, state);
-    return `Previous ${state.route_command || state.route || state.mode || 'SKS'} clarification state is non-blocking. Do not reprint old question sheets; prepare the current prompt normally and replace stale route state when needed.`;
+    return clarificationAwaitingAnswersContext(root, state);
   }
   if (state.clarification_passed && String(state.phase || '').includes('CLARIFICATION_CONTRACT_SEALED')) {
     return `Route contract sealed for ${state.route_command || state.route || state.mode}. Use decision-contract.json and ${PIPELINE_PLAN_ARTIFACT} before executing the route. Before the next route phase, read relevant TriWiki context, hydrate low-trust claims from source, and refresh/validate TriWiki again after new findings or artifact changes. Next atomic action: continue the original route lifecycle with the inferred goal, constraints, non-goals, risk boundary, and test scope.${planNote}`;
@@ -993,7 +992,7 @@ async function clarificationAwaitingAnswersContext(root, state) {
   const id = state.mission_id;
   if (!id) return '';
   const planNote = await activePipelinePlanNote(root, state);
-  return `Active SKS route ${state.route_command || state.route || state.mode} has stale prequestion state. Do not reprint old question sheets. Re-prepare the current prompt so the route auto-seals from prompt, TriWiki/current-code defaults, and conservative SKS policy, or seal the existing mission internally with "sks pipeline answer ${id} --stdin" using inferred answers.${planNote}`;
+  return `Active SKS route ${state.route_command || state.route || state.mode} is paused at its ambiguity gate and waiting for explicit user answers. Do not advance to implementation, tests, route materialization, or a new pipeline stage. If the user's reply is now available, seal it with "sks pipeline answer ${id} --stdin"; otherwise show only the missing slot ids from .sneakoscope/missions/${id}/questions.md and wait.${planNote}`;
 }
 
 function clarificationVisibleResponseContract(id) {
@@ -1031,9 +1030,9 @@ async function clarificationStopReason(root, state, kind) {
   const files = state?.mission_id ? `
 Answer schema: .sneakoscope/missions/${state.mission_id}/required-answers.schema.json` : '';
   const command = `sks pipeline answer ${id} --stdin`;
-  const title = `SKS ${routeName} has stale prequestion state.`;
+  const title = `SKS ${routeName} is paused for explicit user answers.`;
   return `${title}
-Do not reprint old question sheets. Seal internally with inferred answers using "${command}", or re-prepare the current prompt so the route auto-seals.${files}
+Do not continue to implementation or the next pipeline stage until the ambiguity gate is sealed. Ask only the missing slot ids if they have not already been shown, then wait for the user. When the user's reply is available, seal it with "${command}".${files}
 
 After the contract is sealed, continue the original ${routeName} route.`;
 }
@@ -1329,7 +1328,15 @@ export async function evaluateStop(root, state, payload, opts = {}) {
 }
 
 function clarificationGatePending(state = {}) {
-  return false;
+  const phase = String(state.phase || '');
+  return Boolean(state?.clarification_required && phase.includes('CLARIFICATION_AWAITING_ANSWERS'))
+    || Boolean(
+      state?.mission_id
+      && state.implementation_allowed === false
+      && state.ambiguity_gate_required === true
+      && state.ambiguity_gate_passed !== true
+      && (phase.includes('CLARIFICATION_AWAITING_ANSWERS') || state.stop_gate === 'clarification-gate')
+    );
 }
 
 async function complianceBlock(root, state = {}, reason = '', detail = {}) {

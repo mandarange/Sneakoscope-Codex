@@ -2010,10 +2010,26 @@ async function selftest() {
   };
   for (let i = 0; i < 5; i++) {
     const stop = await evaluateStop(tmp, clarificationState, { last_assistant_message: 'continuing implementation without visible questions' });
-    if (stop?.gate === 'clarification' || /ambiguity|clarification|question/i.test(String(stop?.reason || ''))) throw new Error('selftest failed: stale clarification gate still hard-paused without visible questions');
+    if (stop?.decision !== 'block' || stop?.gate !== 'clarification' || !/paused|answers|pipeline answer/i.test(String(stop?.reason || ''))) throw new Error('selftest failed: clarification not paused');
   }
-  const visibleQuestionStop = await evaluateStop(tmp, clarificationState, { last_assistant_message: 'Required questions still pending:\n1. GOAL_PRECISE: What should be changed?\n\nReply by slot id; I will seal the contract with sks pipeline answer latest --stdin.' });
-  if (visibleQuestionStop?.gate === 'clarification' || /ambiguity|clarification/i.test(String(visibleQuestionStop?.reason || ''))) throw new Error('selftest failed: visible stale clarification wording still blocked stop');
+  if (await exists(path.join(clarificationMission.dir, 'hard-blocker.json'))) throw new Error('selftest failed: clarification wrote hard-blocker');
+  const visibleQuestionStop = await evaluateStop(tmp, clarificationState, { last_assistant_message: 'Required questions\n1. GOAL_PRECISE\nsks pipeline answer latest --stdin' });
+  if (visibleQuestionStop?.continue !== true) throw new Error('selftest failed: visible clarification did not wait');
+  const cg = await projectGateStatus(tmp, clarificationState);
+  if (!cg.blockers.includes('clarification-gate:explicit_user_answers') || !cg.blockers.includes('clarification-gate:pipeline_answer')) throw new Error('selftest failed: missing clarification blockers');
+  await setCurrent(tmp, clarificationState);
+  const hookPath = path.join(packageRoot(), 'bin', 'sks.mjs');
+  const blockedPre = await runProcess(process.execPath, [hookPath, 'hook', 'pre-tool'], { cwd: tmp, input: JSON.stringify({ cwd: tmp, tool_name: 'Bash', tool_input: { command: 'npm run selftest' } }), timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (blockedPre.code !== 0) throw new Error(`selftest failed: pre-tool exit ${blockedPre.code}: ${blockedPre.stderr}`);
+  const bp = JSON.parse(blockedPre.stdout || '{}');
+  if (bp.decision !== 'block' || !String(bp.reason || '').includes('waiting for explicit user answers')) throw new Error('selftest failed: pre-tool not blocked');
+  const deniedPermission = await runProcess(process.execPath, [hookPath, 'hook', 'permission-request'], { cwd: tmp, input: JSON.stringify({ cwd: tmp, command: 'npm run selftest', action: 'Run command' }), timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (deniedPermission.code !== 0) throw new Error(`selftest failed: permission exit ${deniedPermission.code}: ${deniedPermission.stderr}`);
+  const dp = JSON.parse(deniedPermission.stdout || '{}');
+  if (dp.hookSpecificOutput?.decision?.behavior !== 'deny' || !String(dp.hookSpecificOutput?.decision?.message || '').includes('waiting for explicit user answers')) throw new Error('selftest failed: permission not denied');
+  const answerTool = await runProcess(process.execPath, [hookPath, 'hook', 'pre-tool'], { cwd: tmp, input: JSON.stringify({ cwd: tmp, tool_name: 'Bash', tool_input: { command: `sks pipeline answer ${clarificationMission.id} --stdin` } }), timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (answerTool.code !== 0) throw new Error(`selftest failed: answer hook exit ${answerTool.code}: ${answerTool.stderr}`);
+  if (JSON.parse(answerTool.stdout || '{}').decision === 'block') throw new Error('selftest failed: answer command blocked');
   await setCurrent(tmp, loopState);
   const dfixPromptHook = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'hook', 'user-prompt-submit'], {
     cwd: tmp,
@@ -3275,7 +3291,9 @@ async function selftest() {
   await writeTextAtomic(fakeTmuxBin, `#!/usr/bin/env node\nconst fs = require('node:fs');\nconst log = process.env.SKS_FAKE_TMUX_LOG;\nif (log) fs.appendFileSync(log, process.argv.slice(2).join(' ') + '\\n');\nconst cmd = process.argv[2];\nif (cmd === 'has-session') process.exit(0);\nif (cmd === 'kill-session') process.exit(0);\nif (cmd === 'kill-pane') process.exit(0);\nif (cmd === 'new-session') { console.log('%1'); process.exit(0); }\nif (cmd === 'split-window') { console.log(process.env.SKS_FAKE_TMUX_SPLIT_ID || '%2'); process.exit(0); }\nif (cmd === 'list-windows') { console.log('@1'); process.exit(0); }\nif (cmd === 'display-message') { console.log(process.env.SKS_FAKE_TMUX_DISPLAY || 'sks-existing-selftest\\t@1\\t%1'); process.exit(0); }\nif (cmd === 'list-panes') { console.log(process.env.SKS_FAKE_TMUX_LIST || ''); process.exit(0); }\nif (cmd === 'set-option' || cmd === 'select-layout' || cmd === 'resize-window' || cmd === 'set-window-option' || cmd === 'set-hook') process.exit(0);\nprocess.exit(0);\n`);
   await fsp.chmod(fakeTmuxBin, 0o755);
   const previousFakeTmuxLog = process.env.SKS_FAKE_TMUX_LOG;
+  const previousPath = process.env.PATH;
   process.env.SKS_FAKE_TMUX_LOG = fakeTmuxLog;
+  process.env.PATH = `${fakeTmuxDir}${path.delimiter}${previousPath || ''}`;
   const recreatedTmux = await createTmuxSession({ root: tmp, session: 'sks-existing-selftest', tmux: { bin: fakeTmuxBin }, codex: { bin: process.execPath } }, [
     { cwd: tmp, command: 'pwd', role: 'overview' },
     { cwd: tmp, command: 'pwd', role: 'lane' }
@@ -3332,6 +3350,8 @@ async function selftest() {
   if (!madCockpit.created || madCockpit.mode !== 'mad_session' || madCockpit.opened?.panes?.length !== 1 || !madTmuxLogText.includes('new-session') || madTmuxLogText.includes('split-window')) throw new Error('selftest failed: MAD tmux launch should create one pane and leave split panes to Team lanes');
   if (previousFakeTmuxLog === undefined) delete process.env.SKS_FAKE_TMUX_LOG;
   else process.env.SKS_FAKE_TMUX_LOG = previousFakeTmuxLog;
+  if (previousPath === undefined) delete process.env.PATH;
+  else process.env.PATH = previousPath;
   const codexLaunchArgs = defaultCodexLaunchArgs({ SKS_CODEX_REASONING: 'low' }).join(' ');
   if (!codexLaunchArgs.includes('service_tier="fast"') || !codexLaunchArgs.includes('model_reasoning_effort="low"')) throw new Error('selftest failed: Codex tmux launch args do not force Fast service tier plus dynamic reasoning');
   await initTeamLive(teamId, teamDir, '역할 팀 테스트', { agentSessions: roleTeamPlan.agent_session_count, roleCounts: roleTeamPlan.role_counts, roster: roleTeamPlan.roster });
@@ -3422,7 +3442,7 @@ async function selftest() {
   if (!teamLive.includes('Context tracking SSOT: TriWiki')) throw new Error('selftest failed: team live transcript missing TriWiki context tracking');
   if (!(await readTeamTranscriptTail(teamDir, 1)).join('\n').includes('selftest mapped options')) throw new Error('selftest failed: team transcript tail missing event');
   const teamLane = await renderTeamAgentLane(teamDir, { missionId: teamId, agent: 'analysis_scout_1', lines: 4 });
-  if (!teamLane.includes('SKS Team Agent Lane') || !teamLane.includes('analysis_scout_1') || !teamLane.includes('selftest mapped repo slice')) throw new Error('selftest failed: team agent lane missing agent event context');
+  if (!teamLane.includes('selftest mapped repo slice')) throw new Error('selftest failed: team agent lane missing event context');
   const teamLaneCli = await runProcess(process.execPath, [hookBin, 'team', 'lane', teamId, '--agent', 'analysis_scout_1', '--lines', '4'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (teamLaneCli.code !== 0 || !String(teamLaneCli.stdout || '').includes('SKS Team Agent Lane') || !String(teamLaneCli.stdout || '').includes('analysis_scout_1')) throw new Error('selftest failed: sks team lane CLI did not render an agent lane');
   await writeTextAtomic(path.join(teamDir, 'team-analysis.md'), '- claim: analysis scout mapped route registry | source: src/core/routes.mjs | risk: high | confidence: supported\n');
