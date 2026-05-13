@@ -1,7 +1,5 @@
 # Sneakoscope Codex
 
-![](https://github.com/mandarange/Sneakoscope-Codex/raw/dev/docs/assets/sneakoscope-codex-logo.png)
-
 Sneakoscope Codex (`sks`) is a Codex CLI/App harness for repeatable workflows. It adds terminal commands, Codex App `$` commands, tmux workspaces, Team/QA/Research routes, pipeline plans, Computer Use, imagegen UI/UX review, Goal, Context7, DB safety, TriWiki, design-system routing, skill dreaming, Honest Mode.
 
 ## Quick Start
@@ -40,32 +38,14 @@ sks selftest --mock
 
 ## What Sneakoscope Adds
 
-| Area | What it does |
-| --- | --- |
-| CLI runtime | Bare `sks` opens or reuses the default tmux Codex CLI workspace. `sks tmux open` remains the explicit form for session/workspace flags, and `sks --mad` launches a single-pane MAD tmux session with the explicit full-access high-reasoning profile. Split panes are reserved for active Team scout/worker lanes. |
-| Codex App commands | Installs generated skills so `$Team`, `$From-Chat-IMG`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Image-UX-Review`, `$UX-Review`, `$Goal`, `$DB`, `$Wiki`, `$Help`, and related routes are visible in prompt workflows. `sks codex-app remote-control` wraps Codex CLI 0.130.0+ headless remote control without falling back to older app-server internals. |
-| OpenClaw agents | Generates an OpenClaw skill package so OpenClaw agents can attach `sneakoscope-codex`, enable the `shell` tool, and discover/use SKS commands from the target repo root. |
-| Pipeline plans | Writes `pipeline-plan.json` for stateful routes so the runtime lane, kept stages, skipped stages, verification commands, and no-unrequested-fallback invariant are visible with `sks pipeline plan`. |
-| Team orchestration | Runs substantial work through score-based ambiguity handling, scouts, TriWiki refresh, debate, runtime task graphs, worker inboxes, implementation, review, cleanup, reflection, and Honest Mode; narrow work should use Proof Field evidence to skip unrelated pipeline work instead of expanding Team. |
-| Skill dreaming | Records cheap generated-skill usage counters in JSON and only periodically scans `.agents/skills` for keep, merge, prune, and improvement candidates. Reports are recommendation-only and never delete skills automatically. |
-| From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
-| QA loop | Dogfoods UI/API behavior with safety gates, Codex Computer Use-only UI evidence, safe fixes, and rechecks. |
-| PPT pipeline | Uses `$PPT` for restrained HTML/PDF presentation artifacts with sealed delivery context, audience, STP, decision context, source research, design SSOT, export QA, editable source HTML, and real `$imagegen` assets when required. |
-| Image UX Review | Uses `$Image-UX-Review` / `$UX-Review` for UI/UX audits that require generated annotated review images through Codex App `$imagegen`/`gpt-image-2` before issue extraction and optional rechecks. |
-| Computer Use fast lane | Uses `$Computer-Use` / `$CU` for UI/browser/visual work that needs maximum speed: skip Team debate and upfront TriWiki loops, use Codex Computer Use directly, then refresh/validate TriWiki and run Honest Mode at final closeout. |
-| Goal | Bridges Codex native `/goal` create, pause, resume, and clear controls while implementation continues through the selected SKS route. |
-| TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, `attention.hydrate_first`, and prompt-bound mistake recall ledgers. |
-| Context7 | Requires current docs for external packages, APIs, MCPs, SDKs, and framework/runtime behavior when correctness depends on current guidance. |
-| Design SSOT | Treats `design.md` as the only design decision source of truth. `docs/Design-Sys-Prompt.md` is the builder prompt; getdesign.md, official getdesign docs, and curated DESIGN.md examples from `VoltAgent/awesome-design-md` are source inputs that must be fused into `design.md` or route-local style tokens instead of becoming parallel authorities. |
-| DB safety | Treats SQL, migrations, Supabase, RLS, and destructive operations as high risk. |
-| Release hygiene | Checks versioning, changelog, package size, syntax, selftests. |
+`sks` adds a tmux Codex CLI runtime, Codex App `$` commands, Team/QA/PPT/Research/DB/GX/Wiki routes, OpenClaw skill generation, Context7-gated current docs, TriWiki context packs, DB safety, design SSOT policy, skill dreaming, release checks, and Honest Mode.
 
 ## Requirements
 
 - Node.js `>=20.11`
 - npm
 - Codex CLI for terminal workflows
-- Codex App for app-facing workflows, with Codex Computer Use required for UI/browser evidence and `$imagegen`/`gpt-image-2` required for generated raster assets or generated image-review evidence
+- Codex App for app-facing workflows, including Codex Computer Use and `$imagegen`/`gpt-image-2` evidence when required
 - tmux for the CLI-first runtime
 - Context7 MCP for current-docs-gated routes
 
@@ -75,12 +55,7 @@ Install tmux from [tmux.dev/download](https://www.tmux.dev/download). On macOS, 
 brew install tmux
 ```
 
-The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex` versions before opening tmux and prompts to update when the terminal can answer y/n. If you approve the Codex CLI update, SKS installs `@openai/codex@latest` and opens tmux with the version visible on PATH. `sks --mad` is stricter than the normal runtime path:
-
-- Checks npm for newer `sneakoscope` and `@openai/codex` versions before launch and asks whether to update when the terminal can answer y/n.
-- Installs the latest Codex CLI with `npm i -g @openai/codex@latest` when it is missing and you approve or pass `--yes`.
-- Requires tmux 3.x or newer before opening the session.
-- Creates a named detached single-pane tmux session and prints only the session, gate, attach, and blocker details needed to act.
+The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex` versions before opening tmux. `sks --mad` also checks dependencies, requires tmux 3.x, and prints only the session, gate, attach, and blocker details needed to act.
 
 ## Installation
 
@@ -97,7 +72,7 @@ sks root
 
 Project setup writes shared `.gitignore` entries for generated SKS files: `.sneakoscope/`, `.codex/`, `.agents/`, and managed `AGENTS.md`. Setup, doctor repair, and npm postinstall refreshes also compare the previous SKS generated-file manifest with the current package templates and prune stale SKS-generated legacy skills or agent files while preserving user-owned custom skills. Use `sks setup --local-only` when you want those excludes kept only in `.git/info/exclude`.
 
-During npm postinstall, SKS also installs generated Codex App skills and tries the official getdesign Codex skill command, `skills add MohtashamMurshid/getdesign`, when the `skills` CLI is available. If that CLI is missing, setup still installs the generated `getdesign-reference` skill. Design work still flows through one authority: `design.md`. When `design.md` is missing, `docs/Design-Sys-Prompt.md` is the builder prompt and getdesign plus curated DESIGN.md examples such as [VoltAgent/awesome-design-md](https://github.com/VoltAgent/awesome-design-md) are inputs to fuse into that SSOT or into route-local `$PPT` style tokens.
+During npm postinstall, SKS installs generated Codex App skills and tries `skills add MohtashamMurshid/getdesign` when the `skills` CLI is available. Design work still flows through one authority: `design.md`.
 
 ### One-Shot Install
 
@@ -179,9 +154,9 @@ sks codex-lb repair
 sks
 ```
 
-Bare `sks` can also prompt for codex-lb auth before launch; SKS stores the key in `~/.codex/sks-codex-lb.env`, syncs `codex login --with-api-key`, and loads it into a fresh tmux session.
+Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, syncs `codex login --with-api-key`, and loads it in tmux.
 
-If Codex CLI auth drifts after a launch or reinstall, run `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
+If Codex CLI auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
 
 ### MAD tmux Launch
 
@@ -190,17 +165,9 @@ sks --mad
 sks --mad --yes
 ```
 
-This syncs existing codex-lb/Codex CLI auth before launch, creates/uses the `sks-mad-high` Codex profile for a one-shot full-access, high-reasoning tmux session with `sandbox_mode = "danger-full-access"` and `approval_policy = "never"`, opens an active MAD-SKS permission gate for that tmux run, then launches a single Codex CLI pane. The session recreates the named session on launch so stale split-pane MAD sessions collapse back to the single-pane default, then attaches in an interactive terminal. If codex-lb is configured and no explicit `--workspace`/`--session` was passed, SKS opens a fresh tmux session so the repaired key is loaded by the Codex process immediately. While the gate is active, live server work, Supabase MCP database writes, direct SQL, targeted DML, schema cleanup, Supabase MCP `apply_migration`, and required Supabase CLI migration application such as `supabase migration up` or `supabase db push` are allowed. Catastrophic database wipe/all-row/project-management safeguards remain active.
+This syncs existing codex-lb/Codex CLI auth, creates/uses the `sks-mad-high` full-access profile, opens the MAD-SKS permission gate for that tmux run, and launches a single Codex CLI pane. The session recreates the named session so stale split-pane MAD sessions collapse back to one pane. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
 
-MAD does not disable the pipeline contract: stages, executors, reviewers, and auto-review policy still must not invent unrequested fallback implementation code. If the requested path cannot be implemented, SKS should block with evidence rather than add substitute behavior.
-
-Before launching, SKS checks whether a newer `sneakoscope` exists on npm. In an interactive terminal it prompts:
-
-```text
-SKS 0.x.y -> 0.x.z update before MAD launch? [Y/n]
-```
-
-Answer `y` to install `sneakoscope@latest`, then rerun `sks --mad`. Answer `n` to continue with the current version. Use `--yes` to approve missing dependency installs automatically.
+Before launching, SKS checks npm for a newer `sneakoscope`; answer `y` to update or `n` to continue. Use `--yes` to approve missing dependency installs automatically.
 
 ### Team Missions
 
@@ -216,17 +183,7 @@ sks team dashboard latest
 sks team log latest
 ```
 
-By default, Team missions keep at least five QA/reviewer lanes active. Use explicit role counts only when you need to raise or otherwise pin the lane mix for a specific mission.
-
-Team mode prepares the mission, records live events, compiles runtime tasks and worker inboxes, writes schema-backed effort/work-order/dashboard artifacts, and reconciles split live lanes inside the current SKS-owned tmux session when available. Outside an SKS tmux session, `sks team open-tmux --separate-session` keeps the named `sks-team-*` fallback view. Use `--no-open-tmux` for artifact-only mission creation. The default terminal output stays compact: mission id, agent count, role count, tmux status, watch command, and artifact directory. `sks team dashboard` renders the cockpit panes for mission overview, agent lanes, task DAG, QA/dogfood, artifacts/evidence, and performance.
-
-The tmux Team launch is a live orchestration screen in one tmux window: the main Codex pane stays alive, a managed overview pane follows `sks team watch <mission-id> --follow`, and neighboring managed split panes follow individual `sks team lane <mission-id> --agent <name> --follow` views. Pane headers show only mission, lane, phase, follow command, and cleanup command. SKS tags Team panes with tmux user options, closes only those managed panes when agent lanes complete or cleanup is requested, and recalculates the tiled layout after split/close operations. The separate `sks-team-*` session remains available as a fallback. SKS gives lanes role-specific colors, labels, and terminal titles, so scouts, planning/debate voices, executors, reviewers, and safety lanes are visually distinct while detailed evidence is mirrored into `team-transcript.jsonl`, `team-live.md`, and `team-dashboard.json`.
-
-Team roster and runtime artifacts now include per-agent Fast reasoning metadata. Simple bounded Team lanes can use low reasoning, tool-heavy runtime/CLI/tmux work uses medium, and knowledge, current-docs, safety, DB, release, commit, or research-heavy lanes use high or xhigh as appropriate instead of opening every scout at high.
-
-Agent sessions communicate through the bounded Team transcript. Use `sks team message <mission-id|latest> --from <agent> --to <agent|all> --message "..."` to add direct or broadcast messages; lane panes show messages addressed to that agent plus the fallback global tail.
-
-When the Team route reaches `session_cleanup`, SKS marks the tmux session record complete and asks `watch --follow` / `lane --follow` panes to show a cleanup summary and stop. You can also run `sks team cleanup-tmux <mission-id|latest>` manually, or `sks team cleanup-tmux latest --close` to kill the recorded tmux session.
+Team missions keep at least five QA/reviewer lanes active, record live events, compile runtime tasks and worker inboxes, write schema-backed effort/work-order/dashboard artifacts, and reconcile split live lanes in tmux when available. Use `sks team watch`, `sks team lane`, `sks team message`, and `sks team cleanup-tmux` to inspect or close the live view.
 
 ### QA, Computer Use, Goal, Research, DB, Wiki, GX
 
@@ -235,6 +192,8 @@ sks qa-loop prepare "http://localhost:3000"
 sks qa-loop run latest --max-cycles 2
 sks goal create "persist this migration workflow"
 sks research prepare "evaluate this approach"
+sks research run latest --max-cycles 3
+sks research status latest
 sks db scan --json
 sks wiki refresh
 sks wiki sweep latest --json
@@ -252,21 +211,13 @@ sks skill-dream run --json
 sks code-structure scan --json
 ```
 
-`sks pipeline plan` is the 0.7 runtime map. It reads or refreshes `.sneakoscope/missions/<id>/pipeline-plan.json`, then shows which lane is active, which stages are kept or skipped, which verification commands are required, and whether the no-unrequested-fallback invariant is present.
+`sks research` prepares a genius-lens scout council, requires every scout to run at `xhigh`, records one literal `Eureka!` idea per scout, runs an evidence-bound debate, maximizes available web/source retrieval before synthesis, and requires `source-ledger.json`, `scout-ledger.json`, `debate-ledger.json`, `novelty-ledger.json`, `falsification-ledger.json`, and `research-gate.json` so research runs stay source-backed, adversarially checked, and falsifiable. `research status` reports source entries, counterevidence, xhigh scout count, Eureka moments, debate exchanges, scout findings, and falsification cases alongside the gate.
 
-`sks proof-field scan` is SKS's lightweight outcome rubric: it maps the goal to proof cones, records unrelated work that can be skipped with evidence, reports a simplicity score, and names escalation triggers for when the route must return to the full Team/Honest proof path. The rubric embeds Hyperplan-style adversarial pressure as compact lenses instead of a new command: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative. When `execution_lane.lane` is `proof_field_fast_lane`, SKS can keep the parent-owned minimal patch plus listed verification and skip Team debate, fresh executor teams, broad route rework, and unrelated checks. Database, security, visual-forensic, unknown, broad, failed, or unsupported-claim signals fail closed to the normal Team/Honest path. Use `sks pipeline plan --proof-field` after changed files are known to bind that Proof Field decision to the mission plan.
+`sks pipeline plan` shows the active route lane, kept/skipped stages, verification commands, and no-unrequested-fallback invariant. `sks proof-field scan` is the lightweight rubric for small changes; risky or broad signals return to the full Team/Honest path.
 
 ### Ambiguity Questions
 
-SKS no longer starts from a fixed checklist such as `GOAL_PRECISE` and `ACCEPTANCE_CRITERIA`. The clarification gate first scores goal clarity, constraint clarity, success-criteria clarity, and codebase-context clarity, then asks only the lowest-clarity item that can change execution. Predictable UI defaults, DB safety defaults, test scope, fallback policy, and ordinary implementation acceptance criteria are inferred and sealed automatically.
-
-The design borrows two useful ideas from external planning systems without copying their route weight: Ouroboros-style ambiguity thresholds decide whether the prompt is clear enough to proceed, while Prometheus/Hyperplan-style adversarial lenses challenge framing, remove unnecessary surface, demand evidence, test integration risk, and consider a simpler alternative before Team work starts.
-
-`sks skill-dream` keeps generated skill complexity bounded without doing a heavy evaluation on every prompt. Route use writes compact counters to `.sneakoscope/skills/dream-state.json`; after the configured 10-route-event threshold and cooldown, or when you run `sks skill-dream run`, SKS scans `.agents/skills` and writes `.sneakoscope/reports/skill-dream-latest.json` with keep, merge, prune, and improvement candidates. The report is intentionally advisory: deleting or merging skills requires explicit approval.
-
-`sks goal` and `$Goal` only prepare/control the native `/goal` persistence bridge. They do not replace Team, QA, DB, or other implementation routes; use the selected execution route for the actual work and verification. Context7 is only needed for Goal when external API/library documentation becomes relevant.
-
-Use `$Computer-Use` or `$CU` inside Codex App when the task specifically needs Codex Computer Use speed for UI/browser/visual work. This lane intentionally skips Team debate, QA-LOOP clarification, subagents, and upfront TriWiki refresh. It still requires Codex Computer Use as the evidence source, and it defers TriWiki refresh/validate plus Honest Mode to the final closeout. SKS does not install a generated skill named `computer-use`, because that name is reserved for the first-party Codex Computer Use plugin; use `$CU` or `$computer-use-fast` from the SKS picker for the SKS route, and use `@Computer` for the OpenAI plugin.
+Clarification asks only for ambiguity that changes execution; predictable defaults are inferred and sealed. `sks skill-dream` records cheap counters and periodically writes advisory skill reports. `$Goal` controls native `/goal` persistence without replacing the selected execution route. `$Computer-Use` / `$CU` is the fast Codex Computer Use lane for UI/browser/visual work.
 
 ### Create A Presentation
 
@@ -274,9 +225,7 @@ Use `$Computer-Use` or `$CU` inside Codex App when the task specifically needs C
 $PPT create a customer proposal deck as HTML/PDF
 ```
 
-`$PPT` seals presentation-specific context before artifact work: delivery format, target audience, STP strategy, decision context, and at least three pain-point/solution/aha mappings. The route writes source and render evidence such as `ppt-audience-strategy.json`, `ppt-source-ledger.json`, `ppt-storyboard.json`, `ppt-style-tokens.json`, `ppt-render-report.json`, and `ppt-parallel-report.json`.
-
-Design references do not compete with each other. `design.md` is the design decision SSOT; if it is missing, SKS uses `docs/Design-Sys-Prompt.md` to build or project the system. getdesign.md, official getdesign docs, and curated DESIGN.md examples from `VoltAgent/awesome-design-md` are source inputs that get fused into `design.md` or route-local `$PPT` style tokens. `$PPT` ignores installed design skills and MCP servers that are not in the route allowlist; generic design skills such as `design-artifact-expert`, `design-ui-editor`, and `design-system-builder` are not automatically used just because they are installed. This is an anti-AI-like-design guard: `$PPT` must ground visual choices in audience, source material, getdesign reference, and the design SSOT instead of freeform cards, gradients, and vague SaaS styling.
+`$PPT` seals presentation context before artifact work and grounds design in `design.md`, getdesign inputs, and source material.
 
 ## Codex App Usage
 
@@ -310,6 +259,7 @@ $DFix change this label and spacing only
 $QA-LOOP dogfood localhost:3000 and fix safe issues
 $PPT create an investor deck as HTML/PDF
 $Goal persist this migration workflow with native /goal continuation
+$Research investigate this mechanism with source-backed scout lenses
 $Wiki refresh and validate the context pack
 $DB inspect this migration for destructive risk
 ```
@@ -339,41 +289,7 @@ sks openclaw install
 sks openclaw path
 ```
 
-By default this writes:
-
-```text
-~/.openclaw/skills/sneakoscope-codex/
-```
-
-The generated skill contains `manifest.yaml`, `SKILL.md`, a skill README, and `openclaw-agent-config.example.yaml`. If you use a custom OpenClaw home, set `OPENCLAW_HOME` or pass `--dir`:
-
-```sh
-OPENCLAW_HOME=/opt/openclaw sks openclaw install
-sks openclaw install --dir /opt/openclaw/skills/sneakoscope-codex
-```
-
-Attach the skill to an OpenClaw agent with the built-in `shell` tool enabled:
-
-```yaml
-agents:
-  coding-agent:
-    tools:
-      - shell
-    env:
-      SKS_OPENCLAW: "1"
-    skills:
-      - sneakoscope-codex
-```
-
-`SKS_OPENCLAW=1` tells SKS that commands are running from OpenClaw. In that mode, SKS auto-approves update/install prompts such as the Codex CLI update check before tmux launch, instead of waiting for a human `Y/n` response.
-
-Then prompt the OpenClaw agent from the target repo root:
-
-```text
-Run sks root, inspect AGENTS.md, then use the SKS Team route to implement this fix and verify it.
-```
-
-Useful commands for OpenClaw agents:
+By default this writes `~/.openclaw/skills/sneakoscope-codex/` with `manifest.yaml`, `SKILL.md`, a README, and `openclaw-agent-config.example.yaml`. Set `OPENCLAW_HOME` or pass `--dir` for a custom location. Attach the skill with the built-in `shell` tool enabled and set `SKS_OPENCLAW=1` so SKS can auto-approve update/install prompts that would otherwise wait for `Y/n`.
 
 ```sh
 SKS_OPENCLAW=1 sks root
@@ -383,113 +299,42 @@ SKS_OPENCLAW=1 sks deps check
 SKS_OPENCLAW=1 sks proof-field scan --intent "small CLI change" --changed src/cli/main.mjs
 ```
 
-If OpenClaw runs the skill inside a sandbox, grant shell execution only for the trusted local workspace. Database, Supabase, migration, and destructive filesystem work should still follow the repo's SKS safety route and require explicit write scope.
+If OpenClaw runs in a sandbox, grant shell execution only for trusted workspaces. Database, migration, and destructive work still follows SKS safety routes.
 
 ## Prompt `$` Commands
 
 Use these inside Codex App or another agent prompt. They are prompt commands, not terminal commands.
 
-| Prompt | Use when |
-| --- | --- |
-| `$Team` | You want implementation, code changes, or substantial repo work. |
-| `$From-Chat-IMG` | You have a chat screenshot plus original attachments and want each visible request mapped to work. |
-| `$DFix` | You need Direct Fix work: tiny copy/config/docs/labels/spacing/translation/simple mechanical edits, with broad implementation still routed to Team and UI design specifics handled by the relevant UI/design route rules. |
-| `$Answer` | You want an answer only and no implementation should start. |
-| `$SKS` | You need setup, status, usage, or workflow help. |
-| `$QA-LOOP` | You want UI/API dogfooding, safe fixes, and rechecks. |
-| `$PPT` | You want a restrained HTML/PDF presentation with sealed delivery context, audience profile, STP strategy, decision context, and 3+ pain-point/solution/aha mappings. |
-| `$Computer-Use` / `$CU` | You want the fastest Codex Computer Use lane for UI/browser/visual inspection or small safe fixes. |
-| `$Goal` | You want a fast SKS bridge overlay for Codex native persisted `/goal` continuation. |
-| `$Research` | You need frontier-style research with hypotheses and falsification. |
-| `$AutoResearch` | You want iterative improve/test/keep-or-discard optimization. |
-| `$DB` | You need database, Supabase, migration, SQL, or MCP safety checks. |
-| `$MAD-SKS` | You explicitly authorize scoped Supabase MCP DB cleanup/write permissions for the active invocation only, while keeping catastrophic wipe safeguards. |
-| `$GX` | You need deterministic visual context cartridges. |
-| `$Wiki` | You want TriWiki refresh, pack, prune, validate, or maintenance. |
-| `$Help` | You want installed command and workflow explanation. |
+Common prompts: `$Team`, `$From-Chat-IMG`, `$DFix`, `$Answer`, `$SKS`, `$QA-LOOP`, `$PPT`, `$Computer-Use`/`$CU`, `$Goal`, `$Research`, `$AutoResearch`, `$DB`, `$MAD-SKS`, `$GX`, `$Wiki`, and `$Help`.
 
 ## Common Workflows
 
-### First Install Checklist
-
-1. Install SKS.
+First install:
 
 ```sh
 npm i -g sneakoscope
-```
-
-2. Bootstrap and check dependencies.
-
-```sh
 sks bootstrap
 sks deps check
-```
-
-On macOS, missing tmux installs and Homebrew-managed tmux upgrades ask `Y/n` before running `brew install tmux` or `brew upgrade tmux`. If PATH resolves an npm-managed `tmux`, SKS prompts for `npm i -g tmux@latest` instead of using Homebrew. Unknown non-Homebrew `tmux` paths are reported as conflicts so the user can remove, upgrade with the owning package manager, or reorder PATH first.
-
-3. Confirm Codex App command surfaces.
-
-```sh
 sks codex-app check
-sks dollar-commands
-```
-
-4. Optional codex-lb key setup for CLI `sks` runs.
-
-```sh
-sks codex-lb setup --host <domain> --api-key <key>
-sks codex-lb repair
-sks
-```
-
-5. Run a local smoke test.
-
-```sh
 sks selftest --mock
 ```
 
-### Start A CLI Workspace
+Start a CLI workspace:
 
 ```sh
 sks tmux check
 sks
+# or: sks --mad
 ```
 
-`sks tmux open` is the equivalent explicit launch form when you want to pass tmux session flags.
+Use Codex App routes with `$Team`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Goal`, `$Wiki`, and `$DB`. Team missions write artifacts under `.sneakoscope/missions/`; validate them with `sks validate-artifacts latest`.
 
-For the high-reasoning full-access profile:
-
-```sh
-sks --mad
-```
-
-### Use Codex App `$Team`
-
-```text
-$Team implement the requested change, update docs if needed, and verify with the relevant tests
-```
-
-Team mode records a mission under `.sneakoscope/missions/`, keeps a live transcript, uses TriWiki context, and finishes with evidence and Honest Mode.
-Every new Team mission now also writes `work-order-ledger.json`, `effort-decision.json`, and `team-dashboard-state.json`. Run `sks validate-artifacts latest` to check the schema gates before treating mission artifacts as completion evidence.
-
-### Dogfood A UI Or API
-
-```sh
-sks qa-loop prepare "http://localhost:3000"
-sks qa-loop run latest --max-cycles 2
-sks qa-loop status latest
-```
-
-Use `$QA-LOOP` in Codex App when UI-level E2E needs verification. UI verification must use Codex Computer Use evidence only; Chrome MCP, Browser Use, Playwright, Selenium, Puppeteer, and other browser automation do not satisfy UI-level E2E verification.
-
-### Refresh Context Before Risky Work
+Refresh context before risky work:
 
 ```sh
 sks wiki refresh
 sks wiki validate .sneakoscope/wiki/context-pack.json
 ```
-
-TriWiki is the long-running context source of truth. It keeps compact high-trust recall in `attention.use_first`, source-hydration targets in `attention.hydrate_first`, and binds relevant prior-mistake claims into the current decision contract when they match the prompt.
 
 ## Safety Model
 
@@ -514,7 +359,7 @@ node ./bin/sks.mjs --version
 npm install -g .
 ```
 
-If the global command is stale, reinstall globally from the repo or from npm.
+If stale, reinstall globally from the repo or npm.
 
 ### tmux is missing
 
@@ -523,7 +368,7 @@ sks deps install tmux
 sks tmux check
 ```
 
-Install tmux from [tmux.dev/download](https://www.tmux.dev/download) or run `brew install tmux` on macOS, then re-run `sks tmux check`.
+Install tmux from [tmux.dev/download](https://www.tmux.dev/download) or `brew install tmux` on macOS, then re-run the check.
 
 ### Codex App tools are missing
 
@@ -532,9 +377,7 @@ sks codex-app check
 codex mcp list
 ```
 
-Codex App workflows need the app installed. QA and UI/browser visual-evidence workflows require first-party Codex Computer Use; Browser Use may support non-UI browser context, but it is not valid UI/browser verification evidence. Generated raster assets and image-review evidence require real Codex App `$imagegen`/`gpt-image-2` output, or the route must stay blocked/unverified.
-
-SKS setup removes old SKS-generated `computer-use` skills from `.agents/skills` so they cannot shadow the first-party Computer Use plugin. If a running Codex App thread was opened before setup or upgrade, start a fresh thread and invoke `@Computer` or Browser again so the host reloads plugin tools.
+Codex App workflows need the app installed. UI/browser evidence requires first-party Codex Computer Use, and generated raster/image-review evidence requires real `$imagegen`/`gpt-image-2` output. After setup/upgrade, start a fresh thread so Codex reloads plugin tools.
 
 ### Setup is blocked by another harness
 
@@ -543,7 +386,7 @@ sks conflicts check
 sks conflicts prompt
 ```
 
-OMX/DCodex conflicts intentionally block setup/doctor until the user approves cleanup.
+OMX/DCodex conflicts block setup/doctor until the user approves cleanup.
 
 ### The route is stuck or a final hook keeps reopening
 
@@ -554,7 +397,7 @@ sks team lane latest --agent parent_orchestrator --follow
 sks wiki validate .sneakoscope/wiki/context-pack.json
 ```
 
-Finalization requires real evidence, no unsupported critical claims, valid Team cleanup artifacts, reflection when required, and Honest Mode.
+Finalization requires evidence, valid Team cleanup artifacts, reflection when required, and Honest Mode.
 
 ## Development And Release
 
@@ -566,30 +409,12 @@ npm run changelog:check
 npm run packcheck
 npm run selftest
 npm run sizecheck
+npm run registry:check
 npm run release:check
-```
-
-Package pipeline UI/browser verification and visual inspection evidence must come from Codex Computer Use only. Do not use Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or other browser automation as substitutes for that evidence. Package image-generation evidence must come from real `$imagegen`/`gpt-image-2` output when generated raster assets or generated image-review evidence are required.
-
-Dry-run publish:
-
-```sh
 npm run publish:dry
 ```
 
-`publish:dry` proves the local package is packable. It does not prove npm ownership, OTP, or registry publish permission.
-
-## Documentation Style
-
-This README follows a common open-source CLI shape:
-
-- quick start first
-- explicit install paths
-- separate CLI and app/plugin usage
-- command examples before internal architecture
-- troubleshooting and release checks near the end
-
-That shape mirrors how projects such as `rdme` and Vite separate quick start, setup/configuration, and CLI usage while keeping copy-ready commands visible.
+`release:check` runs audit, changelog, syntax, selftest, size, and registry checks. `publish:dry` runs that same gate and then performs an npm dry-run publish against the public registry.
 
 ## License
 

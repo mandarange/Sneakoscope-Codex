@@ -498,7 +498,7 @@ export async function requestTeamSessionCleanup(dir, opts = {}) {
     cleanup_requested_at: opts.ts || nowIso(),
     cleanup_requested_by: opts.agent || 'parent_orchestrator',
     cleanup_reason: opts.reason || 'Team session cleanup requested.',
-    final_message: opts.finalMessage || 'Team session ended. Lane follow loops may stop; managed tmux Team panes may close.'
+    final_message: opts.finalMessage || 'Team session ended. Lane/watch follow loops stop after this summary; managed tmux Team panes are closed when reachable.'
   };
   await writeJsonAtomic(files.control, next);
   return next;
@@ -518,7 +518,7 @@ export function renderTeamCleanupSummary(control = {}) {
     `Requested by: ${control.cleanup_requested_by || 'unknown'}`,
     `Reason: ${control.cleanup_reason || 'Team session cleanup requested.'}`,
     '',
-    control.final_message || 'Team session ended. managed tmux Team panes may close.'
+    control.final_message || 'Team session ended. managed tmux Team panes are closed when reachable.'
   ].join('\n');
 }
 
@@ -554,6 +554,9 @@ export async function renderTeamAgentLane(dir, opts = {}) {
   const assignedTasks = runtimeTasks.filter((task) => aliasSet.has(task?.worker) || aliasSet.has(task?.agent_hint));
   const agentEvents = parsedWindow.filter((event) => aliasSet.has(event?.agent) || aliases.some((id) => eventAddressedTo(event, id))).slice(-lines);
   const directMessages = parsedWindow.filter((event) => event?.type === 'message' && aliases.some((id) => eventAddressedTo(event, id))).slice(-lines);
+  const chatEvents = uniqueTranscriptEvents([...agentEvents, ...directMessages])
+    .sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')))
+    .slice(-lines);
   const laneStyle = teamLaneTextStyle(agent);
   return [
     `# SKS Team Agent Lane`,
@@ -573,11 +576,8 @@ export async function renderTeamAgentLane(dir, opts = {}) {
     `## Assigned Runtime Tasks`,
     ...(runtime ? formatRuntimeTasks(assignedTasks) : ['- team-runtime-tasks.json not available yet.']),
     '',
-    `## Recent Agent Events`,
-    ...(agentEvents.length ? agentEvents.map(formatTranscriptEvent) : ['- No recent agent-specific events in the bounded tail.']),
-    '',
-    `## Direct Messages`,
-    ...(directMessages.length ? directMessages.map(formatTranscriptEvent) : ['- No direct or broadcast messages in the bounded tail.']),
+    `## Live Chat`,
+    ...(chatEvents.length ? chatEvents.map((event) => formatChatTranscriptEvent(event, aliases[0])) : ['- waiting for live agent messages...']),
     opts.includeGlobalTail ? '' : null,
     opts.includeGlobalTail ? `## Global Tail` : null,
     ...(opts.includeGlobalTail
@@ -608,11 +608,11 @@ export async function renderTeamWatch(dir, opts = {}) {
     '## Split-Screen Map',
     '- This overview pane follows the whole mission transcript.',
     '- Run `sks team open-tmux ...` to materialize or reopen the split-pane Team tmux view for an existing mission.',
-    '- Inside an SKS-owned tmux session, Team panes are reconciled in the current window and managed panes may close as agent lanes finish.',
-    '- Neighbor tmux panes follow individual `sks team lane ... --agent <name>` views.',
+    '- Inside an SKS-owned tmux session, Team panes are reconciled in the current window with the Codex pane on the left and Team lanes stacked on the right.',
+    '- Neighbor tmux panes follow individual `sks team lane ... --agent <name>` chat-style views.',
     '- Use `sks team event ...` to mirror scout, debate, executor, review, and verification status into the live panes.',
     '- Use `sks team message ... --from <agent> --to <agent|all>` for bounded inter-agent communication in transcript/lane views.',
-    '- Use `sks team cleanup-tmux ...` at session end; follow loops show cleanup and exit while tmux panes remain user-controlled.',
+    '- Use `sks team cleanup-tmux ...` at session end; follow loops show cleanup and managed Team panes close when reachable.',
     '',
     '## Cockpit Views',
     '- Mission / Goal | Agents | MultiAgentV2 | Work Orders | Skills | Memory Health | Forget Queue',
@@ -695,6 +695,29 @@ function formatTranscriptEvent(event = {}) {
   ].filter(Boolean);
   const suffix = event.artifact ? ` (${event.artifact})` : '';
   return `- ${parts.join(' ')}: ${String(event.message || '').slice(0, 500)}${suffix}`;
+}
+
+function uniqueTranscriptEvents(events = []) {
+  const seen = new Set();
+  const out = [];
+  for (const event of events) {
+    const key = event?.raw || [event?.ts, event?.agent, event?.to, event?.type, event?.message].map((value) => String(value || '')).join('\t');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(event);
+  }
+  return out;
+}
+
+function formatChatTranscriptEvent(event = {}, laneAgent = '') {
+  if (event.raw) return `- system: ${event.raw}`;
+  const from = event.agent || 'unknown';
+  const to = event.to ? ` -> ${event.to}` : '';
+  const kind = event.type && event.type !== 'message' ? ` [${event.type}]` : '';
+  const ts = event.ts ? `${event.ts} ` : '';
+  const artifact = event.artifact ? ` (${event.artifact})` : '';
+  const marker = String(from) === String(laneAgent) ? 'me' : from;
+  return `- ${ts}${marker}${to}${kind}: ${String(event.message || '').slice(0, 500)}${artifact}`;
 }
 
 function eventAddressedTo(event = {}, agent = '') {

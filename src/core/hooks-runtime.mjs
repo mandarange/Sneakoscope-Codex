@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION, sha256, packageRoot } from './fsx.mjs';
+import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION, sha256, packageRoot, tmpdir } from './fsx.mjs';
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.mjs';
 import { missionDir, setCurrent, stateFile } from './mission.mjs';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.mjs';
@@ -15,9 +15,11 @@ const TEAM_DIGEST_CONTEXT_CHARS = 1600;
 const TEAM_DIGEST_SYSTEM_CHARS = 260;
 const STOP_REPEAT_GUARD_ARTIFACT = 'stop-hook-repeat-guard.json';
 const LIGHT_ROUTE_STOP_ARTIFACT = 'light-route-stop.json';
+const CODEX_GIT_ACTION_STOP_ARTIFACT = 'codex-git-action-stop-bypass.json';
 const STOP_REPEAT_GUARD_WINDOW_MS = 10 * 60 * 1000;
 const STOP_REPEAT_GUARD_MAX_ENTRIES = 25;
 const DEFAULT_STOP_REPEAT_GUARD_LIMIT = 2;
+const CODEX_GIT_ACTION_STOP_TTL_MS = 5 * 60 * 1000;
 
 async function loadHookPayload() {
   const raw = await readStdin();
@@ -76,7 +78,9 @@ function toolFailed(payload = {}) {
 }
 
 function dollarCommand(prompt) {
-  const match = String(prompt || '').trim().match(/^\$([A-Za-z][A-Za-z0-9_-]*)(?:\s|:|$)/);
+  const text = String(prompt || '').trim();
+  const match = text.match(/^\$([A-Za-z][A-Za-z0-9_-]*)(?:\s|:|$)/)
+    || text.match(/^\[\$([A-Za-z][A-Za-z0-9_-]*)\]\([^)]+\)(?:\s|:|$)/);
   return match ? match[1].toUpperCase() : null;
 }
 
@@ -143,6 +147,13 @@ function clientModelCandidates(value, depth = 0) {
 }
 
 async function hookUserPrompt(root, state, payload, noQuestion) {
+  if (looksLikeCodexGitCommitMessageGeneration(payload)) {
+    await armCodexGitActionStopBypass(root, payload).catch(() => null);
+    return {
+      continue: true,
+      systemMessage: 'SKS: Codex App git commit message generation bypassed route gates.'
+    };
+  }
   if (!noQuestion) {
     const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
     const madSksConfirmation = await handleMadSksUserConfirmation(root, state, prompt);
@@ -162,7 +173,7 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
       const additionalContext = [updateContext, activeContext, teamDigest?.context].filter(Boolean).join('\n\n');
       return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
     }
-    const teamDigest = bypassActiveRoute ? null : await teamLiveDigest(root, state);
+    const teamDigest = (bypassActiveRoute || command) ? null : await teamLiveDigest(root, state);
     const activeContext = await activeRouteContext(root, state);
     const contexts = [updateContext];
     if (activeContext && !command && !bypassActiveRoute && !goalOverlay) contexts.push(routePipelineContext(prompt), activeContext);
@@ -348,6 +359,12 @@ function clarificationPauseBlockReason(state = {}) {
 
 async function hookStop(root, state, payload, noQuestion) {
   const last = extractLastMessage(payload);
+  if (await consumeCodexGitActionStopBypass(root, payload)) {
+    return {
+      continue: true,
+      systemMessage: 'SKS: Codex App git commit message generation accepted without route finalization gates.'
+    };
+  }
   if (!noQuestion && (hasDfixLightCompletion(last) || await consumeLightRouteStop(root, payload))) {
     return {
       continue: true,
@@ -420,6 +437,79 @@ function hasDfixLightCompletion(text) {
 
 function explicitConversationId(payload = {}) {
   return payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || null;
+}
+
+function looksLikeCodexGitCommitMessageGeneration(payload = {}) {
+  const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
+  const haystack = [
+    payload.action,
+    payload.intent,
+    payload.operation,
+    payload.permission,
+    payload.description,
+    payload.kind,
+    payload.type,
+    payload.feature,
+    payload.tool_name,
+    payload.toolName,
+    payload.source,
+    payload.event,
+    payload.hook,
+    payload.hook_name,
+    payload.input?.action,
+    payload.input?.intent,
+    payload.input?.operation,
+    payload.input?.feature,
+    payload.input?.source,
+    payload.metadata?.action,
+    payload.metadata?.intent,
+    payload.metadata?.operation,
+    payload.metadata?.feature,
+    payload.metadata?.source
+  ].filter(Boolean).join(' ');
+  const appSignal = /\b(?:codex[_\s-]*(?:app[_\s-]*)?)?(?:git[_\s-]*)?(?:commit[_\s-]*message|git[_\s-]*commit|codex_git_commit)\b/i.test(haystack)
+    || /커밋\s*메시지\s*생성/i.test(haystack);
+  const promptSignal = /\bgenerate(?:\s+a)?(?:\s+git)?\s+commit\s+message\b/i.test(prompt)
+    || /\bcommit\s+message\b[\s\S]{0,80}\b(?:staged|diff|changes?|git)\b/i.test(prompt)
+    || /커밋\s*메시지\s*생성/i.test(prompt);
+  if (!appSignal && !promptSignal) return false;
+  if (appSignal) return true;
+  return !looksLikeUserImplementationRequest(prompt);
+}
+
+function looksLikeUserImplementationRequest(text = '') {
+  return /(fix|bug|broken|error|issue|implement|change|update|repair|수정|버그|오류|에러|문제|고쳐|고치|해결|변경|수리|패치|안생기|안\s*생기)/i.test(String(text || ''));
+}
+
+async function armCodexGitActionStopBypass(root, payload = {}) {
+  const nowMs = Date.now();
+  const record = {
+    schema_version: 1,
+    route: 'codex_git_commit',
+    pending_stop_bypass: true,
+    conversation_id: conversationId(payload),
+    created_at: nowIso(),
+    expires_at: new Date(nowMs + CODEX_GIT_ACTION_STOP_TTL_MS).toISOString()
+  };
+  await writeJsonAtomic(path.join(root, '.sneakoscope', 'state', CODEX_GIT_ACTION_STOP_ARTIFACT), record);
+  return record;
+}
+
+async function consumeCodexGitActionStopBypass(root, payload = {}) {
+  const file = path.join(root, '.sneakoscope', 'state', CODEX_GIT_ACTION_STOP_ARTIFACT);
+  const record = await readJson(file, null).catch(() => null);
+  if (!record?.pending_stop_bypass) return false;
+  if (record.route !== 'codex_git_commit') return false;
+  const expiresMs = Date.parse(record.expires_at || '');
+  if (!Number.isFinite(expiresMs) || expiresMs < Date.now()) return false;
+  const currentConversation = conversationId(payload);
+  if (record.conversation_id && explicitConversationId(payload) && record.conversation_id !== currentConversation) return false;
+  await writeJsonAtomic(file, {
+    ...record,
+    pending_stop_bypass: false,
+    consumed_at: nowIso()
+  }).catch(() => null);
+  return true;
 }
 
 async function finalizationRepeatDecision(root, state = {}, payload = {}, reason = '', kind = 'finalization') {
@@ -551,12 +641,13 @@ async function updateCheckContext(root, payload, prompt) {
     return `SKS update check: user skipped update to ${pending.latest} for this conversation only. Continue the previous task without updating. Check again on the next conversation.`;
   }
   if (pending?.conversation_id === conv && pending?.latest && looksLikeUpdateAccept(prompt)) {
+    const command = sksUpdateInstallCommand(pending.latest);
     await writeJsonAtomic(statePath, {
       ...updateState,
       pending_offer: null,
       accepted: { conversation_id: conv, latest: pending.latest, accepted_at: nowIso() }
     });
-    return `SKS update check: user accepted update to ${pending.latest}. Before doing other work, run exactly this command and nothing else: npm i -g sneakoscope@latest. Do not start a pipeline route, run setup, or run doctor for this accepted update command.`;
+    return `SKS update check: user accepted update to ${pending.latest}. Before doing other work, run exactly this command and nothing else: ${command}. Do not start a pipeline route, run setup, or run doctor for this accepted update command.`;
   }
   if (updateState.skipped?.conversation_id === conv && updateState.skipped?.latest) {
     return `SKS update check: update ${updateState.skipped.latest} was skipped for this conversation only. Do not ask again in this conversation; check again next conversation.`;
@@ -585,7 +676,11 @@ async function updateCheckContext(root, payload, prompt) {
     pending_offer: { conversation_id: conv, latest: check.latest, offered_at: nowIso() },
     skipped: updateState.skipped?.conversation_id === conv ? null : updateState.skipped || null
   });
-  return `SKS update check: installed ${current}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run exactly this command and nothing else: npm i -g sneakoscope@latest. Do not start a pipeline route, run setup, or run doctor for this accepted update command. If they skip, do not ask again in this conversation, but check again next conversation.`;
+  return `SKS update check: installed ${current}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run exactly this command and nothing else: ${sksUpdateInstallCommand(check.latest)}. Do not start a pipeline route, run setup, or run doctor for this accepted update command. If they skip, do not ask again in this conversation, but check again next conversation.`;
+}
+
+function sksUpdateInstallCommand(version) {
+  return `npm i -g sneakoscope@${version} --registry https://registry.npmjs.org/`;
 }
 
 async function checkLatestVersion() {
@@ -812,6 +907,27 @@ export async function emitHook(name) {
   process.stdout.write(`${JSON.stringify(normalizeHookResult(name, result))}\n`);
 }
 
+export async function selftestCodexCommitHooks() {
+  const root = tmpdir();
+  const hookBin = path.join(packageRoot(), 'bin', 'sks.mjs');
+  const env = { SKS_DISABLE_UPDATE_CHECK: '1' };
+  const setup = await runProcess(process.execPath, [hookBin, 'setup', '--install-scope', 'project'], { cwd: root, env, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  if (setup.code !== 0) throw new Error(`selftest failed: commit setup ${setup.code}: ${setup.stderr}`);
+  const runHook = (name, payload) => runProcess(process.execPath, [hookBin, 'hook', name], { cwd: root, input: JSON.stringify({ cwd: root, ...payload }), env, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  const id = 'commit-selftest';
+  const hook = await runHook('user-prompt-submit', { conversation_id: id, action: 'codex_git_commit', prompt: 'Generate a git commit message for the staged diff.' });
+  if (hook.code !== 0) throw new Error(`selftest failed: commit hook ${hook.code}: ${hook.stderr}`);
+  const hookJson = JSON.parse(hook.stdout);
+  if (hookJson.decision === 'block' || hookJson.hookSpecificOutput?.additionalContext || !String(hookJson.systemMessage || '').includes('git commit message generation')) throw new Error('selftest failed: commit route bypass');
+  const stop = await runHook('stop', { conversation_id: id, last_assistant_message: 'Fix Codex App commit message hook bypass' });
+  if (stop.code !== 0) throw new Error(`selftest failed: commit stop ${stop.code}: ${stop.stderr}`);
+  const stopJson = JSON.parse(stop.stdout);
+  if (stopJson.decision === 'block' || !String(stopJson.systemMessage || '').includes('accepted without route finalization')) throw new Error('selftest failed: commit stop bypass');
+  const userHook = await runHook('user-prompt-submit', { prompt: '[커밋 메시지를 생성하지 못했습니다.] 코덱스 앱에서 이 버그 수정해줘' });
+  if (userHook.code !== 0) throw new Error(`selftest failed: user commit hook ${userHook.code}: ${userHook.stderr}`);
+  if (!JSON.parse(userHook.stdout).hookSpecificOutput?.additionalContext?.includes('$Team route prepared')) throw new Error('selftest failed: user prompt route');
+}
+
 function normalizeHookResult(name, result = {}) {
   const eventName = codexHookEventName(name);
   const out = { ...result };
@@ -890,7 +1006,13 @@ function visibleHookMessage(name, text = '') {
     if (body.includes('Computer Use fast lane active')) return 'SKS: Computer Use fast lane injected; defer TriWiki/Honest Mode to final closeout.';
     if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: stale clarification gate detected; continue from inferred route contract.';
     if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team route, live transcript, and subagent plan injected.';
-    if (body.includes('$QA-LOOP route prepared') || body.includes('QA-LOOP')) return 'SKS: QA-LOOP route and safety checklist injected.';
+    if (body.includes('$Research route prepared')) return 'SKS: Research route, xhigh Eureka scout council, source ledger, debate ledger, and falsification gate injected.';
+    if (body.includes('$AutoResearch route prepared')) return 'SKS: AutoResearch experiment loop and evidence gate injected.';
+    if (body.includes('$PPT route prepared')) return 'SKS: PPT route and delivery-context gate injected.';
+    if (body.includes('$Image-UX-Review route prepared') || body.includes('$UX-Review route prepared')) return 'SKS: Image UX Review route and gpt-image-2 evidence gate injected.';
+    if (body.includes('$DB route prepared')) return 'SKS: DB safety review route injected.';
+    if (body.includes('$GX route prepared')) return 'SKS: GX visual context route injected.';
+    if (body.includes('$QA-LOOP route prepared')) return 'SKS: QA-LOOP route and safety checklist injected.';
     if (body.includes('Subagent policy: REQUIRED')) return 'SKS: route context injected; subagent execution gate is active.';
     return 'SKS: skill-first route context injected.';
   }

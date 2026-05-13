@@ -15,7 +15,7 @@ import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge }
 import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, routePrompt, routeReasoning, stackCurrentDocsPolicy, stripVisibleDecisionAnswerBlocks, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, reflectionRequiredForRoute, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, stripVisibleDecisionAnswerBlocks, triwikiContextTracking } from '../core/routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, formatAgentReasoning, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested, teamReasoningPolicy } from '../core/team-live.mjs';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../core/team-review-policy.mjs';
@@ -428,11 +428,58 @@ async function researchPrepare(args) {
   const prompt = positionalArgs(args).join(' ').trim();
   if (!prompt) throw new Error('Missing research topic.');
   const { id, dir } = await createMission(root, { mode: 'research', prompt });
+  const route = ROUTES.find((entry) => entry.id === 'Research') || routePrompt('$Research');
+  const context7Required = true;
+  const reasoning = routeReasoning(route, prompt);
   const plan = await writeResearchPlan(dir, prompt, { depth: readFlagValue(args, '--depth', 'frontier') });
-  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_PREPARED', questions_allowed: false });
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: prompt, required: context7Required, ambiguity: { required: false, status: 'direct_research_cli' } });
+  await writeJsonAtomic(path.join(dir, 'route-context.json'), {
+    route: route.id,
+    route_command: route.command,
+    command: route.command,
+    mode: route.mode,
+    task: prompt,
+    required_skills: route.requiredSkills,
+    context7_required: context7Required,
+    subagents_required: routeRequiresSubagents(route, prompt),
+    reflection_required: reflectionRequiredForRoute(route),
+    original_stop_gate: route.stopGate,
+    stop_gate: route.stopGate,
+    clarification_gate: false,
+    pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
+    pipeline_plan_path: PIPELINE_PLAN_ARTIFACT,
+    goal_continuation: pipelinePlan.goal_continuation
+  });
+  await setCurrent(root, {
+    mission_id: id,
+    route: route.id,
+    route_command: route.command,
+    mode: route.mode,
+    phase: 'RESEARCH_PREPARED',
+    questions_allowed: false,
+    implementation_allowed: true,
+    context7_required: context7Required,
+    context7_verified: false,
+    subagents_required: routeRequiresSubagents(route, prompt),
+    subagents_verified: false,
+    reflection_required: reflectionRequiredForRoute(route),
+    visible_progress_required: true,
+    context_tracking: 'triwiki',
+    required_skills: route.requiredSkills,
+    stop_gate: route.stopGate,
+    reasoning_effort: reasoning.effort,
+    reasoning_profile: reasoning.profile,
+    reasoning_temporary: true,
+    goal_continuation: pipelinePlan.goal_continuation,
+    pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
+    pipeline_plan_path: PIPELINE_PLAN_ARTIFACT,
+    prompt
+  });
   console.log(`Research mission created: ${id}`);
   console.log(`Methodology: ${plan.methodology}`);
   console.log(`Plan: ${path.relative(root, path.join(dir, 'research-plan.md'))}`);
+  console.log(`Pipeline: ${path.relative(root, path.join(dir, PIPELINE_PLAN_ARTIFACT))}`);
+  console.log('Ledgers: source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json');
   console.log(`Run: sks research run ${id} --max-cycles 3`);
 }
 
@@ -506,7 +553,24 @@ async function researchStatus(args) {
   const state = await readJson(stateFile(root), {});
   const gate = await readJson(path.join(dir, 'research-gate.evaluated.json'), await readJson(path.join(dir, 'research-gate.json'), null));
   const ledger = await readJson(path.join(dir, 'novelty-ledger.json'), null);
-  console.log(JSON.stringify({ mission, state, gate, novelty_entries: ledger?.entries?.length ?? null }, null, 2));
+  const sourceLedger = await readJson(path.join(dir, 'source-ledger.json'), null);
+  const scoutLedger = await readJson(path.join(dir, 'scout-ledger.json'), null);
+  const debateLedger = await readJson(path.join(dir, 'debate-ledger.json'), null);
+  const falsificationLedger = await readJson(path.join(dir, 'falsification-ledger.json'), null);
+  const scoutRows = Array.isArray(scoutLedger?.scouts) ? scoutLedger.scouts : [];
+  console.log(JSON.stringify({
+    mission,
+    state,
+    gate,
+    novelty_entries: ledger?.entries?.length ?? null,
+    source_entries: sourceLedger?.sources?.length ?? null,
+    counterevidence_sources: sourceLedger?.counterevidence_sources?.length ?? null,
+    xhigh_scouts: scoutRows.length ? scoutRows.filter((scout) => scout.effort === 'xhigh').length : null,
+    eureka_moments: scoutRows.length ? scoutRows.filter((scout) => scout.eureka?.exclamation === 'Eureka!' && String(scout.eureka?.idea || '').trim()).length : null,
+    scout_findings: scoutRows.length ? scoutRows.reduce((sum, scout) => sum + (Array.isArray(scout.findings) ? scout.findings.length : 0), 0) : null,
+    debate_exchanges: debateLedger?.exchanges?.length ?? null,
+    falsification_cases: falsificationLedger?.cases?.length ?? null
+  }, null, 2));
 }
 
 async function goalCreate(args) {
@@ -2052,7 +2116,7 @@ async function teamCommand(sub, args) {
         missionId: id,
         agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
         reason: message,
-        finalMessage: 'Team cleanup event received. Managed tmux Team panes may close; follow loops may stop.'
+        finalMessage: 'Team cleanup event received. Follow loops stop and managed tmux Team panes are closed when reachable.'
       }).then(() => cleanupTmuxTeamView({ root, missionId: id, closeSession: flag(args, '--close-session') || flag(args, '--close') })).catch((err) => ({ ok: false, reason: err.message || 'tmux cleanup failed' }))
       : null;
     if (flag(args, '--json')) return console.log(JSON.stringify(record, null, 2));
@@ -2091,7 +2155,7 @@ async function teamCommand(sub, args) {
       missionId: id,
       agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
       reason: readFlagValue(args, '--reason', 'Team session ended; clean up live follow panes.'),
-      finalMessage: 'Team session ended. Lane/watch follow loops will stop after showing this cleanup summary; managed tmux Team panes may close.'
+      finalMessage: 'Team session ended. Lane/watch follow loops will stop after showing this cleanup summary; managed tmux Team panes are closed when reachable.'
     });
     await appendTeamEvent(dir, {
       agent: readFlagValue(args, '--agent', 'parent_orchestrator'),
