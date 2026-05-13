@@ -462,6 +462,34 @@ function mergeManagedCodexConfigToml(existingContent = '') {
   return `${next.trim()}\n`;
 }
 
+async function mergeGlobalCodexConfigIfAvailable(configText = '', configPath = '') {
+  const selectedRe = /(^|\n)\s*model_provider\s*=\s*"codex-lb"\s*(?:#.*)?(?=\n|$)/;
+  const home = process.env.HOME || '';
+  if (!home) return configText;
+  const globalConfigPath = path.join(home, '.codex', 'config.toml');
+  if (configPath && path.resolve(configPath) === path.resolve(globalConfigPath)) return configText;
+  const globalConfig = await readText(globalConfigPath, '');
+  let next = mergeGlobalMcpServers(configText, globalConfig);
+  if (selectedRe.test(next) && /\[model_providers\.codex-lb\]/.test(next)) return `${String(next || '').trim()}\n`;
+  if (!(await exists(path.join(home, '.codex', 'sks-codex-lb.env')))) return next;
+  const baseUrl = globalConfig.match(/(^|\n)\[model_providers\.codex-lb\][\s\S]*?\n\s*base_url\s*=\s*"([^"]+)"/)?.[2];
+  if (!selectedRe.test(globalConfig) || !baseUrl) return next;
+  next = upsertTopLevelTomlString(next, 'model_provider', 'codex-lb');
+  next = upsertTomlTable(next, 'model_providers.codex-lb', `[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "${baseUrl}"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true`);
+  return `${next.trim()}\n`;
+}
+
+function mergeGlobalMcpServers(configText = '', globalConfig = '') {
+  let next = configText;
+  const re = /(?:^|\n)(\[(mcp_servers\.[^\]\r\n]+)\][\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/g;
+  for (const match of String(globalConfig || '').matchAll(re)) {
+    const block = match[1].trim();
+    const table = match[2].trim();
+    if (!new RegExp(`(^|\\n)\\[${escapeRegExp(table)}\\]`).test(next)) next = upsertTomlTable(next, table, block);
+  }
+  return next;
+}
+
 function removeLegacyTopLevelCodexModeLocks(text = '') {
   const legacy = {
     model_reasoning_effort: new Set(['high'])
@@ -619,7 +647,11 @@ function upsertTomlTable(text, table, block) {
 
   const generatedCodexConfigPath = path.join(root, '.codex', 'config.toml');
   const existingCodexConfig = await readText(generatedCodexConfigPath, '');
-  await writeTextAtomic(generatedCodexConfigPath, mergeManagedCodexConfigToml(existingCodexConfig));
+  const managedCodexConfig = await mergeGlobalCodexConfigIfAvailable(
+    mergeManagedCodexConfigToml(existingCodexConfig),
+    generatedCodexConfigPath
+  );
+  await writeTextAtomic(generatedCodexConfigPath, managedCodexConfig);
   created.push('.codex/config.toml');
 
   await writeTextAtomic(path.join(root, '.codex', 'SNEAKOSCOPE.md'), codexAppQuickReference(installScope, hookCommandPrefix));

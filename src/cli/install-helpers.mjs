@@ -6,7 +6,7 @@ import { stdin as input, stdout as output } from 'node:process';
 import { ensureDir, exists, globalSksRoot, packageRoot, readText, runProcess, which, writeTextAtomic } from '../core/fsx.mjs';
 import { getCodexInfo } from '../core/codex-adapter.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
-import { installSkills } from '../core/init.mjs';
+import { initProject, installSkills } from '../core/init.mjs';
 import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext7ConfigText, RECOMMENDED_SKILLS } from '../core/routes.mjs';
 import { codexLaunchCommand, platformTmuxInstallHint, tmuxReadiness } from '../core/tmux-ui.mjs';
 
@@ -869,6 +869,12 @@ export async function selftestCodexLb(tmp) {
   const codexLbEnv = await safeReadText(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'));
   const codexLbAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !codexLbConfig.includes('model_provider = "codex-lb"') || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || !/(\"auth_mode\"\s*:\s*\"apikey\")/.test(codexLbAuth)) throw new Error('selftest failed: codex-lb setup did not write provider config, env key, and Codex API-key auth');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), `${codexLbConfig}\n[mcp_servers.supabase]\nurl = "https://mcp.supabase.com/mcp?project_ref=ref&read_only=true&features=database,docs"\n`);
+  const ptmp = path.join(tmp, 'codex-lb-project-config'), prevHome = process.env.HOME;
+  try { process.env.HOME = codexLbHome; await initProject(ptmp, { installScope: 'global' }); }
+  finally { if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome; }
+  const pcfg = await safeReadText(path.join(ptmp, '.codex', 'config.toml'));
+  if (!pcfg.includes('model_provider = "codex-lb"') || !pcfg.includes('[model_providers.codex-lb]') || !pcfg.includes('[mcp_servers.supabase]') || !pcfg.includes('read_only=true')) throw new Error('selftest failed: project bootstrap lost global codex-lb or MCP config');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
   const codexLbRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'auth', 'repair', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (codexLbRepair.code !== 0) throw new Error(`selftest failed: codex-lb repair exited ${codexLbRepair.code}: ${codexLbRepair.stderr}`);
