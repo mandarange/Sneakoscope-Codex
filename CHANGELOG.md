@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 
+## [0.7.66] - 2026-05-13
+
+### Fixed
+
+- Preserve global codex-lb provider and MCP server settings when SKS bootstraps project `.codex/config.toml`, so reinstall/setup does not hide stored auth or existing MCP connections.
+
 ## [0.7.65] - 2026-05-13
 
 ### Fixed

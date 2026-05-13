@@ -2,7 +2,7 @@
 
 ![](https://github.com/mandarange/Sneakoscope-Codex/raw/dev/docs/assets/sneakoscope-codex-logo.png)
 
-Sneakoscope Codex (`sks`, displayed as `ㅅㅋㅅ`) is a Codex CLI/App harness for repeatable agent workflows. It adds terminal commands, Codex App `$` prompt commands, tmux-native CLI workspaces, Team/QA/Research routes, inspectable pipeline plans, a maximum-speed Computer Use lane, an imagegen/gpt-image-2 UI/UX review route, a fast Goal bridge for native `/goal` persistence, Context7 evidence checks, DB safety, TriWiki context tracking, design-system SSOT routing, lightweight skill dreaming, Honest Mode, and release-readiness gates.
+Sneakoscope Codex (`sks`) is a Codex CLI/App harness for repeatable workflows. It adds terminal commands, Codex App `$` commands, tmux workspaces, Team/QA/Research routes, pipeline plans, Computer Use, imagegen UI/UX review, Goal, Context7, DB safety, TriWiki, design-system routing, skill dreaming, Honest Mode.
 
 ## Quick Start
 
@@ -50,15 +50,15 @@ sks selftest --mock
 | Skill dreaming | Records cheap generated-skill usage counters in JSON and only periodically scans `.agents/skills` for keep, merge, prune, and improvement candidates. Reports are recommendation-only and never delete skills automatically. |
 | From-Chat-IMG | Turns chat screenshots plus original attachments into source-bound work orders, then requires scoped QA evidence before completion. |
 | QA loop | Dogfoods UI/API behavior with safety gates, Codex Computer Use-only UI evidence, safe fixes, and rechecks. |
-| PPT pipeline | Uses `$PPT` for simple, restrained, information-first HTML/PDF presentation artifacts, first asking delivery context, audience profile, STP strategy, decision context, and 3+ pain-point to solution/aha mappings before source research, design-system work, HTML/PDF export, and render QA. Independent strategy/render/file-write phases run in parallel where inputs allow and are recorded in `ppt-parallel-report.json`; editable source HTML is preserved under `source-html/`, PPT-only temporary build files are cleaned after completion, installed skills/MCPs outside the `$PPT` allowlist are ignored, generated image assets must use real `$imagegen`/`gpt-image-2` output when sealed in the contract, and `ppt-style-tokens.json` records the design SSOT plus fused source inputs. |
-| Image UX Review | Uses `$Image-UX-Review` / `$UX-Review` for UI/UX audits where source screenshots are first turned into generated annotated review images through Codex App `$imagegen`/`gpt-image-2`; those generated images are then read back into `image-ux-issue-ledger.json`, optional requested fixes are rechecked, and missing generated review images or text-only screenshot critique cannot pass `image-ux-review-gate.json`. |
+| PPT pipeline | Uses `$PPT` for restrained HTML/PDF presentation artifacts with sealed delivery context, audience, STP, decision context, source research, design SSOT, export QA, editable source HTML, and real `$imagegen` assets when required. |
+| Image UX Review | Uses `$Image-UX-Review` / `$UX-Review` for UI/UX audits that require generated annotated review images through Codex App `$imagegen`/`gpt-image-2` before issue extraction and optional rechecks. |
 | Computer Use fast lane | Uses `$Computer-Use` / `$CU` for UI/browser/visual work that needs maximum speed: skip Team debate and upfront TriWiki loops, use Codex Computer Use directly, then refresh/validate TriWiki and run Honest Mode at final closeout. |
-| Goal | Provides a fast SKS bridge overlay for Codex native persisted `/goal` create, pause, resume, and clear controls; an ambient non-disruptive Goal continuation overlay is also recorded in normal pipeline plans while implementation continues through the selected SKS execution route. |
+| Goal | Bridges Codex native `/goal` create, pause, resume, and clear controls while implementation continues through the selected SKS route. |
 | TriWiki voxels | Maintains `.sneakoscope/wiki/context-pack.json` as the context SSOT with coordinate anchors, voxel metadata, `attention.use_first`, `attention.hydrate_first`, and prompt-bound mistake recall ledgers. |
 | Context7 | Requires current docs for external packages, APIs, MCPs, SDKs, and framework/runtime behavior when correctness depends on current guidance. |
 | Design SSOT | Treats `design.md` as the only design decision source of truth. `docs/Design-Sys-Prompt.md` is the builder prompt; getdesign.md, official getdesign docs, and curated DESIGN.md examples from `VoltAgent/awesome-design-md` are source inputs that must be fused into `design.md` or route-local style tokens instead of becoming parallel authorities. |
 | DB safety | Treats SQL, migrations, Supabase, RLS, and destructive operations as high risk. |
-| Release hygiene | Checks versioning, changelog, package contents, tarball size, syntax, selftests, and dry-run publishing. |
+| Release hygiene | Checks versioning, changelog, package size, syntax, selftests. |
 
 ## Requirements
 
@@ -171,7 +171,7 @@ Bare `sks` creates or reuses the default named tmux session for Codex CLI and at
 
 Before opening tmux, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens tmux with the updated Codex CLI.
 
-If you use [codex-lb](https://github.com/Soju06/codex-lb), start it first, create an API key in its dashboard, then run:
+For [codex-lb](https://github.com/Soju06/codex-lb), start the server, create a dashboard API key, then run:
 
 ```sh
 sks codex-lb setup --host https://your-codex-lb.example.com --api-key "sk-clb-..."
@@ -179,30 +179,9 @@ sks codex-lb repair
 sks
 ```
 
-Bare `sks` asks this before opening Codex when codex-lb is not configured:
+Bare `sks` can also prompt for codex-lb auth before launch; SKS stores the key in `~/.codex/sks-codex-lb.env`, syncs `codex login --with-api-key`, and loads it into a fresh tmux session.
 
-```text
-Authenticate and route Codex through codex-lb? [y/N]
-```
-
-Answering `y` asks for the hosted domain and API key, writes `~/.codex/config.toml`, stores the key in `~/.codex/sks-codex-lb.env` with mode `0600`, syncs Codex CLI API-key auth through `codex login --with-api-key`, and sources that env file before launching Codex in tmux. When codex-lb is configured from this prompt, SKS opens a fresh tmux session for that launch so the new key is loaded by the Codex process immediately. SKS keeps Codex App Fast mode visible and defaulted by writing top-level `model = "gpt-5.5"`, `service_tier = "fast"`, `[features].fast_mode = true`, and the `sks-fast-high` profile while removing legacy top-level reasoning locks; route-specific reasoning stays in named profiles or explicit tmux launch args.
-
-If Codex CLI auth drifts after a tmux/MAD launch, run `sks codex-lb repair` or `sks auth repair`. This reuses the stored `~/.codex/sks-codex-lb.env` key and re-syncs Codex CLI API-key auth without asking for the key again. To replace the key or host, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
-
-The generated provider config follows the codex-lb README's Codex CLI API-key setup:
-
-```toml
-model_provider = "codex-lb"
-service_tier = "fast"
-
-[model_providers.codex-lb]
-name = "OpenAI"
-base_url = "http://127.0.0.1:2455/backend-api/codex"
-wire_api = "responses"
-env_key = "CODEX_LB_API_KEY"
-supports_websockets = true
-requires_openai_auth = true
-```
+If Codex CLI auth drifts after a launch or reinstall, run `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
 
 ### MAD tmux Launch
 
