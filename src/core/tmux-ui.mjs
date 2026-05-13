@@ -121,6 +121,7 @@ const TERMINAL_TEAM_AGENT_STATUSES = new Set([
 
 const LEGACY_TEAM_PANE_TITLE_RE = /^(?:overview: mission_overview|scout: analysis_scout|plan: (?:debate|consensus|planner|user)|exec: (?:executor|implementation|worker)|review: (?:reviewer|qa|validation)|safety:)/;
 const GENERIC_TEAM_AGENT_IDS = new Set(['parent_orchestrator', 'analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']);
+const DYNAMIC_TEAM_TMUX_LAYOUT = 'main-vertical';
 
 export function isTmuxShellSession(env = process.env) {
   return Boolean(String(env.TMUX || '').trim());
@@ -582,14 +583,20 @@ export async function createTmuxSession(plan = {}, panes = [], opts = {}) {
   }
   const first = normalizedPanes[0] || { cwd: root, command: 'pwd' };
   const dimensions = currentTerminalDimensions(opts);
-  const layout = tmuxLayoutName(opts.layout || 'tiled');
+  const rightSidePanes = Boolean(opts.rightSidePanes || opts.rightSideOnly);
+  const layout = tmuxLayoutName(opts.layout || (rightSidePanes ? DYNAMIC_TEAM_TMUX_LAYOUT : 'tiled'));
   const create = await tmuxRun(tmuxBin, ['new-session', '-d', '-x', dimensions.width, '-y', dimensions.height, '-s', session, '-c', path.resolve(first.cwd || root), '-n', 'sks', '-P', '-F', '#{pane_id}', first.command || 'pwd']);
   if (create.code !== 0) return { ok: false, session, panes: [], stderr: create.stderr || create.stdout || 'tmux new-session failed' };
   const created = [{ pane_id: paneId(create.stdout), role: first.role || 'overview', title: first.title || 'overview' }];
+  let rightStackTarget = created[0].pane_id || session;
   for (const pane of normalizedPanes.slice(1)) {
-    const split = await tmuxRun(tmuxBin, ['split-window', '-t', session, pane.vertical ? '-v' : '-h', '-d', '-P', '-F', '#{pane_id}', '-c', path.resolve(pane.cwd || root), pane.command || 'pwd']);
+    const direction = rightSidePanes ? (created.length === 1 ? '-h' : '-v') : (pane.vertical ? '-v' : '-h');
+    const splitTarget = rightSidePanes ? rightStackTarget : session;
+    const split = await tmuxRun(tmuxBin, ['split-window', '-t', splitTarget, direction, '-d', '-P', '-F', '#{pane_id}', '-c', path.resolve(pane.cwd || root), pane.command || 'pwd']);
     if (split.code !== 0) return { ok: false, session, panes: created, stderr: split.stderr || split.stdout || 'tmux split-window failed' };
-    created.push({ pane_id: paneId(split.stdout), role: pane.role || 'lane', title: pane.title || null });
+    const newPaneId = paneId(split.stdout);
+    created.push({ pane_id: newPaneId, role: pane.role || 'lane', title: pane.title || null });
+    if (rightSidePanes && newPaneId) rightStackTarget = newPaneId;
     await tmuxRun(tmuxBin, ['select-layout', '-t', session, layout]).catch(() => null);
   }
   const dynamic_resize = await enableTmuxDynamicResize(tmuxBin, session, { layout });
@@ -732,6 +739,10 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
   const desiredAgents = new Set(lanes.map((lane) => lane.agent));
   const paneList = await listTmuxWindowPanes(tmuxBin, target.window_id);
   if (!paneList.ok) return { ok: false, skipped: false, session: target.session, window_id: target.window_id, reason: paneList.stderr };
+  const cockpitState = await readJson(tmuxCockpitStatePath(resolvedRoot), {}).catch(() => ({}));
+  const previousCockpit = cockpitState?.missions?.[id] || {};
+  const currentPane = paneList.panes.find((pane) => pane.pane_id === target.pane_id);
+  const mainPaneId = previousCockpit.main_pane_id || (currentPane?.managed && currentPane?.mission_id === id ? null : target.pane_id);
   const managed = paneList.panes.filter((pane) => pane.managed && pane.mission_id === id);
   const byAgent = new Map();
   for (const pane of managed) {
@@ -747,14 +758,19 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
       else failed.push({ action: 'kill-pane', pane_id: pane.pane_id, agent: pane.agent, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
     }
   }
+  const remainingManaged = managed.filter((pane) => desiredAgents.has(pane.agent) && !closed.some((entry) => entry.pane_id === pane.pane_id));
+  let rightStackTarget = remainingManaged.at(-1)?.pane_id || mainPaneId || target.window_id;
   for (const lane of lanes) {
     if (byAgent.has(lane.agent)) continue;
-    const split = await tmuxRun(tmuxBin, ['split-window', '-t', target.window_id, '-d', '-P', '-F', '#{pane_id}', '-c', resolvedRoot, lane.command || 'pwd'], { timeoutMs: 5000, maxOutputBytes: 4096 });
+    const firstRightPane = remainingManaged.length === 0 && opened.length === 0;
+    const direction = firstRightPane ? '-h' : '-v';
+    const split = await tmuxRun(tmuxBin, ['split-window', direction, '-t', rightStackTarget, '-d', '-P', '-F', '#{pane_id}', '-c', resolvedRoot, lane.command || 'pwd'], { timeoutMs: 5000, maxOutputBytes: 4096 });
     const pane_id = paneId(split.stdout);
     if (split.code !== 0 || !pane_id) {
       failed.push({ action: 'split-window', agent: lane.agent, role: lane.role, stderr: split.stderr || split.stdout || 'tmux split-window failed' });
       continue;
     }
+    rightStackTarget = pane_id;
     const optionResult = await setTmuxPaneUserOptions(tmuxBin, pane_id, {
       '@sks_team_managed': '1',
       '@sks_mission_id': id,
@@ -766,9 +782,10 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
   }
   let relayout = null;
   if (opened.length || closed.length) {
-    const tiled = await tmuxRun(tmuxBin, ['select-layout', '-t', target.window_id, 'tiled'], { timeoutMs: 5000 });
+    const selectedMain = mainPaneId ? await tmuxRun(tmuxBin, ['select-pane', '-t', mainPaneId], { timeoutMs: 5000 }) : { code: 0 };
+    const tiled = await tmuxRun(tmuxBin, ['select-layout', '-t', target.window_id, DYNAMIC_TEAM_TMUX_LAYOUT], { timeoutMs: 5000 });
     const even = await tmuxRun(tmuxBin, ['select-layout', '-t', target.window_id, '-E'], { timeoutMs: 5000 });
-    relayout = { ok: tiled.code === 0 && even.code === 0, tiled: tiled.code, even: even.code };
+    relayout = { ok: selectedMain.code === 0 && tiled.code === 0 && even.code === 0, selected_main: selectedMain.code, layout: tiled.code, even: even.code, layout_name: DYNAMIC_TEAM_TMUX_LAYOUT };
   }
   const nextPanes = [
     ...managed.filter((pane) => desiredAgents.has(pane.agent) && !closed.some((entry) => entry.pane_id === pane.pane_id)),
@@ -778,8 +795,10 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
     mission_id: id,
     session: target.session,
     window_id: target.window_id,
-    main_pane_id: target.pane_id,
+    main_pane_id: mainPaneId || target.pane_id,
     mode: 'current_session_dynamic_panes',
+    layout: DYNAMIC_TEAM_TMUX_LAYOUT,
+    right_side_only: true,
     desired_lane_count: lanes.length,
     panes: nextPanes,
     opened,
@@ -791,7 +810,7 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
     mode: 'current_session_dynamic_panes',
     session: target.session,
     window_id: target.window_id,
-    main_pane_id: target.pane_id,
+    main_pane_id: mainPaneId || target.pane_id,
     desired_lane_count: lanes.length,
     opened_lane_count: opened.length,
     closed_lane_count: closed.length,
@@ -825,7 +844,8 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
   const splitUi = {
     mode: 'single_window_split_panes',
     window: 'sks',
-    layout: 'tiled',
+    layout: DYNAMIC_TEAM_TMUX_LAYOUT,
+    right_side_only: true,
     dynamic_resize: true,
     window_size: 'latest',
     resize_hooks: ['client-attached', 'client-resized'],
@@ -866,6 +886,8 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
         mode: cockpit.mode,
         current_session: true,
         window_id: cockpit.window_id,
+        main_pane_id: cockpit.main_pane_id,
+        layout: cockpit.relayout?.layout_name || DYNAMIC_TEAM_TMUX_LAYOUT,
         user_attach_command: cockpit.attach_command
       };
       await writeTmuxTeamRecord(launch.root, {
@@ -902,7 +924,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
     }
   }
   const panes = lanes.map((lane, index) => ({ cwd: launch.root, command: lane.command, focused: index === 0, role: lane.role, title: lane.title, vertical: index > 1 }));
-  const created = await createTmuxSession(launch, panes, { layout: 'tiled', recreate: true });
+  const created = await createTmuxSession(launch, panes, { layout: DYNAMIC_TEAM_TMUX_LAYOUT, recreate: true, rightSidePanes: true });
   result.created = Boolean(created.ok);
   result.opened = created;
   result.session = created.session || launch.session;
@@ -1077,7 +1099,7 @@ async function cleanupLegacyTmuxTeamSurfaces(root, missionId, opts = {}) {
         else failed.push({ pane_id: pane.pane_id, title: pane.title, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
       }
       if (closed.length) {
-        await tmuxRun(tmuxBin, ['select-layout', '-t', current.window_id, 'tiled'], { timeoutMs: 5000 }).catch(() => null);
+        await tmuxRun(tmuxBin, ['select-layout', '-t', current.window_id, DYNAMIC_TEAM_TMUX_LAYOUT], { timeoutMs: 5000 }).catch(() => null);
         await tmuxRun(tmuxBin, ['select-layout', '-t', current.window_id, '-E'], { timeoutMs: 5000 }).catch(() => null);
       }
     }
@@ -1117,7 +1139,7 @@ async function cleanupRecordedTmuxTeamPanes(root, missionId, record = {}) {
     else failed.push({ pane_id: pane.pane_id, agent: pane.agent, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
   }
   if (closed.length) {
-    await tmuxRun(tmuxBin, ['select-layout', '-t', target, 'tiled'], { timeoutMs: 5000 }).catch(() => null);
+    await tmuxRun(tmuxBin, ['select-layout', '-t', target, DYNAMIC_TEAM_TMUX_LAYOUT], { timeoutMs: 5000 }).catch(() => null);
     await tmuxRun(tmuxBin, ['select-layout', '-t', target, '-E'], { timeoutMs: 5000 }).catch(() => null);
   }
   return {

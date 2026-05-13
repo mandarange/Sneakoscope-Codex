@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.7.68] - 2026-05-13
+
+### Fixed
+
+- Route `$Research` through a source-backed xhigh genius scout council contract, requiring one literal `Eureka!` idea per scout, `debate-ledger.json`, `source-ledger.json`, `scout-ledger.json`, `falsification-ledger.json`, citation coverage, counterevidence, and stricter research gate metrics before a run can pass.
+- Install accepted SKS updates with the exact registry-confirmed version instead of `sneakoscope@latest`, avoiding stale npm cache or propagation windows after a fresh publish.
+- Make `sks doctor --fix` repair stored codex-lb config/auth drift, and store the codex-lb base URL beside the API key so future updates can restore provider routing.
+- Raise the packed npm tarball budget to 400 KiB while keeping single-file, unpacked-size, and file-count release gates in place.
+- Keep the 0.7.67 Codex App commit-message hook bypass, codex-lb postinstall preservation, Team tmux cleanup, and registry safety fixes available under a fresh patch version.
+
+## [0.7.67] - 2026-05-13
+
+### Fixed
+
+- Add a release registry gate so npm version bumps fail before publish when registry config, lockfile registry sources, packed metadata, or npm dist-tag state is unsafe.
+- Preserve codex-lb provider routing config through postinstall bootstrap/repair so stored API-key auth is not left without `model_provider = "codex-lb"`.
+- Keep Team tmux Scout panes on the right side, close managed panes after work, and render per-Scout live chat transcripts instead of a shared log tail.
+- Let Codex App commit message generation bypass SKS route finalization hooks while keeping ordinary user bug-fix prompts on the normal Team route.
 
 ## [0.7.66] - 2026-05-13
 

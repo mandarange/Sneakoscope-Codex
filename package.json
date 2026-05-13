@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "0.7.66",
+  "version": "0.7.68",
   "description": "Sneakoscope Codex: database-safe Codex CLI/App harness with Team, Goal, AutoResearch, TriWiki, and Honest Mode.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -37,10 +37,11 @@
     "packcheck": "find bin src scripts -name '*.mjs' -print0 | xargs -0 -n1 node --check",
     "changelog:check": "node ./scripts/changelog-check.mjs",
     "sizecheck": "node ./scripts/sizecheck.mjs",
-    "release:check": "npm run repo-audit && npm run changelog:check && npm run packcheck && npm run selftest && npm run sizecheck",
-    "publish:dry": "npm run release:check && npm --cache /tmp/sks-npm-cache pack --dry-run",
-    "publish:npm": "npm --cache /tmp/sks-npm-cache publish --access public",
-    "prepublishOnly": "npm run release:check"
+    "registry:check": "node ./scripts/release-registry-check.mjs",
+    "release:check": "npm run repo-audit && npm run changelog:check && npm run packcheck && npm run selftest && npm run sizecheck && npm run registry:check",
+    "publish:dry": "npm run release:check && npm --cache /tmp/sks-npm-cache publish --dry-run --registry https://registry.npmjs.org/ --access public",
+    "publish:npm": "npm --cache /tmp/sks-npm-cache publish --registry https://registry.npmjs.org/ --access public",
+    "prepublishOnly": "npm run release:check && node ./scripts/release-registry-check.mjs --require-unpublished"
   },
   "keywords": [
     "sneakoscope",

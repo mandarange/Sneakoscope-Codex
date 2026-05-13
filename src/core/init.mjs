@@ -112,6 +112,7 @@ export async function initProject(root, opts = {}) {
   const sine = path.join(root, '.sneakoscope');
   const manifestPath = path.join(sine, 'manifest.json');
   const previousManifest = await readJson(manifestPath, null);
+  const preRepairCodexConfig = opts.repair ? await readText(path.join(root, '.codex', 'config.toml'), '') : '';
   if (opts.repair) {
     const repair = await repairSksGeneratedArtifacts(root, { resetState: Boolean(opts.resetState) });
     if (repair.removed.length) created.push(`repaired generated SKS files (${repair.removed.length})`);
@@ -471,12 +472,37 @@ async function mergeGlobalCodexConfigIfAvailable(configText = '', configPath = '
   const globalConfig = await readText(globalConfigPath, '');
   let next = mergeGlobalMcpServers(configText, globalConfig);
   if (selectedRe.test(next) && /\[model_providers\.codex-lb\]/.test(next)) return `${String(next || '').trim()}\n`;
-  if (!(await exists(path.join(home, '.codex', 'sks-codex-lb.env')))) return next;
-  const baseUrl = globalConfig.match(/(^|\n)\[model_providers\.codex-lb\][\s\S]*?\n\s*base_url\s*=\s*"([^"]+)"/)?.[2];
-  if (!selectedRe.test(globalConfig) || !baseUrl) return next;
+  const envPath = path.join(home, '.codex', 'sks-codex-lb.env');
+  if (!(await exists(envPath))) return next;
+  const envText = await readText(envPath, '');
+  const baseUrl = globalConfig.match(/(^|\n)\[model_providers\.codex-lb\][\s\S]*?\n\s*base_url\s*=\s*"([^"]+)"/)?.[2] || parseCodexLbEnvBaseUrl(envText);
+  if (!parseCodexLbEnvKey(envText) || !baseUrl || (!selectedRe.test(globalConfig) && !parseCodexLbEnvBaseUrl(envText))) return next;
   next = upsertTopLevelTomlString(next, 'model_provider', 'codex-lb');
   next = upsertTomlTable(next, 'model_providers.codex-lb', `[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "${baseUrl}"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true`);
   return `${next.trim()}\n`;
+}
+
+function parseCodexLbEnvKey(text = '') {
+  return parseShellEnvValue(text, 'CODEX_LB_API_KEY');
+}
+
+function parseCodexLbEnvBaseUrl(text = '') {
+  const value = parseShellEnvValue(text, 'CODEX_LB_BASE_URL');
+  if (!value) return '';
+  let host = value.trim();
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(host)) host = `https://${host}`;
+  host = host.replace(/\/+$/, '');
+  return /\/backend-api\/codex$/i.test(host) ? host : `${host}/backend-api/codex`;
+}
+
+function parseShellEnvValue(text = '', key = '') {
+  const re = new RegExp(`^\\s*(?:export\\s+)?${escapeRegExp(key)}\\s*=\\s*(.+?)\\s*$`, 'm');
+  const raw = String(text || '').match(re)?.[1]?.trim() || '';
+  if (!raw) return '';
+  if (raw.startsWith("'")) return raw.endsWith("'") && raw.length > 1 ? raw.slice(1, -1).replace(/'\\''/g, "'") : '';
+  if (raw.startsWith('"')) return raw.endsWith('"') && raw.length > 1 ? raw.slice(1, -1).replace(/\\"/g, '"') : '';
+  if (raw.includes("'") || raw.includes('"') || /\s/.test(raw)) return '';
+  return raw;
 }
 
 function mergeGlobalMcpServers(configText = '', globalConfig = '') {
@@ -646,7 +672,7 @@ function upsertTomlTable(text, table, block) {
   }
 
   const generatedCodexConfigPath = path.join(root, '.codex', 'config.toml');
-  const existingCodexConfig = await readText(generatedCodexConfigPath, '');
+  const existingCodexConfig = await readText(generatedCodexConfigPath, '') || preRepairCodexConfig;
   const managedCodexConfig = await mergeGlobalCodexConfigIfAvailable(
     mergeManagedCodexConfigToml(existingCodexConfig),
     generatedCodexConfigPath
@@ -789,7 +815,7 @@ export async function installSkills(root) {
     'computer-use-fast': `---\nname: computer-use-fast\ndescription: Alias for the maximum-speed $Computer-Use/$CU Codex Computer Use lane.\n---\n\nUse the same rules as computer-use: skip Team debate, QA-LOOP clarification, upfront TriWiki refresh, Context7, subagents, and reflection unless explicitly requested. Use Codex Computer Use directly; never substitute Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or other browser automation for UI/browser evidence. At the end only, refresh/pack TriWiki, validate it, then provide a concise completion summary plus Honest Mode.\n`,
     'cu': `---\nname: cu\ndescription: Short alias for the maximum-speed $Computer-Use Codex Computer Use lane.\n---\n\nUse the same rules as computer-use. This is a speed lane for focused UI/browser/visual tasks that require Codex Computer Use evidence, with TriWiki refresh/validate and Honest Mode deferred to final closeout.\n`,
     'goal': `---\nname: goal\ndescription: Fast $Goal/$goal bridge overlay for Codex native persisted /goal workflows.\n---\n\nUse when the user invokes $Goal/$goal or asks to persist a workflow with Codex native /goal continuation. Prepare with sks goal create or the $Goal route, write only the lightweight bridge artifacts, then use native Codex /goal create, pause, resume, and clear controls where available. Goal does not replace Team, QA, DB, or other SKS execution routes; continue implementation through the selected route and use Context7 only when external API/library docs are involved. Do not recreate the old no-question loop.\n`,
-    'research': `---\nname: research\ndescription: Dollar-command route for $Research or $research frontier discovery workflows.\n---\n\nUse when the user invokes $Research/$research or asks for research, hypotheses, new mechanisms, falsification, or testable predictions. Prefer sks research prepare and sks research run. Keep the loop short: frame outcome, compare a few mechanisms, falsify, keep the smallest useful probe, and avoid adding background process unless it reduces net route weight. Do not use for ordinary code edits.\n`,
+    'research': `---\nname: research\ndescription: Dollar-command route for $Research or $research frontier discovery workflows.\n---\n\nUse when the user invokes $Research/$research or asks for research, hypotheses, new mechanisms, falsification, or testable predictions. Prefer sks research prepare and sks research run. Run the genius-lens scout council with Einstein/Feynman/Turing/von Neumann-inspired cognitive roles plus a skeptic lens; do not impersonate the historical people. Every Research scout must run with effort=xhigh, record one literal "Eureka!" idea, and participate in a vigorous evidence-bound debate before synthesis. Maximize safe web/source search and record source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json, and research-gate.json. Keep the loop short: frame outcome, compare a few mechanisms, falsify, keep the smallest useful probe, and avoid adding background process unless it reduces net route weight. Do not use for ordinary code edits.\n`,
     'autoresearch': `---\nname: autoresearch\ndescription: Dollar-command route for $AutoResearch or $autoresearch iterative experiment loops.\n---\n\nUse for $AutoResearch, iterative improvement, SEO/GEO, ranking, workflow, benchmark, or experiments. Define program, hypothesis, experiment, metric, keep/discard, falsification, next step, and Honest Mode. Load seo-geo-optimizer for README/npm/GitHub/schema/AI-search work.\n`,
     'db': `---\nname: db\ndescription: Dollar-command route for $DB or $db database and Supabase safety checks.\n---\n\nUse when the user invokes $DB/$db or the task touches SQL, Supabase, Postgres, migrations, Prisma, Drizzle, Knex, MCP database tools, or production data. Run or follow sks db policy, sks db scan, sks db classify, and sks db check. Destructive database operations remain forbidden.\n`,
     'mad-sks': `---\nname: mad-sks\ndescription: Explicit high-risk authorization modifier for $MAD-SKS scoped Supabase MCP DB permission widening.\n---\n\nUse only when the user explicitly invokes $MAD-SKS or top-level sks --mad. It can be combined with another route, such as $MAD-SKS $Team or $DB ... $MAD-SKS; in that case the other command remains the primary workflow and MAD-SKS is only the temporary permission grant. The widened permission applies only while the active mission gate is open, must be deactivated when the task ends, and opens live server work, Supabase MCP database writes, column/schema cleanup, direct execute SQL, migration application when required, and normal targeted DB writes. Keep only catastrophic safeguards: whole database/schema/table removal, truncate, all-row delete/update, reset, dangerous project/branch management, credential exfiltration, persistent security weakening, and unrequested fallback implementation remain blocked. Do not carry MAD-SKS permission into later prompts or routes. The permission profile is centralized in src/core/permission-gates.mjs so skill/hook/MCP-style gates share one decision function.\n`,
@@ -811,7 +837,7 @@ export async function installSkills(root) {
     'gx-visual-read': `---\nname: gx-visual-read\ndescription: Read a Sneakoscope Codex deterministic visual sheet and produce context notes.\n---\n\nExtract nodes, edges, invariants, tests, risks, uncertainties, and RGBA anchors from source/render/snapshot. Do not infer hidden nodes.\n`,
     'gx-visual-validate': `---\nname: gx-visual-validate\ndescription: Validate render metadata against vgraph.json and beta.json.\n---\n\nRun sks gx validate and drift; fail stale or incomplete hashes, nodes, edges, invariants, or anchors.\n`,
     'turbo-context-pack': `---\nname: turbo-context-pack\ndescription: Build ultra-low-token context packet with Q4 bits, Q3 tags, top-K claims, and minimal evidence.\n---\n\nDefault to Q4/Q3 plus TriWiki RGBA anchors and attention.use_first. Add Q2/Q1 only when needed or when attention.hydrate_first says source hydration is required. Keep id, hash, path, and coordinate tuple for hydration.\n`,
-    'research-discovery': `---\nname: research-discovery\ndescription: Run SKS Research Mode for frontier-style research, hypotheses, novelty ledgers, falsification, and experiments.\n---\n\nFrame criteria, map assumptions, generate hypotheses, falsify, keep surviving insights, and record novelty/confidence/falsifiers/next experiments. Do not overclaim.\n`,
+    'research-discovery': `---\nname: research-discovery\ndescription: Run SKS Research Mode for frontier-style research, hypotheses, novelty ledgers, falsification, and experiments.\n---\n\nFrame criteria, map assumptions, run maximum available web/source search, generate xhigh scout findings through Einstein/Feynman/Turing/von Neumann-inspired lenses plus a skeptic lens, require each scout to record a literal "Eureka!" idea, run evidence-bound debate, falsify, keep surviving insights, and record source ids, novelty/confidence/falsifiers/next experiments. Do not overclaim.\n`,
     'performance-evaluator': `---\nname: performance-evaluator\ndescription: Evaluate SKS performance, token-saving, accuracy-proxy, context-compression, or workflow improvements.\n---\n\nUse sks eval run/compare before claims. Report token_savings_pct, accuracy_delta/proxy, required_recall, support, and meaningful_improvement.\n`,
     'image-ux-review': imageUxReviewSkill('image-ux-review'),
     'ux-review': imageUxReviewSkill('ux-review'),
