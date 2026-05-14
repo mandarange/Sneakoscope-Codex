@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.7.71] - 2026-05-14
+
+### Fixed
+
+- Make normal `$Research` runs require the real Codex execution path instead of silently falling back to mock output; missing Codex now writes `research-blocker.json` and exits blocked.
+- Give Research runs a two-hour default per-cycle timeout via `--cycle-timeout-minutes`, while keeping `--mock` explicitly limited to selftests and dry harness checks.
+- Update generated Research skill guidance, route context, and README docs so Research is framed as long-running real source gathering, not a short summary loop.
+
 ## [0.7.70] - 2026-05-14
 
 ### Fixed

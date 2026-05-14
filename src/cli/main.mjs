@@ -211,7 +211,7 @@ Usage:
   sks team attach-tmux [mission-id|latest]
   sks team cleanup-tmux [mission-id|latest]
   sks research prepare "topic" [--depth frontier]
-  sks research run <mission-id|latest> [--mock] [--max-cycles N]
+  sks research run <mission-id|latest> [--mock] [--max-cycles N] [--cycle-timeout-minutes N]
   sks research status <mission-id|latest>
   sks db policy
   sks db scan [--migrations] [--json]
@@ -1963,7 +1963,7 @@ function readMaxCycles(args, fallback) {
 
 function positionalArgs(args = []) {
   const out = [];
-  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines', '--dir']);
+  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--cycle-timeout-minutes', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines', '--dir']);
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]);
     if (valueFlags.has(arg)) {

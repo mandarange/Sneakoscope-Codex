@@ -42,6 +42,10 @@ const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 const REPOSITORY_URL = 'https://github.com/mandarange/Sneakoscope-Codex.git';
+const RESEARCH_DEFAULT_MAX_CYCLES = 3;
+const RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES = 120;
+const RESEARCH_MIN_CYCLE_TIMEOUT_MINUTES = 15;
+const RESEARCH_MAX_CYCLE_TIMEOUT_MINUTES = 240;
 
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
 
@@ -483,13 +487,13 @@ async function researchPrepare(args) {
   console.log(`Genius summary: ${RESEARCH_GENIUS_SUMMARY_ARTIFACT}`);
   console.log(`Source skill: ${RESEARCH_SOURCE_SKILL_ARTIFACT}`);
   console.log('Ledgers: source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json');
-  console.log(`Run: sks research run ${id} --max-cycles 3`);
+  console.log(`Run: sks research run ${id} --max-cycles ${RESEARCH_DEFAULT_MAX_CYCLES} --cycle-timeout-minutes ${RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES}`);
 }
 
 async function researchRun(args) {
   const root = await sksRoot();
   const id = await resolveMissionId(root, args[0]);
-  if (!id) throw new Error('Usage: sks research run <mission-id|latest> [--mock] [--max-cycles N]');
+  if (!id) throw new Error('Usage: sks research run <mission-id|latest> [--mock] [--max-cycles N] [--cycle-timeout-minutes N]');
   const { dir, mission } = await loadMission(root, id);
   const planPath = path.join(dir, 'research-plan.json');
   if (!(await exists(planPath))) await writeResearchPlan(dir, mission.prompt || '', {});
@@ -501,10 +505,12 @@ async function researchRun(args) {
     process.exitCode = 2;
     return;
   }
-  const maxCycles = readMaxCycles(args, 3);
+  const maxCycles = readMaxCycles(args, RESEARCH_DEFAULT_MAX_CYCLES);
+  const cycleTimeoutMinutes = readResearchCycleTimeoutMinutes(args);
+  const cycleTimeoutMs = cycleTimeoutMinutes * 60 * 1000;
   const mock = flag(args, '--mock');
-  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false, implementation_allowed: false });
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock });
+  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false, implementation_allowed: false, research_real_run_required: !mock, research_cycle_timeout_minutes: cycleTimeoutMinutes });
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock, cycleTimeoutMinutes, real_run_required: !mock });
   if (mock) {
     const gate = await writeMockResearchResult(dir, plan);
     await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true, implementation_allowed: false });
@@ -514,19 +520,31 @@ async function researchRun(args) {
   }
   const codex = await getCodexInfo();
   if (!codex.bin) {
-    console.error('Codex CLI not found. Running mock research instead.');
-    const gate = await writeMockResearchResult(dir, plan);
-    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true, implementation_allowed: false });
-    console.log(`Mock research done: ${id}`);
+    const blocker = {
+      schema_version: 1,
+      mission_id: id,
+      ts: nowIso(),
+      phase: 'RESEARCH_BLOCKED_REAL_RUN_REQUIRED',
+      reason: 'Codex CLI not found; normal Research cannot fall back to mock output.',
+      required_action: 'Install/configure the Codex CLI or set SKS_CODEX_BIN to a valid executable, then rerun sks research run without --mock.',
+      mock_policy: '--mock is allowed only for selftests and dry harness checks.',
+      implementation_allowed: false
+    };
+    await writeJsonAtomic(path.join(dir, 'research-blocker.json'), blocker);
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: blocker.ts, type: 'research.blocked.real_run_required', reason: blocker.reason, blocker: 'research-blocker.json' });
+    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_BLOCKED_REAL_RUN_REQUIRED', questions_allowed: true, implementation_allowed: false, research_real_run_required: true, blocker: 'research-blocker.json' });
+    console.error('Research cannot run real sources: Codex CLI not found.');
+    console.error('Mock fallback is disabled for normal Research. Use --mock only for selftests, or install/configure Codex CLI/SKS_CODEX_BIN.');
+    process.exitCode = 2;
     return;
   }
   let last = '';
   for (let cycle = 1; cycle <= maxCycles; cycle++) {
     const cycleDir = path.join(dir, 'research', `cycle-${cycle}`);
     const outputFile = path.join(cycleDir, 'final.md');
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.start', cycle });
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.start', cycle, timeoutMinutes: cycleTimeoutMinutes });
     const prompt = buildResearchPrompt({ id, mission, plan, cycle, previous: last });
-    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-research', logDir: cycleDir, timeoutMs: 45 * 60 * 1000 });
+    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-research', logDir: cycleDir, timeoutMs: cycleTimeoutMs });
     await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
     last = await safeReadText(outputFile, result.stdout || result.stderr || '');
     if (containsUserQuestion(last)) {
@@ -637,11 +655,19 @@ async function safeReadText(file, fallback = '') {
   try { return await fsp.readFile(file, 'utf8'); } catch { return fallback; }
 }
 
-function readMaxCycles(args, fallback) {
-  const i = args.indexOf('--max-cycles');
+function readBoundedIntegerFlag(args, name, fallback, min, max) {
+  const i = args.indexOf(name);
   const raw = i >= 0 && args[i + 1] ? Number(args[i + 1]) : Number(fallback);
-  if (!Number.isFinite(raw)) return Math.max(1, Number.parseInt(fallback, 10) || 1);
-  return Math.max(1, Math.min(50, Math.floor(raw)));
+  if (!Number.isFinite(raw)) return Math.max(min, Number.parseInt(fallback, 10) || min);
+  return Math.max(min, Math.min(max, Math.floor(raw)));
+}
+
+function readMaxCycles(args, fallback) {
+  return readBoundedIntegerFlag(args, '--max-cycles', fallback, 1, 50);
+}
+
+function readResearchCycleTimeoutMinutes(args) {
+  return readBoundedIntegerFlag(args, '--cycle-timeout-minutes', RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES, RESEARCH_MIN_CYCLE_TIMEOUT_MINUTES, RESEARCH_MAX_CYCLE_TIMEOUT_MINUTES);
 }
 
 export async function goalCommand(sub, args) {
@@ -1592,7 +1618,7 @@ export async function statsCommand(args) {
 
 function positionalArgs(args = []) {
   const out = [];
-  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines', '--intent', '--changed', '--route', '--skills', '--prompt-signature']);
+  const valueFlags = new Set(['--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope', '--max-cycles', '--cycle-timeout-minutes', '--depth', '--scope', '--transport', '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command', '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors', '--lines', '--intent', '--changed', '--route', '--skills', '--prompt-signature']);
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]);
     if (valueFlags.has(arg)) {
