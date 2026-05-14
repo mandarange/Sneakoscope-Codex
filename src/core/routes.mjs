@@ -390,10 +390,10 @@ export const ROUTES = [
     command: '$Research',
     mode: 'RESEARCH',
     route: 'research mission',
-    description: 'Frontier discovery with xhigh genius-lens scouts, Eureka ideas, vigorous evidence-bound debate, maximum source retrieval, falsification, a paper manuscript, and testable predictions.',
-    requiredSkills: ['research', 'research-discovery', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
-    lifecycle: ['research_plan', 'source_ledger', 'xhigh_scout_council', 'eureka_moments', 'debate_ledger', 'report', 'paper', 'novelty_ledger', 'falsification_ledger', 'research_gate', 'post_route_reflection', 'honest_mode'],
-    context7Policy: 'required',
+    description: 'Frontier discovery with xhigh genius-lens scouts, Eureka ideas, vigorous evidence-bound debate, layered public source retrieval, falsification, a paper manuscript, a final genius-opinion summary, and testable predictions.',
+    requiredSkills: ['research', 'research-discovery', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
+    lifecycle: ['research_plan', 'source_skill', 'layered_source_ledger', 'xhigh_scout_council', 'eureka_moments', 'debate_ledger', 'report', 'paper', 'genius_opinion_summary', 'novelty_ledger', 'falsification_ledger', 'research_gate', 'post_route_reflection', 'honest_mode'],
+    context7Policy: 'if_external_docs',
     reasoningPolicy: 'xhigh',
     stopGate: 'research-gate.json',
     cliEntrypoint: 'sks research prepare|run',
@@ -585,9 +585,21 @@ function leadingDollarCommandMatch(prompt) {
     || text.match(/^\[\$([A-Za-z][A-Za-z0-9_-]*)\]\([^)]+\)(?:\s|:|$)/);
 }
 
+function embeddedDollarCommandMatch(prompt) {
+  const text = String(prompt || '');
+  const matches = [];
+  for (const match of text.matchAll(/\[\$([A-Za-z][A-Za-z0-9_-]*)\]\([^)]+\)/g)) matches.push({ index: match.index, command: match[1] });
+  for (const match of text.matchAll(/(^|[\s([{<])\$([A-Za-z][A-Za-z0-9_-]*)(?=\s|:|$|[.,!?;)\]}])/g)) matches.push({ index: match.index + match[1].length, command: match[2] });
+  return matches
+    .sort((a, b) => a.index - b.index)
+    .find((match) => routeByDollarCommand(match.command) || String(match.command || '').toUpperCase() === 'MAD-SKS') || null;
+}
+
 export function dollarCommand(prompt) {
-  const match = leadingDollarCommandMatch(prompt);
-  return match ? match[1].toUpperCase() : null;
+  const leading = leadingDollarCommandMatch(prompt);
+  if (leading) return leading[1].toUpperCase();
+  const embedded = embeddedDollarCommandMatch(prompt);
+  return embedded ? embedded.command.toUpperCase() : null;
 }
 
 export function hasMadSksSignal(prompt = '') {

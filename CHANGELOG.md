@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.7.70] - 2026-05-14
+
+### Fixed
+
+- Strengthen `$Research` with a route-local `research-source-skill.md`, layered source retrieval across scholarly, official, news, public-discourse, developer, and counterevidence sources, source-layer coverage and triangulation gate metrics, and optional Context7 only for package/API/framework documentation topics.
+- Keep explicit `$Research` prompts on the Research route even when the command appears mid-sentence or as a markdown link, preventing stale Team missions from hijacking research-only work.
+- Keep Research mission state marked `implementation_allowed=false`; the route may write research artifacts, but product/code implementation stays out of scope.
+- Require `$Research` to finish with `genius-opinion-summary.md`, summarizing each genius-lens scout's final opinion, evidence, disagreement, changed mind, and council consensus.
+- Raise the npm unpacked-size release budget to 1.6 MiB for the expanded Research route artifact contract while keeping packed size, file count, and tracked-file limits enforced.
+
 ## [0.7.69] - 2026-05-14
 
 ### Fixed

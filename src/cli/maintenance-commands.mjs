@@ -8,14 +8,14 @@ import { buildQuestionSchema, writeQuestions } from '../core/questions.mjs';
 import { sealContract } from '../core/decision-contract.mjs';
 import { buildQaLoopQuestionSchema, buildQaLoopPrompt, evaluateQaGate, qaStatus, writeMockQaResult, writeQaLoopArtifacts } from '../core/qa-loop.mjs';
 import { containsUserQuestion, noQuestionContinuationReason } from '../core/no-question-guard.mjs';
-import { RESEARCH_PAPER_ARTIFACT, countResearchPaperSections, buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
+import { RESEARCH_GENIUS_SUMMARY_ARTIFACT, RESEARCH_PAPER_ARTIFACT, RESEARCH_SOURCE_SKILL_ARTIFACT, countGeniusOpinionSummaries, countResearchPaperSections, buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { storageReport, enforceRetention, pruneWikiArtifacts } from '../core/retention.mjs';
 import { evaluateDoneGate } from '../core/hproof.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
 import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
-import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, reflectionRequiredForRoute, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, stripVisibleDecisionAnswerBlocks, triwikiContextTracking } from '../core/routes.mjs';
+import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, reflectionRequiredForRoute, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, stripVisibleDecisionAnswerBlocks, triwikiContextTracking } from '../core/routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
 import { appendTeamEvent, formatAgentReasoning, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested, teamReasoningPolicy } from '../core/team-live.mjs';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../core/team-review-policy.mjs';
@@ -429,7 +429,7 @@ async function researchPrepare(args) {
   if (!prompt) throw new Error('Missing research topic.');
   const { id, dir } = await createMission(root, { mode: 'research', prompt });
   const route = ROUTES.find((entry) => entry.id === 'Research') || routePrompt('$Research');
-  const context7Required = true;
+  const context7Required = routeNeedsContext7(route, prompt);
   const reasoning = routeReasoning(route, prompt);
   const plan = await writeResearchPlan(dir, prompt, { depth: readFlagValue(args, '--depth', 'frontier') });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: prompt, required: context7Required, ambiguity: { required: false, status: 'direct_research_cli' } });
@@ -457,7 +457,7 @@ async function researchPrepare(args) {
     mode: route.mode,
     phase: 'RESEARCH_PREPARED',
     questions_allowed: false,
-    implementation_allowed: true,
+    implementation_allowed: false,
     context7_required: context7Required,
     context7_verified: false,
     subagents_required: routeRequiresSubagents(route, prompt),
@@ -480,6 +480,8 @@ async function researchPrepare(args) {
   console.log(`Plan: ${path.relative(root, path.join(dir, 'research-plan.md'))}`);
   console.log(`Pipeline: ${path.relative(root, path.join(dir, PIPELINE_PLAN_ARTIFACT))}`);
   console.log(`Paper: ${RESEARCH_PAPER_ARTIFACT}`);
+  console.log(`Genius summary: ${RESEARCH_GENIUS_SUMMARY_ARTIFACT}`);
+  console.log(`Source skill: ${RESEARCH_SOURCE_SKILL_ARTIFACT}`);
   console.log('Ledgers: source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json');
   console.log(`Run: sks research run ${id} --max-cycles 3`);
 }
@@ -501,11 +503,11 @@ async function researchRun(args) {
   }
   const maxCycles = readMaxCycles(args, 3);
   const mock = flag(args, '--mock');
-  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false });
+  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false, implementation_allowed: false });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock });
   if (mock) {
     const gate = await writeMockResearchResult(dir, plan);
-    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true });
+    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true, implementation_allowed: false });
     console.log(`Mock research done: ${id}`);
     console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
     return;
@@ -514,7 +516,7 @@ async function researchRun(args) {
   if (!codex.bin) {
     console.error('Codex CLI not found. Running mock research instead.');
     const gate = await writeMockResearchResult(dir, plan);
-    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true });
+    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true, implementation_allowed: false });
     console.log(`Mock research done: ${id}`);
     return;
   }
@@ -534,7 +536,7 @@ async function researchRun(args) {
     }
     const gate = await evaluateResearchGate(dir);
     if (gate.passed) {
-      await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_DONE', questions_allowed: true });
+      await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_DONE', questions_allowed: true, implementation_allowed: false });
       await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.done', cycle });
       await enforceRetention(root).catch(() => {});
       console.log(`Research done: ${id}`);
@@ -542,7 +544,7 @@ async function researchRun(args) {
     }
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.continue', cycle, reasons: gate.reasons });
   }
-  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_PAUSED_MAX_CYCLES', questions_allowed: true });
+  await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_PAUSED_MAX_CYCLES', questions_allowed: true, implementation_allowed: false });
   console.log(`Research paused after max cycles: ${id}`);
 }
 
@@ -558,19 +560,29 @@ async function researchStatus(args) {
   const scoutLedger = await readJson(path.join(dir, 'scout-ledger.json'), null);
   const debateLedger = await readJson(path.join(dir, 'debate-ledger.json'), null);
   const falsificationLedger = await readJson(path.join(dir, 'falsification-ledger.json'), null);
+  const sourceSkillText = await readText(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT), '');
+  const geniusSummaryText = await readText(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), '');
   const paperText = await readText(path.join(dir, RESEARCH_PAPER_ARTIFACT), '');
   const scoutRows = Array.isArray(scoutLedger?.scouts) ? scoutLedger.scouts : [];
+  const sourceLayerRows = Array.isArray(sourceLedger?.source_layers) ? sourceLedger.source_layers : [];
+  const sourceLayersCovered = sourceLayerRows.filter((layer) => layer.status === 'covered' && ((Array.isArray(layer.source_ids) && layer.source_ids.length) || (Array.isArray(layer.counterevidence_ids) && layer.counterevidence_ids.length))).length;
   console.log(JSON.stringify({
     mission,
     state,
     gate,
     novelty_entries: ledger?.entries?.length ?? null,
     source_entries: sourceLedger?.sources?.length ?? null,
+    source_layers_required: sourceLayerRows.length || gate?.metrics?.source_layers_required || gate?.source_layers_required || null,
+    source_layers_covered: gate?.metrics?.source_layers_covered ?? gate?.source_layers_covered ?? (sourceLayerRows.length ? sourceLayersCovered : null),
+    triangulation_checks: sourceLedger?.triangulation?.cross_layer_checks?.length ?? gate?.metrics?.triangulation_checks ?? gate?.triangulation_checks ?? null,
+    genius_opinion_summaries: gate?.metrics?.genius_opinion_summaries ?? gate?.genius_opinion_summaries ?? (geniusSummaryText.trim() ? countGeniusOpinionSummaries(geniusSummaryText) : null),
     counterevidence_sources: sourceLedger?.counterevidence_sources?.length ?? null,
     xhigh_scouts: scoutRows.length ? scoutRows.filter((scout) => scout.effort === 'xhigh').length : null,
     eureka_moments: scoutRows.length ? scoutRows.filter((scout) => scout.eureka?.exclamation === 'Eureka!' && String(scout.eureka?.idea || '').trim()).length : null,
     scout_findings: scoutRows.length ? scoutRows.reduce((sum, scout) => sum + (Array.isArray(scout.findings) ? scout.findings.length : 0), 0) : null,
     debate_exchanges: debateLedger?.exchanges?.length ?? null,
+    research_source_skill_present: Boolean(sourceSkillText.trim()),
+    genius_opinion_summary_present: Boolean(geniusSummaryText.trim()),
     paper_present: Boolean(paperText.trim()),
     paper_sections: countResearchPaperSections(paperText),
     falsification_cases: falsificationLedger?.cases?.length ?? null
