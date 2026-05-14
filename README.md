@@ -211,7 +211,7 @@ sks skill-dream run --json
 sks code-structure scan --json
 ```
 
-`sks research` prepares a genius-lens scout council, requires every scout to run at `xhigh`, records one literal `Eureka!` idea per scout, runs an evidence-bound debate, maximizes available web/source retrieval before synthesis, and requires `source-ledger.json`, `scout-ledger.json`, `debate-ledger.json`, `novelty-ledger.json`, `falsification-ledger.json`, and `research-gate.json` so research runs stay source-backed, adversarially checked, and falsifiable. `research status` reports source entries, counterevidence, xhigh scout count, Eureka moments, debate exchanges, scout findings, and falsification cases alongside the gate.
+`sks research` prepares a genius-lens scout council, requires every scout to run at `xhigh`, records one literal `Eureka!` idea per scout, runs an evidence-bound debate, maximizes available web/source retrieval before synthesis, and requires `research-report.md`, `research-paper.md`, `source-ledger.json`, `scout-ledger.json`, `debate-ledger.json`, `novelty-ledger.json`, `falsification-ledger.json`, and `research-gate.json` so research runs stay source-backed, adversarially checked, falsifiable, and paper-ready. `research status` reports source entries, counterevidence, xhigh scout count, Eureka moments, debate exchanges, paper presence/sections, scout findings, and falsification cases alongside the gate.
 
 `sks pipeline plan` shows the active route lane, kept/skipped stages, verification commands, and no-unrequested-fallback invariant. `sks proof-field scan` is the lightweight rubric for small changes; risky or broad signals return to the full Team/Honest path.
 

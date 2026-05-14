@@ -3783,14 +3783,14 @@ async function selftest() {
   const { dir: researchDir, mission: researchMission } = await createMission(tmp, { mode: 'research', prompt: '새로운 코드 리뷰 방법론 연구' });
   const researchPlan = await writeResearchPlan(researchDir, researchMission.prompt, {});
   if (researchPlan.methodology !== 'genius-scout-council-frontier-discovery-loop' || researchPlan.web_research_policy?.mode !== 'maximum_source_retrieval') throw new Error('selftest: research plan contract');
-  for (const artifact of ['source-ledger.json', 'scout-ledger.json', 'debate-ledger.json', 'falsification-ledger.json']) {
-    if (!researchPlan.required_artifacts?.includes(artifact) || !(await exists(path.join(researchDir, artifact)))) throw new Error(`selftest: research ${artifact}`);
-  }
+  const rArts = researchPlan.required_artifacts || [];
+  for (const a of ['source-ledger.json', 'scout-ledger.json', 'debate-ledger.json', 'falsification-ledger.json']) if (!rArts.includes(a) || !(await exists(path.join(researchDir, a)))) throw new Error('selftest: research artifact');
+  if (!rArts.includes('research-paper.md')) throw new Error('selftest: research paper');
   const initialResearchGate = await evaluateResearchGate(researchDir);
-  if (initialResearchGate.passed || !initialResearchGate.reasons.includes('web_search_pass_missing') || !initialResearchGate.reasons.includes('eureka_missing') || !initialResearchGate.reasons.includes('debate_exchanges_missing')) throw new Error('selftest: research gate should block');
+  if (initialResearchGate.passed || ['web_search_pass_missing', 'eureka_missing', 'debate_exchanges_missing', 'research_paper_missing'].some((r) => !initialResearchGate.reasons.includes(r))) throw new Error('selftest: research gate');
   const researchGate = await writeMockResearchResult(researchDir, researchPlan);
   if (!researchGate.passed) throw new Error('selftest: mock research gate did not pass');
-  if (researchGate.metrics?.independent_scouts < 5 || researchGate.metrics?.xhigh_scouts < 5 || researchGate.metrics?.eureka_moments < 5 || researchGate.metrics?.debate_participants < 5 || researchGate.metrics?.counterevidence_sources < 1 || researchGate.metrics?.citation_coverage !== true || researchGate.metrics?.falsification_cases < 1) throw new Error('selftest: research metrics');
+  if (['independent_scouts', 'xhigh_scouts', 'eureka_moments', 'debate_participants'].some((m) => researchGate.metrics?.[m] < 5) || researchGate.metrics?.counterevidence_sources < 1 || researchGate.metrics?.paper_sections < 8 || researchGate.metrics?.citation_coverage !== true || researchGate.metrics?.falsification_cases < 1) throw new Error('selftest: research metrics');
   await writeJsonAtomic(path.join(dir, 'done-gate.json'), { passed: true, unsupported_critical_claims: 0, database_safety_violation: false, database_safety_reviewed: true, visual_drift: 'low', wiki_drift: 'low', tests_required: false });
   const gate = await evaluateDoneGate(tmp, id);
   if (!gate.passed) throw new Error('selftest: done gate');

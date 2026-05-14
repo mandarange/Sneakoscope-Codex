@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, packageRoot, dirSize, formatBytes, PACKAGE_VERSION, sksRoot, readStdin } from '../core/fsx.mjs';
+import { readJson, readText, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, packageRoot, dirSize, formatBytes, PACKAGE_VERSION, sksRoot, readStdin } from '../core/fsx.mjs';
 import { initProject } from '../core/init.mjs';
 import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, missionDir, setCurrent, stateFile } from '../core/mission.mjs';
@@ -8,7 +8,7 @@ import { buildQuestionSchema, writeQuestions } from '../core/questions.mjs';
 import { sealContract } from '../core/decision-contract.mjs';
 import { buildQaLoopQuestionSchema, buildQaLoopPrompt, evaluateQaGate, qaStatus, writeMockQaResult, writeQaLoopArtifacts } from '../core/qa-loop.mjs';
 import { containsUserQuestion, noQuestionContinuationReason } from '../core/no-question-guard.mjs';
-import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
+import { RESEARCH_PAPER_ARTIFACT, countResearchPaperSections, buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { storageReport, enforceRetention, pruneWikiArtifacts } from '../core/retention.mjs';
 import { evaluateDoneGate } from '../core/hproof.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
@@ -479,6 +479,7 @@ async function researchPrepare(args) {
   console.log(`Methodology: ${plan.methodology}`);
   console.log(`Plan: ${path.relative(root, path.join(dir, 'research-plan.md'))}`);
   console.log(`Pipeline: ${path.relative(root, path.join(dir, PIPELINE_PLAN_ARTIFACT))}`);
+  console.log(`Paper: ${RESEARCH_PAPER_ARTIFACT}`);
   console.log('Ledgers: source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json');
   console.log(`Run: sks research run ${id} --max-cycles 3`);
 }
@@ -557,6 +558,7 @@ async function researchStatus(args) {
   const scoutLedger = await readJson(path.join(dir, 'scout-ledger.json'), null);
   const debateLedger = await readJson(path.join(dir, 'debate-ledger.json'), null);
   const falsificationLedger = await readJson(path.join(dir, 'falsification-ledger.json'), null);
+  const paperText = await readText(path.join(dir, RESEARCH_PAPER_ARTIFACT), '');
   const scoutRows = Array.isArray(scoutLedger?.scouts) ? scoutLedger.scouts : [];
   console.log(JSON.stringify({
     mission,
@@ -569,6 +571,8 @@ async function researchStatus(args) {
     eureka_moments: scoutRows.length ? scoutRows.filter((scout) => scout.eureka?.exclamation === 'Eureka!' && String(scout.eureka?.idea || '').trim()).length : null,
     scout_findings: scoutRows.length ? scoutRows.reduce((sum, scout) => sum + (Array.isArray(scout.findings) ? scout.findings.length : 0), 0) : null,
     debate_exchanges: debateLedger?.exchanges?.length ?? null,
+    paper_present: Boolean(paperText.trim()),
+    paper_sections: countResearchPaperSections(paperText),
     falsification_cases: falsificationLedger?.cases?.length ?? null
   }, null, 2));
 }

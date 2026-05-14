@@ -921,7 +921,7 @@ async function prepareResearch(root, route, task, required) {
   await writeResearchPlan(dir, task, {});
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
   await setCurrent(root, routeState(id, route, 'RESEARCH_PREPARED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
-  return routeContext(route, id, task, required, 'Run sks research run latest, maximize web/source search, require every scout effort=xhigh plus one Eureka! idea, fill source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json, research-report.md, and pass research-gate.json.');
+  return routeContext(route, id, task, required, 'Run sks research run latest, maximize web/source search, require every scout effort=xhigh plus one Eureka! idea, fill source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json, research-report.md, research-paper.md, and pass research-gate.json.');
 }
 
 async function prepareAutoResearch(root, route, task, required) {
