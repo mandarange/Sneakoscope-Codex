@@ -7,7 +7,7 @@ import { checkHarnessModification, harnessGuardBlockReason } from './harness-gua
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.mjs';
 import { classifyToolError } from './evaluation.mjs';
 import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.mjs';
-import { stripVisibleDecisionAnswerBlocks } from './routes.mjs';
+import { dollarCommand, stripVisibleDecisionAnswerBlocks } from './routes.mjs';
 
 const TEAM_DIGEST_MAX_EVENTS = 4;
 const TEAM_DIGEST_MESSAGE_CHARS = 180;
@@ -75,13 +75,6 @@ function toolFailed(payload = {}) {
   if (payload.success === false || payload.tool_response?.success === false || payload.toolResponse?.success === false || payload.result?.success === false) return true;
   if (payload.executed === false) return true;
   return false;
-}
-
-function dollarCommand(prompt) {
-  const text = String(prompt || '').trim();
-  const match = text.match(/^\$([A-Za-z][A-Za-z0-9_-]*)(?:\s|:|$)/)
-    || text.match(/^\[\$([A-Za-z][A-Za-z0-9_-]*)\]\([^)]+\)(?:\s|:|$)/);
-  return match ? match[1].toUpperCase() : null;
 }
 
 function looksLikeUpdateDecline(prompt) {

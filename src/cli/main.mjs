@@ -22,7 +22,7 @@ import { bumpProjectVersion, installVersionGitHook, runVersionPreCommit, version
 import { rustInfo } from '../core/rust-accelerator.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
 import { defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evaluation.mjs';
-import { buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
+import { evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import {
   PPT_AUDIENCE_STRATEGY_ARTIFACT,
   PPT_CLEANUP_REPORT_ARTIFACT,
@@ -2647,19 +2647,21 @@ async function selftest() {
   const hookResearchTeamResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookResearchMarkdownTmp, input: hookResearchTeamPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookResearchTeamResult.code !== 0) throw new Error(`selftest: active Team setup before markdown $Research hook exited ${hookResearchTeamResult.code}: ${hookResearchTeamResult.stderr}`);
   const hookResearchTeamState = await readJson(stateFile(hookResearchMarkdownTmp), {});
-  const hookResearchMarkdownPayload = JSON.stringify({ cwd: hookResearchMarkdownTmp, prompt: '[$research](/tmp/research/SKILL.md) Codex Computer Use 도구 노출 문제를 QA루프 관점에서 연구' });
+  const hookResearchMarkdownPayload = JSON.stringify({ cwd: hookResearchMarkdownTmp, prompt: '논문 [$research](x) 팀 커밋 푸쉬 연구' });
   const hookResearchMarkdownResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookResearchMarkdownTmp, input: hookResearchMarkdownPayload, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookResearchMarkdownResult.code !== 0) throw new Error(`selftest: markdown $Research hook exited ${hookResearchMarkdownResult.code}: ${hookResearchMarkdownResult.stderr}`);
   const hookResearchMarkdownJson = JSON.parse(hookResearchMarkdownResult.stdout);
   const hookResearchMarkdownContext = hookResearchMarkdownJson.hookSpecificOutput?.additionalContext || '';
-  if (!hookResearchMarkdownContext.includes('$Research route prepared')) throw new Error('selftest: markdown $Research hook did not prepare Research route');
-  if (hookResearchMarkdownContext.includes(`Active Team mission ${hookResearchTeamState.mission_id}`)) throw new Error('selftest: markdown $Research hook retained stale active Team context');
-  if (!String(hookResearchMarkdownJson.systemMessage || '').includes('Research route') || String(hookResearchMarkdownJson.systemMessage || '').includes('QA-LOOP route')) throw new Error('selftest: markdown $Research visible hook message was hijacked by QA-LOOP policy text');
+  if (!hookResearchMarkdownContext.includes('$Research route prepared')) throw new Error('selftest: markdown research hook');
+  if (hookResearchMarkdownContext.includes(`Active Team mission ${hookResearchTeamState.mission_id}`)) throw new Error('selftest: stale Team context');
+  if (!String(hookResearchMarkdownJson.systemMessage || '').includes('Research route') || String(hookResearchMarkdownJson.systemMessage || '').includes('QA-LOOP route')) throw new Error('selftest: research hook message');
   const hookResearchMarkdownState = await readJson(stateFile(hookResearchMarkdownTmp), {});
-  if (hookResearchMarkdownState.mode !== 'RESEARCH' || hookResearchMarkdownState.route !== 'Research' || hookResearchMarkdownState.mission_id === hookResearchTeamState.mission_id || hookResearchMarkdownState.stop_gate !== 'research-gate.json' || !hookResearchMarkdownState.pipeline_plan_ready) throw new Error('selftest: markdown $Research hook did not replace active Team with prepared Research mission state');
+  if (hookResearchMarkdownState.mode !== 'RESEARCH' || hookResearchMarkdownState.route !== 'Research' || hookResearchMarkdownState.mission_id === hookResearchTeamState.mission_id || hookResearchMarkdownState.stop_gate !== 'research-gate.json' || !hookResearchMarkdownState.pipeline_plan_ready) throw new Error('selftest: research hook state');
   const hookResearchMissionDir = missionDir(hookResearchMarkdownTmp, hookResearchMarkdownState.mission_id);
-  if (!(await exists(path.join(hookResearchMissionDir, PIPELINE_PLAN_ARTIFACT)))) throw new Error('selftest: markdown $Research hook did not write pipeline plan');
-  for (const artifact of ['source-ledger.json', 'scout-ledger.json', 'debate-ledger.json', 'falsification-ledger.json']) {
+  if (!(await exists(path.join(hookResearchMissionDir, PIPELINE_PLAN_ARTIFACT)))) throw new Error('selftest: research hook plan');
+  const rss = 'research-source-skill.md';
+  const gos = 'genius-opinion-summary.md';
+  for (const artifact of [rss, 'source-ledger.json', 'scout-ledger.json', 'debate-ledger.json', 'falsification-ledger.json']) {
     if (!(await exists(path.join(hookResearchMissionDir, artifact)))) throw new Error(`selftest: hook research ${artifact}`);
   }
   const hookPayload = JSON.stringify({ cwd: hookGoalTmp, prompt: '$Goal 로그인 세션 만료 UX 개선' });
@@ -3782,15 +3784,16 @@ async function selftest() {
   if (wikiPruneDryRun.candidates < 1 || !wikiPruneDryRun.actions.some((action) => action.reason === 'low_wiki_trust')) throw new Error('selftest: wiki prune did not flag low-trust artifact');
   const { dir: researchDir, mission: researchMission } = await createMission(tmp, { mode: 'research', prompt: '새로운 코드 리뷰 방법론 연구' });
   const researchPlan = await writeResearchPlan(researchDir, researchMission.prompt, {});
-  if (researchPlan.methodology !== 'genius-scout-council-frontier-discovery-loop' || researchPlan.web_research_policy?.mode !== 'maximum_source_retrieval') throw new Error('selftest: research plan contract');
+  if (researchPlan.methodology !== 'genius-scout-council-frontier-discovery-loop' || researchPlan.web_research_policy?.mode !== 'layered_source_retrieval_and_triangulation') throw new Error('selftest: research plan contract');
   const rArts = researchPlan.required_artifacts || [];
-  for (const a of ['source-ledger.json', 'scout-ledger.json', 'debate-ledger.json', 'falsification-ledger.json']) if (!rArts.includes(a) || !(await exists(path.join(researchDir, a)))) throw new Error('selftest: research artifact');
-  if (!rArts.includes('research-paper.md')) throw new Error('selftest: research paper');
+  for (const a of [rss, 'source-ledger.json', 'scout-ledger.json', 'debate-ledger.json', 'falsification-ledger.json']) if (!rArts.includes(a) || !(await exists(path.join(researchDir, a)))) throw new Error('selftest: research artifact');
+  if (!rArts.includes('research-paper.md') || !rArts.includes(gos)) throw new Error('selftest: research paper');
   const initialResearchGate = await evaluateResearchGate(researchDir);
   if (initialResearchGate.passed || ['web_search_pass_missing', 'eureka_missing', 'debate_exchanges_missing', 'research_paper_missing'].some((r) => !initialResearchGate.reasons.includes(r))) throw new Error('selftest: research gate');
   const researchGate = await writeMockResearchResult(researchDir, researchPlan);
   if (!researchGate.passed) throw new Error('selftest: mock research gate did not pass');
-  if (['independent_scouts', 'xhigh_scouts', 'eureka_moments', 'debate_participants'].some((m) => researchGate.metrics?.[m] < 5) || researchGate.metrics?.counterevidence_sources < 1 || researchGate.metrics?.paper_sections < 8 || researchGate.metrics?.citation_coverage !== true || researchGate.metrics?.falsification_cases < 1) throw new Error('selftest: research metrics');
+  const rm = researchGate.metrics || {};
+  if (['independent_scouts', 'xhigh_scouts', 'eureka_moments', 'debate_participants', 'genius_opinion_summaries'].some((m) => rm[m] < 5) || ['counterevidence_sources', 'falsification_cases', 'triangulation_checks'].some((m) => rm[m] < 1) || rm.paper_sections < 8 || rm.citation_coverage !== true || rm.source_layers_covered < 7) throw new Error('selftest: research metrics');
   await writeJsonAtomic(path.join(dir, 'done-gate.json'), { passed: true, unsupported_critical_claims: 0, database_safety_violation: false, database_safety_reviewed: true, visual_drift: 'low', wiki_drift: 'low', tests_required: false });
   const gate = await evaluateDoneGate(tmp, id);
   if (!gate.passed) throw new Error('selftest: done gate');

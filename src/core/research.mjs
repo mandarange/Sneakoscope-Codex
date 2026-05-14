@@ -3,6 +3,8 @@ import { appendJsonlBounded, nowIso, readJson, readText, writeJsonAtomic, writeT
 import { OUTCOME_RUBRIC } from './proof-field.mjs';
 
 export const RESEARCH_PAPER_ARTIFACT = 'research-paper.md';
+export const RESEARCH_SOURCE_SKILL_ARTIFACT = 'research-source-skill.md';
+export const RESEARCH_GENIUS_SUMMARY_ARTIFACT = 'genius-opinion-summary.md';
 export const RESEARCH_PAPER_SECTION_GROUPS = Object.freeze([
   ['abstract'],
   ['introduction'],
@@ -52,6 +54,67 @@ export const RESEARCH_SCOUT_COUNCIL = Object.freeze([
   }
 ]);
 
+export const RESEARCH_SOURCE_LAYERS = Object.freeze([
+  {
+    id: 'academic_literature',
+    label: 'Academic literature',
+    purpose: 'Find recent papers, preprints, formal reviews, citations, and open scholarly metadata before synthesis.',
+    evidence_role: 'formal_evidence',
+    examples: ['arXiv', 'Semantic Scholar', 'OpenAlex', 'Crossref', 'PubMed'],
+    query_templates: ['"<topic>" arxiv', '"<topic>" site:semanticscholar.org', '"<topic>" OpenAlex Crossref PubMed']
+  },
+  {
+    id: 'official_government_data',
+    label: 'Official government and leading-institution knowledge',
+    purpose: 'Ground claims in public datasets, policy papers, national statistics, and leading-country institutional sources.',
+    evidence_role: 'authoritative_baseline',
+    examples: ['World Bank', 'OECD', 'Eurostat', 'data.gov', 'data.gov.uk', 'NIST'],
+    query_templates: ['"<topic>" site:worldbank.org OR site:oecd.org', '"<topic>" site:data.gov OR site:data.gov.uk', '"<topic>" site:nist.gov']
+  },
+  {
+    id: 'standards_primary_docs',
+    label: 'Standards and primary documents',
+    purpose: 'Check primary specifications, standards, RFCs, policy originals, and official project documents before relying on summaries.',
+    evidence_role: 'primary_source',
+    examples: ['IETF RFCs', 'W3C', 'ISO abstracts', 'official standards bodies', 'project primary docs'],
+    query_templates: ['"<topic>" RFC standard specification', '"<topic>" W3C IETF NIST standard', '"<topic>" official specification']
+  },
+  {
+    id: 'news_current_events',
+    label: 'Current news and global reporting',
+    purpose: 'Capture recent events, public impact, and regional framing from reputable news and global news indices.',
+    evidence_role: 'recency_signal',
+    examples: ['GDELT', 'BBC', 'CNN', 'Reuters', 'AP', 'regional reputable outlets'],
+    query_templates: ['"<topic>" BBC CNN latest', '"<topic>" GDELT news', '"<topic>" Reuters AP analysis']
+  },
+  {
+    id: 'public_discourse',
+    label: 'Public discourse',
+    purpose: 'Sample public practitioner and community discourse without treating popularity as truth.',
+    evidence_role: 'sentiment_and_edge_cases',
+    examples: ['X/Twitter recent search', 'Reddit', 'Hacker News', 'public forums'],
+    query_templates: ['"<topic>" site:x.com OR site:twitter.com', '"<topic>" site:reddit.com', '"<topic>" "Hacker News"']
+  },
+  {
+    id: 'developer_practitioner',
+    label: 'Developer and practitioner knowledge',
+    purpose: 'Find implementation pitfalls, developer questions, bug reports, and operational lessons.',
+    evidence_role: 'practice_feedback',
+    examples: ['Stack Overflow', 'Stack Exchange', 'GitHub issues', 'release notes', 'engineering blogs'],
+    query_templates: ['"<topic>" site:stackoverflow.com', '"<topic>" site:stackexchange.com', '"<topic>" site:github.com issues']
+  },
+  {
+    id: 'counterevidence_factcheck',
+    label: 'Counterevidence and fact-checking',
+    purpose: 'Actively search for failures, critiques, null results, retractions, fact checks, and source conflicts.',
+    evidence_role: 'falsification',
+    examples: ['Google Fact Check Tools', 'Retraction Watch', 'critical reviews', 'benchmark failures', 'negative results'],
+    query_templates: ['"<topic>" critique failure limitation', '"<topic>" fact check retraction', '"<topic>" counterevidence null result']
+  }
+]);
+
+export const RESEARCH_SOURCE_LAYER_IDS = Object.freeze(RESEARCH_SOURCE_LAYERS.map((layer) => layer.id));
+
 export function createResearchPlan(prompt, opts = {}) {
   const depth = opts.depth || 'frontier';
   return {
@@ -88,8 +151,8 @@ export function createResearchPlan(prompt, opts = {}) {
       ]
     },
     web_research_policy: {
-      mode: 'maximum_source_retrieval',
-      requirement: 'Use the broadest safe web/source search available in the runtime before synthesis.',
+      mode: 'layered_source_retrieval_and_triangulation',
+      requirement: 'Use every safely available public web/source route before synthesis, separated into source layers so the final claim is not dominated by one corpus or platform.',
       query_sets: [
         'first-principles and theory sources',
         'plain-language explanations and empirical examples',
@@ -97,10 +160,18 @@ export function createResearchPlan(prompt, opts = {}) {
         'systems, strategy, scaling, or deployment evidence',
         'counterevidence, failures, critiques, and null results'
       ],
+      source_layers: RESEARCH_SOURCE_LAYERS,
       source_priority: ['primary_sources', 'official_docs_or_standards', 'peer_reviewed_or_archival_sources', 'reputable_recent_sources', 'credible_counterevidence'],
+      skill_creator: {
+        artifact: RESEARCH_SOURCE_SKILL_ARTIFACT,
+        status: 'route_local_candidate',
+        rule: 'Before source gathering, create a route-local source collection skill that names the selected layers, query families, source-quality fields, blockers, and cross-layer triangulation checks. Do not edit generated .agents/skills during a research run.'
+      },
       citation_rules: [
         'Every factual claim in the report must cite source-ledger ids or local project evidence.',
         'The final research paper must include references tied to source-ledger ids.',
+        'Every required source layer must have at least one cited source or an explicit blocker; blockers keep the research gate unpassed.',
+        'The source-ledger must include at least one cross-layer triangulation check comparing formal, current, discourse, practitioner, official, and counterevidence sources.',
         'Every novelty-ledger entry must cite at least one evidence source and at least one falsifier.',
         'If live web search is unavailable, record the blocker in source-ledger.json and keep research-gate.json unpassed.'
       ],
@@ -108,7 +179,9 @@ export function createResearchPlan(prompt, opts = {}) {
         independent_scouts: RESEARCH_SCOUT_COUNCIL.length,
         web_search_passes: 1,
         source_entries: 1,
-        counterevidence_sources: 1
+        source_layers: RESEARCH_SOURCE_LAYER_IDS.length,
+        counterevidence_sources: 1,
+        triangulation_checks: 1
       }
     },
     rules: [
@@ -117,25 +190,31 @@ export function createResearchPlan(prompt, opts = {}) {
       'Run the genius-lens scout council independently before synthesis.',
       'Every Research scout must run at reasoning_effort=xhigh, record one literal "Eureka!" idea, and participate in the debate.',
       'The scout council must debate vigorously but stay evidence-bound; record challenges and responses in debate-ledger.json.',
-      'Maximize safe web/source search and record queries, sources, citations, and blockers in source-ledger.json.',
+      'Maximize safe web/source search as layered source retrieval and record queries, source layers, citations, quality notes, triangulation checks, and blockers in source-ledger.json.',
+      `Create ${RESEARCH_SOURCE_SKILL_ARTIFACT} as a route-local source collection skill before synthesis; do not edit generated .agents/skills during the research run.`,
       'Actively seek disconfirming evidence before synthesis.',
       'Turn the surviving research result into research-paper.md with paper-style sections and references.',
+      `End every run with ${RESEARCH_GENIUS_SUMMARY_ARTIFACT}, summarizing each genius-lens scout's final opinion, strongest evidence, disagreement, and changed mind.`,
       'Keep unsupported source-free claims as hypotheses only.',
       'Prefer the smallest testable mechanism or implementation probe over a new long-running loop.',
       'Do not ask the user mid-run; resolve scope using the research plan and safety policy.'
     ],
     phases: [
       { id: 'R0_FRAME', goal: 'Frame the target outcome, constraints, and what would make the idea useful.' },
-      { id: 'R1_SOURCE_SEARCH', goal: 'Run maximum available web/source retrieval with independent query sets for each scout lens.' },
-      { id: 'R2_EUREKA', goal: 'Have each xhigh genius-lens scout shout Eureka! and record one non-obvious idea with source ids.' },
-      { id: 'R3_DEBATE', goal: 'Run a vigorous evidence-bound council debate with every scout challenging or responding.' },
-      { id: 'R4_FALSIFY', goal: 'Attack each mechanism with counterexamples, missing evidence, source conflicts, and failure modes.' },
-      { id: 'R5_APPLY', goal: 'Keep the smallest surviving mechanism, define a cheap probe, and write all ledgers.' },
-      { id: 'R6_PAPER', goal: 'Convert the final research result into a concise paper manuscript with abstract, method, findings, limitations, and references.' }
+      { id: 'R1_SOURCE_SKILL', goal: `Create ${RESEARCH_SOURCE_SKILL_ARTIFACT} with layer-specific search routes, quality fields, and blockers before source gathering.` },
+      { id: 'R2_SOURCE_SEARCH', goal: 'Run layered web/source retrieval across papers, official data, standards, news, public discourse, developer knowledge, and counterevidence.' },
+      { id: 'R3_EUREKA', goal: 'Have each xhigh genius-lens scout shout Eureka! and record one non-obvious idea with source ids.' },
+      { id: 'R4_DEBATE', goal: 'Run a vigorous evidence-bound council debate with every scout challenging or responding.' },
+      { id: 'R5_FALSIFY', goal: 'Attack each mechanism with counterexamples, missing evidence, source conflicts, and failure modes.' },
+      { id: 'R6_APPLY', goal: 'Keep the smallest surviving mechanism, define a cheap probe, and write all ledgers.' },
+      { id: 'R7_PAPER', goal: 'Convert the final research result into a concise paper manuscript with abstract, method, findings, limitations, and references.' },
+      { id: 'R8_GENIUS_SUMMARY', goal: `Write ${RESEARCH_GENIUS_SUMMARY_ARTIFACT} so the final answer can report every scout lens opinion and the council consensus.` }
     ],
     required_artifacts: [
       'research-report.md',
       RESEARCH_PAPER_ARTIFACT,
+      RESEARCH_GENIUS_SUMMARY_ARTIFACT,
+      RESEARCH_SOURCE_SKILL_ARTIFACT,
       'source-ledger.json',
       'scout-ledger.json',
       'debate-ledger.json',
@@ -168,6 +247,10 @@ export function researchPlanMarkdown(plan) {
     lines.push(`Mode: ${plan.web_research_policy.mode}`);
     lines.push(`Requirement: ${plan.web_research_policy.requirement}`);
     for (const querySet of plan.web_research_policy.query_sets || []) lines.push(`- query set: ${querySet}`);
+    if (plan.web_research_policy.skill_creator?.artifact) lines.push(`- source skill artifact: ${plan.web_research_policy.skill_creator.artifact}`);
+    for (const layer of plan.web_research_policy.source_layers || []) {
+      lines.push(`- layer ${layer.id}: ${layer.purpose}`);
+    }
     lines.push('');
   }
   lines.push('## Outcome Rubric');
@@ -182,15 +265,55 @@ export function researchPlanMarkdown(plan) {
   return `${lines.join('\n')}\n`;
 }
 
+export function researchSourceSkillMarkdown(plan) {
+  const layers = plan?.web_research_policy?.source_layers?.length ? plan.web_research_policy.source_layers : RESEARCH_SOURCE_LAYERS;
+  const lines = [];
+  lines.push('# Research Source Layer Skill');
+  lines.push('');
+  lines.push('Status: route-local candidate skill. Use it inside this research mission before scout synthesis. Do not install or edit generated .agents/skills from this artifact.');
+  lines.push('');
+  lines.push('## Trigger');
+  lines.push('- Any `$Research` run that must collect broad public evidence before creative synthesis, debate, falsification, or paper writing.');
+  lines.push('');
+  lines.push('## Source Layers');
+  for (const layer of layers) {
+    lines.push(`- ${layer.id}: ${layer.purpose}`);
+    lines.push(`  Examples: ${(layer.examples || []).join(', ')}`);
+    lines.push(`  Query templates: ${(layer.query_templates || []).join(' | ')}`);
+  }
+  lines.push('');
+  lines.push('## Output Contract');
+  lines.push('- Fill source-ledger.json with `source_layers`, `sources[].layer`, `counterevidence_sources[].layer`, `citation_coverage`, `triangulation.cross_layer_checks`, and `blockers`.');
+  lines.push('- Each source entry should record title, locator/URL, publisher or author when known, published_at when known, accessed_at, layer, reliability, credibility, stance, supports or undermines, and notes.');
+  lines.push('- Public discourse sources such as X/Twitter or Reddit are signals and edge cases, not truth. They must be triangulated with formal, official, practitioner, or counterevidence layers.');
+  lines.push('- If a layer cannot be searched with the available runtime or credentials, record the blocker and keep research-gate.json unpassed.');
+  lines.push('');
+  lines.push('## Debate Use');
+  lines.push('- Every scout must cite source-ledger ids in findings and Eureka ideas.');
+  lines.push('- The skeptic lens must challenge the strongest claim using counterevidence or source-quality downgrades.');
+  lines.push('- Synthesis keeps only claims that survive cross-layer triangulation and falsification.');
+  lines.push('');
+  return `${lines.join('\n')}\n`;
+}
+
 export function countResearchPaperSections(text = '') {
   const headings = String(text || '').toLowerCase().split(/\n/).filter((line) => /^#{1,3}\s+/.test(line));
   return RESEARCH_PAPER_SECTION_GROUPS.filter((group) => headings.some((heading) => group.some((term) => heading.includes(term)))).length;
+}
+
+export function countGeniusOpinionSummaries(text = '') {
+  const lower = String(text || '').toLowerCase();
+  return RESEARCH_SCOUT_COUNCIL.filter((scout) => {
+    const label = String(scout.label || '').toLowerCase();
+    return lower.includes(String(scout.id || '').toLowerCase()) || (label && lower.includes(label));
+  }).length;
 }
 
 export async function writeResearchPlan(dir, prompt, opts = {}) {
   const plan = createResearchPlan(prompt, opts);
   await writeJsonAtomic(path.join(dir, 'research-plan.json'), plan);
   await writeTextAtomic(path.join(dir, 'research-plan.md'), researchPlanMarkdown(plan));
+  await writeTextAtomic(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT), researchSourceSkillMarkdown(plan));
   await writeJsonAtomic(path.join(dir, 'novelty-ledger.json'), {
     schema_version: 1,
     entries: [],
@@ -210,14 +333,46 @@ export async function writeResearchPlan(dir, prompt, opts = {}) {
 }
 
 export function defaultSourceLedger(plan = null) {
+  const sourceLayers = plan?.web_research_policy?.source_layers?.length ? plan.web_research_policy.source_layers : RESEARCH_SOURCE_LAYERS;
   return {
     schema_version: 1,
-    policy: plan?.web_research_policy?.mode || 'maximum_source_retrieval',
+    policy: plan?.web_research_policy?.mode || 'layered_source_retrieval_and_triangulation',
     created_at: nowIso(),
+    source_layer_skill: {
+      artifact: RESEARCH_SOURCE_SKILL_ARTIFACT,
+      status: 'planned'
+    },
     web_search_passes: 0,
+    source_layers: sourceLayers.map((layer) => ({
+      id: layer.id,
+      label: layer.label,
+      required: true,
+      status: 'pending',
+      evidence_role: layer.evidence_role,
+      query_templates: layer.query_templates || [],
+      source_ids: [],
+      counterevidence_ids: [],
+      blocker: null,
+      notes: ''
+    })),
+    layer_coverage: {
+      required: sourceLayers.map((layer) => layer.id),
+      covered: [],
+      missing: sourceLayers.map((layer) => layer.id),
+      notes: []
+    },
     queries: [],
     sources: [],
     counterevidence_sources: [],
+    triangulation: {
+      cross_layer_checks: [],
+      conflicts: [],
+      synthesis_notes: []
+    },
+    quality_model: {
+      reporting_basis: 'Record enough source metadata to make search reproducible, including query, layer, locator, publisher or author, publication date when known, accessed_at, reliability, credibility, stance, and cited claim ids.',
+      source_quality_fields: ['layer', 'kind', 'title', 'locator', 'publisher_or_author', 'published_at', 'accessed_at', 'reliability', 'credibility', 'stance', 'supports', 'undermines']
+    },
     citation_coverage: {
       all_key_claims_cited: false,
       notes: []
@@ -282,20 +437,53 @@ export function defaultFalsificationLedger() {
   };
 }
 
+function sourceLayerIdsForPlan(plan = null) {
+  const layers = plan?.web_research_policy?.source_layers?.length ? plan.web_research_policy.source_layers : RESEARCH_SOURCE_LAYERS;
+  return layers.map((layer) => layer.id).filter(Boolean);
+}
+
+function sourceLayerCoverageStats(sourceLedger = null, requiredLayerIds = RESEARCH_SOURCE_LAYER_IDS) {
+  const covered = new Set();
+  const sourceRows = [
+    ...(Array.isArray(sourceLedger?.sources) ? sourceLedger.sources : []),
+    ...(Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources : [])
+  ];
+  for (const source of sourceRows) {
+    const layer = source?.layer || source?.layer_id || source?.source_layer;
+    if (requiredLayerIds.includes(layer)) covered.add(layer);
+  }
+  for (const layer of Array.isArray(sourceLedger?.source_layers) ? sourceLedger.source_layers : []) {
+    const id = layer?.id || layer?.layer;
+    const sourceIds = [
+      ...(Array.isArray(layer?.source_ids) ? layer.source_ids : []),
+      ...(Array.isArray(layer?.counterevidence_ids) ? layer.counterevidence_ids : [])
+    ];
+    if (requiredLayerIds.includes(id) && layer?.status === 'covered' && sourceIds.length > 0) covered.add(id);
+  }
+  const missing = requiredLayerIds.filter((id) => !covered.has(id));
+  return { covered: [...covered], missing, required: [...requiredLayerIds] };
+}
+
 export function defaultResearchGate() {
   return {
     passed: false,
     report_present: false,
     paper_present: false,
     paper_sections: 0,
+    genius_opinion_summary_present: false,
+    genius_opinion_summaries: 0,
+    research_source_skill_present: false,
     source_ledger_present: false,
     scout_ledger_present: false,
     debate_ledger_present: false,
     novelty_ledger_present: false,
     falsification_ledger_present: false,
-    web_search_policy: 'maximum_source_retrieval',
+    web_search_policy: 'layered_source_retrieval_and_triangulation',
     web_search_passes: 0,
     source_entries: 0,
+    source_layers_required: RESEARCH_SOURCE_LAYER_IDS.length,
+    source_layers_covered: 0,
+    triangulation_checks: 0,
     independent_scouts: 0,
     xhigh_scouts: 0,
     eureka_moments: 0,
@@ -318,9 +506,13 @@ export function defaultResearchGate() {
 
 export async function evaluateResearchGate(dir) {
   const gate = await readJson(path.join(dir, 'research-gate.json'), defaultResearchGate());
+  const plan = await readJson(path.join(dir, 'research-plan.json'), null);
   const reportPresent = await exists(path.join(dir, 'research-report.md'));
   const paperPresent = await exists(path.join(dir, RESEARCH_PAPER_ARTIFACT));
   const paperSections = paperPresent ? countResearchPaperSections(await readText(path.join(dir, RESEARCH_PAPER_ARTIFACT), '')) : 0;
+  const geniusSummaryPresent = await exists(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT));
+  const geniusSummaryCount = geniusSummaryPresent ? countGeniusOpinionSummaries(await readText(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), '')) : 0;
+  const sourceSkillPresent = await exists(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT));
   const sourcePresent = await exists(path.join(dir, 'source-ledger.json'));
   const scoutPresent = await exists(path.join(dir, 'scout-ledger.json'));
   const debatePresent = await exists(path.join(dir, 'debate-ledger.json'));
@@ -333,6 +525,9 @@ export async function evaluateResearchGate(dir) {
   const sourceEntries = Array.isArray(sourceLedger?.sources) ? sourceLedger.sources.length : 0;
   const counterEvidenceEntries = Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources.length : 0;
   const webSearchPasses = Math.max(Number(gate.web_search_passes || 0), Number(sourceLedger?.web_search_passes || 0));
+  const requiredSourceLayers = sourceLayerIdsForPlan(plan);
+  const sourceLayerStats = sourceLayerCoverageStats(sourceLedger, requiredSourceLayers);
+  const triangulationChecks = Array.isArray(sourceLedger?.triangulation?.cross_layer_checks) ? sourceLedger.triangulation.cross_layer_checks.length : 0;
   const scoutRows = Array.isArray(scoutLedger?.scouts) ? scoutLedger.scouts : [];
   const independentScouts = scoutRows.filter((scout) => Array.isArray(scout.findings) && scout.findings.length > 0).length;
   const xhighScouts = scoutRows.filter((scout) => scout.effort === 'xhigh').length;
@@ -351,6 +546,9 @@ export async function evaluateResearchGate(dir) {
   if (!reportPresent && gate.report_present !== true) reasons.push('research_report_missing');
   if (!paperPresent) reasons.push('research_paper_missing');
   if (paperSections < RESEARCH_PAPER_SECTION_GROUPS.length) reasons.push('research_paper_sections_missing');
+  if (!geniusSummaryPresent && gate.genius_opinion_summary_present !== true) reasons.push('genius_opinion_summary_missing');
+  if (Math.max(Number(gate.genius_opinion_summaries || 0), geniusSummaryCount) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('genius_opinion_summary_incomplete');
+  if (!sourceSkillPresent && gate.research_source_skill_present !== true) reasons.push('research_source_skill_missing');
   if (!sourcePresent && gate.source_ledger_present !== true) reasons.push('source_ledger_missing');
   if (!scoutPresent && gate.scout_ledger_present !== true) reasons.push('scout_ledger_missing');
   if (!debatePresent && gate.debate_ledger_present !== true) reasons.push('debate_ledger_missing');
@@ -358,6 +556,8 @@ export async function evaluateResearchGate(dir) {
   if (!falsificationPresent && gate.falsification_ledger_present !== true) reasons.push('falsification_ledger_missing');
   if (webSearchPasses < 1) reasons.push('web_search_pass_missing');
   if (Math.max(Number(gate.source_entries || 0), sourceEntries) < 1) reasons.push('source_entry_missing');
+  if (Math.max(Number(gate.source_layers_covered || 0), sourceLayerStats.covered.length) < requiredSourceLayers.length) reasons.push('source_layer_coverage_missing');
+  if (Math.max(Number(gate.triangulation_checks || 0), triangulationChecks) < 1) reasons.push('cross_layer_triangulation_missing');
   if (Math.max(Number(gate.independent_scouts || 0), independentScouts) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('independent_scouts_missing');
   if (Math.max(Number(gate.xhigh_scouts || 0), xhighScouts) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('scout_effort_not_xhigh');
   if (Math.max(Number(gate.eureka_moments || 0), eurekaMoments) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('eureka_missing');
@@ -380,7 +580,14 @@ export async function evaluateResearchGate(dir) {
     metrics: {
       web_search_passes: webSearchPasses,
       paper_sections: Math.max(Number(gate.paper_sections || 0), paperSections),
+      genius_opinion_summary_present: geniusSummaryPresent || gate.genius_opinion_summary_present === true,
+      genius_opinion_summaries: Math.max(Number(gate.genius_opinion_summaries || 0), geniusSummaryCount),
+      research_source_skill_present: sourceSkillPresent || gate.research_source_skill_present === true,
       source_entries: Math.max(Number(gate.source_entries || 0), sourceEntries),
+      source_layers_required: requiredSourceLayers.length,
+      source_layers_covered: Math.max(Number(gate.source_layers_covered || 0), sourceLayerStats.covered.length),
+      source_layers_missing: sourceLayerStats.missing,
+      triangulation_checks: Math.max(Number(gate.triangulation_checks || 0), triangulationChecks),
       independent_scouts: Math.max(Number(gate.independent_scouts || 0), independentScouts),
       xhigh_scouts: Math.max(Number(gate.xhigh_scouts || 0), xhighScouts),
       eureka_moments: Math.max(Number(gate.eureka_moments || 0), eurekaMoments),
@@ -399,41 +606,89 @@ export async function evaluateResearchGate(dir) {
 }
 
 export async function writeMockResearchResult(dir, plan) {
+  const mockLayerSources = RESEARCH_SOURCE_LAYERS.map((layer, index) => ({
+    id: `mock-source-${index + 1}`,
+    layer: layer.id,
+    kind: 'selftest',
+    title: `Mock ${layer.label} coverage`,
+    locator: 'writeMockResearchResult',
+    accessed_at: nowIso(),
+    reliability: 'mock',
+    credibility: 'mock',
+    stance: layer.id === 'counterevidence_factcheck' ? 'undermines' : 'supports',
+    supports: layer.id === 'counterevidence_factcheck' ? [] : ['mock-insight-1'],
+    undermines: layer.id === 'counterevidence_factcheck' ? ['mock-insight-1'] : [],
+    notes: `Selftest fixture for the ${layer.id} source layer; no live web call is made in --mock mode.`
+  }));
   const sourceLedger = {
     schema_version: 1,
-    policy: 'maximum_source_retrieval',
+    policy: 'layered_source_retrieval_and_triangulation',
     created_at: nowIso(),
     mode: 'selftest_mock',
+    source_layer_skill: {
+      artifact: RESEARCH_SOURCE_SKILL_ARTIFACT,
+      status: 'created'
+    },
     web_search_passes: 1,
-    queries: [
-      { scout_id: 'einstein', query: 'mock first principles falsifiable novelty research mode', status: 'mocked' },
-      { scout_id: 'feynman', query: 'mock simple experiment compare discovery prompt summary prompt', status: 'mocked' },
-      { scout_id: 'turing', query: 'mock formal gate criteria source ledger citation coverage', status: 'mocked' },
-      { scout_id: 'von_neumann', query: 'mock workflow gate scaling review route evidence', status: 'mocked' },
-      { scout_id: 'skeptic', query: 'mock counterevidence research mode overclaims without sources', status: 'mocked' }
-    ],
-    sources: [
-      {
-        id: 'mock-source-1',
-        kind: 'selftest',
-        title: 'Mock SKS research source coverage',
-        locator: 'writeMockResearchResult',
-        accessed_at: nowIso(),
-        supports: ['mock-insight-1'],
-        notes: 'Selftest fixture; no live web call is made in --mock mode.'
-      }
-    ],
+    source_layers: RESEARCH_SOURCE_LAYERS.map((layer, index) => ({
+      id: layer.id,
+      label: layer.label,
+      required: true,
+      status: 'covered',
+      evidence_role: layer.evidence_role,
+      query_templates: layer.query_templates || [],
+      source_ids: [`mock-source-${index + 1}`],
+      counterevidence_ids: layer.id === 'counterevidence_factcheck' ? ['mock-counter-1'] : [],
+      blocker: null,
+      notes: 'Mock mode records layer coverage without live web access.'
+    })),
+    layer_coverage: {
+      required: [...RESEARCH_SOURCE_LAYER_IDS],
+      covered: [...RESEARCH_SOURCE_LAYER_IDS],
+      missing: [],
+      notes: ['mock fixture covers every research source layer']
+    },
+    queries: RESEARCH_SOURCE_LAYERS.map((layer) => ({
+      scout_id: layer.id === 'counterevidence_factcheck' ? 'skeptic' : null,
+      layer: layer.id,
+      query: `mock ${layer.id} layered research source search for ${plan.prompt}`,
+      status: 'mocked'
+    })),
+    sources: mockLayerSources,
     counterevidence_sources: [
       {
         id: 'mock-counter-1',
+        layer: 'counterevidence_factcheck',
         kind: 'selftest',
         title: 'Mock overclaim counterexample',
         locator: 'writeMockResearchResult',
         accessed_at: nowIso(),
+        reliability: 'mock',
+        credibility: 'mock',
+        stance: 'undermines',
         undermines: ['mock-insight-1'],
         notes: 'Shows the gate must fail if a run produces no tests or falsifiers.'
       }
     ],
+    triangulation: {
+      cross_layer_checks: [
+        {
+          id: 'mock-triangulation-1',
+          claim: 'Research Mode should not synthesize from a single corpus.',
+          source_ids: ['mock-source-1', 'mock-source-2', 'mock-source-5', 'mock-counter-1'],
+          result: 'survives_with_layered_evidence_requirement'
+        },
+        {
+          id: 'mock-triangulation-2',
+          claim: 'Public discourse is useful only when checked against formal and official layers.',
+          source_ids: ['mock-source-1', 'mock-source-2', 'mock-source-5', 'mock-source-6'],
+          result: 'downgrade_popularity_to_signal_not_truth'
+        }
+      ],
+      conflicts: [],
+      synthesis_notes: ['mock fixture requires cross-layer checks before synthesis']
+    },
+    quality_model: defaultSourceLedger(plan).quality_model,
     citation_coverage: {
       all_key_claims_cited: true,
       notes: ['mock report and novelty entry cite mock-source-1 and mock-counter-1']
@@ -521,26 +776,51 @@ export async function writeMockResearchResult(dir, plan) {
       }
     ]
   };
+  const geniusSummary = [
+    '# Genius Opinion Summary',
+    '',
+    `Prompt: ${plan.prompt}`,
+    '',
+    '## Scout Opinions',
+    ...RESEARCH_SCOUT_COUNCIL.flatMap((scout) => [
+      `### ${scout.label} (${scout.id})`,
+      `Final opinion: ${scout.label} wants the run to preserve ${scout.mandate.toLowerCase()} while producing a cited, falsifiable insight.`,
+      'Strongest evidence: mock-source-1 plus the layered source ledger.',
+      'Main disagreement: whether formal structure or cheap empirical probes should dominate the first pass.',
+      'Changed mind: accepted that citation coverage, counterevidence, and triangulation are gates before synthesis.',
+      ''
+    ]),
+    '## Council Consensus',
+    'The council keeps one modest, testable claim: Research Mode is useful when it writes a source-cited paper, records every scout opinion, triangulates across source layers, and exposes the next decisive test.'
+  ].join('\n');
+  await writeTextAtomic(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT), researchSourceSkillMarkdown(plan));
   await writeJsonAtomic(path.join(dir, 'source-ledger.json'), sourceLedger);
   await writeJsonAtomic(path.join(dir, 'scout-ledger.json'), scoutLedger);
   await writeJsonAtomic(path.join(dir, 'debate-ledger.json'), debateLedger);
   await writeJsonAtomic(path.join(dir, 'falsification-ledger.json'), falsificationLedger);
   await writeJsonAtomic(path.join(dir, 'novelty-ledger.json'), ledger);
-  await writeTextAtomic(path.join(dir, 'research-report.md'), `# SKS Research Report\n\nPrompt: ${plan.prompt}\n\n## Scout Council Synthesis\n\nThe mock council keeps one cited methodological insight: a research mode should force falsifiable novelty rather than summarize known material [mock-source-1].\n\n## Source Coverage\n\nThis is a selftest fixture. It records mock source and counterevidence ledgers but does not perform live web browsing in --mock mode.\n\n## Candidate Insight\n\nA useful research run must produce source-cited, falsifiable novelty with scout findings and a cheap probe.\n\n## Falsification\n\nThe claim is weak if no new testable prediction, counterevidence source, or experiment is produced [mock-counter-1].\n\n## Next Test\n\nCompare this mode against a summary-only run and score candidate insights, falsification passes, citation coverage, and testability.\n`);
-  await writeTextAtomic(path.join(dir, RESEARCH_PAPER_ARTIFACT), `# Research Paper: ${plan.prompt}\n\n## Abstract\nA source-cited research run should produce falsifiable novelty rather than only summarize known material.\n\n## Introduction\nThe mock topic is evaluated as a research workflow outcome [mock-source-1].\n\n## Methodology\nFive xhigh scouts produce Eureka ideas, debate, and falsify the strongest claim.\n\n## Findings\nThe surviving finding is that useful research needs cited novelty plus a cheap decisive probe.\n\n## Discussion\nThe debate favors gate-backed evidence over narrative confidence.\n\n## Limitations and Falsification\nThe claim fails without sources, counterevidence, or testable predictions [mock-counter-1].\n\n## Conclusion and Next Experiment\nCompare this loop against a summary-only baseline and score testable insights.\n\n## References\n- [mock-source-1] Mock SKS research source coverage.\n- [mock-counter-1] Mock overclaim counterexample.\n`);
+  await writeTextAtomic(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), `${geniusSummary}\n`);
+  await writeTextAtomic(path.join(dir, 'research-report.md'), `# SKS Research Report\n\nPrompt: ${plan.prompt}\n\n## Scout Council Synthesis\n\nThe mock council keeps one cited methodological insight: a research mode should force layered, falsifiable novelty rather than summarize known material from one corpus [mock-source-1].\n\n## Source Coverage\n\nThis is a selftest fixture. It records mock coverage for academic literature, official data, standards, news, public discourse, developer knowledge, and counterevidence layers, but does not perform live web browsing in --mock mode.\n\n## Candidate Insight\n\nA useful research run must produce source-cited, cross-layer triangulated, falsifiable novelty with scout findings and a cheap probe.\n\n## Falsification\n\nThe claim is weak if no new testable prediction, counterevidence source, cross-layer check, or experiment is produced [mock-counter-1].\n\n## Next Test\n\nCompare this mode against a summary-only run and score candidate insights, falsification passes, citation coverage, source-layer coverage, triangulation checks, and testability.\n`);
+  await writeTextAtomic(path.join(dir, RESEARCH_PAPER_ARTIFACT), `# Research Paper: ${plan.prompt}\n\n## Abstract\nA source-cited research run should produce cross-layer, falsifiable novelty rather than only summarize known material.\n\n## Introduction\nThe mock topic is evaluated as a research workflow outcome with layered source coverage [mock-source-1].\n\n## Methodology\nFive xhigh scouts produce Eureka ideas, debate, triangulate source layers, and falsify the strongest claim.\n\n## Findings\nThe surviving finding is that useful research needs cited novelty, source-layer coverage, cross-layer triangulation, and a cheap decisive probe.\n\n## Discussion\nThe debate favors gate-backed evidence over narrative confidence, and treats public discourse as signal rather than truth.\n\n## Limitations and Falsification\nThe claim fails without sources, counterevidence, triangulation checks, or testable predictions [mock-counter-1].\n\n## Conclusion and Next Experiment\nCompare this loop against a summary-only baseline and score testable insights.\n\n## References\n- [mock-source-1] Mock academic literature coverage.\n- [mock-source-2] Mock official government and leading-institution knowledge coverage.\n- [mock-source-3] Mock standards and primary documents coverage.\n- [mock-source-4] Mock current news and global reporting coverage.\n- [mock-source-5] Mock public discourse coverage.\n- [mock-source-6] Mock developer and practitioner knowledge coverage.\n- [mock-source-7] Mock counterevidence and fact-checking coverage.\n- [mock-counter-1] Mock overclaim counterexample.\n`);
   await writeJsonAtomic(path.join(dir, 'research-gate.json'), {
     ...defaultResearchGate(),
     passed: true,
     report_present: true,
     paper_present: true,
     paper_sections: RESEARCH_PAPER_SECTION_GROUPS.length,
+    genius_opinion_summary_present: true,
+    genius_opinion_summaries: RESEARCH_SCOUT_COUNCIL.length,
+    research_source_skill_present: true,
     source_ledger_present: true,
     scout_ledger_present: true,
     debate_ledger_present: true,
     novelty_ledger_present: true,
     falsification_ledger_present: true,
     web_search_passes: 1,
-    source_entries: 1,
+    source_entries: mockLayerSources.length,
+    source_layers_required: RESEARCH_SOURCE_LAYER_IDS.length,
+    source_layers_covered: RESEARCH_SOURCE_LAYER_IDS.length,
+    triangulation_checks: sourceLedger.triangulation.cross_layer_checks.length,
     independent_scouts: RESEARCH_SCOUT_COUNCIL.length,
     xhigh_scouts: RESEARCH_SCOUT_COUNCIL.length,
     eureka_moments: RESEARCH_SCOUT_COUNCIL.length,
@@ -553,12 +833,12 @@ export async function writeMockResearchResult(dir, plan) {
     falsification_cases: 1,
     testable_predictions: 1,
     citation_coverage: true,
-    evidence: ['mock research report', 'mock research paper', 'mock source ledger', 'mock scout ledger', 'mock debate ledger', 'mock novelty ledger', 'mock falsification ledger'],
+    evidence: ['mock research report', 'mock research paper', 'mock genius opinion summary', 'mock research source skill', 'mock layered source ledger', 'mock scout ledger', 'mock debate ledger', 'mock novelty ledger', 'mock falsification ledger'],
     notes: ['mock mode records the new contract but does not call a model or perform live web browsing']
   });
   return evaluateResearchGate(dir);
 }
 
 export function buildResearchPrompt({ id, mission, plan, cycle, previous }) {
-  return `You are running SKS Research Mode.\nMISSION: ${id}\nTOPIC: ${mission.prompt}\nCYCLE: ${cycle}\nMODE: Genius Scout Council + frontier discovery loop. Use maximum reasoning depth available under the current Codex profile.\nNO-QUESTION LOCK: Do not ask the user. Resolve scope from research-plan.json and current project evidence.\nSAFETY: Destructive database operations and unsafe external actions are forbidden. Prefer read-only inspection, local files, and cited public sources.\nPERSONA POLICY: Use Einstein/Feynman/Turing/von Neumann-inspired scout lenses only as cognitive roles. Do not impersonate, roleplay private identity, or speak as the historical people.\nSCOUT EFFORT POLICY: Every Research scout agent must use reasoning_effort=xhigh. Record effort: "xhigh" for every scout in scout-ledger.json. Any lower-effort scout output must keep research-gate.json unpassed.\nEUREKA POLICY: Every scout must literally write "Eureka!" and one non-obvious, source-linked idea before debate.\nDEBATE POLICY: The scouts must debate vigorously but stay evidence-bound. Every scout must challenge or respond at least once, and debate-ledger.json must record the exchanges before synthesis.\nPAPER POLICY: After the report and ledgers, write research-paper.md as a concise manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References.\nWEB/SOURCE POLICY: Run the broadest safe web/source search available in this runtime before synthesis. Use independent query sets for every scout. Prefer primary sources, official docs or standards, peer-reviewed or archival sources, reputable recent sources, and credible counterevidence. If live web search is unavailable, record the blocker in source-ledger.json and do not pass the gate.\nRESEARCH PLAN:\n${JSON.stringify(plan, null, 2)}\n\nOBJECTIVE: Produce genuinely useful candidate discoveries: non-obvious hypotheses, mechanisms, predictions, or experiments. Do not merely summarize. Mark uncertainty clearly.\n\nREQUIRED PROCESS:\n1. Source search first: create source-ledger.json with queries, source ids, counterevidence sources, citation coverage, and blockers.\n2. Independent xhigh scouts: create scout-ledger.json with effort=xhigh, a literal Eureka! idea, findings, source_ids, falsifiers, and cheap_probes for every scout lens.\n3. Debate: create debate-ledger.json with evidence-bound challenge/response exchanges involving every scout before synthesis.\n4. Falsification: create falsification-ledger.json with attacks, missing evidence, source conflicts, and decisive next tests.\n5. Synthesis: write research-report.md and novelty-ledger.json only after cited scout findings, Eureka ideas, debate, and falsification are recorded.\n6. Paper: write research-paper.md as a paper-style manuscript with source-ledger references and limitations.\n\nREQUIRED OUTPUT FILES in .sneakoscope/missions/${id}/:\n- research-report.md: concise report with framing, source coverage, scout synthesis, debate synthesis, hypotheses, falsification, predictions, and next experiments. Cite source-ledger ids for factual claims.\n- research-paper.md: paper manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References using source-ledger ids.\n- source-ledger.json: web/source queries, source ids, source priority, counterevidence sources, citation coverage, and blockers.\n- scout-ledger.json: one entry per scout lens with effort, eureka, query_set, findings, source_ids, falsifiers, and cheap_probes.\n- debate-ledger.json: evidence-bound challenge/response exchanges, participants, changed minds, and unresolved conflicts.\n- novelty-ledger.json: entries with claim, novelty, confidence, falsifiability, evidence source ids, falsifiers, next_experiment.\n- falsification-ledger.json: attacks/counterexamples/source conflicts, result, and next_decisive_tests.\n- research-gate.json: set passed only when all ledgers exist, research-paper.md exists with required paper sections, web/source retrieval was attempted, all scouts have effort=xhigh, all scouts have literal Eureka! ideas, every scout participated in debate, at least one counterevidence source exists, citation coverage is complete, at least one insight survived falsification, at least one testable prediction exists, and unsupported breakthrough claims are zero.\n\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
+  return `You are running SKS Research Mode.\nMISSION: ${id}\nTOPIC: ${mission.prompt}\nCYCLE: ${cycle}\nMODE: Genius Scout Council + frontier discovery loop. Use maximum reasoning depth available under the current Codex profile.\nNO-QUESTION LOCK: Do not ask the user. Resolve scope from research-plan.json and current project evidence.\nSAFETY: Destructive database operations and unsafe external actions are forbidden. Prefer read-only inspection, local files, and cited public sources.\nPERSONA POLICY: Use Einstein/Feynman/Turing/von Neumann-inspired scout lenses only as cognitive roles. Do not impersonate, roleplay private identity, or speak as the historical people.\nSCOUT EFFORT POLICY: Every Research scout agent must use reasoning_effort=xhigh. Record effort: "xhigh" for every scout in scout-ledger.json. Any lower-effort scout output must keep research-gate.json unpassed.\nEUREKA POLICY: Every scout must literally write "Eureka!" and one non-obvious, source-linked idea before debate.\nDEBATE POLICY: The scouts must debate vigorously but stay evidence-bound. Every scout must challenge or respond at least once, and debate-ledger.json must record the exchanges before synthesis.\nPAPER POLICY: After the report and ledgers, write research-paper.md as a concise manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References.\nSOURCE SKILL POLICY: Create or update ${RESEARCH_SOURCE_SKILL_ARTIFACT} as a route-local source collection skill before synthesis. It must name the selected source layers, query routes, quality fields, blockers, and cross-layer triangulation checks. Do not edit generated .agents/skills during the research run.\nWEB/SOURCE POLICY: Run layered source retrieval across every safely available layer before synthesis: latest public papers, official government or leading-institution data, standards or primary docs, current news including BBC/CNN/GDELT-style sources when relevant, public discourse including X/Twitter and Reddit when available, developer/practitioner sources such as Stack Overflow/Stack Exchange/GitHub, and counterevidence or fact-checking sources. Treat public discourse as signal, not truth. If a layer cannot be searched, record the blocker in source-ledger.json and do not pass the gate.\nRESEARCH PLAN:\n${JSON.stringify(plan, null, 2)}\n\nOBJECTIVE: Produce genuinely useful candidate discoveries: non-obvious hypotheses, mechanisms, predictions, or experiments. Do not merely summarize. Mark uncertainty clearly.\n\nREQUIRED PROCESS:\n1. Source skill first: create ${RESEARCH_SOURCE_SKILL_ARTIFACT} with source layers, query templates, quality fields, blockers, and triangulation rules.\n2. Layered source search: create source-ledger.json with source_layers, queries, source ids, source quality notes, counterevidence sources, triangulation.cross_layer_checks, citation coverage, and blockers.\n3. Independent xhigh scouts: create scout-ledger.json with effort=xhigh, a literal Eureka! idea, findings, source_ids, falsifiers, and cheap_probes for every scout lens.\n4. Debate: create debate-ledger.json with evidence-bound challenge/response exchanges involving every scout before synthesis.\n5. Falsification: create falsification-ledger.json with attacks, missing evidence, source conflicts, and decisive next tests.\n6. Synthesis: write research-report.md and novelty-ledger.json only after cited scout findings, Eureka ideas, debate, cross-layer triangulation, and falsification are recorded.\n7. Paper: write research-paper.md as a paper-style manuscript with source-ledger references and limitations.\n\nREQUIRED OUTPUT FILES in .sneakoscope/missions/${id}/:\n- research-report.md: concise report with framing, source coverage, scout synthesis, debate synthesis, hypotheses, falsification, predictions, and next experiments. Cite source-ledger ids for factual claims.\n- research-paper.md: paper manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References using source-ledger ids.\n- ${RESEARCH_SOURCE_SKILL_ARTIFACT}: route-local source collection skill; it is evidence for the Skill Creator step and must not mutate generated .agents/skills.\n- source-ledger.json: layered web/source queries, source ids, source priority, source quality notes, counterevidence sources, citation coverage, triangulation checks, and blockers.\n- scout-ledger.json: one entry per scout lens with effort, eureka, query_set, findings, source_ids, falsifiers, and cheap_probes.\n- debate-ledger.json: evidence-bound challenge/response exchanges, participants, changed minds, and unresolved conflicts.\n- novelty-ledger.json: entries with claim, novelty, confidence, falsifiability, evidence source ids, falsifiers, next_experiment.\n- falsification-ledger.json: attacks/counterexamples/source conflicts, result, and next_decisive_tests.\n- research-gate.json: set passed only when all ledgers exist, ${RESEARCH_SOURCE_SKILL_ARTIFACT} exists, research-paper.md exists with required paper sections, layered web/source retrieval covered every required source layer, at least one cross-layer triangulation check exists, all scouts have effort=xhigh, all scouts have literal Eureka! ideas, every scout participated in debate, at least one counterevidence source exists, citation coverage is complete, at least one insight survived falsification, at least one testable prediction exists, and unsupported breakthrough claims are zero.\n\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
 }
