@@ -7,6 +7,8 @@ const VERSION_STATE_FILE = 'sks-version-state.json';
 const DEFAULT_BUMP = 'patch';
 
 export async function installVersionGitHook(root, commandPrefix = 'sks') {
+  const policy = await versionPolicy(root);
+  if (!policy.enabled) return { ok: true, installed: false, reason: 'disabled_by_policy' };
   const git = await gitPaths(root);
   if (!git.ok) return { ok: true, installed: false, reason: git.reason || 'not_git' };
   const hookPath = git.hook_path;
@@ -17,6 +19,29 @@ export async function installVersionGitHook(root, commandPrefix = 'sks') {
   await writeTextAtomic(hookPath, next);
   await fsp.chmod(hookPath, 0o755).catch(() => {});
   return { ok: true, installed: true, hook_path: hookPath };
+}
+
+export async function enableVersionGitHook(root, commandPrefix = 'sks') {
+  await setVersionPolicyEnabled(root, true);
+  return installVersionGitHook(root, commandPrefix);
+}
+
+export async function disableVersionGitHook(root) {
+  await setVersionPolicyEnabled(root, false);
+  const git = await gitPaths(root);
+  if (!git.ok) return { ok: true, disabled: true, hook_removed: false, reason: git.reason || 'not_git' };
+  const current = await readFileMaybe(git.hook_path);
+  if (!current.includes(`BEGIN ${VERSION_HOOK_MARKER}`)) {
+    return { ok: true, disabled: true, hook_removed: false, hook_path: git.hook_path, reason: 'managed_hook_not_installed' };
+  }
+  const next = removeShellBlock(current, VERSION_HOOK_MARKER);
+  if (next.trim() === '#!/bin/sh' || next.trim() === '#!/usr/bin/env sh' || !next.trim()) {
+    await fsp.rm(git.hook_path, { force: true });
+    return { ok: true, disabled: true, hook_removed: true, hook_path: git.hook_path };
+  }
+  await writeTextAtomic(git.hook_path, next);
+  await fsp.chmod(git.hook_path, 0o755).catch(() => {});
+  return { ok: true, disabled: true, hook_removed: true, hook_path: git.hook_path };
 }
 
 export async function versioningStatus(root) {
@@ -40,7 +65,7 @@ export async function versioningStatus(root) {
     state_path: path.join(git.common_dir, VERSION_STATE_FILE),
     last_version: state.last_version || null,
     runtime_drift: runtimeDrift,
-    reason: version ? null : 'package_json_version_missing'
+    reason: !policy.enabled ? 'disabled_by_policy' : (version ? null : 'package_json_version_missing')
   };
 }
 
@@ -190,9 +215,37 @@ export async function verifyProjectVersion(root, opts = {}) {
 async function versionPolicy(root) {
   const policy = await readJson(path.join(root, '.sneakoscope', 'policy.json'), {});
   return {
-    enabled: policy.versioning?.enabled !== false,
+    enabled: policy.versioning?.enabled === true,
     bump: policy.versioning?.bump || DEFAULT_BUMP
   };
+}
+
+async function setVersionPolicyEnabled(root, enabled) {
+  const policyPath = path.join(root, '.sneakoscope', 'policy.json');
+  const policy = await readJson(policyPath, {});
+  await writeJsonAtomic(policyPath, {
+    ...policy,
+    git: {
+      ...(policy.git || {}),
+      versioning: {
+        ...(policy.git?.versioning || {}),
+        enabled: Boolean(enabled),
+        hook: 'pre-commit',
+        bump: policy.git?.versioning?.bump || policy.versioning?.bump || DEFAULT_BUMP,
+        lock: 'git-common-dir/sks-version.lock',
+        state: 'git-common-dir/sks-version-state.json'
+      }
+    },
+    versioning: {
+      ...(policy.versioning || {}),
+      enabled: Boolean(enabled),
+      bump: policy.versioning?.bump || DEFAULT_BUMP,
+      trigger: enabled ? 'git-pre-commit' : 'manual',
+      lock_scope: 'git-common-dir',
+      managed_files: policy.versioning?.managed_files || ['package.json', 'package-lock.json', 'npm-shrinkwrap.json'],
+      collision_policy: policy.versioning?.collision_policy || 'explicit_bump_only'
+    }
+  });
 }
 
 async function gitPaths(root) {
@@ -361,6 +414,15 @@ function mergeShellBlock(current, marker, block) {
     return `${lines[0]}\n${managed}${lines.slice(1).join('\n').replace(/^\n/, '')}`.replace(/\s*$/, '\n');
   }
   return `${managed}${withShebang.replace(/^\n/, '').replace(/\s*$/, '\n')}`;
+}
+
+function removeShellBlock(current, marker) {
+  const begin = `# BEGIN ${marker}`;
+  const end = `# END ${marker}`;
+  const beginIdx = current.indexOf(begin);
+  const endIdx = current.indexOf(end);
+  if (beginIdx < 0 || endIdx < beginIdx) return current;
+  return `${current.slice(0, beginIdx)}${current.slice(endIdx + end.length).replace(/^\n/, '')}`.replace(/\s*$/, '\n');
 }
 
 async function readFileMaybe(file) {
