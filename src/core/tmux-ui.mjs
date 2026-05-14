@@ -122,6 +122,8 @@ const TERMINAL_TEAM_AGENT_STATUSES = new Set([
 const LEGACY_TEAM_PANE_TITLE_RE = /^(?:overview: mission_overview|scout: analysis_scout|plan: (?:debate|consensus|planner|user)|exec: (?:executor|implementation|worker)|review: (?:reviewer|qa|validation)|safety:)/;
 const GENERIC_TEAM_AGENT_IDS = new Set(['parent_orchestrator', 'analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']);
 const DYNAMIC_TEAM_TMUX_LAYOUT = 'main-vertical';
+const TEAM_TMUX_MAIN_PANE_MIN_WIDTH = 48;
+const TEAM_TMUX_MAIN_PANE_WIDTH_RATIO = 0.5;
 
 export function isTmuxShellSession(env = process.env) {
   return Boolean(String(env.TMUX || '').trim());
@@ -483,6 +485,16 @@ async function listTmuxWindowPanes(bin, windowId) {
   return { ok: true, panes: parseTmuxPaneLines(run.stdout) };
 }
 
+async function tmuxPaneExists(bin, paneId) {
+  if (!paneId || !String(paneId).startsWith('%')) return false;
+  const run = await tmuxRun(bin, ['list-panes', '-t', paneId, '-F', '#{pane_dead}\t#{pane_id}'], { timeoutMs: 5000, maxOutputBytes: 4096 });
+  if (run.code !== 0) return false;
+  return String(run.stdout || '').split(/\r?\n/).some((line) => {
+    const [dead = '', id = ''] = line.trim().split('\t');
+    return id === paneId && dead !== '1';
+  });
+}
+
 async function setTmuxPaneUserOptions(bin, paneId, options = {}) {
   const applied = [];
   const failed = [];
@@ -517,11 +529,52 @@ function tmuxLayoutName(value = 'tiled') {
     : 'tiled';
 }
 
+function teamMainPaneWidthFromWindow(width) {
+  const n = Number(width);
+  if (!Number.isFinite(n) || n <= 0) return TEAM_TMUX_MAIN_PANE_MIN_WIDTH;
+  return Math.max(TEAM_TMUX_MAIN_PANE_MIN_WIDTH, Math.floor(n * TEAM_TMUX_MAIN_PANE_WIDTH_RATIO));
+}
+
+async function applyStableTeamLayout(tmuxBin, target, mainPaneId = null, opts = {}) {
+  const layout = tmuxLayoutName(opts.layout || DYNAMIC_TEAM_TMUX_LAYOUT);
+  const windowTarget = target || mainPaneId;
+  const applied = [];
+  const failed = [];
+  const runAndRecord = async (args) => {
+    const run = await tmuxRun(tmuxBin, args, { timeoutMs: 5000 });
+    const command = [path.basename(tmuxBin), ...args].join(' ');
+    if (run.code === 0) applied.push(command);
+    else failed.push({ command, stderr: run.stderr || run.stdout || 'tmux command failed' });
+    return run;
+  };
+  if (mainPaneId) await runAndRecord(['select-pane', '-t', mainPaneId]);
+  const width = await tmuxRun(tmuxBin, ['display-message', '-p', '-t', windowTarget, '#{window_width}'], { timeoutMs: 5000, maxOutputBytes: 1024 });
+  if (width.code === 0) {
+    const mainWidth = teamMainPaneWidthFromWindow(String(width.stdout || '').trim());
+    await runAndRecord(['set-window-option', '-t', windowTarget, 'main-pane-width', String(mainWidth)]);
+  }
+  await runAndRecord(['select-layout', '-t', windowTarget, layout]);
+  return { ok: failed.length === 0, layout_name: layout, applied, failed };
+}
+
 async function enableTmuxDynamicResize(tmuxBin, session, opts = {}) {
   const layout = tmuxLayoutName(opts.layout || 'tiled');
   const safeSession = sanitizeTmuxSessionName(session);
   const target = await tmuxWindowTarget(tmuxBin, safeSession);
-  const relayout = `resize-window -t ${target} -A; set-window-option -t ${target} window-size latest; select-layout -t ${target} ${layout}; select-layout -t ${target} -E; set-window-option -t ${target} window-size latest`;
+  const stableMainVertical = layout === DYNAMIC_TEAM_TMUX_LAYOUT && opts.stableTeamLayout;
+  const tmuxShell = shellEscape(tmuxBin || 'tmux');
+  const targetShell = shellEscape(target);
+  const stableRelayoutShell = [
+    `${tmuxShell} resize-window -t ${targetShell} -A >/dev/null 2>&1 || true`,
+    `${tmuxShell} set-window-option -t ${targetShell} window-size latest >/dev/null 2>&1 || true`,
+    `w=$(${tmuxShell} display-message -p -t ${targetShell} '#{window_width}' 2>/dev/null || printf 120)`,
+    `if [ "$w" -gt 0 ] 2>/dev/null; then ${tmuxShell} set-window-option -t ${targetShell} main-pane-width $((w / 2)) >/dev/null 2>&1 || true; fi`,
+    `${tmuxShell} select-layout -t ${targetShell} ${layout} >/dev/null 2>&1 || true`,
+    `${tmuxShell} set-window-option -t ${targetShell} window-size latest >/dev/null 2>&1 || true`
+  ].join('; ');
+  const relayout = stableMainVertical
+    ? `run-shell -b ${shellEscape(stableRelayoutShell)}`
+    : `resize-window -t ${target} -A; set-window-option -t ${target} window-size latest; select-layout -t ${target} ${layout}; select-layout -t ${target} -E; set-window-option -t ${target} window-size latest`;
   const commands = [
     ['set-window-option', '-t', target, 'window-size', 'latest'],
     ['set-window-option', '-t', target, 'aggressive-resize', 'on'],
@@ -529,8 +582,8 @@ async function enableTmuxDynamicResize(tmuxBin, session, opts = {}) {
     ['set-hook', '-t', safeSession, 'client-resized', relayout],
     ['resize-window', '-t', target, '-A'],
     ['set-window-option', '-t', target, 'window-size', 'latest'],
-    ['select-layout', '-t', target, layout],
-    ['select-layout', '-t', target, '-E'],
+    ...(stableMainVertical ? [] : [['select-layout', '-t', target, layout], ['select-layout', '-t', target, '-E']]),
+    ...(stableMainVertical ? [['display-message', '-p', '-t', target, '#{window_width}'], ['select-layout', '-t', target, layout]] : []),
     ['set-window-option', '-t', target, 'window-size', 'latest']
   ];
   const applied = [];
@@ -599,19 +652,21 @@ export async function createTmuxSession(plan = {}, panes = [], opts = {}) {
   const create = await tmuxRun(tmuxBin, ['new-session', '-d', '-x', dimensions.width, '-y', dimensions.height, '-s', session, '-c', path.resolve(first.cwd || root), '-n', 'sks', '-P', '-F', '#{pane_id}', first.command || 'pwd']);
   if (create.code !== 0) return { ok: false, session, panes: [], stderr: create.stderr || create.stdout || 'tmux new-session failed' };
   const created = [{ pane_id: paneId(create.stdout), role: first.role || 'overview', title: first.title || 'overview' }];
-  let rightStackTarget = created[0].pane_id || session;
+  let rightStackRootPaneId = null;
   for (const pane of normalizedPanes.slice(1)) {
     const direction = rightSidePanes ? (created.length === 1 ? '-h' : '-v') : (pane.vertical ? '-v' : '-h');
-    const splitTarget = rightSidePanes ? rightStackTarget : session;
+    const splitTarget = rightSidePanes ? (rightStackRootPaneId || created[0].pane_id || session) : session;
     const split = await tmuxRun(tmuxBin, ['split-window', '-t', splitTarget, direction, '-d', '-P', '-F', '#{pane_id}', '-c', path.resolve(pane.cwd || root), pane.command || 'pwd']);
     if (split.code !== 0) return { ok: false, session, panes: created, stderr: split.stderr || split.stdout || 'tmux split-window failed' };
     const newPaneId = paneId(split.stdout);
+    if (newPaneId && !(await tmuxPaneExists(tmuxBin, newPaneId))) return { ok: false, session, panes: created, stderr: `tmux split-window returned pane ${newPaneId}, but the pane was not present after creation` };
     created.push({ pane_id: newPaneId, role: pane.role || 'lane', title: pane.title || null });
-    if (rightSidePanes && newPaneId) rightStackTarget = newPaneId;
-    await tmuxRun(tmuxBin, ['select-layout', '-t', session, layout]).catch(() => null);
+    if (rightSidePanes && !rightStackRootPaneId && newPaneId) rightStackRootPaneId = newPaneId;
+    if (!rightSidePanes) await tmuxRun(tmuxBin, ['select-layout', '-t', session, layout]).catch(() => null);
   }
-  const dynamic_resize = await enableTmuxDynamicResize(tmuxBin, session, { layout });
-  return { ok: true, reused: false, session, panes: created, attach_command: `tmux attach-session -t ${session}`, layout, initial_size: dimensions, dynamic_resize };
+  const stable_layout = rightSidePanes ? await applyStableTeamLayout(tmuxBin, session, created[0].pane_id, { layout }) : null;
+  const dynamic_resize = await enableTmuxDynamicResize(tmuxBin, session, { layout, stableTeamLayout: rightSidePanes });
+  return { ok: true, reused: false, session, panes: created, attach_command: `tmux attach-session -t ${session}`, layout, initial_size: dimensions, stable_layout, dynamic_resize };
 }
 
 export async function launchTmuxUi(args = [], opts = {}) {
@@ -770,18 +825,23 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
     }
   }
   const remainingManaged = managed.filter((pane) => desiredAgents.has(pane.agent) && !closed.some((entry) => entry.pane_id === pane.pane_id));
-  let rightStackTarget = remainingManaged.at(-1)?.pane_id || mainPaneId || target.window_id;
+  let rightStackRootPaneId = remainingManaged[0]?.pane_id || null;
   for (const lane of lanes) {
     if (byAgent.has(lane.agent)) continue;
     const firstRightPane = remainingManaged.length === 0 && opened.length === 0;
     const direction = firstRightPane ? '-h' : '-v';
-    const split = await tmuxRun(tmuxBin, ['split-window', direction, '-t', rightStackTarget, '-d', '-P', '-F', '#{pane_id}', '-c', resolvedRoot, lane.command || 'pwd'], { timeoutMs: 5000, maxOutputBytes: 4096 });
+    const splitTarget = firstRightPane ? (mainPaneId || target.window_id) : (rightStackRootPaneId || mainPaneId || target.window_id);
+    const split = await tmuxRun(tmuxBin, ['split-window', direction, '-t', splitTarget, '-d', '-P', '-F', '#{pane_id}', '-c', resolvedRoot, lane.command || 'pwd'], { timeoutMs: 5000, maxOutputBytes: 4096 });
     const pane_id = paneId(split.stdout);
     if (split.code !== 0 || !pane_id) {
       failed.push({ action: 'split-window', agent: lane.agent, role: lane.role, stderr: split.stderr || split.stdout || 'tmux split-window failed' });
       continue;
     }
-    rightStackTarget = pane_id;
+    if (!(await tmuxPaneExists(tmuxBin, pane_id))) {
+      failed.push({ action: 'verify-pane', pane_id, agent: lane.agent, role: lane.role, stderr: 'tmux split-window returned a pane id, but the pane was not present after creation' });
+      continue;
+    }
+    if (!rightStackRootPaneId) rightStackRootPaneId = pane_id;
     const optionResult = await setTmuxPaneUserOptions(tmuxBin, pane_id, {
       '@sks_team_managed': '1',
       '@sks_mission_id': id,
@@ -793,10 +853,7 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
   }
   let relayout = null;
   if (opened.length || closed.length) {
-    const selectedMain = mainPaneId ? await tmuxRun(tmuxBin, ['select-pane', '-t', mainPaneId], { timeoutMs: 5000 }) : { code: 0 };
-    const tiled = await tmuxRun(tmuxBin, ['select-layout', '-t', target.window_id, DYNAMIC_TEAM_TMUX_LAYOUT], { timeoutMs: 5000 });
-    const even = await tmuxRun(tmuxBin, ['select-layout', '-t', target.window_id, '-E'], { timeoutMs: 5000 });
-    relayout = { ok: selectedMain.code === 0 && tiled.code === 0 && even.code === 0, selected_main: selectedMain.code, layout: tiled.code, even: even.code, layout_name: DYNAMIC_TEAM_TMUX_LAYOUT };
+    relayout = await applyStableTeamLayout(tmuxBin, target.window_id, mainPaneId, { layout: DYNAMIC_TEAM_TMUX_LAYOUT });
   }
   const nextPanes = [
     ...managed.filter((pane) => desiredAgents.has(pane.agent) && !closed.some((entry) => entry.pane_id === pane.pane_id)),

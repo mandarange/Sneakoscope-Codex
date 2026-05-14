@@ -12,7 +12,7 @@ import { writeMemorySweepReport } from './memory-governor.mjs';
 import { writeMistakeMemoryReport } from './mistake-memory.mjs';
 import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from './mistake-recall.mjs';
 import { recordSkillDreamEvent, skillDreamPolicyText, writeSkillForgeReport } from './skill-forge.mjs';
-import { writeResearchPlan } from './research.mjs';
+import { evaluateResearchGate, writeResearchPlan } from './research.mjs';
 import { PPT_REQUIRED_GATE_FIELDS, writePptRouteArtifacts } from './ppt.mjs';
 import { writeQaLoopArtifacts } from './qa-loop.mjs';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, writeImageUxReviewRouteArtifacts } from './image-ux-review.mjs';
@@ -1456,6 +1456,11 @@ function missingRequiredGateFields(file, state, gate = {}) {
 
 async function missingRequiredGateArtifacts(root, file, state, gate = {}) {
   const mode = String(state?.mode || '').toUpperCase();
+  if (file === 'research-gate.json' || mode === 'RESEARCH') {
+    const evaluated = await evaluateResearchGate(missionDir(root, state.mission_id));
+    if (evaluated.passed === true) return [];
+    return (evaluated.reasons || ['research_gate_blocked']).map((reason) => `research-gate:${reason}`);
+  }
   if (file === IMAGE_UX_REVIEW_GATE_ARTIFACT || mode === 'IMAGE_UX_REVIEW') return missingImageUxReviewArtifacts(root, state, gate);
   if (file !== 'team-gate.json' && mode !== 'TEAM') return [];
   const missing = [];

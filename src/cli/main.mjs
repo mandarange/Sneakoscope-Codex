@@ -3305,7 +3305,7 @@ async function selftest() {
   await ensureDir(fakeTmuxDir);
   const fakeTmuxLog = path.join(fakeTmuxDir, 'tmux.log');
   const fakeTmuxBin = path.join(fakeTmuxDir, 'tmux');
-  await writeTextAtomic(fakeTmuxBin, `#!/usr/bin/env node\nconst{appendFileSync:a}=require('node:fs'),e=process.env,c=process.argv[2];if(e.SKS_FAKE_TMUX_LOG)a(e.SKS_FAKE_TMUX_LOG,process.argv.slice(2).join(' ')+'\\n');if(['has-session','kill-session','kill-pane','set-option','select-pane','select-layout','resize-window','set-window-option','set-hook'].includes(c))process.exit(0);if(c==='new-session'){console.log('%1');process.exit(0)}if(c==='split-window'){console.log(e.SKS_FAKE_TMUX_SPLIT_ID||'%2');process.exit(0)}if(c==='list-windows'){console.log('@1');process.exit(0)}if(c==='display-message'){console.log(e.SKS_FAKE_TMUX_DISPLAY||'sks-existing-selftest\\t@1\\t%1');process.exit(0)}if(c==='list-panes'){console.log(e.SKS_FAKE_TMUX_LIST||'');process.exit(0)}process.exit(0);\n`);
+  await writeTextAtomic(fakeTmuxBin, `#!/usr/bin/env node\nconst{appendFileSync:a}=require('fs'),e=process.env,r=process.argv.slice(2),c=r[0];if(e.SKS_FAKE_TMUX_LOG)a(e.SKS_FAKE_TMUX_LOG,r.join(' ')+'\\n');if(c==='new-session')console.log('%1');else if(c==='split-window')console.log(e.SKS_FAKE_TMUX_SPLIT_ID||'%2');else if(c==='list-windows')console.log('@1');else if(c==='display-message')console.log(e.SKS_FAKE_TMUX_DISPLAY||'sks-existing-selftest\\t@1\\t%1');else if(c==='list-panes'){let t=r[r.indexOf('-t')+1]||'';console.log(t[0]=='%'&&r.join(' ').includes('pane_dead')?'0\\t'+t:e.SKS_FAKE_TMUX_LIST||'')}\n`);
   await fsp.chmod(fakeTmuxBin, 0o755);
   const previousFakeTmuxLog = process.env.SKS_FAKE_TMUX_LOG;
   const previousPath = process.env.PATH;
