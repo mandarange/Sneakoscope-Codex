@@ -7,6 +7,7 @@
 ### Fixed
 
 - Route `$Research` through a source-backed xhigh genius scout council contract, requiring one literal `Eureka!` idea per scout, `debate-ledger.json`, `source-ledger.json`, `scout-ledger.json`, `falsification-ledger.json`, citation coverage, counterevidence, and stricter research gate metrics before a run can pass.
+- Require `$Research` runs to turn the final result into `research-paper.md` with paper-style sections and references before the research gate can pass.
 - Install accepted SKS updates with the exact registry-confirmed version instead of `sneakoscope@latest`, avoiding stale npm cache or propagation windows after a fresh publish.
 - Make `sks doctor --fix` repair stored codex-lb config/auth drift, and store the codex-lb base URL beside the API key so future updates can restore provider routing.
 - Raise the packed npm tarball budget to 400 KiB while keeping single-file, unpacked-size, and file-count release gates in place.
