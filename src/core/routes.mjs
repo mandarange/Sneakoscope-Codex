@@ -149,10 +149,19 @@ export function dollarSkillName(commandOrId) {
 }
 
 export function stripVisibleDecisionAnswerBlocks(value = '') {
-  return String(value || '')
+  return stripNonAuthoritativeLiveChatBlocks(String(value || ''))
     .replace(/\s*\[(?=[^\]]*\b[A-Z][A-Z0-9_]{2,}\s*:)[^\]]{0,6000}\]\s*/g, ' ')
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export function stripNonAuthoritativeLiveChatBlocks(value = '') {
+  return String(value || '')
+    .replace(/(?:^|\n)\s*[›>]\s*\[## Live Chat[\s\S]*?\]\s*(?=(?:이|이거|그리고|근데|계속|고쳐|수정|해결|Pane|pane|please|fix|also|and|$))/g, '\n')
+    .replace(/(?:^|\n)\s*\[## Live Chat[\s\S]*?\]\s*(?=(?:이|이거|그리고|근데|계속|고쳐|수정|해결|Pane|pane|please|fix|also|and|$))/g, '\n')
+    .replace(/^\s*-?\s*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s+\S+\s+\[[^\]]+\]:.*$/gm, '')
+    .replace(/^\s*## Live Chat\s*$/gm, '')
     .trim();
 }
 
@@ -677,8 +686,8 @@ export function looksLikeImageUxReviewRequest(prompt = '') {
 }
 
 export function routePrompt(prompt) {
-  const command = dollarCommand(prompt);
-  const text = String(prompt || '');
+  const text = stripVisibleDecisionAnswerBlocks(prompt);
+  const command = dollarCommand(text);
   if (command) {
     if (command === 'MAD-SKS') {
       const afterModifier = stripMadSksSignal(text);

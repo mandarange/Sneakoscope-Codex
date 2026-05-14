@@ -3462,7 +3462,7 @@ async function selftest() {
   if (!(await readTeamTranscriptTail(teamDir, 1)).join('\n').includes('selftest mapped options')) throw new Error('selftest: team transcript tail missing event');
   const teamLane = await renderTeamAgentLane(teamDir, { missionId: teamId, agent: 'analysis_scout_1', lines: 4 });
   if (!teamLane.includes('selftest mapped repo slice')) throw new Error('selftest: team agent lane missing event context');
-  if (!teamLane.includes('## Live Chat') || !teamLane.includes('selftest mapped repo slice') || teamLane.includes('## Global Tail')) throw new Error('selftest:cht');
+  if (!teamLane.includes('## Codex Chat') || !teamLane.includes('+-- me [status]') || !teamLane.includes('selftest mapped repo slice') || teamLane.includes('## Global Tail')) throw new Error('selftest: chat lane');
   const teamLaneCli = await runProcess(process.execPath, [hookBin, 'team', 'lane', teamId, '--agent', 'analysis_scout_1', '--lines', '4'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (teamLaneCli.code !== 0 || !String(teamLaneCli.stdout || '').includes('SKS Team Agent Lane') || !String(teamLaneCli.stdout || '').includes('analysis_scout_1')) throw new Error('selftest: sks team lane CLI did not render an agent lane');
   await writeTextAtomic(path.join(teamDir, 'team-analysis.md'), '- claim: analysis scout mapped route registry | source: src/core/routes.mjs | risk: high | confidence: supported\n');

@@ -223,6 +223,15 @@ function colorizedLaneBannerCommand(lines = [], color = '') {
   return `printf '\\033[1;${code}m%s\\033[0m\\n' ${shellEscape(text)}`;
 }
 
+function selfClosingTeamPaneCommand(command = '') {
+  return [
+    `SKS_TEAM_PANE_SELF_CLOSE=1 ${command}`,
+    'status=$?',
+    'if [ "${SKS_TEAM_PANE_SELF_CLOSE:-1}" = "1" ] && [ -n "${TMUX_PANE:-}" ]; then tmux kill-pane -t "$TMUX_PANE" >/dev/null 2>&1 || true; fi',
+    'exit "$status"'
+  ].join('; ');
+}
+
 function compactTeamPaneBanner({ missionId, agentId, phase, style, overview = false } = {}) {
   const role = overview ? 'overview' : `${style.label} (${style.color_name})`;
   return [
@@ -263,24 +272,26 @@ function teamLaneTitle(agentId = '') {
 export function teamAgentCommand(root, missionId, agentId, phase) {
   const style = teamLaneStyle(agentId);
   const title = teamLaneTitle(agentId);
+  const laneCommand = `node ${shellEscape(path.join(packageRoot(), 'bin', 'sks.mjs'))} team lane ${shellEscape(missionId)} --agent ${shellEscape(agentId)} --phase ${shellEscape(phase)} --follow --lines 12`;
   return [
     terminalTitleCommand(title),
     'clear',
     colorizedLaneBannerCommand(compactTeamPaneBanner({ missionId, agentId, phase, style }), style.color),
     `cd ${shellEscape(root)}`,
-    `node ${shellEscape(path.join(packageRoot(), 'bin', 'sks.mjs'))} team lane ${shellEscape(missionId)} --agent ${shellEscape(agentId)} --phase ${shellEscape(phase)} --follow --lines 12`
+    selfClosingTeamPaneCommand(laneCommand)
   ].join('; ');
 }
 
 export function teamOverviewCommand(root, missionId) {
   const style = teamLaneStyle('mission_overview');
   const title = teamLaneTitle('mission_overview');
+  const watchCommand = `node ${shellEscape(path.join(packageRoot(), 'bin', 'sks.mjs'))} team watch ${shellEscape(missionId)} --follow --lines 18`;
   return [
     terminalTitleCommand(title),
     'clear',
     colorizedLaneBannerCommand(compactTeamPaneBanner({ missionId, agentId: 'mission_overview', style, overview: true }), style.color),
     `cd ${shellEscape(root)}`,
-    `node ${shellEscape(path.join(packageRoot(), 'bin', 'sks.mjs'))} team watch ${shellEscape(missionId)} --follow --lines 18`
+    selfClosingTeamPaneCommand(watchCommand)
   ].join('; ');
 }
 
@@ -1026,7 +1037,7 @@ export async function cleanupTmuxTeamView({ root, missionId = 'latest', closeSes
     };
   }
   const dynamicCleanup = await reconcileTmuxTeamCockpit({ root: resolvedRoot, missionId: record.mission_id || missionId, close: true }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'dynamic tmux cleanup failed' }));
-  const recordedCleanup = dynamicCleanup?.ok
+  const recordedCleanup = dynamicCleanup?.ok && dynamicCleanup.closed_lane_count > 0
     ? null
     : await cleanupRecordedTmuxTeamPanes(resolvedRoot, record.mission_id || missionId, record).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'recorded tmux cleanup failed' }));
   const legacyCleanup = (dynamicCleanup?.closed_lane_count || recordedCleanup?.closed_lane_count)
@@ -1130,10 +1141,16 @@ async function cleanupRecordedTmuxTeamPanes(root, missionId, record = {}) {
   const tmuxBin = await findTmuxBin() || 'tmux';
   const paneList = await listTmuxWindowPanes(tmuxBin, target);
   if (!paneList.ok) return { ok: false, skipped: true, reason: paneList.stderr, closed_lane_count: 0 };
+  const recordedPaneIds = new Set([
+    ...(Array.isArray(record.panes) ? record.panes : []),
+    ...(Array.isArray(cockpit.panes) ? cockpit.panes : [])
+  ].map((pane) => pane?.pane_id).filter(Boolean));
   const managed = paneList.panes.filter((pane) => pane.managed && pane.mission_id === id);
+  const recorded = paneList.panes.filter((pane) => recordedPaneIds.has(pane.pane_id));
+  const targets = managed.length ? managed : recorded;
   const closed = [];
   const failed = [];
-  for (const pane of managed) {
+  for (const pane of targets) {
     const kill = await tmuxRun(tmuxBin, ['kill-pane', '-t', pane.pane_id], { timeoutMs: 5000 });
     if (kill.code === 0) closed.push({ pane_id: pane.pane_id, agent: pane.agent, role: pane.role });
     else failed.push({ pane_id: pane.pane_id, agent: pane.agent, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
@@ -1148,9 +1165,12 @@ async function cleanupRecordedTmuxTeamPanes(root, missionId, record = {}) {
     session: cockpit.session || record.session,
     window_id: cockpit.window_id || record.window_id || null,
     closed_lane_count: closed.length,
+    fallback_used: !managed.length && recorded.length > 0,
     closed,
     failed,
-    reason: closed.length ? 'closed recorded managed panes' : 'no recorded managed panes found'
+    reason: closed.length
+      ? (managed.length ? 'closed recorded managed panes' : 'closed panes by recorded SKS pane ids')
+      : 'no recorded managed panes found'
   };
 }
 
