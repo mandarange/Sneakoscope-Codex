@@ -537,7 +537,7 @@ export const COMMAND_CATALOG = [
   { name: 'init', usage: 'sks init [--force] [--local-only] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
   { name: 'selftest', usage: 'sks selftest [--mock]', description: 'Run local smoke tests without calling a model.' },
   { name: 'goal', usage: 'sks goal create|pause|resume|clear|status ...', description: 'Prepare and control the fast SKS bridge overlay for Codex native persisted /goal workflows.' },
-  { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run frontier-style research missions with xhigh scout Eureka ideas, debate, source-ledger, paper, novelty, and falsification gates.' },
+  { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run long-form real research missions with xhigh scout Eureka ideas, debate, layered sources, paper, novelty, and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
   { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and tmux views.' },
