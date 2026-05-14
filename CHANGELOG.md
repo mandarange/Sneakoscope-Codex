@@ -4,6 +4,17 @@
 
 
 
+## [0.8.0] - 2026-05-15
+
+### Added
+
+- Add the 0.8.0 Massive Upgrade report-only RecallPulse spine with TriWiki L1/L2/L3 cache decisions, neutral positive recall wording, durable `mission-status-ledger.json` status projection, duplicate suppression keys, `route-proof-capsule.json`, and `evidence-envelope.json`.
+- Add `sks recallpulse run|status|eval|governance|checklist` so missions can write and inspect RecallPulse decisions without changing route behavior, including sequential child `$Goal` task checkpoints for `RECALLPULSE_0_8_0_TASKS.md`.
+- Strengthen `$Research` scout personas with named Einstein Scout, Feynman Scout, Turing Scout, von Neumann Scout, and Skeptic Scout ledger fields while keeping them persona-inspired lenses, not impersonations.
+- Gate Research scout ledgers on display names, persona boundaries, `reasoning_effort=xhigh`, `Eureka!` ideas, falsifiers, cheap probes, and debate participation evidence.
+- Document the 0.8.0 Massive Upgrade while keeping performance claims benchmark-gated until scored RecallPulse evals prove them.
+- Raise the npm package file-count release guard for the new RecallPulse core and CLI modules while keeping forbidden generated/runtime files excluded.
+
 
 
 ## [0.7.78] - 2026-05-14
@@ -12,7 +23,7 @@
 
 - Stabilize the Team chat lane selftest used by `npm publish` by checking lane output semantically and including the rendered lane snapshot when the assertion fails.
 - Raise the release size budgets to 448 KiB packed, 1700 KiB unpacked, and 384 KiB per tracked file so the current CLI entrypoint can pass publish checks while the larger split-review refactor remains explicit future work.
-- Stop `sks setup` and `sks doctor --fix` from automatically creating the SKS `.git/hooks/pre-commit` version guard; version hooks are now explicit opt-in via `sks versioning hook` and removable with `sks versioning disable`.
+- Remove SKS support for installing `.git/hooks/pre-commit`; `sks versioning hook` is blocked, setup/doctor remove managed SKS version hooks, and release metadata stays explicit through `sks versioning bump`.
 
 ## [0.7.77] - 2026-05-14
 
