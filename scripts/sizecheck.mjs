@@ -7,10 +7,10 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const limits = {
-  packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 400 * 1024),
-  unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 1600 * 1024),
+  packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 448 * 1024),
+  unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 1700 * 1024),
   packFiles: Number(process.env.SKS_MAX_PACK_FILES || 60),
-  trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 352 * 1024)
+  trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 384 * 1024)
 };
 
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';

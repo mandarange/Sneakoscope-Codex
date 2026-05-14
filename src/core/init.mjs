@@ -249,7 +249,7 @@ export async function initProject(root, opts = {}) {
       exclude_path: localExclude?.path ? path.relative(root, localExclude.path) : null,
       excluded_patterns: localExclude?.patterns || [],
       versioning: {
-        enabled: true,
+        enabled: false,
         hook: 'pre-commit',
         bump: 'patch',
         lock: 'git-common-dir/sks-version.lock',
@@ -286,7 +286,7 @@ export async function initProject(root, opts = {}) {
         excluded_patterns: localExclude?.patterns || policy.git?.excluded_patterns || [],
         versioning: {
           ...(policy.git?.versioning || {}),
-          enabled: true,
+          enabled: false,
           hook: 'pre-commit',
           bump: policy.git?.versioning?.bump || 'patch',
           lock: 'git-common-dir/sks-version.lock',
@@ -295,9 +295,9 @@ export async function initProject(root, opts = {}) {
       },
       versioning: {
         ...(policy.versioning || {}),
-        enabled: true,
+        enabled: false,
         bump: policy.versioning?.bump || 'patch',
-        trigger: 'git-pre-commit',
+        trigger: 'manual',
         lock_scope: 'git-common-dir',
         managed_files: ['package.json', 'package-lock.json', 'npm-shrinkwrap.json']
       },
@@ -361,7 +361,7 @@ export async function initProject(root, opts = {}) {
         exclude_path: localExclude?.path ? path.relative(root, localExclude.path) : null,
         excluded_patterns: localExclude?.patterns || [],
         versioning: {
-          enabled: true,
+          enabled: false,
           hook: 'pre-commit',
           bump: 'patch',
           lock: 'git-common-dir/sks-version.lock',
@@ -376,12 +376,12 @@ export async function initProject(root, opts = {}) {
         skip_scope: 'conversation_only'
       },
       versioning: {
-        enabled: true,
+        enabled: false,
         bump: 'patch',
-        trigger: 'git-pre-commit',
+        trigger: 'manual',
         lock_scope: 'git-common-dir',
         managed_files: ['package.json', 'package-lock.json', 'npm-shrinkwrap.json'],
-        collision_policy: 'lock_then_bump_above_last_seen_version'
+        collision_policy: 'explicit_bump_only'
       },
       honest_mode: {
         required_before_final: true,

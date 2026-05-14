@@ -5,6 +5,15 @@
 
 
 
+
+## [0.7.78] - 2026-05-14
+
+### Fixed
+
+- Stabilize the Team chat lane selftest used by `npm publish` by checking lane output semantically and including the rendered lane snapshot when the assertion fails.
+- Raise the release size budgets to 448 KiB packed, 1700 KiB unpacked, and 384 KiB per tracked file so the current CLI entrypoint can pass publish checks while the larger split-review refactor remains explicit future work.
+- Stop `sks setup` and `sks doctor --fix` from automatically creating the SKS `.git/hooks/pre-commit` version guard; version hooks are now explicit opt-in via `sks versioning hook` and removable with `sks versioning disable`.
+
 ## [0.7.77] - 2026-05-14
 
 ### Fixed

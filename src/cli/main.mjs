@@ -18,7 +18,7 @@ import { classifySql, classifyCommand, classifyToolPayload, checkDbOperation, ha
 import { checkHarnessModification, harnessGuardStatus, isHarnessSourceProject } from '../core/harness-guard.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
 import { context7Docs, context7Resolve, context7Text, context7Tools } from '../core/context7-client.mjs';
-import { bumpProjectVersion, installVersionGitHook, runVersionPreCommit, versioningStatus } from '../core/version-manager.mjs';
+import { bumpProjectVersion, disableVersionGitHook, enableVersionGitHook, runVersionPreCommit, versioningStatus } from '../core/version-manager.mjs';
 import { rustInfo } from '../core/rust-accelerator.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
 import { defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evaluation.mjs';
@@ -199,7 +199,7 @@ Usage:
   sks pipeline answer <mission-id|latest> <answers.json|--stdin|--text "...">
   sks guard check [--json]
   sks conflicts check|prompt [--json]
-  sks versioning status|bump|pre-commit [--json]
+  sks versioning status|bump|hook|disable|pre-commit [--json]
   sks reasoning ["prompt"] [--json]
   sks aliases
   sks setup [--bootstrap] [--install-scope global|project] [--local-only] [--force] [--json]
@@ -1009,10 +1009,16 @@ async function versioning(sub = 'status', args = []) {
     if (!status.ok) console.log('Run: sks doctor --fix');
     return;
   }
-  if (action === 'hook' || action === 'install-hook') {
-    const res = await installVersionGitHook(root, await globalSksCommand());
+  if (action === 'hook' || action === 'install-hook' || action === 'enable') {
+    const res = await enableVersionGitHook(root, await globalSksCommand());
     if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
     console.log(res.installed ? `Version hook installed: ${res.hook_path}` : `Version hook skipped: ${res.reason}`);
+    return;
+  }
+  if (action === 'disable' || action === 'off' || action === 'remove-hook' || action === 'unhook') {
+    const res = await disableVersionGitHook(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
+    console.log(res.hook_removed ? `Version hook removed: ${res.hook_path}` : `Version hook disabled: ${res.reason || 'policy updated'}`);
     return;
   }
   if (action === 'bump') {
@@ -1039,7 +1045,7 @@ async function versioning(sub = 'status', args = []) {
     console.log(res.changed ? `SKS versioning synced: ${res.version}` : `SKS versioning: ${res.version} verified`);
     return;
   }
-  console.error('Usage: sks versioning status|bump|pre-commit [--json]');
+  console.error('Usage: sks versioning status|bump|hook|disable|pre-commit [--json]');
   process.exitCode = 1;
 }
 
@@ -2395,8 +2401,14 @@ async function selftest() {
   await writeTextAtomic(path.join(versionTmp, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
   await initProject(versionTmp, {});
   const versionStatus = await versioningStatus(versionTmp);
-  if (!versionStatus.ok || !versionStatus.enabled || !versionStatus.hook_installed) throw new Error('selftest: versioning hook not installed');
-  const versionHookText = await safeReadText(versionStatus.hook_path);
+  if (!versionStatus.ok || versionStatus.enabled || versionStatus.hook_installed) throw new Error('selftest: versioning hook should stay opt-in after init');
+  let versionHookText = await safeReadText(versionStatus.hook_path);
+  if (versionHookText.includes('versioning pre-commit')) throw new Error('selftest: init installed versioning pre-commit without opt-in');
+  const versionHookInstall = await enableVersionGitHook(versionTmp, 'sks');
+  if (!versionHookInstall.ok || !versionHookInstall.installed) throw new Error(`selftest: explicit versioning hook install failed: ${versionHookInstall.reason || 'unknown'}`);
+  const versionEnabledStatus = await versioningStatus(versionTmp);
+  if (!versionEnabledStatus.ok || !versionEnabledStatus.enabled || !versionEnabledStatus.hook_installed) throw new Error('selftest: explicit versioning hook not installed');
+  versionHookText = await safeReadText(versionEnabledStatus.hook_path);
   if (!versionHookText.includes('versioning pre-commit')) throw new Error('selftest: versioning hook command missing');
   if (versionHookText.indexOf('versioning pre-commit') > versionHookText.indexOf('exit 0')) throw new Error('selftest: versioning hook was appended after an early exit');
   await writeTextAtomic(path.join(versionTmp, 'CHANGELOG.md'), '# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-05-08\n\n### Fixed\n\n- Initial version selftest fixture.\n');
@@ -3570,7 +3582,19 @@ async function selftest() {
   if (!(await readTeamTranscriptTail(teamDir, 1)).join('\n').includes('selftest mapped options')) throw new Error('selftest: team transcript tail missing event');
   const teamLane = await renderTeamAgentLane(teamDir, { missionId: teamId, agent: 'analysis_scout_1', lines: 4 });
   if (!teamLane.includes('selftest mapped repo slice')) throw new Error('selftest: team agent lane missing event context');
-  if (!teamLane.includes('## Codex Chat') || !teamLane.includes('me (analysis_scout_1) [status/scout]') || !teamLane.includes('selftest mapped repo slice') || teamLane.includes('## Global Tail')) throw new Error('selftest: chat lane');
+  const missingChatLaneParts = [
+    ['codex chat heading', '## Codex Chat'],
+    ['lane speaker', 'me (analysis_scout_1)'],
+    ['status role metadata', '[status/scout]'],
+    ['agent event body', 'selftest mapped repo slice']
+  ].filter(([, needle]) => !teamLane.includes(needle)).map(([label]) => label);
+  if (missingChatLaneParts.length || teamLane.includes('## Global Tail')) {
+    const reason = [
+      missingChatLaneParts.length ? `missing ${missingChatLaneParts.join(', ')}` : null,
+      teamLane.includes('## Global Tail') ? 'unexpected global tail' : null
+    ].filter(Boolean).join('; ');
+    throw new Error(`selftest: chat lane (${reason})\n${teamLane.slice(0, 1600)}`);
+  }
   if (!teamLane.includes('╭─') || !teamLane.includes('│ selftest mapped repo slice') || !teamLane.includes('╰─')) throw new Error('selftest: team chat lane did not render framed chat blocks');
   const teamLaneColor = await renderTeamAgentLane(teamDir, { missionId: teamId, agent: 'analysis_scout_1', lines: 4, color: true });
   if (!/\x1b\[[0-9;]+m/.test(teamLaneColor) || !teamLaneColor.includes('Lane color:')) throw new Error('selftest: team chat lane did not render ANSI color metadata/output');
