@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.7.69] - 2026-05-14
+
+### Fixed
+
+- Ship the `$Research` paper-manuscript gate so research runs require `research-paper.md` with paper-style sections before passing.
+
 ## [0.7.68] - 2026-05-13
 
 ### Fixed
