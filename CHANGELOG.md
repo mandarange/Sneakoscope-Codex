@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.7.72] - 2026-05-14
+
+### Fixed
+
+- Prepare the real Research run contract for npm release after the `0.7.71` validation pass.
+
 ## [0.7.71] - 2026-05-14
 
 ### Fixed
