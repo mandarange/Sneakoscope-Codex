@@ -15,6 +15,54 @@ const SKS_GENERATED_GIT_PATTERNS = ['.sneakoscope/', '.codex/', '.agents/', 'AGE
 const SKS_SKILL_MANIFEST_FILE = '.sks-generated.json';
 const GENERATED_PRUNE_POLICY = 'remove_previous_sks_generated_paths_absent_from_current_manifest';
 
+export const REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS = [
+  'hooks',
+  'multi_agent',
+  'fast_mode',
+  'fast_mode_ui',
+  'codex_git_commit',
+  'computer_use',
+  'apps',
+  'plugins'
+];
+
+export function hasTopLevelCodexModeLock(text = '') {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
+  const model = top.match(/^model\s*=\s*"([^"]+)"/m)?.[1];
+  return (Boolean(model) && model !== 'gpt-5.5') || /^model_reasoning_effort\s*=/m.test(top);
+}
+
+export function hasDeprecatedCodexHooksFeatureFlag(text = '') {
+  const lines = String(text || '').split('\n');
+  const start = lines.findIndex((line) => line.trim() === '[features]');
+  if (start === -1) return false;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  return lines.slice(start + 1, end).some((line) => /^\s*codex_hooks\s*=/.test(line));
+}
+
+export function missingGeneratedCodexAppFeatureFlags(text = '') {
+  if (text && typeof text === 'object') return REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name) => text[name] !== true);
+  return REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name) => !String(text || '').includes(`${name} = true`));
+}
+
+export function hasCodexUnstableFeatureWarningSuppression(text = '') {
+  return /(^|\n)\s*suppress_unstable_features_warning\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(String(text || ''));
+}
+
+export function assertCodexWarningSuppressed(text = '', label = 'Codex config') {
+  if (!hasCodexUnstableFeatureWarningSuppression(text)) {
+    throw new Error(`selftest: ${label} missing suppress_unstable_features_warning`);
+  }
+}
+
 function reflectionInstructionText(commandPrefix = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write reflection.md; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass reflection-gate.json.`;
 }
@@ -444,6 +492,7 @@ function mergeManagedCodexConfigToml(existingContent = '') {
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
   next = upsertTopLevelTomlString(next, 'model', 'gpt-5.5');
   next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
+  next = upsertTopLevelTomlBoolean(next, 'suppress_unstable_features_warning', true);
   next = upsertTomlTableKey(next, 'features', 'hooks = true');
   next = upsertTomlTableKey(next, 'features', 'multi_agent = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode = true');
@@ -533,6 +582,21 @@ function removeLegacyTopLevelCodexModeLocks(text = '') {
 
 function upsertTopLevelTomlString(text, key, value) {
   const line = `${key} = "${value}"`;
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  for (let i = 0; i < end; i += 1) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i])) {
+      lines[i] = line;
+      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+    }
+  }
+  lines.splice(end, 0, line);
+  return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function upsertTopLevelTomlBoolean(text, key, value) {
+  const line = `${key} = ${value ? 'true' : 'false'}`;
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
   const end = firstTable === -1 ? lines.length : firstTable;

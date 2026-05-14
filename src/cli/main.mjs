@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { projectRoot, readJson, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, tmpdir, packageRoot, dirSize, formatBytes, which, runProcess, PACKAGE_VERSION, sksRoot, globalSksRoot, findProjectRoot, readStdin } from '../core/fsx.mjs';
-import { initProject, installSkills, normalizeInstallScope, sksCommandPrefix } from '../core/init.mjs';
+import { assertCodexWarningSuppressed as assertCodexWarn, hasDeprecatedCodexHooksFeatureFlag, hasTopLevelCodexModeLock, initProject, installSkills, missingGeneratedCodexAppFeatureFlags, normalizeInstallScope, sksCommandPrefix } from '../core/init.mjs';
 import { buildCodexExecArgs, getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, missionDir, setCurrent, stateFile } from '../core/mission.mjs';
 import { buildQuestionSchema, writeQuestions } from '../core/questions.mjs';
@@ -78,7 +78,7 @@ import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs'
 import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, defaultCodexLaunchArgs, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, sksAsciiLogo, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchMadTmuxUi, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, reconcileTmuxTeamCockpit, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
-import { askPostinstallQuestion, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall } from './install-helpers.mjs';
+import { askPostinstallQuestion, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexFastModeDuringInstall, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, madHighCommand as runMadHighCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 import { openClawCommand } from './openclaw-command.mjs';
 
@@ -1659,6 +1659,7 @@ async function doctor(args) {
   let conflictScan = await scanHarnessConflicts(root);
   let repairApplied = false;
   let globalSkillsRepair = null;
+  let globalCodexConfigRepair = null;
   let projectRepair = null;
   let codexLbRepair = null;
   const globalCommand = await globalSksCommand();
@@ -1666,6 +1667,7 @@ async function doctor(args) {
     const existingManifest = await readJson(path.join(root, '.sneakoscope', 'manifest.json'), null);
     const fixScope = requestedScope || normalizeInstallScope(existingManifest?.installation?.scope || 'global');
     projectRepair = await initProject(root, { installScope: fixScope, globalCommand, localOnly: flag(args, '--local-only') || Boolean(existingManifest?.git?.local_only), force: true, repair: true });
+    if (!flag(args, '--local-only')) globalCodexConfigRepair = await ensureGlobalCodexFastModeDuringInstall();
     if (!flag(args, '--local-only')) globalSkillsRepair = await ensureGlobalCodexSkillsDuringInstall({ force: true });
     codexLbRepair = await repairCodexLbAuth();
     repairApplied = true;
@@ -1695,7 +1697,7 @@ async function doctor(args) {
   const result = {
     node: { ok: nodeOk, version: process.version }, root, codex, rust,
     install,
-    repair: { applied: repairApplied, project: projectRepair, global_skills: globalSkillsRepair, codex_lb: codexLbRepair, blocked_by_other_harness: flag(args, '--fix') && conflictScan.hard_block },
+    repair: { applied: repairApplied, project: projectRepair, global_codex_config: globalCodexConfigRepair, global_skills: globalSkillsRepair, codex_lb: codexLbRepair, blocked_by_other_harness: flag(args, '--fix') && conflictScan.hard_block },
     harness_conflicts: {
       ok: conflictScan.ok,
       hard_block: conflictScan.hard_block,
@@ -1729,6 +1731,7 @@ async function doctor(args) {
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
   console.log(`Conflicts: ${result.harness_conflicts.hard_block ? 'blocked' : 'ok'} ${result.harness_conflicts.conflicts.length} finding(s)`);
   if (repairApplied) console.log('Repair:    regenerated SKS managed files from the installed package template');
+  if (globalCodexConfigRepair) console.log(`Global Codex config: ${globalCodexConfigRepair.status} ${globalCodexConfigRepair.config_path || ''}`.trimEnd());
   if (globalSkillsRepair) {
     const removed = globalSkillsRepair.removed_stale_generated_skills || [];
     const cleanup = removed.length ? ` removed stale generated skill shadow(s): ${removed.join(', ')}` : '';
@@ -1925,34 +1928,6 @@ async function safeReadText(file, fallback = '') {
   try { return await fsp.readFile(file, 'utf8'); } catch { return fallback; }
 }
 
-function hasTopLevelCodexModeLock(text = '') {
-  const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
-  const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
-  const model = top.match(/^model\s*=\s*"([^"]+)"/m)?.[1];
-  return (Boolean(model) && model !== 'gpt-5.5') || /^model_reasoning_effort\s*=/m.test(top);
-}
-
-function hasDeprecatedCodexHooksFeatureFlag(text = '') {
-  const lines = String(text || '').split('\n');
-  const start = lines.findIndex((line) => line.trim() === '[features]');
-  if (start === -1) return false;
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
-      end = i;
-      break;
-    }
-  }
-  return lines.slice(start + 1, end).some((line) => /^\s*codex_hooks\s*=/.test(line));
-}
-
-const REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS = ['hooks', 'multi_agent', 'fast_mode', 'fast_mode_ui', 'codex_git_commit', 'computer_use', 'apps', 'plugins'];
-
-function missingGeneratedCodexAppFeatureFlags(text = '') {
-  return REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name) => !String(text || '').includes(`${name} = true`));
-}
-
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
 function readMaxCycles(args, fallback) {
   const i = args.indexOf('--max-cycles');
@@ -2118,6 +2093,8 @@ async function selftest() {
   if (!doctorRepairJson.repair?.applied || doctorRepairJson.install?.scope !== 'project' || !doctorRepairJson.install?.ok || !doctorRepairJson.install?.source_project) throw new Error('selftest: doctor scope');
   const repairedManifest = await readJson(path.join(repairTmp, '.sneakoscope', 'manifest.json'));
   if (repairedManifest.installation?.scope !== 'project' || repairedManifest.installation?.hook_command_prefix !== 'node ./bin/sks.mjs') throw new Error('selftest: manifest scope');
+  const repairedCodexConfig = await safeReadText(path.join(repairTmp, '.codex', 'config.toml'));
+  assertCodexWarn(repairedCodexConfig, 'doctor project config');
   const repairedTeamSkill = await safeReadText(path.join(repairTmp, '.agents', 'skills', 'team', 'SKILL.md'));
   if (!repairedTeamSkill.includes('SKS Team orchestration') || repairedTeamSkill.includes('tampered')) throw new Error('selftest: doctor repair did not regenerate team skill');
   if (await exists(path.join(repairTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest: doctor repair did not remove deprecated agent-team alias skill');
@@ -2153,6 +2130,9 @@ async function selftest() {
   });
   if (doctorGlobalRepair.code !== 0) throw new Error(`selftest: doctor --fix global skill repair exited ${doctorGlobalRepair.code}: ${doctorGlobalRepair.stderr}`);
   const doctorGlobalRepairJson = JSON.parse(doctorGlobalRepair.stdout || '{}');
+  const doctorGlobalCodexConfig = await safeReadText(path.join(doctorGlobalHome, '.codex', 'config.toml'));
+  if (!doctorGlobalRepairJson.repair?.global_codex_config) throw new Error('selftest: doctor global config repair missing');
+  assertCodexWarn(doctorGlobalCodexConfig, 'doctor global config');
   for (const name of stalePluginSkillNames) {
     if (await exists(path.join(doctorGlobalHome, '.agents', 'skills', name, 'SKILL.md'))) throw new Error(`selftest: doctor --fix did not remove global generated ${name} plugin shadow skill`);
   }
@@ -2185,6 +2165,7 @@ async function selftest() {
   if (!(await exists(path.join(postinstallSetupTmp, '.codex', 'hooks.json')))) throw new Error('selftest: postinstall did not create project hooks during automatic bootstrap');
   const postinstallSetupConfig = await safeReadText(path.join(postinstallSetupTmp, '.codex', 'config.toml'));
   if (missingGeneratedCodexAppFeatureFlags(postinstallSetupConfig).length || hasDeprecatedCodexHooksFeatureFlag(postinstallSetupConfig)) throw new Error('selftest: postinstall flags');
+  assertCodexWarn(postinstallSetupConfig, 'postinstall project config');
   if (!String(postinstallSetup.stdout || '').includes('Codex App global $ skills: installed')) throw new Error('selftest: postinstall did not report automatic global Codex App skills');
   if (!String(postinstallSetup.stdout || '').includes('Removed stale generated skill shadow(s):')) throw new Error('selftest: postinstall did not report stale first-party plugin shadow cleanup');
   const postinstallSetupManifest = await readJson(path.join(postinstallSetupTmp, '.sneakoscope', 'manifest.json'));
@@ -2221,6 +2202,7 @@ async function selftest() {
   if (!(await exists(path.join(postinstallNoMarkerGlobalRoot, '.sneakoscope', 'manifest.json')))) throw new Error('selftest: no-marker postinstall did not bootstrap global runtime root');
   const postinstallNoMarkerConfig = await safeReadText(path.join(postinstallNoMarkerGlobalRoot, '.codex', 'config.toml'));
   if (missingGeneratedCodexAppFeatureFlags(postinstallNoMarkerConfig).length || hasDeprecatedCodexHooksFeatureFlag(postinstallNoMarkerConfig)) throw new Error('selftest: no-marker flags');
+  assertCodexWarn(postinstallNoMarkerConfig, 'postinstall global runtime config');
   if (await exists(path.join(postinstallNoMarkerCwd, '.sneakoscope'))) throw new Error('selftest: no-marker postinstall polluted install cwd');
   if (await exists(path.join(postinstallNoMarkerGlobalRoot, '.gitignore'))) throw new Error('selftest: global runtime bootstrap without project git wrote shared .gitignore');
   const bootstrapJsonTmp = tmpdir();
@@ -3001,6 +2983,7 @@ async function selftest() {
   const codexConfigText = await safeReadText(path.join(tmp, '.codex', 'config.toml'));
   const missingCodexConfigFlags = missingGeneratedCodexAppFeatureFlags(codexConfigText);
   if (missingCodexConfigFlags.length || hasDeprecatedCodexHooksFeatureFlag(codexConfigText)) throw new Error(`selftest: generated Codex App feature flags missing or deprecated: ${missingCodexConfigFlags.join(', ')}`);
+  assertCodexWarn(codexConfigText, 'generated Codex App config');
   if (!hasContext7ConfigText(codexConfigText)) throw new Error('selftest: Context7 MCP not configured');
   if (!codexConfigText.includes('[profiles.sks-task-low]') || !codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-fast-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest: GPT-5.5 reasoning profiles not configured');
   if (!/\[profiles\.sks-mad-high\][\s\S]*?approval_policy = "never"[\s\S]*?sandbox_mode = "danger-full-access"/.test(codexConfigText)) throw new Error('selftest: generated sks-mad-high profile is not full access');
@@ -3012,6 +2995,7 @@ async function selftest() {
   await initProject(preservedConfigTmp, {});
   const preservedConfig = await safeReadText(path.join(preservedConfigTmp, '.codex', 'config.toml'));
   if (!/^model = "gpt-5\.5"/m.test(preservedConfig) || !preservedConfig.includes('service_tier = "fast"') || !preservedConfig.includes('fast_mode = true') || !preservedConfig.includes('fast_mode_ui = true') || !preservedConfig.includes('[user.fast_mode]') || !preservedConfig.includes('visible = true') || !preservedConfig.includes('enabled = true') || !preservedConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(preservedConfig)) throw new Error('selftest: Codex config merge dropped or failed to enable Fast mode defaults and GPT-5.5');
+  assertCodexWarn(preservedConfig, 'merged Codex config');
   if (preservedConfig.includes('fast_default_opt_out = true') || !preservedConfig.includes('keep = true')) throw new Error('selftest: Codex config merge did not remove stale Fast opt-out notice while preserving other notice keys');
   const missingPreservedFlags = missingGeneratedCodexAppFeatureFlags(preservedConfig);
   if (missingPreservedFlags.length || hasDeprecatedCodexHooksFeatureFlag(preservedConfig) || !preservedConfig.includes('custom_preview = true') || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error(`selftest: Codex config merge did not add required app feature flags, preserve existing feature flags, or remove deprecated codex_hooks: ${missingPreservedFlags.join(', ')}`);
@@ -3247,7 +3231,7 @@ async function selftest() {
   if (teamPlan.agent_session_count !== 5) throw new Error('selftest: team default sessions not 5');
   if (teamPlan.role_counts.executor !== 3 || teamPlan.role_counts.user !== 1 || teamPlan.role_counts.reviewer !== 5) throw new Error('selftest: team default role counts invalid');
   const teamPlanFeatureFlags = teamPlan.codex_config_required?.features || {};
-  const missingTeamPlanFeatureFlags = REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name) => teamPlanFeatureFlags[name] !== true);
+  const missingTeamPlanFeatureFlags = missingGeneratedCodexAppFeatureFlags(teamPlanFeatureFlags);
   if (missingTeamPlanFeatureFlags.length || teamPlanFeatureFlags.codex_hooks === true) throw new Error(`selftest: team plan Codex config missing required app flags or still uses deprecated codex_hooks: ${missingTeamPlanFeatureFlags.join(', ')}`);
   if (!teamPlan.review_gate?.passed || teamPlan.review_gate.required_reviewer_lanes !== 5) throw new Error('selftest: team review policy gate did not pass default plan');
   if (teamPlan.codex_config_required?.service_tier !== 'fast' || teamPlan.reasoning?.service_tier !== 'fast') throw new Error('selftest: team plan did not require Fast service tier');
