@@ -217,6 +217,126 @@ export async function codexLbStatus(opts = {}) {
   };
 }
 
+function codexLbResponsesEndpoint(baseUrl = '') {
+  const base = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (!base) return '';
+  return /\/responses$/i.test(base) ? base : `${base}/responses`;
+}
+
+function codexLbChainCheckEnabled(env = process.env) {
+  return env.SKS_CODEX_LB_CHAIN_CHECK !== '0' && env.SKS_SKIP_CODEX_LB_CHAIN_CHECK !== '1';
+}
+
+function isPreviousResponseNotFound(payload = {}) {
+  const error = payload?.error || payload?.response?.error || payload;
+  const text = typeof error === 'string'
+    ? error
+    : [error?.type, error?.code, error?.message, error?.param, JSON.stringify(error || {})].filter(Boolean).join(' ');
+  return /previous_response_not_found|previous_response_id.*not found|previous_response_id/i.test(text);
+}
+
+function parseCodexLbSseEvents(text = '') {
+  const events = [];
+  for (const line of String(text || '').split(/\r?\n/)) {
+    if (!line.startsWith('data:')) continue;
+    const data = line.slice(5).trim();
+    if (!data || data === '[DONE]') continue;
+    try {
+      events.push(JSON.parse(data));
+    } catch {}
+  }
+  return events;
+}
+
+function codexLbResponseId(payload = {}) {
+  if (typeof payload?.id === 'string' && payload.id) return payload.id;
+  if (typeof payload?.response?.id === 'string' && payload.response.id) return payload.response.id;
+  if (typeof payload?.data?.id === 'string' && payload.data.id) return payload.data.id;
+  if (typeof payload?.data?.response?.id === 'string' && payload.data.response.id) return payload.data.response.id;
+  return null;
+}
+
+function codexLbResponseError(json, events = []) {
+  if (json?.error) return json;
+  for (const event of events) {
+    if (event?.error || event?.response?.error || event?.type === 'response.failed' || event?.type === 'error') return event;
+  }
+  return null;
+}
+
+async function fetchCodexLbResponse(fetchImpl, endpoint, apiKey, body, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs).unref?.();
+  try {
+    const response = await fetchImpl(endpoint, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    const text = await response.text();
+    let json = null;
+    try { json = text ? JSON.parse(text) : null; } catch {}
+    const events = json ? [] : parseCodexLbSseEvents(text);
+    const responseId = codexLbResponseId(json) || events.map((event) => codexLbResponseId(event)).find(Boolean) || null;
+    const errorPayload = codexLbResponseError(json, events);
+    return { ok: response.ok && !errorPayload, status: response.status, json, text, events, response_id: responseId, error_payload: errorPayload };
+  } catch (err) {
+    return { ok: false, status: 0, json: null, text: err.name === 'AbortError' ? 'request timed out' : err.message, events: [], response_id: null, error_payload: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function checkCodexLbResponseChain(status = {}, opts = {}) {
+  const env = opts.env || process.env;
+  if (!codexLbChainCheckEnabled(env) && !opts.force) return { ok: true, status: 'skipped', skipped: true, reason: 'SKS_CODEX_LB_CHAIN_CHECK=0' };
+  const endpoint = codexLbResponsesEndpoint(opts.baseUrl || status.base_url);
+  if (!endpoint) return { ok: false, status: 'missing_base_url', chain_unhealthy: true };
+  const apiKey = opts.apiKey || parseCodexLbEnvKey(await readText(opts.envPath || status.env_path || codexLbEnvPath(opts.home || env.HOME || os.homedir()), ''));
+  if (!apiKey) return { ok: false, status: 'missing_env_key', chain_unhealthy: true };
+  const fetchImpl = opts.fetch || globalThis.fetch;
+  if (typeof fetchImpl !== 'function') return { ok: true, status: 'skipped', skipped: true, reason: 'fetch unavailable' };
+  const model = opts.model || env.SKS_CODEX_MODEL || 'gpt-5.5';
+  const timeoutMs = Number(opts.timeoutMs || env.SKS_CODEX_LB_CHAIN_CHECK_TIMEOUT_MS || 8000);
+  const baseBody = {
+    model,
+    instructions: 'You are running a short SKS codex-lb response-chain health check.',
+    input: 'SKS codex-lb response-chain health check. Reply with OK.',
+    stream: true,
+    store: true,
+    parallel_tool_calls: false,
+    tool_choice: 'auto',
+    reasoning: { effort: 'low' }
+  };
+  const first = await fetchCodexLbResponse(fetchImpl, endpoint, apiKey, baseBody, timeoutMs);
+  if (!first.ok || !first.response_id) {
+    return {
+      ok: false,
+      status: first.ok ? 'missing_response_id' : 'first_request_failed',
+      chain_unhealthy: true,
+      endpoint,
+      http_status: first.status,
+      error: redactSecretText(first.error_payload?.error?.message || first.error_payload?.response?.error?.message || first.text || 'codex-lb first Responses request failed', [apiKey])
+    };
+  }
+  const second = await fetchCodexLbResponse(fetchImpl, endpoint, apiKey, { ...baseBody, previous_response_id: first.response_id }, timeoutMs);
+  if (second.ok) return { ok: true, status: 'chain_ok', endpoint, response_id: first.response_id, chained_response_id: second.response_id || null, http_status: second.status };
+  const previousMissing = isPreviousResponseNotFound(second.error_payload || second.json || second.text);
+  return {
+    ok: false,
+    status: previousMissing ? 'previous_response_not_found' : 'second_request_failed',
+    chain_unhealthy: true,
+    endpoint,
+    response_id: first.response_id,
+    http_status: second.status,
+    error: redactSecretText(second.error_payload?.error?.message || second.error_payload?.response?.error?.message || second.text || 'codex-lb chained Responses request failed', [apiKey])
+  };
+}
+
 function hasTopLevelCodexLbSelected(text = '') {
   const topLevel = String(text || '').split(/\n\s*\[/)[0] || '';
   return /(^|\n)\s*model_provider\s*=\s*"codex-lb"\s*(?:#.*)?(?=\n|$)/.test(topLevel);
@@ -283,13 +403,18 @@ export async function ensureCodexLbAuthDuringInstall(opts = {}) {
 
 export async function maybePromptCodexLbSetupForLaunch(args = [], opts = {}) {
   if (args.includes('--json') || args.includes('--skip-codex-lb') || process.env.SKS_SKIP_CODEX_LB_PROMPT === '1') return { status: 'skipped' };
-  if (!canAskYesNo()) return { status: 'non_interactive' };
   const status = await codexLbStatus(opts);
   if (status.ok) {
     const codexLogin = await ensureCodexLbLoginFromEnv(status, opts);
     if (codexLogin.status === 'synced') console.log('codex-lb auth synced with Codex CLI.');
-    return { status: 'present', ...status, codex_login: codexLogin };
+    const chainHealth = await checkCodexLbResponseChain(status, opts);
+    if (!chainHealth.ok && chainHealth.chain_unhealthy) {
+      console.log(`codex-lb response chain check failed (${chainHealth.status}); bypassing codex-lb for this launch.`);
+      return { status: 'chain_unhealthy', ...status, ok: false, codex_login: codexLogin, chain_health: chainHealth, bypass_codex_lb: true };
+    }
+    return { status: 'present', ...status, codex_login: codexLogin, chain_health: chainHealth };
   }
+  if (!canAskYesNo()) return { status: 'non_interactive', codex_lb: status };
   const useCodexLb = (await askPostinstallQuestion('\nAuthenticate and route Codex through codex-lb? [y/N] ')).trim();
   if (!/^(y|yes|예|네|응)$/i.test(useCodexLb)) return { status: 'continued_to_codex' };
   const host = (await askPostinstallQuestion('codex-lb host domain [http://127.0.0.1:2455]: ')).trim() || 'http://127.0.0.1:2455';
@@ -1110,6 +1235,56 @@ export async function selftestCodexLb(tmp) {
   if (codexLbNotConfigured.code !== 0 || String(codexLbNotConfigured.stdout || '').includes('codex-lb auth:')) throw new Error('selftest: postinstall should stay quiet when codex-lb is not configured');
   const codexLbStatusText = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'status'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (!String(codexLbStatusText.stdout || '').includes('Repair auth: sks codex-lb repair')) throw new Error('selftest: codex-lb status did not advertise repair command');
+  const nonInteractiveLaunchChainCalls = [];
+  const nonInteractiveLaunch = await maybePromptCodexLbSetupForLaunch([], {
+    home: codexLbHome,
+    apiKey: 'sk-test',
+    codexBin: path.join(codexLbFakeBin, 'codex'),
+    timeoutMs: 1000,
+    fetch: async (url, init) => {
+      nonInteractiveLaunchChainCalls.push({ url, body: JSON.parse(init.body) });
+      return new Response(JSON.stringify({ id: nonInteractiveLaunchChainCalls.length === 1 ? 'resp_noninteractive_1' : 'resp_noninteractive_2' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+  });
+  if (!nonInteractiveLaunch.ok || nonInteractiveLaunch.status !== 'present' || nonInteractiveLaunch.chain_health?.status !== 'chain_ok' || nonInteractiveLaunchChainCalls.length !== 2 || nonInteractiveLaunchChainCalls[1].body.previous_response_id !== 'resp_noninteractive_1') throw new Error('selftest: non-interactive codex-lb launch path did not run response-chain preflight');
+  const nonInteractiveBrokenLaunch = await maybePromptCodexLbSetupForLaunch([], {
+    home: codexLbHome,
+    apiKey: 'sk-test',
+    codexBin: path.join(codexLbFakeBin, 'codex'),
+    timeoutMs: 1000,
+    fetch: async (_url, init) => {
+      const body = JSON.parse(init.body);
+      if (!body.previous_response_id) return new Response(JSON.stringify({ id: 'resp_noninteractive_broken' }), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify({ error: { type: 'invalid_request_error', code: 'previous_response_not_found', message: 'Previous response not found.', param: 'previous_response_id' } }), { status: 400, headers: { 'content-type': 'application/json' } });
+    }
+  });
+  if (nonInteractiveBrokenLaunch.status !== 'chain_unhealthy' || nonInteractiveBrokenLaunch.bypass_codex_lb !== true || nonInteractiveBrokenLaunch.chain_health?.status !== 'previous_response_not_found') throw new Error('selftest: non-interactive codex-lb launch path did not bypass on previous_response_not_found');
+  const chainCalls = [];
+  const okChain = await checkCodexLbResponseChain(
+    { base_url: 'https://lb.example.test/backend-api/codex', env_path: path.join(codexLbHome, '.codex', 'sks-codex-lb.env') },
+    {
+      apiKey: 'sk-test',
+      timeoutMs: 1000,
+      fetch: async (url, init) => {
+        chainCalls.push({ url, body: JSON.parse(init.body) });
+        return new Response(JSON.stringify({ id: chainCalls.length === 1 ? 'resp_selftest_1' : 'resp_selftest_2' }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+    }
+  );
+  if (!okChain.ok || okChain.status !== 'chain_ok' || chainCalls.length !== 2 || !String(chainCalls[0].url).endsWith('/backend-api/codex/responses') || chainCalls[1].body.previous_response_id !== 'resp_selftest_1') throw new Error('selftest: codex-lb response chain health check did not verify previous_response_id continuity');
+  const brokenChain = await checkCodexLbResponseChain(
+    { base_url: 'https://lb.example.test/backend-api/codex', env_path: path.join(codexLbHome, '.codex', 'sks-codex-lb.env') },
+    {
+      apiKey: 'sk-test',
+      timeoutMs: 1000,
+      fetch: async (_url, init) => {
+        const body = JSON.parse(init.body);
+        if (!body.previous_response_id) return new Response(JSON.stringify({ id: 'resp_missing_selftest' }), { status: 200, headers: { 'content-type': 'application/json' } });
+        return new Response(JSON.stringify({ error: { type: 'invalid_request_error', code: 'previous_response_not_found', message: 'Previous response not found.', param: 'previous_response_id' } }), { status: 400, headers: { 'content-type': 'application/json' } });
+      }
+    }
+  );
+  if (brokenChain.ok || brokenChain.status !== 'previous_response_not_found' || brokenChain.chain_unhealthy !== true) throw new Error('selftest: codex-lb response chain health check did not detect previous_response_not_found');
   if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('hooks = true') || hasDeprecatedCodexHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('multi_agent = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('codex_git_commit = true') || !codexLbConfig.includes('computer_use = true') || !codexLbConfig.includes('apps = true') || !codexLbConfig.includes('plugins = true') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest: codex-lb setup did not preserve Codex App feature flags, Fast mode defaults, Codex Git commit generation, force GPT-5.5, or migrate the hooks feature flag');
   if (!hasCodexUnstableFeatureWarningSuppression(codexLbConfig)) throw new Error('selftest: codex-lb setup did not suppress Codex unstable feature warning');
   const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
@@ -1117,7 +1292,7 @@ export async function selftestCodexLb(tmp) {
   if (!codexLbLaunch.includes("'--model' 'gpt-5.5'")) throw new Error('selftest: tmux launch command without args did not force GPT-5.5');
   if (!codexLbLaunch.includes('SKS_TMUX_LOGO_ANIMATION') || !codexLbLaunch.includes('SNEAKOSCOPE CODEX')) throw new Error('selftest: tmux launch command does not include the animated SKS logo intro');
   const madLaunchSource = await safeReadText(path.join(packageRoot(), 'src', 'cli', 'maintenance-commands.mjs'));
-  if (!madLaunchSource.includes('const lb = await deps.maybePromptCodexLbSetupForLaunch(args)') || !madLaunchSource.includes("const launchLb = lb.status === 'present'") || !madLaunchSource.includes('codexLbImmediateLaunchOpts(cleanArgs, launchLb')) throw new Error('selftest: MAD launch does not sync codex-lb auth and fresh-session launch options');
+  if (!madLaunchSource.includes('const lb = await deps.maybePromptCodexLbSetupForLaunch(args)') || !madLaunchSource.includes("const launchLb = lb.status === 'present'") || !madLaunchSource.includes('codexLbImmediateLaunchOpts(cleanArgs, launchLb') || !madLaunchSource.includes('bypass_codex_lb') || !madLaunchSource.includes('model_provider="openai"') || !madLaunchSource.includes('codexLbFreshSession: true')) throw new Error('selftest: MAD launch does not sync codex-lb auth and fresh-session launch options');
 
 }
 

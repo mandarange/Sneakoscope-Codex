@@ -8,6 +8,32 @@ const MAX_LIVE_BYTES = 192 * 1024;
 const TEAM_RUNTIME_TASKS_ARTIFACT = 'team-runtime-tasks.json';
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 const DEFAULT_AGENTS = ['parent_orchestrator', 'analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer'];
+const TERMINAL_TEAM_AGENT_STATUSES = new Set([
+  'agent_closed',
+  'agent_done',
+  'cancelled',
+  'canceled',
+  'cleanup',
+  'cleanup_requested',
+  'closed',
+  'complete',
+  'completed',
+  'done',
+  'ended',
+  'failed',
+  'stopped',
+  'terminal',
+  'tmux_lane_closed'
+]);
+const CHAT_COLOR_CODES = {
+  blue: '34',
+  cyan: '36',
+  yellow: '33',
+  magenta: '35',
+  red: '31',
+  green: '32',
+  gray: '90'
+};
 export const DEFAULT_TEAM_ROLE_COUNTS = { user: 1, planner: 1, reviewer: MIN_TEAM_REVIEWER_LANES, executor: 3 };
 export const DEFAULT_MAX_TEAM_AGENT_SESSIONS = 6;
 const ROLE_ALIASES = {
@@ -440,11 +466,13 @@ export async function appendTeamEvent(dir, event) {
     dashboard.updated_at = record.ts;
     dashboard.latest_messages = [...(dashboard.latest_messages || []), record].slice(-20);
     const agent = record.agent || 'unknown';
+    const terminalStatus = terminalTeamAgentStatusFromEvent(record);
     dashboard.agents ||= {};
     dashboard.agents[agent] ||= {};
-    dashboard.agents[agent].status = record.type || 'active';
+    dashboard.agents[agent].status = terminalStatus || record.type || 'active';
     dashboard.agents[agent].phase = record.phase || null;
     dashboard.agents[agent].last_seen = record.ts;
+    if (terminalStatus) dashboard.agents[agent].closed_at = record.ts;
     await writeJsonAtomic(files.dashboard, dashboard);
   }
   await reconcileTeamTmuxFromEvent(dir, record).catch(() => null);
@@ -508,6 +536,22 @@ export function teamCleanupRequested(control = {}) {
   return Boolean(control?.cleanup_requested || control?.status === 'cleanup_requested' || control?.status === 'ended');
 }
 
+export function isTerminalTeamAgentStatus(status = '') {
+  const normalized = String(status || '').trim().toLowerCase();
+  return TERMINAL_TEAM_AGENT_STATUSES.has(normalized) || /(?:^|_)(?:done|complete|completed|closed|cleanup|cancelled|canceled|failed|ended|stopped)(?:_|$)/.test(normalized);
+}
+
+export function terminalTeamAgentStatusFromEvent(event = {}) {
+  const type = String(event.type || '').trim().toLowerCase();
+  if (isTerminalTeamAgentStatus(type)) return type;
+  const phase = String(event.phase || '').trim().toLowerCase();
+  if (isTerminalTeamAgentStatus(phase)) return phase;
+  const message = String(event.message || '').trim();
+  if (/^(?:done|complete|completed|finished|final|closed|agent_done|agent_closed)\b/i.test(message)) return 'completed';
+  if (/(?:작업|분석|구현|검토|리뷰|qa|lane|agent|에이전트).{0,40}(?:완료|종료|끝)/i.test(message)) return 'completed';
+  return '';
+}
+
 export function renderTeamCleanupSummary(control = {}) {
   if (!teamCleanupRequested(control)) return '';
   return [
@@ -558,6 +602,7 @@ export async function renderTeamAgentLane(dir, opts = {}) {
     .sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')))
     .slice(-lines);
   const laneStyle = teamLaneTextStyle(agent);
+  const colorChat = terminalChatColorEnabled(opts);
   return [
     `# SKS Team Agent Lane`,
     '',
@@ -577,7 +622,7 @@ export async function renderTeamAgentLane(dir, opts = {}) {
     ...(runtime ? formatRuntimeTasks(assignedTasks) : ['- team-runtime-tasks.json not available yet.']),
     '',
     `## Codex Chat`,
-    ...(chatEvents.length ? chatEvents.map((event) => formatChatTranscriptEvent(event, aliases[0])) : ['- waiting for live agent messages...']),
+    ...(chatEvents.length ? chatEvents.map((event) => formatChatTranscriptEvent(event, aliases[0], { color: colorChat })) : ['- waiting for live agent messages...']),
     opts.includeGlobalTail ? '' : null,
     opts.includeGlobalTail ? `## Global Tail` : null,
     ...(opts.includeGlobalTail
@@ -709,25 +754,49 @@ function uniqueTranscriptEvents(events = []) {
   return out;
 }
 
-function formatChatTranscriptEvent(event = {}, laneAgent = '') {
-  if (event.raw) return codexChatBlock({ speaker: 'system', message: event.raw });
+function formatChatTranscriptEvent(event = {}, laneAgent = '', opts = {}) {
+  if (event.raw) return codexChatBlock({ speaker: 'system', kind: 'raw', style: teamLaneTextStyle('overview'), color: opts.color, message: event.raw });
   const from = event.agent || 'unknown';
-  const to = event.to ? ` -> ${event.to}` : '';
-  const kind = event.type && event.type !== 'message' ? ` [${event.type}]` : '';
   const ts = event.ts ? `${event.ts} ` : '';
   const artifact = event.artifact ? ` (${event.artifact})` : '';
-  const marker = String(from) === String(laneAgent) ? 'me' : from;
+  const isLaneAgent = String(from) === String(laneAgent);
   return codexChatBlock({
-    speaker: `${marker}${to}${kind}`,
+    speaker: isLaneAgent ? `me (${from})` : from,
+    to: event.to || '',
+    kind: event.type || 'message',
     meta: ts.trim(),
+    style: teamLaneTextStyle(from),
+    color: opts.color,
     message: `${String(event.message || '').slice(0, 500)}${artifact}`
   });
 }
 
-function codexChatBlock({ speaker = 'agent', meta = '', message = '' } = {}) {
-  const header = [speaker, meta].filter(Boolean).join(' | ');
-  const body = String(message || '').split(/\r?\n/).map((line) => `| ${line}`).join('\n');
-  return [`+-- ${header}`, body || '|', '+--'].join('\n');
+function codexChatBlock({ speaker = 'agent', to = '', kind = '', meta = '', style = {}, color = false, message = '' } = {}) {
+  const role = style?.role || 'agent';
+  const roleKind = [kind, role].filter(Boolean).join('/');
+  const target = to ? ` -> ${to}` : '';
+  const header = [
+    colorizeChatText(`${speaker}${target}`, style, color, { bold: true }),
+    roleKind ? colorizeChatText(`[${roleKind}]`, style, color) : null,
+    meta ? colorizeChatText(`| ${meta}`, { color_name: 'Gray' }, color) : null
+  ].filter(Boolean).join(' ');
+  const border = (text) => colorizeChatText(text, style, color);
+  const body = String(message || '').split(/\r?\n/).map((line) => `${border('│')} ${colorizeChatText(line || ' ', style, color)}`).join('\n');
+  return [`${border('╭─')} ${header}`, body || `${border('│')} `, border('╰─')].join('\n');
+}
+
+function terminalChatColorEnabled(opts = {}) {
+  if (Object.prototype.hasOwnProperty.call(opts, 'color')) return Boolean(opts.color);
+  if (process.env.NO_COLOR) return false;
+  return Boolean(process.stdout?.isTTY);
+}
+
+function colorizeChatText(text, style = {}, enabled = false, opts = {}) {
+  if (!enabled) return text;
+  const colorName = String(style?.color_name || 'gray').toLowerCase();
+  const colorCode = CHAT_COLOR_CODES[colorName] || CHAT_COLOR_CODES.gray;
+  const code = opts.bold ? `1;${colorCode}` : colorCode;
+  return `\x1b[${code}m${text}\x1b[0m`;
 }
 
 function eventAddressedTo(event = {}, agent = '') {

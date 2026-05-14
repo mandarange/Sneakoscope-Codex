@@ -4,6 +4,14 @@
 
 
 
+## [0.7.76] - 2026-05-14
+
+### Fixed
+
+- Improve Team tmux live panes with Codex-style per-agent chat framing, lane identity, and color metadata.
+- Close stale Team/codex-lb tmux panes before opening new managed views so old sessions do not linger.
+- Detect codex-lb `previous_response_not_found` launch failures and bypass codex-lb for that launch instead of blocking SKS.
+
 ## [0.7.75] - 2026-05-14
 
 ### Fixed

@@ -75,10 +75,10 @@ import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
 import { codexAppRemoteControlCommand } from './codex-app-command.mjs';
 import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs';
-import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, defaultCodexLaunchArgs, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, sksAsciiLogo, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchMadTmuxUi, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, reconcileTmuxTeamCockpit, runTmuxStatus, sanitizeTmuxSessionName, teamLaneStyle } from '../core/tmux-ui.mjs';
+import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, defaultCodexLaunchArgs, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, sksAsciiLogo, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchMadTmuxUi, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, reconcileTmuxTeamCockpit, runTmuxStatus, sanitizeTmuxSessionName, sweepCodexLbTmuxSessions, sweepTmuxTeamSurfaces, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
-import { askPostinstallQuestion, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexFastModeDuringInstall, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall } from './install-helpers.mjs';
+import { askPostinstallQuestion, checkCodexLbResponseChain, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexFastModeDuringInstall, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, madHighCommand as runMadHighCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 import { openClawCommand } from './openclaw-command.mjs';
 
@@ -144,13 +144,20 @@ async function defaultTmuxCommand(args = []) {
 }
 
 function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
-  if (!lb?.ok || lb.status !== 'configured') return opts;
-  if (readOption(args, '--session', null) || readOption(args, '--workspace', null)) return opts;
   const root = readOption(args, '--root', process.cwd());
+  const explicitSession = readOption(args, '--session', null) || readOption(args, '--workspace', null);
+  if (lb?.bypass_codex_lb) {
+    const session = explicitSession || sanitizeTmuxSessionName(`sks-openai-fallback-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
+    console.log(`codex-lb bypass active for this launch: ${lb.chain_health?.status || lb.status}`);
+    console.log(`Using fresh OpenAI fallback tmux session: ${session}`);
+    return { ...opts, session, codexArgs: [...(opts.codexArgs || []), '-c', 'model_provider="openai"'], codexLbBypassed: true };
+  }
+  if (!lb?.ok) return opts;
+  if (explicitSession) return opts;
   const session = sanitizeTmuxSessionName(`sks-codex-lb-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
-  console.log(`codex-lb key loaded for this launch: ${lb.env_path}`);
+  console.log(`codex-lb active for this launch: ${lb.env_path || lb.base_url || 'configured'}`);
   console.log(`Using fresh tmux session: ${session}`);
-  return { ...opts, session };
+  return { ...opts, session, codexLbFreshSession: true };
 }
 
 function help(args = []) {
@@ -171,8 +178,8 @@ Usage:
   sks bootstrap [--install-scope global|project] [--local-only] [--json]
   sks deps check|install [tmux|codex|context7|all] [--yes] [--json]
   sks codex-app
-  sks codex-lb status|repair|setup --host <domain> --api-key <key>
-  sks auth status|repair|setup --host <domain> --api-key <key>
+  sks codex-lb status|health|repair|setup --host <domain> --api-key <key>
+  sks auth status|health|repair|setup --host <domain> --api-key <key>
   sks openclaw install|path|print [--dir path] [--force] [--json]
   sks --mad [--high]
   sks auto-review status|enable|start [--high]
@@ -1125,6 +1132,21 @@ async function codexLbCommand(action = 'status', args = []) {
     else console.log('\nRepair auth: sks codex-lb repair');
     return;
   }
+  if (sub === 'health' || sub === 'verify-chain' || sub === 'chain') {
+    const status = await codexLbStatus();
+    const result = status.ok
+      ? await checkCodexLbResponseChain(status, { force: true })
+      : { ok: false, status: 'not_configured', codex_lb: status };
+    if (json) return console.log(JSON.stringify(result, null, 2));
+    if (result.ok) {
+      console.log('codex-lb response chain: ok');
+      return;
+    }
+    console.error(`codex-lb response chain: failed (${result.status})`);
+    if (result.error) console.error(result.error);
+    process.exitCode = 1;
+    return;
+  }
   if (sub === 'repair' || sub === 'resync' || sub === 'login') {
     const result = await repairCodexLbAuth();
     if (json) return console.log(JSON.stringify(result, null, 2));
@@ -1160,7 +1182,7 @@ async function codexLbCommand(action = 'status', args = []) {
     console.log(`Key env: ${result.env_path}`);
     return;
   }
-  console.error('Usage: sks codex-lb status|repair|setup --host <domain> --api-key <key> [--json]');
+  console.error('Usage: sks codex-lb status|health|repair|setup --host <domain> --api-key <key> [--json]');
   process.exitCode = 1;
 }
 
@@ -1448,7 +1470,7 @@ function usage(args = []) {
   const topic = String(args[0] || 'overview').toLowerCase();
   const blocks = {
     overview: [sksAsciiLogo(), '', 'Usage', '', 'Discover:', '  sks commands', '  sks quickstart', '  sks root', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks tmux check', '  sks dollar-commands', '', `Topics: ${USAGE_TOPICS}`],
-    install: ['Install', '', '1. Global install:', '  npm i -g sneakoscope', '', '2. Bootstrap and check dependencies:', '  sks bootstrap', '  sks deps check', '', '3. Confirm Codex App commands:', '  sks codex-app check', '  sks dollar-commands', '', '4. Optional codex-lb key setup for CLI sks runs:', '  sks codex-lb setup --host <domain> --api-key <key>', '  sks codex-lb repair', '  sks', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
+    install: ['Install', '', '1. Global install:', '  npm i -g sneakoscope', '', '2. Bootstrap and check dependencies:', '  sks bootstrap', '  sks deps check', '', '3. Confirm Codex App commands:', '  sks codex-app check', '  sks dollar-commands', '', '4. Optional codex-lb key setup for CLI sks runs:', '  sks codex-lb setup --host <domain> --api-key <key>', '  sks codex-lb health', '  sks codex-lb repair', '  sks', '', 'Fallback:', '  npx -y -p sneakoscope sks root', '', 'Project:', '  npm i -D sneakoscope', '  npx sks setup --install-scope project'],
     bootstrap: ['Bootstrap', '', '  sks bootstrap', '  sks setup --bootstrap', '', 'Creates project SKS files, Codex App skills/hooks/config, state/guard files, then checks Codex App, Context7, and tmux.'],
     root: ['Root', '', '  sks root [--json]', '', 'Inside a project, SKS uses that project root. Outside any project marker, runtime commands use the per-user global SKS root instead of writing .sneakoscope into the current random folder.'],
     deps: ['Dependencies', '', '  sks deps check [--json]', '  sks deps install [tmux|codex|context7|all] [--yes]', '', 'tmux on macOS uses Homebrew after Y/n approval for missing installs or Homebrew-managed upgrades. If PATH resolves an npm-managed tmux, SKS prompts for npm i -g tmux@latest instead. Unknown non-Homebrew tmux paths are reported as conflicts.'],
@@ -3305,7 +3327,7 @@ async function selftest() {
   await ensureDir(fakeTmuxDir);
   const fakeTmuxLog = path.join(fakeTmuxDir, 'tmux.log');
   const fakeTmuxBin = path.join(fakeTmuxDir, 'tmux');
-  await writeTextAtomic(fakeTmuxBin, `#!/usr/bin/env node\nconst{appendFileSync:a}=require('fs'),e=process.env,r=process.argv.slice(2),c=r[0];if(e.SKS_FAKE_TMUX_LOG)a(e.SKS_FAKE_TMUX_LOG,r.join(' ')+'\\n');if(c==='new-session')console.log('%1');else if(c==='split-window')console.log(e.SKS_FAKE_TMUX_SPLIT_ID||'%2');else if(c==='list-windows')console.log('@1');else if(c==='display-message')console.log(e.SKS_FAKE_TMUX_DISPLAY||'sks-existing-selftest\\t@1\\t%1');else if(c==='list-panes'){let t=r[r.indexOf('-t')+1]||'';console.log(t[0]=='%'&&r.join(' ').includes('pane_dead')?'0\\t'+t:e.SKS_FAKE_TMUX_LIST||'')}\n`);
+  await writeTextAtomic(fakeTmuxBin, `#!/usr/bin/env node\nconst{appendFileSync:a}=require('fs'),e=process.env,r=process.argv.slice(2),c=r[0];if(e.SKS_FAKE_TMUX_LOG)a(e.SKS_FAKE_TMUX_LOG,r.join(' ')+'\\n');if(c==='new-session')console.log('%1');else if(c==='split-window')console.log(e.SKS_FAKE_TMUX_SPLIT_ID||'%2');else if(c==='list-windows')console.log('@1');else if(c==='display-message')console.log(e.SKS_FAKE_TMUX_DISPLAY||'sks-existing-selftest\\t@1\\t%1');else if(c==='list-sessions')console.log(e.SKS_FAKE_TMUX_SESSIONS||'');else if(c==='list-panes'){let t=r[r.indexOf('-t')+1]||'';console.log(t[0]=='%'&&r.join(' ').includes('pane_dead')?'0\\t'+t:e.SKS_FAKE_TMUX_LIST||'')}\n`);
   await fsp.chmod(fakeTmuxBin, 0o755);
   const previousFakeTmuxLog = process.env.SKS_FAKE_TMUX_LOG;
   const previousPath = process.env.PATH;
@@ -3346,6 +3368,91 @@ async function selftest() {
   const cockpitOpenLog = await safeReadText(fakeTmuxLog);
   if (!cockpitOpen.ok || cockpitOpen.opened_lane_count !== 2 || cockpitOpen.main_pane_id !== '%1' || cockpitOpen.relayout?.layout_name !== 'main-vertical' || !cockpitOpenLog.includes('display-message -p') || !cockpitOpenLog.includes('split-window -h -t %1') || !cockpitOpenLog.includes('set-option -pt %80 @sks_team_managed 1') || !cockpitOpenLog.includes('select-pane -t %1') || !cockpitOpenLog.includes('select-layout -t @1 main-vertical')) throw new Error('selftest: split');
   await writeTextAtomic(fakeTmuxLog, '');
+  process.env.SKS_FAKE_TMUX_SPLIT_ID = '%90';
+  process.env.SKS_FAKE_TMUX_LIST = `%81\tscout: analysis_scout_1\tnode\t1\t${teamId}\tanalysis_scout_1\tscout\n%82\tscout: analysis_scout_1\tnode\t1\t${teamId}\tanalysis_scout_1\tscout\n%84\tscout: analysis_scout_old\tnode\t1\told-team-mission\tanalysis_scout_old\tscout`;
+  const cockpitDedupe = await reconcileTmuxTeamCockpit({
+    root: tmp,
+    missionId: teamId,
+    plan: roleTeamPlan,
+    dashboard: { agents: { analysis_scout_1: { status: 'assigned' } } },
+    control: { status: 'running' },
+    tmux: { bin: fakeTmuxBin },
+    env: { ...process.env, TMUX: '/tmp/tmux-selftest/default,1,0' }
+  });
+  const cockpitDedupeLog = await safeReadText(fakeTmuxLog);
+  if (!cockpitDedupe.ok || cockpitDedupe.closed_lane_count !== 2 || !cockpitDedupeLog.includes('kill-pane -t %82') || !cockpitDedupeLog.includes('kill-pane -t %84') || cockpitDedupeLog.includes('kill-pane -t %81')) throw new Error('selftest: tmux cockpit did not prune duplicate or stale managed panes');
+  await writeTextAtomic(fakeTmuxLog, '');
+  process.env.SKS_FAKE_TMUX_LIST = `%81\tscout: analysis_scout_1\tnode\t1\t${teamId}\tanalysis_scout_1\tscout`;
+  const cockpitTerminal = await reconcileTmuxTeamCockpit({
+    root: tmp,
+    missionId: teamId,
+    plan: roleTeamPlan,
+    dashboard: { agents: { analysis_scout_1: { status: 'completed' } } },
+    control: { status: 'running' },
+    tmux: { bin: fakeTmuxBin },
+    env: { ...process.env, TMUX: '/tmp/tmux-selftest/default,1,0' }
+  });
+  const cockpitTerminalLog = await safeReadText(fakeTmuxLog);
+  if (!cockpitTerminal.ok || cockpitTerminal.closed_lane_count !== 1 || cockpitTerminal.opened_lane_count !== 0 || !cockpitTerminalLog.includes('kill-pane -t %81')) throw new Error('selftest: tmux cockpit did not close terminal agent pane');
+  await writeTextAtomic(fakeTmuxLog, '');
+  const staleTeamId = 'M-20260512-000000-old1';
+  const missionDirOnlyTeamId = 'M-20260512-000000-dir1';
+  await ensureDir(path.join(tmp, '.sneakoscope', 'missions', missionDirOnlyTeamId));
+  await writeJsonAtomic(path.join(tmp, '.sneakoscope', 'state', 'tmux-team-sessions.json'), {
+    schema_version: 1,
+    missions: {
+      [staleTeamId]: {
+        mission_id: staleTeamId,
+        session: `sks-team-${staleTeamId}`,
+        root: tmp,
+        panes: [{ pane_id: '%201', title: 'scout: analysis_scout_1' }]
+      },
+      [teamId]: {
+        mission_id: teamId,
+        session: 'sks-existing-selftest',
+        root: tmp,
+        panes: [{ pane_id: '%204', title: 'scout: analysis_scout_1' }]
+      }
+    }
+  });
+  process.env.SKS_FAKE_TMUX_LIST = [
+    'sks-existing-selftest\t@1\t%1\tCodex CLI\tnode\t\t\t\t',
+    `sks-team-${staleTeamId}\t@70\t%201\tscout: analysis_scout_1\tnode\t\t\t\t`,
+    `sks-existing-selftest\t@1\t%202\treview: stale_review\tnode\t1\t${staleTeamId}\tstale_review\treview`,
+    `sks-team-${missionDirOnlyTeamId}\t@71\t%205\treview: reviewer_1\tnode\t\t\t\t`,
+    'unrelated-session\t@9\t%203\tscout: analysis_scout_1\tnode\t\t\t\t',
+    `sks-existing-selftest\t@1\t%204\tscout: analysis_scout_1\tnode\t1\t${teamId}\tanalysis_scout_1\tscout`
+  ].join('\n');
+  const cockpitSweep = await sweepTmuxTeamSurfaces({
+    root: tmp,
+    keepMissionId: teamId,
+    tmux: { bin: fakeTmuxBin },
+    env: { ...process.env, TMUX: '/tmp/tmux-selftest/default,1,0' }
+  });
+  const cockpitSweepLog = await safeReadText(fakeTmuxLog);
+  if (!cockpitSweep.ok || cockpitSweep.closed_lane_count !== 3 || !cockpitSweepLog.includes('kill-pane -t %201') || !cockpitSweepLog.includes('kill-pane -t %202') || !cockpitSweepLog.includes('kill-pane -t %205') || cockpitSweepLog.includes('kill-pane -t %203') || cockpitSweepLog.includes('kill-pane -t %204') || cockpitSweepLog.includes('kill-pane -t %1')) throw new Error('selftest: tmux sweep did not close only stale recorded Team panes');
+  await writeTextAtomic(fakeTmuxLog, '');
+  const codexLbSuffix = defaultTmuxSessionName(tmp);
+  const codexLbKeepSession = `sks-codex-lb-keep-${codexLbSuffix}`;
+  const codexLbCurrentSession = `sks-codex-lb-current-${codexLbSuffix}`;
+  process.env.SKS_FAKE_TMUX_DISPLAY = `${codexLbCurrentSession}\t@1\t%1`;
+  process.env.SKS_FAKE_TMUX_SESSIONS = [
+    `sks-codex-lb-old-${codexLbSuffix}\t0\t100\t100`,
+    `sks-codex-lb-attached-${codexLbSuffix}\t1\t101\t101`,
+    `${codexLbKeepSession}\t0\t102\t102`,
+    `${codexLbCurrentSession}\t0\t103\t103`,
+    'sks-codex-lb-other-sks-other-00000000\t0\t104\t104'
+  ].join('\n');
+  const codexLbSweep = await sweepCodexLbTmuxSessions({
+    root: tmp,
+    keepSession: codexLbKeepSession,
+    tmux: { bin: fakeTmuxBin },
+    env: { ...process.env, TMUX: '/tmp/tmux-selftest/default,1,0' }
+  });
+  const codexLbSweepLog = await safeReadText(fakeTmuxLog);
+  if (!codexLbSweep.ok || codexLbSweep.closed_session_count !== 1 || !codexLbSweepLog.includes(`kill-session -t sks-codex-lb-old-${codexLbSuffix}`) || codexLbSweepLog.includes(`kill-session -t sks-codex-lb-attached-${codexLbSuffix}`) || codexLbSweepLog.includes(`kill-session -t ${codexLbKeepSession}`) || codexLbSweepLog.includes(`kill-session -t ${codexLbCurrentSession}`) || codexLbSweepLog.includes('kill-session -t sks-codex-lb-other')) throw new Error('selftest: codex-lb tmux sweep did not close only stale detached sessions for this repo');
+  await writeTextAtomic(fakeTmuxLog, '');
+  process.env.SKS_FAKE_TMUX_DISPLAY = 'sks-existing-selftest\t@1\t%1';
   const fakePanes = `%81\tscout: analysis_scout_1\tnode\t1\t${teamId}\tanalysis_scout_1\tscout\n%82\tscout: analysis_scout_2\tnode\t1\t${teamId}\tanalysis_scout_2\tscout\n%83\tuser pane\tzsh\t\t\t\t`;
   process.env.SKS_FAKE_TMUX_LIST = fakePanes;
   const cockpitClose = await reconcileTmuxTeamCockpit({
@@ -3362,6 +3469,7 @@ async function selftest() {
   if (!cockpitClose.ok || cockpitClose.closed_lane_count !== 2 || !cockpitCloseLog.includes('kill-pane -t %81') || !cockpitCloseLog.includes('kill-pane -t %82') || cockpitCloseLog.includes('kill-pane -t %83')) throw new Error('selftest: cleanup');
   delete process.env.SKS_FAKE_TMUX_DISPLAY;
   delete process.env.SKS_FAKE_TMUX_LIST;
+  delete process.env.SKS_FAKE_TMUX_SESSIONS;
   delete process.env.SKS_FAKE_TMUX_SPLIT_ID;
   await writeTextAtomic(fakeTmuxLog, '');
   const madCockpit = await launchMadTmuxUi(['--workspace', 'sks-mad-selftest-ui', '--no-attach'], { root: tmp, tmux: { ok: true, bin: fakeTmuxBin, version: '3.4' }, codex: { bin: process.execPath }, app: { ok: true, guidance: [] }, missionId: 'M-MAD-SELFTEST' });
@@ -3462,7 +3570,10 @@ async function selftest() {
   if (!(await readTeamTranscriptTail(teamDir, 1)).join('\n').includes('selftest mapped options')) throw new Error('selftest: team transcript tail missing event');
   const teamLane = await renderTeamAgentLane(teamDir, { missionId: teamId, agent: 'analysis_scout_1', lines: 4 });
   if (!teamLane.includes('selftest mapped repo slice')) throw new Error('selftest: team agent lane missing event context');
-  if (!teamLane.includes('## Codex Chat') || !teamLane.includes('+-- me [status]') || !teamLane.includes('selftest mapped repo slice') || teamLane.includes('## Global Tail')) throw new Error('selftest: chat lane');
+  if (!teamLane.includes('## Codex Chat') || !teamLane.includes('me (analysis_scout_1) [status/scout]') || !teamLane.includes('selftest mapped repo slice') || teamLane.includes('## Global Tail')) throw new Error('selftest: chat lane');
+  if (!teamLane.includes('╭─') || !teamLane.includes('│ selftest mapped repo slice') || !teamLane.includes('╰─')) throw new Error('selftest: team chat lane did not render framed chat blocks');
+  const teamLaneColor = await renderTeamAgentLane(teamDir, { missionId: teamId, agent: 'analysis_scout_1', lines: 4, color: true });
+  if (!/\x1b\[[0-9;]+m/.test(teamLaneColor) || !teamLaneColor.includes('Lane color:')) throw new Error('selftest: team chat lane did not render ANSI color metadata/output');
   const teamLaneCli = await runProcess(process.execPath, [hookBin, 'team', 'lane', teamId, '--agent', 'analysis_scout_1', '--lines', '4'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (teamLaneCli.code !== 0 || !String(teamLaneCli.stdout || '').includes('SKS Team Agent Lane') || !String(teamLaneCli.stdout || '').includes('analysis_scout_1')) throw new Error('selftest: sks team lane CLI did not render an agent lane');
   await writeTextAtomic(path.join(teamDir, 'team-analysis.md'), '- claim: analysis scout mapped route registry | source: src/core/routes.mjs | risk: high | confidence: supported\n');

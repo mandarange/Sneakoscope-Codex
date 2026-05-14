@@ -150,11 +150,12 @@ For [codex-lb](https://github.com/Soju06/codex-lb), start the server, create a d
 
 ```sh
 sks codex-lb setup --host https://your-codex-lb.example.com --api-key "sk-clb-..."
+sks codex-lb health
 sks codex-lb repair
 sks
 ```
 
-Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, syncs `codex login --with-api-key`, and loads it in tmux.
+Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, syncs `codex login --with-api-key`, and loads it in tmux. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` tmux session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths, including non-interactive runs, verify that codex-lb can continue a Responses API chain with `previous_response_id`; if that check fails, SKS bypasses codex-lb for that launch with `model_provider="openai"` instead of letting the Codex session fail mid-work.
 
 If Codex CLI auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
 

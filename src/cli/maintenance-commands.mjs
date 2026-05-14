@@ -17,7 +17,7 @@ import { contextCapsule } from '../core/triwiki-attention.mjs';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../core/wiki-coordinate.mjs';
 import { ALLOWED_REASONING_EFFORTS, CODEX_COMPUTER_USE_ONLY_POLICY, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, ROUTES, hasFromChatImgSignal, reflectionRequiredForRoute, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stackCurrentDocsPolicy, stripVisibleDecisionAnswerBlocks, triwikiContextTracking } from '../core/routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../core/team-dag.mjs';
-import { appendTeamEvent, formatAgentReasoning, formatRoleCounts, initTeamLive, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested, teamReasoningPolicy } from '../core/team-live.mjs';
+import { appendTeamEvent, formatAgentReasoning, formatRoleCounts, initTeamLive, isTerminalTeamAgentStatus, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested, teamReasoningPolicy } from '../core/team-live.mjs';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../core/team-review-policy.mjs';
 import { ARTIFACT_FILES, writeValidationReport } from '../core/artifact-schemas.mjs';
 import { writeEffortDecision } from '../core/effort-orchestrator.mjs';
@@ -66,13 +66,20 @@ function readOption(args, name, fallback) {
 }
 
 function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
-  if (!lb?.ok || lb.status !== 'configured') return opts;
-  if (readOption(args, '--session', null) || readOption(args, '--workspace', null)) return opts;
   const root = readOption(args, '--root', process.cwd());
+  const explicitSession = readOption(args, '--session', null) || readOption(args, '--workspace', null);
+  if (lb?.bypass_codex_lb) {
+    const session = explicitSession || sanitizeTmuxSessionName(`sks-openai-fallback-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
+    console.log(`codex-lb bypass active for this launch: ${lb.chain_health?.status || lb.status}`);
+    console.log(`Using fresh OpenAI fallback tmux session: ${session}`);
+    return { ...opts, session, codexArgs: [...(opts.codexArgs || []), '-c', 'model_provider="openai"'], codexLbBypassed: true };
+  }
+  if (!lb?.ok) return opts;
+  if (explicitSession) return opts;
   const session = sanitizeTmuxSessionName(`sks-codex-lb-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
-  console.log(`codex-lb key loaded for this launch: ${lb.env_path}`);
+  console.log(`codex-lb active for this launch: ${lb.env_path || lb.base_url || 'configured'}`);
   console.log(`Using fresh tmux session: ${session}`);
-  return { ...opts, session };
+  return { ...opts, session, codexLbFreshSession: true };
 }
 
 export async function madHighCommand(args = [], deps = {}) {
@@ -1844,6 +1851,7 @@ export async function team(args) {
   if (result.tmux.ready) {
     const tmuxState = result.tmux.created ? 'opened' : 'not opened';
     console.log(`tmux: ${tmuxState} ${result.tmux.opened_lane_count || result.tmux.agents.length} agent lane(s) in ${result.tmux.session || result.tmux.workspace}`);
+    if (result.tmux.preflight_cleanup?.closed_lane_count) console.log(`tmux cleanup preflight: closed ${result.tmux.preflight_cleanup.closed_lane_count} stale Team pane(s)`);
     if (result.tmux.split_ui?.mode) console.log(`tmux UI: ${result.tmux.split_ui.mode} (${result.tmux.split_ui.layout})`);
   }
   else console.log(`tmux: blocked (${Array.from(new Set(result.tmux.blockers || [])).join('; ')})`);
@@ -2138,6 +2146,7 @@ async function teamCommand(sub, args) {
       return;
     }
     console.log(`tmux: opened ${tmux.opened_lane_count || tmux.lanes?.length || 0} Team lane(s) in ${tmux.session}`);
+    if (tmux.preflight_cleanup?.closed_lane_count) console.log(`tmux cleanup preflight: closed ${tmux.preflight_cleanup.closed_lane_count} stale Team pane(s)`);
     if (tmux.split_ui?.mode) console.log(`tmux UI: ${tmux.split_ui.mode} (${tmux.split_ui.layout})`);
     if (tmux.split_ui?.current_session) console.log('tmux cockpit: reconciled inside the current SKS tmux window');
     console.log(`Attach: ${tmux.attach_command}`);
@@ -2232,6 +2241,7 @@ async function teamCommand(sub, args) {
     }
     if (cleanup.killed_session) console.log(`tmux cleanup: killed session ${cleanup.session}`);
     else console.log(`tmux cleanup: marked complete (${cleanup.reason || 'record updated'})`);
+    if (cleanup.sweep_cleanup?.closed_lane_count) console.log(`tmux sweep: closed ${cleanup.sweep_cleanup.closed_lane_count} stale recorded Team pane(s)`);
     console.log(renderTeamCleanupSummary(control));
     return;
   }
@@ -2262,6 +2272,11 @@ async function teamCommand(sub, args) {
     const agent = readFlagValue(args, '--agent', 'parent_orchestrator');
     const phase = readFlagValue(args, '--phase', '');
     const lines = Number(readFlagValue(args, '--lines', '12'));
+    const shouldStopLaneFollow = async () => {
+      if (teamCleanupRequested(await readTeamControl(dir))) return true;
+      const dashboard = await readTeamDashboard(dir).catch(() => null);
+      return isTerminalTeamAgentStatus(dashboard?.agents?.[agent]?.status || '');
+    };
     const printLane = async () => {
       const text = await renderTeamAgentLane(dir, { missionId: id, agent, phase, lines });
       if (flag(args, '--json')) {
@@ -2273,7 +2288,7 @@ async function teamCommand(sub, args) {
       return text;
     };
     let last = await printLane();
-    if (flag(args, '--follow') && !teamCleanupRequested(await readTeamControl(dir))) {
+    if (flag(args, '--follow') && !(await shouldStopLaneFollow())) {
       for (;;) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
         const next = await renderTeamAgentLane(dir, { missionId: id, agent, phase, lines });
@@ -2283,7 +2298,7 @@ async function teamCommand(sub, args) {
           console.log(next);
           last = next;
         }
-        if (teamCleanupRequested(await readTeamControl(dir))) return;
+        if (await shouldStopLaneFollow()) return;
       }
     }
     return;
