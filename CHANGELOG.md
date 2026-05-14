@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+
+## [0.7.73] - 2026-05-14
+
+### Fixed
+
+- Suppress Codex under-development feature warnings whenever SKS enables `codex_git_commit`, including npm postinstall/global repair, project setup, `sks doctor --fix`, and codex-lb config repair paths.
+
 ## [0.7.72] - 2026-05-14
 
 ### Fixed
