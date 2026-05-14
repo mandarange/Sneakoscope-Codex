@@ -4,6 +4,14 @@
 
 
 
+
+## [0.7.77] - 2026-05-14
+
+### Fixed
+
+- Recognize Codex App `Git Actions Commit` and `Commit and Push` hook payloads as app git actions, so SKS route gates do not block the built-in commit and commit-push flow.
+- Keep ordinary user prompts that mention committing or pushing on the normal SKS route instead of treating them as app git actions.
+
 ## [0.7.76] - 2026-05-14
 
 ### Fixed

@@ -140,11 +140,11 @@ function clientModelCandidates(value, depth = 0) {
 }
 
 async function hookUserPrompt(root, state, payload, noQuestion) {
-  if (looksLikeCodexGitCommitMessageGeneration(payload)) {
+  if (looksLikeCodexGitAction(payload)) {
     await armCodexGitActionStopBypass(root, payload).catch(() => null);
     return {
       continue: true,
-      systemMessage: 'SKS: Codex App git commit message generation bypassed route gates.'
+      systemMessage: 'SKS: Codex App git action bypassed route gates.'
     };
   }
   if (!noQuestion) {
@@ -355,7 +355,7 @@ async function hookStop(root, state, payload, noQuestion) {
   if (await consumeCodexGitActionStopBypass(root, payload)) {
     return {
       continue: true,
-      systemMessage: 'SKS: Codex App git commit message generation accepted without route finalization gates.'
+      systemMessage: 'SKS: Codex App git action accepted without route finalization gates.'
     };
   }
   if (!noQuestion && (hasDfixLightCompletion(last) || await consumeLightRouteStop(root, payload))) {
@@ -432,7 +432,7 @@ function explicitConversationId(payload = {}) {
   return payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || null;
 }
 
-function looksLikeCodexGitCommitMessageGeneration(payload = {}) {
+function looksLikeCodexGitAction(payload = {}) {
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
   const haystack = [
     payload.action,
@@ -460,7 +460,11 @@ function looksLikeCodexGitCommitMessageGeneration(payload = {}) {
     payload.metadata?.feature,
     payload.metadata?.source
   ].filter(Boolean).join(' ');
-  const appSignal = /\b(?:codex[_\s-]*(?:app[_\s-]*)?)?(?:git[_\s-]*)?(?:commit[_\s-]*message|git[_\s-]*commit|codex_git_commit)\b/i.test(haystack)
+  const codexAppGitSignal = /\bcodex[_\s-]*app\b[\s\S]{0,80}\bgit\b[\s\S]{0,80}\b(?:action|actions|commit|push|pr)\b/i.test(haystack);
+  const gitActionSignal = /\bgit[_\s-]*actions?\b[\s\S]{0,80}\b(?:commit|push|commit[\s_-]*(?:and|&)?[\s_-]*push)\b/i.test(haystack);
+  const appSignal = codexAppGitSignal
+    || gitActionSignal
+    || /\b(?:codex[_\s-]*(?:app[_\s-]*)?)?(?:git[_\s-]*)?(?:commit[_\s-]*message|git[_\s-]*commit|codex_git_commit)\b/i.test(haystack)
     || /커밋\s*메시지\s*생성/i.test(haystack);
   const promptSignal = /\bgenerate(?:\s+a)?(?:\s+git)?\s+commit\s+message\b/i.test(prompt)
     || /\bcommit\s+message\b[\s\S]{0,80}\b(?:staged|diff|changes?|git)\b/i.test(prompt)
@@ -478,7 +482,7 @@ async function armCodexGitActionStopBypass(root, payload = {}) {
   const nowMs = Date.now();
   const record = {
     schema_version: 1,
-    route: 'codex_git_commit',
+    route: 'codex_git_action',
     pending_stop_bypass: true,
     conversation_id: conversationId(payload),
     created_at: nowIso(),
@@ -492,7 +496,7 @@ async function consumeCodexGitActionStopBypass(root, payload = {}) {
   const file = path.join(root, '.sneakoscope', 'state', CODEX_GIT_ACTION_STOP_ARTIFACT);
   const record = await readJson(file, null).catch(() => null);
   if (!record?.pending_stop_bypass) return false;
-  if (record.route !== 'codex_git_commit') return false;
+  if (!['codex_git_action', 'codex_git_commit'].includes(record.route)) return false;
   const expiresMs = Date.parse(record.expires_at || '');
   if (!Number.isFinite(expiresMs) || expiresMs < Date.now()) return false;
   const currentConversation = conversationId(payload);
@@ -911,14 +915,26 @@ export async function selftestCodexCommitHooks() {
   const hook = await runHook('user-prompt-submit', { conversation_id: id, action: 'codex_git_commit', prompt: 'Generate a git commit message for the staged diff.' });
   if (hook.code !== 0) throw new Error(`selftest failed: commit hook ${hook.code}: ${hook.stderr}`);
   const hookJson = JSON.parse(hook.stdout);
-  if (hookJson.decision === 'block' || hookJson.hookSpecificOutput?.additionalContext || !String(hookJson.systemMessage || '').includes('git commit message generation')) throw new Error('selftest failed: commit route bypass');
+  if (hookJson.decision === 'block' || hookJson.hookSpecificOutput?.additionalContext || !String(hookJson.systemMessage || '').includes('git action')) throw new Error('selftest failed: commit route bypass');
   const stop = await runHook('stop', { conversation_id: id, last_assistant_message: 'Fix Codex App commit message hook bypass' });
   if (stop.code !== 0) throw new Error(`selftest failed: commit stop ${stop.code}: ${stop.stderr}`);
   const stopJson = JSON.parse(stop.stdout);
   if (stopJson.decision === 'block' || !String(stopJson.systemMessage || '').includes('accepted without route finalization')) throw new Error('selftest failed: commit stop bypass');
+  const commitPushId = 'commit-push-selftest';
+  const appCommitPushHook = await runHook('user-prompt-submit', { conversation_id: commitPushId, action: 'Codex App Git Actions Commit and Push', prompt: 'Commit and push changes.' });
+  if (appCommitPushHook.code !== 0) throw new Error(`selftest failed: app commit-push hook ${appCommitPushHook.code}: ${appCommitPushHook.stderr}`);
+  const appCommitPushJson = JSON.parse(appCommitPushHook.stdout);
+  if (appCommitPushJson.decision === 'block' || appCommitPushJson.hookSpecificOutput?.additionalContext || !String(appCommitPushJson.systemMessage || '').includes('git action')) throw new Error('selftest failed: app commit-push route bypass');
+  const appCommitPushStop = await runHook('stop', { conversation_id: commitPushId, last_assistant_message: 'Commit and push complete.' });
+  if (appCommitPushStop.code !== 0) throw new Error(`selftest failed: app commit-push stop ${appCommitPushStop.code}: ${appCommitPushStop.stderr}`);
+  if (JSON.parse(appCommitPushStop.stdout).decision === 'block') throw new Error('selftest failed: app commit-push stop bypass');
   const userHook = await runHook('user-prompt-submit', { prompt: '[커밋 메시지를 생성하지 못했습니다.] 코덱스 앱에서 이 버그 수정해줘' });
   if (userHook.code !== 0) throw new Error(`selftest failed: user commit hook ${userHook.code}: ${userHook.stderr}`);
   if (!JSON.parse(userHook.stdout).hookSpecificOutput?.additionalContext?.includes('$Team route prepared')) throw new Error('selftest failed: user prompt route');
+  const userCommitPushHook = await runHook('user-prompt-submit', { prompt: '배포하게 커밋하고 푸쉬해줘' });
+  if (userCommitPushHook.code !== 0) throw new Error(`selftest failed: user commit-push hook ${userCommitPushHook.code}: ${userCommitPushHook.stderr}`);
+  const userCommitPushJson = JSON.parse(userCommitPushHook.stdout);
+  if (String(userCommitPushJson.systemMessage || '').includes('git action') || !userCommitPushJson.hookSpecificOutput?.additionalContext) throw new Error('selftest failed: user commit-push prompt should stay on normal route');
 }
 
 function normalizeHookResult(name, result = {}) {
