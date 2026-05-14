@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 
+## [0.7.74] - 2026-05-14
+
+### Fixed
+
+- Prevent copied Team `Live Chat` status logs from contaminating route classification with stale DB/security keywords.
+- Make Team tmux lane panes self-close after follow loops end and fall back to recorded pane ids during cleanup.
+- Render per-agent Team lanes as compact Codex-style chat blocks.
+
 ## [0.7.73] - 2026-05-14
 
 ### Fixed

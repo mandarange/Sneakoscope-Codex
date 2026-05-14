@@ -576,7 +576,7 @@ export async function renderTeamAgentLane(dir, opts = {}) {
     `## Assigned Runtime Tasks`,
     ...(runtime ? formatRuntimeTasks(assignedTasks) : ['- team-runtime-tasks.json not available yet.']),
     '',
-    `## Live Chat`,
+    `## Codex Chat`,
     ...(chatEvents.length ? chatEvents.map((event) => formatChatTranscriptEvent(event, aliases[0])) : ['- waiting for live agent messages...']),
     opts.includeGlobalTail ? '' : null,
     opts.includeGlobalTail ? `## Global Tail` : null,
@@ -710,14 +710,24 @@ function uniqueTranscriptEvents(events = []) {
 }
 
 function formatChatTranscriptEvent(event = {}, laneAgent = '') {
-  if (event.raw) return `- system: ${event.raw}`;
+  if (event.raw) return codexChatBlock({ speaker: 'system', message: event.raw });
   const from = event.agent || 'unknown';
   const to = event.to ? ` -> ${event.to}` : '';
   const kind = event.type && event.type !== 'message' ? ` [${event.type}]` : '';
   const ts = event.ts ? `${event.ts} ` : '';
   const artifact = event.artifact ? ` (${event.artifact})` : '';
   const marker = String(from) === String(laneAgent) ? 'me' : from;
-  return `- ${ts}${marker}${to}${kind}: ${String(event.message || '').slice(0, 500)}${artifact}`;
+  return codexChatBlock({
+    speaker: `${marker}${to}${kind}`,
+    meta: ts.trim(),
+    message: `${String(event.message || '').slice(0, 500)}${artifact}`
+  });
+}
+
+function codexChatBlock({ speaker = 'agent', meta = '', message = '' } = {}) {
+  const header = [speaker, meta].filter(Boolean).join(' | ');
+  const body = String(message || '').split(/\r?\n/).map((line) => `| ${line}`).join('\n');
+  return [`+-- ${header}`, body || '|', '+--'].join('\n');
 }
 
 function eventAddressedTo(event = {}, agent = '') {
