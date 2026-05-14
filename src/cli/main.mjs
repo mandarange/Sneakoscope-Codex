@@ -18,11 +18,12 @@ import { classifySql, classifyCommand, classifyToolPayload, checkDbOperation, ha
 import { checkHarnessModification, harnessGuardStatus, isHarnessSourceProject } from '../core/harness-guard.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
 import { context7Docs, context7Resolve, context7Text, context7Tools } from '../core/context7-client.mjs';
-import { bumpProjectVersion, disableVersionGitHook, enableVersionGitHook, runVersionPreCommit, versioningStatus } from '../core/version-manager.mjs';
+import { bumpProjectVersion, disableVersionGitHook, runVersionPreCommit, versioningStatus } from '../core/version-manager.mjs';
 import { rustInfo } from '../core/rust-accelerator.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
 import { defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evaluation.mjs';
 import { evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
+import { evaluateRecallPulseFixtures, readMissionStatusLedger, writeRecallPulseArtifacts } from '../core/recallpulse.mjs';
 import {
   PPT_AUDIENCE_STRATEGY_ARTIFACT,
   PPT_CLEANUP_REPORT_ARTIFACT,
@@ -81,6 +82,7 @@ import { context7Command } from './context7-command.mjs';
 import { askPostinstallQuestion, checkCodexLbResponseChain, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexFastModeDuringInstall, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, madHighCommand as runMadHighCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 import { openClawCommand } from './openclaw-command.mjs';
+import { recallPulseCommand } from './recallpulse-command.mjs';
 
 const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
@@ -109,7 +111,7 @@ export async function main(args) {
   if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
   const handlers = {
     postinstall: () => postinstall({ bootstrap }), wizard: () => wizard(tail), ui: () => wizard(tail), 'update-check': () => updateCheck(tail), help: () => help(tail), commands: () => commands(tail), usage: () => usage(tail), root: () => rootCommand(tail), quickstart: () => quickstartCommand(), 'codex-app': () => codexAppHelp(tail), 'codex-lb': () => codexLbCommand(sub, rest), auth: () => codexLbCommand(sub, rest), openclaw: () => openClawCommand(tail), bootstrap: () => bootstrap(tail), deps: () => deps(sub, rest),
-    'qa-loop': () => qaLoopCommand(sub, rest), ppt: () => pptCommand(sub, rest), 'image-ux-review': () => imageUxReviewCommand(sub, rest), 'ux-review': () => imageUxReviewCommand(sub, rest), 'visual-review': () => imageUxReviewCommand(sub, rest), 'ui-ux-review': () => imageUxReviewCommand(sub, rest), context7: () => context7Command(sub, rest), pipeline: () => pipeline(sub, rest), guard: () => guard(sub, rest), conflicts: () => conflicts(sub, rest), versioning: () => versioning(sub, rest), reasoning: () => reasoningCommand(tail), aliases: () => aliases(), setup: () => setup(tail), 'fix-path': () => fixPath(tail), doctor: () => doctor(tail), init: () => init(tail), selftest: () => selftest(tail),
+    'qa-loop': () => qaLoopCommand(sub, rest), ppt: () => pptCommand(sub, rest), 'image-ux-review': () => imageUxReviewCommand(sub, rest), 'ux-review': () => imageUxReviewCommand(sub, rest), 'visual-review': () => imageUxReviewCommand(sub, rest), 'ui-ux-review': () => imageUxReviewCommand(sub, rest), context7: () => context7Command(sub, rest), recallpulse: () => recallPulseCommand(sub, rest), pipeline: () => pipeline(sub, rest), guard: () => guard(sub, rest), conflicts: () => conflicts(sub, rest), versioning: () => versioning(sub, rest), reasoning: () => reasoningCommand(tail), aliases: () => aliases(), setup: () => setup(tail), 'fix-path': () => fixPath(tail), doctor: () => doctor(tail), init: () => init(tail), selftest: () => selftest(tail),
     goal: () => goalCommand(sub, rest), research: () => researchCommand(sub, rest), hook: () => emitHook(sub), profile: () => profileCommand(sub, rest), hproof: () => hproofCommand(sub, rest), 'validate-artifacts': () => validateArtifactsCommand(tail), perf: () => perfCommand(sub, rest), 'proof-field': () => proofFieldCommand(sub, rest), 'skill-dream': () => skillDreamCommand(sub, rest), 'code-structure': () => codeStructureCommand(sub, rest), memory: () => memoryCommand(sub, rest), gx: () => gxCommand(sub, rest),
     team: () => team(tail), db: () => dbCommand(sub, rest), eval: () => evalCommand(sub, rest), harness: () => harnessCommand(sub, rest), wiki: () => wikiCommand(sub, rest), gc: () => gcCommand(tail), stats: () => statsCommand(tail)
   };
@@ -195,11 +197,12 @@ Usage:
   sks ppt build <mission-id|latest> [--json]
   sks ppt status <mission-id|latest> [--json]
   sks context7 check|setup|tools|resolve|docs|evidence ...
+  sks recallpulse run|status|eval|governance|checklist <mission-id|latest>
   sks pipeline status|resume|plan [--json] [--proof-field]
   sks pipeline answer <mission-id|latest> <answers.json|--stdin|--text "...">
   sks guard check [--json]
   sks conflicts check|prompt [--json]
-  sks versioning status|bump|hook|disable|pre-commit [--json]
+  sks versioning status|bump|disable [--json]
   sks reasoning ["prompt"] [--json]
   sks aliases
   sks setup [--bootstrap] [--install-scope global|project] [--local-only] [--force] [--json]
@@ -1010,9 +1013,12 @@ async function versioning(sub = 'status', args = []) {
     return;
   }
   if (action === 'hook' || action === 'install-hook' || action === 'enable') {
-    const res = await enableVersionGitHook(root, await globalSksCommand());
-    if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
-    console.log(res.installed ? `Version hook installed: ${res.hook_path}` : `Version hook skipped: ${res.reason}`);
+    const res = await disableVersionGitHook(root);
+    const blocked = { ...res, ok: false, installed: false, reason: 'pre_commit_hooks_unsupported' };
+    process.exitCode = 2;
+    if (flag(args, '--json')) return console.log(JSON.stringify(blocked, null, 2));
+    console.error('SKS no longer installs Git pre-commit hooks. Use `sks versioning bump` and release checks explicitly.');
+    if (res.hook_removed) console.error(`Removed existing SKS version hook: ${res.hook_path}`);
     return;
   }
   if (action === 'disable' || action === 'off' || action === 'remove-hook' || action === 'unhook') {
@@ -1045,7 +1051,7 @@ async function versioning(sub = 'status', args = []) {
     console.log(res.changed ? `SKS versioning synced: ${res.version}` : `SKS versioning: ${res.version} verified`);
     return;
   }
-  console.error('Usage: sks versioning status|bump|hook|disable|pre-commit [--json]');
+  console.error('Usage: sks versioning status|bump|disable [--json]');
   process.exitCode = 1;
 }
 
@@ -1626,7 +1632,7 @@ async function setup(args) {
   console.log(`Install:   ${install.ok ? 'ok' : 'missing'} ${install.scope} (${install.command_prefix})`);
   console.log(`CLI tools: Codex ${formatCodexCliToolStatus(cliTools.codex)}; tmux ${tmuxStatusKind(cliTools.tmux)} ${cliTools.tmux.version || cliTools.tmux.error || ''}`.trimEnd());
   console.log(`Hooks:     ${path.relative(root, hooksPath)}`);
-  console.log(`Version:   ${versioningInfo.enabled ? (versioningInfo.hook_installed ? 'auto-bump enabled' : 'auto-bump hook missing') : 'not enabled'}${versioningInfo.package_version ? ` (${versioningInfo.package_version})` : ''}`);
+  console.log(`Version:   explicit bump only${versioningInfo.package_version ? ` (${versioningInfo.package_version})` : ''}`);
   if (localOnly) console.log('Git:       local-only (.git/info/exclude; user AGENTS preserved, SKS managed block refreshed)');
   else console.log('Git:       .gitignore ignores SKS generated files');
   console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .agents/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
@@ -1792,7 +1798,7 @@ async function doctor(args) {
   if (!appRuntime.ok) console.log('Codex App or first-party MCP/plugin tools missing. Run: sks codex-app check');
   if (!result.runtime.tmux.ok) console.log('tmux missing. Run: sks deps install tmux');
   if (!result.harness_guard.ok) console.log('Harness guard failed. Run: sks setup from a real terminal, then sks guard check.');
-  if (!result.versioning.ok) console.log('Versioning hook missing. Run: sks versioning hook, or sks doctor --fix.');
+  if (!result.versioning.ok) console.log('Versioning metadata drift detected. Run: sks versioning status, then sks versioning bump if release metadata should change.');
   if (!result.codex_lb.ready) console.log('codex-lb config/auth drift detected. Run: sks doctor --fix, or reconfigure once with sks codex-lb reconfigure --host <domain> --api-key <key>.');
   if (!result.skills.ok) console.log(`Missing skills: ${result.skills.missing.join(', ')}. Run: sks setup`);
   if (!result.global_skills.ok) console.log(`Missing global $ skills: ${result.global_skills.missing.join(', ')}. Run: npm i -g sneakoscope, or sks setup from a non-local-only run.`);
@@ -2401,28 +2407,27 @@ async function selftest() {
   await writeTextAtomic(path.join(versionTmp, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
   await initProject(versionTmp, {});
   const versionStatus = await versioningStatus(versionTmp);
-  if (!versionStatus.ok || versionStatus.enabled || versionStatus.hook_installed) throw new Error('selftest: versioning hook should stay opt-in after init');
+  if (!versionStatus.ok || versionStatus.enabled || versionStatus.hook_installed) throw new Error('selftest: versioning hook should stay disabled after init');
   let versionHookText = await safeReadText(versionStatus.hook_path);
-  if (versionHookText.includes('versioning pre-commit')) throw new Error('selftest: init installed versioning pre-commit without opt-in');
-  const versionHookInstall = await enableVersionGitHook(versionTmp, 'sks');
-  if (!versionHookInstall.ok || !versionHookInstall.installed) throw new Error(`selftest: explicit versioning hook install failed: ${versionHookInstall.reason || 'unknown'}`);
-  const versionEnabledStatus = await versioningStatus(versionTmp);
-  if (!versionEnabledStatus.ok || !versionEnabledStatus.enabled || !versionEnabledStatus.hook_installed) throw new Error('selftest: explicit versioning hook not installed');
-  versionHookText = await safeReadText(versionEnabledStatus.hook_path);
-  if (!versionHookText.includes('versioning pre-commit')) throw new Error('selftest: versioning hook command missing');
-  if (versionHookText.indexOf('versioning pre-commit') > versionHookText.indexOf('exit 0')) throw new Error('selftest: versioning hook was appended after an early exit');
+  if (versionHookText.includes('versioning pre-commit')) throw new Error('selftest: init installed versioning pre-commit');
+  const versionHookAttempt = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'versioning', 'hook', '--json'], { cwd: versionTmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (versionHookAttempt.code === 0 || !versionHookAttempt.stdout.includes('pre_commit_hooks_unsupported')) throw new Error('selftest: versioning hook command should be blocked');
+  const versionBlockedStatus = await versioningStatus(versionTmp);
+  if (versionBlockedStatus.enabled || versionBlockedStatus.hook_installed) throw new Error('selftest: blocked versioning hook changed status');
+  versionHookText = await safeReadText(versionBlockedStatus.hook_path);
+  if (versionHookText.includes('versioning pre-commit')) throw new Error('selftest: blocked versioning hook installed pre-commit command');
   await writeTextAtomic(path.join(versionTmp, 'CHANGELOG.md'), '# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-05-08\n\n### Fixed\n\n- Initial version selftest fixture.\n');
   await writeTextAtomic(path.join(versionTmp, 'README.md'), 'version selftest\n');
   await runProcess('git', ['add', 'README.md', 'CHANGELOG.md'], { cwd: versionTmp, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   const preCommitVerify = await runVersionPreCommit(versionTmp);
-  if (!preCommitVerify.ok || preCommitVerify.version !== '0.1.0' || preCommitVerify.changed) throw new Error('selftest: pre-commit should verify current version without bumping');
+  if (!preCommitVerify.ok || !preCommitVerify.skipped || preCommitVerify.reason !== 'disabled_by_policy') throw new Error('selftest: pre-commit path should stay disabled by policy');
   const firstVersionBump = await bumpProjectVersion(versionTmp);
   if (!firstVersionBump.ok || firstVersionBump.version !== '0.1.1' || !firstVersionBump.changed) throw new Error('selftest: first version bump did not advance patch version');
   const bumpedPackage = await readJson(path.join(versionTmp, 'package.json'));
   const bumpedLock = await readJson(path.join(versionTmp, 'package-lock.json'));
   const bumpedChangelog = await safeReadText(path.join(versionTmp, 'CHANGELOG.md'));
   if (bumpedPackage.version !== '0.1.1' || bumpedLock.version !== '0.1.1' || bumpedLock.packages[''].version !== '0.1.1') throw new Error('selftest: package lock versions not synced');
-  if (!bumpedChangelog.includes('## [0.1.1]') || !bumpedChangelog.includes('automatic SKS version guard')) throw new Error('selftest: version bump did not sync changelog section');
+  if (!bumpedChangelog.includes('## [0.1.1]') || !bumpedChangelog.includes('explicit SKS version bump')) throw new Error('selftest: version bump did not sync changelog section');
   const firstCached = await runProcess('git', ['diff', '--cached', '--name-only'], { cwd: versionTmp, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (!firstCached.stdout.includes('package.json') || !firstCached.stdout.includes('package-lock.json') || !firstCached.stdout.includes('CHANGELOG.md')) throw new Error('selftest: version files not staged');
   await runProcess('git', ['commit', '--no-verify', '-m', 'first versioned commit'], { cwd: versionTmp, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
@@ -3580,7 +3585,7 @@ async function selftest() {
   if (!teamLive.includes('selftest mapped options')) throw new Error('selftest: team live transcript missing event');
   if (!teamLive.includes('Context tracking SSOT: TriWiki')) throw new Error('selftest: team live transcript missing TriWiki context tracking');
   if (!(await readTeamTranscriptTail(teamDir, 1)).join('\n').includes('selftest mapped options')) throw new Error('selftest: team transcript tail missing event');
-  const teamLane = await renderTeamAgentLane(teamDir, { missionId: teamId, agent: 'analysis_scout_1', lines: 4 });
+  const teamLane = await renderTeamAgentLane(teamDir, { missionId: teamId, agent: 'analysis_scout_1', lines: 4, color: false });
   if (!teamLane.includes('selftest mapped repo slice')) throw new Error('selftest: team agent lane missing event context');
   const missingChatLaneParts = [
     ['codex chat heading', '## Codex Chat'],
@@ -3595,7 +3600,9 @@ async function selftest() {
     ].filter(Boolean).join('; ');
     throw new Error(`selftest: chat lane (${reason})\n${teamLane.slice(0, 1600)}`);
   }
-  if (!teamLane.includes('╭─') || !teamLane.includes('│ selftest mapped repo slice') || !teamLane.includes('╰─')) throw new Error('selftest: team chat lane did not render framed chat blocks');
+  if (!teamLane.includes('╭─') || !teamLane.includes('│ selftest mapped repo slice') || !teamLane.includes('╰─')) {
+    throw new Error(`selftest: team chat lane did not render framed chat blocks\n${teamLane.slice(0, 1600)}`);
+  }
   const teamLaneColor = await renderTeamAgentLane(teamDir, { missionId: teamId, agent: 'analysis_scout_1', lines: 4, color: true });
   if (!/\x1b\[[0-9;]+m/.test(teamLaneColor) || !teamLaneColor.includes('Lane color:')) throw new Error('selftest: team chat lane did not render ANSI color metadata/output');
   const teamLaneCli = await runProcess(process.execPath, [hookBin, 'team', 'lane', teamId, '--agent', 'analysis_scout_1', '--lines', '4'], { cwd: tmp, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
@@ -3901,9 +3908,28 @@ async function selftest() {
   await writeJsonAtomic(path.join(path.dirname(dryRunPack.file), 'low-trust-artifact.json'), { trust_summary: { avg: 0.1 }, wiki: { anchors: [] } });
   const wikiPruneDryRun = await pruneWikiArtifacts(tmp, { dryRun: true });
   if (wikiPruneDryRun.candidates < 1 || !wikiPruneDryRun.actions.some((action) => action.reason === 'low_wiki_trust')) throw new Error('selftest: wiki prune did not flag low-trust artifact');
+  await writeJsonAtomic(path.join(tmp, '.sneakoscope', 'wiki', 'context-pack.json'), wikiPack);
+  const recallPulseRun = await writeRecallPulseArtifacts(tmp, {
+    missionId: recallMission.id,
+    state: { mission_id: recallMission.id, mode: 'team', route: 'team', phase: 'implementation', prompt: recallPrompt },
+    stageId: 'before_implementation'
+  });
+  if (!recallPulseRun.decision?.report_only || !recallPulseRun.decision?.l1?.selected?.length || recallPulseRun.decision?.l2?.tier !== 'L2' || recallPulseRun.decision?.l3?.tier !== 'L3') throw new Error('selftest: RecallPulse did not write L1/L2/L3 report-only decision');
+  if (!recallPulseRun.capsule?.report_only || !recallPulseRun.envelope?.claim_ids_supported?.includes('durable_status_ledger')) throw new Error('selftest: RecallPulse proof capsule/evidence envelope incomplete');
+  const recallPulseStatusLedger = await readMissionStatusLedger(tmp, recallMission.id);
+  if (!recallPulseStatusLedger?.entries?.length || !recallPulseStatusLedger.final_summary_projection?.last_user_visible) throw new Error('selftest: RecallPulse durable status ledger missing');
+  const repeatedRecallPulseRun = await writeRecallPulseArtifacts(tmp, {
+    missionId: recallMission.id,
+    state: { mission_id: recallMission.id, mode: 'team', route: 'team', phase: 'implementation', prompt: recallPrompt },
+    stageId: 'before_implementation'
+  });
+  if (repeatedRecallPulseRun.decision?.recommended_action !== 'suppress' || !repeatedRecallPulseRun.decision?.duplicate_suppression?.repeated) throw new Error('selftest: RecallPulse duplicate reminder suppression missing');
+  const recallPulseEval = await evaluateRecallPulseFixtures(tmp, { missionId: recallMission.id, write: true });
+  if (!recallPulseEval.passed || recallPulseEval.metrics.route_gate_agreement < 1 || recallPulseEval.metrics.unsupported_performance_claims !== 0) throw new Error('selftest: RecallPulse fixture eval failed');
   const { dir: researchDir, mission: researchMission } = await createMission(tmp, { mode: 'research', prompt: '새로운 코드 리뷰 방법론 연구' });
   const researchPlan = await writeResearchPlan(researchDir, researchMission.prompt, {});
   if (researchPlan.methodology !== 'genius-scout-council-frontier-discovery-loop' || researchPlan.web_research_policy?.mode !== 'layered_source_retrieval_and_triangulation') throw new Error('selftest: research plan contract');
+  if (!researchPlan.research_council?.scouts?.every((scout) => scout.display_name && scout.persona && scout.persona_boundary && scout.reasoning_effort === 'xhigh')) throw new Error('selftest: research scout persona contract missing from plan');
   const rArts = researchPlan.required_artifacts || [];
   for (const a of [rss, 'source-ledger.json', 'scout-ledger.json', 'debate-ledger.json', 'falsification-ledger.json']) if (!rArts.includes(a) || !(await exists(path.join(researchDir, a)))) throw new Error('selftest: research artifact');
   if (!rArts.includes('research-paper.md') || !rArts.includes(gos)) throw new Error('selftest: research paper');
@@ -3912,6 +3938,7 @@ async function selftest() {
   const researchGate = await writeMockResearchResult(researchDir, researchPlan);
   if (!researchGate.passed) throw new Error('selftest: mock research gate did not pass');
   const rm = researchGate.metrics || {};
+  if (rm.scout_persona_contract_ok !== true || (rm.scout_persona_issues || []).length) throw new Error('selftest: research scout persona contract did not pass');
   if (['independent_scouts', 'xhigh_scouts', 'eureka_moments', 'debate_participants', 'genius_opinion_summaries'].some((m) => rm[m] < 5) || ['counterevidence_sources', 'falsification_cases', 'triangulation_checks'].some((m) => rm[m] < 1) || rm.paper_sections < 8 || rm.citation_coverage !== true || rm.source_layers_covered < 7) throw new Error('selftest: research metrics');
   await writeJsonAtomic(path.join(dir, 'done-gate.json'), { passed: true, unsupported_critical_claims: 0, database_safety_violation: false, database_safety_reviewed: true, visual_drift: 'low', wiki_drift: 'low', tests_required: false });
   const gate = await evaluateDoneGate(tmp, id);

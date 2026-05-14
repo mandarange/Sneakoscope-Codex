@@ -1,29 +1,20 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { ensureDir, exists, nowIso, readJson, runProcess, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
+import { exists, nowIso, readJson, runProcess, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
 
 const VERSION_HOOK_MARKER = 'Sneakoscope Codex Version Guard';
 const VERSION_STATE_FILE = 'sks-version-state.json';
 const DEFAULT_BUMP = 'patch';
 
 export async function installVersionGitHook(root, commandPrefix = 'sks') {
-  const policy = await versionPolicy(root);
-  if (!policy.enabled) return { ok: true, installed: false, reason: 'disabled_by_policy' };
-  const git = await gitPaths(root);
-  if (!git.ok) return { ok: true, installed: false, reason: git.reason || 'not_git' };
-  const hookPath = git.hook_path;
-  const block = versionHookBlock(commandPrefix);
-  const current = await readFileMaybe(hookPath);
-  const next = mergeShellBlock(current, VERSION_HOOK_MARKER, block);
-  await ensureDir(path.dirname(hookPath));
-  await writeTextAtomic(hookPath, next);
-  await fsp.chmod(hookPath, 0o755).catch(() => {});
-  return { ok: true, installed: true, hook_path: hookPath };
-}
-
-export async function enableVersionGitHook(root, commandPrefix = 'sks') {
-  await setVersionPolicyEnabled(root, true);
-  return installVersionGitHook(root, commandPrefix);
+  void root;
+  void commandPrefix;
+  return {
+    ok: false,
+    installed: false,
+    reason: 'pre_commit_hooks_unsupported',
+    message: 'SKS no longer installs Git pre-commit hooks. Use `sks versioning bump` and release checks explicitly.'
+  };
 }
 
 export async function disableVersionGitHook(root) {
@@ -230,7 +221,6 @@ async function setVersionPolicyEnabled(root, enabled) {
       versioning: {
         ...(policy.git?.versioning || {}),
         enabled: Boolean(enabled),
-        hook: 'pre-commit',
         bump: policy.git?.versioning?.bump || policy.versioning?.bump || DEFAULT_BUMP,
         lock: 'git-common-dir/sks-version.lock',
         state: 'git-common-dir/sks-version-state.json'
@@ -240,7 +230,7 @@ async function setVersionPolicyEnabled(root, enabled) {
       ...(policy.versioning || {}),
       enabled: Boolean(enabled),
       bump: policy.versioning?.bump || DEFAULT_BUMP,
-      trigger: enabled ? 'git-pre-commit' : 'manual',
+      trigger: 'manual',
       lock_scope: 'git-common-dir',
       managed_files: policy.versioning?.managed_files || ['package.json', 'package-lock.json', 'npm-shrinkwrap.json'],
       collision_policy: policy.versioning?.collision_policy || 'explicit_bump_only'
@@ -340,7 +330,7 @@ async function syncChangelogVersionSection(root, version) {
     text = text.replace(/^#\s+Changelog\s*$/m, (title) => `${title}\n\n## [Unreleased]`);
   }
 
-  const managedSection = `\n## [${version}] - ${date}\n\n### Fixed\n\n- Keep release metadata aligned after the automatic SKS version guard advances the package version.\n`;
+  const managedSection = `\n## [${version}] - ${date}\n\n### Fixed\n\n- Keep release metadata aligned after an explicit SKS version bump advances the package version.\n`;
   const next = text.replace(/^##\s+\[Unreleased\]\s*$/m, (heading) => `${heading}\n${managedSection}`);
   if (next === text) return { files: [], relative_files: [] };
   await writeTextAtomic(file, next);
@@ -392,28 +382,6 @@ function bumpSemver(v, bump = DEFAULT_BUMP) {
   if (bump === 'major') return { major: v.major + 1, minor: 0, patch: 0 };
   if (bump === 'minor') return { major: v.major, minor: v.minor + 1, patch: 0 };
   return { major: v.major, minor: v.minor, patch: v.patch + 1 };
-}
-
-function versionHookBlock(commandPrefix) {
-  return `# SKS keeps package versions unique across worker commits.\n${commandPrefix} versioning pre-commit\nstatus=$?\nif [ $status -ne 0 ]; then\n  echo \"SKS versioning blocked commit. Run: sks versioning status\" >&2\n  exit $status\nfi`;
-}
-
-function mergeShellBlock(current, marker, block) {
-  const begin = `# BEGIN ${marker}`;
-  const end = `# END ${marker}`;
-  const managed = `${begin}\n${block.trim()}\n${end}\n`;
-  if (!current.trim()) return `#!/bin/sh\n${managed}`;
-  const withShebang = current.startsWith('#!') ? current : `#!/bin/sh\n${current}`;
-  const beginIdx = withShebang.indexOf(begin);
-  const endIdx = withShebang.indexOf(end);
-  if (beginIdx >= 0 && endIdx >= beginIdx) {
-    return `${withShebang.slice(0, beginIdx)}${managed}${withShebang.slice(endIdx + end.length).replace(/^\n/, '')}`;
-  }
-  const lines = withShebang.split('\n');
-  if (lines[0]?.startsWith('#!')) {
-    return `${lines[0]}\n${managed}${lines.slice(1).join('\n').replace(/^\n/, '')}`.replace(/\s*$/, '\n');
-  }
-  return `${managed}${withShebang.replace(/^\n/, '').replace(/\s*$/, '\n')}`;
 }
 
 function removeShellBlock(current, marker) {

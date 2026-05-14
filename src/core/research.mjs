@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { appendJsonlBounded, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, exists } from './fsx.mjs';
 import { OUTCOME_RUBRIC } from './proof-field.mjs';
+import { RESEARCH_SCOUT_PERSONA_CONTRACT, validateResearchScoutPersonas } from './recallpulse.mjs';
 
 export const RESEARCH_PAPER_ARTIFACT = 'research-paper.md';
 export const RESEARCH_SOURCE_SKILL_ARTIFACT = 'research-source-skill.md';
@@ -16,43 +17,11 @@ export const RESEARCH_PAPER_SECTION_GROUPS = Object.freeze([
   ['references', 'sources']
 ]);
 
-export const RESEARCH_SCOUT_COUNCIL = Object.freeze([
-  {
-    id: 'einstein',
-    label: 'Einstein lens',
-    role: 'first_principles_reframer',
-    mandate: 'Reframe the problem around invariants, constraints, symmetry, and thought experiments.',
-    required_outputs: ['eureka_moment', 'assumptions_to_remove', 'invariant_or_simplifying_frame', 'decisive_thought_experiment']
-  },
-  {
-    id: 'feynman',
-    label: 'Feynman lens',
-    role: 'explanation_experimentalist',
-    mandate: 'Reduce the idea to a teachable mechanism, toy example, and cheap empirical probe.',
-    required_outputs: ['eureka_moment', 'plain_language_mechanism', 'toy_model', 'cheap_probe']
-  },
-  {
-    id: 'turing',
-    label: 'Turing lens',
-    role: 'formalization_and_adversarial_cases',
-    mandate: 'Formalize inputs, outputs, algorithms, computability limits, and adversarial countercases.',
-    required_outputs: ['eureka_moment', 'formal_definition', 'algorithmic_shape', 'edge_or_adversarial_case']
-  },
-  {
-    id: 'von_neumann',
-    label: 'von Neumann lens',
-    role: 'systems_strategy_scout',
-    mandate: 'Map system dynamics, strategic incentives, scaling behavior, and worst-case interactions.',
-    required_outputs: ['eureka_moment', 'system_model', 'strategic_or_scaling_risk', 'robustness_condition']
-  },
-  {
-    id: 'skeptic',
-    label: 'Skeptic lens',
-    role: 'counterevidence_scout',
-    mandate: 'Find disconfirming sources, replication risks, base-rate failures, and claims that should be weakened.',
-    required_outputs: ['eureka_moment', 'counterevidence', 'base_rate_or_failure_mode', 'claim_to_downgrade']
-  }
-]);
+export const RESEARCH_SCOUT_COUNCIL = Object.freeze(RESEARCH_SCOUT_PERSONA_CONTRACT.map((scout) => Object.freeze({
+  ...scout,
+  label: scout.display_name,
+  required_outputs: scout.required_outputs
+})));
 
 export const RESEARCH_SOURCE_LAYERS = Object.freeze([
   {
@@ -248,7 +217,7 @@ export function researchPlanMarkdown(plan) {
   if (plan.research_council?.scouts?.length) {
     lines.push('## Genius Scout Council');
     lines.push(`Policy: ${plan.research_council.policy}`);
-    for (const scout of plan.research_council.scouts) lines.push(`- ${scout.id}: ${scout.role} - ${scout.mandate}`);
+    for (const scout of plan.research_council.scouts) lines.push(`- ${scout.display_name || scout.label || scout.id}: ${scout.persona || scout.role} - ${scout.mandate} (${scout.persona_boundary || 'persona-inspired lens only'})`);
     lines.push('');
   }
   if (plan.web_research_policy) {
@@ -315,7 +284,8 @@ export function countGeniusOpinionSummaries(text = '') {
   const lower = String(text || '').toLowerCase();
   return RESEARCH_SCOUT_COUNCIL.filter((scout) => {
     const label = String(scout.label || '').toLowerCase();
-    return lower.includes(String(scout.id || '').toLowerCase()) || (label && lower.includes(label));
+    const display = String(scout.display_name || '').toLowerCase();
+    return lower.includes(String(scout.id || '').toLowerCase()) || (label && lower.includes(label)) || (display && lower.includes(display));
   }).length;
 }
 
@@ -399,9 +369,15 @@ export function defaultScoutLedger(plan = null) {
     created_at: nowIso(),
     scouts: scouts.map((scout) => ({
       id: scout.id,
+      display_name: scout.display_name || scout.label || scout.id,
+      historical_inspiration: scout.historical_inspiration || null,
+      persona: scout.persona || scout.role,
+      persona_boundary: scout.persona_boundary || 'persona-inspired cognitive lens only; do not impersonate the historical person',
       role: scout.role,
       mandate: scout.mandate,
       effort: 'xhigh',
+      reasoning_effort: 'xhigh',
+      service_tier: scout.service_tier || 'fast',
       eureka: {
         exclamation: 'Eureka!',
         idea: '',
@@ -411,7 +387,8 @@ export function defaultScoutLedger(plan = null) {
       query_set: [],
       findings: [],
       falsifiers: [],
-      cheap_probes: []
+      cheap_probes: [],
+      challenge_or_response: ''
     })),
     synthesis: {
       surviving_claims: [],
@@ -532,6 +509,8 @@ export async function evaluateResearchGate(dir) {
   const scoutLedger = await readJson(path.join(dir, 'scout-ledger.json'), null);
   const debateLedger = await readJson(path.join(dir, 'debate-ledger.json'), null);
   const falsificationLedger = await readJson(path.join(dir, 'falsification-ledger.json'), null);
+  const geniusSummaryText = geniusSummaryPresent ? await readText(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), '') : '';
+  const personaValidation = validateResearchScoutPersonas(scoutLedger || {}, geniusSummaryText);
   const sourceEntries = Array.isArray(sourceLedger?.sources) ? sourceLedger.sources.length : 0;
   const counterEvidenceEntries = Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources.length : 0;
   const webSearchPasses = Math.max(Number(gate.web_search_passes || 0), Number(sourceLedger?.web_search_passes || 0));
@@ -571,6 +550,7 @@ export async function evaluateResearchGate(dir) {
   if (Math.max(Number(gate.independent_scouts || 0), independentScouts) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('independent_scouts_missing');
   if (Math.max(Number(gate.xhigh_scouts || 0), xhighScouts) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('scout_effort_not_xhigh');
   if (Math.max(Number(gate.eureka_moments || 0), eurekaMoments) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('eureka_missing');
+  if (!personaValidation.ok) reasons.push(...personaValidation.issues.map((issue) => `scout_persona:${issue}`));
   if (Math.max(Number(gate.scout_findings || 0), scoutFindings) < 4) reasons.push('scout_findings_missing');
   if (Math.max(Number(gate.debate_participants || 0), debateParticipants) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('debate_participants_missing');
   if (Math.max(Number(gate.debate_exchanges || 0), debateExchanges) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('debate_exchanges_missing');
@@ -601,6 +581,8 @@ export async function evaluateResearchGate(dir) {
       independent_scouts: Math.max(Number(gate.independent_scouts || 0), independentScouts),
       xhigh_scouts: Math.max(Number(gate.xhigh_scouts || 0), xhighScouts),
       eureka_moments: Math.max(Number(gate.eureka_moments || 0), eurekaMoments),
+      scout_persona_contract_ok: personaValidation.ok,
+      scout_persona_issues: personaValidation.issues,
       scout_findings: Math.max(Number(gate.scout_findings || 0), scoutFindings),
       debate_participants: Math.max(Number(gate.debate_participants || 0), debateParticipants),
       debate_exchanges: Math.max(Number(gate.debate_exchanges || 0), debateExchanges),
@@ -709,12 +691,18 @@ export async function writeMockResearchResult(dir, plan) {
     ...defaultScoutLedger(plan),
     scouts: RESEARCH_SCOUT_COUNCIL.map((scout) => ({
       id: scout.id,
+      display_name: scout.display_name || scout.label,
+      historical_inspiration: scout.historical_inspiration || null,
+      persona: scout.persona || scout.role,
+      persona_boundary: scout.persona_boundary,
       role: scout.role,
       mandate: scout.mandate,
       effort: 'xhigh',
+      reasoning_effort: 'xhigh',
+      service_tier: scout.service_tier || 'fast',
       eureka: {
         exclamation: 'Eureka!',
-        idea: `${scout.label} spots a non-obvious, testable angle for ${plan.prompt}.`,
+        idea: `${scout.display_name || scout.label} spots a non-obvious, testable angle for ${plan.prompt}.`,
         why_it_matters: 'It forces the run to produce one falsifiable idea before synthesis.',
         source_ids: ['mock-source-1']
       },
@@ -722,13 +710,14 @@ export async function writeMockResearchResult(dir, plan) {
       findings: [
         {
           id: `mock-${scout.id}-finding-1`,
-          claim: `${scout.label} supports a source-cited, falsifiable research gate for ${plan.prompt}.`,
+          claim: `${scout.display_name || scout.label} supports a source-cited, falsifiable research gate for ${plan.prompt}.`,
           source_ids: ['mock-source-1'],
           status: 'mock_supported'
         }
       ],
       falsifiers: ['A run without cited sources, counterevidence, or cheap probes should fail the research gate.'],
-      cheap_probes: ['Compare discovery-loop output against a summary-only baseline and count testable insights.']
+      cheap_probes: ['Compare discovery-loop output against a summary-only baseline and count testable insights.'],
+      challenge_or_response: 'Participated in the mock evidence-bound debate.'
     })),
     synthesis: {
       surviving_claims: ['mock-insight-1'],
@@ -793,8 +782,8 @@ export async function writeMockResearchResult(dir, plan) {
     '',
     '## Scout Opinions',
     ...RESEARCH_SCOUT_COUNCIL.flatMap((scout) => [
-      `### ${scout.label} (${scout.id})`,
-      `Final opinion: ${scout.label} wants the run to preserve ${scout.mandate.toLowerCase()} while producing a cited, falsifiable insight.`,
+      `### ${scout.display_name || scout.label} (${scout.id})`,
+      `Final opinion: ${scout.display_name || scout.label} wants the run to preserve ${scout.mandate.toLowerCase()} while producing a cited, falsifiable insight.`,
       'Strongest evidence: mock-source-1 plus the layered source ledger.',
       'Main disagreement: whether formal structure or cheap empirical probes should dominate the first pass.',
       'Changed mind: accepted that citation coverage, counterevidence, and triangulation are gates before synthesis.',
@@ -850,5 +839,5 @@ export async function writeMockResearchResult(dir, plan) {
 }
 
 export function buildResearchPrompt({ id, mission, plan, cycle, previous }) {
-  return `You are running SKS Research Mode.\nMISSION: ${id}\nTOPIC: ${mission.prompt}\nCYCLE: ${cycle}\nMODE: Genius Scout Council + frontier discovery loop. Use maximum reasoning depth available under the current Codex profile.\nLONG-RUN REAL-RESEARCH POLICY: Normal Research is allowed to take one or two hours when the question requires it. Do real source gathering and evidence comparison; do not shortcut into mock, fixture, or summary-only output. If live source access is unavailable, write the blocker and keep the gate unpassed.\nNO-QUESTION LOCK: Do not ask the user. Resolve scope from research-plan.json and current project evidence.\nSAFETY: Destructive database operations and unsafe external actions are forbidden. Prefer read-only inspection, local files, and cited public sources.\nPERSONA POLICY: Use Einstein/Feynman/Turing/von Neumann-inspired scout lenses only as cognitive roles. Do not impersonate, roleplay private identity, or speak as the historical people.\nSCOUT EFFORT POLICY: Every Research scout agent must use reasoning_effort=xhigh. Record effort: "xhigh" for every scout in scout-ledger.json. Any lower-effort scout output must keep research-gate.json unpassed.\nEUREKA POLICY: Every scout must literally write "Eureka!" and one non-obvious, source-linked idea before debate.\nDEBATE POLICY: The scouts must debate vigorously but stay evidence-bound. Every scout must challenge or respond at least once, and debate-ledger.json must record the exchanges before synthesis.\nPAPER POLICY: After the report and ledgers, write research-paper.md as a concise manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References.\nSOURCE SKILL POLICY: Create or update ${RESEARCH_SOURCE_SKILL_ARTIFACT} as a route-local source collection skill before synthesis. It must name the selected source layers, query routes, quality fields, blockers, and cross-layer triangulation checks. Do not edit generated .agents/skills during the research run.\nWEB/SOURCE POLICY: Run layered source retrieval across every safely available layer before synthesis: latest public papers, official government or leading-institution data, standards or primary docs, current news including BBC/CNN/GDELT-style sources when relevant, public discourse including X/Twitter and Reddit when available, developer/practitioner sources such as Stack Overflow/Stack Exchange/GitHub, and counterevidence or fact-checking sources. Treat public discourse as signal, not truth. If a layer cannot be searched, record the blocker in source-ledger.json and do not pass the gate.\nRESEARCH PLAN:\n${JSON.stringify(plan, null, 2)}\n\nOBJECTIVE: Produce genuinely useful candidate discoveries: non-obvious hypotheses, mechanisms, predictions, or experiments. Do not merely summarize. Mark uncertainty clearly.\n\nREQUIRED PROCESS:\n1. Source skill first: create ${RESEARCH_SOURCE_SKILL_ARTIFACT} with source layers, query templates, quality fields, blockers, and triangulation rules.\n2. Layered source search: create source-ledger.json with source_layers, queries, source ids, source quality notes, counterevidence sources, triangulation.cross_layer_checks, citation coverage, and blockers.\n3. Independent xhigh scouts: create scout-ledger.json with effort=xhigh, a literal Eureka! idea, findings, source_ids, falsifiers, and cheap_probes for every scout lens.\n4. Debate: create debate-ledger.json with evidence-bound challenge/response exchanges involving every scout before synthesis.\n5. Falsification: create falsification-ledger.json with attacks, missing evidence, source conflicts, and decisive next tests.\n6. Synthesis: write research-report.md and novelty-ledger.json only after cited scout findings, Eureka ideas, debate, cross-layer triangulation, and falsification are recorded.\n7. Paper: write research-paper.md as a paper-style manuscript with source-ledger references and limitations.\n\nREQUIRED OUTPUT FILES in .sneakoscope/missions/${id}/:\n- research-report.md: concise report with framing, source coverage, scout synthesis, debate synthesis, hypotheses, falsification, predictions, and next experiments. Cite source-ledger ids for factual claims.\n- research-paper.md: paper manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References using source-ledger ids.\n- ${RESEARCH_SOURCE_SKILL_ARTIFACT}: route-local source collection skill; it is evidence for the Skill Creator step and must not mutate generated .agents/skills.\n- source-ledger.json: layered web/source queries, source ids, source priority, source quality notes, counterevidence sources, citation coverage, triangulation checks, and blockers.\n- scout-ledger.json: one entry per scout lens with effort, eureka, query_set, findings, source_ids, falsifiers, and cheap_probes.\n- debate-ledger.json: evidence-bound challenge/response exchanges, participants, changed minds, and unresolved conflicts.\n- novelty-ledger.json: entries with claim, novelty, confidence, falsifiability, evidence source ids, falsifiers, next_experiment.\n- falsification-ledger.json: attacks/counterexamples/source conflicts, result, and next_decisive_tests.\n- research-gate.json: set passed only when all ledgers exist, ${RESEARCH_SOURCE_SKILL_ARTIFACT} exists, research-paper.md exists with required paper sections, layered web/source retrieval covered every required source layer, at least one cross-layer triangulation check exists, all scouts have effort=xhigh, all scouts have literal Eureka! ideas, every scout participated in debate, at least one counterevidence source exists, citation coverage is complete, at least one insight survived falsification, at least one testable prediction exists, and unsupported breakthrough claims are zero.\n\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
+  return `You are running SKS Research Mode.\nMISSION: ${id}\nTOPIC: ${mission.prompt}\nCYCLE: ${cycle}\nMODE: Genius Scout Council + frontier discovery loop. Use maximum reasoning depth available under the current Codex profile.\nLONG-RUN REAL-RESEARCH POLICY: Normal Research is allowed to take one or two hours when the question requires it. Do real source gathering and evidence comparison; do not shortcut into mock, fixture, or summary-only output. If live source access is unavailable, write the blocker and keep the gate unpassed.\nNO-QUESTION LOCK: Do not ask the user. Resolve scope from research-plan.json and current project evidence.\nSAFETY: Destructive database operations and unsafe external actions are forbidden. Prefer read-only inspection, local files, and cited public sources.\nPERSONA POLICY: Use Einstein/Feynman/Turing/von Neumann-inspired scout lenses only as cognitive roles. Do not impersonate, roleplay private identity, or speak as the historical people.\nSCOUT PERSONA POLICY: Every Research scout row must include display_name, persona, persona_boundary, reasoning_effort: "xhigh", service_tier when available, falsifiers, cheap_probes, and challenge_or_response. Persona names are Einstein Scout, Feynman Scout, Turing Scout, von Neumann Scout, and Skeptic Scout; they are cognitive lenses, not impersonations.\nSCOUT EFFORT POLICY: Every Research scout agent must use reasoning_effort=xhigh. Record effort: "xhigh" for every scout in scout-ledger.json. Any lower-effort scout output must keep research-gate.json unpassed.\nEUREKA POLICY: Every scout must literally write "Eureka!" and one non-obvious, source-linked idea before debate.\nDEBATE POLICY: The scouts must debate vigorously but stay evidence-bound. Every scout must challenge or respond at least once, and debate-ledger.json must record the exchanges before synthesis.\nPAPER POLICY: After the report and ledgers, write research-paper.md as a concise manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References.\nSOURCE SKILL POLICY: Create or update ${RESEARCH_SOURCE_SKILL_ARTIFACT} as a route-local source collection skill before synthesis. It must name the selected source layers, query routes, quality fields, blockers, and cross-layer triangulation checks. Do not edit generated .agents/skills during the research run.\nWEB/SOURCE POLICY: Run layered source retrieval across every safely available layer before synthesis: latest public papers, official government or leading-institution data, standards or primary docs, current news including BBC/CNN/GDELT-style sources when relevant, public discourse including X/Twitter and Reddit when available, developer/practitioner sources such as Stack Overflow/Stack Exchange/GitHub, and counterevidence or fact-checking sources. Treat public discourse as signal, not truth. If a layer cannot be searched, record the blocker in source-ledger.json and do not pass the gate.\nRESEARCH PLAN:\n${JSON.stringify(plan, null, 2)}\n\nOBJECTIVE: Produce genuinely useful candidate discoveries: non-obvious hypotheses, mechanisms, predictions, or experiments. Do not merely summarize. Mark uncertainty clearly.\n\nREQUIRED PROCESS:\n1. Source skill first: create ${RESEARCH_SOURCE_SKILL_ARTIFACT} with source layers, query templates, quality fields, blockers, and triangulation rules.\n2. Layered source search: create source-ledger.json with source_layers, queries, source ids, source quality notes, counterevidence sources, triangulation.cross_layer_checks, citation coverage, and blockers.\n3. Independent xhigh scouts: create scout-ledger.json with display_name/persona/persona_boundary, effort=xhigh, reasoning_effort=xhigh, a literal Eureka! idea, findings, source_ids, falsifiers, cheap_probes, and challenge_or_response for every scout lens.\n4. Debate: create debate-ledger.json with evidence-bound challenge/response exchanges involving every scout before synthesis.\n5. Falsification: create falsification-ledger.json with attacks, missing evidence, source conflicts, and decisive next tests.\n6. Synthesis: write research-report.md and novelty-ledger.json only after cited scout findings, Eureka ideas, debate, cross-layer triangulation, and falsification are recorded.\n7. Paper: write research-paper.md as a paper-style manuscript with source-ledger references and limitations.\n\nREQUIRED OUTPUT FILES in .sneakoscope/missions/${id}/:\n- research-report.md: concise report with framing, source coverage, scout synthesis, debate synthesis, hypotheses, falsification, predictions, and next experiments. Cite source-ledger ids for factual claims.\n- research-paper.md: paper manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References using source-ledger ids.\n- ${RESEARCH_SOURCE_SKILL_ARTIFACT}: route-local source collection skill; it is evidence for the Skill Creator step and must not mutate generated .agents/skills.\n- source-ledger.json: layered web/source queries, source ids, source priority, source quality notes, counterevidence sources, citation coverage, triangulation checks, and blockers.\n- scout-ledger.json: one entry per scout lens with display_name, persona, persona_boundary, effort, reasoning_effort, service_tier, eureka, query_set, findings, source_ids, falsifiers, cheap_probes, and challenge_or_response.\n- debate-ledger.json: evidence-bound challenge/response exchanges, participants, changed minds, and unresolved conflicts.\n- novelty-ledger.json: entries with claim, novelty, confidence, falsifiability, evidence source ids, falsifiers, next_experiment.\n- falsification-ledger.json: attacks/counterexamples/source conflicts, result, and next_decisive_tests.\n- research-gate.json: set passed only when all ledgers exist, ${RESEARCH_SOURCE_SKILL_ARTIFACT} exists, research-paper.md exists with required paper sections, layered web/source retrieval covered every required source layer, at least one cross-layer triangulation check exists, all scouts have display_name/persona/persona_boundary, all scouts have effort=xhigh, all scouts have literal Eureka! ideas, every scout participated in debate, at least one counterevidence source exists, citation coverage is complete, at least one insight survived falsification, at least one testable prediction exists, and unsupported breakthrough claims are zero.\n\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
 }

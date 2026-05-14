@@ -8,6 +8,7 @@ import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext a
 import { classifyToolError } from './evaluation.mjs';
 import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.mjs';
 import { dollarCommand, stripVisibleDecisionAnswerBlocks } from './routes.mjs';
+import { appendMissionStatus } from './recallpulse.mjs';
 
 const TEAM_DIGEST_MAX_EVENTS = 4;
 const TEAM_DIGEST_MESSAGE_CHARS = 180;
@@ -541,6 +542,18 @@ async function finalizationRepeatDecision(root, state = {}, payload = {}, reason
     }
   };
   await writeJsonAtomic(guardPath, record).catch(() => null);
+  if (state.mission_id) {
+    await appendMissionStatus(root, state.mission_id, {
+      category: repeatCount >= limit ? 'warning' : 'blocker',
+      audience: ['user', 'route', 'final-summary'],
+      stage_id: 'before_final',
+      message: repeatCount >= limit
+        ? `Repeated ${kind} stop prompt was suppressed; route completion is still unclaimed until evidence passes.`
+        : reason,
+      dedupe_key: key,
+      evidence: [STOP_REPEAT_GUARD_ARTIFACT]
+    }).catch(() => null);
+  }
   if (repeatCount < limit) return null;
   return {
     continue: true,

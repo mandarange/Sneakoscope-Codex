@@ -40,6 +40,25 @@ sks selftest --mock
 
 `sks` adds a tmux Codex CLI runtime, Codex App `$` commands, Team/QA/PPT/Research/DB/GX/Wiki routes, OpenClaw skill generation, Context7-gated current docs, TriWiki context packs, DB safety, design SSOT policy, skill dreaming, release checks, and Honest Mode.
 
+## 0.8.0 Massive Upgrade
+
+Sneakoscope 0.8.0 introduces the RecallPulse planning spine: a report-only active-recall layer that records what the pipeline should remember before a stage proceeds. RecallPulse maps TriWiki into L1/L2/L3 cache behavior, writes durable status ledgers instead of relying on ephemeral hook text, suppresses duplicate reminder loops, and emits RouteProofCapsule plus EvidenceEnvelope artifacts for later gate comparison. These artifacts are evidence surfaces first; speed or accuracy gains remain benchmark-gated until scored evals prove them.
+
+Inspect the new report-only artifacts with:
+
+```sh
+sks recallpulse run latest
+sks recallpulse status latest --json
+sks recallpulse eval latest --json
+sks recallpulse governance latest --json
+sks recallpulse checklist latest --json
+sks recallpulse checklist latest --task T001 --apply --evidence src/core/recallpulse.mjs
+```
+
+Research scouts now use named persona-inspired cognitive lenses: Einstein Scout, Feynman Scout, Turing Scout, von Neumann Scout, and Skeptic Scout. They are not impersonations; each scout ledger row must carry `display_name`, `persona`, `persona_boundary`, `reasoning_effort=xhigh`, a literal `Eureka!` idea, falsifiers, cheap probes, and debate participation evidence.
+
+For existing 0.7.x users, the visible change is new report-only evidence, not a route personality rewrite. Team still feels like Team, DFix stays ultralight, DB remains conservative, QA-LOOP still dogfoods, PPT stays information-first, imagegen still requires real raster evidence, and Honest Mode remains the final truth pass. The original strong reminder idea became neutral RecallPulse so user-facing prompts stay short, professional, and non-repetitive; hook messages can point at status, but `mission-status-ledger.json` is the durable source when app-visible text disappears. The planning source is `docs/RECALLPULSE_0_8_0_TASKS.md`, and implementation is designed to land in safe task-sized slices before any enforcement promotion.
+
 ## Requirements
 
 - Node.js `>=20.11`
@@ -195,6 +214,10 @@ sks goal create "persist this migration workflow"
 sks research prepare "evaluate this approach"
 sks research run latest --max-cycles 3 --cycle-timeout-minutes 120
 sks research status latest
+sks recallpulse run latest
+sks recallpulse status latest --json
+sks recallpulse governance latest --json
+sks recallpulse checklist latest --json
 sks db scan --json
 sks wiki refresh
 sks wiki sweep latest --json
@@ -212,7 +235,9 @@ sks skill-dream run --json
 sks code-structure scan --json
 ```
 
-`sks research` prepares a genius-lens scout council, requires every scout to run at `xhigh`, records one literal `Eureka!` idea per scout, runs an evidence-bound debate, and now creates `research-source-skill.md` as a route-local source collection skill before synthesis. Normal Research is intentionally allowed to take one or two hours when the problem needs it; `--mock` is only for selftests or dry harness checks, and a real run blocks with `research-blocker.json` instead of silently substituting mock output when the Codex execution path is unavailable. The source layer contract separates latest papers, official/government or leading-institution sources, standards/primary docs, current news such as BBC/CNN/GDELT-style sources, public discourse such as X/Reddit, developer/practitioner knowledge such as Stack Overflow/GitHub, and counterevidence/fact-checking; `source-ledger.json` must record layer coverage, source quality, blockers, citations, and cross-layer triangulation. Context7 is optional for `$Research` and only becomes relevant when the research topic specifically depends on package, API, framework, or SDK documentation. Research runs require `research-report.md`, `research-paper.md`, `genius-opinion-summary.md`, `research-source-skill.md`, `source-ledger.json`, `scout-ledger.json`, `debate-ledger.json`, `novelty-ledger.json`, `falsification-ledger.json`, and `research-gate.json` so they stay source-backed, adversarially checked, falsifiable, paper-ready, and clear about every scout lens opinion. `research status` reports source entries, source-layer coverage, triangulation checks, counterevidence, xhigh scout count, Eureka moments, debate exchanges, paper presence/sections, genius-opinion summary coverage, scout findings, and falsification cases alongside the gate.
+`sks research` prepares a named genius-lens scout council, requires every scout to run at `xhigh`, records one literal `Eureka!` idea per scout, runs an evidence-bound debate, and now creates `research-source-skill.md` as a route-local source collection skill before synthesis. The required Research persona lenses are Einstein Scout, Feynman Scout, Turing Scout, von Neumann Scout, and Skeptic Scout; they are cognitive roles, not impersonations, and `scout-ledger.json` must include `display_name`, `persona`, `persona_boundary`, `reasoning_effort`, falsifiers, cheap probes, and `challenge_or_response`. Normal Research is intentionally allowed to take one or two hours when the problem needs it; `--mock` is only for selftests or dry harness checks, and a real run blocks with `research-blocker.json` instead of silently substituting mock output when the Codex execution path is unavailable. The source layer contract separates latest papers, official/government or leading-institution sources, standards/primary docs, current news such as BBC/CNN/GDELT-style sources, public discourse such as X/Reddit, developer/practitioner knowledge such as Stack Overflow/GitHub, and counterevidence/fact-checking; `source-ledger.json` must record layer coverage, source quality, blockers, citations, and cross-layer triangulation. Context7 is optional for `$Research` and only becomes relevant when the research topic specifically depends on package, API, framework, or SDK documentation. Research runs require `research-report.md`, `research-paper.md`, `genius-opinion-summary.md`, `research-source-skill.md`, `source-ledger.json`, `scout-ledger.json`, `debate-ledger.json`, `novelty-ledger.json`, `falsification-ledger.json`, and `research-gate.json` so they stay source-backed, adversarially checked, falsifiable, paper-ready, and clear about every scout lens opinion. `research status` reports source entries, source-layer coverage, triangulation checks, counterevidence, xhigh scout count, Eureka moments, debate exchanges, paper presence/sections, genius-opinion summary coverage, scout findings, and falsification cases alongside the gate.
+
+`sks recallpulse` is the 0.8.0 report-only RecallPulse utility. It writes `recallpulse-decision.json`, `mission-status-ledger.json`, `route-proof-capsule.json`, `evidence-envelope.json`, `recallpulse-governance-report.json`, `recallpulse-task-goal-ledger.json`, and `recallpulse-eval-report.json` for the current mission. RecallPulse does not replace route gates, Honest Mode, DB safety, imagegen evidence, or TriWiki validation; it records cache hits, hydration needs, duplicate suppression, route-governance risks, and final-summary-ready durable status so later releases can promote only measured improvements. Checklist updates are sequential: every `Txxx` row is treated as a child `$Goal` checkpoint, and `sks recallpulse checklist ... --task T001 --apply` refuses out-of-order checks unless explicitly overridden.
 
 `sks pipeline plan` shows the active route lane, kept/skipped stages, verification commands, and no-unrequested-fallback invariant. `sks proof-field scan` is the lightweight rubric for small changes; risky or broad signals return to the full Team/Honest path.
 
@@ -278,6 +303,8 @@ Generated app files include:
 Default setup adds these generated SKS paths to the project `.gitignore`; `--local-only` uses `.git/info/exclude` instead.
 
 Use `sks dollar-commands` to confirm that terminal discovery and Codex App prompt commands agree.
+
+SKS does not install Git pre-commit hooks. Release metadata is changed only by explicit commands such as `sks versioning bump`, and `sks versioning hook` is intentionally blocked so Codex App commit/push flows stay unobstructed.
 
 TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks harness fixture` validates the broader Harness Growth Factory contract: deliberate forgetting fixtures, skill card metadata, experiment schema, tool-error taxonomy, permission profiles, MultiAgentV2 defaults, and tmux cockpit view coverage. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
 
@@ -416,6 +443,8 @@ npm run publish:dry
 ```
 
 `release:check` runs audit, changelog, syntax, selftest, size, and registry checks. `publish:dry` runs that same gate and then performs an npm dry-run publish against the public registry.
+
+Version bumps are manual. Run `sks versioning bump` only when preparing release metadata; SKS will not create `.git/hooks/pre-commit` or auto-bump during ordinary commits.
 
 ## License
 
