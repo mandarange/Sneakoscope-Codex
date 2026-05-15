@@ -407,6 +407,10 @@ codex mcp list
 
 Codex App workflows need the app installed. UI/browser evidence requires first-party Codex Computer Use, and generated raster/image-review evidence requires real `$imagegen`/`gpt-image-2` output. After setup/upgrade, start a fresh thread so Codex reloads plugin tools.
 
+### Codex App UI looks stale after codex-lb changes
+
+If Codex App UI panels or auth-dependent controls still look wrong after codex-lb setup, repair, or upgrade, restart the app first. If the UI still does not recover, sign out of Codex App, sign back in, then run `sks codex-app check` or `sks codex-lb repair` as needed.
+
 ### Setup is blocked by another harness
 
 ```sh
