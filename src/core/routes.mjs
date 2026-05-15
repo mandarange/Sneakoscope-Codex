@@ -35,7 +35,19 @@ export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com
 export const OPENAI_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
 export const CODEX_COMPUTER_USE_ONLY_POLICY = 'Pipeline UI/browser verification and visual inspection must use Codex Computer Use only. Do not use or install Playwright packages, Chrome MCP, Browser Use, Selenium, Puppeteer, or any other browser automation substitute; if Codex Computer Use is unavailable for the target UI, mark the UI/browser evidence unverified instead of substituting another tool. Codex App readiness/config verification is not target-UI evidence: use the Codex-provided control surfaces `codex features list`, `codex mcp list`, `sks codex-app check`, remote-control status, and plugin/tool exposure, not direct OS Accessibility control of the Codex App bundle. In Codex App prompts, invoke @Computer or @AppName in a new thread when live Computer Use tools are needed for the actual target app or screen; SKS hooks and skills can require the policy but cannot attach missing host tools to an already-started turn.';
 export const CODEX_IMAGEGEN_REQUIRED_POLICY = 'Pipeline image generation, raster asset creation/editing, and generated image-review evidence must use real Codex App imagegen/$imagegen with gpt-image-2 when that evidence is required. Do not substitute placeholder SVG/HTML/CSS, prose-only critique, stock-like stand-ins, manually fabricated files, or missing-output ledgers for requested/generated raster assets or required generated review images. If imagegen/gpt-image-2 is unavailable, record the blocker and mark the image asset or review evidence unverified instead of passing the gate. In Codex App prompts, invoke $imagegen when live image generation is needed; SKS hooks and skills can require the policy but cannot attach missing host image-generation tools to an already-started turn.';
-export const RESERVED_CODEX_PLUGIN_SKILL_NAMES = Object.freeze(['computer-use', 'browser', 'browser-use']);
+export const DEFAULT_CODEX_APP_PLUGINS = Object.freeze([
+  ['browser', 'openai-bundled'],
+  ['chrome', 'openai-bundled'],
+  ['computer-use', 'openai-bundled'],
+  ['latex', 'openai-bundled'],
+  ['documents', 'openai-primary-runtime'],
+  ['presentations', 'openai-primary-runtime'],
+  ['spreadsheets', 'openai-primary-runtime']
+]);
+export const RESERVED_CODEX_PLUGIN_SKILL_NAMES = Object.freeze([
+  'browser-use',
+  ...DEFAULT_CODEX_APP_PLUGINS.map(([name]) => name)
+].sort());
 export const FORBIDDEN_BROWSER_AUTOMATION_RE = /\b(playwright|chrome\s+mcp|browser\s+use|selenium|puppeteer)\b/i;
 
 export function evidenceMentionsForbiddenBrowserAutomation(value, seen = new Set()) {
@@ -499,10 +511,8 @@ export const DOLLAR_COMMANDS = ROUTES.flatMap(({ command, route, description, do
 ]);
 export function routeAppSkillNames(route) {
   const canonical = dollarSkillName(route.command);
-  return [
-    ...(RESERVED_CODEX_PLUGIN_SKILL_NAMES.includes(canonical) ? [] : [canonical]),
-    ...(route.appSkillAliases || [])
-  ];
+  const reserved = new Set(RESERVED_CODEX_PLUGIN_SKILL_NAMES);
+  return [canonical, ...(route.appSkillAliases || [])].filter((name) => !reserved.has(name));
 }
 
 export const DOLLAR_SKILL_NAMES = ROUTES.flatMap((route) => routeAppSkillNames(route));

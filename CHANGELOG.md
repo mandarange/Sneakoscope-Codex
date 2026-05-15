@@ -3,6 +3,27 @@
 ## [Unreleased]
 
 
+
+
+## [0.9.2] - 2026-05-16
+
+### Fixed
+
+- Treat Codex App Git Actions metadata for Commit, Push, Commit and Push, and PR flows as lightweight app git actions so SKS route/finalization hooks no longer block the built-in app commit/push UI.
+- Report Codex App git action readiness in `sks codex-app check`, including `codex_git_commit`, hooks, `remote_control`, and Codex CLI remote-control support, so `sks doctor --fix` and upgrade checks surface the exact blocker.
+- Keep `$Image-UX-Review` and `$UX-Review` tied to real Codex App `$imagegen`/`gpt-image-2` evidence, and add regression coverage that disabled `image_generation` blocks imagegen-dependent pipelines instead of passing silently.
+- Raise the npm release size budget to 452 KiB packed and 1792 KiB unpacked for the Codex App git-action and imagegen readiness checks while keeping file count, forbidden-file, and tracked-file guards enforced.
+- Keep release metadata aligned after the explicit SKS version bump to `0.9.2`.
+
+## [0.9.1] - 2026-05-16
+
+### Fixed
+
+- Align codex-lb setup/repair with the upstream `Soju06/codex-lb` provider shape, including the OpenAI-authenticated provider block and websocket/base-url metadata.
+- Restore missing Codex App `model_provider = "codex-lb"` settings from stored codex-lb environment during bare `sks` launches and project init/config merging.
+- Tighten Codex App plugin readiness checks so missing default plugin sources and generated reserved-name skill shadows are reported with actionable guidance.
+- Keep release metadata aligned after the explicit SKS version bump to `0.9.1`.
+
 ## [0.9.0] - 2026-05-15
 
 ### Added

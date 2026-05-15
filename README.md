@@ -187,7 +187,7 @@ sks codex-lb repair
 sks
 ```
 
-Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes `model_provider = "codex-lb"` into `~/.codex/config.toml` for Codex App routing, loads the provider env key for tmux launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. npm postinstall upgrades resync that stored env file and restore the Codex App provider selection when postinstall is not stopped by a hard harness conflict, and `sks doctor --fix` does the same during repair. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` tmux session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths, including non-interactive runs, verify that codex-lb can continue a Responses API chain with `previous_response_id`; if that check fails, SKS bypasses codex-lb for that launch with `model_provider="openai"` instead of letting the Codex session fail mid-work.
+Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes the upstream codex-lb Codex CLI / IDE Extension provider block into `~/.codex/config.toml` for Codex App routing, loads the provider env key for tmux launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. If the provider block disappears but the stored env file is still recoverable, bare `sks`, npm postinstall upgrades, `sks doctor --fix`, and `sks codex-lb repair` restore it with `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = true` as documented by codex-lb. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` tmux session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths, including non-interactive runs, verify that codex-lb can continue a Responses API chain with `previous_response_id`; if that check fails, SKS bypasses codex-lb for that launch with `model_provider="openai"` instead of letting the Codex session fail mid-work.
 
 If codex-lb provider auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
 
@@ -288,7 +288,9 @@ For headless remotely controllable Codex App/server sessions on Codex CLI 0.130.
 sks codex-app remote-control -- --help
 ```
 
-`sks codex-app check` reports whether the installed Codex CLI is new enough, whether the required app flags are visible, whether Fast/speed-selector config is unlocked, and whether installed OpenAI default plugins such as Browser, Chrome, Computer Use, Documents, Presentations, Spreadsheets, and LaTeX are enabled. When codex-lb is configured, SKS keeps it selected as the top-level Codex App provider while still preserving required app flags and plugin settings. Codex CLI 0.130.0+ app-server/remote-control threads can pick up config changes live; older CLI/TUI sessions should still be restarted after `.codex/config.toml` or MCP/plugin changes.
+`sks codex-app check` reports whether the installed Codex CLI is new enough, whether the required app flags are visible, whether Fast/speed-selector config is unlocked, whether Codex App Git Actions can use Commit, Push, Commit and Push, and PR flows, and whether installed OpenAI default plugins such as Browser, Chrome, Computer Use, Documents, Presentations, Spreadsheets, and LaTeX are enabled. When codex-lb is configured, SKS keeps it selected as the top-level Codex App provider while still preserving required app flags and plugin settings. Codex CLI 0.130.0+ app-server/remote-control threads can pick up config changes live; older CLI/TUI sessions should still be restarted after `.codex/config.toml` or MCP/plugin changes.
+
+Image-review routes are intentionally strict. `$Image-UX-Review`, `$UX-Review`, `$Visual-Review`, and `$UI-UX-Review` require real Codex App `$imagegen`/`gpt-image-2` generated annotated review images before `image-ux-review-gate.json` can pass; disabled or missing `image_generation` remains a blocker that `sks codex-app check` and selftest cover.
 
 Then open Codex App and use prompt commands directly in the chat. Examples:
 
@@ -297,6 +299,7 @@ $Team implement the checkout fix and verify it
 $DFix change this label and spacing only
 $QA-LOOP dogfood localhost:3000 and fix safe issues
 $PPT create an investor deck as HTML/PDF
+$UX-Review this screenshot with gpt-image-2 callouts, then fix the issues
 $Goal persist this migration workflow with native /goal continuation
 $Research investigate this mechanism with source-backed scout lenses
 $Wiki refresh and validate the context pack
@@ -419,6 +422,15 @@ codex mcp list
 ```
 
 Codex App workflows need the app installed. UI/browser evidence requires first-party Codex Computer Use, and generated raster/image-review evidence requires real `$imagegen`/`gpt-image-2` output. After setup/upgrade, start a fresh thread so Codex reloads plugin tools.
+
+### Codex App commit/push is blocked
+
+```sh
+sks doctor --fix
+sks codex-app check
+```
+
+`sks codex-app check` now prints `Git Actions`. It should be `ok` for Codex App Commit, Push, Commit and Push, and PR buttons to bypass SKS route gates. If it is blocked, repair config with `sks doctor --fix`; if the blocker mentions remote-control, update Codex CLI to `0.130.0` or newer and restart older app-server/TUI sessions.
 
 ### Codex App UI looks stale after codex-lb changes
 
