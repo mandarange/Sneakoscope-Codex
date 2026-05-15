@@ -59,6 +59,83 @@ function extractCommand(payload) {
   return payload.command || payload.tool_input?.command || payload.toolInput?.command || payload.input?.command || payload.tool?.input?.command || '';
 }
 
+function codexGitActionMetadataText(payload = {}) {
+  const seen = new Set();
+  const out = [];
+  const interesting = new Set([
+    'action',
+    'intent',
+    'operation',
+    'permission',
+    'description',
+    'kind',
+    'type',
+    'feature',
+    'tool_name',
+    'toolName',
+    'name',
+    'label',
+    'title',
+    'source',
+    'event',
+    'hook',
+    'hook_name',
+    'hookName',
+    'hook_event_name',
+    'hookEventName',
+    'id',
+    'command'
+  ]);
+  const noisy = new Set([
+    'prompt',
+    'user_prompt',
+    'userPrompt',
+    'message',
+    'assistant_message',
+    'last_assistant_message',
+    'response',
+    'raw',
+    'stdout',
+    'stderr'
+  ]);
+  function walk(value, depth = 0, parentKey = '') {
+    if (!value || typeof value !== 'object' || depth > 5 || seen.has(value)) return;
+    seen.add(value);
+    for (const [key, candidate] of Object.entries(value)) {
+      if (noisy.has(key)) continue;
+      if (typeof candidate === 'string') {
+        if (interesting.has(key) || /\b(?:codex[_\s-]*app|git[_\s-]*actions?|codex_git_|gitCommit|gitPush|pull\s+request)\b/i.test(candidate)) {
+          out.push(`${key}:${candidate}`);
+        }
+        continue;
+      }
+      if (candidate && typeof candidate === 'object') {
+        const allowedContainer = interesting.has(key)
+          || /^(?:input|metadata|context|client|thread|session|request|payload|tool|tool_input|toolInput|permission_request|permissionRequest)$/i.test(key)
+          || parentKey;
+        if (allowedContainer) walk(candidate, depth + 1, key);
+      }
+    }
+  }
+  walk(payload);
+  return out.join(' ');
+}
+
+function codexGitActionMetadataSignal(text = '') {
+  const s = String(text || '');
+  if (!s) return false;
+  const action = String(s)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ');
+  if (/\bcodex\s*app\b[\s\S]{0,120}\bgit\b[\s\S]{0,120}\b(?:action|actions|commit|push|pr|pull request)\b/i.test(action)) return true;
+  if (/\bgit\s*actions?\b[\s\S]{0,120}\b(?:commit|push|pr|pull request|commit\s*(?:and|&)\s*push)\b/i.test(action)) return true;
+  if (/\bcodex\s*git\s*(?:commit|push|pr|pull request|commit\s*(?:and|&)\s*push)\b/i.test(action)) return true;
+  if (/\b(?:git\s*)?(?:commit|push|commit\s*(?:and|&)\s*push|create\s+(?:a\s+)?pull\s+request|pull\s+request|pr)\b/i.test(action)) {
+    return /\b(?:action|intent|operation|permission|feature|tool\s*name|source|event|hook|name|label|title|type|kind|id)\s*:/i.test(action);
+  }
+  return false;
+}
+
 function toolFailed(payload = {}) {
   const candidates = [
     payload.exit_code,
@@ -335,6 +412,7 @@ function looksLikeUserGitAction(payload = {}) {
   const command = extractCommand(payload);
   const haystack = [
     command,
+    codexGitActionMetadataText(payload),
     payload.action,
     payload.intent,
     payload.operation,
@@ -345,6 +423,7 @@ function looksLikeUserGitAction(payload = {}) {
     payload.toolName
   ].filter(Boolean).join(' ');
   if (/\b(?:reset\s+--hard|clean\s+-[^\s]*f|checkout\s+--|restore\s+|rm\s+|push\s+--force|push\s+-[^\s]*f)\b/i.test(command)) return false;
+  if (codexGitActionMetadataSignal(haystack)) return true;
   if (/\bcodex\b[\s_-]*(?:app\s*)?(?:git\s*)?(?:action|commit|push|pr)\b/i.test(haystack)) return true;
   if (!/^\s*git\s+/i.test(command)) return false;
   return /\bgit\s+(?:status|diff|add|commit|push|branch|remote|rev-parse|log)\b/i.test(command);
@@ -474,7 +553,9 @@ function explicitConversationId(payload = {}) {
 
 function looksLikeCodexGitAction(payload = {}) {
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
+  const metadataText = codexGitActionMetadataText(payload);
   const haystack = [
+    metadataText,
     payload.action,
     payload.intent,
     payload.operation,
@@ -502,9 +583,10 @@ function looksLikeCodexGitAction(payload = {}) {
   ].filter(Boolean).join(' ');
   const codexAppGitSignal = /\bcodex[_\s-]*app\b[\s\S]{0,80}\bgit\b[\s\S]{0,80}\b(?:action|actions|commit|push|pr)\b/i.test(haystack);
   const gitActionSignal = /\bgit[_\s-]*actions?\b[\s\S]{0,80}\b(?:commit|push|commit[\s_-]*(?:and|&)?[\s_-]*push)\b/i.test(haystack);
-  const appSignal = codexAppGitSignal
+  const appSignal = codexGitActionMetadataSignal(metadataText)
+    || codexAppGitSignal
     || gitActionSignal
-    || /\b(?:codex[_\s-]*(?:app[_\s-]*)?)?(?:git[_\s-]*)?(?:commit[_\s-]*message|git[_\s-]*commit|codex_git_commit)\b/i.test(haystack)
+    || /\b(?:codex[_\s-]*(?:app[_\s-]*)?)?(?:git[_\s-]*)?(?:commit[_\s-]*message|git[_\s-]*commit|git[_\s-]*push|git[_\s-]*pr|codex_git_commit|codex_git_push|codex_git_pr)\b/i.test(haystack)
     || /커밋\s*메시지\s*생성/i.test(haystack);
   const promptSignal = /\bgenerate(?:\s+a)?(?:\s+git)?\s+commit\s+message\b/i.test(prompt)
     || /\bcommit\s+message\b[\s\S]{0,80}\b(?:staged|diff|changes?|git)\b/i.test(prompt)
@@ -524,7 +606,9 @@ function looksLikeStockCodexGitActionPrompt(prompt = '') {
 
 function looksLikeCodexGitActionStopCompletion(last = '', payload = {}) {
   const text = String(last || '').trim();
+  const metadataText = codexGitActionMetadataText(payload);
   const haystack = [
+    metadataText,
     payload.action,
     payload.intent,
     payload.operation,
@@ -539,6 +623,7 @@ function looksLikeCodexGitActionStopCompletion(last = '', payload = {}) {
     payload.metadata?.feature,
     payload.metadata?.source
   ].filter(Boolean).join(' ');
+  if (codexGitActionMetadataSignal(metadataText)) return true;
   if (/\bcodex[_\s-]*app\b[\s\S]{0,80}\bgit\b[\s\S]{0,80}\b(?:action|commit|push|pr)\b/i.test(haystack)) return true;
   if (!text || text.length > 180) return false;
   return /^(?:commit(?:ted)?(?:\s+and\s+pushed)?(?:\s+changes)?(?:\s+complete[.!]?)?|push(?:ed)?(?:\s+changes)?(?:\s+complete[.!]?)?|created\s+(?:a\s+)?pull\s+request[.!]?)$/i.test(text);
@@ -1010,6 +1095,14 @@ export async function selftestCodexCommitHooks() {
   const appCommitPushStop = await runHook('stop', { conversation_id: commitPushId, last_assistant_message: 'Commit and push complete.' });
   if (appCommitPushStop.code !== 0) throw new Error(`selftest failed: app commit-push stop ${appCommitPushStop.code}: ${appCommitPushStop.stderr}`);
   if (JSON.parse(appCommitPushStop.stdout).decision === 'block') throw new Error('selftest failed: app commit-push stop bypass');
+  const appPushId = 'app-push-selftest';
+  const appPushHook = await runHook('user-prompt-submit', { conversation_id: appPushId, metadata: { source: 'codex_app', action: 'Git Actions Push' }, prompt: 'Push changes.' });
+  if (appPushHook.code !== 0) throw new Error(`selftest failed: app push hook ${appPushHook.code}: ${appPushHook.stderr}`);
+  const appPushJson = JSON.parse(appPushHook.stdout);
+  if (appPushJson.decision === 'block' || appPushJson.hookSpecificOutput?.additionalContext || !String(appPushJson.systemMessage || '').includes('git action')) throw new Error('selftest failed: app push metadata route bypass');
+  const appPushStop = await runHook('stop', { conversation_id: appPushId, metadata: { source: 'codex_app', action: 'Git Actions Push' }, last_assistant_message: 'Done.' });
+  if (appPushStop.code !== 0) throw new Error(`selftest failed: app push stop ${appPushStop.code}: ${appPushStop.stderr}`);
+  if (JSON.parse(appPushStop.stdout).decision === 'block') throw new Error('selftest failed: app push metadata stop bypass');
   const metadataLightId = 'metadata-light-commit-push-selftest';
   const metadataLightHook = await runHook('user-prompt-submit', { conversation_id: metadataLightId, prompt: 'Commit and push changes.' });
   if (metadataLightHook.code !== 0) throw new Error(`selftest failed: metadata-light commit-push hook ${metadataLightHook.code}: ${metadataLightHook.stderr}`);

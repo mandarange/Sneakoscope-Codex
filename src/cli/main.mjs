@@ -1146,9 +1146,11 @@ async function codexLbCommand(action = 'status', args = []) {
     console.log(`Configured: ${status.ok ? 'yes' : 'no'}`);
     console.log(`Selected:   ${status.selected ? 'yes' : 'no'}`);
     console.log(`Provider:   ${status.provider_configured ? 'yes' : 'no'}`);
+    console.log(`Codex App auth: ${status.provider_requires_openai_auth ? 'yes' : 'missing'}`);
     console.log(`Env file:   ${status.env_file ? status.env_path : 'missing'}`);
     if (status.base_url) console.log(`Base URL:   ${status.base_url}`);
     if (status.ok && !status.selected) console.log('\nRun: sks codex-lb repair to activate codex-lb for Codex App.');
+    else if (!status.ok && status.base_url && status.env_key_configured) console.log('\nRun: sks codex-lb repair to restore the upstream codex-lb provider block.');
     else if (!status.ok) console.log('\nRun: sks codex-lb setup --host <domain> --api-key <key>');
     else console.log('\nRepair provider auth: sks codex-lb repair');
     return;
@@ -1646,7 +1648,7 @@ async function setup(args) {
   else console.log('Git:       .gitignore ignores SKS generated files');
   console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .agents/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
   console.log(`Global $:  ${globalSkills.status === 'installed' ? 'ok' : globalSkills.status} ${globalSkills.root || ''}`.trimEnd());
-  console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser=${appRuntime.features?.browser_tool_ready ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'} Image Gen=${appRuntime.features?.image_generation ? 'ok' : 'missing'}`);
+  console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser=${appRuntime.features?.browser_tool_ready ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'} Image Gen=${appRuntime.features?.image_generation ? 'ok' : 'missing'} Git Actions=${appRuntime.features?.git_actions?.ok ? 'ok' : 'missing'}`);
   console.log(`Prompt:    intent-first routing, $Answer fact-check route, $DFix ultralight Direct Fix route, $PPT HTML/PDF presentation route, Context7 gate`);
   console.log(`Skills:    .agents/skills`);
   console.log(`Next:      sks context7 check; sks selftest --mock; sks commands; sks dollar-commands`);
@@ -2103,14 +2105,18 @@ async function selftest() {
   await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'), '---\nname: agent-team\ndescription: Fallback Codex App picker alias for $Team.\n---\n');
   await ensureDir(path.join(repairTmp, '.agents', 'skills', 'stale-sks-generated'));
   await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'stale-sks-generated', 'SKILL.md'), '---\nname: stale-sks-generated\ndescription: Old SKS generated skill that should disappear on update.\n---\n');
-  await ensureDir(path.join(repairTmp, '.agents', 'skills', 'computer-use'));
-  await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', 'computer-use', 'SKILL.md'), '---\nname: computer-use\ndescription: Maximum-speed $Computer-Use/$CU lane for Codex Computer Use UI/browser/visual tasks.\n---\n');
+  const stalePluginSkillNames = ['browser', 'browser-use', 'computer-use', 'chrome', 'documents', 'presentations', 'spreadsheets', 'latex'];
+  const stalePluginSkillContent = (name) => `---\nname: ${name}\ndescription: Sneakoscope generated stale plugin collision for selftest.\n---\n\nCodex App pipeline activation:\n- stale selftest marker\n`;
+  for (const name of stalePluginSkillNames) {
+    await ensureDir(path.join(repairTmp, '.agents', 'skills', name));
+    await writeTextAtomic(path.join(repairTmp, '.agents', 'skills', name, 'SKILL.md'), stalePluginSkillContent(name));
+  }
   await writeJsonAtomic(path.join(repairTmp, '.agents', 'skills', '.sks-generated.json'), {
     schema_version: 1,
     generated_by: 'sneakoscope',
     version: '0.0.1',
-    skills: ['team', 'stale-sks-generated', 'computer-use'],
-    files: ['.agents/skills/team/SKILL.md', '.agents/skills/stale-sks-generated/SKILL.md', '.agents/skills/computer-use/SKILL.md']
+    skills: ['team', 'stale-sks-generated', ...stalePluginSkillNames],
+    files: ['.agents/skills/team/SKILL.md', '.agents/skills/stale-sks-generated/SKILL.md', ...stalePluginSkillNames.map((name) => `.agents/skills/${name}/SKILL.md`)]
   });
   const staleCodexAgentRel = '.codex/agents/stale-generated.toml';
   await writeTextAtomic(path.join(repairTmp, staleCodexAgentRel), 'name = "stale_generated"\n');
@@ -2131,8 +2137,6 @@ async function selftest() {
   await writeJsonAtomic(path.join(repairTmp, '.sneakoscope', 'policy.json'), { broken: true });
   const existingAgentsMd = await safeReadText(path.join(repairTmp, 'AGENTS.md'));
   await writeTextAtomic(path.join(repairTmp, 'AGENTS.md'), existingAgentsMd.replace(/<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->[\s\S]*?<!-- END Sneakoscope Codex GX MANAGED BLOCK -->\n?/, '<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->\ntampered managed block\n<!-- END Sneakoscope Codex GX MANAGED BLOCK -->\n'));
-  const stalePluginSkillNames = ['computer-use', 'browser-use', 'browser'];
-  const stalePluginSkillContent = (name) => `---\nname: ${name}\ndescription: Sneakoscope generated stale plugin collision for selftest.\n---\n\nCodex App pipeline activation:\n- stale selftest marker\n`;
   const doctorRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'doctor', '--fix', '--local-only', '--json'], {
     cwd: repairTmp,
     env: { HOME: path.join(repairTmp, 'home'), SKS_DISABLE_UPDATE_CHECK: '1' },
@@ -2150,7 +2154,9 @@ async function selftest() {
   if (!repairedTeamSkill.includes('SKS Team orchestration') || repairedTeamSkill.includes('tampered')) throw new Error('selftest: doctor repair did not regenerate team skill');
   if (await exists(path.join(repairTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest: doctor repair did not remove deprecated agent-team alias skill');
   if (await exists(path.join(repairTmp, '.agents', 'skills', 'stale-sks-generated', 'SKILL.md'))) throw new Error('selftest: doctor repair did not prune stale generated skill from previous SKS manifest');
-  if (await exists(path.join(repairTmp, '.agents', 'skills', 'computer-use', 'SKILL.md'))) throw new Error('selftest: computer-use shadow');
+  for (const name of stalePluginSkillNames) {
+    if (await exists(path.join(repairTmp, '.agents', 'skills', name, 'SKILL.md'))) throw new Error(`selftest: doctor repair left stale generated ${name} plugin shadow skill`);
+  }
   if (await exists(path.join(repairTmp, staleCodexAgentRel))) throw new Error('selftest: doctor repair did not prune stale generated agent file from previous SKS manifest');
   if (!doctorRepairJson.repair?.project?.skill_install?.removed_stale_generated_skills?.includes('.agents/skills/stale-sks-generated')) throw new Error('selftest: stale skill report');
   const generatedCleanupReport = doctorRepairJson.repair?.project?.generated_cleanup || {};
@@ -2169,6 +2175,8 @@ async function selftest() {
   await writeJsonAtomic(path.join(doctorGlobalTmp, 'package.json'), { name: 'doctor-global-skill-repair-smoke', version: '0.0.0' });
   await initProject(doctorGlobalTmp, { installScope: 'global' });
   const doctorGlobalHome = path.join(doctorGlobalTmp, 'home');
+  await ensureDir(path.join(doctorGlobalHome, '.codex'));
+  await writeTextAtomic(path.join(doctorGlobalHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[features]\nplugins = false\napps = false\n');
   for (const name of stalePluginSkillNames) {
     await ensureDir(path.join(doctorGlobalHome, '.agents', 'skills', name));
     await writeTextAtomic(path.join(doctorGlobalHome, '.agents', 'skills', name, 'SKILL.md'), stalePluginSkillContent(name));
@@ -2184,6 +2192,7 @@ async function selftest() {
   const doctorGlobalCodexConfig = await safeReadText(path.join(doctorGlobalHome, '.codex', 'config.toml'));
   if (!doctorGlobalRepairJson.repair?.global_codex_config) throw new Error('selftest: doctor global config repair missing');
   assertCodexWarn(doctorGlobalCodexConfig, 'doctor global config');
+  if (hasTopLevelCodexModeLock(doctorGlobalCodexConfig)) throw new Error('selftest: doctor global config repair left top-level model_reasoning_effort lock that can hide Codex App plugin UI');
   if (missingGeneratedCodexAppFeatureFlags(doctorGlobalCodexConfig).length || hasDeprecatedCodexHooksFeatureFlag(doctorGlobalCodexConfig) || !hasResearchProfileConfig(doctorGlobalCodexConfig)) throw new Error('selftest: doctor global config repair did not restore Codex App feature flags and Research xhigh profiles');
   for (const name of stalePluginSkillNames) {
     if (await exists(path.join(doctorGlobalHome, '.agents', 'skills', name, 'SKILL.md'))) throw new Error(`selftest: doctor --fix did not remove global generated ${name} plugin shadow skill`);
@@ -3068,17 +3077,44 @@ async function selftest() {
   await ensureDir(fakeCodexApp);
   await ensureDir(fakeCodexBinDir);
   await ensureDir(path.join(appFeatureTmp, '.codex'));
-  await writeTextAtomic(path.join(appFeatureTmp, '.codex', 'config.toml'), codexConfigText);
+  const codexAppFixtureConfigText = codexConfigText.replace(/(?:^|\n)\[marketplaces\.[^\]\r\n]+\][\s\S]*?(?=\n\[[^\]]+\]|\s*$)/g, '\n').replace(/\n{3,}/g, '\n\n');
+  await writeTextAtomic(path.join(appFeatureTmp, '.codex', 'config.toml'), codexAppFixtureConfigText);
+  const fakeDefaultPluginCacheNames = ['browser', 'chrome', 'computer-use', 'latex', 'documents', 'presentations', 'spreadsheets'];
+  for (const name of fakeDefaultPluginCacheNames) await ensureDir(path.join(appFeatureTmp, '.codex', 'plugins', 'cache', name));
   const fakeCodex = path.join(fakeCodexBinDir, 'codex');
   await writeTextAtomic(fakeCodex, '#!/bin/sh\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then printf "%s\\n" "computer-use enabled" "browser-use enabled"; exit 0; fi\nif [ "$1" = "features" ] && [ "$2" = "list" ]; then cat <<EOF\napps                                    stable             true\nbrowser_use                             stable             true\nbrowser_use_external                    stable             true\ncodex_git_commit                        under development  true\ncomputer_use                            stable             true\nfast_mode                               stable             true\nguardian_approval                       stable             true\nhooks                                   stable             true\nimage_generation                        stable             true\nin_app_browser                          stable             true\nplugins                                 stable             true\nremote_control                          under development  true\ntool_suggest                            stable             true\nEOF\nexit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
   await fsp.chmod(fakeCodex, 0o755);
-  const codexAppFeatureStatus = await codexAppIntegrationStatus({ codex: { bin: fakeCodex, version: 'codex-cli 99.0.0' }, home: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } });
-  if (!codexAppFeatureStatus.ok || !codexAppFeatureStatus.features?.required_flags_ok || !codexAppFeatureStatus.features?.codex_git_commit || !codexAppFeatureStatus.features?.remote_control || !codexAppFeatureStatus.features?.fast_mode_config?.ok) throw new Error('selftest: codex-app check did not accept required app feature flags, remote_control, and unlocked Fast UI config');
+  const codexAppFixtureOpts = { codex: { bin: fakeCodex, version: 'codex-cli 99.0.0' }, home: appFeatureTmp, cwd: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } };
+  const codexAppFeatureStatus = await codexAppIntegrationStatus(codexAppFixtureOpts);
+  if (!codexAppFeatureStatus.ok || !codexAppFeatureStatus.features?.required_flags_ok || !codexAppFeatureStatus.features?.codex_git_commit || !codexAppFeatureStatus.features?.remote_control || !codexAppFeatureStatus.features?.git_actions?.ok || !codexAppFeatureStatus.features?.fast_mode_config?.ok) throw new Error('selftest: codex-app check did not accept required app feature flags, git actions, remote_control, and unlocked Fast UI config');
+  const codexAppOldCliStatus = await codexAppIntegrationStatus({ codex: { bin: fakeCodex, version: 'codex-cli 0.129.0' }, home: appFeatureTmp, cwd: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } });
+  if (codexAppOldCliStatus.ok || codexAppOldCliStatus.features?.git_actions?.ok || !codexAppOldCliStatus.guidance.some((line) => line.includes('git commit/push actions are blocked'))) throw new Error('selftest: codex-app check did not block commit/push actions on old Codex CLI remote-control');
+  const missingDefaultPluginTmp = tmpdir();
+  await ensureDir(path.join(missingDefaultPluginTmp, '.codex'));
+  const codexConfigWithoutMarketplaceSources = codexConfigText.replace(/(?:^|\n)\[marketplaces\.[^\]\r\n]+\][\s\S]*?(?=\n\[[^\]]+\]|\s*$)/g, '').trim();
+  await writeTextAtomic(path.join(missingDefaultPluginTmp, '.codex', 'config.toml'), `${codexConfigWithoutMarketplaceSources}\n`);
+  const codexAppMissingDefaultPluginStatus = await codexAppIntegrationStatus({ codex: { bin: fakeCodex, version: 'codex-cli 99.0.0' }, home: missingDefaultPluginTmp, cwd: missingDefaultPluginTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } });
+  if (codexAppMissingDefaultPluginStatus.ok || codexAppMissingDefaultPluginStatus.plugins?.default_plugins?.ok || codexAppMissingDefaultPluginStatus.plugins?.picker?.ok || !codexAppMissingDefaultPluginStatus.plugins?.default_plugins?.missing_installed?.includes('browser@openai-bundled') || !codexAppMissingDefaultPluginStatus.guidance.some((line) => line.includes('default plugin source'))) throw new Error('selftest: codex-app check did not block missing default plugin source');
+  await ensureDir(path.join(appFeatureTmp, '.agents', 'skills', 'browser'));
+  await writeTextAtomic(path.join(appFeatureTmp, '.agents', 'skills', 'browser', 'SKILL.md'), stalePluginSkillContent('browser'));
+  const codexAppShadowStatus = await codexAppIntegrationStatus(codexAppFixtureOpts);
+  if (codexAppShadowStatus.ok || codexAppShadowStatus.plugins?.picker?.ok || codexAppShadowStatus.plugins?.skill_shadows?.blocking?.[0]?.name !== 'browser' || codexAppShadowStatus.plugins?.skill_shadows?.generated?.[0]?.name !== 'browser' || !codexAppShadowStatus.guidance.some((line) => line.includes('plugin picker generated skill shadow'))) throw new Error('selftest: codex-app check did not block generated skill shadow that can hide @ plugin picker entries');
+  await fsp.rm(path.join(appFeatureTmp, '.agents', 'skills', 'browser'), { recursive: true, force: true });
+  await ensureDir(path.join(appFeatureTmp, '.agents', 'skills', 'browser'));
+  await writeTextAtomic(path.join(appFeatureTmp, '.agents', 'skills', 'browser', 'SKILL.md'), '---\nname: browser\ndescription: User custom skill, not generated by SKS.\n---\n');
+  const codexAppCustomShadowStatus = await codexAppIntegrationStatus(codexAppFixtureOpts);
+  if (codexAppCustomShadowStatus.ok || codexAppCustomShadowStatus.plugins?.picker?.ok || codexAppCustomShadowStatus.plugins?.skill_shadows?.custom?.[0]?.name !== 'browser' || codexAppCustomShadowStatus.plugins?.skill_shadows?.generated?.length || !codexAppCustomShadowStatus.guidance.some((line) => line.includes('user-owned reserved skill name')) || codexAppCustomShadowStatus.guidance.some((line) => line.includes('plugin picker generated skill shadow'))) throw new Error('selftest: codex-app check did not distinguish user-owned reserved plugin skill names from generated shadows');
+  await fsp.rm(path.join(appFeatureTmp, '.agents', 'skills', 'browser'), { recursive: true, force: true });
   const fakeCodexMissing = path.join(fakeCodexBinDir, 'codex-missing-git-commit');
   await writeTextAtomic(fakeCodexMissing, '#!/bin/sh\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then printf "%s\\n" "computer-use enabled" "browser-use enabled"; exit 0; fi\nif [ "$1" = "features" ] && [ "$2" = "list" ]; then cat <<EOF\napps                                    stable             true\nbrowser_use                             stable             true\nbrowser_use_external                    stable             true\ncodex_git_commit                        under development  false\ncomputer_use                            stable             true\nfast_mode                               stable             true\nguardian_approval                       stable             true\nhooks                                   stable             true\nimage_generation                        stable             true\nin_app_browser                          stable             true\nplugins                                 stable             true\nremote_control                          under development  true\ntool_suggest                            stable             true\nEOF\nexit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
   await fsp.chmod(fakeCodexMissing, 0o755);
   const codexAppMissingFeatureStatus = await codexAppIntegrationStatus({ codex: { bin: fakeCodexMissing, version: 'codex-cli 99.0.0' }, home: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } });
-  if (codexAppMissingFeatureStatus.ok || codexAppMissingFeatureStatus.features?.required_flags_ok || codexAppMissingFeatureStatus.features?.codex_git_commit) throw new Error('selftest: codex-app check did not block disabled codex_git_commit feature flag');
+  if (codexAppMissingFeatureStatus.ok || codexAppMissingFeatureStatus.features?.required_flags_ok || codexAppMissingFeatureStatus.features?.codex_git_commit || codexAppMissingFeatureStatus.features?.git_actions?.ok) throw new Error('selftest: codex-app check did not block disabled codex_git_commit feature flag');
+  const fakeCodexMissingImageGen = path.join(fakeCodexBinDir, 'codex-missing-imagegen');
+  await writeTextAtomic(fakeCodexMissingImageGen, '#!/bin/sh\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then printf "%s\\n" "computer-use enabled" "browser-use enabled"; exit 0; fi\nif [ "$1" = "features" ] && [ "$2" = "list" ]; then cat <<EOF\napps                                    stable             true\nbrowser_use                             stable             true\nbrowser_use_external                    stable             true\ncodex_git_commit                        under development  true\ncomputer_use                            stable             true\nfast_mode                               stable             true\nguardian_approval                       stable             true\nhooks                                   stable             true\nimage_generation                        stable             false\nin_app_browser                          stable             true\nplugins                                 stable             true\nremote_control                          under development  true\ntool_suggest                            stable             true\nEOF\nexit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
+  await fsp.chmod(fakeCodexMissingImageGen, 0o755);
+  const codexAppMissingImageGenStatus = await codexAppIntegrationStatus({ codex: { bin: fakeCodexMissingImageGen, version: 'codex-cli 99.0.0' }, home: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } });
+  if (codexAppMissingImageGenStatus.ok || codexAppMissingImageGenStatus.features?.required_flags_ok || codexAppMissingImageGenStatus.features?.image_generation || !codexAppMissingImageGenStatus.guidance.some((line) => line.includes('image_generation'))) throw new Error('selftest: codex-app check did not block disabled image_generation for imagegen pipelines');
   const autoReviewHome = path.join(tmp, 'auto-review-home');
   const autoReviewEnv = { HOME: autoReviewHome };
   const autoReviewEnabled = await enableAutoReview({ env: autoReviewEnv, high: true });
