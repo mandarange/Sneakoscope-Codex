@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { readJson, readText, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, packageRoot, dirSize, formatBytes, PACKAGE_VERSION, sksRoot, readStdin } from '../core/fsx.mjs';
+import { createHash } from 'node:crypto';
+import { readJson, readText, writeJsonAtomic, writeTextAtomic, appendJsonlBounded, nowIso, exists, ensureDir, packageRoot, dirSize, formatBytes, PACKAGE_VERSION, sksRoot, readStdin, runProcess } from '../core/fsx.mjs';
 import { initProject } from '../core/init.mjs';
 import { getCodexInfo, runCodexExec } from '../core/codex-adapter.mjs';
 import { createMission, loadMission, findLatestMission, missionDir, setCurrent, stateFile } from '../core/mission.mjs';
@@ -8,7 +9,7 @@ import { buildQuestionSchema, writeQuestions } from '../core/questions.mjs';
 import { sealContract } from '../core/decision-contract.mjs';
 import { buildQaLoopQuestionSchema, buildQaLoopPrompt, evaluateQaGate, qaStatus, writeMockQaResult, writeQaLoopArtifacts } from '../core/qa-loop.mjs';
 import { containsUserQuestion, noQuestionContinuationReason } from '../core/no-question-guard.mjs';
-import { RESEARCH_GENIUS_SUMMARY_ARTIFACT, RESEARCH_PAPER_ARTIFACT, RESEARCH_SOURCE_SKILL_ARTIFACT, countGeniusOpinionSummaries, countResearchPaperSections, buildResearchPrompt, evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
+import { RESEARCH_GENIUS_SUMMARY_ARTIFACT, RESEARCH_SOURCE_SKILL_ARTIFACT, countGeniusOpinionSummaries, countResearchPaperSections, buildResearchPrompt, evaluateResearchGate, findResearchPaperArtifact, researchPaperArtifactForPlan, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { storageReport, enforceRetention, pruneWikiArtifacts } from '../core/retention.mjs';
 import { evaluateDoneGate } from '../core/hproof.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
@@ -42,7 +43,7 @@ const flag = (args, name) => args.includes(name);
 const promptOf = (args) => args.filter((x) => !String(x).startsWith('--')).join(' ').trim();
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 const REPOSITORY_URL = 'https://github.com/mandarange/Sneakoscope-Codex.git';
-const RESEARCH_DEFAULT_MAX_CYCLES = 3;
+const RESEARCH_DEFAULT_MAX_CYCLES = 12;
 const RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES = 120;
 const RESEARCH_MIN_CYCLE_TIMEOUT_MINUTES = 15;
 const RESEARCH_MAX_CYCLE_TIMEOUT_MINUTES = 240;
@@ -75,11 +76,19 @@ function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
     return { ...opts, session, codexArgs: [...(opts.codexArgs || []), '-c', 'model_provider="openai"'], codexLbBypassed: true };
   }
   if (!lb?.ok) return opts;
-  if (explicitSession) return opts;
+  const nextOpts = withCodexLbProviderArgs(opts);
+  if (explicitSession) return nextOpts;
   const session = sanitizeTmuxSessionName(`sks-codex-lb-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
   console.log(`codex-lb active for this launch: ${lb.env_path || lb.base_url || 'configured'}`);
   console.log(`Using fresh tmux session: ${session}`);
-  return { ...opts, session, codexLbFreshSession: true };
+  return { ...nextOpts, session, codexLbFreshSession: true };
+}
+
+function withCodexLbProviderArgs(opts = {}) {
+  const codexArgs = [...(opts.codexArgs || [])];
+  const hasProviderOverride = codexArgs.some((arg) => /model_provider\s*=/.test(String(arg || '')));
+  if (!hasProviderOverride) codexArgs.push('-c', 'model_provider="codex-lb"');
+  return { ...opts, codexArgs };
 }
 
 export async function madHighCommand(args = [], deps = {}) {
@@ -490,11 +499,12 @@ async function researchPrepare(args) {
   console.log(`Methodology: ${plan.methodology}`);
   console.log(`Plan: ${path.relative(root, path.join(dir, 'research-plan.md'))}`);
   console.log(`Pipeline: ${path.relative(root, path.join(dir, PIPELINE_PLAN_ARTIFACT))}`);
-  console.log(`Paper: ${RESEARCH_PAPER_ARTIFACT}`);
+  console.log(`Paper: ${researchPaperArtifactForPlan(plan)}`);
   console.log(`Genius summary: ${RESEARCH_GENIUS_SUMMARY_ARTIFACT}`);
   console.log(`Source skill: ${RESEARCH_SOURCE_SKILL_ARTIFACT}`);
   console.log('Ledgers: source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json');
   console.log(`Run: sks research run ${id} --max-cycles ${RESEARCH_DEFAULT_MAX_CYCLES} --cycle-timeout-minutes ${RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES}`);
+  console.log('Loop: Research runs until the gate records unanimous scout consensus, or pauses at the explicit safety cap.');
 }
 
 async function researchRun(args) {
@@ -546,13 +556,36 @@ async function researchRun(args) {
     return;
   }
   let last = '';
+  const researchCodexArgs = ['-c', 'service_tier="fast"', '-c', 'model_reasoning_effort="xhigh"'];
+  const sourceMutationBaseline = await researchCodeMutationSnapshot(root, id);
   for (let cycle = 1; cycle <= maxCycles; cycle++) {
     const cycleDir = path.join(dir, 'research', `cycle-${cycle}`);
     const outputFile = path.join(cycleDir, 'final.md');
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.start', cycle, timeoutMinutes: cycleTimeoutMinutes });
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.start', cycle, timeoutMinutes: cycleTimeoutMinutes, profile: 'sks-research', enforced_reasoning_effort: 'xhigh' });
     const prompt = buildResearchPrompt({ id, mission, plan, cycle, previous: last });
-    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-research', logDir: cycleDir, timeoutMs: cycleTimeoutMs });
+    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-research', extraArgs: researchCodexArgs, logDir: cycleDir, timeoutMs: cycleTimeoutMs });
     await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
+    const mutation = await researchCodeMutationDelta(root, sourceMutationBaseline, id);
+    if (mutation.blocked) {
+      const blocker = {
+        schema_version: 1,
+        mission_id: id,
+        ts: nowIso(),
+        phase: 'RESEARCH_BLOCKED_CODE_MUTATION',
+        reason: 'Research mode must not modify repository source files. Only route-local mission artifacts are allowed.',
+        changed_paths: mutation.changed_paths,
+        allowed_prefixes: mutation.allowed_prefixes,
+        required_action: 'Review the changed paths, keep or revert them manually as appropriate, then rerun Research after the worktree is clean for source files.',
+        implementation_allowed: false
+      };
+      await writeJsonAtomic(path.join(dir, 'research-code-mutation-blocker.json'), blocker);
+      await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: blocker.ts, type: 'research.blocked.code_mutation', changed_paths: mutation.changed_paths });
+      await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_BLOCKED_CODE_MUTATION', questions_allowed: true, implementation_allowed: false, blocker: 'research-code-mutation-blocker.json' });
+      console.error('Research cannot continue: source-code mutation detected outside the route-local mission artifacts.');
+      console.error(JSON.stringify(mutation.changed_paths, null, 2));
+      process.exitCode = 2;
+      return;
+    }
     last = await safeReadText(outputFile, result.stdout || result.stderr || '');
     if (containsUserQuestion(last)) {
       await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.guard.question_blocked', cycle });
@@ -570,7 +603,7 @@ async function researchRun(args) {
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.continue', cycle, reasons: gate.reasons });
   }
   await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_PAUSED_MAX_CYCLES', questions_allowed: true, implementation_allowed: false });
-  console.log(`Research paused after max cycles: ${id}`);
+  console.log(`Research paused after max cycles without unanimous scout consensus: ${id}`);
 }
 
 async function researchStatus(args) {
@@ -587,7 +620,9 @@ async function researchStatus(args) {
   const falsificationLedger = await readJson(path.join(dir, 'falsification-ledger.json'), null);
   const sourceSkillText = await readText(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT), '');
   const geniusSummaryText = await readText(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), '');
-  const paperText = await readText(path.join(dir, RESEARCH_PAPER_ARTIFACT), '');
+  const plan = await readJson(path.join(dir, 'research-plan.json'), null);
+  const paperArtifact = await findResearchPaperArtifact(dir, plan);
+  const paperText = paperArtifact.exists ? await readText(paperArtifact.path, '') : '';
   const scoutRows = Array.isArray(scoutLedger?.scouts) ? scoutLedger.scouts : [];
   const sourceLayerRows = Array.isArray(sourceLedger?.source_layers) ? sourceLedger.source_layers : [];
   const sourceLayersCovered = sourceLayerRows.filter((layer) => layer.status === 'covered' && ((Array.isArray(layer.source_ids) && layer.source_ids.length) || (Array.isArray(layer.counterevidence_ids) && layer.counterevidence_ids.length))).length;
@@ -606,8 +641,11 @@ async function researchStatus(args) {
     eureka_moments: scoutRows.length ? scoutRows.filter((scout) => scout.eureka?.exclamation === 'Eureka!' && String(scout.eureka?.idea || '').trim()).length : null,
     scout_findings: scoutRows.length ? scoutRows.reduce((sum, scout) => sum + (Array.isArray(scout.findings) ? scout.findings.length : 0), 0) : null,
     debate_exchanges: debateLedger?.exchanges?.length ?? null,
+    consensus_iterations: gate?.metrics?.consensus_iterations ?? gate?.consensus_iterations ?? debateLedger?.consensus_iterations ?? null,
+    unanimous_consensus: gate?.metrics?.unanimous_consensus ?? gate?.unanimous_consensus ?? debateLedger?.unanimous_consensus ?? false,
     research_source_skill_present: Boolean(sourceSkillText.trim()),
     genius_opinion_summary_present: Boolean(geniusSummaryText.trim()),
+    research_paper_artifact: paperArtifact.name,
     paper_present: Boolean(paperText.trim()),
     paper_sections: countResearchPaperSections(paperText),
     falsification_cases: falsificationLedger?.cases?.length ?? null
@@ -660,6 +698,71 @@ function formatQuestionsForCli(schema) {
 
 async function safeReadText(file, fallback = '') {
   try { return await fsp.readFile(file, 'utf8'); } catch { return fallback; }
+}
+
+async function researchCodeMutationSnapshot(root, missionId = null) {
+  const tracked = await runProcess('git', ['ls-files'], { cwd: root, timeoutMs: 15000, maxOutputBytes: 2 * 1024 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
+  const status = await runProcess('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: root, timeoutMs: 15000, maxOutputBytes: 2 * 1024 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
+  if (tracked.code !== 0 || status.code !== 0) return { ok: false, reason: 'git_unavailable', hashes: {}, status_rows: [], error: tracked.stderr || status.stderr };
+  const allowedPrefixes = researchAllowedMutationPrefixes(missionId);
+  const hashes = {};
+  for (const rel of tracked.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)) {
+    if (researchMutationAllowedPath(rel, allowedPrefixes)) continue;
+    const file = path.join(root, rel);
+    try {
+      const bytes = await fsp.readFile(file);
+      hashes[rel] = createHash('sha256').update(bytes).digest('hex');
+    } catch {
+      hashes[rel] = null;
+    }
+  }
+  return {
+    ok: true,
+    hashes,
+    status_rows: status.stdout.split(/\r?\n/).filter(Boolean),
+    allowed_prefixes: allowedPrefixes
+  };
+}
+
+async function researchCodeMutationDelta(root, baseline, missionId) {
+  if (!baseline?.ok) return { blocked: false, changed_paths: [], reason: baseline?.reason || 'baseline_unavailable' };
+  const current = await researchCodeMutationSnapshot(root, missionId);
+  if (!current.ok) return { blocked: false, changed_paths: [], reason: current.reason || 'current_snapshot_unavailable' };
+  const changed = new Set();
+  for (const [rel, hash] of Object.entries(current.hashes)) {
+    if (baseline.hashes[rel] !== hash) changed.add(rel);
+  }
+  for (const rel of Object.keys(baseline.hashes)) {
+    if (!(rel in current.hashes)) changed.add(rel);
+  }
+  const baselineRows = new Set(baseline.status_rows || []);
+  for (const row of current.status_rows || []) {
+    if (baselineRows.has(row)) continue;
+    const rel = porcelainStatusPath(row);
+    if (rel && !researchMutationAllowedPath(rel, current.allowed_prefixes)) changed.add(rel);
+  }
+  const changedPaths = [...changed].sort();
+  return {
+    blocked: changedPaths.length > 0,
+    changed_paths: changedPaths,
+    allowed_prefixes: current.allowed_prefixes
+  };
+}
+
+function researchAllowedMutationPrefixes(missionId = null) {
+  return missionId ? [`.sneakoscope/missions/${missionId}/`] : ['.sneakoscope/missions/'];
+}
+
+function researchMutationAllowedPath(rel = '', prefixes = []) {
+  const normalized = String(rel || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  return prefixes.some((prefix) => normalized.startsWith(prefix));
+}
+
+function porcelainStatusPath(row = '') {
+  const payload = String(row || '').slice(3).trim();
+  if (!payload) return '';
+  const renamed = payload.split(' -> ').pop();
+  return String(renamed || '').replace(/^"|"$/g, '');
 }
 
 function readBoundedIntegerFlag(args, name, fallback, min, max) {
@@ -1909,7 +2012,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
     reasoning: teamReasoningPolicy(prompt, roster),
     codex_config_required: {
       service_tier: 'fast',
-      features: { multi_agent: true, hooks: true, fast_mode: true, fast_mode_ui: true, codex_git_commit: true, computer_use: true, apps: true, plugins: true },
+      features: { multi_agent: true, hooks: true, remote_control: true, fast_mode: true, fast_mode_ui: true, codex_git_commit: true, computer_use: true, browser_use: true, browser_use_external: true, image_generation: true, in_app_browser: true, guardian_approval: true, tool_suggest: true, apps: true, plugins: true },
       agents: { max_threads: 6, max_depth: 1 },
       custom_agents_dir: '.codex/agents'
     },

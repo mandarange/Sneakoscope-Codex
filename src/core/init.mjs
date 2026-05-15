@@ -17,13 +17,30 @@ const GENERATED_PRUNE_POLICY = 'remove_previous_sks_generated_paths_absent_from_
 
 export const REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS = [
   'hooks',
+  'remote_control',
   'multi_agent',
   'fast_mode',
   'fast_mode_ui',
   'codex_git_commit',
   'computer_use',
+  'browser_use',
+  'browser_use_external',
+  'image_generation',
+  'in_app_browser',
+  'guardian_approval',
+  'tool_suggest',
   'apps',
   'plugins'
+];
+
+const DEFAULT_CODEX_APP_PLUGINS = [
+  ['browser', 'openai-bundled'],
+  ['chrome', 'openai-bundled'],
+  ['computer-use', 'openai-bundled'],
+  ['latex', 'openai-bundled'],
+  ['documents', 'openai-primary-runtime'],
+  ['presentations', 'openai-primary-runtime'],
+  ['spreadsheets', 'openai-primary-runtime']
 ];
 
 export function hasTopLevelCodexModeLock(text = '') {
@@ -31,7 +48,7 @@ export function hasTopLevelCodexModeLock(text = '') {
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
   const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
   const model = top.match(/^model\s*=\s*"([^"]+)"/m)?.[1];
-  return (Boolean(model) && model !== 'gpt-5.5') || /^model_reasoning_effort\s*=/m.test(top);
+  return (Boolean(model) && model !== 'gpt-5.5') || /^model_reasoning_effort\s*=/m.test(top) || /^model_provider\s*=\s*"codex-lb"/m.test(top);
 }
 
 export function hasDeprecatedCodexHooksFeatureFlag(text = '') {
@@ -485,17 +502,25 @@ function installPolicy(scope, commandPrefix) {
 
 function mergeManagedCodexConfigToml(existingContent = '') {
   let next = removeLegacyTopLevelCodexModeLocks(String(existingContent || '').trimEnd());
+  next = removeTopLevelTomlKeyIfValue(next, 'model_provider', 'codex-lb');
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
   next = upsertTopLevelTomlString(next, 'model', 'gpt-5.5');
   next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
   next = upsertTopLevelTomlBoolean(next, 'suppress_unstable_features_warning', true);
   next = upsertTomlTableKey(next, 'features', 'hooks = true');
+  next = upsertTomlTableKey(next, 'features', 'remote_control = true');
   next = upsertTomlTableKey(next, 'features', 'multi_agent = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
   next = upsertTomlTableKey(next, 'features', 'codex_git_commit = true');
   next = upsertTomlTableKey(next, 'features', 'computer_use = true');
+  next = upsertTomlTableKey(next, 'features', 'browser_use = true');
+  next = upsertTomlTableKey(next, 'features', 'browser_use_external = true');
+  next = upsertTomlTableKey(next, 'features', 'image_generation = true');
+  next = upsertTomlTableKey(next, 'features', 'in_app_browser = true');
+  next = upsertTomlTableKey(next, 'features', 'guardian_approval = true');
+  next = upsertTomlTableKey(next, 'features', 'tool_suggest = true');
   next = upsertTomlTableKey(next, 'features', 'apps = true');
   next = upsertTomlTableKey(next, 'features', 'plugins = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
@@ -505,6 +530,10 @@ function mergeManagedCodexConfigToml(existingContent = '') {
   next = upsertTomlTableKey(next, 'agents', 'max_depth = 1');
   for (const block of managedCodexConfigBlocks()) {
     next = upsertTomlTable(next, block.table, block.text);
+  }
+  for (const [name, marketplace] of DEFAULT_CODEX_APP_PLUGINS) {
+    const table = `plugins."${name}@${marketplace}"`;
+    next = upsertTomlTable(next, table, `[${table}]\nenabled = true`);
   }
   return `${next.trim()}\n`;
 }
@@ -517,13 +546,16 @@ async function mergeGlobalCodexConfigIfAvailable(configText = '', configPath = '
   if (configPath && path.resolve(configPath) === path.resolve(globalConfigPath)) return configText;
   const globalConfig = await readText(globalConfigPath, '');
   let next = mergeGlobalMcpServers(configText, globalConfig);
-  if (selectedRe.test(next) && /\[model_providers\.codex-lb\]/.test(next)) return `${String(next || '').trim()}\n`;
+  next = mergeGlobalCodexAppRuntimeTables(next, globalConfig);
+  if (selectedRe.test(next) && /\[model_providers\.codex-lb\]/.test(next)) {
+    return `${removeTopLevelTomlKeyIfValue(next, 'model_provider', 'codex-lb').trim()}\n`;
+  }
   const envPath = path.join(home, '.codex', 'sks-codex-lb.env');
   if (!(await exists(envPath))) return next;
   const envText = await readText(envPath, '');
   const baseUrl = globalConfig.match(/(^|\n)\[model_providers\.codex-lb\][\s\S]*?\n\s*base_url\s*=\s*"([^"]+)"/)?.[2] || parseCodexLbEnvBaseUrl(envText);
   if (!parseCodexLbEnvKey(envText) || !baseUrl || (!selectedRe.test(globalConfig) && !parseCodexLbEnvBaseUrl(envText))) return next;
-  next = upsertTopLevelTomlString(next, 'model_provider', 'codex-lb');
+  next = removeTopLevelTomlKeyIfValue(next, 'model_provider', 'codex-lb');
   next = upsertTomlTable(next, 'model_providers.codex-lb', `[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "${baseUrl}"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true`);
   return `${next.trim()}\n`;
 }
@@ -562,19 +594,33 @@ function mergeGlobalMcpServers(configText = '', globalConfig = '') {
   return next;
 }
 
+function mergeGlobalCodexAppRuntimeTables(configText = '', globalConfig = '') {
+  let next = configText;
+  const re = /(?:^|\n)(\[((?:marketplaces|plugins)\.[^\]\r\n]+)\][\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/g;
+  for (const match of String(globalConfig || '').matchAll(re)) {
+    const block = match[1].trim();
+    const table = match[2].trim();
+    if (!new RegExp(`(^|\\n)\\[${escapeRegExp(table)}\\]`).test(next)) next = upsertTomlTable(next, table, block);
+  }
+  return next;
+}
+
 function removeLegacyTopLevelCodexModeLocks(text = '') {
-  const legacy = {
-    model_reasoning_effort: new Set(['high'])
-  };
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
   const end = firstTable === -1 ? lines.length : firstTable;
   return lines.filter((line, index) => {
     if (index >= end) return true;
-    const match = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=\s*"([^"]*)"\s*(?:#.*)?$/);
-    if (!match) return true;
-    return !legacy[match[1]]?.has(match[2]);
+    return !/^\s*model_reasoning_effort\s*=/.test(line);
   }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function removeTopLevelTomlKeyIfValue(text = '', key = '', value = '') {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  const keyPattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"${escapeRegExp(value)}"\\s*(?:#.*)?$`);
+  return lines.filter((line, index) => index >= end || !keyPattern.test(line)).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
 function upsertTopLevelTomlString(text, key, value) {
@@ -874,7 +920,7 @@ export async function installSkills(root) {
     'computer-use-fast': `---\nname: computer-use-fast\ndescription: Alias for the maximum-speed $Computer-Use/$CU Codex Computer Use lane.\n---\n\nUse the same rules as computer-use: skip Team debate, QA-LOOP clarification, upfront TriWiki refresh, Context7, subagents, and reflection unless explicitly requested. Use Codex Computer Use directly; never substitute Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, or other browser automation for UI/browser evidence. At the end only, refresh/pack TriWiki, validate it, then provide a concise completion summary plus Honest Mode.\n`,
     'cu': `---\nname: cu\ndescription: Short alias for the maximum-speed $Computer-Use Codex Computer Use lane.\n---\n\nUse the same rules as computer-use. This is a speed lane for focused UI/browser/visual tasks that require Codex Computer Use evidence, with TriWiki refresh/validate and Honest Mode deferred to final closeout.\n`,
     'goal': `---\nname: goal\ndescription: Fast $Goal/$goal bridge overlay for Codex native persisted /goal workflows.\n---\n\nUse when the user invokes $Goal/$goal or asks to persist a workflow with Codex native /goal continuation. Prepare with sks goal create or the $Goal route, write only the lightweight bridge artifacts, then use native Codex /goal create, pause, resume, and clear controls where available. Goal does not replace Team, QA, DB, or other SKS execution routes; continue implementation through the selected route and use Context7 only when external API/library docs are involved. Do not recreate the old no-question loop.\n`,
-    'research': `---\nname: research\ndescription: Dollar-command route for $Research or $research frontier discovery workflows.\n---\n\nUse when the user invokes $Research/$research or asks for research, hypotheses, new mechanisms, falsification, or testable predictions. Prefer sks research prepare and sks research run. Run the genius-lens scout council with named persona-inspired cognitive roles: Einstein Scout, Feynman Scout, Turing Scout, von Neumann Scout, and Skeptic Scout. These are lenses only; do not impersonate the historical people. Every Research scout ledger row must include display_name, persona, persona_boundary, effort=xhigh, reasoning_effort=xhigh, service_tier when available, one literal "Eureka!" idea, falsifiers, cheap_probes, and challenge_or_response before synthesis. Create research-source-skill.md as a route-local Skill Creator artifact, then maximize layered public web/source search across papers, official/government or leading-institution data, standards/primary docs, current news, public discourse, developer/practitioner sources, and counterevidence before synthesis. Record research-source-skill.md, source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json, research-report.md, research-paper.md, genius-opinion-summary.md, and research-gate.json. Context7 is optional and only needed when the research topic depends on external package/API/framework docs; do not use it as the default research evidence layer. Normal Research may take one or two hours when needed; favor real source collection, cross-layer comparison, falsification, and a concise paper manuscript over speed. Do not use --mock except for selftests or dry harness checks; if live source execution is unavailable, record a blocker and keep the gate unpassed. Do not use for ordinary code edits.\n`,
+    'research': `---\nname: research\ndescription: Dollar-command route for $Research or $research frontier discovery workflows.\n---\n\nUse when the user invokes $Research/$research or asks for research, hypotheses, new mechanisms, falsification, or testable predictions. Prefer sks research prepare and sks research run. Research is not an implementation route: do not edit repository source, docs, package metadata, generated skills, or harness files; write only route-local mission artifacts under .sneakoscope/missions/<mission-id>/. Run the genius-lens scout council with named persona-inspired cognitive roles: Einstein Scout, Feynman Scout, Turing Scout, von Neumann Scout, and Skeptic Scout. These are lenses only; do not impersonate the historical people. Every Research scout ledger row must include display_name, persona, persona_boundary, effort=xhigh, reasoning_effort=xhigh, service_tier when available, one literal "Eureka!" idea, falsifiers, cheap_probes, and challenge_or_response before synthesis. This is not a fixed three-cycle route: repeat source gathering, Eureka ideas, evidence-bound debate, falsification, and synthesis pressure until every scout records final agreement, or until the explicit max-cycle safety cap pauses with an unpassed gate. Create research-source-skill.md as a route-local Skill Creator artifact, then maximize layered public web/source search across latest papers, official/government or leading-institution data, standards/primary docs, current news, public discourse, developer/practitioner sources, traditional background sources, and counterevidence before synthesis. Record research-source-skill.md, source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json, research-report.md, research-paper.md, genius-opinion-summary.md, and research-gate.json. debate-ledger.json must include consensus_iterations, unanimous_consensus, and per-scout agreements; research-gate.json cannot pass until unanimous_consensus=true with every scout agreement recorded. Context7 is optional and only needed when the research topic depends on external package/API/framework docs; do not use it as the default research evidence layer. Normal Research may take one or two hours when needed; favor real source collection, cross-layer comparison, falsification, and a concise paper manuscript over speed. Do not use --mock except for selftests or dry harness checks; if live source execution is unavailable, record a blocker and keep the gate unpassed. Do not use for ordinary code edits.\n`,
     'autoresearch': `---\nname: autoresearch\ndescription: Dollar-command route for $AutoResearch or $autoresearch iterative experiment loops.\n---\n\nUse for $AutoResearch, iterative improvement, SEO/GEO, ranking, workflow, benchmark, or experiments. Define program, hypothesis, experiment, metric, keep/discard, falsification, next step, and Honest Mode. Load seo-geo-optimizer for README/npm/GitHub/schema/AI-search work.\n`,
     'db': `---\nname: db\ndescription: Dollar-command route for $DB or $db database and Supabase safety checks.\n---\n\nUse when the user invokes $DB/$db or the task touches SQL, Supabase, Postgres, migrations, Prisma, Drizzle, Knex, MCP database tools, or production data. Run or follow sks db policy, sks db scan, sks db classify, and sks db check. Destructive database operations remain forbidden.\n`,
     'mad-sks': `---\nname: mad-sks\ndescription: Explicit high-risk authorization modifier for $MAD-SKS scoped Supabase MCP DB permission widening.\n---\n\nUse only when the user explicitly invokes $MAD-SKS or top-level sks --mad. It can be combined with another route, such as $MAD-SKS $Team or $DB ... $MAD-SKS; in that case the other command remains the primary workflow and MAD-SKS is only the temporary permission grant. The widened permission applies only while the active mission gate is open, must be deactivated when the task ends, and opens live server work, Supabase MCP database writes, column/schema cleanup, direct execute SQL, migration application when required, and normal targeted DB writes. Keep only catastrophic safeguards: whole database/schema/table removal, truncate, all-row delete/update, reset, dangerous project/branch management, credential exfiltration, persistent security weakening, and unrequested fallback implementation remain blocked. Do not carry MAD-SKS permission into later prompts or routes. The permission profile is centralized in src/core/permission-gates.mjs so skill/hook/MCP-style gates share one decision function.\n`,

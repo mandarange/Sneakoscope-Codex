@@ -4,6 +4,43 @@
 
 
 
+
+## [0.8.4] - 2026-05-15
+
+### Fixed
+
+- Surface Research scout agent names as explicit `agent_name` fields such as `Einstein Scout`, `Feynman Scout`, `Turing Scout`, `von Neumann Scout`, and `Skeptic Scout` throughout the plan, prompt, scout ledger, debate ledger, and selftest.
+- Write Research paper manuscripts to a dated, topic-specific filename recorded in the plan, while keeping legacy `research-paper.md` compatibility for older missions.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
+## [0.8.3] - 2026-05-15
+
+### Fixed
+
+- Preserve codex-lb as an explicit CLI launch provider without selecting it as the top-level Codex App provider, keeping native Codex App model, speed, and built-in feature UI visible.
+- Keep release metadata aligned after the explicit SKS version bump to `0.8.3`.
+
+## [0.8.2] - 2026-05-15
+
+### Fixed
+
+- Restore the `remote_control` Codex App feature flag during SKS setup/doctor repair and require it in `sks codex-app check`, so Codex mobile/remote-control UI entrypoints are not hidden while SKS still reports readiness.
+- Keep installed OpenAI default plugins enabled during SKS setup/doctor repair, including Browser, Chrome, Computer Use, Documents, Presentations, Spreadsheets, and LaTeX, and fail `sks codex-app check` when an installed default plugin can be hidden from the composer/tool UI.
+- Remove top-level `model_reasoning_effort` locks from Codex config during setup/doctor/codex-lb repair and report Fast UI config locks in `sks codex-app check`, so the Codex App model selector speed control remains visible.
+- Raise the npm unpacked-size release budget to 1720 KiB for the Codex App readiness checks while keeping packed size, file count, forbidden-file, and tracked-file guards enforced.
+- Keep release metadata aligned after the explicit SKS version bump to `0.8.2`.
+
+
+## [0.8.1] - 2026-05-15
+
+### Fixed
+
+- Repair Codex App readiness and global repair so `sks doctor --fix` / reinstall restore official app feature flags for Computer Use, image generation, in-app browser, git commit/push, and Research xhigh profiles.
+- Stop SKS route gates from blocking Codex App git commit/push and settings/profile UI events.
+- Force `$Research` real runs through `gpt-5.5` Fast `xhigh` execution and report/repair missing Research profiles instead of silently running lower-effort paths.
+- Change `$Research` from a fixed short loop into a no-code-mutation, evidence-layered genius-scout council that repeats until unanimous scout consensus or an explicit safety cap pauses the run.
+- Gate Research completion on `consensus_iterations`, `unanimous_consensus`, and per-scout final agreements before the paper/report can pass.
+
 ## [0.8.0] - 2026-05-15
 
 ### Added

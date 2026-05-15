@@ -17,11 +17,62 @@ export const RESEARCH_PAPER_SECTION_GROUPS = Object.freeze([
   ['references', 'sources']
 ]);
 
-export const RESEARCH_SCOUT_COUNCIL = Object.freeze(RESEARCH_SCOUT_PERSONA_CONTRACT.map((scout) => Object.freeze({
-  ...scout,
-  label: scout.display_name,
-  required_outputs: scout.required_outputs
-})));
+function cleanResearchArtifactDate(value = '') {
+  const match = String(value || '').match(/\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : nowIso().slice(0, 10);
+}
+
+function researchTitleSlug(prompt = '') {
+  const cleaned = String(prompt || '')
+    .normalize('NFKC')
+    .replace(/[`"'<>]/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+  const slug = cleaned.split('-').filter(Boolean).slice(0, 10).join('-').slice(0, 90).replace(/-+$/g, '');
+  return slug || 'research';
+}
+
+export function researchPaperArtifactName(prompt = '', createdAt = nowIso(), opts = {}) {
+  const titleSource = opts.title || opts.paperTitle || prompt;
+  return `${cleanResearchArtifactDate(createdAt)}-${researchTitleSlug(titleSource)}-research-paper.md`;
+}
+
+export function isDatedResearchPaperArtifact(name = '') {
+  return /^\d{4}-\d{2}-\d{2}-[^\s/\\]+-research-paper\.md$/u.test(String(name || ''));
+}
+
+export function researchPaperArtifactForPlan(plan = null) {
+  const artifact = plan?.artifacts?.research_paper || plan?.paper_artifact;
+  return artifact ? path.basename(String(artifact)) : RESEARCH_PAPER_ARTIFACT;
+}
+
+export async function findResearchPaperArtifact(dir, plan = null, opts = {}) {
+  const preferred = researchPaperArtifactForPlan(plan);
+  const allowLegacyFallback = opts.allowLegacyFallback === true || preferred === RESEARCH_PAPER_ARTIFACT;
+  const names = [...new Set([preferred, allowLegacyFallback ? RESEARCH_PAPER_ARTIFACT : null].filter(Boolean))];
+  for (const name of names) {
+    const file = path.join(dir, name);
+    if (await exists(file)) return { name, path: file, exists: true, preferred: name === preferred, legacy: name === RESEARCH_PAPER_ARTIFACT };
+  }
+  return { name: preferred, path: path.join(dir, preferred), exists: false, preferred: true, legacy: false };
+}
+
+export function researchScoutAgentName(scout = {}) {
+  return String(scout.agent_name || scout.display_name || scout.label || scout.id || 'Research Scout').trim();
+}
+
+export const RESEARCH_SCOUT_COUNCIL = Object.freeze(RESEARCH_SCOUT_PERSONA_CONTRACT.map((scout) => {
+  const displayName = scout.display_name || scout.label || scout.id;
+  return Object.freeze({
+    ...scout,
+    display_name: displayName,
+    label: displayName,
+    agent_name: displayName,
+    codex_agent_name: displayName,
+    required_outputs: scout.required_outputs
+  });
+}));
 
 export const RESEARCH_SOURCE_LAYERS = Object.freeze([
   {
@@ -86,16 +137,27 @@ export const RESEARCH_SOURCE_LAYER_IDS = Object.freeze(RESEARCH_SOURCE_LAYERS.ma
 
 export function createResearchPlan(prompt, opts = {}) {
   const depth = opts.depth || 'frontier';
+  const createdAt = nowIso();
+  const paperArtifact = researchPaperArtifactName(prompt, createdAt, opts);
   return {
     schema_version: 1,
     prompt,
     depth,
-    created_at: nowIso(),
+    created_at: createdAt,
     methodology: 'genius-scout-council-frontier-discovery-loop',
+    paper_artifact: paperArtifact,
+    artifacts: {
+      research_paper: paperArtifact,
+      legacy_research_paper: RESEARCH_PAPER_ARTIFACT,
+      genius_opinion_summary: RESEARCH_GENIUS_SUMMARY_ARTIFACT,
+      research_source_skill: RESEARCH_SOURCE_SKILL_ARTIFACT
+    },
     objective: 'Find the shortest useful mechanism that can be falsified or applied, grounded in maximum available source retrieval rather than broad summary.',
     execution_policy: {
-      normal_run: 'real_long_running_research',
+      normal_run: 'real_long_running_research_until_unanimous_scout_consensus',
       default_cycle_timeout_minutes: 120,
+      default_max_cycles: 12,
+      safety_cap: 'Research repeats scout/debate/falsification cycles until unanimous scout consensus or an explicit max-cycle safety cap pauses the run.',
       mock_policy: '--mock is for selftests and dry harness checks only; normal Research must block rather than silently substitute mock output.'
     },
     outcome_rubric: OUTCOME_RUBRIC,
@@ -112,8 +174,8 @@ export function createResearchPlan(prompt, opts = {}) {
         rule: 'Every scout must record one literal Eureka! moment with a non-obvious idea before debate.'
       },
       debate_policy: {
-        mode: 'vigorous_evidence_bound_debate',
-        rule: 'Every scout must challenge at least one other scout or respond to a challenge before synthesis.'
+        mode: 'vigorous_evidence_bound_debate_until_unanimous_consensus',
+        rule: 'Every scout must challenge at least one other scout or respond to a challenge before synthesis. The loop repeats until every scout records final agreement on the surviving mechanism or the safety cap pauses the run with an unpassed gate.'
       },
       scouts: RESEARCH_SCOUT_COUNCIL,
       protocol: [
@@ -158,16 +220,26 @@ export function createResearchPlan(prompt, opts = {}) {
         triangulation_checks: 1
       }
     },
+    mutation_policy: {
+      implementation_allowed: false,
+      allowed_write_scope: 'route-local mission artifacts only',
+      rule: 'Normal Research must not modify repository source, package, docs, config, or generated harness files. It may write only artifacts under its own .sneakoscope/missions/<mission-id>/ directory.'
+    },
+    artifact_policy: {
+      research_paper: paperArtifact,
+      rule: 'Write the final manuscript to the dated topic-specific research_paper artifact from this plan, not the legacy generic filename.'
+    },
     rules: [
+      'Do not modify code or project source files during Research. Research writes only route-local mission artifacts; implementation belongs to $Team or another execution route.',
       'Do not claim novelty without a novelty ledger entry.',
       'Separate facts, inferences, hypotheses, and speculations.',
       'Run the genius-lens scout council independently before synthesis.',
       'Every Research scout must run at reasoning_effort=xhigh, record one literal "Eureka!" idea, and participate in the debate.',
-      'The scout council must debate vigorously but stay evidence-bound; record challenges and responses in debate-ledger.json.',
+      'The scout council must debate vigorously but stay evidence-bound; record challenges and responses in debate-ledger.json. Continue cycles until unanimous_consensus=true with every scout agreeing.',
       'Maximize safe web/source search as layered source retrieval and record queries, source layers, citations, quality notes, triangulation checks, and blockers in source-ledger.json.',
       `Create ${RESEARCH_SOURCE_SKILL_ARTIFACT} as a route-local source collection skill before synthesis; do not edit generated .agents/skills during the research run.`,
       'Actively seek disconfirming evidence before synthesis.',
-      'Turn the surviving research result into research-paper.md with paper-style sections and references.',
+      `Turn the surviving research result into ${paperArtifact} with paper-style sections and references.`,
       `End every run with ${RESEARCH_GENIUS_SUMMARY_ARTIFACT}, summarizing each genius-lens scout's final opinion, strongest evidence, disagreement, and changed mind.`,
       'Keep unsupported source-free claims as hypotheses only.',
       'Prefer the smallest testable mechanism or implementation probe, but do not stop source gathering early for speed when the research question needs a longer pass.',
@@ -178,7 +250,7 @@ export function createResearchPlan(prompt, opts = {}) {
       { id: 'R1_SOURCE_SKILL', goal: `Create ${RESEARCH_SOURCE_SKILL_ARTIFACT} with layer-specific search routes, quality fields, and blockers before source gathering.` },
       { id: 'R2_SOURCE_SEARCH', goal: 'Run layered web/source retrieval across papers, official data, standards, news, public discourse, developer knowledge, and counterevidence.' },
       { id: 'R3_EUREKA', goal: 'Have each xhigh genius-lens scout shout Eureka! and record one non-obvious idea with source ids.' },
-      { id: 'R4_DEBATE', goal: 'Run a vigorous evidence-bound council debate with every scout challenging or responding.' },
+      { id: 'R4_DEBATE', goal: 'Run a vigorous evidence-bound council debate with every scout challenging or responding; repeat until unanimous scout consensus is recorded.' },
       { id: 'R5_FALSIFY', goal: 'Attack each mechanism with counterexamples, missing evidence, source conflicts, and failure modes.' },
       { id: 'R6_APPLY', goal: 'Keep the smallest surviving mechanism, define a cheap probe, and write all ledgers.' },
       { id: 'R7_PAPER', goal: 'Convert the final research result into a concise paper manuscript with abstract, method, findings, limitations, and references.' },
@@ -186,7 +258,7 @@ export function createResearchPlan(prompt, opts = {}) {
     ],
     required_artifacts: [
       'research-report.md',
-      RESEARCH_PAPER_ARTIFACT,
+      paperArtifact,
       RESEARCH_GENIUS_SUMMARY_ARTIFACT,
       RESEARCH_SOURCE_SKILL_ARTIFACT,
       'source-ledger.json',
@@ -206,10 +278,13 @@ export function researchPlanMarkdown(plan) {
   lines.push(`Prompt: ${plan.prompt}`);
   lines.push(`Depth: ${plan.depth}`);
   lines.push(`Methodology: ${plan.methodology}`);
+  lines.push(`Research paper: ${researchPaperArtifactForPlan(plan)}`);
   if (plan.execution_policy) {
     lines.push(`Execution: ${plan.execution_policy.normal_run}; default cycle timeout ${plan.execution_policy.default_cycle_timeout_minutes} minutes`);
+    if (plan.execution_policy.default_max_cycles) lines.push(`Consensus loop: repeat until unanimous scout consensus; default safety cap ${plan.execution_policy.default_max_cycles} cycles`);
     lines.push(`Mock policy: ${plan.execution_policy.mock_policy}`);
   }
+  if (plan.mutation_policy) lines.push(`Mutation policy: ${plan.mutation_policy.rule}`);
   lines.push('');
   lines.push('## Rules');
   for (const rule of plan.rules) lines.push(`- ${rule}`);
@@ -217,7 +292,7 @@ export function researchPlanMarkdown(plan) {
   if (plan.research_council?.scouts?.length) {
     lines.push('## Genius Scout Council');
     lines.push(`Policy: ${plan.research_council.policy}`);
-    for (const scout of plan.research_council.scouts) lines.push(`- ${scout.display_name || scout.label || scout.id}: ${scout.persona || scout.role} - ${scout.mandate} (${scout.persona_boundary || 'persona-inspired lens only'})`);
+    for (const scout of plan.research_council.scouts) lines.push(`- ${researchScoutAgentName(scout)}: ${scout.persona || scout.role} - ${scout.mandate} (${scout.persona_boundary || 'persona-inspired lens only'})`);
     lines.push('');
   }
   if (plan.web_research_policy) {
@@ -266,10 +341,12 @@ export function researchSourceSkillMarkdown(plan) {
   lines.push('- Each source entry should record title, locator/URL, publisher or author when known, published_at when known, accessed_at, layer, reliability, credibility, stance, supports or undermines, and notes.');
   lines.push('- Public discourse sources such as X/Twitter or Reddit are signals and edge cases, not truth. They must be triangulated with formal, official, practitioner, or counterevidence layers.');
   lines.push('- If a layer cannot be searched with the available runtime or credentials, record the blocker and keep research-gate.json unpassed.');
+  lines.push('- Do not modify repository source code or generated harness files during Research; write only route-local mission artifacts.');
   lines.push('');
   lines.push('## Debate Use');
   lines.push('- Every scout must cite source-ledger ids in findings and Eureka ideas.');
   lines.push('- The skeptic lens must challenge the strongest claim using counterevidence or source-quality downgrades.');
+  lines.push('- Continue scout/debate/falsification cycles until every scout agrees to the surviving mechanism. Record `unanimous_consensus=true`, `consensus_iterations`, and per-scout agreement in debate-ledger.json.');
   lines.push('- Synthesis keeps only claims that survive cross-layer triangulation and falsification.');
   lines.push('');
   return `${lines.join('\n')}\n`;
@@ -369,6 +446,7 @@ export function defaultScoutLedger(plan = null) {
     created_at: nowIso(),
     scouts: scouts.map((scout) => ({
       id: scout.id,
+      agent_name: researchScoutAgentName(scout),
       display_name: scout.display_name || scout.label || scout.id,
       historical_inspiration: scout.historical_inspiration || null,
       persona: scout.persona || scout.role,
@@ -403,8 +481,19 @@ export function defaultDebateLedger(plan = null) {
   return {
     schema_version: 1,
     created_at: nowIso(),
-    mode: 'vigorous_evidence_bound_debate',
+    mode: 'vigorous_evidence_bound_debate_until_unanimous_consensus',
     required_participants: scouts.map((scout) => scout.id),
+    participant_display_names: scouts.map((scout) => researchScoutAgentName(scout)),
+    consensus_iterations: 0,
+    unanimous_consensus: false,
+    scout_agreements: scouts.map((scout) => ({
+      scout_id: scout.id,
+      agent_name: researchScoutAgentName(scout),
+      display_name: scout.display_name || scout.label || scout.id,
+      agrees: false,
+      final_position: '',
+      source_ids: []
+    })),
     exchanges: [],
     synthesis_pressure: {
       strongest_disagreement: '',
@@ -451,10 +540,42 @@ function sourceLayerCoverageStats(sourceLedger = null, requiredLayerIds = RESEAR
   return { covered: [...covered], missing, required: [...requiredLayerIds] };
 }
 
+function consensusStats(debateLedger = null, gate = {}) {
+  const required = RESEARCH_SCOUT_COUNCIL.map((scout) => scout.id);
+  const rows = [
+    ...(Array.isArray(debateLedger?.scout_agreements) ? debateLedger.scout_agreements : []),
+    ...(Array.isArray(debateLedger?.consensus?.scout_agreements) ? debateLedger.consensus.scout_agreements : []),
+    ...(Array.isArray(debateLedger?.final_positions) ? debateLedger.final_positions : [])
+  ];
+  const agreed = new Set();
+  for (const row of rows) {
+    const id = row?.scout_id || row?.id || row?.scout;
+    if (required.includes(id) && (row.agrees === true || row.agreement === true || row.final_agreement === true)) agreed.add(id);
+  }
+  const explicitUnanimous = debateLedger?.unanimous_consensus === true
+    || debateLedger?.consensus?.unanimous_consensus === true
+    || debateLedger?.consensus?.unanimous === true
+    || gate.unanimous_consensus === true;
+  const iterations = Math.max(
+    Number(gate.consensus_iterations || 0),
+    Number(debateLedger?.consensus_iterations || 0),
+    Number(debateLedger?.consensus?.iterations || 0)
+  );
+  const unanimous = explicitUnanimous && required.every((id) => agreed.has(id));
+  return {
+    unanimous,
+    iterations,
+    agreed_count: agreed.size,
+    required_count: required.length,
+    missing: required.filter((id) => !agreed.has(id))
+  };
+}
+
 export function defaultResearchGate() {
   return {
     passed: false,
     report_present: false,
+    research_paper_artifact: null,
     paper_present: false,
     paper_sections: 0,
     genius_opinion_summary_present: false,
@@ -477,6 +598,8 @@ export function defaultResearchGate() {
     scout_findings: 0,
     debate_participants: 0,
     debate_exchanges: 0,
+    consensus_iterations: 0,
+    unanimous_consensus: false,
     counterevidence_sources: 0,
     candidate_insights: 0,
     falsification_passes: 0,
@@ -495,8 +618,10 @@ export async function evaluateResearchGate(dir) {
   const gate = await readJson(path.join(dir, 'research-gate.json'), defaultResearchGate());
   const plan = await readJson(path.join(dir, 'research-plan.json'), null);
   const reportPresent = await exists(path.join(dir, 'research-report.md'));
-  const paperPresent = await exists(path.join(dir, RESEARCH_PAPER_ARTIFACT));
-  const paperSections = paperPresent ? countResearchPaperSections(await readText(path.join(dir, RESEARCH_PAPER_ARTIFACT), '')) : 0;
+  const paperArtifact = await findResearchPaperArtifact(dir, plan);
+  const paperPresent = paperArtifact.exists;
+  const paperText = paperPresent ? await readText(paperArtifact.path, '') : '';
+  const paperSections = paperPresent ? countResearchPaperSections(paperText) : 0;
   const geniusSummaryPresent = await exists(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT));
   const geniusSummaryCount = geniusSummaryPresent ? countGeniusOpinionSummaries(await readText(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), '')) : 0;
   const sourceSkillPresent = await exists(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT));
@@ -525,6 +650,7 @@ export async function evaluateResearchGate(dir) {
   const debateRows = Array.isArray(debateLedger?.exchanges) ? debateLedger.exchanges : [];
   const debateParticipants = new Set(debateRows.flatMap((exchange) => [exchange?.from, exchange?.to, ...(Array.isArray(exchange?.participants) ? exchange.participants : [])].filter(Boolean))).size;
   const debateExchanges = debateRows.length;
+  const consensus = consensusStats(debateLedger, gate);
   const falsificationCases = Array.isArray(falsificationLedger?.cases) ? falsificationLedger.cases.length : 0;
   const searchBlockers = [
     ...(Array.isArray(gate.web_search_blockers) ? gate.web_search_blockers : []),
@@ -554,6 +680,8 @@ export async function evaluateResearchGate(dir) {
   if (Math.max(Number(gate.scout_findings || 0), scoutFindings) < 4) reasons.push('scout_findings_missing');
   if (Math.max(Number(gate.debate_participants || 0), debateParticipants) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('debate_participants_missing');
   if (Math.max(Number(gate.debate_exchanges || 0), debateExchanges) < RESEARCH_SCOUT_COUNCIL.length) reasons.push('debate_exchanges_missing');
+  if (Math.max(Number(gate.consensus_iterations || 0), consensus.iterations) < 1) reasons.push('consensus_iteration_missing');
+  if (!consensus.unanimous) reasons.push('unanimous_consensus_missing');
   if (Math.max(Number(gate.counterevidence_sources || 0), counterEvidenceEntries) < 1) reasons.push('counterevidence_source_missing');
   if ((gate.candidate_insights || 0) < 1) reasons.push('candidate_insight_missing');
   if ((gate.falsification_passes || 0) < 1) reasons.push('falsification_missing');
@@ -568,6 +696,8 @@ export async function evaluateResearchGate(dir) {
     passed: gate.passed === true && reasons.length === 0,
     reasons,
     metrics: {
+      research_paper_artifact: paperArtifact.name,
+      paper_present: paperPresent || gate.paper_present === true,
       web_search_passes: webSearchPasses,
       paper_sections: Math.max(Number(gate.paper_sections || 0), paperSections),
       genius_opinion_summary_present: geniusSummaryPresent || gate.genius_opinion_summary_present === true,
@@ -586,18 +716,27 @@ export async function evaluateResearchGate(dir) {
       scout_findings: Math.max(Number(gate.scout_findings || 0), scoutFindings),
       debate_participants: Math.max(Number(gate.debate_participants || 0), debateParticipants),
       debate_exchanges: Math.max(Number(gate.debate_exchanges || 0), debateExchanges),
+      consensus_iterations: Math.max(Number(gate.consensus_iterations || 0), consensus.iterations),
+      unanimous_consensus: consensus.unanimous,
+      consensus_agreed_scouts: consensus.agreed_count,
+      consensus_missing_scouts: consensus.missing,
       counterevidence_sources: Math.max(Number(gate.counterevidence_sources || 0), counterEvidenceEntries),
       falsification_cases: Math.max(Number(gate.falsification_cases || 0), falsificationCases),
       citation_coverage: citationCoverage,
       web_search_blockers: searchBlockers.length
     },
-    gate
+    gate: {
+      ...gate,
+      research_paper_artifact: paperArtifact.name,
+      paper_present: paperPresent || gate.paper_present === true
+    }
   };
   await writeJsonAtomic(path.join(dir, 'research-gate.evaluated.json'), result);
   return result;
 }
 
 export async function writeMockResearchResult(dir, plan) {
+  const paperArtifact = researchPaperArtifactForPlan(plan);
   const mockLayerSources = RESEARCH_SOURCE_LAYERS.map((layer, index) => ({
     id: `mock-source-${index + 1}`,
     layer: layer.id,
@@ -691,6 +830,7 @@ export async function writeMockResearchResult(dir, plan) {
     ...defaultScoutLedger(plan),
     scouts: RESEARCH_SCOUT_COUNCIL.map((scout) => ({
       id: scout.id,
+      agent_name: researchScoutAgentName(scout),
       display_name: scout.display_name || scout.label,
       historical_inspiration: scout.historical_inspiration || null,
       persona: scout.persona || scout.role,
@@ -728,8 +868,19 @@ export async function writeMockResearchResult(dir, plan) {
   const debateLedger = {
     schema_version: 1,
     created_at: nowIso(),
-    mode: 'vigorous_evidence_bound_debate',
+    mode: 'vigorous_evidence_bound_debate_until_unanimous_consensus',
     required_participants: RESEARCH_SCOUT_COUNCIL.map((scout) => scout.id),
+    participant_display_names: RESEARCH_SCOUT_COUNCIL.map((scout) => researchScoutAgentName(scout)),
+    consensus_iterations: 2,
+    unanimous_consensus: true,
+    scout_agreements: RESEARCH_SCOUT_COUNCIL.map((scout) => ({
+      scout_id: scout.id,
+      agent_name: researchScoutAgentName(scout),
+      display_name: scout.display_name || scout.label,
+      agrees: true,
+      final_position: 'Agrees to keep the falsifiable, source-cited research mechanism as the surviving claim.',
+      source_ids: ['mock-source-1', 'mock-counter-1']
+    })),
     exchanges: [
       { id: 'mock-debate-1', from: 'einstein', to: 'feynman', stance: 'challenge', claim: 'A toy probe is not enough unless it preserves the invariant.', source_ids: ['mock-source-1'] },
       { id: 'mock-debate-2', from: 'feynman', to: 'turing', stance: 'challenge', claim: 'A formal gate must still be explainable as a cheap experiment.', source_ids: ['mock-source-1'] },
@@ -800,11 +951,12 @@ export async function writeMockResearchResult(dir, plan) {
   await writeJsonAtomic(path.join(dir, 'novelty-ledger.json'), ledger);
   await writeTextAtomic(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), `${geniusSummary}\n`);
   await writeTextAtomic(path.join(dir, 'research-report.md'), `# SKS Research Report\n\nPrompt: ${plan.prompt}\n\n## Scout Council Synthesis\n\nThe mock council keeps one cited methodological insight: a research mode should force layered, falsifiable novelty rather than summarize known material from one corpus [mock-source-1].\n\n## Source Coverage\n\nThis is a selftest fixture. It records mock coverage for academic literature, official data, standards, news, public discourse, developer knowledge, and counterevidence layers, but does not perform live web browsing in --mock mode.\n\n## Candidate Insight\n\nA useful research run must produce source-cited, cross-layer triangulated, falsifiable novelty with scout findings and a cheap probe.\n\n## Falsification\n\nThe claim is weak if no new testable prediction, counterevidence source, cross-layer check, or experiment is produced [mock-counter-1].\n\n## Next Test\n\nCompare this mode against a summary-only run and score candidate insights, falsification passes, citation coverage, source-layer coverage, triangulation checks, and testability.\n`);
-  await writeTextAtomic(path.join(dir, RESEARCH_PAPER_ARTIFACT), `# Research Paper: ${plan.prompt}\n\n## Abstract\nA source-cited research run should produce cross-layer, falsifiable novelty rather than only summarize known material.\n\n## Introduction\nThe mock topic is evaluated as a research workflow outcome with layered source coverage [mock-source-1].\n\n## Methodology\nFive xhigh scouts produce Eureka ideas, debate, triangulate source layers, and falsify the strongest claim.\n\n## Findings\nThe surviving finding is that useful research needs cited novelty, source-layer coverage, cross-layer triangulation, and a cheap decisive probe.\n\n## Discussion\nThe debate favors gate-backed evidence over narrative confidence, and treats public discourse as signal rather than truth.\n\n## Limitations and Falsification\nThe claim fails without sources, counterevidence, triangulation checks, or testable predictions [mock-counter-1].\n\n## Conclusion and Next Experiment\nCompare this loop against a summary-only baseline and score testable insights.\n\n## References\n- [mock-source-1] Mock academic literature coverage.\n- [mock-source-2] Mock official government and leading-institution knowledge coverage.\n- [mock-source-3] Mock standards and primary documents coverage.\n- [mock-source-4] Mock current news and global reporting coverage.\n- [mock-source-5] Mock public discourse coverage.\n- [mock-source-6] Mock developer and practitioner knowledge coverage.\n- [mock-source-7] Mock counterevidence and fact-checking coverage.\n- [mock-counter-1] Mock overclaim counterexample.\n`);
+  await writeTextAtomic(path.join(dir, paperArtifact), `# Research Paper: ${plan.prompt}\n\n## Abstract\nA source-cited research run should produce cross-layer, falsifiable novelty rather than only summarize known material.\n\n## Introduction\nThe mock topic is evaluated as a research workflow outcome with layered source coverage [mock-source-1].\n\n## Methodology\nFive xhigh scouts produce Eureka ideas, debate, triangulate source layers, and falsify the strongest claim.\n\n## Findings\nThe surviving finding is that useful research needs cited novelty, source-layer coverage, cross-layer triangulation, and a cheap decisive probe.\n\n## Discussion\nThe debate favors gate-backed evidence over narrative confidence, and treats public discourse as signal rather than truth.\n\n## Limitations and Falsification\nThe claim fails without sources, counterevidence, triangulation checks, or testable predictions [mock-counter-1].\n\n## Conclusion and Next Experiment\nCompare this loop against a summary-only baseline and score testable insights.\n\n## References\n- [mock-source-1] Mock academic literature coverage.\n- [mock-source-2] Mock official government and leading-institution knowledge coverage.\n- [mock-source-3] Mock standards and primary documents coverage.\n- [mock-source-4] Mock current news and global reporting coverage.\n- [mock-source-5] Mock public discourse coverage.\n- [mock-source-6] Mock developer and practitioner knowledge coverage.\n- [mock-source-7] Mock counterevidence and fact-checking coverage.\n- [mock-counter-1] Mock overclaim counterexample.\n`);
   await writeJsonAtomic(path.join(dir, 'research-gate.json'), {
     ...defaultResearchGate(),
     passed: true,
     report_present: true,
+    research_paper_artifact: paperArtifact,
     paper_present: true,
     paper_sections: RESEARCH_PAPER_SECTION_GROUPS.length,
     genius_opinion_summary_present: true,
@@ -820,24 +972,28 @@ export async function writeMockResearchResult(dir, plan) {
     source_layers_required: RESEARCH_SOURCE_LAYER_IDS.length,
     source_layers_covered: RESEARCH_SOURCE_LAYER_IDS.length,
     triangulation_checks: sourceLedger.triangulation.cross_layer_checks.length,
-    independent_scouts: RESEARCH_SCOUT_COUNCIL.length,
-    xhigh_scouts: RESEARCH_SCOUT_COUNCIL.length,
-    eureka_moments: RESEARCH_SCOUT_COUNCIL.length,
-    scout_findings: RESEARCH_SCOUT_COUNCIL.length,
-    debate_participants: RESEARCH_SCOUT_COUNCIL.length,
-    debate_exchanges: debateLedger.exchanges.length,
-    counterevidence_sources: 1,
+	    independent_scouts: RESEARCH_SCOUT_COUNCIL.length,
+	    xhigh_scouts: RESEARCH_SCOUT_COUNCIL.length,
+	    eureka_moments: RESEARCH_SCOUT_COUNCIL.length,
+	    scout_findings: RESEARCH_SCOUT_COUNCIL.length,
+	    debate_participants: RESEARCH_SCOUT_COUNCIL.length,
+	    debate_exchanges: debateLedger.exchanges.length,
+	    consensus_iterations: debateLedger.consensus_iterations,
+	    unanimous_consensus: true,
+	    counterevidence_sources: 1,
     candidate_insights: 1,
     falsification_passes: 1,
     falsification_cases: 1,
     testable_predictions: 1,
     citation_coverage: true,
-    evidence: ['mock research report', 'mock research paper', 'mock genius opinion summary', 'mock research source skill', 'mock layered source ledger', 'mock scout ledger', 'mock debate ledger', 'mock novelty ledger', 'mock falsification ledger'],
+    evidence: ['mock research report', `mock research paper: ${paperArtifact}`, 'mock genius opinion summary', 'mock research source skill', 'mock layered source ledger', 'mock scout ledger', 'mock debate ledger', 'mock novelty ledger', 'mock falsification ledger'],
     notes: ['mock mode records the new contract but does not call a model or perform live web browsing']
   });
   return evaluateResearchGate(dir);
 }
 
 export function buildResearchPrompt({ id, mission, plan, cycle, previous }) {
-  return `You are running SKS Research Mode.\nMISSION: ${id}\nTOPIC: ${mission.prompt}\nCYCLE: ${cycle}\nMODE: Genius Scout Council + frontier discovery loop. Use maximum reasoning depth available under the current Codex profile.\nLONG-RUN REAL-RESEARCH POLICY: Normal Research is allowed to take one or two hours when the question requires it. Do real source gathering and evidence comparison; do not shortcut into mock, fixture, or summary-only output. If live source access is unavailable, write the blocker and keep the gate unpassed.\nNO-QUESTION LOCK: Do not ask the user. Resolve scope from research-plan.json and current project evidence.\nSAFETY: Destructive database operations and unsafe external actions are forbidden. Prefer read-only inspection, local files, and cited public sources.\nPERSONA POLICY: Use Einstein/Feynman/Turing/von Neumann-inspired scout lenses only as cognitive roles. Do not impersonate, roleplay private identity, or speak as the historical people.\nSCOUT PERSONA POLICY: Every Research scout row must include display_name, persona, persona_boundary, reasoning_effort: "xhigh", service_tier when available, falsifiers, cheap_probes, and challenge_or_response. Persona names are Einstein Scout, Feynman Scout, Turing Scout, von Neumann Scout, and Skeptic Scout; they are cognitive lenses, not impersonations.\nSCOUT EFFORT POLICY: Every Research scout agent must use reasoning_effort=xhigh. Record effort: "xhigh" for every scout in scout-ledger.json. Any lower-effort scout output must keep research-gate.json unpassed.\nEUREKA POLICY: Every scout must literally write "Eureka!" and one non-obvious, source-linked idea before debate.\nDEBATE POLICY: The scouts must debate vigorously but stay evidence-bound. Every scout must challenge or respond at least once, and debate-ledger.json must record the exchanges before synthesis.\nPAPER POLICY: After the report and ledgers, write research-paper.md as a concise manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References.\nSOURCE SKILL POLICY: Create or update ${RESEARCH_SOURCE_SKILL_ARTIFACT} as a route-local source collection skill before synthesis. It must name the selected source layers, query routes, quality fields, blockers, and cross-layer triangulation checks. Do not edit generated .agents/skills during the research run.\nWEB/SOURCE POLICY: Run layered source retrieval across every safely available layer before synthesis: latest public papers, official government or leading-institution data, standards or primary docs, current news including BBC/CNN/GDELT-style sources when relevant, public discourse including X/Twitter and Reddit when available, developer/practitioner sources such as Stack Overflow/Stack Exchange/GitHub, and counterevidence or fact-checking sources. Treat public discourse as signal, not truth. If a layer cannot be searched, record the blocker in source-ledger.json and do not pass the gate.\nRESEARCH PLAN:\n${JSON.stringify(plan, null, 2)}\n\nOBJECTIVE: Produce genuinely useful candidate discoveries: non-obvious hypotheses, mechanisms, predictions, or experiments. Do not merely summarize. Mark uncertainty clearly.\n\nREQUIRED PROCESS:\n1. Source skill first: create ${RESEARCH_SOURCE_SKILL_ARTIFACT} with source layers, query templates, quality fields, blockers, and triangulation rules.\n2. Layered source search: create source-ledger.json with source_layers, queries, source ids, source quality notes, counterevidence sources, triangulation.cross_layer_checks, citation coverage, and blockers.\n3. Independent xhigh scouts: create scout-ledger.json with display_name/persona/persona_boundary, effort=xhigh, reasoning_effort=xhigh, a literal Eureka! idea, findings, source_ids, falsifiers, cheap_probes, and challenge_or_response for every scout lens.\n4. Debate: create debate-ledger.json with evidence-bound challenge/response exchanges involving every scout before synthesis.\n5. Falsification: create falsification-ledger.json with attacks, missing evidence, source conflicts, and decisive next tests.\n6. Synthesis: write research-report.md and novelty-ledger.json only after cited scout findings, Eureka ideas, debate, cross-layer triangulation, and falsification are recorded.\n7. Paper: write research-paper.md as a paper-style manuscript with source-ledger references and limitations.\n\nREQUIRED OUTPUT FILES in .sneakoscope/missions/${id}/:\n- research-report.md: concise report with framing, source coverage, scout synthesis, debate synthesis, hypotheses, falsification, predictions, and next experiments. Cite source-ledger ids for factual claims.\n- research-paper.md: paper manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References using source-ledger ids.\n- ${RESEARCH_SOURCE_SKILL_ARTIFACT}: route-local source collection skill; it is evidence for the Skill Creator step and must not mutate generated .agents/skills.\n- source-ledger.json: layered web/source queries, source ids, source priority, source quality notes, counterevidence sources, citation coverage, triangulation checks, and blockers.\n- scout-ledger.json: one entry per scout lens with display_name, persona, persona_boundary, effort, reasoning_effort, service_tier, eureka, query_set, findings, source_ids, falsifiers, cheap_probes, and challenge_or_response.\n- debate-ledger.json: evidence-bound challenge/response exchanges, participants, changed minds, and unresolved conflicts.\n- novelty-ledger.json: entries with claim, novelty, confidence, falsifiability, evidence source ids, falsifiers, next_experiment.\n- falsification-ledger.json: attacks/counterexamples/source conflicts, result, and next_decisive_tests.\n- research-gate.json: set passed only when all ledgers exist, ${RESEARCH_SOURCE_SKILL_ARTIFACT} exists, research-paper.md exists with required paper sections, layered web/source retrieval covered every required source layer, at least one cross-layer triangulation check exists, all scouts have display_name/persona/persona_boundary, all scouts have effort=xhigh, all scouts have literal Eureka! ideas, every scout participated in debate, at least one counterevidence source exists, citation coverage is complete, at least one insight survived falsification, at least one testable prediction exists, and unsupported breakthrough claims are zero.\n\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
+  const paperArtifact = researchPaperArtifactForPlan(plan);
+  const scoutAgentNames = (plan?.research_council?.scouts || RESEARCH_SCOUT_COUNCIL).map((scout) => researchScoutAgentName(scout)).join(', ');
+  return `You are running SKS Research Mode.\nMISSION: ${id}\nTOPIC: ${mission.prompt}\nCYCLE: ${cycle}\nMODE: Genius Scout Council + frontier discovery loop. Use maximum reasoning depth available under the current Codex profile.\nLONG-RUN REAL-RESEARCH POLICY: Normal Research is allowed to take one or two hours when the question requires it. Do real source gathering and evidence comparison; do not shortcut into mock, fixture, or summary-only output. If live source access is unavailable, write the blocker and keep the gate unpassed.\nNO-CODE-MUTATION POLICY: Do not edit repository source, package metadata, docs, config, generated skills, or harness files. Write only route-local artifacts under .sneakoscope/missions/${id}/. If a needed implementation change is discovered, record it as a recommendation or blocker for a later execution route.\nNO-QUESTION LOCK: Do not ask the user. Resolve scope from research-plan.json and current project evidence.\nSAFETY: Destructive database operations and unsafe external actions are forbidden. Prefer read-only inspection, local files, and cited public sources.\nPERSONA POLICY: Use Einstein/Feynman/Turing/von Neumann-inspired scout lenses only as cognitive roles. Do not impersonate, roleplay private identity, or speak as the historical people.\nSCOUT PERSONA POLICY: Every Research scout row must include agent_name, display_name, persona, persona_boundary, reasoning_effort: "xhigh", service_tier when available, falsifiers, cheap_probes, and challenge_or_response. Use these agent_name values exactly: ${scoutAgentNames}. Persona names are cognitive lenses, not impersonations.\nSCOUT EFFORT POLICY: Every Research scout agent must use reasoning_effort=xhigh. Record effort: "xhigh" for every scout in scout-ledger.json. Any lower-effort scout output must keep research-gate.json unpassed.\nEUREKA POLICY: Every scout must literally write "Eureka!" and one non-obvious, source-linked idea before debate.\nCONSENSUS LOOP POLICY: This is not a fixed three-cycle run. Repeat source-gathering, scout Eureka ideas, debate, falsification, and synthesis pressure until every scout records final agreement with the surviving mechanism. If unanimous agreement is not reached, keep research-gate.json unpassed and continue until the explicit max-cycle safety cap pauses the run.\nDEBATE POLICY: The scouts must debate vigorously but stay evidence-bound. Every scout must challenge or respond at least once, and debate-ledger.json must record exchanges, consensus_iterations, unanimous_consensus, and per-scout agreements before synthesis.\nPAPER POLICY: After the report and ledgers, write ${paperArtifact} as a concise manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References.\nSOURCE SKILL POLICY: Create or update ${RESEARCH_SOURCE_SKILL_ARTIFACT} as a route-local source collection skill before synthesis. It must name the selected source layers, query routes, quality fields, blockers, and cross-layer triangulation checks. Do not edit generated .agents/skills during the research run.\nWEB/SOURCE POLICY: Run layered source retrieval across every safely available layer before synthesis: latest public papers, official government or leading-institution data, standards or primary docs, current news including BBC/CNN/GDELT-style sources when relevant, public discourse including X/Twitter and Reddit when available, developer/practitioner sources such as Stack Overflow/Stack Exchange/GitHub, and counterevidence or fact-checking sources. Treat public discourse as signal, not truth. If a layer cannot be searched, record the blocker in source-ledger.json and do not pass the gate.\nRESEARCH PLAN:\n${JSON.stringify(plan, null, 2)}\n\nOBJECTIVE: Produce genuinely useful candidate discoveries: non-obvious hypotheses, mechanisms, predictions, or experiments. Do not merely summarize. Mark uncertainty clearly.\n\nREQUIRED PROCESS:\n1. Source skill first: create ${RESEARCH_SOURCE_SKILL_ARTIFACT} with source layers, query templates, quality fields, blockers, and triangulation rules.\n2. Layered source search: create source-ledger.json with source_layers, queries, source ids, source quality notes, counterevidence sources, triangulation.cross_layer_checks, citation coverage, and blockers.\n3. Independent xhigh scouts: create scout-ledger.json with agent_name/display_name/persona/persona_boundary, effort=xhigh, reasoning_effort=xhigh, a literal Eureka! idea, findings, source_ids, falsifiers, cheap_probes, and challenge_or_response for every scout lens.\n4. Debate to agreement: create debate-ledger.json with evidence-bound challenge/response exchanges involving every scout, consensus_iterations >= 1, unanimous_consensus=true only when all scouts agree, and scout_agreements for every scout.\n5. Falsification: create falsification-ledger.json with attacks, missing evidence, source conflicts, and decisive next tests.\n6. Synthesis: write research-report.md and novelty-ledger.json only after cited scout findings, Eureka ideas, unanimous debate agreement, cross-layer triangulation, and falsification are recorded.\n7. Paper: write ${paperArtifact} as a paper-style manuscript with source-ledger references and limitations.\n\nREQUIRED OUTPUT FILES in .sneakoscope/missions/${id}/:\n- research-report.md: concise report with framing, source coverage, scout synthesis, debate synthesis, hypotheses, falsification, predictions, and next experiments. Cite source-ledger ids for factual claims.\n- ${paperArtifact}: paper manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References using source-ledger ids.\n- ${RESEARCH_SOURCE_SKILL_ARTIFACT}: route-local source collection skill; it is evidence for the Skill Creator step and must not mutate generated .agents/skills.\n- source-ledger.json: layered web/source queries, source ids, source priority, source quality notes, counterevidence sources, citation coverage, triangulation checks, and blockers.\n- scout-ledger.json: one entry per scout lens with agent_name, display_name, persona, persona_boundary, effort, reasoning_effort, service_tier, eureka, query_set, findings, source_ids, falsifiers, cheap_probes, and challenge_or_response.\n- debate-ledger.json: evidence-bound challenge/response exchanges, participants, changed minds, unresolved conflicts, consensus_iterations, unanimous_consensus, and scout_agreements for every scout.\n- novelty-ledger.json: entries with claim, novelty, confidence, falsifiability, evidence source ids, falsifiers, next_experiment.\n- falsification-ledger.json: attacks/counterexamples/source conflicts, result, and next_decisive_tests.\n- research-gate.json: set passed only when all ledgers exist, ${RESEARCH_SOURCE_SKILL_ARTIFACT} exists, ${paperArtifact} exists with required paper sections, layered web/source retrieval covered every required source layer, at least one cross-layer triangulation check exists, all scouts have agent_name/display_name/persona/persona_boundary, all scouts have effort=xhigh, all scouts have literal Eureka! ideas, every scout participated in debate, consensus_iterations >= 1, unanimous_consensus=true with every scout agreement recorded, at least one counterevidence source exists, citation coverage is complete, at least one insight survived falsification, at least one testable prediction exists, and unsupported breakthrough claims are zero.\n\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
 }

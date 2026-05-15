@@ -22,7 +22,7 @@ import { bumpProjectVersion, disableVersionGitHook, runVersionPreCommit, version
 import { rustInfo } from '../core/rust-accelerator.mjs';
 import { renderCartridge, validateCartridge, driftCartridge, snapshotCartridge } from '../core/gx-renderer.mjs';
 import { defaultEvaluationScenario, runEvaluationBenchmark } from '../core/evaluation.mjs';
-import { evaluateResearchGate, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
+import { buildResearchPrompt, evaluateResearchGate, isDatedResearchPaperArtifact, writeMockResearchResult, writeResearchPlan } from '../core/research.mjs';
 import { evaluateRecallPulseFixtures, readMissionStatusLedger, writeRecallPulseArtifacts } from '../core/recallpulse.mjs';
 import {
   PPT_AUDIENCE_STRATEGY_ARTIFACT,
@@ -155,11 +155,19 @@ function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
     return { ...opts, session, codexArgs: [...(opts.codexArgs || []), '-c', 'model_provider="openai"'], codexLbBypassed: true };
   }
   if (!lb?.ok) return opts;
-  if (explicitSession) return opts;
+  const nextOpts = withCodexLbProviderArgs(opts);
+  if (explicitSession) return nextOpts;
   const session = sanitizeTmuxSessionName(`sks-codex-lb-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
   console.log(`codex-lb active for this launch: ${lb.env_path || lb.base_url || 'configured'}`);
   console.log(`Using fresh tmux session: ${session}`);
-  return { ...opts, session, codexLbFreshSession: true };
+  return { ...nextOpts, session, codexLbFreshSession: true };
+}
+
+function withCodexLbProviderArgs(opts = {}) {
+  const codexArgs = [...(opts.codexArgs || [])];
+  const hasProviderOverride = codexArgs.some((arg) => /model_provider\s*=/.test(String(arg || '')));
+  if (!hasProviderOverride) codexArgs.push('-c', 'model_provider="codex-lb"');
+  return { ...opts, codexArgs };
 }
 
 function help(args = []) {
@@ -1277,7 +1285,7 @@ async function depsStatus(root = null, opts = {}) {
     codex_cli: { ok: Boolean(codex.bin), bin: codex.bin || null, version: codex.version || null },
     codex_app: app,
     context7,
-    browser_use: { ok: app.mcp.has_browser_use, cache: app.plugins.browser_use_cache },
+    browser_use: { ok: Boolean(app.features?.browser_tool_ready || app.mcp.has_browser_use), cache: app.plugins.browser_use_cache, source: app.features?.browser_tool_source || app.mcp.browser_use_source || null },
     computer_use: { ok: app.mcp.has_computer_use, cache: app.plugins.computer_use_cache },
     tmux: { ok: Boolean(tmux.ok), bin: tmux.bin || null, version: tmux.version || null, min_version: tmux.min_version || '3.0', current_session: Boolean(tmux.current_session), install_hint: tmux.ok ? null : platformTmuxInstallHint(), error: tmux.error || null },
     homebrew: process.platform === 'darwin' ? { ok: Boolean(brew), bin: brew, required_for_tmux_install: homebrewNeeded } : { ok: null, bin: null, required_for_tmux_install: false },
@@ -1307,7 +1315,7 @@ function printDepsStatus(status) {
   console.log(`Codex App:   ${status.codex_app.app.installed ? 'ok' : 'missing'}`);
   console.log(`Image Gen:   ${status.codex_app.features?.image_generation ? 'ok' : 'missing'}`);
   console.log(`Context7:    ${status.context7.ok ? 'ok' : 'missing'}`);
-  console.log(`Browser Use: ${status.browser_use.ok ? 'ok' : 'missing'}`);
+  console.log(`Browser:     ${status.browser_use.ok ? `ok${status.browser_use.source ? ` (${status.browser_use.source})` : ''}` : 'missing'}`);
   console.log(`Computer Use:${status.computer_use.ok ? ' ok' : ' missing'}`);
   console.log(`tmux:        ${tmuxStatusKind(status.tmux)} ${status.tmux.version || status.tmux.error || ''}`.trimEnd());
   if (process.platform === 'darwin') console.log(`Homebrew:    ${status.homebrew.ok ? 'ok' : 'missing'} ${status.homebrew.bin || ''}`.trimEnd());
@@ -1637,7 +1645,7 @@ async function setup(args) {
   else console.log('Git:       .gitignore ignores SKS generated files');
   console.log(`Codex App: .codex/config.toml, .codex/hooks.json, .agents/skills, .codex/agents, .codex/SNEAKOSCOPE.md`);
   console.log(`Global $:  ${globalSkills.status === 'installed' ? 'ok' : globalSkills.status} ${globalSkills.root || ''}`.trimEnd());
-  console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser Use=${appRuntime.mcp.has_browser_use ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'} Image Gen=${appRuntime.features?.image_generation ? 'ok' : 'missing'}`);
+  console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser=${appRuntime.features?.browser_tool_ready ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'} Image Gen=${appRuntime.features?.image_generation ? 'ok' : 'missing'}`);
   console.log(`Prompt:    intent-first routing, $Answer fact-check route, $DFix ultralight Direct Fix route, $PPT HTML/PDF presentation route, Context7 gate`);
   console.log(`Skills:    .agents/skills`);
   console.log(`Next:      sks context7 check; sks selftest --mock; sks commands; sks dollar-commands`);
@@ -1777,7 +1785,7 @@ async function doctor(args) {
   console.log(`Rust acc.: ${rust.available ? rust.version : 'optional-missing'}`);
   console.log(`State:     ${result.sneakoscope.ok ? 'ok' : 'missing .sneakoscope'}`);
   console.log(`Context7:  ${result.context7.ok ? 'ok' : 'missing MCP config'} project=${result.context7.project.ok ? 'ok' : 'missing'} global=${result.context7.global.ok ? 'ok' : 'missing'}`);
-  console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser Use=${appRuntime.mcp.has_browser_use ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'} Image Gen=${appRuntime.features?.image_generation ? 'ok' : 'missing'}`);
+  console.log(`App tools: ${appRuntime.ok ? 'ok' : 'needs setup'} Codex App=${appRuntime.app.installed ? 'ok' : 'missing'} Browser=${appRuntime.features?.browser_tool_ready ? 'ok' : 'missing'} Computer Use=${appRuntime.mcp.has_computer_use ? 'ok' : 'missing'} Image Gen=${appRuntime.features?.image_generation ? 'ok' : 'missing'}`);
   console.log(`tmux:      ${tmuxStatusKind(result.runtime.tmux)} ${result.runtime.tmux.version || result.runtime.tmux.error || ''}`.trimEnd());
   console.log(`Guard:     ${result.harness_guard.ok ? 'ok' : 'blocked'}${result.harness_guard.source_exception ? ' source-exception' : ''}`);
   console.log(`Version:   ${result.versioning.ok ? 'ok' : 'missing'}${result.versioning.enabled ? ` ${result.versioning.package_version || ''}` : ` ${result.versioning.reason || 'disabled'}`}`);
@@ -1963,6 +1971,12 @@ async function safeReadText(file, fallback = '') {
 }
 
 async function resolveMissionId(root, arg) { return (!arg || arg === 'latest') ? findLatestMission(root) : arg; }
+
+function hasResearchProfileConfig(text = '') {
+  return /\[profiles\.sks-research-xhigh\][\s\S]*?model = "gpt-5\.5"[\s\S]*?model_reasoning_effort = "xhigh"/.test(text)
+    && /\[profiles\.sks-research\][\s\S]*?model = "gpt-5\.5"[\s\S]*?approval_policy = "never"[\s\S]*?model_reasoning_effort = "xhigh"/.test(text);
+}
+
 function readMaxCycles(args, fallback) {
   const i = args.indexOf('--max-cycles');
   const raw = i >= 0 && args[i + 1] ? Number(args[i + 1]) : Number(fallback);
@@ -2012,6 +2026,8 @@ async function selftest() {
   if (trippedStop) throw new Error('selftest: compliance loop guard did not terminally trip');
   const loopBlocker = await readJson(path.join(loopMission.dir, 'hard-blocker.json'), null);
   if (loopBlocker?.reason !== 'compliance_loop_guard_tripped') throw new Error('selftest: compliance loop guard did not write hard blocker');
+  const hardBlockerUnblocked = await evaluateStop(tmp, loopState, { last_assistant_message: 'done' });
+  if (hardBlockerUnblocked?.decision === 'block' && !String(hardBlockerUnblocked.reason || '').includes('reflection')) throw new Error('selftest: hard blocker did not unblock incomplete active gate');
   const clarificationMission = await createMission(tmp, { mode: 'team', prompt: 'visible question gate selftest' });
   await writeTextAtomic(path.join(clarificationMission.dir, 'questions.md'), '# Questions\n\n1. GOAL_PRECISE: What should be changed?\n');
   await writeJsonAtomic(path.join(clarificationMission.dir, 'required-answers.schema.json'), { slots: [{ id: 'GOAL_PRECISE', question: 'What should be changed?' }] });
@@ -2167,6 +2183,7 @@ async function selftest() {
   const doctorGlobalCodexConfig = await safeReadText(path.join(doctorGlobalHome, '.codex', 'config.toml'));
   if (!doctorGlobalRepairJson.repair?.global_codex_config) throw new Error('selftest: doctor global config repair missing');
   assertCodexWarn(doctorGlobalCodexConfig, 'doctor global config');
+  if (missingGeneratedCodexAppFeatureFlags(doctorGlobalCodexConfig).length || hasDeprecatedCodexHooksFeatureFlag(doctorGlobalCodexConfig) || !hasResearchProfileConfig(doctorGlobalCodexConfig)) throw new Error('selftest: doctor global config repair did not restore Codex App feature flags and Research xhigh profiles');
   for (const name of stalePluginSkillNames) {
     if (await exists(path.join(doctorGlobalHome, '.agents', 'skills', name, 'SKILL.md'))) throw new Error(`selftest: doctor --fix did not remove global generated ${name} plugin shadow skill`);
   }
@@ -2237,6 +2254,7 @@ async function selftest() {
   const postinstallNoMarkerConfig = await safeReadText(path.join(postinstallNoMarkerGlobalRoot, '.codex', 'config.toml'));
   if (missingGeneratedCodexAppFeatureFlags(postinstallNoMarkerConfig).length || hasDeprecatedCodexHooksFeatureFlag(postinstallNoMarkerConfig)) throw new Error('selftest: no-marker flags');
   assertCodexWarn(postinstallNoMarkerConfig, 'postinstall global runtime config');
+  if (!hasResearchProfileConfig(postinstallNoMarkerConfig)) throw new Error('selftest: postinstall global runtime config did not restore Research xhigh profiles');
   if (await exists(path.join(postinstallNoMarkerCwd, '.sneakoscope'))) throw new Error('selftest: no-marker postinstall polluted install cwd');
   if (await exists(path.join(postinstallNoMarkerGlobalRoot, '.gitignore'))) throw new Error('selftest: global runtime bootstrap without project git wrote shared .gitignore');
   const bootstrapJsonTmp = tmpdir();
@@ -2271,12 +2289,15 @@ async function selftest() {
   if (tmuxOpenArgs.join(' ') !== 'attach-session -t sks-mad-selftest') throw new Error('selftest: MAD tmux attach args are not stable by session name');
   const defaultFastHighPlan = await buildTmuxLaunchPlan({ root: tmp, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
   if (defaultFastHighPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c service_tier="fast" -c model_reasoning_effort="high"') throw new Error('selftest: default sks tmux launch is not fast-high');
-  const forcedModelPlan = await buildTmuxLaunchPlan({ root: tmp, env: { SKS_CODEX_MODEL: 'gpt-5.4-mini', SKS_CODEX_FAST_HIGH: '0', SKS_CODEX_REASONING: 'medium' }, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
-  if (forcedModelPlan.codexArgs.includes('gpt-5.4-mini') || forcedModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c service_tier="fast" -c model_reasoning_effort="medium"') throw new Error('selftest: sks tmux launch allowed a non-GPT-5.5 model override');
-  const explicitBadModelPlan = await buildTmuxLaunchPlan({ root: tmp, codexArgs: ['--profile', 'legacy-5.4', '--model', 'gpt-5.4-mini', '-c', 'model="gpt-5.4"', '-c', 'model_reasoning_effort="low"'], tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
-  if (explicitBadModelPlan.codexArgs.join(' ').includes('gpt-5.4') || explicitBadModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c service_tier="fast" --profile legacy-5.4 -c model_reasoning_effort="low"') throw new Error('selftest: explicit tmux model override was not forced back to GPT-5.5');
-  const codexExecArgs = buildCodexExecArgs({ root: tmp, prompt: 'model guard selftest', profile: 'legacy-5.4', extraArgs: ['--model=gpt-5.4-mini', '--config', 'model = "gpt-5.4"', '-c', 'model_reasoning_effort="medium"'] });
-  if (codexExecArgs.join(' ').includes('gpt-5.4') || !codexExecArgs.includes('gpt-5.5') || codexExecArgs.includes('--model=gpt-5.4-mini')) throw new Error('selftest: codex exec args allowed a non-GPT-5.5 model override');
+  const forcedModelPlan = await buildTmuxLaunchPlan({ root: tmp, env: { SKS_CODEX_MODEL: 'gpt-5.0-forbidden', SKS_CODEX_FAST_HIGH: '0', SKS_CODEX_REASONING: 'medium' }, tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
+  if (forcedModelPlan.codexArgs.includes('gpt-5.0-forbidden') || forcedModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c service_tier="fast" -c model_reasoning_effort="medium"') throw new Error('selftest: sks tmux launch allowed a non-GPT-5.5 model override');
+  const explicitBadModelPlan = await buildTmuxLaunchPlan({ root: tmp, codexArgs: ['--profile', 'legacy-forbidden-model', '--model', 'gpt-5.0-forbidden', '-c', 'model="gpt-5.0-forbidden"', '-c', 'model_reasoning_effort="low"'], tmux: { ok: true, bin: 'tmux', version: '3.4' }, codex: { bin: 'codex', version: 'codex-cli 99.0.0' }, app: { ok: true } });
+  if (explicitBadModelPlan.codexArgs.join(' ').includes('gpt-5.0-forbidden') || explicitBadModelPlan.codexArgs.join(' ') !== '--model gpt-5.5 -c service_tier="fast" --profile legacy-forbidden-model -c model_reasoning_effort="low"') throw new Error('selftest: explicit tmux model override was not forced back to GPT-5.5');
+  const codexExecArgs = buildCodexExecArgs({ root: tmp, prompt: 'model guard selftest', profile: 'legacy-forbidden-model', extraArgs: ['--model=gpt-5.0-forbidden', '--config', 'model = "gpt-5.0-forbidden"', '-c', 'model_reasoning_effort="medium"'] });
+  if (codexExecArgs.join(' ').includes('gpt-5.0-forbidden') || !codexExecArgs.includes('gpt-5.5') || codexExecArgs.includes('--model=gpt-5.0-forbidden')) throw new Error('selftest: codex exec args allowed a non-GPT-5.5 model override');
+  const researchExecArgs = buildCodexExecArgs({ root: tmp, prompt: 'research exec selftest', profile: 'sks-research', extraArgs: ['-c', 'service_tier="fast"', '-c', 'model_reasoning_effort="xhigh"'] });
+  const researchExecJoined = researchExecArgs.join(' ');
+  if (!researchExecJoined.includes('--profile sks-research') || !researchExecJoined.includes('--model gpt-5.5') || !researchExecJoined.includes('service_tier="fast"') || !researchExecJoined.includes('model_reasoning_effort="xhigh"')) throw new Error('selftest: research exec args did not force GPT-5.5 fast xhigh execution');
   await selftestCodexLb(tmp);
   if (!shouldAutoAttachTmux(['--mad'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest: MAD tmux launch does not auto-attach in an interactive terminal');
   if (shouldAutoAttachTmux(['--mad', '--json'], {}, { stdin: { isTTY: true }, stdout: { isTTY: true } })) throw new Error('selftest: MAD tmux json mode should not auto-attach');
@@ -2330,14 +2351,14 @@ async function selftest() {
   if (remoteControlStatus.code !== 0) throw new Error(`selftest: Codex remote-control status exited ${remoteControlStatus.code}: ${remoteControlStatus.stderr}`);
   const remoteControlJson = JSON.parse(remoteControlStatus.stdout);
   if (!remoteControlJson.ok || remoteControlJson.min_version !== '0.130.0' || !String(remoteControlJson.command || '').includes('remote-control')) throw new Error('selftest: Codex remote-control status did not report 0.130.0 readiness');
-  const remoteControlLaunch = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-app', 'remote-control', '--', '--model', 'gpt-5.4-mini', '-c', 'model="gpt-5.4"', '--example'], {
+  const remoteControlLaunch = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-app', 'remote-control', '--', '--model', 'gpt-5.0-forbidden', '-c', 'model="gpt-5.0-forbidden"', '--example'], {
     cwd: globalCwd,
     env: { SKS_GLOBAL_ROOT: globalRuntimeRoot, PATH: remoteControlBin },
     timeoutMs: 15000,
     maxOutputBytes: 64 * 1024
   });
   const remoteControlLaunchText = `${remoteControlLaunch.stdout}\n${remoteControlLaunch.stderr}`;
-  if (remoteControlLaunch.code !== 0 || remoteControlLaunchText.includes('gpt-5.4') || remoteControlLaunchText.includes('--model') || !remoteControlLaunchText.includes('-c model="gpt-5.5"')) throw new Error('selftest: Codex remote-control passthrough did not force GPT-5.5 with config syntax');
+  if (remoteControlLaunch.code !== 0 || remoteControlLaunchText.includes('gpt-5.0-forbidden') || remoteControlLaunchText.includes('--model') || !remoteControlLaunchText.includes('-c model="gpt-5.5"')) throw new Error('selftest: Codex remote-control passthrough did not force GPT-5.5 with config syntax');
   const remoteControlOldBin = path.join(tmp, 'remote-control-old-bin');
   await ensureDir(remoteControlOldBin);
   await writeTextAtomic(path.join(remoteControlOldBin, 'codex'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 0.129.0"; exit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
@@ -2848,10 +2869,10 @@ async function selftest() {
   if (hookTeamState.phase !== 'TEAM_PARALLEL_ANALYSIS_SCOUTING' || hookTeamState.implementation_allowed === false || !hookTeamState.team_plan_ready) throw new Error('selftest: $Team hook did not prepare direct Team mission');
   if (!hookTeamState.pipeline_plan_ready || !(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), PIPELINE_PLAN_ARTIFACT)))) throw new Error('selftest: $Team hook did not write a pipeline plan');
   if (!(await exists(path.join(missionDir(hookTeamTmp, hookTeamState.mission_id), 'team-plan.json')))) throw new Error('selftest: Team plan was not created directly');
-  const hookForbiddenModelResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team should be blocked before route work', model: 'gpt-5.5', metadata: { client: { modelId: 'gpt-5.4-mini' } } }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  const hookForbiddenModelResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team should be blocked before route work', model: 'gpt-5.5', metadata: { client: { modelId: 'gpt-5.0-forbidden' } } }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (hookForbiddenModelResult.code !== 0) throw new Error(`selftest: forbidden model hook exited ${hookForbiddenModelResult.code}: ${hookForbiddenModelResult.stderr}`);
   const hookForbiddenModelJson = JSON.parse(hookForbiddenModelResult.stdout);
-  if (hookForbiddenModelJson.decision !== 'block' || !String(hookForbiddenModelJson.reason || '').includes('gpt-5.5') || !String(hookForbiddenModelJson.reason || '').includes('gpt-5.4-mini')) throw new Error('selftest: hook did not block GPT-5.4 client model metadata');
+  if (hookForbiddenModelJson.decision !== 'block' || !String(hookForbiddenModelJson.reason || '').includes('gpt-5.5') || !String(hookForbiddenModelJson.reason || '').includes('gpt-5.0-forbidden')) throw new Error('selftest: hook did not block forbidden client model metadata');
   const hookTeamPendingResult = await runProcess(process.execPath, [hookBin, 'hook', 'user-prompt-submit'], { cwd: hookTeamTmp, input: JSON.stringify({ cwd: hookTeamTmp, prompt: '$Team 새 작업으로 넘어가' }), env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
   if (hookTeamPendingResult.code !== 0) throw new Error(`selftest: pending clarification hook exited ${hookTeamPendingResult.code}: ${hookTeamPendingResult.stderr}`);
   const hookTeamPendingJson = JSON.parse(hookTeamPendingResult.stdout);
@@ -3024,7 +3045,8 @@ async function selftest() {
   if (missingCodexConfigFlags.length || hasDeprecatedCodexHooksFeatureFlag(codexConfigText)) throw new Error(`selftest: generated Codex App feature flags missing or deprecated: ${missingCodexConfigFlags.join(', ')}`);
   assertCodexWarn(codexConfigText, 'generated Codex App config');
   if (!hasContext7ConfigText(codexConfigText)) throw new Error('selftest: Context7 MCP not configured');
-  if (!codexConfigText.includes('[profiles.sks-task-low]') || !codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-fast-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest: GPT-5.5 reasoning profiles not configured');
+  if (!codexConfigText.includes('[profiles.sks-task-low]') || !codexConfigText.includes('[profiles.sks-task-medium]') || !codexConfigText.includes('[profiles.sks-logic-high]') || !codexConfigText.includes('[profiles.sks-fast-high]') || !codexConfigText.includes('[profiles.sks-research-xhigh]') || !codexConfigText.includes('[profiles.sks-research]') || !codexConfigText.includes('[profiles.sks-mad-high]')) throw new Error('selftest: GPT-5.5 reasoning profiles not configured');
+  if (!hasResearchProfileConfig(codexConfigText)) throw new Error('selftest: generated Research xhigh profiles not configured');
   if (!/\[profiles\.sks-mad-high\][\s\S]*?approval_policy = "never"[\s\S]*?sandbox_mode = "danger-full-access"/.test(codexConfigText)) throw new Error('selftest: generated sks-mad-high profile is not full access');
   if (!codexConfigText.includes('[agents.analysis_scout]')) throw new Error('selftest: analysis_scout agent not configured');
   if (!codexConfigText.includes('[agents.team_consensus]')) throw new Error('selftest: team_consensus agent not configured');
@@ -3037,20 +3059,22 @@ async function selftest() {
   assertCodexWarn(preservedConfig, 'merged Codex config');
   if (preservedConfig.includes('fast_default_opt_out = true') || !preservedConfig.includes('keep = true')) throw new Error('selftest: Codex config merge did not remove stale Fast opt-out notice while preserving other notice keys');
   const missingPreservedFlags = missingGeneratedCodexAppFeatureFlags(preservedConfig);
-  if (missingPreservedFlags.length || hasDeprecatedCodexHooksFeatureFlag(preservedConfig) || !preservedConfig.includes('custom_preview = true') || !preservedConfig.includes('[profiles.sks-fast-high]')) throw new Error(`selftest: Codex config merge did not add required app feature flags, preserve existing feature flags, or remove deprecated codex_hooks: ${missingPreservedFlags.join(', ')}`);
+  if (missingPreservedFlags.length || hasDeprecatedCodexHooksFeatureFlag(preservedConfig) || !preservedConfig.includes('custom_preview = true') || !preservedConfig.includes('[profiles.sks-fast-high]') || !hasResearchProfileConfig(preservedConfig)) throw new Error(`selftest: Codex config merge did not add required app feature flags, Research profiles, preserve existing feature flags, or remove deprecated codex_hooks: ${missingPreservedFlags.join(', ')}`);
   if (hasTopLevelCodexModeLock(preservedConfig)) throw new Error('selftest: Codex config merge left top-level legacy model/reasoning locks that hide Fast mode UI');
   const appFeatureTmp = tmpdir();
   const fakeCodexApp = path.join(appFeatureTmp, 'Codex.app');
   const fakeCodexBinDir = path.join(appFeatureTmp, 'bin');
   await ensureDir(fakeCodexApp);
   await ensureDir(fakeCodexBinDir);
+  await ensureDir(path.join(appFeatureTmp, '.codex'));
+  await writeTextAtomic(path.join(appFeatureTmp, '.codex', 'config.toml'), codexConfigText);
   const fakeCodex = path.join(fakeCodexBinDir, 'codex');
-  await writeTextAtomic(fakeCodex, '#!/bin/sh\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then printf "%s\\n" "computer-use enabled" "browser-use enabled"; exit 0; fi\nif [ "$1" = "features" ] && [ "$2" = "list" ]; then cat <<EOF\napps                                    stable             true\ncodex_git_commit                        under development  true\ncomputer_use                            stable             true\nfast_mode                               stable             true\nhooks                                   stable             true\nimage_generation                        stable             true\nplugins                                 stable             true\nEOF\nexit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
+  await writeTextAtomic(fakeCodex, '#!/bin/sh\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then printf "%s\\n" "computer-use enabled" "browser-use enabled"; exit 0; fi\nif [ "$1" = "features" ] && [ "$2" = "list" ]; then cat <<EOF\napps                                    stable             true\nbrowser_use                             stable             true\nbrowser_use_external                    stable             true\ncodex_git_commit                        under development  true\ncomputer_use                            stable             true\nfast_mode                               stable             true\nguardian_approval                       stable             true\nhooks                                   stable             true\nimage_generation                        stable             true\nin_app_browser                          stable             true\nplugins                                 stable             true\nremote_control                          under development  true\ntool_suggest                            stable             true\nEOF\nexit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
   await fsp.chmod(fakeCodex, 0o755);
   const codexAppFeatureStatus = await codexAppIntegrationStatus({ codex: { bin: fakeCodex, version: 'codex-cli 99.0.0' }, home: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } });
-  if (!codexAppFeatureStatus.ok || !codexAppFeatureStatus.features?.required_flags_ok || !codexAppFeatureStatus.features?.codex_git_commit) throw new Error('selftest: codex-app check did not accept required app feature flags including under-development codex_git_commit');
+  if (!codexAppFeatureStatus.ok || !codexAppFeatureStatus.features?.required_flags_ok || !codexAppFeatureStatus.features?.codex_git_commit || !codexAppFeatureStatus.features?.remote_control || !codexAppFeatureStatus.features?.fast_mode_config?.ok) throw new Error('selftest: codex-app check did not accept required app feature flags, remote_control, and unlocked Fast UI config');
   const fakeCodexMissing = path.join(fakeCodexBinDir, 'codex-missing-git-commit');
-  await writeTextAtomic(fakeCodexMissing, '#!/bin/sh\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then printf "%s\\n" "computer-use enabled" "browser-use enabled"; exit 0; fi\nif [ "$1" = "features" ] && [ "$2" = "list" ]; then cat <<EOF\napps                                    stable             true\ncodex_git_commit                        under development  false\ncomputer_use                            stable             true\nfast_mode                               stable             true\nhooks                                   stable             true\nimage_generation                        stable             true\nplugins                                 stable             true\nEOF\nexit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
+  await writeTextAtomic(fakeCodexMissing, '#!/bin/sh\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then printf "%s\\n" "computer-use enabled" "browser-use enabled"; exit 0; fi\nif [ "$1" = "features" ] && [ "$2" = "list" ]; then cat <<EOF\napps                                    stable             true\nbrowser_use                             stable             true\nbrowser_use_external                    stable             true\ncodex_git_commit                        under development  false\ncomputer_use                            stable             true\nfast_mode                               stable             true\nguardian_approval                       stable             true\nhooks                                   stable             true\nimage_generation                        stable             true\nin_app_browser                          stable             true\nplugins                                 stable             true\nremote_control                          under development  true\ntool_suggest                            stable             true\nEOF\nexit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
   await fsp.chmod(fakeCodexMissing, 0o755);
   const codexAppMissingFeatureStatus = await codexAppIntegrationStatus({ codex: { bin: fakeCodexMissing, version: 'codex-cli 99.0.0' }, home: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } });
   if (codexAppMissingFeatureStatus.ok || codexAppMissingFeatureStatus.features?.required_flags_ok || codexAppMissingFeatureStatus.features?.codex_git_commit) throw new Error('selftest: codex-app check did not block disabled codex_git_commit feature flag');
@@ -3929,17 +3953,24 @@ async function selftest() {
   const { dir: researchDir, mission: researchMission } = await createMission(tmp, { mode: 'research', prompt: '새로운 코드 리뷰 방법론 연구' });
   const researchPlan = await writeResearchPlan(researchDir, researchMission.prompt, {});
   if (researchPlan.methodology !== 'genius-scout-council-frontier-discovery-loop' || researchPlan.web_research_policy?.mode !== 'layered_source_retrieval_and_triangulation') throw new Error('selftest: research plan contract');
-  if (!researchPlan.research_council?.scouts?.every((scout) => scout.display_name && scout.persona && scout.persona_boundary && scout.reasoning_effort === 'xhigh')) throw new Error('selftest: research scout persona contract missing from plan');
+  if (researchPlan.execution_policy?.default_max_cycles !== 12 || researchPlan.mutation_policy?.implementation_allowed !== false || !String(researchPlan.research_council?.debate_policy?.rule || '').includes('every scout records final agreement')) throw new Error('selftest: research consensus/no-code contract');
+  if (!researchPlan.research_council?.scouts?.every((scout) => scout.agent_name && scout.display_name && scout.persona && scout.persona_boundary && scout.reasoning_effort === 'xhigh') || !researchPlan.research_council.scouts.some((scout) => scout.agent_name === 'Einstein Scout')) throw new Error('selftest: research scout persona contract missing from plan');
+  const researchPaperArtifact = researchPlan.artifacts?.research_paper;
+  if (!isDatedResearchPaperArtifact(researchPaperArtifact) || researchPaperArtifact === 'research-paper.md') throw new Error('selftest: research paper artifact filename is not dated and titled');
+  const researchPrompt = buildResearchPrompt({ id: researchMission.id, mission: researchMission, plan: researchPlan, cycle: 1, previous: '' });
+  if (!researchPrompt.includes('NO-CODE-MUTATION POLICY') || !researchPrompt.includes('not a fixed three-cycle run') || !researchPrompt.includes('unanimous_consensus=true') || !researchPrompt.includes('agent_name') || !researchPrompt.includes(researchPaperArtifact)) throw new Error('selftest: research prompt missing no-code unanimous consensus policy');
   const rArts = researchPlan.required_artifacts || [];
   for (const a of [rss, 'source-ledger.json', 'scout-ledger.json', 'debate-ledger.json', 'falsification-ledger.json']) if (!rArts.includes(a) || !(await exists(path.join(researchDir, a)))) throw new Error('selftest: research artifact');
-  if (!rArts.includes('research-paper.md') || !rArts.includes(gos)) throw new Error('selftest: research paper');
+  if (!rArts.includes(researchPaperArtifact) || rArts.includes('research-paper.md') || !rArts.includes(gos)) throw new Error('selftest: research paper');
   const initialResearchGate = await evaluateResearchGate(researchDir);
-  if (initialResearchGate.passed || ['web_search_pass_missing', 'eureka_missing', 'debate_exchanges_missing', 'research_paper_missing'].some((r) => !initialResearchGate.reasons.includes(r))) throw new Error('selftest: research gate');
+  if (initialResearchGate.passed || ['web_search_pass_missing', 'eureka_missing', 'debate_exchanges_missing', 'research_paper_missing', 'consensus_iteration_missing', 'unanimous_consensus_missing'].some((r) => !initialResearchGate.reasons.includes(r))) throw new Error('selftest: research gate');
   const researchGate = await writeMockResearchResult(researchDir, researchPlan);
   if (!researchGate.passed) throw new Error('selftest: mock research gate did not pass');
+  if (!(await exists(path.join(researchDir, researchPaperArtifact))) || await exists(path.join(researchDir, 'research-paper.md'))) throw new Error('selftest: mock research paper filename did not use dated title artifact');
   const rm = researchGate.metrics || {};
+  if (rm.research_paper_artifact !== researchPaperArtifact) throw new Error('selftest: research gate did not report dated paper artifact');
   if (rm.scout_persona_contract_ok !== true || (rm.scout_persona_issues || []).length) throw new Error('selftest: research scout persona contract did not pass');
-  if (['independent_scouts', 'xhigh_scouts', 'eureka_moments', 'debate_participants', 'genius_opinion_summaries'].some((m) => rm[m] < 5) || ['counterevidence_sources', 'falsification_cases', 'triangulation_checks'].some((m) => rm[m] < 1) || rm.paper_sections < 8 || rm.citation_coverage !== true || rm.source_layers_covered < 7) throw new Error('selftest: research metrics');
+  if (['independent_scouts', 'xhigh_scouts', 'eureka_moments', 'debate_participants', 'genius_opinion_summaries'].some((m) => rm[m] < 5) || ['counterevidence_sources', 'falsification_cases', 'triangulation_checks'].some((m) => rm[m] < 1) || rm.paper_sections < 8 || rm.citation_coverage !== true || rm.source_layers_covered < 7 || rm.consensus_iterations < 1 || rm.unanimous_consensus !== true || rm.consensus_agreed_scouts < 5) throw new Error('selftest: research metrics');
   await writeJsonAtomic(path.join(dir, 'done-gate.json'), { passed: true, unsupported_critical_claims: 0, database_safety_violation: false, database_safety_reviewed: true, visual_drift: 'low', wiki_drift: 'low', tests_required: false });
   const gate = await evaluateDoneGate(tmp, id);
   if (!gate.passed) throw new Error('selftest: done gate');
