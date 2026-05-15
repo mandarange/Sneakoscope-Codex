@@ -969,6 +969,9 @@ export async function proofFieldCommand(sub, args = []) {
   console.log(`Workflow complexity: ${report.workflow_complexity.band} (${report.workflow_complexity.score})`);
   if (report.team_trigger_matrix.active_triggers.length) console.log(`Team triggers: ${report.team_trigger_matrix.active_triggers.join(', ')}`);
   console.log(`Proof cones: ${report.proof_cones.map((cone) => cone.id).join(', ')}`);
+  if (report.decision_lattice?.selected_path?.id) {
+    console.log(`Decision lattice: ${report.decision_lattice.selected_path.id} f=${report.decision_lattice.selected_path.cost?.f ?? 'n/a'} frontier=${report.decision_lattice.frontier?.expanded_order?.length || 0} rejected=${report.decision_lattice.rejected_alternatives?.length || 0}`);
+  }
   console.log(`Verification: ${report.fast_lane_decision.verification.join('; ')}`);
   console.log(`Report: ${path.relative(root, report.report_path)}`);
 }

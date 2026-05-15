@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { nowIso, readText, rel, runProcess, sha256, writeJsonAtomic } from './fsx.mjs';
+import { buildDecisionLatticeReport, validateDecisionLatticeReport } from './decision-lattice.mjs';
 
 export const PROOF_FIELD_SCHEMA_VERSION = 1;
 export const FAST_LANE_MIN_SCORE = 0.75;
@@ -88,6 +89,20 @@ export async function buildProofField(root, opts = {}) {
   const verificationStageCache = verificationStageCachePlan({ sourceHash, changedFiles, verification: fastLane.verification });
   const simplicity = outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane, workflowComplexity });
   const executionLane = executionLaneDecision({ fastLane, simplicity, workflowComplexity, teamTriggerMatrix });
+  const decisionLattice = normalizeDecisionLatticeReport(await buildDecisionLatticeReport({
+    intent,
+    changed_files: changedFiles,
+    proof_cones: selectedCones,
+    risk,
+    contract_clarity: contractClarity,
+    workflow_complexity: workflowComplexity,
+    team_trigger_matrix: teamTriggerMatrix,
+    verification_stage_cache: verificationStageCache,
+    simplicity_scorecard: simplicity,
+    fast_lane_decision: fastLane,
+    execution_lane: executionLane,
+    scoring_formula: 'simplicity_scorecard.score + contract_clarity.score - workflow_complexity.score - active_team_trigger_penalty'
+  }));
   return {
     schema_version: PROOF_FIELD_SCHEMA_VERSION,
     generated_at: nowIso(),
@@ -102,6 +117,7 @@ export async function buildProofField(root, opts = {}) {
     workflow_complexity: workflowComplexity,
     team_trigger_matrix: teamTriggerMatrix,
     verification_stage_cache: verificationStageCache,
+    decision_lattice: decisionLattice,
     simplicity_scorecard: simplicity,
     execution_lane: executionLane,
     proof_cones: selectedCones,
@@ -133,6 +149,8 @@ export function validateProofFieldReport(report = {}) {
   if (!Number.isFinite(Number(report.workflow_complexity?.score))) issues.push('workflow_complexity');
   if (!Array.isArray(report.team_trigger_matrix?.triggers)) issues.push('team_trigger_matrix');
   if (report.verification_stage_cache?.report_only !== true || !report.verification_stage_cache?.cache_key) issues.push('verification_stage_cache');
+  const latticeValidation = validateDecisionLatticeReport(report.decision_lattice);
+  if (!latticeValidation.ok) issues.push(`decision_lattice:${latticeValidation.issues.join('|')}`);
   if (!report.execution_lane?.lane) issues.push('execution_lane');
   if (report.execution_lane?.lane === SPEED_LANE_POLICY.fast_lane && report.execution_lane?.score < FAST_LANE_MIN_SCORE) issues.push('execution_lane_score');
   if (!Array.isArray(report.proof_cones)) issues.push('proof_cones');
@@ -158,9 +176,22 @@ export async function proofFieldFixture() {
       outcome_rubric_present: report.outcome_rubric.length === OUTCOME_RUBRIC.length,
       adversarial_lenses_present: report.outcome_rubric.every((item) => item.adversarial_lens) && report.simplicity_scorecard.criteria.every((item) => item.adversarial_lens),
       route_economy_present: report.contract_clarity?.report_only === true && report.workflow_complexity?.report_only === true && report.team_trigger_matrix?.report_only === true && report.verification_stage_cache?.report_only === true,
+      decision_lattice_present: validateDecisionLatticeReport(report.decision_lattice).ok,
+      decision_lattice_report_only: report.decision_lattice?.report_only === true,
+      decision_lattice_selected_path: Boolean(report.decision_lattice?.selected_path?.id),
+      decision_lattice_frontier_present: Array.isArray(report.decision_lattice?.frontier?.expanded_order) && report.decision_lattice.frontier.expanded_order.length > 0,
+      decision_lattice_rejections_present: Array.isArray(report.decision_lattice?.rejected_alternatives),
+      decision_lattice_scoring_formula_present: Boolean(report.decision_lattice?.scoring_formula),
       simplicity_score_usable: Number(report.simplicity_scorecard?.score) >= FAST_LANE_MIN_SCORE,
       execution_fast_lane_selected: report.execution_lane?.lane === SPEED_LANE_POLICY.fast_lane
     }
+  };
+}
+
+function normalizeDecisionLatticeReport(report = {}) {
+  return {
+    ...report,
+    scoring_formula: report.scoring_formula || report.research_basis?.scoring_formula || null
   };
 }
 

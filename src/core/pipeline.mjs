@@ -135,9 +135,30 @@ export function validatePipelinePlan(plan = {}) {
   if (!Array.isArray(plan.stages) || !plan.stages.length) issues.push('stages');
   if (!Array.isArray(plan.verification) || !plan.verification.length) issues.push('verification');
   if (!plan.route_economy?.mode) issues.push('route_economy');
+  const routeEconomyLatticeIssues = validateRouteEconomyDecisionLattice(plan.route_economy, plan.proof_field);
+  if (routeEconomyLatticeIssues.length) issues.push(...routeEconomyLatticeIssues.map((issue) => `route_economy.decision_lattice:${issue}`));
   if (plan.no_unrequested_fallback_code !== true || !plan.invariants?.includes('no_unrequested_fallback_code')) issues.push('fallback_guard');
   if (!plan.next_actions?.length) issues.push('next_actions');
   return { ok: issues.length === 0, issues };
+}
+
+function validateRouteEconomyDecisionLattice(routeEconomy = {}, proof = {}) {
+  const lattice = routeEconomy.decision_lattice;
+  if (!lattice) return [];
+  const issues = [];
+  if (routeEconomy.report_only !== true || routeEconomy.mode !== 'report_only') issues.push('requires_report_only_route_economy');
+  if (lattice.report_only !== true) issues.push('report_only');
+  if (!lattice.selected_path) issues.push('selected_path');
+  if (!Number.isFinite(Number(lattice.selected_f_score))) issues.push('selected_f_score');
+  if (!Number.isFinite(Number(lattice.frontier_count)) || Number(lattice.frontier_count) < 1) issues.push('frontier_count');
+  if (!Number.isFinite(Number(lattice.rejected_alternatives_count))) issues.push('rejected_alternatives_count');
+  if (proof?.attached && proof.decision_lattice) {
+    const source = proof.decision_lattice;
+    if (lattice.selected_path !== source.selected_path?.id) issues.push('selected_path_mismatch');
+    if (Number(lattice.frontier_count) !== Number(source.frontier?.expanded_order?.length || 0)) issues.push('frontier_count_mismatch');
+    if (Number(lattice.rejected_alternatives_count) !== Number(source.rejected_alternatives?.length || 0)) issues.push('rejected_alternatives_count_mismatch');
+  }
+  return issues;
 }
 
 function normalizeAmbiguity(value = {}, route) {
@@ -173,7 +194,8 @@ function normalizeProofField(report) {
     contract_clarity: report.contract_clarity || null,
     workflow_complexity: report.workflow_complexity || null,
     team_trigger_matrix: report.team_trigger_matrix || null,
-    verification_stage_cache: report.verification_stage_cache || null
+    verification_stage_cache: report.verification_stage_cache || null,
+    decision_lattice: report.decision_lattice || null
   };
 }
 
@@ -199,6 +221,13 @@ function routeEconomyPlan(proof = {}) {
     team_trigger_count: triggers.length,
     active_team_triggers: triggers,
     verification_stage_cache_key: proof.verification_stage_cache?.cache_key || null,
+    decision_lattice: proof.decision_lattice ? {
+      selected_path: proof.decision_lattice.selected_path?.id || null,
+      selected_f_score: proof.decision_lattice.selected_path?.cost?.f ?? null,
+      frontier_count: proof.decision_lattice.frontier?.expanded_order?.length || 0,
+      rejected_alternatives_count: proof.decision_lattice.rejected_alternatives?.length || 0,
+      report_only: proof.decision_lattice.report_only === true
+    } : null,
     deletion_policy: 'do_not_delete_or_skip_pipeline_stages_until_report_only_metrics_are_calibrated'
   };
 }

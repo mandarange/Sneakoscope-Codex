@@ -110,6 +110,11 @@ export async function runWorkflowPerfBench(root, opts = {}) {
       workflow_complexity_band: proofField?.workflow_complexity?.band || null,
       team_trigger_count: proofField?.team_trigger_matrix?.active_triggers?.length || 0,
       verification_stage_cache_key: proofField?.verification_stage_cache?.cache_key || null,
+      decision_lattice_selected_path: proofField?.decision_lattice?.selected_path?.id || null,
+      decision_lattice_frontier_count: proofField?.decision_lattice?.frontier?.expanded_order?.length || 0,
+      decision_lattice_rejected_alternative_count: proofField?.decision_lattice?.rejected_alternatives?.length || 0,
+      decision_lattice_scoring_formula: proofField?.decision_lattice?.scoring_formula || null,
+      decision_lattice_valid: Boolean(proofField?.decision_lattice?.report_only) && proofValidation.ok,
       outcome_criteria_passed: (proofField?.simplicity_scorecard?.criteria || []).filter((item) => item.passed).length,
       proof_field_valid: proofValidation.ok,
       pipeline_plan_valid: planValidation.ok
@@ -138,7 +143,19 @@ export function validateWorkflowPerfReport(report = {}) {
   if (!Number.isFinite(Number(report.metrics?.workflow_complexity_score))) issues.push('workflow_complexity_score');
   if (!report.metrics?.workflow_complexity_band) issues.push('workflow_complexity_band');
   if (!report.metrics?.verification_stage_cache_key) issues.push('verification_stage_cache_key');
+  if (!report.metrics?.decision_lattice_selected_path) issues.push('decision_lattice_selected_path');
+  if (!Number.isFinite(Number(report.metrics?.decision_lattice_frontier_count))) issues.push('decision_lattice_frontier_count');
+  if (!Number.isFinite(Number(report.metrics?.decision_lattice_rejected_alternative_count))) issues.push('decision_lattice_rejected_alternative_count');
+  if (!report.metrics?.decision_lattice_scoring_formula) issues.push('decision_lattice_scoring_formula');
+  if (report.metrics?.decision_lattice_valid !== true) issues.push('decision_lattice_valid');
   if (!report.proof_field || !validateProofFieldReport(report.proof_field).ok) issues.push('proof_field');
+  else {
+    const lattice = report.proof_field.decision_lattice;
+    if (report.metrics.decision_lattice_selected_path !== lattice?.selected_path?.id) issues.push('decision_lattice_selected_path_mismatch');
+    if (Number(report.metrics.decision_lattice_frontier_count) !== Number(lattice?.frontier?.expanded_order?.length || 0)) issues.push('decision_lattice_frontier_count_mismatch');
+    if (Number(report.metrics.decision_lattice_rejected_alternative_count) !== Number(lattice?.rejected_alternatives?.length || 0)) issues.push('decision_lattice_rejected_alternative_count_mismatch');
+    if (report.metrics.decision_lattice_scoring_formula !== lattice?.scoring_formula) issues.push('decision_lattice_scoring_formula_mismatch');
+  }
   if (!report.pipeline_plan || !validatePipelinePlan(report.pipeline_plan).ok) issues.push('pipeline_plan');
   if (!report.recommendation?.mode) issues.push('recommendation');
   return { ok: issues.length === 0, issues };
