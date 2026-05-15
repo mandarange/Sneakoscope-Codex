@@ -401,7 +401,6 @@ async function codexFastModeConfigStatus(opts = {}) {
     if (!config.text) continue;
     const topLevel = topLevelToml(config.text);
     if (/(^|\n)\s*model_reasoning_effort\s*=/.test(topLevel)) blockers.push(`${config.scope}:top_level_model_reasoning_effort`);
-    if (/(^|\n)\s*model_provider\s*=\s*"codex-lb"\s*(?:#.*)?(?=\n|$)/.test(topLevel)) blockers.push(`${config.scope}:top_level_codex_lb_provider`);
     if (/(^|\n)\s*fast_default_opt_out\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(tomlTable(config.text, 'notice'))) blockers.push(`${config.scope}:fast_default_opt_out`);
   }
   const merged = configs.map((config) => config.text).join('\n');

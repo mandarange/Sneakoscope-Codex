@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, readJson, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
-import { AWESOME_DESIGN_MD_REFERENCE, DESIGN_SYSTEM_SSOT, GETDESIGN_REFERENCE, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST } from './routes.mjs';
+import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_EVIDENCE_SOURCE, DESIGN_SYSTEM_SSOT, GETDESIGN_REFERENCE, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST } from './routes.mjs';
 
 export const PPT_AUDIENCE_STRATEGY_ARTIFACT = 'ppt-audience-strategy.json';
 export const PPT_GATE_ARTIFACT = 'ppt-gate.json';
@@ -482,18 +482,30 @@ export function planPptImageAssets(contract = {}, storyboard = buildPptStoryboar
     ].filter(Boolean);
   return selected.slice(0, maxAssets).map(({ request, page }, index) => {
     const id = compactId('ppt-image', `${index + 1}:${request || page?.claim || page?.kind}`);
+    const prompt = buildImageAssetPrompt({ contract, page, request, styleTokens });
+    const relPath = path.join(PPT_ASSET_DIR, `${safeFileSlug(id)}.png`);
     return {
       id,
       slide: page?.number || index + 1,
       role: index === 0 ? 'hero_visual' : 'supporting_visual',
       status: 'planned',
-      prompt: buildImageAssetPrompt({ contract, page, request, styleTokens }),
+      prompt,
       model: 'gpt-image-2',
       size: cleanText(contract.answers?.PRESENTATION_IMAGE_SIZE, '1536x1024'),
       quality: cleanText(contract.answers?.PRESENTATION_IMAGE_QUALITY, 'medium'),
       output_format: 'png',
-      rel_path: path.join(PPT_ASSET_DIR, `${safeFileSlug(id)}.png`),
-      html_src: `../${path.join(PPT_ASSET_DIR, `${safeFileSlug(id)}.png`)}`
+      rel_path: relPath,
+      html_src: `../${relPath}`,
+      imagegen_invocation: {
+        required_skill: 'imagegen',
+        command: '$imagegen',
+        surface: 'codex_app_builtin_image_generation',
+        evidence_source: CODEX_IMAGEGEN_EVIDENCE_SOURCE,
+        model: 'gpt-image-2',
+        tool_mode: 'built_in_image_gen',
+        prompt,
+        save_policy: `After generation, move or copy the selected output into ${relPath} and record output_path.`
+      }
     };
   });
 }
@@ -541,7 +553,16 @@ export async function buildPptImageAssetLedger(dir, contract = {}, storyboard = 
     contract_hash: contract.sealed_hash || null,
     required,
     policy: 'Required PPT image resources must be generated through Codex App $imagegen/gpt-image-2 and recorded as real output files; direct API fallback, fabricated files, and placeholder ledgers do not satisfy this gate.',
-    codex_app_imagegen_doc: 'https://developers.openai.com/codex/app/features#image-generation',
+    codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
+    imagegen_execution: {
+      required_skill: 'imagegen',
+      command: '$imagegen',
+      surface: 'codex_app_builtin_image_generation',
+      evidence_source: CODEX_IMAGEGEN_EVIDENCE_SOURCE,
+      model: 'gpt-image-2',
+      tool_mode: 'built_in_image_gen',
+      output_requirement: 'Generated raster files must be copied into the mission assets/ directory and referenced by output_path.'
+    },
     provider: {
       model: 'gpt-image-2',
       surface: 'codex_app_$imagegen',
@@ -559,7 +580,7 @@ export async function buildPptImageAssetLedger(dir, contract = {}, storyboard = 
       required
         ? 'The sealed PPT contract requires generated image assets; missing Codex App $imagegen/gpt-image-2 output blocks the PPT gate.'
         : 'No generated image asset requirement was detected; assets remain optional and are not generated to avoid unrequested API cost.',
-      'Run Codex App $imagegen/gpt-image-2 for each blocked asset, place the generated raster under assets/, then rerun the PPT build so existing generated files are verified.'
+      'Invoke the loaded imagegen skill with Codex App $imagegen/gpt-image-2 for each blocked asset, place the generated raster under assets/, then rerun the PPT build so existing generated files are verified.'
     ]
   };
 }
@@ -592,8 +613,12 @@ export function buildPptReviewPolicy(contract = {}, storyboard = buildPptStorybo
     },
     visual_review: {
       model: 'gpt-image-2',
+      required_skill: 'imagegen',
+      command: '$imagegen',
+      surface: 'codex_app_builtin_image_generation',
+      evidence_source: CODEX_IMAGEGEN_EVIDENCE_SOURCE,
       persona: '대한민국 TOSS UI/UX 시니어 총괄 디자이너',
-      codex_app_imagegen_doc: 'https://developers.openai.com/codex/app/features#image-generation',
+      codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
       model_doc: 'https://developers.openai.com/api/docs/models/gpt-image-2',
       mode: explicitlyRequired ? 'required_by_contract' : 'codex_app_when_available',
       required_for_gate: explicitlyRequired,
@@ -685,7 +710,7 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
       title: 'Required gpt-image-2 visual review evidence missing',
       detail: 'The sealed PPT contract explicitly requested image/gpt-image-2 visual critique, but no Codex App imagegen review evidence was supplied.',
       source: 'codex_app_imagegen_gate',
-      action: 'Run the bounded gpt-image-2 slide review loop in Codex App and record evidence paths before final output.'
+      action: 'Invoke the loaded imagegen skill through Codex App $imagegen/gpt-image-2, run the bounded slide review loop, and record evidence paths before final output.'
     }));
   }
   const blocking = issues.filter((issue) => ['P0', 'P1'].includes(issue.severity));
