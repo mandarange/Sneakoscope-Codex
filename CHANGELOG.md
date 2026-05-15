@@ -5,6 +5,7 @@
 ### Fixed
 
 - Automatically restore existing codex-lb API-key auth during npm postinstall upgrades that reach the repair phase and during `sks doctor --fix`, including legacy installs where the key only remains in Codex `auth.json` and a codex-lb provider or env base URL is already recoverable.
+- Keep the release size gate publishable after the codex-lb auth restore path by deduplicating its selftest setup and raising the unpacked-size budget to 1744 KiB.
 
 
 ## [0.8.5] - 2026-05-15
