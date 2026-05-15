@@ -65,6 +65,13 @@ Sneakoscope 0.9.0 adds a report-only Decision Lattice planner that uses A* over 
 
 The lattice integrates with the existing proof-field and `sks pipeline plan` surfaces. Its reports are expected to show the explored frontier, the selected path, and rejected paths with their proof-debt reasons, so reviewers can audit why a route stayed on the full Team/Honest path or why a smaller verification plan was only proposed. Like RecallPulse, this is designed to land as report-only evidence first; route enforcement and performance claims remain gated by later validation.
 
+Quick checks:
+
+```bash
+sks proof-field scan --json --intent "small CLI change"
+sks pipeline plan latest --proof-field --json
+```
+
 ## Requirements
 
 - Node.js `>=20.11`
