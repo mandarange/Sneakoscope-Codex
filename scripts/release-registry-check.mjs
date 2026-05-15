@@ -144,11 +144,28 @@ function checkPublishedVersion(pkg) {
   }
   const latest = info?.['dist-tags']?.latest || info?.version || null;
   if (!latest) fail('npm registry metadata lookup did not return a latest version');
+  const exact = run(npmBin, ['view', `${pkg.name}@${pkg.version}`, 'version', '--json', '--registry', expectedRegistry]);
+  let exactPublished = false;
+  if (exact.status === 0) {
+    try {
+      const exactInfo = JSON.parse(exact.stdout);
+      exactPublished = Array.isArray(exactInfo) ? exactInfo.includes(pkg.version) : exactInfo === pkg.version;
+    } catch {
+      exactPublished = String(exact.stdout || '').includes(pkg.version);
+    }
+  } else if (!/E404|No match found|not in this registry/i.test(`${exact.stdout || ''}\n${exact.stderr || ''}`)) {
+    fail('npm exact-version lookup failed', `${exact.stdout || ''}\n${exact.stderr || ''}`);
+  }
+  if (requireUnpublished && exactPublished) {
+    fail('package version is already published on npm', `${pkg.name}@${pkg.version}`);
+  }
   const cmp = compareVersions(pkg.version, latest);
   if (requireUnpublished && cmp <= 0) {
     fail('package version is not newer than the npm latest dist-tag', `package.json: ${pkg.version}\nnpm latest: ${latest}`);
   }
-  const note = cmp > 0 ? `ready for new publish over npm latest ${latest}` : `current npm latest is ${latest}`;
+  const note = exactPublished
+    ? `exact version already exists; current npm latest is ${latest}`
+    : (cmp > 0 ? `ready for new publish over npm latest ${latest}` : `current npm latest is ${latest}`);
   console.log(`Registry metadata check passed: ${pkg.name}@${pkg.version}; ${note}.`);
 }
 

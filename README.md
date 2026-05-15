@@ -59,6 +59,12 @@ Research scouts now use named persona-inspired cognitive lenses: Einstein Scout,
 
 For existing 0.7.x users, the visible change is new report-only evidence, not a route personality rewrite. Team still feels like Team, DFix stays ultralight, DB remains conservative, QA-LOOP still dogfoods, PPT stays information-first, imagegen still requires real raster evidence, and Honest Mode remains the final truth pass. The original strong reminder idea became neutral RecallPulse so user-facing prompts stay short, professional, and non-repetitive; hook messages can point at status, but `mission-status-ledger.json` is the durable source when app-visible text disappears. The planning source is `docs/RECALLPULSE_0_8_0_TASKS.md`, and implementation is designed to land in safe task-sized slices before any enforcement promotion.
 
+## 0.9.0 Report-Only Decision Lattice
+
+Sneakoscope 0.9.0 adds a report-only Decision Lattice planner that uses A* over proof-debt signals to explain which route or verification path the pipeline would prefer. It is an evidence and planning surface, not a runtime shortcut: SKS must not claim speedup, fast-lane accuracy, or reduced verification cost from the lattice until replay or scored eval evidence demonstrates those outcomes.
+
+The lattice integrates with the existing proof-field and `sks pipeline plan` surfaces. Its reports are expected to show the explored frontier, the selected path, and rejected paths with their proof-debt reasons, so reviewers can audit why a route stayed on the full Team/Honest path or why a smaller verification plan was only proposed. Like RecallPulse, this is designed to land as report-only evidence first; route enforcement and performance claims remain gated by later validation.
+
 ## Requirements
 
 - Node.js `>=20.11`
@@ -239,7 +245,7 @@ sks code-structure scan --json
 
 `sks recallpulse` is the 0.8.0 report-only RecallPulse utility. It writes `recallpulse-decision.json`, `mission-status-ledger.json`, `route-proof-capsule.json`, `evidence-envelope.json`, `recallpulse-governance-report.json`, `recallpulse-task-goal-ledger.json`, and `recallpulse-eval-report.json` for the current mission. RecallPulse does not replace route gates, Honest Mode, DB safety, imagegen evidence, or TriWiki validation; it records cache hits, hydration needs, duplicate suppression, route-governance risks, and final-summary-ready durable status so later releases can promote only measured improvements. Checklist updates are sequential: every `Txxx` row is treated as a child `$Goal` checkpoint, and `sks recallpulse checklist ... --task T001 --apply` refuses out-of-order checks unless explicitly overridden.
 
-`sks pipeline plan` shows the active route lane, kept/skipped stages, verification commands, and no-unrequested-fallback invariant. `sks proof-field scan` is the lightweight rubric for small changes; risky or broad signals return to the full Team/Honest path.
+`sks pipeline plan` shows the active route lane, kept/skipped stages, verification commands, and no-unrequested-fallback invariant. The 0.9.0 Decision Lattice augments this planning surface with report-only A*/proof-debt evidence: frontier paths considered, the selected path, and rejected paths with rejection reasons. `sks proof-field scan` remains the lightweight rubric for small changes; risky or broad signals return to the full Team/Honest path, and no speedup claim is valid without replay or eval evidence.
 
 ### Ambiguity Questions
 

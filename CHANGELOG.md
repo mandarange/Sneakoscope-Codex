@@ -3,6 +3,16 @@
 ## [Unreleased]
 
 
+## [0.9.0] - 2026-05-15
+
+### Added
+
+- Document the report-only Decision Lattice planner for 0.9.0, using A* over proof-debt signals to explain route and verification path selection without claiming speedups before replay or scored eval evidence exists.
+- Describe the Decision Lattice integration with proof-field and `sks pipeline plan` surfaces, including frontier, selected path, and rejected path evidence for reviewer audit.
+- Raise the unpacked package size gate to 1776 KiB for the new Decision Lattice planner module while keeping packed size and file-count budgets unchanged.
+- Strengthen the release registry gate so `--require-unpublished` checks the exact package version, not only whether the candidate is newer than the latest dist-tag.
+
+
 ## [0.8.6] - 2026-05-15
 
 ### Fixed
