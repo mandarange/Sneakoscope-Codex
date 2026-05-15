@@ -7,7 +7,30 @@ import { getCodexInfo } from './codex-adapter.mjs';
 export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/features';
 export const CODEX_CHANGELOG_URL = 'https://developers.openai.com/codex/changelog';
 export const CODEX_REMOTE_CONTROL_MIN_VERSION = '0.130.0';
-const REQUIRED_CODEX_APP_FEATURE_FLAGS = ['codex_git_commit', 'hooks', 'fast_mode', 'computer_use', 'apps', 'plugins'];
+const REQUIRED_CODEX_APP_FEATURE_FLAGS = [
+  'codex_git_commit',
+  'hooks',
+  'remote_control',
+  'fast_mode',
+  'computer_use',
+  'browser_use',
+  'browser_use_external',
+  'image_generation',
+  'in_app_browser',
+  'guardian_approval',
+  'tool_suggest',
+  'apps',
+  'plugins'
+];
+const DEFAULT_CODEX_APP_PLUGINS = [
+  { name: 'browser', marketplace: 'openai-bundled' },
+  { name: 'chrome', marketplace: 'openai-bundled' },
+  { name: 'computer-use', marketplace: 'openai-bundled' },
+  { name: 'latex', marketplace: 'openai-bundled' },
+  { name: 'documents', marketplace: 'openai-primary-runtime' },
+  { name: 'presentations', marketplace: 'openai-primary-runtime' },
+  { name: 'spreadsheets', marketplace: 'openai-primary-runtime' }
+];
 
 export function codexAppCandidatePaths(home = os.homedir(), env = process.env) {
   const candidates = [];
@@ -104,15 +127,20 @@ export async function codexAppIntegrationStatus(opts = {}) {
   const featureText = `${featureList.stdout}\n${featureList.stderr}`;
   const browserUsePath = await findPluginCache('browser-use', opts);
   const computerUsePath = await findPluginCache('computer-use', opts);
+  const defaultPlugins = await codexDefaultPluginStatus(opts);
+  const fastModeConfig = await codexFastModeConfigStatus(opts);
   const computerUseMcpListed = /computer[-_ ]?use/i.test(mcpText);
   const browserUseMcpListed = /browser[-_ ]?use/i.test(mcpText);
   const imageGenerationReady = codexFeatureEnabled(featureText, 'image_generation');
+  const inAppBrowserReady = codexFeatureEnabled(featureText, 'in_app_browser');
+  const browserUseFeatureReady = codexFeatureEnabled(featureText, 'browser_use');
   const requiredFeatureFlags = Object.fromEntries(REQUIRED_CODEX_APP_FEATURE_FLAGS.map((name) => [name, codexFeatureEnabled(featureText, name)]));
   const requiredFeatureFlagsOk = Object.values(requiredFeatureFlags).every(Boolean);
   const computerUseReady = computerUseMcpListed || Boolean(computerUsePath);
   const browserUseReady = browserUseMcpListed || Boolean(browserUsePath);
+  const browserToolReady = inAppBrowserReady || browserUseFeatureReady || browserUseReady;
   const appInstalled = Boolean(appPath);
-  const ready = appInstalled && Boolean(codex.bin) && mcpList.ok && featureList.ok && requiredFeatureFlagsOk && imageGenerationReady && computerUseReady && browserUseReady;
+  const ready = appInstalled && Boolean(codex.bin) && mcpList.ok && featureList.ok && requiredFeatureFlagsOk && defaultPlugins.ok && fastModeConfig.ok && imageGenerationReady && computerUseReady && browserToolReady;
   return {
     ok: ready,
     app: {
@@ -142,16 +170,30 @@ export async function codexAppIntegrationStatus(opts = {}) {
       ...requiredFeatureFlags,
       required_flags: requiredFeatureFlags,
       required_flags_ok: requiredFeatureFlagsOk,
+      fast_mode_config: fastModeConfig,
       image_generation: imageGenerationReady,
       image_generation_source: imageGenerationReady ? 'codex_features_list' : 'missing',
+      in_app_browser: inAppBrowserReady,
+      browser_use: browserUseFeatureReady,
+      browser_tool_ready: browserToolReady,
+      browser_tool_source: inAppBrowserReady
+        ? 'codex_features_list:in_app_browser'
+        : browserUseFeatureReady
+          ? 'codex_features_list:browser_use'
+          : browserUseMcpListed
+            ? 'mcp_list:browser_use'
+            : browserUsePath
+              ? 'plugin_cache:browser-use'
+              : 'missing',
       stdout: featureList.stdout,
       stderr: featureList.stderr
     },
     plugins: {
       computer_use_cache: computerUsePath,
-      browser_use_cache: browserUsePath
+      browser_use_cache: browserUsePath,
+      default_plugins: defaultPlugins
     },
-    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags, requiredFeatureFlagsOk, imageGenerationReady, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl })
+    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags, requiredFeatureFlagsOk, defaultPlugins, fastModeConfig, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, remoteControl })
   };
 }
 
@@ -206,7 +248,7 @@ export function formatCodexRemoteControlStatus(status) {
   return lines.filter(Boolean).join('\n');
 }
 
-export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, imageGenerationReady, computerUseReady, browserUseReady, computerUseMcpListed, browserUseMcpListed, remoteControl }) {
+export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, fastModeConfig = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, remoteControl }) {
   const lines = [];
   if (!appInstalled) {
     lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS tmux launch can still run with Codex CLI alone, but Codex Computer Use and imagegen/gpt-image-2 evidence will be unavailable until Codex App is ready.');
@@ -229,13 +271,21 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
   }
   if (featureList?.checked && featureList.ok && !requiredFeatureFlagsOk) {
     const missing = missingRequiredFeatureFlags(requiredFeatureFlags);
-    lines.push(`Codex App feature flag(s) disabled or missing: ${missing.join(', ')}. Commit message generation and app-only tool paths can fail even when CLI chat works.`);
-    lines.push('Verify with: codex features list | rg "codex_git_commit|hooks|fast_mode|computer_use|apps|plugins"');
+    lines.push(`Codex App feature flag(s) disabled or missing: ${missing.join(', ')}. Commit message generation, mobile/remote-control, and app-only tool paths can fail even when CLI chat works.`);
+    lines.push('Verify with: codex features list | rg "codex_git_commit|hooks|remote_control|fast_mode|computer_use|browser_use|browser_use_external|image_generation|in_app_browser|guardian_approval|tool_suggest|apps|plugins"');
   }
-  if (appInstalled && (!computerUseReady || !browserUseReady)) {
+  if (defaultPlugins?.missing_enabled?.length) {
+    lines.push(`Codex default plugin(s) installed but not enabled: ${defaultPlugins.missing_enabled.join(', ')}. Composer/tool UI can hide built-in surfaces even while feature flags look green.`);
+    lines.push('Run: sks doctor --fix');
+  }
+  if (fastModeConfig?.blockers?.length) {
+    lines.push(`Codex App speed selector can be hidden or locked by config: ${fastModeConfig.blockers.join(', ')}.`);
+    lines.push('Run: sks doctor --fix');
+  }
+  if (appInstalled && (!computerUseReady || !browserToolReady)) {
     lines.push('Open Codex App settings and enable recommended MCP/plugin tools. Codex CLI 0.130.0+ remote-control/app-server sessions can pick up config changes live; restart older CLI/TUI sessions.');
-    lines.push('Required for SKS QA-LOOP UI/browser evidence: Codex Computer Use only. Browser Use can support non-UI browser context, but it does not satisfy UI-level E2E verification.');
-    lines.push('Verify with: codex mcp list');
+    lines.push('Required for SKS QA-LOOP UI/browser evidence: Codex Computer Use only. Browser tools can support browsing context, but they do not satisfy UI-level E2E verification.');
+    lines.push('Verify with: codex features list; codex mcp list');
   }
   if (imageGenerationReady) {
     lines.push('Image generation is enabled; required raster assets and generated image-review evidence must invoke $imagegen/gpt-image-2 and record real output.');
@@ -244,6 +294,10 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
   }
   if (computerUseReady && !computerUseMcpListed) {
     lines.push('Computer Use plugin files are installed, but this check cannot prove the current thread exposes the live Computer Use tools. Start a new Codex App thread and invoke @Computer or @AppName for the actual target app or screen; Codex App readiness itself should stay on `codex features list`, `codex mcp list`, and `sks codex-app check`.');
+  }
+  if (browserToolReady) {
+    const source = inAppBrowserReady ? 'in-app browser feature' : browserUseFeatureReady ? 'browser_use feature' : 'Browser Use plugin';
+    lines.push(`Browser tooling is visible via ${source}; prefer the first-party in-app browser for local web apps, and keep Codex Computer Use as the only accepted UI verification evidence source.`);
   }
   if (browserUseReady && !browserUseMcpListed) {
     lines.push('Browser Use plugin files are installed, but `codex mcp list` does not list a browser-use MCP server. Treat Browser Use as plugin-scoped, not as SKS UI verification evidence.');
@@ -260,8 +314,10 @@ export function formatCodexAppStatus(status, { includeRaw = false } = {}) {
     `Codex CLI:   ${status.codex_cli.ok ? 'ok' : 'missing'}${status.codex_cli.version ? ` ${status.codex_cli.version}` : ''}`,
     `Remote Ctrl: ${status.remote_control?.ok ? 'ok' : 'missing'}${status.remote_control?.codex_cli?.version_number ? ` min ${status.remote_control.min_version}` : ''}`,
     `App Flags:  ${status.features?.required_flags_ok ? 'ok' : `missing ${missingRequiredFeatureFlags(status.features?.required_flags).join(', ') || 'required flags'}`}`,
+    `Fast UI:    ${status.features?.fast_mode_config?.ok ? 'ok' : `locked ${(status.features?.fast_mode_config?.blockers || []).join(', ') || 'config'}`}`,
+    `Default Plugins:${status.plugins?.default_plugins?.ok ? ' ok' : ` missing ${(status.plugins?.default_plugins?.missing_enabled || []).join(', ') || 'enabled plugin config'}`}`,
     `Computer Use:${status.mcp.has_computer_use ? status.mcp.computer_use_source === 'plugin_cache' ? ' installed (verify @Computer in thread)' : ' ok' : ' missing'}`,
-    `Browser Use: ${status.mcp.has_browser_use ? status.mcp.browser_use_source === 'plugin_cache' ? 'installed (plugin scoped)' : 'ok' : 'missing'}`,
+    `Browser:     ${status.features?.browser_tool_ready ? `ok (${status.features.browser_tool_source})` : status.mcp.has_browser_use ? status.mcp.browser_use_source === 'plugin_cache' ? 'installed (plugin scoped)' : 'ok' : 'missing'}`,
     `Image Gen:   ${status.features?.image_generation ? 'ok ($imagegen/gpt-image-2)' : status.features?.checked ? 'missing' : 'not checked'}`,
     `Ready:       ${status.ok ? 'yes' : 'no'}`,
     '',
@@ -294,6 +350,121 @@ function codexFeatureEnabled(text, featureName) {
 
 function missingRequiredFeatureFlags(flags = {}) {
   return REQUIRED_CODEX_APP_FEATURE_FLAGS.filter((name) => flags?.[name] !== true);
+}
+
+async function codexDefaultPluginStatus(opts = {}) {
+  const home = opts.home || os.homedir();
+  const cwd = opts.cwd || process.cwd();
+  const globalConfigPath = path.join(home || '', '.codex', 'config.toml');
+  const projectConfigPath = path.join(cwd || '', '.codex', 'config.toml');
+  const globalConfig = await readTextIfExists(globalConfigPath);
+  const projectConfig = path.resolve(projectConfigPath) === path.resolve(globalConfigPath)
+    ? ''
+    : await readTextIfExists(projectConfigPath);
+  const configText = `${globalConfig}\n${projectConfig}`;
+  const entries = [];
+  for (const plugin of DEFAULT_CODEX_APP_PLUGINS) {
+    const source = await findDefaultPluginSource(plugin, { home, configText });
+    const enabled = codexPluginEnabled(configText, plugin);
+    entries.push({
+      id: `${plugin.name}@${plugin.marketplace}`,
+      name: plugin.name,
+      marketplace: plugin.marketplace,
+      installed: Boolean(source),
+      source,
+      enabled
+    });
+  }
+  const installed = entries.filter((entry) => entry.installed);
+  const missingEnabled = installed.filter((entry) => !entry.enabled).map((entry) => entry.id);
+  return {
+    ok: missingEnabled.length === 0,
+    checked: true,
+    entries,
+    missing_enabled: missingEnabled
+  };
+}
+
+async function codexFastModeConfigStatus(opts = {}) {
+  const home = opts.home || os.homedir();
+  const cwd = opts.cwd || process.cwd();
+  const globalConfigPath = path.join(home || '', '.codex', 'config.toml');
+  const projectConfigPath = path.join(cwd || '', '.codex', 'config.toml');
+  const configs = [
+    { scope: 'global', path: globalConfigPath, text: await readTextIfExists(globalConfigPath) }
+  ];
+  if (path.resolve(projectConfigPath) !== path.resolve(globalConfigPath)) {
+    configs.push({ scope: 'project', path: projectConfigPath, text: await readTextIfExists(projectConfigPath) });
+  }
+  const blockers = [];
+  for (const config of configs) {
+    if (!config.text) continue;
+    const topLevel = topLevelToml(config.text);
+    if (/(^|\n)\s*model_reasoning_effort\s*=/.test(topLevel)) blockers.push(`${config.scope}:top_level_model_reasoning_effort`);
+    if (/(^|\n)\s*model_provider\s*=\s*"codex-lb"\s*(?:#.*)?(?=\n|$)/.test(topLevel)) blockers.push(`${config.scope}:top_level_codex_lb_provider`);
+    if (/(^|\n)\s*fast_default_opt_out\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(tomlTable(config.text, 'notice'))) blockers.push(`${config.scope}:fast_default_opt_out`);
+  }
+  const merged = configs.map((config) => config.text).join('\n');
+  const fastMode = tomlTable(merged, 'user.fast_mode');
+  if (!/(^|\n)\s*visible\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(fastMode)) blockers.push('user.fast_mode.visible_missing');
+  if (!/(^|\n)\s*enabled\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(fastMode)) blockers.push('user.fast_mode.enabled_missing');
+  if (!/(^|\n)\s*default_profile\s*=\s*"sks-fast-high"\s*(?:#.*)?(?=\n|$)/.test(fastMode)) blockers.push('user.fast_mode.default_profile_missing');
+  return {
+    ok: blockers.length === 0,
+    checked: true,
+    blockers
+  };
+}
+
+async function readTextIfExists(file) {
+  try {
+    return await fsp.readFile(file, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+async function findDefaultPluginSource(plugin, { home, configText }) {
+  const cached = await findPluginCache(plugin.name, { home });
+  if (cached) return cached;
+  for (const source of marketplaceSources(configText, plugin.marketplace)) {
+    const candidate = path.join(source, 'plugins', plugin.name, '.codex-plugin', 'plugin.json');
+    if (await exists(candidate)) return path.dirname(path.dirname(candidate));
+  }
+  return null;
+}
+
+function marketplaceSources(configText = '', marketplaceName = '') {
+  const table = `marketplaces.${marketplaceName}`;
+  const re = new RegExp(`(?:^|\\n)\\[${escapeRegExp(table)}\\]([\\s\\S]*?)(?=\\n\\[[^\\]]+\\]|\\s*$)`, 'g');
+  const sources = [];
+  for (const match of String(configText || '').matchAll(re)) {
+    const source = match[1].match(/(?:^|\n)\s*source\s*=\s*"([^"]+)"/)?.[1];
+    if (source) sources.push(source);
+  }
+  return Array.from(new Set(sources));
+}
+
+function codexPluginEnabled(configText = '', plugin = {}) {
+  const table = `plugins."${plugin.name}@${plugin.marketplace}"`;
+  const re = new RegExp(`(?:^|\\n)\\[${escapeRegExp(table)}\\]([\\s\\S]*?)(?=\\n\\[[^\\]]+\\]|\\s*$)`);
+  const block = String(configText || '').match(re)?.[1] || '';
+  return /(?:^|\n)\s*enabled\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(block);
+}
+
+function topLevelToml(text = '') {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((line) => /^\s*\[.+\]\s*$/.test(line));
+  return (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
+}
+
+function tomlTable(text = '', table = '') {
+  const re = new RegExp(`(?:^|\\n)\\[${escapeRegExp(table)}\\]([\\s\\S]*?)(?=\\n\\[[^\\]]+\\]|\\s*$)`);
+  return String(text || '').match(re)?.[1] || '';
+}
+
+function escapeRegExp(text = '') {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function remoteControlGuidance(status = {}) {

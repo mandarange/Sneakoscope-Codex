@@ -20,7 +20,7 @@ const CODEX_GIT_ACTION_STOP_ARTIFACT = 'codex-git-action-stop-bypass.json';
 const STOP_REPEAT_GUARD_WINDOW_MS = 10 * 60 * 1000;
 const STOP_REPEAT_GUARD_MAX_ENTRIES = 25;
 const DEFAULT_STOP_REPEAT_GUARD_LIMIT = 2;
-const CODEX_GIT_ACTION_STOP_TTL_MS = 5 * 60 * 1000;
+const CODEX_GIT_ACTION_STOP_TTL_MS = 15 * 60 * 1000;
 
 async function loadHookPayload() {
   const raw = await readStdin();
@@ -106,10 +106,37 @@ export async function hookMain(name) {
 function blockForbiddenClientModel(payload = {}) {
   const model = forbiddenClientModelFromPayload(payload);
   if (!model || !isForbiddenCodexModel(model)) return null;
+  if (looksLikeCodexUiSettingsEvent(payload)) return null;
   return {
     decision: 'block',
     reason: `SKS requires ${REQUIRED_CODEX_MODEL}; client payload requested ${model}. Switch the Codex client/session model to ${REQUIRED_CODEX_MODEL} and retry.`
   };
+}
+
+function looksLikeCodexUiSettingsEvent(payload = {}) {
+  const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
+  const haystack = [
+    payload.action,
+    payload.intent,
+    payload.operation,
+    payload.permission,
+    payload.description,
+    payload.kind,
+    payload.type,
+    payload.feature,
+    payload.source,
+    payload.event,
+    payload.hook,
+    payload.hook_name,
+    payload.metadata?.action,
+    payload.metadata?.intent,
+    payload.metadata?.operation,
+    payload.metadata?.feature,
+    payload.metadata?.source,
+    payload.context?.surface,
+    payload.session?.surface
+  ].filter(Boolean).join(' ');
+  return !prompt && /\b(?:settings|preferences|profile|speed|fast[_\s-]*mode|reasoning|model[_\s-]*select|codex[_\s-]*app)\b/i.test(haystack);
 }
 
 function forbiddenClientModelFromPayload(payload = {}) {
@@ -146,6 +173,12 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
     return {
       continue: true,
       systemMessage: 'SKS: Codex App git action bypassed route gates.'
+    };
+  }
+  if (looksLikeCodexUiSettingsEvent(payload)) {
+    return {
+      continue: true,
+      systemMessage: 'SKS: Codex App settings/profile event ignored; route gates unchanged.'
     };
   }
   if (!noQuestion) {
@@ -359,6 +392,12 @@ async function hookStop(root, state, payload, noQuestion) {
       systemMessage: 'SKS: Codex App git action accepted without route finalization gates.'
     };
   }
+  if (looksLikeCodexGitActionStopCompletion(last, payload)) {
+    return {
+      continue: true,
+      systemMessage: 'SKS: Codex App git action completion accepted without route finalization gates.'
+    };
+  }
   if (!noQuestion && (hasDfixLightCompletion(last) || await consumeLightRouteStop(root, payload))) {
     return {
       continue: true,
@@ -469,10 +508,40 @@ function looksLikeCodexGitAction(payload = {}) {
     || /커밋\s*메시지\s*생성/i.test(haystack);
   const promptSignal = /\bgenerate(?:\s+a)?(?:\s+git)?\s+commit\s+message\b/i.test(prompt)
     || /\bcommit\s+message\b[\s\S]{0,80}\b(?:staged|diff|changes?|git)\b/i.test(prompt)
+    || looksLikeStockCodexGitActionPrompt(prompt)
     || /커밋\s*메시지\s*생성/i.test(prompt);
   if (!appSignal && !promptSignal) return false;
+  if (looksLikeStockCodexGitActionPrompt(prompt)) return true;
   if (appSignal) return true;
   return !looksLikeUserImplementationRequest(prompt);
+}
+
+function looksLikeStockCodexGitActionPrompt(prompt = '') {
+  const text = String(prompt || '').trim();
+  if (!text || text.length > 120) return false;
+  return /^(?:generate\s+(?:a\s+)?git\s+commit\s+message(?:\s+for\s+(?:the\s+)?(?:staged\s+)?diff)?|commit\s+changes|commit\s+and\s+push\s+changes|push\s+changes|create\s+(?:a\s+)?commit|create\s+(?:a\s+)?pull\s+request)\.?$/i.test(text);
+}
+
+function looksLikeCodexGitActionStopCompletion(last = '', payload = {}) {
+  const text = String(last || '').trim();
+  const haystack = [
+    payload.action,
+    payload.intent,
+    payload.operation,
+    payload.kind,
+    payload.type,
+    payload.feature,
+    payload.source,
+    payload.event,
+    payload.metadata?.action,
+    payload.metadata?.intent,
+    payload.metadata?.operation,
+    payload.metadata?.feature,
+    payload.metadata?.source
+  ].filter(Boolean).join(' ');
+  if (/\bcodex[_\s-]*app\b[\s\S]{0,80}\bgit\b[\s\S]{0,80}\b(?:action|commit|push|pr)\b/i.test(haystack)) return true;
+  if (!text || text.length > 180) return false;
+  return /^(?:commit(?:ted)?(?:\s+and\s+pushed)?(?:\s+changes)?(?:\s+complete[.!]?)?|push(?:ed)?(?:\s+changes)?(?:\s+complete[.!]?)?|created\s+(?:a\s+)?pull\s+request[.!]?)$/i.test(text);
 }
 
 function looksLikeUserImplementationRequest(text = '') {
@@ -941,6 +1010,18 @@ export async function selftestCodexCommitHooks() {
   const appCommitPushStop = await runHook('stop', { conversation_id: commitPushId, last_assistant_message: 'Commit and push complete.' });
   if (appCommitPushStop.code !== 0) throw new Error(`selftest failed: app commit-push stop ${appCommitPushStop.code}: ${appCommitPushStop.stderr}`);
   if (JSON.parse(appCommitPushStop.stdout).decision === 'block') throw new Error('selftest failed: app commit-push stop bypass');
+  const metadataLightId = 'metadata-light-commit-push-selftest';
+  const metadataLightHook = await runHook('user-prompt-submit', { conversation_id: metadataLightId, prompt: 'Commit and push changes.' });
+  if (metadataLightHook.code !== 0) throw new Error(`selftest failed: metadata-light commit-push hook ${metadataLightHook.code}: ${metadataLightHook.stderr}`);
+  const metadataLightJson = JSON.parse(metadataLightHook.stdout);
+  if (metadataLightJson.decision === 'block' || metadataLightJson.hookSpecificOutput?.additionalContext || !String(metadataLightJson.systemMessage || '').includes('git action')) throw new Error('selftest failed: metadata-light app commit-push route bypass');
+  const metadataLightStop = await runHook('stop', { conversation_id: metadataLightId, last_assistant_message: 'Commit and push complete.' });
+  if (metadataLightStop.code !== 0) throw new Error(`selftest failed: metadata-light commit-push stop ${metadataLightStop.code}: ${metadataLightStop.stderr}`);
+  if (JSON.parse(metadataLightStop.stdout).decision === 'block') throw new Error('selftest failed: metadata-light commit-push stop bypass');
+  const settingsHook = await runHook('user-prompt-submit', { model: 'gpt-5.0-forbidden', metadata: { source: 'codex_app_settings', feature: 'speed profile' } });
+  if (settingsHook.code !== 0) throw new Error(`selftest failed: settings hook ${settingsHook.code}: ${settingsHook.stderr}`);
+  const settingsJson = JSON.parse(settingsHook.stdout);
+  if (settingsJson.decision === 'block' || settingsJson.hookSpecificOutput?.additionalContext || !String(settingsJson.systemMessage || '').includes('settings/profile event ignored')) throw new Error('selftest failed: settings/profile event should not route or block');
   const userHook = await runHook('user-prompt-submit', { prompt: '[커밋 메시지를 생성하지 못했습니다.] 코덱스 앱에서 이 버그 수정해줘' });
   if (userHook.code !== 0) throw new Error(`selftest failed: user commit hook ${userHook.code}: ${userHook.stderr}`);
   if (!JSON.parse(userHook.stdout).hookSpecificOutput?.additionalContext?.includes('$Team route prepared')) throw new Error('selftest failed: user prompt route');

@@ -921,7 +921,7 @@ async function prepareResearch(root, route, task, required) {
   await writeResearchPlan(dir, task, {});
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
   await setCurrent(root, routeState(id, route, 'RESEARCH_PREPARED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
-  return routeContext(route, id, task, required, 'Run sks research run latest as a real long-running source-gathering pass, never an automatic mock fallback; create research-source-skill.md, maximize layered public source search, require every scout effort=xhigh plus one Eureka! idea, fill source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json, research-report.md, research-paper.md, genius-opinion-summary.md, and pass research-gate.json.');
+  return routeContext(route, id, task, required, 'Run sks research run latest as a real long-running source-gathering pass, never an automatic mock fallback; do not modify repository source code; create research-source-skill.md, maximize layered public source search, require every scout effort=xhigh plus one Eureka! idea, repeat scout/debate/falsification cycles until unanimous_consensus=true for every scout or the explicit safety cap pauses the run, fill source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json, research-report.md, research-paper.md, genius-opinion-summary.md, and pass research-gate.json.');
 }
 
 async function prepareAutoResearch(root, route, task, required) {
@@ -1400,6 +1400,8 @@ function normalizeComplianceReason(reason = '') {
 async function passedActiveGate(root, state) {
   const id = state?.mission_id;
   if (!id) return { ok: false, file: null };
+  const hardBlocker = await passedHardBlocker(root, state);
+  if (hardBlocker.ok) return hardBlocker;
   const files = gateFilesForState(state);
   for (const file of files) {
     const p = path.join(missionDir(root, id), file);
@@ -1414,8 +1416,6 @@ async function passedActiveGate(root, state) {
       return { ok: false, file };
     }
   }
-  const hardBlocker = await passedHardBlocker(root, state);
-  if (hardBlocker.ok) return hardBlocker;
   return { ok: false, file: files[0] || null };
 }
 

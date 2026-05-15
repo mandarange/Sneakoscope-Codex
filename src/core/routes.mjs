@@ -521,7 +521,7 @@ export const COMMAND_CATALOG = [
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/tmux, and print ready true/false.' },
   { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
-  { name: 'deps', usage: 'sks deps check|install [tmux|codex|context7|all] [--yes]', description: 'Check or guided-install Node/npm PATH, Codex CLI/App, Context7, Browser Use, Computer Use, tmux, and Homebrew on macOS.' },
+  { name: 'deps', usage: 'sks deps check|install [tmux|codex|context7|all] [--yes]', description: 'Check or guided-install Node/npm PATH, Codex CLI/App, Context7, Browser tooling, Computer Use, tmux, and Homebrew on macOS.' },
   { name: 'codex-app', usage: 'sks codex-app [check|open|remote-control]', description: 'Check Codex App install and first-party MCP/plugin readiness, then show app setup files, examples, and Codex CLI 0.130.0+ remote-control availability.' },
   { name: 'codex-lb', usage: 'sks codex-lb status|health|repair|setup --host <domain> --api-key <key>', description: 'Configure, health-check, or repair codex-lb Codex CLI auth by writing ~/.codex/config.toml, syncing auth.json, and loading the CODEX_LB_API_KEY env file.' },
   { name: 'auth', usage: 'sks auth status|health|repair|setup --host <domain> --api-key <key>', description: 'Shortcut for codex-lb auth status, health, repair, and setup commands.' },

@@ -10,6 +10,16 @@ import { initProject, installSkills } from '../core/init.mjs';
 import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext7ConfigText, RECOMMENDED_SKILLS } from '../core/routes.mjs';
 import { codexLaunchCommand, platformTmuxInstallHint, tmuxReadiness } from '../core/tmux-ui.mjs';
 
+const DEFAULT_CODEX_APP_PLUGINS = [
+  ['browser', 'openai-bundled'],
+  ['chrome', 'openai-bundled'],
+  ['computer-use', 'openai-bundled'],
+  ['latex', 'openai-bundled'],
+  ['documents', 'openai-primary-runtime'],
+  ['presentations', 'openai-primary-runtime'],
+  ['spreadsheets', 'openai-primary-runtime']
+];
+
 export async function postinstall({ bootstrap }) {
   const installRoot = path.resolve(process.env.INIT_CWD || process.cwd());
   const conflictScan = await scanHarnessConflicts(installRoot);
@@ -159,10 +169,10 @@ async function capturePostinstallCodexLbConfigSnapshot(home = process.env.HOME |
 async function restorePostinstallCodexLbConfigSnapshot(snapshot) {
   if (!snapshot?.base_url) return { status: 'skipped', reason: 'no_snapshot' };
   const current = await readText(snapshot.config_path, '');
-  if (hasTopLevelCodexLbSelected(current) && codexLbProviderBaseUrl(current)) {
+  const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, snapshot.base_url));
+  if (next === ensureTrailingNewline(current) && codexLbProviderBaseUrl(current)) {
     return { status: 'present', config_path: snapshot.config_path };
   }
-  const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, snapshot.base_url));
   await writeTextAtomic(snapshot.config_path, next);
   return { status: 'restored', config_path: snapshot.config_path };
 }
@@ -202,10 +212,10 @@ export async function codexLbStatus(opts = {}) {
   const envText = envExists ? await readText(envPath, '') : '';
   const envKeyConfigured = Boolean(parseCodexLbEnvKey(envText));
   const providerConfigured = /\[model_providers\.codex-lb\]/.test(config);
-  const selected = /model_provider\s*=\s*"codex-lb"/.test(config);
+  const selected = hasTopLevelCodexLbSelected(config);
   const baseUrl = codexLbProviderBaseUrl(config) || parseCodexLbEnvBaseUrl(envText) || null;
   return {
-    ok: selected && providerConfigured && envKeyConfigured && Boolean(baseUrl),
+    ok: providerConfigured && envKeyConfigured && Boolean(baseUrl),
     config_path: configPath,
     env_path: envPath,
     provider_configured: providerConfigured,
@@ -350,10 +360,10 @@ function codexLbProviderBaseUrl(text = '') {
 export async function repairCodexLbAuth(opts = {}) {
   let status = await codexLbStatus(opts);
   let configRepaired = false;
-  if (!status.ok && status.env_key_configured && status.base_url) {
+  const currentConfig = await readText(status.config_path, '');
+  if (status.env_key_configured && status.base_url && (!status.ok || status.selected || hasTopLevelCodexModeLock(currentConfig))) {
     await ensureDir(path.dirname(status.config_path));
-    const current = await readText(status.config_path, '');
-    const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, status.base_url));
+    const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(currentConfig, status.base_url));
     await writeTextAtomic(status.config_path, next);
     configRepaired = true;
     status = await codexLbStatus(opts);
@@ -450,7 +460,7 @@ async function syncCodexApiKeyLogin(apiKey, opts = {}) {
 }
 
 function upsertCodexLbConfig(text = '', baseUrl) {
-  let next = upsertTopLevelTomlString(text, 'model_provider', 'codex-lb');
+  let next = removeTopLevelTomlKeyIfValue(text, 'model_provider', 'codex-lb');
   const block = [
     '[model_providers.codex-lb]',
     'name = "OpenAI"',
@@ -488,11 +498,18 @@ export function normalizeCodexFastModeUiConfig(text = '') {
   next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
   next = upsertTopLevelTomlBoolean(next, 'suppress_unstable_features_warning', true);
   next = upsertTomlTableKey(next, 'features', 'hooks = true');
+  next = upsertTomlTableKey(next, 'features', 'remote_control = true');
   next = upsertTomlTableKey(next, 'features', 'multi_agent = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode = true');
   next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
   next = upsertTomlTableKey(next, 'features', 'codex_git_commit = true');
   next = upsertTomlTableKey(next, 'features', 'computer_use = true');
+  next = upsertTomlTableKey(next, 'features', 'browser_use = true');
+  next = upsertTomlTableKey(next, 'features', 'browser_use_external = true');
+  next = upsertTomlTableKey(next, 'features', 'image_generation = true');
+  next = upsertTomlTableKey(next, 'features', 'in_app_browser = true');
+  next = upsertTomlTableKey(next, 'features', 'guardian_approval = true');
+  next = upsertTomlTableKey(next, 'features', 'tool_suggest = true');
   next = upsertTomlTableKey(next, 'features', 'apps = true');
   next = upsertTomlTableKey(next, 'features', 'plugins = true');
   next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
@@ -503,22 +520,39 @@ export function normalizeCodexFastModeUiConfig(text = '') {
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'approval_policy = "on-request"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'sandbox_mode = "workspace-write"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'model_reasoning_effort = "high"');
+  next = upsertTomlTableKey(next, 'profiles.sks-research-xhigh', 'model = "gpt-5.5"');
+  next = upsertTomlTableKey(next, 'profiles.sks-research-xhigh', 'service_tier = "fast"');
+  next = upsertTomlTableKey(next, 'profiles.sks-research-xhigh', 'approval_policy = "on-request"');
+  next = upsertTomlTableKey(next, 'profiles.sks-research-xhigh', 'sandbox_mode = "workspace-write"');
+  next = upsertTomlTableKey(next, 'profiles.sks-research-xhigh', 'model_reasoning_effort = "xhigh"');
+  next = upsertTomlTableKey(next, 'profiles.sks-research', 'model = "gpt-5.5"');
+  next = upsertTomlTableKey(next, 'profiles.sks-research', 'service_tier = "fast"');
+  next = upsertTomlTableKey(next, 'profiles.sks-research', 'approval_policy = "never"');
+  next = upsertTomlTableKey(next, 'profiles.sks-research', 'sandbox_mode = "workspace-write"');
+  next = upsertTomlTableKey(next, 'profiles.sks-research', 'model_reasoning_effort = "xhigh"');
+  for (const [name, marketplace] of DEFAULT_CODEX_APP_PLUGINS) {
+    const table = `plugins."${name}@${marketplace}"`;
+    next = upsertTomlTable(next, table, `[${table}]\nenabled = true`);
+  }
   return ensureTrailingNewline(next);
 }
 
 function removeLegacyTopLevelCodexModeLocks(text = '') {
-  const legacy = {
-    model_reasoning_effort: new Set(['high'])
-  };
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
   const end = firstTable === -1 ? lines.length : firstTable;
   return lines.filter((line, index) => {
     if (index >= end) return true;
-    const match = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=\s*"([^"]*)"\s*(?:#.*)?$/);
-    if (!match) return true;
-    return !legacy[match[1]]?.has(match[2]);
+    return !/^\s*model_reasoning_effort\s*=/.test(line);
   }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function removeTopLevelTomlKeyIfValue(text = '', key = '', value = '') {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  const keyPattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"${escapeRegExp(value)}"\\s*(?:#.*)?$`);
+  return lines.filter((line, index) => index >= end || !keyPattern.test(line)).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
 function removeTomlTableKey(text, table, key) {
@@ -1056,7 +1090,7 @@ export async function selftestCodexLb(tmp) {
   const codexLbFakeCodex = path.join(codexLbFakeBin, 'codex');
   await writeTextAtomic(codexLbFakeCodex, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"codex-cli 99.0.0\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"status\" ]; then echo \"logged in with browser auth\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"--with-api-key\" ]; then read key; mkdir -p \"$HOME/.codex\"; printf '{\\\"auth_mode\\\":\\\"apikey\\\",\\\"key\\\":\\\"%s\\\"}\\n' \"$key\" > \"$HOME/.codex/auth.json\"; printf '%s\\n' \"$key\" >> \"$HOME/.codex/login-calls.log\"; exit 0; fi\necho \"fake codex unsupported\" >&2\nexit 1\n");
   await fsp.chmod(codexLbFakeCodex, 0o755);
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "high"\nservice_tier = "fast"\n\n[notice]\nfast_default_opt_out = true\n\n[features]\ncodex_hooks = true\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "low"\nservice_tier = "fast"\n\n[profiles.custom]\nmodel_reasoning_effort = "low"\n\n[notice]\nfast_default_opt_out = true\n\n[features]\ncodex_hooks = true\n');
   const codexLbEnvForSelftest = { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global'), PATH: `${codexLbFakeBin}${path.delimiter}${process.env.PATH || ''}` };
   const codexLbSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key', 'sk-test', '--json'], {
     cwd: tmp,
@@ -1069,18 +1103,18 @@ export async function selftestCodexLb(tmp) {
   const codexLbConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
   const codexLbEnv = await safeReadText(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'));
   const codexLbAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
-  if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !codexLbConfig.includes('model_provider = "codex-lb"') || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'") || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || !/(\"auth_mode\"\s*:\s*\"apikey\")/.test(codexLbAuth)) throw new Error('selftest: codex-lb setup');
+  if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || hasTopLevelCodexLbSelected(codexLbConfig) || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'") || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || !/(\"auth_mode\"\s*:\s*\"apikey\")/.test(codexLbAuth)) throw new Error('selftest: codex-lb setup');
   if (!hasCodexUnstableFeatureWarningSuppression(codexLbConfig)) throw new Error('selftest: codex-lb setup did not suppress Codex unstable feature warning');
   await initProject(codexLbHome, { installScope: 'global', force: true, repair: true });
   const codexLbRepairSetupConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
-  if (!codexLbRepairSetupConfig.includes('model_provider = "codex-lb"') || !codexLbRepairSetupConfig.includes('[model_providers.codex-lb]') || !codexLbRepairSetupConfig.includes('https://lb.example.test/backend-api/codex') || codexLbRepairSetupConfig.includes('sk-test')) throw new Error('selftest: init codex-lb');
+  if (hasTopLevelCodexLbSelected(codexLbRepairSetupConfig) || !codexLbRepairSetupConfig.includes('[model_providers.codex-lb]') || !codexLbRepairSetupConfig.includes('https://lb.example.test/backend-api/codex') || codexLbRepairSetupConfig.includes('sk-test')) throw new Error('selftest: init codex-lb');
   if (!hasCodexUnstableFeatureWarningSuppression(codexLbRepairSetupConfig)) throw new Error('selftest: init codex-lb did not suppress Codex unstable feature warning');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), `${codexLbConfig}\n[mcp_servers.supabase]\nurl = "https://mcp.supabase.com/mcp?project_ref=ref&read_only=true&features=database,docs"\n`);
   const ptmp = path.join(tmp, 'codex-lb-project-config'), prevHome = process.env.HOME;
   try { process.env.HOME = codexLbHome; await initProject(ptmp, { installScope: 'global' }); }
   finally { if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome; }
   const pcfg = await safeReadText(path.join(ptmp, '.codex', 'config.toml'));
-  if (!pcfg.includes('model_provider = "codex-lb"') || !pcfg.includes('[model_providers.codex-lb]') || !pcfg.includes('[mcp_servers.supabase]') || !pcfg.includes('read_only=true')) throw new Error('selftest: project codex-lb');
+  if (hasTopLevelCodexLbSelected(pcfg) || !pcfg.includes('[model_providers.codex-lb]') || !pcfg.includes('[mcp_servers.supabase]') || !pcfg.includes('read_only=true')) throw new Error('selftest: project codex-lb');
   if (!hasCodexUnstableFeatureWarningSuppression(pcfg)) throw new Error('selftest: project codex-lb config did not suppress Codex unstable feature warning');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
   const codexLbRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'auth', 'repair', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
@@ -1141,7 +1175,7 @@ export async function selftestCodexLb(tmp) {
   const codexLbPostBootstrapConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
   const codexLbLoginCallsAfterBootstrap = (await safeReadText(path.join(codexLbHome, '.codex', 'login-calls.log'))).trim().split(/\r?\n/).filter(Boolean).length;
   if (!codexLbPostBootstrapAuth.includes('"auth_mode":"apikey"') || !codexLbPostBootstrapAuth.includes('sk-test') || codexLbLoginCallsAfterBootstrap <= codexLbLoginCallsBeforeBootstrap) throw new Error('selftest: postinstall drift auth');
-  if (!codexLbPostBootstrapConfig.includes('model_provider = "codex-lb"') || !codexLbPostBootstrapConfig.includes('[model_providers.codex-lb]') || !codexLbPostBootstrapConfig.includes('https://lb.example.test/backend-api/codex') || codexLbPostBootstrapConfig.includes('sk-test')) throw new Error('selftest: postinstall drift config');
+  if (hasTopLevelCodexLbSelected(codexLbPostBootstrapConfig) || !codexLbPostBootstrapConfig.includes('[model_providers.codex-lb]') || !codexLbPostBootstrapConfig.includes('https://lb.example.test/backend-api/codex') || codexLbPostBootstrapConfig.includes('sk-test')) throw new Error('selftest: postinstall drift config');
   const doctorProject = tmpdir();
   await ensureDir(path.join(doctorProject, '.git'));
   await writeTextAtomic(path.join(doctorProject, 'package.json'), '{"name":"codex-lb-doctor-project","version":"0.0.0"}\n');
@@ -1158,7 +1192,7 @@ export async function selftestCodexLb(tmp) {
   const codexLbDoctorJson = JSON.parse(codexLbDoctorRepair.stdout);
   const codexLbDoctorAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   const codexLbDoctorConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
-  if (!codexLbDoctorJson.repair?.codex_lb?.ok || !codexLbDoctorJson.repair.codex_lb.config_repaired || !codexLbDoctorJson.codex_lb?.ok || !codexLbDoctorAuth.includes('"auth_mode":"apikey"') || !codexLbDoctorAuth.includes('sk-test') || !codexLbDoctorConfig.includes('model_provider = "codex-lb"') || !codexLbDoctorConfig.includes('https://lb.example.test/backend-api/codex') || !hasCodexUnstableFeatureWarningSuppression(codexLbDoctorConfig)) throw new Error('selftest: doctor codex-lb');
+  if (!codexLbDoctorJson.repair?.codex_lb?.ok || !codexLbDoctorJson.repair.codex_lb.config_repaired || !codexLbDoctorJson.codex_lb?.ok || !codexLbDoctorAuth.includes('"auth_mode":"apikey"') || !codexLbDoctorAuth.includes('sk-test') || hasTopLevelCodexLbSelected(codexLbDoctorConfig) || !codexLbDoctorConfig.includes('https://lb.example.test/backend-api/codex') || !hasCodexUnstableFeatureWarningSuppression(codexLbDoctorConfig)) throw new Error('selftest: doctor codex-lb');
   const codexLbContext7Bin = path.join(tmp, 'codex-lb-context7-bin');
   await ensureDir(codexLbContext7Bin);
   await writeTextAtomic(path.join(codexLbContext7Bin, 'codex'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 99.0.0"; exit 0; fi\nif [ "$CODEX_LB_API_KEY" ]; then echo "context7 leaked CODEX_LB_API_KEY" >&2; exit 77; fi\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then echo ""; exit 0; fi\nif [ "$1" = "mcp" ] && [ "$2" = "add" ]; then echo "context7 added"; exit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
@@ -1285,7 +1319,7 @@ export async function selftestCodexLb(tmp) {
     }
   );
   if (brokenChain.ok || brokenChain.status !== 'previous_response_not_found' || brokenChain.chain_unhealthy !== true) throw new Error('selftest: codex-lb response chain health check did not detect previous_response_not_found');
-  if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('hooks = true') || hasDeprecatedCodexHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('multi_agent = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('codex_git_commit = true') || !codexLbConfig.includes('computer_use = true') || !codexLbConfig.includes('apps = true') || !codexLbConfig.includes('plugins = true') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest: codex-lb setup did not preserve Codex App feature flags, Fast mode defaults, Codex Git commit generation, force GPT-5.5, or migrate the hooks feature flag');
+  if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('hooks = true') || hasDeprecatedCodexHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('remote_control = true') || !codexLbConfig.includes('multi_agent = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('codex_git_commit = true') || !codexLbConfig.includes('computer_use = true') || !codexLbConfig.includes('browser_use = true') || !codexLbConfig.includes('browser_use_external = true') || !codexLbConfig.includes('guardian_approval = true') || !codexLbConfig.includes('tool_suggest = true') || !codexLbConfig.includes('apps = true') || !codexLbConfig.includes('plugins = true') || !codexLbConfig.includes('[plugins."latex@openai-bundled"]') || !codexLbConfig.includes('[plugins."documents@openai-primary-runtime"]') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.custom\][\s\S]*?model_reasoning_effort = "low"/.test(codexLbConfig) || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest: codex-lb setup did not preserve Codex App feature flags, default plugins, profile-scoped reasoning effort, Fast mode defaults, Codex Git commit generation, force GPT-5.5, or migrate the hooks feature flag');
   if (!hasCodexUnstableFeatureWarningSuppression(codexLbConfig)) throw new Error('selftest: codex-lb setup did not suppress Codex unstable feature warning');
   const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest: tmux launch command does not source codex-lb env file');
@@ -1297,7 +1331,10 @@ export async function selftestCodexLb(tmp) {
 }
 
 function hasTopLevelCodexModeLock(text = '') {
-  return /(^|\n)\s*model\s*=\s*"codex-lb"\s*(\n|$)/.test(text) || /(^|\n)\s*model_provider\s*=\s*"openai"\s*(\n|$)/.test(text);
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
+  return /(^|\n)\s*model_provider\s*=\s*"codex-lb"\s*(\n|$)/.test(top) || /(^|\n)\s*model_reasoning_effort\s*=/.test(top);
 }
 
 function hasDeprecatedCodexHooksFeatureFlag(text = '') {
