@@ -1149,7 +1149,7 @@ async function codexLbCommand(action = 'status', args = []) {
     console.log(`Env file:   ${status.env_file ? status.env_path : 'missing'}`);
     if (status.base_url) console.log(`Base URL:   ${status.base_url}`);
     if (!status.ok) console.log('\nRun: sks codex-lb setup --host <domain> --api-key <key>');
-    else console.log('\nRepair auth: sks codex-lb repair');
+    else console.log('\nRepair provider auth: sks codex-lb repair');
     return;
   }
   if (sub === 'health' || sub === 'verify-chain' || sub === 'chain') {
@@ -1176,7 +1176,7 @@ async function codexLbCommand(action = 'status', args = []) {
       process.exitCode = 1;
       return;
     }
-    console.log('codex-lb auth repaired for Codex CLI.');
+    console.log('codex-lb provider auth repaired for Codex CLI/App environment.');
     console.log(`Config: ${result.config_path}`);
     console.log(`Key env: ${result.env_path}`);
     return;
@@ -1193,7 +1193,7 @@ async function codexLbCommand(action = 'status', args = []) {
     const result = await configureCodexLb({ host, apiKey });
     if (json) return console.log(JSON.stringify(result, null, 2));
     if (!result.ok) {
-      console.error(`codex-lb setup failed: ${result.status}`);
+      console.error(`codex-lb setup failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
       process.exitCode = 1;
       return;
     }
@@ -1779,7 +1779,7 @@ async function doctor(args) {
     const cleanup = removed.length ? ` removed stale generated skill shadow(s): ${removed.join(', ')}` : '';
     console.log(`Global $ repair: ${globalSkillsRepair.status} ${globalSkillsRepair.root || ''}${cleanup}`.trimEnd());
   }
-  if (codexLbRepair?.ok) console.log(`codex-lb repair: ${codexLbRepair.config_repaired ? 'config+auth resynced' : 'auth resynced'} from stored env`);
+  if (codexLbRepair?.ok) console.log(`codex-lb repair: ${codexLbRepair.config_repaired ? 'config+provider auth resynced' : 'provider auth resynced'} from stored env`);
   else if (codexLbRepair && codexLbRepair.status !== 'missing_env_key') console.log(`codex-lb repair: skipped (${codexLbRepair.status})`);
   if (flag(args, '--fix') && result.harness_conflicts.hard_block) console.log('Repair:    skipped because another Codex harness needs human-approved removal first');
   console.log(`Rust acc.: ${rust.available ? rust.version : 'optional-missing'}`);
