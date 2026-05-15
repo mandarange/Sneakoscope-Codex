@@ -174,9 +174,9 @@ sks codex-lb repair
 sks
 ```
 
-Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, syncs `codex login --with-api-key`, and loads it in tmux. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` tmux session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths, including non-interactive runs, verify that codex-lb can continue a Responses API chain with `previous_response_id`; if that check fails, SKS bypasses codex-lb for that launch with `model_provider="openai"` instead of letting the Codex session fail mid-work.
+Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, loads the provider env key for tmux launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` tmux session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths, including non-interactive runs, verify that codex-lb can continue a Responses API chain with `previous_response_id`; if that check fails, SKS bypasses codex-lb for that launch with `model_provider="openai"` instead of letting the Codex session fail mid-work.
 
-If Codex CLI auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
+If codex-lb provider auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
 
 ### MAD tmux Launch
 
@@ -185,7 +185,7 @@ sks --mad
 sks --mad --yes
 ```
 
-This syncs existing codex-lb/Codex CLI auth, creates/uses the `sks-mad-high` full-access profile, opens the MAD-SKS permission gate for that tmux run, and launches a single Codex CLI pane. The session recreates the named session so stale split-pane MAD sessions collapse back to one pane. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
+This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` full-access profile, opens the MAD-SKS permission gate for that tmux run, and launches a single Codex CLI pane. The session recreates the named session so stale split-pane MAD sessions collapse back to one pane. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
 
 Before launching, SKS checks npm for a newer `sneakoscope`; answer `y` to update or `n` to continue. Use `--yes` to approve missing dependency installs automatically.
 

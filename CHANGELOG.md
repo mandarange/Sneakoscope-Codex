@@ -5,6 +5,14 @@
 
 
 
+
+## [0.8.5] - 2026-05-15
+
+### Fixed
+
+- Keep codex-lb provider authentication from clobbering the shared Codex login cache, while syncing the stored `CODEX_LB_API_KEY` into the user launch environment for Codex App visibility.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [0.8.4] - 2026-05-15
 
 ### Fixed
