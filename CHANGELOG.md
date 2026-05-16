@@ -5,6 +5,16 @@
 
 
 
+## [0.9.3] - 2026-05-17
+
+### Fixed
+
+- Auto-reconcile codex-lb authentication during `npm i -g sneakoscope@latest`: when both a codex-lb provider with `env_key` auth and a ChatGPT OAuth token blob live in `~/.codex/auth.json`, the OAuth blob is backed up to `~/.codex/auth.chatgpt-backup.json` and `auth.json` is rewritten to apikey mode using the stored `CODEX_LB_API_KEY` so Codex CLI/App stops sending the OAuth bearer to the load balancer. Opt out with `SKS_CODEX_LB_NO_AUTH_RECONCILE=1` (the backup is still produced so nothing is lost).
+- Broaden the postinstall codex-lb config/auth snapshot so the snapshot is taken whenever any codex-lb signal (`sks-codex-lb.env`, `[model_providers.codex-lb]` block, or pre-existing `auth.json`) is present, and restore a pre-existing `auth.json` if a bootstrap step emptied or removed it during the upgrade.
+- Surface auto-reconciliation, backup-only, and reconciliation failures in postinstall log lines and in the `sks auth repair` / `sks codex-lb repair` JSON output via a new `auth_reconcile` field, so upgrades self-heal the most common codex-lb auth regressions without requiring a manual `sks codex-lb setup` rerun.
+- Make the fake-codex login helper used by `sks selftest --mock` portable across `bash` and `dash` so the codex-lb selftest writes valid JSON regardless of the host shell's `printf` escape handling.
+- Raise the npm unpacked size budget to 1856 KiB to accommodate the codex-lb auth auto-reconciliation logic and its self-test, while keeping packed size, file count, forbidden-file, and tracked-file guards enforced.
+
 ## [0.9.2] - 2026-05-16
 
 ### Fixed
