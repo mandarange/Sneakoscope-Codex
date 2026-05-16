@@ -5,6 +5,14 @@
 
 
 
+## [0.9.5] - 2026-05-17
+
+### Fixed
+
+- `sks` (bare launch) no longer silently demotes a fully configured codex-lb to ChatGPT OAuth when `checkCodexLbResponseChain` reports `previous_response_not_found`. That failure mode is normal for stateless LB deployments that don't persist Responses across requests, so codex-lb stays active and the launch only logs a warning.
+- For hard chain failures (auth rejected, timeout, 5xx, missing base URL), the launch now asks before bypassing: `Use codex-lb anyway, or fall back to ChatGPT OAuth? [LB/oauth]`. Default keeps codex-lb. In non-interactive contexts (CI, pipes, no TTY) the default is also "keep codex-lb" — set `SKS_CODEX_LB_AUTOBYPASS=1` to restore the previous silent-bypass behavior.
+- Selftest: replace the assertion that codified the old "always bypass on `previous_response_not_found`" behavior with one that verifies codex-lb stays active. Added coverage for hard 5xx chain failures (default keep) and `SKS_CODEX_LB_AUTOBYPASS=1` (silent bypass restored).
+
 ## [0.9.4] - 2026-05-17
 
 ### Added

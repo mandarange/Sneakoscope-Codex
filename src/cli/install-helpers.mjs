@@ -793,8 +793,34 @@ export async function maybePromptCodexLbSetupForLaunch(args = [], opts = {}) {
     if (codexLogin.status === 'synced') console.log('codex-lb auth synced with Codex CLI login cache.');
     const chainHealth = await checkCodexLbResponseChain(status, opts);
     if (!chainHealth.ok && chainHealth.chain_unhealthy) {
-      console.log(`codex-lb response chain check failed (${chainHealth.status}); bypassing codex-lb for this launch.`);
-      return { status: 'chain_unhealthy', ...status, ok: false, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth, bypass_codex_lb: true };
+      // `previous_response_not_found` is normal for stateless LB deployments that don't persist
+      // Responses across requests. The codex-lb provider still works fine — only the chained
+      // health probe fails. Keep codex-lb active and just warn.
+      if (chainHealth.status === 'previous_response_not_found') {
+        console.log('codex-lb response chain check: previous_response_id not persisted by the load balancer (this is normal for stateless deployments). Keeping codex-lb active.');
+        return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth };
+      }
+      // Hard chain failure (auth rejected, timeout, missing base URL, etc.). Don't silently
+      // demote a configured codex-lb to ChatGPT OAuth — surface the failure and let the user
+      // decide. Default keeps codex-lb (just press Enter).
+      console.log(`codex-lb response chain check failed (${chainHealth.status}${chainHealth.error ? `: ${chainHealth.error}` : ''}).`);
+      if (process.env.SKS_CODEX_LB_AUTOBYPASS === '1') {
+        console.log('SKS_CODEX_LB_AUTOBYPASS=1 set; bypassing codex-lb to ChatGPT OAuth for this launch.');
+        return { status: 'chain_unhealthy', ...status, ok: false, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth, bypass_codex_lb: true };
+      }
+      if (canAskYesNo()) {
+        const answer = (await askPostinstallQuestion('Use codex-lb anyway, or fall back to ChatGPT OAuth? [LB/oauth] ')).trim().toLowerCase();
+        if (/^(oauth|o|chatgpt|fall ?back|n|no|아니|아니요|ㄴ)$/.test(answer)) {
+          console.log('Falling back to ChatGPT OAuth for this launch. Re-enable codex-lb anytime with `sks codex-lb repair`.');
+          return { status: 'chain_unhealthy', ...status, ok: false, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth, bypass_codex_lb: true };
+        }
+        console.log('Keeping codex-lb active. To switch back to ChatGPT OAuth: `sks codex-lb release`.');
+        return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth };
+      }
+      // Non-interactive context with no opt-out env var. The user explicitly configured codex-lb,
+      // so default to keeping it active rather than silently swapping providers.
+      console.log('Non-interactive launch + chain check failure. Keeping codex-lb active. Set SKS_CODEX_LB_AUTOBYPASS=1 to auto-bypass to ChatGPT OAuth.');
+      return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth };
     }
     return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth };
   }
@@ -1897,7 +1923,42 @@ export async function selftestCodexLb(tmp) {
       return new Response(JSON.stringify({ error: { type: 'invalid_request_error', code: 'previous_response_not_found', message: 'Previous response not found.', param: 'previous_response_id' } }), { status: 400, headers: { 'content-type': 'application/json' } });
     }
   });
-  if (nonInteractiveBrokenLaunch.status !== 'chain_unhealthy' || nonInteractiveBrokenLaunch.bypass_codex_lb !== true || nonInteractiveBrokenLaunch.chain_health?.status !== 'previous_response_not_found') throw new Error('selftest: non-interactive codex-lb launch path did not bypass on previous_response_not_found');
+  if (nonInteractiveBrokenLaunch.status !== 'present' || nonInteractiveBrokenLaunch.bypass_codex_lb === true || nonInteractiveBrokenLaunch.chain_health?.status !== 'previous_response_not_found') throw new Error('selftest: previous_response_not_found should keep codex-lb active (stateless LB is normal), not silently bypass to ChatGPT OAuth');
+  // Hard chain failure (e.g. 500) in non-interactive context should still keep codex-lb by default — the user explicitly configured it, so don't silently swap providers.
+  const hardBrokenLaunchCalls = [];
+  const hardBrokenLaunch = await maybePromptCodexLbSetupForLaunch([], {
+    home: codexLbHome,
+    apiKey: 'sk-test',
+    codexBin: path.join(codexLbFakeBin, 'codex'),
+    syncLaunchEnv: false,
+    timeoutMs: 1000,
+    fetch: async (_url, init) => {
+      hardBrokenLaunchCalls.push({ body: JSON.parse(init.body) });
+      if (!hardBrokenLaunchCalls[hardBrokenLaunchCalls.length - 1].body.previous_response_id) return new Response(JSON.stringify({ id: 'resp_hardbroken_first' }), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify({ error: { type: 'server_error', code: 'internal_error', message: 'simulated upstream failure' } }), { status: 500, headers: { 'content-type': 'application/json' } });
+    }
+  });
+  if (hardBrokenLaunch.status !== 'present' || hardBrokenLaunch.bypass_codex_lb === true || hardBrokenLaunch.chain_health?.status !== 'second_request_failed') throw new Error('selftest: hard codex-lb chain failure in non-interactive launch should default to keeping codex-lb active, not silently bypass');
+  // SKS_CODEX_LB_AUTOBYPASS=1 restores the old silent-bypass behavior for CI/automation.
+  process.env.SKS_CODEX_LB_AUTOBYPASS = '1';
+  let autobypassLaunch;
+  try {
+    autobypassLaunch = await maybePromptCodexLbSetupForLaunch([], {
+      home: codexLbHome,
+      apiKey: 'sk-test',
+      codexBin: path.join(codexLbFakeBin, 'codex'),
+      syncLaunchEnv: false,
+      timeoutMs: 1000,
+      fetch: async (_url, init) => {
+        const body = JSON.parse(init.body);
+        if (!body.previous_response_id) return new Response(JSON.stringify({ id: 'resp_autobypass_first' }), { status: 200, headers: { 'content-type': 'application/json' } });
+        return new Response(JSON.stringify({ error: { type: 'server_error', code: 'internal_error', message: 'simulated upstream failure' } }), { status: 500, headers: { 'content-type': 'application/json' } });
+      }
+    });
+  } finally {
+    delete process.env.SKS_CODEX_LB_AUTOBYPASS;
+  }
+  if (autobypassLaunch.status !== 'chain_unhealthy' || autobypassLaunch.bypass_codex_lb !== true || autobypassLaunch.chain_health?.status !== 'second_request_failed') throw new Error('selftest: SKS_CODEX_LB_AUTOBYPASS=1 should bypass codex-lb on hard chain failure');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nservice_tier = "fast"\n');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\nexport CODEX_LB_API_KEY='sk-test'\n");
   const missingProviderLaunchCalls = [];
