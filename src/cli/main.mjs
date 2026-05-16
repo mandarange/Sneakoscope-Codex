@@ -2070,6 +2070,11 @@ function readFlagValue(args, name, fallback) {
 }
 
 async function selftest() {
+  // Force non-interactive mode for the entire selftest so any in-process call that hits
+  // canAskYesNo() (codex-lb provider-restore prompt, chain-failure prompt, etc.) takes the
+  // non-interactive fallback path instead of bubbling a live readline prompt up to the
+  // user's terminal (e.g. during `npm publish` -> prepublishOnly -> release:check -> selftest).
+  process.env.CI = 'true';
   const tmp = tmpdir();
   process.chdir(tmp);
   await initProject(tmp, {});
