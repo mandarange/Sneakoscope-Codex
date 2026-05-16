@@ -87,6 +87,14 @@ async function reportPostinstallCodexLbAuth() {
   else if (codexLbAuth.status === 'missing_env_key') console.log('codex-lb auth: stored key missing. Run `sks codex-lb setup --host <domain> --api-key <key>` to repair.');
   else if (codexLbAuth.status === 'missing_base_url') console.log('codex-lb auth: stored key has no recoverable base URL. Run `sks codex-lb reconfigure --host <domain> --api-key <key>` once.');
   else if (codexLbAuth.status && codexLbAuth.status !== 'not_configured') console.log(`codex-lb auth: repair skipped (${codexLbAuth.status}${codexLbAuth.error ? `: ${codexLbAuth.error}` : ''}).`);
+  const reconcile = codexLbAuth.auth_reconcile;
+  if (reconcile?.status === 'reconciled') {
+    console.log(`codex-lb auth: resolved ChatGPT OAuth conflict by switching auth.json to apikey mode (OAuth backup at ${reconcile.backup_path}). Set SKS_CODEX_LB_NO_AUTH_RECONCILE=1 to opt out.`);
+  } else if (reconcile?.status === 'backup_only') {
+    console.log(`codex-lb auth: detected ChatGPT OAuth tokens in auth.json. OAuth backup written to ${reconcile.backup_path}; auth.json left untouched because SKS_CODEX_LB_NO_AUTH_RECONCILE=1.`);
+  } else if (reconcile?.status === 'failed') {
+    console.log(`codex-lb auth: ChatGPT OAuth reconciliation could not complete (${reconcile.reason || 'unknown'}${reconcile.error ? `: ${reconcile.error}` : ''}). Run \`sks codex-lb repair\` to retry.`);
+  }
   return codexLbAuth;
 }
 
@@ -160,26 +168,65 @@ function codexAuthPath(home = process.env.HOME || os.homedir()) {
   return path.join(home, '.codex', 'auth.json');
 }
 
+function codexAuthChatgptBackupPath(home = process.env.HOME || os.homedir()) {
+  return path.join(home, '.codex', 'auth.chatgpt-backup.json');
+}
+
 async function capturePostinstallCodexLbConfigSnapshot(home = process.env.HOME || os.homedir()) {
   const configPath = codexLbConfigPath(home);
   const envPath = codexLbEnvPath(home);
+  const authPath = codexAuthPath(home);
   const config = await readText(configPath, '');
   const envText = await readText(envPath, '');
-  if (!parseCodexLbEnvKey(envText)) return null;
+  const authExisted = await exists(authPath);
+  const authText = authExisted ? await readText(authPath, '') : '';
+  const envKey = parseCodexLbEnvKey(envText);
+  const providerConfigured = /\[model_providers\.codex-lb\]/.test(config);
   const baseUrl = codexLbProviderBaseUrl(config) || parseCodexLbEnvBaseUrl(envText);
-  if (!baseUrl) return null;
-  return { config_path: configPath, env_path: envPath, base_url: normalizeCodexLbBaseUrl(baseUrl) };
+  // Snapshot any codex-lb-related state so the upgrade-time bootstrap can't silently undo it.
+  if (!envKey && !providerConfigured && !authExisted) return null;
+  return {
+    config_path: configPath,
+    env_path: envPath,
+    auth_path: authPath,
+    base_url: baseUrl ? normalizeCodexLbBaseUrl(baseUrl) : null,
+    auth_existed: authExisted,
+    auth_text: authText
+  };
 }
 
 async function restorePostinstallCodexLbConfigSnapshot(snapshot) {
-  if (!snapshot?.base_url) return { status: 'skipped', reason: 'no_snapshot' };
-  const current = await readText(snapshot.config_path, '');
-  const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, snapshot.base_url));
-  if (next === ensureTrailingNewline(current) && codexLbProviderBaseUrl(current)) {
-    return { status: 'present', config_path: snapshot.config_path };
+  if (!snapshot) return { status: 'skipped', reason: 'no_snapshot' };
+  let configRestored = false;
+  if (snapshot.base_url) {
+    const current = await readText(snapshot.config_path, '');
+    const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, snapshot.base_url));
+    const alreadyOk = next === ensureTrailingNewline(current) && codexLbProviderBaseUrl(current);
+    if (!alreadyOk) {
+      await writeTextAtomic(snapshot.config_path, next);
+      configRestored = true;
+    }
   }
-  await writeTextAtomic(snapshot.config_path, next);
-  return { status: 'restored', config_path: snapshot.config_path };
+  // Restore auth.json only if bootstrap accidentally wiped or emptied a pre-existing auth.json.
+  // We do NOT clobber a legitimately rewritten auth.json; we just heal the disappearing-auth regression.
+  let authRestored = false;
+  if (snapshot.auth_existed && snapshot.auth_text && snapshot.auth_text.trim()) {
+    const currentAuthExists = await exists(snapshot.auth_path);
+    const currentAuthText = currentAuthExists ? await readText(snapshot.auth_path, '') : '';
+    if (!currentAuthExists || !currentAuthText.trim()) {
+      await ensureDir(path.dirname(snapshot.auth_path));
+      await writeTextAtomic(snapshot.auth_path, snapshot.auth_text);
+      await fsp.chmod(snapshot.auth_path, 0o600).catch(() => {});
+      authRestored = true;
+    }
+  }
+  return {
+    status: configRestored || authRestored ? 'restored' : 'present',
+    config_path: snapshot.config_path,
+    auth_path: snapshot.auth_path,
+    config_restored: configRestored,
+    auth_restored: authRestored
+  };
 }
 
 export function normalizeCodexLbBaseUrl(input = '') {
@@ -413,6 +460,7 @@ export async function repairCodexLbAuth(opts = {}) {
   const codexEnvironment = await syncCodexLbProviderEnvironment(status, opts);
   const apiKey = parseCodexLbEnvKey(await readText(status.env_path, ''));
   const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir(), force: true });
+  const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, status }).catch((err) => ({ status: 'failed', reason: 'exception', error: err.message }));
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
   return {
     ok,
@@ -423,6 +471,7 @@ export async function repairCodexLbAuth(opts = {}) {
     config_repaired: configRepaired,
     legacy_auth_migrated: legacyAuthMigrated,
     legacy_auth_path: legacyAuthPath,
+    auth_reconcile: authReconcile,
     codex_lb: status,
     codex_environment: codexEnvironment,
     codex_login: codexLogin
@@ -441,6 +490,7 @@ export async function ensureCodexLbAuthDuringInstall(opts = {}) {
   const codexEnvironment = await syncCodexLbProviderEnvironment(status, opts);
   const apiKey = parseCodexLbEnvKey(await readText(status.env_path, ''));
   const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir(), force: true });
+  const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, status }).catch((err) => ({ status: 'failed', reason: 'exception', error: err.message }));
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
   return {
     ok,
@@ -451,6 +501,7 @@ export async function ensureCodexLbAuthDuringInstall(opts = {}) {
     codex_lb: status,
     codex_environment: codexEnvironment,
     codex_login: codexLogin,
+    auth_reconcile: authReconcile,
     error: codexEnvironment.error || codexLogin.error || null
   };
 }
@@ -468,6 +519,95 @@ async function restoreCodexLbEnvFromSharedLogin(status = {}, opts = {}) {
   await writeTextAtomic(envPath, `export CODEX_LB_BASE_URL=${shellSingleQuote(normalizeCodexLbBaseUrl(baseUrl))}\nexport CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
   await fsp.chmod(envPath, 0o600).catch(() => {});
   return { ok: true, status: 'migrated_login_cache', auth_path: authPath, env_path: envPath, base_url: normalizeCodexLbBaseUrl(baseUrl) };
+}
+
+// Detects a real ChatGPT OAuth token blob in auth.json.
+// A bare {"auth_mode":"browser"} marker is NOT considered an OAuth token blob — we preserve it.
+function hasChatgptOAuthTokens(text = '') {
+  try {
+    const parsed = JSON.parse(String(text || ''));
+    if (!parsed || typeof parsed !== 'object') return false;
+    const authMode = String(parsed.auth_mode || parsed.authMode || parsed.mode || '').toLowerCase();
+    const tokens = parsed.tokens || parsed.oauth || parsed.oauth_tokens;
+    if (tokens && typeof tokens === 'object') {
+      if (tokens.id_token || tokens.access_token || tokens.refresh_token) return true;
+    }
+    if (authMode && /chatgpt|oauth|browser/.test(authMode)) {
+      // Only treat as an OAuth blob when real tokens or a refresh metadata trail are also present.
+      if (parsed.last_refresh || parsed.expires_at || parsed.refresh_token || parsed.access_token || parsed.id_token) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function parseCodexAuthApiKey(text = '') {
+  try {
+    const parsed = JSON.parse(String(text || ''));
+    const key = parsed?.key || parsed?.api_key || parsed?.apiKey || parsed?.openai_api_key || parsed?.OPENAI_API_KEY;
+    return typeof key === 'string' ? key.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+// When codex-lb is selected with env_key auth AND auth.json also carries a real ChatGPT OAuth
+// token blob, Codex CLI/App can pick the OAuth bearer over the env_key bearer and fail against
+// the load balancer. We back the OAuth blob up to ~/.codex/auth.chatgpt-backup.json and replace
+// auth.json with an apikey-mode payload that matches the stored CODEX_LB_API_KEY.
+// Opt out with SKS_CODEX_LB_NO_AUTH_RECONCILE=1 (the backup is still produced so nothing is lost).
+export async function reconcileCodexLbAuthConflict(opts = {}) {
+  const home = opts.home || process.env.HOME || os.homedir();
+  const status = opts.status || await codexLbStatus({ ...opts, home });
+  const authPath = opts.authPath || codexAuthPath(home);
+  const backupPath = opts.backupPath || codexAuthChatgptBackupPath(home);
+  if (!status.env_key_configured || !status.base_url) {
+    return { status: 'skipped', reason: 'codex_lb_not_ready', auth_path: authPath };
+  }
+  if (!(await exists(authPath))) {
+    return { status: 'skipped', reason: 'auth_missing', auth_path: authPath };
+  }
+  const authText = await readText(authPath, '');
+  if (!authText.trim()) {
+    return { status: 'skipped', reason: 'auth_empty', auth_path: authPath };
+  }
+  if (!hasChatgptOAuthTokens(authText)) {
+    return { status: 'no_oauth_conflict', auth_path: authPath };
+  }
+  const envText = await readText(status.env_path, '');
+  const apiKey = parseCodexLbEnvKey(envText);
+  if (!apiKey) {
+    return { status: 'skipped', reason: 'missing_env_key', auth_path: authPath };
+  }
+  // Always back up the OAuth blob — even if reconciliation is opted out — so the data survives.
+  try {
+    await ensureDir(path.dirname(backupPath));
+    await writeTextAtomic(backupPath, authText);
+    await fsp.chmod(backupPath, 0o600).catch(() => {});
+  } catch (err) {
+    return { status: 'failed', reason: 'backup_failed', auth_path: authPath, backup_path: backupPath, error: err.message };
+  }
+  if (process.env.SKS_CODEX_LB_NO_AUTH_RECONCILE === '1' && !opts.force) {
+    return {
+      status: 'backup_only',
+      reason: 'SKS_CODEX_LB_NO_AUTH_RECONCILE=1',
+      auth_path: authPath,
+      backup_path: backupPath
+    };
+  }
+  try {
+    const replacement = `${JSON.stringify({ auth_mode: 'apikey', key: apiKey }, null, 2)}\n`;
+    await writeTextAtomic(authPath, replacement);
+    await fsp.chmod(authPath, 0o600).catch(() => {});
+  } catch (err) {
+    return { status: 'failed', reason: 'write_failed', auth_path: authPath, backup_path: backupPath, error: err.message };
+  }
+  return {
+    status: 'reconciled',
+    auth_path: authPath,
+    backup_path: backupPath
+  };
 }
 
 export async function maybePromptCodexLbSetupForLaunch(args = [], opts = {}) {
@@ -1240,7 +1380,10 @@ export async function selftestCodexLb(tmp) {
   const codexLbFakeBin = path.join(tmp, 'codex-lb-fake-bin');
   await ensureDir(codexLbFakeBin);
   const codexLbFakeCodex = path.join(codexLbFakeBin, 'codex');
-  await writeTextAtomic(codexLbFakeCodex, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"codex-cli 99.0.0\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"status\" ]; then echo \"logged in with browser auth\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"--with-api-key\" ]; then read key; mkdir -p \"$HOME/.codex\"; printf '{\\\"auth_mode\\\":\\\"apikey\\\",\\\"key\\\":\\\"%s\\\"}\\n' \"$key\" > \"$HOME/.codex/auth.json\"; printf '%s\\n' \"$key\" >> \"$HOME/.codex/login-calls.log\"; exit 0; fi\necho \"fake codex unsupported\" >&2\nexit 1\n");
+  // NOTE: printf format uses literal double-quotes inside single-quoted shell strings so the
+  // fake login writes proper JSON in both bash and dash (where `\"` is a non-standard printf
+  // escape that dash emits literally and bash collapses to `"`).
+  await writeTextAtomic(codexLbFakeCodex, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"codex-cli 99.0.0\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"status\" ]; then echo \"logged in with browser auth\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"--with-api-key\" ]; then read key; mkdir -p \"$HOME/.codex\"; printf '{\"auth_mode\":\"apikey\",\"key\":\"%s\"}\\n' \"$key\" > \"$HOME/.codex/auth.json\"; printf '%s\\n' \"$key\" >> \"$HOME/.codex/login-calls.log\"; exit 0; fi\necho \"fake codex unsupported\" >&2\nexit 1\n");
   await fsp.chmod(codexLbFakeCodex, 0o755);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "low"\nservice_tier = "fast"\n\n[profiles.custom]\nmodel_reasoning_effort = "low"\n\n[notice]\nfast_default_opt_out = true\n\n[features]\ncodex_hooks = true\n');
   const codexLbEnvForSelftest = { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global'), PATH: `${codexLbFakeBin}${path.delimiter}${process.env.PATH || ''}`, SKS_SKIP_CODEX_LB_LAUNCH_ENV: '1' };
@@ -1353,6 +1496,34 @@ export async function selftestCodexLb(tmp) {
   const codexLbDoctorConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
   if (!codexLbDoctorJson.repair?.codex_lb?.ok || !codexLbDoctorJson.repair.codex_lb.config_repaired || !codexLbDoctorJson.codex_lb?.ok || !codexLbDoctorAuth.includes('"auth_mode":"browser"') || codexLbDoctorAuth.includes('sk-test') || !hasTopLevelCodexLbSelected(codexLbDoctorConfig) || !codexLbDoctorConfig.includes('https://lb.example.test/backend-api/codex') || !hasCodexUnstableFeatureWarningSuppression(codexLbDoctorConfig)) throw new Error('selftest: doctor codex-lb');
   if (!codexLbDoctorConfig.includes('requires_openai_auth = true')) throw new Error('selftest: doctor codex-lb did not restore upstream-required requires_openai_auth');
+  // codex-lb auth: ChatGPT OAuth ↔ codex-lb env_key conflict reconciliation.
+  const oauthAuthJson = JSON.stringify({
+    auth_mode: 'chatgpt',
+    tokens: { id_token: 'oauth-id', access_token: 'oauth-access', refresh_token: 'oauth-refresh' },
+    last_refresh: '2026-01-01T00:00:00Z'
+  });
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), `${oauthAuthJson}\n`);
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\nexport CODEX_LB_API_KEY='sk-test'\n");
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model_provider = "codex-lb"\n\n[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true\n');
+  await fsp.rm(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), { force: true });
+  const codexLbReconcileRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'auth', 'repair', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (codexLbReconcileRepair.code !== 0) throw new Error(`selftest: codex-lb oauth reconcile repair exited ${codexLbReconcileRepair.code}: ${codexLbReconcileRepair.stderr}`);
+  const codexLbReconcileJson = JSON.parse(codexLbReconcileRepair.stdout);
+  const codexLbReconcileAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  const codexLbReconcileBackup = await safeReadText(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'));
+  if (codexLbReconcileJson.auth_reconcile?.status !== 'reconciled' || !codexLbReconcileAuth.includes('"auth_mode": "apikey"') || !codexLbReconcileAuth.includes('sk-test') || codexLbReconcileAuth.includes('oauth-id') || !codexLbReconcileBackup.includes('oauth-id') || !codexLbReconcileBackup.includes('oauth-refresh')) throw new Error('selftest: codex-lb oauth reconcile did not back up ChatGPT tokens and switch auth.json to apikey mode');
+  // Opt-out path: SKS_CODEX_LB_NO_AUTH_RECONCILE=1 keeps auth.json untouched but still backs up the OAuth blob.
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), `${oauthAuthJson}\n`);
+  await fsp.rm(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), { force: true });
+  const codexLbReconcileOptOutRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'auth', 'repair', '--json'], { cwd: tmp, env: { ...codexLbEnvForSelftest, SKS_CODEX_LB_NO_AUTH_RECONCILE: '1' }, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (codexLbReconcileOptOutRepair.code !== 0) throw new Error(`selftest: codex-lb oauth reconcile opt-out repair exited ${codexLbReconcileOptOutRepair.code}: ${codexLbReconcileOptOutRepair.stderr}`);
+  const codexLbReconcileOptOutJson = JSON.parse(codexLbReconcileOptOutRepair.stdout);
+  const codexLbReconcileOptOutAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  const codexLbReconcileOptOutBackup = await safeReadText(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'));
+  if (codexLbReconcileOptOutJson.auth_reconcile?.status !== 'backup_only' || !codexLbReconcileOptOutAuth.includes('oauth-id') || !codexLbReconcileOptOutBackup.includes('oauth-id')) throw new Error('selftest: codex-lb oauth reconcile opt-out should back up but not rewrite auth.json');
+  // Restore the doctor-test auth.json shape so downstream selftest assertions still hold.
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
+  await fsp.rm(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), { force: true });
   const codexLbContext7Bin = path.join(tmp, 'codex-lb-context7-bin');
   await ensureDir(codexLbContext7Bin);
   await writeTextAtomic(path.join(codexLbContext7Bin, 'codex'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 99.0.0"; exit 0; fi\nif [ "$CODEX_LB_API_KEY" ]; then echo "context7 leaked CODEX_LB_API_KEY" >&2; exit 77; fi\nif [ "$1" = "mcp" ] && [ "$2" = "list" ]; then echo ""; exit 0; fi\nif [ "$1" = "mcp" ] && [ "$2" = "add" ]; then echo "context7 added"; exit 0; fi\necho "unexpected codex $*" >&2\nexit 2\n');
