@@ -191,6 +191,33 @@ Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/
 
 If codex-lb provider auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
 
+### Switching back to ChatGPT OAuth (releasing codex-lb)
+
+If you want to hand control back to your official ChatGPT account login after codex-lb has been reconciled, use `sks codex-lb release`:
+
+```sh
+sks codex-lb release
+```
+
+This restores `~/.codex/auth.chatgpt-backup.json` (written by the 0.9.3 auto-reconcile) to `~/.codex/auth.json` and unsets `model_provider = "codex-lb"` so Codex CLI/App falls back to ChatGPT OAuth. To re-engage codex-lb afterward, run `sks codex-lb repair`.
+
+Flags:
+
+- `--keep-provider` — restore `auth.json` only; leave `model_provider = "codex-lb"` selected (advanced use).
+- `--delete-backup` — remove `~/.codex/auth.chatgpt-backup.json` after a successful restore. Default is to keep it so a subsequent re-reconcile still has a source backup.
+- `--force` — restore even when the current `auth.json` does not look like the codex-lb apikey shape (e.g. if you hand-edited it after reconcile).
+- `--json` — machine-readable output with `status` ∈ {`released`, `no_backup`, `already_chatgpt`, `auth_in_use`, `failed`} plus `auth_path`, `backup_path`, `provider_unselected`, `backup_removed`.
+
+`sks codex-lb status` reports whether a ChatGPT OAuth backup is present and shows the `sks codex-lb release` hint when applicable. `sks doctor` surfaces the same hint.
+
+If you only want to stop routing through codex-lb without touching `auth.json`, use the lighter `sks codex-lb unselect` instead:
+
+```sh
+sks codex-lb unselect
+```
+
+This flips `model_provider` away from `codex-lb` in the top-level Codex App config while leaving your `sks-codex-lb.env` and `auth.json` untouched, so you can re-engage codex-lb later with `sks codex-lb repair` without re-running setup.
+
 ### MAD tmux Launch
 
 ```sh

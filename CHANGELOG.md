@@ -5,6 +5,19 @@
 
 
 
+## [0.9.4] - 2026-05-17
+
+### Added
+
+- `sks codex-lb release` — reverses the 0.9.3 auto-reconcile: restores `~/.codex/auth.chatgpt-backup.json` back to `~/.codex/auth.json` and, by default, removes `model_provider = "codex-lb"` from the top-level Codex App config so the app falls back to ChatGPT OAuth. Re-engage codex-lb later with `sks codex-lb repair`.
+  - `--keep-provider` — restore `auth.json` only; leave `model_provider = "codex-lb"` selected.
+  - `--delete-backup` — remove `~/.codex/auth.chatgpt-backup.json` after a successful restore (default: keep it so a subsequent re-reconcile still has a source backup).
+  - `--force` — restore even when the current `auth.json` does not look like the codex-lb apikey shape (e.g. user hand-edited it after reconcile).
+  - `--json` — machine-readable result with `status` ∈ {`released`, `no_backup`, `already_chatgpt`, `auth_in_use`, `failed`} plus `auth_path`, `backup_path`, `provider_unselected`, `backup_removed`.
+- `sks codex-lb unselect` — flips `model_provider` away from `codex-lb` in the top-level Codex App config without touching `auth.json` or the stored env file. Useful when switching to a different provider temporarily while keeping codex-lb config and `sks-codex-lb.env` intact for later.
+- `sks codex-lb status` now reports whether `~/.codex/auth.chatgpt-backup.json` is present and surfaces a "Run `sks codex-lb release`" hint when applicable. The JSON variant adds `chatgpt_backup_present` and `chatgpt_backup_path`.
+- Raise npm packed-tarball size budget from 452 KiB to 456 KiB to accommodate the new release/unselect surface plus selftest coverage.
+
 ## [0.9.3] - 2026-05-17
 
 ### Fixed

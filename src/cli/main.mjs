@@ -79,7 +79,7 @@ import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs'
 import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, defaultCodexLaunchArgs, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, sksAsciiLogo, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchMadTmuxUi, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, reconcileTmuxTeamCockpit, runTmuxStatus, sanitizeTmuxSessionName, sweepCodexLbTmuxSessions, sweepTmuxTeamSurfaces, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
-import { askPostinstallQuestion, checkCodexLbResponseChain, checkContext7, checkRequiredSkills, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexFastModeDuringInstall, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall } from './install-helpers.mjs';
+import { askPostinstallQuestion, checkCodexLbResponseChain, checkContext7, checkRequiredSkills, codexLbChatgptBackupPath, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexFastModeDuringInstall, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, releaseCodexLbAuthHold, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall, unselectCodexLbProvider } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, madHighCommand as runMadHighCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 import { openClawCommand } from './openclaw-command.mjs';
 import { recallPulseCommand } from './recallpulse-command.mjs';
@@ -188,8 +188,8 @@ Usage:
   sks bootstrap [--install-scope global|project] [--local-only] [--json]
   sks deps check|install [tmux|codex|context7|all] [--yes] [--json]
   sks codex-app
-  sks codex-lb status|health|repair|setup --host <domain> --api-key <key>
-  sks auth status|health|repair|setup --host <domain> --api-key <key>
+  sks codex-lb status|health|repair|release|unselect|setup --host <domain> --api-key <key>
+  sks auth status|health|repair|release|unselect|setup --host <domain> --api-key <key>
   sks openclaw install|path|print [--dir path] [--force] [--json]
   sks --mad [--high]
   sks auto-review status|enable|start [--high]
@@ -1141,7 +1141,9 @@ async function codexLbCommand(action = 'status', args = []) {
   const json = flag(args, '--json');
   if (sub === 'status' || sub === 'check') {
     const status = await codexLbStatus();
-    if (json) return console.log(JSON.stringify(status, null, 2));
+    const backupPath = codexLbChatgptBackupPath();
+    const backupPresent = await exists(backupPath);
+    if (json) return console.log(JSON.stringify({ ...status, chatgpt_backup_present: backupPresent, chatgpt_backup_path: backupPath }, null, 2));
     console.log('SKS codex-lb\n');
     console.log(`Configured: ${status.ok ? 'yes' : 'no'}`);
     console.log(`Selected:   ${status.selected ? 'yes' : 'no'}`);
@@ -1149,10 +1151,71 @@ async function codexLbCommand(action = 'status', args = []) {
     console.log(`Codex App auth: ${status.provider_requires_openai_auth ? 'yes' : 'missing'}`);
     console.log(`Env file:   ${status.env_file ? status.env_path : 'missing'}`);
     if (status.base_url) console.log(`Base URL:   ${status.base_url}`);
+    console.log(`ChatGPT backup: ${backupPresent ? `yes (${backupPath})` : 'no'}`);
     if (status.ok && !status.selected) console.log('\nRun: sks codex-lb repair to activate codex-lb for Codex App.');
     else if (!status.ok && status.base_url && status.env_key_configured) console.log('\nRun: sks codex-lb repair to restore the upstream codex-lb provider block.');
     else if (!status.ok) console.log('\nRun: sks codex-lb setup --host <domain> --api-key <key>');
     else console.log('\nRepair provider auth: sks codex-lb repair');
+    if (backupPresent) console.log('Switch back to ChatGPT OAuth login: sks codex-lb release');
+    return;
+  }
+  if (sub === 'release') {
+    const result = await releaseCodexLbAuthHold({
+      keepProvider: flag(args, '--keep-provider'),
+      deleteBackup: flag(args, '--delete-backup'),
+      force: flag(args, '--force')
+    });
+    if (result.status === 'no_backup' || result.status === 'auth_in_use' || result.status === 'failed') process.exitCode = 1;
+    if (json) return console.log(JSON.stringify(result, null, 2));
+    if (result.status === 'released') {
+      console.log('codex-lb auth released: ChatGPT OAuth blob restored.');
+      console.log(`Auth:   ${result.auth_path}`);
+      console.log(`Backup: ${result.backup_removed ? 'removed' : result.backup_path}`);
+      console.log(`Provider unselected: ${result.provider_unselected ? 'yes' : 'no'}`);
+      if (result.provider_error) console.log(`Provider unselect warning: ${result.provider_error}`);
+      console.log('\nLaunch Codex App / `codex` and complete the ChatGPT browser login if prompted.');
+      return;
+    }
+    if (result.status === 'already_chatgpt') {
+      console.log('codex-lb auth release: auth.json already carries ChatGPT OAuth tokens — nothing to restore.');
+      console.log(`Auth:   ${result.auth_path}`);
+      console.log(`Backup: ${result.backup_path}`);
+      console.log(`Provider unselected: ${result.provider_unselected ? 'yes' : 'no'}`);
+      if (result.provider_error) console.log(`Provider unselect warning: ${result.provider_error}`);
+      return;
+    }
+    if (result.status === 'no_backup') {
+      console.error(`codex-lb auth release: no ChatGPT OAuth backup found at ${result.backup_path}.`);
+      if (result.reason === 'backup_not_oauth') console.error('The backup file is present but does not contain a ChatGPT OAuth token blob — refusing to clobber auth.json.');
+      else console.error('Run `sks codex-lb repair` after a fresh ChatGPT login to recreate a backup, or `sks codex-lb unselect` to leave codex-lb off without touching auth.json.');
+      process.exitCode = 1;
+      return;
+    }
+    if (result.status === 'auth_in_use') {
+      console.error(`codex-lb auth release refused: ${result.auth_path} does not look like the codex-lb apikey shape. Re-run with --force to overwrite, or back up auth.json yourself first.`);
+      process.exitCode = 1;
+      return;
+    }
+    console.error(`codex-lb auth release failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (sub === 'unselect') {
+    const result = await unselectCodexLbProvider();
+    if (result.status === 'failed') process.exitCode = 1;
+    if (json) return console.log(JSON.stringify(result, null, 2));
+    if (result.status === 'unselected') {
+      console.log('codex-lb unselected. Codex CLI/App will fall back to the default OpenAI provider.');
+      console.log(`Config: ${result.config_path}`);
+      console.log('Re-engage codex-lb with: sks codex-lb repair');
+      return;
+    }
+    if (result.status === 'not_selected') {
+      console.log('codex-lb is not selected — nothing to do.');
+      return;
+    }
+    console.error(`codex-lb unselect failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
+    process.exitCode = 1;
     return;
   }
   if (sub === 'health' || sub === 'verify-chain' || sub === 'chain') {
@@ -1205,7 +1268,7 @@ async function codexLbCommand(action = 'status', args = []) {
     console.log(`Key env: ${result.env_path}`);
     return;
   }
-  console.error('Usage: sks codex-lb status|health|repair|setup --host <domain> --api-key <key> [--json]');
+  console.error('Usage: sks codex-lb status|health|repair|release [--keep-provider] [--delete-backup] [--force]|unselect|setup --host <domain> --api-key <key> [--json]');
   process.exitCode = 1;
 }
 

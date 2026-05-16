@@ -610,6 +610,164 @@ export async function reconcileCodexLbAuthConflict(opts = {}) {
   };
 }
 
+// Expose the ChatGPT OAuth backup path so the CLI can surface it in status / release output.
+export function codexLbChatgptBackupPath(home = process.env.HOME || os.homedir()) {
+  return codexAuthChatgptBackupPath(home);
+}
+
+// Remove a top-level TOML key (only above the first table header). Returns the original text
+// unchanged when the key isn't present.
+function removeTopLevelTomlString(text, key) {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  let removed = false;
+  for (let i = end - 1; i >= 0; i--) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i])) {
+      lines.splice(i, 1);
+      removed = true;
+    }
+  }
+  if (!removed) return text;
+  return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+// Unselect codex-lb at the top-level model_provider setting. Leaves [model_providers.codex-lb]
+// and the env file alone so the user can re-engage with `sks codex-lb repair`.
+export async function unselectCodexLbProvider(opts = {}) {
+  const home = opts.home || process.env.HOME || os.homedir();
+  const configPath = opts.configPath || codexLbConfigPath(home);
+  const current = await readText(configPath, '');
+  if (!current.trim()) return { status: 'not_selected', reason: 'no_config', config_path: configPath };
+  if (!hasTopLevelCodexLbSelected(current)) return { status: 'not_selected', config_path: configPath };
+  try {
+    const next = ensureTrailingNewline(removeTopLevelTomlString(current, 'model_provider'));
+    await writeTextAtomic(configPath, next);
+    return { status: 'unselected', config_path: configPath };
+  } catch (err) {
+    return { status: 'failed', reason: 'write_failed', config_path: configPath, error: err.message };
+  }
+}
+
+// Reverse of reconcileCodexLbAuthConflict: restore the ChatGPT OAuth blob from the backup file
+// so the user can return to the official ChatGPT account login. Also deselects codex-lb at the
+// model_provider level by default so the restored OAuth blob actually wins; pass keepProvider
+// to skip that.
+//
+// Options:
+//   home          - HOME override (selftest)
+//   keepProvider  - leave `model_provider = "codex-lb"` selected (default: deselect)
+//   deleteBackup  - remove ~/.codex/auth.chatgpt-backup.json after a successful restore
+//                   (default: false; keeping it makes the next reconcile cycle a no-op clobber risk)
+//   force         - restore even if the current auth.json shape isn't recognized
+export async function releaseCodexLbAuthHold(opts = {}) {
+  const home = opts.home || process.env.HOME || os.homedir();
+  const authPath = opts.authPath || codexAuthPath(home);
+  const backupPath = opts.backupPath || codexAuthChatgptBackupPath(home);
+  const configPath = opts.configPath || codexLbConfigPath(home);
+
+  const backupExists = await exists(backupPath);
+  const backupText = backupExists ? await readText(backupPath, '') : '';
+  if (!backupExists || !backupText.trim()) {
+    return {
+      status: 'no_backup',
+      auth_path: authPath,
+      backup_path: backupPath,
+      provider_unselected: false
+    };
+  }
+  if (!hasChatgptOAuthTokens(backupText)) {
+    return {
+      status: 'no_backup',
+      reason: 'backup_not_oauth',
+      auth_path: authPath,
+      backup_path: backupPath,
+      provider_unselected: false
+    };
+  }
+
+  const currentAuthText = await readText(authPath, '');
+  const trimmedCurrent = currentAuthText.trim();
+
+  // If auth.json already looks like ChatGPT OAuth (user re-logged in some other way), don't
+  // clobber it — but still honor the deselect request so the OAuth blob takes effect.
+  if (trimmedCurrent && hasChatgptOAuthTokens(currentAuthText) && !opts.force) {
+    let providerUnselected = false;
+    let providerError = null;
+    if (!opts.keepProvider) {
+      const unselected = await unselectCodexLbProvider({ ...opts, home, configPath });
+      if (unselected.status === 'unselected') providerUnselected = true;
+      else if (unselected.status === 'failed') providerError = unselected.error || unselected.reason || 'unselect_failed';
+    }
+    return {
+      status: 'already_chatgpt',
+      auth_path: authPath,
+      backup_path: backupPath,
+      provider_unselected: providerUnselected,
+      provider_error: providerError
+    };
+  }
+
+  // Refuse to clobber unfamiliar auth.json shapes unless forced. We expect either an empty file,
+  // the apikey shape we wrote during reconcile, or a stray `{"auth_mode":"browser"}` marker.
+  if (!opts.force && trimmedCurrent) {
+    const looksApikey = /"auth_mode"\s*:\s*"apikey"/.test(currentAuthText) && Boolean(parseCodexAuthApiKey(currentAuthText));
+    const looksBrowserMarker = /^\{\s*"auth_mode"\s*:\s*"browser"\s*\}\s*$/.test(currentAuthText);
+    if (!looksApikey && !looksBrowserMarker) {
+      return {
+        status: 'auth_in_use',
+        reason: 'unfamiliar_auth_json',
+        auth_path: authPath,
+        backup_path: backupPath,
+        provider_unselected: false
+      };
+    }
+  }
+
+  try {
+    await ensureDir(path.dirname(authPath));
+    const restored = backupText.endsWith('\n') ? backupText : `${backupText}\n`;
+    await writeTextAtomic(authPath, restored);
+    await fsp.chmod(authPath, 0o600).catch(() => {});
+  } catch (err) {
+    return {
+      status: 'failed',
+      reason: 'restore_failed',
+      auth_path: authPath,
+      backup_path: backupPath,
+      error: err.message,
+      provider_unselected: false
+    };
+  }
+
+  let backupRemoved = false;
+  if (opts.deleteBackup) {
+    try {
+      await fsp.rm(backupPath, { force: true });
+      backupRemoved = true;
+    } catch {
+      // Non-fatal: the restore already landed.
+    }
+  }
+
+  let providerUnselected = false;
+  let providerError = null;
+  if (!opts.keepProvider) {
+    const unselected = await unselectCodexLbProvider({ ...opts, home, configPath });
+    if (unselected.status === 'unselected') providerUnselected = true;
+    else if (unselected.status === 'failed') providerError = unselected.error || unselected.reason || 'unselect_failed';
+  }
+
+  return {
+    status: 'released',
+    auth_path: authPath,
+    backup_path: backupPath,
+    backup_removed: backupRemoved,
+    provider_unselected: providerUnselected,
+    provider_error: providerError
+  };
+}
+
 export async function maybePromptCodexLbSetupForLaunch(args = [], opts = {}) {
   if (args.includes('--json') || args.includes('--skip-codex-lb') || process.env.SKS_SKIP_CODEX_LB_PROMPT === '1') return { status: 'skipped' };
   let status = await codexLbStatus(opts);
@@ -1521,6 +1679,60 @@ export async function selftestCodexLb(tmp) {
   const codexLbReconcileOptOutAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   const codexLbReconcileOptOutBackup = await safeReadText(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'));
   if (codexLbReconcileOptOutJson.auth_reconcile?.status !== 'backup_only' || !codexLbReconcileOptOutAuth.includes('oauth-id') || !codexLbReconcileOptOutBackup.includes('oauth-id')) throw new Error('selftest: codex-lb oauth reconcile opt-out should back up but not rewrite auth.json');
+  // codex-lb auth: release flow — restore ChatGPT OAuth from backup so the user can return to
+  // the official ChatGPT account login. Default deselects model_provider; flags control whether
+  // the provider stays selected and whether the backup file is removed after restore.
+  const codexLbReleaseConfig = 'model_provider = "codex-lb"\n\n[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true\n';
+  const codexLbReleaseEnv = "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\nexport CODEX_LB_API_KEY='sk-test'\n";
+  const codexLbReleaseApikeyAuth = '{"auth_mode":"apikey","key":"sk-test"}\n';
+  const codexLbReleaseOauthBackup = `${oauthAuthJson}\n`;
+  // Happy path: deselect model_provider and preserve backup file.
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), codexLbReleaseApikeyAuth);
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), codexLbReleaseOauthBackup);
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), codexLbReleaseEnv);
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), codexLbReleaseConfig);
+  const codexLbReleaseRun = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'release', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (codexLbReleaseRun.code !== 0) throw new Error(`selftest: codex-lb release exited ${codexLbReleaseRun.code}: ${codexLbReleaseRun.stderr}`);
+  const codexLbReleaseJson = JSON.parse(codexLbReleaseRun.stdout);
+  const codexLbReleaseAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  const codexLbReleaseBackupAfter = await safeReadText(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'));
+  const codexLbReleaseConfigAfter = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
+  if (codexLbReleaseJson.status !== 'released' || codexLbReleaseJson.provider_unselected !== true || codexLbReleaseJson.backup_removed !== false || !codexLbReleaseAuth.includes('oauth-id') || !codexLbReleaseAuth.includes('oauth-refresh') || codexLbReleaseAuth.includes('apikey') || !codexLbReleaseBackupAfter.includes('oauth-id') || hasTopLevelCodexLbSelected(codexLbReleaseConfigAfter)) throw new Error('selftest: codex-lb release happy path did not restore OAuth, preserve backup, and deselect model_provider');
+  // --keep-provider: restore auth.json but leave model_provider = "codex-lb" alone.
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), codexLbReleaseApikeyAuth);
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), codexLbReleaseOauthBackup);
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), codexLbReleaseConfig);
+  const codexLbReleaseKeepRun = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'release', '--keep-provider', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (codexLbReleaseKeepRun.code !== 0) throw new Error(`selftest: codex-lb release --keep-provider exited ${codexLbReleaseKeepRun.code}: ${codexLbReleaseKeepRun.stderr}`);
+  const codexLbReleaseKeepJson = JSON.parse(codexLbReleaseKeepRun.stdout);
+  const codexLbReleaseKeepConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
+  if (codexLbReleaseKeepJson.status !== 'released' || codexLbReleaseKeepJson.provider_unselected !== false || !hasTopLevelCodexLbSelected(codexLbReleaseKeepConfig)) throw new Error('selftest: codex-lb release --keep-provider should leave model_provider = "codex-lb" intact');
+  // --delete-backup: restore auth.json and remove the backup file.
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), codexLbReleaseApikeyAuth);
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), codexLbReleaseOauthBackup);
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), codexLbReleaseConfig);
+  const codexLbReleaseDeleteRun = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'release', '--delete-backup', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (codexLbReleaseDeleteRun.code !== 0) throw new Error(`selftest: codex-lb release --delete-backup exited ${codexLbReleaseDeleteRun.code}: ${codexLbReleaseDeleteRun.stderr}`);
+  const codexLbReleaseDeleteJson = JSON.parse(codexLbReleaseDeleteRun.stdout);
+  const codexLbReleaseDeleteBackupExists = await exists(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'));
+  if (codexLbReleaseDeleteJson.status !== 'released' || codexLbReleaseDeleteJson.backup_removed !== true || codexLbReleaseDeleteBackupExists) throw new Error('selftest: codex-lb release --delete-backup should remove the backup file after restore');
+  // No backup: release should refuse and exit 1.
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), codexLbReleaseApikeyAuth);
+  await fsp.rm(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), { force: true });
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), codexLbReleaseConfig);
+  const codexLbReleaseMissingRun = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'release', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  const codexLbReleaseMissingJson = JSON.parse(codexLbReleaseMissingRun.stdout || '{}');
+  const codexLbReleaseMissingAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  if (codexLbReleaseMissingRun.code === 0 || codexLbReleaseMissingJson.status !== 'no_backup' || !codexLbReleaseMissingAuth.includes('apikey')) throw new Error('selftest: codex-lb release with no backup should exit non-zero and report no_backup without touching auth.json');
+  // unselect: flip model_provider off without touching auth.json or env file.
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), codexLbReleaseApikeyAuth);
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), codexLbReleaseConfig);
+  const codexLbUnselectRun = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'unselect', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (codexLbUnselectRun.code !== 0) throw new Error(`selftest: codex-lb unselect exited ${codexLbUnselectRun.code}: ${codexLbUnselectRun.stderr}`);
+  const codexLbUnselectJson = JSON.parse(codexLbUnselectRun.stdout);
+  const codexLbUnselectConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
+  const codexLbUnselectAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  if (codexLbUnselectJson.status !== 'unselected' || hasTopLevelCodexLbSelected(codexLbUnselectConfig) || !codexLbUnselectConfig.includes('[model_providers.codex-lb]') || !codexLbUnselectAuth.includes('apikey')) throw new Error('selftest: codex-lb unselect should drop model_provider but preserve [model_providers.codex-lb] and auth.json');
   // Restore the doctor-test auth.json shape so downstream selftest assertions still hold.
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
   await fsp.rm(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), { force: true });
