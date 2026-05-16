@@ -4,6 +4,18 @@
 
 
 
+## [0.9.7] - 2026-05-17
+
+### Fixed
+
+- **codex 0.130.0 auth compatibility**: codex CLI changed `auth.json` apikey field from `"key"` to `"OPENAI_API_KEY"`. The `reconcileCodexLbAuthConflict` writer now produces the new format. Reading still supports both old and new formats for backward compat.
+- **`[exited]` on launch**: the tmux codex session exited immediately because codex 0.130.0 couldn't find the API key in the old auth.json format. Fixed by the auth format migration above.
+
+### Improved
+
+- `sks codex-lb setup` now supports interactive prompts when `--host`/`--api-key` are omitted: asks for domain and API key step by step, making first-time setup easier.
+- On `npm i -g sneakoscope` upgrade, if codex-lb is already configured, prompts "codex-lb key changed? [y/N]" so users can update their key without needing to remember the setup command. Default is N (no change). Skip with `SKS_SKIP_CODEX_LB_KEY_PROMPT=1`.
+- Auto-migrates legacy `auth.json` from old `"key"` field to new `"OPENAI_API_KEY"` format during postinstall and doctor --fix. Never wipes user keys or settings.
 
 ## [0.9.6] - 2026-05-17
 

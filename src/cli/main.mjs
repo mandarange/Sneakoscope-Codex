@@ -1248,13 +1248,20 @@ async function codexLbCommand(action = 'status', args = []) {
     return;
   }
   if (sub === 'setup' || sub === 'reconfigure') {
-    const host = readOption(args, '--host', readOption(args, '--domain', null));
-    const apiKey = readOption(args, '--api-key', readOption(args, '--key', null));
+    let host = readOption(args, '--host', readOption(args, '--domain', null));
+    let apiKey = readOption(args, '--api-key', readOption(args, '--key', null));
     if (!host || !apiKey) {
       if (json) return console.log(JSON.stringify({ ok: false, reason: 'missing_host_or_api_key' }, null, 2));
-      console.error('Usage: sks codex-lb setup|reconfigure --host <domain> --api-key <key>');
-      process.exitCode = 1;
-      return;
+      if (!canAskYesNo()) {
+        console.error('Usage: sks codex-lb setup|reconfigure --host <domain> --api-key <key>');
+        process.exitCode = 1;
+        return;
+      }
+      console.log('codex-lb setup — configure your Codex load balancer connection.\n');
+      if (!host) host = (await askPostinstallQuestion('Your codex-lb domain (e.g. https://codex.example.com/backend-api/codex): ')).trim();
+      if (!host) { console.error('Setup cancelled: no domain provided.'); process.exitCode = 1; return; }
+      if (!apiKey) apiKey = (await askPostinstallQuestion('Your codex-lb API key (sk-clb-...): ')).trim();
+      if (!apiKey) { console.error('Setup cancelled: no API key provided.'); process.exitCode = 1; return; }
     }
     const result = await configureCodexLb({ host, apiKey });
     if (json) return console.log(JSON.stringify(result, null, 2));
