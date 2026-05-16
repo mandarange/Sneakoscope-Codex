@@ -95,6 +95,17 @@ async function reportPostinstallCodexLbAuth() {
   } else if (reconcile?.status === 'failed') {
     console.log(`codex-lb auth: ChatGPT OAuth reconciliation could not complete (${reconcile.reason || 'unknown'}${reconcile.error ? `: ${reconcile.error}` : ''}). Run \`sks codex-lb repair\` to retry.`);
   }
+  if (codexLbAuth.base_url && codexLbAuth.codex_lb?.env_key_configured && canAskYesNo() && process.env.SKS_SKIP_CODEX_LB_KEY_PROMPT !== '1') {
+    const changeKey = (await askPostinstallQuestion('codex-lb key changed? Update now? [y/N] ')).trim();
+    if (/^(y|yes|예|네|응)$/i.test(changeKey)) {
+      const newKey = (await askPostinstallQuestion('New codex-lb API key (sk-clb-...): ')).trim();
+      if (newKey) {
+        const result = await configureCodexLb({ host: codexLbAuth.base_url, apiKey: newKey });
+        if (result.ok) console.log(`codex-lb key updated: ${result.base_url}`);
+        else console.log(`codex-lb key update failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
+      }
+    }
+  }
   return codexLbAuth;
 }
 
@@ -457,6 +468,7 @@ export async function repairCodexLbAuth(opts = {}) {
       codex_lb: status
     };
   }
+  await migrateCodexAuthKeyFormat({ home: opts.home });
   const codexEnvironment = await syncCodexLbProviderEnvironment(status, opts);
   const apiKey = parseCodexLbEnvKey(await readText(status.env_path, ''));
   const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir(), force: true });
@@ -482,6 +494,7 @@ export async function ensureCodexLbAuthDuringInstall(opts = {}) {
   if (process.env.SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH === '1' && !opts.force) return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH=1' };
   const status = await codexLbStatus(opts);
   if (!status.selected && !status.provider_configured && !status.env_file) return { status: 'not_configured', codex_lb: status };
+  await migrateCodexAuthKeyFormat({ home: opts.home });
   if (status.ok && (!status.selected || !status.provider_requires_openai_auth)) return repairCodexLbAuth(opts);
   if (!status.ok) {
     if (status.base_url && (status.env_key_configured || status.provider_configured || status.selected || status.env_base_url_configured)) return repairCodexLbAuth(opts);
@@ -552,6 +565,28 @@ function parseCodexAuthApiKey(text = '') {
   }
 }
 
+// Migrate auth.json from legacy {"auth_mode":"apikey","key":"..."} to the codex 0.130.0+
+// format {"auth_mode":"apikey","OPENAI_API_KEY":"..."}. Safe: preserves key value, only renames field.
+async function migrateCodexAuthKeyFormat(opts = {}) {
+  const home = opts.home || process.env.HOME || os.homedir();
+  const authPath = opts.authPath || codexAuthPath(home);
+  const text = await readText(authPath, '');
+  if (!text.trim()) return { status: 'skipped', reason: 'empty' };
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed?.auth_mode !== 'apikey') return { status: 'skipped', reason: 'not_apikey' };
+    if (parsed.OPENAI_API_KEY) return { status: 'skipped', reason: 'already_migrated' };
+    const legacyKey = parsed.key || parsed.api_key || parsed.apiKey || parsed.openai_api_key;
+    if (!legacyKey) return { status: 'skipped', reason: 'no_key_found' };
+    const replacement = `${JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: legacyKey })}\n`;
+    await writeTextAtomic(authPath, replacement);
+    await fsp.chmod(authPath, 0o600).catch(() => {});
+    return { status: 'migrated', auth_path: authPath };
+  } catch {
+    return { status: 'skipped', reason: 'parse_error' };
+  }
+}
+
 // When codex-lb is selected with env_key auth AND auth.json also carries a real ChatGPT OAuth
 // token blob, Codex CLI/App can pick the OAuth bearer over the env_key bearer and fail against
 // the load balancer. We back the OAuth blob up to ~/.codex/auth.chatgpt-backup.json and replace
@@ -597,7 +632,7 @@ export async function reconcileCodexLbAuthConflict(opts = {}) {
     };
   }
   try {
-    const replacement = `${JSON.stringify({ auth_mode: 'apikey', key: apiKey }, null, 2)}\n`;
+    const replacement = `${JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: apiKey }, null, 2)}\n`;
     await writeTextAtomic(authPath, replacement);
     await fsp.chmod(authPath, 0o600).catch(() => {});
   } catch (err) {
@@ -1567,7 +1602,7 @@ export async function selftestCodexLb(tmp) {
   // NOTE: printf format uses literal double-quotes inside single-quoted shell strings so the
   // fake login writes proper JSON in both bash and dash (where `\"` is a non-standard printf
   // escape that dash emits literally and bash collapses to `"`).
-  await writeTextAtomic(codexLbFakeCodex, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"codex-cli 99.0.0\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"status\" ]; then echo \"logged in with browser auth\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"--with-api-key\" ]; then read key; mkdir -p \"$HOME/.codex\"; printf '{\"auth_mode\":\"apikey\",\"key\":\"%s\"}\\n' \"$key\" > \"$HOME/.codex/auth.json\"; printf '%s\\n' \"$key\" >> \"$HOME/.codex/login-calls.log\"; exit 0; fi\necho \"fake codex unsupported\" >&2\nexit 1\n");
+  await writeTextAtomic(codexLbFakeCodex, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"codex-cli 99.0.0\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"status\" ]; then echo \"logged in with browser auth\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"--with-api-key\" ]; then read key; mkdir -p \"$HOME/.codex\"; printf '{\"auth_mode\":\"apikey\",\"OPENAI_API_KEY\":\"%s\"}\\n' \"$key\" > \"$HOME/.codex/auth.json\"; printf '%s\\n' \"$key\" >> \"$HOME/.codex/login-calls.log\"; exit 0; fi\necho \"fake codex unsupported\" >&2\nexit 1\n");
   await fsp.chmod(codexLbFakeCodex, 0o755);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "low"\nservice_tier = "fast"\n\n[profiles.custom]\nmodel_reasoning_effort = "low"\n\n[notice]\nfast_default_opt_out = true\n\n[features]\ncodex_hooks = true\n');
   const codexLbEnvForSelftest = { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global'), PATH: `${codexLbFakeBin}${path.delimiter}${process.env.PATH || ''}`, SKS_SKIP_CODEX_LB_LAUNCH_ENV: '1' };
@@ -1710,7 +1745,7 @@ export async function selftestCodexLb(tmp) {
   // the provider stays selected and whether the backup file is removed after restore.
   const codexLbReleaseConfig = 'model_provider = "codex-lb"\n\n[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true\n';
   const codexLbReleaseEnv = "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\nexport CODEX_LB_API_KEY='sk-test'\n";
-  const codexLbReleaseApikeyAuth = '{"auth_mode":"apikey","key":"sk-test"}\n';
+  const codexLbReleaseApikeyAuth = '{"auth_mode":"apikey","OPENAI_API_KEY":"sk-test"}\n';
   const codexLbReleaseOauthBackup = `${oauthAuthJson}\n`;
   // Happy path: deselect model_provider and preserve backup file.
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), codexLbReleaseApikeyAuth);
