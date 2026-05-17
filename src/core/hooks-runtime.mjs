@@ -1158,8 +1158,11 @@ function normalizeHookResult(name, result = {}) {
 
   if (eventName === 'PreToolUse') {
     if (out.decision === 'block' || out.permissionDecision === 'deny' || out.decision === 'deny') {
-      normalized.decision = 'block';
-      normalized.reason = reason;
+      normalized.hookSpecificOutput = {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: reason
+      };
     }
     return normalized;
   }

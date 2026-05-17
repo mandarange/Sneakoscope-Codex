@@ -7,6 +7,7 @@
 ### Fixed
 - Install generated Codex App skill templates for `$Commit` and `$Commit-And-Push` so updated global setups show the commit routes in the dollar-command picker.
 - Add a regression test that every `DOLLAR_SKILL_NAMES` entry is backed by a generated `SKILL.md` template.
+- Emit canonical Codex hook command output with `hookSpecificOutput` wrappers and `PreToolUse.permissionDecision=deny` instead of relying on legacy top-level context/block shapes.
 
 ## [0.9.15] - 2026-05-18
 
