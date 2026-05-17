@@ -17,3 +17,14 @@ export async function readLatestProofMarkdown(root = packageRoot()) {
   if (!await exists(file)) return '# SKS Completion Proof\n\nNo completion proof has been written yet.\n';
   return readText(file);
 }
+
+export async function readRouteProof(root = packageRoot(), missionId = null) {
+  if (missionId) {
+    const missionProof = path.join(root, '.sneakoscope', 'missions', missionId, 'completion-proof.json');
+    if (await exists(missionProof)) return readJson(missionProof);
+    return null;
+  }
+  const latest = path.join(proofDir(root), 'latest.json');
+  if (await exists(latest)) return readJson(latest);
+  return null;
+}

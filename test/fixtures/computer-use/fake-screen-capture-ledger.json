@@ -1,0 +1,6 @@
+{
+  "schema": "sks.screen-capture-ledger.v1",
+  "mode": "mock",
+  "screens": ["screen-before", "screen-after"],
+  "status": "verified_partial"
+}

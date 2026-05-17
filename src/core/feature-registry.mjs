@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS } from './routes.mjs';
 import { fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.mjs';
-import { exists, nowIso, packageRoot, readJson, readText, writeTextAtomic } from './fsx.mjs';
+import { exists, nowIso, packageRoot, readJson, readText, runProcess, writeTextAtomic } from './fsx.mjs';
 
 export const FEATURE_REGISTRY_SCHEMA = 'sks.feature-registry.v1';
 export const FEATURE_INVENTORY_SCHEMA = 'sks.feature-inventory.v1';
@@ -132,10 +133,11 @@ export async function writeFeatureInventoryDocs({ root = packageRoot(), outFile 
   return { ok: registry.coverage.ok, path: outFile, registry };
 }
 
-export function buildAllFeaturesSelftest(registry) {
+export function buildAllFeaturesSelftest(registry, opts = {}) {
   const coverage = validateFeatureRegistry(registry);
   const fixtures = validateFeatureFixtures(registry.features || []);
   const fixturesSummary = fixtureSummary(registry.features || []);
+  const executable = opts.executeFixtures ? executeFeatureFixtures(registry.features || [], opts) : null;
   const checks = [
     checkRow('feature_registry_completeness', coverage.ok, coverage.blockers),
     checkRow('command_lazy_load_availability', coverage.unmapped.cli_command_names.length === 0 && coverage.unmapped.handler_keys.length === 0, [...coverage.unmapped.cli_command_names, ...coverage.unmapped.handler_keys]),
@@ -145,7 +147,10 @@ export function buildAllFeaturesSelftest(registry) {
     checkRow('failure_contracts_present', registry.features.every((feature) => Array.isArray(feature.known_gaps)), missingFeatureField(registry, 'known_gaps')),
     checkRow('fixture_contracts_present', fixtures.ok, fixtures.blockers),
     checkRow('proof_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-proof' && feature.fixture?.status === 'pass'), ['cli-proof']),
-    checkRow('voxel_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact) => artifact.includes('image-voxel-ledger'))), ['cli-wiki'])
+    checkRow('voxel_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact) => artifact.includes('image-voxel-ledger'))), ['cli-wiki']),
+    checkRow('fixture_pass_threshold', (fixturesSummary.counts.pass || 0) >= 45, [`pass=${fixturesSummary.counts.pass || 0}`]),
+    checkRow('fixture_mock_blocked_zero', (fixturesSummary.counts.blocked || 0) === 0, [`blocked=${fixturesSummary.counts.blocked || 0}`]),
+    ...(executable ? [checkRow('executable_fixture_contracts', executable.ok, executable.failures)] : [])
   ];
   const ok = checks.every((check) => check.ok);
   return {
@@ -156,9 +161,87 @@ export function buildAllFeaturesSelftest(registry) {
     checks,
     fixtures: fixturesSummary,
     coverage,
-    note: 'Mock selftest verifies the shared contract spine; feature fixtures remain progressive.'
+    executable_fixtures: executable,
+    note: opts.executeFixtures
+      ? 'Mock executable fixture mode validates release-gated fixture contracts and expected artifact declarations.'
+      : 'Mock selftest verifies the shared contract spine; feature fixtures remain progressive.'
   };
 }
+
+export function executeFeatureFixtures(features = [], opts = {}) {
+  const selected = features.filter((feature) => feature.fixture?.status === 'pass' && ['mock', 'static'].includes(feature.fixture.kind));
+  const failures = [];
+  const checked = [];
+  const executed = [];
+  for (const feature of selected) {
+    const fx = feature.fixture;
+    if (!fx.command) {
+      failures.push(`${feature.id}:fixture_command_missing`);
+      continue;
+    }
+    const artifactOk = Array.isArray(fx.expected_artifacts);
+    if (!artifactOk) failures.push(`${feature.id}:expected_artifacts`);
+    const execution = executeSafeFixtureCommand(feature.id, opts);
+    if (execution) {
+      executed.push(execution);
+      if (!execution.ok) failures.push(`${feature.id}:command_exit_${execution.status}`);
+    }
+    checked.push({
+      id: feature.id,
+      kind: fx.kind,
+      command: fx.command,
+      expected_artifacts: fx.expected_artifacts,
+      mode: execution ? 'command_and_contract' : 'contract'
+    });
+  }
+  return {
+    schema: 'sks.feature-fixture-execution.v1',
+    mode: 'mock',
+    ok: failures.length === 0,
+    checked: checked.length,
+    executed: executed.length,
+    executed_commands: executed,
+    failures,
+    command_execution: executed.length ? 'safe-allowlist' : 'contract-only',
+    note: 'Release fixture execution runs deterministic safe CLI fixtures and validates mock/static contracts without claiming real external dependency runs.'
+  };
+}
+
+function executeSafeFixtureCommand(featureId, opts = {}) {
+  const args = SAFE_EXECUTABLE_FIXTURE_ARGS[featureId];
+  if (!args) return null;
+  const root = opts.root || packageRoot();
+  const result = spawnSync(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    timeout: 15_000,
+    env: { ...process.env, CI: 'true', SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+  });
+  return {
+    id: featureId,
+    args,
+    status: result.status,
+    signal: result.signal || null,
+    ok: result.status === 0,
+    stdout_bytes: Buffer.byteLength(result.stdout || ''),
+    stderr_bytes: Buffer.byteLength(result.stderr || '')
+  };
+}
+
+const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
+  'cli-version': ['--version'],
+  'cli-root': ['root', '--json'],
+  'cli-features': ['features', 'check', '--json'],
+  'cli-commands': ['commands', '--json'],
+  'cli-proof-field': ['proof-field', 'scan', '--json', '--intent', 'fixture'],
+  'cli-db': ['db', 'policy'],
+  'cli-wiki': ['wiki', 'image-summary', '--json'],
+  'cli-codex-lb': ['codex-lb', 'metrics', '--json'],
+  'cli-hooks': ['hooks', 'trust-report', '--json'],
+  'cli-perf': ['perf', 'cold-start', '--json', '--iterations', '1'],
+  'route-db': ['db', 'policy'],
+  'route-wiki': ['wiki', 'image-summary', '--json']
+});
 
 export function renderFeatureInventoryMarkdown(registry) {
   const coverage = registry.coverage || validateFeatureRegistry(registry);

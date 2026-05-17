@@ -4,7 +4,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 fn main() {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
-        Some("--version") => println!("sks-rs 0.9.12"),
+        Some("--version") => println!("sks-rs 0.9.13"),
         Some("compact-info") => {
             let mut input = String::new();
             let _ = io::stdin().read_to_string(&mut input);
@@ -28,6 +28,30 @@ fn main() {
                 }
             }
         }
+        Some("image-hash") => {
+            let path = args.next().unwrap_or_default();
+            match image_hash(&path) {
+                Ok((sha, bytes)) => println!("{{\"ok\":true,\"engine\":\"rust\",\"path\":\"{}\",\"sha256\":\"{}\",\"bytes\":{}}}", json_escape(&path), sha, bytes),
+                Err(err) => {
+                    println!("{{\"ok\":false,\"engine\":\"rust\",\"path\":\"{}\",\"error\":\"{}\"}}", json_escape(&path), json_escape(&err.to_string()));
+                    std::process::exit(1);
+                }
+            }
+        }
+        Some("voxel-validate") => {
+            let path = args.next().unwrap_or_default();
+            match std::fs::read_to_string(&path) {
+                Ok(text) => {
+                    let report = voxel_validate(&text);
+                    println!("{}", report);
+                    if report.contains("\"ok\":false") { std::process::exit(1); }
+                }
+                Err(err) => {
+                    println!("{{\"ok\":false,\"engine\":\"rust\",\"issues\":[\"read_error\"],\"error\":\"{}\"}}", json_escape(&err.to_string()));
+                    std::process::exit(1);
+                }
+            }
+        }
         Some("secret-scan") => {
             let path = args.next().unwrap_or_default();
             match std::fs::read_to_string(&path) {
@@ -45,10 +69,126 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("sks-rs optional accelerator. Commands: --version, compact-info, jsonl-tail, secret-scan");
+            eprintln!("sks-rs optional accelerator. Commands: --version, compact-info, jsonl-tail, secret-scan, image-hash, voxel-validate");
             std::process::exit(2);
         }
     }
+}
+
+fn image_hash(path: &str) -> io::Result<(String, u64)> {
+    let mut file = File::open(path)?;
+    let mut data = Vec::new();
+    file.read_to_end(&mut data)?;
+    let bytes = data.len() as u64;
+    Ok((sha256_hex(&data), bytes))
+}
+
+fn sha256_hex(data: &[u8]) -> String {
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ];
+    let mut h: [u32; 8] = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+    let bit_len = (data.len() as u64) * 8;
+    let mut msg = data.to_vec();
+    msg.push(0x80);
+    while (msg.len() % 64) != 56 { msg.push(0); }
+    msg.extend_from_slice(&bit_len.to_be_bytes());
+    for chunk in msg.chunks(64) {
+        let mut w = [0u32; 64];
+        for i in 0..16 {
+            w[i] = u32::from_be_bytes([chunk[i * 4], chunk[i * 4 + 1], chunk[i * 4 + 2], chunk[i * 4 + 3]]);
+        }
+        for i in 16..64 {
+            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
+            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
+            w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
+        }
+        let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh) = (h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
+        for i in 0..64 {
+            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+            let ch = (e & f) ^ ((!e) & g);
+            let temp1 = hh.wrapping_add(s1).wrapping_add(ch).wrapping_add(K[i]).wrapping_add(w[i]);
+            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+            let maj = (a & b) ^ (a & c) ^ (b & c);
+            let temp2 = s0.wrapping_add(maj);
+            hh = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(temp1);
+            d = c;
+            c = b;
+            b = a;
+            a = temp1.wrapping_add(temp2);
+        }
+        h[0] = h[0].wrapping_add(a);
+        h[1] = h[1].wrapping_add(b);
+        h[2] = h[2].wrapping_add(c);
+        h[3] = h[3].wrapping_add(d);
+        h[4] = h[4].wrapping_add(e);
+        h[5] = h[5].wrapping_add(f);
+        h[6] = h[6].wrapping_add(g);
+        h[7] = h[7].wrapping_add(hh);
+    }
+    h.iter().map(|x| format!("{:08x}", x)).collect::<String>()
+}
+
+fn voxel_validate(text: &str) -> String {
+    let mut issues: Vec<&str> = Vec::new();
+    if !text.contains("\"schema\"") || !text.contains("sks.image-voxel-ledger.v1") { issues.push("schema"); }
+    if !text.contains("\"images\"") { issues.push("missing_images"); }
+    if !text.contains("\"anchors\"") { issues.push("missing_anchors"); }
+    let image_count = count_object_entries(text, "images");
+    let anchor_count = count_object_entries(text, "anchors");
+    if image_count == 0 { issues.push("missing_images"); }
+    if anchor_count == 0 { issues.push("missing_anchors"); }
+    issues.sort();
+    issues.dedup();
+    let ok = issues.is_empty();
+    let issue_json = issues.iter().map(|x| format!("\"{}\"", json_escape(x))).collect::<Vec<_>>().join(",");
+    format!("{{\"ok\":{},\"engine\":\"rust\",\"schema\":\"sks.image-voxel-ledger.v1\",\"images\":{},\"anchors\":{},\"issues\":[{}]}}", if ok { "true" } else { "false" }, image_count, anchor_count, issue_json)
+}
+
+fn count_object_entries(text: &str, key: &str) -> usize {
+    let marker = format!("\"{}\"", key);
+    let Some(start) = text.find(&marker) else { return 0; };
+    let Some(open) = text[start..].find('[').map(|i| start + i) else { return 0; };
+    let mut depth = 0i32;
+    let mut entries = 0usize;
+    let mut in_string = false;
+    let mut escape = false;
+    for ch in text[open..].chars() {
+        if escape {
+            escape = false;
+            continue;
+        }
+        if ch == '\\' && in_string {
+            escape = true;
+            continue;
+        }
+        if ch == '"' {
+            in_string = !in_string;
+            continue;
+        }
+        if in_string { continue; }
+        if ch == '[' { depth += 1; }
+        else if ch == ']' {
+            depth -= 1;
+            if depth == 0 { break; }
+        }
+        else if ch == '{' && depth == 1 { entries += 1; }
+    }
+    entries
+}
+
+fn json_escape(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r")
 }
 
 fn tail_file(path: &str, bytes: u64) -> io::Result<String> {

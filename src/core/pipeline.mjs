@@ -18,6 +18,8 @@ import { writeQaLoopArtifacts } from './qa-loop.mjs';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, writeImageUxReviewRouteArtifacts } from './image-ux-review.mjs';
 import { responseLanguageInstruction } from './language-preference.mjs';
 import { SPEED_LANE_POLICY } from './proof-field.mjs';
+import { validateRouteCompletionProof } from './proof/route-proof-gate.mjs';
+import { routeFromState, routeRequiresCompletionProof } from './proof/route-proof-policy.mjs';
 import { permissionGateSummary } from './permission-gates.mjs';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, SOLUTION_SCOUT_STAGE_ID, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, looksLikeProblemSolvingRequest, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, solutionScoutPolicyText, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
@@ -1357,9 +1359,25 @@ export async function evaluateStop(root, state, payload, opts = {}) {
       return complianceBlock(root, state, `SKS ${state.route_command || state.mode} route cannot stop yet. Pass ${gate.file || state.stop_gate} or record a hard blocker with evidence before finishing.${missing}`, { gate: gate.file || state.stop_gate, missing: gate.missing });
     }
   }
+  const proofGate = await routeProofGateStatus(root, state);
+  if (!proofGate.ok) {
+    return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot finalize without a valid Completion Proof. Missing or invalid proof issues: ${proofGate.issues.join(', ')}.`, { gate: 'completion-proof', missing: proofGate.issues });
+  }
   const reflection = await reflectionGateStatus(root, state);
   if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
   return null;
+}
+
+async function routeProofGateStatus(root, state = {}) {
+  const route = routeFromState(state);
+  const required = state.proof_required === true || routeRequiresCompletionProof(route);
+  if (!required || !state?.mission_id) return { ok: true, required: false, issues: [] };
+  return validateRouteCompletionProof(root, {
+    missionId: state.mission_id,
+    route,
+    state,
+    visualClaim: state.visual_claim !== false
+  });
 }
 
 function clarificationGatePending(state = {}) {

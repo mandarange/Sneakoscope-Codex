@@ -11,6 +11,7 @@ export function validateCompletionProof(proof = {}) {
   if (!Array.isArray(proof.unverified)) issues.push('unverified');
   if (!Array.isArray(proof.blockers)) issues.push('blockers');
   if (containsPlaintextSecret(proof)) issues.push('plaintext_secret');
+  if (proof.status === 'failed') issues.push('proof_failed');
   return {
     ok: issues.length === 0,
     status: issues.length ? 'failed' : proof.status,

@@ -1,0 +1,33 @@
+{
+  "schema": "sks.computer-use-evidence-ledger.v1",
+  "mode": "mock",
+  "route": "$Computer-Use",
+  "screens": [
+    {
+      "id": "screen-before",
+      "path": "fake-before-screen.png",
+      "sha256": "fixture",
+      "width": 1440,
+      "height": 900,
+      "source": "codex-computer-use"
+    },
+    {
+      "id": "screen-after",
+      "path": "fake-after-screen.png",
+      "sha256": "fixture",
+      "width": 1440,
+      "height": 900,
+      "source": "codex-computer-use"
+    }
+  ],
+  "actions": [
+    {
+      "type": "click",
+      "target": "CTA",
+      "screen_id": "screen-before",
+      "bbox": [120, 240, 360, 80],
+      "evidence": "fixture"
+    }
+  ],
+  "status": "verified_partial"
+}

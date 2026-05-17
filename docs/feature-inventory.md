@@ -11,7 +11,7 @@ Generated from `sks commands --json`, `src/cli/main.mjs`, `src/core/routes.mjs`,
 - Dollar routes: 19
 - App skill aliases: 21
 - Skills: 47
-- Fixture statuses: pass=20, not_required=85, blocked=1
+- Fixture statuses: pass=59, not_required=47
 
 ## Release Coverage Rule
 
@@ -23,11 +23,11 @@ Generated from `sks commands --json`, `src/cli/main.mjs`, `src/core/routes.mjs`,
 | --- | --- | --- | --- | --- | --- |
 | `cli-help` | core-cli | stable | sks help [topic] | static:pass | none recorded |
 | `cli-version` | core-cli | stable | sks version \| sks --version | static:pass | none recorded |
-| `cli-update-check` | core-cli | stable | sks update-check [--json] | static:not_required | none recorded |
+| `cli-update-check` | core-cli | stable | sks update-check [--json] | static:pass | none recorded |
 | `cli-wizard` | core-cli | labs | sks wizard<br>sks ui | static:not_required | none recorded |
-| `cli-commands` | core-cli | stable | sks commands [--json] | static:not_required | none recorded |
-| `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|tmux\|auto-review\|team\|qa-loop\|ppt\|image-ux-review\|goal\|research\|db\|codex-app\|hooks\|features\|all-features\|openclaw\|dfix\|design\|imagegen\|dollar\|context7\|pipeline\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|code-structure\|proof-field\|skill-dream] | static:not_required | none recorded |
-| `cli-quickstart` | core-cli | stable | sks quickstart | static:not_required | none recorded |
+| `cli-commands` | core-cli | stable | sks commands [--json] | static:pass | none recorded |
+| `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|tmux\|auto-review\|team\|qa-loop\|ppt\|image-ux-review\|goal\|research\|db\|codex-app\|hooks\|features\|all-features\|openclaw\|dfix\|design\|imagegen\|dollar\|context7\|pipeline\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|code-structure\|proof-field\|skill-dream] | static:pass | none recorded |
+| `cli-quickstart` | core-cli | stable | sks quickstart | static:pass | none recorded |
 | `cli-bootstrap` | install | labs | sks bootstrap [--install-scope global\|project] [--local-only] [--json] | static:not_required | none recorded |
 | `cli-root` | core-cli | stable | sks root [--json] | static:pass | none recorded |
 | `cli-deps` | install | labs | sks deps check\|install [tmux\|codex\|context7\|all] [--yes] | static:not_required | none recorded |
@@ -39,65 +39,65 @@ Generated from `sks commands --json`, `src/cli/main.mjs`, `src/core/routes.mjs`,
 | `cli-tmux` | core-cli | labs | sks \| sks tmux open\|check\|status [--workspace name] | static:not_required | none recorded |
 | `cli-mad` | core-cli | labs | sks --mad [--high] | static:not_required | none recorded |
 | `cli-auto-review` | core-cli | labs | sks auto-review status\|enable\|start [--high] \| sks --Auto-review --high | static:not_required | none recorded |
-| `cli-dollar-commands` | core-cli | labs | sks dollar-commands [--json] | static:not_required | none recorded |
-| `cli-dfix` | core-cli | labs | sks dfix | static:not_required | none recorded |
-| `cli-qa-loop` | loop | labs | sks qa-loop prepare\|answer\|run\|status ... | static:not_required | none recorded |
-| `cli-ppt` | visual-memory | labs | sks ppt build\|status <mission-id\|latest> [--json] | static:not_required | none recorded |
-| `cli-image-ux-review` | visual-memory | labs | sks image-ux-review status <mission-id\|latest> [--json]<br>sks ui-ux-review<br>sks ux-review<br>sks visual-review | static:not_required | none recorded |
+| `cli-dollar-commands` | core-cli | labs | sks dollar-commands [--json] | static:pass | none recorded |
+| `cli-dfix` | core-cli | labs | sks dfix | static:pass | none recorded |
+| `cli-qa-loop` | loop | labs | sks qa-loop prepare\|answer\|run\|status ... | mock:pass | none recorded |
+| `cli-ppt` | visual-memory | labs | sks ppt build\|status <mission-id\|latest> [--json] | mock:pass | none recorded |
+| `cli-image-ux-review` | visual-memory | labs | sks image-ux-review status <mission-id\|latest> [--json]<br>sks ui-ux-review<br>sks ux-review<br>sks visual-review | mock:pass | none recorded |
 | `cli-context7` | integration | labs | sks context7 check\|setup\|tools\|resolve\|docs\|evidence ... | static:not_required | none recorded |
-| `cli-recallpulse` | loop | labs | sks recallpulse run\|status\|eval\|governance\|checklist <mission-id\|latest> | static:not_required | none recorded |
-| `cli-pipeline` | proof-route | beta | sks pipeline status\|resume\|plan\|answer ... | static:not_required | none recorded |
-| `cli-guard` | safety | beta | sks guard check [--json] | static:not_required | none recorded |
-| `cli-conflicts` | safety | labs | sks conflicts check\|prompt [--json] | static:not_required | none recorded |
-| `cli-versioning` | safety | labs | sks versioning status\|bump\|disable [--json] | static:not_required | none recorded |
+| `cli-recallpulse` | loop | labs | sks recallpulse run\|status\|eval\|governance\|checklist <mission-id\|latest> | mock:pass | none recorded |
+| `cli-pipeline` | proof-route | beta | sks pipeline status\|resume\|plan\|answer ... | mock:pass | none recorded |
+| `cli-guard` | safety | beta | sks guard check [--json] | static:pass | none recorded |
+| `cli-conflicts` | safety | labs | sks conflicts check\|prompt [--json] | static:pass | none recorded |
+| `cli-versioning` | safety | labs | sks versioning status\|bump\|disable [--json] | static:pass | none recorded |
 | `cli-features` | core-cli | beta | sks features list\|check\|inventory [--json] [--write-docs] | static:pass | feature fixtures remain progressive |
 | `cli-all-features` | core-cli | beta | sks all-features selftest --mock [--json] | static:not_required | feature fixtures remain progressive |
-| `cli-aliases` | core-cli | labs | sks aliases | static:not_required | none recorded |
+| `cli-aliases` | core-cli | labs | sks aliases | static:pass | none recorded |
 | `cli-setup` | install | stable | sks setup [--bootstrap] [--install-scope global\|project] [--local-only] [--force] [--json] | real_optional:pass | none recorded |
-| `cli-fix-path` | install | labs | sks fix-path [--install-scope global\|project] [--json] | static:not_required | none recorded |
+| `cli-fix-path` | install | labs | sks fix-path [--install-scope global\|project] [--json] | static:pass | none recorded |
 | `cli-doctor` | install | stable | sks doctor [--fix] [--local-only] [--json] [--install-scope global\|project] | real_optional:pass | none recorded |
-| `cli-init` | install | labs | sks init [--force] [--local-only] [--install-scope global\|project] | static:not_required | none recorded |
-| `cli-selftest` | core-cli | stable | sks selftest [--mock] | static:not_required | none recorded |
-| `cli-goal` | proof-route | beta | sks goal create\|pause\|resume\|clear\|status ... | static:not_required | none recorded |
-| `cli-research` | loop | labs | sks research prepare\|run\|status ... | static:not_required | none recorded |
+| `cli-init` | install | labs | sks init [--force] [--local-only] [--install-scope global\|project] | static:pass | none recorded |
+| `cli-selftest` | core-cli | stable | sks selftest [--mock] | static:pass | none recorded |
+| `cli-goal` | proof-route | beta | sks goal create\|pause\|resume\|clear\|status ... | mock:pass | none recorded |
+| `cli-research` | loop | labs | sks research prepare\|run\|status ... | mock:pass | none recorded |
 | `cli-db` | safety | beta | sks db policy\|scan\|mcp-config\|classify\|check ... | static:pass | none recorded |
 | `cli-eval` | loop | labs | sks eval run\|compare\|thresholds ... | static:not_required | none recorded |
 | `cli-harness` | safety | labs | sks harness fixture\|review [--json] | static:not_required | none recorded |
-| `cli-perf` | loop | labs | sks perf run\|workflow\|cold-start [--json] [--iterations N] | static:not_required | none recorded |
+| `cli-perf` | loop | labs | sks perf run\|workflow\|cold-start [--json] [--iterations N] | static:pass | none recorded |
 | `cli-proof` | core-cli | labs | sks proof show\|latest\|validate\|export\|smoke [--json\|--md] | mock:pass | none recorded |
-| `cli-proof-field` | proof-route | labs | sks proof-field scan [--json] [--intent "task"] [--changed file1,file2] | static:not_required | none recorded |
-| `cli-skill-dream` | loop | labs | sks skill-dream status\|run\|record [--json] | static:not_required | none recorded |
-| `cli-code-structure` | core-cli | labs | sks code-structure scan [--json] | static:not_required | none recorded |
-| `cli-validate-artifacts` | proof-route | labs | sks validate-artifacts [mission-id\|latest] [--json] | static:not_required | none recorded |
+| `cli-proof-field` | proof-route | labs | sks proof-field scan [--json] [--intent "task"] [--changed file1,file2] | static:pass | none recorded |
+| `cli-skill-dream` | loop | labs | sks skill-dream status\|run\|record [--json] | static:pass | none recorded |
+| `cli-code-structure` | core-cli | labs | sks code-structure scan [--json] | static:pass | none recorded |
+| `cli-validate-artifacts` | proof-route | labs | sks validate-artifacts [mission-id\|latest] [--json] | mock:pass | none recorded |
 | `cli-wiki` | visual-memory | beta | sks wiki coords\|pack\|refresh\|prune\|validate ... | mock:pass | none recorded |
-| `cli-hproof` | proof-route | labs | sks hproof check [mission-id\|latest] | static:not_required | none recorded |
+| `cli-hproof` | proof-route | labs | sks hproof check [mission-id\|latest] | mock:pass | none recorded |
 | `cli-team` | proof-route | beta | sks team "task" [executor:5 reviewer:6 user:1]\|log\|tail\|watch\|lane\|status\|dashboard\|event\|message\|open-tmux\|attach-tmux\|cleanup-tmux ... | static:not_required | none recorded |
 | `cli-reasoning` | core-cli | labs | sks reasoning ["prompt"] [--json] | static:not_required | none recorded |
-| `cli-gx` | visual-memory | labs | sks gx init\|render\|validate\|drift\|snapshot [name] | static:not_required | none recorded |
+| `cli-gx` | visual-memory | labs | sks gx init\|render\|validate\|drift\|snapshot [name] | mock:pass | none recorded |
 | `cli-profile` | core-cli | labs | sks profile show\|set <model> | static:not_required | none recorded |
-| `cli-gc` | core-cli | labs | sks gc [--dry-run] [--json]<br>sks memory | static:not_required | none recorded |
-| `cli-memory` | core-cli | labs | sks memory [--dry-run] [--json] | static:not_required | none recorded |
-| `cli-stats` | core-cli | labs | sks stats [--json] | static:not_required | none recorded |
+| `cli-gc` | core-cli | labs | sks gc [--dry-run] [--json]<br>sks memory | static:pass | none recorded |
+| `cli-memory` | core-cli | labs | sks memory [--dry-run] [--json] | static:pass | none recorded |
+| `cli-stats` | core-cli | labs | sks stats [--json] | static:pass | none recorded |
 | `handler-$` | internal | beta | sks $ | static:not_required | hidden handler docs needed if promoted |
 | `handler-autoreview` | internal | beta | sks autoreview | static:not_required | hidden handler docs needed if promoted |
 | `handler-dollars` | internal | beta | sks dollars | static:not_required | hidden handler docs needed if promoted |
 | `handler-postinstall` | internal | beta | sks postinstall | static:not_required | hidden handler docs needed if promoted |
-| `route-dfix` | route | stable | $DFix<br>$dfix | static:not_required | none recorded |
-| `route-answer` | route | stable | $Answer<br>$answer | static:not_required | none recorded |
+| `route-dfix` | route | stable | $DFix<br>$dfix | static:pass | none recorded |
+| `route-answer` | route | stable | $Answer<br>$answer | static:pass | none recorded |
 | `route-sks` | route | stable | $SKS<br>$sks | static:not_required | none recorded |
 | `route-team` | route | beta | $Team<br>$team<br>$from-chat-img | mock:pass | none recorded |
-| `route-from-chat-img` | route | labs | $From-Chat-IMG | static:not_required | none recorded |
+| `route-from-chat-img` | route | labs | $From-Chat-IMG | mock:pass | none recorded |
 | `route-qa-loop` | route | beta | $QA-LOOP<br>$qa-loop | mock:pass | none recorded |
 | `route-ppt` | route | labs | $PPT<br>$ppt | mock:pass | live imagegen/CU evidence required |
 | `route-image-ux-review` | route | labs | $Image-UX-Review<br>$image-ux-review<br>$ux-review<br>$visual-review<br>$ui-ux-review | mock:pass | live imagegen/CU evidence required |
-| `route-ux-review` | route | labs | $UX-Review | static:not_required | live imagegen/CU evidence required |
-| `route-computer-use` | route | beta | $Computer-Use<br>$computer-use-fast<br>$cu | real_optional:blocked | none recorded |
-| `route-cu` | route | beta | $CU | static:not_required | none recorded |
-| `route-goal` | route | beta | $Goal<br>$goal | static:not_required | none recorded |
+| `route-ux-review` | route | labs | $UX-Review | mock:pass | live imagegen/CU evidence required |
+| `route-computer-use` | route | beta | $Computer-Use<br>$computer-use-fast<br>$cu | mock:pass | none recorded |
+| `route-cu` | route | beta | $CU | mock:pass | none recorded |
+| `route-goal` | route | beta | $Goal<br>$goal | mock:pass | none recorded |
 | `route-research` | route | labs | $Research<br>$research | mock:pass | none recorded |
-| `route-autoresearch` | route | labs | $AutoResearch<br>$autoresearch | static:not_required | none recorded |
+| `route-autoresearch` | route | labs | $AutoResearch<br>$autoresearch | mock:pass | none recorded |
 | `route-db` | route | beta | $DB<br>$db | static:pass | none recorded |
-| `route-mad-sks` | route | beta | $MAD-SKS<br>$mad-sks | static:not_required | permission closed by owning gate |
+| `route-mad-sks` | route | beta | $MAD-SKS<br>$mad-sks | mock:pass | permission closed by owning gate |
 | `route-gx` | route | labs | $GX<br>$gx | mock:pass | none recorded |
 | `route-wiki` | route | stable | $Wiki<br>$wiki | mock:pass | none recorded |
 | `route-help` | route | stable | $Help<br>$help | static:not_required | none recorded |

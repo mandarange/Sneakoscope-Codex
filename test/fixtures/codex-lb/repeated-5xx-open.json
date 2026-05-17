@@ -1,0 +1,8 @@
+{
+  "events": [
+    { "status": "second_request_failed", "http_status": 500 },
+    { "status": "second_request_failed", "http_status": 502 },
+    { "status": "second_request_failed", "http_status": 503 }
+  ],
+  "expected_state": "open"
+}
