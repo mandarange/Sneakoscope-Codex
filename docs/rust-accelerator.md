@@ -1,6 +1,6 @@
 # Rust Accelerator
 
-SKS `0.9.17` keeps source-in-package packaging for the Rust accelerator. The npm package includes `crates/sks-core/Cargo.toml`, `Cargo.lock`, and `src/`, but excludes `target/` build output.
+SKS `0.9.18` keeps source-in-package packaging for the Rust accelerator. The npm package includes `crates/sks-core/Cargo.toml`, `Cargo.lock`, and `src/`, but excludes `target/` build output.
 
 Prebuilt binary packages are deferred. Until they exist, SKS runs JS fallbacks unless one of these is available and reports the same package version as `sneakoscope`:
 

@@ -6,10 +6,12 @@ import { buildScoutTeamPlan, normalizeScoutPolicy, routeRequiresScoutIntake, sco
 import { readScoutGateStatus, readScoutResults } from '../scouts/scout-gate.mjs';
 import { runFiveScoutIntake } from '../scouts/scout-runner.mjs';
 import { readScoutProofEvidence } from '../scouts/scout-proof-evidence.mjs';
+import { detectScoutEngines } from '../scouts/engines/scout-engine-detect.mjs';
+import { selectScoutEngine } from '../scouts/engines/scout-engine-policy.mjs';
 import { SCOUT_COUNT } from '../scouts/scout-schema.mjs';
 import { flag, readFlagValue, resolveMissionId } from './command-utils.mjs';
 
-const ACTIONS = new Set(['plan', 'run', 'status', 'consensus', 'handoff', 'validate', 'help', '--help', '-h']);
+const ACTIONS = new Set(['plan', 'run', 'status', 'consensus', 'handoff', 'validate', 'engines', 'bench', 'help', '--help', '-h']);
 
 export async function scoutsCommand(args = []) {
   const root = await projectRoot();
@@ -18,10 +20,19 @@ export async function scoutsCommand(args = []) {
   if (action === 'help' || action === '--help' || action === '-h') return scoutsHelp();
   const json = flag(actionArgs, '--json');
   const mock = flag(actionArgs, '--mock');
+  const strict = flag(actionArgs, '--strict');
+  const requestedEngine = readFlagValue(actionArgs, '--engine', 'auto');
+  const requireRealParallel = flag(actionArgs, '--require-real-parallel');
   const force = flag(actionArgs, '--force-scouts') || flag(actionArgs, '--force');
   const noScouts = flag(actionArgs, '--no-scouts');
   const missionArg = actionArgs.find((arg) => !String(arg).startsWith('--')) || 'latest';
-  const { id, dir, mission, created } = await resolveOrCreateScoutMission(root, missionArg, { mock, action });
+  if (action === 'engines') {
+    const result = await detectScoutEngines(root, {});
+    if (json) return console.log(JSON.stringify(result, null, 2));
+    for (const engine of result.engines) console.log(`${engine.name}: ${engine.available ? 'available' : 'blocked'}${engine.reason ? ` (${engine.reason})` : ''}`);
+    return;
+  }
+  const { id, dir, mission, created } = await resolveOrCreateScoutMission(root, missionArg, { mock, action, strict });
   const context = await inferScoutContext(root, id, { route: readFlagValue(actionArgs, '--route', null), task: readFlagValue(actionArgs, '--task', null) });
   if (action === 'plan') {
     const parallelMode = flag(actionArgs, '--sequential') ? 'sequential_fallback' : 'parallel';
@@ -51,6 +62,8 @@ export async function scoutsCommand(args = []) {
       task: context.task,
       mode: mock ? 'mock' : 'manual',
       parallel: !flag(actionArgs, '--sequential'),
+      engine: requestedEngine,
+      requireRealParallel,
       mock
     });
     await setCurrent(root, {
@@ -75,6 +88,8 @@ export async function scoutsCommand(args = []) {
       route: context.route,
       scout_count: SCOUT_COUNT,
       completed_scouts: results.filter((row) => row.status === 'done').length,
+      engine: gate.gate?.engine || null,
+      real_parallel: gate.gate?.real_parallel === true,
       gate: gate.gate,
       missing: gate.missing
     };
@@ -112,13 +127,14 @@ export async function scoutsCommand(args = []) {
   }
   if (action === 'validate') {
     let gate = await readScoutGateStatus(root, id);
-    if (!gate.ok && !flag(actionArgs, '--strict')) {
+    if (!gate.ok && !strict) {
       const run = await runFiveScoutIntake(root, {
         missionId: id,
         route: context.route,
         task: context.task,
         mode: 'validate-fixture',
         parallel: true,
+        engine: 'local-static',
         mock: true
       });
       gate = { ok: run.gate?.passed === true, gate: run.gate, missing: run.gate?.blockers || [] };
@@ -136,13 +152,61 @@ export async function scoutsCommand(args = []) {
     console.log(`Scout validation: ${result.ok ? 'pass' : 'blocked'}`);
     return;
   }
+  if (action === 'bench') {
+    const selection = await selectScoutEngine(root, {
+      requested: requestedEngine,
+      requireRealParallel,
+      missionId: id,
+      route: context.route,
+      mock
+    });
+    const parallelRun = await runFiveScoutIntake(root, {
+      missionId: id,
+      route: context.route,
+      task: context.task,
+      mode: 'bench-parallel',
+      parallel: true,
+      engine: selection.selected,
+      requireRealParallel,
+      mock
+    });
+    const sequentialRun = await runFiveScoutIntake(root, {
+      missionId: id,
+      route: context.route,
+      task: context.task,
+      mode: 'bench-sequential',
+      parallel: false,
+      engine: 'sequential-fallback',
+      mock: true
+    });
+    const sequentialMs = Number(sequentialRun.performance?.duration_ms || 0);
+    const parallelMs = Number(parallelRun.performance?.duration_ms || 0);
+    const result = {
+      schema: 'sks.scout-benchmark.v1',
+      engine: selection.selected,
+      real_parallel: selection.real_parallel === true,
+      sequential_ms: sequentialMs,
+      parallel_ms: parallelMs,
+      speedup: selection.real_parallel && parallelMs > 0 ? Number((sequentialMs / parallelMs).toFixed(2)) : null,
+      claim_allowed: selection.real_parallel === true && parallelRun.performance?.claim_allowed === true,
+      confidence: selection.real_parallel ? 'medium' : 'low',
+      notes: selection.real_parallel ? [] : ['mock/static benchmarks cannot claim real speedup']
+    };
+    await writeJsonAtomic(path.join(dir, 'scout-benchmark.json'), result);
+    if (json) return console.log(JSON.stringify(result, null, 2));
+    console.log(`Scout benchmark: ${result.claim_allowed ? 'claim allowed' : 'claim not allowed'}`);
+    return;
+  }
 }
 
 async function resolveOrCreateScoutMission(root, missionArg, opts = {}) {
   const resolved = await resolveMissionId(root, missionArg);
   if (resolved) return { id: resolved, ...(await loadMission(root, resolved)), created: false };
+  if (opts.strict) {
+    throw new Error('No mission found for strict scout validation; strict mode never creates scout artifacts.');
+  }
   if (!opts.mock && opts.action !== 'validate' && opts.action !== 'run' && opts.action !== 'plan') {
-    throw new Error('No mission found. Use sks scouts run latest --mock --json to create a fixture mission.');
+    throw new Error('No mission found. Use sks scouts run latest --engine local-static --mock --json to create a fixture mission.');
   }
   const created = await createMission(root, { mode: 'scouts', prompt: 'Five Scout fixture intake' });
   return { id: created.id, dir: created.dir, mission: created.mission, created: true };
@@ -189,11 +253,15 @@ function scoutsHelp() {
 
 Usage:
   sks scouts plan latest --json
-  sks scouts run latest --mock --json
+  sks scouts run latest --engine auto --json
+  sks scouts run latest --engine local-static --mock --json
+  sks scouts run latest --require-real-parallel --json
   sks scouts status latest --json
+  sks scouts engines --json
+  sks scouts bench latest --engine local-static --mock --json
   sks scouts consensus latest --json
   sks scouts handoff latest
-  sks scouts validate latest --json
+  sks scouts validate latest --strict --json
 
 Alias:
   sks scout run latest --json

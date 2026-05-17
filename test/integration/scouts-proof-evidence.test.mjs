@@ -13,7 +13,7 @@ test('route auto-finalizer includes evidence.scouts', async () => {
   await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: true });
   await maybeFinalizeRoute(root, { missionId: id, route: '$Team', gateFile: 'team-gate.json', mock: true });
   const proof = JSON.parse(await fs.readFile(path.join(dir, 'completion-proof.json'), 'utf8'));
-  assert.equal(proof.evidence.scouts.schema, 'sks.scout-proof-evidence.v1');
+  assert.equal(proof.evidence.scouts.schema, 'sks.scout-proof-evidence.v2');
   assert.equal(proof.evidence.scouts.completed_scouts, 5);
   assert.equal(proof.evidence.scouts.gate, 'passed');
 });

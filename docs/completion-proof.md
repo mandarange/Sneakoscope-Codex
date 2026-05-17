@@ -16,12 +16,16 @@ Serious route proof also includes `evidence.scouts` when five-scout intake is re
 
 ```json
 {
-  "schema": "sks.scout-proof-evidence.v1",
+  "schema": "sks.scout-proof-evidence.v2",
+  "engine": "codex-exec-parallel",
+  "real_parallel": true,
   "scout_count": 5,
   "completed_scouts": 5,
   "gate": "passed",
   "consensus": ".sneakoscope/missions/<id>/scout-consensus.json",
-  "handoff": ".sneakoscope/missions/<id>/scout-handoff.md"
+  "handoff": ".sneakoscope/missions/<id>/scout-handoff.md",
+  "performance": ".sneakoscope/missions/<id>/scout-performance.json",
+  "speedup_claim_allowed": true
 }
 ```
 

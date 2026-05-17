@@ -6,11 +6,15 @@ SKS serious routes now start with a read-only five-scout intake before implement
 
 ```bash
 sks scouts plan latest --json
-sks scouts run latest --json
+sks scouts run latest --engine auto --json
+sks scouts run latest --engine local-static --mock --json
+sks scouts run latest --require-real-parallel --json
 sks scouts status latest --json
+sks scouts engines --json
+sks scouts bench latest --engine local-static --mock --json
 sks scouts consensus latest --json
 sks scouts handoff latest
-sks scouts validate latest --json
+sks scouts validate latest --strict --json
 ```
 
 `sks scout ...` is an alias for `sks scouts ...`.
@@ -29,6 +33,8 @@ Each mission writes:
 - `scout-consensus.json`
 - `scout-handoff.md`
 - `scout-gate.json`
+- `scout-engine-result.json`
+- `scout-readonly-guard.json`
 - `scout-performance.json`
 
 The package-level summary is `.sneakoscope/reports/scout-performance-summary.json`.
@@ -50,4 +56,4 @@ Disabling scouts must be represented as a proof/evidence decision; it does not s
 
 Scouts can read code, docs, tests, mission artifacts, TriWiki state, and safety policy. They must not edit source code, delete files, install packages, apply migrations, write databases, commit, push, or represent mock/static evidence as real execution evidence.
 
-If parallel execution is unavailable, SKS records `sequential_fallback`. The local deterministic runner can use bounded static parallel work, but `scout-performance.json` sets `claim_allowed: false` until real benchmark evidence supports a speedup claim.
+If real parallel execution is unavailable or not requested, SKS records `local-static` or `sequential-fallback` as verified-partial evidence. Mock/static runs set `claim_allowed: false`; real speedup claims require a real parallel engine plus measured sequential baseline evidence.
