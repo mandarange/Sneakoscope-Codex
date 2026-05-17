@@ -88,8 +88,12 @@ async function reportPostinstallCodexLbAuth() {
   else if (codexLbAuth.status === 'missing_base_url') console.log('codex-lb auth: stored key has no recoverable base URL. Run `sks codex-lb reconfigure --host <domain> --api-key <key>` once.');
   else if (codexLbAuth.status && codexLbAuth.status !== 'not_configured') console.log(`codex-lb auth: repair skipped (${codexLbAuth.status}${codexLbAuth.error ? `: ${codexLbAuth.error}` : ''}).`);
   const reconcile = codexLbAuth.auth_reconcile;
-  if (reconcile?.status === 'reconciled') {
-    console.log(`codex-lb auth: resolved ChatGPT OAuth conflict by switching auth.json to apikey mode (OAuth backup at ${reconcile.backup_path}). Set SKS_CODEX_LB_NO_AUTH_RECONCILE=1 to opt out.`);
+  if (reconcile?.status === 'oauth_preserved') {
+    console.log(`codex-lb auth: ChatGPT OAuth preserved for Codex App; codex-lb key stays in env_key (OAuth backup at ${reconcile.backup_path}).`);
+  } else if (reconcile?.status === 'oauth_restored') {
+    console.log(`codex-lb auth: restored ChatGPT OAuth from ${reconcile.backup_path} while keeping codex-lb selected.`);
+  } else if (reconcile?.status === 'apikey_forced') {
+    console.log(`codex-lb auth: forced API-key auth.json for CLI-only use (OAuth backup at ${reconcile.backup_path}).`);
   } else if (reconcile?.status === 'backup_only') {
     console.log(`codex-lb auth: detected ChatGPT OAuth tokens in auth.json. OAuth backup written to ${reconcile.backup_path}; auth.json left untouched because SKS_CODEX_LB_NO_AUTH_RECONCILE=1.`);
   } else if (reconcile?.status === 'failed') {
@@ -263,6 +267,9 @@ export async function configureCodexLb(opts = {}) {
   await fsp.chmod(envPath, 0o600).catch(() => {});
   const codexEnvironment = await syncCodexLbProviderEnvironment({ env_path: envPath, base_url: baseUrl }, { ...opts, home });
   const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home, force: true });
+  const codexLb = await codexLbStatus({ ...opts, home, configPath, envPath });
+  const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, home, status: codexLb }).catch((err) => ({ status: 'failed', reason: 'exception', error: err.message }));
+  const finalCodexLb = await codexLbStatus({ ...opts, home, configPath, envPath });
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
   return {
     ok,
@@ -271,9 +278,11 @@ export async function configureCodexLb(opts = {}) {
     env_path: envPath,
     base_url: baseUrl,
     env_key: 'CODEX_LB_API_KEY',
+    auth_reconcile: authReconcile,
+    codex_lb: finalCodexLb,
     codex_environment: codexEnvironment,
     codex_login: codexLogin,
-    error: codexEnvironment.error || codexLogin.error || null
+    error: authReconcile.error || codexEnvironment.error || codexLogin.error || null
   };
 }
 
@@ -284,6 +293,9 @@ export async function codexLbStatus(opts = {}) {
   const config = await readText(configPath, '');
   const envExists = await exists(envPath);
   const envText = envExists ? await readText(envPath, '') : '';
+  const authPath = opts.authPath || codexAuthPath(home);
+  const authText = await readText(authPath, '');
+  const authMode = codexAuthModeSummary(authText);
   const envKeyConfigured = Boolean(parseCodexLbEnvKey(envText));
   const providerConfigured = /\[model_providers\.codex-lb\]/.test(config);
   const selected = hasTopLevelCodexLbSelected(config);
@@ -299,8 +311,50 @@ export async function codexLbStatus(opts = {}) {
     env_file: envExists,
     env_key_configured: envKeyConfigured,
     env_base_url_configured: Boolean(parseCodexLbEnvBaseUrl(envText)),
-    base_url: baseUrl
+    base_url: baseUrl,
+    auth_path: authPath,
+    auth_mode: authMode.mode,
+    auth_usable_for_codex_app: authMode.codex_app_usable,
+    auth_summary: authMode.summary
   };
+}
+
+export function formatCodexLbStatusText(status = {}, opts = {}) {
+  const backupPresent = Boolean(opts.backupPresent);
+  const backupPath = opts.backupPath || '';
+  const lines = [
+    'SKS codex-lb',
+    '',
+    `Configured: ${status.ok ? 'yes' : 'no'}`,
+    `Selected:   ${status.selected ? 'yes' : 'no'}`,
+    `Provider:   ${status.provider_configured ? 'yes' : 'no'}`,
+    `Provider requires OpenAI auth: ${status.provider_requires_openai_auth ? 'yes' : 'missing'}`,
+    `Codex App auth: ${status.auth_usable_for_codex_app ? 'ok' : 'needs sign-in/repair'} (${status.auth_mode || 'unknown'})`
+  ];
+  if (status.auth_summary) lines.push(`Auth detail: ${status.auth_summary}`);
+  lines.push(`Env file:   ${status.env_file ? status.env_path : 'missing'}`);
+  if (status.base_url) lines.push(`Base URL:   ${status.base_url}`);
+  lines.push(`ChatGPT backup: ${backupPresent ? `yes (${backupPath})` : 'no'}`);
+  if (status.ok && !status.auth_usable_for_codex_app && backupPresent) lines.push('', 'Run: sks codex-lb repair to restore the ChatGPT OAuth backup while keeping codex-lb selected.');
+  else if (status.ok && !status.auth_usable_for_codex_app) lines.push('', 'Sign in to Codex App/CLI again, then run: sks codex-lb repair');
+  else if (status.ok && !status.selected) lines.push('', 'Run: sks codex-lb repair to activate codex-lb for Codex App.');
+  else if (!status.ok && status.base_url && status.env_key_configured) lines.push('', 'Run: sks codex-lb repair to restore the upstream codex-lb provider block.');
+  else if (!status.ok) lines.push('', 'Run: sks codex-lb setup --host <domain> --api-key <key>');
+  else lines.push('', 'Repair provider auth: sks codex-lb repair');
+  if (backupPresent) lines.push('Switch fully away from codex-lb: sks codex-lb release');
+  return `${lines.join('\n')}\n`;
+}
+
+export function formatCodexLbRepairResultText(result = {}) {
+  const lines = [
+    'codex-lb provider auth repaired for Codex CLI/App environment.',
+    `Config: ${result.config_path}`,
+    `Key env: ${result.env_path}`
+  ];
+  if (result.auth_reconcile?.status === 'oauth_restored') lines.push(`Codex App auth: ChatGPT OAuth restored from ${result.auth_reconcile.backup_path}.`);
+  else if (result.auth_reconcile?.status === 'oauth_preserved') lines.push('Codex App auth: ChatGPT OAuth preserved; codex-lb will use CODEX_LB_API_KEY from env_key.');
+  else if (result.auth_reconcile?.status === 'apikey_auth_active') lines.push('Codex App auth: API-key auth.json is still active. Sign in again if the App asks for ChatGPT OAuth.');
+  return `${lines.join('\n')}\n`;
 }
 
 function codexLbResponsesEndpoint(baseUrl = '') {
@@ -311,6 +365,77 @@ function codexLbResponsesEndpoint(baseUrl = '') {
 
 function codexLbChainCheckEnabled(env = process.env) {
   return env.SKS_CODEX_LB_CHAIN_CHECK !== '0' && env.SKS_SKIP_CODEX_LB_CHAIN_CHECK !== '1';
+}
+
+function codexLbChainCachePath(home = process.env.HOME || os.homedir()) {
+  return path.join(home, '.codex', 'sks-codex-lb-chain-health.json');
+}
+
+function codexLbChainCacheTtlMs(status = '', env = process.env) {
+  const hardFailure = Boolean(status && !['chain_ok', 'previous_response_not_found'].includes(status));
+  const key = hardFailure ? 'SKS_CODEX_LB_CHAIN_CHECK_FAILURE_CACHE_TTL_MS' : 'SKS_CODEX_LB_CHAIN_CHECK_CACHE_TTL_MS';
+  const fallback = hardFailure ? 30 * 1000 : 5 * 60 * 1000;
+  const raw = env[key] ?? env.SKS_CODEX_LB_CHAIN_CHECK_CACHE_TTL_MS;
+  if (raw === undefined || raw === '') return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
+}
+
+function codexLbChainCacheEnabled(opts = {}, env = process.env) {
+  if (opts.force || opts.cache === false) return false;
+  if (opts.fetch) return false;
+  if (env.SKS_CODEX_LB_CHAIN_CHECK_CACHE === '0') return false;
+  return true;
+}
+
+async function readCodexLbChainCache({ endpoint, home, opts = {}, env = process.env } = {}) {
+  if (!endpoint || !codexLbChainCacheEnabled(opts, env)) return null;
+  const cachePath = opts.cachePath || codexLbChainCachePath(home || env.HOME || os.homedir());
+  const text = await readText(cachePath, '');
+  if (!text.trim()) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed?.schema !== 'sks.codex-lb-chain-health.v1' || parsed.endpoint !== endpoint || !parsed.result?.status) return null;
+    const now = typeof opts.now === 'function' ? opts.now() : Date.now();
+    const checkedAt = Number(parsed.checked_at_ms || 0);
+    const ttlMs = codexLbChainCacheTtlMs(parsed.result.status, env);
+    if (!checkedAt || ttlMs <= 0 || now - checkedAt > ttlMs) return null;
+    return {
+      ...parsed.result,
+      endpoint,
+      cached: true,
+      cache_path: cachePath,
+      cache_age_ms: Math.max(0, now - checkedAt)
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function writeCodexLbChainCache(result = {}, { endpoint, home, opts = {}, env = process.env } = {}) {
+  if (!endpoint || !result.status || !codexLbChainCacheEnabled(opts, env)) return result;
+  const cachePath = opts.cachePath || codexLbChainCachePath(home || env.HOME || os.homedir());
+  const now = typeof opts.now === 'function' ? opts.now() : Date.now();
+  const cacheResult = {
+    ok: Boolean(result.ok),
+    status: result.status,
+    chain_unhealthy: result.chain_unhealthy === true,
+    http_status: result.http_status || null,
+    error: result.error || null
+  };
+  try {
+    await ensureDir(path.dirname(cachePath));
+    await writeTextAtomic(cachePath, `${JSON.stringify({
+      schema: 'sks.codex-lb-chain-health.v1',
+      endpoint,
+      checked_at_ms: now,
+      result: cacheResult
+    }, null, 2)}\n`);
+    await fsp.chmod(cachePath, 0o600).catch(() => {});
+  } catch {
+    // Cache writes are a launch optimization only; never block codex-lb startup.
+  }
+  return result;
 }
 
 function isPreviousResponseNotFound(payload = {}) {
@@ -382,8 +507,11 @@ export async function checkCodexLbResponseChain(status = {}, opts = {}) {
   if (!codexLbChainCheckEnabled(env) && !opts.force) return { ok: true, status: 'skipped', skipped: true, reason: 'SKS_CODEX_LB_CHAIN_CHECK=0' };
   const endpoint = codexLbResponsesEndpoint(opts.baseUrl || status.base_url);
   if (!endpoint) return { ok: false, status: 'missing_base_url', chain_unhealthy: true };
-  const apiKey = opts.apiKey || parseCodexLbEnvKey(await readText(opts.envPath || status.env_path || codexLbEnvPath(opts.home || env.HOME || os.homedir()), ''));
+  const home = opts.home || env.HOME || os.homedir();
+  const apiKey = opts.apiKey || parseCodexLbEnvKey(await readText(opts.envPath || status.env_path || codexLbEnvPath(home), ''));
   if (!apiKey) return { ok: false, status: 'missing_env_key', chain_unhealthy: true };
+  const cached = await readCodexLbChainCache({ endpoint, home, opts, env });
+  if (cached) return cached;
   const fetchImpl = opts.fetch || globalThis.fetch;
   if (typeof fetchImpl !== 'function') return { ok: true, status: 'skipped', skipped: true, reason: 'fetch unavailable' };
   const model = opts.model || env.SKS_CODEX_MODEL || 'gpt-5.5';
@@ -400,19 +528,19 @@ export async function checkCodexLbResponseChain(status = {}, opts = {}) {
   };
   const first = await fetchCodexLbResponse(fetchImpl, endpoint, apiKey, baseBody, timeoutMs);
   if (!first.ok || !first.response_id) {
-    return {
+    return writeCodexLbChainCache({
       ok: false,
       status: first.ok ? 'missing_response_id' : 'first_request_failed',
       chain_unhealthy: true,
       endpoint,
       http_status: first.status,
       error: redactSecretText(first.error_payload?.error?.message || first.error_payload?.response?.error?.message || first.text || 'codex-lb first Responses request failed', [apiKey])
-    };
+    }, { endpoint, home, opts, env });
   }
   const second = await fetchCodexLbResponse(fetchImpl, endpoint, apiKey, { ...baseBody, previous_response_id: first.response_id }, timeoutMs);
-  if (second.ok) return { ok: true, status: 'chain_ok', endpoint, response_id: first.response_id, chained_response_id: second.response_id || null, http_status: second.status };
+  if (second.ok) return writeCodexLbChainCache({ ok: true, status: 'chain_ok', endpoint, response_id: first.response_id, chained_response_id: second.response_id || null, http_status: second.status }, { endpoint, home, opts, env });
   const previousMissing = isPreviousResponseNotFound(second.error_payload || second.json || second.text);
-  return {
+  return writeCodexLbChainCache({
     ok: false,
     status: previousMissing ? 'previous_response_not_found' : 'second_request_failed',
     chain_unhealthy: true,
@@ -420,7 +548,7 @@ export async function checkCodexLbResponseChain(status = {}, opts = {}) {
     response_id: first.response_id,
     http_status: second.status,
     error: redactSecretText(second.error_payload?.error?.message || second.error_payload?.response?.error?.message || second.text || 'codex-lb chained Responses request failed', [apiKey])
-  };
+  }, { endpoint, home, opts, env });
 }
 
 function hasTopLevelCodexLbSelected(text = '') {
@@ -473,6 +601,7 @@ export async function repairCodexLbAuth(opts = {}) {
   const apiKey = parseCodexLbEnvKey(await readText(status.env_path, ''));
   const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir(), force: true });
   const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, status }).catch((err) => ({ status: 'failed', reason: 'exception', error: err.message }));
+  const finalStatus = await codexLbStatus(opts);
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
   return {
     ok,
@@ -484,7 +613,7 @@ export async function repairCodexLbAuth(opts = {}) {
     legacy_auth_migrated: legacyAuthMigrated,
     legacy_auth_path: legacyAuthPath,
     auth_reconcile: authReconcile,
-    codex_lb: status,
+    codex_lb: finalStatus,
     codex_environment: codexEnvironment,
     codex_login: codexLogin
   };
@@ -504,6 +633,7 @@ export async function ensureCodexLbAuthDuringInstall(opts = {}) {
   const apiKey = parseCodexLbEnvKey(await readText(status.env_path, ''));
   const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir(), force: true });
   const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, status }).catch((err) => ({ status: 'failed', reason: 'exception', error: err.message }));
+  const finalStatus = await codexLbStatus(opts);
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
   return {
     ok,
@@ -511,7 +641,7 @@ export async function ensureCodexLbAuthDuringInstall(opts = {}) {
     config_path: status.config_path,
     env_path: status.env_path,
     base_url: status.base_url,
-    codex_lb: status,
+    codex_lb: finalStatus,
     codex_environment: codexEnvironment,
     codex_login: codexLogin,
     auth_reconcile: authReconcile,
@@ -565,6 +695,19 @@ function parseCodexAuthApiKey(text = '') {
   }
 }
 
+function codexAuthModeSummary(text = '') {
+  const raw = String(text || '').trim();
+  if (!raw) return { mode: 'missing', codex_app_usable: false, summary: 'missing auth.json' };
+  if (hasChatgptOAuthTokens(raw)) return { mode: 'chatgpt_oauth', codex_app_usable: true, summary: 'ChatGPT OAuth token blob present' };
+  const apiKey = parseCodexAuthApiKey(raw);
+  if (apiKey) return { mode: 'apikey', codex_app_usable: false, summary: 'API-key auth.json; Codex App may require ChatGPT sign-in for requires_openai_auth providers' };
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.auth_mode === 'browser') return { mode: 'browser_marker', codex_app_usable: false, summary: 'browser auth marker without refresh tokens' };
+  } catch {}
+  return { mode: 'unknown', codex_app_usable: false, summary: 'unrecognized auth.json shape' };
+}
+
 // Migrate auth.json from legacy {"auth_mode":"apikey","key":"..."} to the codex 0.130.0+
 // format {"auth_mode":"apikey","OPENAI_API_KEY":"..."}. Safe: preserves key value, only renames field.
 async function migrateCodexAuthKeyFormat(opts = {}) {
@@ -587,11 +730,10 @@ async function migrateCodexAuthKeyFormat(opts = {}) {
   }
 }
 
-// When codex-lb is selected with env_key auth AND auth.json also carries a real ChatGPT OAuth
-// token blob, Codex CLI/App can pick the OAuth bearer over the env_key bearer and fail against
-// the load balancer. We back the OAuth blob up to ~/.codex/auth.chatgpt-backup.json and replace
-// auth.json with an apikey-mode payload that matches the stored CODEX_LB_API_KEY.
-// Opt out with SKS_CODEX_LB_NO_AUTH_RECONCILE=1 (the backup is still produced so nothing is lost).
+// Codex App needs a refreshable ChatGPT OAuth blob when a provider declares
+// requires_openai_auth=true. For codex-lb, the proxy key belongs in env_key
+// (CODEX_LB_API_KEY), so SKS preserves or restores OAuth by default and only
+// writes apikey auth.json when explicitly requested for CLI-only legacy use.
 export async function reconcileCodexLbAuthConflict(opts = {}) {
   const home = opts.home || process.env.HOME || os.homedir();
   const status = opts.status || await codexLbStatus({ ...opts, home });
@@ -607,42 +749,77 @@ export async function reconcileCodexLbAuthConflict(opts = {}) {
   if (!authText.trim()) {
     return { status: 'skipped', reason: 'auth_empty', auth_path: authPath };
   }
-  if (!hasChatgptOAuthTokens(authText)) {
-    return { status: 'no_oauth_conflict', auth_path: authPath };
-  }
   const envText = await readText(status.env_path, '');
   const apiKey = parseCodexLbEnvKey(envText);
   if (!apiKey) {
     return { status: 'skipped', reason: 'missing_env_key', auth_path: authPath };
   }
-  // Always back up the OAuth blob — even if reconciliation is opted out — so the data survives.
-  try {
-    await ensureDir(path.dirname(backupPath));
-    await writeTextAtomic(backupPath, authText);
-    await fsp.chmod(backupPath, 0o600).catch(() => {});
-  } catch (err) {
-    return { status: 'failed', reason: 'backup_failed', auth_path: authPath, backup_path: backupPath, error: err.message };
-  }
-  if (process.env.SKS_CODEX_LB_NO_AUTH_RECONCILE === '1' && !opts.force) {
+  if (hasChatgptOAuthTokens(authText)) {
+    try {
+      await ensureDir(path.dirname(backupPath));
+      await writeTextAtomic(backupPath, authText);
+      await fsp.chmod(backupPath, 0o600).catch(() => {});
+    } catch (err) {
+      return { status: 'failed', reason: 'backup_failed', auth_path: authPath, backup_path: backupPath, error: err.message };
+    }
+    if (process.env.SKS_CODEX_LB_NO_AUTH_RECONCILE === '1' && !opts.force) {
+      return {
+        status: 'backup_only',
+        reason: 'SKS_CODEX_LB_NO_AUTH_RECONCILE=1',
+        auth_path: authPath,
+        backup_path: backupPath
+      };
+    }
+    if (process.env.SKS_CODEX_LB_FORCE_APIKEY_AUTH !== '1') {
+      return {
+        status: 'oauth_preserved',
+        reason: 'codex_app_requires_refreshable_oauth',
+        auth_path: authPath,
+        backup_path: backupPath
+      };
+    }
+    try {
+      const replacement = `${JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: apiKey }, null, 2)}\n`;
+      await writeTextAtomic(authPath, replacement);
+      await fsp.chmod(authPath, 0o600).catch(() => {});
+    } catch (err) {
+      return { status: 'failed', reason: 'write_failed', auth_path: authPath, backup_path: backupPath, error: err.message };
+    }
     return {
-      status: 'backup_only',
-      reason: 'SKS_CODEX_LB_NO_AUTH_RECONCILE=1',
+      status: 'apikey_forced',
+      reason: 'SKS_CODEX_LB_FORCE_APIKEY_AUTH=1',
       auth_path: authPath,
       backup_path: backupPath
     };
   }
-  try {
-    const replacement = `${JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: apiKey }, null, 2)}\n`;
-    await writeTextAtomic(authPath, replacement);
-    await fsp.chmod(authPath, 0o600).catch(() => {});
-  } catch (err) {
-    return { status: 'failed', reason: 'write_failed', auth_path: authPath, backup_path: backupPath, error: err.message };
+
+  const currentApiKey = parseCodexAuthApiKey(authText);
+  if (currentApiKey && currentApiKey === apiKey) {
+    const backupText = await readText(backupPath, '');
+    if (hasChatgptOAuthTokens(backupText) && process.env.SKS_CODEX_LB_KEEP_APIKEY_AUTH !== '1') {
+      try {
+        const restored = backupText.endsWith('\n') ? backupText : `${backupText}\n`;
+        await writeTextAtomic(authPath, restored);
+        await fsp.chmod(authPath, 0o600).catch(() => {});
+        return {
+          status: 'oauth_restored',
+          reason: 'restored_chatgpt_oauth_for_codex_app',
+          auth_path: authPath,
+          backup_path: backupPath
+        };
+      } catch (err) {
+        return { status: 'failed', reason: 'restore_failed', auth_path: authPath, backup_path: backupPath, error: err.message };
+      }
+    }
+    return {
+      status: 'apikey_auth_active',
+      reason: hasChatgptOAuthTokens(backupText) ? 'SKS_CODEX_LB_KEEP_APIKEY_AUTH=1' : 'chatgpt_oauth_backup_missing',
+      auth_path: authPath,
+      backup_path: backupPath
+    };
   }
-  return {
-    status: 'reconciled',
-    auth_path: authPath,
-    backup_path: backupPath
-  };
+
+  return { status: 'no_oauth_conflict', auth_path: authPath };
 }
 
 // Expose the ChatGPT OAuth backup path so the CLI can surface it in status / release output.
@@ -1730,7 +1907,7 @@ export async function selftestCodexLb(tmp) {
   const codexLbReconcileJson = JSON.parse(codexLbReconcileRepair.stdout);
   const codexLbReconcileAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   const codexLbReconcileBackup = await safeReadText(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'));
-  if (codexLbReconcileJson.auth_reconcile?.status !== 'reconciled' || !codexLbReconcileAuth.includes('"auth_mode": "apikey"') || !codexLbReconcileAuth.includes('sk-test') || codexLbReconcileAuth.includes('oauth-id') || !codexLbReconcileBackup.includes('oauth-id') || !codexLbReconcileBackup.includes('oauth-refresh')) throw new Error('selftest: codex-lb oauth reconcile did not back up ChatGPT tokens and switch auth.json to apikey mode');
+  if (codexLbReconcileJson.auth_reconcile?.status !== 'oauth_preserved' || !codexLbReconcileAuth.includes('oauth-id') || !codexLbReconcileAuth.includes('oauth-refresh') || codexLbReconcileAuth.includes('sk-test') || !codexLbReconcileBackup.includes('oauth-id') || !codexLbReconcileBackup.includes('oauth-refresh')) throw new Error('selftest: codex-lb oauth reconcile should preserve ChatGPT OAuth and back it up');
   // Opt-out path: SKS_CODEX_LB_NO_AUTH_RECONCILE=1 keeps auth.json untouched but still backs up the OAuth blob.
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), `${oauthAuthJson}\n`);
   await fsp.rm(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), { force: true });
@@ -1740,6 +1917,16 @@ export async function selftestCodexLb(tmp) {
   const codexLbReconcileOptOutAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   const codexLbReconcileOptOutBackup = await safeReadText(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'));
   if (codexLbReconcileOptOutJson.auth_reconcile?.status !== 'backup_only' || !codexLbReconcileOptOutAuth.includes('oauth-id') || !codexLbReconcileOptOutBackup.includes('oauth-id')) throw new Error('selftest: codex-lb oauth reconcile opt-out should back up but not rewrite auth.json');
+  // Restore path: older SKS versions could leave the codex-lb API key in auth.json. Repair should
+  // restore the ChatGPT OAuth backup while keeping codex-lb selected for provider routing.
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"apikey","OPENAI_API_KEY":"sk-test"}\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), `${oauthAuthJson}\n`);
+  const codexLbReconcileRestoreRepair = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'auth', 'repair', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
+  if (codexLbReconcileRestoreRepair.code !== 0) throw new Error(`selftest: codex-lb oauth restore repair exited ${codexLbReconcileRestoreRepair.code}: ${codexLbReconcileRestoreRepair.stderr}`);
+  const codexLbReconcileRestoreJson = JSON.parse(codexLbReconcileRestoreRepair.stdout);
+  const codexLbReconcileRestoreAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  const codexLbReconcileRestoreConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
+  if (codexLbReconcileRestoreJson.auth_reconcile?.status !== 'oauth_restored' || !codexLbReconcileRestoreAuth.includes('oauth-id') || codexLbReconcileRestoreAuth.includes('sk-test') || !hasTopLevelCodexLbSelected(codexLbReconcileRestoreConfig)) throw new Error('selftest: codex-lb oauth restore should replace apikey auth.json with ChatGPT OAuth backup while keeping codex-lb selected');
   // codex-lb auth: release flow — restore ChatGPT OAuth from backup so the user can return to
   // the official ChatGPT account login. Default deselects model_provider; flags control whether
   // the provider stays selected and whether the backup file is removed after restore.
@@ -1932,7 +2119,7 @@ export async function selftestCodexLb(tmp) {
   });
   if (codexLbNotConfigured.code !== 0 || String(codexLbNotConfigured.stdout || '').includes('codex-lb auth:')) throw new Error('selftest: postinstall should stay quiet when codex-lb is not configured');
   const codexLbStatusText = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'codex-lb', 'status'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  if (!String(codexLbStatusText.stdout || '').includes('Repair provider auth: sks codex-lb repair')) throw new Error('selftest: codex-lb status did not advertise repair command');
+  if (!String(codexLbStatusText.stdout || '').includes('Codex App auth:') || !String(codexLbStatusText.stdout || '').includes('sks codex-lb repair')) throw new Error('selftest: codex-lb status did not advertise App auth state and repair command');
   const nonInteractiveLaunchChainCalls = [];
   const nonInteractiveLaunch = await maybePromptCodexLbSetupForLaunch([], {
     home: codexLbHome,
@@ -2023,6 +2210,21 @@ export async function selftestCodexLb(tmp) {
     }
   );
   if (!okChain.ok || okChain.status !== 'chain_ok' || chainCalls.length !== 2 || !String(chainCalls[0].url).endsWith('/backend-api/codex/responses') || chainCalls[1].body.previous_response_id !== 'resp_selftest_1') throw new Error('selftest: codex-lb response chain health check did not verify previous_response_id continuity');
+  const previousGlobalFetch = globalThis.fetch;
+  const cacheCalls = [];
+  const cachePath = path.join(codexLbHome, '.codex', 'chain-cache-selftest.json');
+  try {
+    globalThis.fetch = async (url, init) => {
+      cacheCalls.push({ url, body: JSON.parse(init.body) });
+      return new Response(JSON.stringify({ id: cacheCalls.length === 1 ? 'resp_cache_1' : 'resp_cache_2' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const cacheStatus = { base_url: 'https://cache.example.test/backend-api/codex', env_path: path.join(codexLbHome, '.codex', 'sks-codex-lb.env') };
+    const firstCache = await checkCodexLbResponseChain(cacheStatus, { home: codexLbHome, apiKey: 'sk-test', timeoutMs: 1000, cachePath, now: () => 1000 });
+    const secondCache = await checkCodexLbResponseChain(cacheStatus, { home: codexLbHome, apiKey: 'sk-test', timeoutMs: 1000, cachePath, now: () => 2000 });
+    if (!firstCache.ok || firstCache.status !== 'chain_ok' || secondCache.cached !== true || secondCache.status !== 'chain_ok' || cacheCalls.length !== 2) throw new Error('selftest: codex-lb response chain cache did not avoid repeated launch preflight calls');
+  } finally {
+    globalThis.fetch = previousGlobalFetch;
+  }
   const brokenChain = await checkCodexLbResponseChain(
     { base_url: 'https://lb.example.test/backend-api/codex', env_path: path.join(codexLbHome, '.codex', 'sks-codex-lb.env') },
     {

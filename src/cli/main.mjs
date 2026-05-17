@@ -73,13 +73,15 @@ import { MISTAKE_RECALL_ARTIFACT, contractConsumesMistakeRecall } from '../core/
 import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
-import { CODEX_APP_DOCS_URL, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
+import { CODEX_APP_DOCS_URL, codexAccessTokenStatus, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
+import { buildAllFeaturesSelftest, buildFeatureRegistry, validateFeatureRegistry } from '../core/feature-registry.mjs';
 import { codexAppRemoteControlCommand } from './codex-app-command.mjs';
+import { allFeaturesCommand, featuresCommand, hooksCommand, hooksExplainReport } from './feature-commands.mjs';
 import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs';
 import { buildTmuxLaunchPlan, buildTmuxOpenArgs, codexLaunchCommand, createTmuxSession, defaultCodexLaunchArgs, isTmuxShellSession, runTmuxLaunchPlanSyntaxCheck, shouldAutoAttachTmux, sksAsciiLogo, tmuxReadiness, tmuxStatusKind, defaultTmuxSessionName, formatTmuxBanner, launchMadTmuxUi, launchTmuxTeamView, launchTmuxUi, platformTmuxInstallHint, reconcileTmuxTeamCockpit, runTmuxStatus, sanitizeTmuxSessionName, sweepCodexLbTmuxSessions, sweepTmuxTeamSurfaces, teamLaneStyle } from '../core/tmux-ui.mjs';
 import { autoReviewProfileName, autoReviewStatus, autoReviewSummary, enableAutoReview, disableAutoReview, enableMadHighProfile, madHighProfileName } from '../core/auto-review.mjs';
 import { context7Command } from './context7-command.mjs';
-import { askPostinstallQuestion, checkCodexLbResponseChain, checkContext7, checkRequiredSkills, codexLbChatgptBackupPath, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexFastModeDuringInstall, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, releaseCodexLbAuthHold, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall, unselectCodexLbProvider } from './install-helpers.mjs';
+import { askPostinstallQuestion, checkCodexLbResponseChain, checkContext7, checkRequiredSkills, codexLbChatgptBackupPath, codexLbStatus, configureCodexLb, ensureCodexCliTool, ensureGlobalCodexFastModeDuringInstall, ensureGlobalCodexSkillsDuringInstall, ensureProjectContext7Config, ensureRelatedCliTools, ensureSksCommandDuringInstall, ensureTmuxCliTool, formatCodexLbRepairResultText, formatCodexLbStatusText, globalCodexSkillsRoot, maybePromptCodexLbSetupForLaunch, maybePromptCodexUpdateForLaunch, postinstall, postinstallBootstrapDecision, releaseCodexLbAuthHold, repairCodexLbAuth, selftestCodexLb, shouldAutoApproveInstall, unselectCodexLbProvider } from './install-helpers.mjs';
 import { buildTeamPlan, codeStructureCommand, dbCommand, defaultBeta, defaultVGraph, evalCommand, gcCommand, goalCommand, gxCommand, harnessCommand, hproofCommand, madHighCommand as runMadHighCommand, memoryCommand, migrateWikiContextPack, parseTeamCreateArgs, perfCommand, profileCommand, projectWikiClaims, proofFieldCommand, qaLoopCommand, quickstartCommand, researchCommand, skillDreamCommand, statsCommand, team, teamWorkflowMarkdown, validateArtifactsCommand, wikiCommand, wikiVoxelRowCount, writeWikiContextPack } from './maintenance-commands.mjs';
 import { openClawCommand } from './openclaw-command.mjs';
 import { recallPulseCommand } from './recallpulse-command.mjs';
@@ -111,7 +113,7 @@ export async function main(args) {
   if (String(cmd).toLowerCase() === 'dfix') return dfixHelp();
   const handlers = {
     postinstall: () => postinstall({ bootstrap }), wizard: () => wizard(tail), ui: () => wizard(tail), 'update-check': () => updateCheck(tail), help: () => help(tail), commands: () => commands(tail), usage: () => usage(tail), root: () => rootCommand(tail), quickstart: () => quickstartCommand(), 'codex-app': () => codexAppHelp(tail), 'codex-lb': () => codexLbCommand(sub, rest), auth: () => codexLbCommand(sub, rest), openclaw: () => openClawCommand(tail), bootstrap: () => bootstrap(tail), deps: () => deps(sub, rest),
-    'qa-loop': () => qaLoopCommand(sub, rest), ppt: () => pptCommand(sub, rest), 'image-ux-review': () => imageUxReviewCommand(sub, rest), 'ux-review': () => imageUxReviewCommand(sub, rest), 'visual-review': () => imageUxReviewCommand(sub, rest), 'ui-ux-review': () => imageUxReviewCommand(sub, rest), context7: () => context7Command(sub, rest), recallpulse: () => recallPulseCommand(sub, rest), pipeline: () => pipeline(sub, rest), guard: () => guard(sub, rest), conflicts: () => conflicts(sub, rest), versioning: () => versioning(sub, rest), reasoning: () => reasoningCommand(tail), aliases: () => aliases(), setup: () => setup(tail), 'fix-path': () => fixPath(tail), doctor: () => doctor(tail), init: () => init(tail), selftest: () => selftest(tail),
+    'qa-loop': () => qaLoopCommand(sub, rest), ppt: () => pptCommand(sub, rest), 'image-ux-review': () => imageUxReviewCommand(sub, rest), 'ux-review': () => imageUxReviewCommand(sub, rest), 'visual-review': () => imageUxReviewCommand(sub, rest), 'ui-ux-review': () => imageUxReviewCommand(sub, rest), context7: () => context7Command(sub, rest), recallpulse: () => recallPulseCommand(sub, rest), pipeline: () => pipeline(sub, rest), guard: () => guard(sub, rest), conflicts: () => conflicts(sub, rest), versioning: () => versioning(sub, rest), features: () => featuresCommand(sub, rest), 'all-features': () => allFeaturesCommand(sub, rest), hooks: () => hooksCommand(sub, rest), reasoning: () => reasoningCommand(tail), aliases: () => aliases(), setup: () => setup(tail), 'fix-path': () => fixPath(tail), doctor: () => doctor(tail), init: () => init(tail), selftest: () => selftest(tail),
     goal: () => goalCommand(sub, rest), research: () => researchCommand(sub, rest), hook: () => emitHook(sub), profile: () => profileCommand(sub, rest), hproof: () => hproofCommand(sub, rest), 'validate-artifacts': () => validateArtifactsCommand(tail), perf: () => perfCommand(sub, rest), 'proof-field': () => proofFieldCommand(sub, rest), 'skill-dream': () => skillDreamCommand(sub, rest), 'code-structure': () => codeStructureCommand(sub, rest), memory: () => memoryCommand(sub, rest), gx: () => gxCommand(sub, rest),
     team: () => team(tail), db: () => dbCommand(sub, rest), eval: () => evalCommand(sub, rest), harness: () => harnessCommand(sub, rest), wiki: () => wikiCommand(sub, rest), gc: () => gcCommand(tail), stats: () => statsCommand(tail)
   };
@@ -188,6 +190,8 @@ Usage:
   sks bootstrap [--install-scope global|project] [--local-only] [--json]
   sks deps check|install [tmux|codex|context7|all] [--yes] [--json]
   sks codex-app
+  sks codex-app pat status [--json]
+  sks hooks explain [--json]
   sks codex-lb status|health|repair|release|unselect|setup --host <domain> --api-key <key>
   sks auth status|health|repair|release|unselect|setup --host <domain> --api-key <key>
   sks openclaw install|path|print [--dir path] [--force] [--json]
@@ -218,6 +222,8 @@ Usage:
   sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]
   sks init [--install-scope global|project] [--local-only]
   sks selftest [--mock]
+  sks features list|check|inventory [--json] [--write-docs]
+  sks all-features selftest --mock [--json]
   sks goal create "task"
   sks goal pause|resume|clear <mission-id|latest>
   sks goal status <mission-id|latest>
@@ -1144,19 +1150,7 @@ async function codexLbCommand(action = 'status', args = []) {
     const backupPath = codexLbChatgptBackupPath();
     const backupPresent = await exists(backupPath);
     if (json) return console.log(JSON.stringify({ ...status, chatgpt_backup_present: backupPresent, chatgpt_backup_path: backupPath }, null, 2));
-    console.log('SKS codex-lb\n');
-    console.log(`Configured: ${status.ok ? 'yes' : 'no'}`);
-    console.log(`Selected:   ${status.selected ? 'yes' : 'no'}`);
-    console.log(`Provider:   ${status.provider_configured ? 'yes' : 'no'}`);
-    console.log(`Codex App auth: ${status.provider_requires_openai_auth ? 'yes' : 'missing'}`);
-    console.log(`Env file:   ${status.env_file ? status.env_path : 'missing'}`);
-    if (status.base_url) console.log(`Base URL:   ${status.base_url}`);
-    console.log(`ChatGPT backup: ${backupPresent ? `yes (${backupPath})` : 'no'}`);
-    if (status.ok && !status.selected) console.log('\nRun: sks codex-lb repair to activate codex-lb for Codex App.');
-    else if (!status.ok && status.base_url && status.env_key_configured) console.log('\nRun: sks codex-lb repair to restore the upstream codex-lb provider block.');
-    else if (!status.ok) console.log('\nRun: sks codex-lb setup --host <domain> --api-key <key>');
-    else console.log('\nRepair provider auth: sks codex-lb repair');
-    if (backupPresent) console.log('Switch back to ChatGPT OAuth login: sks codex-lb release');
+    process.stdout.write(formatCodexLbStatusText(status, { backupPresent, backupPath }));
     return;
   }
   if (sub === 'release') {
@@ -1242,9 +1236,7 @@ async function codexLbCommand(action = 'status', args = []) {
       process.exitCode = 1;
       return;
     }
-    console.log('codex-lb provider auth repaired for Codex CLI/App environment.');
-    console.log(`Config: ${result.config_path}`);
-    console.log(`Key env: ${result.env_path}`);
+    process.stdout.write(formatCodexLbRepairResultText(result));
     return;
   }
   if (sub === 'setup' || sub === 'reconfigure') {
@@ -1499,6 +1491,23 @@ async function autoReviewCommand(sub = 'status', args = []) {
 async function codexAppHelp(args = []) {
   const action = args[0] || 'help';
   if (action === 'remote-control' || action === 'remote') return codexAppRemoteControlCommand(args.slice(1));
+  if (action === 'pat') {
+    const patAction = args[1] || 'status';
+    if (patAction !== 'status' && patAction !== 'check') {
+      console.error('Usage: sks codex-app pat status [--json]');
+      process.exitCode = 1;
+      return;
+    }
+    const status = codexAccessTokenStatus();
+    if (flag(args, '--json')) return console.log(JSON.stringify(status, null, 2));
+    console.log('Codex App PAT status\n');
+    console.log(`Status: ${status.status}`);
+    console.log(`Docs:   ${status.docs_url}`);
+    console.log(`Policy: ${status.storage_policy}`);
+    for (const entry of status.access_token_env_vars) console.log(`${entry.name}: ${entry.present ? entry.value : 'missing'}`);
+    for (const warning of status.warnings) console.log(`- ${warning}`);
+    return;
+  }
   if (action === 'check' || action === 'status') {
     const status = await codexAppIntegrationStatus();
     const skills = await codexAppSkillReadiness();
@@ -1526,7 +1535,7 @@ async function codexAppHelp(args = []) {
     'Codex App', '',
     formatCodexAppStatus(status), '',
     `Skills: project=${skills.project.ok ? 'ok' : `missing ${skills.project.missing.length}`} global=${skills.global.ok ? 'ok' : `missing ${skills.global.missing.length}`}`, '',
-    'Setup:', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks codex-app remote-control --status', '  sks tmux check', '',
+    'Setup:', '  sks bootstrap', '  sks deps check', '  sks codex-app check', '  sks codex-app pat status', '  sks codex-app remote-control --status', '  sks tmux check', '',
     'Generated files:', '  .codex/config.toml', '  .codex/hooks.json', '  .agents/skills/', '  .codex/agents/', '  .codex/SNEAKOSCOPE.md', '  AGENTS.md', '',
     'Git ignore:', '  default setup writes .gitignore entries for .sneakoscope/, .codex/, .agents/, AGENTS.md', '  --local-only writes those patterns to .git/info/exclude instead', '',
     'Prompt routes:', formatDollarCommandsCompact('  ')
@@ -2717,7 +2726,18 @@ async function selftest() {
   if (!DOLLAR_DEFAULT_PIPELINE_TEXT.includes('$From-Chat-IMG')) throw new Error('selftest: dollar-commands missing From-Chat-IMG guidance');
   if (!DOLLAR_DEFAULT_PIPELINE_TEXT.includes('$MAD-SKS')) throw new Error('selftest: dollar-commands missing MAD-SKS scoped override guidance');
   if (!DOLLAR_DEFAULT_PIPELINE_TEXT.includes('$Image-UX-Review')) throw new Error('selftest: dollar-commands missing Image UX Review guidance');
-  if (!COMMAND_CATALOG.some((c) => c.name === 'context7') || !COMMAND_CATALOG.some((c) => c.name === 'pipeline') || !COMMAND_CATALOG.some((c) => c.name === 'qa-loop') || !COMMAND_CATALOG.some((c) => c.name === 'image-ux-review') || !COMMAND_CATALOG.some((c) => c.name === 'root') || !COMMAND_CATALOG.some((c) => c.name === 'openclaw')) throw new Error('selftest: context7/pipeline/qa-loop/image-ux-review/root/openclaw commands missing from catalog');
+  for (const name of ['context7', 'pipeline', 'qa-loop', 'image-ux-review', 'root', 'openclaw', 'hooks', 'features', 'all-features']) {
+    if (!COMMAND_CATALOG.some((c) => c.name === name)) throw new Error(`selftest: catalog missing ${name}`);
+  }
+  const featureRegistry = await buildFeatureRegistry({ root: packageRoot() });
+  const featureCoverage = validateFeatureRegistry(featureRegistry);
+  if (!featureCoverage.ok) throw new Error(`selftest: feature registry coverage blocked: ${featureCoverage.blockers.join(', ')}`);
+  const allFeaturesResult = buildAllFeaturesSelftest(featureRegistry);
+  if (!allFeaturesResult.ok) throw new Error(`selftest: all-features contract blocked: ${allFeaturesResult.checks.filter((check) => !check.ok).map((check) => check.id).join(', ')}`);
+  const patRedactionProbe = codexAccessTokenStatus({ CODEX_ACCESS_TOKEN: 'secret-probe-value', CODEX_LB_API_KEY: 'lb-secret-probe' });
+  if (patRedactionProbe.status !== 'present_redacted' || JSON.stringify(patRedactionProbe).includes('secret-probe-value') || JSON.stringify(patRedactionProbe).includes('lb-secret-probe')) throw new Error('selftest: Codex access token status leaked a token value');
+  const hooksReport = hooksExplainReport();
+  if (!hooksReport.events.includes('UserPromptSubmit') || !hooksReport.events.includes('Stop') || !hooksReport.sources.some((source) => source.url.includes('/access-tokens'))) throw new Error('selftest: hooks explain coverage');
   const openClawTmp = tmpdir();
   const openClawResult = await installOpenClawSkill({ targetDir: path.join(openClawTmp, 'skills', OPENCLAW_SKILL_NAME) });
   if (!openClawResult.ok) throw new Error(`selftest: OpenClaw skill install blocked: ${openClawResult.reason}`);
