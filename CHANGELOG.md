@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.9.15] - 2026-05-18
+
+### Fixed
+- Fix `sks postinstall` auto-bootstrap by passing the callable bootstrap command instead of a boolean flag, preventing `TypeError: bootstrap is not a function` during `npm i -g sneakoscope@latest`.
+- Add a focused postinstall regression test that forces auto-bootstrap in a temporary HOME/global root.
+
 ## [0.9.14] - 2026-05-17
 
 ### Added

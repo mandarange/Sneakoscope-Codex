@@ -202,7 +202,7 @@ export async function depsCommand(sub = 'check', args = []) {
 
 export async function postinstallCommand(args = []) {
   const { postinstall } = await import('../../cli/install-helpers.mjs');
-  return postinstall({ bootstrap: flag(args, '--bootstrap') });
+  return postinstall({ bootstrap: bootstrapCommand });
 }
 
 export async function selftestCommand(args = []) {
