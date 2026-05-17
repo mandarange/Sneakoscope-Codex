@@ -2,11 +2,13 @@
 
 Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
-Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `0.9.14` runs through split command modules, automatically seals serious routes with Completion Proof, binds visual/UI claims to Image Voxel TriWiki anchors and relations, and release-gates hooks, codex-lb, executable fixtures, Rust parity, and DB safety evidence.
+Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `0.9.15` runs through split command modules, automatically seals serious routes with Completion Proof, binds visual/UI claims to Image Voxel TriWiki anchors and relations, and release-gates hooks, codex-lb, executable fixtures, Rust parity, and DB safety evidence.
 
-## 0.9.14 Current Release
+## 0.9.15 Current Release
 
-`0.9.14` turns SKS into a legacy-free proof-first trust layer for Codex work:
+`0.9.15` preserves the 0.9.14 legacy-free trust layer and fixes global npm postinstall auto-bootstrap.
+
+`0.9.14` turned SKS into a legacy-free proof-first trust layer for Codex work:
 
 - Command registry entries load independent command modules without runtime fallback to archived 0.9.13 CLI bundles.
 - Serious routes write Completion Proof through the central route finalizer before completion is claimed.
