@@ -6,6 +6,13 @@
 
 
 
+
+## [0.9.10] - 2026-05-17
+
+### Fixed
+
+- Repair stale Codex App desktop app-server processes during npm upgrades so reconnect loops recover without manual cleanup.
+
 ## [0.9.9] - 2026-05-17
 
 ### Fixed

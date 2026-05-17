@@ -73,7 +73,7 @@ import { MISTAKE_RECALL_ARTIFACT, contractConsumesMistakeRecall } from '../core/
 import { buildPromptContext } from '../core/prompt-context-builder.mjs';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-dashboard-renderer.mjs';
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
-import { CODEX_APP_DOCS_URL, codexAccessTokenStatus, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.mjs';
+import { CODEX_APP_DOCS_URL, codexAccessTokenStatus, codexAppIntegrationStatus, findCodexAppUpgradeRepairTargets, formatCodexAppStatus, parseProcessRows } from '../core/codex-app.mjs';
 import { buildAllFeaturesSelftest, buildFeatureRegistry, validateFeatureRegistry } from '../core/feature-registry.mjs';
 import { codexAppRemoteControlCommand } from './codex-app-command.mjs';
 import { allFeaturesCommand, featuresCommand, hooksCommand, hooksExplainReport } from './feature-commands.mjs';
@@ -2289,11 +2289,11 @@ async function selftest() {
   await ensureDir(path.join(conflictTmp, '.omx'));
   const conflictScan = await scanHarnessConflicts(conflictTmp, { home: path.join(conflictTmp, 'home') });
   if (!conflictScan.hard_block || !formatHarnessConflictReport(conflictScan).includes('GPT-5.5')) throw new Error('selftest: OMX conflict did not block with cleanup prompt');
-  const postinstallConflict = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  const postinstallConflict = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_SKIP_CODEX_APP_UPGRADE_REPAIR: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (postinstallConflict.code !== 0) throw new Error('selftest: postinstall conflict notice should not make npm install fail');
   const postinstallConflictOutput = String(`${postinstallConflict.stdout}\n${postinstallConflict.stderr}`);
   if (!postinstallConflictOutput.includes('SKS setup is blocked') || postinstallConflictOutput.includes('Cleanup prompt:')) throw new Error('selftest: postinstall conflict notice did not stay informational');
-  const postinstallConflictPrompt = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, input: 'y\n', env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_POSTINSTALL_PROMPT: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  const postinstallConflictPrompt = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: conflictTmp, input: 'y\n', env: { INIT_CWD: conflictTmp, HOME: path.join(conflictTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_SKIP_CODEX_APP_UPGRADE_REPAIR: '1', SKS_POSTINSTALL_PROMPT: '1' }, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (postinstallConflictPrompt.code !== 0 || !String(postinstallConflictPrompt.stdout || '').includes('Goal: completely remove the conflicting Codex harnesses')) throw new Error('selftest: conflict prompt');
   const postinstallSetupTmp = tmpdir();
   await writeJsonAtomic(path.join(postinstallSetupTmp, 'package.json'), { name: 'postinstall-setup-smoke', version: '0.0.0' });
@@ -2303,7 +2303,7 @@ async function selftest() {
     await ensureDir(path.join(postinstallSetupHome, '.agents', 'skills', name));
     await writeTextAtomic(path.join(postinstallSetupHome, '.agents', 'skills', name, 'SKILL.md'), stalePluginSkillContent(name));
   }
-  const postinstallSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallSetupTmp, env: { INIT_CWD: postinstallSetupTmp, HOME: path.join(postinstallSetupTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
+  const postinstallSetup = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallSetupTmp, env: { INIT_CWD: postinstallSetupTmp, HOME: path.join(postinstallSetupTmp, 'home'), SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_SKIP_CODEX_APP_UPGRADE_REPAIR: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
   if (postinstallSetup.code !== 0) throw new Error(`selftest: postinstall setup exited ${postinstallSetup.code}: ${postinstallSetup.stderr}`);
   if (await exists(path.join(postinstallSetupTmp, '.agents', 'skills', 'agent-team', 'SKILL.md'))) throw new Error('selftest: postinstall installed deprecated agent-team fallback skill');
   if (!String(postinstallSetup.stdout || '').includes('SKS bootstrap: auto-running sks setup --bootstrap --install-scope global --force') || !String(postinstallSetup.stdout || '').includes('SKS Ready')) throw new Error('selftest: postinstall bootstrap');
@@ -2341,7 +2341,7 @@ async function selftest() {
   const postinstallNoMarkerCwd = path.join(postinstallNoMarkerTmp, 'cwd');
   const postinstallNoMarkerGlobalRoot = path.join(postinstallNoMarkerTmp, 'global-root');
   await ensureDir(postinstallNoMarkerCwd);
-  const postinstallNoMarker = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallNoMarkerCwd, env: { INIT_CWD: postinstallNoMarkerCwd, HOME: postinstallNoMarkerHome, SKS_GLOBAL_ROOT: postinstallNoMarkerGlobalRoot, SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
+  const postinstallNoMarker = await runProcess(process.execPath, [path.join(packageRoot(), 'bin', 'sks.mjs'), 'postinstall'], { cwd: postinstallNoMarkerCwd, env: { INIT_CWD: postinstallNoMarkerCwd, HOME: postinstallNoMarkerHome, SKS_GLOBAL_ROOT: postinstallNoMarkerGlobalRoot, SKS_SKIP_POSTINSTALL_SHIM: '1', SKS_SKIP_POSTINSTALL_CONTEXT7: '1', SKS_SKIP_POSTINSTALL_GETDESIGN: '1', SKS_SKIP_CODEX_APP_UPGRADE_REPAIR: '1', SKS_SKIP_CLI_TOOLS: '1' }, timeoutMs: 30000, maxOutputBytes: 256 * 1024 });
   if (postinstallNoMarker.code !== 0) throw new Error(`selftest: no-marker postinstall bootstrap exited ${postinstallNoMarker.code}: ${postinstallNoMarker.stderr}`);
   if (!String(postinstallNoMarker.stdout || '').includes('no project marker found; auto-running global SKS runtime bootstrap')) throw new Error('selftest: no-marker bootstrap');
   if (!(await exists(path.join(postinstallNoMarkerGlobalRoot, '.sneakoscope', 'manifest.json')))) throw new Error('selftest: no-marker postinstall did not bootstrap global runtime root');
@@ -3182,6 +3182,15 @@ async function selftest() {
   const codexAppFixtureOpts = { codex: { bin: fakeCodex, version: 'codex-cli 99.0.0' }, home: appFeatureTmp, cwd: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } };
   const codexAppFeatureStatus = await codexAppIntegrationStatus(codexAppFixtureOpts);
   if (!codexAppFeatureStatus.ok || !codexAppFeatureStatus.features?.required_flags_ok || !codexAppFeatureStatus.features?.codex_git_commit || !codexAppFeatureStatus.features?.remote_control || !codexAppFeatureStatus.features?.git_actions?.ok || !codexAppFeatureStatus.features?.fast_mode_config?.ok) throw new Error('selftest: codex-app check did not accept required app feature flags, git actions, remote_control, and unlocked Fast UI config');
+  const codexAppProcessRows = parseProcessRows([
+    '101 1 /Applications/Codex.app/Contents/Resources/codex app-server --analytics-default-enabled',
+    '200 1 /Applications/Codex.app/Contents/MacOS/Codex',
+    '201 200 /Applications/Codex.app/Contents/Resources/codex app-server --analytics-default-enabled',
+    '202 1 /Applications/Codex.app/Contents/Resources/codex app-server --listen stdio://',
+    '203 1 /Users/me/.nvm/versions/node/bin/codex --model gpt-5.5'
+  ].join('\n'));
+  const codexAppRepairTargets = findCodexAppUpgradeRepairTargets(codexAppProcessRows);
+  if (codexAppRepairTargets.length !== 1 || codexAppRepairTargets[0].pid !== 101) throw new Error('selftest: Codex App upgrade repair target selection is not limited to orphan desktop app-server processes');
   const codexAppOldCliStatus = await codexAppIntegrationStatus({ codex: { bin: fakeCodex, version: 'codex-cli 0.129.0' }, home: appFeatureTmp, cwd: appFeatureTmp, env: { SKS_CODEX_APP_PATH: fakeCodexApp } });
   if (codexAppOldCliStatus.ok || codexAppOldCliStatus.features?.git_actions?.ok || !codexAppOldCliStatus.guidance.some((line) => line.includes('git commit/push actions are blocked'))) throw new Error('selftest: codex-app check did not block commit/push actions on old Codex CLI remote-control');
   const missingDefaultPluginTmp = tmpdir();

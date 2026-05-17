@@ -9,6 +9,7 @@ import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConfli
 import { initProject, installSkills } from '../core/init.mjs';
 import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext7ConfigText, RECOMMENDED_SKILLS } from '../core/routes.mjs';
 import { codexLaunchCommand, platformTmuxInstallHint, tmuxReadiness } from '../core/tmux-ui.mjs';
+import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.mjs';
 
 const DEFAULT_CODEX_APP_PLUGINS = [
   ['browser', 'openai-bundled'],
@@ -46,6 +47,11 @@ export async function postinstall({ bootstrap }) {
   else if (fastModeRepair.status === 'present') console.log('Codex App Fast mode: config already compatible.');
   else if (fastModeRepair.status === 'skipped') console.log(`Codex App Fast mode: skipped (${fastModeRepair.reason}).`);
   else if (fastModeRepair.status === 'failed') console.log(`Codex App Fast mode: auto repair failed. Run \`sks setup\`. ${fastModeRepair.error || ''}`.trim());
+  const appProcessRepair = await reconcileCodexAppUpgradeProcesses();
+  if (appProcessRepair.status === 'repaired') console.log(`Codex App reconnect repair: stopped ${appProcessRepair.killed.length} stale orphan app-server process(es). Restart Codex App to reconnect cleanly.`);
+  else if (appProcessRepair.status === 'partial') console.log(`Codex App reconnect repair: stopped ${appProcessRepair.killed.length} stale orphan app-server process(es); ${appProcessRepair.failed.length} could not be stopped. Restart Codex App if reconnecting continues.`);
+  else if (appProcessRepair.status === 'skipped' && appProcessRepair.reason !== 'platform') console.log(`Codex App reconnect repair: skipped (${appProcessRepair.reason}).`);
+  else if (appProcessRepair.status === 'failed') console.log(`Codex App reconnect repair: skipped (${appProcessRepair.error || appProcessRepair.reason || 'process check failed'}).`);
   const globalSkills = await ensureGlobalCodexSkillsDuringInstall();
   if (globalSkills.status === 'installed') {
     const removed = globalSkills.removed_stale_generated_skills || [];
@@ -1766,6 +1772,7 @@ function codexLbPostinstallEnv(baseEnv, overrides = {}) {
     SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
     SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0',
     SKS_SKIP_CODEX_LB_LAUNCH_ENV: '1',
+    SKS_SKIP_CODEX_APP_UPGRADE_REPAIR: '1',
     ...overrides
   };
 }
@@ -1838,7 +1845,7 @@ export async function selftestCodexLb(tmp) {
   const codexLbPostinstallAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   const codexLbLoginCallsAfterPostinstall = await codexLbLoginCallCount(codexLbHome);
   if (!String(codexLbPostinstall.stdout || '').includes('codex-lb auth: preserved') || !codexLbPostinstallAuth.includes('"auth_mode":"browser"') || codexLbPostinstallAuth.includes('sk-test') || codexLbLoginCallsAfterPostinstall !== codexLbLoginCallsBeforePostinstall) throw new Error('selftest: postinstall auth');
-  const postinstallEnvKeys = ['HOME', 'PATH', 'INIT_CWD', 'SKS_GLOBAL_ROOT', 'SKS_POSTINSTALL_BOOTSTRAP', 'SKS_POSTINSTALL_NO_BOOTSTRAP', 'SKS_SKIP_POSTINSTALL_SHIM', 'SKS_SKIP_POSTINSTALL_CONTEXT7', 'SKS_SKIP_POSTINSTALL_GETDESIGN', 'SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS', 'SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH', 'SKS_SKIP_CODEX_LB_LAUNCH_ENV', 'SKS_CODEX_LB_SYNC_CODEX_LOGIN'];
+  const postinstallEnvKeys = ['HOME', 'PATH', 'INIT_CWD', 'SKS_GLOBAL_ROOT', 'SKS_POSTINSTALL_BOOTSTRAP', 'SKS_POSTINSTALL_NO_BOOTSTRAP', 'SKS_SKIP_POSTINSTALL_SHIM', 'SKS_SKIP_POSTINSTALL_CONTEXT7', 'SKS_SKIP_POSTINSTALL_GETDESIGN', 'SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS', 'SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH', 'SKS_SKIP_CODEX_LB_LAUNCH_ENV', 'SKS_SKIP_CODEX_APP_UPGRADE_REPAIR', 'SKS_CODEX_LB_SYNC_CODEX_LOGIN'];
   const postinstallEnvBefore = Object.fromEntries(postinstallEnvKeys.map((key) => [key, process.env[key]]));
   const codexLbLoginCallsBeforeBootstrap = await codexLbLoginCallCount(codexLbHome);
   try {
@@ -1854,7 +1861,8 @@ export async function selftestCodexLb(tmp) {
       SKS_SKIP_POSTINSTALL_GETDESIGN: '1',
       SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
       SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '0',
-      SKS_SKIP_CODEX_LB_LAUNCH_ENV: '1'
+      SKS_SKIP_CODEX_LB_LAUNCH_ENV: '1',
+      SKS_SKIP_CODEX_APP_UPGRADE_REPAIR: '1'
     });
     await postinstall({
       bootstrap: async () => {
