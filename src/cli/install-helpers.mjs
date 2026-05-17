@@ -3,7 +3,7 @@ import os from 'node:os';
 import fsp from 'node:fs/promises';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { ensureDir, exists, globalSksRoot, packageRoot, readText, runProcess, tmpdir, which, writeTextAtomic } from '../core/fsx.mjs';
+import { ensureDir, exists, globalSksRoot, packageRoot, PACKAGE_VERSION, readText, runProcess, tmpdir, which, writeTextAtomic } from '../core/fsx.mjs';
 import { getCodexInfo } from '../core/codex-adapter.mjs';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.mjs';
 import { initProject, installSkills } from '../core/init.mjs';
@@ -32,6 +32,7 @@ export async function postinstall({ bootstrap }) {
   console.log('\nSKS installed.');
   const shim = await ensureSksCommandDuringInstall();
   if (shim.status === 'present') console.log(`SKS command: available (${shim.command}).`);
+  else if (shim.status === 'repaired') console.log(`SKS command: stale PATH shim repaired (${shim.command}).`);
   else if (shim.status === 'created') console.log(`SKS command: shim created at ${shim.command}.`);
   else if (shim.status === 'created_not_on_path') console.log(`SKS command: shim created at ${shim.command}. Add ${path.dirname(shim.command)} to PATH, or run npx -y -p sneakoscope sks.`);
   else if (shim.status === 'skipped') console.log(`SKS command: skipped (${shim.reason}).`);
@@ -1367,10 +1368,13 @@ function escapeRegExp(value) {
 export async function ensureSksCommandDuringInstall(opts = {}) {
   if (process.env.SKS_SKIP_POSTINSTALL_SHIM === '1' && !opts.force) return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_SHIM=1' };
   const pathEnv = opts.pathEnv ?? process.env.PATH ?? '';
-  const existing = await findCommandOnPath('sks', pathEnv);
-  if (isStableSksBin(existing)) return { status: 'present', command: existing };
   const nodeBin = opts.nodeBin || process.execPath;
   const target = opts.target || path.join(packageRoot(), 'bin', 'sks.mjs');
+  const repair = await reconcileSksPathShimsDuringInstall({ ...opts, pathEnv, nodeBin, target });
+  if (repair.status === 'repaired') return { ...repair, command: repair.command || repair.repaired?.[0]?.path || target };
+  if (repair.status === 'failed') return repair;
+  const existing = await findCommandOnPath('sks', pathEnv);
+  if (isStableSksBin(existing)) return { status: 'present', command: existing };
   const dirs = candidateShimDirs(pathEnv, opts.home || process.env.HOME);
   const script = process.platform === 'win32'
     ? `@echo off\r\n"${nodeBin}" "${target}" %*\r\n`
@@ -1394,6 +1398,80 @@ export async function ensureSksCommandDuringInstall(opts = {}) {
   return { status: 'failed', error: lastError };
 }
 
+export async function selftestSksShimRepair() {
+  const staleShimTmp = tmpdir();
+  const staleBin = path.join(staleShimTmp, 'old-prefix', 'bin');
+  const stalePkg = path.join(staleShimTmp, 'old-prefix', 'lib', 'node_modules', 'sneakoscope');
+  await ensureDir(path.join(stalePkg, 'bin'));
+  await ensureDir(staleBin);
+  await writeTextAtomic(path.join(stalePkg, 'package.json'), JSON.stringify({ name: 'sneakoscope', version: '0.0.1' }, null, 2));
+  await writeTextAtomic(path.join(stalePkg, 'bin', 'sks.mjs'), '#!/usr/bin/env node\nconsole.log("sneakoscope 0.0.1");\n');
+  await fsp.chmod(path.join(stalePkg, 'bin', 'sks.mjs'), 0o755).catch(() => {});
+  await fsp.symlink(path.join(stalePkg, 'bin', 'sks.mjs'), path.join(staleBin, 'sks'));
+  const repair = await ensureSksCommandDuringInstall({ force: true, pathEnv: staleBin, home: path.join(staleShimTmp, 'home') });
+  if (repair.status !== 'repaired') throw new Error(`selftest: stale global sks shim was not repaired (${repair.status})`);
+  const run = await runProcess(path.join(staleBin, 'sks'), ['--version'], { timeoutMs: 10000, maxOutputBytes: 16 * 1024 });
+  if (run.code !== 0 || !String(run.stdout || '').includes(PACKAGE_VERSION)) throw new Error('selftest: repaired stale sks shim does not run current package version');
+  return { ok: true, repaired: repair.repaired || [] };
+}
+
+async function reconcileSksPathShimsDuringInstall(opts = {}) {
+  if (process.env.SKS_SKIP_POSTINSTALL_SHIM_REPAIR === '1' && !opts.force) return { status: 'skipped', reason: 'SKS_SKIP_POSTINSTALL_SHIM_REPAIR=1' };
+  const target = opts.target || path.join(packageRoot(), 'bin', 'sks.mjs');
+  const nodeBin = opts.nodeBin || process.execPath;
+  const currentVersion = await installedPackageVersion(packageRoot());
+  const commands = await findCommandsOnPath(['sks', 'sneakoscope'], opts.pathEnv ?? process.env.PATH ?? '');
+  const repaired = [];
+  const failed = [];
+  for (const command of commands) {
+    const info = await inspectSksPathShim(command.path, { target, currentVersion });
+    if (!info.repairable) continue;
+    const script = process.platform === 'win32'
+      ? `@echo off\r\n"${nodeBin}" "${target}" %*\r\n`
+      : `#!/bin/sh\nexec "${nodeBin}" "${target}" "$@"\n`;
+    try {
+      await writeTextAtomic(command.path, script);
+      if (process.platform !== 'win32') await fsp.chmod(command.path, 0o755).catch(() => {});
+      repaired.push({ path: command.path, name: command.name, previous_version: info.version || null, target });
+    } catch (err) {
+      failed.push({ path: command.path, name: command.name, previous_version: info.version || null, error: err.message });
+    }
+  }
+  if (repaired.length) return { status: 'repaired', command: repaired[0].path, repaired, failed };
+  if (failed.length) return { status: 'failed', error: failed.map((entry) => `${entry.path}: ${entry.error}`).join('; '), failed };
+  return { status: 'present' };
+}
+
+async function inspectSksPathShim(candidate, opts = {}) {
+  if (!candidate || isTransientNpmBinPath(candidate)) return { repairable: false, reason: 'transient_or_missing' };
+  const target = path.resolve(opts.target || path.join(packageRoot(), 'bin', 'sks.mjs'));
+  const resolved = await fsp.realpath(candidate).catch(() => candidate);
+  if (path.resolve(resolved) === target) return { repairable: false, reason: 'current_target' };
+  const packageDir = sksPackageRootForBin(resolved) || sksPackageRootForBin(candidate);
+  if (!packageDir) return { repairable: false, reason: 'not_sneakoscope_bin' };
+  const version = await installedPackageVersion(packageDir);
+  const currentVersion = opts.currentVersion || await installedPackageVersion(packageRoot());
+  if (!version || !currentVersion || compareVersions(version, currentVersion) >= 0) return { repairable: false, reason: 'not_older', version, current_version: currentVersion };
+  return { repairable: true, version, current_version: currentVersion, package_dir: packageDir, resolved };
+}
+
+function sksPackageRootForBin(file) {
+  const normalized = String(file || '').split(path.sep).join('/');
+  const marker = '/node_modules/sneakoscope/bin/';
+  const idx = normalized.lastIndexOf(marker);
+  if (idx < 0) return null;
+  return normalized.slice(0, idx + '/node_modules/sneakoscope'.length).split('/').join(path.sep);
+}
+
+async function installedPackageVersion(root) {
+  const pkg = await readJsonMaybe(path.join(root, 'package.json'));
+  return pkg?.version || (root === packageRoot() ? PACKAGE_VERSION : null);
+}
+
+async function readJsonMaybe(file) {
+  try { return JSON.parse(await fsp.readFile(file, 'utf8')); } catch { return null; }
+}
+
 function candidateShimDirs(pathEnv, home) {
   const seen = new Set();
   const out = [];
@@ -1413,14 +1491,26 @@ function candidateShimDirs(pathEnv, home) {
 }
 
 async function findCommandOnPath(name, pathEnv) {
+  const found = await findCommandsOnPath([name], pathEnv);
+  return found[0]?.path || null;
+}
+
+async function findCommandsOnPath(names, pathEnv) {
   const suffixes = process.platform === 'win32' ? ['.cmd', '.exe', ''] : [''];
+  const out = [];
+  const seen = new Set();
   for (const dir of String(pathEnv || '').split(path.delimiter).filter(Boolean)) {
-    for (const suffix of suffixes) {
-      const candidate = path.join(dir, `${name}${suffix}`);
-      if (await exists(candidate)) return candidate;
+    for (const name of names) {
+      for (const suffix of suffixes) {
+        const candidate = path.join(dir, `${name}${suffix}`);
+        const key = path.resolve(candidate);
+        if (seen.has(key) || !await exists(candidate)) continue;
+        seen.add(key);
+        out.push({ name, path: candidate });
+      }
     }
   }
-  return null;
+  return out;
 }
 
 async function ensureGlobalContext7DuringInstall() {
