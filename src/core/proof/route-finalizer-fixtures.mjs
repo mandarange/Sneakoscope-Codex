@@ -1,0 +1,21 @@
+export const ROUTE_FINALIZER_FIXTURE_ROUTES = Object.freeze([
+  '$Team',
+  '$DFix',
+  '$QA-LOOP',
+  '$Research',
+  '$AutoResearch',
+  '$PPT',
+  '$Image-UX-Review',
+  '$UX-Review',
+  '$From-Chat-IMG',
+  '$Computer-Use',
+  '$CU',
+  '$DB',
+  '$Wiki',
+  '$GX',
+  '$Goal',
+  '$MAD-SKS',
+  'hproof',
+  'proof-field',
+  'recallpulse'
+]);

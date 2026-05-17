@@ -1,0 +1,8 @@
+{
+  "schema": "sks.route-fixture-expected-artifacts.v1",
+  "route": "$DB",
+  "required": [
+    ".sneakoscope/missions/M-fixture-db/completion-proof.json",
+    ".sneakoscope/missions/M-fixture-db/completion-proof.md"
+  ]
+}

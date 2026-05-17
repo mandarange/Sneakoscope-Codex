@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-input.v1",
+  "route": "$Computer-Use",
+  "mission_id": "M-fixture-computer-use",
+  "mode": "mock",
+  "visual_claim": true
+}

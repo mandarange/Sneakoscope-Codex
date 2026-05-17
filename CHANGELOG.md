@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [0.9.14] - 2026-05-17
+
+### Added
+- Add a legacy-free command architecture with no command registry fallback to `legacy-main.mjs`.
+- Add automatic route completion proof writers for every serious route finalization path.
+- Add automatic image voxel anchor/relation generation for all visual and Computer Use routes.
+- Add full executable feature fixtures with expected artifact existence and schema validation.
+- Add semantic Rust voxel validation parity with the JavaScript image voxel validator.
+- Add strict hook replay matching for decision, reason, gate, and issue expectations.
+- Add active project-root codex-lb circuit recording and proof evidence integration.
+- Add `$Commit` and `$Commit-And-Push` simple git routes for commit-only and commit-then-push workflows without the full SKS pipeline.
+
+### Fixed
+- Remove indirect maintenance/legacy imports from split commands.
+- Remove reliance on manual `sks proof repair latest` for normal route completion.
+- Block visual completion when anchors or before/after relations are missing.
+- Ensure codex-lb launch health reports are written to the active project root.
+- Ensure fixture pass status means executed or schema-validated evidence, not registry-only metadata.
+
+### Changed
+- Treat Completion Proof and Image Voxel TriWiki as mandatory completion contracts, not optional reports.
+- Promote executable fixtures and route proof adapters to the central release gate.
+- Make the legacy-free command graph the only supported 0.9.14 command path.
+
 
 
 

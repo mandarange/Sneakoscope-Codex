@@ -1,0 +1,13 @@
+{
+  "schema": "sks.completion-proof.v1",
+  "route": "$Research",
+  "mission_id": "M-fixture-research",
+  "allowed_status": [
+    "verified",
+    "verified_partial"
+  ],
+  "required_evidence": [
+    "files",
+    "codex_lb"
+  ]
+}

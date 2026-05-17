@@ -26,9 +26,14 @@ export async function rustImageHash(file) {
   return runRustOrFallback('image-hash', [file], async () => ({ ok: true, engine: 'js', path: file, sha256: await sha256File(file) }));
 }
 
-export async function rustVoxelValidate(file) {
-  return runRustOrFallback('voxel-validate', [file], async () => {
-    const validation = validateImageVoxelLedger(await readImageVoxelLedger(packageRoot(), file));
+export async function rustVoxelValidate(file, opts = {}) {
+  const args = [file, ...(opts.requireAnchors ? ['--require-anchors'] : []), ...(opts.requireRelations ? ['--require-relations'] : [])];
+  return runRustOrFallback('voxel-validate', args, async () => {
+    const validation = validateImageVoxelLedger(await readImageVoxelLedger(packageRoot(), file), {
+      requireAnchors: opts.requireAnchors,
+      requireRelations: opts.requireRelations,
+      route: opts.route
+    });
     return { ok: validation.ok, engine: 'js', schema: 'sks.image-voxel-ledger.v1', images: validation.summary.images, anchors: validation.summary.anchors, issues: validation.issues };
   });
 }

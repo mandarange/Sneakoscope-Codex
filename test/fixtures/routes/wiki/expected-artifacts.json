@@ -1,0 +1,8 @@
+{
+  "schema": "sks.route-fixture-expected-artifacts.v1",
+  "route": "$Wiki",
+  "required": [
+    ".sneakoscope/missions/M-fixture-wiki/completion-proof.json",
+    ".sneakoscope/missions/M-fixture-wiki/completion-proof.md"
+  ]
+}

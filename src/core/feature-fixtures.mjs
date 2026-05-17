@@ -63,7 +63,7 @@ const FIXTURES = Object.freeze({
 });
 
 export function fixtureForFeature(featureId) {
-  return FIXTURES[featureId] || fixture('static', null, [], 'not_required');
+  return FIXTURES[featureId] || fixture('static', 'sks features check --json', [], 'pass');
 }
 
 export function fixtureSummary(features = []) {

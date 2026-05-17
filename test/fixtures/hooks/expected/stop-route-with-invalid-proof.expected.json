@@ -1,0 +1,9 @@
+{
+  "decision": "block",
+  "reason_contains": "Completion Proof",
+  "gate": "completion-proof",
+  "issues_contains": [
+    "proof_status_blocked"
+  ],
+  "secret_policy": "redacted"
+}

@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-input.v1",
+  "route": "$PPT",
+  "mission_id": "M-fixture-ppt",
+  "mode": "mock",
+  "visual_claim": true
+}

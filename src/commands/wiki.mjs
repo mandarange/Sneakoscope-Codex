@@ -85,8 +85,8 @@ export async function run(_command, args = []) {
     if (!result.ok) process.exitCode = 1;
     return;
   }
-  const legacy = await import('../cli/legacy-main.mjs');
-  return legacy.main(['wiki', ...args]);
+  const { wikiCommand } = await import('../core/commands/route-cli.mjs');
+  return wikiCommand(action, args.slice(1));
 }
 
 function parseBbox(raw) {

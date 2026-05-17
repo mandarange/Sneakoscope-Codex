@@ -1,0 +1,10 @@
+{
+  "schema": "sks.route-fixture-expected-artifacts.v1",
+  "route": "$From-Chat-IMG",
+  "required": [
+    ".sneakoscope/missions/M-fixture-from-chat-img/completion-proof.json",
+    ".sneakoscope/missions/M-fixture-from-chat-img/completion-proof.md",
+    ".sneakoscope/missions/M-fixture-from-chat-img/image-voxel-ledger.json",
+    ".sneakoscope/missions/M-fixture-from-chat-img/visual-anchors.json"
+  ]
+}

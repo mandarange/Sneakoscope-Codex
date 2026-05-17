@@ -1,0 +1,10 @@
+{
+  "schema": "sks.route-fixture-expected-artifacts.v1",
+  "route": "$Image-UX-Review",
+  "required": [
+    ".sneakoscope/missions/M-fixture-image-ux-review/completion-proof.json",
+    ".sneakoscope/missions/M-fixture-image-ux-review/completion-proof.md",
+    ".sneakoscope/missions/M-fixture-image-ux-review/image-voxel-ledger.json",
+    ".sneakoscope/missions/M-fixture-image-ux-review/visual-anchors.json"
+  ]
+}

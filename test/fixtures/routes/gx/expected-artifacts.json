@@ -1,0 +1,10 @@
+{
+  "schema": "sks.route-fixture-expected-artifacts.v1",
+  "route": "$GX",
+  "required": [
+    ".sneakoscope/missions/M-fixture-gx/completion-proof.json",
+    ".sneakoscope/missions/M-fixture-gx/completion-proof.md",
+    ".sneakoscope/missions/M-fixture-gx/image-voxel-ledger.json",
+    ".sneakoscope/missions/M-fixture-gx/visual-anchors.json"
+  ]
+}

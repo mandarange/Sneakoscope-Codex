@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-input.v1",
+  "route": "$QA-LOOP",
+  "mission_id": "M-fixture-qa-loop",
+  "mode": "mock",
+  "visual_claim": true
+}

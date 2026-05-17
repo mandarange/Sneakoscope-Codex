@@ -1,0 +1,6 @@
+{
+  "schema": "sks.image-voxel-ledger.v1",
+  "route": "$QA-LOOP",
+  "require_anchors": true,
+  "require_relations": true
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "sks.route-fixture-expected-artifacts.v1",
+  "route": "$Goal",
+  "required": [
+    ".sneakoscope/missions/M-fixture-goal/completion-proof.json",
+    ".sneakoscope/missions/M-fixture-goal/completion-proof.md"
+  ]
+}

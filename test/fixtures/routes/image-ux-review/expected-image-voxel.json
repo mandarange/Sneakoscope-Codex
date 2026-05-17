@@ -1,0 +1,6 @@
+{
+  "schema": "sks.image-voxel-ledger.v1",
+  "route": "$Image-UX-Review",
+  "require_anchors": true,
+  "require_relations": true
+}

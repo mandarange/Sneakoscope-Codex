@@ -30,6 +30,13 @@ export async function readImageVoxelLedger(root = packageRoot(), file = wikiImag
   return readJson(file);
 }
 
+async function readScopedImageVoxelLedger(root = packageRoot(), missionId = null) {
+  if (!missionId) return readImageVoxelLedger(root);
+  const file = missionImageLedgerPath(root, missionId);
+  if (!await exists(file)) return emptyImageVoxelLedger({ mission_id: missionId });
+  return readImageVoxelLedger(root, file);
+}
+
 export async function writeImageVoxelLedger(root = packageRoot(), ledger = emptyImageVoxelLedger()) {
   await ensureDir(path.dirname(wikiImageLedgerPath(root)));
   const normalized = { ...emptyImageVoxelLedger(), ...ledger, generated_at: nowIso() };
@@ -65,7 +72,7 @@ export async function ingestImage(root = packageRoot(), imagePath, opts = {}) {
   const absolute = path.resolve(root, imagePath);
   const dims = await imageDimensions(absolute);
   const sha256 = await sha256File(absolute);
-  const ledger = await readImageVoxelLedger(root);
+  const ledger = await readScopedImageVoxelLedger(root, opts.missionId || null);
   const rel = path.relative(root, absolute).split(path.sep).join('/');
   const id = opts.id || stableImageId(rel, sha256);
   const image = {
@@ -100,7 +107,7 @@ export async function imageVoxelSummary(root = packageRoot(), ledgerFile = wikiI
 }
 
 export async function addVisualAnchor(root = packageRoot(), input = {}) {
-  const ledger = await readImageVoxelLedger(root);
+  const ledger = await readScopedImageVoxelLedger(root, input.missionId || null);
   const image = (ledger.images || []).find((entry) => entry.id === input.imageId);
   const anchor = createVisualAnchor({
     id: input.id || stableAnchorId(input.imageId, input.label, ledger.anchors?.length || 0),
@@ -120,7 +127,7 @@ export async function addVisualAnchor(root = packageRoot(), input = {}) {
 }
 
 export async function addImageRelation(root = packageRoot(), input = {}) {
-  const ledger = await readImageVoxelLedger(root);
+  const ledger = await readScopedImageVoxelLedger(root, input.missionId || null);
   const relation = createImageRelation({
     type: input.type || 'before_after',
     beforeImageId: input.beforeImageId,

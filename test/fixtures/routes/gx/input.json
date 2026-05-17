@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-input.v1",
+  "route": "$GX",
+  "mission_id": "M-fixture-gx",
+  "mode": "mock",
+  "visual_claim": true
+}

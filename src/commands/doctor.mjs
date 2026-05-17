@@ -8,8 +8,8 @@ import { codexLbMetrics, readCodexLbCircuit } from '../core/codex-lb-circuit.mjs
 
 export async function run(_command, args = []) {
   if (flag(args, '--fix')) {
-    const legacy = await import('../cli/legacy-main.mjs');
-    return legacy.main(['doctor', ...args]);
+    const { setupCommand } = await import('../core/commands/basic-cli.mjs');
+    await setupCommand(['--force', '--local-only']);
   }
   const root = await projectRoot();
   const codex = await getCodexInfo().catch((err) => ({ available: false, error: err.message }));

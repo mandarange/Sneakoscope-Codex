@@ -1,0 +1,9 @@
+{
+  "decision": "block",
+  "reason_contains": "Completion Proof",
+  "gate": "completion-proof",
+  "issues_contains": [
+    "image_voxel_anchors_missing"
+  ],
+  "secret_policy": "redacted"
+}

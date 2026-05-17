@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-input.v1",
+  "route": "$Research",
+  "mission_id": "M-fixture-research",
+  "mode": "mock",
+  "visual_claim": false
+}
