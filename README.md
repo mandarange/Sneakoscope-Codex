@@ -210,6 +210,8 @@ Flags:
 
 `sks codex-lb status` reports whether a ChatGPT OAuth backup is present and shows the `sks codex-lb release` hint when applicable. `sks doctor` surfaces the same hint.
 
+If Codex App shows `access token could not be refreshed` after codex-lb setup or status checks, recover the ChatGPT OAuth side without discarding codex-lb: run `sks codex-lb status`, then `sks codex-lb repair`. Repair restores a ChatGPT OAuth backup when one exists while keeping `model_provider = "codex-lb"` selected and the codex-lb key in `CODEX_LB_API_KEY`. If no OAuth backup exists, sign in again in Codex App/CLI, then rerun `sks codex-lb repair`. Use `sks codex-lb release` only when you want to switch fully away from codex-lb.
+
 If you only want to stop routing through codex-lb without touching `auth.json`, use the lighter `sks codex-lb unselect` instead:
 
 ```sh
@@ -491,6 +493,8 @@ Run local checks:
 npm run repo-audit
 npm run changelog:check
 npm run packcheck
+npm run feature:check
+npm run all-features:selftest
 npm run selftest
 npm run sizecheck
 npm run registry:check
@@ -498,7 +502,7 @@ npm run release:check
 npm run publish:dry
 ```
 
-`release:check` runs audit, changelog, syntax, selftest, size, and registry checks. `publish:dry` runs that same gate and then performs an npm dry-run publish against the public registry.
+`release:check` runs audit, changelog, syntax, feature-registry coverage, all-features contract selftest, selftest, size, and registry checks. Generate the human-readable registry with `sks features inventory --write-docs`. `publish:dry` runs that same gate and then performs an npm dry-run publish against the public registry.
 
 Version bumps are manual. Run `sks versioning bump` only when preparing release metadata; SKS will not create `.git/hooks/pre-commit` or auto-bump during ordinary commits.
 

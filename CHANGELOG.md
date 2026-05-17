@@ -4,6 +4,24 @@
 
 
 
+
+
+## [0.9.9] - 2026-05-17
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+- Preserve or restore ChatGPT OAuth in `~/.codex/auth.json` for Codex App when codex-lb uses `requires_openai_auth = true`; the codex-lb proxy key now stays in `CODEX_LB_API_KEY`/`env_key` by default instead of clobbering App auth.
+- `sks codex-lb status` now reports the local Codex App auth shape and gives the right recovery path for the App refresh-token error: `sks codex-lb repair` keeps codex-lb selected, while `release` is reserved for switching fully away from codex-lb.
+- Cache the codex-lb response-chain health probe briefly so repeated bare `sks` launches do not keep paying the same preflight/network cost.
+- Raise the npm unpacked-size budget to 1864 KiB for the feature registry and codex-lb auth recovery code while keeping tracked-file, packed-size, file-count, and forbidden-file guards enforced.
+
+## [0.9.8] - 2026-05-17
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [0.9.7] - 2026-05-17
 
 ### Fixed

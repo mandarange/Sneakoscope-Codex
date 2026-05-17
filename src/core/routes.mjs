@@ -28,7 +28,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|codex-app|openclaw|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field|skill-dream';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|codex-app|hooks|features|all-features|openclaw|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field|skill-dream';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
 export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/codex/app/features#image-generation';
@@ -531,7 +531,8 @@ export const COMMAND_CATALOG = [
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/tmux, and print ready true/false.' },
   { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
   { name: 'deps', usage: 'sks deps check|install [tmux|codex|context7|all] [--yes]', description: 'Check or guided-install Node/npm PATH, Codex CLI/App, Context7, Browser tooling, Computer Use, tmux, and Homebrew on macOS.' },
-  { name: 'codex-app', usage: 'sks codex-app [check|open|remote-control]', description: 'Check Codex App install and first-party MCP/plugin readiness, then show app setup files, examples, and Codex CLI 0.130.0+ remote-control availability.' },
+  { name: 'codex-app', usage: 'sks codex-app [check|open|pat status|remote-control]', description: 'Check Codex App install, PAT-safe status, first-party MCP/plugin readiness, and Codex CLI 0.130.0+ remote-control availability.' },
+  { name: 'hooks', usage: 'sks hooks explain [--json]', description: 'Explain Codex hook events, config locations, handler support, and SKS hook policies without storing raw payloads.' },
   { name: 'codex-lb', usage: 'sks codex-lb status|health|repair|setup --host <domain> --api-key <key>', description: 'Configure, health-check, or repair codex-lb provider auth by writing ~/.codex/config.toml, restoring CODEX_LB_API_KEY env auth from stored or legacy login-cache state, and preserving the shared Codex login cache unless explicitly requested.' },
   { name: 'auth', usage: 'sks auth status|health|repair|setup --host <domain> --api-key <key>', description: 'Shortcut for codex-lb provider auth status, health, repair, and setup commands.' },
   { name: 'openclaw', usage: 'sks openclaw install|path|print [--dir path] [--force] [--json]', description: 'Generate an OpenClaw skill package so OpenClaw agents can discover and use local SKS workflows.' },
@@ -549,6 +550,8 @@ export const COMMAND_CATALOG = [
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
   { name: 'conflicts', usage: 'sks conflicts check|prompt [--json]', description: 'Detect other Codex harnesses such as OMX/DCodex and print the GPT-5.5 high cleanup prompt.' },
   { name: 'versioning', usage: 'sks versioning status|bump|disable [--json]', description: 'Manage explicit project version syncs; SKS does not install Git pre-commit hooks.' },
+  { name: 'features', usage: 'sks features list|check|inventory [--json] [--write-docs]', description: 'Build and validate the feature registry that maps CLI commands, hidden handlers, dollar routes, app skill aliases, and skills.' },
+  { name: 'all-features', usage: 'sks all-features selftest --mock [--json]', description: 'Run the mock all-features contract selftest for feature registry, proof, Voxel TriWiki, and failure-contract coverage.' },
   { name: 'aliases', usage: 'sks aliases', description: 'Show command aliases and npm binary names.' },
   { name: 'setup', usage: 'sks setup [--bootstrap] [--install-scope global|project] [--local-only] [--force] [--json]', description: 'Initialize SKS state, Codex App files, hooks, skills, and rules.' },
   { name: 'fix-path', usage: 'sks fix-path [--install-scope global|project] [--json]', description: 'Refresh hook commands with the resolved SKS binary path.' },

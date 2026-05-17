@@ -7,6 +7,7 @@ import { DEFAULT_CODEX_APP_PLUGINS as DEFAULT_CODEX_APP_PLUGIN_TUPLES, RESERVED_
 
 export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/features';
 export const CODEX_CHANGELOG_URL = 'https://developers.openai.com/codex/changelog';
+export const CODEX_ACCESS_TOKENS_DOCS_URL = 'https://developers.openai.com/codex/enterprise/access-tokens';
 export const CODEX_REMOTE_CONTROL_MIN_VERSION = '0.130.0';
 const REQUIRED_CODEX_APP_FEATURE_FLAGS = [
   'codex_git_commit',
@@ -251,6 +252,37 @@ export function formatCodexRemoteControlStatus(status) {
       : remoteControlGuidance(status)
   ];
   return lines.filter(Boolean).join('\n');
+}
+
+export function codexAccessTokenStatus(env = process.env) {
+  const accessTokenVars = ['CODEX_ACCESS_TOKEN'];
+  const adjacentSecretVars = ['OPENAI_API_KEY', 'CODEX_LB_API_KEY'];
+  const accessTokens = accessTokenVars.map((name) => ({ name, present: Boolean(env[name]), value: env[name] ? '[redacted]' : null }));
+  const adjacentSecrets = adjacentSecretVars.map((name) => ({ name, present: Boolean(env[name]), value: env[name] ? '[redacted]' : null }));
+  const extraTokenLikeVars = Object.keys(env)
+    .filter((name) => /(?:CODEX|OPENAI|CHATGPT).*TOKEN/i.test(name) && !accessTokenVars.includes(name))
+    .sort()
+    .map((name) => ({ name, present: true, value: '[redacted]' }));
+  const present = accessTokens.some((entry) => entry.present);
+  return {
+    schema: 'sks.codex-access-token-status.v1',
+    ok: true,
+    status: present ? 'present_redacted' : 'missing',
+    supported_for: 'ChatGPT Business and Enterprise workspace programmatic local Codex workflows',
+    docs_url: CODEX_ACCESS_TOKENS_DOCS_URL,
+    official_cli_ingest: 'codex login --with-access-token reads CODEX_ACCESS_TOKEN from stdin when the caller provides it',
+    storage_policy: 'Store access tokens in an external secret manager or ephemeral environment variable; never write plaintext tokens into .sneakoscope, hooks, proof, stdout, stderr, or screenshots.',
+    access_token_env_vars: accessTokens,
+    adjacent_secret_env_vars: adjacentSecrets,
+    extra_token_like_env_vars: extraTokenLikeVars,
+    redaction: {
+      ok: true,
+      strategy: 'presence-only reporting with literal [redacted] value placeholders'
+    },
+    warnings: present
+      ? ['Token presence was detected without printing the value. Rotate regularly and use only trusted runners.']
+      : ['No CODEX_ACCESS_TOKEN detected in the current process environment. This is fine for interactive ChatGPT login or API-key auth.']
+  };
 }
 
 export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, pluginSkillShadows = { ok: true, blocking: [] }, fastModeConfig = { ok: true, blockers: [] }, gitActions = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, remoteControl }) {
