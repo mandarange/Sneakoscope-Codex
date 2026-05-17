@@ -7,6 +7,14 @@
 
 
 
+
+## [0.9.11] - 2026-05-17
+
+### Fixed
+
+- Repair stale `sks`/`sneakoscope` PATH shims during `npm i -g sneakoscope@latest` when another npm prefix still shadows the newly installed package, so `sks --version` reflects the upgraded release without manual PATH cleanup.
+- Raise the npm unpacked-size budget to 1871 KiB for the upgrade-time shim repair code while preserving packed-size, file-count, tracked-file, and forbidden-file guards.
+
 ## [0.9.10] - 2026-05-17
 
 ### Fixed
