@@ -4,7 +4,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 fn main() {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
-        Some("--version") => println!("sks-rs 0.9.16"),
+        Some("--version") => println!("sks-rs 0.9.17"),
         Some("compact-info") => {
             let mut input = String::new();
             let _ = io::stdin().read_to_string(&mut input);

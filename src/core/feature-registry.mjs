@@ -50,6 +50,8 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
   }
 
   for (const route of DOLLAR_COMMANDS) features.push(routeFeature(route));
+  features.push(fiveScoutIntakeFeature());
+  features.push(scoutProofEvidenceFeature());
   for (const skillName of skillNames) {
     if (!skillCoveredByRoute(skillName)) features.push(skillFeature(skillName));
   }
@@ -148,7 +150,11 @@ export function buildAllFeaturesSelftest(registry, opts = {}) {
     checkRow('failure_contracts_present', registry.features.every((feature) => Array.isArray(feature.known_gaps)), missingFeatureField(registry, 'known_gaps')),
     checkRow('fixture_contracts_present', fixtures.ok, fixtures.blockers),
     checkRow('proof_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-proof' && feature.fixture?.status === 'pass'), ['cli-proof']),
-    checkRow('voxel_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact) => artifact.includes('image-voxel-ledger'))), ['cli-wiki']),
+    checkRow('voxel_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact) => expectedArtifactPath(artifact).includes('image-voxel-ledger'))), ['cli-wiki']),
+    checkRow('five_scout_intake_contract_present', registry.features.some((feature) => feature.id === 'route-five-scout-intake'), ['route-five-scout-intake']),
+    checkRow('scout_gate_fixture_pass', registry.features.some((feature) => feature.id === 'cli-scouts' && feature.fixture?.status === 'pass' && feature.fixture.expected_artifacts?.some((artifact) => expectedArtifactPath(artifact).includes('scout-gate'))), ['cli-scouts']),
+    checkRow('scout_proof_evidence_contract_present', registry.features.some((feature) => feature.id === 'proof-scout-evidence'), ['proof-scout-evidence']),
+    checkRow('scout_read_only_policy_present', registry.features.some((feature) => feature.id === 'route-five-scout-intake' && /read-only/i.test(JSON.stringify(feature.contract || {}))), ['route-five-scout-intake']),
     checkRow('fixture_pass_threshold', (fixturesSummary.counts.pass || 0) >= 90, [`pass=${fixturesSummary.counts.pass || 0}`]),
     checkRow('fixture_not_required_ceiling', (fixturesSummary.counts.not_required || 0) <= 16, [`not_required=${fixturesSummary.counts.not_required || 0}`]),
     checkRow('fixture_mock_blocked_zero', (fixturesSummary.counts.blocked || 0) === 0, [`blocked=${fixturesSummary.counts.blocked || 0}`]),
@@ -171,7 +177,7 @@ export function buildAllFeaturesSelftest(registry, opts = {}) {
 }
 
 export function executeFeatureFixtures(features = [], opts = {}) {
-  const selected = features.filter((feature) => feature.fixture?.status === 'pass' && ['mock', 'static'].includes(feature.fixture.kind));
+  const selected = features.filter((feature) => feature.fixture?.status === 'pass' && ['mock', 'static', 'execute', 'execute_and_validate_artifacts'].includes(feature.fixture.kind));
   const failures = [];
   const checked = [];
   const executed = [];
@@ -184,18 +190,18 @@ export function executeFeatureFixtures(features = [], opts = {}) {
     }
     const artifactOk = Array.isArray(fx.expected_artifacts);
     if (!artifactOk) failures.push(`${feature.id}:expected_artifacts`);
-    const execution = executeSafeFixtureCommand(feature.id, opts);
-    if (execution) {
-      executed.push(execution);
-      if (!execution.ok) failures.push(`${feature.id}:command_exit_${execution.status}`);
-    }
     const strict = opts.strictArtifacts || opts.validateArtifacts;
+    const commandSpec = SAFE_EXECUTABLE_FIXTURE_ARGS[feature.id] || null;
     const artifactRun = runFeatureFixture(feature, {
       root: opts.root || packageRoot(),
-      execute: false,
+      execute: Boolean(commandSpec),
       validateArtifacts: strict,
-      commandArgs: SAFE_EXECUTABLE_FIXTURE_ARGS[feature.id] || null
+      commandArgs: commandSpec
     });
+    if (artifactRun.execution) {
+      executed.push({ id: feature.id, ...artifactRun.execution });
+      if (!artifactRun.execution.ok) failures.push(`${feature.id}:command_exit_${artifactRun.execution.status}`);
+    }
     if (strict) artifactValidated += artifactRun.expected_artifacts.length;
     failures.push(...artifactRun.failures.filter((failure) => !failures.includes(failure)));
     checked.push({
@@ -203,7 +209,7 @@ export function executeFeatureFixtures(features = [], opts = {}) {
       kind: fx.kind,
       command: fx.command,
       expected_artifacts: fx.expected_artifacts,
-      mode: execution ? 'command_and_contract' : strict ? 'strict_artifact_schema' : 'contract'
+      mode: commandSpec ? 'execute_and_validate_artifacts' : strict ? 'contract_no_artifacts' : 'contract'
     });
   }
   const report = {
@@ -216,7 +222,7 @@ export function executeFeatureFixtures(features = [], opts = {}) {
     executed_commands: executed,
     failures,
     command_execution: executed.length ? 'safe-allowlist' : 'contract-only',
-    note: 'Release fixture execution runs deterministic safe CLI fixtures and validates mock/static contracts without claiming real external dependency runs.'
+    note: 'Release fixture execution runs deterministic safe CLI fixtures and validates artifacts that those commands actually generated.'
   };
   if (opts.root) report.report_files = writeFeatureFixtureReports(opts.root, report);
   return report;
@@ -243,19 +249,34 @@ function executeSafeFixtureCommand(featureId, opts = {}) {
   };
 }
 
+function expectedArtifactPath(artifact) {
+  if (typeof artifact === 'string') return artifact;
+  return String(artifact?.path || '');
+}
+
 const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-version': ['--version'],
   'cli-root': ['root', '--json'],
   'cli-features': ['features', 'check', '--json'],
   'cli-commands': ['commands', '--json'],
   'cli-proof-field': ['proof-field', 'scan', '--json', '--intent', 'fixture'],
+  'cli-proof': ['proof', 'smoke', '--json'],
   'cli-db': ['db', 'policy'],
-  'cli-wiki': ['wiki', 'image-summary', '--json'],
+  'cli-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
   'cli-codex-lb': ['codex-lb', 'metrics', '--json'],
   'cli-hooks': ['hooks', 'trust-report', '--json'],
+  'cli-scouts': ['scouts', 'run', 'latest', '--mock', '--json'],
   'cli-perf': ['perf', 'cold-start', '--json', '--iterations', '1'],
-  'route-db': ['db', 'policy'],
-  'route-wiki': ['wiki', 'image-summary', '--json']
+  'cli-rust': ['rust', 'smoke', '--json'],
+  'route-team': ['team', 'fixture', '--mock', '--json'],
+  'route-qa-loop': { setup: [['qa-loop', 'prepare', 'fixture UI QA', '--json']], command: ['qa-loop', 'run', 'latest', '--mock', '--json'] },
+  'route-research': { setup: [['research', 'prepare', 'fixture research topic', '--json']], command: ['research', 'run', 'latest', '--mock', '--json'] },
+  'route-ppt': ['ppt', 'fixture', '--mock', '--json'],
+  'route-image-ux-review': ['image-ux-review', 'fixture', '--mock', '--json'],
+  'route-computer-use': ['computer-use', 'import-fixture', '--mock', '--json'],
+  'route-db': ['db', 'check', '--sql', 'SELECT 1', '--json'],
+  'route-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
+  'route-gx': ['gx', 'validate', 'fixture', '--mock', '--json']
 });
 
 export function renderFeatureInventoryMarkdown(registry) {
@@ -377,6 +398,58 @@ function routeFeature(route) {
       dollar_commands: [route.command],
       app_skill_aliases: aliases,
       skills: aliases.map((alias) => alias.replace(/^\$/, ''))
+    }
+  });
+}
+
+function fiveScoutIntakeFeature() {
+  return baseFeature({
+    id: 'route-five-scout-intake',
+    commands: ['sks scouts run latest --mock --json'],
+    aliases: ['sks scout run latest --json'],
+    category: 'proof-route',
+    maturity: 'beta',
+    intent: 'Default read-only five-scout intake before serious route implementation.',
+    voxel_triwiki_integration: 'scout findings are TriWiki-ready and can require image voxel evidence for visual routes',
+    completion_proof_integration: 'Completion Proof evidence.scouts records scout_count, completed_scouts, gate, consensus, and handoff',
+    known_gaps: ['real speedup claims require scout-performance evidence; mock/static timing is not enough'],
+    contract: {
+      input: 'serious route mission or explicit sks scouts run',
+      output: 'scout-team-plan.json, five scout result pairs, scout-consensus.json, scout-handoff.md, scout-gate.json',
+      state: 'mission-local scout artifacts',
+      safety: 'read-only scouts; no code/DB/git/package mutation',
+      proof: 'evidence.scouts required for serious route proof',
+      voxel: 'visual scout records image voxel requirements without satisfying visual evidence by itself',
+      tests: 'unit, integration, e2e route fixtures, release scouts scripts',
+      docs: 'docs/five-scout-pipeline.md'
+    },
+    source_refs: {
+      cli_command_names: [],
+      handler_keys: [],
+      dollar_commands: [],
+      app_skill_aliases: [],
+      skills: []
+    }
+  });
+}
+
+function scoutProofEvidenceFeature() {
+  return baseFeature({
+    id: 'proof-scout-evidence',
+    commands: ['completion-proof.json evidence.scouts'],
+    aliases: [],
+    category: 'proof-route',
+    maturity: 'beta',
+    intent: 'Completion Proof binding for five-scout intake artifacts.',
+    voxel_triwiki_integration: 'inherits route Voxel/TriWiki evidence and references scout visual decisions',
+    completion_proof_integration: 'required evidence.scouts contract for serious route finalization',
+    known_gaps: ['disabled scouts must be recorded as not_verified_for_parallel_speed'],
+    source_refs: {
+      cli_command_names: [],
+      handler_keys: [],
+      dollar_commands: [],
+      app_skill_aliases: [],
+      skills: []
     }
   });
 }
@@ -519,7 +592,7 @@ function slug(value) {
 }
 
 function commandCategory(name) {
-  if (['team', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts'].includes(name)) return 'proof-route';
+  if (['team', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts', 'scouts', 'scout'].includes(name)) return 'proof-route';
   if (['qa-loop', 'research', 'recallpulse', 'skill-dream', 'eval', 'perf'].includes(name)) return 'loop';
   if (['codex-app', 'codex-lb', 'auth', 'hooks', 'context7', 'openclaw'].includes(name)) return 'integration';
   if (['db', 'guard', 'conflicts', 'harness', 'versioning'].includes(name)) return 'safety';
@@ -530,7 +603,7 @@ function commandCategory(name) {
 
 function commandMaturity(name) {
   if (['help', 'version', 'commands', 'usage', 'root', 'quickstart', 'setup', 'doctor', 'selftest', 'update-check'].includes(name)) return 'stable';
-  if (['codex-app', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'team', 'pipeline', 'goal', 'db', 'guard'].includes(name)) return 'beta';
+  if (['codex-app', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'team', 'pipeline', 'goal', 'db', 'guard', 'scouts', 'scout'].includes(name)) return 'beta';
   return 'labs';
 }
 

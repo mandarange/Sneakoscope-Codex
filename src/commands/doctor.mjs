@@ -51,7 +51,7 @@ export async function run(_command, args = []) {
   console.log(`Root:      ${root}`);
   console.log(`Node:      ${result.node.ok ? 'ok' : 'fail'} ${result.node.version}`);
   console.log(`Codex:     ${codex.bin ? 'ok' : 'missing'} ${codex.version || ''}`);
-  console.log(`Rust acc.: ${rust.available ? rust.version : 'optional-missing'}`);
+  console.log(`Rust acc.: ${rust.mode || (rust.available ? 'rust_accelerated' : 'js_fallback')} ${rust.version || rust.status || ''}`);
   console.log(`Codex App: ${codexApp.ok ? 'ok' : 'needs setup'}`);
   console.log(`codex-lb:  ${codexLb.ok ? 'ok' : `blocked ${codexLb.circuit?.state || 'unknown'}`}`);
   console.log(`Ready:     ${result.ok ? 'yes' : 'no'}`);

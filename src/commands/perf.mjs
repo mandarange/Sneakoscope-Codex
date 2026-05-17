@@ -25,7 +25,7 @@ export async function run(_command, args = []) {
     if (!result.ok) process.exitCode = 1;
     return;
   }
-  const { perfCommand } = await import('../core/commands/route-cli.mjs');
+  const { perfCommand } = await import('../core/commands/perf-command.mjs');
   return perfCommand(action, args.slice(1));
 }
 
