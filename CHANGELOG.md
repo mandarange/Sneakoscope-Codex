@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.9.18] - 2026-05-18
+
+### Added
+- Add real 5-Scout execution engine detection and selection for Codex exec, tmux lanes, Codex App subagents, local static fallback, and sequential fallback.
+- Add read-only scout filesystem guards with pre/post source snapshots and mission-local allowed write paths.
+- Add hermetic E2E route test roots so route tests no longer share the source checkout `.sneakoscope` state.
+- Add strict feature fixture mode that rejects features without explicit fixtures and validates command-generated artifacts only.
+- Add strict scout validation mode for release checks.
+- Add split pipeline architecture module surfaces for stage policy, scout policy, route prep, stop gate, active context, prompt context, and plan writing.
+- Add scout performance evidence v2 with speedup claims allowed only when real parallel execution has a measured sequential baseline.
+
+### Fixed
+- Prevent new features from receiving implicit static-pass fixture fallback.
+- Prevent `sks scouts validate --strict` from silently creating a passing scout run during release checks.
+- Prevent E2E latest-mission collisions by isolating route tests in temp project roots.
+- Prevent scout read-only violations by detecting source changes outside allowed scout artifacts.
+
+### Changed
+- Treat Five-Scout intake as real engine-backed when available and as verified-partial fallback otherwise.
+- Treat feature fixture pass as explicit, command-generated, schema-validated evidence only.
+- Promote pipeline budget, scout engine detection, strict scout checks, and hermetic fixture execution into `npm run release:check`.
+
 ## [0.9.17] - 2026-05-18
 
 ### Added

@@ -81,7 +81,7 @@ function mockPptFixtureGate(gate = {}) {
 
 function fixtureAnswers() {
   return {
-    PRESENTATION_AUDIENCE_PROFILE: 'Release reviewer validating SKS 0.9.17 route evidence.',
+    PRESENTATION_AUDIENCE_PROFILE: 'Release reviewer validating SKS 0.9.18 route evidence.',
     PRESENTATION_STP_STRATEGY: 'Segment: developer tooling. Target: Codex trust-layer maintainers. Positioning: proof-first release readiness.',
     PRESENTATION_DELIVERY_CONTEXT: 'Mock release gate fixture.',
     PRESENTATION_PAINPOINT_SOLUTION_MAP: [

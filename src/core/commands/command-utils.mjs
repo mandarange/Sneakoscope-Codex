@@ -30,7 +30,7 @@ export function positionalArgs(args = []) {
     '--lines', '--intent', '--changed', '--route', '--skills', '--prompt-signature',
     '--mission-id', '--source', '--image-id', '--bbox', '--label', '--evidence',
     '--claim-id', '--type', '--before', '--after', '--anchors', '--verification',
-    '--status', '--scouts'
+    '--status', '--scouts', '--engine'
   ]);
   for (let i = 0; i < args.length; i += 1) {
     const arg = String(args[i]);

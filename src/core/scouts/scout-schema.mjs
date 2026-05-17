@@ -2,8 +2,8 @@ export const SCOUT_TEAM_PLAN_SCHEMA = 'sks.scout-team-plan.v1';
 export const SCOUT_RESULT_SCHEMA = 'sks.scout-result.v1';
 export const SCOUT_CONSENSUS_SCHEMA = 'sks.scout-consensus.v1';
 export const SCOUT_GATE_SCHEMA = 'sks.scout-gate.v1';
-export const SCOUT_PROOF_EVIDENCE_SCHEMA = 'sks.scout-proof-evidence.v1';
-export const SCOUT_PERFORMANCE_SCHEMA = 'sks.scout-performance.v1';
+export const SCOUT_PROOF_EVIDENCE_SCHEMA = 'sks.scout-proof-evidence.v2';
+export const SCOUT_PERFORMANCE_SCHEMA = 'sks.scout-performance.v2';
 export const SCOUT_PERFORMANCE_SUMMARY_SCHEMA = 'sks.scout-performance-summary.v1';
 
 export const FIVE_SCOUT_STAGE_ID = 'five_scout_parallel_intake';
@@ -75,5 +75,7 @@ export const SCOUT_ALL_OUTPUTS = Object.freeze([
   'scout-team-plan.json',
   'scout-parallel-ledger.jsonl',
   ...SCOUT_REQUIRED_OUTPUTS,
+  'scout-engine-result.json',
+  'scout-readonly-guard.json',
   'scout-performance.json'
 ]);

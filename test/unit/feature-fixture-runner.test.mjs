@@ -24,6 +24,7 @@ test('feature fixture runner validates expected artifact schemas', () => {
     id: 'route-qa-loop',
     fixture: {
       kind: 'execute_and_validate_artifacts',
+      root_mode: 'source_checkout_required',
       command: 'sks qa-loop run latest --mock --json',
       expected_artifacts: [
         { path: 'completion-proof.json', schema: 'sks.completion-proof.v1' },

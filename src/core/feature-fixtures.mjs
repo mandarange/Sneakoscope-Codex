@@ -31,7 +31,7 @@ const FIXTURES = Object.freeze({
   'cli-hproof': fixture('mock', 'sks hproof check latest', ['completion-proof.json'], 'pass'),
   'cli-proof-field': fixture('static', 'sks proof-field scan --json --intent fixture', [], 'pass'),
   'cli-recallpulse': fixture('mock', 'sks recallpulse status latest --json', ['recallpulse-report.json'], 'pass'),
-  'cli-scouts': fixture('execute_and_validate_artifacts', 'sks scouts run latest --mock --json', ['scout-team-plan.json', 'scout-consensus.json', 'scout-handoff.md', 'scout-gate.json'], 'pass'),
+  'cli-scouts': fixture('execute_and_validate_artifacts', 'sks scouts run latest --engine local-static --mock --json', ['scout-team-plan.json', 'scout-consensus.json', 'scout-handoff.md', 'scout-gate.json', 'scout-engine-result.json'], 'pass'),
   'cli-scout': fixture('mock', 'sks scout status latest --json', ['scout-gate.json'], 'pass'),
   'cli-gx': fixture('mock', 'sks gx validate fixture', ['gx-validation.json'], 'pass'),
   'cli-perf': fixture('static', 'sks perf cold-start --json --iterations 1', [], 'pass'),
@@ -63,12 +63,58 @@ const FIXTURES = Object.freeze({
   'route-db': fixture('execute_and_validate_artifacts', 'sks db check --sql "SELECT 1" --json', ['completion-proof.json', 'db-operation-report.json'], 'pass'),
   'route-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: 'completion-proof.json', schema: 'sks.completion-proof.v1' }, { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }], 'pass'),
   'route-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'gx-validation.json'], 'pass'),
-  'route-five-scout-intake': fixture('mock', 'sks scouts validate latest --json', ['scout-team-plan.json', 'scout-consensus.json', 'scout-handoff.md', 'scout-gate.json'], 'pass'),
+  'route-five-scout-intake': fixture('mock', 'sks scouts validate latest --strict --json', ['scout-team-plan.json', 'scout-consensus.json', 'scout-handoff.md', 'scout-gate.json'], 'pass'),
   'proof-scout-evidence': fixture('mock', 'sks team "fixture" --mock --json', ['completion-proof.json', 'scout-gate.json'], 'pass')
 });
 
+const STATIC_CONTRACT_FEATURES = new Set([
+  'cli-wizard',
+  'cli-bootstrap',
+  'cli-deps',
+  'cli-auth',
+  'cli-openclaw',
+  'cli-tmux',
+  'cli-mad',
+  'cli-auto-review',
+  'cli-commit',
+  'cli-commit-and-push',
+  'cli-context7',
+  'cli-all-features',
+  'cli-eval',
+  'cli-harness',
+  'cli-team',
+  'cli-reasoning',
+  'cli-profile',
+  'handler-$',
+  'handler-autoresearch',
+  'handler-autoreview',
+  'handler-computer-use',
+  'handler-cu',
+  'handler-dollars',
+  'handler-mad-sks',
+  'handler-postinstall',
+  'route-sks',
+  'route-commit',
+  'route-commit-and-push',
+  'route-help'
+]);
+
 export function fixtureForFeature(featureId) {
-  return FIXTURES[featureId] || fixture('static', 'sks features check --json', [], 'pass');
+  if (FIXTURES[featureId]) return FIXTURES[featureId];
+  if (STATIC_CONTRACT_FEATURES.has(featureId)) {
+    return fixture('static', `explicit static contract fixture: ${featureId}`, [], 'pass', {
+      quality: 'static_contract',
+      root_mode: 'source_checkout_required'
+    });
+  }
+  if (String(featureId || '').startsWith('skill-')) {
+    return fixture('static', `skill contract: ${featureId}`, [], 'pass', { quality: 'static_contract', root_mode: 'source_checkout_required' });
+  }
+  return fixture('not_available', null, [], 'missing', {
+    quality: 'missing',
+    fallback_removed: true,
+    reason: 'No explicit fixture registered for this feature.'
+  });
 }
 
 export function fixtureSummary(features = []) {
@@ -96,6 +142,7 @@ export function validateFeatureFixtures(features = []) {
       continue;
     }
     if (!['contract', 'execute', 'execute_and_validate_artifacts', 'mock', 'static', 'real_optional', 'not_available'].includes(fx.kind)) blockers.push(`${feature.id}:fixture_kind`);
+    if (!['real_optional', 'execute_and_validate_artifacts', 'execute', 'mock', 'static_contract', 'missing'].includes(fx.quality)) blockers.push(`${feature.id}:fixture_quality`);
     if (!['pass', 'missing', 'blocked', 'not_required'].includes(fx.status)) blockers.push(`${feature.id}:fixture_status`);
     if ((fx.kind === 'mock' || fx.kind === 'static') && !fx.command && fx.status !== 'not_required') blockers.push(`${feature.id}:fixture_command`);
     if (!Array.isArray(fx.expected_artifacts)) blockers.push(`${feature.id}:fixture_expected_artifacts`);
@@ -103,6 +150,18 @@ export function validateFeatureFixtures(features = []) {
   return { ok: blockers.length === 0, blockers };
 }
 
-function fixture(kind, command, expected_artifacts, status) {
-  return { kind, command, expected_artifacts, status };
+function fixture(kind, command, expected_artifacts, status, extra = {}) {
+  const quality = extra.quality || (kind === 'static' ? 'static_contract' : kind);
+  const rootMode = extra.root_mode || (kind === 'execute_and_validate_artifacts' || kind === 'execute' || kind === 'mock' ? 'hermetic_temp_project' : 'source_checkout_required');
+  return {
+    kind,
+    quality,
+    root_mode: rootMode,
+    command,
+    expected_artifacts,
+    status,
+    explicit: true,
+    fallback_removed: true,
+    ...extra
+  };
 }

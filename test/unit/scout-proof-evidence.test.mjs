@@ -10,9 +10,11 @@ import { readScoutProofEvidence } from '../../src/core/scouts/scout-proof-eviden
 test('readScoutProofEvidence returns the completion proof scout contract', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-scout-proof-'));
   const { id } = await createMission(root, { mode: 'team', prompt: 'fixture' });
-  await runFiveScoutIntake(root, { missionId: id, route: '$Team', task: 'fixture', mock: true });
+  await runFiveScoutIntake(root, { missionId: id, route: '$Team', task: 'fixture', engine: 'local-static', mock: true });
   const evidence = await readScoutProofEvidence(root, id);
-  assert.equal(evidence.schema, 'sks.scout-proof-evidence.v1');
+  assert.equal(evidence.schema, 'sks.scout-proof-evidence.v2');
+  assert.equal(evidence.engine, 'local-static');
+  assert.equal(evidence.real_parallel, false);
   assert.equal(evidence.scout_count, 5);
   assert.equal(evidence.completed_scouts, 5);
   assert.equal(evidence.gate, 'passed');

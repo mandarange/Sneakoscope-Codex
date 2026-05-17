@@ -7,6 +7,10 @@ import { buildScoutTeamPlan, routeRequiresScoutIntake, scoutRouteLabel } from '.
 import { appendScoutLedger, renderScoutMarkdown, resetScoutLedger, scoutArtifactList, writeScoutPerformanceSummary } from './scout-artifacts.mjs';
 import { SCOUT_COUNT, SCOUT_PERFORMANCE_SCHEMA, SCOUT_RESULT_SCHEMA, SCOUT_ROLES } from './scout-schema.mjs';
 import { readScoutTriWikiHint } from './scout-triwiki.mjs';
+import { snapshotScoutReadableTree, assertScoutReadOnly } from './scout-readonly-guard.mjs';
+import { runCodexExecParallelEngine } from './engines/codex-exec-parallel-engine.mjs';
+import { selectScoutEngine } from './engines/scout-engine-policy.mjs';
+import { scoutEngineResult } from './engines/scout-engine-base.mjs';
 
 export async function ensureScoutMission(root, { missionId = null, route = '$Team', task = 'Five Scout fixture intake' } = {}) {
   if (missionId) {
@@ -37,6 +41,8 @@ export async function ensureFiveScoutIntake(root, {
   task = '',
   mode = 'auto',
   parallel = true,
+  engine = 'auto',
+  requireRealParallel = false,
   mock = false,
   timeBudget = {},
   force = false,
@@ -57,7 +63,7 @@ export async function ensureFiveScoutIntake(root, {
     gate: status.gate,
     artifacts: scoutArtifactList()
   };
-  return runFiveScoutIntake(root, { missionId, route, task, mode, parallel, mock, timeBudget });
+  return runFiveScoutIntake(root, { missionId, route, task, mode, parallel, engine, requireRealParallel, mock, timeBudget });
 }
 
 export async function runFiveScoutIntake(root, {
@@ -66,6 +72,8 @@ export async function runFiveScoutIntake(root, {
   task = '',
   mode = 'auto',
   parallel = true,
+  engine = 'auto',
+  requireRealParallel = false,
   mock = false,
   timeBudget = {}
 } = {}) {
@@ -73,15 +81,102 @@ export async function runFiveScoutIntake(root, {
   const id = mission.id;
   const dir = mission.dir || missionDir(root, id);
   const routeLabel = scoutRouteLabel(route);
-  const parallelMode = parallel ? 'parallel' : 'sequential_fallback';
   const startedAt = nowIso();
   const startMs = Date.now();
   await ensureDir(dir);
   await resetScoutLedger(root, id);
+  const selection = await selectScoutEngine(root, {
+    requested: engine,
+    requireRealParallel,
+    missionId: id,
+    route: routeLabel,
+    mock
+  });
+  const selectedEngine = selection.selected;
+  const realParallel = selection.real_parallel === true;
+  const parallelMode = realParallel || (parallel && selectedEngine === 'local-static') ? 'parallel' : 'sequential_fallback';
   let plan = buildScoutTeamPlan({ missionId: id, route: routeLabel, task: task || mission.mission?.prompt || '', parallelMode, mode, timeBudget, createdAt: startedAt });
+  plan = {
+    ...plan,
+    engine: selectedEngine,
+    real_parallel: realParallel,
+    engine_selection: selection
+  };
   await writeJsonAtomic(path.join(dir, 'scout-team-plan.json'), plan);
-  await appendScoutLedger(root, id, { type: 'scouts.started', route: routeLabel, scout_count: SCOUT_COUNT, parallel_mode: parallelMode, mock });
+  await appendScoutLedger(root, id, { type: 'scouts.started', route: routeLabel, scout_count: SCOUT_COUNT, parallel_mode: parallelMode, engine: selectedEngine, real_parallel: realParallel, mock });
+  if (!selection.available) {
+    const completedAt = nowIso();
+    const engineResult = scoutEngineResult({
+      engine: selectedEngine,
+      realParallel,
+      mock,
+      parallelMode,
+      startedAt,
+      completedAt,
+      durationMs: Date.now() - startMs,
+      blockers: selection.blockers,
+      unverified: ['No scout run was created because the selected engine is unavailable or real parallel was required.']
+    });
+    await writeJsonAtomic(path.join(dir, 'scout-engine-result.json'), engineResult);
+    const gate = {
+      schema: 'sks.scout-gate.v1',
+      mission_id: id,
+      route: routeLabel,
+      passed: false,
+      required_scouts: SCOUT_COUNT,
+      completed_scouts: 0,
+      read_only_confirmed: false,
+      engine: selectedEngine,
+      real_parallel: realParallel,
+      blockers: selection.blockers,
+      unverified: engineResult.unverified
+    };
+    await writeJsonAtomic(path.join(dir, 'scout-gate.json'), gate);
+    const performance = scoutPerformance({
+      missionId: id,
+      route: routeLabel,
+      engine: selectedEngine,
+      realParallel,
+      mock,
+      parallelMode,
+      startedAt,
+      completedAt,
+      durationMs: Date.now() - startMs,
+      perScout: {},
+      claimAllowed: false,
+      claimReason: selection.blockers.join('; ') || 'selected scout engine unavailable'
+    });
+    await writeJsonAtomic(path.join(dir, 'scout-performance.json'), performance);
+    const summary = await writeScoutPerformanceSummary(root, performance);
+    await appendScoutLedger(root, id, { type: 'scouts.blocked', engine: selectedEngine, blockers: selection.blockers });
+    return {
+      schema: 'sks.scouts-run.v1',
+      ok: false,
+      required: true,
+      mission_id: id,
+      route: routeLabel,
+      engine: selectedEngine,
+      real_parallel: realParallel,
+      parallel_mode: parallelMode,
+      scout_count: SCOUT_COUNT,
+      completed_scouts: 0,
+      gate,
+      performance,
+      performance_summary: summary,
+      artifacts: scoutArtifactList()
+    };
+  }
   const triwiki = await readScoutTriWikiHint(root);
+  const before = await snapshotScoutReadableTree(root, { missionId: id });
+  if (selectedEngine === 'codex-exec-parallel') {
+    await runCodexExecParallelEngine(root, {
+      missionId: id,
+      dir,
+      route: routeLabel,
+      task: task || mission.mission?.prompt || '',
+      roles: SCOUT_ROLES
+    });
+  }
   const work = SCOUT_ROLES.map((role) => async () => {
     const scoutStart = Date.now();
     const result = await buildScoutResult(root, {
@@ -90,6 +185,8 @@ export async function runFiveScoutIntake(root, {
       task: task || mission.mission?.prompt || '',
       role,
       mock,
+      engine: selectedEngine,
+      realParallel,
       triwiki
     });
     const durationMs = Date.now() - scoutStart;
@@ -98,8 +195,11 @@ export async function runFiveScoutIntake(root, {
     await appendScoutLedger(root, id, { type: 'scout.done', scout_id: role.id, duration_ms: durationMs, status: result.status });
     return { result, durationMs };
   });
-  const rows = parallel ? await Promise.all(work.map((fn) => fn())) : [];
+  const rows = (realParallel || parallel) && selectedEngine !== 'sequential-fallback' ? await Promise.all(work.map((fn) => fn())) : [];
   if (!parallel) {
+    for (const fn of work) rows.push(await fn());
+  }
+  if (selectedEngine === 'sequential-fallback' && parallel) {
     for (const fn of work) rows.push(await fn());
   }
   const results = rows.map((row) => row.result);
@@ -111,29 +211,62 @@ export async function runFiveScoutIntake(root, {
   const consensus = buildScoutConsensus({ missionId: id, route: routeLabel, results, parallelMode });
   await writeJsonAtomic(path.join(dir, 'scout-consensus.json'), consensus);
   await writeTextAtomic(path.join(dir, 'scout-handoff.md'), renderScoutHandoff(consensus));
-  const gate = evaluateScoutGate({ missionId: id, route: routeLabel, plan, results, consensus, handoffWritten: true });
+  const readOnlyGuard = await assertScoutReadOnly(root, before, { missionId: id });
+  await writeJsonAtomic(path.join(dir, 'scout-readonly-guard.json'), readOnlyGuard);
+  const gate = {
+    ...evaluateScoutGate({ missionId: id, route: routeLabel, plan, results, consensus, handoffWritten: true }),
+    engine: selectedEngine,
+    real_parallel: realParallel,
+    read_only_guard: readOnlyGuard.passed === true,
+    blockers: [
+      ...evaluateScoutGate({ missionId: id, route: routeLabel, plan, results, consensus, handoffWritten: true }).blockers,
+      ...(readOnlyGuard.passed ? [] : readOnlyGuard.violations.map((violation) => `read_only_violation:${violation.kind}:${violation.path}`))
+    ]
+  };
+  gate.passed = gate.blockers.length === 0;
   await writeJsonAtomic(path.join(dir, 'scout-gate.json'), gate);
   const completedAt = nowIso();
   const durationMs = Date.now() - startMs;
   const perScout = Object.fromEntries(SCOUT_ROLES.map((role) => [role.id, rows.find((row) => row.result.scout_id === role.id)?.durationMs || 0]));
   const estimatedSequentialMs = Object.values(perScout).reduce((sum, ms) => sum + Number(ms || 0), 0);
-  const performance = {
-    schema: SCOUT_PERFORMANCE_SCHEMA,
-    mission_id: id,
+  const claimAllowed = realParallel
+    && !mock
+    && readOnlyGuard.passed === true
+    && durationMs > 0
+    && estimatedSequentialMs > durationMs
+    && estimatedSequentialMs >= durationMs * 1.1;
+  const performance = scoutPerformance({
+    missionId: id,
     route: routeLabel,
-    parallel_mode: parallelMode,
-    execution_engine: parallel ? 'local_static_promise_all' : 'sequential_static_fallback',
-    scout_count: SCOUT_COUNT,
-    started_at: startedAt,
-    completed_at: completedAt,
-    duration_ms: durationMs,
-    per_scout_duration_ms: perScout,
-    estimated_sequential_ms: estimatedSequentialMs,
-    observed_parallel_speedup: parallel && durationMs > 0 ? Number((estimatedSequentialMs / durationMs).toFixed(2)) : null,
-    claim_allowed: false,
-    claim_policy: mock ? 'mock fixture cannot support real speedup claims' : 'local static timing is recorded but not sufficient for a real speedup claim',
-    mock: Boolean(mock)
-  };
+    engine: selectedEngine,
+    realParallel,
+    mock,
+    parallelMode,
+    startedAt,
+    completedAt,
+    durationMs,
+    perScout,
+    estimatedSequentialMs,
+    claimAllowed,
+    claimReason: claimAllowed
+      ? 'real parallel engine with measured wall-clock and sequential baseline'
+      : (mock || selectedEngine === 'local-static' ? 'mock/static fallback cannot support real speedup claims' : 'real engine ran, but no measured sequential baseline supports a speedup claim')
+  });
+  const engineResult = scoutEngineResult({
+    engine: selectedEngine,
+    realParallel,
+    mock,
+    parallelMode,
+    startedAt,
+    completedAt,
+    durationMs,
+    perScoutDurationMs: perScout,
+    completedScouts: gate.completed_scouts,
+    claimAllowed,
+    blockers: gate.blockers,
+    unverified: gate.unverified
+  });
+  await writeJsonAtomic(path.join(dir, 'scout-engine-result.json'), engineResult);
   await writeJsonAtomic(path.join(dir, 'scout-performance.json'), performance);
   const summary = await writeScoutPerformanceSummary(root, performance);
   await appendScoutLedger(root, id, { type: 'scouts.finished', passed: gate.passed, duration_ms: durationMs, claim_allowed: performance.claim_allowed });
@@ -143,6 +276,8 @@ export async function runFiveScoutIntake(root, {
     required: true,
     mission_id: id,
     route: routeLabel,
+    engine: selectedEngine,
+    real_parallel: realParallel,
     parallel_mode: parallelMode,
     scout_count: SCOUT_COUNT,
     completed_scouts: gate.completed_scouts,
@@ -154,7 +289,44 @@ export async function runFiveScoutIntake(root, {
   };
 }
 
-async function buildScoutResult(root, { missionId, route, task, role, mock, triwiki }) {
+function scoutPerformance({
+  missionId,
+  route,
+  engine,
+  realParallel,
+  mock,
+  parallelMode,
+  startedAt,
+  completedAt,
+  durationMs,
+  perScout,
+  estimatedSequentialMs = Object.values(perScout || {}).reduce((sum, ms) => sum + Number(ms || 0), 0),
+  claimAllowed,
+  claimReason
+}) {
+  return {
+    schema: SCOUT_PERFORMANCE_SCHEMA,
+    mission_id: missionId,
+    route,
+    engine,
+    execution_engine: engine,
+    real_parallel: Boolean(realParallel),
+    mock: Boolean(mock),
+    parallel_mode: parallelMode,
+    scout_count: SCOUT_COUNT,
+    started_at: startedAt,
+    completed_at: completedAt,
+    duration_ms: durationMs,
+    per_scout_duration_ms: perScout || {},
+    estimated_sequential_ms: estimatedSequentialMs,
+    observed_parallel_speedup: realParallel && durationMs > 0 ? Number((estimatedSequentialMs / durationMs).toFixed(2)) : null,
+    claim_allowed: Boolean(claimAllowed),
+    claim_reason: claimReason,
+    claim_policy: claimReason
+  };
+}
+
+async function buildScoutResult(root, { missionId, route, task, role, mock, engine = 'local-static', realParallel = false, triwiki }) {
   const packageJson = await readJson(path.join(root, 'package.json'), {});
   const hasCommandRegistry = await exists(path.join(root, 'src', 'cli', 'command-registry.mjs'));
   const hasPipeline = await exists(path.join(root, 'src', 'core', 'pipeline.mjs'));
@@ -174,6 +346,8 @@ async function buildScoutResult(root, { missionId, route, task, role, mock, triw
     generated_at: nowIso(),
     context7_required: context7Required,
     context7_libraries: context7Required ? context7LibrariesFor(routeText) : [],
+    engine,
+    real_parallel: Boolean(realParallel),
     triwiki_hint: triwiki,
     blockers: [],
     unverified
@@ -199,7 +373,7 @@ async function buildScoutResult(root, { missionId, route, task, role, mock, triw
       summary: 'Verification should cover plan policy, gate policy, consensus aggregation, proof evidence, CLI mock run, route fixtures, and release scripts.',
       findings: [
         finding('finding-001', 'test', 'Unit tests should prove exactly five scouts and read-only policy.', 'test/unit/scout-plan.test.mjs', 'new', 'high', 'Add unit coverage for route policy and plan shape.'),
-        finding('finding-002', 'test', 'Integration tests should exercise `sks scouts run latest --mock --json` and proof evidence.', 'test/integration/scouts-run-mock.test.mjs', 'new', 'high', 'Add CLI and core integration coverage.'),
+        finding('finding-002', 'test', 'Integration tests should exercise `sks scouts run latest --engine local-static --mock --json` and proof evidence.', 'test/integration/scouts-run-mock.test.mjs', 'new', 'high', 'Add CLI and core integration coverage.'),
         finding('finding-003', 'test', 'E2E route fixtures should prove Team, QA-LOOP, and Research completion proof includes evidence.scouts.', 'test/e2e/route-team-five-scouts.test.mjs', 'new', 'high', 'Assert route auto-finalization generated scout artifacts.')
       ],
       suggested_tasks: [

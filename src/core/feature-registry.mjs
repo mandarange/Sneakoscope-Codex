@@ -149,6 +149,7 @@ export function buildAllFeaturesSelftest(registry, opts = {}) {
     checkRow('voxel_triwiki_contracts_present', registry.features.every((feature) => Boolean(feature.voxel_triwiki_integration)), missingFeatureField(registry, 'voxel_triwiki_integration')),
     checkRow('failure_contracts_present', registry.features.every((feature) => Array.isArray(feature.known_gaps)), missingFeatureField(registry, 'known_gaps')),
     checkRow('fixture_contracts_present', fixtures.ok, fixtures.blockers),
+    checkRow('fixture_fallback_removed', registry.features.every((feature) => feature.fixture?.fallback_removed === true && feature.fixture?.status !== 'missing'), registry.features.filter((feature) => feature.fixture?.fallback_removed !== true || feature.fixture?.status === 'missing').map((feature) => feature.id)),
     checkRow('proof_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-proof' && feature.fixture?.status === 'pass'), ['cli-proof']),
     checkRow('voxel_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact) => expectedArtifactPath(artifact).includes('image-voxel-ledger'))), ['cli-wiki']),
     checkRow('five_scout_intake_contract_present', registry.features.some((feature) => feature.id === 'route-five-scout-intake'), ['route-five-scout-intake']),
@@ -265,7 +266,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
   'cli-codex-lb': ['codex-lb', 'metrics', '--json'],
   'cli-hooks': ['hooks', 'trust-report', '--json'],
-  'cli-scouts': ['scouts', 'run', 'latest', '--mock', '--json'],
+  'cli-scouts': ['scouts', 'run', 'latest', '--engine', 'local-static', '--mock', '--json'],
   'cli-perf': ['perf', 'cold-start', '--json', '--iterations', '1'],
   'cli-rust': ['rust', 'smoke', '--json'],
   'route-team': ['team', 'fixture', '--mock', '--json'],
@@ -303,14 +304,15 @@ export function renderFeatureInventoryMarkdown(registry) {
     '',
     '## Stable / Beta / Labs Map',
     '',
-    '| Feature | Category | Maturity | Commands / Routes | Fixture | Known Gaps |',
-    '| --- | --- | --- | --- | --- | --- |'
+    '| Feature | Category | Maturity | Commands / Routes | Fixture | Quality | Known Gaps |',
+    '| --- | --- | --- | --- | --- | --- | --- |'
   ];
   for (const feature of registry.features) {
     const commands = [...(feature.commands || []), ...(feature.aliases || [])].map(markdownTableCell).join('<br>');
     const gaps = (feature.known_gaps || []).map(markdownTableCell).join('<br>') || 'none recorded';
     const fixture = feature.fixture ? `${feature.fixture.kind}:${feature.fixture.status}` : 'missing';
-    lines.push(`| \`${feature.id}\` | ${feature.category} | ${feature.maturity} | ${commands || '-'} | ${fixture} | ${gaps} |`);
+    const quality = feature.fixture?.quality || 'missing';
+    lines.push(`| \`${feature.id}\` | ${feature.category} | ${feature.maturity} | ${commands || '-'} | ${fixture} | ${quality} | ${gaps} |`);
   }
   lines.push('', '## Unmapped Coverage', '');
   for (const [kind, values] of Object.entries(coverage.unmapped || {})) {
@@ -405,7 +407,7 @@ function routeFeature(route) {
 function fiveScoutIntakeFeature() {
   return baseFeature({
     id: 'route-five-scout-intake',
-    commands: ['sks scouts run latest --mock --json'],
+    commands: ['sks scouts run latest --engine local-static --mock --json'],
     aliases: ['sks scout run latest --json'],
     category: 'proof-route',
     maturity: 'beta',

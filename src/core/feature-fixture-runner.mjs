@@ -12,12 +12,14 @@ export function runFeatureFixture(feature, {
 } = {}) {
   const fixture = feature.fixture || {};
   const expected = normalizeExpectedArtifacts(fixture.expected_artifacts);
-  const latestBefore = latestMissionId(root);
-  const execution = execute && commandArgs ? executeCommand(root, commandArgs) : null;
-  const latestAfter = execution?.mission_id || latestMissionId(root) || latestBefore;
+  const useHermeticRoot = fixture.root_mode !== 'source_checkout_required' && (execute || validateArtifacts || fixture.kind === 'execute_and_validate_artifacts');
+  const projectRoot = useHermeticRoot ? prepareHermeticFixtureRoot(root, tempRoot) : root;
+  const latestBefore = latestMissionId(projectRoot);
+  const execution = execute && commandArgs ? executeCommand(root, projectRoot, commandArgs, fixture) : null;
+  const latestAfter = execution?.mission_id || latestMissionId(projectRoot) || latestBefore;
   const shouldValidateArtifacts = validateArtifacts && (fixture.kind === 'execute_and_validate_artifacts' || execution);
   const artifacts = shouldValidateArtifacts
-    ? expected.map((artifact) => inspectExpectedArtifact(root, tempRoot, artifact, { latestMissionId: latestAfter }))
+    ? expected.map((artifact) => inspectExpectedArtifact(projectRoot, tempRoot, artifact, { latestMissionId: latestAfter }))
     : expected.map((artifact) => ({ path: artifact.path, requested_path: artifact.path, schema: artifact.schema || inferSchema(artifact.path), exists: null, schema_ok: null, content_ok: null, skipped: 'contract_only' }));
   const artifactFailures = shouldValidateArtifacts
     ? artifacts.filter((artifact) => !artifact.exists || !artifact.schema_ok || !artifact.content_ok).map((artifact) => `${feature.id}:${artifact.path}:${artifact.failure || 'artifact_invalid'}`)
@@ -26,17 +28,20 @@ export function runFeatureFixture(feature, {
     id: feature.id,
     kind: fixture.kind || 'static',
     command: fixture.command || null,
-    temp_root: tempRoot,
+    temp_root: useHermeticRoot ? projectRoot : tempRoot,
+    root_mode: useHermeticRoot ? 'hermetic_temp_project' : 'source_checkout_required',
     latest_mission_id: latestAfter,
     executed: Boolean(execution),
     execution,
     expected_artifacts: artifacts,
     artifact_schema_validated: validateArtifacts,
-    ok: (!execution || execution.ok) && artifactFailures.length === 0 && !(validateArtifacts && fixture.kind === 'execute_and_validate_artifacts' && expected.length && !execution),
+    no_plaintext_secrets: validateNoPlaintextSecrets(projectRoot),
+    ok: (!execution || execution.ok) && artifactFailures.length === 0 && validateNoPlaintextSecrets(projectRoot) && !(validateArtifacts && fixture.kind === 'execute_and_validate_artifacts' && expected.length && !execution),
     failures: [
       ...(!fixture.command && fixture.status === 'pass' ? [`${feature.id}:fixture_command_missing`] : []),
       ...(validateArtifacts && fixture.kind === 'execute_and_validate_artifacts' && expected.length && !execution ? [`${feature.id}:command_not_executed_for_artifact_validation`] : []),
       ...(execution && !execution.ok ? [`${feature.id}:command_exit_${execution.status}`] : []),
+      ...(validateNoPlaintextSecrets(projectRoot) ? [] : [`${feature.id}:plaintext_secret_detected`]),
       ...artifactFailures
     ]
   };
@@ -52,12 +57,15 @@ export function writeFeatureFixtureReports(root, report) {
   return { json: jsonPath, md: mdPath };
 }
 
-function executeCommand(root, spec) {
+function executeCommand(sourceRoot, projectRoot, spec, fixture = {}) {
   const normalized = Array.isArray(spec) ? { command: spec } : spec;
-  const setup = normalized.setup || [];
-  const setupResults = setup.map((args) => spawnSks(root, args));
+  const setup = [
+    ...(fixture.root_mode === 'source_checkout_required' ? [] : [['setup', '--local-only', '--json']]),
+    ...(normalized.setup || [])
+  ];
+  const setupResults = setup.map((args) => spawnSks(sourceRoot, projectRoot, args));
   const command = normalized.command || normalized.args || [];
-  const result = command.length ? spawnSks(root, command) : { status: 0, signal: null, ok: true, stdout_bytes: 0, stderr_bytes: 0, args: [] };
+  const result = command.length ? spawnSks(sourceRoot, projectRoot, command) : { status: 0, signal: null, ok: true, stdout_bytes: 0, stderr_bytes: 0, args: [] };
   const missionId = result.mission_id || [...setupResults].reverse().find((row) => row.mission_id)?.mission_id || null;
   return {
     args: command,
@@ -71,9 +79,9 @@ function executeCommand(root, spec) {
   };
 }
 
-function spawnSks(root, args = []) {
-  const result = spawnSync(process.execPath, [path.join(root, 'bin', 'sks.mjs'), ...args], {
-    cwd: root,
+function spawnSks(sourceRoot, projectRoot, args = []) {
+  const result = spawnSync(process.execPath, [path.join(sourceRoot, 'bin', 'sks.mjs'), ...args], {
+    cwd: projectRoot,
     encoding: 'utf8',
     timeout: 30_000,
     env: { ...process.env, CI: 'true', SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
@@ -89,6 +97,26 @@ function spawnSks(root, args = []) {
     stderr_bytes: Buffer.byteLength(result.stderr || ''),
     stderr_tail: String(result.stderr || '').slice(-600)
   };
+}
+
+function prepareHermeticFixtureRoot(sourceRoot, tempRoot) {
+  fs.mkdirSync(tempRoot, { recursive: true });
+  const packageFile = path.join(tempRoot, 'package.json');
+  if (!fs.existsSync(packageFile)) {
+    fs.writeFileSync(packageFile, `${JSON.stringify({ name: 'sks-hermetic-fixture', private: true, version: '0.0.0' }, null, 2)}\n`);
+  }
+  const readme = path.join(tempRoot, 'README.md');
+  if (!fs.existsSync(readme)) fs.writeFileSync(readme, '# SKS Hermetic Fixture\n');
+  copyFixtureFile(sourceRoot, tempRoot, 'test/fixtures/images/one-by-one.png');
+  return tempRoot;
+}
+
+function copyFixtureFile(sourceRoot, tempRoot, rel) {
+  const src = path.join(sourceRoot, rel);
+  const dest = path.join(tempRoot, rel);
+  if (!fs.existsSync(src) || fs.existsSync(dest)) return;
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
 }
 
 function parseJsonOutput(text = '') {
@@ -198,7 +226,7 @@ export function validateImageVoxelArtifact(file, { requireAnchors = true, requir
 }
 
 export function validateNoPlaintextSecrets(root) {
-  const secretPattern = /(sk-proj-|sk-clb-|github_pat_|CODEX_ACCESS_TOKEN|OPENAI_API_KEY)/;
+  const secretPattern = /(sk-proj-[A-Za-z0-9_-]{8,}|sk-clb-[A-Za-z0-9_-]{8,}|github_pat_[A-Za-z0-9_]{8,}|(?:CODEX_ACCESS_TOKEN|OPENAI_API_KEY)\s*[:=]\s*["']?(?:sk-[A-Za-z0-9_-]{8,}|[A-Za-z0-9_-]{32,}))/;
   const reportDir = path.join(root, '.sneakoscope');
   if (!fs.existsSync(reportDir)) return true;
   const stack = [reportDir];
