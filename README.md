@@ -2,7 +2,23 @@
 
 Fast proof-first Codex trust layer with image-based Voxel TriWiki.
 
-Sneakoscope Codex (`sks`) is a Codex CLI/App harness for repeatable workflows. It adds terminal commands, Codex App `$` commands, tmux workspaces, Team/QA/Research routes, pipeline plans, Computer Use, imagegen UI/UX review, Goal, Context7, DB safety, Voxel TriWiki, design-system routing, skill dreaming, completion proof, and Honest Mode.
+Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `0.9.13` connects serious-route completion, visual/UI evidence, Codex App hooks, codex-lb launch health, fixture evidence, and Rust accelerator parity into release-gated trust surfaces.
+
+## 0.9.13 Current Release
+
+`0.9.13` turns SKS into a proof-first trust layer for Codex work:
+
+- Serious routes write and validate Completion Proof before completion is claimed.
+- Visual/UI routes require Image Voxel TriWiki anchors, with before/after relations for visual fix claims.
+- Hook replay uses shared runtime policy fixtures, with PAT/access-token evidence redacted.
+- codex-lb launch failures feed circuit health; stateless `previous_response_not_found` stays a warning.
+- Rust `image-hash` and `voxel-validate` commands match JS fallback behavior. Rust source is included in the npm package; until prebuilt binaries ship, SKS uses JS fallbacks unless `SKS_RS_BIN` or a source-checkout `sks-rs` binary is available.
+
+Learn more:
+- Completion Proof: [docs/completion-proof.md](docs/completion-proof.md)
+- Image Voxel TriWiki: [docs/image-voxel-ledger.md](docs/image-voxel-ledger.md)
+- Codex App Hooks/PAT: [docs/hooks-pat.md](docs/hooks-pat.md)
+- codex-lb: [docs/codex-lb.md](docs/codex-lb.md)
 
 ## 60-second start
 
@@ -20,23 +36,15 @@ sks selftest --mock
 2. Codex App / codex-lb operational readiness
 3. Completion proof for every serious route
 
-## Quick Start
+## Install Options
 
 Install globally, then run `sks` from either a project or any global shell location:
 
 ```sh
 npm i -g sneakoscope
 sks root
-sks
+sks doctor
 ```
-
-`0.9.13` connects serious routes to Completion Proof, visual routes to image voxel anchors, hook replay to shared runtime policy, codex-lb launch failures to circuit health, and Rust accelerator commands to JS fallback parity. Rust accelerator source is included in the npm package; until prebuilt binaries ship, SKS uses JS fallbacks unless `SKS_RS_BIN` or a source-checkout `sks-rs` binary is available.
-
-Learn more:
-- Completion Proof: [docs/completion-proof.md](docs/completion-proof.md)
-- Image Voxel TriWiki: [docs/image-voxel-ledger.md](docs/image-voxel-ledger.md)
-- Codex App Hooks/PAT: [docs/hooks-pat.md](docs/hooks-pat.md)
-- codex-lb: [docs/codex-lb.md](docs/codex-lb.md)
 
 `npm i -g sneakoscope` automatically refreshes the `sks` command shim, global Codex App `$` skills, and SKS bootstrap surface. When the install is run from a project, postinstall bootstraps that project. When it is run outside a repo/project marker, postinstall bootstraps the per-user global runtime root instead of writing `.sneakoscope` into a random current directory. `sks root` tells you which root SKS will use.
 
@@ -66,32 +74,11 @@ sks selftest --mock
 
 `sks` adds a tmux Codex CLI runtime, Codex App `$` commands, Team/QA/PPT/Research/DB/GX/Wiki routes, OpenClaw skill generation, Context7-gated current docs, TriWiki context packs, DB safety, design SSOT policy, skill dreaming, release checks, and Honest Mode.
 
-## 0.8.0 Massive Upgrade
+## Report-Only Planning Surfaces
 
-Sneakoscope 0.8.0 introduces the RecallPulse planning spine: a report-only active-recall layer that records what the pipeline should remember before a stage proceeds. RecallPulse maps TriWiki into L1/L2/L3 cache behavior, writes durable status ledgers instead of relying on ephemeral hook text, suppresses duplicate reminder loops, and emits RouteProofCapsule plus EvidenceEnvelope artifacts for later gate comparison. These artifacts are evidence surfaces first; speed or accuracy gains remain benchmark-gated until scored evals prove them.
+Decision Lattice and RecallPulse remain report-only planning and evidence surfaces. They can explain route choices and proof-debt signals, but SKS does not claim speedup, fast-lane accuracy, or reduced verification cost from them until scored evals prove those outcomes.
 
-Inspect the new report-only artifacts with:
-
-```sh
-sks recallpulse run latest
-sks recallpulse status latest --json
-sks recallpulse eval latest --json
-sks recallpulse governance latest --json
-sks recallpulse checklist latest --json
-sks recallpulse checklist latest --task T001 --apply --evidence src/core/recallpulse.mjs
-```
-
-Research scouts now use named persona-inspired cognitive lenses: Einstein Scout, Feynman Scout, Turing Scout, von Neumann Scout, and Skeptic Scout. They are not impersonations; each scout ledger row must carry `display_name`, `persona`, `persona_boundary`, `reasoning_effort=xhigh`, a literal `Eureka!` idea, falsifiers, cheap probes, and debate participation evidence.
-
-For existing 0.7.x users, the visible change is new report-only evidence, not a route personality rewrite. Team still feels like Team, DFix stays ultralight, DB remains conservative, QA-LOOP still dogfoods, PPT stays information-first, imagegen still requires real raster evidence, and Honest Mode remains the final truth pass. The original strong reminder idea became neutral RecallPulse so user-facing prompts stay short, professional, and non-repetitive; hook messages can point at status, but `mission-status-ledger.json` is the durable source when app-visible text disappears. The planning source is `docs/RECALLPULSE_0_8_0_TASKS.md`, and implementation is designed to land in safe task-sized slices before any enforcement promotion.
-
-## 0.9.0 Report-Only Decision Lattice
-
-Sneakoscope 0.9.0 adds a report-only Decision Lattice planner that uses A* over proof-debt signals to explain which route or verification path the pipeline would prefer. It is an evidence and planning surface, not a runtime shortcut: SKS must not claim speedup, fast-lane accuracy, or reduced verification cost from the lattice until replay or scored eval evidence demonstrates those outcomes.
-
-The lattice integrates with the existing proof-field and `sks pipeline plan` surfaces. Its reports are expected to show the explored frontier, the selected path, and rejected paths with their proof-debt reasons, so reviewers can audit why a route stayed on the full Team/Honest path or why a smaller verification plan was only proposed. Like RecallPulse, this is designed to land as report-only evidence first; route enforcement and performance claims remain gated by later validation.
-
-Quick checks:
+Useful checks:
 
 ```bash
 sks proof-field scan --json --intent "small CLI change"
