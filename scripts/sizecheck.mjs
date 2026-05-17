@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const limits = {
-  packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 472 * 1024),
-  unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 1871 * 1024),
-  packFiles: Number(process.env.SKS_MAX_PACK_FILES || 66),
+  packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 520 * 1024),
+  unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 2050 * 1024),
+  packFiles: Number(process.env.SKS_MAX_PACK_FILES || 110),
   trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 384 * 1024)
 };
 
@@ -58,13 +58,16 @@ function checkTrackedFiles() {
 function checkVersionSync() {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+  const source = fs.readFileSync(path.join(root, 'src', 'core', 'version.mjs'), 'utf8');
   const fsx = fs.readFileSync(path.join(root, 'src', 'core', 'fsx.mjs'), 'utf8');
-  const sourceVersion = fsx.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
+  const sourceVersion = source.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
+  const fsxVersion = fsx.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
   const lockRootVersion = lock.packages?.['']?.version;
   const mismatches = [
     ['package-lock.json version', lock.version],
     ['package-lock root package version', lockRootVersion],
-    ['src/core/fsx.mjs PACKAGE_VERSION', sourceVersion]
+    ['src/core/version.mjs PACKAGE_VERSION', sourceVersion],
+    ['src/core/fsx.mjs PACKAGE_VERSION', fsxVersion]
   ].filter(([, version]) => version !== pkg.version);
   if (mismatches.length) {
     fail('package version metadata is not synchronized', [
@@ -96,7 +99,6 @@ function checkPackageFootprint() {
     /^\.dcodex\//,
     /^\.omx\//,
     /^\.sneakoscope\//,
-    /^crates\//,
     /^native\//,
     /^node_modules\//,
     /^scripts\//,

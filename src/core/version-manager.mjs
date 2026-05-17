@@ -308,13 +308,17 @@ async function syncPackageLockVersions(root, version) {
 }
 
 async function syncSourcePackageVersion(root, version) {
-  const file = path.join(root, 'src', 'core', 'fsx.mjs');
-  const text = await readFileMaybe(file);
-  if (!text) return { files: [], relative_files: [] };
-  const next = text.replace(/export const PACKAGE_VERSION = ['"][^'"]+['"];/, `export const PACKAGE_VERSION = '${version}';`);
-  if (next === text) return { files: [], relative_files: [] };
-  await writeTextAtomic(file, next);
-  return { files: [file], relative_files: [path.relative(root, file)] };
+  const files = [];
+  for (const rel of ['src/core/fsx.mjs', 'src/core/version.mjs']) {
+    const file = path.join(root, rel);
+    const text = await readFileMaybe(file);
+    if (!text) continue;
+    const next = text.replace(/export const PACKAGE_VERSION = ['"][^'"]+['"];/, `export const PACKAGE_VERSION = '${version}';`);
+    if (next === text) continue;
+    await writeTextAtomic(file, next);
+    files.push(file);
+  }
+  return { files, relative_files: files.map((file) => path.relative(root, file)) };
 }
 
 async function syncChangelogVersionSection(root, version) {

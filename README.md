@@ -1,6 +1,24 @@
 # Sneakoscope Codex
 
-Sneakoscope Codex (`sks`) is a Codex CLI/App harness for repeatable workflows. It adds terminal commands, Codex App `$` commands, tmux workspaces, Team/QA/Research routes, pipeline plans, Computer Use, imagegen UI/UX review, Goal, Context7, DB safety, TriWiki, design-system routing, skill dreaming, Honest Mode.
+Fast proof-first Codex trust layer with image-based Voxel TriWiki.
+
+Sneakoscope Codex (`sks`) is a Codex CLI/App harness for repeatable workflows. It adds terminal commands, Codex App `$` commands, tmux workspaces, Team/QA/Research routes, pipeline plans, Computer Use, imagegen UI/UX review, Goal, Context7, DB safety, Voxel TriWiki, design-system routing, skill dreaming, completion proof, and Honest Mode.
+
+## 60-second start
+
+```sh
+npm i -g sneakoscope
+sks root
+sks doctor
+sks codex-app check
+sks selftest --mock
+```
+
+## Three core promises
+
+1. Image-based Voxel TriWiki memory
+2. Codex App / codex-lb operational readiness
+3. Completion proof for every serious route
 
 ## Quick Start
 
@@ -11,6 +29,8 @@ npm i -g sneakoscope
 sks root
 sks
 ```
+
+`0.9.12` adds the lazy CLI architecture foundation, `sks proof`, image voxel ledger commands, cold-start perf checks, hook trust reports, codex-lb circuit metrics, and feature fixture contracts. Rust accelerator source is included in the npm package; until prebuilt binaries ship, SKS uses JS fallbacks unless `SKS_RS_BIN` or a source-checkout `sks-rs` binary is available.
 
 `npm i -g sneakoscope` automatically refreshes the `sks` command shim, global Codex App `$` skills, and SKS bootstrap surface. When the install is run from a project, postinstall bootstraps that project. When it is run outside a repo/project marker, postinstall bootstraps the per-user global runtime root instead of writing `.sneakoscope` into a random current directory. `sks root` tells you which root SKS will use.
 

@@ -6,6 +6,29 @@
 
 
 
+## [0.9.12] - 2026-05-17
+
+### Added
+
+- Add lazy command architecture foundations for lighter SKS startup, including a slim CLI entrypoint, command registry, and lazy legacy fallback.
+- Add a unified Completion Proof Engine surface with latest proof JSON/Markdown, command/file ledgers, validation, and secret redaction.
+- Add image-first Voxel TriWiki ledger foundations with SHA-256 image ingest, dimension capture, bbox/anchor validation, and proof summaries.
+- Add route fixture coverage contracts for core SKS feature families through the feature registry and all-features selftest.
+- Add cold-start performance measurement and release-gated CLI entrypoint checks.
+- Add prompt-language response guidance so Korean requests produce Korean progress/final/Honest Mode text and English requests produce English text while preserving code and commands.
+
+### Fixed
+
+- Reduce heavy top-level CLI imports for lightweight commands such as `sks --version`, `sks help`, `sks root --json`, and `sks commands --json`.
+- Strengthen Codex App / codex-lb / hook evidence handling with hook trust reports, replay fixture support, circuit metrics, and unified `[redacted]` secret policy.
+- Make feature-registry checks distinguish coverage from executable/static fixture contracts.
+- Stabilize the release cold-start performance gate by measuring 20 samples by default and retrying budget-only misses once before failing publish.
+
+### Changed
+
+- Promote proof and Voxel TriWiki evidence to first-class release-gated contracts.
+- Package the Rust accelerator source in the npm package while keeping JS fallback behavior when no compiled `sks-rs` binary is available.
+
 
 
 ## [0.9.11] - 2026-05-17

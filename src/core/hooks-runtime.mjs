@@ -5,6 +5,7 @@ import { missionDir, setCurrent, stateFile } from './mission.mjs';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.mjs';
 import { checkHarnessModification, harnessGuardBlockReason } from './harness-guard.mjs';
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.mjs';
+import { localizedFinalizationReason } from './language-preference.mjs';
 import { classifyToolError } from './evaluation.mjs';
 import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.mjs';
 import { dollarCommand, stripVisibleDecisionAnswerBlocks } from './routes.mjs';
@@ -486,8 +487,9 @@ async function hookStop(root, state, payload, noQuestion) {
   const routeDecision = await evaluateStop(root, state, payload, { noQuestion });
   if (routeDecision) return routeDecision;
   if (!noQuestion) {
+    const languageBasis = state?.prompt || state?.task || extractUserPrompt(payload) || last;
     if (!hasHonestMode(last)) {
-      const reason = 'SKS Honest Mode is required before finishing. Re-check the actual goal, verify evidence/tests, state gaps honestly, and only then provide the final answer. Include a short "SKS Honest Mode" or "솔직모드" section.';
+      const reason = localizedFinalizationReason('honest_mode_missing', languageBasis);
       const repeatDecision = await finalizationRepeatDecision(root, state, payload, reason, 'honest_mode_missing');
       return repeatDecision || {
         decision: 'block',
@@ -495,7 +497,7 @@ async function hookStop(root, state, payload, noQuestion) {
       };
     }
     if (!hasCompletionSummary(last)) {
-      const reason = 'SKS final completion summary is required before finishing. Explain what was done, what changed for the user/repo, what was verified, and any remaining gaps before or alongside SKS Honest Mode.';
+      const reason = localizedFinalizationReason('completion_summary_missing', languageBasis);
       const repeatDecision = await finalizationRepeatDecision(root, state, payload, reason, 'completion_summary_missing');
       return repeatDecision || {
         decision: 'block',
@@ -506,7 +508,7 @@ async function hookStop(root, state, payload, noQuestion) {
       const loopback = await recordHonestModeLoopback(root, state, last);
       return {
         decision: 'block',
-        reason: `SKS Honest Mode found unresolved gaps. Continue from the post-ambiguity execution phase using decision-contract.json, fix them, rerun verification, refresh/validate TriWiki, then retry final Honest Mode. Loopback: ${loopback.relative_file}`
+        reason: `${localizedFinalizationReason('honest_loopback', languageBasis)} Loopback: ${loopback.relative_file}`
       };
     }
     if (state?.honest_loop_required) await resolveHonestModeLoopback(root, state);

@@ -52,8 +52,8 @@ id_ed25519
 *.bak
 *.backup
 *.orig
-crates/
 native/
+crates/**/target/
 scripts/
 tmp/
 .tmp/

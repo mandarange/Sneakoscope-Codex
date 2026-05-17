@@ -17,6 +17,7 @@ Sneakoscope Codex v0.6 is designed to keep runtime, package size, RAM, and stora
 
 `sks eval run` creates a deterministic JSON report in `.sneakoscope/reports/` unless `--no-save` is used. The built-in scenario compares an uncompressed all-claims baseline with a TriWiki compressed context capsule.
 `sks perf run --json` is the lightweight runtime probe for CLI startup and package payload budgets.
+`sks perf cold-start --json` and the release `perf:gate` use 20 process-spawn samples by default so p95 is not just the single slowest run. The release gate also retries once when every command exited successfully and only the timing budget missed, which keeps transient OS scheduling noise from blocking publish while still failing persistent regressions.
 
 Tracked metrics:
 
@@ -51,7 +52,7 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 
 - The npm package has zero runtime dependencies.
 - `@openai/codex` is no longer bundled. Users install Codex separately or set `SKS_CODEX_BIN`.
-- Optional Rust source is in `crates/` for the Git repo, but is excluded from the npm package by the `files` allowlist.
+- Optional Rust source is in `crates/sks-core/` and is included in the npm package as source only. Build artifacts under `target/` stay excluded.
 - GX rendering uses only built-in Node.js APIs and ships as source in the npm package.
 - `npm run sizecheck` enforces package limits during `release:check`, `publish:dry`, and publish: `<=256 KiB` packed, `<=1024 KiB` unpacked, `<=48` package files, and `<=320 KiB` per tracked file by default.
 - The GPT-5.5 performance budget file uses a 1024KB package payload cap because the measured zero-dependency CLI payload is already above 512KB; shrinking that cap requires measured justification.
@@ -71,7 +72,7 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 
 ## Rust decision
 
-Rust is useful for CPU-heavy long-running kernels, but not for the default npm package yet: native binaries increase package size and create OS/architecture install failure modes. Sneakoscope Codex therefore ships a zero-dependency Node runtime by default and includes an optional zero-dependency Rust helper source at `crates/sks-core` for future builds or users who want to compile locally.
+Rust is useful for CPU-heavy long-running kernels, but prebuilt native binaries are not shipped in `0.9.12`: binary packages increase package size and create OS/architecture install failure modes. Sneakoscope Codex therefore ships a zero-dependency Node runtime by default and includes optional zero-dependency Rust helper source at `crates/sks-core` for future builds or users who want to compile locally. JS fallbacks remain authoritative when no `sks-rs` binary is available.
 
 ## Database safety resource policy
 
