@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-input.v1",
+  "route": "$DB",
+  "mission_id": "M-fixture-db",
+  "mode": "mock",
+  "visual_claim": false
+}

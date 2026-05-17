@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-gate.v1",
+  "route": "$Goal",
+  "completion_proof_required": true,
+  "image_voxel_required": false,
+  "expected": "pass"
+}

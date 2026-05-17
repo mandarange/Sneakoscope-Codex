@@ -25,8 +25,8 @@ export async function run(_command, args = []) {
     if (!result.ok) process.exitCode = 1;
     return;
   }
-  const legacy = await import('../cli/legacy-main.mjs');
-  return legacy.main(['perf', ...args]);
+  const { perfCommand } = await import('../core/commands/route-cli.mjs');
+  return perfCommand(action, args.slice(1));
 }
 
 export function runColdStart({ root = process.cwd(), iterations = DEFAULT_COLD_START_ITERATIONS } = {}) {

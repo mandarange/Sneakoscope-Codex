@@ -1415,7 +1415,7 @@ async function complianceBlock(root, state = {}, reason = '', detail = {}) {
   };
   await writeJsonAtomic(guardPath, record);
   await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.compliance_loop_guard', gate: record.gate, repeat_count: count, limit, tripped: record.tripped, missing: record.missing });
-  if (!record.tripped) return { decision: 'block', reason };
+  if (!record.tripped) return { decision: 'block', reason, gate: detail.gate || state.stop_gate || null, missing: Array.isArray(detail.missing) ? detail.missing : [] };
   await writeJsonAtomic(path.join(dir, HARD_BLOCKER_ARTIFACT), {
     passed: true,
     created_at: nowIso(),

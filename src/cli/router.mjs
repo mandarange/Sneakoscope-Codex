@@ -13,8 +13,8 @@ function normalizeCommand(args = []) {
 export async function dispatch(args = []) {
   const { command, args: rest } = normalizeCommand(args);
   if (!command) {
-    const legacy = await import('./legacy-main.mjs');
-    return legacy.main(args);
+    const mod = await import('../commands/tmux.mjs');
+    return mod.run('tmux', ['check']);
   }
   const entry = COMMANDS[command];
   if (!entry) {
@@ -25,6 +25,5 @@ export async function dispatch(args = []) {
   const mod = await entry.lazy();
   const runner = mod.run || mod.main || mod.default;
   if (typeof runner !== 'function') throw new Error(`Command ${command} has no run/main export`);
-  if (mod.IS_LEGACY_CLI) return runner([command, ...rest]);
   return runner(command, rest);
 }

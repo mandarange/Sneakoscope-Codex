@@ -1,0 +1,13 @@
+{
+  "schema": "sks.completion-proof.v1",
+  "route": "$Image-UX-Review",
+  "mission_id": "M-fixture-image-ux-review",
+  "allowed_status": [
+    "verified",
+    "verified_partial"
+  ],
+  "required_evidence": [
+    "files",
+    "codex_lb"
+  ]
+}

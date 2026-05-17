@@ -1,18 +1,21 @@
 # Sneakoscope Codex
 
-Fast proof-first Codex trust layer with image-based Voxel TriWiki.
+Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
-Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `0.9.13` connects serious-route completion, visual/UI evidence, Codex App hooks, codex-lb launch health, fixture evidence, and Rust accelerator parity into release-gated trust surfaces.
+Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `0.9.14` runs through split command modules, automatically seals serious routes with Completion Proof, binds visual/UI claims to Image Voxel TriWiki anchors and relations, and release-gates hooks, codex-lb, executable fixtures, Rust parity, and DB safety evidence.
 
-## 0.9.13 Current Release
+## 0.9.14 Current Release
 
-`0.9.13` turns SKS into a proof-first trust layer for Codex work:
+`0.9.14` turns SKS into a legacy-free proof-first trust layer for Codex work:
 
-- Serious routes write and validate Completion Proof before completion is claimed.
+- Command registry entries load independent command modules without runtime fallback to archived 0.9.13 CLI bundles.
+- Serious routes write Completion Proof through the central route finalizer before completion is claimed.
 - Visual/UI routes require Image Voxel TriWiki anchors, with before/after relations for visual fix claims.
-- Hook replay uses shared runtime policy fixtures, with PAT/access-token evidence redacted.
-- codex-lb launch failures feed circuit health; stateless `previous_response_not_found` stays a warning.
-- Rust `image-hash` and `voxel-validate` commands match JS fallback behavior. Rust source is included in the npm package; until prebuilt binaries ship, SKS uses JS fallbacks unless `SKS_RS_BIN` or a source-checkout `sks-rs` binary is available.
+- Executable feature fixtures validate expected artifact existence and schema contracts.
+- Hook replay strictly matches decision, reason, gate, issues, continuation, and redaction policy.
+- codex-lb launch failures feed both global and active-project circuit health; stateless `previous_response_not_found` stays a warning.
+- Rust `image-hash` and semantic `voxel-validate` commands match JS fallback behavior.
+- `$Commit` and `$Commit-And-Push` provide a simple git-only route for staging, committing, and optionally pushing without the full SKS pipeline.
 
 Learn more:
 - Completion Proof: [docs/completion-proof.md](docs/completion-proof.md)
@@ -32,9 +35,9 @@ sks selftest --mock
 
 ## Three core promises
 
-1. Image-based Voxel TriWiki memory
-2. Codex App / codex-lb operational readiness
-3. Completion proof for every serious route
+1. Completion Proof for every serious route
+2. Image Voxel TriWiki anchors and relations for every visual route
+3. Codex App, codex-lb, hooks, Rust, DB, and fixtures verified by release gates
 
 ## Install Options
 
@@ -67,6 +70,7 @@ Check that the install is usable:
 sks deps check
 sks codex-app check
 sks dollar-commands
+sks commit --json
 sks selftest --mock
 ```
 

@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-gate.v1",
+  "route": "$Image-UX-Review",
+  "completion_proof_required": true,
+  "image_voxel_required": true,
+  "expected": "pass"
+}

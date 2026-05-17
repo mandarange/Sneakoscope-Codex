@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS } from './routes.mjs';
 import { fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.mjs';
+import { runFeatureFixture, writeFeatureFixtureReports } from './feature-fixture-runner.mjs';
 import { exists, nowIso, packageRoot, readJson, readText, runProcess, writeTextAtomic } from './fsx.mjs';
 
 export const FEATURE_REGISTRY_SCHEMA = 'sks.feature-registry.v1';
@@ -148,7 +149,8 @@ export function buildAllFeaturesSelftest(registry, opts = {}) {
     checkRow('fixture_contracts_present', fixtures.ok, fixtures.blockers),
     checkRow('proof_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-proof' && feature.fixture?.status === 'pass'), ['cli-proof']),
     checkRow('voxel_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact) => artifact.includes('image-voxel-ledger'))), ['cli-wiki']),
-    checkRow('fixture_pass_threshold', (fixturesSummary.counts.pass || 0) >= 45, [`pass=${fixturesSummary.counts.pass || 0}`]),
+    checkRow('fixture_pass_threshold', (fixturesSummary.counts.pass || 0) >= 90, [`pass=${fixturesSummary.counts.pass || 0}`]),
+    checkRow('fixture_not_required_ceiling', (fixturesSummary.counts.not_required || 0) <= 16, [`not_required=${fixturesSummary.counts.not_required || 0}`]),
     checkRow('fixture_mock_blocked_zero', (fixturesSummary.counts.blocked || 0) === 0, [`blocked=${fixturesSummary.counts.blocked || 0}`]),
     ...(executable ? [checkRow('executable_fixture_contracts', executable.ok, executable.failures)] : [])
   ];
@@ -173,6 +175,7 @@ export function executeFeatureFixtures(features = [], opts = {}) {
   const failures = [];
   const checked = [];
   const executed = [];
+  let artifactValidated = 0;
   for (const feature of selected) {
     const fx = feature.fixture;
     if (!fx.command) {
@@ -186,25 +189,37 @@ export function executeFeatureFixtures(features = [], opts = {}) {
       executed.push(execution);
       if (!execution.ok) failures.push(`${feature.id}:command_exit_${execution.status}`);
     }
+    const strict = opts.strictArtifacts || opts.validateArtifacts;
+    const artifactRun = runFeatureFixture(feature, {
+      root: opts.root || packageRoot(),
+      execute: false,
+      validateArtifacts: strict,
+      commandArgs: SAFE_EXECUTABLE_FIXTURE_ARGS[feature.id] || null
+    });
+    if (strict) artifactValidated += artifactRun.expected_artifacts.length;
+    failures.push(...artifactRun.failures.filter((failure) => !failures.includes(failure)));
     checked.push({
       id: feature.id,
       kind: fx.kind,
       command: fx.command,
       expected_artifacts: fx.expected_artifacts,
-      mode: execution ? 'command_and_contract' : 'contract'
+      mode: execution ? 'command_and_contract' : strict ? 'strict_artifact_schema' : 'contract'
     });
   }
-  return {
+  const report = {
     schema: 'sks.feature-fixture-execution.v1',
     mode: 'mock',
     ok: failures.length === 0,
     checked: checked.length,
     executed: executed.length,
+    artifact_schema_validated: artifactValidated,
     executed_commands: executed,
     failures,
     command_execution: executed.length ? 'safe-allowlist' : 'contract-only',
     note: 'Release fixture execution runs deterministic safe CLI fixtures and validates mock/static contracts without claiming real external dependency runs.'
   };
+  if (opts.root) report.report_files = writeFeatureFixtureReports(opts.root, report);
+  return report;
 }
 
 function executeSafeFixtureCommand(featureId, opts = {}) {
@@ -422,10 +437,7 @@ async function parseMainHandlerKeys(root) {
   const registryText = await readText(path.join(root, 'src', 'cli', 'command-registry.mjs'), '');
   const registryMatch = registryText.match(/export const COMMANDS = \{([\s\S]*?)\n\};/);
   if (registryMatch) return parseObjectKeys(registryMatch[1]);
-  const text = await readText(path.join(root, 'src', 'cli', 'legacy-main.mjs'), '');
-  const match = text.match(/const handlers = \{([\s\S]*?)\n\s*\};/);
-  if (!match) return [];
-  return parseObjectKeys(match[1]);
+  return [];
 }
 
 function parseObjectKeys(text = '') {

@@ -1,0 +1,47 @@
+{
+  "event": "Stop",
+  "state": {
+    "mission_id": "M-fixture-visual-no-anchor",
+    "route_command": "$Image-UX-Review",
+    "mode": "IMAGE_UX_REVIEW",
+    "stop_gate": "none",
+    "proof_required": true,
+    "reflection_required": false
+  },
+  "payload": {
+    "last_assistant_message": "What changed: visual route attempted completion.\n\nVerified: proof checked.\n\nHonest Mode: missing anchors should block."
+  },
+  "proof": {
+    "schema": "sks.completion-proof.v1",
+    "version": "0.9.14",
+    "generated_at": "2026-05-17T00:00:00.000Z",
+    "mission_id": "M-fixture-visual-no-anchor",
+    "route": "$Image-UX-Review",
+    "status": "verified_partial",
+    "summary": {
+      "files_changed": 0,
+      "commands_run": 1,
+      "tests_passed": 1,
+      "tests_failed": 0,
+      "manual_review_required": true
+    },
+    "evidence": {
+      "commands": [],
+      "files": [],
+      "db_safety": null,
+      "codex_app": null,
+      "computer_use": null,
+      "image_voxels": {
+        "anchors": 0,
+        "anchor_count": 0
+      },
+      "triwiki": null
+    },
+    "claims": [],
+    "unverified": [
+      "Fixture proof is mock evidence."
+    ],
+    "blockers": [],
+    "next_human_actions": []
+  }
+}

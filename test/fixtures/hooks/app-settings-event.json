@@ -1,0 +1,7 @@
+{
+  "event": "UserPromptSubmit",
+  "metadata": {
+    "source": "Codex App settings",
+    "feature": "fast_mode"
+  }
+}

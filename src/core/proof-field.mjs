@@ -48,7 +48,7 @@ export const PROOF_CONE_DEFINITIONS = Object.freeze([
   {
     id: 'cli_runtime',
     surfaces: ['cli', 'commands', 'runtime'],
-    match: [/src\/cli|bin\/sks|maintenance-commands|fsx|codex-adapter/i],
+    match: [/src\/cli|src\/commands|bin\/sks|fsx|codex-adapter/i],
     verification: ['npm run packcheck', 'node ./bin/sks.mjs commands --json', 'node ./bin/sks.mjs proof-field scan --json'],
     negative_work: ['browser_ui_e2e']
   },
@@ -163,7 +163,7 @@ export function validateProofFieldReport(report = {}) {
 export async function proofFieldFixture() {
   const report = await buildProofField(process.cwd(), {
     intent: 'small CLI help surface update',
-    changedFiles: ['src/cli/maintenance-commands.mjs', 'src/core/routes.mjs']
+    changedFiles: ['src/commands/help.mjs', 'src/core/routes.mjs']
   });
   return {
     report,

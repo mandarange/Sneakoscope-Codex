@@ -561,7 +561,7 @@ export async function checkCodexLbResponseChain(status = {}, opts = {}) {
 
 async function recordCodexLbChainHealth(result, opts = {}) {
   if (!result || result.skipped || opts.recordCircuit === false) return result;
-  await recordCodexLbHealthEvent(packageRoot(), result).catch(() => null);
+  await recordCodexLbHealthEvent(opts.root || packageRoot(), result).catch(() => null);
   return result;
 }
 
@@ -2349,7 +2349,7 @@ export async function selftestCodexLb(tmp) {
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest: tmux launch command does not source codex-lb env file');
   if (!codexLbLaunch.includes("'--model' 'gpt-5.5'")) throw new Error('selftest: tmux launch command without args did not force GPT-5.5');
   if (!codexLbLaunch.includes('SKS_TMUX_LOGO_ANIMATION') || !codexLbLaunch.includes('SNEAKOSCOPE CODEX')) throw new Error('selftest: tmux launch command does not include the animated SKS logo intro');
-  const madLaunchSource = await safeReadText(path.join(packageRoot(), 'src', 'cli', 'maintenance-commands.mjs'));
+  const madLaunchSource = await safeReadText(path.join(packageRoot(), 'src', 'core', 'commands', 'route-cli.mjs'));
   if (!madLaunchSource.includes('const lb = await deps.maybePromptCodexLbSetupForLaunch(args)') || !madLaunchSource.includes("const launchLb = lb.status === 'present'") || !madLaunchSource.includes('codexLbImmediateLaunchOpts(cleanArgs, launchLb') || !madLaunchSource.includes('bypass_codex_lb') || !madLaunchSource.includes('model_provider="openai"') || !madLaunchSource.includes('codexLbFreshSession: true')) throw new Error('selftest: MAD launch does not sync codex-lb auth and fresh-session launch options');
 
 }

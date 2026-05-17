@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-gate.v1",
+  "route": "$AutoResearch",
+  "completion_proof_required": true,
+  "image_voxel_required": false,
+  "expected": "pass"
+}

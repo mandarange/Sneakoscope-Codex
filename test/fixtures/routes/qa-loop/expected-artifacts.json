@@ -1,0 +1,10 @@
+{
+  "schema": "sks.route-fixture-expected-artifacts.v1",
+  "route": "$QA-LOOP",
+  "required": [
+    ".sneakoscope/missions/M-fixture-qa-loop/completion-proof.json",
+    ".sneakoscope/missions/M-fixture-qa-loop/completion-proof.md",
+    ".sneakoscope/missions/M-fixture-qa-loop/image-voxel-ledger.json",
+    ".sneakoscope/missions/M-fixture-qa-loop/visual-anchors.json"
+  ]
+}

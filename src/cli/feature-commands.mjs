@@ -52,7 +52,7 @@ export async function allFeaturesCommand(sub = 'selftest', args = []) {
   }
   const root = await projectRoot();
   const registry = await buildFeatureRegistry({ root });
-  const result = buildAllFeaturesSelftest(registry, { executeFixtures: flag(args, '--execute-fixtures'), root });
+  const result = buildAllFeaturesSelftest(registry, { executeFixtures: flag(args, '--execute-fixtures'), strictArtifacts: flag(args, '--strict-artifacts'), root });
   if (flag(args, '--json')) console.log(JSON.stringify(result, null, 2));
   else {
     console.log('SKS all-features selftest');
@@ -154,9 +154,19 @@ async function hooksReplayReport(fixturePath) {
   const runtime = await evaluateHookPayload(hookName, payload, { root: tempRoot, state });
   const decision = runtime.decision || runtime.permissionDecision || (runtime.continue === true ? 'continue' : 'continue');
   const expected = await readExpectedReplay(absolute);
-  const comparable = { decision, reason: runtime.reason || 'fixture_safe' };
-  const matchesExpected = expected ? expected.decision === comparable.decision && (!expected.reason || expected.reason === comparable.reason) : null;
-  const ok = expected ? matchesExpected : decision !== 'block' && decision !== 'deny';
+  const comparable = {
+    decision,
+    permissionDecision: runtime.permissionDecision || null,
+    reason: runtime.reason || 'fixture_safe',
+    gate: runtime.gate || runtime.hookSpecificOutput?.gate || null,
+    missing: runtime.missing || runtime.hookSpecificOutput?.missing || [],
+    issues: runtime.issues || runtime.hookSpecificOutput?.issues || runtime.missing || [],
+    continue: runtime.continue,
+    secret_policy: 'redacted'
+  };
+  const match = expected ? matchHookExpected(comparable, expected) : { ok: decision !== 'block' && decision !== 'deny', failures: [] };
+  const matchesExpected = expected ? match.ok : null;
+  const ok = match.ok;
   return redactSecrets({
     schema: 'sks.hooks-replay.v1',
     ok,
@@ -164,10 +174,39 @@ async function hooksReplayReport(fixturePath) {
     hook: hookName,
     command: payload.command || payload.tool_input?.command || payload.toolInput?.command || payload.input?.command || '',
     decision,
-    reason: runtime.reason || 'fixture_safe',
+    permissionDecision: comparable.permissionDecision,
+    reason: comparable.reason,
+    gate: comparable.gate,
+    missing: comparable.missing,
+    issues: comparable.issues,
+    continue: comparable.continue,
     matches_expected: matchesExpected,
+    expected_failures: match.failures,
     secret_policy: 'redacted'
   });
+}
+
+function matchHookExpected(actual = {}, expected = {}) {
+  const failures = [];
+  if (expected.decision !== undefined && expected.decision !== actual.decision) failures.push(`decision:${actual.decision}`);
+  if (expected.permissionDecision !== undefined && expected.permissionDecision !== actual.permissionDecision) failures.push(`permissionDecision:${actual.permissionDecision}`);
+  if (expected.reason !== undefined && expected.reason !== actual.reason) failures.push('reason');
+  if (expected.reason_contains !== undefined && !String(actual.reason || '').includes(expected.reason_contains)) failures.push('reason_contains');
+  if (expected.gate !== undefined && expected.gate !== actual.gate) failures.push(`gate:${actual.gate}`);
+  if (expected.continue !== undefined && expected.continue !== actual.continue) failures.push(`continue:${actual.continue}`);
+  for (const item of expected.missing_contains || []) {
+    if (!containsValue(actual.missing, item)) failures.push(`missing_contains:${item}`);
+  }
+  for (const item of expected.issues_contains || []) {
+    if (!containsValue(actual.issues, item) && !containsValue(actual.missing, item) && !String(actual.reason || '').includes(item)) failures.push(`issues_contains:${item}`);
+  }
+  if (expected.secret_policy !== undefined && expected.secret_policy !== actual.secret_policy) failures.push(`secret_policy:${actual.secret_policy}`);
+  return { ok: failures.length === 0, failures };
+}
+
+function containsValue(values, item) {
+  const list = Array.isArray(values) ? values : [values].filter(Boolean);
+  return list.some((value) => String(value || '').includes(item));
 }
 
 function normalizeReplayHookName(event = '') {

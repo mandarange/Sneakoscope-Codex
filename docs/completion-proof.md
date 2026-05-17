@@ -1,6 +1,6 @@
 # Completion Proof
 
-SKS `0.9.13` makes Completion Proof a route-bound completion requirement for serious routes. Serious route finalization must write a valid proof, and Stop/Honest/HProof-style gates block missing, failed, blocked, invalid, or secret-bearing proof artifacts.
+SKS `0.9.14` makes Completion Proof a route-bound completion requirement for serious routes. Serious route finalization writes a valid proof through the central finalizer, and Stop/Honest/HProof-style gates block missing, failed, blocked, invalid, or secret-bearing proof artifacts.
 
 ## Files
 
@@ -34,10 +34,14 @@ sks proof validate
 sks proof validate --json
 sks proof route latest --json
 sks proof route <mission-id> --json
+sks proof finalize latest --json
+sks proof finalize <mission-id> --json
+sks proof finalize latest --route '$Team' --json
+sks proof finalize latest --strict --json
 sks proof export --md
 sks proof repair latest --json
 ```
 
-Route adapters live under `src/core/proof/route-adapter.mjs`, with route policy in `route-proof-policy.mjs` and Stop validation in `route-proof-gate.mjs`.
+Route finalization lives under `src/core/proof/route-finalizer.mjs`, route policy in `route-finalizer-policy.mjs` and `route-proof-policy.mjs`, route writing in `route-adapter.mjs`, and Stop validation in `route-proof-gate.mjs`.
 
 Proof writing and validation redact secret-shaped values, including Codex access tokens, OpenAI API keys, and codex-lb API keys, with the common marker `[redacted]`. Mock and fixture evidence must stay `verified_partial`, `not_verified`, `mock`, or `fixture`; it must not be claimed as a real verified run.

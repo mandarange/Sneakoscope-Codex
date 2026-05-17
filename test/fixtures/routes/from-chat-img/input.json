@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-input.v1",
+  "route": "$From-Chat-IMG",
+  "mission_id": "M-fixture-from-chat-img",
+  "mode": "mock",
+  "visual_claim": true
+}

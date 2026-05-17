@@ -1,0 +1,6 @@
+{
+  "schema": "sks.image-voxel-ledger.v1",
+  "route": "$From-Chat-IMG",
+  "require_anchors": true,
+  "require_relations": true
+}

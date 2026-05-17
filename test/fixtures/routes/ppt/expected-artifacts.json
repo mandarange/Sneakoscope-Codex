@@ -1,0 +1,10 @@
+{
+  "schema": "sks.route-fixture-expected-artifacts.v1",
+  "route": "$PPT",
+  "required": [
+    ".sneakoscope/missions/M-fixture-ppt/completion-proof.json",
+    ".sneakoscope/missions/M-fixture-ppt/completion-proof.md",
+    ".sneakoscope/missions/M-fixture-ppt/image-voxel-ledger.json",
+    ".sneakoscope/missions/M-fixture-ppt/visual-anchors.json"
+  ]
+}

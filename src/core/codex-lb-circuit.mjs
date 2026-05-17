@@ -99,6 +99,24 @@ export function codexLbMetrics(circuit = emptyCircuit()) {
   };
 }
 
+export async function codexLbProofEvidence(root = packageRoot()) {
+  const circuit = await readCodexLbCircuit(root);
+  const metrics = codexLbMetrics(circuit);
+  return {
+    schema: 'sks.codex-lb-proof-evidence.v1',
+    ok: metrics.ok,
+    status: circuit.state === 'open' ? 'blocked' : 'verified_partial',
+    circuit_state: circuit.state,
+    report_path: codexLbReportPath(root),
+    last_ok_at: circuit.last_ok_at,
+    last_failure_at: circuit.last_failure_at,
+    last_warning_at: circuit.last_warning_at,
+    recent_failures: circuit.recent_failures?.length || 0,
+    recent_warnings: circuit.recent_warnings?.length || 0,
+    policy: metrics.policy
+  };
+}
+
 function emptyCircuit() {
   return {
     schema: CODEX_LB_CIRCUIT_SCHEMA,

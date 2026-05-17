@@ -1,0 +1,7 @@
+{
+  "schema": "sks.route-fixture-input.v1",
+  "route": "$MAD-SKS",
+  "mission_id": "M-fixture-mad-sks",
+  "mode": "mock",
+  "visual_claim": false
+}

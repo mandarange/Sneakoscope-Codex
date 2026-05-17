@@ -4,7 +4,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 fn main() {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
-        Some("--version") => println!("sks-rs 0.9.13"),
+        Some("--version") => println!("sks-rs 0.9.14"),
         Some("compact-info") => {
             let mut input = String::new();
             let _ = io::stdin().read_to_string(&mut input);
@@ -40,9 +40,15 @@ fn main() {
         }
         Some("voxel-validate") => {
             let path = args.next().unwrap_or_default();
+            let mut require_anchors = false;
+            let mut require_relations = false;
+            while let Some(arg) = args.next() {
+                if arg == "--require-anchors" { require_anchors = true; }
+                if arg == "--require-relations" { require_relations = true; }
+            }
             match std::fs::read_to_string(&path) {
                 Ok(text) => {
-                    let report = voxel_validate(&text);
+                    let report = voxel_validate(&text, require_anchors, require_relations);
                     println!("{}", report);
                     if report.contains("\"ok\":false") { std::process::exit(1); }
                 }
@@ -139,52 +145,80 @@ fn sha256_hex(data: &[u8]) -> String {
     h.iter().map(|x| format!("{:08x}", x)).collect::<String>()
 }
 
-fn voxel_validate(text: &str) -> String {
-    let mut issues: Vec<&str> = Vec::new();
-    if !text.contains("\"schema\"") || !text.contains("sks.image-voxel-ledger.v1") { issues.push("schema"); }
-    if !text.contains("\"images\"") { issues.push("missing_images"); }
-    if !text.contains("\"anchors\"") { issues.push("missing_anchors"); }
-    let image_count = count_object_entries(text, "images");
-    let anchor_count = count_object_entries(text, "anchors");
-    if image_count == 0 { issues.push("missing_images"); }
-    if anchor_count == 0 { issues.push("missing_anchors"); }
+fn voxel_validate(text: &str, require_anchors: bool, require_relations: bool) -> String {
+    let parsed: serde_json::Value = match serde_json::from_str(text) {
+        Ok(value) => value,
+        Err(err) => {
+            return format!("{{\"ok\":false,\"engine\":\"rust\",\"schema\":\"sks.image-voxel-ledger.v1\",\"images\":0,\"anchors\":0,\"relations\":0,\"issues\":[\"json_parse\"],\"error\":\"{}\"}}", json_escape(&err.to_string()));
+        }
+    };
+    let mut issues: Vec<String> = Vec::new();
+    if parsed.get("schema").and_then(|v| v.as_str()) != Some("sks.image-voxel-ledger.v1") { issues.push("schema".to_string()); }
+    let images = parsed.get("images").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let anchors = parsed.get("anchors").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let relations = parsed.get("relations").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    if !parsed.get("images").map(|v| v.is_array()).unwrap_or(false) { issues.push("missing_images".to_string()); }
+    if !parsed.get("anchors").map(|v| v.is_array()).unwrap_or(false) { issues.push("missing_anchors".to_string()); }
+    if require_anchors && anchors.is_empty() { issues.push("missing_anchors:visual-route".to_string()); }
+    if require_relations && relations.is_empty() { issues.push("missing_relations:visual-route".to_string()); }
+    let mut image_ids: Vec<String> = Vec::new();
+    let mut anchor_ids: Vec<String> = Vec::new();
+    for image in &images {
+        let id = image.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        if id.is_empty() { issues.push("image_id".to_string()); }
+        if !id.is_empty() && image_ids.iter().any(|x| x == id) { issues.push(format!("duplicate_image:{}", id)); }
+        if !id.is_empty() { image_ids.push(id.to_string()); }
+        if image.get("path").and_then(|v| v.as_str()).unwrap_or("").is_empty() { issues.push(format!("image_path:{}", if id.is_empty() { "unknown" } else { id })); }
+        if image.get("sha256").and_then(|v| v.as_str()).unwrap_or("").is_empty() { issues.push(format!("image_sha256:{}", if id.is_empty() { "unknown" } else { id })); }
+        let w = image.get("width").and_then(|v| v.as_f64());
+        let h = image.get("height").and_then(|v| v.as_f64());
+        if !w.map(|n| n.is_finite()).unwrap_or(false) || !h.map(|n| n.is_finite()).unwrap_or(false) {
+            issues.push(format!("image_dimensions:{}", if id.is_empty() { "unknown" } else { id }));
+        }
+    }
+    for anchor in &anchors {
+        let id = anchor.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        if id.is_empty() { issues.push("anchor_id".to_string()); }
+        if !id.is_empty() && anchor_ids.iter().any(|x| x == id) { issues.push(format!("duplicate_anchor:{}", id)); }
+        if !id.is_empty() { anchor_ids.push(id.to_string()); }
+        let image_id = anchor.get("image_id").and_then(|v| v.as_str()).unwrap_or("");
+        if image_id.is_empty() || !image_ids.iter().any(|x| x == image_id) { issues.push(format!("anchor_image_ref:{}", if id.is_empty() { "unknown" } else { id })); }
+        let image = images.iter().find(|img| img.get("id").and_then(|v| v.as_str()) == Some(image_id));
+        let w = image.and_then(|img| img.get("width")).and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
+        let h = image.and_then(|img| img.get("height")).and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
+        match anchor.get("bbox").and_then(|v| v.as_array()) {
+            Some(bbox) if bbox.len() == 4 => {
+                let vals: Vec<f64> = bbox.iter().map(|v| v.as_f64().unwrap_or(f64::NAN)).collect();
+                if vals.iter().any(|n| !n.is_finite()) { issues.push(format!("bbox_number:{}", if id.is_empty() { "unknown" } else { id })); }
+                if vals[2] <= 0.0 || vals[3] <= 0.0 { issues.push(format!("bbox_positive:{}", if id.is_empty() { "unknown" } else { id })); }
+                if w.is_finite() && vals[0] + vals[2] > w {
+                    issues.push(format!("bbox_width_out_of_bounds:{}", if id.is_empty() { "unknown" } else { id }));
+                }
+                if h.is_finite() && vals[1] + vals[3] > h {
+                    issues.push(format!("bbox_height_out_of_bounds:{}", if id.is_empty() { "unknown" } else { id }));
+                }
+            }
+            Some(_) => issues.push(format!("bbox_shape:{}", if id.is_empty() { "unknown" } else { id })),
+            None => issues.push(format!("anchor_bbox:{}", if id.is_empty() { "unknown" } else { id })),
+        }
+    }
+    for relation in &relations {
+        if let Some(before) = relation.get("before_image_id").and_then(|v| v.as_str()) {
+            if !image_ids.iter().any(|x| x == before) { issues.push(format!("relation_before:{}", before)); }
+        }
+        if let Some(after) = relation.get("after_image_id").and_then(|v| v.as_str()) {
+            if !image_ids.iter().any(|x| x == after) { issues.push(format!("relation_after:{}", after)); }
+        }
+        let changed = relation.get("changed_anchor_ids").or_else(|| relation.get("anchors")).and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        for anchor_id in changed.iter().filter_map(|v| v.as_str()) {
+            if !anchor_ids.iter().any(|x| x == anchor_id) { issues.push(format!("relation_anchor:{}", anchor_id)); }
+        }
+    }
     issues.sort();
     issues.dedup();
     let ok = issues.is_empty();
     let issue_json = issues.iter().map(|x| format!("\"{}\"", json_escape(x))).collect::<Vec<_>>().join(",");
-    format!("{{\"ok\":{},\"engine\":\"rust\",\"schema\":\"sks.image-voxel-ledger.v1\",\"images\":{},\"anchors\":{},\"issues\":[{}]}}", if ok { "true" } else { "false" }, image_count, anchor_count, issue_json)
-}
-
-fn count_object_entries(text: &str, key: &str) -> usize {
-    let marker = format!("\"{}\"", key);
-    let Some(start) = text.find(&marker) else { return 0; };
-    let Some(open) = text[start..].find('[').map(|i| start + i) else { return 0; };
-    let mut depth = 0i32;
-    let mut entries = 0usize;
-    let mut in_string = false;
-    let mut escape = false;
-    for ch in text[open..].chars() {
-        if escape {
-            escape = false;
-            continue;
-        }
-        if ch == '\\' && in_string {
-            escape = true;
-            continue;
-        }
-        if ch == '"' {
-            in_string = !in_string;
-            continue;
-        }
-        if in_string { continue; }
-        if ch == '[' { depth += 1; }
-        else if ch == ']' {
-            depth -= 1;
-            if depth == 0 { break; }
-        }
-        else if ch == '{' && depth == 1 { entries += 1; }
-    }
-    entries
+    format!("{{\"ok\":{},\"engine\":\"rust\",\"schema\":\"sks.image-voxel-ledger.v1\",\"images\":{},\"anchors\":{},\"relations\":{},\"issues\":[{}]}}", if ok { "true" } else { "false" }, images.len(), anchors.len(), relations.len(), issue_json)
 }
 
 fn json_escape(value: &str) -> String {

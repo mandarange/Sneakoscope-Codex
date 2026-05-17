@@ -1,0 +1,13 @@
+{
+  "schema": "sks.completion-proof.v1",
+  "route": "$From-Chat-IMG",
+  "mission_id": "M-fixture-from-chat-img",
+  "allowed_status": [
+    "verified",
+    "verified_partial"
+  ],
+  "required_evidence": [
+    "files",
+    "codex_lb"
+  ]
+}

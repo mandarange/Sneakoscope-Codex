@@ -5,6 +5,7 @@ import { collectProofEvidence } from '../core/proof/evidence-collector.mjs';
 import { findLatestMission } from '../core/mission.mjs';
 import { readLatestProof, readLatestProofMarkdown, readRouteProof } from '../core/proof/proof-reader.mjs';
 import { writeRouteCompletionProof } from '../core/proof/route-adapter.mjs';
+import { finalizeRouteWithProof } from '../core/proof/route-finalizer.mjs';
 import { renderProofMarkdown, writeCompletionProof } from '../core/proof/proof-writer.mjs';
 import { validateCompletionProof } from '../core/proof/validation.mjs';
 
@@ -38,6 +39,26 @@ export async function run(_command, args = []) {
     if (flag(args, '--json')) return printJson(result);
     if (proof) process.stdout.write(renderProofMarkdown(proof));
     else console.log(`Completion proof missing for mission ${missionId || 'latest'}`);
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'finalize') {
+    const missionArg = rest.find((arg) => !String(arg).startsWith('--')) || 'latest';
+    const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+    const routeIndex = args.indexOf('--route');
+    const route = routeIndex >= 0 && args[routeIndex + 1] ? args[routeIndex + 1] : '$SKS';
+    const result = await finalizeRouteWithProof(root, {
+      missionId,
+      route,
+      strict: flag(args, '--strict'),
+      mock: flag(args, '--mock'),
+      requireRelation: flag(args, '--require-relation'),
+      statusHint: flag(args, '--strict') ? 'verified_partial' : 'verified_partial',
+      claims: [{ id: 'proof-finalize', status: 'supported', evidence: `.sneakoscope/missions/${missionId}/completion-proof.json` }],
+      unverified: flag(args, '--mock') ? ['Finalizer ran in mock fixture mode.'] : []
+    });
+    if (flag(args, '--json')) return printJson({ schema: 'sks.completion-proof-finalize.v1', ok: result.ok, mission_id: missionId, validation: result.validation, files: result.files, proof: result.proof });
+    console.log(`Completion proof finalized: ${result.files.latest_json}`);
     if (!result.ok) process.exitCode = 1;
     return;
   }
@@ -86,7 +107,7 @@ export async function run(_command, args = []) {
     console.log(`Completion proof written: ${result.files.latest_json}`);
     return;
   }
-  console.error('Usage: sks proof show|latest|validate|route <mission-id|latest>|export --md|repair latest|smoke [--json]');
+  console.error('Usage: sks proof show|latest|validate|route <mission-id|latest>|finalize <mission-id|latest> [--route route] [--strict] [--mock] [--json]|export --md|repair latest|smoke [--json]');
   process.exitCode = 1;
 }
 

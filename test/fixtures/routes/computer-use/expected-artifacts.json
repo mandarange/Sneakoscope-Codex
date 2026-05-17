@@ -1,0 +1,10 @@
+{
+  "schema": "sks.route-fixture-expected-artifacts.v1",
+  "route": "$Computer-Use",
+  "required": [
+    ".sneakoscope/missions/M-fixture-computer-use/completion-proof.json",
+    ".sneakoscope/missions/M-fixture-computer-use/completion-proof.md",
+    ".sneakoscope/missions/M-fixture-computer-use/image-voxel-ledger.json",
+    ".sneakoscope/missions/M-fixture-computer-use/visual-anchors.json"
+  ]
+}

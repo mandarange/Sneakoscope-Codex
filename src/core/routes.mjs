@@ -28,7 +28,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|codex-app|hooks|features|all-features|openclaw|dfix|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field|skill-dream';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|codex-app|hooks|features|all-features|openclaw|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field|skill-dream';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
 export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/codex/app/features#image-generation';
@@ -406,6 +406,34 @@ export const ROUTES = [
     examples: ['$Goal persist this migration workflow with native /goal continuation']
   },
   {
+    id: 'Commit',
+    command: '$Commit',
+    mode: 'COMMIT',
+    route: 'simple git commit',
+    description: 'Summarize current git changes, stage them, and create one commit without the full SKS pipeline.',
+    requiredSkills: ['honest-mode'],
+    lifecycle: ['git_status_summary', 'git_add_all', 'git_commit', 'short_result'],
+    context7Policy: 'not_required',
+    reasoningPolicy: 'low',
+    stopGate: 'none',
+    cliEntrypoint: 'sks commit [--message "msg"] [--json]',
+    examples: ['$Commit 이번 작업 커밋해줘']
+  },
+  {
+    id: 'CommitAndPush',
+    command: '$Commit-And-Push',
+    mode: 'COMMIT_AND_PUSH',
+    route: 'simple git commit and push',
+    description: 'Summarize current git changes, stage them, create one commit, then run git push without the full SKS pipeline.',
+    requiredSkills: ['honest-mode'],
+    lifecycle: ['git_status_summary', 'git_add_all', 'git_commit', 'git_push', 'short_result'],
+    context7Policy: 'not_required',
+    reasoningPolicy: 'low',
+    stopGate: 'none',
+    cliEntrypoint: 'sks commit-and-push [--message "msg"] [--json]',
+    examples: ['$Commit-And-Push 커밋하고 바로 푸쉬해줘']
+  },
+  {
     id: 'Research',
     command: '$Research',
     mode: 'RESEARCH',
@@ -540,6 +568,8 @@ export const COMMAND_CATALOG = [
   { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot tmux Codex CLI workspace with the SKS MAD full-access auto-review profile.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS tmux with the auto-review profile.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Team.' },
+  { name: 'commit', usage: 'sks commit [--message "msg"] [--json]', description: 'Stage current changes, summarize them, and create a simple git commit without the full SKS pipeline.' },
+  { name: 'commit-and-push', usage: 'sks commit-and-push [--message "msg"] [--json]', description: 'Stage current changes, create a simple git commit, and push without the full SKS pipeline.' },
   { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight direct-fix mode.' },
   { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Dogfood UI/API as human proxy with safety gates, safe fixes, rechecks, Codex Computer Use-only UI evidence, report.' },
   { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $PPT HTML/PDF artifacts from a sealed presentation decision contract.' },
