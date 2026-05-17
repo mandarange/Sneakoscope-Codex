@@ -1,0 +1,4 @@
+{
+  "event": "PermissionRequest",
+  "command": "supabase db reset"
+}

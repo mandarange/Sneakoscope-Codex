@@ -1,6 +1,10 @@
 [package]
 name = "sks-core"
-version = "0.6.0"
+version = "0.9.12"
 edition = "2021"
 
 [dependencies]
+
+[[bin]]
+name = "sks-rs"
+path = "src/main.rs"

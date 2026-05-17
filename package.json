@@ -1,8 +1,8 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "0.9.11",
-  "description": "Sneakoscope Codex: database-safe Codex CLI/App harness with Team, Goal, AutoResearch, TriWiki, and Honest Mode.",
+  "version": "0.9.12",
+  "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
   "repository": {
@@ -23,6 +23,9 @@
   "files": [
     "bin",
     "src",
+    "crates/sks-core/Cargo.lock",
+    "crates/sks-core/Cargo.toml",
+    "crates/sks-core/src",
     "README.md",
     "LICENSE"
   ],
@@ -36,11 +39,18 @@
     "doctor": "node ./bin/sks.mjs doctor",
     "packcheck": "find bin src scripts -name '*.mjs' -print0 | xargs -0 -n1 node --check",
     "changelog:check": "node ./scripts/changelog-check.mjs",
+    "cli-entrypoint:check": "node ./scripts/check-cli-entrypoint.mjs",
     "sizecheck": "node ./scripts/sizecheck.mjs",
     "registry:check": "node ./scripts/release-registry-check.mjs",
     "feature:check": "node ./bin/sks.mjs features check --json",
     "all-features:selftest": "node ./bin/sks.mjs all-features selftest --mock --json",
-    "release:check": "npm run repo-audit && npm run changelog:check && npm run packcheck && npm run feature:check && npm run all-features:selftest && npm run selftest && npm run sizecheck && npm run registry:check",
+    "perf:cold-start": "node ./bin/sks.mjs perf cold-start --json",
+    "perf:gate": "node ./scripts/perf-gate.mjs",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "test:unit": "node --test \"test/unit/**/*.test.mjs\"",
+    "test:integration:mock": "node --test \"test/integration/**/*.test.mjs\"",
+    "coverage": "node --experimental-test-coverage --test \"test/**/*.test.mjs\"",
+    "release:check": "npm run repo-audit && npm run changelog:check && npm run cli-entrypoint:check && npm run packcheck && npm run feature:check && npm run all-features:selftest && npm run selftest && npm run test:unit && npm run test:integration:mock && npm run perf:gate && npm run sizecheck && npm run registry:check",
     "publish:dry": "npm run release:check && npm --cache /tmp/sks-npm-cache publish --dry-run --registry https://registry.npmjs.org/ --access public",
     "publish:npm": "npm --cache /tmp/sks-npm-cache publish --registry https://registry.npmjs.org/ --access public",
     "prepublishOnly": "npm run release:check && node ./scripts/release-registry-check.mjs --require-unpublished"

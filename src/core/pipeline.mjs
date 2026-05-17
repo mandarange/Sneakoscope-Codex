@@ -16,6 +16,7 @@ import { evaluateResearchGate, writeResearchPlan } from './research.mjs';
 import { PPT_REQUIRED_GATE_FIELDS, writePptRouteArtifacts } from './ppt.mjs';
 import { writeQaLoopArtifacts } from './qa-loop.mjs';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, writeImageUxReviewRouteArtifacts } from './image-ux-review.mjs';
+import { responseLanguageInstruction } from './language-preference.mjs';
 import { SPEED_LANE_POLICY } from './proof-field.mjs';
 import { permissionGateSummary } from './permission-gates.mjs';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, SOLUTION_SCOUT_STAGE_ID, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, looksLikeProblemSolvingRequest, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, solutionScoutPolicyText, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
@@ -313,6 +314,7 @@ export function promptPipelineContext(prompt, route = null) {
     reasoningInstruction(reasoning),
     'Before work, load the required SKS skill context and follow the route lifecycle instead of treating the command as plain text.',
     'Codex App visibility: briefly surface what SKS is doing before tools run, mirror important worker/tool status to mission artifacts, and keep progress legible to the user.',
+    responseLanguageInstruction(cleanPrompt),
     'Hook visibility limit: hooks can inject context/status or block/continue a turn, but they cannot create arbitrary live chat bubbles; use team events, mission files, or normal assistant updates for live transcript details.',
     'Ambient Goal continuation: even without an explicit $Goal keyword, use Codex native /goal persistence when it helps keep long work resumable and complete; do not let it replace or skip the selected SKS route gates.',
     'Route contract: execution routes infer contract answers from the prompt, TriWiki/current-code defaults, and conservative SKS policy. DFix and Answer bypass stateful execution because they do not start implementation.',
@@ -355,6 +357,7 @@ export function dfixQuickContext(prompt, route = routePrompt(prompt)) {
   const routeLabel = route?.command || '$DFix';
   return [
     `DFix ultralight pipeline active. Route: ${routeLabel} (Direct Fix: tiny copy/config/docs/labels/spacing/translation/simple mechanical edits).`,
+    responseLanguageInstruction(task),
     'Bypass: do not enter the general SKS prompt pipeline, mission creation, ambiguity gate, TriWiki refresh, Context7 routing, subagent orchestration, Goal, Research, eval, or broad planning.',
     `Task: ${task}`,
     'Task list:',
@@ -371,6 +374,7 @@ export function answerOnlyContext(prompt, route = routePrompt(prompt)) {
   const required = routeNeedsContext7(route, task);
   return [
     `SKS answer-only pipeline active. Route: ${route?.command || '$Answer'} (${route?.route || 'answer-only research'}).`,
+    responseLanguageInstruction(task),
     'Intent classification: answer/research question, not implementation. Do not create route mission state, ask ambiguity-gate questions, spawn subagents, continue active Team/Goal work, or edit files unless the user explicitly asks for implementation.',
     `Question: ${task}`,
     'Evidence flow:',
@@ -464,6 +468,7 @@ export function computerUseFastContext(prompt, route = routePrompt(prompt)) {
   const task = stripDollarCommand(prompt) || String(prompt || '').trim();
   return [
     `Computer Use fast lane active. Route: ${route?.command || '$Computer-Use'} (${route?.route || 'Computer Use fast lane'}).`,
+    responseLanguageInstruction(task),
     'Speed contract: do not enter Team, QA-LOOP clarification, repeated upfront TriWiki refresh, Context7, subagent orchestration, debate, reflection, or broad planning unless the user explicitly requests that heavier route.',
     `Task: ${task}`,
     'Execution order:',
@@ -482,6 +487,7 @@ async function prepareWikiQuickRoute(route, task) {
     route,
     additionalContext: [
       `SKS wiki pipeline active. Route: ${route.command} (${route.route}).`,
+      responseLanguageInstruction(task),
       `Task: ${task || 'refresh and validate TriWiki'}`,
       'Run policy: refresh/update/갱신 -> `sks wiki refresh` then validate; prune/clean/정리 -> `sks wiki refresh --prune` or dry-run prune first; pack -> `sks wiki pack` then validate.',
       stackCurrentDocsPolicyText(),

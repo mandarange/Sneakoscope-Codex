@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS } from './routes.mjs';
+import { fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.mjs';
 import { exists, nowIso, packageRoot, readJson, readText, writeTextAtomic } from './fsx.mjs';
 
 export const FEATURE_REGISTRY_SCHEMA = 'sks.feature-registry.v1';
@@ -62,6 +63,7 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
       skills: '.agents/skills'
     },
     features,
+    fixture_summary: fixtureSummary(features),
     source_inventory: {
       cli_command_names: COMMAND_CATALOG.map((entry) => entry.name),
       handler_keys: handlerKeys,
@@ -118,7 +120,8 @@ export function validateFeatureRegistry(registry = {}) {
     nonblocking_known_gaps: [
       'feature fixtures remain progressive',
       'registry proves coverage, not full roadmap completion'
-    ]
+    ],
+    fixture_summary: fixtureSummary(features)
   };
 }
 
@@ -131,13 +134,18 @@ export async function writeFeatureInventoryDocs({ root = packageRoot(), outFile 
 
 export function buildAllFeaturesSelftest(registry) {
   const coverage = validateFeatureRegistry(registry);
+  const fixtures = validateFeatureFixtures(registry.features || []);
+  const fixturesSummary = fixtureSummary(registry.features || []);
   const checks = [
     checkRow('feature_registry_completeness', coverage.ok, coverage.blockers),
     checkRow('command_lazy_load_availability', coverage.unmapped.cli_command_names.length === 0 && coverage.unmapped.handler_keys.length === 0, [...coverage.unmapped.cli_command_names, ...coverage.unmapped.handler_keys]),
     checkRow('json_schema_validation', registry.schema === FEATURE_REGISTRY_SCHEMA && Array.isArray(registry.features), []),
     checkRow('proof_integration_contracts_present', registry.features.every((feature) => Boolean(feature.completion_proof_integration)), missingFeatureField(registry, 'completion_proof_integration')),
     checkRow('voxel_triwiki_contracts_present', registry.features.every((feature) => Boolean(feature.voxel_triwiki_integration)), missingFeatureField(registry, 'voxel_triwiki_integration')),
-    checkRow('failure_contracts_present', registry.features.every((feature) => Array.isArray(feature.known_gaps)), missingFeatureField(registry, 'known_gaps'))
+    checkRow('failure_contracts_present', registry.features.every((feature) => Array.isArray(feature.known_gaps)), missingFeatureField(registry, 'known_gaps')),
+    checkRow('fixture_contracts_present', fixtures.ok, fixtures.blockers),
+    checkRow('proof_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-proof' && feature.fixture?.status === 'pass'), ['cli-proof']),
+    checkRow('voxel_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact) => artifact.includes('image-voxel-ledger'))), ['cli-wiki'])
   ];
   const ok = checks.every((check) => check.ok);
   return {
@@ -146,6 +154,7 @@ export function buildAllFeaturesSelftest(registry) {
     ok,
     status: ok ? 'verified_partial' : 'blocked',
     checks,
+    fixtures: fixturesSummary,
     coverage,
     note: 'Mock selftest verifies the shared contract spine; feature fixtures remain progressive.'
   };
@@ -167,6 +176,7 @@ export function renderFeatureInventoryMarkdown(registry) {
     `- Dollar routes: ${coverage.counts.dollar_commands}`,
     `- App skill aliases: ${coverage.counts.app_skill_aliases}`,
     `- Skills: ${coverage.counts.skills}`,
+    `- Fixture statuses: ${Object.entries(fixtureSummary(registry.features).counts).map(([status, count]) => `${status}=${count}`).join(', ')}`,
     '',
     '## Release Coverage Rule',
     '',
@@ -174,13 +184,14 @@ export function renderFeatureInventoryMarkdown(registry) {
     '',
     '## Stable / Beta / Labs Map',
     '',
-    '| Feature | Category | Maturity | Commands / Routes | Known Gaps |',
-    '| --- | --- | --- | --- | --- |'
+    '| Feature | Category | Maturity | Commands / Routes | Fixture | Known Gaps |',
+    '| --- | --- | --- | --- | --- | --- |'
   ];
   for (const feature of registry.features) {
     const commands = [...(feature.commands || []), ...(feature.aliases || [])].map(markdownTableCell).join('<br>');
     const gaps = (feature.known_gaps || []).map(markdownTableCell).join('<br>') || 'none recorded';
-    lines.push(`| \`${feature.id}\` | ${feature.category} | ${feature.maturity} | ${commands || '-'} | ${gaps} |`);
+    const fixture = feature.fixture ? `${feature.fixture.kind}:${feature.fixture.status}` : 'missing';
+    lines.push(`| \`${feature.id}\` | ${feature.category} | ${feature.maturity} | ${commands || '-'} | ${fixture} | ${gaps} |`);
   }
   lines.push('', '## Unmapped Coverage', '');
   for (const [kind, values] of Object.entries(coverage.unmapped || {})) {
@@ -197,6 +208,7 @@ export function renderFeatureInventoryMarkdown(registry) {
   lines.push('- [x] Mapped project skills from `.agents/skills` into the registry.');
   lines.push('- [x] Exposed the registry through `sks features list --json`.');
   lines.push('- [x] Added a release coverage check through `sks features check --json`.');
+  lines.push('- [x] Documented fixture status for every registry feature.');
   lines.push('');
   return `${lines.join('\n')}\n`;
 }
@@ -293,7 +305,7 @@ function skillFeature(skillName) {
 }
 
 function baseFeature(feature) {
-  return {
+  const merged = {
     contract: {
       input: feature.commands?.[0] || feature.aliases?.[0] || 'skill invocation',
       output: 'stdout/json/artifacts by command',
@@ -306,6 +318,10 @@ function baseFeature(feature) {
     },
     acceptance: FEATURE_ACCEPTANCE_DEFAULTS,
     ...feature
+  };
+  return {
+    ...merged,
+    fixture: fixtureForFeature(merged.id)
   };
 }
 
@@ -320,11 +336,18 @@ function mapHandlerKeysToFeatureIds(handlerKeys = []) {
 }
 
 async function parseMainHandlerKeys(root) {
-  const text = await readText(path.join(root, 'src', 'cli', 'main.mjs'), '');
+  const registryText = await readText(path.join(root, 'src', 'cli', 'command-registry.mjs'), '');
+  const registryMatch = registryText.match(/export const COMMANDS = \{([\s\S]*?)\n\};/);
+  if (registryMatch) return parseObjectKeys(registryMatch[1]);
+  const text = await readText(path.join(root, 'src', 'cli', 'legacy-main.mjs'), '');
   const match = text.match(/const handlers = \{([\s\S]*?)\n\s*\};/);
   if (!match) return [];
+  return parseObjectKeys(match[1]);
+}
+
+function parseObjectKeys(text = '') {
   const keys = [];
-  for (const keyMatch of match[1].matchAll(/(?:^|[,\n])\s*(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$-]*))\s*:/g)) {
+  for (const keyMatch of text.matchAll(/^\s{2}(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$-]*))\s*:/gm)) {
     keys.push(keyMatch[1] || keyMatch[2] || keyMatch[3]);
   }
   return [...new Set(keys)].sort();

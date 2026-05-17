@@ -1,0 +1,6 @@
+{
+  "event": "PreToolUse",
+  "tool_input": {
+    "command": "psql -c \"DROP TABLE users\""
+  }
+}

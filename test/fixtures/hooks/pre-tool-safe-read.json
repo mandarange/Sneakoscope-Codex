@@ -1,0 +1,6 @@
+{
+  "event": "PreToolUse",
+  "tool_input": {
+    "command": "ls"
+  }
+}

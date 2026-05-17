@@ -1,6 +1,8 @@
 import path from 'node:path';
-import { projectRoot } from '../core/fsx.mjs';
+import os from 'node:os';
+import { exists, projectRoot, readJson } from '../core/fsx.mjs';
 import { CODEX_ACCESS_TOKENS_DOCS_URL } from '../core/codex-app.mjs';
+import { redactSecrets } from '../core/secret-redaction.mjs';
 import { buildAllFeaturesSelftest, buildFeatureRegistry, validateFeatureRegistry, writeFeatureInventoryDocs } from '../core/feature-registry.mjs';
 
 const flag = (args, name) => args.includes(name);
@@ -59,10 +61,33 @@ export async function allFeaturesCommand(sub = 'selftest', args = []) {
   if (!result.ok) process.exitCode = 1;
 }
 
-export function hooksCommand(sub = 'explain', args = []) {
+export async function hooksCommand(sub = 'explain', args = []) {
   const action = sub || 'explain';
-  if (action !== 'explain' && action !== 'status') {
-    console.error('Usage: sks hooks explain [--json]');
+  const root = await projectRoot();
+  if (action === 'status') {
+    const report = await hooksStatusReport(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`Hooks: ${report.ok ? 'ok' : 'missing'}`);
+    for (const file of report.hooks_files) console.log(`- ${file.path}: ${file.exists ? 'present' : 'missing'}`);
+    return;
+  }
+  if (action === 'trust-report') {
+    const report = await hooksTrustReport(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`Hooks trust report: ${report.ok ? 'ok' : 'blocked'}`);
+    for (const event of report.events) console.log(`- ${event.event}: ${event.command}`);
+    return;
+  }
+  if (action === 'replay') {
+    const fixture = args.find((arg) => !String(arg).startsWith('--'));
+    const report = await hooksReplayReport(fixture);
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`Hook replay: ${report.ok ? 'ok' : 'blocked'} ${report.event || 'unknown'}`);
+    if (report.decision) console.log(`Decision: ${report.decision}`);
+    return;
+  }
+  if (action !== 'explain') {
+    console.error('Usage: sks hooks explain|status|trust-report|replay <fixture.json> [--json]');
     process.exitCode = 1;
     return;
   }
@@ -78,6 +103,56 @@ export function hooksCommand(sub = 'explain', args = []) {
   for (const policy of report.sks_policies) console.log(`- ${policy}`);
   console.log('\nSources:');
   for (const source of report.sources) console.log(`- ${source.title}: ${source.url}`);
+}
+
+async function hooksStatusReport(root) {
+  const files = [
+    path.join(os.homedir(), '.codex', 'hooks.json'),
+    path.join(root, '.codex', 'hooks.json')
+  ];
+  const hooksFiles = [];
+  for (const file of files) {
+    hooksFiles.push({ path: file, exists: await exists(file) });
+  }
+  return {
+    schema: 'sks.hooks-status.v1',
+    hooks_files: hooksFiles,
+    ok: hooksFiles.some((file) => file.exists)
+  };
+}
+
+async function hooksTrustReport(root) {
+  const status = await hooksStatusReport(root);
+  return redactSecrets({
+    schema: 'sks.hooks-trust-report.v1',
+    hooks_files: status.hooks_files.map((file) => file.path),
+    events: [
+      { event: 'PreToolUse', command: 'sks hook pre-tool', writes: ['.sneakoscope/bus/tool-events.jsonl'], network: false, secret_policy: 'redacted', risk: 'medium' },
+      { event: 'PermissionRequest', command: 'sks hook permission-request', writes: ['.sneakoscope/state'], network: false, secret_policy: 'redacted', risk: 'medium' },
+      { event: 'UserPromptSubmit', command: 'sks hook user-prompt-submit', writes: ['.sneakoscope/missions'], network: false, secret_policy: 'redacted', risk: 'medium' },
+      { event: 'Stop', command: 'sks hook stop', writes: ['.sneakoscope/missions', '.sneakoscope/proof'], network: false, secret_policy: 'redacted', risk: 'high' }
+    ],
+    ok: true,
+    warnings: status.ok ? [] : ['no hooks.json file found in project or user config']
+  });
+}
+
+async function hooksReplayReport(fixturePath) {
+  if (!fixturePath) return { schema: 'sks.hooks-replay.v1', ok: false, reason: 'fixture_required' };
+  const fixture = await readJson(path.resolve(fixturePath), {});
+  const command = fixture.command || fixture.tool_input?.command || fixture.toolInput?.command || fixture.input?.command || '';
+  const event = fixture.event || fixture.hook_event_name || fixture.name || 'unknown';
+  const dangerousDb = /\b(?:drop\s+table|delete\s+from|truncate|supabase\s+db\s+reset)\b/i.test(command);
+  const missingProof = /route-without-proof|without-proof/i.test(fixturePath) || fixture.requires_proof === true;
+  return redactSecrets({
+    schema: 'sks.hooks-replay.v1',
+    ok: !dangerousDb && !missingProof,
+    event,
+    command,
+    decision: dangerousDb || missingProof ? 'block' : 'continue',
+    reason: dangerousDb ? 'dangerous_database_command' : (missingProof ? 'route_completion_without_proof' : 'fixture_safe'),
+    secret_policy: 'redacted'
+  });
 }
 
 export function hooksExplainReport() {
