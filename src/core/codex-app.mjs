@@ -238,6 +238,65 @@ export function codexSupportsRemoteControl(versionText) {
   return Boolean(current && compareVersions(current, CODEX_REMOTE_CONTROL_MIN_VERSION) >= 0);
 }
 
+export function parseProcessRows(text = '') {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(\d+)\s+(\d+)\s+(.+)$/);
+      if (!match) return null;
+      return {
+        pid: Number.parseInt(match[1], 10),
+        ppid: Number.parseInt(match[2], 10),
+        command: match[3]
+      };
+    })
+    .filter((row) => Number.isFinite(row?.pid) && Number.isFinite(row?.ppid) && row.command);
+}
+
+export function findCodexAppUpgradeRepairTargets(rows = []) {
+  return rows.filter((row) => (
+    row?.ppid === 1
+    && /\/Codex\.app\/Contents\/Resources\/codex\s+app-server\s+--analytics-default-enabled(?:\s|$)/.test(String(row.command || ''))
+  ));
+}
+
+export async function reconcileCodexAppUpgradeProcesses(opts = {}) {
+  const platform = opts.platform || process.platform;
+  const env = opts.env || process.env;
+  if (platform !== 'darwin') return { status: 'skipped', reason: 'platform', killed: [] };
+  if (env.SKS_SKIP_CODEX_APP_UPGRADE_REPAIR === '1') return { status: 'skipped', reason: 'SKS_SKIP_CODEX_APP_UPGRADE_REPAIR=1', killed: [] };
+  const run = opts.runProcess || runProcess;
+  const ps = await run('ps', ['-axo', 'pid=', '-o', 'ppid=', '-o', 'command='], {
+    timeoutMs: opts.timeoutMs || 5000,
+    maxOutputBytes: opts.maxOutputBytes || 256 * 1024
+  }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  if (ps.code !== 0) return { status: 'failed', reason: 'ps_failed', error: ps.stderr || ps.stdout || 'ps exited non-zero', killed: [] };
+  const rows = parseProcessRows(ps.stdout);
+  const targets = findCodexAppUpgradeRepairTargets(rows);
+  const killed = [];
+  const failed = [];
+  for (const target of targets) {
+    if (opts.dryRun) {
+      killed.push({ pid: target.pid, command: target.command, dry_run: true });
+      continue;
+    }
+    const kill = await run('kill', ['-TERM', String(target.pid)], {
+      timeoutMs: opts.timeoutMs || 5000,
+      maxOutputBytes: 8 * 1024
+    }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+    if (kill.code === 0) killed.push({ pid: target.pid, command: target.command });
+    else failed.push({ pid: target.pid, command: target.command, error: kill.stderr || kill.stdout || 'kill exited non-zero' });
+  }
+  return {
+    status: failed.length ? 'partial' : killed.length ? 'repaired' : 'clean',
+    killed,
+    failed,
+    checked: rows.length
+  };
+}
+
 export function formatCodexRemoteControlStatus(status) {
   const lines = [
     'Codex remote-control',
