@@ -10,6 +10,7 @@ import { initProject, installSkills } from '../core/init.mjs';
 import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext7ConfigText, RECOMMENDED_SKILLS } from '../core/routes.mjs';
 import { codexLaunchCommand, platformTmuxInstallHint, tmuxReadiness } from '../core/tmux-ui.mjs';
 import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.mjs';
+import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.mjs';
 
 const DEFAULT_CODEX_APP_PLUGINS = [
   ['browser', 'openai-bundled'],
@@ -513,10 +514,10 @@ export async function checkCodexLbResponseChain(status = {}, opts = {}) {
   const env = opts.env || process.env;
   if (!codexLbChainCheckEnabled(env) && !opts.force) return { ok: true, status: 'skipped', skipped: true, reason: 'SKS_CODEX_LB_CHAIN_CHECK=0' };
   const endpoint = codexLbResponsesEndpoint(opts.baseUrl || status.base_url);
-  if (!endpoint) return { ok: false, status: 'missing_base_url', chain_unhealthy: true };
+  if (!endpoint) return recordCodexLbChainHealth({ ok: false, status: 'missing_base_url', chain_unhealthy: true }, opts);
   const home = opts.home || env.HOME || os.homedir();
   const apiKey = opts.apiKey || parseCodexLbEnvKey(await readText(opts.envPath || status.env_path || codexLbEnvPath(home), ''));
-  if (!apiKey) return { ok: false, status: 'missing_env_key', chain_unhealthy: true };
+  if (!apiKey) return recordCodexLbChainHealth({ ok: false, status: 'missing_env_key', chain_unhealthy: true }, opts);
   const cached = await readCodexLbChainCache({ endpoint, home, opts, env });
   if (cached) return cached;
   const fetchImpl = opts.fetch || globalThis.fetch;
@@ -535,19 +536,19 @@ export async function checkCodexLbResponseChain(status = {}, opts = {}) {
   };
   const first = await fetchCodexLbResponse(fetchImpl, endpoint, apiKey, baseBody, timeoutMs);
   if (!first.ok || !first.response_id) {
-    return writeCodexLbChainCache({
+    return recordCodexLbChainHealth(await writeCodexLbChainCache({
       ok: false,
       status: first.ok ? 'missing_response_id' : 'first_request_failed',
       chain_unhealthy: true,
       endpoint,
       http_status: first.status,
       error: redactSecretText(first.error_payload?.error?.message || first.error_payload?.response?.error?.message || first.text || 'codex-lb first Responses request failed', [apiKey])
-    }, { endpoint, home, opts, env });
+    }, { endpoint, home, opts, env }), opts);
   }
   const second = await fetchCodexLbResponse(fetchImpl, endpoint, apiKey, { ...baseBody, previous_response_id: first.response_id }, timeoutMs);
-  if (second.ok) return writeCodexLbChainCache({ ok: true, status: 'chain_ok', endpoint, response_id: first.response_id, chained_response_id: second.response_id || null, http_status: second.status }, { endpoint, home, opts, env });
+  if (second.ok) return recordCodexLbChainHealth(await writeCodexLbChainCache({ ok: true, status: 'chain_ok', endpoint, response_id: first.response_id, chained_response_id: second.response_id || null, http_status: second.status }, { endpoint, home, opts, env }), opts);
   const previousMissing = isPreviousResponseNotFound(second.error_payload || second.json || second.text);
-  return writeCodexLbChainCache({
+  return recordCodexLbChainHealth(await writeCodexLbChainCache({
     ok: false,
     status: previousMissing ? 'previous_response_not_found' : 'second_request_failed',
     chain_unhealthy: true,
@@ -555,7 +556,13 @@ export async function checkCodexLbResponseChain(status = {}, opts = {}) {
     response_id: first.response_id,
     http_status: second.status,
     error: redactSecretText(second.error_payload?.error?.message || second.error_payload?.response?.error?.message || second.text || 'codex-lb chained Responses request failed', [apiKey])
-  }, { endpoint, home, opts, env });
+  }, { endpoint, home, opts, env }), opts);
+}
+
+async function recordCodexLbChainHealth(result, opts = {}) {
+  if (!result || result.skipped || opts.recordCircuit === false) return result;
+  await recordCodexLbHealthEvent(packageRoot(), result).catch(() => null);
+  return result;
 }
 
 function hasTopLevelCodexLbSelected(text = '') {

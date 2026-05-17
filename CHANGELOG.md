@@ -5,6 +5,30 @@
 
 
 
+## [0.9.13] - 2026-05-17
+
+### Added
+- Add route-bound Completion Proof adapters for all serious SKS routes.
+- Add image voxel anchor automation for Computer Use, Image UX Review, PPT, GX, and From-Chat-IMG routes.
+- Add executable feature fixtures for core route families and reduce `not_required` fixture coverage.
+- Add real hook runtime replay fixtures and expected-decision validation.
+- Add codex-lb circuit integration with launch health failures and recovery state.
+- Add Rust `image-hash` and `voxel-validate` accelerator commands with JS fallback parity tests.
+
+### Fixed
+- Connect serious route gates to completion-proof presence and validation.
+- Connect visual/UI route gates to image voxel anchors and before/after evidence where required.
+- Fix Rust wrapper/binary command mismatch.
+- Correct codex-lb README behavior around stateless `previous_response_not_found` and hard failure fallback.
+- Reduce legacy CLI fallback for high-value commands.
+
+### Changed
+- Promote executable feature fixtures from registry metadata into release-gated mock validation.
+- Treat image voxel anchors and completion proof as first-class serious-route completion requirements.
+
+
+
+
 
 ## [0.9.12] - 2026-05-17
 

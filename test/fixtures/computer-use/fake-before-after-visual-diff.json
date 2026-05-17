@@ -1,0 +1,8 @@
+{
+  "schema": "sks.before-after-visual-diff.v1",
+  "mode": "mock",
+  "before_image_id": "screen-before",
+  "after_image_id": "screen-after",
+  "changed_anchor_ids": ["screen-before-CTA-001"],
+  "status": "verified_partial"
+}

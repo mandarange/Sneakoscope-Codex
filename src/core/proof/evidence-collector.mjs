@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { packageRoot, readJson, runProcess, which } from '../fsx.mjs';
+import { codexLbMetrics, readCodexLbCircuit } from '../codex-lb-circuit.mjs';
 import { imageVoxelSummary } from '../wiki-image/image-voxel-ledger.mjs';
 
 export async function collectProofEvidence(root = packageRoot()) {
@@ -10,6 +11,12 @@ export async function collectProofEvidence(root = packageRoot()) {
       status: 'present',
       schema: pack.schema || null,
       claims: pack.trust_summary?.claims || pack.wiki?.a?.length || 0
+    } : null).catch(() => null),
+    codex_lb: await readCodexLbCircuit(root).then((circuit) => codexLbMetrics(circuit)).catch(() => null),
+    db_safety: await readJson(path.join(root, '.sneakoscope', 'db-safety.json'), null).then((policy) => policy ? {
+      status: 'present',
+      mode: policy.mode || null,
+      destructive_operations: policy.destructive_operations || null
     } : null).catch(() => null)
   };
 }

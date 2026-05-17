@@ -1,0 +1,26 @@
+{
+  "schema": "sks.image-voxel-ledger.v1",
+  "version": "0.9.13",
+  "generated_at": "2026-05-17T00:00:00.000Z",
+  "mission_id": null,
+  "images": [
+    {
+      "id": "screen-home-before",
+      "path": "screen-home-before.png",
+      "sha256": "fixture",
+      "width": 1440,
+      "height": 900,
+      "source": "fixture"
+    }
+  ],
+  "anchors": [
+    {
+      "id": "ux-callout-001",
+      "image_id": "screen-home-before",
+      "bbox": [120, 240, 360, 80],
+      "label": "CTA contrast issue",
+      "source": "gpt-image-2-annotated-review"
+    }
+  ],
+  "relations": []
+}

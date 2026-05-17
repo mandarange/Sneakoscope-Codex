@@ -166,8 +166,12 @@ function looksLikeUpdateAccept(prompt) {
 
 export async function hookMain(name) {
   const payload = await loadHookPayload();
-  const root = await projectRoot(payload.cwd || process.cwd());
-  const state = await loadState(root);
+  return evaluateHookPayload(name, payload);
+}
+
+export async function evaluateHookPayload(name, payload = {}, opts = {}) {
+  const root = opts.root || await projectRoot(payload.cwd || process.cwd());
+  const state = opts.state || payload.state || await loadState(root);
   const noQuestion = isNoQuestionRunning(state);
   if (name === 'user-prompt-submit') {
     const modelBlock = blockForbiddenClientModel(payload);
@@ -913,7 +917,7 @@ function hasHonestModeUnresolvedGap(text) {
   return honestModeGapLines(text).length > 0;
 }
 
-function honestModeGapLines(text) {
+export function honestModeGapLines(text) {
   const issue = /(gap|remaining|unverified|not verified|not run|not complete|incomplete|failed|blocked|blocker|could not|couldn't|missing|미완료|미검증|미실행|실패|차단|누락|못했|못 했|안 했|안함|아직|남은)/i;
   return String(text || '')
     .split(/\n/)
@@ -923,6 +927,11 @@ function honestModeGapLines(text) {
 }
 
 function honestGapLineResolved(line) {
+  if (/(?:unverified|미검증)\s*:\s*\[\s*\]/i.test(line) && /blockers?\s*:\s*\[\s*\]/i.test(line)) return true;
+  if (/(?:^|[\s*-])(?:unverified|미검증|blockers?)\s*:\s*\[\s*\](?:\s*(?:[,.;]|$).*)?$/i.test(line)) return true;
+  if (/(?:미해결|남은)\s*(?:gap|갭|문제|항목)\s*:\s*(?:없음|없습니다|없다|0|0개)(?:\s|,|\.|$)/i.test(line)) return true;
+  if (/unresolved\s+gaps?\s+(?:for|in)[^:]*:\s*(?:none|no|0)\b/i.test(line)) return true;
+  if (/no\s+unresolved\s+gaps?\s+remain/i.test(line)) return true;
   if (/(남은\s*(?:gap|갭|문제)\s*:\s*없음|남은\s*(?:gap|갭|문제)\s*없음|remaining\s+gaps?\s*:\s*(none|no|0)|no\s+remaining\s+gaps?)/i.test(line)) return true;
   if (/no\s+active\s+blocking\s+route\s+gate\s+detected/i.test(line)) return true;
   if (/(non[-\s]?blocker|non[-\s]?blocking|not\s+(?:a\s+)?blocker|no\s+blocker|does\s+not\s+block|not\s+blocking|blocker\s*(?:는|가)?\s*(?:아님|아닙니다|없음)|차단(?:하지|하진|하지는)\s*않|막(?:지|지는)\s*않)/i.test(line)) return true;

@@ -77,6 +77,7 @@ import { renderTeamDashboardState, writeTeamDashboardState } from '../core/team-
 import { GOAL_WORKFLOW_ARTIFACT } from '../core/goal-workflow.mjs';
 import { CODEX_APP_DOCS_URL, codexAccessTokenStatus, codexAppIntegrationStatus, findCodexAppUpgradeRepairTargets, formatCodexAppStatus, parseProcessRows } from '../core/codex-app.mjs';
 import { buildAllFeaturesSelftest, buildFeatureRegistry, validateFeatureRegistry } from '../core/feature-registry.mjs';
+import { writeSelftestRouteProof } from '../core/proof/selftest-proof-fixtures.mjs';
 import { codexAppRemoteControlCommand } from './codex-app-command.mjs';
 import { allFeaturesCommand, featuresCommand, hooksCommand, hooksExplainReport } from './feature-commands.mjs';
 import { OPENCLAW_SKILL_NAME, installOpenClawSkill } from '../core/openclaw.mjs';
@@ -2088,10 +2089,7 @@ function readFlagValue(args, name, fallback) {
 }
 
 async function selftest() {
-  // Force non-interactive mode for the entire selftest so any in-process call that hits
-  // canAskYesNo() (codex-lb provider-restore prompt, chain-failure prompt, etc.) takes the
-  // non-interactive fallback path instead of bubbling a live readline prompt up to the
-  // user's terminal (e.g. during `npm publish` -> prepublishOnly -> release:check -> selftest).
+  // Keep selftest non-interactive even when install helpers would normally prompt.
   process.env.CI = 'true';
   const tmp = tmpdir();
   process.chdir(tmp);
@@ -2115,6 +2113,7 @@ async function selftest() {
   if (trippedStop) throw new Error('selftest: compliance loop guard did not terminally trip');
   const loopBlocker = await readJson(path.join(loopMission.dir, 'hard-blocker.json'), null);
   if (loopBlocker?.reason !== 'compliance_loop_guard_tripped') throw new Error('selftest: compliance loop guard did not write hard blocker');
+  await writeSelftestRouteProof(tmp, { missionId: loopMission.id, kind: 'hard_blocker' });
   const hardBlockerUnblocked = await evaluateStop(tmp, loopState, { last_assistant_message: 'done' });
   if (hardBlockerUnblocked?.decision === 'block' && !String(hardBlockerUnblocked.reason || '').includes('reflection')) throw new Error('selftest: hard blocker did not unblock incomplete active gate');
   const clarificationMission = await createMission(tmp, { mode: 'team', prompt: 'visible question gate selftest' });
@@ -3406,6 +3405,7 @@ async function selftest() {
   const missingCleanupStop = await evaluateStop(routeGateTmp, gateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (missingCleanupStop?.decision !== 'block' || !String(missingCleanupStop.reason || '').includes(TEAM_SESSION_CLEANUP_ARTIFACT)) throw new Error('selftest: Team route did not block missing session cleanup gate');
   await writeJsonAtomic(path.join(gateDir, TEAM_SESSION_CLEANUP_ARTIFACT), passedTeamSessionCleanup);
+  await writeSelftestRouteProof(routeGateTmp, { missionId: gateId, kind: 'team_gate' });
   const missingReflectionStop = await evaluateStop(routeGateTmp, gateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (missingReflectionStop?.decision !== 'block' || !String(missingReflectionStop.reason || '').includes('reflection')) throw new Error('selftest: full route did not block missing reflection gate');
   const missingReflectionNoQuestionStop = await evaluateStop(routeGateTmp, gateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: true });
@@ -3430,6 +3430,7 @@ async function selftest() {
   await writeJsonAtomic(path.join(subagentGateDir, TEAM_SESSION_CLEANUP_ARTIFACT), passedTeamSessionCleanup);
   await writeTextAtomic(path.join(subagentGateDir, REFLECTION_ARTIFACT), '# Post-Route Reflection\n\nNo issue selftest.\n');
   await writeJsonAtomic(path.join(subagentGateDir, REFLECTION_GATE), { schema_version: 1, passed: true, mission_id: subagentGateId, route: '$Team', reflection_artifact: true, lessons_recorded: false, no_issue_acknowledged: true, triwiki_recorded: false, wiki_refreshed_or_packed: true, wiki_validated: true, created_at: nowIso() });
+  await writeSelftestRouteProof(subagentGateTmp, { missionId: subagentGateId, kind: 'subagent_gate' });
   const subagentUnblocked = await evaluateStop(subagentGateTmp, subagentGateState, { last_assistant_message: 'SKS Honest Mode verification evidence gap' }, { noQuestion: false });
   if (subagentUnblocked?.decision === 'block') throw new Error('selftest: subagent evidence did not unblock route gate');
   const { id: teamId, dir: teamDir } = await createMission(tmp, { mode: 'team', prompt: '병렬 구현 팀 테스트' });

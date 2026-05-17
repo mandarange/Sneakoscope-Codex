@@ -1,0 +1,7 @@
+{
+  "schema": "sks.completion-proof.v1",
+  "version": "0.9.13",
+  "route": "$Computer-Use",
+  "status": "verified_partial",
+  "mode": "mock"
+}

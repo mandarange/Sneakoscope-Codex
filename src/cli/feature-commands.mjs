@@ -1,8 +1,10 @@
 import path from 'node:path';
 import os from 'node:os';
-import { exists, projectRoot, readJson } from '../core/fsx.mjs';
+import fs from 'node:fs/promises';
+import { exists, projectRoot, readJson, writeJsonAtomic } from '../core/fsx.mjs';
 import { CODEX_ACCESS_TOKENS_DOCS_URL } from '../core/codex-app.mjs';
 import { redactSecrets } from '../core/secret-redaction.mjs';
+import { evaluateHookPayload } from '../core/hooks-runtime.mjs';
 import { buildAllFeaturesSelftest, buildFeatureRegistry, validateFeatureRegistry, writeFeatureInventoryDocs } from '../core/feature-registry.mjs';
 
 const flag = (args, name) => args.includes(name);
@@ -44,13 +46,13 @@ export async function featuresCommand(sub = 'list', args = []) {
 export async function allFeaturesCommand(sub = 'selftest', args = []) {
   const action = sub || 'selftest';
   if (action !== 'selftest') {
-    console.error('Usage: sks all-features selftest --mock [--json]');
+    console.error('Usage: sks all-features selftest --mock [--execute-fixtures] [--json]');
     process.exitCode = 1;
     return;
   }
   const root = await projectRoot();
   const registry = await buildFeatureRegistry({ root });
-  const result = buildAllFeaturesSelftest(registry);
+  const result = buildAllFeaturesSelftest(registry, { executeFixtures: flag(args, '--execute-fixtures'), root });
   if (flag(args, '--json')) console.log(JSON.stringify(result, null, 2));
   else {
     console.log('SKS all-features selftest');
@@ -139,20 +141,49 @@ async function hooksTrustReport(root) {
 
 async function hooksReplayReport(fixturePath) {
   if (!fixturePath) return { schema: 'sks.hooks-replay.v1', ok: false, reason: 'fixture_required' };
-  const fixture = await readJson(path.resolve(fixturePath), {});
-  const command = fixture.command || fixture.tool_input?.command || fixture.toolInput?.command || fixture.input?.command || '';
+  const absolute = path.resolve(fixturePath);
+  const fixture = await readJson(absolute, {});
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-hooks-replay-'));
+  const payload = { ...(fixture.payload || fixture), cwd: tempRoot };
+  const state = fixture.state || {};
+  if (state.mission_id && fixture.proof) {
+    await writeJsonAtomic(path.join(tempRoot, '.sneakoscope', 'missions', state.mission_id, 'completion-proof.json'), fixture.proof);
+  }
   const event = fixture.event || fixture.hook_event_name || fixture.name || 'unknown';
-  const dangerousDb = /\b(?:drop\s+table|delete\s+from|truncate|supabase\s+db\s+reset)\b/i.test(command);
-  const missingProof = /route-without-proof|without-proof/i.test(fixturePath) || fixture.requires_proof === true;
+  const hookName = normalizeReplayHookName(event);
+  const runtime = await evaluateHookPayload(hookName, payload, { root: tempRoot, state });
+  const decision = runtime.decision || runtime.permissionDecision || (runtime.continue === true ? 'continue' : 'continue');
+  const expected = await readExpectedReplay(absolute);
+  const comparable = { decision, reason: runtime.reason || 'fixture_safe' };
+  const matchesExpected = expected ? expected.decision === comparable.decision && (!expected.reason || expected.reason === comparable.reason) : null;
+  const ok = expected ? matchesExpected : decision !== 'block' && decision !== 'deny';
   return redactSecrets({
     schema: 'sks.hooks-replay.v1',
-    ok: !dangerousDb && !missingProof,
+    ok,
     event,
-    command,
-    decision: dangerousDb || missingProof ? 'block' : 'continue',
-    reason: dangerousDb ? 'dangerous_database_command' : (missingProof ? 'route_completion_without_proof' : 'fixture_safe'),
+    hook: hookName,
+    command: payload.command || payload.tool_input?.command || payload.toolInput?.command || payload.input?.command || '',
+    decision,
+    reason: runtime.reason || 'fixture_safe',
+    matches_expected: matchesExpected,
     secret_policy: 'redacted'
   });
+}
+
+function normalizeReplayHookName(event = '') {
+  const normalized = String(event || '').replace(/[_\s]+/g, '-').toLowerCase();
+  if (normalized.includes('pretool') || normalized.includes('pre-tool')) return 'pre-tool';
+  if (normalized.includes('permission')) return 'permission-request';
+  if (normalized.includes('userprompt') || normalized.includes('user-prompt')) return 'user-prompt-submit';
+  if (normalized.includes('posttool') || normalized.includes('post-tool')) return 'post-tool';
+  if (normalized.includes('stop')) return 'stop';
+  return normalized || 'pre-tool';
+}
+
+async function readExpectedReplay(fixturePath) {
+  const expectedPath = path.join(path.dirname(fixturePath), 'expected', `${path.basename(fixturePath, '.json')}.expected.json`);
+  if (!await exists(expectedPath)) return null;
+  return readJson(expectedPath, null);
 }
 
 export function hooksExplainReport() {

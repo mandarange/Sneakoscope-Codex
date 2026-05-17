@@ -3,6 +3,7 @@ import { ensureDir, exists, nowIso, packageRoot, readJson, writeJsonAtomic } fro
 import { emptyImageVoxelLedger } from './image-voxel-schema.mjs';
 import { sha256File, imageDimensions } from './image-hash.mjs';
 import { validateImageVoxelLedger } from './validation.mjs';
+import { createImageRelation, createVisualAnchor } from './visual-anchor.mjs';
 
 export function wikiImageLedgerPath(root = packageRoot()) {
   return path.join(root, '.sneakoscope', 'wiki', 'image-voxel-ledger.json');
@@ -98,7 +99,49 @@ export async function imageVoxelSummary(root = packageRoot(), ledgerFile = wikiI
   };
 }
 
+export async function addVisualAnchor(root = packageRoot(), input = {}) {
+  const ledger = await readImageVoxelLedger(root);
+  const image = (ledger.images || []).find((entry) => entry.id === input.imageId);
+  const anchor = createVisualAnchor({
+    id: input.id || stableAnchorId(input.imageId, input.label, ledger.anchors?.length || 0),
+    imageId: input.imageId,
+    bbox: input.bbox,
+    label: input.label,
+    source: input.source || 'manual',
+    evidencePath: input.evidencePath || null,
+    trustScore: input.trustScore ?? 0.82,
+    route: input.route || null,
+    claimId: input.claimId || null
+  });
+  const anchors = [...(ledger.anchors || []).filter((entry) => entry.id !== anchor.id), anchor];
+  const next = await writeImageVoxelLedger(root, { ...ledger, mission_id: input.missionId || ledger.mission_id || null, anchors });
+  const validation = validateImageVoxelLedger(next, { requireAnchors: true, route: input.route || '$Wiki' });
+  return { ok: validation.ok && Boolean(image), anchor, ledger: next, validation: image ? validation : { ...validation, ok: false, issues: [...validation.issues, `missing_image:${input.imageId}`] } };
+}
+
+export async function addImageRelation(root = packageRoot(), input = {}) {
+  const ledger = await readImageVoxelLedger(root);
+  const relation = createImageRelation({
+    type: input.type || 'before_after',
+    beforeImageId: input.beforeImageId,
+    afterImageId: input.afterImageId,
+    anchors: input.anchors || [],
+    verification: input.verification || 'changed-screen-recheck',
+    status: input.status || 'verified_partial'
+  });
+  const relations = [...(ledger.relations || []), relation];
+  const next = await writeImageVoxelLedger(root, { ...ledger, mission_id: input.missionId || ledger.mission_id || null, relations });
+  const validation = validateImageVoxelLedger(next, { requireAnchors: true, requireRelations: true, route: input.route || '$Wiki' });
+  return { ok: validation.ok, relation, ledger: next, validation };
+}
+
 function stableImageId(rel, sha256) {
   const base = path.basename(rel).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-|-$/g, '') || 'image';
   return `${base}-${sha256.slice(0, 8)}`;
+}
+
+function stableAnchorId(imageId = 'image', label = 'anchor', index = 0) {
+  const image = String(imageId || 'image').replace(/[^A-Za-z0-9_-]+/g, '-').slice(0, 40) || 'image';
+  const slug = String(label || 'anchor').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'anchor';
+  return `${image}-${slug}-${String(index + 1).padStart(3, '0')}`;
 }

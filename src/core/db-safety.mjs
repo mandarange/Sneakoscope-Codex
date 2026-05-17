@@ -68,6 +68,21 @@ function stripSqlComments(sql = '') {
 
 function norm(s = '') { return stripSqlComments(s).toLowerCase(); }
 
+function stripSqlStringLiterals(sql = '') {
+  let out = '';
+  let quote = null;
+  for (let i = 0; i < String(sql).length; i++) {
+    const ch = sql[i];
+    if ((ch === "'" || ch === '"') && sql[i - 1] !== '\\') {
+      quote = quote === ch ? null : (quote || ch);
+      out += ' ';
+      continue;
+    }
+    out += quote ? ' ' : ch;
+  }
+  return out;
+}
+
 export function splitSqlStatements(sql = '') {
   const text = stripSqlComments(sql);
   const out = [];
@@ -86,7 +101,7 @@ export function splitSqlStatements(sql = '') {
 function hasWhere(stmt) { return /\bwhere\b/i.test(stmt); }
 function hasLimit(stmt) { return /\blimit\s+\d+\b/i.test(stmt); }
 function isReadOnly(stmt) {
-  const s = norm(stmt);
+  const s = stripSqlStringLiterals(norm(stmt));
   return /^(select|with|show|explain|describe)\b/.test(s) && !/(\binsert\b|\bupdate\b|\bdelete\b|\bdrop\b|\btruncate\b|\balter\b|\bcreate\b|\bgrant\b|\brevoke\b)/.test(s);
 }
 
@@ -97,7 +112,7 @@ export function classifySql(sql = '') {
   let level = 'safe';
   let kind = 'read';
   for (const stmtRaw of statements) {
-    const stmt = norm(stmtRaw);
+    const stmt = stripSqlStringLiterals(norm(stmtRaw));
     if (!stmt) continue;
     const destructiveChecks = [
       [/\bdrop\s+database\b/, 'drop_database'],

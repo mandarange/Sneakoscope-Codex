@@ -1,4 +1,14 @@
 {
   "event": "Stop",
-  "requires_proof": true
+  "state": {
+    "mission_id": "M-fixture-without-proof",
+    "route_command": "$Team",
+    "mode": "TEAM",
+    "stop_gate": "none",
+    "proof_required": true,
+    "reflection_required": false
+  },
+  "payload": {
+    "last_assistant_message": "Summary done.\n\nHonest Mode: verified partial."
+  }
 }
