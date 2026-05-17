@@ -1,8 +1,20 @@
 import path from 'node:path';
-import { exists, packageRoot, readText, runProcess, which } from './fsx.mjs';
+import { exists, PACKAGE_VERSION, packageRoot, readText, runProcess, which } from './fsx.mjs';
 import { sha256File } from './wiki-image/image-hash.mjs';
 import { validateImageVoxelLedger } from './wiki-image/validation.mjs';
 import { readImageVoxelLedger } from './wiki-image/image-voxel-ledger.mjs';
+
+export const RUST_ACCELERATOR_CAPABILITIES = Object.freeze([
+  'compact-info',
+  'jsonl-tail',
+  'secret-scan',
+  'image-hash',
+  'voxel-validate'
+]);
+
+export function rustBuildHint() {
+  return 'cargo build --release --manifest-path crates/sks-core/Cargo.toml';
+}
 
 export async function findRustAccelerator() {
   const env = process.env.SKS_RS_BIN || process.env.DCODEX_RS_BIN;
@@ -15,8 +27,17 @@ export async function findRustAccelerator() {
 }
 
 export async function runRustOrFallback(command, args = [], fallbackFn = async () => null) {
-  const bin = await findRustAccelerator();
-  if (!bin) return normalizeAcceleratorResult(command, { engine: 'js', available: false, result: await fallbackFn() });
+  const probe = await rustAcceleratorProbe();
+  if (!probe.bin) return normalizeAcceleratorResult(command, { engine: 'js', available: false, result: await fallbackFn() });
+  if (!probe.compatible) {
+    return normalizeAcceleratorResult(command, {
+      engine: 'js',
+      available: false,
+      rust_error: { kind: 'version_mismatch', command, message: `native ${probe.version || 'unknown'} does not match package ${PACKAGE_VERSION}` },
+      result: await fallbackFn()
+    });
+  }
+  const bin = probe.bin;
   const result = await runProcess(bin, [command, ...args], { timeoutMs: 10000, maxOutputBytes: 1024 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
   if (result.code !== 0) return normalizeAcceleratorResult(command, { engine: 'js', available: true, rust_error: classifyRustError(command, result.stderr || result.stdout), result: await fallbackFn() });
   return normalizeAcceleratorResult(command, { engine: 'rust', available: true, stdout: result.stdout.trim(), result: parseRustJson(result.stdout) });
@@ -46,11 +67,51 @@ export async function rustSecretScan(file) {
 }
 
 export async function rustInfo() {
+  const probe = await rustAcceleratorProbe();
+  const sourceIncluded = await exists(path.join(packageRoot(), 'crates', 'sks-core', 'Cargo.toml'));
+  const base = {
+    schema: 'sks.rust-accelerator-status.v1',
+    capabilities: [...RUST_ACCELERATOR_CAPABILITIES],
+    packaging: 'source_checkout_or_optional_path',
+    source_included: sourceIncluded,
+    prebuilt_available: false,
+    build_hint: rustBuildHint(),
+    fallback: 'dependency-free Node.js implementations remain active when Rust is missing'
+  };
+  if (!probe.bin) {
+    return {
+      ...base,
+      available: false,
+      mode: 'js_fallback',
+      status: 'optional_missing',
+      note: 'Rust accelerator is optional; SKS continues through JS fallback paths until SKS_RS_BIN or a local source build is available.'
+    };
+  }
+  return {
+    ...base,
+    available: probe.compatible,
+    mode: probe.compatible ? 'rust_accelerated' : 'js_fallback',
+    status: probe.compatible ? 'available' : (probe.version_mismatch ? 'version_mismatch' : 'optional_error'),
+    bin: probe.bin,
+    version: probe.version,
+    expected_version: `sks-rs ${PACKAGE_VERSION}`,
+    error: probe.compatible ? null : (probe.version_mismatch ? `native ${probe.version || 'unknown'} does not match package ${PACKAGE_VERSION}` : probe.error)
+  };
+}
+
+async function rustAcceleratorProbe() {
   const bin = await findRustAccelerator();
-  const capabilities = ['compact-info', 'jsonl-tail', 'secret-scan', 'image-hash', 'voxel-validate'];
-  if (!bin) return { available: false, capabilities, packaging: 'source_checkout_or_optional_path', note: 'Rust accelerator available only from source checkout or SKS_RS_BIN until prebuilt packages exist.' };
-  const result = await runProcess(bin, ['--version'], { timeoutMs: 3000, maxOutputBytes: 20_000 });
-  return { available: result.code === 0, bin, version: `${result.stdout}${result.stderr}`.trim(), capabilities, packaging: 'source_checkout_or_optional_path' };
+  if (!bin) return { bin: null, compatible: false };
+  const result = await runProcess(bin, ['--version'], { timeoutMs: 3000, maxOutputBytes: 20_000 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  const version = `${result.stdout || ''}${result.stderr || ''}`.trim();
+  const compatible = result.code === 0 && version === `sks-rs ${PACKAGE_VERSION}`;
+  return {
+    bin,
+    version,
+    compatible,
+    version_mismatch: result.code === 0 && !compatible,
+    error: result.code === 0 ? null : version
+  };
 }
 
 function parseRustJson(text = '') {

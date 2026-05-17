@@ -2,6 +2,7 @@ import { collectProofEvidence } from './evidence-collector.mjs';
 import { writeRouteCompletionProof } from './route-adapter.mjs';
 import { routeFinalizerPolicy } from './route-finalizer-policy.mjs';
 import { ensureRouteImageEvidence } from '../wiki-image/route-image-evidence.mjs';
+import { readScoutProofEvidence } from '../scouts/scout-proof-evidence.mjs';
 
 export async function finalizeRouteWithProof(root, {
   missionId,
@@ -20,9 +21,10 @@ export async function finalizeRouteWithProof(root, {
   strict = false,
   mock = false,
   fixClaim = false,
-  requireRelation = false
+  requireRelation = false,
+  visualClaim = undefined
 } = {}) {
-  const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation });
+  const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation, visualClaim });
   const localBlockers = [...blockers];
   let imageEvidence = visualEvidence;
   if (policy.requires_image_voxel_anchors) {
@@ -38,6 +40,7 @@ export async function finalizeRouteWithProof(root, {
     }
   }
   const collected = await collectProofEvidence(root);
+  const scoutEvidence = await readScoutProofEvidence(root, missionId).catch(() => null);
   const status = localBlockers.length
     ? (strict ? 'blocked' : statusHint === 'verified' ? 'verified_partial' : statusHint)
     : statusHint;
@@ -56,6 +59,7 @@ export async function finalizeRouteWithProof(root, {
       relations: imageEvidence.ledger.relations?.length || 0,
       mock: Boolean(imageEvidence.mock)
     } } : {}),
+    ...(scoutEvidence ? { scouts: scoutEvidence } : {}),
     route_gate: gate || (gateFile ? { source: gateFile } : null)
   };
   return writeRouteCompletionProof(root, {

@@ -12,6 +12,19 @@ SKS `0.9.14` makes Completion Proof a route-bound completion requirement for ser
 - `.sneakoscope/missions/<id>/completion-proof.json`
 - `.sneakoscope/missions/<id>/completion-proof.md`
 
+Serious route proof also includes `evidence.scouts` when five-scout intake is required:
+
+```json
+{
+  "schema": "sks.scout-proof-evidence.v1",
+  "scout_count": 5,
+  "completed_scouts": 5,
+  "gate": "passed",
+  "consensus": ".sneakoscope/missions/<id>/scout-consensus.json",
+  "handoff": ".sneakoscope/missions/<id>/scout-handoff.md"
+}
+```
+
 ## Status Values
 
 Proof status must be one of:

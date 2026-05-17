@@ -21,6 +21,9 @@ import { SPEED_LANE_POLICY } from './proof-field.mjs';
 import { validateRouteCompletionProof } from './proof/route-proof-gate.mjs';
 import { routeFromState, routeRequiresCompletionProof } from './proof/route-proof-policy.mjs';
 import { permissionGateSummary } from './permission-gates.mjs';
+import { FIVE_SCOUT_STAGE_ID, SCOUT_COUNT } from './scouts/scout-schema.mjs';
+import { normalizeScoutPolicy, routeRequiresScoutIntake, scoutPipelineStage } from './scouts/scout-plan.mjs';
+import { readScoutGateStatus } from './scouts/scout-gate.mjs';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, SOLUTION_SCOUT_STAGE_ID, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, looksLikeProblemSolvingRequest, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, solutionScoutPolicyText, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.mjs';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from './team-dag.mjs';
 import { formatAgentReasoning, formatRoleCounts, initTeamLive, parseTeamSpecText, teamReasoningPolicy } from './team-live.mjs';
@@ -60,6 +63,7 @@ const FULL_ROUTE_STAGES = Object.freeze([
   'proof_field_scan',
   'triwiki_use_first',
   'context7_evidence',
+  FIVE_SCOUT_STAGE_ID,
   'parallel_analysis_scouting',
   'planning_debate',
   'route_materialization',
@@ -82,7 +86,8 @@ export function buildPipelinePlan(input = {}) {
   const ambiguity = normalizeAmbiguity(input.ambiguity, route);
   const proof = normalizeProofField(input.proofField);
   const lane = selectPipelineLane(route, task, proof);
-  const stages = buildPipelineStages(route, task, ambiguity, lane, Boolean(input.required));
+  const scoutPolicy = normalizeScoutPolicy(route, task, input.scouts === undefined ? {} : input.scouts);
+  const stages = buildPipelineStages(route, task, ambiguity, lane, Boolean(input.required), scoutPolicy);
   const verification = planVerification(route, proof);
   const skipped = stages.filter((stage) => stage.status === 'skipped').map((stage) => stage.id);
   const kept = stages.filter((stage) => stage.status !== 'skipped' && stage.status !== 'not_applicable').map((stage) => stage.id);
@@ -117,9 +122,10 @@ export function buildPipelinePlan(input = {}) {
     invariants: ['no_unrequested_fallback_code', 'listed_verification', 'triwiki_validate_before_final', 'honest_mode'],
     proof_field: proof,
     route_economy: routeEconomy,
+    scout_intake: scoutPolicy,
     skill_dream: input.skillDream || { attached: false, reason: 'skill dreaming uses cheap counters and only runs inventory at threshold' },
     goal_continuation: ambientGoalContinuation(),
-    next_actions: planNextActions(route, task, ambiguity, lane),
+    next_actions: planNextActions(route, task, ambiguity, lane, scoutPolicy),
     no_unrequested_fallback_code: true
   };
 }
@@ -142,6 +148,7 @@ export function validatePipelinePlan(plan = {}) {
   if (routeEconomyLatticeIssues.length) issues.push(...routeEconomyLatticeIssues.map((issue) => `route_economy.decision_lattice:${issue}`));
   if (plan.no_unrequested_fallback_code !== true || !plan.invariants?.includes('no_unrequested_fallback_code')) issues.push('fallback_guard');
   if (!plan.next_actions?.length) issues.push('next_actions');
+  if (plan.scout_intake?.required && !plan.stages?.some((stage) => stage.id === FIVE_SCOUT_STAGE_ID && stage.scout_count === SCOUT_COUNT && stage.read_only === true)) issues.push('scout_intake_stage');
   return { ok: issues.length === 0, issues };
 }
 
@@ -253,11 +260,15 @@ function selectPipelineLane(route, task, proof) {
   return { lane: SPEED_LANE_POLICY.balanced_lane, source: 'route_policy', fast_lane_allowed: false, reason: 'Balanced parent-owned route until Proof Field proves a narrower lane.', blockers: ['proof_field_not_attached'], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
 }
 
-function buildPipelineStages(route, task, ambiguity, lane, context7Required) {
+function buildPipelineStages(route, task, ambiguity, lane, context7Required, scoutPolicy = normalizeScoutPolicy(route, task, {})) {
   return FULL_ROUTE_STAGES.map((id) => {
     const optional = optionalStage(route, task, ambiguity, context7Required, id);
     const skippedByFast = lane.fast_lane_allowed && SPEED_LANE_POLICY.skip_when_fast.includes(id);
     const skipped = skippedByFast || optional.skip;
+    if (id === FIVE_SCOUT_STAGE_ID) {
+      if (!scoutPolicy.required) return scoutPipelineStage(scoutPolicy);
+      return { ...scoutPipelineStage(scoutPolicy), status: skipped ? 'skipped' : 'required', reason: skippedByFast ? 'proof_field_fast_lane' : scoutPolicy.reason };
+    }
     return {
       id,
       status: skipped ? (optional.notApplicable ? 'not_applicable' : 'skipped') : (id === 'ambiguity_gate' && ambiguity.passed ? 'passed' : 'keep'),
@@ -267,6 +278,8 @@ function buildPipelineStages(route, task, ambiguity, lane, context7Required) {
 }
 
 function optionalStage(route, task, ambiguity, context7Required, id) {
+  if (id === FIVE_SCOUT_STAGE_ID && !routeRequiresScoutIntake(route, { task })) return { skip: true, notApplicable: true, reason: 'five_scout_intake_not_required_for_route' };
+  if (id === FIVE_SCOUT_STAGE_ID) return { skip: false, reason: 'serious_route_requires_five_scout_intake' };
   if (id === SOLUTION_SCOUT_STAGE_ID && !looksLikeProblemSolvingRequest(task)) return { skip: true, notApplicable: true, reason: 'no_problem_solving_signal' };
   if (id === SOLUTION_SCOUT_STAGE_ID && ['Answer', 'Help', 'Wiki'].includes(route?.id)) return { skip: true, notApplicable: true, reason: 'route_not_code_repair' };
   if (id === SOLUTION_SCOUT_STAGE_ID) return { skip: false, reason: 'problem_solving_request_requires_web_similarity_scout' };
@@ -287,7 +300,7 @@ function planVerification(route, proof) {
   return [...out];
 }
 
-function planNextActions(route, task, ambiguity, lane) {
+function planNextActions(route, task, ambiguity, lane, scoutPolicy = normalizeScoutPolicy(route, task, {})) {
   if (ambiguity.required && !ambiguity.passed) {
     return [
       'auto-seal execution contract from inferred answers',
@@ -296,6 +309,7 @@ function planNextActions(route, task, ambiguity, lane) {
     ];
   }
   const actions = ['read pipeline-plan.json before work', 'execute kept stages only', 'run listed verification'];
+  if (scoutPolicy.required) actions.splice(1, 0, 'run sks scouts run latest --json before implementation');
   if (!lane.fast_lane_allowed && routeRequiresSubagents(route, task)) actions.splice(1, 0, 'materialize full Team artifacts before implementation');
   if (looksLikeProblemSolvingRequest(task)) actions.splice(1, 0, 'run Solution Scout web search for similar fixes before editing');
   actions.push('refresh/validate TriWiki when required', 'finish with completion summary and Honest Mode');
@@ -1000,7 +1014,7 @@ async function prepareLightRoute(root, route, task, required) {
 function routeState(id, route, phase, context7Required, extra = {}) {
   const reasoning = routeReasoning(route, extra.prompt || '');
   const subagentsRequired = routeRequiresSubagents(route, extra.prompt || '');
-  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: false, reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, goal_continuation: ambientGoalContinuation(), ...extra };
+  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: false, scouts_required: routeRequiresScoutIntake(route, { task: extra.prompt }), scout_count: SCOUT_COUNT, reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, goal_continuation: ambientGoalContinuation(), ...extra };
 }
 
 function routeContext(route, id, task, required, next) {
@@ -1280,6 +1294,15 @@ export async function projectGateStatus(root, state = {}) {
       source: id ? `.sneakoscope/missions/${id}/subagent-evidence.jsonl` : '.sneakoscope/state/subagent-evidence.jsonl'
     });
   }
+  if (id && routeRequiresScoutIntake(routeFromState(state), { task: state.prompt, force: state.force_scouts === true, noScouts: state.scouts_required === false })) {
+    const scoutGate = await readScoutGateStatus(root, id);
+    gates.push({
+      id: FIVE_SCOUT_STAGE_ID,
+      ok: scoutGate.ok,
+      missing: scoutGate.ok ? [] : (scoutGate.missing || ['scout-gate.json']),
+      source: `.sneakoscope/missions/${id}/scout-gate.json`
+    });
+  }
   if (id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate)) {
     const active = await passedActiveGate(root, state);
     gates.push({
@@ -1337,6 +1360,12 @@ export async function evaluateStop(root, state, payload, opts = {}) {
   if (state?.subagents_required && !(await hasSubagentEvidence(root, state))) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires subagent execution evidence before completion. Spawn worker/reviewer subagents for disjoint code-changing work, or record explicit evidence that subagents were unavailable or unsafe to split.`, { gate: 'subagent-evidence' });
   }
+  if (state?.mission_id && !(await exists(path.join(missionDir(root, state.mission_id), 'completion-proof.json'))) && routeRequiresScoutIntake(routeFromState(state), { task: state.prompt, force: state.force_scouts === true, noScouts: state.scouts_required === false })) {
+    const scoutGate = await readScoutGateStatus(root, state.mission_id);
+    if (!scoutGate.ok) {
+      return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot continue to implementation/finalization: 5-scout intake gate is missing or blocked. Run: sks scouts run latest --json`, { gate: FIVE_SCOUT_STAGE_ID, missing: scoutGate.missing || ['scout-gate.json'] });
+    }
+  }
   const mistakeRecall = await mistakeRecallGateStatus(root, state);
   if (!mistakeRecall.ok) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} found relevant TriWiki mistake memory that is not bound to the decision contract. Re-run pipeline answer or seal the contract so ${MISTAKE_RECALL_ARTIFACT} is consumed before finishing.`, { gate: MISTAKE_RECALL_ARTIFACT, missing: mistakeRecall.missing });
@@ -1376,7 +1405,7 @@ async function routeProofGateStatus(root, state = {}) {
     missionId: state.mission_id,
     route,
     state,
-    visualClaim: state.visual_claim !== false
+    visualClaim: state.visual_claim === true ? true : (state.visual_claim === false ? false : undefined)
   });
 }
 

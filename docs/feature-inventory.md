@@ -5,13 +5,13 @@ Generated from `sks commands --json`, `src/cli/main.mjs`, `src/core/routes.mjs`,
 ## Coverage
 
 - Status: coverage-ok
-- Features: 114
-- CLI commands: 59
-- Handler keys: 71
+- Features: 115
+- CLI commands: 60
+- Handler keys: 72
 - Dollar routes: 21
 - App skill aliases: 23
-- Skills: 47
-- Fixture statuses: pass=114
+- Skills: 49
+- Fixture statuses: pass=115
 
 ## Release Coverage Rule
 
@@ -26,14 +26,14 @@ Generated from `sks commands --json`, `src/cli/main.mjs`, `src/core/routes.mjs`,
 | `cli-update-check` | core-cli | stable | sks update-check [--json] | static:pass | none recorded |
 | `cli-wizard` | core-cli | labs | sks wizard | static:pass | none recorded |
 | `cli-commands` | core-cli | stable | sks commands [--json] | static:pass | none recorded |
-| `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|tmux\|auto-review\|team\|qa-loop\|ppt\|image-ux-review\|goal\|research\|db\|codex-app\|hooks\|features\|all-features\|openclaw\|dfix\|commit\|commit-and-push\|design\|imagegen\|dollar\|context7\|pipeline\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|code-structure\|proof-field\|skill-dream] | static:pass | none recorded |
+| `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|tmux\|auto-review\|team\|qa-loop\|ppt\|image-ux-review\|goal\|research\|db\|codex-app\|hooks\|features\|all-features\|openclaw\|dfix\|commit\|commit-and-push\|design\|imagegen\|dollar\|context7\|pipeline\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|code-structure\|proof-field\|skill-dream\|rust] | static:pass | none recorded |
 | `cli-quickstart` | core-cli | stable | sks quickstart | static:pass | none recorded |
 | `cli-bootstrap` | install | labs | sks bootstrap [--install-scope global\|project] [--local-only] [--json] | static:pass | none recorded |
 | `cli-root` | core-cli | stable | sks root [--json] | static:pass | none recorded |
 | `cli-deps` | install | labs | sks deps check\|install [tmux\|codex\|context7\|all] [--yes] | static:pass | none recorded |
 | `cli-codex-app` | integration | beta | sks codex-app [check\|open\|pat status\|remote-control] | real_optional:pass | mobile/event payload details remain unknown |
 | `cli-hooks` | integration | beta | sks hooks explain\|status\|trust-report\|replay ... [--json]<br>sks hook | mock:pass | mobile/event payload details remain unknown |
-| `cli-codex-lb` | integration | beta | sks codex-lb status\|health\|metrics\|doctor\|circuit\|repair\|setup ...<br>sks auth | mock:pass | none recorded |
+| `cli-codex-lb` | integration | beta | sks codex-lb status\|health\|metrics\|doctor\|circuit\|repair\|setup ...<br>sks auth | execute_and_validate_artifacts:pass | none recorded |
 | `cli-auth` | integration | labs | sks auth status\|health\|repair\|setup --host <domain> --api-key <key> | static:pass | none recorded |
 | `cli-openclaw` | integration | labs | sks openclaw install\|path\|print [--dir path] [--force] [--json] | static:pass | none recorded |
 | `cli-tmux` | core-cli | labs | sks \| sks tmux open\|check\|status [--workspace name] | static:pass | none recorded |
@@ -66,12 +66,13 @@ Generated from `sks commands --json`, `src/cli/main.mjs`, `src/core/routes.mjs`,
 | `cli-eval` | loop | labs | sks eval run\|compare\|thresholds ... | static:pass | none recorded |
 | `cli-harness` | safety | labs | sks harness fixture\|review [--json] | static:pass | none recorded |
 | `cli-perf` | loop | labs | sks perf run\|workflow\|cold-start [--json] [--iterations N] | static:pass | none recorded |
-| `cli-proof` | core-cli | labs | sks proof show\|latest\|validate\|export\|smoke [--json\|--md] | mock:pass | none recorded |
+| `cli-proof` | core-cli | labs | sks proof show\|latest\|validate\|export\|smoke [--json\|--md] | execute_and_validate_artifacts:pass | none recorded |
 | `cli-proof-field` | proof-route | labs | sks proof-field scan [--json] [--intent "task"] [--changed file1,file2] | static:pass | none recorded |
 | `cli-skill-dream` | loop | labs | sks skill-dream status\|run\|record [--json] | static:pass | none recorded |
 | `cli-code-structure` | core-cli | labs | sks code-structure scan [--json] | static:pass | none recorded |
+| `cli-rust` | core-cli | labs | sks rust status\|smoke [--json] [--require-native] | execute:pass | none recorded |
 | `cli-validate-artifacts` | proof-route | labs | sks validate-artifacts [mission-id\|latest] [--json] | mock:pass | none recorded |
-| `cli-wiki` | visual-memory | beta | sks wiki coords\|pack\|refresh\|prune\|validate ... | mock:pass | none recorded |
+| `cli-wiki` | visual-memory | beta | sks wiki coords\|pack\|refresh\|prune\|validate ... | execute_and_validate_artifacts:pass | none recorded |
 | `cli-hproof` | proof-route | labs | sks hproof check [mission-id\|latest] | mock:pass | none recorded |
 | `cli-team` | proof-route | beta | sks team "task" [executor:5 reviewer:6 user:1]\|log\|tail\|watch\|lane\|status\|dashboard\|event\|message\|open-tmux\|attach-tmux\|cleanup-tmux ... | static:pass | none recorded |
 | `cli-reasoning` | core-cli | labs | sks reasoning ["prompt"] [--json] | static:pass | none recorded |
@@ -91,23 +92,23 @@ Generated from `sks commands --json`, `src/cli/main.mjs`, `src/core/routes.mjs`,
 | `route-dfix` | route | stable | $DFix<br>$dfix | static:pass | none recorded |
 | `route-answer` | route | stable | $Answer<br>$answer | static:pass | none recorded |
 | `route-sks` | route | stable | $SKS<br>$sks | static:pass | none recorded |
-| `route-team` | route | beta | $Team<br>$team<br>$from-chat-img | mock:pass | none recorded |
+| `route-team` | route | beta | $Team<br>$team<br>$from-chat-img | execute_and_validate_artifacts:pass | none recorded |
 | `route-from-chat-img` | route | labs | $From-Chat-IMG | mock:pass | none recorded |
-| `route-qa-loop` | route | beta | $QA-LOOP<br>$qa-loop | mock:pass | none recorded |
-| `route-ppt` | route | labs | $PPT<br>$ppt | mock:pass | live imagegen/CU evidence required |
-| `route-image-ux-review` | route | labs | $Image-UX-Review<br>$image-ux-review<br>$ux-review<br>$visual-review<br>$ui-ux-review | mock:pass | live imagegen/CU evidence required |
+| `route-qa-loop` | route | beta | $QA-LOOP<br>$qa-loop | execute_and_validate_artifacts:pass | none recorded |
+| `route-ppt` | route | labs | $PPT<br>$ppt | execute_and_validate_artifacts:pass | live imagegen/CU evidence required |
+| `route-image-ux-review` | route | labs | $Image-UX-Review<br>$image-ux-review<br>$ux-review<br>$visual-review<br>$ui-ux-review | execute_and_validate_artifacts:pass | live imagegen/CU evidence required |
 | `route-ux-review` | route | labs | $UX-Review | mock:pass | live imagegen/CU evidence required |
-| `route-computer-use` | route | beta | $Computer-Use<br>$computer-use-fast<br>$cu | mock:pass | none recorded |
+| `route-computer-use` | route | beta | $Computer-Use<br>$computer-use-fast<br>$cu | execute_and_validate_artifacts:pass | none recorded |
 | `route-cu` | route | beta | $CU | mock:pass | none recorded |
 | `route-goal` | route | beta | $Goal<br>$goal | mock:pass | none recorded |
 | `route-commit` | route | labs | $Commit<br>$commit | static:pass | none recorded |
 | `route-commit-and-push` | route | labs | $Commit-And-Push<br>$commit-and-push | static:pass | none recorded |
-| `route-research` | route | labs | $Research<br>$research | mock:pass | none recorded |
+| `route-research` | route | labs | $Research<br>$research | execute_and_validate_artifacts:pass | none recorded |
 | `route-autoresearch` | route | labs | $AutoResearch<br>$autoresearch | mock:pass | none recorded |
-| `route-db` | route | beta | $DB<br>$db | static:pass | none recorded |
+| `route-db` | route | beta | $DB<br>$db | execute_and_validate_artifacts:pass | none recorded |
 | `route-mad-sks` | route | beta | $MAD-SKS<br>$mad-sks | mock:pass | permission closed by owning gate |
-| `route-gx` | route | labs | $GX<br>$gx | mock:pass | none recorded |
-| `route-wiki` | route | stable | $Wiki<br>$wiki | mock:pass | none recorded |
+| `route-gx` | route | labs | $GX<br>$gx | execute_and_validate_artifacts:pass | none recorded |
+| `route-wiki` | route | stable | $Wiki<br>$wiki | execute_and_validate_artifacts:pass | none recorded |
 | `route-help` | route | stable | $Help<br>$help | static:pass | none recorded |
 | `skill-autoresearch-loop` | skill | labs | $autoresearch-loop | static:pass | runtime fixtures owned by route |
 | `skill-context7-docs` | skill | labs | $context7-docs | static:pass | runtime fixtures owned by route |

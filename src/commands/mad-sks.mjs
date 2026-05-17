@@ -1,4 +1,4 @@
-import { madHighCommand } from '../core/commands/route-cli.mjs';
+import { madHighCommand } from '../core/commands/mad-sks-command.mjs';
 import { maybePromptCodexUpdateForLaunch, maybePromptCodexLbSetupForLaunch } from '../cli/install-helpers.mjs';
 import { PACKAGE_VERSION } from '../core/fsx.mjs';
 

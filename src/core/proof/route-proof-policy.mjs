@@ -82,6 +82,7 @@ export function routeRequiresCompletionProof(route) {
 }
 
 export function routeRequiresImageVoxelAnchors(route, opts = {}) {
+  if (opts.visualClaim === true) return true;
   const normalized = normalizeProofRoute(route);
   if (opts.visualClaim === false) return false;
   return VISUAL_ROUTE_ALIASES.includes(normalized);
