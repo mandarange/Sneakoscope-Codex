@@ -26,7 +26,6 @@ AGENTS.md
 mcp.json
 *.mcp.json
 claude_desktop_config.json
-.claude/
 .cursor/
 .windsurf/
 .vscode/

@@ -10,7 +10,7 @@ const riskyPathPatterns = [
   /(^|\/)\.envrc$/,
   /(^|\/)id_(rsa|dsa|ecdsa|ed25519)$/,
   /(^|\/)(\.mcp\.json|mcp\.json|claude_desktop_config\.json)$/,
-  /(^|\/)(\.codex|\.agents|\.sneakoscope|\.dcodex|\.omx|\.cursor|\.windsurf|\.claude)(\/|$)/,
+  /(^|\/)(\.codex|\.agents|\.sneakoscope|\.dcodex|\.omx|\.cursor|\.windsurf)(\/|$)/,
   /(^|\/)(\.aws|\.azure)(\/|$)/,
   /\.(pem|key|p12|pfx|crt|cer|asc|kubeconfig|db|sqlite|sqlite3|dump|bak|backup|sql\.gz)$/i
 ];

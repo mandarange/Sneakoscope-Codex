@@ -477,7 +477,7 @@ export async function scanDbSafety(root, opts = {}) {
 }
 
 async function scanSupabaseMcpConfigs(root) {
-  const files = ['.codex/config.toml', '.cursor/mcp.json', '.windsurf/mcp_config.json', '.vscode/mcp.json', '.mcp.json', 'mcp.json', 'claude_desktop_config.json', '.claude/mcp.json'];
+  const files = ['.codex/config.toml', '.cursor/mcp.json', '.windsurf/mcp_config.json', '.vscode/mcp.json', '.mcp.json', 'mcp.json', 'claude_desktop_config.json'];
   const findings = [];
   for (const name of files) {
     const file = path.join(root, name);
