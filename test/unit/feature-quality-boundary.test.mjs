@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary } from '../../src/core/feature-fixtures.mjs';
 import { buildAllFeaturesSelftest, buildFeatureRegistry, runtimeRoutesNotStaticContract } from '../../src/core/feature-registry.mjs';
 
-test('feature fixtures expose the 0.9.19 quality taxonomy', () => {
+test('feature fixtures expose the 0.9.20 quality taxonomy', () => {
   assert.deepEqual(FEATURE_QUALITY_LEVELS, [
     'runtime_verified',
     'runtime_mock_verified',
@@ -16,7 +16,7 @@ test('feature fixtures expose the 0.9.19 quality taxonomy', () => {
   assert.equal(fixtureForFeature('route-team').quality, 'runtime_verified');
   assert.equal(fixtureForFeature('route-answer').quality, 'runtime_mock_verified');
   assert.equal(fixtureForFeature('cli-doctor').quality, 'integration_optional');
-  assert.equal(fixtureForFeature('cli-help').quality, 'static_contract');
+  assert.equal(fixtureForFeature('cli-help').quality, 'runtime_verified');
   assert.equal(fixtureForFeature('unknown-runtime-feature').quality, 'missing');
 });
 

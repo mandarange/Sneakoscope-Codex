@@ -41,3 +41,19 @@ sks scouts run latest --engine tmux-lanes --attach
 ## Read-Only Guard
 
 Scout runs snapshot source files before and after execution. Writes are allowed only under `.sneakoscope/missions/<id>/scout-*` and `.sneakoscope/reports/scout-*`. Source, package, migration, SQL, generated app asset, and git state modifications block the scout gate.
+## Trust Report Binding
+
+0.9.20 exposes scout quality through `trust-report.json`:
+
+```json
+{
+  "schema": "sks.scout-quality.v1",
+  "parsed_outputs": 5,
+  "blocked_scouts": 0,
+  "read_only_guard": "passed",
+  "source_policy": "parsed_real_scout_outputs",
+  "confidence": "high"
+}
+```
+
+SKS only allows real speedup claims when real parallel scout output is parsed, five outputs are present, read-only guard passes, and the scout performance artifact explicitly allows the claim. Local-static or mock scout evidence remains `verified_partial`.

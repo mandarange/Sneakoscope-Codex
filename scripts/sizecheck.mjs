@@ -60,14 +60,17 @@ function checkVersionSync() {
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
   const source = fs.readFileSync(path.join(root, 'src', 'core', 'version.mjs'), 'utf8');
   const fsx = fs.readFileSync(path.join(root, 'src', 'core', 'fsx.mjs'), 'utf8');
+  const bin = fs.readFileSync(path.join(root, 'bin', 'sks.mjs'), 'utf8');
   const sourceVersion = source.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
   const fsxVersion = fsx.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
+  const binVersion = bin.match(/const FAST_PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
   const lockRootVersion = lock.packages?.['']?.version;
   const mismatches = [
     ['package-lock.json version', lock.version],
     ['package-lock root package version', lockRootVersion],
     ['src/core/version.mjs PACKAGE_VERSION', sourceVersion],
-    ['src/core/fsx.mjs PACKAGE_VERSION', fsxVersion]
+    ['src/core/fsx.mjs PACKAGE_VERSION', fsxVersion],
+    ['bin/sks.mjs FAST_PACKAGE_VERSION', binVersion]
   ].filter(([, version]) => version !== pkg.version);
   if (mismatches.length) {
     fail('package version metadata is not synchronized', [

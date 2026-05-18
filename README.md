@@ -2,11 +2,26 @@
 
 Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
-Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `0.9.19` binds real Scout engine output to structured `sks.scout-result.v1` evidence, keeps `pipeline-runtime.mjs` as a small compatibility facade, and release-gates packed npm/npx/global install behavior with explicit feature quality boundaries.
+Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `0.9.20` adds the SKS Trust Kernel: serious route finalization now writes Completion Proof, a route completion contract, an evidence index, and a trust report through one release-gated core loop.
+
+SKS does not try to clone every other harness. It focuses on one thing: making Codex work auditable, visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
 
 ![Sneakoscope Codex architecture and pipeline](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/dev/docs/assets/sneakoscope-architecture-pipeline.jpg)
 
-## 0.9.19 Current Release
+## 0.9.20 Current Release
+
+0.9.20 strengthens the core trust loop instead of expanding route names. The new `sks trust` surface validates `route-completion-contract.json`, `evidence-index.json`, stale/mock/static evidence rules, and Completion Proof status. `sks run` and `sks status` give novices a smaller control surface while preserving the existing Team, QA, Research, PPT, Image UX, DB, Wiki, GX, and Goal routes.
+
+Highlights:
+
+- `sks trust report latest --json`, `sks trust validate latest --json`, and `sks trust explain latest` expose the route trust kernel.
+- Route finalization writes mission-local `route-completion-contract.json`, `evidence-index.json`, `evidence.jsonl`, and `trust-report.json`.
+- Mock/static evidence stays `verified_partial` or lower; it cannot support a real `verified` route claim.
+- Visual route validation blocks stale image/voxel anchors.
+- `sks bench core --json` writes `.sneakoscope/reports/performance/core-bench.json` and `.md`.
+- `sks paths managed --json` and `sks rollback list --json` document SKS-owned project paths and explicit rollback actions.
+
+## 0.9.19 Release
 
 0.9.19 makes SKS Scout evidence parse-bound and package-install verified. Real Codex/tmux/Codex App subagent engines must write parseable scout output before consensus can use them as primary evidence. If an engine is unavailable or output cannot be parsed, SKS records a blocked or verified-partial result instead of substituting static evidence. Packed package checks now cover temp install, npx one-shot, and global shim behavior.
 
@@ -34,10 +49,16 @@ Highlights:
 
 Learn more:
 - Completion Proof: [docs/completion-proof.md](docs/completion-proof.md)
+- Trust Kernel: [docs/trust-kernel.md](docs/trust-kernel.md)
+- Core dominance: [docs/core-dominance.md](docs/core-dominance.md)
+- Performance budgets: [docs/performance-budgets.md](docs/performance-budgets.md)
 - Five-Scout Pipeline: [docs/five-scout-pipeline.md](docs/five-scout-pipeline.md)
 - Image Voxel TriWiki: [docs/image-voxel-ledger.md](docs/image-voxel-ledger.md)
 - Route finalization: [docs/route-finalization.md](docs/route-finalization.md)
 - Feature fixtures: [docs/feature-fixtures.md](docs/feature-fixtures.md)
+- Managed paths: [docs/managed-paths.md](docs/managed-paths.md)
+- Rollback: [docs/rollback.md](docs/rollback.md)
+- Known gaps: [docs/known-gaps.md](docs/known-gaps.md)
 - Scout engines: [docs/scout-engines.md](docs/scout-engines.md)
 - Hermetic E2E: [docs/testing-hermetic-e2e.md](docs/testing-hermetic-e2e.md)
 - Pipeline architecture: [docs/pipeline-architecture.md](docs/pipeline-architecture.md)
@@ -51,6 +72,8 @@ Learn more:
 npm i -g sneakoscope
 sks root
 sks doctor
+sks status
+sks trust report latest
 sks codex-app check
 sks selftest --mock
 sks rust smoke --json
@@ -60,7 +83,7 @@ sks rust smoke --json
 
 1. Completion Proof for every serious route
 2. Image Voxel TriWiki anchors and relations for every visual route
-3. Codex App, codex-lb, hooks, Rust fallback parity, DB, route modularity, and generated fixtures verified by release gates
+3. Route contracts, evidence indexes, trust reports, Codex App, codex-lb, hooks, Rust fallback parity, DB, route modularity, and generated fixtures verified by release gates
 
 ## Install Options
 

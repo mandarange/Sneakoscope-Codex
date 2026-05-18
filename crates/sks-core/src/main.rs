@@ -4,7 +4,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 fn main() {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
-        Some("--version") => println!("sks-rs 0.9.19"),
+        Some("--version") => println!("sks-rs 0.9.20"),
         Some("compact-info") => {
             let mut input = String::new();
             let _ = io::stdin().read_to_string(&mut input);
@@ -28,7 +28,7 @@ fn main() {
                 }
             }
         }
-        Some("image-hash") => {
+        Some("image-hash") | Some("image-voxel-index") => {
             let path = args.next().unwrap_or_default();
             match image_hash(&path) {
                 Ok((sha, bytes)) => println!("{{\"ok\":true,\"engine\":\"rust\",\"path\":\"{}\",\"sha256\":\"{}\",\"bytes\":{}}}", json_escape(&path), sha, bytes),
@@ -38,7 +38,7 @@ fn main() {
                 }
             }
         }
-        Some("voxel-validate") => {
+        Some("voxel-validate") | Some("image-voxel-validate-fast") => {
             let path = args.next().unwrap_or_default();
             let mut require_anchors = false;
             let mut require_relations = false;
@@ -58,7 +58,7 @@ fn main() {
                 }
             }
         }
-        Some("secret-scan") => {
+        Some("secret-scan") | Some("evidence-secret-scan") => {
             let path = args.next().unwrap_or_default();
             match std::fs::read_to_string(&path) {
                 Ok(text) => {
@@ -75,7 +75,7 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("sks-rs optional accelerator. Commands: --version, compact-info, jsonl-tail, secret-scan, image-hash, voxel-validate");
+            eprintln!("sks-rs optional accelerator. Commands: --version, compact-info, jsonl-tail, secret-scan, evidence-secret-scan, image-hash, image-voxel-index, voxel-validate, image-voxel-validate-fast");
             std::process::exit(2);
         }
     }

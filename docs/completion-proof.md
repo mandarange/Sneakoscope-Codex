@@ -2,6 +2,15 @@
 
 SKS `0.9.14` makes Completion Proof a route-bound completion requirement for serious routes. Serious route finalization writes a valid proof through the central finalizer, and Stop/Honest/HProof-style gates block missing, failed, blocked, invalid, or secret-bearing proof artifacts.
 
+In `0.9.20`, route finalization also writes a Trust Kernel envelope:
+
+- `.sneakoscope/missions/<id>/route-completion-contract.json`
+- `.sneakoscope/missions/<id>/evidence-index.json`
+- `.sneakoscope/missions/<id>/evidence.jsonl`
+- `.sneakoscope/missions/<id>/trust-report.json`
+
+Completion Proof includes links to the evidence router and trust report so proof claims can be checked against path-bound evidence.
+
 ## Files
 
 - `.sneakoscope/proof/latest.json`
@@ -57,6 +66,8 @@ sks proof finalize latest --route '$Team' --json
 sks proof finalize latest --strict --json
 sks proof export --md
 sks proof repair latest --json
+sks trust report latest --json
+sks trust validate latest --json
 ```
 
 Route finalization lives under `src/core/proof/route-finalizer.mjs`, route policy in `route-finalizer-policy.mjs` and `route-proof-policy.mjs`, route writing in `route-adapter.mjs`, and Stop validation in `route-proof-gate.mjs`.

@@ -17,3 +17,19 @@ The default `runSks()` helper now creates a temp root, writes a minimal `package
 ## Rule
 
 Route tests must inspect the temp root `.sneakoscope/missions/<id>` path. They must not read source checkout latest mission state or rely on `process.cwd()` `.sneakoscope` artifacts.
+## 0.9.20 Trust Kernel E2E Additions
+
+Hermetic route tests now include checks that real route commands write:
+
+- `completion-proof.json`
+- `route-completion-contract.json`
+- `evidence-index.json`
+- `trust-report.json`
+
+Representative tests:
+
+- `test/integration/route-finalization-audit.test.mjs`
+- `test/integration/trust-report-route.test.mjs`
+- `test/integration/evidence-index-route.test.mjs`
+- `test/integration/sks-run-happy-path.test.mjs`
+- `test/integration/sks-run-visual-path.test.mjs`
