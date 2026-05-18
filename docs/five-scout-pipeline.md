@@ -36,6 +36,7 @@ Each mission writes:
 - `scout-engine-result.json`
 - `scout-readonly-guard.json`
 - `scout-performance.json`
+- real-engine raw outputs such as `scout-1-code-surface.codex.md` or `scout-1-code-surface.tmux.md`
 
 The package-level summary is `.sneakoscope/reports/scout-performance-summary.json`.
 
@@ -56,4 +57,8 @@ Disabling scouts must be represented as a proof/evidence decision; it does not s
 
 Scouts can read code, docs, tests, mission artifacts, TriWiki state, and safety policy. They must not edit source code, delete files, install packages, apply migrations, write databases, commit, push, or represent mock/static evidence as real execution evidence.
 
-If real parallel execution is unavailable or not requested, SKS records `local-static` or `sequential-fallback` as verified-partial evidence. Mock/static runs set `claim_allowed: false`; real speedup claims require a real parallel engine plus measured sequential baseline evidence.
+If real parallel execution is unavailable or not requested, SKS records `local-static` or `sequential-fallback` as verified-partial evidence. Mock/static runs set `claim_allowed: false`; real speedup claims require a real parallel engine, five parsed real outputs, a passing read-only guard, and measured sequential baseline evidence.
+
+## Real Output Binding
+
+Real engines write raw markdown/output files first. SKS then parses those files into normal scout JSON artifacts. `scout-consensus.json` records `source_policy.primary_source="parsed_real_scout_outputs"` only when parsed real outputs are used. Unparseable real output becomes a blocked scout with `scout_output_parse_failed:*`; SKS does not replace that result with a synthetic static finding.

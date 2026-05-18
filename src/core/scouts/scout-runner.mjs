@@ -9,8 +9,11 @@ import { SCOUT_COUNT, SCOUT_PERFORMANCE_SCHEMA, SCOUT_RESULT_SCHEMA, SCOUT_ROLES
 import { readScoutTriWikiHint } from './scout-triwiki.mjs';
 import { snapshotScoutReadableTree, assertScoutReadOnly } from './scout-readonly-guard.mjs';
 import { runCodexExecParallelEngine } from './engines/codex-exec-parallel-engine.mjs';
+import { runCodexAppSubagentEngine } from './engines/codex-app-subagent-engine.mjs';
 import { selectScoutEngine } from './engines/scout-engine-policy.mjs';
 import { scoutEngineResult } from './engines/scout-engine-base.mjs';
+import { runTmuxLaneEngine } from './engines/tmux-lane-engine.mjs';
+import { parseScoutOutputFile } from './scout-output-parser.mjs';
 
 export async function ensureScoutMission(root, { missionId = null, route = '$Team', task = 'Five Scout fixture intake' } = {}) {
   if (missionId) {
@@ -168,8 +171,27 @@ export async function runFiveScoutIntake(root, {
   }
   const triwiki = await readScoutTriWikiHint(root);
   const before = await snapshotScoutReadableTree(root, { missionId: id });
+  let engineRun = null;
   if (selectedEngine === 'codex-exec-parallel') {
-    await runCodexExecParallelEngine(root, {
+    engineRun = await runCodexExecParallelEngine(root, {
+      missionId: id,
+      dir,
+      route: routeLabel,
+      task: task || mission.mission?.prompt || '',
+      roles: SCOUT_ROLES
+    });
+  } else if (selectedEngine === 'tmux-lanes') {
+    engineRun = await runTmuxLaneEngine(root, {
+      missionId: id,
+      dir,
+      route: routeLabel,
+      task: task || mission.mission?.prompt || '',
+      roles: SCOUT_ROLES,
+      attach: false,
+      keepTmux: false
+    });
+  } else if (selectedEngine === 'codex-app-subagents') {
+    engineRun = await runCodexAppSubagentEngine(root, {
       missionId: id,
       dir,
       route: routeLabel,
@@ -177,19 +199,40 @@ export async function runFiveScoutIntake(root, {
       roles: SCOUT_ROLES
     });
   }
+  const engineJobs = Array.isArray(engineRun?.jobs) ? engineRun.jobs : [];
   const work = SCOUT_ROLES.map((role) => async () => {
     const scoutStart = Date.now();
-    const result = await buildScoutResult(root, {
-      missionId: id,
-      route: routeLabel,
-      task: task || mission.mission?.prompt || '',
-      role,
-      mock,
-      engine: selectedEngine,
-      realParallel,
-      triwiki
-    });
-    const durationMs = Date.now() - scoutStart;
+    const job = engineJobs.find((candidate) => candidate.scout_id === role.id);
+    const result = ['codex-exec-parallel', 'tmux-lanes', 'codex-app-subagents'].includes(selectedEngine)
+      ? await parseScoutOutputFile({
+          outputFile: job?.output_file || path.join(dir, `${role.id}.${selectedEngine}.md`),
+          stdoutFile: job?.stdout_file || path.join(dir, `${role.id}.${selectedEngine}.stdout.log`),
+          stderrFile: job?.stderr_file || path.join(dir, `${role.id}.${selectedEngine}.stderr.log`),
+          missionId: id,
+          route: routeLabel,
+          role,
+          engine: selectedEngine,
+          realParallel
+        })
+      : await buildScoutResult(root, {
+          missionId: id,
+          route: routeLabel,
+          task: task || mission.mission?.prompt || '',
+          role,
+          mock,
+          engine: selectedEngine,
+          realParallel,
+          triwiki
+        });
+    if (['codex-exec-parallel', 'tmux-lanes', 'codex-app-subagents'].includes(selectedEngine) && job?.status === 'rejected') {
+      result.status = 'blocked';
+      result.blockers = [...(result.blockers || []), `scout_engine_rejected:${job.reason || 'unknown'}`];
+    }
+    if (['codex-exec-parallel', 'tmux-lanes', 'codex-app-subagents'].includes(selectedEngine) && Number(job?.code || 0) !== 0) {
+      result.status = 'blocked';
+      result.blockers = [...(result.blockers || []), `scout_engine_exit_code:${job.code}`];
+    }
+    const durationMs = job?.duration_ms || Date.now() - scoutStart;
     await writeJsonAtomic(path.join(dir, role.json), result);
     await writeTextAtomic(path.join(dir, role.md), renderScoutMarkdown(result));
     await appendScoutLedger(root, id, { type: 'scout.done', scout_id: role.id, duration_ms: durationMs, status: result.status });
@@ -263,6 +306,8 @@ export async function runFiveScoutIntake(root, {
     perScoutDurationMs: perScout,
     completedScouts: gate.completed_scouts,
     claimAllowed,
+    sourcePolicy: consensus.source_policy,
+    jobs: engineJobs,
     blockers: gate.blockers,
     unverified: gate.unverified
   });
@@ -348,6 +393,19 @@ async function buildScoutResult(root, { missionId, route, task, role, mock, engi
     context7_libraries: context7Required ? context7LibrariesFor(routeText) : [],
     engine,
     real_parallel: Boolean(realParallel),
+    source_policy: mock || engine === 'local-static' || engine === 'sequential-fallback' ? 'static_fixture' : 'generated_in_process',
+    source: mock || engine === 'local-static' || engine === 'sequential-fallback' ? 'local_static_fixture' : 'generated_in_process',
+    source_file: null,
+    parsed: false,
+    parse_issues: [],
+    source_details: {
+      type: mock || engine === 'local-static' || engine === 'sequential-fallback' ? 'static_fixture' : 'generated_in_process',
+      engine,
+      real_parallel: Boolean(realParallel),
+      output_file: null,
+      stdout_file: null,
+      stderr_file: null
+    },
     triwiki_hint: triwiki,
     blockers: [],
     unverified

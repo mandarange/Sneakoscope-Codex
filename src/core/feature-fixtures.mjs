@@ -1,4 +1,11 @@
 export const FEATURE_FIXTURE_SCHEMA = 'sks.feature-fixtures.v1';
+export const FEATURE_QUALITY_LEVELS = Object.freeze([
+  'runtime_verified',
+  'runtime_mock_verified',
+  'integration_optional',
+  'static_contract',
+  'missing'
+]);
 
 const FIXTURES = Object.freeze({
   'cli-help': fixture('static', 'sks help', [], 'pass'),
@@ -53,8 +60,8 @@ const FIXTURES = Object.freeze({
   'route-image-ux-review': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'image-ux-generated-review-ledger.json'], 'pass'),
   'route-computer-use': fixture('execute_and_validate_artifacts', 'sks computer-use import-fixture --mock --json', ['computer-use-evidence-ledger.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'completion-proof.json'], 'pass'),
   'route-cu': fixture('mock', '$CU mock evidence ledger', ['computer-use-evidence-ledger.json', 'image-voxel-ledger.json', 'completion-proof.json'], 'pass'),
-  'route-dfix': fixture('static', '$DFix tiny edit route policy', ['completion-proof.json'], 'pass'),
-  'route-answer': fixture('static', '$Answer answer-only route policy', [], 'pass'),
+  'route-dfix': fixture('mock', '$DFix tiny edit route policy', ['completion-proof.json'], 'pass'),
+  'route-answer': fixture('mock', '$Answer answer-only route policy', [], 'pass'),
   'route-goal': fixture('mock', '$Goal bridge route', ['goal-workflow.json', 'completion-proof.json'], 'pass'),
   'route-autoresearch': fixture('mock', '$AutoResearch fixture route', ['research-gate.json', 'completion-proof.json'], 'pass'),
   'route-mad-sks': fixture('mock', '$MAD-SKS permission gate route', ['mad-sks-gate.json', 'completion-proof.json'], 'pass'),
@@ -63,6 +70,10 @@ const FIXTURES = Object.freeze({
   'route-db': fixture('execute_and_validate_artifacts', 'sks db check --sql "SELECT 1" --json', ['completion-proof.json', 'db-operation-report.json'], 'pass'),
   'route-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: 'completion-proof.json', schema: 'sks.completion-proof.v1' }, { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }], 'pass'),
   'route-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'gx-validation.json'], 'pass'),
+  'route-sks': fixture('mock', '$SKS control-surface route', ['completion-proof.json'], 'pass'),
+  'route-help': fixture('mock', '$Help lightweight route', [], 'pass'),
+  'route-commit': fixture('mock', '$Commit git route', ['completion-proof.json'], 'pass'),
+  'route-commit-and-push': fixture('mock', '$Commit-And-Push git route', ['completion-proof.json'], 'pass'),
   'route-five-scout-intake': fixture('mock', 'sks scouts validate latest --strict --json', ['scout-team-plan.json', 'scout-consensus.json', 'scout-handoff.md', 'scout-gate.json'], 'pass'),
   'proof-scout-evidence': fixture('mock', 'sks team "fixture" --mock --json', ['completion-proof.json', 'scout-gate.json'], 'pass')
 });
@@ -92,11 +103,7 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'handler-cu',
   'handler-dollars',
   'handler-mad-sks',
-  'handler-postinstall',
-  'route-sks',
-  'route-commit',
-  'route-commit-and-push',
-  'route-help'
+  'handler-postinstall'
 ]);
 
 export function fixtureForFeature(featureId) {
@@ -119,15 +126,19 @@ export function fixtureForFeature(featureId) {
 
 export function fixtureSummary(features = []) {
   const counts = {};
+  const quality_counts = Object.fromEntries(FEATURE_QUALITY_LEVELS.map((level) => [level, 0]));
   const missing = [];
   for (const feature of features) {
     const status = feature.fixture?.status || 'missing';
     counts[status] = (counts[status] || 0) + 1;
+    const quality = feature.fixture?.quality || 'missing';
+    quality_counts[quality] = (quality_counts[quality] || 0) + 1;
     if (!feature.fixture) missing.push(feature.id);
   }
   return {
     schema: FEATURE_FIXTURE_SCHEMA,
     counts,
+    quality_counts,
     missing,
     ok: missing.length === 0 && !counts.missing
   };
@@ -142,7 +153,7 @@ export function validateFeatureFixtures(features = []) {
       continue;
     }
     if (!['contract', 'execute', 'execute_and_validate_artifacts', 'mock', 'static', 'real_optional', 'not_available'].includes(fx.kind)) blockers.push(`${feature.id}:fixture_kind`);
-    if (!['real_optional', 'execute_and_validate_artifacts', 'execute', 'mock', 'static_contract', 'missing'].includes(fx.quality)) blockers.push(`${feature.id}:fixture_quality`);
+    if (!FEATURE_QUALITY_LEVELS.includes(fx.quality)) blockers.push(`${feature.id}:fixture_quality`);
     if (!['pass', 'missing', 'blocked', 'not_required'].includes(fx.status)) blockers.push(`${feature.id}:fixture_status`);
     if ((fx.kind === 'mock' || fx.kind === 'static') && !fx.command && fx.status !== 'not_required') blockers.push(`${feature.id}:fixture_command`);
     if (!Array.isArray(fx.expected_artifacts)) blockers.push(`${feature.id}:fixture_expected_artifacts`);
@@ -151,7 +162,7 @@ export function validateFeatureFixtures(features = []) {
 }
 
 function fixture(kind, command, expected_artifacts, status, extra = {}) {
-  const quality = extra.quality || (kind === 'static' ? 'static_contract' : kind);
+  const quality = extra.quality || qualityForKind(kind);
   const rootMode = extra.root_mode || (kind === 'execute_and_validate_artifacts' || kind === 'execute' || kind === 'mock' ? 'hermetic_temp_project' : 'source_checkout_required');
   return {
     kind,
@@ -164,4 +175,12 @@ function fixture(kind, command, expected_artifacts, status, extra = {}) {
     fallback_removed: true,
     ...extra
   };
+}
+
+function qualityForKind(kind) {
+  if (kind === 'execute' || kind === 'execute_and_validate_artifacts') return 'runtime_verified';
+  if (kind === 'mock') return 'runtime_mock_verified';
+  if (kind === 'real_optional') return 'integration_optional';
+  if (kind === 'not_available') return 'missing';
+  return 'static_contract';
 }

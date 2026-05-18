@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS } from './routes.mjs';
-import { fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.mjs';
+import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.mjs';
 import { runFeatureFixture, writeFeatureFixtureReports } from './feature-fixture-runner.mjs';
 import { exists, nowIso, packageRoot, readJson, readText, runProcess, writeTextAtomic } from './fsx.mjs';
 
@@ -68,6 +68,7 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
     },
     features,
     fixture_summary: fixtureSummary(features),
+    feature_quality_summary: featureQualitySummary(features),
     source_inventory: {
       cli_command_names: COMMAND_CATALOG.map((entry) => entry.name),
       handler_keys: handlerKeys,
@@ -125,7 +126,8 @@ export function validateFeatureRegistry(registry = {}) {
       'feature fixtures remain progressive',
       'registry proves coverage, not full roadmap completion'
     ],
-    fixture_summary: fixtureSummary(features)
+    fixture_summary: fixtureSummary(features),
+    feature_quality_summary: featureQualitySummary(features)
   };
 }
 
@@ -149,6 +151,8 @@ export function buildAllFeaturesSelftest(registry, opts = {}) {
     checkRow('voxel_triwiki_contracts_present', registry.features.every((feature) => Boolean(feature.voxel_triwiki_integration)), missingFeatureField(registry, 'voxel_triwiki_integration')),
     checkRow('failure_contracts_present', registry.features.every((feature) => Array.isArray(feature.known_gaps)), missingFeatureField(registry, 'known_gaps')),
     checkRow('fixture_contracts_present', fixtures.ok, fixtures.blockers),
+    checkRow('feature_quality_levels_present', FEATURE_QUALITY_LEVELS.every((level) => Object.hasOwn(fixturesSummary.quality_counts || {}, level)), FEATURE_QUALITY_LEVELS),
+    checkRow('runtime_routes_not_static_contract', runtimeRoutesNotStaticContract(registry.features || []).ok, runtimeRoutesNotStaticContract(registry.features || []).blockers),
     checkRow('fixture_fallback_removed', registry.features.every((feature) => feature.fixture?.fallback_removed === true && feature.fixture?.status !== 'missing'), registry.features.filter((feature) => feature.fixture?.fallback_removed !== true || feature.fixture?.status === 'missing').map((feature) => feature.id)),
     checkRow('proof_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-proof' && feature.fixture?.status === 'pass'), ['cli-proof']),
     checkRow('voxel_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact) => expectedArtifactPath(artifact).includes('image-voxel-ledger'))), ['cli-wiki']),
@@ -169,6 +173,7 @@ export function buildAllFeaturesSelftest(registry, opts = {}) {
     status: ok ? 'verified_partial' : 'blocked',
     checks,
     fixtures: fixturesSummary,
+    feature_quality_summary: featureQualitySummary(registry.features || []),
     coverage,
     executable_fixtures: executable,
     note: opts.executeFixtures
@@ -297,6 +302,7 @@ export function renderFeatureInventoryMarkdown(registry) {
     `- App skill aliases: ${coverage.counts.app_skill_aliases}`,
     `- Skills: ${coverage.counts.skills}`,
     `- Fixture statuses: ${Object.entries(fixtureSummary(registry.features).counts).map(([status, count]) => `${status}=${count}`).join(', ')}`,
+    `- Feature quality: ${Object.entries(fixtureSummary(registry.features).quality_counts).map(([quality, count]) => `${quality}=${count}`).join(', ')}`,
     '',
     '## Release Coverage Rule',
     '',
@@ -647,6 +653,18 @@ function routeKnownGaps(command) {
 
 function checkRow(id, ok, blockers = []) {
   return { id, ok: Boolean(ok), blockers: ok ? [] : blockers };
+}
+
+export function featureQualitySummary(features = []) {
+  return fixtureSummary(features).quality_counts;
+}
+
+export function runtimeRoutesNotStaticContract(features = []) {
+  const blockers = features
+    .filter((feature) => feature.category === 'route' || String(feature.id || '').startsWith('route-'))
+    .filter((feature) => feature.fixture?.quality === 'static_contract')
+    .map((feature) => `${feature.id}:static_contract`);
+  return { ok: blockers.length === 0, blockers };
 }
 
 function missingFeatureField(registry, field) {

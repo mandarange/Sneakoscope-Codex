@@ -1,6 +1,7 @@
 import { getCodexInfo } from '../../codex-adapter.mjs';
 import { runProcess, which } from '../../fsx.mjs';
 import { availableEngine, unavailableEngine } from './scout-engine-base.mjs';
+import { readCodexAppSubagentCapability } from './codex-app-subagent-engine.mjs';
 
 export async function detectScoutEngines(root, opts = {}) {
   const [codex, tmux, app] = await Promise.all([
@@ -54,10 +55,13 @@ export async function detectTmuxLanes(root, opts = {}) {
 }
 
 export async function detectCodexAppSubagents(root, opts = {}) {
-  if (process.env.SKS_CODEX_APP_SUBAGENTS === '1') {
+  const capability = await readCodexAppSubagentCapability();
+  if (capability.available) {
     return availableEngine('codex-app-subagents', {
-      reason: 'SKS_CODEX_APP_SUBAGENTS=1 explicitly declared local Codex App subagent runtime support.'
+      capability_file: capability.file,
+      event_schema_version: capability.descriptor?.event_schema_version || null,
+      reason: 'Codex App subagent capability descriptor is present and valid.'
     });
   }
-  return unavailableEngine('codex-app-subagents', 'Codex App subagent runtime capability is not exposed to this CLI process; schema/events are not invented.');
+  return unavailableEngine('codex-app-subagents', (capability.blockers || []).join('; ') || 'Codex App subagent runtime capability is not exposed to this CLI process; schema/events are not invented.');
 }

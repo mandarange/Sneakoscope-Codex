@@ -43,7 +43,9 @@ export function scoutEngineResult({
   perScoutDurationMs = {},
   claimAllowed = false,
   blockers = [],
-  unverified = []
+  unverified = [],
+  jobs = [],
+  sourcePolicy = null
 } = {}) {
   return {
     schema: SCOUT_ENGINE_RESULT_SCHEMA,
@@ -58,6 +60,8 @@ export function scoutEngineResult({
     duration_ms: durationMs,
     per_scout_duration_ms: perScoutDurationMs,
     claim_allowed: Boolean(claimAllowed),
+    source_policy: sourcePolicy,
+    jobs,
     blockers,
     unverified
   };

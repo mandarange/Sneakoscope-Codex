@@ -3,4 +3,4 @@ export {
   dfixQuickContext,
   answerOnlyContext,
   computerUseFastContext
-} from '../pipeline-runtime.mjs';
+} from '../pipeline-internals/runtime-core.mjs';

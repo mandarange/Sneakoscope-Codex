@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { exists, projectRoot, readJson, writeJsonAtomic } from '../fsx.mjs';
+import { ensureDir, exists, projectRoot, readJson, writeJsonAtomic } from '../fsx.mjs';
 import { createMission, loadMission, missionDir, setCurrent, stateFile } from '../mission.mjs';
 import { routePrompt } from '../routes.mjs';
 import { buildScoutTeamPlan, normalizeScoutPolicy, routeRequiresScoutIntake, scoutRouteLabel } from '../scouts/scout-plan.mjs';
@@ -181,18 +181,36 @@ export async function scoutsCommand(args = []) {
     });
     const sequentialMs = Number(sequentialRun.performance?.duration_ms || 0);
     const parallelMs = Number(parallelRun.performance?.duration_ms || 0);
+    const parsedRealOutputs = Number(parallelRun.consensus?.source_policy?.counts?.parsed_scout_output || 0);
+    const speedup = selection.real_parallel && parallelMs > 0 ? Number((sequentialMs / parallelMs).toFixed(2)) : null;
+    const claimAllowed = selection.real_parallel === true
+      && parsedRealOutputs === SCOUT_COUNT
+      && parallelRun.performance?.claim_allowed === true
+      && speedup > 1.1
+      && parallelRun.gate?.read_only_guard === true
+      && !parallelRun.gate?.blockers?.length;
     const result = {
-      schema: 'sks.scout-benchmark.v1',
+      schema: 'sks.scout-benchmark.v2',
+      mission_id: id,
       engine: selection.selected,
       real_parallel: selection.real_parallel === true,
+      parsed_real_outputs: parsedRealOutputs,
       sequential_ms: sequentialMs,
       parallel_ms: parallelMs,
-      speedup: selection.real_parallel && parallelMs > 0 ? Number((sequentialMs / parallelMs).toFixed(2)) : null,
-      claim_allowed: selection.real_parallel === true && parallelRun.performance?.claim_allowed === true,
+      speedup,
+      claim_allowed: claimAllowed,
       confidence: selection.real_parallel ? 'medium' : 'low',
+      read_only_guard: parallelRun.gate?.read_only_guard === true ? 'passed' : 'blocked',
       notes: selection.real_parallel ? [] : ['mock/static benchmarks cannot claim real speedup']
     };
     await writeJsonAtomic(path.join(dir, 'scout-benchmark.json'), result);
+    const reportDir = path.join(root, '.sneakoscope', 'reports');
+    await ensureDir(reportDir);
+    await writeJsonAtomic(path.join(reportDir, 'scout-benchmark-summary.json'), {
+      schema: 'sks.scout-benchmark-summary.v1',
+      updated_at: new Date().toISOString(),
+      latest: result
+    });
     if (json) return console.log(JSON.stringify(result, null, 2));
     console.log(`Scout benchmark: ${result.claim_allowed ? 'claim allowed' : 'claim not allowed'}`);
     return;
