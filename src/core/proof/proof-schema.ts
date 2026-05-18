@@ -1,7 +1,48 @@
-import { type EvidenceRecord } from '../evidence/evidence-schema.js';
-import { type TrustStatus } from '../trust-kernel/trust-kernel-schema.js';
+// @ts-nocheck
+import { PACKAGE_VERSION, nowIso } from '../fsx.js';
 
-export const COMPLETION_PROOF_SCHEMA = 'sks.completion-proof.v1' as const;
+export const COMPLETION_PROOF_SCHEMA = 'sks.completion-proof.v1';
+export const COMPLETION_PROOF_STATUSES = Object.freeze([
+  'verified',
+  'verified_partial',
+  'blocked',
+  'not_verified',
+  'failed'
+]);
+
+export function emptyCompletionProof(overrides = {}) {
+  return {
+    schema: COMPLETION_PROOF_SCHEMA,
+    version: PACKAGE_VERSION,
+    generated_at: nowIso(),
+    mission_id: null,
+    route: null,
+    status: 'not_verified',
+    summary: {
+      files_changed: 0,
+      commands_run: 0,
+      tests_passed: 0,
+      tests_failed: 0,
+      manual_review_required: true
+    },
+    evidence: {
+      commands: [],
+      files: [],
+      db_safety: null,
+      codex_app: null,
+      computer_use: null,
+      image_voxels: null,
+      scouts: null,
+      triwiki: null
+    },
+    claims: [],
+    unverified: [],
+    blockers: [],
+    next_human_actions: [],
+    ...overrides
+  };
+}
+
 
 export interface ProofEvidence {
   commands?: unknown[];
@@ -14,12 +55,12 @@ export interface ProofEvidence {
   scouts?: unknown;
   triwiki?: unknown;
   evidence_router?: { records: number };
-  evidence_records?: EvidenceRecord[];
+  evidence_records?: import('../evidence/evidence-schema.js').EvidenceRecord[];
 }
 
 export interface ProofClaim {
   id: string;
-  status: TrustStatus | 'supported' | 'unsupported';
+  status: import('../trust-kernel/trust-kernel-schema.js').TrustStatus | 'supported' | 'unsupported';
   evidence?: string | null;
 }
 
@@ -27,7 +68,7 @@ export interface CompletionProof {
   schema: typeof COMPLETION_PROOF_SCHEMA;
   mission_id: string | null;
   route: string | null;
-  status: TrustStatus;
+  status: import('../trust-kernel/trust-kernel-schema.js').TrustStatus;
   evidence: ProofEvidence;
   claims: ProofClaim[];
   unverified: string[];

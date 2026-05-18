@@ -29,11 +29,14 @@ if (pack.status === 0) {
   }
 }
 
-for (const required of ['package.json', 'README.md', 'LICENSE', 'dist/bin/sks.js', 'dist/cli/command-registry.mjs']) {
+for (const required of ['package.json', 'README.md', 'LICENSE', 'dist/bin/sks.js', 'dist/cli/command-registry.js']) {
   if (!files.includes(required)) issues.push(`packed_missing:${required}`);
 }
 for (const forbidden of files.filter((file) => /^(src|scripts|test|\.sneakoscope|\.codex|\.agents)\//.test(file))) {
   issues.push(`packed_forbidden:${forbidden}`);
+}
+for (const forbidden of files.filter((file) => file.endsWith('.mjs'))) {
+  issues.push(`packed_mjs_forbidden:${forbidden}`);
 }
 
 const importIssues = checkImportClosure(path.join(root, 'dist'));

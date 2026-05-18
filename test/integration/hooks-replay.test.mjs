@@ -19,7 +19,7 @@ test('hooks replay calls shared runtime policy and matches expected decisions', 
     'app-settings-event.json'
   ];
   for (const fixture of fixtures) {
-    const run = await runProcess(process.execPath, [path.join(process.cwd(), 'bin/sks.mjs'), 'hooks', 'replay', path.join('test/fixtures/hooks', fixture), '--json'], {
+    const run = await runProcess(process.execPath, [path.join(process.cwd(), 'dist/bin/sks.js'), 'hooks', 'replay', path.join('test/fixtures/hooks', fixture), '--json'], {
       cwd: process.cwd(),
       timeoutMs: 10000,
       maxOutputBytes: 128 * 1024

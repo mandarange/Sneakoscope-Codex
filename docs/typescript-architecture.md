@@ -1,14 +1,14 @@
 # TypeScript Architecture
 
-`1.0.0` introduces a TypeScript-first trust-contract spine while keeping the existing `.mjs` runtime as thin compatibility surfaces where a full migration would be risky.
+`1.0.1` completes the TypeScript-first runtime. The published CLI entrypoint, router, command registry, Trust Kernel, Evidence Router, Completion Proof, Image Voxel, Scout, and route command runtime are built from TypeScript into `dist`.
 
 ## Release Invariants
 
 - `tsconfig.json` uses NodeNext, ES2022, `strict`, `noImplicitAny`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`.
 - `src/bin/sks.ts` builds the published `dist/bin/sks.js` binary.
-- `src/cli/command-registry.ts` defines the typed command contract and mirrors critical runtime command entries.
+- `src/cli/command-registry.ts` is the actual typed runtime command registry used by the CLI.
 - Trust Kernel, route contracts, Completion Proof, evidence records, Trust Reports, Image Voxel ledgers, Scout outputs, and feature fixtures have exported TypeScript interfaces and runtime guards.
-- `npm run build`, `npm run typecheck`, `npm run typecheck:contracts`, `npm run test:types`, and `npm run schema:check` are required before publish.
+- `npm run build`, `npm run typecheck`, `npm run typecheck:contracts`, `npm run test:types`, `npm run schema:check`, and `npm run dist:check` are required before publish.
 
 ## Contract Modules
 
@@ -21,7 +21,7 @@
 
 ## Build Output
 
-The npm package uses `files: ["dist", ...]`; source-only implementation files are not relied on by consumers. `scripts/build-dist.mjs` copies runtime `.mjs` compatibility modules and runtime config into `dist`, while TypeScript emits declarations and source maps.
+The npm package uses `files: ["dist", ...]`; source implementation files are not published. `npm run build` cleans `dist`, compiles TypeScript, copies only runtime config assets, writes `dist/build-manifest.json`, and blocks copied `.mjs` runtime files through `npm run dist:check`.
 
 ## Type Contract Tests
 

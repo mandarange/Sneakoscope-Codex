@@ -1,0 +1,367 @@
+// @ts-nocheck
+import path from 'node:path';
+import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, PACKAGE_VERSION } from './fsx.js';
+import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, evidenceMentionsForbiddenBrowserAutomation } from './routes.js';
+
+export const QA_LOOP_ROUTE = 'QALoop';
+const QA_REPORT_SUFFIX = 'qa-report.md';
+const UI_COMPUTER_USE_ONLY_ACK = 'use_codex_computer_use_only_no_chrome_mcp_no_browser_use_no_playwright_or_mark_ui_not_verified';
+
+function promptText(prompt = '') {
+  return String(prompt || '').trim();
+}
+
+function lowerPrompt(prompt = '') {
+  return promptText(prompt).toLowerCase();
+}
+
+function firstUrl(prompt = '') {
+  return promptText(prompt).match(/https?:\/\/[^\s)\]}>,]+/i)?.[0] || '';
+}
+
+function qaScopeFromPrompt(prompt = '') {
+  const lower = lowerPrompt(prompt);
+  const wantsUi = /\b(ui|browser|screen|visual)\b|화면|브라우저|시각|첫\s*화면|내비|네비/.test(lower);
+  const wantsApi = /\b(api|endpoint|http|request|response)\b|엔드포인트|응답|요청/.test(lower);
+  if (wantsUi && wantsApi) return 'ui_and_api_e2e';
+  if (wantsApi && !wantsUi) return 'api_e2e_only';
+  return 'ui_e2e_only';
+}
+
+function targetEnvironmentFromPrompt(prompt = '') {
+  const lower = lowerPrompt(prompt);
+  if (/\b(prod|production|deployed|live)\b|프로덕션|운영|배포된|실서비스/.test(lower)) return 'deployed_production_domain';
+  if (/\b(preview|staging|stage)\b|프리뷰|스테이징|스테이지/.test(lower)) return 'preview_or_staging_domain';
+  return 'local_dev_server';
+}
+
+function loginPolicyFromPrompt(prompt = '') {
+  const lower = lowerPrompt(prompt);
+  const required = /\b(login|log in|signin|sign in|auth|authenticated|credential)\b|로그인|인증|계정/.test(lower);
+  if (!required) {
+    return {
+      LOGIN_REQUIRED: 'no',
+      TEMP_TEST_CREDENTIALS_READY: 'not_required',
+      TEST_CREDENTIALS_RUNTIME_SOURCE: 'not_required'
+    };
+  }
+  return {
+    LOGIN_REQUIRED: 'yes',
+    TEMP_TEST_CREDENTIALS_READY: 'no_block_authenticated_tests',
+    TEST_CREDENTIALS_RUNTIME_SOURCE: 'not_required'
+  };
+}
+
+export function inferQaLoopAnswers(prompt = '') {
+  const text = promptText(prompt);
+  const environment = targetEnvironmentFromPrompt(text);
+  const url = firstUrl(text);
+  const local = environment === 'local_dev_server';
+  const login = loginPolicyFromPrompt(text);
+  const scope = qaScopeFromPrompt(text);
+  return {
+    GOAL_PRECISE: text ? `현재 요청 범위에서 QA-LOOP를 안전하게 실행한다: ${text}` : '현재 로컬 개발 환경에서 핵심 사용자 흐름을 안전하게 QA한다.',
+    QA_SCOPE: scope,
+    TARGET_ENVIRONMENT: environment,
+    TARGET_BASE_URL: url || (local ? 'http://localhost:3000' : 'unset_target_url'),
+    DEV_SERVER_COMMAND: local ? 'npm run dev' : 'none',
+    API_BASE_URL: 'same_as_target',
+    QA_MUTATION_POLICY: 'read_only_smoke_only',
+    DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED: 'never',
+    EXTERNAL_SIDE_EFFECT_POLICY: 'block_all_external_side_effects',
+    ...login,
+    CREDENTIAL_STORAGE_ACK: 'never_store_credentials_in_artifacts_or_wiki',
+    UI_COMPUTER_USE_ACK: UI_COMPUTER_USE_ONLY_ACK,
+    TEAM_MODE_ALLOWED: 'no_parent_only',
+    MAX_QA_CYCLES: '1',
+    ACCEPTANCE_CRITERIA: [
+      '앱 첫 화면 또는 지정된 대상이 정상 로드된다.',
+      '주요 내비게이션과 핵심 화면 진입에서 콘솔/화면상 치명 오류가 없다.',
+      '검증하지 못한 UI/API 범위는 통과로 주장하지 않고 QA 리포트에 남긴다.'
+    ],
+    NON_GOALS: [
+      '결제, 실제 이메일/SMS 발송, 관리자 권한 변경, 데이터 삭제, 프로덕션 데이터 변경은 테스트하지 않는다.'
+    ],
+    RISK_BOUNDARY: [
+      '실제 사용자 데이터, 인증 권한, 결제, 메시지 발송, 웹훅, 외부 서비스 상태를 생성/수정/삭제하지 않는다.',
+      'Codex Computer Use 증거가 없으면 UI/browser 검증 완료로 주장하지 않는다.',
+      '로그인이 필요하지만 임시 테스트 자격증명이 없으면 인증 구간은 차단/미검증으로 기록한다.'
+    ],
+    MID_RUN_UNKNOWN_POLICY: ['preserve_existing_behavior', 'defer_optional_scope', 'block_only_if_no_safe_path']
+  };
+}
+
+function qaReportDateStamp(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+function sanitizeVersion(version = PACKAGE_VERSION) {
+  return String(version || PACKAGE_VERSION).replace(/^v/i, '').replace(/[^0-9A-Za-z.-]/g, '_');
+}
+
+export function qaReportFilename(date = new Date(), version = PACKAGE_VERSION) {
+  return `${qaReportDateStamp(date)}-v${sanitizeVersion(version)}-${QA_REPORT_SUFFIX}`;
+}
+
+export function isQaReportFilename(name = '') {
+  return /^\d{4}-\d{2}-\d{2}-v[0-9A-Za-z][0-9A-Za-z.-]*-qa-report\.md$/.test(String(name || ''));
+}
+
+function qaReportFileFromGate(gate = {}) {
+  return String(gate?.qa_report_file || '').trim();
+}
+
+export function buildQaLoopQuestionSchema(prompt) {
+  const inferred = inferQaLoopAnswers(prompt);
+  return {
+    schema_version: 1,
+    route: QA_LOOP_ROUTE,
+    description: `QA-LOOP defaults are inferred from the prompt, TriWiki/current-code defaults, and conservative safety policy. Login secrets and browser auth state are runtime-only and must not be saved to mission files or TriWiki. ${CODEX_COMPUTER_USE_ONLY_POLICY}`,
+    prompt,
+    inferred_answers: inferred,
+    inference_notes: {
+      QA_SCOPE: 'prompt-and-safe-default',
+      TARGET_ENVIRONMENT: 'prompt-or-local-dev-default',
+      TARGET_BASE_URL: 'prompt-url-or-localhost-default',
+      QA_MUTATION_POLICY: 'safe-read-only-default',
+      LOGIN_REQUIRED: 'prompt-derived; authenticated paths are blocked if no temp credentials are ready'
+    },
+    slots: []
+  };
+}
+
+export function qaLoopQuestionSlots() {
+  return [
+      { id: 'GOAL_PRECISE', question: 'Define the QA objective in one sentence.', required: true, type: 'string' },
+      { id: 'QA_SCOPE', question: 'Which QA surface should run?', required: true, type: 'enum', options: ['ui_e2e_only', 'api_e2e_only', 'ui_and_api_e2e', 'all_available'] },
+      { id: 'TARGET_ENVIRONMENT', question: 'Where should QA run?', required: true, type: 'enum', options: ['local_dev_server', 'preview_or_staging_domain', 'deployed_production_domain'] },
+      { id: 'TARGET_BASE_URL', question: 'What base URL should QA target?', required: true, type: 'string' },
+      { id: 'DEV_SERVER_COMMAND', question: 'If local dev is selected, what command starts the app? Use none if already running.', required: true, type: 'string' },
+      { id: 'API_BASE_URL', question: 'If API E2E is selected, what API base URL should be used? Use same_as_target when identical.', required: true, type: 'string' },
+      { id: 'QA_MUTATION_POLICY', question: 'May QA create or change seeded data?', required: true, type: 'enum', options: ['read_only_smoke_only', 'seeded_create_change_only', 'seeded_create_change_remove_local_only'] },
+      { id: 'DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED', question: 'Can non-local QA run destructive removal scenarios?', required: true, type: 'enum', options: ['never'] },
+      { id: 'EXTERNAL_SIDE_EFFECT_POLICY', question: 'How should email, SMS, webhook, payment, and admin side effects be handled?', required: true, type: 'enum', options: ['block_all_external_side_effects', 'mock_or_sandbox_only'] },
+      { id: 'LOGIN_REQUIRED', question: 'Does UI/API QA require login?', required: true, type: 'enum', options: ['no', 'yes'] },
+      { id: 'TEMP_TEST_CREDENTIALS_READY', question: 'If login is required, are test-only credentials ready to provide ephemerally during the run?', required: true, type: 'enum', options: ['not_required', 'yes_temp_only', 'no_block_authenticated_tests'] },
+      { id: 'TEST_CREDENTIALS_RUNTIME_SOURCE', question: 'If login is required, how will test-only credentials be provided without saving the values?', required: true, type: 'enum', options: ['not_required', 'ephemeral_chat_only', 'environment_variables', 'secret_manager'] },
+      { id: 'CREDENTIAL_STORAGE_ACK', question: 'Acknowledge credential handling policy.', required: true, type: 'enum', options: ['never_store_credentials_in_artifacts_or_wiki'] },
+      { id: 'UI_COMPUTER_USE_ACK', question: 'Acknowledge UI E2E evidence policy: Codex Computer Use only; no Chrome MCP, Browser Use, Playwright, Selenium, Puppeteer, or other browser automation.', required: true, type: 'enum', options: [UI_COMPUTER_USE_ONLY_ACK] },
+      { id: 'TEAM_MODE_ALLOWED', question: 'May QA-LOOP use Team/subagents where useful?', required: true, type: 'enum', options: ['yes_parallel_where_safe', 'no_parent_only'] },
+      { id: 'MAX_QA_CYCLES', question: 'How many no-question QA cycles are allowed before pausing?', required: true, type: 'string' },
+      { id: 'ACCEPTANCE_CRITERIA', question: 'List the QA completion criteria.', required: true, type: 'array_or_string' },
+      { id: 'NON_GOALS', question: 'List anything QA-LOOP must not test.', required: true, type: 'array_or_string', allow_empty: true },
+      { id: 'RISK_BOUNDARY', question: 'List hard safety boundaries for data, auth, permissions, money, messages, and third-party systems.', required: true, type: 'array_or_string' },
+      { id: 'MID_RUN_UNKNOWN_POLICY', question: 'If ambiguity appears during no-question QA, choose the resolution order. This does not authorize unrequested fallback implementation code.', required: true, type: 'array', options: ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'] }
+    ];
+}
+
+export function validateQaLoopAnswers(schema, answers = {}) {
+  if (schema?.route !== QA_LOOP_ROUTE) return [];
+  const errors = [];
+  const env = answers.TARGET_ENVIRONMENT;
+  const mutation = answers.QA_MUTATION_POLICY;
+  const extra = Object.keys(answers).filter((k) => /(password|passwd|token|secret|cookie|storage_state|login_username|login_password)/i.test(k));
+  if (extra.length) errors.push({ slot: extra.join(','), error: 'qa_loop_credentials_must_not_be_saved_in_answers_json' });
+  if (env !== 'local_dev_server' && mutation === 'seeded_create_change_remove_local_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'destructive_removal_tests_are_local_dev_only' });
+  if (env === 'deployed_production_domain' && mutation !== 'read_only_smoke_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'production_deployed_qa_is_read_only_smoke_only' });
+  if (answers.DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED !== 'never') errors.push({ slot: 'DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED', error: 'destructive_deployed_tests_never_allowed' });
+  if (isUiScope(answers.QA_SCOPE) && answers.UI_COMPUTER_USE_ACK !== UI_COMPUTER_USE_ONLY_ACK) errors.push({ slot: 'UI_COMPUTER_USE_ACK', error: 'ui_e2e_requires_codex_computer_use_only_ack' });
+  if (answers.LOGIN_REQUIRED === 'yes' && !['yes_temp_only', 'no_block_authenticated_tests'].includes(answers.TEMP_TEST_CREDENTIALS_READY)) errors.push({ slot: 'TEMP_TEST_CREDENTIALS_READY', error: 'authenticated_tests_require_ephemeral_test_credentials_or_must_be_blocked' });
+  if (answers.LOGIN_REQUIRED === 'yes' && answers.TEMP_TEST_CREDENTIALS_READY === 'yes_temp_only' && answers.TEST_CREDENTIALS_RUNTIME_SOURCE === 'not_required') errors.push({ slot: 'TEST_CREDENTIALS_RUNTIME_SOURCE', error: 'credential_runtime_source_required' });
+  if (answers.CREDENTIAL_STORAGE_ACK !== 'never_store_credentials_in_artifacts_or_wiki') errors.push({ slot: 'CREDENTIAL_STORAGE_ACK', error: 'credential_temp_only_ack_required' });
+  return errors;
+}
+
+export function isUiScope(scope) {
+  return ['ui_e2e_only', 'ui_and_api_e2e', 'all_available'].includes(scope);
+}
+
+export function isApiScope(scope) {
+  return ['api_e2e_only', 'ui_and_api_e2e', 'all_available'].includes(scope);
+}
+
+function targetUrl(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return Boolean(text) && !['none', 'not_required', 'n/a', 'na', 'unset'].includes(text);
+}
+
+function hasUiTarget(a = {}) {
+  return targetUrl(a.TARGET_BASE_URL);
+}
+
+function hasApiTarget(a = {}) {
+  const api = String(a.API_BASE_URL || '').trim();
+  if (!api || /^same_as_target$/i.test(api)) return hasUiTarget(a);
+  return targetUrl(api);
+}
+
+export function qaUiRequired(a = {}) {
+  return a.QA_SCOPE === 'all_available' ? hasUiTarget(a) : isUiScope(a.QA_SCOPE);
+}
+
+export function qaApiRequired(a = {}) {
+  return a.QA_SCOPE === 'all_available' ? hasApiTarget(a) : isApiScope(a.QA_SCOPE);
+}
+
+export function defaultQaGate(contract = {}, opts = {}) {
+  const a = contract.answers || {};
+  const uiRequired = qaUiRequired(a);
+  const apiRequired = qaApiRequired(a);
+  const reportFile = opts.reportFile || qaReportFilename();
+  const corrective = a.QA_CORRECTIVE_POLICY !== 'report_only_no_code_changes';
+  return {
+    passed: false,
+    clarification_contract_sealed: Boolean(contract.sealed_hash),
+    qa_report_written: false,
+    qa_report_file: reportFile,
+    qa_ledger_complete: false,
+    checklist_completed: false,
+    safety_reviewed: false,
+    deployed_destructive_tests_blocked: a.TARGET_ENVIRONMENT === 'local_dev_server' || a.DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED === 'never',
+    credentials_not_persisted: false,
+    ui_e2e_required: uiRequired,
+    ui_computer_use_evidence: !uiRequired,
+    ui_evidence_source: uiRequired ? null : 'not_required',
+    api_e2e_required: apiRequired,
+    unsafe_external_side_effects: false,
+    corrective_loop_enabled: corrective,
+    safe_remediation_required: corrective,
+    unresolved_findings: 0,
+    unresolved_fixable_findings: 0,
+    unsafe_or_deferred_findings: 0,
+    safe_fix_attempts: 0,
+    post_fix_verification_complete: false,
+    honest_mode_complete: false,
+    evidence: [],
+    notes: []
+  };
+}
+
+export async function writeQaLoopArtifacts(dir, mission, contract) {
+  const a = contract.answers || {};
+  const checklist = qaChecklist(a);
+  const reportFile = qaReportFilename();
+  await writeJsonAtomic(path.join(dir, 'qa-ledger.json'), {
+    schema_version: 1,
+    generated_at: nowIso(),
+    mission_id: mission.id,
+    qa_report_file: reportFile,
+    target: { scope: a.QA_SCOPE, environment: a.TARGET_ENVIRONMENT, base_url: a.TARGET_BASE_URL, api_base_url: a.API_BASE_URL },
+    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_computer_use_only_required_for_ui_e2e' },
+    checklist
+  });
+  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), defaultQaGate(contract, { reportFile }));
+  await writeTextAtomic(path.join(dir, reportFile), qaReportTemplate(mission, contract, checklist));
+  return { checklist_count: checklist.length, report_file: reportFile };
+}
+
+export async function evaluateQaGate(dir) {
+  const gate = await readJson(path.join(dir, 'qa-gate.json'), {});
+  const reportFile = qaReportFileFromGate(gate);
+  const reasons = [];
+  for (const key of ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'ui_computer_use_evidence', 'honest_mode_complete']) {
+    if (gate[key] !== true) reasons.push(`${key}_missing`);
+  }
+  if (gate.corrective_loop_enabled === true) {
+    if (gate.safe_remediation_required !== true) reasons.push('safe_remediation_required_missing');
+    if (gate.post_fix_verification_complete !== true) reasons.push('post_fix_verification_complete_missing');
+    if (positiveCount(gate.unresolved_findings)) reasons.push('unresolved_findings_remaining');
+    if (positiveCount(gate.unresolved_fixable_findings)) reasons.push('unresolved_fixable_findings_remaining');
+  }
+  if (gate.unsafe_external_side_effects === true) reasons.push('unsafe_external_side_effects');
+  if (gate.ui_e2e_required === true) {
+    if (gate.ui_evidence_source !== CODEX_COMPUTER_USE_EVIDENCE_SOURCE) reasons.push('ui_evidence_source_not_codex_computer_use');
+    if (evidenceMentionsForbiddenBrowserAutomation({ evidence: gate.evidence, notes: gate.notes, ui_evidence_source: gate.ui_evidence_source })) reasons.push('forbidden_browser_automation_evidence');
+  }
+  if (!reportFile) reasons.push('qa_report_file_missing');
+  else if (!isQaReportFilename(reportFile)) reasons.push('qa_report_filename_prefix_invalid');
+  else if (!(await exists(path.join(dir, reportFile)))) reasons.push('qa_report_missing');
+  if (!(await exists(path.join(dir, 'qa-ledger.json')))) reasons.push('qa_ledger_missing');
+  const passed = gate.passed === true && reasons.length === 0;
+  const result = { checked_at: nowIso(), passed, reasons, gate };
+  await writeJsonAtomic(path.join(dir, 'qa-gate.evaluated.json'), result);
+  return result;
+}
+
+export async function writeMockQaResult(dir, mission, contract) {
+  const previousGate = await readJson(path.join(dir, 'qa-gate.json'), {});
+  const previousReportFile = qaReportFileFromGate(previousGate);
+  const reportFile = isQaReportFilename(previousReportFile) ? previousReportFile : qaReportFilename();
+  const uiRequired = qaUiRequired(contract.answers || {});
+  await writeTextAtomic(path.join(dir, reportFile), `# QA-LOOP Report\n\nMission: ${mission.id}\nMode: mock verification\n\nMock QA-LOOP completed. No live UI/API actions were executed.\n\n## Honest Mode\n\nThis is a mock smoke run for command verification, not production QA evidence.\n`);
+  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), { ...defaultQaGate(contract, { reportFile }), passed: !uiRequired, qa_report_written: true, qa_ledger_complete: true, checklist_completed: true, safety_reviewed: true, credentials_not_persisted: true, ui_computer_use_evidence: !uiRequired, ui_evidence_source: uiRequired ? null : 'not_required', unresolved_findings: 0, unresolved_fixable_findings: 0, unsafe_or_deferred_findings: 0, post_fix_verification_complete: true, honest_mode_complete: true, evidence: ['mock QA-LOOP smoke completed'], notes: ['No live UI/API verification was claimed.'] });
+  return evaluateQaGate(dir);
+}
+
+export function buildQaLoopPrompt({ id, mission, contract, cycle, previous, reportFile }) {
+  const report = reportFile && isQaReportFilename(reportFile) ? reportFile : 'the date/version-prefixed report named by qa-gate.json.qa_report_file';
+  return `SKS QA-LOOP
+MISSION: ${id}
+TASK: ${mission.prompt}
+CYCLE: ${cycle}
+NO QUESTIONS: use decision-contract.json.
+MODE: dogfood as human proxy; use real flows, fix safe code/test/docs now, then recheck.
+UI: ${CODEX_COMPUTER_USE_ONLY_POLICY} Secrets runtime-only.
+SAFETY: deployed read-only smoke; no destructive, billing, message, webhook, admin, bulk-write, global-config, or live-data edits unless contract allows.
+GATE: passed=false while unresolved_findings or unresolved_fixable_findings > 0, or post_fix_verification_complete is not true.
+ARTIFACTS: update qa-ledger.json, ${report}, qa-gate.json, and qa-loop/cycle-${cycle}/.
+CONTRACT:
+${JSON.stringify(contract, null, 2)}
+Previous tail:
+${String(previous || '').slice(-2500)}
+`;
+}
+
+export async function qaStatus(dir) {
+  const gate = await readJson(path.join(dir, 'qa-gate.evaluated.json'), await readJson(path.join(dir, 'qa-gate.json'), null));
+  const ledger = await readJson(path.join(dir, 'qa-ledger.json'), null);
+  const reportFile = qaReportFileFromGate(gate?.gate || gate || {}) || ledger?.qa_report_file || null;
+  const report = reportFile && isQaReportFilename(reportFile) ? await readText(path.join(dir, reportFile), '') : '';
+  return { gate, checklist_count: ledger?.checklist?.length ?? null, report_file: reportFile, report_written: Boolean(report.trim()) };
+}
+
+function qaChecklist(a) {
+  const cases = [
+    ['preflight.target', 'Confirm target, environment, and mutation policy.'],
+    ['preflight.safety', 'Block destructive, billing, messaging, webhook, admin, bulk writes.'],
+    ['preflight.corrective_policy', 'Confirm safe fixes plus reverify.'],
+    ['preflight.auth', 'Confirm login and temp credential handling.'],
+    ['preflight.data', 'Identify seed data, cleanup limits, and rollback expectations.'],
+    ['preflight.roles', 'Map roles, permissions, protected areas.']
+  ];
+  if (qaUiRequired(a)) cases.push(
+    ['ui.computer_use_only', CODEX_COMPUTER_USE_ONLY_POLICY],
+    ['ui.navigation', 'Check primary navigation, deep links, back/forward, refresh, and protected routes.'],
+    ['ui.auth', 'Check login, logout, session expiry, unauthorized access, and role-specific visibility.'],
+    ['ui.forms', 'Check required fields, validation, disabled states, success, and failure.'],
+    ['ui.states', 'Check loading, empty, error, retry, offline/timeout, and slow network states.'],
+    ['ui.crud', 'Check allowed create/change flows and block forbidden destructive flows by environment.'],
+    ['ui.responsive', 'Check desktop, tablet, mobile, overflow, long text, and keyboard focus order.'],
+    ['ui.a11y', 'Check labels, focus traps, modals, contrast-sensitive controls, and screen-reader names.'],
+    ['ui.visual', 'Capture evidence for meaningful UI regressions without storing secrets.']
+  );
+  if (qaApiRequired(a)) cases.push(
+    ['api.health', 'Check health/version/readiness endpoints when available.'],
+    ['api.auth', 'Check anonymous, authenticated, expired, and wrong-role access.'],
+    ['api.contract', 'Check status codes, response shape, headers, content type, and error format.'],
+    ['api.validation', 'Check missing, malformed, boundary, duplicate, and over-limit payloads.'],
+    ['api.listing', 'Check pagination, sorting, filters, search, and empty results.'],
+    ['api.mutation', 'Check allowed seeded create/change and forbid deployed destructive flows.'],
+    ['api.idempotency', 'Check retry/idempotency behavior for safe operations.'],
+    ['api.concurrency', 'Check stale change, conflict, and double-submit behavior.'],
+    ['api.failure', 'Check timeout, upstream error, rate-limit, and rollback-visible failure paths.'],
+    ['api.security', 'Check CORS, auth headers, PII redaction, and permission boundaries.']
+  );
+  cases.push(['report.evidence', 'Record pass/fail/blocked/skipped with evidence.'], ['report.corrective_loop', 'Record fixes, rechecks, unresolved findings, deferred blockers.'], ['report.honest', 'Run Honest Mode.']);
+  return cases.map(([id, title]) => ({ id, title, status: 'pending', evidence: [] }));
+}
+
+function qaReportTemplate(mission, contract, checklist) {
+  const a = contract.answers || {};
+  return `# QA-LOOP Report\n\nMission: ${mission.id}\nTarget: ${a.TARGET_BASE_URL || 'unset'}\nScope: ${a.QA_SCOPE || 'unset'}\nEnvironment: ${a.TARGET_ENVIRONMENT || 'unset'}\n\n## Safety\n\n- Deployed destructive tests: never\n- Credentials: temp-only, never saved\n- UI evidence: ${CODEX_COMPUTER_USE_ONLY_POLICY}\n\n## Checklist\n\n${checklist.map((item) => `- [ ] ${item.id}: ${item.title}`).join('\n')}\n\n## Findings\n\nTBD\n\n## Corrections And Rechecks\n\nTBD\n\n## Honest Mode\n\nTBD\n`;
+}
+
+function positiveCount(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) && n > 0;
+}

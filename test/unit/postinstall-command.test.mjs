@@ -14,7 +14,7 @@ test('postinstall command auto-bootstrap passes a callable bootstrap command', a
   await fs.mkdir(initCwd, { recursive: true });
   await fs.mkdir(globalRoot, { recursive: true });
 
-  const result = await runProcess(process.execPath, [path.join(process.cwd(), 'bin/sks.mjs'), 'postinstall'], {
+  const result = await runProcess(process.execPath, [path.join(process.cwd(), 'dist/bin/sks.js'), 'postinstall'], {
     cwd: process.cwd(),
     timeoutMs: 30000,
     maxOutputBytes: 64 * 1024,

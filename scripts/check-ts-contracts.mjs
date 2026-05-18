@@ -29,7 +29,7 @@ for (const rel of requiredFiles) {
   if (!/\bexport\b/.test(text)) issues.push(`${rel}:exports_missing`);
 }
 
-const runtimeRegistry = await import(pathToFileURL(path.join(root, 'src', 'cli', 'command-registry.mjs')));
+const runtimeRegistry = await import(pathToFileURL(path.join(root, 'dist', 'cli', 'command-registry.js')));
 const runtimeCommands = Object.keys(runtimeRegistry.COMMANDS || {}).sort();
 const typedText = fs.readFileSync(path.join(root, 'src', 'cli', 'command-registry.ts'), 'utf8');
 for (const name of ['help', 'version', 'commands', 'run', 'team', 'trust', 'proof', 'scouts', 'db', 'wiki', 'bench', 'features']) {

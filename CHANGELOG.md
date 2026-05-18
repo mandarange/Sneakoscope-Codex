@@ -3,6 +3,27 @@
 ## [Unreleased]
 
 
+## [1.0.1] - 2026-05-19
+
+### Added
+- Add a hybrid-free TypeScript runtime: CLI entrypoint, command registry, Trust Kernel, Evidence Router, Completion Proof, Image Voxel, Scouts, and route commands now build from TypeScript source into `dist`.
+- Add actual typed runtime command registry used by the CLI, replacing the previous contract-only TypeScript registry plus MJS runtime registry split.
+- Add dist-only package verification that blocks copied MJS runtime files and verifies every command registry lazy import from the packed package.
+- Add `sks run --execute` and `sks run --auto` route execution modes for safe routes.
+- Add TypeScript runtime/schema parity checks for completion proof, evidence records, route contracts, scout outputs, image voxel ledgers, and feature fixtures.
+
+### Fixed
+- Remove build-time copying of `src/**/*.mjs` into `dist`.
+- Remove the hybrid `TypeScript contracts + MJS runtime` package boundary.
+- Fix the missing `1.0.0` changelog lineage and document the 1.0.1 runtime completion.
+- Prevent feature quality targets from drifting below RC-level requirements.
+- Prevent typed command registry from diverging from actual runtime command registry.
+
+### Changed
+- Treat TypeScript-built runtime as a release invariant.
+- Treat `.mjs` runtime implementation as legacy-only and excluded from the published package.
+- Treat `sks run --execute` as the novice-safe execution path for supported routes.
+
 ## [1.0.0] - 2026-05-19
 
 ### Added

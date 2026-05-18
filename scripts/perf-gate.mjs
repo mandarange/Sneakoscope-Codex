@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { DEFAULT_COLD_START_ITERATIONS, resolveColdStartIterations, runColdStart } from '../src/commands/perf.mjs';
+import { DEFAULT_COLD_START_ITERATIONS, resolveColdStartIterations, runColdStart } from '../dist/commands/perf.js';
 
 const requestedIterations = resolveColdStartIterations(process.env.SKS_COLD_START_ITERATIONS);
 const tier = process.env.SKS_PERF_TIER || (process.env.CI === 'true' ? 'source-ci' : 'source-local');

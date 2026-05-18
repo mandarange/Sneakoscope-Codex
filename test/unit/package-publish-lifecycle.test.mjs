@@ -6,7 +6,7 @@ const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const scripts = pkg.scripts || {};
 
 test('publish lifecycle runs the expensive release gate only once', () => {
-  assert.equal(pkg.version, '1.0.0');
+  assert.equal(pkg.version, '1.0.1');
   assert.equal(pkg.publishConfig?.tag, 'latest');
   assert.match(scripts['feature-quality:check'], /--release/);
   assert.doesNotMatch(scripts['feature-quality:check'], /--rc/);

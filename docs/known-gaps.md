@@ -10,12 +10,12 @@
 - Feature quality improved to zero missing fixtures and lower static contracts, but `runtime_mock_verified >= 45` remains a P1 target rather than a 0.9.20 P0 claim.
 
 Static contracts are not runtime verification. They document expected behavior and must be promoted through executable fixtures before being used as completion proof.
-# 1.0.0 Known Gaps
+# 1.0.1 Known Gaps
 
-No P0 stable-release blocker is intentionally left open for TypeScript contracts, package boundary, command import smoke, real blackbox matrix, `sks run --execute`, feature quality, architecture hard-fail, performance tiers, or Trust Kernel stale/mock/static blocking.
+No P0 stable-release blocker is intentionally left open for TypeScript-built `dist` runtime, actual typed command registry, package boundary, command import smoke, `sks run --execute`, feature quality, architecture hard-fail, performance tiers, or Trust Kernel stale/mock/static blocking.
 
 Remaining non-P0 work:
 
 - Broaden DB safety fixture volume and SQL parser edge cases beyond the current release gate.
 - Add more native/Rust acceleration paths for large Image Voxel ledgers.
-- Continue migrating compatibility `.mjs` runtime modules to TypeScript in smaller slices after the stable 1.0.0 boundary is published.
+- Legacy `.mjs` source files are retained only outside the published package boundary as compatibility/reference surfaces; the package runtime and command import closure are TypeScript-built `.js` under `dist`.
