@@ -2,19 +2,20 @@
 
 Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
-Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `1.0.0` makes the trust layer TypeScript-first: strict typed contracts compile to `dist`, packed installs smoke every command registry entry, real black-box package checks are release-gated, and `sks run --execute` can carry safe routes through execution, proof, trust report, and status.
+Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `1.0.1` finishes the hybrid-free TypeScript runtime: the CLI entrypoint, router, command registry, Trust Kernel, Evidence Router, Completion Proof, Image Voxel, Scout, and route command runtime build into `dist`, packed installs smoke every command registry entry, and `sks run --execute` can carry safe routes through execution, proof, trust report, and status.
 
 SKS does not try to clone every other harness. It focuses on one thing: making Codex work auditable, visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
 
 ![Sneakoscope Codex architecture and pipeline](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/dev/docs/assets/sneakoscope-architecture-pipeline.jpg)
 
-## 1.0.0 Current Release
+## 1.0.1 Current Release
 
-1.0.0 strengthens the core trust loop instead of expanding route names. The new TypeScript spine covers command registry contracts, route contracts, evidence records, Completion Proof, Trust Reports, Image Voxel ledgers, Scout output, and feature fixtures. The package publishes built `dist` output, and release checks prove the packed tarball can import every registered command.
+1.0.1 removes the package/runtime hybrid boundary. The TypeScript command registry is the actual CLI runtime registry, `npm run build` no longer copies `src/**/*.mjs` into `dist`, and `npm run dist:check` blocks `dist/**/*.mjs`, `.mjs` imports, and contract-only registry markers.
 
 Highlights:
 
 - `npm run build`, `npm run typecheck`, `npm run typecheck:contracts`, and `npm run schema:check` are release invariants.
+- `npm run dist:check` proves the built runtime is `dist`-only JavaScript generated from TypeScript.
 - `npm run package-boundary:check` and `npm run blackbox:command-import-smoke` verify the packed package, not just the source checkout.
 - `npm run blackbox:matrix` runs real pack install, npx one-shot, global shim, no-git, spaces, and Korean/Unicode path checks by default.
 - `sks run "task" --execute --json` and `sks run "task" --auto --json` execute safe routes; visual evidence gaps and destructive DB prompts block with explicit recovery.
@@ -498,7 +499,7 @@ By default, SKS favors inspection, local files, branch-safe changes, explicit co
 ```sh
 which sks
 sks --version
-node ./bin/sks.mjs --version
+node ./dist/bin/sks.js --version
 npm install -g .
 ```
 

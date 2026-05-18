@@ -5,7 +5,7 @@ import { createHermeticProjectRoot, runSksInRoot } from '../e2e/route-real-comma
 test('sks run mock happy path reaches trust report without route jargon', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'sks-run-happy' });
   const result = await runSksInRoot(root, ['run', 'fix the fixture bug', '--mock', '--json']);
-  assert.equal(result.schema, 'sks.run.v1');
+  assert.equal(result.schema, 'sks.run.v2');
   assert.equal(result.route, '$Team');
   assert.equal(result.trust_status, 'verified_partial');
   assert.equal(result.trust_report.issues.length, 0);

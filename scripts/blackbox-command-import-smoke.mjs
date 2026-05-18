@@ -70,7 +70,7 @@ function childNpmEnv(extra = {}) {
 }
 
 async function smokeCommands(pkgRoot) {
-  const registryPath = path.join(pkgRoot, 'dist', 'cli', 'command-registry.mjs');
+  const registryPath = path.join(pkgRoot, 'dist', 'cli', 'command-registry.js');
   if (!fs.existsSync(registryPath)) {
     failures.push('dist_cli_command_registry_missing');
     return;

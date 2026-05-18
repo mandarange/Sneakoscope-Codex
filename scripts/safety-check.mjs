@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runProcess } from '../src/core/fsx.mjs';
+import { runProcess } from '../dist/core/fsx.js';
 
 const shards = [
   ['node', ['--test', 'test/unit/db-safety.test.mjs', 'test/unit/db-safety-golden.test.mjs']],

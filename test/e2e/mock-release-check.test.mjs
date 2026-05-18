@@ -5,7 +5,7 @@ import { runProcess } from '../../src/core/fsx.mjs';
 
 test('mock e2e release-critical fixtures pass strict artifact validation', { timeout: 300000 }, async () => {
   const result = await runProcess(process.execPath, [
-    path.join(process.cwd(), 'bin/sks.mjs'),
+    path.join(process.cwd(), 'dist/bin/sks.js'),
     'all-features',
     'selftest',
     '--mock',

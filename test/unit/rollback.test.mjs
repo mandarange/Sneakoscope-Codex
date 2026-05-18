@@ -8,7 +8,7 @@ import { runProcess } from '../../src/core/fsx.mjs';
 test('rollback apply requires explicit confirmation phrase', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-rollback-'));
   await fs.writeFile(path.join(root, 'package.json'), '{"private":true}\n');
-  const result = await runProcess(process.execPath, [path.join(process.cwd(), 'bin', 'sks.mjs'), 'rollback', 'apply', 'rollback-sneakoscope', '--json'], {
+  const result = await runProcess(process.execPath, [path.join(process.cwd(), 'dist', 'bin', 'sks.js'), 'rollback', 'apply', 'rollback-sneakoscope', '--json'], {
     cwd: root,
     timeoutMs: 10_000,
     maxOutputBytes: 64 * 1024,

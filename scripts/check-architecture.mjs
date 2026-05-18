@@ -10,7 +10,10 @@ const waivers = loadWaivers();
 runGate('pipeline-budget:check');
 runGate('pipeline-runtime:check');
 checkFacade('src/core/pipeline-runtime.mjs', 300);
+checkFacade('src/core/pipeline-runtime.ts', 300);
 checkLargeFiles();
+checkTsImports();
+checkDistRuntime();
 if (failures.length) {
   console.error('Architecture check failed:');
   for (const failure of failures) console.error(`- ${failure}`);
@@ -55,7 +58,9 @@ function architectureLineLimit(relPath) {
 function isRouteDomainAggregator(relPath) {
   return [
     'src/core/pipeline-internals/runtime-core.mjs',
-    'src/core/pipeline-internals/runtime-gates.mjs'
+    'src/core/pipeline-internals/runtime-gates.mjs',
+    'src/core/pipeline-internals/runtime-core.ts',
+    'src/core/pipeline-internals/runtime-gates.ts'
   ].includes(relPath);
 }
 
@@ -82,6 +87,29 @@ function walk(dir, out) {
     const file = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(file, out);
     else if (entry.isFile() && /\.(mjs|js|ts)$/.test(entry.name)) out.push(file);
+  }
+}
+
+function checkTsImports() {
+  const files = [];
+  walk(path.join(root, 'src'), files);
+  for (const file of files.filter((item) => item.endsWith('.ts'))) {
+    const relPath = path.relative(root, file).split(path.sep).join('/');
+    const text = fs.readFileSync(file, 'utf8');
+    if (/from\s+['"][^'"]+\.mjs['"]|import\(\s*['"][^'"]+\.mjs['"]\s*\)/.test(text)) {
+      failures.push(`${relPath}: TypeScript imports .mjs runtime`);
+    }
+  }
+}
+
+function checkDistRuntime() {
+  const dist = path.join(root, 'dist');
+  if (!fs.existsSync(dist)) return;
+  const files = [];
+  walk(dist, files);
+  for (const file of files) {
+    const relPath = path.relative(root, file).split(path.sep).join('/');
+    if (relPath.endsWith('.mjs')) failures.push(`${relPath}: dist .mjs runtime forbidden`);
   }
 }
 

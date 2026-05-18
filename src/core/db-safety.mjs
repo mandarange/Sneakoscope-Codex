@@ -209,7 +209,7 @@ function extractSqlLiterals(command = '') {
     let m;
     while ((m = re.exec(command))) out.push(m[2]);
   }
-  if (/\b(select|insert|update|delete|drop|truncate|alter|create|grant|revoke)\b/i.test(command)) out.push(command);
+  if (looksLikeSqlText(command)) out.push(command);
   return out;
 }
 

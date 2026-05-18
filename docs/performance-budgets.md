@@ -1,6 +1,6 @@
 # Performance Budgets
 
-SKS 0.9.20 records core hot-path budgets with:
+SKS 1.0.1 records core hot-path budgets with:
 
 ```bash
 sks bench core --json
@@ -28,7 +28,7 @@ Artifacts:
 Budget misses are evidence, not marketing copy. README or release notes should only claim a speed win when the benchmark artifact exists and passes on the target environment.
 # 1.0.0 Tiered Budgets
 
-Performance budgets are tiered by execution environment and stored in `src/core/performance-budgets.json`, which is copied to `dist/core/performance-budgets.json` during build.
+Performance budgets are tiered by execution environment and stored in `src/core/performance-budgets.json`, which is copied as a non-code asset to `dist/core/performance-budgets.json` during the TypeScript build.
 
 Tiers:
 

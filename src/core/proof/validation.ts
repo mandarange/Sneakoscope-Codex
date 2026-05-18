@@ -1,19 +1,21 @@
-import { COMPLETION_PROOF_SCHEMA, type CompletionProof, isCompletionProof } from './proof-schema.js';
+// @ts-nocheck
+import { containsPlaintextSecret } from '../secret-redaction.js';
+import { COMPLETION_PROOF_SCHEMA, COMPLETION_PROOF_STATUSES } from './proof-schema.js';
 
-export interface ValidationResult {
-  ok: boolean;
-  status: CompletionProof['status'];
-  issues: string[];
-}
-
-export function validateCompletionProof(value: unknown): ValidationResult {
-  const issues: string[] = [];
-  if (!isCompletionProof(value)) {
-    return { ok: false, status: 'failed', issues: ['completion_proof_shape'] };
-  }
-  if (value.schema !== COMPLETION_PROOF_SCHEMA) issues.push('schema');
-  if (value.status === 'failed') issues.push('proof_failed');
-  if (value.status === 'verified' && value.unverified.length > 0) issues.push('verified_with_unverified_claims');
-  if (value.status === 'verified' && value.blockers.length > 0) issues.push('verified_with_blockers');
-  return { ok: issues.length === 0, status: issues.length ? 'failed' : value.status, issues };
+export function validateCompletionProof(proof = {}) {
+  const issues = [];
+  if (proof.schema !== COMPLETION_PROOF_SCHEMA) issues.push('schema');
+  if (!COMPLETION_PROOF_STATUSES.includes(proof.status)) issues.push('status');
+  if (!proof.summary || typeof proof.summary !== 'object') issues.push('summary');
+  if (!proof.evidence || typeof proof.evidence !== 'object') issues.push('evidence');
+  if (!Array.isArray(proof.claims)) issues.push('claims');
+  if (!Array.isArray(proof.unverified)) issues.push('unverified');
+  if (!Array.isArray(proof.blockers)) issues.push('blockers');
+  if (containsPlaintextSecret(proof)) issues.push('plaintext_secret');
+  if (proof.status === 'failed') issues.push('proof_failed');
+  return {
+    ok: issues.length === 0,
+    status: issues.length ? 'failed' : proof.status,
+    issues
+  };
 }

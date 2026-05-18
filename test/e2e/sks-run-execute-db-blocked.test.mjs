@@ -5,7 +5,7 @@ import { createHermeticProjectRoot, runSksInRoot } from './route-real-command-he
 test('sks run --db --execute blocks destructive DB prompts', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'sks-run-execute-db-blocked' });
   const result = await runSksInRoot(root, ['run', 'drop table users', '--db', '--execute', '--json'], { expectCode: 1 });
-  assert.equal(result.schema, 'sks.run.v1');
+  assert.equal(result.schema, 'sks.run.v2');
   assert.equal(result.ok, false);
   assert.equal(result.route, '$DB');
   assert.equal(result.route_execution, 'blocked');

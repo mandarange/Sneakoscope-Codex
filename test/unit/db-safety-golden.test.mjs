@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyCommand, classifySql } from '../../src/core/db-safety.mjs';
+import { classifyCommand, classifySql, classifyToolPayload, evaluateDbSafety } from '../../src/core/db-safety.mjs';
 
 const sqlCases = [
   ['DROP TABLE users', 'destructive', 'drop_table'],
@@ -87,7 +87,8 @@ const generatedCommandCases = [
   ['createdb replacement', 'destructive', 'postgres_database_admin_command'],
   ['psql -c "DROP TABLE users"', 'destructive', 'drop_table'],
   ['psql -c "DELETE FROM users WHERE id = 1"', 'write', 'delete_with_where'],
-  ['psql -c "SELECT * FROM users LIMIT 10"', 'safe', null]
+  ['psql -c "SELECT * FROM users LIMIT 10"', 'safe', null],
+  ['rg "DROP|DELETE|UPDATE|SELECT" src test', 'none', null]
 ];
 
 const allSqlCases = [...sqlCases, ...generatedSqlCases];
@@ -105,4 +106,37 @@ test('DB safety golden cases classify destructive and safe shapes', () => {
     if (reason) assert.ok(result.reasons.includes(reason), `${command} missing ${reason}`);
   }
   assert.ok(allSqlCases.length + allCommandCases.length >= 100);
+});
+
+test('Supabase MCP execute_sql allows read-only SELECT without MAD-SKS', () => {
+  const classification = classifyToolPayload({
+    tool_name: 'mcp__supabase__execute_sql',
+    tool_input: {
+      query: 'SELECT * FROM users LIMIT 10'
+    }
+  });
+  assert.equal(classification.level, 'safe');
+  assert.ok(classification.toolReasons.includes('database_tool'));
+
+  const decision = evaluateDbSafety({ classification });
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.action, 'allow');
+  assert.ok(decision.reasons.includes('read_only_operation'));
+});
+
+test('Supabase MCP execute_sql still blocks writes without MAD-SKS', () => {
+  const classification = classifyToolPayload({
+    tool_name: 'mcp__supabase__execute_sql',
+    tool_input: {
+      query: 'UPDATE users SET admin = true WHERE id = 1'
+    }
+  });
+  assert.equal(classification.level, 'write');
+  assert.ok(classification.sql.reasons.includes('update_with_where'));
+
+  const decision = evaluateDbSafety({ classification });
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.action, 'block');
+  assert.ok(decision.reasons.includes('database_write_mode_is_read_only_only'));
+  assert.ok(decision.reasons.includes('direct_mcp_execute_sql_writes_blocked'));
 });

@@ -5,7 +5,7 @@ import path from 'node:path';
 const root = process.cwd();
 const dir = path.join(root, 'src', 'core', 'commands');
 const failures = [];
-for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('-command.mjs'))) {
+for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('-command.ts'))) {
   const absolute = path.join(dir, file);
   const text = fs.readFileSync(absolute, 'utf8');
   const lines = text.split(/\r?\n/).length;

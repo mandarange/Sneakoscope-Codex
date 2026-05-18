@@ -6,6 +6,12 @@
       "file": "src/cli/install-helpers.mjs",
       "reason": "generated",
       "expires_version": "1.0.0"
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/cli/install-helpers.ts",
+      "reason": "generated",
+      "expires_version": "1.0.1"
     }
   ]
 }

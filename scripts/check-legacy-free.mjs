@@ -6,7 +6,7 @@ const root = process.cwd();
 const issues = [];
 const oldMainModule = ['legacy', 'main.mjs'].join('-');
 const oldMaintenanceModule = ['maintenance', 'commands.mjs'].join('-');
-const registry = await read('src/cli/command-registry.mjs');
+const registry = await read('src/cli/command-registry.ts');
 if (registry.includes(oldMainModule)) issues.push('registry_legacy_main');
 if (/lazy\s*:\s*legacy/.test(registry)) issues.push('registry_lazy_legacy');
 if (/const\s+legacy\s*=/.test(registry)) issues.push('registry_legacy_const');
@@ -20,12 +20,12 @@ for (const file of await listFiles(path.join(root, 'src'))) {
   const text = await fs.readFile(file, 'utf8');
   if (/lazy\s*:\s*legacy/.test(text)) issues.push(`${rel(file)}:lazy_legacy`);
 }
-const bin = await read('bin/sks.mjs');
-const main = await read('src/cli/main.mjs');
-const router = await read('src/cli/router.mjs');
-if (!bin.includes('src/cli/main.mjs')) issues.push('bin_entrypoint');
-if (!main.includes('./router.mjs')) issues.push('main_router');
-if (!router.includes('command-registry.mjs')) issues.push('router_registry');
+const bin = await read('src/bin/sks.ts');
+const main = await read('src/cli/main.ts');
+const router = await read('src/cli/router.ts');
+if (!bin.includes('../cli/main.js')) issues.push('bin_entrypoint');
+if (!main.includes('./router.js')) issues.push('main_router');
+if (!router.includes('command-registry.js')) issues.push('router_registry');
 if (router.includes(oldMainModule)) issues.push('router_legacy_main');
 const pkg = JSON.parse(await read('package.json'));
 if ((pkg.files || []).some((entry) => String(entry).startsWith('archive'))) issues.push('archive_in_package_files');

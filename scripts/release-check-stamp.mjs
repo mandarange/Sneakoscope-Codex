@@ -23,6 +23,32 @@ function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
+function treeDigest(dir) {
+  if (!fs.existsSync(dir)) return { digest: null, file_count: 0 };
+  const files = [];
+  collectFiles(dir, files);
+  const hash = crypto.createHash('sha256');
+  for (const file of files.sort()) {
+    const rel = path.relative(dir, file).split(path.sep).join('/');
+    const stat = fs.statSync(file);
+    hash.update(rel);
+    hash.update('\0');
+    hash.update(String(stat.size));
+    hash.update('\0');
+    hash.update(sha256(fs.readFileSync(file)));
+    hash.update('\0');
+  }
+  return { digest: hash.digest('hex'), file_count: files.length };
+}
+
+function collectFiles(dir, out) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) collectFiles(file, out);
+    else if (entry.isFile()) out.push(file);
+  }
+}
+
 function gitFiles() {
   const result = spawnSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
     cwd: root,
@@ -80,10 +106,14 @@ function releaseSnapshot() {
 function currentStampPayload() {
   const pkg = readJson('package.json');
   const snapshot = releaseSnapshot();
+  const dist = treeDigest(path.join(root, 'dist'));
   return {
     schema: 'sks.release-check-stamp.v1',
     package_name: pkg.name,
     package_version: pkg.version,
+    package_json_sha256: sha256(fs.readFileSync(path.join(root, 'package.json'))),
+    dist_build_sha256: dist.digest,
+    dist_file_count: dist.file_count,
     release_check_sha256: sha256(pkg.scripts?.['release:check'] || ''),
     source_digest: snapshot.digest,
     source_file_count: snapshot.file_count
@@ -112,7 +142,7 @@ function verifyStamp() {
   }
   const current = currentStampPayload();
   const mismatches = [];
-  for (const key of ['schema', 'package_name', 'package_version', 'release_check_sha256', 'source_digest', 'source_file_count']) {
+  for (const key of ['schema', 'package_name', 'package_version', 'package_json_sha256', 'dist_build_sha256', 'dist_file_count', 'release_check_sha256', 'source_digest', 'source_file_count']) {
     if (stamp[key] !== current[key]) mismatches.push(`${key}: stamp=${stamp[key] || 'missing'} current=${current[key] || 'missing'}`);
   }
   if (mismatches.length) {

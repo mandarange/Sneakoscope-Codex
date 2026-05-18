@@ -5,7 +5,7 @@ import { runProcess } from '../../src/core/fsx.mjs';
 
 test('hook replay strict matcher validates reason gate issues and secret policy', async () => {
   const result = await runProcess(process.execPath, [
-    path.join(process.cwd(), 'bin/sks.mjs'),
+    path.join(process.cwd(), 'dist/bin/sks.js'),
     'hooks',
     'replay',
     'test/fixtures/hooks/stop-visual-route-without-anchor.json',

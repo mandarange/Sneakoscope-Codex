@@ -2,11 +2,11 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { runProcess } from '../src/core/fsx.mjs';
+import { runProcess } from '../dist/core/fsx.js';
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-trust-fixture-'));
 await fs.writeFile(path.join(root, 'package.json'), '{"private":true,"name":"sks-trust-fixture"}\n');
-const sks = path.join(process.cwd(), 'bin', 'sks.mjs');
+const sks = path.join(process.cwd(), 'dist', 'bin', 'sks.js');
 const run = await runJson(root, sks, ['run', 'fixture', '--mock', '--json']);
 const trust = await runJson(root, sks, ['trust', 'validate', run.mission_id, '--json']);
 const ok = run.ok === true && ['verified', 'verified_partial'].includes(trust.status);

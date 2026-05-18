@@ -37,9 +37,9 @@ sks trust explain latest
 - Mock/static evidence cannot become high-trust real evidence.
 - Evidence older than the last route event is stale.
 - Missing route completion contract is a trust blocker.
-# 1.0.0 Hardening
+# 1.0.1 Hardening
 
-The stable Trust Kernel blocks stale and mismatched trust artifacts across the whole proof chain:
+The stable Trust Kernel blocks stale and mismatched trust artifacts across the whole proof chain, and its runtime modules are now built from TypeScript into `dist`:
 
 - `stale_proof`: Completion Proof is older than the latest route event.
 - `stale_evidence_index`: evidence index is older than the proof it claims to support.

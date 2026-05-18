@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { runProcess } from '../../src/core/fsx.mjs';
 
-const hookBin = path.join(process.cwd(), 'bin', 'sks.mjs');
+const hookBin = path.join(process.cwd(), 'dist', 'bin', 'sks.js');
 
 async function runHook(name, payload) {
   const result = await runProcess(process.execPath, [hookBin, 'hook', name], {

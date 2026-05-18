@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runProcess } from '../../src/core/fsx.mjs';
 
 test('scouts local-static engine runs deterministic five-scout intake', async () => {
-  const result = await runProcess(process.execPath, ['bin/sks.mjs', 'scouts', 'run', 'latest', '--engine', 'local-static', '--mock', '--json'], {
+  const result = await runProcess(process.execPath, ['dist/bin/sks.js', 'scouts', 'run', 'latest', '--engine', 'local-static', '--mock', '--json'], {
     cwd: process.cwd(),
     timeoutMs: 30000,
     maxOutputBytes: 256 * 1024,

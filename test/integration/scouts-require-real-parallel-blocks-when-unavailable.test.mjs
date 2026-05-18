@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runProcess } from '../../src/core/fsx.mjs';
 
 test('scouts require-real-parallel blocks explicit fallback engines', async () => {
-  const result = await runProcess(process.execPath, ['bin/sks.mjs', 'scouts', 'run', 'latest', '--engine', 'local-static', '--require-real-parallel', '--mock', '--json'], {
+  const result = await runProcess(process.execPath, ['dist/bin/sks.js', 'scouts', 'run', 'latest', '--engine', 'local-static', '--require-real-parallel', '--mock', '--json'], {
     cwd: process.cwd(),
     timeoutMs: 30000,
     maxOutputBytes: 128 * 1024,

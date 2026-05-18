@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { buildFeatureRegistry, runtimeRoutesNotStaticContract } from '../src/core/feature-registry.mjs';
-import { FEATURE_QUALITY_LEVELS, validateFeatureFixtures } from '../src/core/feature-fixtures.mjs';
-import { packageRoot } from '../src/core/fsx.mjs';
+import { buildFeatureRegistry, runtimeRoutesNotStaticContract } from '../dist/core/feature-registry.js';
+import { FEATURE_QUALITY_LEVELS, validateFeatureFixtures } from '../dist/core/feature-fixtures.js';
+import { packageRoot } from '../dist/core/fsx.js';
 
 const json = process.argv.includes('--json');
 const releaseGate = process.argv.includes('--release') || process.argv.includes('--stable') || process.argv.includes('--rc');
