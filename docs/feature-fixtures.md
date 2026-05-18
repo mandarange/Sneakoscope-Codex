@@ -22,7 +22,7 @@ The fixture gate checks:
 
 External dependency routes remain honest: a mock fixture can pass while the real dependency path remains `blocked`, `not_verified`, or `verified_partial` until real evidence exists.
 
-## 0.9.19 Quality Boundary
+## Quality Boundary
 
 - `runtime_verified`: actual command executed and generated artifacts validated.
 - `runtime_mock_verified`: mock route command executed and generated artifacts validated.
@@ -31,3 +31,24 @@ External dependency routes remain honest: a mock fixture can pass while the real
 - `missing`: invalid release state.
 
 `npm run feature-quality:check` fails when runtime route features are static-only or when quality counts are missing from the registry.
+# 1.0.0 Feature Quality Target
+
+Stable release feature quality is release-gated by `npm run feature-quality:check`.
+
+Targets:
+
+- `runtime_verified >= 22`
+- `runtime_mock_verified >= 45`
+- `integration_optional <= 6`
+- `static_contract <= 45`
+- `missing = 0`
+
+Current stable verification snapshot:
+
+- `runtime_verified=43`
+- `runtime_mock_verified=47`
+- `integration_optional=5`
+- `static_contract=30`
+- `missing=0`
+
+Runtime-capable CLI and route features should not stay `static_contract` unless they are explicitly documentation-only or no-op surfaces.

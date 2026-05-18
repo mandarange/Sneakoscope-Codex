@@ -2,23 +2,27 @@
 
 Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
-Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `0.9.20` adds the SKS Trust Kernel: serious route finalization now writes Completion Proof, a route completion contract, an evidence index, and a trust report through one release-gated core loop.
+Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `1.0.0` makes the trust layer TypeScript-first: strict typed contracts compile to `dist`, packed installs smoke every command registry entry, real black-box package checks are release-gated, and `sks run --execute` can carry safe routes through execution, proof, trust report, and status.
 
 SKS does not try to clone every other harness. It focuses on one thing: making Codex work auditable, visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
 
 ![Sneakoscope Codex architecture and pipeline](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/dev/docs/assets/sneakoscope-architecture-pipeline.jpg)
 
-## 0.9.20 Current Release
+## 1.0.0 Current Release
 
-0.9.20 strengthens the core trust loop instead of expanding route names. The new `sks trust` surface validates `route-completion-contract.json`, `evidence-index.json`, stale/mock/static evidence rules, and Completion Proof status. `sks run` and `sks status` give novices a smaller control surface while preserving the existing Team, QA, Research, PPT, Image UX, DB, Wiki, GX, and Goal routes.
+1.0.0 strengthens the core trust loop instead of expanding route names. The new TypeScript spine covers command registry contracts, route contracts, evidence records, Completion Proof, Trust Reports, Image Voxel ledgers, Scout output, and feature fixtures. The package publishes built `dist` output, and release checks prove the packed tarball can import every registered command.
 
 Highlights:
 
+- `npm run build`, `npm run typecheck`, `npm run typecheck:contracts`, and `npm run schema:check` are release invariants.
+- `npm run package-boundary:check` and `npm run blackbox:command-import-smoke` verify the packed package, not just the source checkout.
+- `npm run blackbox:matrix` runs real pack install, npx one-shot, global shim, no-git, spaces, and Korean/Unicode path checks by default.
+- `sks run "task" --execute --json` and `sks run "task" --auto --json` execute safe routes; visual evidence gaps and destructive DB prompts block with explicit recovery.
 - `sks trust report latest --json`, `sks trust validate latest --json`, and `sks trust explain latest` expose the route trust kernel.
 - Route finalization writes mission-local `route-completion-contract.json`, `evidence-index.json`, `evidence.jsonl`, and `trust-report.json`.
-- Mock/static evidence stays `verified_partial` or lower; it cannot support a real `verified` route claim.
+- Mock/static evidence stays `verified_partial` or lower; static contracts cannot satisfy runtime route contracts.
 - Visual route validation blocks stale image/voxel anchors.
-- `sks bench core --json` writes `.sneakoscope/reports/performance/core-bench.json` and `.md`.
+- `sks bench core --tier source-ci --json` writes `.sneakoscope/reports/performance/core-bench.json` and `.md` using tiered budgets.
 - `sks paths managed --json` and `sks rollback list --json` document SKS-owned project paths and explicit rollback actions.
 
 ## 0.9.19 Release
@@ -49,7 +53,10 @@ Highlights:
 
 Learn more:
 - Completion Proof: [docs/completion-proof.md](docs/completion-proof.md)
+- TypeScript architecture: [docs/typescript-architecture.md](docs/typescript-architecture.md)
 - Trust Kernel: [docs/trust-kernel.md](docs/trust-kernel.md)
+- Package boundary: [docs/package-boundary.md](docs/package-boundary.md)
+- Black-box package tests: [docs/black-box-package-tests.md](docs/black-box-package-tests.md)
 - Core dominance: [docs/core-dominance.md](docs/core-dominance.md)
 - Performance budgets: [docs/performance-budgets.md](docs/performance-budgets.md)
 - Five-Scout Pipeline: [docs/five-scout-pipeline.md](docs/five-scout-pipeline.md)
@@ -565,7 +572,7 @@ npm run release:check
 npm run publish:dry
 ```
 
-`release:check` runs audit, changelog, syntax, feature-registry coverage, all-features contract selftest, selftest, size, and registry checks. Generate the human-readable registry with `sks features inventory --write-docs`. `publish:dry` runs that same gate and then performs an npm dry-run publish against the public registry.
+`release:check` runs audit, changelog, syntax, feature-registry coverage, all-features contract selftest, selftest, size, and registry checks, then writes a source digest stamp under `.sneakoscope/reports/`. Generate the human-readable registry with `sks features inventory --write-docs`. `1.0.0` is a stable release, so plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
 
 Version bumps are manual. Run `sks versioning bump` only when preparing release metadata; SKS will not create `.git/hooks/pre-commit` or auto-bump during ordinary commits.
 

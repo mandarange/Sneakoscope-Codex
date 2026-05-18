@@ -2,10 +2,11 @@
 import { DEFAULT_COLD_START_ITERATIONS, resolveColdStartIterations, runColdStart } from '../src/commands/perf.mjs';
 
 const requestedIterations = resolveColdStartIterations(process.env.SKS_COLD_START_ITERATIONS);
-let result = runColdStart({ root: process.cwd(), iterations: requestedIterations });
+const tier = process.env.SKS_PERF_TIER || (process.env.CI === 'true' ? 'source-ci' : 'source-local');
+let result = runColdStart({ root: process.cwd(), iterations: requestedIterations, tier });
 if (!result.ok && process.env.SKS_PERF_GATE_RETRY !== '0' && isBudgetOnlyMiss(result)) {
   const retryIterations = Math.max(requestedIterations, DEFAULT_COLD_START_ITERATIONS);
-  const retry = runColdStart({ root: process.cwd(), iterations: retryIterations });
+  const retry = runColdStart({ root: process.cwd(), iterations: retryIterations, tier });
   result = {
     ...retry,
     gate_retry: {

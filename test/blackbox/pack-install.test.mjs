@@ -13,5 +13,6 @@ test('pack install black-box script supports dry-run proof shape', async () => {
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.schema, 'sks.blackbox-pack-install.v1');
   assert.equal(parsed.ok, true);
+  assert.ok(parsed.steps.some((step) => step.label === 'npx_sks_run_execute_mock'));
   assert.ok(parsed.steps.some((step) => step.label === 'verify_completion_proof_exists'));
 });

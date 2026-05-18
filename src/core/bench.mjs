@@ -3,17 +3,65 @@ import { performance } from 'node:perf_hooks';
 import { ensureDir, nowIso, packageRoot, projectRoot, runProcess, writeJsonAtomic, writeTextAtomic } from './fsx.mjs';
 import { percentile } from './perf-bench.mjs';
 
-export const CORE_BENCH_BUDGETS = Object.freeze({
-  'sks --version': 50,
-  'sks help': 80,
-  'sks root --json': 80,
-  'sks commands --json': 120,
-  'sks proof validate --json': 250,
-  'sks trust validate latest --json': 300,
-  'sks wiki image-validate --json': 300,
-  'sks features check --json': 1200,
-  'sks scouts engines --json': 1000
+export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
+  'source-local': {
+    'sks --version': 50,
+    'sks help': 80,
+    'sks root --json': 80,
+    'sks commands --json': 120,
+    'sks proof validate --json': 250,
+    'sks trust validate latest --json': 300,
+    'sks wiki image-validate --json': 300,
+    'sks features check --json': 1200,
+    'sks scouts engines --json': 1000
+  },
+  'source-ci': {
+    'sks --version': 80,
+    'sks help': 140,
+    'sks root --json': 140,
+    'sks commands --json': 200,
+    'sks proof validate --json': 350,
+    'sks trust validate latest --json': 450,
+    'sks wiki image-validate --json': 450,
+    'sks features check --json': 1800,
+    'sks scouts engines --json': 1400
+  },
+  'packed-local': {
+    'sks --version': 100,
+    'sks help': 180,
+    'sks root --json': 180,
+    'sks commands --json': 260,
+    'sks proof validate --json': 500,
+    'sks trust validate latest --json': 650,
+    'sks wiki image-validate --json': 650,
+    'sks features check --json': 2400,
+    'sks scouts engines --json': 1800
+  },
+  'global-shim': {
+    'sks --version': 140,
+    'sks help': 240,
+    'sks root --json': 240,
+    'sks commands --json': 320,
+    'sks proof validate --json': 700,
+    'sks trust validate latest --json': 800,
+    'sks wiki image-validate --json': 800,
+    'sks features check --json': 2800,
+    'sks scouts engines --json': 2200
+  },
+  'npx-one-shot': {
+    'sks --version': 3000,
+    'sks help': 3000,
+    'sks root --json': 3000,
+    'sks commands --json': 3500,
+    'sks proof validate --json': 3500,
+    'sks trust validate latest --json': 3500,
+    'sks wiki image-validate --json': 3500,
+    'sks features check --json': 5000,
+    'sks scouts engines --json': 5000
+  }
 });
+
+export const CORE_BENCH_BUDGETS = CORE_BENCH_BUDGET_TIERS['source-local'];
 
 const CORE_COMMANDS = Object.freeze([
   ['sks --version', ['--version']],
@@ -27,8 +75,9 @@ const CORE_COMMANDS = Object.freeze([
   ['sks scouts engines --json', ['scouts', 'engines', '--json']]
 ]);
 
-export async function runCoreBench(root = process.cwd(), { iterations = 3 } = {}) {
+export async function runCoreBench(root = process.cwd(), { iterations = 3, tier = 'source-local' } = {}) {
   const script = path.join(packageRoot(), 'bin', 'sks.mjs');
+  const budgets = CORE_BENCH_BUDGET_TIERS[tier] || CORE_BENCH_BUDGET_TIERS['source-local'];
   await ensureBenchTrustMission(root, script);
   const rows = [];
   for (const [label, args] of CORE_COMMANDS) {
@@ -48,9 +97,9 @@ export async function runCoreBench(root = process.cwd(), { iterations = 3 } = {}
     const p95 = Math.round(percentile(values, 95));
     rows.push({
       command: label,
-      budget_p95_ms: CORE_BENCH_BUDGETS[label],
+      budget_p95_ms: budgets[label],
       p95_ms: p95,
-      ok: failures.length === 0 && p95 <= CORE_BENCH_BUDGETS[label],
+      ok: failures.length === 0 && p95 <= budgets[label],
       failures,
       raw_ms: values.map((value) => Math.round(value))
     });
@@ -58,7 +107,9 @@ export async function runCoreBench(root = process.cwd(), { iterations = 3 } = {}
   const report = {
     schema: 'sks.core-bench.v1',
     generated_at: nowIso(),
+    tier,
     iterations: Math.max(1, Number(iterations) || 1),
+    budget_tiers: CORE_BENCH_BUDGET_TIERS,
     ok: rows.every((row) => row.ok),
     commands: rows
   };

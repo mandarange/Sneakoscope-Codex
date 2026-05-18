@@ -160,4 +160,24 @@ Generated from `sks commands --json`, `src/cli/main.mjs`, `src/core/routes.mjs`,
 - [x] Exposed the registry through `sks features list --json`.
 - [x] Added a release coverage check through `sks features check --json`.
 - [x] Documented fixture status for every registry feature.
+# 1.0.0 Inventory Snapshot
+
+`sks features check --json` currently maps every CLI command, handler key, dollar command, app skill alias, and skill entry.
+
+- features: `125`
+- CLI command names: `68`
+- handler keys: `80`
+- dollar commands: `21`
+- app skill aliases: `23`
+- skills: `49`
+- unmapped: `0`
+- duplicate feature IDs: `0`
+
+Fixture quality snapshot:
+
+- `runtime_verified=43`
+- `runtime_mock_verified=47`
+- `integration_optional=5`
+- `static_contract=30`
+- `missing=0`
 

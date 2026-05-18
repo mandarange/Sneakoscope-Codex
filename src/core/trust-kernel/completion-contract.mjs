@@ -13,6 +13,7 @@ export function validateCompletionContract(contract = {}, proof = {}, evidenceIn
   if (required.scouts && proof.evidence?.scouts?.gate !== 'passed') issues.push('scout_gate_not_passed');
   if (evidenceIndex?.status === 'blocked') issues.push(...(evidenceIndex.issues || []).map((issue) => `evidence:${issue}`));
   if (proof.status === 'verified' && mockOrStaticEvidence(evidenceIndex)) issues.push('mock_or_static_evidence_cannot_verify_real_status');
+  if (runtimeRoute(proof.route || contract.route) && staticContractEvidence(evidenceIndex)) issues.push('static_contract_evidence_for_runtime_route');
   return {
     ok: issues.length === 0,
     status: issues.length ? 'blocked' : (proof.status || contract.status || 'not_verified'),
@@ -34,4 +35,12 @@ function dbEvidenceOk(proof = {}, evidenceIndex = {}) {
 
 function mockOrStaticEvidence(evidenceIndex = {}) {
   return (evidenceIndex.records || []).some((record) => record.source === 'mock' || record.source === 'static_contract');
+}
+
+function staticContractEvidence(evidenceIndex = {}) {
+  return (evidenceIndex.records || []).some((record) => record.source === 'static_contract');
+}
+
+function runtimeRoute(route = '') {
+  return /^\$(Team|QA-LOOP|Research|Image-UX-Review|DB|PPT|GX|Computer-Use|CU|Wiki)$/i.test(String(route || ''));
 }

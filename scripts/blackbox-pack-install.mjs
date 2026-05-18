@@ -27,7 +27,7 @@ function spawnStep(label, cmd, args, options = {}) {
         cwd: options.cwd || root,
         encoding: 'utf8',
         timeout: options.timeout || 120_000,
-        env: { ...process.env, npm_config_cache: cache, npm_config_prefix: prefix, SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true', ...options.env }
+        env: childNpmEnv(options.env)
       });
   return {
     label,
@@ -42,6 +42,13 @@ function spawnStep(label, cmd, args, options = {}) {
     stdout: result.stdout || '',
     stderr: result.stderr || ''
   };
+}
+
+function childNpmEnv(extra = {}) {
+  const env = { ...process.env, npm_config_cache: cache, npm_config_prefix: prefix, SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true', ...extra };
+  delete env.npm_config_dry_run;
+  delete env.NPM_CONFIG_DRY_RUN;
+  return env;
 }
 
 function run(label, cmd, args, options = {}) {
@@ -103,6 +110,7 @@ if (steps.at(-1)?.ok) run('npx_sks_version', npxBin, ['sks', '--version'], { cwd
 if (steps.at(-1)?.ok) run('npx_sks_root_json', npxBin, ['sks', 'root', '--json'], { cwd: consumer });
 if (steps.at(-1)?.ok) run('npx_sks_setup_local_only', npxBin, ['sks', 'setup', '--local-only', '--json'], { cwd: consumer });
 if (steps.at(-1)?.ok) run('npx_sks_selftest_mock', npxBin, ['sks', 'selftest', '--mock'], { cwd: consumer, timeout: 180_000 });
+if (steps.at(-1)?.ok) run('npx_sks_run_execute_mock', npxBin, ['sks', 'run', 'blackbox execute fixture', '--execute', '--mock', '--json'], { cwd: consumer, timeout: 180_000 });
 if (steps.at(-1)?.ok) run('npx_sks_scouts_local_static', npxBin, ['sks', 'scouts', 'run', 'latest', '--engine', 'local-static', '--mock', '--json'], { cwd: consumer, timeout: 180_000 });
 let qaMissionId = null;
 if (steps.at(-1)?.ok) {

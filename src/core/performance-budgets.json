@@ -1,0 +1,92 @@
+{
+  "schema": "sks.performance-budgets.v1",
+  "tiers": {
+    "source-local": {
+      "sks --version": 50,
+      "sks help": 80,
+      "sks root --json": 80,
+      "sks commands --json": 120,
+      "sks proof validate --json": 250,
+      "sks trust validate latest --json": 300,
+      "sks wiki image-validate --json": 300,
+      "sks features check --json": 1200,
+      "sks scouts engines --json": 1000
+    },
+    "source-ci": {
+      "sks --version": 80,
+      "sks help": 140,
+      "sks root --json": 140,
+      "sks commands --json": 200,
+      "sks proof validate --json": 350,
+      "sks trust validate latest --json": 450,
+      "sks wiki image-validate --json": 450,
+      "sks features check --json": 1800,
+      "sks scouts engines --json": 1400
+    },
+    "packed-local": {
+      "sks --version": 100,
+      "sks help": 180,
+      "sks root --json": 180,
+      "sks commands --json": 260,
+      "sks proof validate --json": 500,
+      "sks trust validate latest --json": 650,
+      "sks wiki image-validate --json": 650,
+      "sks features check --json": 2400,
+      "sks scouts engines --json": 1800
+    },
+    "global-shim": {
+      "sks --version": 140,
+      "sks help": 240,
+      "sks root --json": 240,
+      "sks commands --json": 320,
+      "sks proof validate --json": 700,
+      "sks trust validate latest --json": 800,
+      "sks wiki image-validate --json": 800,
+      "sks features check --json": 2800,
+      "sks scouts engines --json": 2200
+    },
+    "npx-one-shot": {
+      "sks --version": 3000,
+      "sks help": 3000,
+      "sks root --json": 3000,
+      "sks commands --json": 3500,
+      "sks proof validate --json": 3500,
+      "sks trust validate latest --json": 3500,
+      "sks wiki image-validate --json": 3500,
+      "sks features check --json": 5000,
+      "sks scouts engines --json": 5000
+    }
+  },
+  "cold_start_tiers": {
+    "source-local": {
+      "sks --version": 80,
+      "sks help": 150,
+      "sks root --json": 150,
+      "sks features check --json": 1500
+    },
+    "source-ci": {
+      "sks --version": 120,
+      "sks help": 220,
+      "sks root --json": 220,
+      "sks features check --json": 2200
+    },
+    "packed-local": {
+      "sks --version": 160,
+      "sks help": 280,
+      "sks root --json": 280,
+      "sks features check --json": 2800
+    },
+    "global-shim": {
+      "sks --version": 220,
+      "sks help": 350,
+      "sks root --json": 350,
+      "sks features check --json": 3200
+    },
+    "npx-one-shot": {
+      "sks --version": 3000,
+      "sks help": 3000,
+      "sks root --json": 3000,
+      "sks features check --json": 5000
+    }
+  }
+}
