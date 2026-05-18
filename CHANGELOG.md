@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.9.19] - 2026-05-18
+
+### Added
+- Add real scout output parsing for Codex/tmux scout runs into `sks.scout-result.v1`.
+- Add consensus binding that uses parsed real scout outputs as the primary source for `scout-consensus.json`.
+- Add tmux lane scout execution with session/window creation, watcher, timeout, output collection, and cleanup.
+- Add Codex App subagent capability descriptors so SKS only launches subagents when a real local event/output surface is declared.
+- Add black-box packed package tests for npm pack, temp install, npx-style one-shot, and global shim behavior.
+- Add pipeline runtime decomposition checks so `pipeline-runtime.mjs` is a small compatibility facade.
+- Add stricter feature fixture quality gates that distinguish static contracts from runtime-verified features.
+- Add scout speedup benchmark proof that allows speed claims only when parsed real scout outputs and measured baselines exist.
+
+### Fixed
+- Prevent real scout engines from claiming success when Codex/tmux output cannot be parsed into scout-result schema.
+- Prevent pipeline budget checks from ignoring `pipeline-runtime.mjs`.
+- Prevent static feature contracts from being treated as runtime route verification.
+- Prevent package publish checks from passing without packed install smoke coverage.
+
+### Changed
+- Treat real Scout consensus as an evidence-bound parsed-output contract, not a synthetic fallback.
+- Treat packed package behavior as part of the release proof.
+- Treat pipeline architecture modularity as a hard release invariant.
+
 ## [0.9.18] - 2026-05-18
 
 ### Added

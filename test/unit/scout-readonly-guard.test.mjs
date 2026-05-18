@@ -18,3 +18,14 @@ test('scout read-only guard allows mission scout artifacts and blocks source edi
   assert.equal(guard.passed, false);
   assert.equal(guard.violations[0].path, 'package.json');
 });
+
+test('scout read-only guard ignores volatile sks runtime state files', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-scout-guard-state-'));
+  await fs.writeFile(path.join(root, 'package.json'), '{"name":"fixture"}\n');
+  await fs.mkdir(path.join(root, '.sneakoscope', 'state'), { recursive: true });
+  await fs.writeFile(path.join(root, '.sneakoscope', 'state', 'current.json'), '{}\n');
+  await fs.writeFile(path.join(root, '.sneakoscope', 'state', 'current.json.123.tmp'), '{}\n');
+  const before = await snapshotScoutReadableTree(root, { missionId: 'M-test' });
+  assert.equal(Object.hasOwn(before.entries, '.sneakoscope/state/current.json'), false);
+  assert.equal(Object.hasOwn(before.entries, '.sneakoscope/state/current.json.123.tmp'), false);
+});

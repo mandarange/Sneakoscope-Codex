@@ -55,6 +55,9 @@ id_ed25519
 native/
 crates/**/target/
 scripts/
+src/core/pipeline/route-prep-*.mjs
+src/core/pipeline/prompt-context-*.mjs
+src/core/pipeline/stop-gate-*.mjs
 tmp/
 .tmp/
 temp/

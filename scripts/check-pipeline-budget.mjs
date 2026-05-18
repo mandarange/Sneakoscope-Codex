@@ -8,11 +8,23 @@ const facade = path.join(root, 'src', 'core', 'pipeline.mjs');
 const facadeLines = lineCount(facade);
 if (facadeLines > 200) failures.push(`src/core/pipeline.mjs: line count ${facadeLines} > 200`);
 
+const runtimeFacade = path.join(root, 'src', 'core', 'pipeline-runtime.mjs');
+if (fs.existsSync(runtimeFacade)) {
+  const runtimeLines = lineCount(runtimeFacade);
+  if (runtimeLines > 300) failures.push(`src/core/pipeline-runtime.mjs: line count ${runtimeLines} > 300`);
+  const text = fs.readFileSync(runtimeFacade, 'utf8');
+  if (/from ['"].*\\b(team|qa|research|ppt|image-ux-review|db|gx)\\b/i.test(text)) {
+    failures.push('src/core/pipeline-runtime.mjs: compatibility facade imports route implementation modules directly');
+  }
+}
+
 const moduleDir = path.join(root, 'src', 'core', 'pipeline');
 for (const file of fs.readdirSync(moduleDir).filter((name) => name.endsWith('.mjs'))) {
   const absolute = path.join(moduleDir, file);
   const lines = lineCount(absolute);
   if (lines > 1000) failures.push(`src/core/pipeline/${file}: line count ${lines} > 1000`);
+  const imports = fs.readFileSync(absolute, 'utf8').match(/\\bfrom\\s+['"][^'"]+['"]/g) || [];
+  if (imports.length > 35) failures.push(`src/core/pipeline/${file}: import count ${imports.length} > 35`);
 }
 
 const required = [
@@ -20,9 +32,22 @@ const required = [
   'stage-policy.mjs',
   'scout-stage-policy.mjs',
   'route-prep.mjs',
+  'route-prep-team.mjs',
+  'route-prep-research.mjs',
+  'route-prep-qa.mjs',
+  'route-prep-ppt.mjs',
+  'route-prep-image-ux.mjs',
+  'route-prep-db.mjs',
+  'route-prep-gx.mjs',
   'stop-gate.mjs',
+  'stop-gate-context7.mjs',
+  'stop-gate-subagents.mjs',
+  'stop-gate-proof.mjs',
   'active-context.mjs',
   'prompt-context.mjs',
+  'prompt-context-dfix.mjs',
+  'prompt-context-answer.mjs',
+  'prompt-context-computer-use.mjs',
   'pipeline-plan-writer.mjs',
   'validation.mjs'
 ];

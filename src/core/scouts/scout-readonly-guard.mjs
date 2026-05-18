@@ -6,6 +6,7 @@ const DEFAULT_IGNORES = Object.freeze([
   '.git',
   'node_modules',
   '.sneakoscope/arenas',
+  '.sneakoscope/state',
   '.sneakoscope/tmp'
 ]);
 
@@ -14,9 +15,11 @@ export async function snapshotScoutReadableTree(root, { missionId } = {}) {
   const entries = {};
   for (const file of files) {
     const relative = rel(root, file);
+    if (isVolatileRuntimePath(relative)) continue;
     if (isAllowedScoutWrite(relative, missionId)) continue;
-    const data = await fs.readFile(file);
-    const stat = await fs.stat(file);
+    const current = await readStableFile(file);
+    if (!current) continue;
+    const { data, stat } = current;
     entries[relative] = {
       sha256: sha256(data),
       size: stat.size
@@ -28,6 +31,24 @@ export async function snapshotScoutReadableTree(root, { missionId } = {}) {
     file_count: Object.keys(entries).length,
     entries
   };
+}
+
+async function readStableFile(file) {
+  try {
+    const data = await fs.readFile(file);
+    const stat = await fs.stat(file);
+    return { data, stat };
+  } catch (err) {
+    if (err?.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+function isVolatileRuntimePath(relativePath) {
+  const relPath = String(relativePath || '').split(path.sep).join('/');
+  if (/^\.sneakoscope\/state\//.test(relPath)) return true;
+  if (/^\.sneakoscope\/.*\.tmp$/.test(relPath)) return true;
+  return false;
 }
 
 export async function assertScoutReadOnly(root, before, { missionId } = {}) {

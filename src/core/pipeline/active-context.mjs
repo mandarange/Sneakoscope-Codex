@@ -1,3 +1,3 @@
 export {
   activeRouteContext
-} from '../pipeline-runtime.mjs';
+} from '../pipeline-internals/runtime-core.mjs';

@@ -5,4 +5,4 @@ export {
   buildPipelinePlan,
   writePipelinePlan,
   validatePipelinePlan
-} from '../pipeline-runtime.mjs';
+} from '../pipeline-internals/runtime-core.mjs';

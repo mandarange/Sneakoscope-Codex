@@ -9,7 +9,8 @@ The fixture gate checks:
 - deterministic safe allowlist commands execute successfully;
 - expected artifacts are declared as arrays;
 - every feature has an explicit fixture; unknown features return `missing` instead of implicit static pass;
-- fixture quality is recorded as `real_optional`, `execute_and_validate_artifacts`, `execute`, `mock`, or `static_contract`;
+- fixture quality is recorded as `runtime_verified`, `runtime_mock_verified`, `integration_optional`, `static_contract`, or `missing`;
+- runtime route features cannot be `static_contract`;
 - runtime fixtures default to `hermetic_temp_project` roots unless explicitly marked `source_checkout_required`;
 - expected artifacts are resolved from the mission id emitted by the command output, not from placeholder materialization;
 - fixture pass count is at least 90;
@@ -20,3 +21,13 @@ The fixture gate checks:
 - all-features selftest checks `five_scout_intake_contract_present`, `scout_gate_fixture_pass`, `scout_proof_evidence_contract_present`, and `scout_read_only_policy_present`.
 
 External dependency routes remain honest: a mock fixture can pass while the real dependency path remains `blocked`, `not_verified`, or `verified_partial` until real evidence exists.
+
+## 0.9.19 Quality Boundary
+
+- `runtime_verified`: actual command executed and generated artifacts validated.
+- `runtime_mock_verified`: mock route command executed and generated artifacts validated.
+- `integration_optional`: real dependency may be absent, but a blocker is recorded.
+- `static_contract`: docs/skill/manifest-only; no runtime behavior claim.
+- `missing`: invalid release state.
+
+`npm run feature-quality:check` fails when runtime route features are static-only or when quality counts are missing from the registry.
