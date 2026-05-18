@@ -44,7 +44,7 @@ export async function maybeFinalizeRoute(root, {
       mode: mock ? 'auto-finalize-mock' : 'auto-finalize'
     })
     : null;
-  const scoutArtifacts = scoutResult?.required === false ? [] : scoutArtifactList();
+  const scoutArtifacts = scoutResult ? (scoutResult.required === false ? [] : scoutArtifactList()) : [];
   const scoutBlockers = scoutResult?.required && scoutResult.gate?.passed !== true && scoutResult.status !== 'already_passed'
     ? ['scout_gate_not_passed']
     : [];

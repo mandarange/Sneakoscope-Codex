@@ -8,8 +8,11 @@ export const RUST_ACCELERATOR_CAPABILITIES = Object.freeze([
   'compact-info',
   'jsonl-tail',
   'secret-scan',
+  'evidence-secret-scan',
   'image-hash',
-  'voxel-validate'
+  'image-voxel-index',
+  'voxel-validate',
+  'image-voxel-validate-fast'
 ]);
 
 export function rustBuildHint() {

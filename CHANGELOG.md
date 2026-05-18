@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+
+## [0.9.20] - 2026-05-18
+
+### Added
+- Add SKS Trust Kernel invariants that make route completion, evidence, and proof validation a single contract.
+- Add core performance budgets for CLI hot paths, proof validation, Image Voxel validation, Scout intake, and feature fixture execution.
+- Add route finalization audit tests that prove serious route fixtures write Completion Proof through real command paths.
+- Add strict evidence router checks so mock/static evidence cannot be upgraded to verified real evidence.
+- Add managed-path rollback and pollution checks for SKS-owned project files.
+- Add core dominance documentation covering speed, stability, proof, image memory, black-box install, and known gaps.
+
+### Fixed
+- Prevent static contracts from being interpreted as runtime verification by routing route completion through `route-completion-contract.json`, `evidence-index.json`, and `trust-report.json`.
+- Prevent stale image/voxel/proof/scout evidence from passing route completion by adding freshness and stale-anchor validation.
+- Prevent release checks from passing without trust, evidence, safety, chaos, benchmark, and black-box matrix gates.
+- Prevent performance claims without benchmark artifacts by writing `.sneakoscope/reports/performance/core-bench.json` and `.md`.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
+### Changed
+- Treat SKS as a core trust kernel rather than a feature-cloning harness.
+- Prefer fewer, stronger, release-gated core surfaces over broader unverified feature expansion.
+- Expose novice-facing `sks run`, `sks status`, `sks trust`, `sks paths`, `sks rollback`, and `sks bench` surfaces.
+
 ## [0.9.19] - 2026-05-18
 
 ### Added

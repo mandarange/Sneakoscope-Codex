@@ -2,6 +2,8 @@ import path from 'node:path';
 import { collectProofEvidence } from './evidence-collector.mjs';
 import { writeCompletionProof } from './proof-writer.mjs';
 import { normalizeProofRoute, routeRequiresImageVoxelAnchors } from './route-proof-policy.mjs';
+import { linkProofClaimsToEvidence, proofEvidenceSummary } from '../evidence/evidence-proof-linker.mjs';
+import { writeTrustArtifactsForProof } from '../trust-kernel/trust-report.mjs';
 
 export async function writeRouteCompletionProof(root, {
   missionId = null,
@@ -30,7 +32,7 @@ export async function writeRouteCompletionProof(root, {
     blockers,
     unverified
   });
-  return writeCompletionProof(root, {
+  const written = await writeCompletionProof(root, {
     mission_id: missionId,
     route: normalizedRoute,
     status: normalizedStatus,
@@ -54,6 +56,27 @@ export async function writeRouteCompletionProof(root, {
       status: normalizedStatus
     }
   });
+  if (!missionId) return written;
+  const firstTrust = await writeTrustArtifactsForProof(root, written.proof);
+  const evidenceSummary = proofEvidenceSummary(firstTrust.evidenceIndex);
+  const enriched = await writeCompletionProof(root, {
+    ...written.proof,
+    evidence: {
+      ...written.proof.evidence,
+      evidence_router: evidenceSummary,
+      route_contract: firstTrust.contract?.mission_id ? `.sneakoscope/missions/${firstTrust.contract.mission_id}/route-completion-contract.json` : null,
+      trust_report: firstTrust.report?.mission_id ? `.sneakoscope/missions/${firstTrust.report.mission_id}/trust-report.json` : null
+    },
+    claims: linkProofClaimsToEvidence(written.proof, firstTrust.evidenceIndex)
+  }, {
+    command: {
+      cmd: `sks trust finalize ${missionId}`,
+      route: normalizedRoute,
+      status: firstTrust.report?.status || normalizedStatus
+    }
+  });
+  const trust = await writeTrustArtifactsForProof(root, enriched.proof);
+  return { ...enriched, trust };
 }
 
 function normalizeRouteProofStatus(status, { route, evidence, blockers, unverified }) {

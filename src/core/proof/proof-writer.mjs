@@ -57,6 +57,8 @@ export function renderProofMarkdown(proof = {}, validation = validateCompletionP
     `- Image voxels: ${proof.evidence?.image_voxels?.anchors || proof.evidence?.image_voxels?.anchor_count || 0}`,
     `- Scouts: ${proof.evidence?.scouts?.completed_scouts ?? 0}/${proof.evidence?.scouts?.scout_count ?? 0} (${proof.evidence?.scouts?.gate || 'not_recorded'})`,
     `- TriWiki: ${proof.evidence?.triwiki?.status || 'not_recorded'}`,
+    `- Evidence router: ${proof.evidence?.evidence_router?.records ?? 0} record(s)`,
+    `- Trust report: ${proof.evidence?.trust_report || 'not_recorded'}`,
     '',
     '## Unverified',
     ''

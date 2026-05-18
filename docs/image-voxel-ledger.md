@@ -13,4 +13,6 @@ sks wiki image-link-proof latest --json
 
 Validation fails when anchors point at missing images, bbox values exceed image dimensions, a visual route has no anchors, or a before/after fix claim lacks the relation needed to bind the change.
 
+0.9.20 also treats stale image evidence as a trust blocker. Images marked `stale` or `freshness: "stale"`, and anchors marked stale or with `voxel_layers.fresh <= 0`, cannot support high-confidence visual completion.
+
 Mock fixtures are allowed for release selftests only when they are marked as mock or `verified_partial`. Real visual completion still requires real screenshots or generated image evidence, valid image hashes, anchors inside image bounds, and before/after relations for fix claims.

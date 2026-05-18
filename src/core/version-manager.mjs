@@ -318,6 +318,15 @@ async function syncSourcePackageVersion(root, version) {
     await writeTextAtomic(file, next);
     files.push(file);
   }
+  const binFile = path.join(root, 'bin', 'sks.mjs');
+  const binText = await readFileMaybe(binFile);
+  if (binText) {
+    const next = binText.replace(/const FAST_PACKAGE_VERSION = ['"][^'"]+['"];/, `const FAST_PACKAGE_VERSION = '${version}';`);
+    if (next !== binText) {
+      await writeTextAtomic(binFile, next);
+      files.push(binFile);
+    }
+  }
   return { files, relative_files: files.map((file) => path.relative(root, file)) };
 }
 

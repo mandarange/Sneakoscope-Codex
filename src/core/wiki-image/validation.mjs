@@ -15,6 +15,7 @@ export function validateImageVoxelLedger(ledger = {}, opts = {}) {
     if (image.id) imageById.set(image.id, image);
     if (!image.path) issues.push(`image_path:${image.id || 'unknown'}`);
     if (!image.sha256) issues.push(`image_sha256:${image.id || 'unknown'}`);
+    if (image.stale === true || image.freshness === 'stale') issues.push(`stale_image:${image.id || 'unknown'}`);
     if (!Number.isFinite(Number(image.width)) || !Number.isFinite(Number(image.height))) issues.push(`image_dimensions:${image.id || 'unknown'}`);
   }
   if (opts.requireAnchors && anchors.length === 0) issues.push(`missing_anchors:${opts.route || 'visual-route'}`);
@@ -22,6 +23,7 @@ export function validateImageVoxelLedger(ledger = {}, opts = {}) {
     if (!anchor.id) issues.push('anchor_id');
     if (anchor.id && anchorById.has(anchor.id)) issues.push(`duplicate_anchor:${anchor.id}`);
     if (anchor.id) anchorById.set(anchor.id, anchor);
+    if (anchor.stale === true || anchor.freshness === 'stale' || Number(anchor.voxel_layers?.fresh ?? 1) <= 0) issues.push(`stale_anchor:${anchor.id || 'unknown'}`);
     if (!anchor.image_id || !imageById.has(anchor.image_id)) issues.push(`anchor_image_ref:${anchor.id || 'unknown'}`);
     if (anchor.bbox) {
       const image = imageById.get(anchor.image_id) || {};
