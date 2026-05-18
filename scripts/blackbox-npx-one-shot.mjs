@@ -22,7 +22,7 @@ function run(label, cmd, args, options = {}) {
         cwd: options.cwd || root,
         encoding: 'utf8',
         timeout: options.timeout || 120_000,
-        env: { ...process.env, npm_config_cache: cache, npm_config_prefix: prefix, SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true', ...options.env }
+        env: childNpmEnv(options.env)
       });
   const row = {
     label,
@@ -36,6 +36,13 @@ function run(label, cmd, args, options = {}) {
   };
   steps.push(row);
   return { ...row, stdout: result.stdout || '', stderr: result.stderr || '' };
+}
+
+function childNpmEnv(extra = {}) {
+  const env = { ...process.env, npm_config_cache: cache, npm_config_prefix: prefix, SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true', ...extra };
+  delete env.npm_config_dry_run;
+  delete env.NPM_CONFIG_DRY_RUN;
+  return env;
 }
 
 let tarball = dryRun ? path.join(tmp, 'sneakoscope-0.0.0.tgz') : null;

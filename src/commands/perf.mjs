@@ -6,11 +6,44 @@ import { printJson } from '../cli/output.mjs';
 
 export const DEFAULT_COLD_START_ITERATIONS = 20;
 
+const COLD_START_TIERS = Object.freeze({
+  'source-local': {
+    'sks --version': 80,
+    'sks help': 150,
+    'sks root --json': 150,
+    'sks features check --json': 1500
+  },
+  'source-ci': {
+    'sks --version': 120,
+    'sks help': 220,
+    'sks root --json': 220,
+    'sks features check --json': 2200
+  },
+  'packed-local': {
+    'sks --version': 160,
+    'sks help': 280,
+    'sks root --json': 280,
+    'sks features check --json': 2800
+  },
+  'global-shim': {
+    'sks --version': 220,
+    'sks help': 350,
+    'sks root --json': 350,
+    'sks features check --json': 3200
+  },
+  'npx-one-shot': {
+    'sks --version': 3000,
+    'sks help': 3000,
+    'sks root --json': 3000,
+    'sks features check --json': 5000
+  }
+});
+
 const COLD_START_COMMANDS = Object.freeze([
-  { cmd: 'sks --version', args: ['--version'], budget_p95_ms: 80 },
-  { cmd: 'sks help', args: ['help'], budget_p95_ms: 150 },
-  { cmd: 'sks root --json', args: ['root', '--json'], budget_p95_ms: 150 },
-  { cmd: 'sks features check --json', args: ['features', 'check', '--json'], budget_p95_ms: 1500 }
+  { cmd: 'sks --version', args: ['--version'] },
+  { cmd: 'sks help', args: ['help'] },
+  { cmd: 'sks root --json', args: ['root', '--json'] },
+  { cmd: 'sks features check --json', args: ['features', 'check', '--json'] }
 ]);
 
 export async function run(_command, args = []) {
@@ -18,7 +51,7 @@ export async function run(_command, args = []) {
   if (action === 'cold-start') {
     const root = await projectRoot();
     const iterations = resolveColdStartIterations(readArg(args, '--iterations', process.env.SKS_COLD_START_ITERATIONS));
-    const result = runColdStart({ root, iterations });
+    const result = runColdStart({ root, iterations, tier: readArg(args, '--tier', process.env.SKS_PERF_TIER || 'source-local') });
     if (flag(args, '--json')) return printJson(result);
     console.log(`Cold-start: ${result.ok ? 'pass' : 'fail'}`);
     for (const row of result.commands) console.log(`- ${row.cmd}: p95=${row.p95_ms}ms budget=${row.budget_p95_ms}ms ${row.ok ? 'ok' : 'blocked'}`);
@@ -29,13 +62,16 @@ export async function run(_command, args = []) {
   return perfCommand(action, args.slice(1));
 }
 
-export function runColdStart({ root = process.cwd(), iterations = DEFAULT_COLD_START_ITERATIONS } = {}) {
+export function runColdStart({ root = process.cwd(), iterations = DEFAULT_COLD_START_ITERATIONS, tier = 'source-local' } = {}) {
   const script = new URL('../../bin/sks.mjs', import.meta.url).pathname;
   const measuredIterations = resolveColdStartIterations(iterations);
-  const commands = COLD_START_COMMANDS.map((spec) => measureCommand(root, script, spec, measuredIterations));
+  const budgets = COLD_START_TIERS[tier] || COLD_START_TIERS['source-local'];
+  const commands = COLD_START_COMMANDS.map((spec) => measureCommand(root, script, { ...spec, budget_p95_ms: budgets[spec.cmd] }, measuredIterations));
   return {
     schema: 'sks.perf.cold-start.v1',
     version: PACKAGE_VERSION,
+    tier,
+    budget_tiers: COLD_START_TIERS,
     node: process.version,
     platform: `${process.platform}-${process.arch}`,
     commands,

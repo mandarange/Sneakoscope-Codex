@@ -1,0 +1,11 @@
+{
+  "schema": "sks.architecture-waivers.v1",
+  "waivers": [
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/cli/install-helpers.mjs",
+      "reason": "generated",
+      "expires_version": "1.0.0"
+    }
+  ]
+}

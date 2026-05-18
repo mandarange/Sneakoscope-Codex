@@ -6,7 +6,7 @@ export async function benchCommand(args = []) {
   const action = args[0] || 'core';
   const root = await benchRoot();
   if (action === 'core' || action === 'trust-kernel') {
-    const report = await runCoreBench(root, { iterations: readFlagValue(args, '--iterations', 3) });
+    const report = await runCoreBench(root, { iterations: readFlagValue(args, '--iterations', 3), tier: readFlagValue(args, '--tier', 'source-local') });
     const result = action === 'trust-kernel'
       ? { schema: 'sks.trust-kernel-bench.v1', ok: report.commands.find((row) => row.command === 'sks trust validate latest --json')?.ok === true, core: report }
       : report;

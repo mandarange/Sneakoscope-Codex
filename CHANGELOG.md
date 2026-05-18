@@ -3,6 +3,29 @@
 ## [Unreleased]
 
 
+## [1.0.0] - 2026-05-19
+
+### Added
+- Add TypeScript-first architecture for SKS core trust kernel, command registry, route contracts, evidence records, completion proof, Image Voxel ledgers, Scout outputs, and feature fixtures.
+- Add generated runtime validators or schema guards for every trust-kernel contract.
+- Add packed-package command registry import smoke tests that verify every registered command resolves from the packed tarball.
+- Add real black-box matrix coverage for pack install, npx one-shot, global shim, Unicode paths, paths with spaces, no-git directories, and read-only project directories.
+- Add `sks run --execute` and `sks run --auto` to run selected routes through route command execution, finalization, proof, trust report, and status.
+- Add environment-tiered performance budgets for source, packed, CI, local, and global install modes.
+- Add hard architecture gates that fail on internal monolith regressions.
+
+### Fixed
+- Prevent package `files` exclusions from breaking command registry imports in packed installs.
+- Prevent static-contract feature coverage from masking runtime route verification gaps.
+- Prevent architecture warnings from allowing new monoliths.
+- Prevent `sks run` from stopping at prepared state when `--execute` is requested.
+- Prevent TypeScript type drift between compile-time contracts and runtime JSON artifacts.
+
+### Changed
+- Treat TypeScript type safety and runtime schema validation as release invariants.
+- Treat packed package command import smoke as mandatory before publish.
+- Promote `1.0.0` to the stable npm release target so plain `npm publish` can ship on the `latest` dist-tag.
+
 ## [0.9.20] - 2026-05-18
 
 ### Added

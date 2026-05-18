@@ -39,6 +39,13 @@ function run(cmd, args, options = {}) {
   });
 }
 
+function npmRegistryReadEnv(overrides = {}) {
+  const env = { ...process.env, ...overrides };
+  delete env.npm_config_tag;
+  delete env.NPM_CONFIG_TAG;
+  return env;
+}
+
 function checkPackagePublishConfig(pkg) {
   if (pkg.private) fail('package.json private=true would block public npm publication');
   if (pkg.publishConfig?.access !== 'public') {
@@ -48,21 +55,35 @@ function checkPackagePublishConfig(pkg) {
   if (registry !== expectedRegistry) {
     fail('package.json publishConfig.registry must target npmjs', `found: ${registry || 'missing'}\nexpected: ${expectedRegistry}`);
   }
+  const isPrerelease = /-/.test(String(pkg.version || ''));
+  if (isPrerelease && pkg.publishConfig?.tag !== 'rc') {
+    fail('package.json publishConfig.tag must be rc for prerelease versions', `found: ${pkg.publishConfig?.tag || 'missing'}\nversion: ${pkg.version}`);
+  }
+  if (!isPrerelease && pkg.publishConfig?.tag && pkg.publishConfig.tag !== 'latest') {
+    fail('package.json publishConfig.tag must be latest or omitted for stable versions', `found: ${pkg.publishConfig.tag}\nversion: ${pkg.version}`);
+  }
 }
 
-function checkRootNpmrc() {
+function checkRootNpmrc(pkg) {
   const npmrcPath = path.join(root, '.npmrc');
   if (!fs.existsSync(npmrcPath)) return;
   const text = fs.readFileSync(npmrcPath, 'utf8');
   const unsafe = [];
+  const isPrerelease = /-/.test(String(pkg.version || ''));
   for (const [index, line] of text.split(/\r?\n/).entries()) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) continue;
     const match = trimmed.match(/^(?:@[^:]+:)?registry\s*=\s*(.+)$/);
     if (match && normalizeRegistry(match[1]) !== expectedRegistry) unsafe.push(`${index + 1}: ${trimmed}`);
+    const tagMatch = trimmed.match(/^tag\s*=\s*(.+)$/);
+    if (tagMatch) {
+      const tag = tagMatch[1].trim();
+      if (isPrerelease && tag !== 'rc') unsafe.push(`${index + 1}: ${trimmed}`);
+      if (!isPrerelease && tag !== 'latest') unsafe.push(`${index + 1}: ${trimmed}`);
+    }
   }
   if (unsafe.length) {
-    fail('root .npmrc overrides the registry away from npmjs', unsafe.join('\n'));
+    fail('root .npmrc contains publish config incompatible with this release', unsafe.join('\n'));
   }
 }
 
@@ -99,10 +120,9 @@ function checkLockfile(pkg) {
 }
 
 function checkPackedMetadata(pkg) {
-  const env = {
-    ...process.env,
+  const env = npmRegistryReadEnv({
     npm_config_cache: process.env.SKS_RELEASE_NPM_CACHE || path.join(os.tmpdir(), 'sneakoscope-npm-cache')
-  };
+  });
   const result = run(npmBin, ['pack', '--dry-run', '--json', '--ignore-scripts', '--registry', expectedRegistry], { env });
   if (result.status !== 0) fail('npm pack dry-run failed', `${result.stdout || ''}\n${result.stderr || ''}`);
   let info;
@@ -134,7 +154,10 @@ function checkPublishedVersion(pkg) {
     console.log('Registry network check skipped by SKS_SKIP_REGISTRY_NETWORK_CHECK=1.');
     return;
   }
-  const result = run(npmBin, ['view', pkg.name, 'version', 'dist-tags', '--json', '--registry', expectedRegistry]);
+  const env = npmRegistryReadEnv({
+    npm_config_cache: process.env.SKS_RELEASE_NPM_CACHE || path.join(os.tmpdir(), 'sneakoscope-npm-cache')
+  });
+  const result = run(npmBin, ['view', `${pkg.name}@latest`, 'version', 'dist-tags', '--json', '--registry', expectedRegistry], { env });
   if (result.status !== 0) fail('npm registry metadata lookup failed', `${result.stdout || ''}\n${result.stderr || ''}`);
   let info;
   try {
@@ -144,7 +167,7 @@ function checkPublishedVersion(pkg) {
   }
   const latest = info?.['dist-tags']?.latest || info?.version || null;
   if (!latest) fail('npm registry metadata lookup did not return a latest version');
-  const exact = run(npmBin, ['view', `${pkg.name}@${pkg.version}`, 'version', '--json', '--registry', expectedRegistry]);
+  const exact = run(npmBin, ['view', `${pkg.name}@${pkg.version}`, 'version', '--json', '--registry', expectedRegistry], { env });
   let exactPublished = false;
   if (exact.status === 0) {
     try {
@@ -171,7 +194,7 @@ function checkPublishedVersion(pkg) {
 
 const pkg = readJson('package.json');
 checkPackagePublishConfig(pkg);
-checkRootNpmrc();
+checkRootNpmrc(pkg);
 checkLockfile(pkg);
 checkPackedMetadata(pkg);
 checkPublishedVersion(pkg);

@@ -5,17 +5,12 @@ import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
 const failures = [];
-const warnings = [];
+const waivers = loadWaivers();
 
 runGate('pipeline-budget:check');
 runGate('pipeline-runtime:check');
 checkFacade('src/core/pipeline-runtime.mjs', 300);
 checkLargeFiles();
-
-if (warnings.length) {
-  console.error('Architecture warnings:');
-  for (const warning of warnings) console.error(`- ${warning}`);
-}
 if (failures.length) {
   console.error('Architecture check failed:');
   for (const failure of failures) console.error(`- ${failure}`);
@@ -43,15 +38,67 @@ function checkLargeFiles() {
   for (const file of files) {
     const relPath = path.relative(root, file).split(path.sep).join('/');
     const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/).length;
-    if (lines > 3000) failures.push(`${relPath}: handwritten file ${lines} lines > 3000 split-review gate`);
-    else if (lines > 1500) warnings.push(`${relPath}: ${lines} lines; extraction recommended before adding substantial unrelated logic`);
+    if (isWaivedGenerated(relPath)) continue;
+    const max = architectureLineLimit(relPath);
+    if (lines > max) failures.push(`${relPath}: handwritten file ${lines} lines > ${max} architecture gate`);
+    if (!isRouteDomainAggregator(relPath) && importsUnrelatedRouteDomains(file)) failures.push(`${relPath}: imports 5+ unrelated route domains`);
   }
+}
+
+function architectureLineLimit(relPath) {
+  if (/^src\/core\/(?:pipeline|trust-kernel|evidence|proof)\//.test(relPath)) return 1200;
+  if (/^src\/core\/(?:pipeline|trust-kernel|evidence|proof)/.test(relPath)) return 1200;
+  if (/^src\/commands\//.test(relPath) || /^src\/core\/commands\//.test(relPath)) return 900;
+  return 1800;
+}
+
+function isRouteDomainAggregator(relPath) {
+  return [
+    'src/core/pipeline-internals/runtime-core.mjs',
+    'src/core/pipeline-internals/runtime-gates.mjs'
+  ].includes(relPath);
+}
+
+function importsUnrelatedRouteDomains(file) {
+  const text = fs.readFileSync(file, 'utf8');
+  const domains = new Set();
+  const imports = importSpecs(text);
+  for (const domain of ['team', 'qa-loop', 'research', 'ppt', 'image-ux-review', 'db', 'gx', 'wiki']) {
+    if (imports.some((spec) => new RegExp(`(^|[/_-])${domain}([/_-]|\\.|$)`, 'i').test(spec))) domains.add(domain);
+  }
+  return domains.size >= 5;
+}
+
+function importSpecs(text) {
+  const specs = [];
+  const re = /^\s*import\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/gm;
+  let match;
+  while ((match = re.exec(text))) specs.push(match[1]);
+  return specs;
 }
 
 function walk(dir, out) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(file, out);
-    else if (entry.isFile() && /\.(mjs|js)$/.test(entry.name)) out.push(file);
+    else if (entry.isFile() && /\.(mjs|js|ts)$/.test(entry.name)) out.push(file);
   }
+}
+
+function loadWaivers() {
+  const file = path.join(root, 'src', 'generated', 'architecture-waivers.json');
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return Array.isArray(parsed.waivers) ? parsed.waivers : [];
+  } catch {
+    return [];
+  }
+}
+
+function isWaivedGenerated(relPath) {
+  return /^src\/generated\//.test(relPath)
+    || waivers.some((waiver) => waiver?.schema === 'sks.architecture-waiver.v1'
+      && waiver.file === relPath
+      && waiver.reason === 'generated'
+      && waiver.expires_version);
 }

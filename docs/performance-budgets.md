@@ -26,3 +26,16 @@ Artifacts:
 | `sks scouts engines --json` | 1000ms |
 
 Budget misses are evidence, not marketing copy. README or release notes should only claim a speed win when the benchmark artifact exists and passes on the target environment.
+# 1.0.0 Tiered Budgets
+
+Performance budgets are tiered by execution environment and stored in `src/core/performance-budgets.json`, which is copied to `dist/core/performance-budgets.json` during build.
+
+Tiers:
+
+- `source-local`
+- `source-ci`
+- `packed-local`
+- `global-shim`
+- `npx-one-shot`
+
+Use `sks bench core --tier source-ci --json` for release CI. `perf:gate` selects `source-ci` when `CI=true`; otherwise it uses the local tier unless `SKS_PERF_TIER` is set.

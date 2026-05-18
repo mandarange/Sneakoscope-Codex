@@ -1,11 +1,13 @@
 import path from 'node:path';
+import fsp from 'node:fs/promises';
 import { exists, nowIso, readJson, writeJsonAtomic } from '../fsx.mjs';
 import { findLatestMission, missionDir } from '../mission.mjs';
 import { readRouteProof } from '../proof/proof-reader.mjs';
 import { validateCompletionContract } from './completion-contract.mjs';
 import { writeEvidenceIndexForProof } from '../evidence/evidence-router.mjs';
-import { readEvidenceIndex } from '../evidence/evidence-store.mjs';
-import { writeRouteCompletionContract } from './route-contract.mjs';
+import { missionEvidenceIndexPath, readEvidenceIndex } from '../evidence/evidence-store.mjs';
+import { routeCompletionContractPath, writeRouteCompletionContract } from './route-contract.mjs';
+import { lastJsonlEventTime } from '../evidence/evidence-freshness.mjs';
 import { routeStateMachineSnapshot } from './route-state-machine.mjs';
 import { combineTrustStatus } from './trust-status.mjs';
 import { TRUST_REPORT_SCHEMA, trustKernelMetadata } from './trust-kernel-schema.mjs';
@@ -36,8 +38,13 @@ export async function latestTrustReport(root, missionArg = 'latest') {
     };
   }
   const file = trustReportPath(root, missionId);
-  if (await exists(file)) return readJson(file);
   const proof = await readRouteProof(root, missionId);
+  if (await exists(file)) {
+    const report = await readJson(file);
+    const temporalIssues = await temporalTrustIssues(root, missionId, { report, proof });
+    if (!temporalIssues.length) return report;
+    return staleTrustReport(report, temporalIssues);
+  }
   if (!proof) {
     return {
       schema: TRUST_REPORT_SCHEMA,
@@ -107,5 +114,49 @@ function scoutQualityFromProof(proof = {}) {
     confidence: high ? 'high' : 'verified_partial',
     real_parallel: Boolean(scouts.real_parallel),
     speedup_claim_allowed: Boolean(scouts.speedup_claim_allowed)
+  };
+}
+
+async function temporalTrustIssues(root, missionId, { report = {}, proof = null } = {}) {
+  const issues = [];
+  if (!missionId) return issues;
+  const dir = missionDir(root, missionId);
+  const evidenceIndex = await readEvidenceIndex(root, missionId);
+  const contract = await readJson(routeCompletionContractPath(root, missionId), null);
+  const latestEvent = await lastJsonlEventTime(path.join(dir, 'events.jsonl'));
+  const proofTime = await artifactTime(path.join(dir, 'completion-proof.json'), proof);
+  const evidenceTime = await artifactTime(missionEvidenceIndexPath(root, missionId), evidenceIndex);
+  const contractTime = await artifactTime(routeCompletionContractPath(root, missionId), contract);
+  const reportTime = await artifactTime(trustReportPath(root, missionId), report);
+  if (Number.isFinite(latestEvent) && Number.isFinite(proofTime) && proofTime < latestEvent) issues.push('stale_proof');
+  if (Number.isFinite(evidenceTime) && Number.isFinite(proofTime) && evidenceTime < proofTime) issues.push('stale_evidence_index');
+  if (Number.isFinite(contractTime) && Number.isFinite(proofTime) && contractTime < proofTime) issues.push('stale_route_contract');
+  if (Number.isFinite(reportTime)) {
+    if (Number.isFinite(evidenceTime) && reportTime < evidenceTime) issues.push('stale_trust_report');
+    if (Number.isFinite(contractTime) && reportTime < contractTime) issues.push('stale_trust_report');
+    if (Number.isFinite(proofTime) && reportTime < proofTime) issues.push('stale_trust_report');
+  }
+  return [...new Set(issues)];
+}
+
+async function artifactTime(file, artifact = null) {
+  const generated = Date.parse(artifact?.generated_at || '');
+  if (Number.isFinite(generated)) return generated;
+  try {
+    const stat = await fsp.stat(file);
+    return stat.mtimeMs;
+  } catch {
+    return Number.NaN;
+  }
+}
+
+function staleTrustReport(report = {}, issues = []) {
+  const nextIssues = [...new Set([...(report.issues || []), ...issues])];
+  return {
+    ...report,
+    ok: false,
+    status: 'blocked',
+    issues: nextIssues,
+    blockers: [...new Set([...(report.blockers || []), ...issues])]
   };
 }

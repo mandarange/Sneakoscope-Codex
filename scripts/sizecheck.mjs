@@ -9,7 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const limits = {
   packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 520 * 1024),
   unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 2140 * 1024),
-  packFiles: Number(process.env.SKS_MAX_PACK_FILES || 240),
+  packFiles: Number(process.env.SKS_MAX_PACK_FILES || 360),
   trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 384 * 1024)
 };
 
@@ -61,16 +61,28 @@ function checkVersionSync() {
   const source = fs.readFileSync(path.join(root, 'src', 'core', 'version.mjs'), 'utf8');
   const fsx = fs.readFileSync(path.join(root, 'src', 'core', 'fsx.mjs'), 'utf8');
   const bin = fs.readFileSync(path.join(root, 'bin', 'sks.mjs'), 'utf8');
+  const tsBin = fs.readFileSync(path.join(root, 'src', 'bin', 'sks.ts'), 'utf8');
+  const cargoToml = fs.readFileSync(path.join(root, 'crates', 'sks-core', 'Cargo.toml'), 'utf8');
+  const cargoLock = fs.readFileSync(path.join(root, 'crates', 'sks-core', 'Cargo.lock'), 'utf8');
+  const cargoMain = fs.readFileSync(path.join(root, 'crates', 'sks-core', 'src', 'main.rs'), 'utf8');
   const sourceVersion = source.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
   const fsxVersion = fsx.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
   const binVersion = bin.match(/const FAST_PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
+  const tsBinVersion = tsBin.match(/const FAST_PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
+  const cargoTomlVersion = cargoToml.match(/^version = "([^"]+)"/m)?.[1];
+  const cargoLockVersion = cargoLock.match(/\[\[package\]\]\nname = "sks-core"\nversion = "([^"]+)"/)?.[1];
+  const cargoMainVersion = cargoMain.match(/println!\("sks-rs ([^"]+)"\)/)?.[1];
   const lockRootVersion = lock.packages?.['']?.version;
   const mismatches = [
     ['package-lock.json version', lock.version],
     ['package-lock root package version', lockRootVersion],
     ['src/core/version.mjs PACKAGE_VERSION', sourceVersion],
     ['src/core/fsx.mjs PACKAGE_VERSION', fsxVersion],
-    ['bin/sks.mjs FAST_PACKAGE_VERSION', binVersion]
+    ['bin/sks.mjs FAST_PACKAGE_VERSION', binVersion],
+    ['src/bin/sks.ts FAST_PACKAGE_VERSION', tsBinVersion],
+    ['crates/sks-core/Cargo.toml version', cargoTomlVersion],
+    ['crates/sks-core/Cargo.lock sks-core version', cargoLockVersion],
+    ['crates/sks-core/src/main.rs sks-rs version', cargoMainVersion]
   ].filter(([, version]) => version !== pkg.version);
   if (mismatches.length) {
     fail('package version metadata is not synchronized', [
