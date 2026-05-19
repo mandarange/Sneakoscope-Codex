@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { rgbaKey, rgbaToWikiCoord } from '../wiki-coordinate.js';
 
-export function createVisualAnchor({ id, imageId, bbox, label, source, evidencePath, trustScore = 0.5, rgba = [58, 132, 210, 240], route = null, claimId = null } = {}) {
+export function createVisualAnchor({ id, imageId, bbox, label, source, evidencePath, trustScore = 0.5, rgba = [58, 132, 210, 240], route = null, claimId = null }: any = {}) {
   const key = Array.isArray(rgba) ? rgbaKey(rgba) : String(rgba || '3a84d2f0');
   const rgbaTuple = Array.isArray(rgba)
     ? rgba
@@ -31,12 +30,12 @@ export function createVisualAnchor({ id, imageId, bbox, label, source, evidenceP
   };
 }
 
-export function createImageRelation({ type = 'before_after', beforeImageId, afterImageId, anchors = [], verification = 'changed-screen-recheck', status = 'verified_partial' } = {}) {
+export function createImageRelation({ type = 'before_after', beforeImageId, afterImageId, anchors = [], verification = 'changed-screen-recheck', status = 'verified_partial' }: any = {}) {
   return {
     type,
     before_image_id: beforeImageId,
     after_image_id: afterImageId,
-    changed_anchor_ids: Array.isArray(anchors) ? anchors : String(anchors || '').split(',').map((x) => x.trim()).filter(Boolean),
+    changed_anchor_ids: Array.isArray(anchors) ? anchors : String(anchors || '').split(',').map((x: any) => x.trim()).filter(Boolean),
     verification,
     status
   };

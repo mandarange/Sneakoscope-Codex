@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { readJson, sksRoot } from '../core/fsx.js';
 import { findLatestMission, missionDir, stateFile } from '../core/mission.js';
@@ -20,15 +19,15 @@ import {
   writeRecallPulseArtifacts
 } from '../core/recallpulse.js';
 
-function flag(args, name) {
+function flag(args: any, name: any) {
   return args.includes(name);
 }
 
-export async function recallPulseCommand(sub = 'status', args = []) {
+export async function recallPulseCommand(sub: any = 'status', args: any = []) {
   const root = await sksRoot();
   const action = sub || 'status';
   if (action === 'help' || action === '--help' || action === '-h') return help();
-  const missionArg = args.find((arg) => !String(arg).startsWith('--')) || 'latest';
+  const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
   const id = await resolveMissionId(root, missionArg);
   if (!id) throw new Error('Usage: sks recallpulse run|status|eval|governance|checklist <mission-id|latest> [--json]');
   const state = await readJson(stateFile(root), {});
@@ -65,7 +64,7 @@ export async function recallPulseCommand(sub = 'status', args = []) {
     console.log('SKS RecallPulse governance report\n');
     console.log(`Mission: ${id}`);
     console.log(`Routes inventoried: ${report.route_gate_inventory.length}`);
-    console.log(`Recorded samples:   ${report.rollout.requested_samples.filter((sample) => sample.report_only_decision_recorded).length}/${report.rollout.requested_samples.length}`);
+    console.log(`Recorded samples:   ${report.rollout.requested_samples.filter((sample: any) => sample.report_only_decision_recorded).length}/${report.rollout.requested_samples.length}`);
     console.log(`Enforcement:        ${report.shadow_eval.enforcement_decision}`);
     console.log(`File:               ${path.relative(root, path.join(missionDir(root, id), RECALLPULSE_GOVERNANCE_ARTIFACT))}`);
     return;
@@ -96,7 +95,7 @@ export async function recallPulseCommand(sub = 'status', args = []) {
   throw new Error(`Unknown recallpulse command: ${action}`);
 }
 
-async function recallPulseStatus(root, id) {
+async function recallPulseStatus(root: any, id: any) {
   const dir = missionDir(root, id);
   return {
     mission_id: id,
@@ -109,7 +108,7 @@ async function recallPulseStatus(root, id) {
   };
 }
 
-function printSummary(root, id, decision) {
+function printSummary(root: any, id: any, decision: any) {
   console.log(`Mission: ${id}`);
   if (!decision) {
     console.log(`Decision: missing (${path.relative(root, path.join(missionDir(root, id), RECALLPULSE_DECISION_ARTIFACT))})`);
@@ -118,24 +117,24 @@ function printSummary(root, id, decision) {
   }
   console.log(`Decision: ${decision.recommended_action}`);
   console.log(`Stage:    ${decision.stage_id}`);
-  console.log(`L1:       ${(decision.l1?.selected || []).map((item) => item.id).join(', ') || 'none'}`);
+  console.log(`L1:       ${(decision.l1?.selected || []).map((item: any) => item.id).join(', ') || 'none'}`);
   console.log(`L3:       ${(decision.l3?.hydration_requests || []).length} hydration request(s)`);
   console.log(`Status:   ${decision.user_visible_status_projection?.message || 'report-only decision written'}`);
 }
 
-async function resolveMissionId(root, value = 'latest') {
+async function resolveMissionId(root: any, value: any = 'latest') {
   if (!value || value === 'latest') return findLatestMission(root);
   return value;
 }
 
-function readOption(args = [], name, fallback = null) {
+function readOption(args: any = [], name: any, fallback: any = null) {
   const index = args.indexOf(name);
   if (index < 0 || index + 1 >= args.length) return fallback;
   return args[index + 1];
 }
 
-function readListOption(args = [], name) {
-  const values = [];
+function readListOption(args: any = [], name: any) {
+  const values: any[] = [];
   for (let i = 0; i < args.length; i += 1) {
     if (args[i] === name && args[i + 1]) values.push(args[i + 1]);
   }

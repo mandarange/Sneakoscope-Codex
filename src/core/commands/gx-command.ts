@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { sksRoot, writeJsonAtomic } from '../fsx.js';
 import { createMission } from '../mission.js';
@@ -6,14 +5,14 @@ import { driftCartridge, renderCartridge, snapshotCartridge, validateCartridge }
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { flag, positionalArgs, readFlagValue } from './command-utils.js';
 
-export async function gxCommand(sub, args = []) {
+export async function gxCommand(sub: any, args: any = []) {
   const root = await sksRoot();
   const name = cartridgeName(args);
   const dir = cartridgeDir(root, name);
   if (sub === 'init') {
     const vgraphPath = path.join(dir, 'vgraph.json');
     const betaPath = path.join(dir, 'beta.json');
-    const created = [];
+    const created: any[] = [];
     const { exists, writeJsonAtomic: writeJson } = await import('../fsx.js');
     if (!(await exists(vgraphPath)) || flag(args, '--force')) {
       await writeJson(vgraphPath, defaultVGraph(name));
@@ -56,7 +55,7 @@ export async function gxCommand(sub, args = []) {
   process.exitCode = 1;
 }
 
-async function gxValidateFixture(root, args) {
+async function gxValidateFixture(root: any, args: any) {
   const { id, dir } = await createMission(root, { mode: 'gx', prompt: 'GX validate fixture' });
   const validation = { schema: 'sks.gx-validation.v1', ok: true, status: 'pass', fixture: true, cartridge: 'fixture' };
   await writeJsonAtomic(path.join(dir, 'gx-validation.json'), validation);
@@ -66,16 +65,16 @@ async function gxValidateFixture(root, args) {
   console.log(JSON.stringify({ schema: 'sks.gx-validate-fixture.v1', ok: proof.ok, mission_id: id, validation, proof: proof.validation }, null, 2));
 }
 
-function cartridgeName(args, fallback = 'architecture-atlas') {
+function cartridgeName(args: any, fallback: any = 'architecture-atlas') {
   const raw = positionalArgs(args)[0] || fallback;
   return String(raw).trim().replace(/[\\/]+/g, '-').replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
 }
 
-function cartridgeDir(root, name) {
+function cartridgeDir(root: any, name: any) {
   return path.join(root, '.sneakoscope', 'gx', 'cartridges', name);
 }
 
-export function defaultVGraph(name) {
+export function defaultVGraph(name: any) {
   return {
     id: name,
     title: 'Sneakoscope Context Map',
@@ -95,6 +94,6 @@ export function defaultVGraph(name) {
   };
 }
 
-export function defaultBeta(name) {
+export function defaultBeta(name: any) {
   return { id: name, version: 1, read_order: ['title', 'layers', 'nodes', 'edges', 'invariants', 'tests'], renderer: 'sneakoscope-codex-deterministic-svg' };
 }

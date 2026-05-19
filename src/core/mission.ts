@@ -1,20 +1,19 @@
-// @ts-nocheck
 import path from 'node:path';
-import { ensureDir, nowIso, randomId, writeJsonAtomic, appendJsonl, readJson, exists } from './fsx.js';
+import { ensureDir, nowIso, randomId, writeJsonAtomic, appendJsonl, readJson, exists, type JsonData } from './fsx.js';
 
 export function missionId() {
   const d = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
+  const pad = (n: any) => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
   return `M-${stamp}-${randomId(4)}`;
 }
 
-export function sineDir(root) { return path.join(root, '.sneakoscope'); }
-export function missionsDir(root) { return path.join(sineDir(root), 'missions'); }
-export function missionDir(root, id) { return path.join(missionsDir(root), id); }
-export function stateFile(root) { return path.join(sineDir(root), 'state', 'current.json'); }
+export function sineDir(root: any) { return path.join(root, '.sneakoscope'); }
+export function missionsDir(root: any) { return path.join(sineDir(root), 'missions'); }
+export function missionDir(root: any, id: any) { return path.join(missionsDir(root), id); }
+export function stateFile(root: any) { return path.join(sineDir(root), 'state', 'current.json'); }
 
-export async function createMission(root, { mode, prompt }) {
+export async function createMission(root: any, { mode, prompt }: any): Promise<JsonData> {
   const id = missionId();
   const dir = missionDir(root, id);
   await ensureDir(dir);
@@ -36,19 +35,19 @@ export async function createMission(root, { mode, prompt }) {
   return { id, dir, mission };
 }
 
-export async function loadMission(root, id) {
+export async function loadMission(root: any, id: any): Promise<JsonData> {
   const dir = missionDir(root, id);
   const mission = await readJson(path.join(dir, 'mission.json'));
   return { id, dir, mission };
 }
 
-export async function findLatestMission(root) {
+export async function findLatestMission(root: any) {
   const dir = missionsDir(root);
   if (!(await exists(dir))) return null;
   const fs = await import('node:fs/promises');
   const entries = await fs.readdir(dir, { withFileTypes: true });
-  const ids = entries.filter((e) => e.isDirectory() && e.name.startsWith('M-')).map((e) => e.name);
-  const candidates = await Promise.all(ids.map(async (id) => {
+  const ids = entries.filter((e: any) => e.isDirectory() && e.name.startsWith('M-')).map((e: any) => e.name);
+  const candidates = await Promise.all(ids.map(async (id: any) => {
     const dirPath = missionDir(root, id);
     const stat = await fs.stat(dirPath).catch(() => null);
     const mission = await readJson(path.join(dirPath, 'mission.json'), {}).catch(() => ({}));
@@ -59,11 +58,11 @@ export async function findLatestMission(root) {
       mtimeMs: stat?.mtimeMs || 0
     };
   }));
-  candidates.sort((a, b) => (a.createdMs - b.createdMs) || (a.mtimeMs - b.mtimeMs) || a.id.localeCompare(b.id));
+  candidates.sort((a: any, b: any) => (a.createdMs - b.createdMs) || (a.mtimeMs - b.mtimeMs) || a.id.localeCompare(b.id));
   return candidates.at(-1)?.id || null;
 }
 
-export async function setCurrent(root, patch, opts = {}) {
+export async function setCurrent(root: any, patch: any, opts: any = {}) {
   const current = opts.replace ? {} : await readJson(stateFile(root), {});
   await writeJsonAtomic(stateFile(root), { ...current, ...patch, updated_at: nowIso() });
 }

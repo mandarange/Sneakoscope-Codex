@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { buildCodexExecArgs, findCodexBinary } from '../../codex-adapter.js';
 import { nowIso, runProcess, which } from '../../fsx.js';
@@ -7,7 +6,7 @@ import { buildScoutPrompt } from './scout-engine-base.js';
 import { cleanupTmuxScoutSession } from './tmux-lane-cleanup.js';
 import { watchTmuxScoutOutputs } from './tmux-lane-watcher.js';
 
-export async function runTmuxLaneEngine(root, {
+export async function runTmuxLaneEngine(root: any, {
   missionId,
   dir,
   route,
@@ -16,13 +15,13 @@ export async function runTmuxLaneEngine(root, {
   attach = false,
   keepTmux = false,
   timeoutMs = Number(process.env.SKS_SCOUT_TMUX_TIMEOUT_MS || 120000)
-} = {}) {
+}: any = {}) {
   const startedAt = nowIso();
   const startMs = Date.now();
   const tmux = await which('tmux');
   const codex = await findCodexBinary();
   const session = `sks-scouts-${String(missionId || 'manual').replace(/[^A-Za-z0-9_-]/g, '-')}`;
-  const jobs = roles.map((role) => ({
+  const jobs = roles.map((role: any) => ({
     scout_id: role.id,
     output_file: path.join(dir, `${role.id}.tmux.md`),
     stdout_file: path.join(dir, `${role.id}.tmux.stdout.log`),
@@ -61,17 +60,17 @@ export async function runTmuxLaneEngine(root, {
   };
 }
 
-function blockedResult({ startedAt, startMs, jobs, blockers }) {
+function blockedResult({ startedAt, startMs, jobs, blockers }: any) {
   return {
     engine: 'tmux-lanes',
     started_at: startedAt,
     completed_at: nowIso(),
     duration_ms: Date.now() - startMs,
     blockers,
-    jobs: jobs.map((job) => ({ ...job, status: 'rejected', code: 127, reason: blockers.join('; ') }))
+    jobs: jobs.map((job: any) => ({ ...job, status: 'rejected', code: 127, reason: blockers.join('; ') }))
   };
 }
 
-function shellQuote(value) {
+function shellQuote(value: any) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }

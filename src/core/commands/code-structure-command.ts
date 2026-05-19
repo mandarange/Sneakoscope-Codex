@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { sksRoot } from '../fsx.js';
 import { scanCodeStructure } from '../code-structure.js';
 import { flag } from './command-utils.js';
 
-export async function codeStructureCommand(sub, args = []) {
+export async function codeStructureCommand(sub: any, args: any = []) {
   const action = sub || 'scan';
   if (action !== 'scan') {
     console.error('Usage: sks code-structure scan [--json]');

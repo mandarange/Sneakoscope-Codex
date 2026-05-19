@@ -1,15 +1,14 @@
-// @ts-nocheck
 import path from 'node:path';
 import { appendJsonl, ensureDir, nowIso, packageRoot, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { redactSecrets } from '../secret-redaction.js';
 import { emptyCompletionProof } from './proof-schema.js';
 import { validateCompletionProof } from './validation.js';
 
-export function proofDir(root = packageRoot()) {
+export function proofDir(root: any = packageRoot()) {
   return path.join(root, '.sneakoscope', 'proof');
 }
 
-export async function writeCompletionProof(root = packageRoot(), input = {}, opts = {}) {
+export async function writeCompletionProof(root: any = packageRoot(), input: any = {}, opts: any = {}) {
   const proof = redactSecrets(emptyCompletionProof({
     generated_at: nowIso(),
     ...input
@@ -32,7 +31,7 @@ export async function writeCompletionProof(root = packageRoot(), input = {}, opt
   return { ok: validation.ok, proof, validation, files: { latest_json: latestJson, latest_md: latestMd } };
 }
 
-export function renderProofMarkdown(proof = {}, validation = validateCompletionProof(proof)) {
+export function renderProofMarkdown(proof: any = {}, validation: any = validateCompletionProof(proof)) {
   const lines = [
     '# SKS Completion Proof',
     '',
@@ -58,6 +57,7 @@ export function renderProofMarkdown(proof = {}, validation = validateCompletionP
     `- Image voxels: ${proof.evidence?.image_voxels?.anchors || proof.evidence?.image_voxels?.anchor_count || 0}`,
     `- Scouts: ${proof.evidence?.scouts?.completed_scouts ?? 0}/${proof.evidence?.scouts?.scout_count ?? 0} (${proof.evidence?.scouts?.gate || 'not_recorded'})`,
     `- TriWiki: ${proof.evidence?.triwiki?.status || 'not_recorded'}`,
+    `- Wrongness: ${proof.evidence?.wrongness?.active_count ?? 0} active (${proof.evidence?.wrongness?.high_severity_active ?? 0} high)`,
     `- Evidence router: ${proof.evidence?.evidence_router?.records ?? 0} record(s)`,
     `- Trust report: ${proof.evidence?.trust_report || 'not_recorded'}`,
     '',
@@ -77,7 +77,7 @@ export function renderProofMarkdown(proof = {}, validation = validateCompletionP
   return `${lines.join('\n')}\n`;
 }
 
-function renderUnverifiedMarkdown(proof = {}) {
+function renderUnverifiedMarkdown(proof: any = {}) {
   const lines = ['# SKS Unverified Claims', ''];
   const items = proof.unverified?.length ? proof.unverified : ['No unverified claims recorded.'];
   for (const item of items) lines.push(`- ${typeof item === 'string' ? item : JSON.stringify(item)}`);

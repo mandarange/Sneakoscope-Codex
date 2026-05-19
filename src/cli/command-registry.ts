@@ -1,74 +1,116 @@
+export type CommandRun = (command: string, args: string[]) => Promise<unknown> | unknown;
+export type ArgsRun = (args: string[]) => Promise<unknown> | unknown;
+export type SubcommandRun = (subcommand: string, args: string[]) => Promise<unknown> | unknown;
+export type CommandArgsRun = (command: string, args: string[]) => Promise<unknown> | unknown;
+
 export interface CommandModule {
-  run(command: string, args: string[]): Promise<unknown> | unknown;
+  run: CommandRun;
 }
 
 export interface CommandEntry {
   maturity: 'stable' | 'beta' | 'labs';
   summary: string;
   lazy: () => Promise<CommandModule>;
-  packageRequiredFiles?: readonly string[];
+  packageRequiredFiles: readonly string[];
 }
 
-type RawCommandModule = Record<string, unknown>;
+type CommandCallable = (...args: unknown[]) => Promise<unknown> | unknown;
 
-type ModuleLoader = () => Promise<RawCommandModule>;
-
-function asFunction(value: unknown, exportName: string): (...args: readonly unknown[]) => Promise<unknown> | unknown {
-  if (typeof value !== 'function') throw new Error(`Command export ${exportName} is not a function`);
-  return value as (...args: readonly unknown[]) => Promise<unknown> | unknown;
+/** Loaded ESM modules are unknown at the boundary; narrow before calling exports. */
+export function hasFunctionExport<K extends string>(
+  mod: unknown,
+  exportName: K
+): mod is Record<K, CommandCallable> {
+  if (!mod || typeof mod !== 'object') return false;
+  const v = (mod as Record<string, unknown>)[exportName];
+  return typeof v === 'function';
 }
 
-function normalizeCommandModule(moduleValue: RawCommandModule, packageRequiredFile?: string): CommandModule {
-  const runner = moduleValue.run ?? moduleValue.main ?? moduleValue.default;
-  const module = {
-    run: async (command: string, args: string[]) => asFunction(runner, 'run/main/default')(command, args)
+function functionExport<T>(mod: unknown, exportName: string): T {
+  if (!hasFunctionExport(mod, exportName)) throw new Error(`Missing export ${exportName}`);
+  return mod[exportName] as T;
+}
+
+/** Pick runner from default export object shape used by legacy command files. */
+function pickRunner(mod: Record<string, unknown>): CommandCallable | null {
+  for (const k of ['run', 'main', 'default'] as const) {
+    const v = mod[k];
+    if (typeof v === 'function') return v as CommandCallable;
+  }
+  return null;
+}
+
+function normalizeCommandModule(moduleValue: unknown, _packageRequiredFile: string): CommandModule {
+  if (!moduleValue || typeof moduleValue !== 'object')
+    throw new Error('Invalid command module');
+
+  const rec = moduleValue as Record<string, unknown>;
+  const runner = pickRunner(rec);
+  if (!runner)
+    throw new Error('Command module must export run/main/default callable');
+
+  return {
+    run: async (command: string, args: string[]) => runner(command, args) as unknown,
   } satisfies CommandModule;
-  if (!packageRequiredFile) return module;
-  return module;
 }
 
-function directCommand(loader: ModuleLoader, packageRequiredFile: string): () => Promise<CommandModule> {
+export function directCommand<T extends { run?: CommandRun; main?: CommandRun; default?: CommandRun }>(
+  loader: () => Promise<T>,
+  packageRequiredFile: string
+): () => Promise<CommandModule> {
   return async () => normalizeCommandModule(await loader(), packageRequiredFile);
 }
 
-function argsCommand(loader: ModuleLoader, exportName: string, packageRequiredFile: string): () => Promise<CommandModule> {
+export function argsCommand<T extends object, K extends keyof T & string>(
+  loader: () => Promise<T>,
+  exportName: K,
+  packageRequiredFile: string
+): () => Promise<CommandModule> {
   return async () => {
     const mod = await loader();
-    const fn = asFunction(mod[exportName], exportName);
-    return { run: (_command: string, args: string[]) => fn(args) };
+    const fn = functionExport<ArgsRun>(mod, exportName);
+    return { run: (_command: string, args: string[]) => fn(args) as unknown };
   };
 }
 
-function noArgsCommand(loader: ModuleLoader, exportName: string, packageRequiredFile: string): () => Promise<CommandModule> {
+function noArgsCommand<T extends object, K extends keyof T & string>(
+  loader: () => Promise<T>,
+  exportName: K,
+  packageRequiredFile: string
+): () => Promise<CommandModule> {
   return async () => {
     const mod = await loader();
-    const fn = asFunction(mod[exportName], exportName);
-    return { run: () => fn() };
+    const fn = functionExport<() => Promise<unknown> | unknown>(mod, exportName);
+    return { run: () => fn() as unknown };
   };
 }
 
-function commandArgsCommand(loader: ModuleLoader, exportName: string, packageRequiredFile: string): () => Promise<CommandModule> {
+function commandArgsCommand<T extends object, K extends keyof T & string>(
+  loader: () => Promise<T>,
+  exportName: K,
+  packageRequiredFile: string
+): () => Promise<CommandModule> {
   return async () => {
     const mod = await loader();
-    const fn = asFunction(mod[exportName], exportName);
-    return { run: (command: string, args: string[]) => fn(command, args) };
+    const fn = functionExport<CommandArgsRun>(mod, exportName);
+    return { run: (command: string, args: string[]) => fn(command, args) as unknown };
   };
 }
 
-function subcommand(
-  loader: ModuleLoader,
-  exportName: string,
+function subcommand<T extends object, K extends keyof T & string>(
+  loader: () => Promise<T>,
+  exportName: K,
   packageRequiredFile: string,
   fallbackSubcommand?: string
 ): () => Promise<CommandModule> {
   return async () => {
     const mod = await loader();
-    const fn = asFunction(mod[exportName], exportName);
+    const fn = functionExport<SubcommandRun>(mod, exportName);
     return {
       run: (_command: string, args: string[]) => {
         const [subcommandName = fallbackSubcommand, ...rest] = args;
-        return fn(subcommandName, rest);
-      }
+        return fn(subcommandName ?? '', rest) as unknown;
+      },
     };
   };
 }
@@ -85,7 +127,8 @@ function entry(
 const basicModule = '../core/commands/basic-cli.js';
 const basicArgs = (exportName: string) => argsCommand(() => import(basicModule), exportName, 'dist/core/commands/basic-cli.js');
 const basicNoArgs = (exportName: string) => noArgsCommand(() => import(basicModule), exportName, 'dist/core/commands/basic-cli.js');
-const gcArgs = (exportName: string) => argsCommand(() => import('../core/commands/gc-command.js'), exportName, 'dist/core/commands/gc-command.js');
+const gcArgs = (exportName: 'gcCommand' | 'statsCommand' | 'memoryCommand') =>
+  argsCommand(() => import('../core/commands/gc-command.js'), exportName, 'dist/core/commands/gc-command.js');
 
 export const COMMANDS = {
   help: entry('stable', 'Show SKS help', 'dist/commands/help.js', directCommand(() => import('../commands/help.js'), 'dist/commands/help.js')),
@@ -152,6 +195,7 @@ export const COMMANDS = {
   'validate-artifacts': entry('beta', 'Validate mission artifacts', 'dist/core/commands/validate-artifacts-command.js', argsCommand(() => import('../core/commands/validate-artifacts-command.js'), 'validateArtifactsCommand', 'dist/core/commands/validate-artifacts-command.js')),
   proof: entry('beta', 'Show and validate completion proof', 'dist/commands/proof.js', directCommand(() => import('../commands/proof.js'), 'dist/commands/proof.js')),
   trust: entry('beta', 'Report and validate route trust kernel evidence', 'dist/core/commands/trust-command.js', argsCommand(() => import('../core/commands/trust-command.js'), 'trustCommand', 'dist/core/commands/trust-command.js')),
+  wrongness: entry('beta', 'Record and inspect TriWiki wrongness negative evidence', 'dist/core/commands/wrongness-command.js', argsCommand(() => import('../core/commands/wrongness-command.js'), 'wrongnessCommand', 'dist/core/commands/wrongness-command.js')),
   'proof-field': entry('beta', 'Scan proof field', 'dist/commands/proof-field.js', directCommand(() => import('../commands/proof-field.js'), 'dist/commands/proof-field.js')),
   'skill-dream': entry('labs', 'Track skill dream counters', 'dist/core/commands/skill-dream-command.js', subcommand(() => import('../core/commands/skill-dream-command.js'), 'skillDreamCommand', 'dist/core/commands/skill-dream-command.js', 'status')),
   'code-structure': entry('labs', 'Scan source structure', 'dist/core/commands/code-structure-command.js', subcommand(() => import('../core/commands/code-structure-command.js'), 'codeStructureCommand', 'dist/core/commands/code-structure-command.js', 'scan')),
@@ -182,7 +226,7 @@ export const COMMAND_ALIASES = {
   '--mad-sks': 'mad-sks'
 } as const;
 
-export type CommandName = keyof typeof COMMANDS;
+export type CommandName = Extract<keyof typeof COMMANDS, string>;
 
 export function commandNames(): CommandName[] {
   return Object.keys(COMMANDS).sort() as CommandName[];

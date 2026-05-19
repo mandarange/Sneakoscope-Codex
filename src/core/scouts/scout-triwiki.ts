@@ -1,8 +1,7 @@
-// @ts-nocheck
 import path from 'node:path';
 import { readJson } from '../fsx.js';
 
-export async function readScoutTriWikiHint(root) {
+export async function readScoutTriWikiHint(root: any) {
   const pack = await readJson(path.join(root, '.sneakoscope', 'wiki', 'context-pack.json'), null);
   if (!pack) return {
     available: false,

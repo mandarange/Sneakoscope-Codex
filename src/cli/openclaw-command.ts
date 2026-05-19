@@ -1,16 +1,15 @@
-// @ts-nocheck
 import path from 'node:path';
 import { OPENCLAW_SKILL_NAME, buildOpenClawSkillFiles, defaultOpenClawSkillDir, installOpenClawSkill } from '../core/openclaw.js';
 
-const flag = (args, name) => args.includes(name);
+const flag = (args: any, name: any) => args.includes(name);
 
-function readFlagValue(args, name, fallback) {
+function readFlagValue(args: any, name: any, fallback: any) {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 }
 
-function positionalArgs(args = []) {
-  const out = [];
+function positionalArgs(args: any = []) {
+  const out: any[] = [];
   const valueFlags = new Set(['--dir']);
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]);
@@ -23,7 +22,7 @@ function positionalArgs(args = []) {
   return out;
 }
 
-export async function openClawCommand(args = []) {
+export async function openClawCommand(args: any = []) {
   const action = args[0] || 'help';
   const targetDir = readFlagValue(args, '--dir', defaultOpenClawSkillDir());
   const resultOptions = {
@@ -38,8 +37,8 @@ export async function openClawCommand(args = []) {
     return;
   }
   if (action === 'print') {
-    const file = positionalArgs(args.slice(1))[0] || 'SKILL.md';
     const files = buildOpenClawSkillFiles();
+    const file = (positionalArgs(args.slice(1))[0] || 'SKILL.md') as keyof typeof files;
     if (!files[file]) {
       console.error(`Unknown OpenClaw skill file: ${file}`);
       console.error(`Files: ${Object.keys(files).join(', ')}`);

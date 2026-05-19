@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { loadMission } from '../mission.js';
@@ -6,7 +5,7 @@ import { ARTIFACT_FILES, writeValidationReport } from '../artifact-schemas.js';
 import { evaluateResearchGate } from '../research.js';
 import { flag, readFlagValue, resolveMissionId } from './command-utils.js';
 
-export async function validateArtifactsCommand(args = []) {
+export async function validateArtifactsCommand(args: any = []) {
   const root = await sksRoot();
   const missionArg = args[0] && !String(args[0]).startsWith('--') ? args[0] : 'latest';
   const id = await resolveMissionId(root, missionArg);
@@ -15,15 +14,15 @@ export async function validateArtifactsCommand(args = []) {
   const requiredRaw = readFlagValue(args, '--required', '');
   const required = requiredRaw === 'all'
     ? Object.keys(ARTIFACT_FILES)
-    : String(requiredRaw || '').split(',').map((x) => x.trim()).filter(Boolean);
-  const report = await writeValidationReport(targetDir, { required });
+    : String(requiredRaw || '').split(',').map((x: any) => x.trim()).filter(Boolean);
+  const report: any = await writeValidationReport(targetDir, { required });
   const missionMode = String(loaded?.mission?.mode || '').toLowerCase();
   if (missionMode === 'research' || await existsFile(path.join(targetDir, 'research-gate.json'))) {
     const researchGate = await evaluateResearchGate(targetDir);
     report.route_gate = { route: 'Research', ok: researchGate.passed === true, gate_file: 'research-gate.evaluated.json', reasons: researchGate.reasons || [] };
     if (!report.route_gate.ok) {
       report.ok = false;
-      report.errors = [...(report.errors || []), ...report.route_gate.reasons.map((reason) => `research-gate:${reason}`)];
+      report.errors = [...(report.errors || []), ...report.route_gate.reasons.map((reason: any) => `research-gate:${reason}`)];
     }
     await writeJsonAtomic(path.join(targetDir, 'artifact-validation.json'), report);
   }
@@ -32,11 +31,11 @@ export async function validateArtifactsCommand(args = []) {
   console.log(`Target: ${path.relative(root, targetDir) || '.'}`);
   if (report.route_gate) console.log(`Route gate: ${report.route_gate.route} ${report.route_gate.ok ? 'pass' : `fail (${report.route_gate.reasons.join(', ')})`}`);
   if (report.missing.length) console.log(`Missing: ${report.missing.join(', ')}`);
-  for (const [schema, result] of Object.entries(report.results)) console.log(`${schema}: ${result.ok ? 'pass' : `fail (${result.errors.join(', ')})`}`);
+  for (const [schema, result] of Object.entries(report.results) as Array<[string, any]>) console.log(`${schema}: ${result.ok ? 'pass' : `fail (${result.errors.join(', ')})`}`);
   if (!report.ok) process.exitCode = 2;
 }
 
-async function existsFile(file) {
+async function existsFile(file: any) {
   try {
     await readJson(file);
     return true;

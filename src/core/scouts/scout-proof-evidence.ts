@@ -1,10 +1,9 @@
-// @ts-nocheck
 import path from 'node:path';
 import { exists, readJson } from '../fsx.js';
 import { missionDir } from '../mission.js';
 import { SCOUT_COUNT, SCOUT_PROOF_EVIDENCE_SCHEMA } from './scout-schema.js';
 
-export async function readScoutProofEvidence(root, missionId) {
+export async function readScoutProofEvidence(root: any, missionId: any) {
   if (!missionId) return null;
   const dir = missionDir(root, missionId);
   const gateFile = path.join(dir, 'scout-gate.json');
@@ -38,7 +37,7 @@ export async function readScoutProofEvidence(root, missionId) {
   };
 }
 
-export function disabledScoutProofEvidence(reason = 'explicitly disabled by sealed contract') {
+export function disabledScoutProofEvidence(reason: any = 'explicitly disabled by sealed contract') {
   return {
     schema: SCOUT_PROOF_EVIDENCE_SCHEMA,
     required: false,

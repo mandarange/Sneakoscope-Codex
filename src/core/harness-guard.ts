@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { appendJsonlBounded, exists, nowIso, readJson, readText, sha256, writeJsonAtomic } from './fsx.js';
@@ -33,7 +32,7 @@ export const HARNESS_RUNTIME_MUTABLE = [
   '.sneakoscope/db-safety-scan.json'
 ];
 
-export async function isHarnessSourceProject(root) {
+export async function isHarnessSourceProject(root: any) {
   const pkg = await readJson(path.join(root, 'package.json'), null);
   return pkg?.name === 'sneakoscope'
     && await exists(path.join(root, 'src', 'bin', 'sks.ts'))
@@ -41,7 +40,7 @@ export async function isHarnessSourceProject(root) {
     && await exists(path.join(root, 'src', 'core', 'hooks-runtime.ts'));
 }
 
-export async function writeHarnessGuardPolicy(root, opts = {}) {
+export async function writeHarnessGuardPolicy(root: any, opts: any = {}) {
   const sourceException = opts.engineSourceException ?? await isHarnessSourceProject(root);
   const policy = {
     schema_version: 1,
@@ -66,7 +65,7 @@ export async function writeHarnessGuardPolicy(root, opts = {}) {
   return policy;
 }
 
-export async function loadHarnessGuardPolicy(root) {
+export async function loadHarnessGuardPolicy(root: any) {
   const policy = await readJson(path.join(root, HARNESS_GUARD_PATH), null);
   const sourceException = await isHarnessSourceProject(root);
   return {
@@ -82,15 +81,15 @@ export async function loadHarnessGuardPolicy(root) {
   };
 }
 
-export async function harnessGuardStatus(root) {
+export async function harnessGuardStatus(root: any) {
   const policyPath = path.join(root, HARNESS_GUARD_PATH);
   const existsPolicy = await exists(policyPath);
   const policy = await loadHarnessGuardPolicy(root);
   const sourceException = await isHarnessSourceProject(root);
   const current = await collectHarnessFingerprints(root);
   const expected = policy.fingerprints || {};
-  const missing = [];
-  const changed = [];
+  const missing: any[] = [];
+  const changed: any[] = [];
   for (const [file, hash] of Object.entries(expected)) {
     if (!current[file]) missing.push(file);
     else if (current[file] !== hash) changed.push(file);
@@ -109,7 +108,7 @@ export async function harnessGuardStatus(root) {
   };
 }
 
-export async function checkHarnessModification(root, payload = {}, opts = {}) {
+export async function checkHarnessModification(root: any, payload: any = {}, opts: any = {}) {
   const policy = await loadHarnessGuardPolicy(root);
   if (!policy.enabled || !policy.locked || policy.engine_source_exception || await isHarnessSourceProject(root)) {
     return { action: 'allow', reason: 'harness_source_exception_or_unlocked' };
@@ -123,12 +122,12 @@ export async function checkHarnessModification(root, payload = {}, opts = {}) {
   return { action: 'allow', classification };
 }
 
-export function harnessGuardBlockReason(decision = {}) {
+export function harnessGuardBlockReason(decision: any = {}) {
   const matches = (decision.matches || []).slice(0, 6).join(', ');
   return `SKS harness guard blocked this tool call. Installed Sneakoscope harness files are immutable to LLM edits after setup${matches ? `: ${matches}` : ''}. Use manual terminal maintenance or update/reinstall SKS outside the agent. This repository is editable only when it is the Sneakoscope engine source repo.`;
 }
 
-export function classifyHarnessPayload(root, payload = {}, policy = {}) {
+export function classifyHarnessPayload(root: any, payload: any = {}, policy: any = {}) {
   const strings = collectPayloadStrings(payload).slice(0, 300);
   const hay = strings.join('\n');
   const toolName = [payload.tool_name, payload.toolName, payload.name, payload.tool?.name, payload.server, payload.mcp_tool, payload.tool, payload.type].filter(Boolean).join(' ').toLowerCase();
@@ -138,15 +137,15 @@ export function classifyHarnessPayload(root, payload = {}, policy = {}) {
   const protectedMatches = findProtectedMatches(root, strings, policy);
   const packageEdit = writeIntent && /\b(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)\b/i.test(hay) && /\bsneakoscope\b/i.test(hay);
   const block = maintenance.block || packageEdit || (writeIntent && protectedMatches.length > 0);
-  const reasons = [];
+  const reasons: any[] = [];
   if (maintenance.block) reasons.push(...maintenance.reasons);
   if (packageEdit) reasons.push('package_manifest_sneakoscope_edit_blocked');
   if (writeIntent && protectedMatches.length) reasons.push('protected_harness_path_write_blocked');
   return { block, reasons: [...new Set(reasons)], matches: protectedMatches, writeIntent, toolName, command };
 }
 
-export async function collectHarnessFingerprints(root) {
-  const out = {};
+export async function collectHarnessFingerprints(root: any) {
+  const out: Record<string, string> = {};
   for (const rel of HARNESS_STATIC_FILES) {
     if (rel === HARNESS_GUARD_PATH) continue;
     const abs = path.join(root, rel);
@@ -160,12 +159,12 @@ export async function collectHarnessFingerprints(root) {
       out[r] = sha256(await readText(file, ''));
     }
   }
-  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => a.localeCompare(b)));
+  return Object.fromEntries(Object.entries(out).sort(([a]: any, [b]: any) => a.localeCompare(b)));
 }
 
-async function listFiles(dir) {
-  const out = [];
-  let entries = [];
+async function listFiles(dir: any) {
+  const out: any[] = [];
+  let entries: any[] = [];
   try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return out; }
   for (const entry of entries) {
     const p = path.join(dir, entry.name);
@@ -175,11 +174,11 @@ async function listFiles(dir) {
   return out;
 }
 
-function extractCommand(payload = {}) {
+function extractCommand(payload: any = {}) {
   return payload.command || payload.tool_input?.command || payload.toolInput?.command || payload.input?.command || payload.tool?.input?.command || '';
 }
 
-function collectPayloadStrings(obj, out = [], depth = 0) {
+function collectPayloadStrings(obj: any, out: any = [], depth: any = 0) {
   if (depth > 10 || obj == null) return out;
   if (typeof obj === 'string') { out.push(obj); return out; }
   if (Array.isArray(obj)) { for (const x of obj) collectPayloadStrings(x, out, depth + 1); return out; }
@@ -189,7 +188,7 @@ function collectPayloadStrings(obj, out = [], depth = 0) {
   return out;
 }
 
-function hasWriteIntent(toolName, command, hay) {
+function hasWriteIntent(toolName: any, command: any, hay: any) {
   if (/\b(apply_patch|edit|write|create|delete|remove|rename|str_replace|file_write|fs_write)\b/i.test(toolName)) return true;
   const c = String(command || hay || '');
   return /(^|[\s;&|])(?:rm|mv|cp|touch|chmod|chown|mkdir|rmdir|tee)\b/i.test(c)
@@ -199,10 +198,10 @@ function hasWriteIntent(toolName, command, hay) {
     || classifyMaintenanceCommand(c).block;
 }
 
-function classifyMaintenanceCommand(command = '') {
+function classifyMaintenanceCommand(command: any = '') {
   const c = String(command || '').replace(/\s+/g, ' ').trim();
   const low = c.toLowerCase();
-  const reasons = [];
+  const reasons: any[] = [];
   const sksInvoke = '(?:sks|sneakoscope|node\\s+\\S*sks\\.js|npx\\s+(?:-y\\s+)?(?:-p\\s+\\S+\\s+)?sks)';
   if (new RegExp(`(^|[\\s;&|])${sksInvoke}(?:\\s+|$)(?:setup|init|fix-path)\\b`).test(low)) reasons.push('sks_harness_maintenance_command_blocked');
   if (new RegExp(`(^|[\\s;&|])${sksInvoke}\\s+doctor\\b[\\s\\S]*\\s--fix\\b`).test(low)) reasons.push('sks_doctor_fix_blocked');
@@ -212,10 +211,10 @@ function classifyMaintenanceCommand(command = '') {
   return { block: reasons.length > 0, reasons };
 }
 
-function findProtectedMatches(root, strings, policy) {
+function findProtectedMatches(root: any, strings: any, policy: any) {
   const rels = [...(policy.protected_files || HARNESS_STATIC_FILES), ...(policy.protected_dirs || HARNESS_STATIC_DIRS)];
   const matches = new Set();
-  const normalizedTexts = strings.map((s) => String(s || '').replace(/\\/g, '/'));
+  const normalizedTexts = strings.map((s: any) => String(s || '').replace(/\\/g, '/'));
   for (const rel of rels) {
     const normalizedRel = rel.replace(/\\/g, '/').replace(/\/$/, '');
     const abs = path.join(root, rel).replace(/\\/g, '/').replace(/\/$/, '');
@@ -226,6 +225,6 @@ function findProtectedMatches(root, strings, policy) {
   return [...matches].sort();
 }
 
-function toRel(root, file) {
+function toRel(root: any, file: any) {
   return path.relative(root, file).split(path.sep).join('/');
 }

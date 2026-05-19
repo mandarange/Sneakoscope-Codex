@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { dirSize, fileSize, nowIso, packageRoot, runProcess, writeJsonAtomic } from './fsx.js';
@@ -19,23 +18,23 @@ export const DEFAULT_PERF_BUDGETS = {
   notes: 'Package payload budget is 1024KB because the current low-dependency CLI payload is already above 512KB; reduce only with measured justification.'
 };
 
-export function percentile(values, p = 95) {
-  const sorted = values.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+export function percentile(values: any, p: any = 95) {
+  const sorted = values.map(Number).filter(Number.isFinite).sort((a: any, b: any) => a - b);
   if (!sorted.length) return 0;
   const idx = Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1);
   return sorted[idx];
 }
 
-export async function ensurePerfBudgetFile(root) {
+export async function ensurePerfBudgetFile(root: any) {
   const file = path.join(root, '.sneakoscope', 'perf', 'budgets.json');
   await writeJsonAtomic(file, DEFAULT_PERF_BUDGETS);
   return file;
 }
 
-export async function runPerfBench(root, opts = {}) {
+export async function runPerfBench(root: any, opts: any = {}) {
   const iterations = Math.max(1, Math.min(20, Number(opts.iterations || 3)));
   const sksBin = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
-  const startup = [];
+  const startup: any[] = [];
   for (let i = 0; i < iterations; i++) {
     const t0 = performance.now();
     const result = await runProcess(process.execPath, [sksBin, 'commands', '--json'], { cwd: root, env: { SKS_DISABLE_UPDATE_CHECK: '1' }, timeoutMs: 15000, maxOutputBytes: 256 * 1024 });
@@ -54,16 +53,16 @@ export async function runPerfBench(root, opts = {}) {
       cli_startup_ms_p95: Math.round(percentile(startup, 95)),
       package_size_kb: packageSizeKb
     },
-    raw: { cli_startup_ms: startup.map((value) => Math.round(value)) }
+    raw: { cli_startup_ms: startup.map((value: any) => Math.round(value)) }
   };
 }
 
-export async function runWorkflowPerfBench(root, opts = {}) {
+export async function runWorkflowPerfBench(root: any, opts: any = {}) {
   const iterations = Math.max(1, Math.min(20, Number(opts.iterations || 3)));
   const intent = String(opts.intent || '').trim();
   const changedFiles = normalizeChangedFiles(opts.changedFiles);
-  const proofFieldBuild = [];
-  const pipelinePlanBuild = [];
+  const proofFieldBuild: any[] = [];
+  const pipelinePlanBuild: any[] = [];
   let proofField = null;
   let pipelinePlan = null;
   for (let i = 0; i < iterations; i++) {
@@ -81,7 +80,7 @@ export async function runWorkflowPerfBench(root, opts = {}) {
   const planValidation = validatePipelinePlan(pipelinePlan);
   const verification = proofField?.fast_lane_decision?.verification || [];
   const negativeWork = proofField?.negative_work_cache || [];
-  const estimatedSavedWork = negativeWork.filter((item) => item.disposition === 'skip_with_evidence').length;
+  const estimatedSavedWork = negativeWork.filter((item: any) => item.disposition === 'skip_with_evidence').length;
   const proofFieldMsP95 = Math.round(percentile(proofFieldBuild, 95));
   const workflowScanMsP95 = proofFieldMsP95;
   return {
@@ -116,7 +115,7 @@ export async function runWorkflowPerfBench(root, opts = {}) {
       decision_lattice_rejected_alternative_count: proofField?.decision_lattice?.rejected_alternatives?.length || 0,
       decision_lattice_scoring_formula: proofField?.decision_lattice?.scoring_formula || null,
       decision_lattice_valid: Boolean(proofField?.decision_lattice?.report_only) && proofValidation.ok,
-      outcome_criteria_passed: (proofField?.simplicity_scorecard?.criteria || []).filter((item) => item.passed).length,
+      outcome_criteria_passed: (proofField?.simplicity_scorecard?.criteria || []).filter((item: any) => item.passed).length,
       proof_field_valid: proofValidation.ok,
       pipeline_plan_valid: planValidation.ok
     },
@@ -124,14 +123,14 @@ export async function runWorkflowPerfBench(root, opts = {}) {
     pipeline_plan: pipelinePlan,
     recommendation: workflowRecommendation(proofField, proofValidation),
     raw: {
-      proof_field_build_ms: proofFieldBuild.map((value) => Math.round(value)),
-      pipeline_plan_build_ms: pipelinePlanBuild.map((value) => Math.round(value))
+      proof_field_build_ms: proofFieldBuild.map((value: any) => Math.round(value)),
+      pipeline_plan_build_ms: pipelinePlanBuild.map((value: any) => Math.round(value))
     }
   };
 }
 
-export function validateWorkflowPerfReport(report = {}) {
-  const issues = [];
+export function validateWorkflowPerfReport(report: any = {}) {
+  const issues: any[] = [];
   if (report.schema_version !== 1) issues.push('schema_version');
   if (report.theory !== 'Potential Proof Field') issues.push('theory');
   if (!report.metrics || !Number.isFinite(Number(report.metrics.proof_field_build_ms_p95))) issues.push('proof_field_build_ms_p95');
@@ -162,12 +161,12 @@ export function validateWorkflowPerfReport(report = {}) {
   return { ok: issues.length === 0, issues };
 }
 
-function normalizeChangedFiles(files) {
-  return [...new Set((files || []).flatMap((value) => String(value || '').split(',')).map((file) => file.trim()).filter(Boolean))]
+function normalizeChangedFiles(files: any) {
+  return [...new Set((files || []).flatMap((value: any) => String(value || '').split(',')).map((file: any) => file.trim()).filter(Boolean))]
     .sort();
 }
 
-function workflowRecommendation(proofField, validation) {
+function workflowRecommendation(proofField: any, validation: any) {
   if (!validation.ok) {
     return {
       mode: 'full_proof',
@@ -190,7 +189,7 @@ function workflowRecommendation(proofField, validation) {
   };
 }
 
-async function packagePayloadSize(root) {
+async function packagePayloadSize(root: any) {
   let total = 0;
   for (const rel of ['bin', 'src']) total += await dirSize(path.join(root, rel));
   for (const rel of ['README.md', 'LICENSE', 'package.json']) total += await fileSize(path.join(root, rel));

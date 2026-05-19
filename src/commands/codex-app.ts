@@ -1,10 +1,9 @@
-// @ts-nocheck
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { codexAccessTokenStatus, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.js';
 import { codexAppRemoteControlCommand } from '../cli/codex-app-command.js';
 
-export async function run(_command, args = []) {
+export async function run(_command: any, args: any = []) {
   const action = args[0] || 'check';
   if (action === 'remote-control' || action === 'remote') return codexAppRemoteControlCommand(args.slice(1));
   if (action === 'pat') {

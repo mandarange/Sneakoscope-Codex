@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { PACKAGE_VERSION, nowIso } from '../fsx.js';
 
 export const IMAGE_VOXEL_LEDGER_SCHEMA = 'sks.image-voxel-ledger.v1';
 
-export function emptyImageVoxelLedger(overrides = {}) {
+export function emptyImageVoxelLedger(overrides: Record<string, unknown> = {}) {
   return {
     schema: IMAGE_VOXEL_LEDGER_SCHEMA,
     version: PACKAGE_VERSION,
@@ -34,6 +33,9 @@ export interface ImageVoxelAnchor {
 
 export interface ImageVoxelLedger {
   schema: typeof IMAGE_VOXEL_LEDGER_SCHEMA;
+  version?: string;
+  generated_at?: string;
+  mission_id?: string | null;
   images: ImageVoxelImage[];
   anchors: ImageVoxelAnchor[];
   relations: unknown[];

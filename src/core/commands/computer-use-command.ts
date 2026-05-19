@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { nowIso, projectRoot, writeJsonAtomic } from '../fsx.js';
 import { createMission, findLatestMission } from '../mission.js';
@@ -6,11 +5,11 @@ import { flag } from '../../cli/args.js';
 import { printJson } from '../../cli/output.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 
-export async function computerUseCommand(command, args = []) {
+export async function computerUseCommand(command: any, args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'import';
   if (action === 'import-fixture') return importFixture(root, command, args);
-  const missionArg = args.find((arg) => !String(arg).startsWith('--')) || 'latest';
+  const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
   const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
   if (!missionId) {
     const result = { schema: 'sks.computer-use-evidence.v1', ok: false, status: 'missing_mission' };
@@ -36,7 +35,7 @@ export async function computerUseCommand(command, args = []) {
   if (!proof.ok) process.exitCode = 1;
 }
 
-async function importFixture(root, command, args) {
+async function importFixture(root: any, command: any, args: any) {
   const route = command === 'cu' ? '$CU' : '$Computer-Use';
   const { id, dir } = await createMission(root, { mode: 'computer-use', prompt: 'Computer Use fixture evidence import' });
   const evidence = {

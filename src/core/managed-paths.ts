@@ -1,15 +1,14 @@
-// @ts-nocheck
 import path from 'node:path';
 import { exists, nowIso, readJson, writeJsonAtomic } from './fsx.js';
 
 export const MANAGED_PATHS_SCHEMA = 'sks.managed-paths.v1';
 export const ROLLBACK_SCHEMA = 'sks.rollback.v1';
 
-export function managedPathManifestPath(root) {
+export function managedPathManifestPath(root: any) {
   return path.join(root, '.sneakoscope', 'managed-paths.json');
 }
 
-export async function managedPathManifest(root) {
+export async function managedPathManifest(root: any) {
   const file = managedPathManifestPath(root);
   const current = await readJson(file, null);
   if (current?.schema === MANAGED_PATHS_SCHEMA) return current;
@@ -31,10 +30,10 @@ export function defaultManagedPaths() {
   ];
 }
 
-export async function rollbackList(root) {
+export async function rollbackList(root: any) {
   const manifest = await managedPathManifest(root);
-  const actions = [];
-  for (const entry of manifest.paths.filter((row) => row.rollback)) {
+  const actions: any[] = [];
+  for (const entry of manifest.paths.filter((row: any) => row.rollback)) {
     actions.push({
       id: rollbackId(entry.path),
       path: entry.path,
@@ -51,11 +50,11 @@ export async function rollbackList(root) {
   };
 }
 
-export function rollbackId(relPath = '') {
+export function rollbackId(relPath: any = '') {
   return `rollback-${String(relPath).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'root'}`;
 }
 
-function row(relPath, purpose, rollback) {
+function row(relPath: any, purpose: any, rollback: any) {
   return {
     path: relPath,
     owner: 'sks',

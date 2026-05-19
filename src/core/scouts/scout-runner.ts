@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { ensureDir, exists, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { createMission, loadMission, missionDir } from '../mission.js';
@@ -15,8 +14,10 @@ import { selectScoutEngine } from './engines/scout-engine-policy.js';
 import { scoutEngineResult } from './engines/scout-engine-base.js';
 import { runTmuxLaneEngine } from './engines/tmux-lane-engine.js';
 import { parseScoutOutputFile } from './scout-output-parser.js';
+import { wrongnessContextForRoute, scoutWrongnessReferences } from '../triwiki-wrongness/wrongness-retrieval.js';
+import { recordScoutMismatchWrongness } from '../triwiki-wrongness/wrongness-ledger.js';
 
-export async function ensureScoutMission(root, { missionId = null, route = '$Team', task = 'Five Scout fixture intake' } = {}) {
+export async function ensureScoutMission(root: any, { missionId = null, route = '$Team', task = 'Five Scout fixture intake' }: any = {}) {
   if (missionId) {
     try {
       return await loadMission(root, missionId);
@@ -39,7 +40,7 @@ export async function ensureScoutMission(root, { missionId = null, route = '$Tea
   return { id: created.id, dir: created.dir, mission: created.mission };
 }
 
-export async function ensureFiveScoutIntake(root, {
+export async function ensureFiveScoutIntake(root: any, {
   missionId,
   route = '$Team',
   task = '',
@@ -51,7 +52,7 @@ export async function ensureFiveScoutIntake(root, {
   timeBudget = {},
   force = false,
   noScouts = false
-} = {}) {
+}: any = {}) {
   const required = routeRequiresScoutIntake(route, { task, force, noScouts });
   if (!required) {
     return {
@@ -70,7 +71,7 @@ export async function ensureFiveScoutIntake(root, {
   return runFiveScoutIntake(root, { missionId, route, task, mode, parallel, engine, requireRealParallel, mock, timeBudget });
 }
 
-export async function runFiveScoutIntake(root, {
+export async function runFiveScoutIntake(root: any, {
   missionId,
   route = '$Team',
   task = '',
@@ -80,7 +81,7 @@ export async function runFiveScoutIntake(root, {
   requireRealParallel = false,
   mock = false,
   timeBudget = {}
-} = {}) {
+}: any = {}) {
   const mission = await ensureScoutMission(root, { missionId, route, task });
   const id = mission.id;
   const dir = mission.dir || missionDir(root, id);
@@ -99,7 +100,7 @@ export async function runFiveScoutIntake(root, {
   const selectedEngine = selection.selected;
   const realParallel = selection.real_parallel === true;
   const parallelMode = realParallel || (parallel && selectedEngine === 'local-static') ? 'parallel' : 'sequential_fallback';
-  let plan = buildScoutTeamPlan({ missionId: id, route: routeLabel, task: task || mission.mission?.prompt || '', parallelMode, mode, timeBudget, createdAt: startedAt });
+  let plan: any = buildScoutTeamPlan({ missionId: id, route: routeLabel, task: task || mission.mission?.prompt || '', parallelMode, mode, timeBudget, createdAt: startedAt });
   plan = {
     ...plan,
     engine: selectedEngine,
@@ -171,6 +172,7 @@ export async function runFiveScoutIntake(root, {
     };
   }
   const triwiki = await readScoutTriWikiHint(root);
+  const wrongnessContext = await wrongnessContextForRoute(root, { missionId: id, route: routeLabel, limit: 12 }).catch(() => null);
   const before = await snapshotScoutReadableTree(root, { missionId: id });
   let engineRun = null;
   if (selectedEngine === 'codex-exec-parallel') {
@@ -201,9 +203,9 @@ export async function runFiveScoutIntake(root, {
     });
   }
   const engineJobs = Array.isArray(engineRun?.jobs) ? engineRun.jobs : [];
-  const work = SCOUT_ROLES.map((role) => async () => {
+  const work = SCOUT_ROLES.map((role: any) => async () => {
     const scoutStart = Date.now();
-    const job = engineJobs.find((candidate) => candidate.scout_id === role.id);
+    const job = engineJobs.find((candidate: any) => candidate.scout_id === role.id);
     const result = ['codex-exec-parallel', 'tmux-lanes', 'codex-app-subagents'].includes(selectedEngine)
       ? await parseScoutOutputFile({
           outputFile: job?.output_file || path.join(dir, `${role.id}.${selectedEngine}.md`),
@@ -223,7 +225,8 @@ export async function runFiveScoutIntake(root, {
           mock,
           engine: selectedEngine,
           realParallel,
-          triwiki
+          triwiki,
+          wrongnessContext
         });
     if (['codex-exec-parallel', 'tmux-lanes', 'codex-app-subagents'].includes(selectedEngine) && job?.status === 'rejected') {
       result.status = 'blocked';
@@ -233,23 +236,33 @@ export async function runFiveScoutIntake(root, {
       result.status = 'blocked';
       result.blockers = [...(result.blockers || []), `scout_engine_exit_code:${job.code}`];
     }
+    const parseIssues = Array.isArray(result.parse_issues) ? result.parse_issues : [];
+    if (result.status === 'blocked' || parseIssues.length) {
+      await recordScoutMismatchWrongness(root, {
+        mission_id: id,
+        route: routeLabel,
+        scout_id: role.id,
+        issues: [...parseIssues, ...(result.blockers || [])],
+        artifact: role.json
+      }).catch(() => null);
+    }
     const durationMs = job?.duration_ms || Date.now() - scoutStart;
     await writeJsonAtomic(path.join(dir, role.json), result);
     await writeTextAtomic(path.join(dir, role.md), renderScoutMarkdown(result));
     await appendScoutLedger(root, id, { type: 'scout.done', scout_id: role.id, duration_ms: durationMs, status: result.status });
     return { result, durationMs };
   });
-  const rows = (realParallel || parallel) && selectedEngine !== 'sequential-fallback' ? await Promise.all(work.map((fn) => fn())) : [];
+  const rows = (realParallel || parallel) && selectedEngine !== 'sequential-fallback' ? await Promise.all(work.map((fn: any) => fn())) : [];
   if (!parallel) {
     for (const fn of work) rows.push(await fn());
   }
   if (selectedEngine === 'sequential-fallback' && parallel) {
     for (const fn of work) rows.push(await fn());
   }
-  const results = rows.map((row) => row.result);
+  const results = rows.map((row: any) => row.result);
   plan = {
     ...plan,
-    scouts: plan.scouts.map((scout) => ({ ...scout, status: results.some((result) => result.scout_id === scout.id && result.status === 'done') ? 'done' : 'blocked' }))
+    scouts: plan.scouts.map((scout: any) => ({ ...scout, status: results.some((result: any) => result.scout_id === scout.id && result.status === 'done') ? 'done' : 'blocked' }))
   };
   await writeJsonAtomic(path.join(dir, 'scout-team-plan.json'), plan);
   const consensus = buildScoutConsensus({ missionId: id, route: routeLabel, results, parallelMode });
@@ -264,15 +277,15 @@ export async function runFiveScoutIntake(root, {
     read_only_guard: readOnlyGuard.passed === true,
     blockers: [
       ...evaluateScoutGate({ missionId: id, route: routeLabel, plan, results, consensus, handoffWritten: true }).blockers,
-      ...(readOnlyGuard.passed ? [] : readOnlyGuard.violations.map((violation) => `read_only_violation:${violation.kind}:${violation.path}`))
+      ...(readOnlyGuard.passed ? [] : readOnlyGuard.violations.map((violation: any) => `read_only_violation:${violation.kind}:${violation.path}`))
     ]
   };
   gate.passed = gate.blockers.length === 0;
   await writeJsonAtomic(path.join(dir, 'scout-gate.json'), gate);
   const completedAt = nowIso();
   const durationMs = Date.now() - startMs;
-  const perScout = Object.fromEntries(SCOUT_ROLES.map((role) => [role.id, rows.find((row) => row.result.scout_id === role.id)?.durationMs || 0]));
-  const estimatedSequentialMs = Object.values(perScout).reduce((sum, ms) => sum + Number(ms || 0), 0);
+  const perScout = Object.fromEntries(SCOUT_ROLES.map((role: any) => [role.id, rows.find((row: any) => row.result.scout_id === role.id)?.durationMs || 0]));
+  const estimatedSequentialMs = Number(Object.values(perScout).reduce((sum: any, ms: any) => sum + Number(ms || 0), 0));
   const claimAllowed = realParallel
     && !mock
     && readOnlyGuard.passed === true
@@ -346,10 +359,10 @@ function scoutPerformance({
   completedAt,
   durationMs,
   perScout,
-  estimatedSequentialMs = Object.values(perScout || {}).reduce((sum, ms) => sum + Number(ms || 0), 0),
+  estimatedSequentialMs = Object.values(perScout || {}).reduce((sum: any, ms: any) => sum + Number(ms || 0), 0),
   claimAllowed,
   claimReason
-}) {
+}: any) {
   return {
     schema: SCOUT_PERFORMANCE_SCHEMA,
     mission_id: missionId,
@@ -372,7 +385,7 @@ function scoutPerformance({
   };
 }
 
-async function buildScoutResult(root, { missionId, route, task, role, mock, engine = 'local-static', realParallel = false, triwiki }) {
+async function buildScoutResult(root: any, { missionId, route, task, role, mock, engine = 'local-static', realParallel = false, triwiki, wrongnessContext = null }: any) {
   const packageJson = await readJson(path.join(root, 'package.json'), {});
   const hasCommandRegistry = await exists(path.join(root, 'src', 'cli', 'command-registry.js'));
   const hasPipeline = await exists(path.join(root, 'src', 'core', 'pipeline.js'));
@@ -408,6 +421,8 @@ async function buildScoutResult(root, { missionId, route, task, role, mock, engi
       stderr_file: null
     },
     triwiki_hint: triwiki,
+    wrongness_context: wrongnessContext,
+    wrongness_references: wrongnessContext ? scoutWrongnessReferences(wrongnessContext, role.id) : [],
     blockers: [],
     unverified
   };
@@ -484,7 +499,7 @@ async function buildScoutResult(root, { missionId, route, task, role, mock, engi
   };
 }
 
-function finding(id, kind, claim, ref, lineHint, confidence, action) {
+function finding(id: any, kind: any, claim: any, ref: any, lineHint: any, confidence: any, action: any) {
   return {
     id,
     kind,
@@ -495,12 +510,12 @@ function finding(id, kind, claim, ref, lineHint, confidence, action) {
   };
 }
 
-function taskRow(id, title, files, verification) {
+function taskRow(id: any, title: any, files: any, verification: any) {
   return { id, title, owner_type: 'implementation', files, verification };
 }
 
-function context7LibrariesFor(text = '') {
-  const libs = [];
+function context7LibrariesFor(text: any = '') {
+  const libs: any[] = [];
   for (const [needle, lib] of [
     ['Supabase', 'supabase'],
     ['React', 'react'],

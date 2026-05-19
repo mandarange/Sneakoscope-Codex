@@ -1,10 +1,9 @@
-// @ts-nocheck
 import { getCodexInfo } from '../../codex-adapter.js';
 import { runProcess, which } from '../../fsx.js';
 import { availableEngine, unavailableEngine } from './scout-engine-base.js';
 import { readCodexAppSubagentCapability } from './codex-app-subagent-engine.js';
 
-export async function detectScoutEngines(root, opts = {}) {
+export async function detectScoutEngines(root: any, opts: any = {}) {
   const [codex, tmux, app] = await Promise.all([
     detectCodexExecParallel(root, opts),
     detectTmuxLanes(root, opts),
@@ -33,8 +32,8 @@ export async function detectScoutEngines(root, opts = {}) {
   };
 }
 
-export async function detectCodexExecParallel(root, opts = {}) {
-  const info = await getCodexInfo().catch((err) => ({ available: false, error: err.message }));
+export async function detectCodexExecParallel(root: any, opts: any = {}) {
+  const info: any = await getCodexInfo().catch((err: any) => ({ available: false, error: err.message }));
   if (!info?.available || !info.bin) return unavailableEngine('codex-exec-parallel', 'Codex CLI not available; set SKS_CODEX_BIN or install codex CLI.');
   return availableEngine('codex-exec-parallel', {
     bin: info.bin,
@@ -43,10 +42,10 @@ export async function detectCodexExecParallel(root, opts = {}) {
   });
 }
 
-export async function detectTmuxLanes(root, opts = {}) {
+export async function detectTmuxLanes(root: any, opts: any = {}) {
   const bin = await which('tmux');
   if (!bin) return unavailableEngine('tmux-lanes', 'tmux binary not available on PATH.');
-  const version = await runProcess(bin, ['-V'], { timeoutMs: 5000, maxOutputBytes: 4096 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  const version = await runProcess(bin, ['-V'], { timeoutMs: 5000, maxOutputBytes: 4096 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   if (version.code !== 0) return unavailableEngine('tmux-lanes', `tmux exists but version check failed: ${String(version.stderr || version.stdout || '').trim() || 'unknown error'}`);
   return availableEngine('tmux-lanes', {
     bin,
@@ -55,7 +54,7 @@ export async function detectTmuxLanes(root, opts = {}) {
   });
 }
 
-export async function detectCodexAppSubagents(root, opts = {}) {
+export async function detectCodexAppSubagents(root: any, opts: any = {}) {
   const capability = await readCodexAppSubagentCapability();
   if (capability.available) {
     return availableEngine('codex-app-subagents', {

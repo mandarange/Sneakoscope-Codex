@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { ensureDir, nowIso, packageRoot, projectRoot, runProcess, writeJsonAtomic, writeTextAtomic } from './fsx.js';
@@ -76,14 +75,14 @@ const CORE_COMMANDS = Object.freeze([
   ['sks scouts engines --json', ['scouts', 'engines', '--json']]
 ]);
 
-export async function runCoreBench(root = process.cwd(), { iterations = 3, tier = 'source-local' } = {}) {
+export async function runCoreBench(root: any = process.cwd(), { iterations = 3, tier = 'source-local' }: any = {}) {
   const script = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
-  const budgets = CORE_BENCH_BUDGET_TIERS[tier] || CORE_BENCH_BUDGET_TIERS['source-local'];
+  const budgets = ((CORE_BENCH_BUDGET_TIERS as Record<string, Record<string, number>>)[tier] || CORE_BENCH_BUDGET_TIERS['source-local']) as Record<string, number>;
   await ensureBenchTrustMission(root, script);
-  const rows = [];
-  for (const [label, args] of CORE_COMMANDS) {
-    const values = [];
-    const failures = [];
+  const rows: any[] = [];
+  for (const [label, args] of CORE_COMMANDS as readonly [string, string[]][]) {
+    const values: any[] = [];
+    const failures: any[] = [];
     for (let i = 0; i < Math.max(1, Number(iterations) || 1); i += 1) {
       const t0 = performance.now();
       const result = await runProcess(process.execPath, [script, ...args], {
@@ -98,11 +97,11 @@ export async function runCoreBench(root = process.cwd(), { iterations = 3, tier 
     const p95 = Math.round(percentile(values, 95));
     rows.push({
       command: label,
-      budget_p95_ms: budgets[label],
+      budget_p95_ms: budgets[label] ?? 0,
       p95_ms: p95,
-      ok: failures.length === 0 && p95 <= budgets[label],
+      ok: failures.length === 0 && p95 <= (budgets[label] ?? 0),
       failures,
-      raw_ms: values.map((value) => Math.round(value))
+      raw_ms: values.map((value: any) => Math.round(value))
     });
   }
   const report = {
@@ -111,14 +110,14 @@ export async function runCoreBench(root = process.cwd(), { iterations = 3, tier 
     tier,
     iterations: Math.max(1, Number(iterations) || 1),
     budget_tiers: CORE_BENCH_BUDGET_TIERS,
-    ok: rows.every((row) => row.ok),
+    ok: rows.every((row: any) => row.ok),
     commands: rows
   };
   await writeCoreBenchArtifacts(root, report);
   return report;
 }
 
-async function ensureBenchTrustMission(root, script) {
+async function ensureBenchTrustMission(root: any, script: any) {
   await runProcess(process.execPath, [script, 'run', 'bench trust fixture', '--mock', '--json'], {
     cwd: root,
     timeoutMs: 60_000,
@@ -127,7 +126,7 @@ async function ensureBenchTrustMission(root, script) {
   });
 }
 
-export async function writeCoreBenchArtifacts(root, report) {
+export async function writeCoreBenchArtifacts(root: any, report: any) {
   const dir = path.join(root, '.sneakoscope', 'reports', 'performance');
   await ensureDir(dir);
   await writeJsonAtomic(path.join(dir, 'core-bench.json'), report);

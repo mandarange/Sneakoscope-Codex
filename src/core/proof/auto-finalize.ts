@@ -1,12 +1,11 @@
-// @ts-nocheck
 import path from 'node:path';
-import { exists, readJson } from '../fsx.js';
+import { exists, readJson, type JsonData } from '../fsx.js';
 import { finalizeRouteWithProof } from './route-finalizer.js';
 import { ensureFiveScoutIntake } from '../scouts/scout-runner.js';
 import { routeRequiresScoutIntake } from '../scouts/scout-plan.js';
 import { scoutArtifactList } from '../scouts/scout-artifacts.js';
 
-export async function maybeFinalizeRoute(root, {
+export async function maybeFinalizeRoute(root: any, {
   missionId,
   route,
   gateFile = null,
@@ -25,7 +24,7 @@ export async function maybeFinalizeRoute(root, {
   blockers = [],
   unverified = [],
   scouts = undefined
-} = {}) {
+}: any = {}): Promise<JsonData> {
   if (!missionId || !route) {
     return { ok: false, skipped: true, reason: 'mission_id_or_route_missing' };
   }
@@ -36,7 +35,7 @@ export async function maybeFinalizeRoute(root, {
   const passed = gateObject?.passed === true || gateObject?.ok === true || gateObject?.status === 'pass';
   const mission = await readJson(path.join(missionDir, 'mission.json'), {});
   const scoutRequired = scouts !== false && routeRequiresScoutIntake(route, { task: mission.prompt || '' });
-  const scoutResult = scoutRequired
+  const scoutResult: any = scoutRequired
     ? await ensureFiveScoutIntake(root, {
       missionId,
       route,

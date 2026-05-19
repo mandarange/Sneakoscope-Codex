@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { imageVoxelSummary } from './image-voxel-ledger.js';
 
-export async function imageVoxelProofEvidence(root, ledgerFile) {
+export async function imageVoxelProofEvidence(root: any, ledgerFile: any) {
   const summary = await imageVoxelSummary(root, ledgerFile);
   return {
     schema: 'sks.image-voxel-proof-link.v1',

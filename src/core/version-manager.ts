@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { exists, nowIso, readJson, runProcess, writeJsonAtomic, writeTextAtomic } from './fsx.js';
@@ -7,7 +6,7 @@ const VERSION_HOOK_MARKER = 'Sneakoscope Codex Version Guard';
 const VERSION_STATE_FILE = 'sks-version-state.json';
 const DEFAULT_BUMP = 'patch';
 
-export async function installVersionGitHook(root, commandPrefix = 'sks') {
+export async function installVersionGitHook(root: any, commandPrefix: any = 'sks') {
   void root;
   void commandPrefix;
   return {
@@ -18,7 +17,7 @@ export async function installVersionGitHook(root, commandPrefix = 'sks') {
   };
 }
 
-export async function disableVersionGitHook(root) {
+export async function disableVersionGitHook(root: any) {
   await setVersionPolicyEnabled(root, false);
   const git = await gitPaths(root);
   if (!git.ok) return { ok: true, disabled: true, hook_removed: false, reason: git.reason || 'not_git' };
@@ -36,7 +35,7 @@ export async function disableVersionGitHook(root) {
   return { ok: true, disabled: true, hook_removed: true, hook_path: git.hook_path };
 }
 
-export async function versioningStatus(root) {
+export async function versioningStatus(root: any) {
   const git = await gitPaths(root);
   const packagePath = path.join(root, 'package.json');
   const pkg = await readJson(packagePath, null);
@@ -61,7 +60,7 @@ export async function versioningStatus(root) {
   };
 }
 
-async function runtimeDriftStatus(root, packageVersion) {
+async function runtimeDriftStatus(root: any, packageVersion: any) {
   if (!packageVersion || process.env.SKS_RUNTIME_DRIFT_CHECK === '0') {
     return { ok: true, checked: false, reason: packageVersion ? 'disabled' : 'package_json_version_missing' };
   }
@@ -96,7 +95,7 @@ async function runtimeDriftStatus(root, packageVersion) {
   };
 }
 
-export async function runVersionPreCommit(root, opts = {}) {
+export async function runVersionPreCommit(root: any, opts: any = {}) {
   if (process.env.SKS_DISABLE_VERSIONING === '1') return { ok: true, skipped: true, reason: 'SKS_DISABLE_VERSIONING=1' };
   const policy = await versionPolicy(root);
   if (!policy.enabled && !opts.force) return { ok: true, skipped: true, reason: 'disabled_by_policy' };
@@ -108,11 +107,11 @@ export async function runVersionPreCommit(root, opts = {}) {
   return withVersionLock(git.common_dir, async () => verifyProjectVersion(root, { ...opts, policy, git }));
 }
 
-export async function bumpProjectVersion(root, opts = {}) {
+export async function bumpProjectVersion(root: any, opts: any = {}) {
   const policy = opts.policy || await versionPolicy(root);
   const git = opts.git || await gitPaths(root);
   const pkgPath = path.join(root, 'package.json');
-  const pkg = await readJson(pkgPath);
+  const pkg = await readJson(pkgPath, {});
   const current = parseSemver(pkg.version);
   if (!current) return { ok: false, reason: `Unsupported package.json version: ${pkg.version}` };
 
@@ -167,10 +166,10 @@ export async function bumpProjectVersion(root, opts = {}) {
   };
 }
 
-export async function verifyProjectVersion(root, opts = {}) {
+export async function verifyProjectVersion(root: any, opts: any = {}) {
   const git = opts.git || await gitPaths(root);
   const pkgPath = path.join(root, 'package.json');
-  const pkg = await readJson(pkgPath);
+  const pkg = await readJson(pkgPath, {});
   const current = parseSemver(pkg.version);
   if (!current) return { ok: false, reason: `Unsupported package.json version: ${pkg.version}` };
   const version = formatSemver(current);
@@ -204,7 +203,7 @@ export async function verifyProjectVersion(root, opts = {}) {
   };
 }
 
-async function versionPolicy(root) {
+async function versionPolicy(root: any) {
   const policy = await readJson(path.join(root, '.sneakoscope', 'policy.json'), {});
   return {
     enabled: policy.versioning?.enabled === true,
@@ -212,7 +211,7 @@ async function versionPolicy(root) {
   };
 }
 
-async function setVersionPolicyEnabled(root, enabled) {
+async function setVersionPolicyEnabled(root: any, enabled: any) {
   const policyPath = path.join(root, '.sneakoscope', 'policy.json');
   const policy = await readJson(policyPath, {});
   await writeJsonAtomic(policyPath, {
@@ -239,7 +238,11 @@ async function setVersionPolicyEnabled(root, enabled) {
   });
 }
 
-async function gitPaths(root) {
+type GitPathsResult =
+  | { ok: true; top_level: string; common_dir: string; hook_path: string }
+  | { ok: false; reason: string };
+
+async function gitPaths(root: any): Promise<GitPathsResult> {
   const top = await git(root, ['rev-parse', '--show-toplevel']);
   if (top.code !== 0) return { ok: false, reason: 'not_git' };
   const common = await git(root, ['rev-parse', '--git-common-dir']);
@@ -251,17 +254,17 @@ async function gitPaths(root) {
   return { ok: true, top_level: topLevel, common_dir: commonDir, hook_path: hookPath };
 }
 
-async function git(root, args, opts = {}) {
+async function git(root: any, args: any, opts: any = {}) {
   return runProcess('git', args, { cwd: root, timeoutMs: opts.timeoutMs || 15000, maxOutputBytes: opts.maxOutputBytes || 64 * 1024 });
 }
 
-async function gitJson(root, spec) {
+async function gitJson(root: any, spec: any) {
   const result = await git(root, ['show', spec], { maxOutputBytes: 256 * 1024 });
   if (result.code !== 0) return null;
   try { return JSON.parse(result.stdout); } catch { return null; }
 }
 
-async function withVersionLock(commonDir, fn) {
+async function withVersionLock(commonDir: any, fn: any) {
   const lockDir = path.join(commonDir, 'sks-version.lock');
   const started = Date.now();
   let attempts = 0;
@@ -276,7 +279,7 @@ async function withVersionLock(commonDir, fn) {
       } finally {
         await fsp.rm(lockDir, { recursive: true, force: true }).catch(() => {});
       }
-    } catch (err) {
+    } catch (err: any) {
       if (err?.code !== 'EEXIST') throw err;
       if (Date.now() - started > 15000) return { ok: false, reason: 'version_lock_timeout', lock_path: lockDir };
       await sleep(150 + Math.min(750, attempts * 25));
@@ -284,12 +287,12 @@ async function withVersionLock(commonDir, fn) {
   }
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: any) {
+  return new Promise<any>((resolve: any) => setTimeout(resolve, ms));
 }
 
-async function syncPackageLockVersions(root, version) {
-  const files = [];
+async function syncPackageLockVersions(root: any, version: any) {
+  const files: any[] = [];
   for (const rel of ['package-lock.json', 'npm-shrinkwrap.json']) {
     const file = path.join(root, rel);
     const json = await readJson(file, null);
@@ -305,11 +308,11 @@ async function syncPackageLockVersions(root, version) {
       files.push(file);
     }
   }
-  return { files, relative_files: files.map((file) => path.relative(root, file)) };
+  return { files, relative_files: files.map((file: any) => path.relative(root, file)) };
 }
 
-async function syncSourcePackageVersion(root, version) {
-  const files = [];
+async function syncSourcePackageVersion(root: any, version: any) {
+  const files: any[] = [];
   for (const rel of ['src/core/fsx.ts', 'src/core/version.ts']) {
     const file = path.join(root, rel);
     const text = await readFileMaybe(file);
@@ -328,12 +331,12 @@ async function syncSourcePackageVersion(root, version) {
       files.push(binFile);
     }
   }
-  return { files, relative_files: files.map((file) => path.relative(root, file)) };
+  return { files, relative_files: files.map((file: any) => path.relative(root, file)) };
 }
 
-async function syncChangelogVersionSection(root, version) {
+async function syncChangelogVersionSection(root: any, version: any) {
   const file = path.join(root, 'CHANGELOG.md');
-  let text = await readFileMaybe(file);
+  let text = (await readFileMaybe(file)) ?? '';
   const date = nowIso().slice(0, 10);
   const sectionRe = new RegExp(`^##\\s+\\[${escapeRegExp(version)}\\]\\s+-\\s+\\d{4}-\\d{2}-\\d{2}\\s*$`, 'm');
   if (sectionRe.test(text)) return { files: [], relative_files: [] };
@@ -341,46 +344,46 @@ async function syncChangelogVersionSection(root, version) {
   if (!text.trim()) text = '# Changelog\n\n## [Unreleased]\n\n';
   if (!/^#\s+Changelog\s*$/m.test(text)) text = `# Changelog\n\n${text.replace(/^\s+/, '')}`;
   if (!/^##\s+\[Unreleased\]\s*$/m.test(text)) {
-    text = text.replace(/^#\s+Changelog\s*$/m, (title) => `${title}\n\n## [Unreleased]`);
+    text = text.replace(/^#\s+Changelog\s*$/m, (title: any) => `${title}\n\n## [Unreleased]`);
   }
 
   const managedSection = `\n## [${version}] - ${date}\n\n### Fixed\n\n- Keep release metadata aligned after an explicit SKS version bump advances the package version.\n`;
-  const next = text.replace(/^##\s+\[Unreleased\]\s*$/m, (heading) => `${heading}\n${managedSection}`);
+  const next = text.replace(/^##\s+\[Unreleased\]\s*$/m, (heading: any) => `${heading}\n${managedSection}`);
   if (next === text) return { files: [], relative_files: [] };
   await writeTextAtomic(file, next);
   return { files: [file], relative_files: [path.relative(root, file)] };
 }
 
-async function changelogHasVersionSection(root, version) {
+async function changelogHasVersionSection(root: any, version: any) {
   const file = path.join(root, 'CHANGELOG.md');
   const text = await readFileMaybe(file);
   const sectionRe = new RegExp(`^##\\s+\\[${escapeRegExp(version)}\\]\\s+-\\s+\\d{4}-\\d{2}-\\d{2}\\s*$`, 'm');
-  return sectionRe.test(text);
+  return sectionRe.test(text ?? '');
 }
 
-async function stageVersionFiles(root, files) {
-  const existing = [];
+async function stageVersionFiles(root: any, files: any) {
+  const existing: any[] = [];
   for (const file of files) if (await exists(file)) existing.push(path.relative(root, file));
   if (!existing.length) return { ok: true, relative_files: [] };
   const result = await git(root, ['add', '--', ...existing]);
   return { ok: result.code === 0, relative_files: existing, stderr: result.stderr };
 }
 
-function escapeRegExp(value) {
+function escapeRegExp(value: any) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function parseSemver(value) {
+function parseSemver(value: any) {
   const match = String(value || '').trim().match(/^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/);
   if (!match) return null;
   return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
 }
 
-function formatSemver(v) {
+function formatSemver(v: any) {
   return `${v.major}.${v.minor}.${v.patch}`;
 }
 
-function compareSemver(a, b) {
+function compareSemver(a: any, b: any) {
   for (const key of ['major', 'minor', 'patch']) {
     if ((a?.[key] || 0) > (b?.[key] || 0)) return 1;
     if ((a?.[key] || 0) < (b?.[key] || 0)) return -1;
@@ -388,17 +391,17 @@ function compareSemver(a, b) {
   return 0;
 }
 
-function maxSemver(items) {
-  return items.reduce((max, item) => (!max || compareSemver(item, max) > 0 ? item : max), null);
+function maxSemver(items: any) {
+  return items.reduce((max: any, item: any) => (!max || compareSemver(item, max) > 0 ? item : max), null);
 }
 
-function bumpSemver(v, bump = DEFAULT_BUMP) {
+function bumpSemver(v: any, bump: any = DEFAULT_BUMP) {
   if (bump === 'major') return { major: v.major + 1, minor: 0, patch: 0 };
   if (bump === 'minor') return { major: v.major, minor: v.minor + 1, patch: 0 };
   return { major: v.major, minor: v.minor, patch: v.patch + 1 };
 }
 
-function removeShellBlock(current, marker) {
+function removeShellBlock(current: any, marker: any) {
   const begin = `# BEGIN ${marker}`;
   const end = `# END ${marker}`;
   const beginIdx = current.indexOf(begin);
@@ -407,6 +410,6 @@ function removeShellBlock(current, marker) {
   return `${current.slice(0, beginIdx)}${current.slice(endIdx + end.length).replace(/^\n/, '')}`.replace(/\s*$/, '\n');
 }
 
-async function readFileMaybe(file) {
+async function readFileMaybe(file: any) {
   try { return await fsp.readFile(file, 'utf8'); } catch { return ''; }
 }

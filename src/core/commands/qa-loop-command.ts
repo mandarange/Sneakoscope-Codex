@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { appendJsonlBounded, exists, nowIso, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
@@ -14,7 +13,7 @@ import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { flag, promptOf, readMaxCycles, resolveMissionId, safeReadTextFile } from './command-utils.js';
 import fsp from 'node:fs/promises';
 
-export async function qaLoopCommand(sub, args = []) {
+export async function qaLoopCommand(sub: any, args: any = []) {
   const known = new Set(['prepare', 'answer', 'run', 'status', 'help', '--help', '-h']);
   const action = known.has(sub) ? sub : 'prepare';
   const actionArgs = action === 'prepare' && sub && !known.has(sub) ? [sub, ...args] : args;
@@ -33,10 +32,10 @@ Usage:
 }
 
 function qaRoute() {
-  return ROUTES.find((route) => route.id === 'QALoop') || routePrompt('$QA-LOOP');
+  return ROUTES.find((route: any) => route.id === 'QALoop') || routePrompt('$QA-LOOP');
 }
 
-async function qaLoopPrepare(args) {
+async function qaLoopPrepare(args: any) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
   const prompt = stripVisibleDecisionAnswerBlocks(promptOf(args));
@@ -72,7 +71,7 @@ async function qaLoopPrepare(args) {
   console.log(`Answer schema: ${path.relative(root, path.join(dir, 'required-answers.schema.json'))}`);
 }
 
-async function qaLoopAnswer(args) {
+async function qaLoopAnswer(args: any) {
   const root = await sksRoot();
   const [missionArg, answerFile] = args;
   const id = await resolveMissionId(root, missionArg);
@@ -93,14 +92,14 @@ async function qaLoopAnswer(args) {
   console.log(`QA-LOOP contract sealed for ${id}`);
 }
 
-async function qaLoopRun(args) {
+async function qaLoopRun(args: any) {
   const root = await sksRoot();
   const id = await resolveMissionId(root, args[0]);
   if (!id) throw new Error('Usage: sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N]');
   const { dir, mission } = await loadMission(root, id);
   const contractPath = path.join(dir, 'decision-contract.json');
   if (!(await exists(contractPath))) throw new Error('QA-LOOP cannot run: decision-contract.json is missing.');
-  const contract = await readJson(contractPath);
+  const contract = await readJson(contractPath, {});
   if (!(await exists(path.join(dir, 'qa-ledger.json')))) await writeQaLoopArtifacts(dir, mission, contract);
   const safetyScan = await scanDbSafety(root);
   if (!safetyScan.ok) {
@@ -171,7 +170,7 @@ async function qaLoopRun(args) {
   console.log(`QA-LOOP paused after max cycles: ${id}`);
 }
 
-async function qaLoopStatus(args) {
+async function qaLoopStatus(args: any) {
   const root = await sksRoot();
   const id = await resolveMissionId(root, args[0]);
   if (!id) throw new Error('Usage: sks qa-loop status <mission-id|latest>');

@@ -1,9 +1,8 @@
-// @ts-nocheck
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
 import { exists, runProcess } from './fsx.js';
-import { getCodexInfo } from './codex-adapter.js';
+import { EMPTY_CODEX_INFO, getCodexInfo } from './codex-adapter.js';
 import { DEFAULT_CODEX_APP_PLUGINS as DEFAULT_CODEX_APP_PLUGIN_TUPLES, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes.js';
 
 export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/features';
@@ -25,10 +24,10 @@ const REQUIRED_CODEX_APP_FEATURE_FLAGS = [
   'apps',
   'plugins'
 ];
-const DEFAULT_CODEX_APP_PLUGINS = DEFAULT_CODEX_APP_PLUGIN_TUPLES.map(([name, marketplace]) => ({ name, marketplace }));
+const DEFAULT_CODEX_APP_PLUGINS = DEFAULT_CODEX_APP_PLUGIN_TUPLES.map(([name, marketplace]: any) => ({ name, marketplace }));
 
-export function codexAppCandidatePaths(home = os.homedir(), env = process.env) {
-  const candidates = [];
+export function codexAppCandidatePaths(home: any = os.homedir(), env: any = process.env) {
+  const candidates: any[] = [];
   if (env.SKS_CODEX_APP_PATH) candidates.push(env.SKS_CODEX_APP_PATH);
   if (process.platform === 'darwin') {
     candidates.push('/Applications/Codex.app');
@@ -42,14 +41,14 @@ export function codexAppCandidatePaths(home = os.homedir(), env = process.env) {
   return Array.from(new Set(candidates.filter(Boolean)));
 }
 
-export async function findCodexApp(opts = {}) {
+export async function findCodexApp(opts: any = {}) {
   for (const candidate of codexAppCandidatePaths(opts.home || os.homedir(), opts.env || process.env)) {
     if (await exists(candidate)) return candidate;
   }
   return null;
 }
 
-async function findPluginCache(pluginName, opts = {}) {
+async function findPluginCache(pluginName: any, opts: any = {}) {
   const home = opts.home || os.homedir();
   const roots = [
     path.join(home || '', '.codex', 'plugins', 'cache'),
@@ -59,16 +58,16 @@ async function findPluginCache(pluginName, opts = {}) {
   const maxEntries = Number(opts.maxEntries || 3000);
   let seen = 0;
 
-  async function walk(dir, depth = 0) {
+  async function walk(dir: any, depth: any = 0): Promise<string | null> {
     if (!dir || seen > maxEntries || depth > 6 || !(await exists(dir))) return null;
-    let entries = [];
+    let entries: any[] = [];
     try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return null; }
     for (const entry of entries) {
       if (seen++ > maxEntries) return null;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (entry.name.toLowerCase() === needle) return full;
-        const hit = await walk(full, depth + 1);
+        const hit: string | null = await walk(full, depth + 1);
         if (hit) return hit;
       }
     }
@@ -82,13 +81,13 @@ async function findPluginCache(pluginName, opts = {}) {
   return null;
 }
 
-export async function codexMcpList(opts = {}) {
-  const codex = opts.codex || await getCodexInfo().catch(() => ({}));
+export async function codexMcpList(opts: any = {}) {
+  const codex = opts.codex || await getCodexInfo().catch(() => EMPTY_CODEX_INFO);
   if (!codex.bin) return { ok: false, checked: false, stdout: '', stderr: 'Codex CLI missing.' };
   const out = await runProcess(codex.bin, ['mcp', 'list'], {
     timeoutMs: opts.timeoutMs || 10000,
     maxOutputBytes: 64 * 1024
-  }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   return {
     ok: out.code === 0,
     checked: true,
@@ -97,13 +96,13 @@ export async function codexMcpList(opts = {}) {
   };
 }
 
-export async function codexFeatureList(opts = {}) {
-  const codex = opts.codex || await getCodexInfo().catch(() => ({}));
+export async function codexFeatureList(opts: any = {}) {
+  const codex = opts.codex || await getCodexInfo().catch(() => EMPTY_CODEX_INFO);
   if (!codex.bin) return { ok: false, checked: false, stdout: '', stderr: 'Codex CLI missing.' };
   const out = await runProcess(codex.bin, ['features', 'list'], {
     timeoutMs: opts.timeoutMs || 10000,
     maxOutputBytes: 64 * 1024
-  }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   return {
     ok: out.code === 0,
     checked: true,
@@ -112,9 +111,9 @@ export async function codexFeatureList(opts = {}) {
   };
 }
 
-export async function codexAppIntegrationStatus(opts = {}) {
+export async function codexAppIntegrationStatus(opts: any = {}) {
   const appPath = await findCodexApp(opts);
-  const codex = opts.codex || await getCodexInfo().catch(() => ({}));
+  const codex = opts.codex || await getCodexInfo().catch(() => EMPTY_CODEX_INFO);
   const mcpList = await codexMcpList({ ...opts, codex });
   const featureList = await codexFeatureList({ ...opts, codex });
   const remoteControl = codexRemoteControlStatusFromInfo(codex);
@@ -130,7 +129,7 @@ export async function codexAppIntegrationStatus(opts = {}) {
   const imageGenerationReady = codexFeatureEnabled(featureText, 'image_generation');
   const inAppBrowserReady = codexFeatureEnabled(featureText, 'in_app_browser');
   const browserUseFeatureReady = codexFeatureEnabled(featureText, 'browser_use');
-  const requiredFeatureFlags = Object.fromEntries(REQUIRED_CODEX_APP_FEATURE_FLAGS.map((name) => [name, codexFeatureEnabled(featureText, name)]));
+  const requiredFeatureFlags = Object.fromEntries(REQUIRED_CODEX_APP_FEATURE_FLAGS.map((name: any) => [name, codexFeatureEnabled(featureText, name)]));
   const requiredFeatureFlagsOk = Object.values(requiredFeatureFlags).every(Boolean);
   const computerUseReady = computerUseMcpListed || Boolean(computerUsePath);
   const browserUseReady = browserUseMcpListed || Boolean(browserUsePath);
@@ -204,12 +203,12 @@ export async function codexAppIntegrationStatus(opts = {}) {
   };
 }
 
-export async function codexRemoteControlStatus(opts = {}) {
-  const codex = opts.codex || await getCodexInfo().catch(() => ({}));
+export async function codexRemoteControlStatus(opts: any = {}) {
+  const codex = opts.codex || await getCodexInfo().catch(() => EMPTY_CODEX_INFO);
   return codexRemoteControlStatusFromInfo(codex);
 }
 
-export function codexRemoteControlStatusFromInfo(codex = {}) {
+export function codexRemoteControlStatusFromInfo(codex: any = {}) {
   const current = codexCliVersionNumber(codex.version);
   const versionKnown = Boolean(current);
   const supported = Boolean(codex.bin && current && compareVersions(current, CODEX_REMOTE_CONTROL_MIN_VERSION) >= 0);
@@ -234,17 +233,17 @@ export function codexRemoteControlStatusFromInfo(codex = {}) {
   };
 }
 
-export function codexSupportsRemoteControl(versionText) {
+export function codexSupportsRemoteControl(versionText: any) {
   const current = codexCliVersionNumber(versionText);
   return Boolean(current && compareVersions(current, CODEX_REMOTE_CONTROL_MIN_VERSION) >= 0);
 }
 
-export function parseProcessRows(text = '') {
+export function parseProcessRows(text: any = '') {
   return String(text || '')
     .split(/\r?\n/)
-    .map((line) => line.trim())
+    .map((line: any) => line.trim())
     .filter(Boolean)
-    .map((line) => {
+    .map((line: any) => {
       const match = line.match(/^(\d+)\s+(\d+)\s+(.+)$/);
       if (!match) return null;
       return {
@@ -253,17 +252,17 @@ export function parseProcessRows(text = '') {
         command: match[3]
       };
     })
-    .filter((row) => Number.isFinite(row?.pid) && Number.isFinite(row?.ppid) && row.command);
+    .filter((row: any) => Number.isFinite(row?.pid) && Number.isFinite(row?.ppid) && row.command);
 }
 
-export function findCodexAppUpgradeRepairTargets(rows = []) {
-  return rows.filter((row) => (
+export function findCodexAppUpgradeRepairTargets(rows: any = []) {
+  return rows.filter((row: any) => (
     row?.ppid === 1
     && /\/Codex\.app\/Contents\/Resources\/codex\s+app-server\s+--analytics-default-enabled(?:\s|$)/.test(String(row.command || ''))
   ));
 }
 
-export async function reconcileCodexAppUpgradeProcesses(opts = {}) {
+export async function reconcileCodexAppUpgradeProcesses(opts: any = {}) {
   const platform = opts.platform || process.platform;
   const env = opts.env || process.env;
   if (platform !== 'darwin') return { status: 'skipped', reason: 'platform', killed: [] };
@@ -272,12 +271,12 @@ export async function reconcileCodexAppUpgradeProcesses(opts = {}) {
   const ps = await run('ps', ['-axo', 'pid=', '-o', 'ppid=', '-o', 'command='], {
     timeoutMs: opts.timeoutMs || 5000,
     maxOutputBytes: opts.maxOutputBytes || 256 * 1024
-  }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   if (ps.code !== 0) return { status: 'failed', reason: 'ps_failed', error: ps.stderr || ps.stdout || 'ps exited non-zero', killed: [] };
   const rows = parseProcessRows(ps.stdout);
   const targets = findCodexAppUpgradeRepairTargets(rows);
-  const killed = [];
-  const failed = [];
+  const killed: any[] = [];
+  const failed: any[] = [];
   for (const target of targets) {
     if (opts.dryRun) {
       killed.push({ pid: target.pid, command: target.command, dry_run: true });
@@ -286,7 +285,7 @@ export async function reconcileCodexAppUpgradeProcesses(opts = {}) {
     const kill = await run('kill', ['-TERM', String(target.pid)], {
       timeoutMs: opts.timeoutMs || 5000,
       maxOutputBytes: 8 * 1024
-    }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+    }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
     if (kill.code === 0) killed.push({ pid: target.pid, command: target.command });
     else failed.push({ pid: target.pid, command: target.command, error: kill.stderr || kill.stdout || 'kill exited non-zero' });
   }
@@ -298,7 +297,7 @@ export async function reconcileCodexAppUpgradeProcesses(opts = {}) {
   };
 }
 
-export function formatCodexRemoteControlStatus(status) {
+export function formatCodexRemoteControlStatus(status: any) {
   const lines = [
     'Codex remote-control',
     '',
@@ -314,16 +313,16 @@ export function formatCodexRemoteControlStatus(status) {
   return lines.filter(Boolean).join('\n');
 }
 
-export function codexAccessTokenStatus(env = process.env) {
+export function codexAccessTokenStatus(env: any = process.env) {
   const accessTokenVars = ['CODEX_ACCESS_TOKEN'];
   const adjacentSecretVars = ['OPENAI_API_KEY', 'CODEX_LB_API_KEY'];
-  const accessTokens = accessTokenVars.map((name) => ({ name, present: Boolean(env[name]), value: env[name] ? '[redacted]' : null }));
-  const adjacentSecrets = adjacentSecretVars.map((name) => ({ name, present: Boolean(env[name]), value: env[name] ? '[redacted]' : null }));
+  const accessTokens = accessTokenVars.map((name: any) => ({ name, present: Boolean(env[name]), value: env[name] ? '[redacted]' : null }));
+  const adjacentSecrets = adjacentSecretVars.map((name: any) => ({ name, present: Boolean(env[name]), value: env[name] ? '[redacted]' : null }));
   const extraTokenLikeVars = Object.keys(env)
-    .filter((name) => /(?:CODEX|OPENAI|CHATGPT).*TOKEN/i.test(name) && !accessTokenVars.includes(name))
+    .filter((name: any) => /(?:CODEX|OPENAI|CHATGPT).*TOKEN/i.test(name) && !accessTokenVars.includes(name))
     .sort()
-    .map((name) => ({ name, present: true, value: '[redacted]' }));
-  const present = accessTokens.some((entry) => entry.present);
+    .map((name: any) => ({ name, present: true, value: '[redacted]' }));
+  const present = accessTokens.some((entry: any) => entry.present);
   return {
     schema: 'sks.codex-access-token-status.v1',
     ok: true,
@@ -345,8 +344,8 @@ export function codexAccessTokenStatus(env = process.env) {
   };
 }
 
-export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, pluginSkillShadows = { ok: true, blocking: [] }, fastModeConfig = { ok: true, blockers: [] }, gitActions = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, remoteControl }) {
-  const lines = [];
+export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, pluginSkillShadows = { ok: true, blocking: [] }, fastModeConfig = { ok: true, blockers: [] }, gitActions = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, remoteControl }: any) {
+  const lines: any[] = [];
   if (!appInstalled) {
     lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS tmux launch can still run with Codex CLI alone, but Codex Computer Use and imagegen/gpt-image-2 evidence will be unavailable until Codex App is ready.');
     lines.push(`Docs: ${CODEX_APP_DOCS_URL}`);
@@ -380,12 +379,12 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
     lines.push('Run: sks doctor --fix, then restart Codex App if the plugin cache was just restored.');
   }
   if (pluginSkillShadows?.generated?.length) {
-    const names = pluginSkillShadows.generated.map((entry) => `${entry.name}:${entry.scope}`).join(', ');
+    const names = pluginSkillShadows.generated.map((entry: any) => `${entry.name}:${entry.scope}`).join(', ');
     lines.push(`Codex plugin picker generated skill shadow(s) detected: ${names}. Generated SKS skills with first-party plugin names can hide @ plugin entries after upgrades.`);
     lines.push('Run: sks doctor --fix');
   }
   if (pluginSkillShadows?.custom?.length) {
-    const names = pluginSkillShadows.custom.map((entry) => `${entry.name}:${entry.scope}`).join(', ');
+    const names = pluginSkillShadows.custom.map((entry: any) => `${entry.name}:${entry.scope}`).join(', ');
     lines.push(`Codex plugin picker user-owned reserved skill name(s) detected: ${names}. Rename or remove these custom skills to avoid hiding first-party @ plugin entries; SKS doctor will not delete user-owned skills.`);
   }
   if (fastModeConfig?.blockers?.length) {
@@ -422,7 +421,7 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
   return lines;
 }
 
-export function formatCodexAppStatus(status, { includeRaw = false } = {}) {
+export function formatCodexAppStatus(status: any, { includeRaw = false }: any = {}) {
   const lines = [
     'Codex App / MCP Plugin Readiness',
     '',
@@ -439,39 +438,39 @@ export function formatCodexAppStatus(status, { includeRaw = false } = {}) {
     `Image Gen:   ${status.features?.image_generation ? 'ok ($imagegen/gpt-image-2)' : status.features?.checked ? 'missing' : 'not checked'}`,
     `Ready:       ${status.ok ? 'yes' : 'no'}`,
     '',
-    ...status.guidance.map((line) => `- ${line}`)
+    ...status.guidance.map((line: any) => `- ${line}`)
   ];
   if (includeRaw && status.mcp.stdout) lines.push('', status.mcp.stdout.trim());
   if (includeRaw && status.features?.stdout) lines.push('', status.features.stdout.trim());
   return lines.join('\n');
 }
 
-function summarizeCodexMcpError(text) {
+function summarizeCodexMcpError(text: any) {
   const cleanLines = String(text || '')
     .split(/\r?\n/)
-    .map((line) => line.trim())
+    .map((line: any) => line.trim())
     .filter(Boolean)
-    .filter((line) => !line.startsWith('WARNING: proceeding'));
-  const variantLine = cleanLines.find((line) => line.includes('unknown variant'));
-  const errorLine = cleanLines.find((line) => line.startsWith('Error:'));
+    .filter((line: any) => !line.startsWith('WARNING: proceeding'));
+  const variantLine = cleanLines.find((line: any) => line.includes('unknown variant'));
+  const errorLine = cleanLines.find((line: any) => line.startsWith('Error:'));
   if (errorLine && variantLine && errorLine !== variantLine) return `${errorLine}; ${variantLine}`;
   return variantLine || errorLine || cleanLines[0] || 'codex mcp list failed';
 }
 
-function codexFeatureEnabled(text, featureName) {
+function codexFeatureEnabled(text: any, featureName: any) {
   const expected = String(featureName || '').toLowerCase();
-  return String(text || '').split(/\r?\n/).some((line) => {
+  return String(text || '').split(/\r?\n/).some((line: any) => {
     const parts = line.trim().split(/\s+/).filter(Boolean);
     return parts[0]?.toLowerCase() === expected && parts[parts.length - 1]?.toLowerCase() === 'true';
   });
 }
 
-function missingRequiredFeatureFlags(flags = {}) {
-  return REQUIRED_CODEX_APP_FEATURE_FLAGS.filter((name) => flags?.[name] !== true);
+function missingRequiredFeatureFlags(flags: any = {}) {
+  return REQUIRED_CODEX_APP_FEATURE_FLAGS.filter((name: any) => flags?.[name] !== true);
 }
 
-function codexGitActionReadiness({ requiredFeatureFlags = {}, remoteControl = {} } = {}) {
-  const blockers = [];
+function codexGitActionReadiness({ requiredFeatureFlags = {}, remoteControl = {} }: any = {}) {
+  const blockers: any[] = [];
   if (requiredFeatureFlags.codex_git_commit !== true) blockers.push('codex_git_commit');
   if (requiredFeatureFlags.hooks !== true) blockers.push('hooks');
   if (requiredFeatureFlags.remote_control !== true) blockers.push('remote_control_feature');
@@ -489,7 +488,7 @@ function codexGitActionReadiness({ requiredFeatureFlags = {}, remoteControl = {}
   };
 }
 
-async function codexDefaultPluginStatus(opts = {}) {
+async function codexDefaultPluginStatus(opts: any = {}) {
   const home = opts.home || os.homedir();
   const cwd = opts.cwd || process.cwd();
   const globalConfigPath = path.join(home || '', '.codex', 'config.toml');
@@ -499,7 +498,7 @@ async function codexDefaultPluginStatus(opts = {}) {
     ? ''
     : await readTextIfExists(projectConfigPath);
   const configText = `${globalConfig}\n${projectConfig}`;
-  const entries = [];
+  const entries: any[] = [];
   for (const plugin of DEFAULT_CODEX_APP_PLUGINS) {
     const source = await findDefaultPluginSource(plugin, { home, configText });
     const enabled = codexPluginEnabled(configText, plugin);
@@ -512,9 +511,9 @@ async function codexDefaultPluginStatus(opts = {}) {
       enabled
     });
   }
-  const installed = entries.filter((entry) => entry.installed);
-  const missingInstalled = entries.filter((entry) => !entry.installed).map((entry) => entry.id);
-  const missingEnabled = installed.filter((entry) => !entry.enabled).map((entry) => entry.id);
+  const installed = entries.filter((entry: any) => entry.installed);
+  const missingInstalled = entries.filter((entry: any) => !entry.installed).map((entry: any) => entry.id);
+  const missingEnabled = installed.filter((entry: any) => !entry.enabled).map((entry: any) => entry.id);
   return {
     ok: missingInstalled.length === 0 && missingEnabled.length === 0,
     checked: true,
@@ -524,15 +523,16 @@ async function codexDefaultPluginStatus(opts = {}) {
   };
 }
 
-async function codexPluginSkillShadowStatus(opts = {}) {
+async function codexPluginSkillShadowStatus(opts: any = {}) {
   const home = opts.home || os.homedir();
   const cwd = opts.cwd || process.cwd();
   const roots = [
     { scope: 'global', root: path.join(home || '', '.agents', 'skills') }
   ];
   const projectRoot = path.join(cwd || '', '.agents', 'skills');
-  if (path.resolve(projectRoot) !== path.resolve(roots[0].root)) roots.push({ scope: 'project', root: projectRoot });
-  const entries = [];
+  const globalEntry = roots[0];
+  if (globalEntry && path.resolve(projectRoot) !== path.resolve(globalEntry.root)) roots.push({ scope: 'project', root: projectRoot });
+  const entries: any[] = [];
   for (const root of roots) {
     for (const name of RESERVED_CODEX_PLUGIN_SKILL_NAMES) {
       const skillPath = path.join(root.root, name, 'SKILL.md');
@@ -551,19 +551,19 @@ async function codexPluginSkillShadowStatus(opts = {}) {
     checked: true,
     reserved_names: RESERVED_CODEX_PLUGIN_SKILL_NAMES,
     blocking: entries,
-    generated: entries.filter((entry) => entry.generated),
-    custom: entries.filter((entry) => !entry.generated)
+    generated: entries.filter((entry: any) => entry.generated),
+    custom: entries.filter((entry: any) => !entry.generated)
   };
 }
 
-function isGeneratedSksPluginShadow(text = '', name = '') {
+function isGeneratedSksPluginShadow(text: any = '', name: any = '') {
   const s = String(text || '');
   if (!new RegExp(`^name:\\s*${escapeRegExp(name)}\\s*$`, 'm').test(s)) return false;
   if (/\bnot generated by SKS\b/i.test(s)) return false;
   return /Sneakoscope generated|Codex App pipeline activation:|Dollar-command route generated by SKS|stale plugin collision/i.test(s);
 }
 
-async function codexFastModeConfigStatus(opts = {}) {
+async function codexFastModeConfigStatus(opts: any = {}) {
   const home = opts.home || os.homedir();
   const cwd = opts.cwd || process.cwd();
   const globalConfigPath = path.join(home || '', '.codex', 'config.toml');
@@ -574,14 +574,14 @@ async function codexFastModeConfigStatus(opts = {}) {
   if (path.resolve(projectConfigPath) !== path.resolve(globalConfigPath)) {
     configs.push({ scope: 'project', path: projectConfigPath, text: await readTextIfExists(projectConfigPath) });
   }
-  const blockers = [];
+  const blockers: any[] = [];
   for (const config of configs) {
     if (!config.text) continue;
     const topLevel = topLevelToml(config.text);
     if (/(^|\n)\s*model_reasoning_effort\s*=/.test(topLevel)) blockers.push(`${config.scope}:top_level_model_reasoning_effort`);
     if (/(^|\n)\s*fast_default_opt_out\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(tomlTable(config.text, 'notice'))) blockers.push(`${config.scope}:fast_default_opt_out`);
   }
-  const merged = configs.map((config) => config.text).join('\n');
+  const merged = configs.map((config: any) => config.text).join('\n');
   const fastMode = tomlTable(merged, 'user.fast_mode');
   if (!/(^|\n)\s*visible\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(fastMode)) blockers.push('user.fast_mode.visible_missing');
   if (!/(^|\n)\s*enabled\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(fastMode)) blockers.push('user.fast_mode.enabled_missing');
@@ -593,7 +593,7 @@ async function codexFastModeConfigStatus(opts = {}) {
   };
 }
 
-async function readTextIfExists(file) {
+async function readTextIfExists(file: any) {
   try {
     return await fsp.readFile(file, 'utf8');
   } catch {
@@ -601,7 +601,7 @@ async function readTextIfExists(file) {
   }
 }
 
-async function findDefaultPluginSource(plugin, { home, configText }) {
+async function findDefaultPluginSource(plugin: any, { home, configText }: any) {
   const cached = await findPluginCache(plugin.name, { home });
   if (cached) return cached;
   for (const source of marketplaceSources(configText, plugin.marketplace)) {
@@ -611,26 +611,26 @@ async function findDefaultPluginSource(plugin, { home, configText }) {
   return null;
 }
 
-function marketplaceSources(configText = '', marketplaceName = '') {
+function marketplaceSources(configText: any = '', marketplaceName: any = '') {
   const table = `marketplaces.${marketplaceName}`;
   const re = new RegExp(`(?:^|\\n)\\[${escapeRegExp(table)}\\]([\\s\\S]*?)(?=\\n\\[[^\\]]+\\]|\\s*$)`, 'g');
-  const sources = [];
+  const sources: any[] = [];
   for (const match of String(configText || '').matchAll(re)) {
-    const source = match[1].match(/(?:^|\n)\s*source\s*=\s*"([^"]+)"/)?.[1];
+    const source = match[1]?.match(/(?:^|\n)\s*source\s*=\s*"([^"]+)"/)?.[1];
     if (source) sources.push(source);
   }
   return Array.from(new Set(sources));
 }
 
-function codexPluginEnabled(configText = '', plugin = {}) {
+function codexPluginEnabled(configText: any = '', plugin: any = {}) {
   const table = `plugins."${plugin.name}@${plugin.marketplace}"`;
   const re = new RegExp(`(?:^|\\n)\\[${escapeRegExp(table)}\\]([\\s\\S]*?)(?=\\n\\[[^\\]]+\\]|\\s*$)`);
   const block = String(configText || '').match(re)?.[1] || '';
   return /(?:^|\n)\s*enabled\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(block);
 }
 
-function pluginPickerBlockers(status = {}) {
-  const out = [];
+function pluginPickerBlockers(status: any = {}) {
+  const out: any[] = [];
   if (!status.plugins?.picker?.required_flags_ok) out.push('tool_suggest/plugins/apps');
   if (!status.plugins?.picker?.default_plugins_ok) out.push('default_plugins');
   if (!status.plugins?.picker?.skill_shadows_ok) out.push('skill_shadows');
@@ -638,42 +638,42 @@ function pluginPickerBlockers(status = {}) {
   return out;
 }
 
-function defaultPluginMissingSummary(defaultPlugins = {}) {
+function defaultPluginMissingSummary(defaultPlugins: any = {}) {
   return [
     ...(defaultPlugins?.missing_installed || []),
     ...(defaultPlugins?.missing_enabled || [])
   ].join(', ');
 }
 
-function topLevelToml(text = '') {
+function topLevelToml(text: any = '') {
   const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((line) => /^\s*\[.+\]\s*$/.test(line));
+  const firstTable = lines.findIndex((line: any) => /^\s*\[.+\]\s*$/.test(line));
   return (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
 }
 
-function tomlTable(text = '', table = '') {
+function tomlTable(text: any = '', table: any = '') {
   const re = new RegExp(`(?:^|\\n)\\[${escapeRegExp(table)}\\]([\\s\\S]*?)(?=\\n\\[[^\\]]+\\]|\\s*$)`);
   return String(text || '').match(re)?.[1] || '';
 }
 
-function escapeRegExp(text = '') {
+function escapeRegExp(text: any = '') {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function remoteControlGuidance(status = {}) {
+function remoteControlGuidance(status: any = {}) {
   if (!status.codex_cli?.ok) return 'Codex remote-control requires Codex CLI 0.130.0+. Install with: npm i -g @openai/codex@latest';
   if (status.reason === 'codex_cli_version_unknown') return 'Codex remote-control requires Codex CLI 0.130.0+, but the installed CLI version could not be parsed. Check: codex --version';
   return `Codex remote-control requires Codex CLI ${CODEX_REMOTE_CONTROL_MIN_VERSION}+. Update with: npm i -g @openai/codex@latest`;
 }
 
-function codexCliVersionNumber(versionText = '') {
+function codexCliVersionNumber(versionText: any = '') {
   const match = String(versionText || '').match(/(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/);
   return match ? match[1] : null;
 }
 
-function compareVersions(a, b) {
-  const pa = String(a || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
-  const pb = String(b || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+function compareVersions(a: any, b: any) {
+  const pa = String(a || '').split(/[.-]/).map((x: any) => Number.parseInt(x, 10) || 0);
+  const pb = String(b || '').split(/[.-]/).map((x: any) => Number.parseInt(x, 10) || 0);
   for (let i = 0; i < Math.max(pa.length, pb.length, 3); i++) {
     if ((pa[i] || 0) > (pb[i] || 0)) return 1;
     if ((pa[i] || 0) < (pb[i] || 0)) return -1;

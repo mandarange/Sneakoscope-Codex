@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const ROUTE_COMPLETION_STATES = Object.freeze([
   'route_command_executed',
   'mission_state_transitioned',
@@ -10,14 +9,14 @@ export const ROUTE_COMPLETION_STATES = Object.freeze([
   'trust_report'
 ]);
 
-export function routeStateMachineSnapshot({ proof = {}, evidenceIndex = null, contract = null } = {}) {
-  return ROUTE_COMPLETION_STATES.map((state) => ({
+export function routeStateMachineSnapshot({ proof = {}, evidenceIndex = null, contract = null }: any = {}) {
+  return ROUTE_COMPLETION_STATES.map((state: any) => ({
     state,
     ok: stateSatisfied(state, { proof, evidenceIndex, contract })
   }));
 }
 
-function stateSatisfied(state, { proof, evidenceIndex, contract }) {
+function stateSatisfied(state: any, { proof, evidenceIndex, contract }: any) {
   if (state === 'completion_proof') return proof?.schema === 'sks.completion-proof.v1';
   if (state === 'proof_validation') return ['verified', 'verified_partial', 'blocked'].includes(proof?.status);
   if (state === 'evidence_router') return evidenceIndex?.schema === 'sks.evidence-index.v1';

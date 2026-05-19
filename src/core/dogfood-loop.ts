@@ -1,11 +1,10 @@
-// @ts-nocheck
 import path from 'node:path';
 import { nowIso, writeJsonAtomic } from './fsx.js';
 import { ARTIFACT_FILES, validateDogfoodReport } from './artifact-schemas.js';
 
-export function createDogfoodReport(opts = {}) {
+export function createDogfoodReport(opts: any = {}) {
   const findings = opts.findings || [];
-  const unresolvedFixable = findings.filter((finding) => finding.classification === 'fixable' && finding.post_fix_verification !== 'passed').length;
+  const unresolvedFixable = findings.filter((finding: any) => finding.classification === 'fixable' && finding.post_fix_verification !== 'passed').length;
   const report = {
     schema_version: 1,
     generated_at: nowIso(),
@@ -21,13 +20,13 @@ export function createDogfoodReport(opts = {}) {
   return report;
 }
 
-export async function writeDogfoodReport(dir, opts = {}) {
+export async function writeDogfoodReport(dir: any, opts: any = {}) {
   const report = createDogfoodReport(opts);
   await writeJsonAtomic(path.join(dir, ARTIFACT_FILES.dogfood_report), report);
   return validateDogfoodReport(report);
 }
 
-export function classifyDogfoodFinding(finding = {}) {
+export function classifyDogfoodFinding(finding: any = {}) {
   const classification = finding.classification || (finding.fixable === false ? 'blocked' : 'fixable');
   return {
     id: finding.id || 'DF-001',

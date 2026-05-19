@@ -1,4 +1,3 @@
-// @ts-nocheck
 const SECRET_ENV_NAMES = [
   'CODEX_ACCESS_TOKEN',
   'OPENAI_API_KEY',
@@ -20,12 +19,12 @@ const SECRET_PATTERNS = [
 
 export const REDACTION_MARKER = '[redacted]';
 
-export function redactSecrets(value, env = process.env) {
+export function redactSecrets(value: any, env: any = process.env): any {
   if (value == null) return value;
   if (typeof value === 'string') return redactString(value, env);
-  if (Array.isArray(value)) return value.map((item) => redactSecrets(item, env));
+  if (Array.isArray(value)) return value.map((item: any) => redactSecrets(item, env));
   if (typeof value === 'object') {
-    const out = {};
+    const out: Record<string, any> = {};
     for (const [key, candidate] of Object.entries(value)) {
       out[key] = secretKeyName(key) ? REDACTION_MARKER : redactSecrets(candidate, env);
     }
@@ -34,35 +33,35 @@ export function redactSecrets(value, env = process.env) {
   return value;
 }
 
-export function redactString(input = '', env = process.env) {
+export function redactString(input: any = '', env: any = process.env) {
   let out = String(input);
   for (const name of SECRET_ENV_NAMES) {
     const raw = env?.[name];
     if (raw && raw.length >= 4) out = out.split(raw).join(REDACTION_MARKER);
     out = out.replace(new RegExp(`(${name}\\s*[:=]\\s*)[^\\s"',}]+`, 'gi'), `$1${REDACTION_MARKER}`);
   }
-  for (const pattern of SECRET_PATTERNS) out = out.replace(pattern, (match) => redactKeyValue(match));
+  for (const pattern of SECRET_PATTERNS) out = out.replace(pattern, (match: any) => redactKeyValue(match));
   return out;
 }
 
-export function containsPlaintextSecret(value, env = process.env) {
+export function containsPlaintextSecret(value: any, env: any = process.env) {
   const text = typeof value === 'string' ? value : JSON.stringify(value || {});
   for (const name of SECRET_ENV_NAMES) {
     const raw = env?.[name];
     if (raw && raw.length >= 4 && text.includes(raw)) return true;
   }
-  return SECRET_PATTERNS.some((pattern) => {
+  return SECRET_PATTERNS.some((pattern: any) => {
     pattern.lastIndex = 0;
     return pattern.test(text);
   });
 }
 
-function secretKeyName(key = '') {
+function secretKeyName(key: any = '') {
   return /(?:access[_-]?token|api[_-]?key|secret|password|token)$/i.test(String(key || ''))
     || SECRET_ENV_NAMES.includes(String(key || '').toUpperCase());
 }
 
-function redactKeyValue(match) {
+function redactKeyValue(match: any) {
   const keyValue = String(match).match(/^([^:=]+[:=]\s*)/);
   if (keyValue) return `${keyValue[1]}${REDACTION_MARKER}`;
   if (/^Bearer\s+/i.test(match)) return `Bearer ${REDACTION_MARKER}`;

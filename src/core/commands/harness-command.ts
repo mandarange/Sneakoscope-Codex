@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { sksRoot } from '../fsx.js';
 import { harnessGrowthReport, writeHarnessGrowthReport } from '../evaluation.js';
 import { flag } from './command-utils.js';
 
-export async function harnessCommand(sub, args = []) {
+export async function harnessCommand(sub: any, args: any = []) {
   const action = sub || 'fixture';
   if (!['fixture', 'review'].includes(action)) {
     console.error('Usage: sks harness fixture|review [--json]');

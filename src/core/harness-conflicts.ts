@@ -1,23 +1,22 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { exists, readJson, readText } from './fsx.js';
 
 export const OTHER_HARNESS_NAMES = ['OMX', 'DCodex'];
 
-export async function scanHarnessConflicts(root, opts = {}) {
+export async function scanHarnessConflicts(root: any, opts: any = {}) {
   const projectRoot = path.resolve(root || process.cwd());
   const home = opts.home || process.env.HOME || '';
   const includeGlobal = opts.includeGlobal !== false;
-  const conflicts = [];
+  const conflicts: any[] = [];
   conflicts.push(...await scanProjectHarnessConflicts(projectRoot));
   if (includeGlobal && home) conflicts.push(...await scanGlobalHarnessConflicts(home));
-  const hard = conflicts.filter((x) => x.hard_block);
-  const repairable = conflicts.filter((x) => x.repairable && !x.hard_block);
+  const hard = conflicts.filter((x: any) => x.hard_block);
+  const repairable = conflicts.filter((x: any) => x.repairable && !x.hard_block);
   return {
     ok: hard.length === 0,
     hard_block: hard.length > 0,
-    requires_human_approval: conflicts.some((x) => x.requires_human_approval),
+    requires_human_approval: conflicts.some((x: any) => x.requires_human_approval),
     project_root: projectRoot,
     global_home: home || null,
     conflicts,
@@ -26,8 +25,8 @@ export async function scanHarnessConflicts(root, opts = {}) {
   };
 }
 
-async function scanProjectHarnessConflicts(root) {
-  const out = [];
+async function scanProjectHarnessConflicts(root: any) {
+  const out: any[] = [];
   for (const marker of [
     { rel: '.omx', name: 'OMX' },
     { rel: '.dcodex', name: 'DCodex' }
@@ -76,8 +75,8 @@ async function scanProjectHarnessConflicts(root) {
   return out;
 }
 
-async function scanGlobalHarnessConflicts(home) {
-  const out = [];
+async function scanGlobalHarnessConflicts(home: any) {
+  const out: any[] = [];
   for (const rel of [
     '.omx',
     '.omxrc',
@@ -103,7 +102,7 @@ async function scanGlobalHarnessConflicts(home) {
   return out;
 }
 
-function blockingConflict(scope, filePath, reason, recommendation) {
+function blockingConflict(scope: any, filePath: any, reason: any, recommendation: any) {
   return {
     id: reason.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
     scope,
@@ -117,16 +116,16 @@ function blockingConflict(scope, filePath, reason, recommendation) {
   };
 }
 
-function hasForeignCodexHooks(text) {
+function hasForeignCodexHooks(text: any) {
   const parsed = safeJson(text);
   if (!parsed?.hooks) return false;
-  const commands = [];
+  const commands: any[] = [];
   collectHookCommands(parsed.hooks, commands);
   if (!commands.length) return false;
-  return commands.some((cmd) => !/\b(sks|sneakoscope)\b|node\s+\S*node_modules\/sneakoscope\/bin\/sks\.js|node\s+\S*bin\/sks\.js/i.test(cmd));
+  return commands.some((cmd: any) => !/\b(sks|sneakoscope)\b|node\s+\S*node_modules\/sneakoscope\/bin\/sks\.js|node\s+\S*bin\/sks\.js/i.test(cmd));
 }
 
-function collectHookCommands(value, out) {
+function collectHookCommands(value: any, out: any) {
   if (!value) return;
   if (Array.isArray(value)) {
     for (const item of value) collectHookCommands(item, out);
@@ -138,17 +137,17 @@ function collectHookCommands(value, out) {
   }
 }
 
-function safeJson(text) {
+function safeJson(text: any) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
-function isOtherHarnessPackage(name) {
+function isOtherHarnessPackage(name: any) {
   return /(^|[-_@/])(omx|dcodex)([-_@/]|$)/i.test(String(name || ''));
 }
 
-export function formatHarnessConflictReport(scan, opts = {}) {
+export function formatHarnessConflictReport(scan: any, opts: any = {}) {
   if (!scan?.conflicts?.length) return 'No conflicting Codex harness detected.';
-  const lines = [];
+  const lines: any[] = [];
   lines.push('Conflicting Codex harness detected. SKS installation/setup is blocked until it is removed with human approval.');
   for (const item of scan.conflicts) {
     lines.push(`- [${item.severity}] ${item.scope}: ${item.path}`);
@@ -167,8 +166,8 @@ export function formatHarnessConflictReport(scan, opts = {}) {
   return lines.join('\n');
 }
 
-export function llmHarnessCleanupPrompt(scan) {
-  const paths = (scan?.conflicts || []).map((x) => `- ${x.scope}: ${x.path} (${x.reason})`).join('\n') || '- No paths supplied. Re-run `sks doctor --json` first.';
+export function llmHarnessCleanupPrompt(scan: any) {
+  const paths = (scan?.conflicts || []).map((x: any) => `- ${x.scope}: ${x.path} (${x.reason})`).join('\n') || '- No paths supplied. Re-run `sks doctor --json` first.';
   return `Use GPT-5.5 with reasoning effort high.
 
 Goal: completely remove the conflicting Codex harnesses before installing Sneakoscope Codex.
@@ -191,8 +190,8 @@ Expected final report:
 4. Whether SKS installation is now allowed.`;
 }
 
-export async function repairSksGeneratedArtifacts(root, opts = {}) {
-  const removed = [];
+export async function repairSksGeneratedArtifacts(root: any, opts: any = {}) {
+  const removed: any[] = [];
   const rels = [
     '.codex/hooks.json',
     '.codex/config.toml',

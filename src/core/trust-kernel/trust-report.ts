@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { exists, nowIso, readJson, writeJsonAtomic } from '../fsx.js';
@@ -12,12 +11,13 @@ import { lastJsonlEventTime } from '../evidence/evidence-freshness.js';
 import { routeStateMachineSnapshot } from './route-state-machine.js';
 import { combineTrustStatus } from './trust-status.js';
 import { TRUST_REPORT_SCHEMA, trustKernelMetadata } from './trust-kernel-schema.js';
+import { evaluateWrongnessTrust, applyWrongnessTrustStatus } from '../triwiki-wrongness/wrongness-trust-policy.js';
 
-export function trustReportPath(root, missionId) {
+export function trustReportPath(root: any, missionId: any) {
   return path.join(missionDir(root, missionId), 'trust-report.json');
 }
 
-export async function writeTrustArtifactsForProof(root, proof = {}) {
+export async function writeTrustArtifactsForProof(root: any, proof: any = {}) {
   if (!proof?.mission_id) return null;
   const evidenceIndex = await writeEvidenceIndexForProof(root, proof);
   const contract = await writeRouteCompletionContract(root, proof, evidenceIndex);
@@ -26,7 +26,7 @@ export async function writeTrustArtifactsForProof(root, proof = {}) {
   return { evidenceIndex, contract, report };
 }
 
-export async function latestTrustReport(root, missionArg = 'latest') {
+export async function latestTrustReport(root: any, missionArg: any = 'latest') {
   const missionId = !missionArg || missionArg === 'latest' ? await findLatestMission(root) : missionArg;
   if (!missionId) {
     return {
@@ -56,18 +56,31 @@ export async function latestTrustReport(root, missionArg = 'latest') {
       issues: ['completion_proof_missing']
     };
   }
-  return (await writeTrustArtifactsForProof(root, proof)).report;
+  const rebuilt = await writeTrustArtifactsForProof(root, proof);
+  if (!rebuilt) {
+    return {
+      schema: TRUST_REPORT_SCHEMA,
+      ...trustKernelMetadata(),
+      ok: false,
+      mission_id: missionId,
+      status: 'blocked',
+      issues: ['trust_report_rebuild_skipped']
+    };
+  }
+  return rebuilt.report;
 }
 
-export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {} } = {}) {
+export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {} }: any = {}) {
   const validation = contract.validation || validateCompletionContract(contract, proof, evidenceIndex);
+  const wrongness = evaluateWrongnessTrust({ proof, evidenceIndex, contract });
   const statuses = [
     proof.status || 'not_verified',
     evidenceIndex.status || 'not_verified',
     validation.status || 'not_verified'
   ];
-  const status = validation.ok ? combineTrustStatus(statuses) : 'blocked';
-  const issues = [...new Set([...(validation.issues || []), ...(evidenceIndex.issues || [])])];
+  const baseStatus = validation.ok ? combineTrustStatus(statuses) : 'blocked';
+  const status = applyWrongnessTrustStatus(baseStatus, wrongness);
+  const issues = [...new Set([...(validation.issues || []), ...(evidenceIndex.issues || []), ...(wrongness.issues || [])])];
   return {
     schema: TRUST_REPORT_SCHEMA,
     ...trustKernelMetadata(),
@@ -84,14 +97,16 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
       completion_proof: proof.mission_id ? `.sneakoscope/missions/${proof.mission_id}/completion-proof.json` : null,
       route_contract: proof.mission_id ? `.sneakoscope/missions/${proof.mission_id}/route-completion-contract.json` : null,
       evidence_index: proof.mission_id ? `.sneakoscope/missions/${proof.mission_id}/evidence-index.json` : null,
-      evidence_records: evidenceIndex.records?.length || 0
+      evidence_records: evidenceIndex.records?.length || 0,
+      wrongness: wrongness.summary
     },
+    wrongness: wrongness.summary,
     scout_quality: scoutQualityFromProof(proof),
-    blockers: issues.filter((issue) => /missing|blocked|stale|secret|not_passed|cannot_verify/i.test(issue))
+    blockers: issues.filter((issue: any) => /missing|blocked|stale|secret|not_passed|cannot_verify/i.test(issue))
   };
 }
 
-function scoutQualityFromProof(proof = {}) {
+function scoutQualityFromProof(proof: any = {}) {
   const scouts = proof.evidence?.scouts;
   if (!scouts) {
     return {
@@ -118,8 +133,8 @@ function scoutQualityFromProof(proof = {}) {
   };
 }
 
-async function temporalTrustIssues(root, missionId, { report = {}, proof = null } = {}) {
-  const issues = [];
+async function temporalTrustIssues(root: any, missionId: any, { report = {}, proof = null }: any = {}) {
+  const issues: any[] = [];
   if (!missionId) return issues;
   const dir = missionDir(root, missionId);
   const evidenceIndex = await readEvidenceIndex(root, missionId);
@@ -129,7 +144,7 @@ async function temporalTrustIssues(root, missionId, { report = {}, proof = null 
   const evidenceTime = await artifactTime(missionEvidenceIndexPath(root, missionId), evidenceIndex);
   const contractTime = await artifactTime(routeCompletionContractPath(root, missionId), contract);
   const reportTime = await artifactTime(trustReportPath(root, missionId), report);
-  if (Number.isFinite(latestEvent) && Number.isFinite(proofTime) && proofTime < latestEvent) issues.push('stale_proof');
+  if (latestEvent !== null && Number.isFinite(proofTime) && proofTime < latestEvent) issues.push('stale_proof');
   if (Number.isFinite(evidenceTime) && Number.isFinite(proofTime) && evidenceTime < proofTime) issues.push('stale_evidence_index');
   if (Number.isFinite(contractTime) && Number.isFinite(proofTime) && contractTime < proofTime) issues.push('stale_route_contract');
   if (Number.isFinite(reportTime)) {
@@ -140,7 +155,7 @@ async function temporalTrustIssues(root, missionId, { report = {}, proof = null 
   return [...new Set(issues)];
 }
 
-async function artifactTime(file, artifact = null) {
+async function artifactTime(file: any, artifact: any = null) {
   const generated = Date.parse(artifact?.generated_at || '');
   if (Number.isFinite(generated)) return generated;
   try {
@@ -151,7 +166,7 @@ async function artifactTime(file, artifact = null) {
   }
 }
 
-function staleTrustReport(report = {}, issues = []) {
+function staleTrustReport(report: any = {}, issues: any = []) {
   const nextIssues = [...new Set([...(report.issues || []), ...issues])];
   return {
     ...report,

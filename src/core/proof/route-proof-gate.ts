@@ -1,14 +1,13 @@
-// @ts-nocheck
 import { containsPlaintextSecret } from '../secret-redaction.js';
 import { readRouteProof } from './proof-reader.js';
 import { validateCompletionProof } from './validation.js';
 import { proofStatusBlocks, routeRequiresCompletionProof, routeRequiresImageVoxelAnchors } from './route-proof-policy.js';
 import { routeRequiresScoutIntake } from '../scouts/scout-plan.js';
 
-export async function validateRouteCompletionProof(root, { missionId = null, route = null, state = {}, visualClaim = undefined } = {}) {
+export async function validateRouteCompletionProof(root: any, { missionId = null, route = null, state = {}, visualClaim = undefined }: any = {}) {
   const proofRequired = state.proof_required === true || routeRequiresCompletionProof(route);
   if (!proofRequired) return { ok: true, required: false, status: 'not_required', issues: [] };
-  const proof = await readRouteProof(root, missionId);
+  const proof: any = await readRouteProof(root, missionId);
   if (!proof) {
     return {
       ok: false,
@@ -34,6 +33,9 @@ export async function validateRouteCompletionProof(root, { missionId = null, rou
       if (scouts.read_only_confirmed !== true) issues.push('scout_read_only_not_confirmed');
     }
   }
+  const wrongness = proof.evidence?.wrongness;
+  if (Number(wrongness?.high_severity_active || 0) > 0) issues.push('active_wrongness_high');
+  if (proof.status === 'verified' && Number(wrongness?.active_count || 0) > 0) issues.push('active_wrongness_requires_partial');
   return {
     ok: issues.length === 0,
     required: true,

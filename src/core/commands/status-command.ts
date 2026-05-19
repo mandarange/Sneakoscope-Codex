@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { projectRoot, readJson } from '../fsx.js';
 import { stateFile } from '../mission.js';
@@ -6,11 +5,11 @@ import { readRouteProof } from '../proof/proof-reader.js';
 import { latestTrustReport } from '../trust-kernel/trust-report.js';
 import { flag } from './command-utils.js';
 
-export async function statusCommand(args = []) {
+export async function statusCommand(args: any = []) {
   const root = await projectRoot();
   const state = await readJson(stateFile(root), {});
   const missionId = state.mission_id || null;
-  const proof = missionId ? await readRouteProof(root, missionId) : null;
+  const proof: any = missionId ? await readRouteProof(root, missionId) : null;
   const trust = missionId ? await latestTrustReport(root, missionId) : null;
   const result = {
     schema: 'sks.status.v1',
@@ -43,7 +42,7 @@ export async function statusCommand(args = []) {
   console.log(`Next:    ${result.next_action}`);
 }
 
-function nextAction(state = {}, trust = {}, proof = {}) {
+function nextAction(state: any = {}, trust: any = {}, proof: any = {}) {
   if (!state.mission_id) return 'start a route with sks run, $Team, or $Goal';
   if (!proof?.schema) return `write completion proof for ${state.mission_id}`;
   if (trust?.ok) return 'ready for final Honest Mode summary';

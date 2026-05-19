@@ -1,18 +1,17 @@
-// @ts-nocheck
 import path from 'node:path';
 import { nowIso, writeJsonAtomic } from './fsx.js';
 import { ARTIFACT_FILES } from './artifact-schemas.js';
 
 export const EFFORT_POLICY_VERSION = 1;
 
-export function selectEffort(task = {}) {
+export function selectEffort(task: any = {}) {
   const route = String(task.route || task.command || '').toLowerCase();
   const phase = String(task.phase || '').toLowerCase();
   const text = String(task.prompt || task.description || '');
   const risks = normalizeRiskScores(task.risk_scores || inferRiskScores({ ...task, route, phase, text }));
   const failureCount = Number(task.failure_count || 0);
   const repeated = Boolean(task.repeated_failure || risks.repeated_failure >= 0.75);
-  const reasonCodes = [];
+  const reasonCodes: any[] = [];
   let selected = 'medium';
 
   if (route.includes('from-chat-img') || /from-chat-img|visual-reference|reference image|screenshot|chat image/i.test(text)) {
@@ -51,13 +50,13 @@ export function selectEffort(task = {}) {
   };
 }
 
-export async function writeEffortDecision(dir, task = {}) {
+export async function writeEffortDecision(dir: any, task: any = {}) {
   const decision = selectEffort(task);
   await writeJsonAtomic(path.join(dir, ARTIFACT_FILES.effort_decision), decision);
   return decision;
 }
 
-function inferRiskScores(task = {}) {
+function inferRiskScores(task: any = {}) {
   const text = String(task.text || '');
   return {
     ambiguity: /ambiguous|unclear|모호|확인/i.test(text) ? 0.7 : 0.2,
@@ -69,7 +68,7 @@ function inferRiskScores(task = {}) {
   };
 }
 
-function normalizeRiskScores(scores = {}) {
+function normalizeRiskScores(scores: any = {}) {
   const defaults = {
     ambiguity: 0,
     visual_fidelity: 0,
@@ -78,13 +77,13 @@ function normalizeRiskScores(scores = {}) {
     repeated_failure: 0,
     user_impact: 0
   };
-  return Object.fromEntries(Object.entries({ ...defaults, ...scores }).map(([key, value]) => {
+  return Object.fromEntries(Object.entries({ ...defaults, ...scores }).map(([key, value]: any) => {
     const n = Number(value);
     return [key, Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0];
   }));
 }
 
-function demotionPolicy(effort) {
+function demotionPolicy(effort: any) {
   if (effort === 'forensic_vision') return ['source_inventory_complete', 'visual_map_complete', 'no_unresolved_regions'];
   if (effort === 'recovery') return ['root_cause_fixed', 'regression_gate_added', 'verification_passed'];
   if (effort === 'xhigh') return ['final_audit_complete', 'no_blockers'];
@@ -92,7 +91,7 @@ function demotionPolicy(effort) {
   return [];
 }
 
-function escalationPolicy(effort) {
+function escalationPolicy(effort: any) {
   const base = ['verification_failed', 'evidence_conflict', 'hard_blocker_found'];
   if (effort === 'low') return [...base, 'scope_expanded', 'ambiguity_increased'];
   if (effort === 'medium') return [...base, 'repeated_failure', 'security_or_destructive_risk', 'visual_fidelity_required'];

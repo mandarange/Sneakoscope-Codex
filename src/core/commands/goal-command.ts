@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { exists, readJson, sksRoot } from '../fsx.js';
 import { initProject } from '../init.js';
@@ -6,7 +5,7 @@ import { createMission, loadMission, setCurrent, stateFile } from '../mission.js
 import { GOAL_BRIDGE_ARTIFACT, GOAL_WORKFLOW_ARTIFACT, updateGoalWorkflow, writeGoalWorkflow } from '../goal-workflow.js';
 import { flag, promptOf, resolveMissionId } from './command-utils.js';
 
-export async function goalCommand(sub, args = []) {
+export async function goalCommand(sub: any, args: any = []) {
   const known = new Set(['create', 'pause', 'resume', 'clear', 'status', 'help', '--help', '-h']);
   const action = known.has(sub) ? sub : 'create';
   const actionArgs = action === 'create' && sub && !known.has(sub) ? [sub, ...args] : args;
@@ -24,7 +23,7 @@ Usage:
 `);
 }
 
-async function goalCreate(args) {
+async function goalCreate(args: any) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
   const prompt = promptOf(args);
@@ -39,7 +38,7 @@ async function goalCreate(args) {
   console.log(`Native Codex control: ${workflow.native_goal.slash_command}`);
 }
 
-async function goalControl(action, args) {
+async function goalControl(action: any, args: any) {
   const root = await sksRoot();
   const id = await resolveMissionId(root, args[0]);
   if (!id) throw new Error(`Usage: sks goal ${action} <mission-id|latest>`);
@@ -50,7 +49,7 @@ async function goalControl(action, args) {
   console.log(`Native Codex control: ${workflow.native_goal.slash_command}`);
 }
 
-async function goalStatus(args) {
+async function goalStatus(args: any) {
   const root = await sksRoot();
   const id = await resolveMissionId(root, args[0]);
   if (!id) throw new Error('Usage: sks goal status <mission-id|latest>');

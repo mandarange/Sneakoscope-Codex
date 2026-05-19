@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { nowIso, readText } from '../fsx.js';
 import { SCOUT_RESULT_SCHEMA } from './scout-schema.js';
@@ -14,7 +13,7 @@ export async function parseScoutOutputFile({
   engine = null,
   realParallel = false,
   generatedAt = nowIso()
-} = {}) {
+}: any = {}) {
   const outputText = outputFile ? await readText(outputFile, '') : '';
   const stdoutText = stdoutFile ? await readText(stdoutFile, '') : '';
   const source = buildSource({ outputFile, stdoutFile, stderrFile, engine, realParallel });
@@ -43,7 +42,7 @@ export async function parseScoutOutputFile({
   });
 }
 
-export function parseScoutOutput(text, ctx = {}) {
+export function parseScoutOutput(text: any, ctx: any = {}) {
   const parsed = parseScoutOutputText(text);
   if (!parsed.ok) {
     return blockedScoutResult({
@@ -66,7 +65,7 @@ export function parseScoutOutput(text, ctx = {}) {
   return normalizeParsedScoutResult(parsed.value, ctx);
 }
 
-export function parseScoutOutputText(text = '') {
+export function parseScoutOutputText(text: any = '') {
   const raw = String(text || '').trim();
   if (!raw) return { ok: false, error: 'empty_output' };
   const candidates = [
@@ -87,7 +86,7 @@ export function parseScoutOutputText(text = '') {
   return { ok: false, error: 'invalid_json' };
 }
 
-export function normalizeParsedScoutResult(raw = {}, {
+export function normalizeParsedScoutResult(raw: any = {}, {
   missionId = null,
   route = '$Team',
   role,
@@ -95,15 +94,15 @@ export function normalizeParsedScoutResult(raw = {}, {
   realParallel = false,
   source = {},
   generatedAt = nowIso()
-} = {}) {
+}: any = {}) {
   const blockers = arrayOfStrings(raw.blockers);
-  const validationBlockers = [];
+  const validationBlockers: any[] = [];
   if (raw.schema !== SCOUT_RESULT_SCHEMA) validationBlockers.push(`invalid_schema:${raw.schema || 'missing'}`);
   if (raw.scout_id && raw.scout_id !== role.id) validationBlockers.push(`scout_id_mismatch:${raw.scout_id}`);
   if (raw.read_only !== true) validationBlockers.push('read_only_not_confirmed');
   if (!String(raw.summary || '').trim()) validationBlockers.push('summary_missing');
   const status = validationBlockers.length || blockers.length || raw.status === 'blocked' ? 'blocked' : 'done';
-  const result = {
+  const result: any = {
     schema: SCOUT_RESULT_SCHEMA,
     mission_id: raw.mission_id || missionId,
     scout_id: role.id,
@@ -133,7 +132,7 @@ export function normalizeParsedScoutResult(raw = {}, {
   const validation = validateScoutResult(result);
   if (!validation.ok) {
     result.status = 'blocked';
-    result.blockers = [...new Set([...(result.blockers || []), ...validation.blockers])];
+    result.blockers = [...new Set([...(result.blockers || []), ...validation.blockers])] as any[];
     result.parse_issues = validation.blockers;
   }
   return result;
@@ -141,12 +140,12 @@ export function normalizeParsedScoutResult(raw = {}, {
 
 export const normalizeScoutResult = normalizeParsedScoutResult;
 
-export function validateScoutResult(result = {}, {
+export function validateScoutResult(result: any = {}, {
   requireFindings = true,
   requireSuggestedTasks = true,
   requireReadOnly = true
-} = {}) {
-  const blockers = [];
+}: any = {}) {
+  const blockers: any[] = [];
   if (result.schema !== SCOUT_RESULT_SCHEMA) blockers.push(`invalid_schema:${result.schema || 'missing'}`);
   if (!String(result.scout_id || '').trim()) blockers.push('scout_id_missing');
   if (!String(result.role || '').trim()) blockers.push('role_missing');
@@ -159,7 +158,7 @@ export function validateScoutResult(result = {}, {
   return { ok: blockers.length === 0, blockers };
 }
 
-function blockedScoutResult({ missionId, route, role, engine, realParallel, source, generatedAt, reason }) {
+function blockedScoutResult({ missionId, route, role, engine, realParallel, source, generatedAt, reason }: any) {
   return {
     schema: SCOUT_RESULT_SCHEMA,
     mission_id: missionId,
@@ -189,7 +188,7 @@ function blockedScoutResult({ missionId, route, role, engine, realParallel, sour
   };
 }
 
-function buildSource({ outputFile, stdoutFile, stderrFile, engine, realParallel }) {
+function buildSource({ outputFile, stdoutFile, stderrFile, engine, realParallel }: any) {
   return {
     type: 'engine_output',
     engine: engine || null,
@@ -200,20 +199,20 @@ function buildSource({ outputFile, stdoutFile, stderrFile, engine, realParallel 
   };
 }
 
-function normalizePath(file) {
+function normalizePath(file: any) {
   return file ? path.normalize(file) : null;
 }
 
-function jsonFenceCandidates(text) {
-  const out = [];
+function jsonFenceCandidates(text: any) {
+  const out: any[] = [];
   const re = /```(?:json)?\s*([\s\S]*?)```/gi;
   let match;
   while ((match = re.exec(text))) out.push(match[1]);
   return out;
 }
 
-function balancedJsonObjectCandidates(text) {
-  const out = [];
+function balancedJsonObjectCandidates(text: any) {
+  const out: any[] = [];
   for (let start = text.indexOf('{'); start >= 0; start = text.indexOf('{', start + 1)) {
     let depth = 0;
     let inString = false;
@@ -240,19 +239,19 @@ function balancedJsonObjectCandidates(text) {
   return out;
 }
 
-function normalizeFindings(value) {
-  return Array.isArray(value) ? value.filter((item) => item && typeof item === 'object').map((item, index) => ({
+function normalizeFindings(value: any) {
+  return Array.isArray(value) ? value.filter((item: any) => item && typeof item === 'object').map((item: any, index: any) => ({
     id: String(item.id || `finding-${index + 1}`),
     kind: String(item.kind || 'finding'),
     claim: String(item.claim || item.summary || ''),
     evidence: Array.isArray(item.evidence) ? item.evidence : [],
     risk: String(item.risk || 'medium'),
     action: item.action ? String(item.action) : undefined
-  })).filter((item) => item.claim) : [];
+  })).filter((item: any) => item.claim) : [];
 }
 
-function normalizeTasks(value) {
-  return Array.isArray(value) ? value.filter((item) => item && typeof item === 'object').map((item, index) => ({
+function normalizeTasks(value: any) {
+  return Array.isArray(value) ? value.filter((item: any) => item && typeof item === 'object').map((item: any, index: any) => ({
     id: String(item.id || `task-${index + 1}`),
     title: String(item.title || item.summary || 'Scout suggested task'),
     owner_type: String(item.owner_type || 'implementation'),
@@ -262,6 +261,6 @@ function normalizeTasks(value) {
   })) : [];
 }
 
-function arrayOfStrings(value) {
-  return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+function arrayOfStrings(value: any) {
+  return Array.isArray(value) ? value.map((item: any) => String(item)).filter(Boolean) : [];
 }

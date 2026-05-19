@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { normalizeTrustStatus } from './trust-kernel-schema.js';
 
-export function combineTrustStatus(statuses = []) {
+export function combineTrustStatus(statuses: any = []) {
   const values = statuses.map(normalizeTrustStatus);
   if (values.includes('failed')) return 'failed';
   if (values.includes('blocked')) return 'blocked';
@@ -10,8 +9,8 @@ export function combineTrustStatus(statuses = []) {
   return values.length ? 'verified' : 'not_verified';
 }
 
-export function statusFromIssues(issues = [], fallback = 'verified') {
-  if (issues.some((issue) => /failed|schema|plaintext_secret/i.test(String(issue)))) return 'failed';
+export function statusFromIssues(issues: any = [], fallback: any = 'verified') {
+  if (issues.some((issue: any) => /failed|schema|plaintext_secret/i.test(String(issue)))) return 'failed';
   if (issues.length) return 'blocked';
   return fallback;
 }

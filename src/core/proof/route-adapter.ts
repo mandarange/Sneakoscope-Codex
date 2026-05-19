@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { collectProofEvidence } from './evidence-collector.js';
 import { writeCompletionProof } from './proof-writer.js';
@@ -6,7 +5,7 @@ import { normalizeProofRoute, routeRequiresImageVoxelAnchors } from './route-pro
 import { linkProofClaimsToEvidence, proofEvidenceSummary } from '../evidence/evidence-proof-linker.js';
 import { writeTrustArtifactsForProof } from '../trust-kernel/trust-report.js';
 
-export async function writeRouteCompletionProof(root, {
+export async function writeRouteCompletionProof(root: any, {
   missionId = null,
   route = null,
   status = 'verified_partial',
@@ -18,7 +17,7 @@ export async function writeRouteCompletionProof(root, {
   unverified = [],
   blockers = [],
   nextHumanActions = []
-} = {}) {
+}: any = {}) {
   const collected = await collectProofEvidence(root);
   const normalizedRoute = normalizeProofRoute(route);
   const mergedEvidence = {
@@ -58,7 +57,7 @@ export async function writeRouteCompletionProof(root, {
     }
   });
   if (!missionId) return written;
-  const firstTrust = await writeTrustArtifactsForProof(root, written.proof);
+  const firstTrust: any = await writeTrustArtifactsForProof(root, written.proof);
   const evidenceSummary = proofEvidenceSummary(firstTrust.evidenceIndex);
   const enriched = await writeCompletionProof(root, {
     ...written.proof,
@@ -80,7 +79,7 @@ export async function writeRouteCompletionProof(root, {
   return { ...enriched, trust };
 }
 
-function normalizeRouteProofStatus(status, { route, evidence, blockers, unverified }) {
+function normalizeRouteProofStatus(status: any, { route, evidence, blockers, unverified }: any) {
   if (blockers?.length) return status === 'failed' ? 'failed' : 'blocked';
   if (status === 'verified' && unverified?.length) return 'verified_partial';
   if (routeRequiresImageVoxelAnchors(route)) {
@@ -90,8 +89,8 @@ function normalizeRouteProofStatus(status, { route, evidence, blockers, unverifi
   return status;
 }
 
-function normalizeArtifacts(root, artifacts = []) {
-  return artifacts.map((artifact) => {
+function normalizeArtifacts(root: any, artifacts: any = []) {
+  return artifacts.map((artifact: any) => {
     if (typeof artifact !== 'string') return artifact;
     return path.isAbsolute(artifact) ? path.relative(root, artifact).split(path.sep).join('/') : artifact;
   });

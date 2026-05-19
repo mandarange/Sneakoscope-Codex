@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { projectRoot, readJson, runProcess, sksRoot } from '../core/fsx.js';
 import { getCodexInfo } from '../core/codex-adapter.js';
 import { context7Docs, context7Resolve, context7Text, context7Tools } from '../core/context7-client.js';
@@ -6,9 +5,9 @@ import { context7Evidence, recordContext7Evidence } from '../core/pipeline.js';
 import { stateFile } from '../core/mission.js';
 import { checkContext7, ensureProjectContext7Config } from './install-helpers.js';
 
-const flag = (args, name) => args.includes(name);
+const flag = (args: any, name: any) => args.includes(name);
 
-export async function context7Command(sub = 'check', args = []) {
+export async function context7Command(sub: any = 'check', args: any = []) {
   const action = sub || 'check';
   const setupScope = action === 'setup' ? readOption(args, '--scope', flag(args, '--global') ? 'global' : 'project') : null;
   const root = action === 'setup' && setupScope === 'project' ? await projectRoot() : await sksRoot();
@@ -30,7 +29,7 @@ export async function context7Command(sub = 'check', args = []) {
     console.log(`Server: ${result.server.info?.name || 'context7'} ${result.server.info?.version || ''}`.trim());
     console.log(`Command: ${result.server.command} ${result.server.args.join(' ')}`);
     console.log(`Tools:  ${result.tool_names.join(', ') || 'none'}`);
-    if (!result.tool_names.includes('resolve-library-id') || !result.tool_names.some((name) => name === 'query-docs' || name === 'get-library-docs')) {
+    if (!result.tool_names.includes('resolve-library-id') || !result.tool_names.some((name: any) => name === 'query-docs' || name === 'get-library-docs')) {
       process.exitCode = 1;
       console.log('\nContext7 local MCP is missing the required resolve/docs tools.');
     }
@@ -123,7 +122,7 @@ export async function context7Command(sub = 'check', args = []) {
   throw new Error(`Unknown context7 command: ${action}`);
 }
 
-function printContext7DocsResult(result, opts = {}) {
+function printContext7DocsResult(result: any, opts: any = {}) {
   console.log(`${opts.title || 'SKS Context7 Docs'}\n`);
   console.log(`Library ID: ${result.library_id || 'not resolved'}`);
   console.log(`Docs tool:  ${result.docs_tool || 'missing'}`);
@@ -133,20 +132,20 @@ function printContext7DocsResult(result, opts = {}) {
   if (result.error) console.log(`\nError: ${result.error}`);
 }
 
-function readOption(args, name, fallback) {
+function readOption(args: any, name: any, fallback: any) {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 }
 
-function readNumberOption(args, name, fallback) {
+function readNumberOption(args: any, name: any, fallback: any) {
   const raw = readOption(args, name, null);
   if (raw == null) return fallback;
   const n = Number(raw);
   return Number.isFinite(n) ? n : fallback;
 }
 
-function positionalArgs(args = []) {
-  const out = [];
+function positionalArgs(args: any = []) {
+  const out: any[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (String(arg).startsWith('--')) {
@@ -158,7 +157,7 @@ function positionalArgs(args = []) {
   return out;
 }
 
-async function resolveMissionId(root, arg) {
+async function resolveMissionId(root: any, arg: any) {
   const { findLatestMission } = await import('../core/mission.js');
   return (!arg || arg === 'latest') ? findLatestMission(root) : arg;
 }

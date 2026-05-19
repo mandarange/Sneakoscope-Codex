@@ -1,10 +1,9 @@
-// @ts-nocheck
 import { appendScoutLedger } from '../scout-artifacts.js';
 
-export async function cleanupTmuxScoutSession({ session, tmux, root, missionId } = {}) {
+export async function cleanupTmuxScoutSession({ session, tmux, root, missionId }: any = {}) {
   if (!tmux || !session) return { ok: false, reason: 'tmux_or_session_missing' };
   const { runProcess } = await import('../../fsx.js');
-  const result = await runProcess(tmux, ['kill-session', '-t', session], { timeoutMs: 10000, maxOutputBytes: 8192 }).catch((err) => ({ code: 1, stderr: err.message }));
+  const result = await runProcess(tmux, ['kill-session', '-t', session], { timeoutMs: 10000, maxOutputBytes: 8192 }).catch((err: any) => ({ code: 1, stderr: err.message }));
   if (root && missionId) {
     await appendScoutLedger(root, missionId, {
       type: 'scout.tmux_lane.cleanup',

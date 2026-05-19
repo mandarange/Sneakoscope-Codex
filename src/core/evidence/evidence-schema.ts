@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { nowIso, randomId } from '../fsx.js';
 
 export const EVIDENCE_SCHEMA = 'sks.evidence.v1';
@@ -20,8 +19,12 @@ export const EVIDENCE_KINDS = Object.freeze([
   'route_contract',
   'trust_report',
   'route_gate',
+  'wrongness',
+  'image_wrongness',
+  'correction',
+  'avoidance_rule',
   'artifact'
-]);
+] as const);
 
 export const EVIDENCE_SOURCES = Object.freeze([
   'real',
@@ -29,61 +32,89 @@ export const EVIDENCE_SOURCES = Object.freeze([
   'static_contract',
   'fixture',
   'blocked'
-]);
+] as const);
 
 export const EVIDENCE_FRESHNESS = Object.freeze([
   'fresh',
   'stale',
   'unknown'
-]);
+] as const);
 
 export const EVIDENCE_TRUST = Object.freeze([
   'high',
   'medium',
   'low',
   'blocked'
-]);
+] as const);
 
-export function evidenceId(kind = 'artifact') {
+export type EvidenceKind = typeof EVIDENCE_KINDS[number];
+export type EvidenceSource = typeof EVIDENCE_SOURCES[number];
+export type EvidenceFreshness = typeof EVIDENCE_FRESHNESS[number];
+export type EvidenceTrust = typeof EVIDENCE_TRUST[number];
+
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function isOneOf<T extends string>(values: readonly T[], value: unknown): value is T {
+  return typeof value === 'string' && (values as readonly string[]).includes(value);
+}
+
+export function evidenceId(kind: unknown = 'artifact') {
   return `EV-${String(kind || 'artifact').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toUpperCase() || 'ART'}-${randomId(8)}`;
 }
 
-export function normalizeEvidenceKind(kind = 'artifact') {
-  return EVIDENCE_KINDS.includes(kind) ? kind : 'artifact';
+export function normalizeEvidenceKind(kind: unknown = 'artifact'): EvidenceKind {
+  return isOneOf(EVIDENCE_KINDS, kind) ? kind : 'artifact';
 }
 
-export function normalizeEvidenceSource(source = 'real') {
-  return EVIDENCE_SOURCES.includes(source) ? source : 'real';
+export function normalizeEvidenceSource(source: unknown = 'real'): EvidenceSource {
+  return isOneOf(EVIDENCE_SOURCES, source) ? source : 'real';
 }
 
-export function normalizeEvidenceFreshness(freshness = 'unknown') {
-  return EVIDENCE_FRESHNESS.includes(freshness) ? freshness : 'unknown';
+export function normalizeEvidenceFreshness(freshness: unknown = 'unknown'): EvidenceFreshness {
+  return isOneOf(EVIDENCE_FRESHNESS, freshness) ? freshness : 'unknown';
 }
 
-export function normalizeEvidenceTrust(trust = 'low') {
-  return EVIDENCE_TRUST.includes(trust) ? trust : 'low';
+export function normalizeEvidenceTrust(trust: unknown = 'low'): EvidenceTrust {
+  return isOneOf(EVIDENCE_TRUST, trust) ? trust : 'low';
 }
 
-export function createEvidenceRecord(input = {}) {
-  const source = normalizeEvidenceSource(input.source);
-  const freshness = normalizeEvidenceFreshness(input.freshness);
+export function createEvidenceRecord(input: unknown = {}): EvidenceRecord {
+  const record = asRecord(input);
+  const source = normalizeEvidenceSource(record.source);
+  const freshness = normalizeEvidenceFreshness(record.freshness);
   return {
     schema: EVIDENCE_SCHEMA,
-    id: input.id || evidenceId(input.kind),
-    mission_id: input.mission_id || null,
-    kind: normalizeEvidenceKind(input.kind),
+    id: stringOrNull(record.id) || evidenceId(record.kind),
+    mission_id: stringOrNull(record.mission_id),
+    kind: normalizeEvidenceKind(record.kind),
     source,
-    path: input.path || null,
-    sha256: input.sha256 || null,
-    created_at: input.created_at || nowIso(),
+    path: stringOrNull(record.path),
+    sha256: stringOrNull(record.sha256),
+    created_at: stringOrNull(record.created_at) || nowIso(),
     freshness,
-    trust: normalizeEvidenceTrust(input.trust || trustForEvidence({ source, freshness, blocked: input.blocked })),
-    redacted: input.redacted !== false,
-    issues: Array.isArray(input.issues) ? input.issues : []
+    trust: normalizeEvidenceTrust(record.trust || trustForEvidence({ source, freshness, blocked: record.blocked })),
+    redacted: record.redacted !== false,
+    issues: stringList(record.issues)
   };
 }
 
-export function trustForEvidence({ source = 'real', freshness = 'unknown', blocked = false } = {}) {
+export function trustForEvidence(input: unknown = {}): EvidenceTrust {
+  const record = asRecord(input);
+  const source = normalizeEvidenceSource(record.source);
+  const freshness = normalizeEvidenceFreshness(record.freshness);
+  const blocked = Boolean(record.blocked);
   if (blocked || source === 'blocked') return 'blocked';
   if (freshness === 'stale') return 'blocked';
   if (source === 'mock' || source === 'static_contract') return 'low';
@@ -91,25 +122,21 @@ export function trustForEvidence({ source = 'real', freshness = 'unknown', block
   return freshness === 'fresh' ? 'high' : 'medium';
 }
 
-export function validateEvidenceRecord(record = {}) {
-  const issues = [];
-  if (record.schema !== EVIDENCE_SCHEMA) issues.push('schema');
-  if (!record.id) issues.push('id');
-  if (!EVIDENCE_KINDS.includes(record.kind)) issues.push('kind');
-  if (!EVIDENCE_SOURCES.includes(record.source)) issues.push('source');
-  if (!EVIDENCE_FRESHNESS.includes(record.freshness)) issues.push('freshness');
-  if (!EVIDENCE_TRUST.includes(record.trust)) issues.push('trust');
-  if (record.path && !record.sha256) issues.push('sha256');
-  if ((record.source === 'mock' || record.source === 'static_contract') && record.trust === 'high') issues.push('mock_high_trust');
-  if (record.freshness === 'stale' && record.trust !== 'blocked') issues.push('stale_not_blocked');
+export function validateEvidenceRecord(record: unknown = {}) {
+  const issues: string[] = [];
+  const row = asRecord(record);
+  if (row.schema !== EVIDENCE_SCHEMA) issues.push('schema');
+  if (!row.id) issues.push('id');
+  if (!isOneOf(EVIDENCE_KINDS, row.kind)) issues.push('kind');
+  if (!isOneOf(EVIDENCE_SOURCES, row.source)) issues.push('source');
+  if (!isOneOf(EVIDENCE_FRESHNESS, row.freshness)) issues.push('freshness');
+  if (!isOneOf(EVIDENCE_TRUST, row.trust)) issues.push('trust');
+  if (row.path && !row.sha256) issues.push('sha256');
+  if ((row.source === 'mock' || row.source === 'static_contract') && row.trust === 'high') issues.push('mock_high_trust');
+  if (row.freshness === 'stale' && row.trust !== 'blocked') issues.push('stale_not_blocked');
   return { ok: issues.length === 0, issues };
 }
 
-
-export type EvidenceKind = typeof EVIDENCE_KINDS[number];
-export type EvidenceSource = typeof EVIDENCE_SOURCES[number];
-export type EvidenceFreshness = typeof EVIDENCE_FRESHNESS[number];
-export type EvidenceTrust = typeof EVIDENCE_TRUST[number];
 
 export interface EvidenceRecord {
   schema: typeof EVIDENCE_SCHEMA;
@@ -119,6 +146,7 @@ export interface EvidenceRecord {
   source: EvidenceSource;
   path: string | null;
   sha256: string | null;
+  created_at?: string;
   freshness: EvidenceFreshness;
   trust: EvidenceTrust;
   redacted: boolean;

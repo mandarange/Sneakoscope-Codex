@@ -1,11 +1,10 @@
-// @ts-nocheck
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { projectRoot } from '../fsx.js';
 import { rollbackId, rollbackList } from '../managed-paths.js';
 import { flag, positionalArgs, readFlagValue } from './command-utils.js';
 
-export async function rollbackCommand(args = []) {
+export async function rollbackCommand(args: any = []) {
   const action = args[0] || 'list';
   const root = await projectRoot();
   if (action === 'list') {
@@ -19,7 +18,7 @@ export async function rollbackCommand(args = []) {
     const id = positionalArgs(args.slice(1))[0];
     const confirm = readFlagValue(args, '--confirm', '');
     const list = await rollbackList(root);
-    const row = list.actions.find((entry) => entry.id === id || rollbackId(entry.path) === id);
+    const row = list.actions.find((entry: any) => entry.id === id || rollbackId(entry.path) === id);
     if (!row) {
       console.error(`Unknown rollback id: ${id || 'missing'}`);
       process.exitCode = 2;

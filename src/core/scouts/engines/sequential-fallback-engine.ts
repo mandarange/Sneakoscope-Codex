@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { availableEngine } from './scout-engine-base.js';
 
 export function sequentialFallbackEngineDescriptor() {

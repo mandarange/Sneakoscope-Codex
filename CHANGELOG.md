@@ -3,6 +3,24 @@
 ## [Unreleased]
 
 
+## [1.0.2] - 2026-05-19
+
+### Added
+- Add `scripts/check-ts-suppressions.mjs` plus `npm run typecheck:suppressions` intended as a release gate rejecting `@ts-nocheck`, `@ts-ignore`, and unstructured `@ts-expect-error` suppressions outside `src/generated/**`.
+- Add `npm run typescript:migration-report` emitting `.sneakoscope/reports/typescript-migration.json` / `.md` with suppression and dist summary counters.
+- Add dist build manifest schema `sks.dist-build.v2` (writes package version plus `mjs_runtime_files`; enforced by `dist:check`).
+- Tighten `dist:check` to validate manifest schema and manifest `mjs_runtime_files`.
+
+### Fixed
+- Add suppression rules and reporting intended to eliminate silent TypeScript escapes before `release:check` can declare a strict-runtime seal complete.
+- Refine `command-registry` lazy adapters to narrow unknown module exports via explicit callable guards rather than broad `RawCommandModule` casts.
+- Rework CLI `router.ts` normalization with explicit `CommandName` guards plus structured blocked results for unknown commands.
+- Rewrite `core/fsx` with typed process execution (`RunProcessOptions` / `RunProcessResult`), `TailBuffer`, and explicit JSON boundary helpers aligned with SKS filesystem utilities.
+
+### Changed
+- Bump crate `sks-rs` metadata version to remain aligned with the npm package semver for optional Rust tooling.
+
+
 ## [1.0.1] - 2026-05-19
 
 ### Added

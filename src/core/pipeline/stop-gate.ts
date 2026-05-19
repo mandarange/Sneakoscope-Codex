@@ -1,4 +1,3 @@
-// @ts-nocheck
 export {
   recordContext7Evidence,
   recordSubagentEvidence,

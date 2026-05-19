@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { projectRoot, dirSize, exists, formatBytes } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
@@ -9,7 +8,7 @@ import { codexLbMetrics, readCodexLbCircuit } from '../core/codex-lb-circuit.js'
 import { ensureGlobalCodexSkillsDuringInstall } from '../cli/install-helpers.js';
 import { normalizeInstallScope } from '../core/init.js';
 
-export async function run(_command, args = []) {
+export async function run(_command: any, args: any = []) {
   let repair = null;
   if (flag(args, '--fix')) {
     const { setupCommand } = await import('../core/commands/basic-cli.js');
@@ -25,9 +24,15 @@ export async function run(_command, args = []) {
     };
   }
   const root = await projectRoot();
-  const codex = await getCodexInfo().catch((err) => ({ available: false, error: err.message }));
-  const rust = await rustInfo().catch((err) => ({ available: false, error: err.message }));
-  const codexApp = await codexAppIntegrationStatus({ codex }).catch((err) => ({ ok: false, error: err.message }));
+  const codex = await getCodexInfo().catch(() => ({ bin: null, version: null, available: false }));
+  const rust: any = await rustInfo().catch((err: any) => ({
+    available: false,
+    mode: 'js_fallback',
+    status: 'error',
+    version: null,
+    error: err.message
+  }));
+  const codexApp = await codexAppIntegrationStatus({ codex }).catch((err: any) => ({ ok: false, error: err.message }));
   const codexLb = codexLbMetrics(await readCodexLbCircuit(root).catch(() => ({})));
   const pkgBytes = await dirSize(root).catch(() => 0);
   const result = {
@@ -59,7 +64,7 @@ export async function run(_command, args = []) {
   if (!result.ok) process.exitCode = 1;
 }
 
-function installScopeFromArgs(args = []) {
+function installScopeFromArgs(args: any = []) {
   if (flag(args, '--project')) return 'project';
   if (flag(args, '--global')) return 'global';
   const index = args.indexOf('--install-scope');

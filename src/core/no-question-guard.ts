@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const QUESTION_PATTERNS = [
   /\?/,
   /어떻게\s*할까요/i,
@@ -16,9 +15,9 @@ export const QUESTION_PATTERNS = [
   /which\s+option\s+do\s+you\s+prefer/i
 ];
 
-export function containsUserQuestion(text = '') {
+export function containsUserQuestion(text: any = '') {
   if (!text) return false;
-  return QUESTION_PATTERNS.some((p) => p.test(text));
+  return QUESTION_PATTERNS.some((p: any) => p.test(text));
 }
 
 export function noQuestionContinuationReason() {
@@ -31,11 +30,11 @@ export function noQuestionContinuationReason() {
   ].join(' ');
 }
 
-export function interactiveCommandReason(command = '') {
+export function interactiveCommandReason(command: any = '') {
   return `Interactive or approval-seeking command is forbidden during SKS no-question mode: ${command}`;
 }
 
-export function looksInteractiveCommand(command = '') {
+export function looksInteractiveCommand(command: any = '') {
   const patterns = [
     /(^|\s)read\s+-?p?\b/i,
     /(^|\s)select\s+/i,
@@ -50,5 +49,5 @@ export function looksInteractiveCommand(command = '') {
     /(^|\s)mv\s+-i\b/i,
     /(^|\s)cp\s+-i\b/i
   ];
-  return patterns.some((p) => p.test(command));
+  return patterns.some((p: any) => p.test(command));
 }

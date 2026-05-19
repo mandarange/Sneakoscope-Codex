@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const DECISION_LATTICE_SCHEMA_VERSION = 1;
 
 export const DEFAULT_LATTICE_WEIGHTS = Object.freeze({
@@ -114,7 +113,7 @@ const DEFAULT_ROUTE_PATHS = Object.freeze([
   }
 ]);
 
-export function buildDecisionLatticeReport(input = {}) {
+export function buildDecisionLatticeReport(input: any = {}) {
   const weights = normalizeWeights(input.weights);
   const start = normalizeState(input.start_state || input.start || DEFAULT_START);
   const goal = normalizeState(input.goal_state || input.target_state || input.target || inferredGoal(input));
@@ -122,19 +121,19 @@ export function buildDecisionLatticeReport(input = {}) {
   const routePaths = normalizeRoutePaths(input.route_paths || input.candidate_route_paths || DEFAULT_ROUTE_PATHS, actions);
   const grid = buildConceptualGrid(start, goal, actions);
   const search = runAStar({ start, goal, actions, weights });
-  const routeCandidates = routePaths.map((routePath, index) => evaluateRoutePath(routePath, index, { start, goal, actions, weights }));
+  const routeCandidates = routePaths.map((routePath: any, index: any) => evaluateRoutePath(routePath, index, { start, goal, actions, weights }));
   const candidates = routeCandidates.concat([{ ...search.selected_path, rank_hint: routeCandidates.length }]).sort(compareCandidates);
   const selected = selectPath(candidates, search.selected_path);
   const rejected = candidates
-    .filter((candidate) => candidate.id !== selected.id)
-    .map((candidate) => ({
+    .filter((candidate: any) => candidate.id !== selected.id)
+    .map((candidate: any) => ({
       id: candidate.id,
       label: candidate.label,
       f: candidate.cost.f,
       delta_from_selected: round(candidate.cost.f - selected.cost.f),
       rejection_reasons: rejectionReasons(candidate, selected)
     }));
-  const report = {
+  const report: any = {
     schema_version: DECISION_LATTICE_SCHEMA_VERSION,
     report_only: true,
     deterministic: true,
@@ -156,10 +155,10 @@ export function buildDecisionLatticeReport(input = {}) {
     heuristic: {
       id: 'proof_debt',
       h_start: proofDebt(start, goal, weights),
-      axes: AXES.map((axis) => ({
+      axes: AXES.map((axis: any) => ({
         axis,
-        start: start[axis],
-        goal: goal[axis],
+        start: start[axis] ?? 0,
+        goal: goal[axis] ?? 0,
         debt: debtForAxis(start, goal, axis),
         weighted_debt: round(debtForAxis(start, goal, axis) * weights.proof_debt)
       }))
@@ -175,16 +174,16 @@ export function buildDecisionLatticeReport(input = {}) {
   return report;
 }
 
-function inferredGoal(input = {}) {
-  const goal = { ...DEFAULT_GOAL };
+function inferredGoal(input: any = {}) {
+  const goal: any = { ...DEFAULT_GOAL };
   if (input.execution_lane?.fast_lane_allowed === true && !(input.team_trigger_matrix?.active_triggers || []).length) {
     goal.review = 0;
   }
   return goal;
 }
 
-export function validateDecisionLatticeReport(report = {}) {
-  const issues = [];
+export function validateDecisionLatticeReport(report: any = {}) {
+  const issues: any[] = [];
   if (report.schema_version !== DECISION_LATTICE_SCHEMA_VERSION) issues.push('schema_version');
   if (report.report_only !== true) issues.push('report_only');
   if (report.deterministic !== true) issues.push('deterministic');
@@ -196,12 +195,12 @@ export function validateDecisionLatticeReport(report = {}) {
   if (!Array.isArray(report.candidate_paths) || report.candidate_paths.length < 1) issues.push('candidate_paths');
   if (!report.selected_path?.id || !Array.isArray(report.selected_path?.steps)) issues.push('selected_path');
   if (!Array.isArray(report.rejected_alternatives)) issues.push('rejected_alternatives');
-  if (report.candidate_paths?.some((candidate) => !Number.isFinite(Number(candidate?.cost?.f)))) issues.push('candidate_costs');
-  if (report.selected_path?.cost?.f !== Math.min(...(report.candidate_paths || []).map((candidate) => candidate.cost.f))) issues.push('selected_path_not_min_f');
+  if (report.candidate_paths?.some((candidate: any) => !Number.isFinite(Number(candidate?.cost?.f)))) issues.push('candidate_costs');
+  if (report.selected_path?.cost?.f !== Math.min(...(report.candidate_paths || []).map((candidate: any) => candidate.cost.f))) issues.push('selected_path_not_min_f');
   return { ok: issues.length === 0, issues };
 }
 
-function normalizeWeights(input = {}) {
+function normalizeWeights(input: any = {}) {
   return {
     step: positiveNumber(input.step, DEFAULT_LATTICE_WEIGHTS.step),
     proof_debt: positiveNumber(input.proof_debt, DEFAULT_LATTICE_WEIGHTS.proof_debt),
@@ -211,15 +210,15 @@ function normalizeWeights(input = {}) {
   };
 }
 
-function normalizeState(input = {}) {
-  const state = {};
+function normalizeState(input: any = {}) {
+  const state: Record<string, number> = {};
   for (const axis of AXES) state[axis] = clampInt(input[axis], 0, 3);
   return state;
 }
 
-function normalizeActions(input = []) {
+function normalizeActions(input: any = []) {
   return input
-    .map((action, index) => ({
+    .map((action: any, index: any) => ({
       id: safeId(action.id || `action_${index + 1}`),
       label: String(action.label || action.id || `Action ${index + 1}`),
       delta: normalizeDelta(action.delta || {}),
@@ -228,41 +227,41 @@ function normalizeActions(input = []) {
       info_gain: nonNegativeNumber(action.info_gain, 0),
       notes: arrayOfStrings(action.notes)
     }))
-    .filter((action) => AXES.some((axis) => action.delta[axis] > 0))
+    .filter((action: any) => AXES.some((axis: any) => action.delta[axis] > 0))
     .sort(compareById);
 }
 
-function normalizeRoutePaths(input = [], actions = []) {
-  const actionIds = new Set(actions.map((action) => action.id));
+function normalizeRoutePaths(input: any = [], actions: any = []) {
+  const actionIds = new Set(actions.map((action: any) => action.id));
   return input
-    .map((routePath, index) => ({
+    .map((routePath: any, index: any) => ({
       id: safeId(routePath.id || `route_path_${index + 1}`),
       label: String(routePath.label || routePath.id || `Route Path ${index + 1}`),
-      action_ids: arrayOfStrings(routePath.action_ids || routePath.actions).map(safeId).filter((id) => actionIds.has(id)),
+      action_ids: arrayOfStrings(routePath.action_ids || routePath.actions).map(safeId).filter((id: any) => actionIds.has(id)),
       notes: arrayOfStrings(routePath.notes)
     }))
-    .filter((routePath) => routePath.action_ids.length > 0)
+    .filter((routePath: any) => routePath.action_ids.length > 0)
     .sort(compareById);
 }
 
-function normalizeDelta(delta = {}) {
-  const out = {};
+function normalizeDelta(delta: any = {}) {
+  const out: Record<string, number> = {};
   for (const axis of AXES) out[axis] = clampInt(delta[axis], 0, 3);
   return out;
 }
 
-function runAStar({ start, goal, actions, weights }) {
+function runAStar({ start, goal, actions, weights }: any) {
   const open = [nodeForState(start, { g: 0, h: proofDebt(start, goal, weights), risk: 0, friction: 0, info_gain: 0, steps: [] })];
   const best = new Map([[stateKey(start), 0]]);
-  const closed = [];
-  const snapshots = [];
+  const closed: any[] = [];
+  const snapshots: any[] = [];
   let selected = open[0];
 
   while (open.length > 0 && closed.length < 64) {
     open.sort(compareNodes);
     const current = open.shift();
     closed.push(current);
-    snapshots.push({ step: closed.length, current: current.key, f: current.f, open: open.map((node) => node.key).sort() });
+    snapshots.push({ step: closed.length, current: current.key, f: current.f, open: open.map((node: any) => node.key).sort() });
     if (isGoal(current.state, goal)) {
       selected = current;
       break;
@@ -271,7 +270,7 @@ function runAStar({ start, goal, actions, weights }) {
       const nextState = applyAction(current.state, action, goal);
       const key = stateKey(nextState);
       const g = round(current.g + weights.step);
-      if (best.has(key) && best.get(key) <= g) continue;
+      if (best.has(key) && (best.get(key) ?? Number.POSITIVE_INFINITY) <= g) continue;
       best.set(key, g);
       const risk = round(current.risk + action.risk * weights.risk);
       const friction = round(current.friction + action.friction * weights.friction);
@@ -291,22 +290,22 @@ function runAStar({ start, goal, actions, weights }) {
   return {
     selected_path: pathFromNode('astar_frontier_path', 'A* Frontier Path', selected),
     frontier: {
-      expanded_order: closed.map((node, index) => ({ index, key: node.key, f: node.f, h: node.h, steps: node.steps.map((step) => step.id) })),
-      open_nodes: open.sort(compareNodes).slice(0, 12).map((node) => ({ key: node.key, f: node.f, h: node.h })),
-      closed_nodes: closed.map((node) => node.key),
+      expanded_order: closed.map((node: any, index: any) => ({ index, key: node.key, f: node.f, h: node.h, steps: node.steps.map((step: any) => step.id) })),
+      open_nodes: open.sort(compareNodes).slice(0, 12).map((node: any) => ({ key: node.key, f: node.f, h: node.h })),
+      closed_nodes: closed.map((node: any) => node.key),
       snapshots
     }
   };
 }
 
-function evaluateRoutePath(routePath, index, { start, goal, actions, weights }) {
-  const actionById = new Map(actions.map((action) => [action.id, action]));
-  let state = { ...start };
+function evaluateRoutePath(routePath: any, index: any, { start, goal, actions, weights }: any) {
+  const actionById = new Map<string, any>(actions.map((action: any) => [action.id, action]));
+  let state: any = { ...start };
   let g = 0;
   let risk = 0;
   let friction = 0;
   let infoGain = 0;
-  const steps = [];
+  const steps: any[] = [];
   for (const id of routePath.action_ids) {
     const action = actionById.get(id);
     if (!action) continue;
@@ -333,18 +332,18 @@ function evaluateRoutePath(routePath, index, { start, goal, actions, weights }) 
   };
 }
 
-function selectPath(candidates, astarPath) {
-  const complete = candidates.filter((candidate) => candidate.complete);
+function selectPath(candidates: any, astarPath: any) {
+  const complete = candidates.filter((candidate: any) => candidate.complete);
   const pool = complete.length ? complete : candidates;
   const selected = pool.slice().sort(compareCandidates)[0] || astarPath;
   return selected.cost.f <= astarPath.cost.f ? selected : astarPath;
 }
 
-function pathFromNode(id, label, node) {
+function pathFromNode(id: any, label: any, node: any) {
   return {
     id,
     label,
-    route: node.steps.map((step) => step.id),
+    route: node.steps.map((step: any) => step.id),
     steps: node.steps,
     final_state: node.state,
     proof_debt: node.h,
@@ -361,34 +360,34 @@ function pathFromNode(id, label, node) {
   };
 }
 
-function nodeForState(state, input) {
+function nodeForState(state: any, input: any) {
   const f = round(input.g + input.h + input.risk + input.friction - input.info_gain);
   return { ...input, state, key: stateKey(state), f };
 }
 
-function applyAction(state, action, goal) {
-  const next = {};
+function applyAction(state: any, action: any, goal: any) {
+  const next: Record<string, number> = {};
   for (const axis of AXES) next[axis] = Math.min(goal[axis], state[axis] + action.delta[axis]);
   return next;
 }
 
-function proofDebt(state, goal, weights) {
-  return round(AXES.reduce((sum, axis) => sum + debtForAxis(state, goal, axis), 0) * weights.proof_debt);
+function proofDebt(state: any, goal: any, weights: any) {
+  return round(AXES.reduce((sum: any, axis: any) => sum + debtForAxis(state, goal, axis), 0) * weights.proof_debt);
 }
 
-function debtForAxis(state, goal, axis) {
+function debtForAxis(state: any, goal: any, axis: any) {
   return Math.max(0, Number(goal[axis] || 0) - Number(state[axis] || 0));
 }
 
-function buildConceptualGrid(start, goal, actions) {
+function buildConceptualGrid(start: any, goal: any, actions: any) {
   return {
-    axes: AXES.map((axis) => ({ axis, start: start[axis], goal: goal[axis], span: Math.max(0, goal[axis] - start[axis]) })),
-    cells: AXES.map((axis) => ({
+    axes: AXES.map((axis: any) => ({ axis, start: start[axis], goal: goal[axis], span: Math.max(0, goal[axis] - start[axis]) })),
+    cells: AXES.map((axis: any) => ({
       id: `axis_${axis}`,
       axis,
       start: start[axis],
       goal: goal[axis],
-      candidate_actions: actions.filter((action) => action.delta[axis] > 0).map((action) => action.id)
+      candidate_actions: actions.filter((action: any) => action.delta[axis] > 0).map((action: any) => action.id)
     })),
     legend: {
       g: 'path steps already paid',
@@ -400,8 +399,8 @@ function buildConceptualGrid(start, goal, actions) {
   };
 }
 
-function rejectionReasons(candidate, selected) {
-  const reasons = [];
+function rejectionReasons(candidate: any, selected: any) {
+  const reasons: any[] = [];
   if (!candidate.complete) reasons.push('remaining_proof_debt');
   if (candidate.cost.risk > selected.cost.risk) reasons.push('higher_risk');
   if (candidate.cost.friction > selected.cost.friction) reasons.push('higher_friction');
@@ -410,7 +409,7 @@ function rejectionReasons(candidate, selected) {
   return reasons.length ? reasons : ['tie_broken_by_deterministic_order'];
 }
 
-function compareCandidates(a, b) {
+function compareCandidates(a: any, b: any) {
   return (a.cost.f - b.cost.f)
     || (a.cost.h - b.cost.h)
     || (a.cost.risk - b.cost.risk)
@@ -419,7 +418,7 @@ function compareCandidates(a, b) {
     || a.id.localeCompare(b.id);
 }
 
-function compareNodes(a, b) {
+function compareNodes(a: any, b: any) {
   return (a.f - b.f)
     || (a.h - b.h)
     || (a.risk - b.risk)
@@ -428,19 +427,19 @@ function compareNodes(a, b) {
     || a.key.localeCompare(b.key);
 }
 
-function compareById(a, b) {
+function compareById(a: any, b: any) {
   return a.id.localeCompare(b.id);
 }
 
-function stateKey(state) {
-  return AXES.map((axis) => `${axis}:${state[axis]}`).join('|');
+function stateKey(state: any) {
+  return AXES.map((axis: any) => `${axis}:${state[axis]}`).join('|');
 }
 
-function isGoal(state, goal) {
-  return AXES.every((axis) => state[axis] >= goal[axis]);
+function isGoal(state: any, goal: any) {
+  return AXES.every((axis: any) => state[axis] >= goal[axis]);
 }
 
-function stepFromAction(action, state) {
+function stepFromAction(action: any, state: any) {
   return {
     id: action.id,
     label: action.label,
@@ -452,31 +451,31 @@ function stepFromAction(action, state) {
   };
 }
 
-function arrayOfStrings(value) {
+function arrayOfStrings(value: any) {
   if (!Array.isArray(value)) return [];
-  return value.map((item) => String(item || '').trim()).filter(Boolean);
+  return value.map((item: any) => String(item || '').trim()).filter(Boolean);
 }
 
-function safeId(value) {
+function safeId(value: any) {
   return String(value || 'item').trim().toLowerCase().replace(/[^a-z0-9_./-]+/g, '_').replace(/^_+|_+$/g, '') || 'item';
 }
 
-function clampInt(value, min, max) {
+function clampInt(value: any, min: any, max: any) {
   const number = Number(value);
   if (!Number.isFinite(number)) return min;
   return Math.max(min, Math.min(max, Math.floor(number)));
 }
 
-function positiveNumber(value, fallback) {
+function positiveNumber(value: any, fallback: any) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
-function nonNegativeNumber(value, fallback) {
+function nonNegativeNumber(value: any, fallback: any) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
-function round(value) {
+function round(value: any) {
   return Math.round(Number(value || 0) * 1000) / 1000;
 }

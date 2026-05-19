@@ -1,11 +1,10 @@
-// @ts-nocheck
-export function parseGeneratedReviewCallouts(ledger = {}) {
+export function parseGeneratedReviewCallouts(ledger: any = {}) {
   const items = Array.isArray(ledger.callouts)
     ? ledger.callouts
     : Array.isArray(ledger.issues)
       ? ledger.issues
       : [];
-  return items.map((item, index) => ({
+  return items.map((item: any, index: any) => ({
     id: item.id || `callout-${String(index + 1).padStart(3, '0')}`,
     image_id: item.image_id || item.imageId || ledger.image_id || null,
     bbox: item.bbox || item.box || null,

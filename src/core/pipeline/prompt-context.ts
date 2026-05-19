@@ -1,4 +1,3 @@
-// @ts-nocheck
 export {
   promptPipelineContext,
   dfixQuickContext,

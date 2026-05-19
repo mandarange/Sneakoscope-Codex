@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { performance } from 'node:perf_hooks';
 import { spawnSync } from 'node:child_process';
 import { PACKAGE_VERSION, projectRoot } from '../core/fsx.js';
@@ -47,7 +46,7 @@ const COLD_START_COMMANDS = Object.freeze([
   { cmd: 'sks features check --json', args: ['features', 'check', '--json'] }
 ]);
 
-export async function run(_command, args = []) {
+export async function run(_command: any, args: any = []) {
   const action = args[0] || 'run';
   if (action === 'cold-start') {
     const root = await projectRoot();
@@ -63,11 +62,11 @@ export async function run(_command, args = []) {
   return perfCommand(action, args.slice(1));
 }
 
-export function runColdStart({ root = process.cwd(), iterations = DEFAULT_COLD_START_ITERATIONS, tier = 'source-local' } = {}) {
+export function runColdStart({ root = process.cwd(), iterations = DEFAULT_COLD_START_ITERATIONS, tier = 'source-local' }: any = {}) {
   const script = new URL('../bin/sks.js', import.meta.url).pathname;
   const measuredIterations = resolveColdStartIterations(iterations);
-  const budgets = COLD_START_TIERS[tier] || COLD_START_TIERS['source-local'];
-  const commands = COLD_START_COMMANDS.map((spec) => measureCommand(root, script, { ...spec, budget_p95_ms: budgets[spec.cmd] }, measuredIterations));
+  const budgets = ((COLD_START_TIERS as Record<string, Record<string, number>>)[tier] || COLD_START_TIERS['source-local']) as Record<string, number>;
+  const commands = COLD_START_COMMANDS.map((spec: any) => measureCommand(root, script, { ...spec, budget_p95_ms: budgets[spec.cmd] }, measuredIterations));
   return {
     schema: 'sks.perf.cold-start.v1',
     version: PACKAGE_VERSION,
@@ -76,19 +75,19 @@ export function runColdStart({ root = process.cwd(), iterations = DEFAULT_COLD_S
     node: process.version,
     platform: `${process.platform}-${process.arch}`,
     commands,
-    ok: commands.every((row) => row.ok)
+    ok: commands.every((row: any) => row.ok)
   };
 }
 
-export function resolveColdStartIterations(value = DEFAULT_COLD_START_ITERATIONS) {
+export function resolveColdStartIterations(value: any = DEFAULT_COLD_START_ITERATIONS) {
   const parsed = Number(value ?? DEFAULT_COLD_START_ITERATIONS);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_COLD_START_ITERATIONS;
   return Math.max(1, Math.floor(parsed));
 }
 
-function measureCommand(root, script, spec, iterations) {
-  const values = [];
-  const failures = [];
+function measureCommand(root: any, script: any, spec: any, iterations: any) {
+  const values: any[] = [];
+  const failures: any[] = [];
   for (let i = 0; i < iterations; i += 1) {
     const t0 = performance.now();
     const res = spawnSync(process.execPath, [script, ...spec.args], {
@@ -101,7 +100,7 @@ function measureCommand(root, script, spec, iterations) {
     values.push(performance.now() - t0);
     if (res.status !== 0) failures.push({ status: res.status, stderr: String(res.stderr || '').slice(0, 400) });
   }
-  values.sort((a, b) => a - b);
+  values.sort((a: any, b: any) => a - b);
   const p50 = percentile(values, 50);
   const p95 = percentile(values, 95);
   const p95Rounded = Math.round(p95);
@@ -116,13 +115,13 @@ function measureCommand(root, script, spec, iterations) {
   };
 }
 
-function percentile(values, p) {
+function percentile(values: any, p: any) {
   if (!values.length) return 0;
   const idx = Math.min(values.length - 1, Math.ceil((p / 100) * values.length) - 1);
   return values[idx];
 }
 
-function readArg(args, name, fallback) {
+function readArg(args: any, name: any, fallback: any) {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 }

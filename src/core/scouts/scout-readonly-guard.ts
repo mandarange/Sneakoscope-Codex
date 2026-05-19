@@ -1,4 +1,3 @@
-// @ts-nocheck
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { listFilesRecursive, rel, sha256 } from '../fsx.js';
@@ -11,9 +10,9 @@ const DEFAULT_IGNORES = Object.freeze([
   '.sneakoscope/tmp'
 ]);
 
-export async function snapshotScoutReadableTree(root, { missionId } = {}) {
+export async function snapshotScoutReadableTree(root: any, { missionId }: any = {}) {
   const files = await listFilesRecursive(root, { ignore: [...DEFAULT_IGNORES], maxFiles: 100000 });
-  const entries = {};
+  const entries: Record<string, any> = {};
   for (const file of files) {
     const relative = rel(root, file);
     if (isVolatileRuntimePath(relative)) continue;
@@ -34,27 +33,27 @@ export async function snapshotScoutReadableTree(root, { missionId } = {}) {
   };
 }
 
-async function readStableFile(file) {
+async function readStableFile(file: any) {
   try {
     const data = await fs.readFile(file);
     const stat = await fs.stat(file);
     return { data, stat };
-  } catch (err) {
+  } catch (err: any) {
     if (err?.code === 'ENOENT') return null;
     throw err;
   }
 }
 
-function isVolatileRuntimePath(relativePath) {
+function isVolatileRuntimePath(relativePath: any) {
   const relPath = String(relativePath || '').split(path.sep).join('/');
   if (/^\.sneakoscope\/state\//.test(relPath)) return true;
   if (/^\.sneakoscope\/.*\.tmp$/.test(relPath)) return true;
   return false;
 }
 
-export async function assertScoutReadOnly(root, before, { missionId } = {}) {
+export async function assertScoutReadOnly(root: any, before: any, { missionId }: any = {}) {
   const after = await snapshotScoutReadableTree(root, { missionId });
-  const violations = [];
+  const violations: any[] = [];
   const beforeEntries = before?.entries || {};
   const afterEntries = after.entries || {};
   const paths = new Set([...Object.keys(beforeEntries), ...Object.keys(afterEntries)]);
@@ -75,7 +74,7 @@ export async function assertScoutReadOnly(root, before, { missionId } = {}) {
   };
 }
 
-export function isAllowedScoutWrite(relativePath, missionId) {
+export function isAllowedScoutWrite(relativePath: any, missionId: any) {
   const relPath = String(relativePath || '').split(path.sep).join('/');
   if (!relPath) return false;
   if (missionId && relPath.startsWith(`.sneakoscope/missions/${missionId}/`)) {
@@ -94,7 +93,7 @@ export function isAllowedScoutWrite(relativePath, missionId) {
   return false;
 }
 
-export function allowedScoutWriteGlobs(missionId) {
+export function allowedScoutWriteGlobs(missionId: any) {
   return [
     `.sneakoscope/missions/${missionId || '<mission-id>'}/scout-*`,
     '.sneakoscope/reports/scout-*'

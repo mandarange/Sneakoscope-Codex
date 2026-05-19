@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, readJson, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
@@ -139,50 +138,50 @@ export const PPT_REQUIRED_GATE_FIELDS = Object.freeze([
   'honest_mode_complete'
 ]);
 
-function asArray(value) {
+function asArray(value: any) {
   if (value == null) return [];
   if (Array.isArray(value)) return value;
   return String(value)
     .split(/\n|;/)
-    .map((item) => item.trim())
+    .map((item: any) => item.trim())
     .filter(Boolean);
 }
 
-function cleanText(value, fallback = '') {
+function cleanText(value: any, fallback: any = '') {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim();
   return text || fallback;
 }
 
-function compactId(prefix, text) {
+function compactId(prefix: any, text: any) {
   return `${prefix}-${sha256(cleanText(text, prefix)).slice(0, 10)}`;
 }
 
-function contractText(contract = {}) {
+function contractText(contract: any = {}) {
   return cleanText(`${contract.prompt || ''} ${JSON.stringify(contract.answers || {})}`);
 }
 
-function extractUrls(value = '') {
+function extractUrls(value: any = '') {
   return [...String(value || '').matchAll(/\bhttps?:\/\/[^\s<>"')]+/g)]
-    .map((match) => match[0].replace(/[.,;:!?]+$/, ''));
+    .map((match: any) => match[0].replace(/[.,;:!?]+$/, ''));
 }
 
-function hasExternalFactCue(text = '') {
+function hasExternalFactCue(text: any = '') {
   return /(market|competitor|benchmark|statistic|growth|revenue|share|survey|latest|recent|source|citation|fact|research|web|시장|경쟁|벤치마크|통계|성장률|매출|점유율|설문|최신|최근|출처|근거|팩트|사실|자료|웹\s*조사|리서치)/i.test(String(text || ''));
 }
 
-function hasVisualReviewCue(text = '') {
+function hasVisualReviewCue(text: any = '') {
   return /(gpt-image-2|imagegen|image review|visual review|i2i|toss|토스|시니어\s*디자이너|디자인\s*리뷰|시각\s*리뷰|이미지\s*리뷰|슬라이드별\s*리뷰)/i.test(String(text || ''));
 }
 
-function hasImageAssetCue(text = '') {
+function hasImageAssetCue(text: any = '') {
   return /(image asset|visual asset|generated image|hero image|illustration|photo|photorealistic|mockup|product shot|background image|gpt-image-2|imagegen|이미지\s*리소스|이미지\s*자산|이미지\s*생성|사진|일러스트|히어로\s*이미지|비주얼\s*자산|배경\s*이미지|목업|제품\s*컷)/i.test(String(text || ''));
 }
 
-function safeFileSlug(value = '') {
+function safeFileSlug(value: any = '') {
   return cleanText(value, 'asset').toLowerCase().replace(/[^a-z0-9가-힣]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'asset';
 }
 
-function parseBooleanish(value) {
+function parseBooleanish(value: any) {
   if (value === true || value === false) return value;
   const text = cleanText(value).toLowerCase();
   if (!text) return null;
@@ -191,12 +190,12 @@ function parseBooleanish(value) {
   return null;
 }
 
-function titleFromContract(contract = {}) {
+function titleFromContract(contract: any = {}) {
   const prompt = cleanText(contract.prompt || contract.answers?.GOAL_PRECISE || 'PPT artifact');
   return prompt.replace(/^\$PPT\s*/i, '').slice(0, 96) || 'PPT artifact';
 }
 
-function escapeHtml(value) {
+function escapeHtml(value: any) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -205,20 +204,20 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function jsonScript(value) {
+function jsonScript(value: any) {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
-function splitArrow(raw = '') {
+function splitArrow(raw: any = '') {
   return String(raw || '')
     .split(/->|→|=>/)
-    .map((part) => part.trim())
+    .map((part: any) => part.trim())
     .filter(Boolean);
 }
 
-function normalizePainpoints(answers = {}) {
+function normalizePainpoints(answers: any = {}) {
   const rows = asArray(answers.PRESENTATION_PAINPOINT_SOLUTION_MAP);
-  return rows.map((raw, index) => {
+  return rows.map((raw: any, index: any) => {
     const parts = splitArrow(raw);
     return {
       id: `painpoint-${index + 1}`,
@@ -232,12 +231,12 @@ function normalizePainpoints(answers = {}) {
   });
 }
 
-function msSince(startedAt) {
+function msSince(startedAt: any) {
   return Math.max(0, Date.now() - startedAt);
 }
 
-export function createPptParallelReporter(contract = {}) {
-  const report = {
+export function createPptParallelReporter(contract: any = {}) {
+  const report: any = {
     schema_version: 1,
     created_at: nowIso(),
     contract_hash: contract.sealed_hash || null,
@@ -257,11 +256,11 @@ export function createPptParallelReporter(contract = {}) {
     ]
   };
   return {
-    async group(id, tasks = {}) {
+    async group(id: any, tasks: any = {}) {
       const entries = Object.entries(tasks);
       const started = Date.now();
       const startedAt = nowIso();
-      const values = await Promise.all(entries.map(async ([taskId, task]) => {
+      const values = await Promise.all(entries.map(async ([taskId, task]: any) => {
         const taskStarted = Date.now();
         const value = await task();
         return [taskId, value, { id: taskId, duration_ms: msSince(taskStarted) }];
@@ -271,10 +270,10 @@ export function createPptParallelReporter(contract = {}) {
         started_at: startedAt,
         duration_ms: msSince(started),
         task_count: entries.length,
-        tasks: values.map(([, , meta]) => meta),
+        tasks: values.map(([, , meta]: any) => meta),
         executed_in_parallel: entries.length > 1
       });
-      return Object.fromEntries(values.map(([taskId, value]) => [taskId, value]));
+      return Object.fromEntries(values.map(([taskId, value]: any) => [taskId, value]));
     },
     report() {
       const groups = report.parallel_groups;
@@ -282,14 +281,14 @@ export function createPptParallelReporter(contract = {}) {
         ...report,
         completed_at: nowIso(),
         total_groups: groups.length,
-        parallel_group_count: groups.filter((group) => group.executed_in_parallel).length,
-        passed: groups.some((group) => group.executed_in_parallel)
+        parallel_group_count: groups.filter((group: any) => group.executed_in_parallel).length,
+        passed: groups.some((group: any) => group.executed_in_parallel)
       };
     }
   };
 }
 
-export function buildPptAudienceStrategy(contract = {}) {
+export function buildPptAudienceStrategy(contract: any = {}) {
   const answers = contract.answers || {};
   const painpoints = normalizePainpoints(answers);
   return {
@@ -313,8 +312,8 @@ export function buildPptAudienceStrategy(contract = {}) {
       targeting: '',
       positioning: ''
     },
-    painpoint_solution_map: asArray(answers.PRESENTATION_PAINPOINT_SOLUTION_MAP).map((item) => ({
-      ...(painpoints.find((entry) => entry.raw === cleanText(item)) || {}),
+    painpoint_solution_map: asArray(answers.PRESENTATION_PAINPOINT_SOLUTION_MAP).map((item: any) => ({
+      ...(painpoints.find((entry: any) => entry.raw === cleanText(item)) || {}),
       raw: cleanText(item)
     })),
     decision_context: {
@@ -343,7 +342,7 @@ export function buildPptAudienceStrategy(contract = {}) {
   };
 }
 
-export function buildPptSourceLedger(contract = {}) {
+export function buildPptSourceLedger(contract: any = {}) {
   const answers = contract.answers || {};
   const sourceRows = [
     ['audience-profile', 'PRESENTATION_AUDIENCE_PROFILE', answers.PRESENTATION_AUDIENCE_PROFILE],
@@ -351,14 +350,14 @@ export function buildPptSourceLedger(contract = {}) {
     ['painpoint-solution-map', 'PRESENTATION_PAINPOINT_SOLUTION_MAP', asArray(answers.PRESENTATION_PAINPOINT_SOLUTION_MAP).join('; ')],
     ['decision-context', 'PRESENTATION_DECISION_CONTEXT', answers.PRESENTATION_DECISION_CONTEXT],
     ['delivery-context', 'PRESENTATION_DELIVERY_CONTEXT', answers.PRESENTATION_DELIVERY_CONTEXT]
-  ].filter(([, , value]) => cleanText(value));
+  ].filter(([, , value]: any) => cleanText(value));
   return {
     schema_version: 1,
     created_at: nowIso(),
     contract_hash: contract.sealed_hash || null,
     web_research_performed: false,
     source_policy: 'user_provided_answers_only_until_route_worker_adds_web_sources',
-    sources: sourceRows.map(([id, slot, value]) => ({
+    sources: sourceRows.map(([id, slot, value]: any) => ({
       id: `user-${id}`,
       type: 'user_provided_answer',
       slot,
@@ -372,19 +371,19 @@ export function buildPptSourceLedger(contract = {}) {
   };
 }
 
-export function buildPptFactLedger(contract = {}, sourceLedger = buildPptSourceLedger(contract), existing = null) {
+export function buildPptFactLedger(contract: any = {}, sourceLedger: any = buildPptSourceLedger(contract), existing: any = null) {
   const text = contractText(contract);
   const sourceUrls = extractUrls(text);
   const preservedSources = Array.isArray(existing?.sources) ? existing.sources : [];
   const preservedClaims = Array.isArray(existing?.claims) ? existing.claims : [];
-  const urlSources = sourceUrls.map((url, index) => ({
+  const urlSources = sourceUrls.map((url: any, index: any) => ({
     id: `web-source-${index + 1}`,
     type: 'web_source_url',
     url,
     confidence: 'needs_route_worker_verification',
     support_status: 'pending_verification'
   }));
-  const userClaims = (sourceLedger.sources || []).map((source) => ({
+  const userClaims = (sourceLedger.sources || []).map((source: any) => ({
     id: compactId('claim-user', `${source.slot || source.id}:${source.value || ''}`),
     text: cleanText(source.value || source.slot || source.id),
     source_ids: [source.id],
@@ -393,12 +392,12 @@ export function buildPptFactLedger(contract = {}, sourceLedger = buildPptSourceL
     slide_refs: [],
     verification_note: 'User-provided input can support intent and context, but must not be treated as an external market fact.'
   }));
-  const allSources = [...preservedSources, ...(sourceLedger.sources || []), ...urlSources].filter((source, index, arr) => {
+  const allSources = [...preservedSources, ...(sourceLedger.sources || []), ...urlSources].filter((source: any, index: any, arr: any) => {
     const key = source.url || `${source.type}:${source.id}:${source.value}`;
-    return arr.findIndex((candidate) => (candidate.url || `${candidate.type}:${candidate.id}:${candidate.value}`) === key) === index;
+    return arr.findIndex((candidate: any) => (candidate.url || `${candidate.type}:${candidate.id}:${candidate.value}`) === key) === index;
   });
   const webResearchPerformed = Boolean(existing?.web_research_performed)
-    || allSources.some((source) => ['web_source', 'verified_web_source', 'web_source_url'].includes(source.type) && source.support_status === 'verified');
+    || allSources.some((source: any) => ['web_source', 'verified_web_source', 'web_source_url'].includes(source.type) && source.support_status === 'verified');
   const externalResearchRequired = Boolean(existing?.external_research_required) || hasExternalFactCue(text);
   const unsupportedCriticalClaims = externalResearchRequired && !webResearchPerformed
     ? [{
@@ -409,12 +408,12 @@ export function buildPptFactLedger(contract = {}, sourceLedger = buildPptSourceL
       required_action: 'Use web/Context7 evidence in the route worker, write verified sources/claims into ppt-fact-ledger.json, then rebuild.'
     }]
     : [];
-  const preservedUnsupported = preservedClaims.filter((claim) => claim.support_status === 'unsupported' && claim.criticality !== 'low');
+  const preservedUnsupported = preservedClaims.filter((claim: any) => claim.support_status === 'unsupported' && claim.criticality !== 'low');
   const claims = [
-    ...preservedClaims.filter((claim) => claim.support_status !== 'unsupported' || claim.criticality === 'low'),
+    ...preservedClaims.filter((claim: any) => claim.support_status !== 'unsupported' || claim.criticality === 'low'),
     ...userClaims,
     ...unsupportedCriticalClaims
-  ].filter((claim, index, arr) => arr.findIndex((candidate) => candidate.id === claim.id) === index);
+  ].filter((claim: any, index: any, arr: any) => arr.findIndex((candidate: any) => candidate.id === claim.id) === index);
   const unsupportedCriticalClaimsCount = unsupportedCriticalClaims.length + preservedUnsupported.length;
   return {
     schema_version: 1,
@@ -438,24 +437,24 @@ export function buildPptFactLedger(contract = {}, sourceLedger = buildPptSourceL
   };
 }
 
-function imageAssetRequired(contract = {}) {
+function imageAssetRequired(contract: any = {}) {
   const answers = contract.answers || {};
   const explicit = parseBooleanish(answers.PRESENTATION_IMAGE_ASSETS_REQUIRED);
   if (explicit !== null) return explicit;
   return hasImageAssetCue(contractText(contract));
 }
 
-function imageAssetRequests(contract = {}) {
+function imageAssetRequests(contract: any = {}) {
   const answers = contract.answers || {};
   const rows = [
     ...asArray(answers.PRESENTATION_IMAGE_ASSET_REQUESTS),
     ...asArray(answers.IMAGE_ASSET_REQUESTS),
     ...asArray(answers.GENERATED_IMAGE_ASSETS)
   ];
-  return rows.map((row) => cleanText(row)).filter(Boolean);
+  return rows.map((row: any) => cleanText(row)).filter(Boolean);
 }
 
-function buildImageAssetPrompt({ contract = {}, page = {}, request = '', styleTokens = {} }) {
+function buildImageAssetPrompt({ contract = {}, page = {}, request = '', styleTokens = {} }: any) {
   const audience = cleanText(contract.answers?.PRESENTATION_AUDIENCE_PROFILE, 'business presentation audience');
   const thesis = cleanText(contract.answers?.PRESENTATION_DECISION_CONTEXT || contract.answers?.GOAL_PRECISE || contract.prompt, 'presentation thesis');
   const reference = styleTokens.design_policy?.design_reference_selection?.primary?.name || 'restrained information-first design system';
@@ -469,19 +468,19 @@ function buildImageAssetPrompt({ contract = {}, page = {}, request = '', styleTo
   ].join(' ');
 }
 
-export function planPptImageAssets(contract = {}, storyboard = buildPptStoryboard(contract), styleTokens = buildPptStyleTokens(contract)) {
+export function planPptImageAssets(contract: any = {}, storyboard: any = buildPptStoryboard(contract), styleTokens: any = buildPptStyleTokens(contract)) {
   const required = imageAssetRequired(contract);
   const requests = imageAssetRequests(contract);
   if (!required && requests.length === 0) return [];
   const pages = storyboard.pages || [];
   const maxAssets = Math.max(1, Math.min(6, Number(contract.answers?.PRESENTATION_IMAGE_ASSET_MAX || process.env.SKS_PPT_IMAGEGEN_MAX_ASSETS || 3) || 3));
   const selected = requests.length
-    ? requests.map((request, index) => ({ request, page: pages[index] || pages[0] || { number: index + 1, kind: 'visual' } }))
+    ? requests.map((request: any, index: any) => ({ request, page: pages[index] || pages[0] || { number: index + 1, kind: 'visual' } }))
     : [
-      pages.find((page) => page.kind === 'cover') || pages[0],
-      ...pages.filter((page) => page.kind === 'aha-proof').slice(0, 2)
+      pages.find((page: any) => page.kind === 'cover') || pages[0],
+      ...pages.filter((page: any) => page.kind === 'aha-proof').slice(0, 2)
     ].filter(Boolean);
-  return selected.slice(0, maxAssets).map(({ request, page }, index) => {
+  return selected.slice(0, maxAssets).map(({ request, page }: any, index: any) => {
     const id = compactId('ppt-image', `${index + 1}:${request || page?.claim || page?.kind}`);
     const prompt = buildImageAssetPrompt({ contract, page, request, styleTokens });
     const relPath = path.join(PPT_ASSET_DIR, `${safeFileSlug(id)}.png`);
@@ -511,9 +510,9 @@ export function planPptImageAssets(contract = {}, storyboard = buildPptStoryboar
   });
 }
 
-async function existingGeneratedImageAssets(dir, existing = {}) {
+async function existingGeneratedImageAssets(dir: any, existing: any = {}) {
   const assets = Array.isArray(existing?.assets) ? existing.assets : [];
-  const checked = [];
+  const checked: any[] = [];
   for (const asset of assets) {
     if (asset.status !== 'generated' || !asset.output_path) continue;
     const target = path.join(dir, asset.output_path);
@@ -525,14 +524,14 @@ async function existingGeneratedImageAssets(dir, existing = {}) {
   return checked;
 }
 
-export async function buildPptImageAssetLedger(dir, contract = {}, storyboard = buildPptStoryboard(contract), styleTokens = buildPptStyleTokens(contract), existing = null) {
+export async function buildPptImageAssetLedger(dir: any, contract: any = {}, storyboard: any = buildPptStoryboard(contract), styleTokens: any = buildPptStyleTokens(contract), existing: any = null) {
   const required = imageAssetRequired(contract);
   const plannedAssets = planPptImageAssets(contract, storyboard, styleTokens);
   const reused = await existingGeneratedImageAssets(dir, existing || {});
-  const reusedIds = new Set(reused.map((asset) => asset.id));
-  const pending = plannedAssets.filter((asset) => !reusedIds.has(asset.id));
+  const reusedIds = new Set(reused.map((asset: any) => asset.id));
+  const pending = plannedAssets.filter((asset: any) => !reusedIds.has(asset.id));
   const imagegenDisabled = /^(0|false|no)$/i.test(String(process.env.SKS_PPT_IMAGEGEN ?? 'auto'));
-  const blockers = [];
+  const blockers: any[] = [];
   const generated = [...reused];
   if (pending.length > 0 && required && imagegenDisabled) {
     blockers.push('imagegen_disabled_by_SKS_PPT_IMAGEGEN');
@@ -542,8 +541,8 @@ export async function buildPptImageAssetLedger(dir, contract = {}, storyboard = 
   const assets = [
     ...generated,
     ...pending
-      .filter((asset) => !generated.some((generatedAsset) => generatedAsset.id === asset.id))
-      .map((asset) => ({ ...asset, status: required ? 'blocked' : 'planned_optional' }))
+      .filter((asset: any) => !generated.some((generatedAsset: any) => generatedAsset.id === asset.id))
+      .map((asset: any) => ({ ...asset, status: required ? 'blocked' : 'planned_optional' }))
   ];
   const generatedCount = generated.length;
   const requiredCount = required ? plannedAssets.length : 0;
@@ -586,7 +585,7 @@ export async function buildPptImageAssetLedger(dir, contract = {}, storyboard = 
   };
 }
 
-export function buildPptReviewPolicy(contract = {}, storyboard = buildPptStoryboard(contract), styleTokens = buildPptStyleTokens(contract)) {
+export function buildPptReviewPolicy(contract: any = {}, storyboard: any = buildPptStoryboard(contract), styleTokens: any = buildPptStyleTokens(contract)) {
   const text = contractText(contract);
   const explicitlyRequired = hasVisualReviewCue(text);
   return {
@@ -635,7 +634,7 @@ export function buildPptReviewPolicy(contract = {}, storyboard = buildPptStorybo
   };
 }
 
-function reviewIssue({ id, severity = 'P2', slide = null, title, detail, source = 'deterministic_qa', action = 'fix_or_accept_residual' }) {
+function reviewIssue({ id, severity = 'P2', slide = null, title, detail, source = 'deterministic_qa', action = 'fix_or_accept_residual' }: any) {
   return {
     id,
     severity,
@@ -648,8 +647,8 @@ function reviewIssue({ id, severity = 'P2', slide = null, title, detail, source 
   };
 }
 
-export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, factLedger, imageAssetLedger, renderReport, reviewPolicy }) {
-  const issues = [];
+export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, factLedger, imageAssetLedger, renderReport, reviewPolicy }: any) {
+  const issues: any[] = [];
   if (!factLedger?.passed) {
     issues.push(reviewIssue({
       id: 'fact-ledger-critical-unsupported',
@@ -714,7 +713,7 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
       action: 'Invoke the loaded imagegen skill through Codex App $imagegen/gpt-image-2, run the bounded slide review loop, and record evidence paths before final output.'
     }));
   }
-  const blocking = issues.filter((issue) => ['P0', 'P1'].includes(issue.severity));
+  const blocking = issues.filter((issue: any) => ['P0', 'P1'].includes(issue.severity));
   const slideCount = storyboard?.pages?.length || 0;
   const scoreDeductions = (blocking.length * 0.16) + (issues.length - blocking.length) * 0.04;
   const overallScore = Number(Math.max(0, Math.min(1, 0.96 - scoreDeductions)).toFixed(3));
@@ -749,7 +748,7 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
   };
 }
 
-export function buildPptIterationReport({ contract = {}, reviewPolicy, reviewLedger }) {
+export function buildPptIterationReport({ contract = {}, reviewPolicy, reviewLedger }: any) {
   const score = reviewLedger?.scorecard?.overall_score || 0;
   const blocking = reviewLedger?.blocking_issue_count || 0;
   const passed = blocking === 0 && score >= (reviewPolicy?.score_threshold || 0.88);
@@ -771,7 +770,7 @@ export function buildPptIterationReport({ contract = {}, reviewPolicy, reviewLed
         score,
         blocking_issue_count: blocking,
         status: passed ? 'passed' : 'blocked',
-        changed_slides_for_next_pass: (reviewLedger?.issues || []).map((issue) => issue.slide).filter(Boolean)
+        changed_slides_for_next_pass: (reviewLedger?.issues || []).map((issue: any) => issue.slide).filter(Boolean)
       }
     ],
     final_narrative_pass: {
@@ -784,11 +783,11 @@ export function buildPptIterationReport({ contract = {}, reviewPolicy, reviewLed
   };
 }
 
-export function buildPptStoryboard(contract = {}, audience = buildPptAudienceStrategy(contract)) {
+export function buildPptStoryboard(contract: any = {}, audience: any = buildPptAudienceStrategy(contract)) {
   const answers = contract.answers || {};
   const title = titleFromContract(contract);
   const painpoints = normalizePainpoints(answers);
-  const ahaMoments = painpoints.slice(0, Math.max(3, painpoints.length)).map((entry, index) => ({
+  const ahaMoments = painpoints.slice(0, Math.max(3, painpoints.length)).map((entry: any, index: any) => ({
     id: `aha-${index + 1}`,
     placement: index === 0 ? 'opening' : (index === painpoints.length - 1 ? 'decision-close' : 'proof-turn'),
     viewer_realization: entry.aha_moment,
@@ -820,7 +819,7 @@ export function buildPptStoryboard(contract = {}, audience = buildPptAudienceStr
         support: cleanText(answers.PRESENTATION_AUDIENCE_PROFILE),
         source_ids: ['user-audience-profile', 'user-stp-strategy', 'user-decision-context']
       },
-      ...painpoints.map((entry, index) => ({
+      ...painpoints.map((entry: any, index: any) => ({
         number: index + 3,
         kind: 'aha-proof',
         claim: entry.painpoint,
@@ -839,7 +838,7 @@ export function buildPptStoryboard(contract = {}, audience = buildPptAudienceStr
   };
 }
 
-export function buildPptStyleTokens(contract = {}) {
+export function buildPptStyleTokens(contract: any = {}) {
   const korean = /[ㄱ-ㅎ가-힣]/.test(`${contract.prompt || ''} ${JSON.stringify(contract.answers || {})}`);
   const reference = selectPptDesignReference(contract);
   const refTokens = reference.applied_token_profile.color;
@@ -925,14 +924,15 @@ export function buildPptStyleTokens(contract = {}) {
   };
 }
 
-export function selectPptDesignReference(contract = {}) {
+export function selectPptDesignReference(contract: any = {}) {
   const text = cleanText(`${contract.prompt || ''} ${JSON.stringify(contract.answers || {})}`).toLowerCase();
-  const scored = PPT_DESIGN_REFERENCE_PROFILES.map((profile) => {
-    const score = profile.keywords.reduce((sum, keyword) => sum + (text.includes(String(keyword).toLowerCase()) ? 1 : 0), 0);
+  const scored = PPT_DESIGN_REFERENCE_PROFILES.map((profile: any) => {
+    const score = profile.keywords.reduce((sum: any, keyword: any) => sum + (text.includes(String(keyword).toLowerCase()) ? 1 : 0), 0);
     return { profile, score };
-  }).sort((a, b) => b.score - a.score);
-  const primary = scored[0]?.score > 0 ? scored[0].profile : PPT_DESIGN_REFERENCE_PROFILES[0];
-  const secondary = scored.find((entry) => entry.profile.id !== primary.id && entry.score > 0)?.profile || PPT_DESIGN_REFERENCE_PROFILES.find((entry) => entry.id !== primary.id);
+  }).sort((a: any, b: any) => b.score - a.score);
+  const topScore = scored[0]?.score ?? 0;
+  const primary: any = topScore > 0 ? scored[0]?.profile : PPT_DESIGN_REFERENCE_PROFILES[0];
+  const secondary: any = scored.find((entry: any) => entry.profile.id !== primary.id && entry.score > 0)?.profile || PPT_DESIGN_REFERENCE_PROFILES.find((entry: any) => entry.id !== primary.id);
   return {
     source: AWESOME_DESIGN_MD_REFERENCE.url,
     selection_method: 'keyword_match_against_sealed_ppt_contract',
@@ -950,7 +950,7 @@ export function selectPptDesignReference(contract = {}) {
       source_summary: secondary.source_summary,
       applied_rules: secondary.applied_rules.slice(0, 2)
     } : null,
-    selected_sources: [primary, secondary].filter(Boolean).map((profile) => ({
+    selected_sources: [primary, secondary].filter(Boolean).map((profile: any) => ({
       id: profile.id,
       name: profile.name,
       source_url: profile.source_url,
@@ -961,13 +961,13 @@ export function selectPptDesignReference(contract = {}) {
       composition: primary.tokens.composition,
       treatment: primary.tokens.treatment
     },
-    selection_reason: scored[0]?.score > 0
-      ? `matched ${scored[0].score} contract keyword(s) to ${primary.name}`
+    selection_reason: topScore > 0
+      ? `matched ${topScore} contract keyword(s) to ${primary.name}`
       : `no strong domain match; defaulted to ${primary.name} for restrained business presentation output`
   };
 }
 
-export function buildPptHtml({ contract = {}, audience, sourceLedger, factLedger, imageAssetLedger, reviewPolicy, storyboard, styleTokens }) {
+export function buildPptHtml({ contract = {}, audience, sourceLedger, factLedger, imageAssetLedger, reviewPolicy, storyboard, styleTokens }: any) {
   const title = escapeHtml(storyboard.title);
   const referenceName = escapeHtml(styleTokens.design_policy?.design_reference_selection?.primary?.name || 'selected design reference');
   const audienceRaw = escapeHtml(audience?.audience_profile?.raw || 'Audience context');
@@ -996,9 +996,9 @@ p { margin: 0; color: ${styleTokens.color.muted}; font-size: ${styleTokens.typog
 .value { color: ${styleTokens.color.text}; font-size: 20px; line-height: 1.42; }
 .source { display: grid; grid-template-columns: 1fr auto; gap: 24px; color: ${styleTokens.color.muted}; font-size: ${styleTokens.typography.caption_px}px; border-top: 1px solid ${styleTokens.color.rule}; padding-top: 14px; }
 .accent { width: 64px; height: 3px; background: ${styleTokens.color.accent}; }`;
-  const generatedAssets = (imageAssetLedger?.assets || []).filter((asset) => asset.status === 'generated' && asset.html_src);
-  const pages = storyboard.pages.map((page) => {
-    const asset = generatedAssets.find((candidate) => Number(candidate.slide) === Number(page.number));
+  const generatedAssets = (imageAssetLedger?.assets || []).filter((asset: any) => asset.status === 'generated' && asset.html_src);
+  const pages = storyboard.pages.map((page: any) => {
+    const asset = generatedAssets.find((candidate: any) => Number(candidate.slide) === Number(page.number));
     return `<section class="page">
   <header class="topline">
     <div class="kicker">${escapeHtml(page.kind)} / ${page.number}</div>
@@ -1052,9 +1052,9 @@ ${pages}
 `;
 }
 
-function wrapText(text, max = 42) {
-  const chars = Array.from(cleanText(text));
-  const lines = [];
+function wrapText(text: any, max: any = 42) {
+  const chars = Array.from(cleanText(text)) as string[];
+  const lines: any[] = [];
   let line = '';
   for (const ch of chars) {
     line += ch;
@@ -1067,16 +1067,16 @@ function wrapText(text, max = 42) {
   return lines.length ? lines : [''];
 }
 
-function pdfTextHex(text) {
+function pdfTextHex(text: any) {
   const buf = Buffer.from(`\uFEFF${cleanText(text)}`, 'utf16le');
   return buf.swap16().toString('hex').toUpperCase();
 }
 
-function pdfStreamForPage(page, style = {}) {
+function pdfStreamForPage(page: any, style: any = {}) {
   const lines = [
     { text: `${page.number}. ${page.kind}`, size: 16, x: 64, y: 522 },
     { text: page.claim, size: 30, x: 64, y: 470 },
-    ...wrapText(page.support, 44).slice(0, 6).map((text, i) => ({ text, size: 16, x: 68, y: 410 - i * 24 })),
+    ...wrapText(page.support, 44).slice(0, 6).map((text: any, i: any) => ({ text, size: 16, x: 68, y: 410 - i * 24 })),
     { text: `Sources: ${(page.source_ids || []).join(', ') || 'none'}`, size: 9, x: 64, y: 44 }
   ];
   const color = style.color || {};
@@ -1097,22 +1097,22 @@ function pdfStreamForPage(page, style = {}) {
   return `${ops.join('\n')}\n`;
 }
 
-function hexToRgb(hex) {
+function hexToRgb(hex: any) {
   const raw = String(hex || '').replace(/^#/, '');
-  const n = Number.parseInt(raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw, 16);
+  const n = Number.parseInt(raw.length === 3 ? raw.split('').map((c: any) => c + c).join('') : raw, 16);
   if (!Number.isFinite(n)) return [0, 0, 0];
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map((v) => Number(v.toFixed(3)));
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map((v: any) => Number(v.toFixed(3)));
 }
 
-function makePdf(storyboard, styleTokens) {
+function makePdf(storyboard: any, styleTokens: any) {
   const pages = storyboard.pages || [];
   const pageCount = Math.max(1, pages.length);
   const fontObj = 3 + pageCount * 2;
   const cidObj = fontObj + 1;
   const descriptorObj = fontObj + 2;
-  const objects = [];
+  const objects: any[] = [];
   objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
-  const kids = Array.from({ length: pageCount }, (_, i) => `${3 + i * 2} 0 R`).join(' ');
+  const kids = Array.from({ length: pageCount }, (_: any, i: any) => `${3 + i * 2} 0 R`).join(' ');
   objects[2] = `<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>`;
   for (let i = 0; i < pageCount; i++) {
     const pageObj = 3 + i * 2;
@@ -1137,7 +1137,7 @@ function makePdf(storyboard, styleTokens) {
   return Buffer.from(body, 'binary');
 }
 
-export function buildPptRenderReport({ contract = {}, audience, sourceLedger, factLedger, imageAssetLedger, storyboard, styleTokens, html, pdfBytes }) {
+export function buildPptRenderReport({ contract = {}, audience, sourceLedger, factLedger, imageAssetLedger, storyboard, styleTokens, html, pdfBytes }: any) {
   const painpointCount = audience?.painpoint_solution_map?.length || 0;
   const pageCount = storyboard?.pages?.length || 0;
   return {
@@ -1160,13 +1160,13 @@ export function buildPptRenderReport({ contract = {}, audience, sourceLedger, fa
       { id: 'information_first', passed: styleTokens.design_policy?.priority === 'information_first' },
       { id: 'restrained_detail', passed: styleTokens.design_policy?.visual_style === 'simple_restrained_detailed' },
       { id: 'design_ssot_declared', passed: styleTokens.design_policy?.design_ssot?.authority === DESIGN_SYSTEM_SSOT.authority_file },
-      { id: 'curated_design_md_input_fused', passed: (styleTokens.design_policy?.source_inputs || []).some((entry) => entry.url === AWESOME_DESIGN_MD_REFERENCE.url && entry.role === 'source_input_for_ssot') },
+      { id: 'curated_design_md_input_fused', passed: (styleTokens.design_policy?.source_inputs || []).some((entry: any) => entry.url === AWESOME_DESIGN_MD_REFERENCE.url && entry.role === 'source_input_for_ssot') },
       { id: 'concrete_design_reference_selected', passed: Boolean(styleTokens.design_policy?.design_reference_selection?.primary?.id && styleTokens.design_policy?.design_reference_selection?.selected_sources?.length) },
       { id: 'reference_rules_applied_to_tokens', passed: Boolean(styleTokens.layout?.composition && styleTokens.layout?.treatment && styleTokens.design_policy?.design_reference_selection?.applied_token_profile) },
       { id: 'html_uses_reference_layout', passed: typeof html === 'string' && html.includes('decision evidence') && html.includes(styleTokens.layout?.composition || 'presentation-grid') },
       { id: 'ppt_skill_allowlist_enforced', passed: JSON.stringify(styleTokens.design_policy?.pipeline_allowlist?.required_skills || []) === JSON.stringify([...PPT_PIPELINE_SKILL_ALLOWLIST]) },
       { id: 'out_of_pipeline_design_skills_ignored', passed: styleTokens.design_policy?.pipeline_allowlist?.ignore_installed_out_of_pipeline_skills === true && (styleTokens.design_policy?.pipeline_allowlist?.ignored_design_skills_even_if_installed || []).includes('design-artifact-expert') },
-      { id: 'ppt_mcp_allowlist_scoped', passed: (styleTokens.design_policy?.pipeline_allowlist?.allowed_mcp_servers || []).every((entry) => entry.mcp === 'context7' && /external_documentation/.test(entry.condition || '')) },
+      { id: 'ppt_mcp_allowlist_scoped', passed: (styleTokens.design_policy?.pipeline_allowlist?.allowed_mcp_servers || []).every((entry: any) => entry.mcp === 'context7' && /external_documentation/.test(entry.condition || '')) },
       { id: 'no_decorative_overdesign', passed: !String(html).includes('gradient') },
       { id: 'fact_ledger_embedded', passed: typeof html === 'string' && html.includes('ppt-fact-ledger') },
       { id: 'unsupported_critical_claims_zero', passed: factLedger?.unsupported_critical_claims_count === 0 },
@@ -1190,7 +1190,7 @@ export function buildPptRenderReport({ contract = {}, audience, sourceLedger, fa
   };
 }
 
-async function fileExists(p) {
+async function fileExists(p: any) {
   try {
     await fsp.access(p);
     return true;
@@ -1199,8 +1199,8 @@ async function fileExists(p) {
   }
 }
 
-async function cleanupPptBuildTemps(dir) {
-  const removed = [];
+async function cleanupPptBuildTemps(dir: any) {
+  const removed: any[] = [];
   const candidates = [
     { rel: PPT_TEMP_DIR, reason: 'ppt_build_temp_dir' },
     { rel: '.ppt-tmp', reason: 'legacy_hidden_ppt_temp_dir' },
@@ -1215,7 +1215,7 @@ async function cleanupPptBuildTemps(dir) {
     let stat;
     try {
       stat = await fsp.lstat(target);
-    } catch (err) {
+    } catch (err: any) {
       if (err?.code === 'ENOENT') continue;
       throw err;
     }
@@ -1243,7 +1243,7 @@ async function cleanupPptBuildTemps(dir) {
   return removed;
 }
 
-export async function buildPptCleanupReport(dir) {
+export async function buildPptCleanupReport(dir: any) {
   const removed = await cleanupPptBuildTemps(dir);
   const sourceHtmlPath = path.join(dir, PPT_HTML_ARTIFACT);
   const sourceHtmlPreserved = await fileExists(sourceHtmlPath);
@@ -1274,7 +1274,7 @@ export async function buildPptCleanupReport(dir) {
   };
 }
 
-export function defaultPptGate(contract = {}) {
+export function defaultPptGate(contract: any = {}) {
   const answers = contract.answers || {};
   const painpoints = asArray(answers.PRESENTATION_PAINPOINT_SOLUTION_MAP);
   return {
@@ -1337,7 +1337,7 @@ export function defaultPptGate(contract = {}) {
   };
 }
 
-export async function writePptRouteArtifacts(dir, contract = {}) {
+export async function writePptRouteArtifacts(dir: any, contract: any = {}) {
   const audience = buildPptAudienceStrategy(contract);
   const gate = defaultPptGate(contract);
   await writeJsonAtomic(path.join(dir, PPT_AUDIENCE_STRATEGY_ARTIFACT), audience);
@@ -1348,7 +1348,7 @@ export async function writePptRouteArtifacts(dir, contract = {}) {
   };
 }
 
-export async function writePptBuildArtifacts(dir, contract = null) {
+export async function writePptBuildArtifacts(dir: any, contract: any = null) {
   const sealed = contract || await readJson(path.join(dir, 'decision-contract.json'));
   const existingFactLedger = await readJson(path.join(dir, PPT_FACT_LEDGER_ARTIFACT), null);
   const existingImageAssetLedger = await readJson(path.join(dir, PPT_IMAGE_ASSET_LEDGER_ARTIFACT), null);

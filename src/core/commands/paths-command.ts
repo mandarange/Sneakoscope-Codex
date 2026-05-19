@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { projectRoot } from '../fsx.js';
 import { managedPathManifest } from '../managed-paths.js';
 import { flag } from './command-utils.js';
 
-export async function pathsCommand(args = []) {
+export async function pathsCommand(args: any = []) {
   const action = args[0] || 'managed';
   if (action !== 'managed') {
     console.error('Usage: sks paths managed [--json]');

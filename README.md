@@ -2,13 +2,28 @@
 
 Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
-Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable. `1.0.1` finishes the hybrid-free TypeScript runtime: the CLI entrypoint, router, command registry, Trust Kernel, Evidence Router, Completion Proof, Image Voxel, Scout, and route command runtime build into `dist`, packed installs smoke every command registry entry, and `sks run --execute` can carry safe routes through execution, proof, trust report, and status.
+Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable.
+
+SKS **1.0.2** removes the last blanket TypeScript suppressions from runtime sources (`@ts-nocheck`/`@ts-ignore` are gated out by `npm run typecheck:suppressions`). The package remains `dist`-only, the typed command registry is still the genuine runtime registry, and release checks additionally block stray `.mjs` under `dist`, command-registry import drift (`blackbox:command-import-smoke`), typed contract probes, plus the new suppression + migration summaries.
+
+SKS **1.0.2** also adds TriWiki Wrongness Memory: `sks wrongness ...` records negative evidence for wrong claims, stale or missing proof, test failures, image anchor mistakes, DB safety mismatches, hook policy mismatches, mock-real confusion, and trust overclaims. Active wrongness is retrieved by TriWiki/scouts and lowers or blocks trust until corrected.
+
+Hybrid-free **`1.0.1`** already delivered the CLI entrypoint/router/registry/Trust Kernel/Evidence/Proof/Voxel/Scout TypeScript builds, packed installs that smoke-test every lazy import, and **`sks run --execute`** / **`--auto`** paths for safe/mock routes (destructive DB and missing visual proof stay blocked—these are mock/safe-heavy, not universally live executions).
 
 SKS does not try to clone every other harness. It focuses on one thing: making Codex work auditable, visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
 
 ![Sneakoscope Codex architecture and pipeline](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/dev/docs/assets/sneakoscope-architecture-pipeline.jpg)
 
-## 1.0.1 Current Release
+
+## 1.0.2 Current Release Notes
+
+SKS **1.0.2 removes the blanket `@ts-nocheck` / `@ts-ignore` layer from runtime TypeScript.** The shipped package stays `dist`-only, keeps the typed command registry as the real runtime dispatcher, runs `npm run typecheck:suppressions` ahead of builds in `release:check`, and records migration counters under `.sneakoscope/reports/typescript-migration.*`.
+
+`npm run dist:check` now pairs the existing filesystem `.mjs` hunt with **`sks.dist-build.v2`** metadata that records `mjs_runtime_files = 0` plus the semver captured at build time—guarding accidental hybrid drift.
+
+`npm run typecheck`, `npm run typecheck:suppressions`, `npm run typecheck:contracts`, `npm run test:types`, and `npm run release:check` are the release proof for the 1.0.2 strict TypeScript seal.
+
+## 1.0.1 Previous Release
 
 1.0.1 removes the package/runtime hybrid boundary. The TypeScript command registry is the actual CLI runtime registry, `npm run build` no longer copies `src/**/*.mjs` into `dist`, and `npm run dist:check` blocks `dist/**/*.mjs`, `.mjs` imports, and contract-only registry markers.
 
@@ -56,12 +71,15 @@ Learn more:
 - Completion Proof: [docs/completion-proof.md](docs/completion-proof.md)
 - TypeScript architecture: [docs/typescript-architecture.md](docs/typescript-architecture.md)
 - Trust Kernel: [docs/trust-kernel.md](docs/trust-kernel.md)
+- TriWiki Wrongness Memory: [docs/triwiki-wrongness-memory.md](docs/triwiki-wrongness-memory.md)
+- Wrongness Learning Loop: [docs/wrongness-learning-loop.md](docs/wrongness-learning-loop.md)
 - Package boundary: [docs/package-boundary.md](docs/package-boundary.md)
 - Black-box package tests: [docs/black-box-package-tests.md](docs/black-box-package-tests.md)
 - Core dominance: [docs/core-dominance.md](docs/core-dominance.md)
 - Performance budgets: [docs/performance-budgets.md](docs/performance-budgets.md)
 - Five-Scout Pipeline: [docs/five-scout-pipeline.md](docs/five-scout-pipeline.md)
 - Image Voxel TriWiki: [docs/image-voxel-ledger.md](docs/image-voxel-ledger.md)
+- Image Wrongness: [docs/image-wrongness.md](docs/image-wrongness.md)
 - Route finalization: [docs/route-finalization.md](docs/route-finalization.md)
 - Feature fixtures: [docs/feature-fixtures.md](docs/feature-fixtures.md)
 - Managed paths: [docs/managed-paths.md](docs/managed-paths.md)
@@ -82,6 +100,7 @@ sks root
 sks doctor
 sks status
 sks trust report latest
+sks wrongness validate project --json
 sks codex-app check
 sks selftest --mock
 sks rust smoke --json
@@ -91,7 +110,7 @@ sks rust smoke --json
 
 1. Completion Proof for every serious route
 2. Image Voxel TriWiki anchors and relations for every visual route
-3. Route contracts, evidence indexes, trust reports, Codex App, codex-lb, hooks, Rust fallback parity, DB, route modularity, and generated fixtures verified by release gates
+3. Route contracts, evidence indexes, wrongness memory, trust reports, Codex App, codex-lb, hooks, Rust fallback parity, DB, route modularity, and generated fixtures verified by release gates
 
 ## Install Options
 

@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { findProjectRoot, globalSksRoot, sksRoot } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson, sksTextLogo } from '../cli/output.js';
 
-export async function run(_command, args = []) {
+export async function run(_command: any, args: any = []) {
   const project = await findProjectRoot();
   const global = globalSksRoot();
   const active = await sksRoot();

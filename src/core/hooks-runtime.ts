@@ -1,6 +1,5 @@
-// @ts-nocheck
 import path from 'node:path';
-import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION, sha256, packageRoot, tmpdir } from './fsx.js';
+import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION, sha256, packageRoot, tmpdir, type JsonData } from './fsx.js';
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.js';
 import { missionDir, setCurrent, stateFile } from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
@@ -29,20 +28,20 @@ async function loadHookPayload() {
   try { return raw.trim() ? JSON.parse(raw) : {}; } catch { return { raw }; }
 }
 
-async function loadState(root) {
+async function loadState(root: any) {
   return readJson(stateFile(root), {});
 }
 
-function isNoQuestionRunning(state) {
+function isNoQuestionRunning(state: any) {
   return (state.mode === 'RESEARCH' && state.phase === 'RESEARCH_RUNNING_NO_QUESTIONS')
     || (state.mode === 'QALOOP' && state.phase === 'QALOOP_RUNNING_NO_QUESTIONS');
 }
 
-function extractLastMessage(payload) {
+function extractLastMessage(payload: any) {
   return payload.last_assistant_message || payload.assistant_message || payload.message || payload.response || payload.raw || '';
 }
 
-function extractUserPrompt(payload) {
+function extractUserPrompt(payload: any) {
   return payload.prompt
     || payload.user_prompt
     || payload.userPrompt
@@ -53,17 +52,17 @@ function extractUserPrompt(payload) {
     || '';
 }
 
-function conversationId(payload) {
+function conversationId(payload: any) {
   return String(payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || payload.cwd || 'default');
 }
 
-function extractCommand(payload) {
+function extractCommand(payload: any) {
   return payload.command || payload.tool_input?.command || payload.toolInput?.command || payload.input?.command || payload.tool?.input?.command || '';
 }
 
-function codexGitActionMetadataText(payload = {}) {
+function codexGitActionMetadataText(payload: any = {}) {
   const seen = new Set();
-  const out = [];
+  const out: any[] = [];
   const interesting = new Set([
     'action',
     'intent',
@@ -100,7 +99,7 @@ function codexGitActionMetadataText(payload = {}) {
     'stdout',
     'stderr'
   ]);
-  function walk(value, depth = 0, parentKey = '') {
+  function walk(value: any, depth: any = 0, parentKey: any = '') {
     if (!value || typeof value !== 'object' || depth > 5 || seen.has(value)) return;
     seen.add(value);
     for (const [key, candidate] of Object.entries(value)) {
@@ -123,7 +122,7 @@ function codexGitActionMetadataText(payload = {}) {
   return out.join(' ');
 }
 
-function codexGitActionMetadataSignal(text = '') {
+function codexGitActionMetadataSignal(text: any = '') {
   const s = String(text || '');
   if (!s) return false;
   const action = String(s)
@@ -138,7 +137,7 @@ function codexGitActionMetadataSignal(text = '') {
   return false;
 }
 
-function toolFailed(payload = {}) {
+function toolFailed(payload: any = {}) {
   const candidates = [
     payload.exit_code,
     payload.exitCode,
@@ -157,20 +156,20 @@ function toolFailed(payload = {}) {
   return false;
 }
 
-function looksLikeUpdateDecline(prompt) {
+function looksLikeUpdateDecline(prompt: any) {
   return /^(no|nope|skip|later|not now|don't|dont|아니|아니요|안해|안 함|나중에|건너뛰|스킵)/i.test(String(prompt || '').trim());
 }
 
-function looksLikeUpdateAccept(prompt) {
+function looksLikeUpdateAccept(prompt: any) {
   return /^(yes|y|ok|okay|update|upgrade|do it|go ahead|응|네|예|업데이트|해줘|진행)/i.test(String(prompt || '').trim());
 }
 
-export async function hookMain(name) {
+export async function hookMain(name: any): Promise<JsonData> {
   const payload = await loadHookPayload();
   return evaluateHookPayload(name, payload);
 }
 
-export async function evaluateHookPayload(name, payload = {}, opts = {}) {
+export async function evaluateHookPayload(name: any, payload: any = {}, opts: any = {}): Promise<JsonData> {
   const root = opts.root || await projectRoot(payload.cwd || process.cwd());
   const state = opts.state || payload.state || await loadState(root);
   const noQuestion = isNoQuestionRunning(state);
@@ -186,7 +185,7 @@ export async function evaluateHookPayload(name, payload = {}, opts = {}) {
   return { continue: true };
 }
 
-function blockForbiddenClientModel(payload = {}) {
+function blockForbiddenClientModel(payload: any = {}) {
   const model = forbiddenClientModelFromPayload(payload);
   if (!model || !isForbiddenCodexModel(model)) return null;
   if (looksLikeCodexUiSettingsEvent(payload)) return null;
@@ -196,7 +195,7 @@ function blockForbiddenClientModel(payload = {}) {
   };
 }
 
-function looksLikeCodexUiSettingsEvent(payload = {}) {
+function looksLikeCodexUiSettingsEvent(payload: any = {}) {
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
   const haystack = [
     payload.action,
@@ -222,7 +221,7 @@ function looksLikeCodexUiSettingsEvent(payload = {}) {
   return !prompt && /\b(?:settings|preferences|profile|speed|fast[_\s-]*mode|reasoning|model[_\s-]*select|codex[_\s-]*app)\b/i.test(haystack);
 }
 
-function forbiddenClientModelFromPayload(payload = {}) {
+function forbiddenClientModelFromPayload(payload: any = {}) {
   const candidates = [
     payload.model,
     payload.model_id,
@@ -235,12 +234,12 @@ function forbiddenClientModelFromPayload(payload = {}) {
     ...clientModelCandidates(payload.thread),
     ...clientModelCandidates(payload.session)
   ];
-  return candidates.find((value) => typeof value === 'string' && isForbiddenCodexModel(value)) || '';
+  return candidates.find((value: any) => typeof value === 'string' && isForbiddenCodexModel(value)) || '';
 }
 
-function clientModelCandidates(value, depth = 0) {
+function clientModelCandidates(value: any, depth: any = 0) {
   if (!value || typeof value !== 'object' || depth > 4) return [];
-  const out = [];
+  const out: any[] = [];
   for (const key of ['model', 'model_id', 'modelId', 'client_model', 'clientModel']) {
     if (typeof value[key] === 'string') out.push(value[key]);
   }
@@ -250,7 +249,7 @@ function clientModelCandidates(value, depth = 0) {
   return out;
 }
 
-async function hookUserPrompt(root, state, payload, noQuestion) {
+async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: any) {
   if (looksLikeCodexGitAction(payload)) {
     await armCodexGitActionStopBypass(root, payload).catch(() => null);
     return {
@@ -301,7 +300,7 @@ async function hookUserPrompt(root, state, payload, noQuestion) {
   };
 }
 
-function isClarificationAwaiting(state = {}) {
+function isClarificationAwaiting(state: any = {}) {
   const phase = String(state.phase || '');
   const stopGate = String(state.stop_gate || '');
   const gateAwaiting = phase.includes('CLARIFICATION_AWAITING_ANSWERS') || stopGate === 'clarification-gate';
@@ -311,15 +310,15 @@ function isClarificationAwaiting(state = {}) {
   return Boolean(state.clarification_required || state.implementation_allowed === false);
 }
 
-function isBlockingClarificationAwaiting(state = {}) {
+function isBlockingClarificationAwaiting(state: any = {}) {
   return isClarificationAwaiting(state);
 }
 
-function looksLikeClarificationCancel(prompt = '') {
+function looksLikeClarificationCancel(prompt: any = '') {
   return /^(cancel|reset|restart|new mission|새로|취소|중단|리셋|다시 시작)\b/i.test(String(prompt || '').trim());
 }
 
-function activeGoalOverlayContext(state = {}, route = null) {
+function activeGoalOverlayContext(state: any = {}, route: any = null) {
   if (state.mode !== 'GOAL' || !state.mission_id) return '';
   if (!route || route.id === 'Goal' || route.id === 'DFix' || route.id === 'Answer') return '';
   return [
@@ -329,7 +328,7 @@ function activeGoalOverlayContext(state = {}, route = null) {
   ].join('\n');
 }
 
-async function hookPreTool(root, state, payload, noQuestion) {
+async function hookPreTool(root: any, state: any, payload: any, noQuestion: any) {
   const harnessDecision = await checkHarnessModification(root, payload, { phase: 'pre-tool' });
   if (harnessDecision.action === 'block') {
     return { decision: 'block', permissionDecision: 'deny', reason: harnessGuardBlockReason(harnessDecision) };
@@ -346,7 +345,7 @@ async function hookPreTool(root, state, payload, noQuestion) {
   return { continue: true };
 }
 
-async function hookPostTool(root, state, payload, noQuestion) {
+async function hookPostTool(root: any, state: any, payload: any, noQuestion: any) {
   const dbDecision = await checkDbOperation(root, state, payload, { duringNoQuestion: noQuestion });
   if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
     return { decision: 'block', reason: dbBlockReason(dbDecision) };
@@ -374,7 +373,7 @@ async function hookPostTool(root, state, payload, noQuestion) {
     : { continue: true };
 }
 
-async function recordToolErrorTaxonomy(root, state = {}, payload = {}) {
+async function recordToolErrorTaxonomy(root: any, state: any = {}, payload: any = {}) {
   if (!state?.mission_id) return null;
   const classification = classifyToolError({
     code: payload.exit_code ?? payload.exitCode ?? payload.tool_response?.exit_code ?? payload.result?.exit_code,
@@ -393,7 +392,7 @@ async function recordToolErrorTaxonomy(root, state = {}, payload = {}) {
   return record;
 }
 
-async function hookPermission(root, state, payload, noQuestion) {
+async function hookPermission(root: any, state: any, payload: any, noQuestion: any) {
   const harnessDecision = await checkHarnessModification(root, payload, { phase: 'permission-request' });
   if (harnessDecision.action === 'block') {
     return { decision: 'deny', permissionDecision: 'deny', reason: harnessGuardBlockReason(harnessDecision) };
@@ -414,7 +413,7 @@ async function hookPermission(root, state, payload, noQuestion) {
   };
 }
 
-function looksLikeUserGitAction(payload = {}) {
+function looksLikeUserGitAction(payload: any = {}) {
   const command = extractCommand(payload);
   const haystack = [
     command,
@@ -435,7 +434,7 @@ function looksLikeUserGitAction(payload = {}) {
   return /\bgit\s+(?:status|diff|add|commit|push|branch|remote|rev-parse|log)\b/i.test(command);
 }
 
-function clarificationGateLocked(state = {}) {
+function clarificationGateLocked(state: any = {}) {
   if (isBlockingClarificationAwaiting(state)) return true;
   return Boolean(
     state?.mission_id
@@ -446,7 +445,7 @@ function clarificationGateLocked(state = {}) {
   );
 }
 
-function clarificationAnswerToolAllowed(payload = {}) {
+function clarificationAnswerToolAllowed(payload: any = {}) {
   const command = extractCommand(payload);
   if (/\bpipeline\s+answer\b/i.test(command) && /\b(?:sks|sks\.js|bin\/sks\.js|node)\b/i.test(command)) return true;
   if (!payloadMentionsAnswersJson(payload)) return false;
@@ -455,7 +454,7 @@ function clarificationAnswerToolAllowed(payload = {}) {
   return !/\b(npm|git|selftest|packcheck|release:check|publish:dry|publish:npm|doctor|team|qa-loop|wiki|db|test)\b/i.test(command);
 }
 
-function payloadMentionsAnswersJson(payload = {}) {
+function payloadMentionsAnswersJson(payload: any = {}) {
   try {
     return /\banswers\.json\b/i.test(JSON.stringify(payload || {}));
   } catch {
@@ -463,13 +462,13 @@ function payloadMentionsAnswersJson(payload = {}) {
   }
 }
 
-function clarificationPauseBlockReason(state = {}) {
+function clarificationPauseBlockReason(state: any = {}) {
   const id = state?.mission_id || 'latest';
   const route = state.route_command || state.route || state.mode || 'route';
   return `SKS ${route} ambiguity gate is paused and waiting for explicit user answers. Do not run implementation, tests, route materialization, or unrelated tools yet. The only allowed action is sealing the user's reply with "sks pipeline answer ${id} --stdin"; elapsed time or repeated hook resumes never count as answers.`;
 }
 
-async function hookStop(root, state, payload, noQuestion) {
+async function hookStop(root: any, state: any, payload: any, noQuestion: any) {
   const last = extractLastMessage(payload);
   if (await consumeCodexGitActionStopBypass(root, payload)) {
     return {
@@ -525,7 +524,7 @@ async function hookStop(root, state, payload, noQuestion) {
   };
 }
 
-async function consumeLightRouteStop(root, payload = {}) {
+async function consumeLightRouteStop(root: any, payload: any = {}) {
   const file = path.join(root, '.sneakoscope', 'state', LIGHT_ROUTE_STOP_ARTIFACT);
   const record = await readJson(file, null).catch(() => null);
   if (!record?.pending_stop_bypass) return false;
@@ -543,7 +542,7 @@ async function consumeLightRouteStop(root, payload = {}) {
   return true;
 }
 
-function hasDfixLightCompletion(text) {
+function hasDfixLightCompletion(text: any) {
   const s = String(text || '');
   const marker = /^\s*(?:\*\*)?\s*(?:\$?DFix|dfix)\s*(?:완료\s*요약|completion\s+summary)\s*[:：]/im.test(s);
   if (!marker) return false;
@@ -554,11 +553,11 @@ function hasDfixLightCompletion(text) {
   return verification && gap;
 }
 
-function explicitConversationId(payload = {}) {
+function explicitConversationId(payload: any = {}) {
   return payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || null;
 }
 
-function looksLikeCodexGitAction(payload = {}) {
+function looksLikeCodexGitAction(payload: any = {}) {
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
   const metadataText = codexGitActionMetadataText(payload);
   const haystack = [
@@ -605,13 +604,13 @@ function looksLikeCodexGitAction(payload = {}) {
   return !looksLikeUserImplementationRequest(prompt);
 }
 
-function looksLikeStockCodexGitActionPrompt(prompt = '') {
+function looksLikeStockCodexGitActionPrompt(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text || text.length > 120) return false;
   return /^(?:generate\s+(?:a\s+)?git\s+commit\s+message(?:\s+for\s+(?:the\s+)?(?:staged\s+)?diff)?|commit\s+changes|commit\s+and\s+push\s+changes|push\s+changes|create\s+(?:a\s+)?commit|create\s+(?:a\s+)?pull\s+request)\.?$/i.test(text);
 }
 
-function looksLikeCodexGitActionStopCompletion(last = '', payload = {}) {
+function looksLikeCodexGitActionStopCompletion(last: any = '', payload: any = {}) {
   const text = String(last || '').trim();
   const metadataText = codexGitActionMetadataText(payload);
   const haystack = [
@@ -636,11 +635,11 @@ function looksLikeCodexGitActionStopCompletion(last = '', payload = {}) {
   return /^(?:commit(?:ted)?(?:\s+and\s+pushed)?(?:\s+changes)?(?:\s+complete[.!]?)?|push(?:ed)?(?:\s+changes)?(?:\s+complete[.!]?)?|created\s+(?:a\s+)?pull\s+request[.!]?)$/i.test(text);
 }
 
-function looksLikeUserImplementationRequest(text = '') {
+function looksLikeUserImplementationRequest(text: any = '') {
   return /(fix|bug|broken|error|issue|implement|change|update|repair|수정|버그|오류|에러|문제|고쳐|고치|해결|변경|수리|패치|안생기|안\s*생기)/i.test(String(text || ''));
 }
 
-async function armCodexGitActionStopBypass(root, payload = {}) {
+async function armCodexGitActionStopBypass(root: any, payload: any = {}) {
   const nowMs = Date.now();
   const record = {
     schema_version: 1,
@@ -654,7 +653,7 @@ async function armCodexGitActionStopBypass(root, payload = {}) {
   return record;
 }
 
-async function consumeCodexGitActionStopBypass(root, payload = {}) {
+async function consumeCodexGitActionStopBypass(root: any, payload: any = {}) {
   const file = path.join(root, '.sneakoscope', 'state', CODEX_GIT_ACTION_STOP_ARTIFACT);
   const record = await readJson(file, null).catch(() => null);
   if (!record?.pending_stop_bypass) return false;
@@ -671,12 +670,12 @@ async function consumeCodexGitActionStopBypass(root, payload = {}) {
   return true;
 }
 
-async function finalizationRepeatDecision(root, state = {}, payload = {}, reason = '', kind = 'finalization') {
+async function finalizationRepeatDecision(root: any, state: any = {}, payload: any = {}, reason: any = '', kind: any = 'finalization') {
   const now = nowIso();
   const guardPath = path.join(root, '.sneakoscope', 'state', STOP_REPEAT_GUARD_ARTIFACT);
   const previous = await readJson(guardPath, {}).catch(() => ({}));
   const limit = stopRepeatGuardLimit();
-  const entries = pruneStopRepeatEntries(previous.entries || {}, now);
+  const entries: Record<string, any> = pruneStopRepeatEntries(previous.entries || {}, now);
   const key = stopRepeatKey(state, payload, reason, kind);
   const prior = entries[key] || {};
   const repeatCount = stopRepeatInWindow(prior, now)
@@ -722,7 +721,7 @@ async function finalizationRepeatDecision(root, state = {}, payload = {}, reason
   };
 }
 
-function stopRepeatKey(state = {}, payload = {}, reason = '', kind = '') {
+function stopRepeatKey(state: any = {}, payload: any = {}, reason: any = '', kind: any = '') {
   return sha256(JSON.stringify({
     kind,
     reason,
@@ -739,27 +738,27 @@ function stopRepeatGuardLimit() {
   return Math.max(1, Math.min(20, raw));
 }
 
-function stopRepeatInWindow(entry = {}, now = nowIso()) {
+function stopRepeatInWindow(entry: any = {}, now: any = nowIso()) {
   const last = Date.parse(entry.last_seen || '');
   const current = Date.parse(now);
   if (!Number.isFinite(last) || !Number.isFinite(current)) return false;
   return current - last <= STOP_REPEAT_GUARD_WINDOW_MS;
 }
 
-function pruneStopRepeatEntries(entries = {}, now = nowIso()) {
+function pruneStopRepeatEntries(entries: any = {}, now: any = nowIso()) {
   return Object.fromEntries(Object.entries(entries)
-    .filter(([, entry]) => stopRepeatInWindow(entry, now))
-    .sort((a, b) => Date.parse(b[1]?.last_seen || '') - Date.parse(a[1]?.last_seen || ''))
+    .filter(([, entry]: any) => stopRepeatInWindow(entry, now))
+    .sort((a: any, b: any) => Date.parse(b[1]?.last_seen || '') - Date.parse(a[1]?.last_seen || ''))
     .slice(0, STOP_REPEAT_GUARD_MAX_ENTRIES));
 }
 
-async function updateCheckContext(root, payload, prompt) {
+async function updateCheckContext(root: any, payload: any, prompt: any) {
   if (process.env.SKS_DISABLE_UPDATE_CHECK === '1') return '';
   const statePath = path.join(root, '.sneakoscope', 'state', 'update-check.json');
   const updateState = await readJson(statePath, {});
   const conv = conversationId(payload);
   const pending = updateState.pending_offer;
-  let effective = null;
+  let effective: any = null;
   async function effectiveVersion() {
     if (!effective) {
       const installed = await detectInstalledSksVersion();
@@ -850,7 +849,7 @@ async function updateCheckContext(root, payload, prompt) {
   return `SKS update check: installed ${current}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run exactly this command and nothing else: ${sksUpdateInstallCommand(check.latest)}. Do not start a pipeline route, run setup, or run doctor for this accepted update command. If they skip, do not ask again in this conversation, but check again next conversation.`;
 }
 
-function sksUpdateInstallCommand(version) {
+function sksUpdateInstallCommand(version: any) {
   return `npm i -g sneakoscope@${version} --registry https://registry.npmjs.org/`;
 }
 
@@ -866,7 +865,7 @@ async function checkLatestVersion() {
 async function detectInstalledSksVersion() {
   const override = parseVersionText(process.env.SKS_INSTALLED_SKS_VERSION || '');
   if (override) return { version: override, source: 'env' };
-  const candidates = [];
+  const candidates: any[] = [];
   const pkg = await readJson(path.join(packageRoot(), 'package.json'), {}).catch(() => ({}));
   if (parseVersionText(pkg.version)) candidates.push({ version: parseVersionText(pkg.version), source: 'package.json' });
   const sks = await which('sks').catch(() => null);
@@ -875,24 +874,24 @@ async function detectInstalledSksVersion() {
     timeoutMs: 2000,
     maxOutputBytes: 4096,
     env: { SKS_DISABLE_UPDATE_CHECK: '1' }
-  }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   if (result.code === 0 && parseVersionText(result.stdout)) candidates.push({ version: parseVersionText(result.stdout), source: sks });
-  if (candidates.length) return candidates.reduce((best, candidate) => compareVersions(candidate.version, best.version) > 0 ? candidate : best);
+  if (candidates.length) return candidates.reduce((best: any, candidate: any) => compareVersions(candidate.version, best.version) > 0 ? candidate : best);
   return { version: null, source: sks, error: `${result.stderr || result.stdout || 'sks --version failed'}`.trim() };
 }
 
-function parseVersionText(text) {
+function parseVersionText(text: any) {
   const match = String(text || '').match(/\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b/);
   return match ? match[0] : null;
 }
 
-function highestVersion(versions = []) {
-  return versions.filter(Boolean).reduce((best, candidate) => compareVersions(candidate, best) > 0 ? candidate : best, '0.0.0');
+function highestVersion(versions: any = []) {
+  return versions.filter(Boolean).reduce((best: any, candidate: any) => compareVersions(candidate, best) > 0 ? candidate : best, '0.0.0');
 }
 
-function compareVersions(a, b) {
-  const pa = String(a || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
-  const pb = String(b || '').split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+function compareVersions(a: any, b: any) {
+  const pa = String(a || '').split(/[.-]/).map((x: any) => Number.parseInt(x, 10) || 0);
+  const pb = String(b || '').split(/[.-]/).map((x: any) => Number.parseInt(x, 10) || 0);
   for (let i = 0; i < Math.max(pa.length, pb.length, 3); i++) {
     if ((pa[i] || 0) > (pb[i] || 0)) return 1;
     if ((pa[i] || 0) < (pb[i] || 0)) return -1;
@@ -900,13 +899,13 @@ function compareVersions(a, b) {
   return 0;
 }
 
-function hasHonestMode(text) {
+function hasHonestMode(text: any) {
   const s = String(text || '');
   return /(SKS Honest Mode|솔직모드|Honest Mode)/i.test(s)
     && /(verified|verification|검증|tests?|테스트|evidence|근거|gap|제약|uncertainty|불확실)/i.test(s);
 }
 
-function hasCompletionSummary(text) {
+function hasCompletionSummary(text: any) {
   const s = String(text || '');
   const summary = /(completion summary|change summary|what changed|what was done|done summary|작업\s*요약|완료\s*요약|변경\s*요약|무엇을\s*(?:했|했고|변경)|뭐가\s*어떻게|정리)/i.test(s);
   const verification = /(verified|verification|검증|tests?|테스트|evidence|근거|확인|통과)/i.test(s);
@@ -914,20 +913,20 @@ function hasCompletionSummary(text) {
   return summary && verification && gap;
 }
 
-function hasHonestModeUnresolvedGap(text) {
+function hasHonestModeUnresolvedGap(text: any) {
   return honestModeGapLines(text).length > 0;
 }
 
-export function honestModeGapLines(text) {
+export function honestModeGapLines(text: any) {
   const issue = /(gap|remaining|unverified|not verified|not run|not complete|incomplete|failed|blocked|blocker|could not|couldn't|missing|미완료|미검증|미실행|실패|차단|누락|못했|못 했|안 했|안함|아직|남은)/i;
   return String(text || '')
     .split(/\n/)
-    .map((line) => line.trim())
-    .filter((line) => issue.test(line) && !honestGapLineResolved(line))
+    .map((line: any) => line.trim())
+    .filter((line: any) => issue.test(line) && !honestGapLineResolved(line))
     .slice(0, 12);
 }
 
-function honestGapLineResolved(line) {
+function honestGapLineResolved(line: any) {
   if (/(?:unverified|미검증)\s*:\s*\[\s*\]/i.test(line) && /blockers?\s*:\s*\[\s*\]/i.test(line)) return true;
   if (/(?:^|[\s*-])(?:unverified|미검증|blockers?)\s*:\s*\[\s*\](?:\s*(?:[,.;]|$).*)?$/i.test(line)) return true;
   if (/(?:미해결|남은)\s*(?:gap|갭|문제|항목)\s*:\s*(?:없음|없습니다|없다|0|0개)(?:\s|,|\.|$)/i.test(line)) return true;
@@ -942,7 +941,7 @@ function honestGapLineResolved(line) {
   return /(없음|없습니다|없다|해당 없음|none|no unresolved|no remaining|no gaps|zero|0개|n\/a|not applicable)\.?\s*$/i.test(line);
 }
 
-function shouldLoopBackAfterHonestMode(state = {}) {
+function shouldLoopBackAfterHonestMode(state: any = {}) {
   if (!state?.mission_id) return false;
   if (state.implementation_allowed === false) return false;
   const route = String(state.route || state.mode || '').toLowerCase();
@@ -950,7 +949,7 @@ function shouldLoopBackAfterHonestMode(state = {}) {
   return Boolean(state.ambiguity_gate_passed || state.clarification_passed || /CONTRACT_SEALED|HONEST_LOOPBACK/i.test(String(state.phase || '')));
 }
 
-async function recordHonestModeLoopback(root, state = {}, lastMessage = '') {
+async function recordHonestModeLoopback(root: any, state: any = {}, lastMessage: any = '') {
   const id = state.mission_id;
   const dir = missionDir(root, id);
   const previousPhase = state.phase || null;
@@ -982,7 +981,7 @@ async function recordHonestModeLoopback(root, state = {}, lastMessage = '') {
   return { file, relative_file: path.relative(root, file).split(path.sep).join('/') };
 }
 
-async function resolveHonestModeLoopback(root, state = {}) {
+async function resolveHonestModeLoopback(root: any, state: any = {}) {
   const id = state.mission_id;
   const mode = String(state.mode || state.route || 'SKS').toUpperCase();
   if (id) await appendJsonl(path.join(missionDir(root, id), 'events.jsonl'), { ts: nowIso(), type: 'pipeline.honest_mode.loopback_resolved', previous_phase: state.phase || null });
@@ -994,7 +993,7 @@ async function resolveHonestModeLoopback(root, state = {}) {
   });
 }
 
-async function teamLiveDigest(root, state = {}) {
+async function teamLiveDigest(root: any, state: any = {}) {
   if (!isTeamState(state) || !state.mission_id) return null;
   const id = String(state.mission_id);
   const dir = missionDir(root, id);
@@ -1004,7 +1003,7 @@ async function teamLiveDigest(root, state = {}) {
   let source = 'team-transcript.jsonl';
   if (!events.length) {
     const live = await readText(path.join(dir, 'team-live.md'), '').catch(() => '');
-    events = live.split(/\n/).filter((line) => /^- \d{4}-\d{2}-\d{2}T/.test(line.trim())).slice(-TEAM_DIGEST_MAX_EVENTS).map(parseTeamLiveLine).filter(Boolean);
+    events = live.split(/\n/).filter((line: any) => /^- \d{4}-\d{2}-\d{2}T/.test(line.trim())).slice(-TEAM_DIGEST_MAX_EVENTS).map(parseTeamLiveLine).filter(Boolean);
     source = 'team-live.md';
   }
   if (!events.length) {
@@ -1021,27 +1020,27 @@ async function teamLiveDigest(root, state = {}) {
     `Open tmux multi-view with: sks team open-tmux ${id}`,
     `Open live view with: sks team watch ${id}`,
     'Recent events:',
-    ...lines.map((line) => `- ${line}`)
+    ...lines.map((line: any) => `- ${line}`)
   ].join('\n'), TEAM_DIGEST_CONTEXT_CHARS);
   const system = boundText(`SKS Team live: ${lines.at(-1) || `${id} ${phase}`}`, TEAM_DIGEST_SYSTEM_CHARS);
   return { context, system };
 }
 
-function isTeamState(state = {}) {
-  const values = [state.mode, state.route, state.route_command, state.stop_gate].map((value) => String(value || '').toLowerCase());
-  return values.some((value) => value === 'team' || value === '$team' || value.includes('team-gate'));
+function isTeamState(state: any = {}) {
+  const values = [state.mode, state.route, state.route_command, state.stop_gate].map((value: any) => String(value || '').toLowerCase());
+  return values.some((value: any) => value === 'team' || value === '$team' || value.includes('team-gate'));
 }
 
-function normalizeTeamEvents(events = []) {
-  return events.map((event) => ({
+function normalizeTeamEvents(events: any = []) {
+  return events.map((event: any) => ({
     ts: String(event?.ts || ''),
     agent: oneLine(event?.agent || 'unknown', 40),
     phase: oneLine(event?.phase || 'general', 48),
     message: oneLine(event?.message || '', TEAM_DIGEST_MESSAGE_CHARS)
-  })).filter((event) => event.message);
+  })).filter((event: any) => event.message);
 }
 
-function parseTeamTranscriptLine(line) {
+function parseTeamTranscriptLine(line: any) {
   try {
     return JSON.parse(line);
   } catch {
@@ -1049,36 +1048,36 @@ function parseTeamTranscriptLine(line) {
   }
 }
 
-function parseTeamLiveLine(line) {
+function parseTeamLiveLine(line: any) {
   const match = String(line || '').trim().match(/^-\s+(\S+)\s+\[([^\]]+)\]\s+([^:]+):\s*(.*)$/);
   if (!match) return null;
   return { ts: match[1], phase: match[2], agent: match[3], message: match[4] };
 }
 
-function formatTeamDigestEvent(event) {
+function formatTeamDigestEvent(event: any) {
   const ts = shortIsoTime(event.ts);
   return `${ts} [${event.phase}] ${event.agent}: ${event.message}`;
 }
 
-function shortIsoTime(ts) {
+function shortIsoTime(ts: any) {
   return String(ts || '').replace(/^\d{4}-\d{2}-\d{2}T/, '').replace(/\.\d{3}Z$/, 'Z') || 'recent';
 }
 
-function oneLine(value, limit) {
+function oneLine(value: any, limit: any) {
   return boundText(String(value || '').replace(/\s+/g, ' ').trim(), limit);
 }
 
-function boundText(value, limit) {
+function boundText(value: any, limit: any) {
   const text = String(value || '');
   if (text.length <= limit) return text;
   return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
 }
 
-function joinSystemMessages(...parts) {
+function joinSystemMessages(...parts: any[]) {
   return boundText(parts.filter(Boolean).join(' | '), 420);
 }
 
-export async function emitHook(name) {
+export async function emitHook(name: any) {
   const result = await hookMain(name);
   process.stdout.write(`${JSON.stringify(normalizeHookResult(name, result))}\n`);
 }
@@ -1089,7 +1088,7 @@ export async function selftestCodexCommitHooks() {
   const env = { SKS_DISABLE_UPDATE_CHECK: '1' };
   const setup = await runProcess(process.execPath, [hookBin, 'setup', '--install-scope', 'project'], { cwd: root, env, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   if (setup.code !== 0) throw new Error(`selftest failed: commit setup ${setup.code}: ${setup.stderr}`);
-  const runHook = (name, payload) => runProcess(process.execPath, [hookBin, 'hook', name], { cwd: root, input: JSON.stringify({ cwd: root, ...payload }), env, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
+  const runHook = (name: any, payload: any) => runProcess(process.execPath, [hookBin, 'hook', name], { cwd: root, input: JSON.stringify({ cwd: root, ...payload }), env, timeoutMs: 15000, maxOutputBytes: 128 * 1024 });
   const id = 'commit-selftest';
   const hook = await runHook('user-prompt-submit', { conversation_id: id, action: 'codex_git_commit', prompt: 'Generate a git commit message for the staged diff.' });
   if (hook.code !== 0) throw new Error(`selftest failed: commit hook ${hook.code}: ${hook.stderr}`);
@@ -1136,11 +1135,11 @@ export async function selftestCodexCommitHooks() {
   if (String(userCommitPushJson.systemMessage || '').includes('git action') || !userCommitPushJson.hookSpecificOutput?.additionalContext) throw new Error('selftest failed: user commit-push prompt should stay on normal route');
 }
 
-function normalizeHookResult(name, result = {}) {
+function normalizeHookResult(name: any, result: any = {}) {
   const eventName = codexHookEventName(name);
   const out = { ...result };
   const systemMessage = out.systemMessage || visibleHookMessage(name, out.reason || out.additionalContext || '');
-  const normalized = { continue: out.continue !== false, systemMessage };
+  const normalized: any = { continue: out.continue !== false, systemMessage };
   const reason = out.reason || 'SKS guard denied this action.';
 
   if (eventName === 'UserPromptSubmit' || eventName === 'PostToolUse') {
@@ -1197,17 +1196,17 @@ function normalizeHookResult(name, result = {}) {
   return normalized;
 }
 
-function codexHookEventName(name) {
-  return {
+function codexHookEventName(name: any) {
+  return ({
     'user-prompt-submit': 'UserPromptSubmit',
     'pre-tool': 'PreToolUse',
     'post-tool': 'PostToolUse',
     'permission-request': 'PermissionRequest',
     'stop': 'Stop'
-  }[name] || name;
+  } as Record<string, string>)[name] || name;
 }
 
-function visibleHookMessage(name, text = '') {
+function visibleHookMessage(name: any, text: any = '') {
   const body = String(text || '');
   if (name === 'user-prompt-submit') {
     if (body.includes('DFix ultralight pipeline active')) return 'SKS: DFix ultralight task list injected.';

@@ -22,3 +22,5 @@ sks wiki image-link-proof latest --json
 ```
 
 Validation fails when an anchor references a missing image, a screenshot lacks dimensions, a bbox falls outside image dimensions, or a visual route completion has zero anchors. Generic image ingest may stay anchorless as `not_verified` or `verified_partial`; visual/UI completion claims require anchors, and before/after fix claims require relations or must remain partial.
+
+Failed image validation now writes image wrongness records in `.sneakoscope/wiki/image-wrongness-index.json` and, when scoped, `.sneakoscope/missions/<id>/image-wrongness-ledger.json`. Those records are also mirrored into TriWiki wrongness memory so visual claims cannot be upgraded while bbox, anchor, dimension, stale-image, or relation errors remain active.

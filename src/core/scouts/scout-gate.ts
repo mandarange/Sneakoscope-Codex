@@ -1,16 +1,15 @@
-// @ts-nocheck
 import path from 'node:path';
 import { exists, readJson } from '../fsx.js';
 import { missionDir } from '../mission.js';
 import { SCOUT_COUNT, SCOUT_GATE_SCHEMA, SCOUT_ROLES } from './scout-schema.js';
 
-export function evaluateScoutGate({ missionId = null, route = '$Team', plan = null, results = [], consensus = null, handoffWritten = false } = {}) {
-  const completed = results.filter((result) => result.status === 'done').length;
-  const readOnlyConfirmed = results.length === SCOUT_COUNT && results.every((result) => result.read_only === true);
+export function evaluateScoutGate({ missionId = null, route = '$Team', plan = null, results = [], consensus = null, handoffWritten = false }: any = {}) {
+  const completed = results.filter((result: any) => result.status === 'done').length;
+  const readOnlyConfirmed = results.length === SCOUT_COUNT && results.every((result: any) => result.read_only === true);
   const implementationSlicesPresent = Array.isArray(consensus?.implementation_slices) && consensus.implementation_slices.length > 0;
   const verificationPlanPresent = Array.isArray(consensus?.required_tests) && consensus.required_tests.length > 0;
-  const riskReviewPresent = results.some((result) => result.scout_id === 'scout-3-safety-db' && result.status === 'done');
-  const visualVoxelReviewPresent = results.some((result) => result.scout_id === 'scout-4-visual-voxel' && result.status === 'done');
+  const riskReviewPresent = results.some((result: any) => result.scout_id === 'scout-3-safety-db' && result.status === 'done');
+  const visualVoxelReviewPresent = results.some((result: any) => result.scout_id === 'scout-4-visual-voxel' && result.status === 'done');
   const blockers = [
     ...(completed !== SCOUT_COUNT ? [`completed_scouts_${completed}_of_${SCOUT_COUNT}`] : []),
     ...(readOnlyConfirmed ? [] : ['read_only_not_confirmed']),
@@ -20,7 +19,7 @@ export function evaluateScoutGate({ missionId = null, route = '$Team', plan = nu
     ...(verificationPlanPresent ? [] : ['verification_plan_missing']),
     ...(riskReviewPresent ? [] : ['risk_review_missing']),
     ...(visualVoxelReviewPresent ? [] : ['visual_voxel_review_missing']),
-    ...results.flatMap((result) => result.blockers || []),
+    ...results.flatMap((result: any) => result.blockers || []),
     ...(plan?.scout_count === SCOUT_COUNT ? [] : ['scout-team-plan_count_mismatch'])
   ];
   return {
@@ -38,13 +37,13 @@ export function evaluateScoutGate({ missionId = null, route = '$Team', plan = nu
     risk_review_present: riskReviewPresent,
     visual_voxel_review_present: visualVoxelReviewPresent,
     blockers,
-    unverified: results.flatMap((result) => result.unverified || [])
+    unverified: results.flatMap((result: any) => result.unverified || [])
   };
 }
 
-export async function readScoutResults(root, missionId) {
+export async function readScoutResults(root: any, missionId: any) {
   const dir = missionDir(root, missionId);
-  const results = [];
+  const results: any[] = [];
   for (const role of SCOUT_ROLES) {
     const file = path.join(dir, role.json);
     const result = await readJson(file, null);
@@ -53,7 +52,7 @@ export async function readScoutResults(root, missionId) {
   return results;
 }
 
-export async function readScoutGateStatus(root, missionId) {
+export async function readScoutGateStatus(root: any, missionId: any) {
   if (!missionId) return { ok: false, missing: ['mission_id'], gate: null };
   const dir = missionDir(root, missionId);
   const gateFile = path.join(dir, 'scout-gate.json');
@@ -63,7 +62,7 @@ export async function readScoutGateStatus(root, missionId) {
     missing: ['scout-gate.json', 'scout-consensus.json', 'scout-handoff.md'],
     gate: null
   };
-  const missing = [];
+  const missing: any[] = [];
   if (gate.passed !== true) missing.push(...(gate.blockers?.length ? gate.blockers : ['scout_gate_not_passed']));
   for (const file of ['scout-consensus.json', 'scout-handoff.md']) {
     if (!(await exists(path.join(dir, file)))) missing.push(file);

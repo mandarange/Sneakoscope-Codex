@@ -1,6 +1,6 @@
 # Package Boundary
 
-`1.0.1` treats the packed npm tarball as the release source of truth and requires a TypeScript-built, `.mjs`-free `dist` runtime.
+`1.0.2` continues to treat the packed npm tarball as the release source of truth and expects a TypeScript-built, `.mjs`-free `dist` runtime keyed by manifest schema `sks.dist-build.v2`.
 
 ## Policy
 
@@ -12,7 +12,7 @@
 ## Required Checks
 
 - `npm run package-boundary:check` builds, runs `npm pack --dry-run --json --ignore-scripts`, verifies required files, rejects forbidden paths, and checks relative import closure under `dist`.
-- `npm run dist:check` rejects `dist/**/*.mjs`, `.mjs` imports, missing build manifest, missing executable bin, and contract-only runtime markers.
+- `npm run dist:check` rejects `dist/**/*.mjs`, `.mjs` imports, missing build manifest, volatile build-manifest timestamps, missing executable bin, and contract-only runtime markers.
 - `npm run blackbox:command-import-smoke` packs the tarball, installs it into a temp consumer, imports `dist/cli/command-registry.js`, and lazy-imports every registered command.
 - `npm run blackbox:matrix` runs real pack install, npx one-shot, global shim, no-git, spaces, Unicode, and optional read-only directory scenarios.
 

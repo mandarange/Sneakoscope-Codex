@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs/promises';
@@ -7,10 +6,11 @@ import { CODEX_ACCESS_TOKENS_DOCS_URL } from '../core/codex-app.js';
 import { redactSecrets } from '../core/secret-redaction.js';
 import { evaluateHookPayload } from '../core/hooks-runtime.js';
 import { buildAllFeaturesSelftest, buildFeatureRegistry, validateFeatureRegistry, writeFeatureInventoryDocs } from '../core/feature-registry.js';
+import { recordHookPolicyMismatchWrongness } from '../core/triwiki-wrongness/wrongness-ledger.js';
 
-const flag = (args, name) => args.includes(name);
+const flag = (args: any, name: any) => args.includes(name);
 
-export async function featuresCommand(sub = 'list', args = []) {
+export async function featuresCommand(sub: any = 'list', args: any = []) {
   const action = sub || 'list';
   const root = await projectRoot();
   if (action === 'list' || action === 'status' || action === 'registry') {
@@ -44,7 +44,7 @@ export async function featuresCommand(sub = 'list', args = []) {
   process.exitCode = 1;
 }
 
-export async function allFeaturesCommand(sub = 'selftest', args = []) {
+export async function allFeaturesCommand(sub: any = 'selftest', args: any = []) {
   const action = sub || 'selftest';
   if (action !== 'selftest') {
     console.error('Usage: sks all-features selftest --mock [--execute-fixtures] [--json]');
@@ -64,7 +64,7 @@ export async function allFeaturesCommand(sub = 'selftest', args = []) {
   if (!result.ok) process.exitCode = 1;
 }
 
-export async function hooksCommand(sub = 'explain', args = []) {
+export async function hooksCommand(sub: any = 'explain', args: any = []) {
   const action = sub || 'explain';
   const root = await projectRoot();
   if (action === 'status') {
@@ -82,8 +82,8 @@ export async function hooksCommand(sub = 'explain', args = []) {
     return;
   }
   if (action === 'replay') {
-    const fixture = args.find((arg) => !String(arg).startsWith('--'));
-    const report = await hooksReplayReport(fixture);
+    const fixture = args.find((arg: any) => !String(arg).startsWith('--'));
+    const report = await hooksReplayReport(root, fixture);
     if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
     console.log(`Hook replay: ${report.ok ? 'ok' : 'blocked'} ${report.event || 'unknown'}`);
     if (report.decision) console.log(`Decision: ${report.decision}`);
@@ -108,27 +108,27 @@ export async function hooksCommand(sub = 'explain', args = []) {
   for (const source of report.sources) console.log(`- ${source.title}: ${source.url}`);
 }
 
-async function hooksStatusReport(root) {
+async function hooksStatusReport(root: any) {
   const files = [
     path.join(os.homedir(), '.codex', 'hooks.json'),
     path.join(root, '.codex', 'hooks.json')
   ];
-  const hooksFiles = [];
+  const hooksFiles: any[] = [];
   for (const file of files) {
     hooksFiles.push({ path: file, exists: await exists(file) });
   }
   return {
     schema: 'sks.hooks-status.v1',
     hooks_files: hooksFiles,
-    ok: hooksFiles.some((file) => file.exists)
+    ok: hooksFiles.some((file: any) => file.exists)
   };
 }
 
-async function hooksTrustReport(root) {
+async function hooksTrustReport(root: any) {
   const status = await hooksStatusReport(root);
   return redactSecrets({
     schema: 'sks.hooks-trust-report.v1',
-    hooks_files: status.hooks_files.map((file) => file.path),
+    hooks_files: status.hooks_files.map((file: any) => file.path),
     events: [
       { event: 'PreToolUse', command: 'sks hook pre-tool', writes: ['.sneakoscope/bus/tool-events.jsonl'], network: false, secret_policy: 'redacted', risk: 'medium' },
       { event: 'PermissionRequest', command: 'sks hook permission-request', writes: ['.sneakoscope/state'], network: false, secret_policy: 'redacted', risk: 'medium' },
@@ -140,7 +140,7 @@ async function hooksTrustReport(root) {
   });
 }
 
-async function hooksReplayReport(fixturePath) {
+async function hooksReplayReport(root: any, fixturePath: any) {
   if (!fixturePath) return { schema: 'sks.hooks-replay.v1', ok: false, reason: 'fixture_required' };
   const absolute = path.resolve(fixturePath);
   const fixture = await readJson(absolute, {});
@@ -168,6 +168,15 @@ async function hooksReplayReport(fixturePath) {
   const match = expected ? matchHookExpected(comparable, expected) : { ok: decision !== 'block' && decision !== 'deny', failures: [] };
   const matchesExpected = expected ? match.ok : null;
   const ok = match.ok;
+  const wrongness = expected && !match.ok
+    ? await recordHookPolicyMismatchWrongness(root, {
+        artifact: path.relative(root, absolute).startsWith('..') ? absolute : path.relative(root, absolute),
+        expected: JSON.stringify(expected),
+        actual: JSON.stringify(comparable),
+        detail: match.failures.join(', '),
+        route: '$Hooks'
+      })
+    : null;
   return redactSecrets({
     schema: 'sks.hooks-replay.v1',
     ok,
@@ -183,12 +192,13 @@ async function hooksReplayReport(fixturePath) {
     continue: comparable.continue,
     matches_expected: matchesExpected,
     expected_failures: match.failures,
-    secret_policy: 'redacted'
+    secret_policy: 'redacted',
+    wrongness
   });
 }
 
-function matchHookExpected(actual = {}, expected = {}) {
-  const failures = [];
+function matchHookExpected(actual: any = {}, expected: any = {}) {
+  const failures: any[] = [];
   if (expected.decision !== undefined && expected.decision !== actual.decision) failures.push(`decision:${actual.decision}`);
   if (expected.permissionDecision !== undefined && expected.permissionDecision !== actual.permissionDecision) failures.push(`permissionDecision:${actual.permissionDecision}`);
   if (expected.reason !== undefined && expected.reason !== actual.reason) failures.push('reason');
@@ -205,12 +215,12 @@ function matchHookExpected(actual = {}, expected = {}) {
   return { ok: failures.length === 0, failures };
 }
 
-function containsValue(values, item) {
+function containsValue(values: any, item: any) {
   const list = Array.isArray(values) ? values : [values].filter(Boolean);
-  return list.some((value) => String(value || '').includes(item));
+  return list.some((value: any) => String(value || '').includes(item));
 }
 
-function normalizeReplayHookName(event = '') {
+function normalizeReplayHookName(event: any = '') {
   const normalized = String(event || '').replace(/[_\s]+/g, '-').toLowerCase();
   if (normalized.includes('pretool') || normalized.includes('pre-tool')) return 'pre-tool';
   if (normalized.includes('permission')) return 'permission-request';
@@ -220,7 +230,7 @@ function normalizeReplayHookName(event = '') {
   return normalized || 'pre-tool';
 }
 
-async function readExpectedReplay(fixturePath) {
+async function readExpectedReplay(fixturePath: any) {
   const expectedPath = path.join(path.dirname(fixturePath), 'expected', `${path.basename(fixturePath, '.json')}.expected.json`);
   if (!await exists(expectedPath)) return null;
   return readJson(expectedPath, null);
@@ -261,16 +271,16 @@ export function hooksExplainReport() {
   };
 }
 
-function printFeatureRegistrySummary(registry) {
+function printFeatureRegistrySummary(registry: any) {
   console.log('SKS feature registry\n');
   console.log(`Schema:   ${registry.schema}`);
   console.log(`Features: ${registry.features.length}`);
   printFeatureCoverage(registry.coverage);
 }
 
-function printFeatureCoverage(coverage = {}) {
+function printFeatureCoverage(coverage: any = {}) {
   console.log(`Coverage: ${coverage.ok ? 'ok' : 'blocked'} (${coverage.status || 'unknown'})`);
-  for (const [kind, values] of Object.entries(coverage.unmapped || {})) {
+  for (const [kind, values] of Object.entries(coverage.unmapped || {}) as Array<[string, any[]]>) {
     console.log(`- ${kind}: ${values.length ? values.join(', ') : 'none'}`);
   }
   if (coverage.blockers?.length) console.log(`Blockers: ${coverage.blockers.join(', ')}`);

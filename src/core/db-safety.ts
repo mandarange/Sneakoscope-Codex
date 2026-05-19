@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { exists, readJson, writeJsonAtomic, readText, nowIso, appendJsonlBounded } from './fsx.js';
 import { missionDir, setCurrent } from './mission.js';
@@ -32,19 +31,19 @@ const MAD_SKS_GATE_FILE = 'mad-sks-gate.json';
 const MAD_SKS_TABLE_DELETE_CONFIRMATION_FILE = 'mad-sks-table-delete-confirmation.json';
 const MAD_SKS_TABLE_DELETE_TIMEOUT_MS = 30_000;
 
-export async function ensureDbSafetyPolicy(root) {
+export async function ensureDbSafetyPolicy(root: any) {
   const p = path.join(root, '.sneakoscope', 'db-safety.json');
   if (!(await exists(p))) await writeJsonAtomic(p, DEFAULT_DB_SAFETY_POLICY);
   return p;
 }
 
-export async function loadDbSafetyPolicy(root) {
+export async function loadDbSafetyPolicy(root: any) {
   const p = path.join(root, '.sneakoscope', 'db-safety.json');
   const data = await readJson(p, {});
   return { ...DEFAULT_DB_SAFETY_POLICY, ...(data || {}) };
 }
 
-export function safeSupabaseMcpConfig({ projectRef = '<project_ref>', readOnly = true, features = 'database,docs' } = {}) {
+export function safeSupabaseMcpConfig({ projectRef = '<project_ref>', readOnly = true, features = 'database,docs' }: any = {}) {
   const qs = new URLSearchParams();
   if (projectRef) qs.set('project_ref', projectRef);
   if (readOnly) qs.set('read_only', 'true');
@@ -59,7 +58,7 @@ export function safeSupabaseMcpConfig({ projectRef = '<project_ref>', readOnly =
   };
 }
 
-function stripSqlComments(sql = '') {
+function stripSqlComments(sql: any = '') {
   return String(sql)
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/--[^\n\r]*/g, ' ')
@@ -67,9 +66,9 @@ function stripSqlComments(sql = '') {
     .trim();
 }
 
-function norm(s = '') { return stripSqlComments(s).toLowerCase(); }
+function norm(s: any = '') { return stripSqlComments(s).toLowerCase(); }
 
-function stripSqlStringLiterals(sql = '') {
+function stripSqlStringLiterals(sql: any = '') {
   let out = '';
   let quote = null;
   for (let i = 0; i < String(sql).length; i++) {
@@ -84,9 +83,9 @@ function stripSqlStringLiterals(sql = '') {
   return out;
 }
 
-export function splitSqlStatements(sql = '') {
+export function splitSqlStatements(sql: any = '') {
   const text = stripSqlComments(sql);
-  const out = [];
+  const out: any[] = [];
   let current = '';
   let quote = null;
   for (let i = 0; i < text.length; i++) {
@@ -99,23 +98,23 @@ export function splitSqlStatements(sql = '') {
   return out;
 }
 
-function hasWhere(stmt) { return /\bwhere\b/i.test(stmt); }
-function hasLimit(stmt) { return /\blimit\s+\d+\b/i.test(stmt); }
-function isReadOnly(stmt) {
+function hasWhere(stmt: any) { return /\bwhere\b/i.test(stmt); }
+function hasLimit(stmt: any) { return /\blimit\s+\d+\b/i.test(stmt); }
+function isReadOnly(stmt: any) {
   const s = stripSqlStringLiterals(norm(stmt));
   return /^(select|with|show|explain|describe)\b/.test(s) && !/(\binsert\b|\bupdate\b|\bdelete\b|\bdrop\b|\btruncate\b|\balter\b|\bcreate\b|\bgrant\b|\brevoke\b)/.test(s);
 }
 
-export function classifySql(sql = '') {
+export function classifySql(sql: any = '') {
   const statements = splitSqlStatements(sql);
   if (!statements.length) return { level: 'none', kind: 'none', reasons: [], statements: [] };
-  const reasons = [];
+  const reasons: any[] = [];
   let level = 'safe';
   let kind = 'read';
   for (const stmtRaw of statements) {
     const stmt = stripSqlStringLiterals(norm(stmtRaw));
     if (!stmt) continue;
-    const destructiveChecks = [
+    const destructiveChecks: Array<[RegExp, string]> = [
       [/\bdrop\s+database\b/, 'drop_database'],
       [/\bdrop\s+schema\b/, 'drop_schema'],
       [/\bdrop\s+table\b/, 'drop_table'],
@@ -148,18 +147,18 @@ export function classifySql(sql = '') {
   return { level, kind, reasons: [...new Set(reasons)], statements };
 }
 
-export function classifyCommand(command = '') {
+export function classifyCommand(command: any = '') {
   const c = String(command);
   const low = c.toLowerCase();
-  const reasons = [];
+  const reasons: any[] = [];
   if (!low.trim()) return { level: 'none', kind: 'none', reasons: [], command: c };
-  const supabaseMigrationApply = [];
+  const supabaseMigrationApply: any[] = [];
   if (/\bsupabase\s+migration\s+up\b/.test(low)) supabaseMigrationApply.push('supabase_migration_up', 'supabase_migration_apply');
   if (/\bsupabase\s+db\s+push\b/.test(low)) supabaseMigrationApply.push('supabase_db_push', 'supabase_migration_apply');
-  const supabaseMigrationRead = [];
+  const supabaseMigrationRead: any[] = [];
   if (/\bsupabase\s+db\s+(diff|pull)\b/.test(low)) supabaseMigrationRead.push('supabase_migration_schema_read');
   if (/\bsupabase\s+migration\s+(list|new|squash)\b/.test(low)) supabaseMigrationRead.push('supabase_migration_file_work');
-  const hard = [
+  const hard: Array<[RegExp, string]> = [
     [/\bsupabase\s+db\s+reset\b/, 'supabase_db_reset'],
     [/\bsupabase\s+migration\s+repair\b/, 'supabase_migration_repair'],
     [/\bprisma\s+migrate\s+reset\b/, 'prisma_migrate_reset'],
@@ -171,7 +170,7 @@ export function classifyCommand(command = '') {
   ];
   for (const [re, reason] of hard) if (re.test(low)) reasons.push(reason);
   const maybeSql = extractSqlLiterals(c).join('\n');
-  const sqlClass = maybeSql ? classifySql(maybeSql) : { level: 'none', reasons: [] };
+  const sqlClass = maybeSql ? classifySql(maybeSql) : { level: 'none', kind: 'none', reasons: [] };
   if (reasons.length) return { level: 'destructive', kind: 'db_command', reasons, sql: sqlClass, command: c };
   if (supabaseMigrationApply.length) {
     const level = sqlClass.level === 'destructive' ? 'destructive' : 'write';
@@ -199,8 +198,8 @@ export function classifyCommand(command = '') {
   return { level: sqlClass.level, kind: sqlClass.kind, reasons: sqlClass.reasons, sql: sqlClass, command: c };
 }
 
-function extractSqlLiterals(command = '') {
-  const out = [];
+function extractSqlLiterals(command: any = '') {
+  const out: any[] = [];
   const patterns = [
     /-c\s+(['"])([\s\S]*?)\1/g,
     /--command\s+(['"])([\s\S]*?)\1/g,
@@ -214,7 +213,7 @@ function extractSqlLiterals(command = '') {
   return out;
 }
 
-function recursivelyCollectStrings(obj, out = [], depth = 0) {
+function recursivelyCollectStrings(obj: any, out: any = [], depth: any = 0) {
   if (depth > 8 || obj == null) return out;
   if (typeof obj === 'string') { out.push(obj); return out; }
   if (Array.isArray(obj)) { for (const x of obj) recursivelyCollectStrings(x, out, depth + 1); return out; }
@@ -226,26 +225,26 @@ function recursivelyCollectStrings(obj, out = [], depth = 0) {
   return out;
 }
 
-function looksLikeSqlText(text = '') {
+function looksLikeSqlText(text: any = '') {
   const s = stripSqlComments(text).trim();
   return /^(select|with|show|explain|describe|insert|update|delete|drop|truncate|alter|create|grant|revoke)\b/i.test(s)
     || /;\s*(select|with|show|explain|describe|insert|update|delete|drop|truncate|alter|create|grant|revoke)\b/i.test(s);
 }
 
-function hasReadOnlyDbInspectionIntent(text = '') {
+function hasReadOnlyDbInspectionIntent(text: any = '') {
   const s = String(text || '').toLowerCase();
   if (/\b(insert|update|delete|drop|truncate|alter|create|grant|revoke|write|mutate|migration|apply|push|reset|repair)\b|삭제|수정|변경|쓰기|삽입|생성|초기화|적용/i.test(s)) return false;
   return /\b(read.?only|select|with|show|explain|describe|inspect|list|get|fetch|count|schema)\b|조회|확인|읽|보기|목록|스키마/i.test(s);
 }
 
-export function classifyToolPayload(payload = {}) {
+export function classifyToolPayload(payload: any = {}) {
   const strings = recursivelyCollectStrings(payload).slice(0, 200);
   const toolName = [payload.tool_name, payload.toolName, payload.name, payload.tool?.name, payload.server, payload.mcp_tool, payload.tool, payload.type].filter(Boolean).join(' ').toLowerCase();
   const combined = strings.filter(looksLikeSqlText).join('\n');
   const sqlClass = classifySql(combined);
-  const commandClass = classifyCommand(strings.find((s) => /\b(supabase|psql|prisma|drizzle|knex|sequelize)\b/i.test(s)) || '');
-  const toolReasons = [];
-  const reasons = [];
+  const commandClass = classifyCommand(strings.find((s: any) => /\b(supabase|psql|prisma|drizzle|knex|sequelize)\b/i.test(s)) || '');
+  const toolReasons: any[] = [];
+  const reasons: any[] = [];
   if (/\b(apply_patch|edit|write|create|remove|rename|str_replace|file_write|fs_write)\b/i.test(toolName) && !/supabase|postgres|database|execute_sql|apply_migration|sql_query|db_|_db\b|migration/.test(toolName)) {
     return { level: 'none', toolName, toolReasons, reasons, sql: sqlClass, command: commandClass, stringsExamined: strings.length };
   }
@@ -274,7 +273,7 @@ export function classifyToolPayload(payload = {}) {
   return { level, toolName, toolReasons, reasons, sql: sqlClass, command: commandClass, stringsExamined: strings.length };
 }
 
-function contractAllowsDbWrite(contract = {}) {
+function contractAllowsDbWrite(contract: any = {}) {
   const hc = contract.hard_constraints || {};
   const mode = hc.database_write_mode || hc.db_write_mode || contract.answers?.DATABASE_WRITE_MODE || 'read_only_only';
   const env = hc.database_target_environment || contract.answers?.DATABASE_TARGET_ENVIRONMENT || 'no_database';
@@ -283,16 +282,16 @@ function contractAllowsDbWrite(contract = {}) {
   return { mode, env, destructive, migrationApply };
 }
 
-function hasTableRemovalRisk(cls = {}) {
+function hasTableRemovalRisk(cls: any = {}) {
   const reasons = new Set([
     ...(cls.reasons || []),
     ...(cls.sql?.reasons || []),
     ...(cls.command?.reasons || [])
   ]);
-  return ['drop_table', 'truncate'].some((reason) => reasons.has(reason));
+  return ['drop_table', 'truncate'].some((reason: any) => reasons.has(reason));
 }
 
-async function madSksOverrideState(root, state = {}) {
+async function madSksOverrideState(root: any, state: any = {}) {
   if (!isMadSksRouteState(state) || !state.mission_id || state.mad_sks_active === false) return { active: false };
   const gateFile = state.mad_sks_gate_file || state.stop_gate || MAD_SKS_GATE_FILE;
   const gate = await readJson(path.join(missionDir(root, state.mission_id), gateFile), null);
@@ -306,10 +305,10 @@ async function madSksOverrideState(root, state = {}) {
   };
 }
 
-export function evaluateDbSafety({ classification, policy = DEFAULT_DB_SAFETY_POLICY, contract = null, duringNoQuestion = false, madSks = null } = {}) {
+export function evaluateDbSafety({ classification, policy = DEFAULT_DB_SAFETY_POLICY, contract = null, duringNoQuestion = false, madSks = null }: any = {}) {
   const cls = classification || { level: 'none', reasons: [] };
   const noQuestion = Boolean(duringNoQuestion);
-  const reasons = [];
+  const reasons: any[] = [];
   const effective = contractAllowsDbWrite(contract || {});
   if (cls.level === 'none') return { allowed: true, action: 'allow', reasons: [], classification: cls };
   if (cls.level === 'safe') return { allowed: true, action: 'allow', reasons: ['read_only_operation'], classification: cls };
@@ -365,7 +364,7 @@ export function evaluateDbSafety({ classification, policy = DEFAULT_DB_SAFETY_PO
   return { allowed: true, action: 'allow', reasons: ['write_allowed_by_contract_to_safe_target'], classification: cls, effective };
 }
 
-async function writeMadSksTableDeletePending(root, state = {}, decision = {}) {
+async function writeMadSksTableDeletePending(root: any, state: any = {}, decision: any = {}) {
   if (!state?.mission_id) return null;
   const dir = missionDir(root, state.mission_id);
   const createdAt = nowIso();
@@ -385,15 +384,15 @@ async function writeMadSksTableDeletePending(root, state = {}, decision = {}) {
   return pending;
 }
 
-function looksLikeConfirmationYes(prompt = '') {
+function looksLikeConfirmationYes(prompt: any = '') {
   return /^(yes|y|confirm|confirmed|approve|approved|proceed|continue|ok|okay|네|예|응|허용|승인|진행|계속|삭제\s*허용|테이블\s*삭제\s*허용)\b/i.test(String(prompt || '').trim());
 }
 
-function looksLikeConfirmationNo(prompt = '') {
+function looksLikeConfirmationNo(prompt: any = '') {
   return /^(no|n|stop|abort|cancel|deny|denied|아니|아니요|중단|취소|거부|멈춰)\b/i.test(String(prompt || '').trim());
 }
 
-export async function handleMadSksUserConfirmation(root, state = {}, prompt = '') {
+export async function handleMadSksUserConfirmation(root: any, state: any = {}, prompt: any = '') {
   if (!isMadSksRouteState(state) || !state?.mission_id) return null;
   const file = path.join(missionDir(root, state.mission_id), MAD_SKS_TABLE_DELETE_CONFIRMATION_FILE);
   const pending = await readJson(file, null);
@@ -433,14 +432,14 @@ export async function handleMadSksUserConfirmation(root, state = {}, prompt = ''
   };
 }
 
-export async function loadMissionContract(root, state = {}) {
+export async function loadMissionContract(root: any, state: any = {}) {
   if (!state?.mission_id) return null;
   const p = path.join(missionDir(root, state.mission_id), 'decision-contract.json');
   if (!(await exists(p))) return null;
   return readJson(p, null);
 }
 
-export async function checkDbOperation(root, state, payload, { duringNoQuestion = false } = {}) {
+export async function checkDbOperation(root: any, state: any, payload: any, { duringNoQuestion = false }: any = {}) {
   const policy = await loadDbSafetyPolicy(root);
   const contract = await loadMissionContract(root, state);
   const classification = classifyToolPayload(payload);
@@ -453,12 +452,12 @@ export async function checkDbOperation(root, state, payload, { duringNoQuestion 
   return decision;
 }
 
-export async function checkSqlFile(file) {
+export async function checkSqlFile(file: any) {
   const sql = await readText(file);
   return classifySql(sql);
 }
 
-export function dbBlockReason(decision) {
+export function dbBlockReason(decision: any) {
   if ((decision.reasons || []).includes('mad_sks_catastrophic_db_operation_blocked')) {
     return [
       'Sneakoscope Codex MAD-SKS catastrophic database safeguard blocked this operation.',
@@ -482,19 +481,19 @@ export function dbBlockReason(decision) {
   ].join(' ');
 }
 
-export async function scanDbSafety(root, opts = {}) {
-  const findings = [];
+export async function scanDbSafety(root: any, opts: any = {}) {
+  const findings: any[] = [];
   findings.push(...await scanSupabaseMcpConfigs(root));
   if (opts.includeMigrations) findings.push(...await scanMissionMigrationFiles(root, opts));
-  const ok = !findings.some((f) => ['critical', 'high'].includes(f.severity));
+  const ok = !findings.some((f: any) => ['critical', 'high'].includes(f.severity));
   const report = { checked_at: nowIso(), ok, findings };
   await writeJsonAtomic(path.join(root, '.sneakoscope', 'db-safety-scan.json'), report).catch(() => {});
   return report;
 }
 
-async function scanSupabaseMcpConfigs(root) {
+async function scanSupabaseMcpConfigs(root: any) {
   const files = ['.codex/config.toml', '.cursor/mcp.json', '.windsurf/mcp_config.json', '.vscode/mcp.json', '.mcp.json', 'mcp.json', 'claude_desktop_config.json'];
-  const findings = [];
+  const findings: any[] = [];
   for (const name of files) {
     const file = path.join(root, name);
     if (!(await exists(file))) continue;
@@ -505,12 +504,12 @@ async function scanSupabaseMcpConfigs(root) {
       findings.push({ id: 'supabase_mcp_unparsed', severity: 'medium', file: rel(root, file), reason: 'Supabase MCP reference found but URL could not be parsed. Verify read_only=true, project_ref, and restricted features manually.' });
       continue;
     }
-    for (const url of urls) findings.push(...checkSupabaseMcpUrl(url).map((x) => ({ ...x, file: rel(root, file), url: redactUrl(url) })));
+    for (const url of urls) findings.push(...checkSupabaseMcpUrl(url).map((x: any) => ({ ...x, file: rel(root, file), url: redactUrl(url) })));
   }
   return findings;
 }
 
-function extractSupabaseMcpUrls(text) {
+function extractSupabaseMcpUrls(text: any) {
   const out = new Set();
   const re = /https:\/\/mcp\.supabase\.com\/mcp[^"'\s)>,]*/gi;
   let m;
@@ -519,8 +518,8 @@ function extractSupabaseMcpUrls(text) {
   return [...out];
 }
 
-function checkSupabaseMcpUrl(url) {
-  const findings = [];
+function checkSupabaseMcpUrl(url: any) {
+  const findings: any[] = [];
   let u;
   try { u = new URL(url); } catch { u = new URL('https://mcp.supabase.com/mcp'); }
   const q = u.searchParams;
@@ -531,7 +530,7 @@ function checkSupabaseMcpUrl(url) {
   else {
     const allowed = new Set(['database', 'docs', 'development']);
     const forbidden = new Set(['account', 'account_management', 'branching', 'storage', 'edge_functions', 'edge-functions']);
-    for (const f of featuresRaw.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)) {
+    for (const f of featuresRaw.split(',').map((x: any) => x.trim().toLowerCase()).filter(Boolean)) {
       if (forbidden.has(f)) findings.push({ id: 'supabase_mcp_forbidden_feature', severity: 'critical', feature: f, reason: `Supabase MCP feature '${f}' is forbidden.` });
       else if (!allowed.has(f)) findings.push({ id: 'supabase_mcp_unapproved_feature', severity: 'high', feature: f, reason: `Supabase MCP feature '${f}' is not in Sneakoscope Codex allowlist.` });
     }
@@ -539,12 +538,12 @@ function checkSupabaseMcpUrl(url) {
   return findings;
 }
 
-async function scanMissionMigrationFiles(root, opts = {}) {
+async function scanMissionMigrationFiles(root: any, opts: any = {}) {
   const since = opts.since ? Date.parse(opts.since) : 0;
-  const findings = [];
-  async function walk(dir, depth = 0) {
+  const findings: any[] = [];
+  async function walk(dir: any, depth: any = 0) {
     if (depth > 8) return;
-    let entries = [];
+    let entries: any[] = [];
     try { entries = await (await import('node:fs/promises')).readdir(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       const p = path.join(dir, e.name);
@@ -564,5 +563,5 @@ async function scanMissionMigrationFiles(root, opts = {}) {
   return findings;
 }
 
-function redactUrl(url) { return String(url).replace(/(access_token|token|apikey|key)=([^&]+)/gi, '$1=<redacted>'); }
-function rel(root, file) { return path.relative(root, file).split(path.sep).join('/'); }
+function redactUrl(url: any) { return String(url).replace(/(access_token|token|apikey|key)=([^&]+)/gi, '$1=<redacted>'); }
+function rel(root: any, file: any) { return path.relative(root, file).split(path.sep).join('/'); }

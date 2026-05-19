@@ -1,9 +1,8 @@
-// @ts-nocheck
 const REFLECTION_SKILL_NAME = 'reflection';
 export const SOLUTION_SCOUT_SKILL_NAME = 'solution-scout';
 export const SOLUTION_SCOUT_STAGE_ID = 'solution_scout';
 
-export function looksLikeProblemSolvingRequest(prompt = '') {
+export function looksLikeProblemSolvingRequest(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
   const problemCue = /(문제|오류|에러|버그|고장|깨짐|실패|안\s*(?:됨|돼|되|나옴|보임|돌아|먹)|작동\s*안|해결|고쳐|수정|복구|troubleshoot|not\s+working|broken|bug|error|failure|fails?|crash|fix|repair|resolve|solve)/i.test(text);
@@ -11,7 +10,7 @@ export function looksLikeProblemSolvingRequest(prompt = '') {
   return problemCue && actionCue;
 }
 
-export function solutionScoutPolicyText(prompt = '') {
+export function solutionScoutPolicyText(prompt: any = '') {
   if (!looksLikeProblemSolvingRequest(prompt)) return '';
   return [
     'Solution Scout hook: this prompt looks like a problem-solving or repair request.',
@@ -29,7 +28,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|codex-app|hooks|features|all-features|openclaw|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|scouts|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|code-structure|proof-field|skill-dream|rust';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|codex-app|hooks|features|all-features|openclaw|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|scouts|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
 export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/codex/app/features#image-generation';
@@ -47,18 +46,18 @@ export const DEFAULT_CODEX_APP_PLUGINS = Object.freeze([
 ]);
 export const RESERVED_CODEX_PLUGIN_SKILL_NAMES = Object.freeze([
   'browser-use',
-  ...DEFAULT_CODEX_APP_PLUGINS.map(([name]) => name)
+  ...DEFAULT_CODEX_APP_PLUGINS.map(([name]: any) => name)
 ].sort());
 export const FORBIDDEN_BROWSER_AUTOMATION_RE = /\b(playwright|chrome\s+mcp|browser\s+use|selenium|puppeteer)\b/i;
 
-export function evidenceMentionsForbiddenBrowserAutomation(value, seen = new Set()) {
+export function evidenceMentionsForbiddenBrowserAutomation(value: any, seen: any = new Set()): boolean {
   if (value == null) return false;
   if (typeof value === 'string') return FORBIDDEN_BROWSER_AUTOMATION_RE.test(value);
   if (typeof value !== 'object') return false;
   if (seen.has(value)) return false;
   seen.add(value);
-  if (Array.isArray(value)) return value.some((item) => evidenceMentionsForbiddenBrowserAutomation(item, seen));
-  return Object.values(value).some((item) => evidenceMentionsForbiddenBrowserAutomation(item, seen));
+  if (Array.isArray(value)) return value.some((item: any) => evidenceMentionsForbiddenBrowserAutomation(item, seen));
+  return Object.values(value).some((item: any) => evidenceMentionsForbiddenBrowserAutomation(item, seen));
 }
 
 export const RECOMMENDED_MCP_SERVERS = [
@@ -123,9 +122,9 @@ export const PPT_PIPELINE_MCP_ALLOWLIST = Object.freeze([
 
 export function pptPipelineAllowlistPolicyText() {
   const conditionalSkills = PPT_CONDITIONAL_SKILL_ALLOWLIST.length
-    ? PPT_CONDITIONAL_SKILL_ALLOWLIST.map((entry) => `${entry.skill}=${entry.condition}`).join('; ')
+    ? PPT_CONDITIONAL_SKILL_ALLOWLIST.map((entry: any) => `${entry.skill}=${entry.condition}`).join('; ')
     : 'none';
-  return `PPT pipeline allowlist: during $PPT design/render work, ignore installed skills and MCPs that are not explicitly part of the $PPT pipeline. The purpose is to prevent AI-like generic presentation design: decorative gradients, nested cards, vague SaaS visuals, and style choices not grounded in the audience, source material, getdesign reference, or the project design SSOT. Required skills are ${PPT_PIPELINE_SKILL_ALLOWLIST.join(', ')}. The imagegen skill is required for $PPT so Codex App can invoke official built-in $imagegen/gpt-image-2 for every generated raster asset or generated visual-review image; do not route PPT imagery through direct API fallback. Do not use generic design skills such as design-artifact-expert, design-ui-editor, or design-system-builder for $PPT just because they are installed. $PPT design must use getdesign-reference plus the built-in PPT design implementation pipeline: ${DESIGN_SYSTEM_SSOT.authority_file} when present, ${DESIGN_SYSTEM_SSOT.builder_prompt} as the builder prompt when missing, and route-local ppt-style-tokens.json as the fused design projection. Conditional skills/MCPs are allowed only when their condition is sealed in the contract: ${conditionalSkills}; ${PPT_PIPELINE_MCP_ALLOWLIST.map((entry) => `${entry.mcp}=${entry.condition}`).join('; ')}. Fact, image, and review evidence are first-class artifacts: gather user-provided context and required web/Context7 evidence into ppt-fact-ledger.json, block unsupported critical claims, plan required image resources through ppt-image-asset-ledger.json, then run a bounded review loop recorded in ppt-review-policy.json, ppt-review-ledger.json, and ppt-iteration-report.json. Required raster asset or generated visual-review evidence must come from Codex App $imagegen/gpt-image-2; direct API fallback, placeholder files, and prose-only substitutes do not satisfy the route gate. The review loop caps full-deck passes at 2, slide retries at 2, requires P0/P1 issue count to be zero, targets score >= 0.88, and stops when improvement delta is below 0.03 or evidence is missing. For Codex App visual critique, invoke $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) when required; never simulate missing gpt-image-2 output. If required image-review evidence is unavailable, record the blocker instead of passing the gate. ${CODEX_IMAGEGEN_REQUIRED_POLICY}`;
+  return `PPT pipeline allowlist: during $PPT design/render work, ignore installed skills and MCPs that are not explicitly part of the $PPT pipeline. The purpose is to prevent AI-like generic presentation design: decorative gradients, nested cards, vague SaaS visuals, and style choices not grounded in the audience, source material, getdesign reference, or the project design SSOT. Required skills are ${PPT_PIPELINE_SKILL_ALLOWLIST.join(', ')}. The imagegen skill is required for $PPT so Codex App can invoke official built-in $imagegen/gpt-image-2 for every generated raster asset or generated visual-review image; do not route PPT imagery through direct API fallback. Do not use generic design skills such as design-artifact-expert, design-ui-editor, or design-system-builder for $PPT just because they are installed. $PPT design must use getdesign-reference plus the built-in PPT design implementation pipeline: ${DESIGN_SYSTEM_SSOT.authority_file} when present, ${DESIGN_SYSTEM_SSOT.builder_prompt} as the builder prompt when missing, and route-local ppt-style-tokens.json as the fused design projection. Conditional skills/MCPs are allowed only when their condition is sealed in the contract: ${conditionalSkills}; ${PPT_PIPELINE_MCP_ALLOWLIST.map((entry: any) => `${entry.mcp}=${entry.condition}`).join('; ')}. Fact, image, and review evidence are first-class artifacts: gather user-provided context and required web/Context7 evidence into ppt-fact-ledger.json, block unsupported critical claims, plan required image resources through ppt-image-asset-ledger.json, then run a bounded review loop recorded in ppt-review-policy.json, ppt-review-ledger.json, and ppt-iteration-report.json. Required raster asset or generated visual-review evidence must come from Codex App $imagegen/gpt-image-2; direct API fallback, placeholder files, and prose-only substitutes do not satisfy the route gate. The review loop caps full-deck passes at 2, slide retries at 2, requires P0/P1 issue count to be zero, targets score >= 0.88, and stops when improvement delta is below 0.03 or evidence is missing. For Codex App visual critique, invoke $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) when required; never simulate missing gpt-image-2 output. If required image-review evidence is unavailable, record the blocker instead of passing the gate. ${CODEX_IMAGEGEN_REQUIRED_POLICY}`;
 }
 
 export function getdesignReferencePolicyText() {
@@ -156,11 +155,11 @@ export const RECOMMENDED_SKILLS = [
   'honest-mode'
 ];
 
-export function dollarSkillName(commandOrId) {
+export function dollarSkillName(commandOrId: any) {
   return String(commandOrId || '').replace(/^\$/, '').toLowerCase();
 }
 
-export function stripVisibleDecisionAnswerBlocks(value = '') {
+export function stripVisibleDecisionAnswerBlocks(value: any = '') {
   return stripNonAuthoritativeLiveChatBlocks(String(value || ''))
     .replace(/\s*\[(?=[^\]]*\b[A-Z][A-Z0-9_]{2,}\s*:)[^\]]{0,6000}\]\s*/g, ' ')
     .replace(/[ \t]{2,}/g, ' ')
@@ -168,7 +167,7 @@ export function stripVisibleDecisionAnswerBlocks(value = '') {
     .trim();
 }
 
-export function stripNonAuthoritativeLiveChatBlocks(value = '') {
+export function stripNonAuthoritativeLiveChatBlocks(value: any = '') {
   return String(value || '')
     .replace(/(?:^|\n)\s*[›>]\s*\[## Live Chat[\s\S]*?\]\s*(?=(?:이|이거|그리고|근데|계속|고쳐|수정|해결|Pane|pane|please|fix|also|and|$))/g, '\n')
     .replace(/(?:^|\n)\s*\[## Live Chat[\s\S]*?\]\s*(?=(?:이|이거|그리고|근데|계속|고쳐|수정|해결|Pane|pane|please|fix|also|and|$))/g, '\n')
@@ -177,7 +176,7 @@ export function stripNonAuthoritativeLiveChatBlocks(value = '') {
     .trim();
 }
 
-export function triwikiContextTracking(commandPrefix = 'sks') {
+export function triwikiContextTracking(commandPrefix: any = 'sks') {
   const prefix = String(commandPrefix || 'sks');
   return {
     ssot: 'triwiki',
@@ -204,7 +203,7 @@ export function triwikiContextTracking(commandPrefix = 'sks') {
 }
 
 
-export function stackCurrentDocsPolicy(commandPrefix = 'sks') {
+export function stackCurrentDocsPolicy(commandPrefix: any = 'sks') {
   const prefix = String(commandPrefix || 'sks');
   return {
     trigger: 'when_tech_stack_is_added_or_package_framework_runtime_version_changes',
@@ -221,17 +220,17 @@ export function stackCurrentDocsPolicy(commandPrefix = 'sks') {
   };
 }
 
-export function stackCurrentDocsPolicyText(commandPrefix = 'sks') {
+export function stackCurrentDocsPolicyText(commandPrefix: any = 'sks') {
   const policy = stackCurrentDocsPolicy(commandPrefix);
   return `Stack current-docs policy: whenever project tech stack is added or a framework/package/runtime/platform version changes, fetch current docs with Context7 (resolve-library-id then query-docs) or official vendor web docs before coding, record the syntax/limits/security guidance as high-priority TriWiki claims in ${policy.memory_path}, run "${policy.refresh_command}", then "${policy.validate_command}". Treat these claims as higher priority than model-memory defaults. Examples include Supabase publishable/secret keys replacing legacy anon/service_role guidance for hosted projects, Next.js 16 proxy.ts/proxy.js replacing the deprecated middleware file convention, avoiding stale webpack defaults when newer framework guidance says otherwise, and Vercel Function duration limits such as the 300s default under Fluid Compute.`;
 }
 
-export function triwikiContextTrackingText(commandPrefix = 'sks') {
+export function triwikiContextTrackingText(commandPrefix: any = 'sks') {
   const ctx = triwikiContextTracking(commandPrefix);
   return `Context tracking SSOT: TriWiki. Use only the latest TriWiki pack shape at every work stage: ${ctx.required_schema}; coordinate-only legacy packs are invalid and must be refreshed before use. Read ${ctx.default_pack} before each route phase, consume attention.use_first as the compact high-trust recall set, hydrate attention.hydrate_first from source before risky or lower-trust decisions, refresh with "${ctx.refresh_command}" or "${ctx.pack_command}" after new findings/artifact changes, prune stale/oversized wiki state with "${ctx.prune_command}" when retention matters, and validate with "${ctx.validate_command}" before each handoff or final claim. Selected text is only the visible slice; non-selected claims remain hydratable by id, hash, source path, and RGBA/trig coordinate. Follow high-trust claims unless newer source evidence contradicts them; low-trust claims should trigger source/evidence hydration before implementation or final claims. ${stackCurrentDocsPolicyText(commandPrefix)}`;
 }
 
-export function triwikiStagePolicyText(commandPrefix = 'sks') {
+export function triwikiStagePolicyText(commandPrefix: any = 'sks') {
   const ctx = triwikiContextTracking(commandPrefix);
   return [
     'TriWiki stage policy:',
@@ -261,11 +260,11 @@ export function speedLanePolicyText() {
   return 'Proof Field speed lane policy: after the intended write scope is known, run or mentally apply `sks proof-field scan --intent "<goal>" --changed <files>`. If `execution_lane.lane` is `proof_field_fast_lane`, keep the parent-owned minimal patch, listed verification, TriWiki validate, and Honest Mode while skipping Team debate, fresh executor teams, broad route rework, and unrelated checks. If blockers include database, security, visual-forensic, unknown surface, broad change set, failed verification, or unsupported claims, fail closed to the normal Team/Honest path.';
 }
 
-export function hasFromChatImgSignal(prompt = '') {
+export function hasFromChatImgSignal(prompt: any = '') {
   return /(?:^|\s)\$?from-chat-img(?:\s|:|$)/i.test(String(prompt || ''));
 }
 
-export function looksLikeChatCaptureRequest(prompt = '') {
+export function looksLikeChatCaptureRequest(prompt: any = '') {
   const text = String(prompt || '');
   return hasFromChatImgSignal(text)
     && /(chat|conversation|message|messenger|kakao|slack|discord|whatsapp|채팅|대화|메신저|카톡|캡처|스크린샷)/i.test(text)
@@ -534,19 +533,19 @@ export const ROUTES = [
   }
 ];
 
-export const DOLLAR_COMMANDS = ROUTES.flatMap(({ command, route, description, dollarAliases = [] }) => [
+export const DOLLAR_COMMANDS = ROUTES.flatMap(({ command, route, description, dollarAliases = [] }: any) => [
   { command, route, description },
-  ...dollarAliases.map((alias) => ({ command: alias, route, description }))
+  ...dollarAliases.map((alias: any) => ({ command: alias, route, description }))
 ]);
-export function routeAppSkillNames(route) {
+export function routeAppSkillNames(route: any) {
   const canonical = dollarSkillName(route.command);
   const reserved = new Set(RESERVED_CODEX_PLUGIN_SKILL_NAMES);
-  return [canonical, ...(route.appSkillAliases || [])].filter((name) => !reserved.has(name));
+  return [canonical, ...(route.appSkillAliases || [])].filter((name: any) => !reserved.has(name));
 }
 
-export const DOLLAR_SKILL_NAMES = ROUTES.flatMap((route) => routeAppSkillNames(route));
-export const DOLLAR_COMMAND_ALIASES = ROUTES.flatMap((route) => [
-  ...routeAppSkillNames(route).map((alias) => ({ canonical: route.command, app_skill: `$${alias}` }))
+export const DOLLAR_SKILL_NAMES = ROUTES.flatMap((route: any) => routeAppSkillNames(route));
+export const DOLLAR_COMMAND_ALIASES = ROUTES.flatMap((route: any) => [
+  ...routeAppSkillNames(route).map((alias: any) => ({ canonical: route.command, app_skill: `$${alias}` }))
 ]);
 
 export const COMMAND_CATALOG = [
@@ -604,12 +603,13 @@ export const COMMAND_CATALOG = [
   { name: 'bench', usage: 'sks bench core|route-fixtures|blackbox|trust-kernel [--json]', description: 'Measure core trust-kernel hot paths and write performance budget artifacts.' },
   { name: 'proof', usage: 'sks proof show|latest|validate|export|smoke [--json|--md]', description: 'Show, validate, export, or smoke-write the unified Completion Proof Engine surface.' },
   { name: 'trust', usage: 'sks trust report|validate|status|explain [latest|mission-id] [--json]', description: 'Validate route contracts, evidence indexes, stale/mock evidence, and trust report blockers.' },
+  { name: 'wrongness', usage: 'sks wrongness list|show|add|resolve|summarize|validate|context|rules ...', description: 'Record, retrieve, and validate TriWiki wrongness memory: negative evidence, failed assumptions, stale proof, visual/DB/hook mismatches, and avoidance rules.' },
   { name: 'proof-field', usage: 'sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]', description: 'Analyze Potential Proof Field cones, negative-work cache, and fast-lane eligibility for a change set.' },
   { name: 'skill-dream', usage: 'sks skill-dream status|run|record [--json]', description: 'Track generated-skill usage in lightweight JSON and periodically report keep, merge, prune, and improvement candidates without deleting skills automatically.' },
   { name: 'code-structure', usage: 'sks code-structure scan [--json]', description: 'Scan handwritten source files for 1000/2000/3000-line structure gates and split-review exceptions.' },
   { name: 'rust', usage: 'sks rust status|smoke [--json] [--require-native]', description: 'Inspect optional Rust accelerator availability and verify JS fallback parity for image hash, voxel validation, and secret scanning.' },
   { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, effort decisions, visual maps, dogfood reports, skills, mistake memory, Team dashboard state, and Honest Mode.' },
-  { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate ...', description: 'Build, refresh, prune, and validate RGBA/trig LLM Wiki context packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
+  { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate|wrongness ...', description: 'Build, refresh, prune, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
   { name: 'team', usage: 'sks team "task" [executor:5 reviewer:6 user:1]|log|tail|watch|lane|status|dashboard|event|message|open-tmux|attach-tmux|cleanup-tmux ...', description: 'Create and observe a scout-first Team mission with at least five reviewer/QA validation lanes, current-session managed tmux lanes when available, transcript messages, and cleanup-aware follow panes.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
@@ -620,70 +620,70 @@ export const COMMAND_CATALOG = [
   { name: 'stats', usage: 'sks stats [--json]', description: 'Show package and .sneakoscope storage size.' }
 ];
 
-export function routeById(id) {
+export function routeById(id: any): any {
   const key = String(id || '').replace(/^\$/, '').toLowerCase();
-  return ROUTES.find((route) => {
+  return ROUTES.find((route: any) => {
     const aliases = [
       route.id,
       route.mode,
       dollarSkillName(route.command),
       ...(route.appSkillAliases || [])
-    ].map((x) => String(x || '').toLowerCase());
+    ].map((x: any) => String(x || '').toLowerCase());
     return aliases.includes(key);
   }) || null;
 }
 
-export function routeByDollarCommand(commandName) {
+export function routeByDollarCommand(commandName: any): any {
   const key = String(commandName || '').replace(/^\$/, '').toLowerCase();
-  return ROUTES.find((route) => [
+  return ROUTES.find((route: any) => [
     dollarSkillName(route.command),
-    ...(route.dollarAliases || []).map((alias) => dollarSkillName(alias)),
+    ...(route.dollarAliases || []).map((alias: any) => dollarSkillName(alias)),
     ...(route.appSkillAliases || [])
   ].includes(key)) || null;
 }
 
-function leadingDollarCommandMatch(prompt) {
+function leadingDollarCommandMatch(prompt: any) {
   const text = String(prompt || '').trim();
   return text.match(/^\$([A-Za-z][A-Za-z0-9_-]*)(?:\s|:|$)/)
     || text.match(/^\[\$([A-Za-z][A-Za-z0-9_-]*)\]\([^)]+\)(?:\s|:|$)/);
 }
 
-function embeddedDollarCommandMatch(prompt) {
+function embeddedDollarCommandMatch(prompt: any) {
   const text = String(prompt || '');
-  const matches = [];
-  for (const match of text.matchAll(/\[\$([A-Za-z][A-Za-z0-9_-]*)\]\([^)]+\)/g)) matches.push({ index: match.index, command: match[1] });
-  for (const match of text.matchAll(/(^|[\s([{<])\$([A-Za-z][A-Za-z0-9_-]*)(?=\s|:|$|[.,!?;)\]}])/g)) matches.push({ index: match.index + match[1].length, command: match[2] });
+  const matches: any[] = [];
+  for (const match of text.matchAll(/\[\$([A-Za-z][A-Za-z0-9_-]*)\]\([^)]+\)/g)) matches.push({ index: match.index ?? 0, command: match[1] || '' });
+  for (const match of text.matchAll(/(^|[\s([{<])\$([A-Za-z][A-Za-z0-9_-]*)(?=\s|:|$|[.,!?;)\]}])/g)) matches.push({ index: (match.index ?? 0) + (match[1] || '').length, command: match[2] || '' });
   return matches
-    .sort((a, b) => a.index - b.index)
-    .find((match) => routeByDollarCommand(match.command) || String(match.command || '').toUpperCase() === 'MAD-SKS') || null;
+    .sort((a: any, b: any) => a.index - b.index)
+    .find((match: any) => routeByDollarCommand(match.command) || String(match.command || '').toUpperCase() === 'MAD-SKS') || null;
 }
 
-export function dollarCommand(prompt) {
+export function dollarCommand(prompt: any) {
   const leading = leadingDollarCommandMatch(prompt);
-  if (leading) return leading[1].toUpperCase();
+  if (leading?.[1]) return leading[1].toUpperCase();
   const embedded = embeddedDollarCommandMatch(prompt);
   return embedded ? embedded.command.toUpperCase() : null;
 }
 
-export function hasMadSksSignal(prompt = '') {
+export function hasMadSksSignal(prompt: any = '') {
   return /(?:^|\s)(?:\$MAD-SKS|\[\$MAD-SKS\]\([^)]+\))(?:\s|:|$)/i.test(String(prompt || ''));
 }
 
-export function stripMadSksSignal(prompt = '') {
+export function stripMadSksSignal(prompt: any = '') {
   return String(prompt || '')
     .replace(/(?:^|\s)(?:\$MAD-SKS|\[\$MAD-SKS\]\([^)]+\))(?:\s|:)?/ig, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-export function stripDollarCommand(prompt) {
+export function stripDollarCommand(prompt: any) {
   return String(prompt || '').trim()
     .replace(/^\$[A-Za-z][A-Za-z0-9_-]*(?:\s|:)?\s*/, '')
     .replace(/^\[\$[A-Za-z][A-Za-z0-9_-]*\]\([^)]+\)(?:\s|:)?\s*/, '')
     .trim();
 }
 
-export function looksLikeTinyDirectFix(prompt) {
+export function looksLikeTinyDirectFix(prompt: any) {
   const text = String(prompt || '');
   if (looksLikeDirectFixQuestion(text)) return false;
   const broadCodeCue = /(구현|개발|리팩터|마이그레이션|버그|기능|로직|인증|데이터베이스|스키마|서버|API|테스트|동작|작동|implement|build|develop|refactor|rewrite|migrate|bug|feature|logic|auth|database|schema|server|endpoint|test|deploy|generator|workflow|flow|work(?:ing)?)/i.test(text);
@@ -698,7 +698,7 @@ export function looksLikeTinyDirectFix(prompt) {
   return directCue && changeCue && (!looksLikeAnswerOnlyRequest(text) || looksLikeDirectWorkRequest(text));
 }
 
-function looksLikeDirectFixQuestion(prompt = '') {
+function looksLikeDirectFixQuestion(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
   if (looksLikePoliteDirectWorkRequest(text)) return false;
@@ -707,20 +707,20 @@ function looksLikeDirectFixQuestion(prompt = '') {
     && !/(해줘|고쳐줘|바꿔줘|변경해줘|수정해줘|교체해줘|please\s+(?:fix|change|replace|update|edit)|\b(?:fix|change|replace|update|edit)\b.*(?:for\s+me|now)$)/i.test(text);
 }
 
-function looksLikeMethodQuestion(prompt = '') {
+function looksLikeMethodQuestion(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
   return /(?:\?|^(?:how\s+(?:do|can|could|should|would)\s+(?:i|we)\b|how\s+to\b|what(?:'s| is)?\s+(?:the\s+)?(?:best\s+)?way\b|(?:can|could|should|would)\s+(?:i|we)\b)|^(?:어떻게|방법|왜|무엇|뭐|언제|어디|가능|맞아|인가|인지)\b)/i.test(text);
 }
 
-function looksLikePoliteDirectWorkRequest(prompt = '') {
+function looksLikePoliteDirectWorkRequest(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
   return /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:fix|change|replace|update|edit|make|turn|translate|create|add|build|implement|delete|remove)\b/i.test(text)
     || /(?:해줄\s*수|해\s*줄래|바꿔줄|고쳐줄|수정해줄|변경해줄|교체해줄)/i.test(text);
 }
 
-export function looksLikePresentationArtifactRequest(prompt = '') {
+export function looksLikePresentationArtifactRequest(prompt: any = '') {
   const text = String(prompt || '');
   const lower = text.toLowerCase();
   const cue = /\b(ppt|presentation|deck|slide|slides|pitch\s*deck|proposal\s*deck)\b|발표자료|발표\s*자료|소개자료|제안서|피치덱|슬라이드|pdf\s*자료/i.test(text);
@@ -730,7 +730,7 @@ export function looksLikePresentationArtifactRequest(prompt = '') {
   return /만들|작성|생성|제작|디자인|export|pdf|html|create|generate|build|write|make/i.test(text) || /\b(ppt|presentation|deck|slides?)\b/.test(lower);
 }
 
-export function looksLikeImageUxReviewRequest(prompt = '') {
+export function looksLikeImageUxReviewRequest(prompt: any = '') {
   const text = String(prompt || '');
   const reviewCue = /(ui\/?ux|ux|ui|screen|screenshot|visual|interface|화면|스크린|캡처|비주얼|인터페이스|사용성|유아이|유엑스)/i.test(text)
     && /(review|critique|audit|inspect|analy[sz]e|검수|리뷰|분석|평가|진단)/i.test(text);
@@ -739,7 +739,7 @@ export function looksLikeImageUxReviewRequest(prompt = '') {
   return commandCue || (reviewCue && imagegenCue);
 }
 
-export function routePrompt(prompt) {
+export function routePrompt(prompt: any): any {
   const text = stripVisibleDecisionAnswerBlocks(prompt);
   const command = dollarCommand(text);
   if (command) {
@@ -751,7 +751,7 @@ export function routePrompt(prompt) {
       if (looksLikeCodeChangingWork(afterModifier) || looksLikeDirectWorkRequest(afterModifier)) return routeById('Team');
       return routeById('MadSKS');
     }
-    const route = routeByDollarCommand(command) || null;
+    const route = routeByDollarCommand(command) || routeById('SKS');
     if (route?.id === 'SKS' && looksLikeTeamDefaultWork(stripDollarCommand(text))) return routeById('Team');
     if (route?.id === 'Team') return route;
     return route;
@@ -775,21 +775,21 @@ export function routePrompt(prompt) {
   return routeById('SKS');
 }
 
-export function looksLikeComputerUseFastLane(prompt = '') {
+export function looksLikeComputerUseFastLane(prompt: any = '') {
   const text = String(prompt || '');
   const computerUseCue = /\b(computer\s*use|codex\s+computer\s+use|computer-use)\b|컴퓨터\s*유즈|컴퓨터\s*사용|컴퓨터유즈/i.test(text);
   if (!computerUseCue) return false;
   return /\b(ui|browser|visual|screen|screenshot|e2e|qa|dogfood|fast|lane|pipeline|localhost|web|app|page)\b|화면|브라우저|시각|스크린|캡처|검증|빠른|고속|파이프라인|작업|속도/i.test(text);
 }
 
-export function looksLikeTeamDefaultWork(prompt = '') {
+export function looksLikeTeamDefaultWork(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
   if (looksLikeTinyDirectFix(text) || looksLikeAnswerOnlyRequest(text)) return false;
   return looksLikeCodeChangingWork(text) || looksLikeDirectWorkRequest(text);
 }
 
-export function looksLikeAnswerOnlyRequest(prompt = '') {
+export function looksLikeAnswerOnlyRequest(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
   if (looksLikeQuestionShapedDirective(text)) return false;
@@ -798,7 +798,7 @@ export function looksLikeAnswerOnlyRequest(prompt = '') {
   return !looksLikeDirectWorkRequest(text);
 }
 
-export function looksLikeQuestionShapedDirective(prompt = '') {
+export function looksLikeQuestionShapedDirective(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
   const directive = /(반드시|필수|무조건|해야\s*(?:해|함|돼|한다|하지|한다는|되는)|해야지|해야돼|해야한다|알지|기억해|파악해야|구분해야|막아야|보장해야|강제|기본적으로)/i.test(text);
@@ -807,7 +807,7 @@ export function looksLikeQuestionShapedDirective(prompt = '') {
   return (directive && pipelineCue) || complaint;
 }
 
-export function looksLikeDirectWorkRequest(prompt = '') {
+export function looksLikeDirectWorkRequest(prompt: any = '') {
   const text = String(prompt || '');
   if (looksLikeDirectFixQuestion(text)) return false;
   if (looksLikeMethodQuestion(text) && !looksLikePoliteDirectWorkRequest(text) && !looksLikeQuestionShapedDirective(text)) return false;
@@ -818,14 +818,14 @@ export function looksLikeDirectWorkRequest(prompt = '') {
     || /(진행해|수행해|작업해|처리해|적용해|반영해|검수해|고쳐줘|바꿔줘|해결해줘|만들어줘|해줘야|해줘야지|해달라|해야지|되게 해|install|run|execute|test|deploy|commit|push)/i.test(text);
 }
 
-export function routeNeedsContext7(route, prompt = '') {
+export function routeNeedsContext7(route: any, prompt: any = '') {
   if (!route) return false;
   if (route.context7Policy === 'required') return true;
   if (route.context7Policy !== 'if_external_docs') return false;
   return /\b(package|library|framework|SDK|API|MCP|Supabase|React|Next|Vue|Svelte|Vite|Prisma|Drizzle|Knex|Postgres|npm|node_modules|docs?|documentation)\b/i.test(String(prompt || ''));
 }
 
-export function routeRequiresSubagents(route, prompt = '') {
+export function routeRequiresSubagents(route: any, prompt: any = '') {
   if (!route) return false;
   if (route.id === 'Team') return true;
   if (route.id === 'SKS') return looksLikeTeamDefaultWork(prompt);
@@ -839,22 +839,22 @@ export function routeRequiresSubagents(route, prompt = '') {
   return looksLikeExecutionWork(prompt);
 }
 
-export function reflectionRequiredForRoute(route) {
+export function reflectionRequiredForRoute(route: any) {
   const id = String(route?.id || route?.mode || route?.route || route || '').replace(/^\$/, '');
   return /^(team|qaloop|qa-loop|ppt|imageuxreview|image-ux-review|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
 }
 
-export function looksLikeCodeChangingWork(prompt = '') {
+export function looksLikeCodeChangingWork(prompt: any = '') {
   return /\b(implement|build|make|add|edit|modify|change|fix|refactor|rewrite|migrate|create|delete|remove|rename|update|patch|코드|구현|개발|수정|변경|추가|삭제|해결|고쳐|바꿔|리팩터|마이그레이션)\b/i.test(String(prompt || ''));
 }
 
-export function looksLikeExecutionWork(prompt = '') {
+export function looksLikeExecutionWork(prompt: any = '') {
   const text = String(prompt || '');
   return looksLikeCodeChangingWork(text)
     || /\b(test|verify|run|doctor|setup|install|lint|typecheck|selftest|release|publish|execute|실행|검증|테스트|설치|배포)\b/i.test(text);
 }
 
-export function subagentExecutionPolicyText(route, prompt = '') {
+export function subagentExecutionPolicyText(route: any, prompt: any = '') {
   const required = routeRequiresSubagents(route, prompt);
   if (route?.id === 'Goal') {
     if (!required) return 'Subagent policy: Goal itself is a lightweight native /goal persistence overlay; subagents are not required for bridge creation/control.';
@@ -879,7 +879,7 @@ export function subagentExecutionPolicyText(route, prompt = '') {
 
 export const ALLOWED_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh']);
 
-export function routeReasoning(route, prompt = '') {
+export function routeReasoning(route: any, prompt: any = '') {
   const text = String(prompt || '');
   const base = ALLOWED_REASONING_EFFORTS.has(route?.reasoningPolicy) ? route.reasoningPolicy : 'medium';
   if (hasFromChatImgSignal(text)) return reasoning('xhigh', 'from_chat_img_image_work_order_analysis');
@@ -893,7 +893,7 @@ export function routeReasoning(route, prompt = '') {
   return reasoning('medium', 'simple_fulfillment');
 }
 
-function teamRouteReasoning(text = '') {
+function teamRouteReasoning(text: any = '') {
   if (/(frontier|autoresearch|novelty|hypothesis|falsify|forensic|from-chat-img|가설|포렌식)/i.test(text)) return reasoning('xhigh', 'team_research_or_forensic_signal');
   if (/(research|current docs?|library|framework|sdk|api|database|supabase|sql|migration|security|permission|mad|release|publish|deploy|commit|push|architecture|algorithm|리서치|문서|데이터베이스|마이그레이션|보안|권한|배포|커밋|푸쉬)/i.test(text)) return reasoning('high', 'team_knowledge_safety_or_release_signal');
   if (/(tmux|terminal|cli|cmd|warp|tool(?:\s|-)?call|hook|router|routing|pipeline|multi[-\s]?pane|pane|process|config|터미널|라우팅|파이프라인|훅|도구|툴)/i.test(text)) return reasoning('medium', 'team_tooling_or_runtime_signal');
@@ -901,51 +901,51 @@ function teamRouteReasoning(text = '') {
   return reasoning('medium', 'team_default_balanced_reasoning');
 }
 
-export function reasoningProfileName(effort) {
+export function reasoningProfileName(effort: any) {
   if (effort === 'low') return 'sks-task-low';
   if (effort === 'xhigh') return 'sks-research-xhigh';
   if (effort === 'high') return 'sks-logic-high';
   return 'sks-task-medium';
 }
 
-export function reasoningInstruction(info) {
+export function reasoningInstruction(info: any) {
   const profile = reasoningProfileName(info?.effort);
   return `Temporary reasoning route: use ${info?.effort || 'medium'} reasoning (${profile}) in Fast service tier for this SKS route only; do not persist profile changes, and return to the default/user-selected profile after the route gate passes.`;
 }
 
-function reasoning(effort, reason) {
+function reasoning(effort: any, reason: any) {
   const normalizedEffort = ALLOWED_REASONING_EFFORTS.has(effort) ? effort : 'medium';
   return { effort: normalizedEffort, profile: reasoningProfileName(normalizedEffort), reason, temporary: true };
 }
 
-export function context7RequirementText(required = true) {
+export function context7RequirementText(required: any = true) {
   if (!required) return 'Context7 MCP is optional for this route unless external API/library documentation becomes relevant.';
   return 'Context7 MCP is required before completion: call resolve-library-id for the relevant package or API, then query-docs (or legacy get-library-docs), and let SKS record both PostToolUse events.';
 }
 
-export function formatDollarCommandsDetailed(indent = '') {
-  const width = Math.max(...DOLLAR_COMMANDS.map((c) => c.command.length));
-  return DOLLAR_COMMANDS.map((c) => `${indent}${c.command.padEnd(width)}  ${c.route}: ${c.description}`).join('\n');
+export function formatDollarCommandsDetailed(indent: any = '') {
+  const width = Math.max(...DOLLAR_COMMANDS.map((c: any) => c.command.length));
+  return DOLLAR_COMMANDS.map((c: any) => `${indent}${c.command.padEnd(width)}  ${c.route}: ${c.description}`).join('\n');
 }
 
-export function formatDollarCommandsCompact(indent = '') {
-  const width = Math.max(...DOLLAR_COMMANDS.map((c) => c.command.length));
-  return DOLLAR_COMMANDS.map((c) => `${indent}${c.command.padEnd(width)}  ${c.route}`).join('\n');
+export function formatDollarCommandsCompact(indent: any = '') {
+  const width = Math.max(...DOLLAR_COMMANDS.map((c: any) => c.command.length));
+  return DOLLAR_COMMANDS.map((c: any) => `${indent}${c.command.padEnd(width)}  ${c.route}`).join('\n');
 }
 
 export function dollarCommandNames() {
   return Array.from(new Set([
-    ...DOLLAR_COMMANDS.map((c) => c.command),
-    ...DOLLAR_COMMAND_ALIASES.map((alias) => alias.app_skill)
+    ...DOLLAR_COMMANDS.map((c: any) => c.command),
+    ...DOLLAR_COMMAND_ALIASES.map((alias: any) => alias.app_skill)
   ])).join(', ');
 }
 
-export function context7ConfigToml(transport = 'local') {
+export function context7ConfigToml(transport: any = 'local') {
   if (transport === 'remote') return '[mcp_servers.context7]\nurl = "https://mcp.context7.com/mcp"\n';
   return '[mcp_servers.context7]\ncommand = "npx"\nargs = ["-y", "@upstash/context7-mcp@latest"]\n';
 }
 
-export function hasContext7ConfigText(text) {
+export function hasContext7ConfigText(text: any) {
   const s = String(text || '');
   return /\[mcp_servers\.context7\]/.test(s)
     && (/@upstash\/context7-mcp@latest/.test(s) || /https:\/\/mcp\.context7\.com\/mcp/.test(s));

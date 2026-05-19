@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, nowIso, projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
@@ -10,7 +9,7 @@ import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 
 const ONE_BY_ONE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/axX7V8AAAAASUVORK5CYII=';
 
-export async function imageUxReviewCommand(command, args = []) {
+export async function imageUxReviewCommand(command: any, args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'status';
   if (action === 'fixture') return imageUxFixture(root, command, args);
@@ -42,7 +41,7 @@ export async function imageUxReviewCommand(command, args = []) {
   console.log(`Gate: ${gate?.passed ? 'passed' : gate ? 'present' : 'missing'}`);
 }
 
-async function imageUxFixture(root, command, args) {
+async function imageUxFixture(root: any, command: any, args: any) {
   const { id, dir, mission } = await createMission(root, { mode: 'image-ux-review', prompt: 'Image UX Review fixture' });
   const sourceImage = path.join(dir, 'image-ux-source-fixture.png');
   await ensureDir(path.dirname(sourceImage));
@@ -79,6 +78,6 @@ async function imageUxFixture(root, command, args) {
   console.log(`Image UX fixture: ${proof.ok ? 'ok' : 'blocked'} ${id}`);
 }
 
-function routeForCommand(command) {
+function routeForCommand(command: any) {
   return command === 'ux-review' ? '$UX-Review' : command === 'visual-review' ? '$Visual-Review' : command === 'ui-ux-review' ? '$UI-UX-Review' : '$Image-UX-Review';
 }

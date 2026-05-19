@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { IMAGE_VOXEL_LEDGER_SCHEMA } from './image-voxel-schema.js';
 import { validateBbox } from './bbox.js';
 
-export function validateImageVoxelLedger(ledger = {}, opts = {}) {
-  const issues = [];
+export function validateImageVoxelLedger(ledger: any = {}, opts: any = {}) {
+  const issues: any[] = [];
   if (ledger.schema !== IMAGE_VOXEL_LEDGER_SCHEMA) issues.push('schema');
   const images = Array.isArray(ledger.images) ? ledger.images : [];
   const anchors = Array.isArray(ledger.anchors) ? ledger.anchors : [];

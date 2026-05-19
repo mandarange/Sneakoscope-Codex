@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { nowIso, writeJsonAtomic, writeTextAtomic } from './fsx.js';
 import { ARTIFACT_FILES, validateFromChatImgVisualMap } from './artifact-schemas.js';
@@ -6,32 +5,32 @@ import { ARTIFACT_FILES, validateFromChatImgVisualMap } from './artifact-schemas
 export const FROM_CHAT_IMG_WORK_ORDER_MD = 'from-chat-img-work-order.md';
 export const FROM_CHAT_IMG_SOURCE_INVENTORY = 'from-chat-img-source-inventory.json';
 
-export function buildFromChatImgInventory({ missionId = 'unassigned', chatMessages = [], chatImages = [], referenceImages = [], zipAssets = [], nonImageAssets = [] } = {}) {
+export function buildFromChatImgInventory({ missionId = 'unassigned', chatMessages = [], chatImages = [], referenceImages = [], zipAssets = [], nonImageAssets = [] }: any = {}) {
   const sources = [
-    ...chatMessages.map((item, i) => source(`chat-message-${i + 1}`, 'chat_message', item)),
-    ...chatImages.map((item, i) => source(`chat-img-${i + 1}`, 'chat_image', item)),
-    ...referenceImages.map((item, i) => source(`reference-img-${i + 1}`, 'reference_image', item)),
-    ...zipAssets.map((item, i) => source(`zip-asset-${i + 1}`, 'zip_asset', item)),
-    ...nonImageAssets.map((item, i) => source(`non-image-asset-${i + 1}`, 'non_image_asset', item))
+    ...chatMessages.map((item: any, i: any) => source(`chat-message-${i + 1}`, 'chat_message', item)),
+    ...chatImages.map((item: any, i: any) => source(`chat-img-${i + 1}`, 'chat_image', item)),
+    ...referenceImages.map((item: any, i: any) => source(`reference-img-${i + 1}`, 'reference_image', item)),
+    ...zipAssets.map((item: any, i: any) => source(`zip-asset-${i + 1}`, 'zip_asset', item)),
+    ...nonImageAssets.map((item: any, i: any) => source(`non-image-asset-${i + 1}`, 'non_image_asset', item))
   ];
   return {
     schema_version: 1,
     mission_id: missionId,
     generated_at: nowIso(),
-    source_inventory_complete: sources.length > 0 && sources.every((entry) => entry.accounted_for === true || entry.relevant === false),
+    source_inventory_complete: sources.length > 0 && sources.every((entry: any) => entry.accounted_for === true || entry.relevant === false),
     sources
   };
 }
 
-export function buildFromChatImgVisualMap({ missionId = 'unassigned', sources = [], regions = [] } = {}) {
+export function buildFromChatImgVisualMap({ missionId = 'unassigned', sources = [], regions = [] }: any = {}) {
   const map = {
     schema_version: 1,
     mission_id: missionId,
     generated_at: nowIso(),
-    source_inventory_complete: sources.length > 0 && sources.every((entry) => entry.accounted_for === true || entry.relevant === false),
-    visual_mapping_complete: regions.length > 0 && regions.every((region) => ['mapped', 'irrelevant'].includes(region.status)),
+    source_inventory_complete: sources.length > 0 && sources.every((entry: any) => entry.accounted_for === true || entry.relevant === false),
+    visual_mapping_complete: regions.length > 0 && regions.every((region: any) => ['mapped', 'irrelevant'].includes(region.status)),
     sources,
-    regions: regions.map((region, index) => ({
+    regions: regions.map((region: any, index: any) => ({
       image_id: region.image_id || 'chat-img-1',
       region_id: region.region_id || `R${String(index + 1).padStart(2, '0')}`,
       observed_detail: region.observed_detail || '',
@@ -45,7 +44,7 @@ export function buildFromChatImgVisualMap({ missionId = 'unassigned', sources = 
   return map;
 }
 
-export async function writeFromChatImgArtifacts(dir, data = {}) {
+export async function writeFromChatImgArtifacts(dir: any, data: any = {}) {
   const inventory = buildFromChatImgInventory(data);
   const visualMap = buildFromChatImgVisualMap({ missionId: data.missionId, sources: inventory.sources, regions: data.regions || [] });
   await writeJsonAtomic(path.join(dir, FROM_CHAT_IMG_SOURCE_INVENTORY), inventory);
@@ -54,14 +53,14 @@ export async function writeFromChatImgArtifacts(dir, data = {}) {
   return validateFromChatImgVisualMap(visualMap);
 }
 
-export function renderFromChatImgWorkOrder({ inventory = {}, visualMap = {}, requests = [], tasks = [], ambiguities = [] } = {}) {
-  const sourceLines = (inventory.sources || []).map((item) => `- ${item.id}: ${item.type} ${item.location || ''}`.trim()).join('\n') || '- none recorded';
+export function renderFromChatImgWorkOrder({ inventory = {}, visualMap = {}, requests = [], tasks = [], ambiguities = [] }: any = {}) {
+  const sourceLines = (inventory.sources || []).map((item: any) => `- ${item.id}: ${item.type} ${item.location || ''}`.trim()).join('\n') || '- none recorded';
   const requestLines = requests.length
-    ? requests.map((request, i) => `- [ ] Request ${i + 1}: "${String(request.verbatim || request.text || '').replace(/"/g, '\\"')}"`).join('\n')
+    ? requests.map((request: any, i: any) => `- [ ] Request ${i + 1}: "${String(request.verbatim || request.text || '').replace(/"/g, '\\"')}"`).join('\n')
     : '- [ ] Request 1: "<not extracted>"';
-  const rows = (visualMap.regions || []).map((region) => `| ${region.image_id} | ${region.region_id} | ${region.observed_detail || ''} | ${(region.matched_customer_request_ids || []).join(', ')} | ${(region.matched_reference_assets || []).join(', ')} | ${region.confidence} | ${region.status} |`).join('\n');
-  const taskLines = tasks.length ? tasks.map((task, i) => `- [ ] WO-${String(i + 1).padStart(3, '0')} - ${task}`).join('\n') : '- [ ] WO-001 - <not decomposed>';
-  const ambiguityLines = ambiguities.length ? ambiguities.map((item) => `- Ambiguity: ${item}`).join('\n') : '- Ambiguity: none recorded yet';
+  const rows = (visualMap.regions || []).map((region: any) => `| ${region.image_id} | ${region.region_id} | ${region.observed_detail || ''} | ${(region.matched_customer_request_ids || []).join(', ')} | ${(region.matched_reference_assets || []).join(', ')} | ${region.confidence} | ${region.status} |`).join('\n');
+  const taskLines = tasks.length ? tasks.map((task: any, i: any) => `- [ ] WO-${String(i + 1).padStart(3, '0')} - ${task}`).join('\n') : '- [ ] WO-001 - <not decomposed>';
+  const ambiguityLines = ambiguities.length ? ambiguities.map((item: any) => `- Ambiguity: ${item}`).join('\n') : '- Ambiguity: none recorded yet';
   return `# From-Chat-IMG Work Order
 
 ## Source Inventory
@@ -96,7 +95,7 @@ ${ambiguityLines}
 `;
 }
 
-function source(id, type, item) {
+function source(id: any, type: any, item: any) {
   if (typeof item === 'string') return { id, type, location: item, relevant: true, accounted_for: false };
   return {
     id: item.id || id,

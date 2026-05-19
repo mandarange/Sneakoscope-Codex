@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { exists, nowIso, readJson, writeJsonAtomic } from './fsx.js';
 import { DEFAULT_FORGETTING_THRESHOLDS, MEMORY_LIFECYCLE_STATES, forgettingDecision } from './evaluation.js';
@@ -15,12 +14,12 @@ export const DEFAULT_RETRIEVAL_BUDGET = {
   actual_tokens: 0
 };
 
-export function memoryUtilityScore(claim = {}, duplicateCount = 0) {
+export function memoryUtilityScore(claim: any = {}, duplicateCount: any = 0) {
   const source = String(claim.source || claim.file || '');
   const trust = Number(claim.trust_score ?? (claim.status === 'supported' ? 0.75 : source ? 0.65 : 0.35));
   const evidence = Math.min(1, Number(claim.evidence_count || (source ? 1 : 0)) / 4);
   const weight = Math.min(1, Number(claim.required_weight || 0.5) / 1.5);
-  const freshness = { fresh: 1, aging: 0.65, stale: 0.25, obsolete: 0, unknown: 0.45 }[claim.freshness] ?? 0.45;
+  const freshness = ({ fresh: 1, aging: 0.65, stale: 0.25, obsolete: 0, unknown: 0.45 } as Record<string, number>)[claim.freshness] ?? 0.45;
   const authority = source || ['code', 'contract', 'test'].includes(String(claim.authority || '').toLowerCase()) ? 0.12 : 0;
   const riskBoost = ['critical', 'high'].includes(String(claim.risk || '').toLowerCase()) ? 0.22 : 0;
   const duplicatePenalty = Math.min(0.5, duplicateCount * 0.15);
@@ -28,14 +27,14 @@ export function memoryUtilityScore(claim = {}, duplicateCount = 0) {
   return clamp01(trust * 0.3 + evidence * 0.2 + weight * 0.2 + freshness * 0.18 + riskBoost + authority - duplicatePenalty - unsupportedPenalty);
 }
 
-export async function sweepTriWiki(root, opts = {}) {
+export async function sweepTriWiki(root: any, opts: any = {}) {
   const missionId = opts.missionId || null;
   const startedAt = nowIso();
   const packFile = opts.packFile || path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
   const pack = await readJson(packFile, { claims: [] });
   const claims = Array.isArray(pack.claims) ? pack.claims : [];
   const seen = new Map();
-  const operations = [];
+  const operations: any[] = [];
   let actualTokens = 0;
 
   for (const claim of claims) {
@@ -48,8 +47,8 @@ export async function sweepTriWiki(root, opts = {}) {
     operations.push(operationForClaim(claim, before, score, duplicateCount));
   }
 
-  const skillCandidates = operations.filter((op) => op.operation === 'PROMOTE_SKILL');
-  const mistakeRules = operations.filter((op) => op.operation === 'PROMOTE_RULE');
+  const skillCandidates = operations.filter((op: any) => op.operation === 'PROMOTE_SKILL');
+  const mistakeRules = operations.filter((op: any) => op.operation === 'PROMOTE_RULE');
   const report = {
     schema_version: 1,
     mission_id: missionId,
@@ -58,7 +57,7 @@ export async function sweepTriWiki(root, opts = {}) {
     operations,
     lifecycle_states: MEMORY_LIFECYCLE_STATES,
     forgetting_defaults: DEFAULT_FORGETTING_THRESHOLDS,
-    tombstones: operations.map((op) => op.tombstone).filter(Boolean),
+    tombstones: operations.map((op: any) => op.tombstone).filter(Boolean),
     retrieval_budget: {
       ...DEFAULT_RETRIEVAL_BUDGET,
       top_k_default: Number(opts.topKDefault || DEFAULT_RETRIEVAL_BUDGET.top_k_default),
@@ -77,16 +76,16 @@ export async function sweepTriWiki(root, opts = {}) {
   return report;
 }
 
-export async function writeMemorySweepReport(root, dir, opts = {}) {
+export async function writeMemorySweepReport(root: any, dir: any, opts: any = {}) {
   const report = await sweepTriWiki(root, opts);
   await writeJsonAtomic(path.join(dir, 'memory-sweep-report.json'), report);
   await writeJsonAtomic(path.join(root, '.sneakoscope', 'wiki', 'last-sweep-report.json'), report);
   return report;
 }
 
-function operationForClaim(claim, before, score, duplicateCount) {
+function operationForClaim(claim: any, before: any, score: any, duplicateCount: any) {
   const text = String(claim.text || claim.claim || '');
-  const reasonCodes = [];
+  const reasonCodes: any[] = [];
   let operation = 'NOOP';
   let reversible = true;
   if (duplicateCount > 0) {
@@ -136,8 +135,8 @@ function operationForClaim(claim, before, score, duplicateCount) {
   };
 }
 
-async function sourceHydrationPass(root, claims) {
-  const risky = claims.filter((claim) => ['critical', 'high'].includes(String(claim.risk || '').toLowerCase())).slice(0, 12);
+async function sourceHydrationPass(root: any, claims: any) {
+  const risky = claims.filter((claim: any) => ['critical', 'high'].includes(String(claim.risk || '').toLowerCase())).slice(0, 12);
   for (const claim of risky) {
     const source = String(claim.source || claim.file || '');
     if (!source || /^https?:\/\//.test(source)) continue;
@@ -146,22 +145,22 @@ async function sourceHydrationPass(root, claims) {
   return true;
 }
 
-function estimateTokens(text) {
+function estimateTokens(text: any) {
   return Math.ceil(String(text || '').length / 4);
 }
 
-function normalizeClaimText(text) {
+function normalizeClaimText(text: any) {
   return String(text || '').toLowerCase().replace(/[^a-z0-9가-힣]+/g, ' ').trim().slice(0, 160);
 }
 
-function stableId(text) {
+function stableId(text: any) {
   return normalizeClaimText(text).replace(/\s+/g, '-').slice(0, 64) || 'claim';
 }
 
-function round(value) {
+function round(value: any) {
   return Math.round(Number(value || 0) * 1000) / 1000;
 }
 
-function clamp01(value) {
+function clamp01(value: any) {
   return Math.max(0, Math.min(1, Number(value) || 0));
 }

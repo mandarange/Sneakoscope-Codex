@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { appendJsonlBounded, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from './fsx.js';
 import { reasoningProfileName, triwikiContextTracking, triwikiContextTrackingText } from './routes.js';
@@ -73,7 +72,7 @@ const HIGH_SIGNAL_RE = /(research|current docs?|library|framework|sdk|api|databa
 const MEDIUM_SIGNAL_RE = /(tmux|terminal|cli|cmd|warp|tool(?:\s|-)?call|hook|router|routing|orchestrat|pipeline|multi[-\s]?pane|pane|process|config|many files?|여러\s*파일|터미널|라우팅|파이프라인|훅|도구|툴)/i;
 const SIMPLE_SIGNAL_RE = /(tiny|simple|small|one[-\s]?line|typo|copy|label|spacing|rename|text|readme|docs?|config wording|간단|단순|오타|문구|라벨|간격|색상)/i;
 
-export function teamAgentReasoning(input = {}) {
+export function teamAgentReasoning(input: any = {}) {
   const prompt = String(input.prompt || '');
   const role = String(input.role || '').toLowerCase();
   const id = String(input.id || input.agentId || '').toLowerCase();
@@ -111,7 +110,7 @@ export function teamAgentReasoning(input = {}) {
   };
 }
 
-export function teamPromptReasoning(prompt = '') {
+export function teamPromptReasoning(prompt: any = '') {
   const text = String(prompt || '');
   if (XHIGH_SIGNAL_RE.test(text)) return { effort: 'xhigh', reason: 'research_forensic_or_frontier_signal' };
   if (HIGH_SIGNAL_RE.test(text)) return { effort: 'high', reason: 'knowledge_safety_release_or_db_signal' };
@@ -120,16 +119,16 @@ export function teamPromptReasoning(prompt = '') {
   return { effort: 'medium', reason: 'default_team_balanced_reasoning' };
 }
 
-export function formatAgentReasoning(agent = {}) {
+export function formatAgentReasoning(agent: any = {}) {
   const effort = agent.reasoning_effort || agent.model_reasoning_effort || 'medium';
   const profile = agent.reasoning_profile || reasoningProfileName(effort);
   const reason = agent.reasoning_reason || 'default_team_balanced_reasoning';
   return `${effort}/${profile}, fast, ${reason}`;
 }
 
-export function teamReasoningPolicy(prompt = '', roster = {}) {
+export function teamReasoningPolicy(prompt: any = '', roster: any = {}) {
   const agents = Array.isArray(roster.all_agents) ? roster.all_agents : [];
-  const counts = {};
+  const counts: Record<string, number> = {};
   for (const agent of agents) counts[agent.reasoning_effort || 'medium'] = (counts[agent.reasoning_effort || 'medium'] || 0) + 1;
   return {
     schema_version: TEAM_REASONING_POLICY_VERSION,
@@ -148,7 +147,7 @@ export function teamReasoningPolicy(prompt = '', roster = {}) {
   };
 }
 
-export function teamLogPaths(dir) {
+export function teamLogPaths(dir: any) {
   return {
     live: path.join(dir, 'team-live.md'),
     transcript: path.join(dir, 'team-transcript.jsonl'),
@@ -157,7 +156,7 @@ export function teamLogPaths(dir) {
   };
 }
 
-export function defaultTeamDashboard(id, prompt, opts = {}) {
+export function defaultTeamDashboard(id: any, prompt: any, opts: any = {}) {
   const spec = normalizeTeamSpec({ ...opts, prompt });
   return {
     schema_version: 1,
@@ -186,13 +185,13 @@ export function defaultTeamDashboard(id, prompt, opts = {}) {
       message: `sks team message ${id} --from <agent> --to <agent|all> --message "..."`,
       cleanup: `sks team cleanup-tmux ${id}`
     },
-    agents: Object.fromEntries([...new Set([...DEFAULT_AGENTS, ...spec.roster.all_agents.map((agent) => agent.id)])].map((name) => [name, { status: 'pending', phase: null, last_seen: null }])),
+    agents: Object.fromEntries([...new Set([...DEFAULT_AGENTS, ...spec.roster.all_agents.map((agent: any) => agent.id)])].map((name: any) => [name, { status: 'pending', phase: null, last_seen: null }])),
     phases: ['parallel_analysis_scouting', 'triwiki_refresh', 'debate_team', 'triwiki_refresh_after_consensus', 'parallel_development_team', 'triwiki_refresh_after_implementation', 'strict_review_and_user_acceptance', 'session_cleanup'],
     latest_messages: []
   };
 }
 
-export function teamLiveMarkdown(id, prompt, opts = {}) {
+export function teamLiveMarkdown(id: any, prompt: any, opts: any = {}) {
   const spec = normalizeTeamSpec({ ...opts, prompt });
   const contextTracking = triwikiContextTrackingText();
   return `# SKS Team Live Transcript
@@ -259,7 +258,7 @@ ${spec.roster.validation_team.map(formatRosterLine).join('\n')}
 `;
 }
 
-export async function initTeamLive(id, dir, prompt, opts = {}) {
+export async function initTeamLive(id: any, dir: any, prompt: any, opts: any = {}) {
   const files = teamLogPaths(dir);
   const spec = normalizeTeamSpec({ ...opts, prompt });
   await writeJsonAtomic(files.dashboard, defaultTeamDashboard(id, prompt, opts));
@@ -278,7 +277,7 @@ export async function initTeamLive(id, dir, prompt, opts = {}) {
   return files;
 }
 
-export function defaultTeamControl(id) {
+export function defaultTeamControl(id: any) {
   return {
     schema_version: 1,
     mission_id: id,
@@ -291,14 +290,14 @@ export function defaultTeamControl(id) {
   };
 }
 
-export function normalizeTeamAgentSessions(value, fallback = 3) {
+export function normalizeTeamAgentSessions(value: any, fallback: any = 3) {
   const n = Number(value ?? fallback);
   return Math.min(12, Math.max(1, Number.isFinite(n) ? Math.floor(n) : fallback));
 }
 
-export function parseTeamSpecArgs(args = []) {
-  const cleanArgs = [];
-  let roleCounts = { ...DEFAULT_TEAM_ROLE_COUNTS };
+export function parseTeamSpecArgs(args: any = []) {
+  const cleanArgs: any[] = [];
+  let roleCounts: Record<string, number> = { ...DEFAULT_TEAM_ROLE_COUNTS };
   let explicitSession = null;
   let explicitExecutor = false;
   for (let i = 0; i < args.length; i++) {
@@ -349,11 +348,11 @@ export function parseTeamSpecArgs(args = []) {
   return { cleanArgs, ...normalizeTeamSpec({ roleCounts, agentSessions: explicitSession }) };
 }
 
-export function parseTeamSpecText(text = '') {
-  let roleCounts = { ...DEFAULT_TEAM_ROLE_COUNTS };
+export function parseTeamSpecText(text: any = '') {
+  let roleCounts: Record<string, number> = { ...DEFAULT_TEAM_ROLE_COUNTS };
   let explicitExecutor = false;
   const wantsMaxAgents = /\b(max|maximum|maximal|available agents?)\b|최대|가용가능/i.test(String(text || ''));
-  const prompt = String(text || '').replace(/\b([A-Za-z][A-Za-z_-]*):(\d+)\b/g, (token) => {
+  const prompt = String(text || '').replace(/\b([A-Za-z][A-Za-z_-]*):(\d+)\b/g, (token: any) => {
     const parsed = parseRolePair(token);
     if (!parsed) return token;
     roleCounts[parsed.role] = parsed.count;
@@ -364,7 +363,7 @@ export function parseTeamSpecText(text = '') {
   return { prompt, ...normalizeTeamSpec({ roleCounts, agentSessions: wantsMaxAgents ? roleCounts.executor : undefined, prompt }) };
 }
 
-export function normalizeTeamSpec(opts = {}) {
+export function normalizeTeamSpec(opts: any = {}) {
   const roleCounts = normalizeTeamRoleCounts(opts.roleCounts);
   if (opts.agentSessions !== undefined && (!opts.roleCounts || opts.roleCounts.executor === undefined)) {
     roleCounts.executor = normalizeTeamAgentSessions(opts.agentSessions, roleCounts.executor);
@@ -375,17 +374,17 @@ export function normalizeTeamSpec(opts = {}) {
   return { agentSessions, bundleSize, roleCounts, roster: buildTeamRoster(roleCounts, { prompt: opts.prompt || opts.task || '' }) };
 }
 
-export function normalizeTeamRoleCounts(input = {}) {
-  const counts = { ...DEFAULT_TEAM_ROLE_COUNTS };
+export function normalizeTeamRoleCounts(input: any = {}) {
+  const counts: Record<string, number> = { ...DEFAULT_TEAM_ROLE_COUNTS };
   for (const [key, value] of Object.entries(input || {})) {
     const role = normalizeTeamRole(key);
     if (role) counts[role] = normalizeTeamAgentSessions(value, counts[role] || 1);
   }
-  counts.reviewer = Math.max(MIN_TEAM_REVIEWER_LANES, counts.reviewer);
+  counts.reviewer = Math.max(MIN_TEAM_REVIEWER_LANES, counts.reviewer ?? 0);
   return counts;
 }
 
-export function buildTeamRoster(roleCounts = DEFAULT_TEAM_ROLE_COUNTS, opts = {}) {
+export function buildTeamRoster(roleCounts: any = DEFAULT_TEAM_ROLE_COUNTS, opts: any = {}) {
   const counts = normalizeTeamRoleCounts(roleCounts);
   const prompt = String(opts.prompt || opts.task || '');
   const bundleSize = normalizeTeamAgentSessions(counts.executor);
@@ -401,37 +400,37 @@ export function buildTeamRoster(roleCounts = DEFAULT_TEAM_ROLE_COUNTS, opts = {}
   return {
     role_counts: counts,
     bundle_size: bundleSize,
-    analysis_team: analysisScouts.map((agent) => ({ ...agent, write_policy: 'read-only scouting', output: 'team-analysis.md' })),
+    analysis_team: analysisScouts.map((agent: any) => ({ ...agent, write_policy: 'read-only scouting', output: 'team-analysis.md' })),
     debate_team: debateTeam,
-    development_team: developmentExecutors.map((agent) => ({ ...agent, write_policy: 'workspace-write with explicit ownership' })),
+    development_team: developmentExecutors.map((agent: any) => ({ ...agent, write_policy: 'workspace-write with explicit ownership' })),
     validation_team: [
-      ...validationReviewers.map((agent) => ({ ...agent, write_policy: 'read-only strict review' })),
-      ...validationUsers.map((agent) => ({ ...agent, phase_role: 'acceptance_persona' }))
+      ...validationReviewers.map((agent: any) => ({ ...agent, write_policy: 'read-only strict review' })),
+      ...validationUsers.map((agent: any) => ({ ...agent, phase_role: 'acceptance_persona' }))
     ],
     all_agents: [...analysisScouts, ...debateTeam, ...developmentExecutors, ...validationReviewers, ...validationUsers]
   };
 }
 
-export function formatRoleCounts(roleCounts = DEFAULT_TEAM_ROLE_COUNTS) {
+export function formatRoleCounts(roleCounts: any = DEFAULT_TEAM_ROLE_COUNTS) {
   const counts = normalizeTeamRoleCounts(roleCounts);
-  return Object.entries(counts).map(([role, count]) => `${role}:${count}`).join(' ');
+  return Object.entries(counts).map(([role, count]: any) => `${role}:${count}`).join(' ');
 }
 
-function numberedAgents(prefix, count, persona, role = prefix, opts = {}) {
-  return Array.from({ length: normalizeTeamAgentSessions(count, 1) }, (_, i) => {
+function numberedAgents(prefix: any, count: any, persona: any, role: any = prefix, opts: any = {}) {
+  return Array.from({ length: normalizeTeamAgentSessions(count, 1) }, (_: any, i: any) => {
     const id = `${prefix}_${i + 1}`;
     return { id, role, index: i + 1, persona, ...teamAgentReasoning({ prompt: opts.prompt || '', role, id }) };
   });
 }
 
-function formatRosterLine(agent = {}) {
+function formatRosterLine(agent: any = {}) {
   return `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`;
 }
 
-function composeDebateTeam({ users, planners, reviewers, executors, bundleSize }) {
-  const selected = [];
+function composeDebateTeam({ users, planners, reviewers, executors, bundleSize }: any) {
+  const selected: any[] = [];
   const used = new Set();
-  const add = (agent) => {
+  const add = (agent: any) => {
     if (!agent || selected.length >= bundleSize || used.has(agent.id)) return;
     selected.push(agent);
     used.add(agent.id);
@@ -446,19 +445,19 @@ function composeDebateTeam({ users, planners, reviewers, executors, bundleSize }
   return selected.slice(0, bundleSize);
 }
 
-function parseRolePair(token) {
+function parseRolePair(token: any) {
   const match = String(token || '').match(/^([A-Za-z][A-Za-z_-]*):(\d+)$/);
   if (!match) return null;
   const role = normalizeTeamRole(match[1]);
   if (!role) return null;
-  return { role, count: normalizeTeamAgentSessions(match[2], DEFAULT_TEAM_ROLE_COUNTS[role] || 1) };
+  return { role, count: normalizeTeamAgentSessions(match[2], (DEFAULT_TEAM_ROLE_COUNTS as Record<string, number>)[role] || 1) };
 }
 
-function normalizeTeamRole(role) {
-  return ROLE_ALIASES[String(role || '').trim().toLowerCase().replace(/[^a-z_-]/g, '')] || null;
+function normalizeTeamRole(role: any) {
+  return (ROLE_ALIASES as Record<string, string>)[String(role || '').trim().toLowerCase().replace(/[^a-z_-]/g, '')] || null;
 }
 
-export async function appendTeamEvent(dir, event) {
+export async function appendTeamEvent(dir: any, event: any) {
   const files = teamLogPaths(dir);
   const record = normalizeEvent(event);
   await appendJsonlBounded(files.transcript, record, 1024 * 1024);
@@ -484,7 +483,7 @@ export async function appendTeamEvent(dir, event) {
   return record;
 }
 
-async function reconcileTeamTmuxFromEvent(dir, record = {}) {
+async function reconcileTeamTmuxFromEvent(dir: any, record: any = {}) {
   if (!process.env.TMUX || String(process.env.SKS_TMUX_EVENT_RECONCILE || '1') === '0') return null;
   if (record.type === 'tmux_lane_opened') return null;
   const missionId = path.basename(dir);
@@ -500,7 +499,7 @@ async function reconcileTeamTmuxFromEvent(dir, record = {}) {
   return reconcileTmuxTeamCockpit({ root, missionId, plan, close, plannedFallback: false });
 }
 
-export async function readTeamControl(dir) {
+export async function readTeamControl(dir: any) {
   const control = await readJson(teamLogPaths(dir).control, defaultTeamControl(path.basename(dir)));
   const cleanup = await readJson(path.join(dir, TEAM_SESSION_CLEANUP_ARTIFACT), null).catch(() => null);
   if (!cleanup || (cleanup.passed !== true && cleanup.live_transcript_finalized !== true && cleanup.all_sessions_closed !== true)) return control;
@@ -516,7 +515,7 @@ export async function readTeamControl(dir) {
   };
 }
 
-export async function requestTeamSessionCleanup(dir, opts = {}) {
+export async function requestTeamSessionCleanup(dir: any, opts: any = {}) {
   const files = teamLogPaths(dir);
   const current = await readTeamControl(dir);
   const next = {
@@ -533,16 +532,16 @@ export async function requestTeamSessionCleanup(dir, opts = {}) {
   return next;
 }
 
-export function teamCleanupRequested(control = {}) {
+export function teamCleanupRequested(control: any = {}) {
   return Boolean(control?.cleanup_requested || control?.status === 'cleanup_requested' || control?.status === 'ended');
 }
 
-export function isTerminalTeamAgentStatus(status = '') {
+export function isTerminalTeamAgentStatus(status: any = '') {
   const normalized = String(status || '').trim().toLowerCase();
   return TERMINAL_TEAM_AGENT_STATUSES.has(normalized) || /(?:^|_)(?:done|complete|completed|closed|cleanup|cancelled|canceled|failed|ended|stopped)(?:_|$)/.test(normalized);
 }
 
-export function terminalTeamAgentStatusFromEvent(event = {}) {
+export function terminalTeamAgentStatusFromEvent(event: any = {}) {
   const type = String(event.type || '').trim().toLowerCase();
   if (isTerminalTeamAgentStatus(type)) return type;
   const phase = String(event.phase || '').trim().toLowerCase();
@@ -553,7 +552,7 @@ export function terminalTeamAgentStatusFromEvent(event = {}) {
   return '';
 }
 
-export function renderTeamCleanupSummary(control = {}) {
+export function renderTeamCleanupSummary(control: any = {}) {
   if (!teamCleanupRequested(control)) return '';
   return [
     '# SKS Team Session Cleanup',
@@ -567,20 +566,20 @@ export function renderTeamCleanupSummary(control = {}) {
   ].join('\n');
 }
 
-export async function readTeamDashboard(dir) {
+export async function readTeamDashboard(dir: any) {
   return readJson(teamLogPaths(dir).dashboard, null);
 }
 
-export async function readTeamLive(dir) {
+export async function readTeamLive(dir: any) {
   return readText(teamLogPaths(dir).live, '');
 }
 
-export async function readTeamTranscriptTail(dir, count = 20) {
+export async function readTeamTranscriptTail(dir: any, count: any = 20) {
   const text = await readText(teamLogPaths(dir).transcript, '');
   return text.split(/\n/).filter(Boolean).slice(-Math.max(1, Number(count) || 20));
 }
 
-export async function renderTeamAgentLane(dir, opts = {}) {
+export async function renderTeamAgentLane(dir: any, opts: any = {}) {
   const agent = String(opts.agent || opts.agentId || 'parent_orchestrator');
   const phase = opts.phase ? String(opts.phase) : null;
   const lines = Math.max(1, Number(opts.lines) || 12);
@@ -595,12 +594,12 @@ export async function renderTeamAgentLane(dir, opts = {}) {
   const aliases = teamLaneAliases(agent, parsedWindow, dashboard, runtimeTasks);
   const aliasSet = new Set(aliases);
   const statusAliases = aliases.length > 1 ? [...aliases.slice(1), aliases[0]] : aliases;
-  const laneStatus = statusAliases.map((id) => dashboard?.agents?.[id]).find((entry) => entry && entry.status && entry.status !== 'pending') || status;
-  const assignedTasks = runtimeTasks.filter((task) => aliasSet.has(task?.worker) || aliasSet.has(task?.agent_hint));
-  const agentEvents = parsedWindow.filter((event) => aliasSet.has(event?.agent) || aliases.some((id) => eventAddressedTo(event, id))).slice(-lines);
-  const directMessages = parsedWindow.filter((event) => event?.type === 'message' && aliases.some((id) => eventAddressedTo(event, id))).slice(-lines);
+  const laneStatus = statusAliases.map((id: any) => dashboard?.agents?.[id]).find((entry: any) => entry && entry.status && entry.status !== 'pending') || status;
+  const assignedTasks = runtimeTasks.filter((task: any) => aliasSet.has(task?.worker) || aliasSet.has(task?.agent_hint));
+  const agentEvents = parsedWindow.filter((event: any) => aliasSet.has(event?.agent) || aliases.some((id: any) => eventAddressedTo(event, id))).slice(-lines);
+  const directMessages = parsedWindow.filter((event: any) => event?.type === 'message' && aliases.some((id: any) => eventAddressedTo(event, id))).slice(-lines);
   const chatEvents = uniqueTranscriptEvents([...agentEvents, ...directMessages])
-    .sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')))
+    .sort((a: any, b: any) => String(a.ts || '').localeCompare(String(b.ts || '')))
     .slice(-lines);
   const laneStyle = teamLaneTextStyle(agent);
   const colorChat = terminalChatColorEnabled(opts);
@@ -623,17 +622,17 @@ export async function renderTeamAgentLane(dir, opts = {}) {
     ...(runtime ? formatRuntimeTasks(assignedTasks) : ['- team-runtime-tasks.json not available yet.']),
     '',
     `## Codex Chat`,
-    ...(chatEvents.length ? chatEvents.map((event) => formatChatTranscriptEvent(event, aliases[0], { color: colorChat })) : ['- waiting for live agent messages...']),
+    ...(chatEvents.length ? chatEvents.map((event: any) => formatChatTranscriptEvent(event, aliases[0], { color: colorChat })) : ['- waiting for live agent messages...']),
     opts.includeGlobalTail ? '' : null,
     opts.includeGlobalTail ? `## Global Tail` : null,
     ...(opts.includeGlobalTail
       ? (await readTeamTranscriptTail(dir, lines)).map(parseTranscriptLine).filter(Boolean).map(formatTranscriptEvent)
       : []),
     teamCleanupRequested(control) ? ['', renderTeamCleanupSummary(control)].join('\n') : null
-  ].filter((line) => line !== null).join('\n');
+  ].filter((line: any) => line !== null).join('\n');
 }
 
-export async function renderTeamWatch(dir, opts = {}) {
+export async function renderTeamWatch(dir: any, opts: any = {}) {
   const lines = Math.max(1, Number(opts.lines) || 20);
   const dashboard = await readTeamDashboard(dir);
   const control = await readTeamControl(dir);
@@ -666,7 +665,7 @@ export async function renderTeamWatch(dir, opts = {}) {
     '',
     '## Visible Agent Lanes',
     ...(visibleAgents.length
-      ? visibleAgents.map(([name, status]) => `- ${name}: ${status.status || 'pending'} | ${status.phase || 'unknown'} | last_seen:${status.last_seen || 'never'}`)
+      ? visibleAgents.map(([name, status]: any) => `- ${name}: ${status.status || 'pending'} | ${status.phase || 'unknown'} | last_seen:${status.last_seen || 'never'}`)
       : ['- No agent lanes registered yet.']),
     '',
     '## Runtime Task Snapshot',
@@ -675,30 +674,30 @@ export async function renderTeamWatch(dir, opts = {}) {
     '## Recent Mission Events',
     ...(events.length ? events.map(formatTranscriptEvent) : ['- No transcript events yet.']),
     teamCleanupRequested(control) ? ['', renderTeamCleanupSummary(control)].join('\n') : null
-  ].filter((line) => line !== null).join('\n');
+  ].filter((line: any) => line !== null).join('\n');
 }
 
-function visibleDashboardAgentEntries(dashboard = {}) {
+function visibleDashboardAgentEntries(dashboard: any = {}) {
   const agents = dashboard?.agents || {};
   const roster = dashboard?.roster || {};
   const analysis = uniqueAgentIds(roster.analysis_team || []);
   const debate = uniqueAgentIds(roster.debate_team || []);
   const development = uniqueAgentIds(roster.development_team || []);
   const validation = uniqueAgentIds(roster.validation_team || []);
-  const reviewers = validation.filter((id) => /review|qa|validation/i.test(id));
+  const reviewers = validation.filter((id: any) => /review|qa|validation/i.test(id));
   const reviewerTarget = Math.max(MIN_TEAM_REVIEWER_LANES, Number(dashboard?.role_counts?.reviewer) || 0);
   const reviewLanes = reviewers.slice(0, reviewerTarget);
   const phaseRepresentatives = [development[0], debate[0]].filter(Boolean);
   const requiredVisible = [...analysis, ...reviewLanes, ...phaseRepresentatives];
-  const concreteAgentIds = Object.keys(agents).filter((name) => name !== 'parent_orchestrator' && !DEFAULT_AGENTS.includes(name));
-  const fallbackAgentIds = Object.keys(agents).filter((name) => name !== 'parent_orchestrator');
+  const concreteAgentIds = Object.keys(agents).filter((name: any) => name !== 'parent_orchestrator' && !DEFAULT_AGENTS.includes(name));
+  const fallbackAgentIds = Object.keys(agents).filter((name: any) => name !== 'parent_orchestrator');
   const limit = Math.max(3, Number(dashboard?.agent_session_count) || 3, requiredVisible.length);
   return uniqueAgentIds([...requiredVisible, ...concreteAgentIds, ...debate, ...development, ...validation, ...fallbackAgentIds])
     .slice(0, limit)
-    .map((id) => [id, agents[id] || { status: 'pending', phase: null, last_seen: null }]);
+    .map((id: any) => [id, agents[id] || { status: 'pending', phase: null, last_seen: null }]);
 }
 
-function normalizeEvent(event = {}) {
+function normalizeEvent(event: any = {}) {
   return {
     ts: event.ts || nowIso(),
     agent: String(event.agent || 'parent_orchestrator'),
@@ -710,8 +709,8 @@ function normalizeEvent(event = {}) {
   };
 }
 
-function uniqueAgentIds(agents = []) {
-  const ids = [];
+function uniqueAgentIds(agents: any = []) {
+  const ids: any[] = [];
   const seen = new Set();
   for (const agent of agents) {
     const id = agent?.id || String(agent || '');
@@ -722,7 +721,7 @@ function uniqueAgentIds(agents = []) {
   return ids;
 }
 
-function parseTranscriptLine(line) {
+function parseTranscriptLine(line: any) {
   try {
     return JSON.parse(line);
   } catch {
@@ -730,7 +729,7 @@ function parseTranscriptLine(line) {
   }
 }
 
-function formatTranscriptEvent(event = {}) {
+function formatTranscriptEvent(event: any = {}) {
   if (event.raw) return `- ${event.raw}`;
   const parts = [
     event.ts || 'no-ts',
@@ -743,11 +742,11 @@ function formatTranscriptEvent(event = {}) {
   return `- ${parts.join(' ')}: ${String(event.message || '').slice(0, 500)}${suffix}`;
 }
 
-function uniqueTranscriptEvents(events = []) {
+function uniqueTranscriptEvents(events: any = []) {
   const seen = new Set();
-  const out = [];
+  const out: any[] = [];
   for (const event of events) {
-    const key = event?.raw || [event?.ts, event?.agent, event?.to, event?.type, event?.message].map((value) => String(value || '')).join('\t');
+    const key = event?.raw || [event?.ts, event?.agent, event?.to, event?.type, event?.message].map((value: any) => String(value || '')).join('\t');
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(event);
@@ -755,7 +754,7 @@ function uniqueTranscriptEvents(events = []) {
   return out;
 }
 
-function formatChatTranscriptEvent(event = {}, laneAgent = '', opts = {}) {
+function formatChatTranscriptEvent(event: any = {}, laneAgent: any = '', opts: any = {}) {
   if (event.raw) return codexChatBlock({ speaker: 'system', kind: 'raw', style: teamLaneTextStyle('overview'), color: opts.color, message: event.raw });
   const from = event.agent || 'unknown';
   const ts = event.ts ? `${event.ts} ` : '';
@@ -772,7 +771,7 @@ function formatChatTranscriptEvent(event = {}, laneAgent = '', opts = {}) {
   });
 }
 
-function codexChatBlock({ speaker = 'agent', to = '', kind = '', meta = '', style = {}, color = false, message = '' } = {}) {
+function codexChatBlock({ speaker = 'agent', to = '', kind = '', meta = '', style = {}, color = false, message = '' }: any = {}) {
   const role = style?.role || 'agent';
   const roleKind = [kind, role].filter(Boolean).join('/');
   const target = to ? ` -> ${to}` : '';
@@ -781,33 +780,33 @@ function codexChatBlock({ speaker = 'agent', to = '', kind = '', meta = '', styl
     roleKind ? colorizeChatText(`[${roleKind}]`, style, color) : null,
     meta ? colorizeChatText(`| ${meta}`, { color_name: 'Gray' }, color) : null
   ].filter(Boolean).join(' ');
-  const border = (text) => colorizeChatText(text, style, color);
-  const body = String(message || '').split(/\r?\n/).map((line) => `${border('│')} ${colorizeChatText(line || ' ', style, color)}`).join('\n');
+  const border = (text: any) => colorizeChatText(text, style, color);
+  const body = String(message || '').split(/\r?\n/).map((line: any) => `${border('│')} ${colorizeChatText(line || ' ', style, color)}`).join('\n');
   return [`${border('╭─')} ${header}`, body || `${border('│')} `, border('╰─')].join('\n');
 }
 
-function terminalChatColorEnabled(opts = {}) {
+function terminalChatColorEnabled(opts: any = {}) {
   if (Object.prototype.hasOwnProperty.call(opts, 'color')) return Boolean(opts.color);
   if (process.env.NO_COLOR) return false;
   return Boolean(process.stdout?.isTTY);
 }
 
-function colorizeChatText(text, style = {}, enabled = false, opts = {}) {
+function colorizeChatText(text: any, style: any = {}, enabled: any = false, opts: any = {}) {
   if (!enabled) return text;
   const colorName = String(style?.color_name || 'gray').toLowerCase();
-  const colorCode = CHAT_COLOR_CODES[colorName] || CHAT_COLOR_CODES.gray;
+  const colorCode = (CHAT_COLOR_CODES as Record<string, string>)[colorName] || CHAT_COLOR_CODES.gray;
   const code = opts.bold ? `1;${colorCode}` : colorCode;
   return `\x1b[${code}m${text}\x1b[0m`;
 }
 
-function eventAddressedTo(event = {}, agent = '') {
+function eventAddressedTo(event: any = {}, agent: any = '') {
   if (!event?.to) return false;
   const target = String(event.to || '').trim().toLowerCase();
   const name = String(agent || '').trim().toLowerCase();
   return target === name || target === 'all' || target === '*' || target === 'broadcast';
 }
 
-function teamLaneAliases(agent = '', events = [], dashboard = null, runtimeTasks = []) {
+function teamLaneAliases(agent: any = '', events: any = [], dashboard: any = null, runtimeTasks: any = []) {
   const primary = String(agent || '').trim();
   if (!primary) return [];
   const aliases = [primary];
@@ -816,24 +815,24 @@ function teamLaneAliases(agent = '', events = [], dashboard = null, runtimeTasks
   const role = teamLaneTextStyle(primary).role;
   const candidates = uniqueAgentIds([
     ...Object.keys(dashboard?.agents || {}),
-    ...events.map((event) => event?.agent).filter(Boolean),
-    ...runtimeTasks.flatMap((task) => [task?.worker, task?.agent_hint]).filter(Boolean)
+    ...events.map((event: any) => event?.agent).filter(Boolean),
+    ...runtimeTasks.flatMap((task: any) => [task?.worker, task?.agent_hint]).filter(Boolean)
   ])
-    .filter((id) => id !== primary)
-    .filter((id) => !DEFAULT_AGENTS.includes(id))
-    .filter((id) => teamLaneTextStyle(id).role === role)
-    .filter((id) => !numberedLaneOrdinal(id));
+    .filter((id: any) => id !== primary)
+    .filter((id: any) => !DEFAULT_AGENTS.includes(id))
+    .filter((id: any) => teamLaneTextStyle(id).role === role)
+    .filter((id: any) => !numberedLaneOrdinal(id));
   const concrete = candidates[ordinal - 1];
   if (concrete) aliases.push(concrete);
   return aliases;
 }
 
-function numberedLaneOrdinal(agent = '') {
+function numberedLaneOrdinal(agent: any = '') {
   const match = String(agent || '').match(/_(\d+)$/);
   return match ? Number(match[1]) : 0;
 }
 
-function teamLaneTextStyle(agentId = '') {
+function teamLaneTextStyle(agentId: any = '') {
   const id = String(agentId || '').toLowerCase();
   if (!id || id === 'mission_overview' || id === 'overview') return { role: 'overview', color_name: 'Blue' };
   if (/analysis|scout/.test(id)) return { role: 'scout', color_name: 'Cyan' };
@@ -844,9 +843,9 @@ function teamLaneTextStyle(agentId = '') {
   return { role: 'planning', color_name: 'Yellow' };
 }
 
-function formatRuntimeTasks(tasks = []) {
+function formatRuntimeTasks(tasks: any = []) {
   if (!tasks.length) return ['- No assigned runtime tasks found.'];
-  return tasks.slice(0, 12).map((task) => {
+  return tasks.slice(0, 12).map((task: any) => {
     const details = [
       task.status || 'pending',
       task.phase || task.role || 'team',
@@ -857,7 +856,7 @@ function formatRuntimeTasks(tasks = []) {
   });
 }
 
-function trimLiveMarkdown(text) {
+function trimLiveMarkdown(text: any) {
   if (Buffer.byteLength(text) <= MAX_LIVE_BYTES) return text.endsWith('\n') ? text : `${text}\n`;
   const marker = '## Live Events\n';
   const i = text.indexOf(marker);

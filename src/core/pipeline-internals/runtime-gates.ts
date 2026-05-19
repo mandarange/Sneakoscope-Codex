@@ -1,4 +1,3 @@
-// @ts-nocheck
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js';
@@ -15,6 +14,13 @@ import { routeRequiresScoutIntake } from '../scouts/scout-plan.js';
 import { readScoutGateStatus } from '../scouts/scout-gate.js';
 import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from '../mistake-recall.js';
 import { validateTeamRuntimeArtifacts } from '../team-dag.js';
+import {
+  clarificationStopReason,
+  context7Evidence,
+  hasContext7DocsEvidence,
+  hasSubagentEvidence,
+  subagentEvidence,
+} from './runtime-core.js';
 
 const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
@@ -24,13 +30,13 @@ const COMPLIANCE_LOOP_GUARD_ARTIFACT = 'compliance-loop-guard.json';
 const HARD_BLOCKER_ARTIFACT = 'hard-blocker.json';
 const DEFAULT_COMPLIANCE_LOOP_LIMIT = 3;
 
-function reflectionRequiredForState(state = {}) {
+function reflectionRequiredForState(state: any = {}) {
   if (state.reflection_required === false) return false;
   if (state.reflection_required === true) return true;
   return reflectionRequiredForRoute(state.route || state.mode || state.route_command);
 }
 
-async function reflectionGateStatus(root, state = {}) {
+async function reflectionGateStatus(root: any, state: any = {}) {
   if (!reflectionRequiredForState(state)) return { ok: true, missing: [] };
   const id = state?.mission_id;
   if (!id) return { ok: false, missing: ['mission_id'] };
@@ -41,7 +47,7 @@ async function reflectionGateStatus(root, state = {}) {
   const hasLesson = gate.lessons_recorded === true || (Array.isArray(gate.lessons) && gate.lessons.length > 0);
   const noIssue = gate.no_issue_acknowledged === true;
   const hasMemory = gate.triwiki_recorded === true || gate.memory_recorded === true;
-  const missing = [];
+  const missing: any[] = [];
   if (gate.passed !== true) missing.push('passed');
   if (!hasArtifact) missing.push(REFLECTION_ARTIFACT);
   if (!hasLesson && !noIssue) missing.push('lessons_recorded_or_no_issue_acknowledged');
@@ -53,24 +59,24 @@ async function reflectionGateStatus(root, state = {}) {
   return { ok: missing.length === 0, missing };
 }
 
-async function staleReflectionReasons(root, state = {}, gate = {}) {
+async function staleReflectionReasons(root: any, state: any = {}, gate: any = {}) {
   const created = Date.parse(gate.created_at || gate.updated_at || '');
   if (!Number.isFinite(created)) return ['reflection-gate:created_at'];
   const id = state?.mission_id;
   if (!id) return [];
   const dir = missionDir(root, id);
-  const missing = [];
-  for (const file of gateFilesForState(state).filter((file) => file && !['none', 'honest_mode'].includes(file))) {
+  const missing: any[] = [];
+  for (const file of gateFilesForState(state).filter((file: any) => file && !['none', 'honest_mode'].includes(file))) {
     if (await fileUpdatedAfter(path.join(dir, file), created)) missing.push(`${file}:updated_after_reflection`);
   }
   const transcript = await readText(path.join(dir, 'team-transcript.jsonl'), '');
   const newerWorkEvent = transcript
     .split(/\n/)
     .filter(Boolean)
-    .map((line) => {
+    .map((line: any) => {
       try { return JSON.parse(line); } catch { return null; }
     })
-    .find((event) => {
+    .find((event: any) => {
       const ts = Date.parse(event?.ts || '');
       if (!Number.isFinite(ts) || ts <= created) return false;
       return !/^(REFLECTION|HONEST|TEAM_CLEANUP)$/i.test(String(event?.phase || ''));
@@ -79,7 +85,7 @@ async function staleReflectionReasons(root, state = {}, gate = {}) {
   return missing;
 }
 
-async function fileUpdatedAfter(file, timeMs) {
+async function fileUpdatedAfter(file: any, timeMs: any) {
   try {
     const stat = await fsp.stat(file);
     return stat.mtimeMs > timeMs + 1000;
@@ -88,15 +94,15 @@ async function fileUpdatedAfter(file, timeMs) {
   }
 }
 
-function reflectionStopReason(state = {}, status = {}) {
+function reflectionStopReason(state: any = {}, status: any = {}) {
   const id = state?.mission_id || 'latest';
   const route = String(state.route_command || state.route || state.mode || 'route');
   const missing = status.missing?.length ? ` Missing: ${status.missing.join(', ')}.` : '';
   return `SKS ${route} must run reflection before final. Write .sneakoscope/missions/${id}/${REFLECTION_ARTIFACT}, record real lessons in ${REFLECTION_MEMORY_PATH} when present, refresh/pack and validate TriWiki, then pass .sneakoscope/missions/${id}/${REFLECTION_GATE}.${missing}`;
 }
 
-export async function projectGateStatus(root, state = {}) {
-  const gates = [];
+export async function projectGateStatus(root: any, state: any = {}) {
+  const gates: any[] = [];
   const id = state?.mission_id || null;
   if (clarificationGatePending(state)) {
     gates.push({
@@ -134,7 +140,7 @@ export async function projectGateStatus(root, state = {}) {
     });
   }
   if (id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate)) {
-    const active = await passedActiveGate(root, state);
+    const active: any = await passedActiveGate(root, state);
     gates.push({
       id: active.file || state.stop_gate,
       ok: active.ok,
@@ -160,7 +166,7 @@ export async function projectGateStatus(root, state = {}) {
       source: id ? `.sneakoscope/missions/${id}/${REFLECTION_GATE}` : null
     });
   }
-  const blockers = gates.filter((gate) => !gate.ok).flatMap((gate) => gate.missing.map((item) => `${gate.id}:${item}`));
+  const blockers = gates.filter((gate: any) => !gate.ok).flatMap((gate: any) => gate.missing.map((item: any) => `${gate.id}:${item}`));
   return {
     schema_version: 1,
     generated_at: nowIso(),
@@ -173,7 +179,7 @@ export async function projectGateStatus(root, state = {}) {
   };
 }
 
-export async function evaluateStop(root, state, payload, opts = {}) {
+export async function evaluateStop(root: any, state: any, payload: any, opts: any = {}) {
   const last = extractLastMessage(payload);
   if (clarificationGatePending(state)) {
     if (await hasVisibleClarificationQuestionBlock(root, state, last)) return { continue: true };
@@ -202,7 +208,7 @@ export async function evaluateStop(root, state, payload, opts = {}) {
   }
   if (opts.noQuestion) {
     if (containsUserQuestion(last)) return complianceBlock(root, state, noQuestionContinuationReason(), { gate: 'no-question' });
-    const gate = await passedActiveGate(root, state);
+    const gate: any = await passedActiveGate(root, state);
     if (gate.ok) {
       const reflection = await reflectionGateStatus(root, state);
       if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
@@ -212,7 +218,7 @@ export async function evaluateStop(root, state, payload, opts = {}) {
     return complianceBlock(root, state, `SKS no-question run is not done. Continue autonomously, fix failing checks, update ${gate.file || 'the active gate file'}, and do not ask the user.${missing}`, { gate: gate.file || 'active-gate', missing: gate.missing });
   }
   if (state?.mission_id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate)) {
-    const gate = await passedActiveGate(root, state);
+    const gate: any = await passedActiveGate(root, state);
     if (!gate.ok) {
       const missing = gate.missing?.length ? ` Missing gate fields: ${gate.missing.join(', ')}.` : '';
       return complianceBlock(root, state, `SKS ${state.route_command || state.mode} route cannot stop yet. Pass ${gate.file || state.stop_gate} or record a hard blocker with evidence before finishing.${missing}`, { gate: gate.file || state.stop_gate, missing: gate.missing });
@@ -227,7 +233,7 @@ export async function evaluateStop(root, state, payload, opts = {}) {
   return null;
 }
 
-async function routeProofGateStatus(root, state = {}) {
+async function routeProofGateStatus(root: any, state: any = {}) {
   const route = routeFromState(state);
   const required = state.proof_required === true || routeRequiresCompletionProof(route);
   if (!required || !state?.mission_id) return { ok: true, required: false, issues: [] };
@@ -239,7 +245,7 @@ async function routeProofGateStatus(root, state = {}) {
   });
 }
 
-function clarificationGatePending(state = {}) {
+function clarificationGatePending(state: any = {}) {
   const phase = String(state.phase || '');
   return Boolean(state?.clarification_required && phase.includes('CLARIFICATION_AWAITING_ANSWERS'))
     || Boolean(
@@ -251,7 +257,7 @@ function clarificationGatePending(state = {}) {
     );
 }
 
-async function complianceBlock(root, state = {}, reason = '', detail = {}) {
+async function complianceBlock(root: any, state: any = {}, reason: any = '', detail: any = {}) {
   if (!state?.mission_id) return { decision: 'block', reason };
   const dir = missionDir(root, state.mission_id);
   const guardPath = path.join(dir, COMPLIANCE_LOOP_GUARD_ARTIFACT);
@@ -299,7 +305,7 @@ function complianceLoopLimit() {
   return Math.max(1, Math.min(20, raw));
 }
 
-function normalizeComplianceReason(reason = '') {
+function normalizeComplianceReason(reason: any = '') {
   return String(reason || '')
     .replace(/\bM-\d{8}-\d{6}-[a-z0-9]+\b/gi, 'M-*')
     .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, 'TIMESTAMP')
@@ -309,7 +315,7 @@ function normalizeComplianceReason(reason = '') {
     .slice(0, 1200);
 }
 
-async function passedActiveGate(root, state) {
+async function passedActiveGate(root: any, state: any) {
   const id = state?.mission_id;
   if (!id) return { ok: false, file: null };
   const hardBlocker = await passedHardBlocker(root, state);
@@ -331,7 +337,7 @@ async function passedActiveGate(root, state) {
   return { ok: false, file: files[0] || null };
 }
 
-async function passedHardBlocker(root, state) {
+async function passedHardBlocker(root: any, state: any) {
   if (!state?.mission_id) return { ok: false };
   const file = 'hard-blocker.json';
   const blocker = await readJson(path.join(missionDir(root, state.mission_id), file), null);
@@ -339,47 +345,47 @@ async function passedHardBlocker(root, state) {
   return { ok: blocker.passed === true && String(blocker.reason || '').trim() && Array.isArray(blocker.evidence) && blocker.evidence.length > 0, file };
 }
 
-function missingRequiredGateFields(file, state, gate = {}) {
+function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
   const mode = String(state?.mode || '').toUpperCase();
   if (file === 'team-gate.json' || mode === 'TEAM') {
     const required = ['team_roster_confirmed', 'analysis_artifact', 'triwiki_refreshed', 'triwiki_validated', 'consensus_artifact', 'implementation_team_fresh', 'review_artifact', 'integration_evidence', 'session_cleanup'];
     if (fromChatImgCoverageRequired(state, gate)) required.push('from_chat_img_request_coverage');
     if (teamGraphRequired(state, gate)) required.push('team_graph_compiled', 'runtime_dependencies_concrete', 'worker_inboxes_written', 'write_scope_conflicts_zero', 'task_claim_readiness_checked');
     return required
-      .filter((key) => gate[key] !== true);
+      .filter((key: any) => gate[key] !== true);
   }
   if (file === 'qa-gate.json' || mode === 'QALOOP') {
     return ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'ui_computer_use_evidence', 'honest_mode_complete']
-      .filter((key) => gate[key] !== true);
+      .filter((key: any) => gate[key] !== true);
   }
   if (file === 'ppt-gate.json' || mode === 'PPT') {
     const required = [...PPT_REQUIRED_GATE_FIELDS];
     if (Number(gate.painpoint_count || 0) < 3) required.push('painpoint_count>=3');
-    return required.filter((key) => {
+    return required.filter((key: any) => {
       if (key === 'painpoint_count>=3') return Number(gate.painpoint_count || 0) < 3;
       return gate[key] !== true;
     });
   }
   if (file === IMAGE_UX_REVIEW_GATE_ARTIFACT || mode === 'IMAGE_UX_REVIEW') {
-    return IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS.filter((key) => gate[key] !== true);
+    return IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS.filter((key: any) => gate[key] !== true);
   }
   return [];
 }
 
-async function missingRequiredGateArtifacts(root, file, state, gate = {}) {
+async function missingRequiredGateArtifacts(root: any, file: any, state: any, gate: any = {}) {
   const mode = String(state?.mode || '').toUpperCase();
   if (file === 'research-gate.json' || mode === 'RESEARCH') {
     const evaluated = await evaluateResearchGate(missionDir(root, state.mission_id));
     if (evaluated.passed === true) return [];
-    return (evaluated.reasons || ['research_gate_blocked']).map((reason) => `research-gate:${reason}`);
+    return (evaluated.reasons || ['research_gate_blocked']).map((reason: any) => `research-gate:${reason}`);
   }
   if (file === IMAGE_UX_REVIEW_GATE_ARTIFACT || mode === 'IMAGE_UX_REVIEW') return missingImageUxReviewArtifacts(root, state, gate);
   if (file !== 'team-gate.json' && mode !== 'TEAM') return [];
-  const missing = [];
+  const missing: any[] = [];
   if (gate.team_roster_confirmed === true && !(await exists(path.join(missionDir(root, state.mission_id), 'team-roster.json')))) missing.push('team-roster.json');
   if (teamGraphRequired(state, gate) && gate.team_graph_compiled === true) {
     const validation = await validateTeamRuntimeArtifacts(missionDir(root, state.mission_id));
-    if (!validation.ok) missing.push(...validation.issues.map((issue) => `team-runtime:${issue}`));
+    if (!validation.ok) missing.push(...validation.issues.map((issue: any) => `team-runtime:${issue}`));
   }
   if (fromChatImgCoverageRequired(state, gate) && gate.from_chat_img_request_coverage === true) {
     missing.push(...await missingFromChatImgCoverageArtifacts(root, state));
@@ -393,8 +399,8 @@ async function missingRequiredGateArtifacts(root, file, state, gate = {}) {
   return missing;
 }
 
-async function missingImageUxReviewArtifacts(root, state = {}, gate = {}) {
-  const missing = [];
+async function missingImageUxReviewArtifacts(root: any, state: any = {}, gate: any = {}) {
+  const missing: any[] = [];
   const id = state?.mission_id;
   if (!id) return [`${IMAGE_UX_REVIEW_GATE_ARTIFACT}:mission_id`];
   const dir = missionDir(root, id);
@@ -405,7 +411,7 @@ async function missingImageUxReviewArtifacts(root, state = {}, gate = {}) {
     [IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, 'issue_ledger_created'],
     [IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, 'bounded_iteration_complete']
   ];
-  for (const [artifact, field] of required) {
+  for (const [artifact, field] of required as Array<[string, string]>) {
     if (gate[field] === true && !(await exists(path.join(dir, artifact)))) missing.push(artifact);
   }
   const generated = await readJson(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), null);
@@ -429,16 +435,16 @@ async function missingImageUxReviewArtifacts(root, state = {}, gate = {}) {
   return missing;
 }
 
-function fromChatImgCoverageRequired(state = {}, gate = {}) {
+function fromChatImgCoverageRequired(state: any = {}, gate: any = {}) {
   return state?.from_chat_img_required === true || gate?.from_chat_img_required === true;
 }
 
-function teamGraphRequired(state = {}, gate = {}) {
+function teamGraphRequired(state: any = {}, gate: any = {}) {
   return state?.team_graph_required === true || gate?.team_graph_required === true;
 }
 
-async function missingFromChatImgCoverageArtifacts(root, state = {}) {
-  const missing = [];
+async function missingFromChatImgCoverageArtifacts(root: any, state: any = {}) {
+  const missing: any[] = [];
   const id = state?.mission_id;
   if (!id) return [`${FROM_CHAT_IMG_COVERAGE_ARTIFACT}:mission_id`];
   const ledger = await readJson(path.join(missionDir(root, id), FROM_CHAT_IMG_COVERAGE_ARTIFACT), null);
@@ -494,7 +500,7 @@ async function missingFromChatImgCoverageArtifacts(root, state = {}) {
   return missing;
 }
 
-function gateFilesForState(state) {
+function gateFilesForState(state: any) {
   if (state.stop_gate) return [state.stop_gate];
   if (state.mode === 'GOAL') return ['goal-workflow.json'];
   if (state.mode === 'RESEARCH') return ['research-gate.json', 'research-gate.evaluated.json'];
@@ -508,17 +514,16 @@ function gateFilesForState(state) {
   return ['done-gate.json'];
 }
 
-function extractLastMessage(payload) {
+function extractLastMessage(payload: any) {
   return payload.last_assistant_message || payload.assistant_message || payload.message || payload.response || payload.raw || '';
 }
 
-async function hasVisibleClarificationQuestionBlock(root, state = {}, text = '') {
+async function hasVisibleClarificationQuestionBlock(root: any, state: any = {}, text: any = '') {
   const body = String(text || '');
   if (!/Required questions|필수 질문|질문지|답변할 항목/i.test(body)) return false;
   const schema = state.mission_id ? await readJson(path.join(missionDir(root, state.mission_id), 'required-answers.schema.json'), null) : null;
   const slots = Array.isArray(schema?.slots) ? schema.slots : [];
   if (!slots.length) return /sks pipeline answer|answers\.json/i.test(body);
-  const requiredIds = slots.slice(0, Math.min(3, slots.length)).map((slot) => slot.id).filter(Boolean);
-  return requiredIds.every((id) => body.includes(id)) && /sks pipeline answer|answers\.json|slot id|슬롯|항목/i.test(body);
+  const requiredIds = slots.slice(0, Math.min(3, slots.length)).map((slot: any) => slot.id).filter(Boolean);
+  return requiredIds.every((id: any) => body.includes(id)) && /sks pipeline answer|answers\.json|slot id|슬롯|항목/i.test(body);
 }
-

@@ -1,4 +1,3 @@
-// @ts-nocheck
 export {
   validateScoutResult
 } from './scout-output-parser.js';

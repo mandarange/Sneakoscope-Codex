@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, readJson, sha256, writeJsonAtomic } from './fsx.js';
@@ -8,7 +7,7 @@ export const CLAIM_CONSUMPTION_ARTIFACT = 'claim-consumption-ledger.json';
 
 const MISTAKE_CUE_RE = /\b(mistake|repeat|repeated|regression|forget|forgot|stale|drift|ambiguity|clarification|fallback|question|runtime|route|triwiki|wiki|voxel|memory)\b|반복|실수|또\s*|까먹|기억|모호|질문|복셀|검수|개선|정상\s*동작/i;
 
-export async function buildMistakeRecallLedger(root, { prompt = '', answers = {}, maxMatches = 8 } = {}) {
+export async function buildMistakeRecallLedger(root: any, { prompt = '', answers = {}, maxMatches = 8 }: any = {}) {
   const seedText = `${prompt || ''}\n${JSON.stringify(answers || {})}`;
   const queryTerms = tokenize(seedText);
   const claims = [
@@ -16,9 +15,9 @@ export async function buildMistakeRecallLedger(root, { prompt = '', answers = {}
     ...(await claimsFromMemory(root))
   ];
   const scored = claims
-    .map((claim) => ({ ...claim, ...scoreClaim(claim, queryTerms, seedText) }))
-    .filter((claim) => claim.score >= 2.5 || (claim.mistake_cue && claim.overlap_count > 0))
-    .sort((a, b) => (b.score - a.score) || String(a.id).localeCompare(String(b.id)))
+    .map((claim: any) => ({ ...claim, ...scoreClaim(claim, queryTerms, seedText) }))
+    .filter((claim: any) => claim.score >= 2.5 || (claim.mistake_cue && claim.overlap_count > 0))
+    .sort((a: any, b: any) => (b.score - a.score) || String(a.id).localeCompare(String(b.id)))
     .slice(0, maxMatches);
   return {
     schema_version: 1,
@@ -27,7 +26,7 @@ export async function buildMistakeRecallLedger(root, { prompt = '', answers = {}
     required: scored.length > 0,
     status: scored.length ? 'matched' : 'no_relevant_mistake_claims',
     query_terms: [...queryTerms].slice(0, 24),
-    matches: scored.map((claim) => ({
+    matches: scored.map((claim: any) => ({
       id: claim.id,
       text: claim.text,
       source: claim.source,
@@ -43,17 +42,17 @@ export async function buildMistakeRecallLedger(root, { prompt = '', answers = {}
   };
 }
 
-export function bindMistakeRecallToAnswers(answers = {}, ledger = {}) {
+export function bindMistakeRecallToAnswers(answers: any = {}, ledger: any = {}) {
   if (!ledger?.required || !Array.isArray(ledger.matches) || !ledger.matches.length) return answers;
-  const ids = ledger.matches.map((match) => match.id).filter(Boolean);
+  const ids = ledger.matches.map((match: any) => match.id).filter(Boolean);
   const recallLine = `TriWiki mistake recall consumed before implementation: ${ids.join(', ')}`;
   const riskBoundary = Array.isArray(answers.RISK_BOUNDARY)
     ? [...answers.RISK_BOUNDARY]
-    : String(answers.RISK_BOUNDARY || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    : String(answers.RISK_BOUNDARY || '').split(/\r?\n/).map((line: any) => line.trim()).filter(Boolean);
   if (!riskBoundary.includes(recallLine)) riskBoundary.push(recallLine);
   const acceptance = Array.isArray(answers.ACCEPTANCE_CRITERIA)
     ? [...answers.ACCEPTANCE_CRITERIA]
-    : String(answers.ACCEPTANCE_CRITERIA || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    : String(answers.ACCEPTANCE_CRITERIA || '').split(/\r?\n/).map((line: any) => line.trim()).filter(Boolean);
   const acceptanceLine = 'mistake-recall-ledger.json is consumed by the decision contract when relevant TriWiki mistakes are found';
   if (!acceptance.includes(acceptanceLine)) acceptance.push(acceptanceLine);
   return {
@@ -66,31 +65,31 @@ export function bindMistakeRecallToAnswers(answers = {}, ledger = {}) {
   };
 }
 
-export function mistakeRecallContractSummary(ledger = {}) {
+export function mistakeRecallContractSummary(ledger: any = {}) {
   if (!ledger?.required) return { required: false, status: ledger?.status || 'not_required', matches: [] };
   return {
     required: true,
     status: ledger.status,
     artifact: MISTAKE_RECALL_ARTIFACT,
     match_count: ledger.matches?.length || 0,
-    ids: (ledger.matches || []).map((match) => match.id).filter(Boolean),
-    sources: [...new Set((ledger.matches || []).map((match) => match.source).filter(Boolean))].slice(0, 8)
+    ids: (ledger.matches || []).map((match: any) => match.id).filter(Boolean),
+    sources: [...new Set((ledger.matches || []).map((match: any) => match.source).filter(Boolean))].slice(0, 8)
   };
 }
 
-export function contractConsumesMistakeRecall(contract = {}, ledger = {}) {
+export function contractConsumesMistakeRecall(contract: any = {}, ledger: any = {}) {
   if (!ledger?.required) return { ok: true, missing: [] };
-  const ids = (ledger.matches || []).map((match) => match.id).filter(Boolean);
+  const ids = (ledger.matches || []).map((match: any) => match.id).filter(Boolean);
   if (!ids.length) return { ok: true, missing: [] };
   const contractText = JSON.stringify(contract || {});
-  const missing = ids.filter((id) => !contractText.includes(id));
+  const missing = ids.filter((id: any) => !contractText.includes(id));
   const summary = contract?.triwiki_mistake_recall;
   if (!summary?.required) missing.push('contract.triwiki_mistake_recall.required');
   if (summary?.artifact !== MISTAKE_RECALL_ARTIFACT) missing.push('contract.triwiki_mistake_recall.artifact');
   return { ok: missing.length === 0, missing };
 }
 
-export async function writeMistakeRecallArtifacts(missionDir, ledger = {}, contract = {}) {
+export async function writeMistakeRecallArtifacts(missionDir: any, ledger: any = {}, contract: any = {}) {
   await writeJsonAtomic(path.join(missionDir, MISTAKE_RECALL_ARTIFACT), ledger);
   const consumption = {
     schema_version: 1,
@@ -103,7 +102,7 @@ export async function writeMistakeRecallArtifacts(missionDir, ledger = {}, contr
   return consumption;
 }
 
-export async function mistakeRecallGateStatus(root, state = {}) {
+export async function mistakeRecallGateStatus(root: any, state: any = {}) {
   const id = state?.mission_id;
   if (!id) return { ok: true, missing: [] };
   const dir = path.join(root, '.sneakoscope', 'missions', id);
@@ -120,9 +119,9 @@ export async function mistakeRecallGateStatus(root, state = {}) {
   };
 }
 
-async function claimsFromContextPack(root) {
+async function claimsFromContextPack(root: any) {
   const pack = await readJson(path.join(root, '.sneakoscope', 'wiki', 'context-pack.json'), null);
-  const claims = [];
+  const claims: any[] = [];
   for (const claim of Array.isArray(pack?.claims) ? pack.claims : []) {
     if (!claim?.id || !claim?.text) continue;
     claims.push({
@@ -139,10 +138,10 @@ async function claimsFromContextPack(root) {
   return claims;
 }
 
-async function claimsFromMemory(root) {
+async function claimsFromMemory(root: any) {
   const base = path.join(root, '.sneakoscope', 'memory');
   const files = await listClaimFiles(base);
-  const rows = [];
+  const rows: any[] = [];
   for (const file of files.slice(0, 120)) {
     const rel = path.relative(root, file);
     let text = '';
@@ -156,17 +155,17 @@ async function claimsFromMemory(root) {
   return rows;
 }
 
-async function listClaimFiles(base) {
-  const out = [];
-  async function walk(dir, depth = 0) {
+async function listClaimFiles(base: any) {
+  const out: any[] = [];
+  async function walk(dir: any, depth: any = 0) {
     if (depth > 3) return;
-    let entries = [];
+    let entries: any[] = [];
     try {
       entries = await fsp.readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
-    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const entry of entries.sort((a: any, b: any) => a.name.localeCompare(b.name))) {
       const file = path.join(dir, entry.name);
       if (entry.isDirectory()) await walk(file, depth + 1);
       else if (/\.(md|txt|json)$/i.test(entry.name)) out.push(file);
@@ -176,24 +175,24 @@ async function listClaimFiles(base) {
   return out;
 }
 
-function parseClaimRows(text, relFile) {
+function parseClaimRows(text: any, relFile: any) {
   if (/\.json$/i.test(relFile)) {
     try {
       const parsed = JSON.parse(text);
       const rows = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.claims) ? parsed.claims : []);
-      return rows.map((row) => normalizeClaim(row, relFile)).filter(Boolean);
+      return rows.map((row: any) => normalizeClaim(row, relFile)).filter(Boolean);
     } catch {
       return [];
     }
   }
   return String(text || '').split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
-    .map((line) => normalizeClaim(line.replace(/^[-*]\s*/, ''), relFile))
+    .map((line: any) => line.trim())
+    .filter((line: any) => line && !line.startsWith('#'))
+    .map((line: any) => normalizeClaim(line.replace(/^[-*]\s*/, ''), relFile))
     .filter(Boolean);
 }
 
-function normalizeClaim(row, relFile) {
+function normalizeClaim(row: any, relFile: any) {
   if (!row) return null;
   if (typeof row === 'object') {
     const text = String(row.text || row.claim || '').trim();
@@ -224,7 +223,7 @@ function normalizeClaim(row, relFile) {
   };
 }
 
-function scoreClaim(claim, queryTerms, seedText) {
+function scoreClaim(claim: any, queryTerms: any, seedText: any) {
   const hay = `${claim.id || ''} ${claim.text || ''} ${claim.source || ''}`.toLowerCase();
   let overlap = 0;
   for (const term of queryTerms) if (hay.includes(term)) overlap += 1;
@@ -232,8 +231,8 @@ function scoreClaim(claim, queryTerms, seedText) {
   const seedMistakeCue = MISTAKE_CUE_RE.test(seedText || '');
   const required = Number(claim.required_weight || 0);
   const trust = Number(claim.trust_score || 0);
-  const risk = { low: 0, medium: 0.25, high: 0.75, critical: 1.1 }[claim.risk || 'medium'] ?? 0.25;
-  const freshness = { fresh: 0.45, unknown: 0.1, stale: -0.25 }[claim.freshness || 'unknown'] ?? 0.1;
+  const risk = ({ low: 0, medium: 0.25, high: 0.75, critical: 1.1 } as Record<string, number>)[claim.risk || 'medium'] ?? 0.25;
+  const freshness = ({ fresh: 0.45, unknown: 0.1, stale: -0.25 } as Record<string, number>)[claim.freshness || 'unknown'] ?? 0.1;
   const score = overlap + required * 3.5 + trust * 1.5 + risk + freshness + (mistakeCue ? 2 : 0) + (seedMistakeCue && mistakeCue ? 1 : 0);
   return {
     score,
@@ -248,7 +247,7 @@ function scoreClaim(claim, queryTerms, seedText) {
   };
 }
 
-function tokenize(text) {
+function tokenize(text: any) {
   const out = new Set();
   for (const match of String(text || '').toLowerCase().matchAll(/[a-z0-9_/-]{3,}|[가-힣]{2,}/g)) {
     const token = match[0].replace(/^[-_/]+|[-_/]+$/g, '');
@@ -262,17 +261,17 @@ const STOP_TERMS = new Set([
   '사용자', '요청', '현재', '코드', '기준', '구현', '작업', '완료', '검증'
 ]);
 
-function extractField(text, key) {
+function extractField(text: any, key: any) {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = String(text || '').match(new RegExp(`\\b${escaped}\\s*[:=]\\s*\\\`?([^\\\`|,;]+)`, 'i'));
-  return match ? match[1].trim().replace(/[.;)]$/, '') : null;
+  return match?.[1] ? match[1].trim().replace(/[.;)]$/, '') : null;
 }
 
-function numberOrUndefined(value) {
+function numberOrUndefined(value: any) {
   const n = Number(value);
   return Number.isFinite(n) ? n : undefined;
 }
 
-function slug(value) {
+function slug(value: any) {
   return String(value || 'claim').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'claim';
 }

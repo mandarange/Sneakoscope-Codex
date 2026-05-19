@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { nowIso, sha256, writeJsonAtomic } from './fsx.js';
 import { contextCapsule } from './triwiki-attention.js';
@@ -99,12 +98,12 @@ export const TMUX_COCKPIT_VIEWS = Object.freeze([
   'Statusline / Terminal Title Preview'
 ]);
 
-export function estimateTokens(value) {
+export function estimateTokens(value: any) {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   return Math.max(1, Math.ceil(String(text || '').length / 4));
 }
 
-export function classifyToolError(input = {}) {
+export function classifyToolError(input: any = {}) {
   const text = `${input.code || ''} ${input.name || ''} ${input.message || ''} ${input.stderr || ''}`.toLowerCase();
   if (/invalid|required|schema|argument|parameter|json/.test(text)) return 'InvalidArguments';
   if (/enoent|not found|cwd|path|missing file|environment|not installed/.test(text)) return 'UnexpectedEnvironment';
@@ -118,7 +117,7 @@ export function classifyToolError(input = {}) {
   return 'Unknown';
 }
 
-export function utilityScore(object = {}) {
+export function utilityScore(object: any = {}) {
   const evidence = Math.min(20, Number(object.evidence_count || 0) * 4);
   const successfulUse = Math.min(16, Number(object.success_count || object.use_count || 0) * 3);
   const recency = daysSince(object.updated_at || object.last_used_at || object.created_at) <= 30 ? 14 : 4;
@@ -132,11 +131,11 @@ export function utilityScore(object = {}) {
     object.prompt_bloat ? 8 : 0,
     object.security_risk ? 80 : 0,
     object.maintenance_cost ? 8 : 0
-  ].reduce((a, b) => a + b, 0);
+  ].reduce((a: any, b: any) => a + b, 0);
   return clamp(0, 100, recency + evidence + successfulUse + uniqueness + trust + riskPrevention - penalties);
 }
 
-export function forgettingDecision(object = {}, opts = {}) {
+export function forgettingDecision(object: any = {}, opts: any = {}) {
   const state = String(object.lifecycle_state || object.status || '').toUpperCase();
   const score = utilityScore(object);
   if (isPinned(object)) return decision('KEEP_ACTIVE', 'PINNED', score, ['retention_exempt']);
@@ -154,7 +153,7 @@ export function forgettingDecision(object = {}, opts = {}) {
   return decision('KEEP_ACTIVE', 'ACTIVE', score, ['useful_current']);
 }
 
-export function createSkillCard(input = {}) {
+export function createSkillCard(input: any = {}) {
   return {
     skill_id: input.skill_id || input.id || `skill.${safeId(input.name || 'candidate')}`,
     name: input.name || input.skill_id || 'Candidate Skill',
@@ -182,7 +181,7 @@ export function createSkillCard(input = {}) {
   };
 }
 
-export function createHarnessExperiment(input = {}) {
+export function createHarnessExperiment(input: any = {}) {
   return {
     experiment_id: input.experiment_id || `exp.${safeId(input.title || 'harness')}.${sha256(JSON.stringify(input)).slice(0, 8)}`,
     title: input.title || 'Harness experiment',
@@ -227,8 +226,8 @@ export function buildHarnessGrowthFixture() {
 
 export function runHarnessGrowthFixture() {
   const objects = buildHarnessGrowthFixture();
-  const decisions = objects.map((object) => ({ id: object.id, ...forgettingDecision(object, { now: new Date() }) }));
-  const byId = Object.fromEntries(decisions.map((item) => [item.id, item]));
+  const decisions = objects.map((object: any) => ({ id: object.id, ...forgettingDecision(object, { now: new Date() }) }));
+  const byId = Object.fromEntries(decisions.map((item: any) => [item.id, item]));
   const checks = {
     pinned_rule_remains: byId['pinned-user-rule'].action === 'KEEP_ACTIVE',
     old_wiki_leaves_active: ['ARCHIVE', 'HARD_DELETE'].includes(byId['old-unused-wiki'].action),
@@ -250,13 +249,13 @@ export function runHarnessGrowthFixture() {
   };
 }
 
-export function harnessGrowthReport(input = {}) {
+export function harnessGrowthReport(input: any = {}) {
   const fixture = runHarnessGrowthFixture();
   const toolErrors = (input.tool_errors || [
     { message: 'operation timed out after 30s' },
     { message: 'unexpected provider 500' },
     { message: 'unmatched example for taxonomy coverage' }
-  ]).map((error) => ({ ...error, classification: classifyToolError(error), unknown_is_bug: classifyToolError(error) === 'Unknown' }));
+  ]).map((error: any) => ({ ...error, classification: classifyToolError(error), unknown_is_bug: classifyToolError(error) === 'Unknown' }));
   return {
     schema_version: 1,
     generated_at: nowIso(),
@@ -299,35 +298,35 @@ export function harnessGrowthReport(input = {}) {
     },
     validation: {
       fixture_passed: fixture.passed,
-      unknown_errors_recorded: toolErrors.filter((e) => e.classification === 'Unknown').length
+      unknown_errors_recorded: toolErrors.filter((e: any) => e.classification === 'Unknown').length
     }
   };
 }
 
-export async function writeHarnessGrowthReport(root, dir, input = {}) {
+export async function writeHarnessGrowthReport(root: any, dir: any, input: any = {}) {
   const report = harnessGrowthReport(input);
   await writeJsonAtomic(path.join(dir || path.join(root, '.sneakoscope', 'reports'), HARNESS_GROWTH_REPORT), report);
   return report;
 }
 
-function clamp01(x) {
+function clamp01(x: any) {
   return Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0));
 }
 
-function decision(action, lifecycle_state, utility_score, reason_codes, immediate = false, tombstoneMeta = null) {
+function decision(action: any, lifecycle_state: any, utility_score: any, reason_codes: any, immediate: any = false, tombstoneMeta: any = null) {
   return { action, lifecycle_state, utility_score, reason_codes, immediate, tombstone: tombstoneMeta };
 }
 
-function isPinned(object = {}) {
+function isPinned(object: any = {}) {
   return object.pinned === true || String(object.lifecycle_state || '').toUpperCase() === 'PINNED';
 }
 
-function containsSecret(object = {}) {
+function containsSecret(object: any = {}) {
   const text = JSON.stringify(object);
   return /(sk-|ghp_|glpat-|xox[baprs]-|AKIA[0-9A-Z]{16}|secret|private[_-]?key|token=|password=)/i.test(text);
 }
 
-function graceChecksPass(object = {}, opts = {}) {
+function graceChecksPass(object: any = {}, opts: any = {}) {
   if (isPinned(object)) return false;
   if (object.active_work_order || object.required_by_skill_validation || object.only_source_for_user_preference) return false;
   if (object.only_source_for_mistake_prevention && !object.regression_test) return false;
@@ -335,7 +334,7 @@ function graceChecksPass(object = {}, opts = {}) {
   return true;
 }
 
-function tombstone(object = {}, opts = {}) {
+function tombstone(object: any = {}, opts: any = {}) {
   return {
     deleted_object_id: safeId(object.id || sha256(JSON.stringify(object)).slice(0, 16)),
     object_type: object.type || 'memory',
@@ -347,25 +346,25 @@ function tombstone(object = {}, opts = {}) {
   };
 }
 
-function daysSince(value, now = new Date()) {
+function daysSince(value: any, now: any = new Date()) {
   const t = Date.parse(value || '');
   if (!Number.isFinite(t)) return 9999;
   return Math.floor((Number(now) - t) / 86400000);
 }
 
-function isoDaysAgo(days) {
+function isoDaysAgo(days: any) {
   return new Date(Date.now() - Number(days) * 86400000).toISOString();
 }
 
-function safeId(value) {
+function safeId(value: any) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'object';
 }
 
-function clamp(min, max, value) {
+function clamp(min: any, max: any, value: any) {
   return Math.max(min, Math.min(max, Math.round(Number(value) || 0)));
 }
 
-function timed(fn, iterations) {
+function timed(fn: any, iterations: any) {
   let result;
   const count = Math.max(1, Number(iterations) || 1);
   const start = process.hrtime.bigint();
@@ -415,19 +414,19 @@ export function defaultEvaluationScenario() {
     q4: { mode: 'evaluation', db_guard: 'deny_destructive', design_artifact: 'html_verified' },
     q3: ['sks', 'goal', 'db-safety', 'gx', 'skills', 'design'],
     claims: [
-      ...required.map(([id, text, authority, risk, weight], i) => ({
+      ...required.map(([id, text, authority, risk, weight]: any, i: any) => ({
         id, text, authority, risk, status: 'supported', freshness: 'fresh', required_weight: weight,
         coord: { domainAngle: coord.domainAngle + i * 0.025, layerRadius: coord.layerRadius, phase: coord.phase + i * 0.02 },
         source: authority,
         evidence_count: 2 + (i % 3)
       })),
-      ...optional.map(([id, text, authority, risk], i) => ({
+      ...optional.map(([id, text, authority, risk]: any, i: any) => ({
         id, text, authority, risk, status: 'supported', freshness: 'fresh', required_weight: 0,
         coord: { domainAngle: coord.domainAngle + 0.18 + i * 0.04, layerRadius: coord.layerRadius + 0.05, phase: coord.phase + 0.12 + i * 0.03 },
         source: authority,
         evidence_count: 1 + (i % 2)
       })),
-      ...noise.map(([id, text, status, authority, risk], i) => ({
+      ...noise.map(([id, text, status, authority, risk]: any, i: any) => ({
         id, text, authority, risk, status, freshness: i % 2 ? 'unknown' : 'stale', required_weight: 0,
         coord: { domainAngle: 2.4 + i * 0.31, layerRadius: 1.1 + i * 0.05, phase: 2.8 + i * 0.2 },
         source: authority,
@@ -438,14 +437,14 @@ export function defaultEvaluationScenario() {
   };
 }
 
-function naiveContext(scenario) {
+function naiveContext(scenario: any) {
   return {
     mission: scenario.mission.id,
     role: 'baseline-uncompressed',
     token_policy: 'ALL_CLAIMS_RAW',
     q4: scenario.q4,
     q3: scenario.q3,
-    claims: scenario.claims.map((claim) => ({
+    claims: scenario.claims.map((claim: any) => ({
       id: claim.id,
       text: claim.text,
       status: claim.status,
@@ -455,18 +454,18 @@ function naiveContext(scenario) {
   };
 }
 
-function requiredWeight(claim) {
+function requiredWeight(claim: any) {
   return Math.max(0, Number(claim.required_weight) || 0);
 }
 
-function scoreSelection(allClaims, selectedIds) {
+function scoreSelection(allClaims: any, selectedIds: any) {
   const selected = new Set(selectedIds);
-  const selectedClaims = allClaims.filter((claim) => selected.has(claim.id));
-  const requiredTotal = allClaims.reduce((sum, claim) => sum + requiredWeight(claim), 0);
-  const requiredSelected = selectedClaims.reduce((sum, claim) => sum + requiredWeight(claim), 0);
-  const relevantSelectedCount = selectedClaims.filter((claim) => requiredWeight(claim) > 0).length;
-  const supportedSelectedCount = selectedClaims.filter((claim) => ['supported', 'weak'].includes(claim.status)).length;
-  const unsupportedCriticalSelected = selectedClaims.filter((claim) => ['unsupported', 'conflicted'].includes(claim.status) && ['high', 'critical'].includes(claim.risk)).length;
+  const selectedClaims = allClaims.filter((claim: any) => selected.has(claim.id));
+  const requiredTotal = allClaims.reduce((sum: any, claim: any) => sum + requiredWeight(claim), 0);
+  const requiredSelected = selectedClaims.reduce((sum: any, claim: any) => sum + requiredWeight(claim), 0);
+  const relevantSelectedCount = selectedClaims.filter((claim: any) => requiredWeight(claim) > 0).length;
+  const supportedSelectedCount = selectedClaims.filter((claim: any) => ['supported', 'weak'].includes(claim.status)).length;
+  const unsupportedCriticalSelected = selectedClaims.filter((claim: any) => ['unsupported', 'conflicted'].includes(claim.status) && ['high', 'critical'].includes(claim.risk)).length;
   const recall = requiredTotal ? requiredSelected / requiredTotal : 1;
   const precision = selectedClaims.length ? relevantSelectedCount / selectedClaims.length : 0;
   const supportRatio = selectedClaims.length ? supportedSelectedCount / selectedClaims.length : 1;
@@ -481,9 +480,9 @@ function scoreSelection(allClaims, selectedIds) {
   };
 }
 
-function metricBlock({ label, context, scenario, msPerRun }) {
-  const selectedIds = (context.claims || []).map((claim) => claim.id);
-  const wikiValidation = context.wiki ? validateWikiCoordinateIndex(context.wiki) : null;
+function metricBlock({ label, context, scenario, msPerRun }: any) {
+  const selectedIds = (context.claims || []).map((claim: any) => claim.id);
+  const wikiValidation: any = context.wiki ? validateWikiCoordinateIndex(context.wiki) : { ok: false };
   const voxel = context.wiki?.vx || context.wiki?.voxel_overlay || null;
   const voxelRows = Array.isArray(voxel?.v) ? voxel.v.length : (Array.isArray(voxel?.rows) ? voxel.rows.length : 0);
   return {
@@ -503,7 +502,7 @@ function metricBlock({ label, context, scenario, msPerRun }) {
   };
 }
 
-export function compareMetricBlocks(baseline, candidate, thresholds = DEFAULT_EVAL_THRESHOLDS) {
+export function compareMetricBlocks(baseline: any, candidate: any, thresholds: any = DEFAULT_EVAL_THRESHOLDS) {
   const tokenSavingsPct = baseline.estimated_tokens
     ? (baseline.estimated_tokens - candidate.estimated_tokens) / baseline.estimated_tokens
     : 0;
@@ -511,7 +510,7 @@ export function compareMetricBlocks(baseline, candidate, thresholds = DEFAULT_EV
   const precisionDelta = candidate.quality.relevance_precision - baseline.quality.relevance_precision;
   const supportDelta = candidate.quality.support_ratio - baseline.quality.support_ratio;
   const buildRuntimeDeltaMs = candidate.context_build_ms_per_run - baseline.context_build_ms_per_run;
-  const checks = {
+  const checks: Record<string, boolean> = {
     token_savings: tokenSavingsPct >= thresholds.min_token_savings_pct,
     accuracy_delta: accuracyDelta >= thresholds.min_accuracy_delta,
     required_recall: candidate.quality.required_recall >= thresholds.min_required_recall,
@@ -530,7 +529,7 @@ export function compareMetricBlocks(baseline, candidate, thresholds = DEFAULT_EV
   };
 }
 
-export function runEvaluationBenchmark(opts = {}) {
+export function runEvaluationBenchmark(opts: any = {}) {
   const scenario = opts.scenario || defaultEvaluationScenario();
   const iterations = Math.max(1, Number(opts.iterations) || 200);
   const baselineTiming = timed(() => naiveContext(scenario), iterations);
@@ -562,7 +561,7 @@ export function runEvaluationBenchmark(opts = {}) {
       id: scenario.id,
       description: scenario.description,
       claims: scenario.claims.length,
-      required_claims: scenario.claims.filter((claim) => requiredWeight(claim) > 0).length
+      required_claims: scenario.claims.filter((claim: any) => requiredWeight(claim) > 0).length
     },
     thresholds: opts.thresholds || DEFAULT_EVAL_THRESHOLDS,
     iterations,
@@ -576,14 +575,14 @@ export function runEvaluationBenchmark(opts = {}) {
   };
 }
 
-function reportMetric(report) {
+function reportMetric(report: any) {
   if (report?.candidate?.quality && report?.candidate?.estimated_tokens) return report.candidate;
   if (report?.metrics?.quality && report?.metrics?.estimated_tokens) return report.metrics;
   if (report?.quality && report?.estimated_tokens) return report;
   throw new Error('Unsupported eval report shape.');
 }
 
-export function compareEvaluationReports(baselineReport, candidateReport, thresholds = DEFAULT_EVAL_THRESHOLDS) {
+export function compareEvaluationReports(baselineReport: any, candidateReport: any, thresholds: any = DEFAULT_EVAL_THRESHOLDS) {
   const baseline = reportMetric(baselineReport);
   const candidate = reportMetric(candidateReport);
   return {

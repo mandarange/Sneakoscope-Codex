@@ -1,16 +1,15 @@
-// @ts-nocheck
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-export function runFeatureFixture(feature, {
+export function runFeatureFixture(feature: any, {
   root = process.cwd(),
   tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-feature-fixture-')),
   execute = false,
   validateArtifacts = false,
   commandArgs = null
-} = {}) {
+}: any = {}) {
   const fixture = feature.fixture || {};
   const expected = normalizeExpectedArtifacts(fixture.expected_artifacts);
   const useHermeticRoot = fixture.root_mode !== 'source_checkout_required' && (execute || validateArtifacts || fixture.kind === 'execute_and_validate_artifacts');
@@ -20,10 +19,10 @@ export function runFeatureFixture(feature, {
   const latestAfter = execution?.mission_id || latestMissionId(projectRoot) || latestBefore;
   const shouldValidateArtifacts = validateArtifacts && (fixture.kind === 'execute_and_validate_artifacts' || execution);
   const artifacts = shouldValidateArtifacts
-    ? expected.map((artifact) => inspectExpectedArtifact(projectRoot, tempRoot, artifact, { latestMissionId: latestAfter }))
-    : expected.map((artifact) => ({ path: artifact.path, requested_path: artifact.path, schema: artifact.schema || inferSchema(artifact.path), exists: null, schema_ok: null, content_ok: null, skipped: 'static_contract' }));
+    ? expected.map((artifact: any) => inspectExpectedArtifact(projectRoot, tempRoot, artifact, { latestMissionId: latestAfter }))
+    : expected.map((artifact: any) => ({ path: artifact.path, requested_path: artifact.path, schema: artifact.schema || inferSchema(artifact.path), exists: null, schema_ok: null, content_ok: null, skipped: 'static_contract' }));
   const artifactFailures = shouldValidateArtifacts
-    ? artifacts.filter((artifact) => !artifact.exists || !artifact.schema_ok || !artifact.content_ok).map((artifact) => `${feature.id}:${artifact.path}:${artifact.failure || 'artifact_invalid'}`)
+    ? artifacts.filter((artifact: any) => !artifact.exists || !artifact.schema_ok || !artifact.content_ok).map((artifact: any) => `${feature.id}:${artifact.path}:${artifact.failure || 'artifact_invalid'}`)
     : [];
   return {
     id: feature.id,
@@ -48,7 +47,7 @@ export function runFeatureFixture(feature, {
   };
 }
 
-export function writeFeatureFixtureReports(root, report) {
+export function writeFeatureFixtureReports(root: any, report: any) {
   const reportDir = path.join(root, '.sneakoscope', 'reports');
   fs.mkdirSync(reportDir, { recursive: true });
   const jsonPath = path.join(reportDir, 'feature-fixtures.json');
@@ -58,29 +57,29 @@ export function writeFeatureFixtureReports(root, report) {
   return { json: jsonPath, md: mdPath };
 }
 
-function executeCommand(sourceRoot, projectRoot, spec, fixture = {}) {
+function executeCommand(sourceRoot: any, projectRoot: any, spec: any, fixture: any = {}) {
   const normalized = Array.isArray(spec) ? { command: spec } : spec;
   const setup = [
     ...(fixture.root_mode === 'source_checkout_required' ? [] : [['setup', '--local-only', '--json']]),
     ...(normalized.setup || [])
   ];
-  const setupResults = setup.map((args) => spawnSks(sourceRoot, projectRoot, args));
+  const setupResults = setup.map((args: any) => spawnSks(sourceRoot, projectRoot, args));
   const command = normalized.command || normalized.args || [];
-  const result = command.length ? spawnSks(sourceRoot, projectRoot, command) : { status: 0, signal: null, ok: true, stdout_bytes: 0, stderr_bytes: 0, args: [] };
-  const missionId = result.mission_id || [...setupResults].reverse().find((row) => row.mission_id)?.mission_id || null;
+  const result: any = command.length ? spawnSks(sourceRoot, projectRoot, command) : { status: 0, signal: null, ok: true, stdout_bytes: 0, stderr_bytes: 0, args: [] };
+  const missionId = result.mission_id || [...setupResults].reverse().find((row: any) => row.mission_id)?.mission_id || null;
   return {
     args: command,
     setup: setupResults,
     mission_id: missionId,
     status: result.status,
     signal: result.signal || null,
-    ok: setupResults.every((row) => row.ok) && result.ok,
+    ok: setupResults.every((row: any) => row.ok) && result.ok,
     stdout_bytes: result.stdout_bytes,
     stderr_bytes: result.stderr_bytes
   };
 }
 
-function spawnSks(sourceRoot, projectRoot, args = []) {
+function spawnSks(sourceRoot: any, projectRoot: any, args: any = []) {
   const entrypoint = resolveSksEntrypoint(sourceRoot);
   const result = spawnSync(process.execPath, [entrypoint, ...args], {
     cwd: projectRoot,
@@ -101,15 +100,15 @@ function spawnSks(sourceRoot, projectRoot, args = []) {
   };
 }
 
-function resolveSksEntrypoint(sourceRoot) {
+function resolveSksEntrypoint(sourceRoot: any) {
   const candidates = [
     path.join(sourceRoot, 'dist', 'bin', 'sks.js'),
     path.join(sourceRoot, 'bin', 'sks.js')
   ];
-  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
+  return candidates.find((candidate: any) => fs.existsSync(candidate)) || candidates[0];
 }
 
-function prepareHermeticFixtureRoot(sourceRoot, tempRoot) {
+function prepareHermeticFixtureRoot(sourceRoot: any, tempRoot: any) {
   fs.mkdirSync(tempRoot, { recursive: true });
   const packageFile = path.join(tempRoot, 'package.json');
   if (!fs.existsSync(packageFile)) {
@@ -121,7 +120,7 @@ function prepareHermeticFixtureRoot(sourceRoot, tempRoot) {
   return tempRoot;
 }
 
-function copyFixtureFile(sourceRoot, tempRoot, rel) {
+function copyFixtureFile(sourceRoot: any, tempRoot: any, rel: any) {
   const src = path.join(sourceRoot, rel);
   const dest = path.join(tempRoot, rel);
   if (!fs.existsSync(src) || fs.existsSync(dest)) return;
@@ -129,7 +128,7 @@ function copyFixtureFile(sourceRoot, tempRoot, rel) {
   fs.copyFileSync(src, dest);
 }
 
-function parseJsonOutput(text = '') {
+function parseJsonOutput(text: any = '') {
   const trimmed = String(text || '').trim();
   if (!trimmed) return null;
   try { return JSON.parse(trimmed); } catch {}
@@ -141,14 +140,14 @@ function parseJsonOutput(text = '') {
   return null;
 }
 
-export function resolveExpectedArtifactPath(root, rel, { latestMissionId = null } = {}) {
+export function resolveExpectedArtifactPath(root: any, rel: any, { latestMissionId = null }: any = {}) {
   const normalized = String(rel || '').replace('<latest>', latestMissionId || 'latest').replace('<mission-id>', latestMissionId || 'latest').replace('<root>', '.');
   if (normalized.startsWith('.sneakoscope/')) return path.join(root, normalized);
   if (latestMissionId) return path.join(root, '.sneakoscope', 'missions', latestMissionId, normalized);
   return path.join(root, normalized);
 }
 
-function inspectExpectedArtifact(root, tempRoot, artifact, ctx = {}) {
+function inspectExpectedArtifact(root: any, tempRoot: any, artifact: any, ctx: any = {}) {
   const rel = artifact.path;
   const file = resolveExpectedArtifactPath(root, rel, ctx);
   const exists = fs.existsSync(file);
@@ -183,14 +182,14 @@ function inspectExpectedArtifact(root, tempRoot, artifact, ctx = {}) {
   return { ...result, schema_ok: schema ? parsed.schema === schema || parsed.schema_version != null : true, content_ok: true };
 }
 
-function normalizeExpectedArtifacts(items = []) {
-  return (items || []).map((artifact) => {
+function normalizeExpectedArtifacts(items: any = []) {
+  return (items || []).map((artifact: any) => {
     if (typeof artifact === 'string') return { path: artifact, schema: inferSchema(artifact) };
     return { ...artifact, schema: artifact.schema || inferSchema(artifact.path) };
   });
 }
 
-function inferSchema(file = '') {
+function inferSchema(file: any = '') {
   if (file.includes('completion-proof')) return 'sks.completion-proof.v1';
   if (file.includes('image-voxel-ledger')) return 'sks.image-voxel-ledger.v1';
   if (file.includes('visual-anchors')) return 'sks.visual-anchors.v1';
@@ -199,14 +198,14 @@ function inferSchema(file = '') {
   return null;
 }
 
-function latestMissionId(root) {
+function latestMissionId(root: any) {
   const dir = path.join(root, '.sneakoscope', 'missions');
   if (!fs.existsSync(dir)) return null;
-  const entries = fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory() && entry.name.startsWith('M-')).map((entry) => entry.name).sort();
+  const entries = fs.readdirSync(dir, { withFileTypes: true }).filter((entry: any) => entry.isDirectory() && entry.name.startsWith('M-')).map((entry: any) => entry.name).sort();
   return entries.at(-1) || null;
 }
 
-function renderFeatureFixtureMarkdown(report = {}) {
+function renderFeatureFixtureMarkdown(report: any = {}) {
   const lines = [
     '# SKS Feature Fixtures',
     '',
@@ -223,25 +222,26 @@ function renderFeatureFixtureMarkdown(report = {}) {
   return `${lines.join('\n')}\n`;
 }
 
-export function validateCompletionProofArtifact(file) {
+export function validateCompletionProofArtifact(file: any) {
   const proof = JSON.parse(fs.readFileSync(file, 'utf8'));
   return proof.schema === 'sks.completion-proof.v1' && ['verified', 'verified_partial', 'blocked'].includes(proof.status);
 }
 
-export function validateImageVoxelArtifact(file, { requireAnchors = true, requireRelations = false } = {}) {
+export function validateImageVoxelArtifact(file: any, { requireAnchors = true, requireRelations = false }: any = {}) {
   const ledger = JSON.parse(fs.readFileSync(file, 'utf8'));
   const anchors = ledger.anchors?.length || 0;
   const relations = ledger.relations?.length || 0;
   return ledger.schema === 'sks.image-voxel-ledger.v1' && (!requireAnchors || anchors >= 1) && (!requireRelations || relations >= 1);
 }
 
-export function validateNoPlaintextSecrets(root) {
+export function validateNoPlaintextSecrets(root: any) {
   const secretPattern = /(sk-proj-[A-Za-z0-9_-]{8,}|sk-clb-[A-Za-z0-9_-]{8,}|github_pat_[A-Za-z0-9_]{8,}|(?:CODEX_ACCESS_TOKEN|OPENAI_API_KEY)\s*[:=]\s*["']?(?:sk-[A-Za-z0-9_-]{8,}|[A-Za-z0-9_-]{32,}))/;
   const reportDir = path.join(root, '.sneakoscope');
   if (!fs.existsSync(reportDir)) return true;
   const stack = [reportDir];
   while (stack.length) {
     const current = stack.pop();
+    if (!current) continue;
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const p = path.join(current, entry.name);
       if (entry.isDirectory()) stack.push(p);

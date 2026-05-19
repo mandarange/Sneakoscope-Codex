@@ -1,11 +1,11 @@
-// @ts-nocheck
 import { collectProofEvidence } from './evidence-collector.js';
 import { writeRouteCompletionProof } from './route-adapter.js';
 import { routeFinalizerPolicy } from './route-finalizer-policy.js';
 import { ensureRouteImageEvidence } from '../wiki-image/route-image-evidence.js';
 import { readScoutProofEvidence } from '../scouts/scout-proof-evidence.js';
+import { wrongnessProofEvidence } from '../triwiki-wrongness/wrongness-proof-linker.js';
 
-export async function finalizeRouteWithProof(root, {
+export async function finalizeRouteWithProof(root: any, {
   missionId,
   route,
   gateFile = null,
@@ -24,7 +24,7 @@ export async function finalizeRouteWithProof(root, {
   fixClaim = false,
   requireRelation = false,
   visualClaim = undefined
-} = {}) {
+}: any = {}) {
   const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation, visualClaim });
   const localBlockers = [...blockers];
   let imageEvidence = visualEvidence;
@@ -42,6 +42,10 @@ export async function finalizeRouteWithProof(root, {
   }
   const collected = await collectProofEvidence(root);
   const scoutEvidence = await readScoutProofEvidence(root, missionId).catch(() => null);
+  const wrongnessEvidence = await wrongnessProofEvidence(root, missionId).catch(() => null);
+  if (Number(wrongnessEvidence?.high_severity_active || 0) > 0) {
+    localBlockers.push('active_high_severity_wrongness');
+  }
   const status = localBlockers.length
     ? (strict ? 'blocked' : statusHint === 'verified' ? 'verified_partial' : statusHint)
     : statusHint;
@@ -61,6 +65,7 @@ export async function finalizeRouteWithProof(root, {
       mock: Boolean(imageEvidence.mock)
     } } : {}),
     ...(scoutEvidence ? { scouts: scoutEvidence } : {}),
+    ...(wrongnessEvidence ? { wrongness: wrongnessEvidence } : {}),
     route_gate: gate || (gateFile ? { source: gateFile } : null)
   };
   return writeRouteCompletionProof(root, {
@@ -73,14 +78,15 @@ export async function finalizeRouteWithProof(root, {
     claims,
     unverified: [
       ...unverified,
-      ...(imageEvidence?.mock ? ['Image voxel evidence is mock fixture evidence and does not claim a real visual run.'] : [])
+      ...(imageEvidence?.mock ? ['Image voxel evidence is mock fixture evidence and does not claim a real visual run.'] : []),
+      ...(Number(wrongnessEvidence?.medium_severity_active || 0) > 0 ? ['Active medium-severity wrongness memory remains and prevents full verification claims.'] : [])
     ],
     blockers: localBlockers,
     summary: {
       files_changed: collected.files?.length || 0,
       commands_run: evidence.commands?.length || 0,
-      tests_passed: Array.isArray(testEvidence) ? testEvidence.filter((row) => row.ok).length : 0,
-      tests_failed: Array.isArray(testEvidence) ? testEvidence.filter((row) => row.ok === false).length : 0,
+      tests_passed: Array.isArray(testEvidence) ? testEvidence.filter((row: any) => row.ok).length : 0,
+      tests_failed: Array.isArray(testEvidence) ? testEvidence.filter((row: any) => row.ok === false).length : 0,
       manual_review_required: status !== 'verified'
     }
   });

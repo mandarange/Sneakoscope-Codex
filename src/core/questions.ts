@@ -1,16 +1,15 @@
-// @ts-nocheck
 import path from 'node:path';
 import { writeJsonAtomic, writeTextAtomic } from './fsx.js';
 import { buildQaLoopQuestionSchema } from './qa-loop.js';
 import { CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, hasFromChatImgSignal } from './routes.js';
 
-export function buildQuestionSchemaForRoute(route, prompt) {
+export function buildQuestionSchemaForRoute(route: any, prompt: any) {
   if (String(route?.id || '') === 'QALoop') return buildQaLoopQuestionSchema(prompt);
   if (String(route?.id || '') === 'MadSKS') return buildMadSksQuestionSchema(prompt);
   return buildQuestionSchema(prompt);
 }
 
-function buildMadSksQuestionSchema(prompt) {
+function buildMadSksQuestionSchema(prompt: any) {
   const task = String(prompt || '').trim() || 'MAD-SKS scoped database override';
   return {
     schema_version: 1,
@@ -54,7 +53,7 @@ function buildMadSksQuestionSchema(prompt) {
   };
 }
 
-function hasAnswer(value) {
+function hasAnswer(value: any) {
   if (value === undefined || value === null) return false;
   if (typeof value === 'string') return value.trim() !== '';
   if (Array.isArray(value)) return value.length > 0;
@@ -75,16 +74,16 @@ const CLARITY_WEIGHTS = {
   context: 0.15
 };
 
-function clamp01(n) {
+function clamp01(n: any) {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(1, n));
 }
 
-function hasAny(re, text) {
+function hasAny(re: any, text: any) {
   return re.test(text);
 }
 
-function scoreComponent(name, clarity, weight, justification) {
+function scoreComponent(name: any, clarity: any, weight: any, justification: any) {
   return {
     name,
     clarity_score: Number(clamp01(clarity).toFixed(2)),
@@ -94,55 +93,55 @@ function scoreComponent(name, clarity, weight, justification) {
   };
 }
 
-function summarizeAnswer(value) {
-  if (Array.isArray(value)) return value.map((v) => String(v || '').trim()).filter(Boolean).join('; ');
+function summarizeAnswer(value: any) {
+  if (Array.isArray(value)) return value.map((v: any) => String(v || '').trim()).filter(Boolean).join('; ');
   return String(value || '').trim();
 }
 
-function promptedGoalFromAnswers(explicitAnswers = {}) {
+function promptedGoalFromAnswers(explicitAnswers: any = {}) {
   const target = summarizeAnswer(explicitAnswers.INTENT_TARGET);
   const outcome = summarizeAnswer(explicitAnswers.REQUIRED_OUTCOME || explicitAnswers.SUCCESS_CRITERIA_OR_ACCEPTANCE);
   if (target && outcome) return `${target}: ${outcome}`;
   return target || outcome || '';
 }
 
-function promptHasExplicitAcceptance(lower) {
+function promptHasExplicitAcceptance(lower: any) {
   return /완료\s*기준|성공\s*기준|acceptance|criteria|definition of done|검증|테스트|pass|green|확인|완성도|완전히|처음부터|바로\s*보이|노출|표시|end[- ]?to[- ]?end/.test(lower);
 }
 
-function promptHasTarget(text, lower) {
+function promptHasTarget(text: any, lower: any) {
   return /[`'"][^`'"]+[`'"]/.test(text)
     || /(?:^|\s)(?:src|bin|scripts|docs|README|CHANGELOG|package\.json|\.sneakoscope|\.agents|\.codex|[A-Za-z0-9_.-]+\/)[^\s,)]*/.test(text)
     || /\$[A-Za-z0-9_-]+/.test(text)
     || /(모호성|질문|파이프라인|게이트|라우트|화면|버튼|모달|디자인|레이아웃|컴포넌트|프론트|리드미|코덱스|결제|로그인|인증|세션|codex|route|pipeline|ambiguity|clarification|question|decision[- ]?contract|hyperplan|prometheus|ouroboros|openagent|payment|billing|auth|session|팀|team|qa|ppt|db|ui|ux|설치|버전|readme|changelog)/.test(lower);
 }
 
-function promptHasAction(lower) {
+function promptHasAction(lower: any) {
   return /(구현|수정|개선|고쳐|만들|추가|삭제|정리|리팩터|바꿔|교체|재설계|처음부터|알려|보이게|보여|노출|표시|rebuild|rewrite|implement|fix|improve|add|remove|refactor|change|replace|redesign|reverse engineer)/.test(lower);
 }
 
-function promptIsUnderspecified(lower) {
+function promptIsUnderspecified(lower: any) {
   const trimmed = lower.trim();
   return trimmed.length < 12
     || /^(이거|저거|그거|뭔가|문제|고쳐줘|수정해줘|개선해줘|해줘|fix this|improve this|do it)\s*[.!?。]*$/.test(trimmed)
     || /^(이거|저거|그거)\s+(고쳐|수정|개선|해줘)/.test(trimmed);
 }
 
-function promptHasRisk(lower) {
+function promptHasRisk(lower: any) {
   return /(운영|production|prod|live|배포|publish|release|결제|payment|billing|auth|인증|보안|security|db|database|supabase|postgres|sql|schema|migration|마이그레이션|삭제|delete|drop|truncate|reset|권한|permission|credential|secret)/.test(lower);
 }
 
-function promptNeedsExplicitRiskBoundary(lower) {
+function promptNeedsExplicitRiskBoundary(lower: any) {
   return /(drop|truncate|wipe|reset\s+(?:db|database)|delete\s+all|all-row|전체\s*(?:삭제|초기화)|운영\s*(?:db|데이터|삭제|쓰기|변경)|production\s*(?:db|database|delete|write|mutation)|prod\s*(?:db|database|delete|write|mutation)|credential|secret|api\s*key|토큰\s*(?:노출|삭제|교체)|권한\s*(?:상승|확대)|permission\s*(?:escalation|widening))/.test(lower);
 }
 
-function promptHasContextTarget(text, lower) {
+function promptHasContextTarget(text: any, lower: any) {
   return promptHasTarget(text, lower)
     || /https?:\/\/\S+/.test(text)
     || /(프로젝트|repo|repository|codebase|코드베이스|현재 코드|current code|기존|existing|local|로컬)/.test(lower);
 }
 
-export function buildAmbiguityAssessment(prompt, explicitAnswers = {}) {
+export function buildAmbiguityAssessment(prompt: any, explicitAnswers: any = {}) {
   const text = String(prompt || '');
   const lower = text.toLowerCase();
   const target = promptHasTarget(text, lower) || hasAnswer(explicitAnswers.INTENT_TARGET) || hasAnswer(explicitAnswers.GOAL_PRECISE);
@@ -168,13 +167,13 @@ export function buildAmbiguityAssessment(prompt, explicitAnswers = {}) {
     success: scoreComponent('success_criteria_clarity', successClarity, CLARITY_WEIGHTS.success, acceptance ? 'success or verification language is explicit' : 'success criteria can be inferred only if goal/risk are clear enough'),
     context: scoreComponent('context_clarity', contextClarity, CLARITY_WEIGHTS.context, contextTarget ? 'target context is named or discoverable' : 'target context is not discoverable from prompt')
   };
-  const overall = Object.values(components).reduce((sum, item) => sum + item.ambiguity_contribution, 0);
-  const floorFailures = [];
+  const overall = Object.values(components).reduce((sum: any, item: any) => sum + item.ambiguity_contribution, 0);
+  const floorFailures: any[] = [];
   if (components.goal.clarity_score < CLARITY_FLOORS.goal) floorFailures.push('goal_clarity');
   if (components.constraints.clarity_score < CLARITY_FLOORS.constraints) floorFailures.push('constraint_clarity');
   if (components.success.clarity_score < CLARITY_FLOORS.success) floorFailures.push('success_criteria_clarity');
   if (components.context.clarity_score < CLARITY_FLOORS.context) floorFailures.push('context_clarity');
-  const unresolved = [];
+  const unresolved: any[] = [];
   if (components.goal.clarity_score < CLARITY_FLOORS.goal) unresolved.push('intent_target_or_required_outcome');
   if (components.success.clarity_score < CLARITY_FLOORS.success && (!target || !action || risk)) unresolved.push('success_criteria_or_acceptance');
   if ((components.constraints.clarity_score < CLARITY_FLOORS.constraints && hardRiskNeedsBoundary) || hasMultipleChoiceRisk) unresolved.push('risk_boundary_or_choice');
@@ -196,13 +195,13 @@ export function buildAmbiguityAssessment(prompt, explicitAnswers = {}) {
   };
 }
 
-function addInferred(out, notes, id, value, note) {
+function addInferred(out: any, notes: any, id: any, value: any, note: any) {
   if (!hasAnswer(value) && !(Array.isArray(value) && value.length === 0)) return;
   out[id] = value;
   notes[id] = note;
 }
 
-function looksLikePresentationArtifactPrompt(lower) {
+function looksLikePresentationArtifactPrompt(lower: any) {
   const presentationCue = /^\s*\$ppt\b/.test(lower)
     || /\b(ppt|presentation|deck|slide|slides|pitch\s*deck|proposal\s*deck)\b/.test(lower)
     || /발표자료|발표\s*자료|소개자료|제안서|피치덱|슬라이드|pdf\s*자료/.test(lower);
@@ -211,7 +210,7 @@ function looksLikePresentationArtifactPrompt(lower) {
   return !pipelineMeta || /^\s*\$ppt\b/.test(lower);
 }
 
-export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
+export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   const text = `${prompt || ''}\n${explicitAnswers.GOAL_PRECISE || ''}`;
   const lower = text.toLowerCase();
   const ambiguity = buildAmbiguityAssessment(prompt, explicitAnswers);
@@ -453,16 +452,16 @@ export function inferAnswersForPrompt(prompt, explicitAnswers = {}) {
   return { answers: inferred, notes };
 }
 
-export function buildQuestionSchema(prompt) {
+export function buildQuestionSchema(prompt: any) {
   const lower = String(prompt || '').toLowerCase();
-  const domainHints = [];
+  const domainHints: any[] = [];
   if (/결제|payment|billing|invoice|checkout|order/.test(lower)) domainHints.push('payment');
   if (/로그인|auth|session|token|인증/.test(lower)) domainHints.push('auth');
   if (/\b(ui|modal|screen|button|visual|design|layout|component|prototype|frontend)\b|화면|버튼|모달|디자인|레이아웃|컴포넌트|프론트|시각|발표자료|디자인\s*시스템/.test(lower)) domainHints.push('uiux');
   if (looksLikePresentationArtifactPrompt(lower)) domainHints.push('presentation');
   if (/db|database|schema|migration|테이블|마이그레이션|supabase|postgres|sql/.test(lower)) domainHints.push('db');
   const ambiguity = buildAmbiguityAssessment(prompt);
-  const slots = [];
+  const slots: any[] = [];
   const presentationSpecific = domainHints.includes('presentation');
   const intentMissing = ambiguity.unresolved_dimensions.includes('intent_target_or_required_outcome');
   if (!presentationSpecific && intentMissing) {
@@ -486,7 +485,7 @@ export function buildQuestionSchema(prompt) {
     );
   }
   if (domainHints.includes('payment')) {
-    const inferred = inferAnswersForPrompt(prompt);
+    const inferred: any = inferAnswersForPrompt(prompt);
     if (!hasAnswer(inferred.answers.PAYMENT_SUCCESS_INVARIANT)) {
       slots.push({ id: 'PAYMENT_SUCCESS_INVARIANT', question: '이미 성공 처리된 결제에 대해서는 어떤 invariant를 보존해야 하나요?', required: true, type: 'string' });
     }
@@ -495,7 +494,7 @@ export function buildQuestionSchema(prompt) {
     }
   }
   if (domainHints.includes('auth')) {
-    const inferred = inferAnswersForPrompt(prompt);
+    const inferred: any = inferAnswersForPrompt(prompt);
     if (!hasAnswer(inferred.answers.AUTH_SESSION_EXPIRED_BEHAVIOR)) {
       slots.push({ id: 'AUTH_SESSION_EXPIRED_BEHAVIOR', question: '세션/토큰 만료 시 사용자가 보게 될 UX 또는 API 동작을 지정해주세요.', required: true, type: 'string' });
     }
@@ -526,7 +525,7 @@ export function buildQuestionSchema(prompt) {
   }
   const inferred = inferAnswersForPrompt(prompt);
   const inferredSlots = new Set(Object.keys(inferred.answers));
-  const askedSlots = [];
+  const askedSlots: any[] = [];
   return {
     schema_version: 2,
     description: 'SKS infers goal, constraints, success criteria, and codebase context from the prompt, TriWiki/current-code defaults, and conservative SKS safety policy. After the contract is sealed, SKS resolves mid-run unknowns with the decision ladder instead of asking the user.',
@@ -539,8 +538,8 @@ export function buildQuestionSchema(prompt) {
   };
 }
 
-export function questionsMarkdown(schema) {
-  const lines = [];
+export function questionsMarkdown(schema: any) {
+  const lines: any[] = [];
   const isQaLoop = schema?.route === 'QALoop';
   lines.push(isQaLoop ? '# Sneakoscope Codex QA-LOOP Inferred Contract' : '# Sneakoscope Codex Inferred Contract');
   lines.push('');
@@ -589,7 +588,7 @@ export function questionsMarkdown(schema) {
   lines.push('## Internal Answer Payload Template');
   lines.push('');
   lines.push('```json');
-  const example = {};
+  const example: Record<string, any> = {};
   for (const s of schema.slots) {
     if (s.type === 'array' || s.type === 'array_or_string') example[s.id] = s.options ? [s.options[0]] : [];
     else if (s.options) example[s.id] = s.options[0];
@@ -601,7 +600,7 @@ export function questionsMarkdown(schema) {
   return `${lines.join('\n')}\n`;
 }
 
-export async function writeQuestions(dir, schema) {
+export async function writeQuestions(dir: any, schema: any) {
   await writeJsonAtomic(path.join(dir, 'required-answers.schema.json'), schema);
   await writeTextAtomic(path.join(dir, 'questions.md'), questionsMarkdown(schema));
 }

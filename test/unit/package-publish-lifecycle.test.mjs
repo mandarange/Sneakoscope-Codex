@@ -4,9 +4,11 @@ import fs from 'node:fs';
 
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const scripts = pkg.scripts || {};
+const buildManifestWriter = fs.readFileSync('scripts/write-build-manifest.mjs', 'utf8');
+const distRuntimeCheck = fs.readFileSync('scripts/check-dist-runtime.mjs', 'utf8');
 
 test('publish lifecycle runs the expensive release gate only once', () => {
-  assert.equal(pkg.version, '1.0.1');
+  assert.equal(pkg.version, '1.0.2');
   assert.equal(pkg.publishConfig?.tag, 'latest');
   assert.match(scripts['feature-quality:check'], /--release/);
   assert.doesNotMatch(scripts['feature-quality:check'], /--rc/);
@@ -20,4 +22,9 @@ test('publish lifecycle runs the expensive release gate only once', () => {
   assert.doesNotMatch(scripts['publish:dry'], /--tag rc/);
   assert.doesNotMatch(scripts['publish:npm'], /--tag rc/);
   assert.equal(scripts['release:publish'], 'npm run publish:npm');
+});
+
+test('prepack rebuild keeps the release stamp stable', () => {
+  assert.doesNotMatch(buildManifestWriter, /generated_at/);
+  assert.match(distRuntimeCheck, /build_manifest_generated_at_non_deterministic/);
 });

@@ -1,19 +1,18 @@
-// @ts-nocheck
 import path from 'node:path';
 import os from 'node:os';
 import { exists, readText, writeTextAtomic, PACKAGE_VERSION } from './fsx.js';
 
 export const OPENCLAW_SKILL_NAME = 'sneakoscope-codex';
 
-export function defaultOpenClawHome(env = process.env) {
+export function defaultOpenClawHome(env: any = process.env) {
   return path.resolve(env.OPENCLAW_HOME || path.join(env.HOME || os.homedir(), '.openclaw'));
 }
 
-export function defaultOpenClawSkillDir(env = process.env) {
+export function defaultOpenClawSkillDir(env: any = process.env) {
   return path.join(defaultOpenClawHome(env), 'skills', OPENCLAW_SKILL_NAME);
 }
 
-export function buildOpenClawSkillFiles(options = {}) {
+export function buildOpenClawSkillFiles(options: any = {}) {
   const sksCommand = options.sksCommand || 'sks';
   const version = options.version || PACKAGE_VERSION;
   const skillName = options.skillName || OPENCLAW_SKILL_NAME;
@@ -25,7 +24,7 @@ export function buildOpenClawSkillFiles(options = {}) {
   };
 }
 
-export async function installOpenClawSkill(options = {}) {
+export async function installOpenClawSkill(options: any = {}) {
   const targetDir = path.resolve(options.targetDir || defaultOpenClawSkillDir(options.env || process.env));
   const files = buildOpenClawSkillFiles(options);
   const existingManifest = path.join(targetDir, 'manifest.yaml');
@@ -50,7 +49,7 @@ export async function installOpenClawSkill(options = {}) {
   return { ok: true, status: existing ? 'updated' : 'created', target_dir: targetDir, files: Object.keys(files) };
 }
 
-function openClawManifest({ skillName, version }) {
+function openClawManifest({ skillName, version }: any) {
   return `name: ${skillName}
 version: ${version}
 description: Expose Sneakoscope Codex (sks) workflows to OpenClaw agents.
@@ -71,7 +70,7 @@ tags:
 `;
 }
 
-function openClawSkillMarkdown({ sksCommand, skillName, version }) {
+function openClawSkillMarkdown({ sksCommand, skillName, version }: any) {
   return `---
 name: ${skillName}
 version: ${version}
@@ -114,7 +113,7 @@ Set \`SKS_OPENCLAW=1\` for SKS shell commands. In OpenClaw mode, SKS treats upda
 `;
 }
 
-function openClawSkillReadme({ sksCommand, skillName, version }) {
+function openClawSkillReadme({ sksCommand, skillName, version }: any) {
   return `# ${skillName}
 
 Version: ${version}
@@ -152,7 +151,7 @@ If OpenClaw runs skills in a sandbox, allow shell execution for this skill and r
 `;
 }
 
-function openClawAgentConfigExample({ skillName }) {
+function openClawAgentConfigExample({ skillName }: any) {
   return `agents:
   coding-agent:
     model: openai/gpt-4o
