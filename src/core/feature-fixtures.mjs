@@ -15,6 +15,7 @@ const FIXTURES = Object.freeze({
   'cli-paths': fixture('execute_and_validate_artifacts', 'sks paths managed --json', ['.sneakoscope/managed-paths.json'], 'pass'),
   'cli-rollback': fixture('execute', 'sks rollback list --json', [], 'pass'),
   'cli-setup': fixture('real_optional', 'sks setup --json --local-only', [], 'pass'),
+  'cli-codex': fixture('execute', 'sks codex compatibility --json', [], 'pass'),
   'cli-codex-app': fixture('real_optional', 'sks codex-app check --json', [], 'pass'),
   'cli-codex-lb': fixture('execute_and_validate_artifacts', 'sks codex-lb metrics --json', [], 'pass'),
   'cli-hooks': fixture('mock', 'sks hooks trust-report --json', [], 'pass'),

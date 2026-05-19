@@ -1,5 +1,7 @@
 import path from 'node:path';
-import { projectRoot } from '../core/fsx.js';
+import readline from 'node:readline/promises';
+import { stdin as input, stdout as output } from 'node:process';
+import { projectRoot, readStdin } from '../core/fsx.js';
 import { flag, readOption } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { codexLbMetrics, readCodexLbCircuit, recordCodexLbHealthEvent, resetCodexLbCircuit, codexLbProofEvidence } from '../core/codex-lb-circuit.js';
@@ -17,8 +19,18 @@ export async function run(command: any, args: any = []) {
   }
   if (action === 'status' || action === 'check') {
     const result = await codexLbStatus();
-    if (flag(args, '--json')) return printJson(result);
+    const shaped = shapeCodexLbStatus(result);
+    if (flag(args, '--json')) return printJson(shaped);
     process.stdout.write(formatCodexLbStatusText(result));
+    return;
+  }
+  if (action === 'doctor') {
+    const status = shapeCodexLbStatus(await codexLbStatus());
+    const metrics = codexLbMetrics(await readCodexLbCircuit(root));
+    const result = { schema: 'sks.codex-lb-doctor.v1', ok: Boolean(status.ok && metrics.ok), deep: flag(args, '--deep'), status, metrics };
+    if (flag(args, '--json')) return printJson(result);
+    console.log(`codex-lb doctor: ${result.ok ? 'ok' : status.setup_needed ? 'setup_needed' : 'blocked'}`);
+    if (!result.ok) process.exitCode = status.setup_needed ? 0 : 1;
     return;
   }
   if (action === 'health' || action === 'verify-chain' || action === 'chain') {
@@ -51,25 +63,32 @@ export async function run(command: any, args: any = []) {
     return;
   }
   if (action === 'setup' || action === 'reconfigure') {
-    const host = readOption(args, '--host', readOption(args, '--domain', null));
-    const apiKey = readOption(args, '--api-key', readOption(args, '--key', null));
-    if (!host || !apiKey) {
-      const result = { ok: false, reason: 'missing_host_or_api_key' };
+    const options = await codexLbSetupOptions(args);
+    if (!options.host || !options.apiKey) {
+      const result = {
+        schema: 'sks.codex-lb-setup.v1',
+        ok: false,
+        status: 'setup_needed',
+        reason: !options.host ? 'missing_host_or_base_url' : 'missing_api_key',
+        guidance: [
+          'Run: sks codex-lb setup',
+          'Or: sks codex-lb setup --host <domain> --api-key-stdin --yes'
+        ]
+      };
       if (flag(args, '--json')) return printJson(result);
-      console.error('Usage: sks codex-lb setup|reconfigure --host <domain> --api-key <key>');
+      console.error('codex-lb API key is not configured.');
+      console.error('Run:');
+      console.error('  sks codex-lb setup');
+      console.error('or:');
+      console.error('  sks codex-lb setup --host <domain> --api-key-stdin --yes');
       process.exitCode = 1;
       return;
     }
-    const result = await configureCodexLb({ host, apiKey });
-    if (flag(args, '--json')) return printJson(result);
+    const result = await configureCodexLb({ host: options.host, apiKey: options.apiKey });
+    const shaped: any = { schema: 'sks.codex-lb-setup.v1', ...result, api_key: { present: Boolean(options.apiKey), redacted: true }, env_file_chmod: '0600' };
+    if (options.health) shaped.chain_health = result.ok ? await checkCodexLbResponseChain(result, { force: true, root }) : null;
+    if (flag(args, '--json')) return printJson(shaped);
     console.log(`codex-lb configured: ${result.base_url || result.status}`);
-    if (!result.ok) process.exitCode = 1;
-    return;
-  }
-  if (action === 'doctor' && flag(args, '--deep')) {
-    const result = { ...codexLbMetrics(await readCodexLbCircuit(root)), schema: 'sks.codex-lb-doctor.v1', deep: true };
-    if (flag(args, '--json')) return printJson(result);
-    console.log(`codex-lb deep doctor: ${result.ok ? 'ok' : 'blocked'} (${result.circuit.state})`);
     if (!result.ok) process.exitCode = 1;
     return;
   }
@@ -102,4 +121,73 @@ export async function run(command: any, args: any = []) {
   }
   console.error('Usage: sks codex-lb status|metrics|doctor --deep|health|repair|release|unselect|setup|circuit reset|circuit record-fixture|proof-evidence [--json]');
   process.exitCode = 1;
+}
+
+function shapeCodexLbStatus(status: any = {}) {
+  return {
+    schema: 'sks.codex-lb-status.v1',
+    ...status,
+    configured: Boolean(status.ok),
+    setup_needed: !status.ok,
+    api_key: {
+      present: Boolean(status.env_key_configured),
+      source: status.env_key_configured ? 'env-file' : null,
+      redacted: true
+    },
+    env_auto_load: Boolean(status.env_file && status.env_key_configured),
+    guidance: status.ok ? [] : [
+      'codex-lb API key is not configured.',
+      'Run: sks codex-lb setup',
+      'Or: sks codex-lb setup --host <domain> --api-key-stdin --yes'
+    ]
+  };
+}
+
+async function codexLbSetupOptions(args: any = []) {
+  const baseUrl = readOption(args, '--base-url', null);
+  let host = baseUrl || readOption(args, '--host', readOption(args, '--domain', null));
+  let apiKey = readOption(args, '--api-key', readOption(args, '--key', null));
+  if (flag(args, '--api-key-stdin')) apiKey = (await readStdin()).trim();
+  let health = flag(args, '--health') || flag(args, '--check');
+  if ((!host || !apiKey) && canAskInteractive(args)) {
+    console.log('SKS codex-lb setup\n');
+    host ||= (await ask('1. codex-lb domain or base URL?\n   Example: lb.example.com or https://lb.example.com/backend-api/codex\n> ')).trim();
+    apiKey ||= (await askHidden('2. API key?\n   Input hidden. Value will be stored securely and never printed.\n> ')).trim();
+    await ask('3. Use this codex-lb as default for Codex launches? [Y/n] ');
+    await ask('4. Write shell env loader to ~/.codex/sks-codex-lb.env? [Y/n] ');
+    const runHealth = (await ask('5. Run health check now? [Y/n] ')).trim();
+    health = !/^(n|no|아니|아니요|ㄴ)$/i.test(runHealth || 'y');
+  }
+  return { host, apiKey, health };
+}
+
+function canAskInteractive(args: any = []) {
+  return !flag(args, '--json') && !flag(args, '--yes') && Boolean(input.isTTY && output.isTTY && process.env.CI !== 'true');
+}
+
+async function ask(question: string) {
+  const rl = readline.createInterface({ input, output });
+  try {
+    return await rl.question(question);
+  } finally {
+    rl.close();
+  }
+}
+
+async function askHidden(question: string) {
+  if (!input.isTTY || !output.isTTY) return ask(question);
+  const rl: any = readline.createInterface({ input, output, terminal: true });
+  rl.stdoutMuted = true;
+  const original = rl._writeToOutput;
+  rl._writeToOutput = function writeToOutput(value: string) {
+    if (rl.stdoutMuted && !/\n|\r/.test(value)) return;
+    return original.call(rl, value);
+  };
+  try {
+    const answer = await rl.question(question);
+    output.write('\n');
+    return answer;
+  } finally {
+    rl.close();
+  }
 }

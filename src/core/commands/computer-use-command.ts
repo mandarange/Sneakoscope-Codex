@@ -4,10 +4,46 @@ import { createMission, findLatestMission } from '../mission.js';
 import { flag } from '../../cli/args.js';
 import { printJson } from '../../cli/output.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
+import { computerUseStatusReport } from '../computer-use-status.js';
 
 export async function computerUseCommand(command: any, args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'import';
+  if (action === 'status' || action === 'doctor') {
+    const result = await computerUseStatusReport();
+    if (flag(args, '--json')) return printJson(result);
+    console.log(`Computer Use status: ${result.status}`);
+    if (result.guidance?.length) for (const line of result.guidance) console.log(`- ${line}`);
+    if (!result.ok && action === 'doctor') process.exitCode = result.status === 'not_macos' ? 0 : 1;
+    return;
+  }
+  if (action === 'enable') {
+    const result = await computerUseStatusReport();
+    const response = {
+      schema: 'sks.computer-use-enable.v1',
+      ok: result.status === 'available',
+      status: result.status,
+      macos: process.platform === 'darwin',
+      guidance: [
+        'Open Codex App and grant Screen Recording/Accessibility if macOS prompts.',
+        'SKS does not widen MAD-SKS or DB permissions for Computer Use.'
+      ],
+      current: result
+    };
+    if (flag(args, '--json')) return printJson(response);
+    console.log(`Computer Use enable: ${response.ok ? 'available' : response.status}`);
+    for (const line of response.guidance) console.log(`- ${line}`);
+    return;
+  }
+  if (action === 'require') {
+    const routeArg = args.includes('--route') ? args[args.indexOf('--route') + 1] : null;
+    const result = await computerUseStatusReport();
+    const response = { schema: 'sks.computer-use-require.v1', ok: result.status === 'available', route: routeArg || null, status: result.status, evidence: result.evidence, blocker: result.status === 'available' ? null : result.status };
+    if (flag(args, '--json')) return printJson(response);
+    console.log(`Computer Use requirement for ${routeArg || 'route'}: ${response.ok ? 'available' : `blocked (${response.blocker})`}`);
+    if (!response.ok) process.exitCode = 1;
+    return;
+  }
   if (action === 'import-fixture') return importFixture(root, command, args);
   const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
   const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;

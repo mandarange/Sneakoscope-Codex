@@ -1163,6 +1163,17 @@ function normalizeHookResult(name, result = {}) {
         permissionDecision: 'deny',
         permissionDecisionReason: reason
       };
+    } else if (out.permissionDecision === 'allow' || out.decision === 'allow') {
+      normalized.hookSpecificOutput = {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'allow'
+      };
+    } else if (out.permissionDecision === 'ask') {
+      normalized.hookSpecificOutput = {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'ask',
+        permissionDecisionReason: reason
+      };
     }
     return normalized;
   }
@@ -1201,6 +1212,9 @@ function codexHookEventName(name) {
     'user-prompt-submit': 'UserPromptSubmit',
     'pre-tool': 'PreToolUse',
     'post-tool': 'PostToolUse',
+    'pre-compact': 'PreCompact',
+    'post-compact': 'PostCompact',
+    'session-start': 'SessionStart',
     'permission-request': 'PermissionRequest',
     'stop': 'Stop'
   }[name] || name;

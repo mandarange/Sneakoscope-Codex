@@ -7,8 +7,44 @@ Core commands:
 ```sh
 sks hooks trust-report --json
 sks hooks replay test/fixtures/hooks/pre-tool-db-drop.json --json
+sks hooks codex-schema --json
+sks hooks codex-validate --json
+sks hooks warning-check --json
+sks hooks replay-codex-fixtures --json
 sks codex-app pat status --json
 ```
+
+## Codex `rust-v0.131.0` Hook Shape
+
+SKS 1.0.4 validates Codex hook output against vendored OpenAI Codex CLI `rust-v0.131.0` generated schemas in `src/vendor/openai-codex/rust-v0.131.0/hooks/`.
+
+Supported event names are `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SessionStart`, `UserPromptSubmit`, and `Stop`.
+
+Command hook config must use the upstream handler fields `command`, `commandWindows` or `command_windows`, `timeout`, `async`, and `statusMessage`. `allow_managed_hooks_only = true` is valid only in `requirements.toml`; SKS must not write it to `config.toml`.
+
+Output uses camelCase Codex fields. Examples:
+
+```json
+{
+  "continue": true,
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "SKS policy blocked the requested command."
+  }
+}
+```
+
+```json
+{
+  "continue": false,
+  "stopReason": "SKS Completion Proof missing",
+  "decision": "block",
+  "reason": "SKS serious route cannot finalize without valid Completion Proof."
+}
+```
+
+Snake_case output keys, legacy top-level `permissionDecision`, PermissionRequest reserved fields, unsupported config fields, and Stop blocks without a reason are release-blocking warning patterns.
 
 PAT and access-token policy:
 
