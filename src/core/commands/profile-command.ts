@@ -1,9 +1,8 @@
-// @ts-nocheck
 import path from 'node:path';
 import { readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { ALLOWED_REASONING_EFFORTS } from '../routes.js';
 
-export async function profileCommand(sub, args = []) {
+export async function profileCommand(sub: any, args: any = []) {
   const root = await sksRoot();
   if (sub === 'show') return console.log(JSON.stringify(await readJson(path.join(root, '.sneakoscope', 'model', 'current.json'), { model: 'gpt-5.5', reasoning_effort: 'medium' }), null, 2));
   if (sub === 'set') {

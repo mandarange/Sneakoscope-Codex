@@ -1,9 +1,9 @@
-// @ts-nocheck
 import { projectRoot } from '../fsx.js';
 import { latestTrustReport } from '../trust-kernel/trust-report.js';
+import { recordWrongnessFromTrustReport } from '../triwiki-wrongness/wrongness-ledger.js';
 import { flag, positionalArgs } from './command-utils.js';
 
-export async function trustCommand(args = []) {
+export async function trustCommand(args: any = []) {
   const action = args[0] || 'status';
   const rest = args.slice(1);
   const root = await projectRoot();
@@ -14,9 +14,12 @@ export async function trustCommand(args = []) {
       report.ok = false;
       report.issues = [...(report.issues || []), 'strict_requires_verified'];
     }
+    const wrongness = action === 'validate' && !flag(args, '--no-wrongness')
+      ? await recordWrongnessFromTrustReport(root, report)
+      : null;
     if (flag(args, '--json')) {
       console.log(JSON.stringify(action === 'validate'
-        ? { schema: 'sks.trust-validation.v1', ok: report.ok, status: report.status, issues: report.issues || [], report }
+        ? { schema: 'sks.trust-validation.v1', ok: report.ok, status: report.status, issues: report.issues || [], report, wrongness }
         : report, null, 2));
     } else if (action === 'explain') {
       printExplain(report);
@@ -27,11 +30,11 @@ export async function trustCommand(args = []) {
     if (action === 'validate' && !report.ok) process.exitCode = 1;
     return report;
   }
-  console.error('Usage: sks trust report|validate|status|explain [latest|mission-id] [--json] [--strict]');
+  console.error('Usage: sks trust report|validate|status|explain [latest|mission-id] [--json] [--strict] [--no-wrongness]');
   process.exitCode = 2;
 }
 
-function printExplain(report = {}) {
+function printExplain(report: any = {}) {
   console.log('SKS Trust Kernel');
   console.log(`Mission: ${report.mission_id || 'none'}`);
   console.log(`Route:   ${report.route || 'unknown'}`);

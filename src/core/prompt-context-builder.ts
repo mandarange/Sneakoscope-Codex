@@ -1,11 +1,10 @@
-// @ts-nocheck
 import { nowIso } from './fsx.js';
 
-export function buildPromptContext({ stable = [], policies = [], tools = [], skills = [], dynamic = [] } = {}) {
+export function buildPromptContext({ stable = [], policies = [], tools = [], skills = [], dynamic = [] }: any = {}) {
   const stableBlocks = normalizeBlocks([...stable, ...policies, ...tools, ...skills]);
   const dynamicBlocks = normalizeBlocks(dynamic);
-  const blocks = [...stableBlocks.map((block) => ({ ...block, cache_region: 'stable_prefix' })), ...dynamicBlocks.map((block) => ({ ...block, cache_region: 'dynamic_suffix' }))];
-  const text = blocks.map((block) => block.text).join('\n\n');
+  const blocks = [...stableBlocks.map((block: any) => ({ ...block, cache_region: 'stable_prefix' })), ...dynamicBlocks.map((block: any) => ({ ...block, cache_region: 'dynamic_suffix' }))];
+  const text = blocks.map((block: any) => block.text).join('\n\n');
   return {
     schema_version: 1,
     built_at: nowIso(),
@@ -17,23 +16,23 @@ export function buildPromptContext({ stable = [], policies = [], tools = [], ski
   };
 }
 
-export function selectSkillSummaries(skills = [], { route = '', taskSignature = '', topK = 3 } = {}) {
+export function selectSkillSummaries(skills: any = [], { route = '', taskSignature = '', topK = 3 }: any = {}) {
   const hay = `${route} ${taskSignature}`.toLowerCase();
   return skills
-    .filter((skill) => skill.status !== 'deprecated')
-    .map((skill) => ({
+    .filter((skill: any) => skill.status !== 'deprecated')
+    .map((skill: any) => ({
       ...skill,
-      score: (skill.triggers || []).reduce((sum, trigger) => sum + (hay.includes(String(trigger).toLowerCase().replace(/^\$/, '')) ? 1 : 0), 0)
+      score: (skill.triggers || []).reduce((sum: any, trigger: any) => sum + (hay.includes(String(trigger).toLowerCase().replace(/^\$/, '')) ? 1 : 0), 0)
     }))
-    .filter((skill) => skill.score > 0 || skill.always_include)
-    .sort((a, b) => b.score - a.score)
+    .filter((skill: any) => skill.score > 0 || skill.always_include)
+    .sort((a: any, b: any) => b.score - a.score)
     .slice(0, topK)
-    .map((skill) => `${skill.id || skill.name}: ${skill.summary || skill.description || ''}`.trim());
+    .map((skill: any) => `${skill.id || skill.name}: ${skill.summary || skill.description || ''}`.trim());
 }
 
-function normalizeBlocks(items = []) {
-  return items.filter(Boolean).map((item, index) => {
+function normalizeBlocks(items: any = []) {
+  return items.filter(Boolean).map((item: any, index: any) => {
     if (typeof item === 'string') return { id: `block-${index + 1}`, text: item };
     return { id: item.id || `block-${index + 1}`, text: String(item.text || item.summary || '') };
-  }).filter((block) => block.text.trim());
+  }).filter((block: any) => block.text.trim());
 }

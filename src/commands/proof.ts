@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { projectRoot } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
@@ -10,7 +9,7 @@ import { finalizeRouteWithProof } from '../core/proof/route-finalizer.js';
 import { renderProofMarkdown, writeCompletionProof } from '../core/proof/proof-writer.js';
 import { validateCompletionProof } from '../core/proof/validation.js';
 
-export async function run(_command, args = []) {
+export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'show';
   const rest = args.slice(1);
@@ -31,7 +30,7 @@ export async function run(_command, args = []) {
     return;
   }
   if (action === 'route') {
-    const missionArg = rest.find((arg) => !String(arg).startsWith('--')) || 'latest';
+    const missionArg = rest.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
     const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
     const proof = await readRouteProof(root, missionId);
     const result = proof
@@ -44,7 +43,7 @@ export async function run(_command, args = []) {
     return;
   }
   if (action === 'finalize') {
-    const missionArg = rest.find((arg) => !String(arg).startsWith('--')) || 'latest';
+    const missionArg = rest.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
     const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
     const routeIndex = args.indexOf('--route');
     const route = routeIndex >= 0 && args[routeIndex + 1] ? args[routeIndex + 1] : '$SKS';
@@ -112,7 +111,7 @@ export async function run(_command, args = []) {
   process.exitCode = 1;
 }
 
-async function withFreshSummaries(root, proof) {
+async function withFreshSummaries(root: any, proof: any) {
   const evidence = await collectProofEvidence(root);
   return {
     ...proof,

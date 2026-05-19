@@ -1,10 +1,9 @@
-// @ts-nocheck
 import path from 'node:path';
 import { sksRoot } from '../fsx.js';
 import { loadSkillDreamState, recordSkillDreamEvent, runSkillDream } from '../skill-forge.js';
 import { flag, knownGeneratedSkillNames, positionalArgs, readFlagValue } from './command-utils.js';
 
-export async function skillDreamCommand(sub, args = []) {
+export async function skillDreamCommand(sub: any, args: any = []) {
   const action = sub && !String(sub).startsWith('--') ? sub : 'status';
   const actionArgs = action === sub ? args : [sub, ...args].filter(Boolean);
   if (!['status', 'run', 'record', 'help', '--help'].includes(action)) {
@@ -18,7 +17,7 @@ export async function skillDreamCommand(sub, args = []) {
   }
   const root = await sksRoot();
   if (action === 'record') {
-    const skills = readFlagValue(actionArgs, '--skills', '').split(',').map((x) => x.trim()).filter(Boolean);
+    const skills = readFlagValue(actionArgs, '--skills', '').split(',').map((x: any) => x.trim()).filter(Boolean);
     const result = await recordSkillDreamEvent(root, { route: readFlagValue(actionArgs, '--route', positionalArgs(actionArgs).join(' ') || 'manual'), command: readFlagValue(actionArgs, '--command', null), required_skills: skills, prompt_signature: readFlagValue(actionArgs, '--prompt-signature', null) }, { known_skill_names: knownGeneratedSkillNames() });
     if (flag(actionArgs, '--json')) return console.log(JSON.stringify(result, null, 2));
     console.log('SKS Skill Dream Record');

@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const SCOUT_TEAM_PLAN_SCHEMA = 'sks.scout-team-plan.v1';
 export const SCOUT_RESULT_SCHEMA = 'sks.scout-result.v1';
 export const SCOUT_CONSENSUS_SCHEMA = 'sks.scout-consensus.v1';

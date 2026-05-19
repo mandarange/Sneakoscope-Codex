@@ -1,11 +1,10 @@
-// @ts-nocheck
 import path from 'node:path';
 import { flag } from '../../cli/args.js';
 import { printJson } from '../../cli/output.js';
 import { packageRoot } from '../fsx.js';
 import { rustImageHash, rustInfo, rustSecretScan, rustVoxelValidate } from '../rust-accelerator.js';
 
-export async function rustCommand(args = []) {
+export async function rustCommand(args: any = []) {
   const action = args[0] || 'status';
   if (action === 'status') return rustStatus(args.slice(1));
   if (action === 'smoke') return rustSmoke(args.slice(1));
@@ -14,7 +13,7 @@ export async function rustCommand(args = []) {
   process.exitCode = 2;
 }
 
-async function rustStatus(args = []) {
+async function rustStatus(args: any = []) {
   const info = await rustInfo();
   const result = {
     schema: 'sks.rust-status.v1',
@@ -30,11 +29,11 @@ async function rustStatus(args = []) {
   if (info.version) console.log(`Version:           ${info.version}`);
 }
 
-async function rustSmoke(args = []) {
+async function rustSmoke(args: any = []) {
   const root = packageRoot();
   const requireNative = flag(args, '--require-native');
   const info = await rustInfo();
-  const results = [];
+  const results: any[] = [];
   results.push(await smokeCase('status', async () => ({ ok: !requireNative || info.available, engine: info.mode, detail: info })));
   results.push(await smokeCase('image-hash', () => rustImageHash(path.join(root, 'test', 'fixtures', 'images', 'one-by-one.png'))));
   results.push(await smokeCase('voxel-valid', () => rustVoxelValidate(path.join(root, 'test', 'fixtures', 'wiki-image', 'valid-ledger.json'), { requireAnchors: true })));
@@ -43,7 +42,7 @@ async function rustSmoke(args = []) {
     return { ...result, result: { ...result.result, ok: result.result?.ok === false && result.result?.issues?.includes('bbox_width_out_of_bounds:bad-bbox') } };
   }));
   results.push(await smokeCase('secret-scan', () => rustSecretScan(path.join(root, 'test', 'fixtures', 'secrets', 'clean.txt'))));
-  const ok = results.every((row) => row.ok);
+  const ok = results.every((row: any) => row.ok);
   const report = {
     schema: 'sks.rust-smoke.v1',
     ok,
@@ -60,7 +59,7 @@ async function rustSmoke(args = []) {
   return report;
 }
 
-async function smokeCase(id, fn) {
+async function smokeCase(id: any, fn: any) {
   try {
     const value = await fn();
     const result = value?.result && typeof value.result === 'object' ? value.result : value;
@@ -71,7 +70,7 @@ async function smokeCase(id, fn) {
       available: value?.available ?? null,
       issues: Array.isArray(result?.issues) ? result.issues : []
     };
-  } catch (err) {
+  } catch (err: any) {
     return { id, ok: false, error: err.message };
   }
 }

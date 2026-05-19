@@ -1,14 +1,13 @@
-// @ts-nocheck
 import path from 'node:path';
 import { exists, readJson, writeJsonAtomic, nowIso, fileSize } from './fsx.js';
 
-export async function evaluateDoneGate(root, missionId) {
+export async function evaluateDoneGate(root: any, missionId: any) {
   const dir = path.join(root, '.sneakoscope', 'missions', missionId);
   const gatePath = path.join(dir, 'done-gate.json');
   const contractPath = path.join(dir, 'decision-contract.json');
   const contractExists = await exists(contractPath);
   const gate = await readJson(gatePath, {});
-  const reasons = [];
+  const reasons: any[] = [];
   if (!contractExists) reasons.push('decision_contract_missing');
   if (gate.unsupported_critical_claims && gate.unsupported_critical_claims > 0) reasons.push('unsupported_critical_claims_present');
   if (gate.database_safety_violation === true || gate.db_safety_violation === true) reasons.push('database_safety_violation_present');

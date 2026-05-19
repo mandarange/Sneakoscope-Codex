@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import os from 'node:os';
 import { ensureDir, nowIso, packageRoot, readJson, writeJsonAtomic } from './fsx.js';
@@ -11,16 +10,16 @@ export function codexLbGlobalHealthPath() {
   return path.join(os.homedir(), '.codex', 'sks-codex-lb-health.json');
 }
 
-export function codexLbReportPath(root = packageRoot()) {
+export function codexLbReportPath(root: any = packageRoot()) {
   return path.join(root, '.sneakoscope', 'reports', 'codex-lb-health.json');
 }
 
-export async function readCodexLbCircuit(root = packageRoot()) {
+export async function readCodexLbCircuit(root: any = packageRoot()) {
   const record = await readJson(codexLbGlobalHealthPath(), null).catch(() => null);
   return normalizeCircuit(record || {}, root);
 }
 
-export async function writeCodexLbCircuit(root = packageRoot(), circuit = {}) {
+export async function writeCodexLbCircuit(root: any = packageRoot(), circuit: any = {}) {
   const normalized = normalizeCircuit(circuit, root);
   await ensureDir(path.dirname(codexLbGlobalHealthPath()));
   await ensureDir(path.dirname(codexLbReportPath(root)));
@@ -29,15 +28,15 @@ export async function writeCodexLbCircuit(root = packageRoot(), circuit = {}) {
   return normalized;
 }
 
-export async function resetCodexLbCircuit(root = packageRoot()) {
+export async function resetCodexLbCircuit(root: any = packageRoot()) {
   return writeCodexLbCircuit(root, emptyCircuit());
 }
 
-export async function recordCodexLbFailure(root = packageRoot(), failure = {}) {
+export async function recordCodexLbFailure(root: any = packageRoot(), failure: any = {}) {
   return recordCodexLbHealthEvent(root, failure);
 }
 
-export async function recordCodexLbHealthEvent(root = packageRoot(), event = {}) {
+export async function recordCodexLbHealthEvent(root: any = packageRoot(), event: any = {}) {
   const current = await readCodexLbCircuit(root);
   const normalized = normalizeHealthEvent(event);
   if (normalized.kind === 'chain_ok') {
@@ -58,8 +57,8 @@ export async function recordCodexLbHealthEvent(root = packageRoot(), event = {})
     });
   }
   const recent = [...(current.recent_failures || []), redactSecrets({ ts: nowIso(), ...normalized })].slice(-10);
-  const open = recent.filter((item) => ['5xx', 'timeout', 'network'].includes(item.kind)).length >= 3
-    || recent.some((item) => item.kind === 'auth');
+  const open = recent.filter((item: any) => ['5xx', 'timeout', 'network'].includes(item.kind)).length >= 3
+    || recent.some((item: any) => item.kind === 'auth');
   return writeCodexLbCircuit(root, {
     ...current,
     state: open ? 'open' : current.state || 'closed',
@@ -68,7 +67,7 @@ export async function recordCodexLbHealthEvent(root = packageRoot(), event = {})
   });
 }
 
-export function normalizeHealthEvent(event = {}) {
+export function normalizeHealthEvent(event: any = {}) {
   const status = String(event.status || event.kind || '').toLowerCase();
   const httpStatus = Number(event.http_status || event.httpStatus || 0);
   let kind = event.kind || status || 'unknown';
@@ -85,7 +84,7 @@ export function normalizeHealthEvent(event = {}) {
   return redactSecrets({ ...event, kind });
 }
 
-export function codexLbMetrics(circuit = emptyCircuit()) {
+export function codexLbMetrics(circuit: any = emptyCircuit()) {
   return {
     schema: 'sks.codex-lb-metrics.v1',
     ok: circuit.state !== 'open',
@@ -100,7 +99,7 @@ export function codexLbMetrics(circuit = emptyCircuit()) {
   };
 }
 
-export async function codexLbProofEvidence(root = packageRoot()) {
+export async function codexLbProofEvidence(root: any = packageRoot()) {
   const circuit = await readCodexLbCircuit(root);
   const metrics = codexLbMetrics(circuit);
   return {
@@ -133,9 +132,9 @@ function emptyCircuit() {
   };
 }
 
-function normalizeCircuit(input = {}, root = packageRoot()) {
-  const failures = Array.isArray(input.recent_failures) ? input.recent_failures.slice(-10).map((item) => redactSecrets(item)) : [];
-  const warnings = Array.isArray(input.recent_warnings) ? input.recent_warnings.slice(-10).map((item) => redactSecrets(item)) : [];
+function normalizeCircuit(input: any = {}, root: any = packageRoot()) {
+  const failures = Array.isArray(input.recent_failures) ? input.recent_failures.slice(-10).map((item: any) => redactSecrets(item)) : [];
+  const warnings = Array.isArray(input.recent_warnings) ? input.recent_warnings.slice(-10).map((item: any) => redactSecrets(item)) : [];
   return {
     ...emptyCircuit(),
     ...redactSecrets(input),

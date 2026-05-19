@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
 import { missionDir, stateFile } from '../mission.js';
@@ -6,7 +5,7 @@ import { buildPipelinePlan, PIPELINE_PLAN_ARTIFACT, projectGateStatus } from '..
 import { routePrompt } from '../routes.js';
 import { flag, positionalArgs, readFlagValue, resolveMissionId } from './command-utils.js';
 
-export async function pipelineCommand(args = []) {
+export async function pipelineCommand(args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'status';
   const state = await readJson(stateFile(root), {});
@@ -54,6 +53,6 @@ export async function pipelineCommand(args = []) {
   process.exitCode = 1;
 }
 
-function hasScoutPlanFlags(args = []) {
+function hasScoutPlanFlags(args: any = []) {
   return flag(args, '--force-scouts') || flag(args, '--no-scouts') || args.includes('--scouts');
 }

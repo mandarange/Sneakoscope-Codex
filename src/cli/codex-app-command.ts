@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { spawn } from 'node:child_process';
 import { codexRemoteControlStatus, formatCodexRemoteControlStatus } from '../core/codex-app.js';
 import { forceGpt55CodexConfigArgs } from '../core/codex-model-guard.js';
 
-export async function codexAppRemoteControlCommand(args = [], opts = {}) {
+export async function codexAppRemoteControlCommand(args: any = [], opts: any = {}) {
   const controlArgs = argsBeforeSeparator(args);
   if (controlArgs.includes('--help') || controlArgs.includes('-h')) {
     console.log(remoteControlHelp());
@@ -47,23 +46,23 @@ function remoteControlHelp() {
   ].join('\n');
 }
 
-function stripSeparator(args = []) {
+function stripSeparator(args: any = []) {
   const index = args.indexOf('--');
   return index >= 0 ? args.slice(index + 1) : args;
 }
 
-function argsBeforeSeparator(args = []) {
+function argsBeforeSeparator(args: any = []) {
   const index = args.indexOf('--');
   return index >= 0 ? args.slice(0, index) : args;
 }
 
-function spawnInherited(spawnFn, command, args, opts) {
-  return new Promise((resolve) => {
+function spawnInherited(spawnFn: any, command: any, args: any, opts: any) {
+  return new Promise<any>((resolve: any) => {
     const child = spawnFn(command, args, { ...opts, stdio: 'inherit' });
-    child.on('error', (err) => {
+    child.on('error', (err: any) => {
       console.error(`codex remote-control failed to start: ${err.message}`);
       resolve(1);
     });
-    child.on('close', (code) => resolve(code || 0));
+    child.on('close', (code: any) => resolve(code || 0));
   });
 }

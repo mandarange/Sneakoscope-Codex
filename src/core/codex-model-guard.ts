@@ -1,15 +1,14 @@
-// @ts-nocheck
 export const REQUIRED_CODEX_MODEL = 'gpt-5.5';
 
 const MODEL_VALUE_FLAGS = new Set(['--model', '-m']);
 const CONFIG_VALUE_FLAGS = new Set(['-c', '--config']);
 
-function isModelConfigOverride(value = '') {
+function isModelConfigOverride(value: any = '') {
   return /^model\s*=/.test(String(value || '').trim());
 }
 
-function stripCodexModelOverrides(args = []) {
-  const out = [];
+function stripCodexModelOverrides(args: any = []) {
+  const out: any[] = [];
   const input = Array.isArray(args) ? args : [];
   for (let i = 0; i < input.length; i += 1) {
     const arg = String(input[i]);
@@ -37,15 +36,15 @@ function stripCodexModelOverrides(args = []) {
   return out;
 }
 
-export function forceGpt55CodexArgs(args = []) {
+export function forceGpt55CodexArgs(args: any = []) {
   return ['--model', REQUIRED_CODEX_MODEL, ...stripCodexModelOverrides(args)];
 }
 
-export function forceGpt55CodexConfigArgs(args = []) {
+export function forceGpt55CodexConfigArgs(args: any = []) {
   return ['-c', `model="${REQUIRED_CODEX_MODEL}"`, ...stripCodexModelOverrides(args)];
 }
 
-export function isForbiddenCodexModel(value = '') {
+export function isForbiddenCodexModel(value: any = '') {
   const model = String(value || '').trim().toLowerCase();
   return /^gpt-5\./.test(model) && model !== REQUIRED_CODEX_MODEL;
 }

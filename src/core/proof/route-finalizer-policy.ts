@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { normalizeProofRoute, routeRequiresCompletionProof, routeRequiresImageVoxelAnchors } from './route-proof-policy.js';
 
-export function routeFinalizerPolicy(route, opts = {}) {
+export function routeFinalizerPolicy(route: any, opts: any = {}) {
   const normalized = normalizeProofRoute(route);
   const visual = routeRequiresImageVoxelAnchors(normalized, opts);
   return {

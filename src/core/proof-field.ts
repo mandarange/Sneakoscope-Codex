@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { nowIso, readText, rel, runProcess, sha256, writeJsonAtomic } from './fsx.js';
 import { buildDecisionLatticeReport, validateDecisionLatticeReport } from './decision-lattice.js';
@@ -76,7 +75,7 @@ export const PROOF_CONE_DEFINITIONS = Object.freeze([
   }
 ]);
 
-export async function buildProofField(root, opts = {}) {
+export async function buildProofField(root: any, opts: any = {}) {
   const changedFiles = normalizeChangedFiles(opts.changedFiles || await gitChangedFiles(root));
   const intent = String(opts.intent || '').trim();
   const selectedCones = selectProofCones(changedFiles, intent);
@@ -128,22 +127,22 @@ export async function buildProofField(root, opts = {}) {
   };
 }
 
-export async function writeProofFieldReport(root, opts = {}) {
+export async function writeProofFieldReport(root: any, opts: any = {}) {
   const report = await buildProofField(root, opts);
   const file = path.join(root, '.sneakoscope', 'reports', `proof-field-${Date.now()}.json`);
   await writeJsonAtomic(file, report);
   return { ...report, report_path: file };
 }
 
-export function validateProofFieldReport(report = {}) {
-  const issues = [];
+export function validateProofFieldReport(report: any = {}) {
+  const issues: any[] = [];
   if (report.schema_version !== PROOF_FIELD_SCHEMA_VERSION) issues.push('schema_version');
   if (!Array.isArray(report.invariant_ledger) || !report.invariant_ledger.length) issues.push('invariant_ledger');
   if (!Array.isArray(report.outcome_rubric) || report.outcome_rubric.length !== OUTCOME_RUBRIC.length) issues.push('outcome_rubric');
-  if (!report.outcome_rubric?.every((item) => item.adversarial_lens)) issues.push('outcome_adversarial_lenses');
+  if (!report.outcome_rubric?.every((item: any) => item.adversarial_lens)) issues.push('outcome_adversarial_lenses');
   if (!Number.isFinite(Number(report.simplicity_scorecard?.score))) issues.push('simplicity_scorecard');
   if (!Array.isArray(report.simplicity_scorecard?.criteria) || report.simplicity_scorecard.criteria.length !== OUTCOME_RUBRIC.length) issues.push('simplicity_criteria');
-  if (!report.simplicity_scorecard?.criteria?.every((item) => item.adversarial_lens)) issues.push('simplicity_adversarial_lenses');
+  if (!report.simplicity_scorecard?.criteria?.every((item: any) => item.adversarial_lens)) issues.push('simplicity_adversarial_lenses');
   if (!report.speed_lane_policy || Number(report.speed_lane_policy.min_score) !== FAST_LANE_MIN_SCORE) issues.push('speed_lane_policy');
   if (!Number.isFinite(Number(report.contract_clarity?.score))) issues.push('contract_clarity');
   if (!Array.isArray(report.contract_clarity?.components) || report.contract_clarity.components.length < 1) issues.push('contract_clarity_components');
@@ -170,12 +169,12 @@ export async function proofFieldFixture() {
     report,
     validation: validateProofFieldReport(report),
     checks: {
-      route_cone_selected: report.proof_cones.some((cone) => cone.id === 'route_surface'),
-      cli_cone_selected: report.proof_cones.some((cone) => cone.id === 'cli_runtime'),
-      catastrophic_guard_present: report.invariant_ledger.some((item) => item.id === 'db-catastrophic-guard'),
-      negative_release_work_recorded: report.negative_work_cache.some((item) => item.id === 'full_release_gate' && item.disposition === 'skip_with_evidence'),
+      route_cone_selected: report.proof_cones.some((cone: any) => cone.id === 'route_surface'),
+      cli_cone_selected: report.proof_cones.some((cone: any) => cone.id === 'cli_runtime'),
+      catastrophic_guard_present: report.invariant_ledger.some((item: any) => item.id === 'db-catastrophic-guard'),
+      negative_release_work_recorded: report.negative_work_cache.some((item: any) => item.id === 'full_release_gate' && item.disposition === 'skip_with_evidence'),
       outcome_rubric_present: report.outcome_rubric.length === OUTCOME_RUBRIC.length,
-      adversarial_lenses_present: report.outcome_rubric.every((item) => item.adversarial_lens) && report.simplicity_scorecard.criteria.every((item) => item.adversarial_lens),
+      adversarial_lenses_present: report.outcome_rubric.every((item: any) => item.adversarial_lens) && report.simplicity_scorecard.criteria.every((item: any) => item.adversarial_lens),
       route_economy_present: report.contract_clarity?.report_only === true && report.workflow_complexity?.report_only === true && report.team_trigger_matrix?.report_only === true && report.verification_stage_cache?.report_only === true,
       decision_lattice_present: validateDecisionLatticeReport(report.decision_lattice).ok,
       decision_lattice_report_only: report.decision_lattice?.report_only === true,
@@ -189,33 +188,33 @@ export async function proofFieldFixture() {
   };
 }
 
-function normalizeDecisionLatticeReport(report = {}) {
+function normalizeDecisionLatticeReport(report: any = {}) {
   return {
     ...report,
     scoring_formula: report.scoring_formula || report.research_basis?.scoring_formula || null
   };
 }
 
-async function gitChangedFiles(root) {
+async function gitChangedFiles(root: any) {
   const result = await runProcess('git', ['diff', '--name-only', 'HEAD', '--'], { cwd: root, timeoutMs: 10000, maxOutputBytes: 128 * 1024 });
   if (result.code !== 0) return [];
-  return result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return result.stdout.split(/\r?\n/).map((line: any) => line.trim()).filter(Boolean);
 }
 
-function normalizeChangedFiles(files = []) {
-  return [...new Set((files || []).flatMap((value) => String(value || '').split(',')).map((file) => file.trim()).filter(Boolean))]
+function normalizeChangedFiles(files: any = []) {
+  return [...new Set((files || []).flatMap((value: any) => String(value || '').split(',')).map((file: any) => file.trim()).filter(Boolean))]
     .sort();
 }
 
-function selectProofCones(files, intent) {
+function selectProofCones(files: any, intent: any) {
   const haystack = `${files.join('\n')}\n${intent || ''}`;
   const selected = PROOF_CONE_DEFINITIONS
-    .filter((cone) => cone.match.some((re) => re.test(haystack)))
-    .map((cone) => ({
+    .filter((cone: any) => cone.match.some((re: any) => re.test(haystack)))
+    .map((cone: any) => ({
       id: cone.id,
       surfaces: cone.surfaces,
       verification: cone.verification,
-      matched_files: files.filter((file) => cone.match.some((re) => re.test(file)))
+      matched_files: files.filter((file: any) => cone.match.some((re: any) => re.test(file)))
     }));
   if (!selected.length) {
     selected.push({
@@ -228,7 +227,7 @@ function selectProofCones(files, intent) {
   return selected;
 }
 
-function riskSummary(files, cones, intent) {
+function riskSummary(files: any, cones: any, intent: any) {
   const text = `${files.join('\n')}\n${intent || ''}`;
   const flags = {
     database: /\b(db|database|supabase|sql|migration|rls|schema)\b/i.test(text),
@@ -236,17 +235,17 @@ function riskSummary(files, cones, intent) {
     visual_forensic: /from-chat-img|screenshot|visual|이미지|스크린샷/i.test(text),
     release: /package\.json|package-lock\.json|CHANGELOG|release|publish/i.test(text),
     broad_change: files.length > 3,
-    unknown_surface: cones.some((cone) => cone.id === 'generic_local_change')
+    unknown_surface: cones.some((cone: any) => cone.id === 'generic_local_change')
   };
   const score = Object.values(flags).filter(Boolean).length;
   const level = score >= 3 ? 'high' : score === 2 ? 'medium' : score === 1 ? 'low' : 'minimal';
   return { level, score, flags };
 }
 
-function buildNegativeWorkCache(cones, risk) {
-  const required = new Set(cones.flatMap((cone) => cone.verification));
-  const candidates = new Set(cones.flatMap((cone) => cone.negative_work || []));
-  const out = [];
+function buildNegativeWorkCache(cones: any, risk: any) {
+  const required = new Set(cones.flatMap((cone: any) => cone.verification));
+  const candidates = new Set(cones.flatMap((cone: any) => cone.negative_work || []));
+  const out: any[] = [];
   for (const id of candidates) {
     const blockedByRisk = (id === 'database_migration' && risk.flags.database)
       || (id === 'browser_ui_e2e' && risk.flags.visual_forensic);
@@ -259,13 +258,13 @@ function buildNegativeWorkCache(cones, risk) {
   if (!required.has('npm run release:check') && !risk.flags.release) {
     out.push({ id: 'full_release_gate', disposition: 'skip_with_evidence', reason: 'no package/release surface in selected cones' });
   }
-  return out.sort((a, b) => a.id.localeCompare(b.id));
+  return out.sort((a: any, b: any) => a.id.localeCompare(b.id));
 }
 
-function fastLaneDecision({ changedFiles, selectedCones, risk, negativeWork }) {
-  const verification = [...new Set(selectedCones.flatMap((cone) => cone.verification))];
-  const safeSkips = negativeWork.filter((item) => item.disposition === 'skip_with_evidence').map((item) => item.id);
-  const blockers = [];
+function fastLaneDecision({ changedFiles, selectedCones, risk, negativeWork }: any) {
+  const verification = [...new Set(selectedCones.flatMap((cone: any) => cone.verification))];
+  const safeSkips = negativeWork.filter((item: any) => item.disposition === 'skip_with_evidence').map((item: any) => item.id);
+  const blockers: any[] = [];
   if (!changedFiles.length) blockers.push('no_changed_files');
   if (changedFiles.length > 3) blockers.push('broad_change_set');
   if (risk.flags.database) blockers.push('database_surface');
@@ -283,7 +282,7 @@ function fastLaneDecision({ changedFiles, selectedCones, risk, negativeWork }) {
   };
 }
 
-function contractClarityScore({ intent, changedFiles, selectedCones, risk }) {
+function contractClarityScore({ intent, changedFiles, selectedCones, risk }: any) {
   const components = [
     {
       id: 'goal_fit',
@@ -295,7 +294,7 @@ function contractClarityScore({ intent, changedFiles, selectedCones, risk }) {
       id: 'safety_scope_clarity',
       floor: 0.7,
       score: risk.flags.unknown_surface ? 0.4 : 1,
-      evidence: risk.flags.unknown_surface ? 'unknown surface present' : `risk flags classified: ${Object.entries(risk.flags).filter(([, value]) => value).map(([key]) => key).join(', ') || 'none'}`
+      evidence: risk.flags.unknown_surface ? 'unknown surface present' : `risk flags classified: ${Object.entries(risk.flags).filter(([, value]: any) => value).map(([key]: any) => key).join(', ') || 'none'}`
     },
     {
       id: 'acceptance_observability',
@@ -316,8 +315,8 @@ function contractClarityScore({ intent, changedFiles, selectedCones, risk }) {
       evidence: `${selectedCones.length} proof cone(s), unknown_surface=${risk.flags.unknown_surface}`
     }
   ];
-  const score = Number((components.reduce((sum, item) => sum + item.score, 0) / components.length).toFixed(2));
-  const failed = components.filter((item) => item.score < item.floor).map((item) => item.id);
+  const score = Number((components.reduce((sum: any, item: any) => sum + item.score, 0) / components.length).toFixed(2));
+  const failed = components.filter((item: any) => item.score < item.floor).map((item: any) => item.id);
   return {
     schema_version: 1,
     report_only: true,
@@ -329,8 +328,8 @@ function contractClarityScore({ intent, changedFiles, selectedCones, risk }) {
   };
 }
 
-function workflowComplexityScore({ changedFiles, selectedCones, risk, verification }) {
-  const surfaces = new Set(selectedCones.flatMap((cone) => cone.surfaces || []));
+function workflowComplexityScore({ changedFiles, selectedCones, risk, verification }: any) {
+  const surfaces = new Set(selectedCones.flatMap((cone: any) => cone.surfaces || []));
   const weighted = {
     changed_files: Math.min(changedFiles.length, 8) / 8 * 0.3,
     proof_cones: Math.min(selectedCones.length, 4) / 4 * 0.2,
@@ -338,7 +337,7 @@ function workflowComplexityScore({ changedFiles, selectedCones, risk, verificati
     verification: Math.min((verification || []).length, 6) / 6 * 0.15,
     surfaces: Math.min(surfaces.size, 6) / 6 * 0.1
   };
-  const score = Number(Object.values(weighted).reduce((sum, value) => sum + value, 0).toFixed(2));
+  const score = Number(Object.values(weighted).reduce((sum: any, value: any) => sum + value, 0).toFixed(2));
   const band = score >= 0.67 ? 'frontier' : (score >= 0.34 ? 'balanced' : 'focused');
   return {
     schema_version: 1,
@@ -356,7 +355,7 @@ function workflowComplexityScore({ changedFiles, selectedCones, risk, verificati
   };
 }
 
-function teamTriggerDecision({ intent, changedFiles, risk }) {
+function teamTriggerDecision({ intent, changedFiles, risk }: any) {
   const triggers = [
     { id: 'explicit_team', active: /\$?team\b/i.test(intent || ''), reason: 'user explicitly selected Team' },
     { id: 'broad_change_set', active: changedFiles.length > 3, reason: `${changedFiles.length} changed file(s)` },
@@ -367,7 +366,7 @@ function teamTriggerDecision({ intent, changedFiles, risk }) {
     { id: 'unsupported_claim', active: false, reason: 'only activated by Honest/H-Proof evidence' },
     { id: 'verification_failed', active: false, reason: 'only activated after verification failure' }
   ];
-  const active = triggers.filter((trigger) => trigger.active).map((trigger) => trigger.id);
+  const active = triggers.filter((trigger: any) => trigger.active).map((trigger: any) => trigger.id);
   return {
     schema_version: 1,
     report_only: true,
@@ -377,8 +376,8 @@ function teamTriggerDecision({ intent, changedFiles, risk }) {
   };
 }
 
-function verificationStageCachePlan({ sourceHash, changedFiles, verification }) {
-  const stage1 = [...new Set(verification || [])].filter((command) => /packcheck|selftest|commands --json|wiki validate|eval run/i.test(command));
+function verificationStageCachePlan({ sourceHash, changedFiles, verification }: any) {
+  const stage1 = [...new Set(verification || [])].filter((command: any) => /packcheck|selftest|commands --json|wiki validate|eval run/i.test(command));
   const cacheInput = { source_hash: sourceHash || null, changed_files: changedFiles, stage1 };
   return {
     schema_version: 1,
@@ -392,18 +391,18 @@ function verificationStageCachePlan({ sourceHash, changedFiles, verification }) 
   };
 }
 
-function outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane, workflowComplexity }) {
-  const skipped = negativeWork.filter((item) => item.disposition === 'skip_with_evidence').length;
+function outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane, workflowComplexity }: any) {
+  const skipped = negativeWork.filter((item: any) => item.disposition === 'skip_with_evidence').length;
   const criteria = [
     { id: 'goal_fit', passed: Boolean(intent || changedFiles.length), evidence: intent ? 'intent provided' : 'changed files define scope' },
     { id: 'minimum_surface', passed: changedFiles.length <= 3 && !risk.flags.unknown_surface, evidence: `${changedFiles.length} changed file(s), ${selectedCones.length} proof cone(s), complexity=${workflowComplexity?.band || 'unknown'}` },
     { id: 'bounded_verification', passed: fastLane.verification.length > 0 && fastLane.verification.length <= 4, evidence: `${fastLane.verification.length} focused verification command(s)` },
     { id: 'escalation_defined', passed: Array.isArray(fastLane.escalate_on) && fastLane.escalate_on.length > 0, evidence: `${fastLane.escalate_on.length} escalation trigger(s)` }
-  ].map((criterion) => ({
+  ].map((criterion: any) => ({
     ...criterion,
-    adversarial_lens: OUTCOME_RUBRIC.find((item) => item.id === criterion.id)?.adversarial_lens || null
+    adversarial_lens: OUTCOME_RUBRIC.find((item: any) => item.id === criterion.id)?.adversarial_lens || null
   }));
-  const passed = criteria.filter((item) => item.passed).length;
+  const passed = criteria.filter((item: any) => item.passed).length;
   return {
     schema_version: 1,
     score: Number((passed / OUTCOME_RUBRIC.length).toFixed(2)),
@@ -413,7 +412,7 @@ function outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeW
   };
 }
 
-function executionLaneDecision({ fastLane, simplicity, workflowComplexity, teamTriggerMatrix }) {
+function executionLaneDecision({ fastLane, simplicity, workflowComplexity, teamTriggerMatrix }: any) {
   const score = Number(simplicity?.score || 0);
   const fast = Boolean(fastLane?.eligible) && score >= FAST_LANE_MIN_SCORE;
   const lane = fast
@@ -435,15 +434,15 @@ function executionLaneDecision({ fastLane, simplicity, workflowComplexity, teamT
   };
 }
 
-function nextAction(decision, simplicity) {
+function nextAction(decision: any, simplicity: any) {
   const score = Number.isFinite(Number(simplicity?.score)) ? ` outcome_score=${simplicity.score}` : '';
   if (decision.mode === 'fast_lane') return `apply minimal patch, run listed verification, then Honest Mode against the proof field report;${score}`;
   if (decision.mode === 'balanced') return `narrow the change set or run parent-led implementation with listed verification and reviewer escalation if checks fail;${score}`;
   return 'use full Team/Honest proof path; fast lane is intentionally blocked for this risk state';
 }
 
-async function sourceDigest(root, files) {
-  const rows = [];
+async function sourceDigest(root: any, files: any) {
+  const rows: any[] = [];
   for (const file of files) {
     const abs = path.resolve(root, file);
     if (!abs.startsWith(path.resolve(root))) continue;

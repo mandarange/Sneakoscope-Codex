@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { PACKAGE_VERSION, nowIso } from '../fsx.js';
 
 export const COMPLETION_PROOF_SCHEMA = 'sks.completion-proof.v1';
@@ -10,7 +9,7 @@ export const COMPLETION_PROOF_STATUSES = Object.freeze([
   'failed'
 ]);
 
-export function emptyCompletionProof(overrides = {}) {
+export function emptyCompletionProof(overrides: Record<string, unknown> = {}) {
   return {
     schema: COMPLETION_PROOF_SCHEMA,
     version: PACKAGE_VERSION,
@@ -33,7 +32,8 @@ export function emptyCompletionProof(overrides = {}) {
       computer_use: null,
       image_voxels: null,
       scouts: null,
-      triwiki: null
+      triwiki: null,
+      wrongness: null
     },
     claims: [],
     unverified: [],
@@ -54,6 +54,7 @@ export interface ProofEvidence {
   image_voxels?: unknown;
   scouts?: unknown;
   triwiki?: unknown;
+  wrongness?: unknown;
   evidence_router?: { records: number };
   evidence_records?: import('../evidence/evidence-schema.js').EvidenceRecord[];
 }
@@ -62,6 +63,7 @@ export interface ProofClaim {
   id: string;
   status: import('../trust-kernel/trust-kernel-schema.js').TrustStatus | 'supported' | 'unsupported';
   evidence?: string | null;
+  wrongness?: string[];
 }
 
 export interface CompletionProof {

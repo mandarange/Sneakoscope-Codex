@@ -1,20 +1,19 @@
-// @ts-nocheck
 import path from 'node:path';
 import { readJson, writeJsonAtomic, nowIso, sha256 } from './fsx.js';
 import { validateQaLoopAnswers } from './qa-loop.js';
 import { inferAnswersForPrompt } from './questions.js';
 import { bindMistakeRecallToAnswers, buildMistakeRecallLedger, mistakeRecallContractSummary, writeMistakeRecallArtifacts } from './mistake-recall.js';
 
-function isEmptyAnswer(v, slot = {}) {
+function isEmptyAnswer(v: any, slot: any = {}) {
   if (v === undefined || v === null) return true;
   if (typeof v === 'string' && v.trim() === '') return true;
   if (Array.isArray(v) && v.length === 0) return !slot.allow_empty;
   return false;
 }
 
-export function validateAnswers(schema, answers) {
-  const errors = [];
-  const resolved = [];
+export function validateAnswers(schema: any, answers: any) {
+  const errors: any[] = [];
+  const resolved: any[] = [];
   for (const slot of schema.slots) {
     const value = answers[slot.id];
     if (slot.required && isEmptyAnswer(value, slot)) {
@@ -37,10 +36,10 @@ export function validateAnswers(schema, answers) {
     errors.push({ slot: 'DATABASE_TARGET_ENVIRONMENT', error: 'production_write_target_forbidden' });
   }
   errors.push(...validateQaLoopAnswers(schema, answers));
-  return { ok: errors.length === 0, errors, resolved, totalRequired: schema.slots.filter((s) => s.required).length };
+  return { ok: errors.length === 0, errors, resolved, totalRequired: schema.slots.filter((s: any) => s.required).length };
 }
 
-export function buildDecisionContract({ mission, schema, answers, mistakeRecall = null }) {
+export function buildDecisionContract({ mission, schema, answers, mistakeRecall = null }: any) {
   const madSks = answers.MAD_SKS_MODE === 'explicit_invocation_only';
   const defaults = {
     if_multiple_valid_implementations: 'choose_smallest_reversible_change',
@@ -60,7 +59,7 @@ export function buildDecisionContract({ mission, schema, answers, mistakeRecall 
     if_database_blast_radius_unknown: 'do_not_execute_live_dml'
   };
   const fallback = answers.MID_RUN_UNKNOWN_POLICY || ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'];
-  const contract = {
+  const contract: any = {
     schema_version: 2,
     mission_id: mission.id,
     status: 'sealed',
@@ -110,8 +109,8 @@ export function buildDecisionContract({ mission, schema, answers, mistakeRecall 
       migration_apply_allowed: answers.DB_MIGRATION_APPLY_ALLOWED || 'no',
       read_only_query_limit: answers.DB_READ_ONLY_QUERY_LIMIT || '1000'
     },
-    acceptance_criteria: Array.isArray(answers.ACCEPTANCE_CRITERIA) ? answers.ACCEPTANCE_CRITERIA : String(answers.ACCEPTANCE_CRITERIA || '').split('\n').map((x) => x.trim()).filter(Boolean),
-    non_goals: Array.isArray(answers.NON_GOALS) ? answers.NON_GOALS : String(answers.NON_GOALS || '').split('\n').map((x) => x.trim()).filter(Boolean),
+    acceptance_criteria: Array.isArray(answers.ACCEPTANCE_CRITERIA) ? answers.ACCEPTANCE_CRITERIA : String(answers.ACCEPTANCE_CRITERIA || '').split('\n').map((x: any) => x.trim()).filter(Boolean),
+    non_goals: Array.isArray(answers.NON_GOALS) ? answers.NON_GOALS : String(answers.NON_GOALS || '').split('\n').map((x: any) => x.trim()).filter(Boolean),
     test_scope: answers.TEST_SCOPE,
     triwiki_mistake_recall: mistakeRecallContractSummary(mistakeRecall),
     approved_defaults: defaults,
@@ -133,9 +132,9 @@ export function buildDecisionContract({ mission, schema, answers, mistakeRecall 
   return contract;
 }
 
-export async function sealContract(missionDir, mission) {
-  const schema = await readJson(path.join(missionDir, 'required-answers.schema.json'));
-  const explicitAnswers = await readJson(path.join(missionDir, 'answers.json'));
+export async function sealContract(missionDir: any, mission: any): Promise<any> {
+  const schema = await readJson(path.join(missionDir, 'required-answers.schema.json'), {});
+  const explicitAnswers = await readJson(path.join(missionDir, 'answers.json'), {});
   const inferred = inferAnswersForPrompt(mission?.prompt || schema?.prompt || '', explicitAnswers);
   const baseAnswers = {
     ...(schema.inferred_answers || {}),
@@ -168,7 +167,7 @@ export async function sealContract(missionDir, mission) {
   return { ok: true, validation, contract };
 }
 
-function rootFromMissionDir(missionDir) {
+function rootFromMissionDir(missionDir: any) {
   const resolved = path.resolve(missionDir);
   const parts = resolved.split(path.sep);
   const idx = parts.lastIndexOf('.sneakoscope');

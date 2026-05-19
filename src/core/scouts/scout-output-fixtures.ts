@@ -1,5 +1,4 @@
-// @ts-nocheck
-export function scoutOutputJsonFixture(overrides = {}) {
+export function scoutOutputJsonFixture(overrides: any = {}) {
   return {
     schema: 'sks.scout-result.v1',
     scout_id: 'scout-1-code-surface',
@@ -16,7 +15,7 @@ export function scoutOutputJsonFixture(overrides = {}) {
   };
 }
 
-export function scoutOutputMarkdownFixture(overrides = {}) {
+export function scoutOutputMarkdownFixture(overrides: any = {}) {
   return [
     'Scout notes.',
     '',

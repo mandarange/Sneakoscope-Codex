@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { commandsCommand } from '../core/commands/basic-cli.js';
 
-export async function run(_command, args = []) {
+export async function run(_command: any, args: any = []) {
   return commandsCommand(args);
 }

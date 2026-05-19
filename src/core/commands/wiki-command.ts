@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { appendJsonlBounded, ensureDir, exists, formatBytes, nowIso, PACKAGE_VERSION, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
@@ -15,22 +14,26 @@ import { addImageRelation, addVisualAnchor, ingestImage, imageVoxelSummary, read
 import { imageVoxelProofEvidence } from '../wiki-image/proof-linker.js';
 import { validateImageVoxelLedger } from '../wiki-image/validation.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
+import { wikiWrongnessCommand } from '../triwiki-wrongness/wrongness-cli.js';
+import { wrongnessContextForRoute } from '../triwiki-wrongness/wrongness-retrieval.js';
+import { recordImageWrongnessFromValidation } from '../triwiki-wrongness/image-wrongness.js';
 import { flag, positionalArgs, readFlagValue, readOption, resolveMissionId } from './command-utils.js';
 
-export async function wikiCommand(sub, args = []) {
+export async function wikiCommand(sub: any, args: any = []) {
   if (!sub || sub === 'help' || sub === '--help') {
-    console.log('Usage: sks wiki coords --rgba R,G,B,A | sks wiki pack|refresh|sweep|prune|validate | sks wiki image-ingest|anchor-add|relation-add|image-validate|image-summary');
+    console.log('Usage: sks wiki coords --rgba R,G,B,A | sks wiki pack|refresh|sweep|prune|validate|wrongness | sks wiki image-ingest|anchor-add|relation-add|image-validate|image-summary');
     return;
   }
   if (sub === 'image-ingest') return wikiImageIngest(args);
   if (sub === 'image-validate') return wikiImageValidate(args);
   if (sub === 'image-summary') return wikiImageSummary(args);
+  if (sub === 'wrongness') return wikiWrongnessCommand(args);
   if (sub === 'anchor-add') return wikiAnchorAdd(args);
   if (sub === 'relation-add') return wikiRelationAdd(args);
   if (sub === 'image-link-proof') return wikiImageLinkProof(args);
   if (sub === 'coords') {
     const raw = readFlagValue(args, '--rgba', positionalArgs(args)[0] || '');
-    const parts = String(raw).split(/[,\s]+/).filter(Boolean).map((x) => Number.parseInt(x, 10));
+    const parts = String(raw).split(/[,\s]+/).filter(Boolean).map((x: any) => Number.parseInt(x, 10));
     if (parts.length < 3) throw new Error('Usage: sks wiki coords --rgba R,G,B,A');
     const coord = rgbaToWikiCoord({ r: parts[0], g: parts[1], b: parts[2], a: parts[3] ?? 255 });
     console.log(JSON.stringify({ rgba: coord.rgba, rgba_key: rgbaKey(coord.rgba), coord }, null, 2));
@@ -105,7 +108,7 @@ export async function wikiCommand(sub, args = []) {
     if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
     console.log('Sneakoscope TriWiki Sweep');
     console.log(`Operations: ${report.operations.length}`);
-    console.log(`Forget queue: ${report.operations.filter((op) => ['DEMOTE', 'SOFT_FORGET', 'ARCHIVE', 'HARD_DELETE', 'CONSOLIDATE'].includes(op.operation)).length}`);
+    console.log(`Forget queue: ${report.operations.filter((op: any) => ['DEMOTE', 'SOFT_FORGET', 'ARCHIVE', 'HARD_DELETE', 'CONSOLIDATE'].includes(op.operation)).length}`);
     console.log(`Budget: ${report.retrieval_budget.actual_tokens}/${report.retrieval_budget.max_tokens} tokens`);
     return;
   }
@@ -122,13 +125,13 @@ export async function wikiCommand(sub, args = []) {
     process.exitCode = result.ok ? 0 : 2;
     return;
   }
-  console.error('Usage: sks wiki coords|pack|refresh|sweep|prune|validate|image-ingest|anchor-add|relation-add|image-validate|image-summary');
+  console.error('Usage: sks wiki coords|pack|refresh|sweep|prune|validate|wrongness|image-ingest|anchor-add|relation-add|image-validate|image-summary');
   process.exitCode = 1;
 }
 
-async function wikiImageIngest(args = []) {
+async function wikiImageIngest(args: any = []) {
   const root = await sksRoot();
-  const imagePath = args.find((arg, i) => i >= 0 && !String(arg).startsWith('--'));
+  const imagePath = args.find((arg: any, i: any) => i >= 0 && !String(arg).startsWith('--'));
   const { id, dir } = await createMission(root, { mode: 'wiki', prompt: `sks wiki image-ingest ${imagePath || ''}`.trim() });
   const result = await ingestImage(root, imagePath, { source: readOption(args, '--source', 'manual'), missionId: readOption(args, '--mission-id', id) || id });
   const gate = { schema_version: 1, passed: result.ok, ok: result.ok, image_id: result.image.id, image_voxel_ledger: 'image-voxel-ledger.json' };
@@ -141,18 +144,26 @@ async function wikiImageIngest(args = []) {
   if (!result.ok) process.exitCode = 1;
 }
 
-async function wikiImageValidate(args = []) {
+async function wikiImageValidate(args: any = []) {
   const root = await sksRoot();
-  const ledgerPath = args.find((arg, i) => i >= 0 && !String(arg).startsWith('--'));
+  const ledgerPath = args.find((arg: any, i: any) => i >= 0 && !String(arg).startsWith('--'));
   const ledger = await readImageVoxelLedger(root, ledgerPath ? path.resolve(root, ledgerPath) : undefined);
   const result = { schema: 'sks.image-voxel-validation.v1', ...validateImageVoxelLedger(ledger, { requireAnchors: flag(args, '--require-anchors'), requireRelations: flag(args, '--require-relations'), route: readOption(args, '--route', '$Wiki') }) };
-  if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+  const wrongness = await recordImageWrongnessFromValidation(root, {
+    ledger,
+    validation: result,
+    missionId: readOption(args, '--mission-id', ledger.mission_id || null),
+    route: readOption(args, '--route', '$Wiki'),
+    artifact: ledgerPath || '.sneakoscope/wiki/image-voxel-ledger.json'
+  });
+  const output = { ...result, wrongness };
+  if (flag(args, '--json')) return console.log(JSON.stringify(output, null, 2));
   console.log(`Image voxel ledger: ${result.ok ? 'pass' : 'blocked'}`);
   for (const issue of result.issues) console.log(`- ${issue}`);
   if (!result.ok) process.exitCode = 1;
 }
 
-async function wikiImageSummary(args = []) {
+async function wikiImageSummary(args: any = []) {
   const root = await sksRoot();
   const result = await imageVoxelSummary(root);
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
@@ -162,7 +173,7 @@ async function wikiImageSummary(args = []) {
   if (!result.ok) process.exitCode = 1;
 }
 
-async function wikiAnchorAdd(args = []) {
+async function wikiAnchorAdd(args: any = []) {
   const root = await sksRoot();
   const result = await addVisualAnchor(root, {
     imageId: readOption(args, '--image-id', null),
@@ -179,13 +190,13 @@ async function wikiAnchorAdd(args = []) {
   if (!result.ok) process.exitCode = 1;
 }
 
-async function wikiRelationAdd(args = []) {
+async function wikiRelationAdd(args: any = []) {
   const root = await sksRoot();
   const result = await addImageRelation(root, {
     type: readOption(args, '--type', 'before_after'),
     beforeImageId: readOption(args, '--before', null),
     afterImageId: readOption(args, '--after', null),
-    anchors: String(readOption(args, '--anchors', '') || '').split(',').map((x) => x.trim()).filter(Boolean),
+    anchors: String(readOption(args, '--anchors', '') || '').split(',').map((x: any) => x.trim()).filter(Boolean),
     verification: readOption(args, '--verification', 'changed-screen-recheck'),
     status: readOption(args, '--status', 'verified_partial'),
     route: readOption(args, '--route', '$Wiki'),
@@ -196,15 +207,15 @@ async function wikiRelationAdd(args = []) {
   if (!result.ok) process.exitCode = 1;
 }
 
-async function wikiImageLinkProof(args = []) {
+async function wikiImageLinkProof(args: any = []) {
   const root = await sksRoot();
-  const result = await imageVoxelProofEvidence(root);
+  const result = await imageVoxelProofEvidence(root, null);
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log(`Image voxel proof link: ${result.ok ? 'ok' : 'blocked'}`);
   if (!result.ok) process.exitCode = 1;
 }
 
-export async function writeWikiContextPack(root, args = [], opts = {}) {
+export async function writeWikiContextPack(root: any, args: any = [], opts: any = {}) {
   const role = readFlagValue(args, '--role', 'worker');
   const maxAnchors = Number(readFlagValue(args, '--max-anchors', role.includes('verifier') ? 48 : 32));
   const pack = contextCapsule({
@@ -216,15 +227,21 @@ export async function writeWikiContextPack(root, args = [], opts = {}) {
     q3: ['sks', 'llm-wiki', 'wiki-coordinate', 'gx', 'skills'],
     budget: { maxWikiAnchors: maxAnchors, includeTrustSummary: true }
   });
+  const wrongnessContext = await wrongnessContextForRoute(root, { route: '$Wiki', limit: 12 });
+  const enrichedPack = {
+    ...pack,
+    wrongness_context: wrongnessContext,
+    q3: Array.from(new Set([...(pack.q3 || []), 'wrongness-memory', 'negative-evidence']))
+  };
   const file = path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
   if (!opts.dryRun) {
     await ensureDir(path.dirname(file));
-    await writeJsonAtomic(file, pack);
+    await writeJsonAtomic(file, enrichedPack);
   }
-  return { pack, file, role, maxAnchors };
+  return { pack: enrichedPack, file, role, maxAnchors };
 }
 
-export async function migrateWikiContextPack(root) {
+export async function migrateWikiContextPack(root: any) {
   try {
     const { pack } = await writeWikiContextPack(root, ['--max-anchors', '32']);
     return wikiValidationResult(pack).result.ok;
@@ -233,22 +250,22 @@ export async function migrateWikiContextPack(root) {
   }
 }
 
-function wikiAnchorCount(wiki = {}) {
+function wikiAnchorCount(wiki: any = {}) {
   return (wiki.anchors || wiki.a || []).length;
 }
 
-export function wikiVoxelRowCount(wiki = {}) {
+export function wikiVoxelRowCount(wiki: any = {}) {
   const overlay = wiki.vx || wiki.voxel_overlay || {};
   return (overlay.rows || overlay.v || []).length;
 }
 
-function wikiValidationResult(pack = {}) {
+function wikiValidationResult(pack: any = {}) {
   const wikiIndex = pack.wiki || pack;
   const result = validateWikiCoordinateIndex(wikiIndex);
   return { result, trustAnchors: countTrustAnchors(wikiIndex) };
 }
 
-function printWikiPackSummary(root, file, pack) {
+function printWikiPackSummary(root: any, file: any, pack: any) {
   console.log('Sneakoscope LLM Wiki Context Pack');
   console.log(`Path:     ${path.relative(root, file)}`);
   console.log(`Claims:   ${pack.claims.length} hydrated text claims`);
@@ -261,7 +278,7 @@ function printWikiPackSummary(root, file, pack) {
   console.log(`Validate: sks wiki validate ${path.relative(root, file)}`);
 }
 
-function wikiAttentionSummary(pack = {}) {
+function wikiAttentionSummary(pack: any = {}) {
   const attention = pack.attention || {};
   return {
     mode: attention.mode || null,
@@ -271,12 +288,12 @@ function wikiAttentionSummary(pack = {}) {
   };
 }
 
-function countTrustAnchors(wiki = {}) {
-  const rows = Array.isArray(wiki.a) ? wiki.a : (Array.isArray(wiki.anchors) ? wiki.anchors.map((anchor) => [anchor.id, null, null, null, null, null, null, null, null, anchor.trust_score, anchor.trust_band]) : []);
-  return rows.filter((row) => row?.[9] != null && row?.[10]).length;
+function countTrustAnchors(wiki: any = {}) {
+  const rows = Array.isArray(wiki.a) ? wiki.a : (Array.isArray(wiki.anchors) ? wiki.anchors.map((anchor: any) => [anchor.id, null, null, null, null, null, null, null, null, anchor.trust_score, anchor.trust_band]) : []);
+  return rows.filter((row: any) => row?.[9] != null && row?.[10]).length;
 }
 
-export async function projectWikiClaims(root) {
+export async function projectWikiClaims(root: any) {
   const claims = [
     ['wiki-hooks', '.codex/hooks.json routes UserPromptSubmit, tool, permission, and Stop events through SKS guards.', '.codex/hooks.json', 'code', 'high'],
     ['wiki-config', '.codex/config.toml enables Codex App profiles, multi-agent support, and Team agent limits.', '.codex/config.toml', 'code', 'high'],
@@ -290,11 +307,24 @@ export async function projectWikiClaims(root) {
     ['wiki-eval', 'sks eval run measures token savings, evidence-weighted accuracy proxy, required recall, unsupported critical filtering, and build runtime.', 'src/core/evaluation.js', 'test', 'medium'],
     ['wiki-trig', 'TriWiki maps RGBA channels to domain angle, layer radius, phase, and concentration using deterministic trigonometric coordinates.', 'src/core/wiki-coordinate.js', 'code', 'high']
   ];
-  const out = [];
-  for (const [id, text, file, authority, risk] of claims) {
+  const out: any[] = [];
+  for (const [id, text, file, authority, risk] of claims as Array<[string, string, string, string, string]>) {
     out.push({ id, text, authority, risk, status: await exists(path.join(root, file)) ? 'supported' : 'unknown', freshness: 'fresh', source: file, file, evidence_count: await exists(path.join(root, file)) ? 1 : 0 });
   }
   const stackPolicy = stackCurrentDocsPolicy();
+  out.push({
+    id: 'wiki-wrongness-memory',
+    text: 'TriWiki wrongness memory stores negative evidence, failed assumptions, stale proof, mock-real confusion, visual anchor errors, DB safety mismatches, hook policy mismatch, and trust overclaim as project and mission ledgers that retrieval and trust gates must consult before verification claims.',
+    authority: 'code',
+    risk: 'critical',
+    status: await exists(path.join(root, '.sneakoscope/wiki/wrongness-ledger.json')) ? 'supported' : 'unknown',
+    freshness: 'fresh',
+    source: 'src/core/triwiki-wrongness',
+    file: 'src/core/triwiki-wrongness',
+    evidence_count: await exists(path.join(root, 'src/core/triwiki-wrongness/wrongness-schema.ts')) ? 2 : 0,
+    required_weight: 1.4,
+    trust_score: 0.9
+  });
   out.push({
     id: 'wiki-stack-current-docs-policy',
     text: `When project tech stack, framework, package, runtime, SDK, MCP, or deployment-platform versions change, use Context7 or official vendor docs, write current syntax/security/limit guidance to ${stackPolicy.memory_path}, refresh TriWiki, validate it, and prefer those claims over stale model defaults before coding.`,
@@ -326,10 +356,10 @@ export async function projectWikiClaims(root) {
   return out;
 }
 
-async function memoryWikiClaims(root) {
+async function memoryWikiClaims(root: any) {
   const base = path.join(root, '.sneakoscope', 'memory');
   const files = await listMemoryClaimFiles(base);
-  const claims = [];
+  const claims: any[] = [];
   for (const file of files.slice(0, 80)) {
     let text = '';
     try { text = await fsp.readFile(file, 'utf8'); } catch { continue; }
@@ -356,17 +386,17 @@ async function memoryWikiClaims(root) {
   return claims;
 }
 
-function selectMemoryClaimRows(rows = [], limit = 48) {
+function selectMemoryClaimRows(rows: any = [], limit: any = 48) {
   return rows.slice(-limit);
 }
 
-async function listMemoryClaimFiles(base) {
-  const out = [];
-  async function walk(dir, depth = 0) {
+async function listMemoryClaimFiles(base: any) {
+  const out: any[] = [];
+  async function walk(dir: any, depth: any = 0) {
     if (depth > 3) return;
-    let entries = [];
+    let entries: any[] = [];
     try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
-    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const entry of entries.sort((a: any, b: any) => a.name.localeCompare(b.name))) {
       const p = path.join(dir, entry.name);
       if (entry.isDirectory()) await walk(p, depth + 1);
       else if (/\.(md|txt|json)$/i.test(entry.name)) out.push(p);
@@ -376,20 +406,20 @@ async function listMemoryClaimFiles(base) {
   return out;
 }
 
-function parseMemoryClaimRows(text, relFile) {
+function parseMemoryClaimRows(text: any, relFile: any) {
   if (/\.json$/i.test(relFile)) {
     try {
       const parsed = JSON.parse(text);
       const rows = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.claims) ? parsed.claims : []);
-      return rows.map((row) => normalizeMemoryClaimRow(row, relFile)).filter(Boolean);
+      return rows.map((row: any) => normalizeMemoryClaimRow(row, relFile)).filter(Boolean);
     } catch {
       return [];
     }
   }
-  return text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#')).map((line) => normalizeMemoryClaimRow(line.replace(/^[-*]\s*/, ''), relFile)).filter(Boolean);
+  return text.split(/\r?\n/).map((line: any) => line.trim()).filter((line: any) => line && !line.startsWith('#')).map((line: any) => normalizeMemoryClaimRow(line.replace(/^[-*]\s*/, ''), relFile)).filter(Boolean);
 }
 
-function normalizeMemoryClaimRow(row, relFile) {
+function normalizeMemoryClaimRow(row: any, relFile: any) {
   if (!row) return null;
   if (typeof row === 'object') {
     const text = String(row.text || row.claim || '').trim();
@@ -401,27 +431,27 @@ function normalizeMemoryClaimRow(row, relFile) {
   return { id: extractClaimField(clean, 'id'), text: clean.slice(0, 320), source: extractClaimField(clean, 'source') || extractClaimField(clean, 'file') || relFile, authority: extractClaimField(clean, 'authority') || 'wiki', risk: extractClaimField(clean, 'risk') || 'high', status: extractClaimField(clean, 'status'), freshness: extractClaimField(clean, 'freshness') || 'fresh', evidence_count: parseOptionalNumber(extractClaimField(clean, 'evidence_count')), required_weight: parseOptionalNumber(extractClaimField(clean, 'required_weight')), trust_score: parseOptionalNumber(extractClaimField(clean, 'trust_score')) };
 }
 
-function extractClaimField(text, key) {
+function extractClaimField(text: any, key: any) {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = String(text || '').match(new RegExp(`\\b${escaped}\\s*[:=]\\s*\`?([^\`|,;]+)`, 'i'));
-  return match ? match[1].trim().replace(/[.;)]$/, '') : null;
+  return match?.[1] ? match[1].trim().replace(/[.;)]$/, '') : null;
 }
 
-function parseOptionalNumber(value) {
+function parseOptionalNumber(value: any) {
   const n = Number(value);
   return Number.isFinite(n) ? n : undefined;
 }
 
-function slugifyClaimId(value) {
+function slugifyClaimId(value: any) {
   return String(value || 'claim').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'claim';
 }
 
-async function userRequestSignalWikiClaims(root) {
+async function userRequestSignalWikiClaims(root: any) {
   const base = path.join(root, '.sneakoscope', 'missions');
-  let entries = [];
+  let entries: any[] = [];
   try { entries = await fsp.readdir(base, { withFileTypes: true }); } catch { return []; }
   const topics = new Map();
-  for (const id of entries.filter((item) => item.isDirectory() && item.name.startsWith('M-')).map((item) => item.name).sort().reverse().slice(0, 120)) {
+  for (const id of entries.filter((item: any) => item.isDirectory() && item.name.startsWith('M-')).map((item: any) => item.name).sort().reverse().slice(0, 120)) {
     const mission = await readJson(path.join(base, id, 'mission.json'), null);
     const prompt = String(mission?.prompt || '').trim();
     if (!prompt) continue;
@@ -432,7 +462,7 @@ async function userRequestSignalWikiClaims(root) {
       topics.set(topic, current);
     }
   }
-  return [...topics.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 16).map(([topic, row]) => ({
+  return [...topics.entries()].sort((a: any, b: any) => b[1].count - a[1].count).slice(0, 16).map(([topic, row]: any) => ({
     id: `user-request-frequency-${slugifyClaimId(topic)}`,
     text: `User request topic "${topic}" appeared ${row.count} time(s); repeated topics should be consulted before asking predictable clarification questions.`,
     authority: 'wiki',
@@ -446,7 +476,7 @@ async function userRequestSignalWikiClaims(root) {
   }));
 }
 
-function userRequestSignal(prompt = '') {
+function userRequestSignal(prompt: any = '') {
   const lower = String(prompt || '').toLowerCase();
   const topicRules = [
     ['ambiguity-questions', /모호|ambiguity|clarification|질문|답변|answers?\.json|decision-contract|추론|예측/],
@@ -457,12 +487,12 @@ function userRequestSignal(prompt = '') {
     ['team-pipeline', /team|subagent|세션|cleanup|reflection|회고|반성/],
     ['safety-boundary', /삭제|파괴|destructive|production|권한|보안|인증|결제/]
   ];
-  const topics = topicRules.filter(([, pattern]) => pattern.test(lower)).map(([topic]) => topic);
+  const topics = topicRules.filter(([, pattern]: any) => pattern.test(lower)).map(([topic]: any) => topic);
   if (!topics.length) topics.push('general-user-preference');
   return { topics };
 }
 
-function parseBbox(raw) {
-  const parts = String(raw || '').split(',').map((part) => Number(part.trim()));
+function parseBbox(raw: any) {
+  const parts = String(raw || '').split(',').map((part: any) => Number(part.trim()));
   return parts.length === 4 && parts.every(Number.isFinite) ? parts : null;
 }

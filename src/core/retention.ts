@@ -1,4 +1,3 @@
-// @ts-nocheck
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { exists, readJson, writeJsonAtomic, ensureDir, dirSize, fileSize, formatBytes, rmrf, nowIso, appendJsonlBounded, listFilesRecursive } from './fsx.js';
@@ -24,21 +23,21 @@ export const DEFAULT_RETENTION_POLICY = Object.freeze({
   max_from_chat_img_temp_sessions: FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS
 });
 
-export async function ensureRetentionPolicy(root) {
+export async function ensureRetentionPolicy(root: any) {
   const p = path.join(root, '.sneakoscope', 'policy.json');
   if (!(await exists(p))) await writeJsonAtomic(p, { retention: DEFAULT_RETENTION_POLICY });
   return p;
 }
 
-export async function loadRetentionPolicy(root) {
+export async function loadRetentionPolicy(root: any) {
   const p = path.join(root, '.sneakoscope', 'policy.json');
   const data = await readJson(p, {});
   return { ...DEFAULT_RETENTION_POLICY, ...(data.retention || data || {}) };
 }
 
-export async function storageReport(root) {
+export async function storageReport(root: any): Promise<any> {
   const sks = path.join(root, '.sneakoscope');
-  const report = { root, exists: await exists(sks), generated_at: nowIso(), sections: {}, total_bytes: 0 };
+  const report: any = { root, exists: await exists(sks), generated_at: nowIso(), sections: {}, total_bytes: 0 };
   if (!report.exists) return report;
   for (const name of ['missions', 'memory', 'gx', 'hproof', 'tmp', 'arenas', 'state', 'model', 'genome', 'trajectories', 'locks', 'reports', 'wiki']) {
     const p = path.join(sks, name);
@@ -50,21 +49,21 @@ export async function storageReport(root) {
   return report;
 }
 
-async function listMissionDirs(root) {
+async function listMissionDirs(root: any) {
   const base = path.join(root, '.sneakoscope', 'missions');
   if (!(await exists(base))) return [];
   const entries = await fs.readdir(base, { withFileTypes: true });
-  const out = [];
+  const out: any[] = [];
   for (const e of entries) {
     if (!e.isDirectory() || !e.name.startsWith('M-')) continue;
     const p = path.join(base, e.name);
     const st = await fs.stat(p).catch(() => null);
     if (st) out.push({ id: e.name, path: p, mtimeMs: st.mtimeMs, size: await dirSize(p).catch(() => 0) });
   }
-  return out.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return out.sort((a: any, b: any) => b.mtimeMs - a.mtimeMs);
 }
 
-async function pruneTmp(root, policy, dryRun, actions) {
+async function pruneTmp(root: any, policy: any, dryRun: any, actions: any) {
   const tmp = path.join(root, '.sneakoscope', 'tmp');
   if (!(await exists(tmp))) return;
   const now = Date.now();
@@ -81,7 +80,7 @@ async function pruneTmp(root, policy, dryRun, actions) {
   }
 }
 
-async function pruneOldMissions(root, policy, dryRun, actions) {
+async function pruneOldMissions(root: any, policy: any, dryRun: any, actions: any) {
   const missions = await listMissionDirs(root);
   const now = Date.now();
   const maxAge = policy.max_mission_age_days * 24 * 60 * 60 * 1000;
@@ -96,7 +95,7 @@ async function pruneOldMissions(root, policy, dryRun, actions) {
   }
 }
 
-async function pruneFromChatImgTempTriWiki(root, policy, dryRun, actions) {
+async function pruneFromChatImgTempTriWiki(root: any, policy: any, dryRun: any, actions: any) {
   const missions = await listMissionDirs(root);
   const ttlDefault = Math.max(1, Number(policy.max_from_chat_img_temp_sessions) || FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS);
   for (let i = 0; i < missions.length; i++) {
@@ -112,19 +111,19 @@ async function pruneFromChatImgTempTriWiki(root, policy, dryRun, actions) {
   }
 }
 
-async function compactMission(mission, policy, dryRun, actions) {
+async function compactMission(mission: any, policy: any, dryRun: any, actions: any) {
   if (mission.size <= policy.max_mission_bytes) return;
   const cyclesRoot = path.join(mission.path, 'cycles');
   if (await exists(cyclesRoot)) {
     const entries = await fs.readdir(cyclesRoot, { withFileTypes: true }).catch(() => []);
-    const dirs = [];
+    const dirs: any[] = [];
     for (const e of entries) {
       if (!e.isDirectory() || !/^cycle-\d+$/.test(e.name)) continue;
       const n = Number(e.name.replace('cycle-', ''));
       const p = path.join(cyclesRoot, e.name);
       dirs.push({ n, path: p, bytes: await dirSize(p).catch(() => 0) });
     }
-    dirs.sort((a, b) => b.n - a.n);
+    dirs.sort((a: any, b: any) => b.n - a.n);
     for (const d of dirs.slice(policy.keep_last_cycles_per_mission)) {
       actions.push({ action: 'remove_old_cycle_dir', mission: mission.id, path: d.path, bytes: d.bytes });
       if (!dryRun) await rmrf(d.path);
@@ -140,7 +139,7 @@ async function compactMission(mission, policy, dryRun, actions) {
   }
 }
 
-async function rotateLargeJsonl(root, policy, dryRun, actions) {
+async function rotateLargeJsonl(root: any, policy: any, dryRun: any, actions: any) {
   const files = await listFilesRecursive(path.join(root, '.sneakoscope'), { maxFiles: 100000 }).catch(() => []);
   for (const f of files) {
     if (!f.endsWith('.jsonl')) continue;
@@ -151,11 +150,11 @@ async function rotateLargeJsonl(root, policy, dryRun, actions) {
   }
 }
 
-function wikiTrustScore(data = {}) {
+function wikiTrustScore(data: any = {}) {
   const summaryAvg = Number(data.trust_summary?.avg);
   if (Number.isFinite(summaryAvg)) return summaryAvg;
   const wiki = data.wiki || data;
-  const scores = [];
+  const scores: any[] = [];
   if (Array.isArray(wiki.anchors)) {
     for (const anchor of wiki.anchors) {
       const score = Number(anchor?.trust_score);
@@ -169,10 +168,10 @@ function wikiTrustScore(data = {}) {
     }
   }
   if (!scores.length) return null;
-  return scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  return scores.reduce((sum: any, score: any) => sum + score, 0) / scores.length;
 }
 
-async function wikiArtifactTrust(file, maxReadBytes) {
+async function wikiArtifactTrust(file: any, maxReadBytes: any) {
   const size = await fileSize(file).catch(() => 0);
   if (!size || size > maxReadBytes) return null;
   try {
@@ -182,24 +181,24 @@ async function wikiArtifactTrust(file, maxReadBytes) {
   }
 }
 
-export async function pruneWikiArtifacts(root, opts = {}) {
+export async function pruneWikiArtifacts(root: any, opts: any = {}) {
   const policy = { ...(await loadRetentionPolicy(root)), ...(opts.policy || {}) };
   const dryRun = Boolean(opts.dryRun);
   const actions = opts.actions || [];
   const wikiDir = path.join(root, '.sneakoscope', 'wiki');
   if (!(await exists(wikiDir))) return { dryRun, policy, actions, scanned: 0, candidates: 0 };
   const files = (await listFilesRecursive(wikiDir, { maxFiles: Number(policy.max_wiki_scan_files) || 250 }).catch(() => []))
-    .filter((file) => path.extname(file) === '.json');
+    .filter((file: any) => path.extname(file) === '.json');
   const keep = new Set([
     path.join(wikiDir, 'context-pack.json')
   ]);
-  const entries = [];
+  const entries: any[] = [];
   for (const file of files) {
     const st = await fs.stat(file).catch(() => null);
     if (!st || keep.has(file)) continue;
     entries.push({ path: file, mtimeMs: st.mtimeMs, bytes: st.size });
   }
-  entries.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  entries.sort((a: any, b: any) => b.mtimeMs - a.mtimeMs);
   const now = Date.now();
   const maxAge = Number(policy.max_wiki_artifact_age_days) * 24 * 60 * 60 * 1000;
   const maxArtifacts = Math.max(0, Number(policy.max_wiki_artifacts) || 0);
@@ -231,10 +230,10 @@ export async function pruneWikiArtifacts(root, opts = {}) {
   return { dryRun, policy, actions, scanned: entries.length, candidates };
 }
 
-export async function enforceRetention(root, opts = {}) {
+export async function enforceRetention(root: any, opts: any = {}) {
   const policy = { ...(await loadRetentionPolicy(root)), ...(opts.policy || {}) };
   const dryRun = Boolean(opts.dryRun);
-  const actions = [];
+  const actions: any[] = [];
   await ensureDir(path.join(root, '.sneakoscope', 'reports'));
   await pruneTmp(root, policy, dryRun, actions);
   await pruneOldMissions(root, policy, dryRun, actions);

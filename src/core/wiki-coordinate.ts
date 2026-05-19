@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { sha256 } from './fsx.js';
 
 export const WIKI_COORD_SCHEMA = 'sks.wiki-coordinate.v1';
@@ -6,35 +5,35 @@ export const WIKI_VOXEL_SCHEMA = 'sks.wiki-voxel.v1';
 export const WIKI_TAU = Math.PI * 2;
 export const WIKI_VOXEL_LAYERS = Object.freeze(['sem', 'trust', 'fresh', 'prio', 'conflict', 'route', 'cost']);
 
-export function clamp01(x) {
+export function clamp01(x: any) {
   return Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0));
 }
 
-function round6(x) {
+function round6(x: any) {
   return Number((Number.isFinite(x) ? x : 0).toFixed(6));
 }
 
-function byte(x) {
+function byte(x: any) {
   return Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(x)) ? Number(x) : 0)));
 }
 
-function wrapTau(x) {
+function wrapTau(x: any) {
   const value = Number.isFinite(Number(x)) ? Number(x) : 0;
   return ((value % WIKI_TAU) + WIKI_TAU) % WIKI_TAU;
 }
 
-function hasOwn(obj = {}, key) {
+function hasOwn(obj: any = {}, key: any) {
   return Object.prototype.hasOwnProperty.call(Object(obj), key);
 }
 
-function trustFieldsFrom(source = {}) {
-  const fields = {};
+function trustFieldsFrom(source: any = {}): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
   if (hasOwn(source, 'trust_score')) fields.trust_score = source.trust_score;
   if (hasOwn(source, 'trust_band')) fields.trust_band = source.trust_band;
   return fields;
 }
 
-function appendTrustSlots(row, anchor = {}) {
+function appendTrustSlots(row: any, anchor: any = {}) {
   const trustSlots = [
     hasOwn(anchor, 'trust_score') ? anchor.trust_score : null,
     hasOwn(anchor, 'trust_band') ? anchor.trust_band : null
@@ -43,11 +42,11 @@ function appendTrustSlots(row, anchor = {}) {
   return trustSlots.length ? [...row, ...trustSlots] : row;
 }
 
-function round4(x) {
+function round4(x: any) {
   return Number((Number.isFinite(x) ? x : 0).toFixed(4));
 }
 
-export function rgbaFromHash(seed = '') {
+export function rgbaFromHash(seed: any = '') {
   const hex = sha256(String(seed || 'wiki-anchor'));
   return {
     r: Number.parseInt(hex.slice(0, 2), 16),
@@ -57,12 +56,12 @@ export function rgbaFromHash(seed = '') {
   };
 }
 
-export function rgbaKey(rgba = {}) {
+export function rgbaKey(rgba: any = {}) {
   const c = normalizeRgba(rgba);
-  return [c.r, c.g, c.b, c.a].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return [c.r, c.g, c.b, c.a].map((x: any) => x.toString(16).padStart(2, '0')).join('');
 }
 
-export function normalizeRgba(rgba = {}) {
+export function normalizeRgba(rgba: any = {}) {
   if (Array.isArray(rgba)) return { r: byte(rgba[0]), g: byte(rgba[1]), b: byte(rgba[2]), a: byte(rgba[3] ?? 255) };
   if (typeof rgba === 'string') {
     const clean = rgba.replace(/^#/, '').replace(/[^0-9a-f]/gi, '');
@@ -78,7 +77,7 @@ export function normalizeRgba(rgba = {}) {
   return { r: byte(rgba.r), g: byte(rgba.g), b: byte(rgba.b), a: byte(rgba.a ?? 255) };
 }
 
-export function rgbaToWikiCoord(rgba = {}) {
+export function rgbaToWikiCoord(rgba: any = {}) {
   const c = normalizeRgba(rgba);
   const alpha = c.a / 255;
   const domainAngle = WIKI_TAU * ((c.r + 0.5) / 256);
@@ -88,7 +87,7 @@ export function rgbaToWikiCoord(rgba = {}) {
   return compactWikiCoord({ domainAngle, layerRadius, phase, concentration, rgba: c });
 }
 
-export function wikiCoordToRgba(coord = {}) {
+export function wikiCoordToRgba(coord: any = {}) {
   const domainAngle = wrapTau(coord.domainAngle);
   const phase = wrapTau(coord.phase);
   const layerRadius = clamp01(coord.layerRadius);
@@ -101,9 +100,9 @@ export function wikiCoordToRgba(coord = {}) {
   };
 }
 
-export function normalizeWikiCoord(coord = {}, seed = '') {
+export function normalizeWikiCoord(coord: any = {}, seed: any = '') {
   if (coord?.rgba) return rgbaToWikiCoord(coord.rgba);
-  if (coord && ['domainAngle', 'layerRadius', 'phase'].some((key) => Number.isFinite(Number(coord[key])))) {
+  if (coord && ['domainAngle', 'layerRadius', 'phase'].some((key: any) => Number.isFinite(Number(coord[key])))) {
     return compactWikiCoord({
       domainAngle: wrapTau(coord.domainAngle),
       layerRadius: clamp01(Number(coord.layerRadius)),
@@ -115,7 +114,7 @@ export function normalizeWikiCoord(coord = {}, seed = '') {
   return rgbaToWikiCoord(rgbaFromHash(seed));
 }
 
-export function compactWikiCoord(coord = {}) {
+export function compactWikiCoord(coord: any = {}) {
   const domainAngle = wrapTau(coord.domainAngle);
   const layerRadius = clamp01(Number(coord.layerRadius));
   const phase = wrapTau(coord.phase);
@@ -137,7 +136,7 @@ export function compactWikiCoord(coord = {}) {
   };
 }
 
-export function wikiCoordSimilarity(a = {}, b = {}) {
+export function wikiCoordSimilarity(a: any = {}, b: any = {}) {
   const ca = normalizeWikiCoord(a, 'a');
   const cb = normalizeWikiCoord(b, 'b');
   const domain = 0.5 + 0.5 * Math.cos(ca.domainAngle - cb.domainAngle);
@@ -147,7 +146,7 @@ export function wikiCoordSimilarity(a = {}, b = {}) {
   return clamp01((0.42 * domain) + (0.26 * layer) + (0.24 * phase) + (0.08 * concentration));
 }
 
-export function wikiAnchorFromClaim(claim = {}, index = 0) {
+export function wikiAnchorFromClaim(claim: any = {}, index: any = 0) {
   const id = String(claim.id || `claim-${index + 1}`);
   const text = String(claim.text || claim.label || id);
   const coord = normalizeWikiCoord(claim.coord || {}, `${id}:${text}`);
@@ -167,14 +166,14 @@ export function wikiAnchorFromClaim(claim = {}, index = 0) {
   };
 }
 
-export function buildWikiCoordinateIndex({ mission = {}, claims = [], q4 = {}, q3 = [], maxAnchors = 24, pinAnchorIds = [] } = {}) {
+export function buildWikiCoordinateIndex({ mission = {}, claims = [], q4 = {}, q3 = [], maxAnchors = 24, pinAnchorIds = [] }: any = {}) {
   const missionCoord = normalizeWikiCoord(mission.coord || {}, mission.id || JSON.stringify(q3 || []));
-  const claimsById = new Map((claims || []).map((claim, index) => [String(claim.id || `claim-${index + 1}`), claim]));
+  const claimsById = new Map((claims || []).map((claim: any, index: any) => [String(claim.id || `claim-${index + 1}`), claim]));
   const limit = Math.max(0, Number(maxAnchors) || 0);
-  const pinned = new Set((pinAnchorIds || []).map((id) => String(id)).filter(Boolean));
-  const compareAnchor = (a, b) => b.pri - a.pri || b.sim - a.sim || a.id.localeCompare(b.id);
+  const pinned = new Set((pinAnchorIds || []).map((id: any) => String(id)).filter(Boolean));
+  const compareAnchor = (a: any, b: any) => b.pri - a.pri || b.sim - a.sim || a.id.localeCompare(b.id);
   const candidates = (claims || [])
-    .map((claim, index) => {
+    .map((claim: any, index: any) => {
       const anchor = wikiAnchorFromClaim(claim, index);
       const coord = { domainAngle: anchor.c[0], layerRadius: anchor.c[1], phase: anchor.c[2], concentration: anchor.c[3] };
       const required = clamp01(Number(claim.required_weight || 0) / 1.5);
@@ -183,11 +182,11 @@ export function buildWikiCoordinateIndex({ mission = {}, claims = [], q4 = {}, q
       return { ...anchor, sim: round6(wikiCoordSimilarity(missionCoord, coord)), pri: round4((required * 0.52) + (trust * 0.3) + (risk * 0.18)) };
     })
     .sort(compareAnchor);
-  const pinnedAnchors = candidates.filter((anchor) => pinned.has(anchor.id)).sort(compareAnchor).slice(0, limit);
-  const pinnedAnchorIds = new Set(pinnedAnchors.map((anchor) => anchor.id));
+  const pinnedAnchors = candidates.filter((anchor: any) => pinned.has(anchor.id)).sort(compareAnchor).slice(0, limit);
+  const pinnedAnchorIds = new Set(pinnedAnchors.map((anchor: any) => anchor.id));
   const anchors = [
     ...pinnedAnchors,
-    ...candidates.filter((anchor) => !pinnedAnchorIds.has(anchor.id)).slice(0, Math.max(0, limit - pinnedAnchors.length))
+    ...candidates.filter((anchor: any) => !pinnedAnchorIds.has(anchor.id)).slice(0, Math.max(0, limit - pinnedAnchors.length))
   ];
   return {
     schema: WIKI_COORD_SCHEMA,
@@ -212,14 +211,14 @@ export function buildWikiCoordinateIndex({ mission = {}, claims = [], q4 = {}, q
   };
 }
 
-export function compactWikiCoordinateIndex(index = {}) {
+export function compactWikiCoordinateIndex(index: any = {}) {
   return {
     schema: WIKI_COORD_SCHEMA,
     ch: 'r=domain,g=sin-layer,b=phase,a=concentration',
     m: [index.mission?.rgba || '000000ff', index.mission?.c || [0, 0, 0, 1]],
     q: index.q4_hash || null,
     q3: index.q3 || [],
-    a: (index.anchors || []).map((anchor) => appendTrustSlots([
+    a: (index.anchors || []).map((anchor: any) => appendTrustSlots([
       anchor.id,
       anchor.rgba,
       anchor.c,
@@ -236,26 +235,45 @@ export function compactWikiCoordinateIndex(index = {}) {
   };
 }
 
-function statusScore(status) {
-  return { supported: 1, weak: 0.62, stale: 0.35, unknown: 0.32, unsupported: 0.06, conflicted: 0 }[status || 'unknown'] ?? 0.32;
+function statusScore(status: any) {
+  const table: Record<string, number> = {
+    supported: 1,
+    weak: 0.62,
+    stale: 0.35,
+    unknown: 0.32,
+    unsupported: 0.06,
+    conflicted: 0,
+  };
+  return table[String(status || 'unknown')] ?? 0.32;
 }
 
-function freshnessScore(value) {
-  return { fresh: 1, unknown: 0.55, stale: 0.18 }[value || 'unknown'] ?? 0.55;
+function freshnessScore(value: any) {
+  const table: Record<string, number> = {
+    fresh: 1,
+    unknown: 0.55,
+    stale: 0.18,
+  };
+  return table[String(value || 'unknown')] ?? 0.55;
 }
 
-function riskScore(value) {
-  return { low: 0.12, medium: 0.35, high: 0.74, critical: 1 }[value || 'medium'] ?? 0.35;
+function riskScore(value: any) {
+  const table: Record<string, number> = {
+    low: 0.12,
+    medium: 0.35,
+    high: 0.74,
+    critical: 1,
+  };
+  return table[String(value || 'medium')] ?? 0.35;
 }
 
-function quantizeVoxelCoord(c = []) {
+function quantizeVoxelCoord(c: any = []) {
   const domain = Math.max(0, Math.min(63, Math.floor((wrapTau(c[0]) / WIKI_TAU) * 64)));
   const radius = Math.max(0, Math.min(15, Math.floor(clamp01(Number(c[1])) * 16)));
   const phase = Math.max(0, Math.min(63, Math.floor((wrapTau(c[2]) / WIKI_TAU) * 64)));
   return `${domain}:${radius}:${phase}`;
 }
 
-function conflictShadow(anchor = {}, claim = {}) {
+function conflictShadow(anchor: any = {}, claim: any = {}) {
   const status = claim.status || anchor.st || 'unknown';
   if (status === 'conflicted') return 1;
   if (status === 'unsupported') return riskScore(claim.risk || anchor.r);
@@ -263,7 +281,7 @@ function conflictShadow(anchor = {}, claim = {}) {
   return 0;
 }
 
-function layerVector(anchor = {}, claim = {}, q3 = []) {
+function layerVector(anchor: any = {}, claim: any = {}, q3: any = []) {
   const tokenCost = Math.max(1, Number(anchor.tc) || String(claim.text || '').length / 4 || 1);
   const required = Math.max(0, Number(claim.required_weight) || 0);
   const requestCount = Math.max(0, Number(claim.request_count) || 0);
@@ -283,8 +301,8 @@ function layerVector(anchor = {}, claim = {}, q3 = []) {
   ].map(round4);
 }
 
-export function buildWikiVoxelOverlay({ anchors = [], claimsById = new Map(), q3 = [], quantization = { domain: 64, radius: 16, phase: 64 } } = {}) {
-  const rows = (anchors || []).map((anchor) => {
+export function buildWikiVoxelOverlay({ anchors = [], claimsById = new Map(), q3 = [], quantization = { domain: 64, radius: 16, phase: 64 } }: any = {}) {
+  const rows = (anchors || []).map((anchor: any) => {
     const claim = claimsById instanceof Map ? claimsById.get(anchor.id) || {} : {};
     return [quantizeVoxelCoord(anchor.c), anchor.id, layerVector(anchor, claim, q3)];
   });
@@ -297,8 +315,8 @@ export function buildWikiVoxelOverlay({ anchors = [], claimsById = new Map(), q3
   };
 }
 
-export function validateWikiVoxelOverlay(overlay = {}, anchorIds = null) {
-  const issues = [];
+export function validateWikiVoxelOverlay(overlay: any = {}, anchorIds: any = null) {
+  const issues: any[] = [];
   if (!overlay) return { ok: true, checked: 0, issues };
   if (overlay.s !== WIKI_VOXEL_SCHEMA) issues.push({ id: 'vx_schema', severity: 'error' });
   if (overlay.base !== WIKI_COORD_SCHEMA) issues.push({ id: 'vx_base', severity: 'error' });
@@ -321,11 +339,11 @@ export function validateWikiVoxelOverlay(overlay = {}, anchorIds = null) {
   return { ok: issues.length === 0, checked: rows.length, issues };
 }
 
-function expandedAnchors(index = {}) {
+function expandedAnchors(index: any = {}) {
   if (Array.isArray(index.anchors)) return index.anchors;
   if (!Array.isArray(index.a)) return [];
-  return index.a.map((row) => {
-    const anchor = {
+  return index.a.map((row: any) => {
+    const anchor: Record<string, unknown> = {
       id: row[0],
       rgba: row[1],
       c: row[2],
@@ -334,7 +352,7 @@ function expandedAnchors(index = {}) {
       r: row[5],
       src: row[6],
       h: row[7],
-      p: row[8]
+      p: row[8],
     };
     if (row.length > 9 && row[9] != null) anchor.trust_score = row[9];
     if (row.length > 10 && row[10] != null) anchor.trust_band = row[10];
@@ -342,7 +360,7 @@ function expandedAnchors(index = {}) {
   });
 }
 
-function validateTrustFields(anchor = {}, issues = []) {
+function validateTrustFields(anchor: any = {}, issues: any = []) {
   if (hasOwn(anchor, 'trust_score')) {
     const score = Number(anchor.trust_score);
     if (!Number.isFinite(score) || score < 0 || score > 1) {
@@ -357,8 +375,8 @@ function validateTrustFields(anchor = {}, issues = []) {
   }
 }
 
-export function validateWikiCoordinateIndex(index = {}) {
-  const issues = [];
+export function validateWikiCoordinateIndex(index: any = {}) {
+  const issues: any[] = [];
   if (index.schema !== WIKI_COORD_SCHEMA) issues.push({ id: 'schema_mismatch', severity: 'error' });
   if (!index.channel_map && !index.ch) issues.push({ id: 'channel_map_missing', severity: 'error' });
   const anchors = expandedAnchors(index);

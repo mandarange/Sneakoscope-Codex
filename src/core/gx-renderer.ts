@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { exists, nowIso, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
 import { buildWikiCoordinateIndex, normalizeWikiCoord, rgbaKey } from './wiki-coordinate.js';
@@ -6,15 +5,15 @@ import { buildWikiCoordinateIndex, normalizeWikiCoord, rgbaKey } from './wiki-co
 const SVG_WIDTH = 1280;
 const SVG_HEIGHT = 820;
 
-function stableJson(value) {
+function stableJson(value: any): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+    return `{${Object.keys(value).sort().map((key: any) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
   }
   return JSON.stringify(value);
 }
 
-function escapeXml(value = '') {
+function escapeXml(value: any = '') {
   return String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -23,18 +22,18 @@ function escapeXml(value = '') {
     .replace(/'/g, '&apos;');
 }
 
-function slug(value = '') {
+function slug(value: any = '') {
   return String(value || 'item').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'item';
 }
 
-function shortText(value = '', max = 64) {
+function shortText(value: any = '', max: any = 64) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   return text.length > max ? `${text.slice(0, max - 1)}...` : text;
 }
 
-function splitLabel(value = '', maxLine = 24, maxLines = 3) {
+function splitLabel(value: any = '', maxLine: any = 24, maxLines: any = 3) {
   const words = String(value || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
-  const lines = [];
+  const lines: any[] = [];
   let current = '';
   for (const word of words.length ? words : ['Untitled']) {
     if (!current) current = word;
@@ -49,7 +48,7 @@ function splitLabel(value = '', maxLine = 24, maxLines = 3) {
   return lines.slice(0, maxLines);
 }
 
-function normalizeNode(node, index) {
+function normalizeNode(node: any, index: any) {
   const id = slug(node?.id || `node-${index + 1}`);
   return {
     ...node,
@@ -62,7 +61,7 @@ function normalizeNode(node, index) {
   };
 }
 
-function normalizeEdge(edge, index) {
+function normalizeEdge(edge: any, index: any) {
   return {
     ...edge,
     id: slug(edge?.id || `edge-${index + 1}`),
@@ -72,7 +71,7 @@ function normalizeEdge(edge, index) {
   };
 }
 
-export function normalizeVGraph(vgraph = {}) {
+export function normalizeVGraph(vgraph: any = {}) {
   const nodes = Array.isArray(vgraph.nodes) ? vgraph.nodes.map(normalizeNode) : [];
   const edges = Array.isArray(vgraph.edges) ? vgraph.edges.map(normalizeEdge) : [];
   return {
@@ -87,16 +86,16 @@ export function normalizeVGraph(vgraph = {}) {
   };
 }
 
-export function vgraphHash(vgraph = {}) {
+export function vgraphHash(vgraph: any = {}) {
   return sha256(stableJson(normalizeVGraph(vgraph)));
 }
 
-function nodeWikiCoord(node) {
+function nodeWikiCoord(node: any) {
   return normalizeWikiCoord(node?.coord || {}, `node:${node?.id || node?.label || 'node'}`);
 }
 
-function nodeClaims(graph) {
-  return graph.nodes.map((node) => ({
+function nodeClaims(graph: any) {
+  return graph.nodes.map((node: any) => ({
     id: `node:${node.id}`,
     text: node.label,
     authority: 'vgraph',
@@ -107,7 +106,7 @@ function nodeClaims(graph) {
   }));
 }
 
-function nodePalette(node) {
+function nodePalette(node: any) {
   if (node.risk === 'critical' || node.status === 'blocked') return { fill: '#fee2e2', stroke: '#b91c1c', text: '#3b0a0a' };
   if (node.risk === 'high' || node.status === 'warn') return { fill: '#ffedd5', stroke: '#c2410c', text: '#431407' };
   if (node.status === 'passed' || node.status === 'safe') return { fill: '#dcfce7', stroke: '#15803d', text: '#052e16' };
@@ -115,10 +114,10 @@ function nodePalette(node) {
   return { fill: '#f8fafc', stroke: '#475569', text: '#0f172a' };
 }
 
-function layoutNodes(nodes) {
+function layoutNodes(nodes: any) {
   if (!nodes.length) return new Map();
-  const layers = [...new Set(nodes.map((node) => node.layer))].sort();
-  const byLayer = new Map(layers.map((layer) => [layer, nodes.filter((node) => node.layer === layer).sort((a, b) => a.id.localeCompare(b.id))]));
+  const layers = [...new Set(nodes.map((node: any) => node.layer))].sort();
+  const byLayer = new Map(layers.map((layer: any) => [layer, nodes.filter((node: any) => node.layer === layer).sort((a: any, b: any) => a.id.localeCompare(b.id))]));
   const positions = new Map();
   const top = 170;
   const bottom = 530;
@@ -139,7 +138,7 @@ function layoutNodes(nodes) {
   return positions;
 }
 
-function renderList(items, x, y, title) {
+function renderList(items: any, x: any, y: any, title: any) {
   const lines = [`<text x="${x}" y="${y}" class="section-title">${escapeXml(title)}</text>`];
   if (!items.length) {
     lines.push(`<text x="${x}" y="${y + 34}" class="muted">No entries</text>`);
@@ -154,13 +153,13 @@ function renderList(items, x, y, title) {
   return lines.join('\n');
 }
 
-export function renderVGraphSvg(vgraph = {}, beta = {}) {
+export function renderVGraphSvg(vgraph: any = {}, beta: any = {}) {
   const graph = normalizeVGraph(vgraph);
   const hash = vgraphHash(graph);
   const positions = layoutNodes(graph.nodes);
-  const layers = [...new Set(graph.nodes.map((node) => node.layer))].sort();
+  const layers = [...new Set(graph.nodes.map((node: any) => node.layer))].sort();
   const generatedAt = nowIso();
-  const edgeLines = graph.edges.map((edge) => {
+  const edgeLines = graph.edges.map((edge: any) => {
     const from = positions.get(edge.from);
     const to = positions.get(edge.to);
     if (!from || !to) return '';
@@ -175,11 +174,11 @@ export function renderVGraphSvg(vgraph = {}, beta = {}) {
       ${edge.label ? `<text x="${midX}" y="${midY - 8}" class="edge-label">${escapeXml(shortText(edge.label, 28))}</text>` : ''}
     </g>`;
   }).join('\n');
-  const layerBands = layers.map((layer, index) => {
+  const layerBands = layers.map((layer: any, index: any) => {
     const y = layers.length > 1 ? 132 + index * (398 / Math.max(1, layers.length - 1)) : 250;
     return `<text x="40" y="${y}" class="layer-label">${escapeXml(layer)}</text>`;
   }).join('\n');
-  const nodeCards = graph.nodes.map((node) => {
+  const nodeCards = graph.nodes.map((node: any) => {
     const pos = positions.get(node.id);
     const palette = nodePalette(node);
     const labelLines = splitLabel(node.label);
@@ -188,11 +187,11 @@ export function renderVGraphSvg(vgraph = {}, beta = {}) {
     return `<g class="node" data-wiki-rgba="${rgbaKey(wikiCoord.rgba)}" data-wiki-coord="${wikiCoord.domainAngle},${wikiCoord.layerRadius},${wikiCoord.phase},${wikiCoord.concentration}" transform="translate(${pos.x - pos.w / 2} ${pos.y - pos.h / 2})">
       <rect width="${pos.w}" height="${pos.h}" rx="14" fill="${palette.fill}" stroke="${palette.stroke}" stroke-width="3"/>
       <text x="18" y="27" class="node-title" fill="${palette.text}">${escapeXml(labelLines[0])}</text>
-      ${labelLines.slice(1).map((line, i) => `<text x="18" y="${49 + i * 18}" class="node-title small" fill="${palette.text}">${escapeXml(line)}</text>`).join('\n')}
+      ${labelLines.slice(1).map((line: any, i: any) => `<text x="18" y="${49 + i * 18}" class="node-title small" fill="${palette.text}">${escapeXml(line)}</text>`).join('\n')}
       <text x="18" y="${pos.h - 14}" class="node-meta" fill="${palette.text}">${escapeXml(shortText(tag, 34))}</text>
     </g>`;
   }).join('\n');
-  const wikiStrip = graph.nodes.slice(0, 24).map((node, index) => {
+  const wikiStrip = graph.nodes.slice(0, 24).map((node: any, index: any) => {
     const coord = nodeWikiCoord(node);
     const x = 1010 + (index % 12) * 18;
     const y = 36 + Math.floor(index / 12) * 18;
@@ -244,7 +243,7 @@ export function renderVGraphSvg(vgraph = {}, beta = {}) {
 `;
 }
 
-export function renderVGraphHtml(vgraph = {}, beta = {}, svg = renderVGraphSvg(vgraph, beta)) {
+export function renderVGraphHtml(vgraph: any = {}, beta: any = {}, svg: any = renderVGraphSvg(vgraph, beta)) {
   const graph = normalizeVGraph(vgraph);
   return `<!doctype html>
 <html lang="en">
@@ -271,10 +270,10 @@ export function renderVGraphHtml(vgraph = {}, beta = {}, svg = renderVGraphSvg(v
 `;
 }
 
-export function validateVGraph(vgraph = {}, beta = {}) {
+export function validateVGraph(vgraph: any = {}, beta: any = {}) {
   const graph = normalizeVGraph(vgraph);
-  const issues = [];
-  const warnings = [];
+  const issues: any[] = [];
+  const warnings: any[] = [];
   const ids = new Set();
   if (!graph.id) issues.push({ id: 'missing_graph_id', severity: 'error', reason: 'vgraph.id is required.' });
   for (const node of graph.nodes) {
@@ -306,16 +305,16 @@ export function validateVGraph(vgraph = {}, beta = {}) {
   };
 }
 
-function extractRenderHash(text = '') {
+function extractRenderHash(text: any = '') {
   const match = String(text).match(/\bdata-vgraph-hash="([^"]+)"/);
   return match ? match[1] : null;
 }
 
-export async function renderCartridge(dir, { format = 'all' } = {}) {
+export async function renderCartridge(dir: any, { format = 'all' }: any = {}) {
   const vgraph = await readJson(path.join(dir, 'vgraph.json'));
   const beta = await readJson(path.join(dir, 'beta.json'), {});
   const svg = renderVGraphSvg(vgraph, beta);
-  const outputs = [];
+  const outputs: any[] = [];
   if (format === 'all' || format === 'svg') {
     await writeTextAtomic(path.join(dir, 'render.svg'), svg);
     outputs.push('render.svg');
@@ -328,7 +327,7 @@ export async function renderCartridge(dir, { format = 'all' } = {}) {
   return { graph_id: normalizeVGraph(vgraph).id, source_hash: vgraphHash(vgraph), outputs };
 }
 
-export async function validateCartridge(dir) {
+export async function validateCartridge(dir: any) {
   const vgraph = await readJson(path.join(dir, 'vgraph.json'));
   const beta = await readJson(path.join(dir, 'beta.json'), {});
   const validation = validateVGraph(vgraph, beta);
@@ -336,14 +335,14 @@ export async function validateCartridge(dir) {
   return validation;
 }
 
-export async function driftCartridge(dir) {
+export async function driftCartridge(dir: any) {
   const vgraph = await readJson(path.join(dir, 'vgraph.json'));
   const sourceHash = vgraphHash(vgraph);
   const renderPath = path.join(dir, 'render.svg');
   const renderText = await readText(renderPath, '');
   const renderHash = renderText ? extractRenderHash(renderText) : null;
   const validation = validateVGraph(vgraph, await readJson(path.join(dir, 'beta.json'), {}));
-  const reasons = [];
+  const reasons: any[] = [];
   if (!renderText) reasons.push('render_svg_missing');
   if (renderText && !renderHash) reasons.push('render_svg_missing_vgraph_hash');
   if (renderHash && renderHash !== sourceHash) reasons.push('render_svg_stale');
@@ -360,7 +359,7 @@ export async function driftCartridge(dir) {
   return drift;
 }
 
-export async function snapshotCartridge(dir) {
+export async function snapshotCartridge(dir: any) {
   const vgraph = await readJson(path.join(dir, 'vgraph.json'));
   const beta = await readJson(path.join(dir, 'beta.json'), {});
   const validation = await validateCartridge(dir);

@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { collectProofEvidence } from './evidence-collector.js';
 
-export async function fileChangeLedger(root) {
+export async function fileChangeLedger(root: any) {
   const evidence = await collectProofEvidence(root);
   return evidence.files || [];
 }

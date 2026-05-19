@@ -1,33 +1,32 @@
-// @ts-nocheck
 import path from 'node:path';
 import { appendJsonl, ensureDir, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { missionDir } from '../mission.js';
 import { SCOUT_ALL_OUTPUTS, SCOUT_PERFORMANCE_SUMMARY_SCHEMA } from './scout-schema.js';
 
-export function scoutMissionDir(root, missionId) {
+export function scoutMissionDir(root: any, missionId: any) {
   return missionDir(root, missionId);
 }
 
-export function scoutArtifactPath(root, missionId, file) {
+export function scoutArtifactPath(root: any, missionId: any, file: any) {
   return path.join(scoutMissionDir(root, missionId), file);
 }
 
-export function scoutArtifactRel(missionId, file) {
+export function scoutArtifactRel(missionId: any, file: any) {
   return `.sneakoscope/missions/${missionId}/${file}`;
 }
 
-export async function resetScoutLedger(root, missionId) {
+export async function resetScoutLedger(root: any, missionId: any) {
   await writeTextAtomic(scoutArtifactPath(root, missionId, 'scout-parallel-ledger.jsonl'), '');
 }
 
-export async function appendScoutLedger(root, missionId, event = {}) {
+export async function appendScoutLedger(root: any, missionId: any, event: any = {}) {
   await appendJsonl(scoutArtifactPath(root, missionId, 'scout-parallel-ledger.jsonl'), {
     ts: nowIso(),
     ...event
   });
 }
 
-export function renderScoutMarkdown(result = {}) {
+export function renderScoutMarkdown(result: any = {}) {
   const lines = [
     `# ${result.role || result.scout_id || 'Scout Result'}`,
     '',
@@ -65,7 +64,7 @@ export function renderScoutMarkdown(result = {}) {
   return `${lines.join('\n')}\n`;
 }
 
-export async function writeScoutPerformanceSummary(root, performance = {}) {
+export async function writeScoutPerformanceSummary(root: any, performance: any = {}) {
   const reportsDir = path.join(root, '.sneakoscope', 'reports');
   await ensureDir(reportsDir);
   const file = path.join(reportsDir, 'scout-performance-summary.json');

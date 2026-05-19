@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const PERMISSION_GATE_SCHEMA_VERSION = 1;
 
 export const MAD_SKS_PERMISSION_PROFILE = Object.freeze({
@@ -33,7 +32,7 @@ export const MAD_SKS_PERMISSION_PROFILE = Object.freeze({
   deactivation: 'mission_gate_passed_or_permissions_deactivated'
 });
 
-export function permissionGateSummary(profile = MAD_SKS_PERMISSION_PROFILE) {
+export function permissionGateSummary(profile: any = MAD_SKS_PERMISSION_PROFILE) {
   return {
     schema_version: PERMISSION_GATE_SCHEMA_VERSION,
     id: profile.id,
@@ -45,7 +44,7 @@ export function permissionGateSummary(profile = MAD_SKS_PERMISSION_PROFILE) {
   };
 }
 
-export function isMadSksRouteState(state = {}) {
+export function isMadSksRouteState(state: any = {}) {
   return state.mad_sks_active === true
     || String(state.mode || '').toUpperCase() === 'MADSKS'
     || String(state.route_command || '').toUpperCase() === '$MAD-SKS'
@@ -53,7 +52,7 @@ export function isMadSksRouteState(state = {}) {
     || state.permission_profile?.id === MAD_SKS_PERMISSION_PROFILE.id;
 }
 
-export function madSksCatastrophicDbReasons(cls = {}) {
+export function madSksCatastrophicDbReasons(cls: any = {}) {
   const reasons = new Set([
     ...(cls.reasons || []),
     ...(cls.sql?.reasons || []),
@@ -69,12 +68,12 @@ export function madSksCatastrophicDbReasons(cls = {}) {
     'supabase_db_reset',
     'prisma_migrate_reset',
     'postgres_database_admin_command'
-  ].filter((reason) => reasons.has(reason));
+  ].filter((reason: any) => reasons.has(reason));
   if (cls.toolReasons?.includes?.('dangerous_supabase_management_tool')) blocked.push('dangerous_project_or_branch_management');
   return [...new Set(blocked)];
 }
 
-export function evaluateMadSksPermissionGate({ classification, active = false } = {}) {
+export function evaluateMadSksPermissionGate({ classification, active = false }: any = {}) {
   const cls = classification || { level: 'none', reasons: [] };
   if (!active || !['write', 'destructive'].includes(cls.level)) return { matched: false, active: Boolean(active), profile: permissionGateSummary() };
   const catastrophic = madSksCatastrophicDbReasons(cls);

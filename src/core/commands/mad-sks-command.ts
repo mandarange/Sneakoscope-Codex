@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { appendJsonlBounded, exists, nowIso, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
@@ -7,8 +6,8 @@ import { enableMadHighProfile, madHighProfileName } from '../auto-review.js';
 import { permissionGateSummary } from '../permission-gates.js';
 import { defaultTmuxSessionName, launchMadTmuxUi, sanitizeTmuxSessionName } from '../tmux-ui.js';
 
-export async function madHighCommand(args = [], deps = {}) {
-  const cleanArgs = args.filter((arg) => !['--mad', '--MAD', '--mad-sks', '--high', '--no-auto-install-tmux'].includes(arg));
+export async function madHighCommand(args: any = [], deps: any = {}) {
+  const cleanArgs = args.filter((arg: any) => !['--mad', '--MAD', '--mad-sks', '--high', '--no-auto-install-tmux'].includes(arg));
   if (args.includes('--json')) {
     const profile = await enableMadHighProfile();
     return console.log(JSON.stringify(profile, null, 2));
@@ -51,7 +50,7 @@ export async function madHighCommand(args = [], deps = {}) {
   return launchMadTmuxUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, codexArgs: profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, missionId: madLaunch.mission_id });
 }
 
-async function activateMadTmuxPermissionState(cwd = process.cwd()) {
+async function activateMadTmuxPermissionState(cwd: any = process.cwd()) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad tmux live full-access session' });
@@ -98,12 +97,12 @@ async function activateMadTmuxPermissionState(cwd = process.cwd()) {
   return { mission_id: id, dir, gate };
 }
 
-function readOption(args, name, fallback) {
+function readOption(args: any, name: any, fallback: any) {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 }
 
-function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
+function codexLbImmediateLaunchOpts(args: any = [], lb: any = {}, opts: any = {}) {
   const root = readOption(args, '--root', process.cwd());
   const explicitSession = readOption(args, '--session', null) || readOption(args, '--workspace', null);
   if (lb?.bypass_codex_lb) {
@@ -114,7 +113,7 @@ function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
   }
   if (!lb?.ok) return opts;
   const codexArgs = [...(opts.codexArgs || [])];
-  if (!codexArgs.some((arg) => /model_provider\s*=/.test(String(arg || '')))) codexArgs.push('-c', 'model_provider="codex-lb"');
+  if (!codexArgs.some((arg: any) => /model_provider\s*=/.test(String(arg || '')))) codexArgs.push('-c', 'model_provider="codex-lb"');
   if (explicitSession) return { ...opts, codexArgs };
   const session = sanitizeTmuxSessionName(`sks-codex-lb-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
   console.log(`codex-lb active for this launch: ${lb.env_path || lb.base_url || 'configured'}`);
@@ -122,7 +121,7 @@ function codexLbImmediateLaunchOpts(args = [], lb = {}, opts = {}) {
   return { ...opts, codexArgs, session, codexLbFreshSession: true };
 }
 
-export async function madSksFixture(root) {
+export async function madSksFixture(root: any) {
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: '$MAD-SKS fixture permission gate' });
   const gate = { schema_version: 1, passed: true, mad_sks_permission_active: true, permissions_deactivated: true, catastrophic_safety_guard_active: true, permission_profile: permissionGateSummary(), fixture: true };
   await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);

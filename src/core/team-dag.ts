@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { ensureDir, exists, nowIso, readJson, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
 
@@ -25,7 +24,7 @@ export function teamRuntimePlanMetadata() {
   };
 }
 
-export async function writeTeamRuntimeArtifacts(dir, plan, opts = {}) {
+export async function writeTeamRuntimeArtifacts(dir: any, plan: any, opts: any = {}) {
   const compiled = compileTeamRuntime(plan, opts);
   if (!compiled.ok) {
     const message = compiled.validation.errors.join('; ') || 'unknown Team DAG validation error';
@@ -47,14 +46,14 @@ export async function writeTeamRuntimeArtifacts(dir, plan, opts = {}) {
   };
 }
 
-export function compileTeamRuntime(plan, opts = {}) {
+export function compileTeamRuntime(plan: any, opts: any = {}) {
   const dag = normalizeTeamDag(opts.dag || plan?.team_dag || planToTeamDag(plan, opts), plan, opts);
   const validation = validateTeamDag(dag);
   if (!validation.ok) return { ok: false, validation, dag };
   const order = topologicalOrder(dag.nodes);
-  const nodeIdToTaskId = {};
+  const nodeIdToTaskId: Record<string, string> = {};
   const agentReasoning = teamAgentReasoningById(plan?.roster || {});
-  const tasks = order.map((node, index) => {
+  const tasks = order.map((node: any, index: any) => {
     const taskId = `${TASK_ID_PREFIX}${String(index + 1).padStart(3, '0')}`;
     nodeIdToTaskId[node.id] = taskId;
     const reasoning = agentReasoning[node.agent || ''] || {};
@@ -78,14 +77,14 @@ export function compileTeamRuntime(plan, opts = {}) {
       status: 'pending'
     };
   });
-  const bySymbolic = new Map(order.map((node) => [node.id, node]));
+  const bySymbolic = new Map(order.map((node: any) => [node.id, node]));
   for (const task of tasks) {
     const node = bySymbolic.get(task.symbolic_id);
-    task.depends_on = (node.depends_on || []).map((id) => nodeIdToTaskId[id]).filter(Boolean);
+    task.depends_on = (node.depends_on || []).map((id: any) => nodeIdToTaskId[id]).filter(Boolean);
     task.blocked_by = [...task.depends_on];
   }
   const allocation = allocateTasks(tasks, plan);
-  const runtimeTasks = tasks.map((task) => ({
+  const runtimeTasks = tasks.map((task: any) => ({
     ...task,
     worker: allocation.by_task_id[task.task_id]?.worker || 'parent_orchestrator',
     allocation_reason: allocation.by_task_id[task.task_id]?.reason || 'default_parent_orchestrator'
@@ -105,7 +104,7 @@ export function compileTeamRuntime(plan, opts = {}) {
     source: dag.source,
     validation,
     task_count: runtimeTasks.length,
-    ready_lane_count: runtimeTasks.filter((task) => task.depends_on.length === 0).length,
+    ready_lane_count: runtimeTasks.filter((task: any) => task.depends_on.length === 0).length,
     useful_lane_count: allocation.useful_lane_count,
     verification_lane_reserved: allocation.verification_lane_reserved,
     worker_allocations: allocation.workers,
@@ -117,13 +116,13 @@ export function compileTeamRuntime(plan, opts = {}) {
     ...dag,
     validation,
     node_id_to_task_id: nodeIdToTaskId,
-    runtime_task_ids: runtimeTasks.map((task) => task.task_id)
+    runtime_task_ids: runtimeTasks.map((task: any) => task.task_id)
   };
   return { ok: true, graph, runtime, report, validation, inboxes: groupTasksByWorker(runtimeTasks) };
 }
 
-function teamAgentReasoningById(roster = {}) {
-  const out = {};
+function teamAgentReasoningById(roster: any = {}) {
+  const out: Record<string, any> = {};
   const groups = ['analysis_team', 'debate_team', 'development_team', 'validation_team', 'all_agents'];
   for (const group of groups) {
     for (const agent of Array.isArray(roster[group]) ? roster[group] : []) {
@@ -139,8 +138,8 @@ function teamAgentReasoningById(roster = {}) {
   return out;
 }
 
-export async function validateTeamRuntimeArtifacts(dir) {
-  const issues = [];
+export async function validateTeamRuntimeArtifacts(dir: any) {
+  const issues: any[] = [];
   const graph = await readJson(path.join(dir, TEAM_GRAPH_ARTIFACT), null);
   const runtime = await readJson(path.join(dir, TEAM_RUNTIME_TASKS_ARTIFACT), null);
   const report = await readJson(path.join(dir, TEAM_DECOMPOSITION_ARTIFACT), null);
@@ -152,7 +151,7 @@ export async function validateTeamRuntimeArtifacts(dir) {
   for (const worker of Array.isArray(report?.inboxes) ? report.inboxes : []) {
     if (!await exists(path.join(dir, TEAM_INBOX_DIR, `${safeName(worker)}.md`))) issues.push(`${TEAM_INBOX_DIR}:${worker}`);
   }
-  const ids = new Set((runtime?.tasks || []).map((task) => task.task_id));
+  const ids = new Set((runtime?.tasks || []).map((task: any) => task.task_id));
   for (const task of runtime?.tasks || []) {
     if (!String(task.task_id || '').startsWith(TASK_ID_PREFIX)) issues.push(`${task.task_id || 'task'}:task_id`);
     for (const dep of [...(task.depends_on || []), ...(task.blocked_by || [])]) {
@@ -166,7 +165,7 @@ export async function validateTeamRuntimeArtifacts(dir) {
   return { ok: issues.length === 0, issues, graph, runtime, report };
 }
 
-export function teamRuntimeGateFields(compiledOrValidation) {
+export function teamRuntimeGateFields(compiledOrValidation: any) {
   const report = compiledOrValidation?.report || compiledOrValidation;
   const ok = Boolean(compiledOrValidation?.ok ?? report?.validation?.ok);
   const noConflicts = Array.isArray(report?.write_scope_conflicts) ? report.write_scope_conflicts.length === 0 : ok;
@@ -180,17 +179,17 @@ export function teamRuntimeGateFields(compiledOrValidation) {
   };
 }
 
-function planToTeamDag(plan = {}, opts = {}) {
-  const nodes = [];
-  let previousIds = [];
+function planToTeamDag(plan: any = {}, opts: any = {}) {
+  const nodes: any[] = [];
+  let previousIds: any[] = [];
   for (const phase of plan.phases || []) {
     const agents = Array.isArray(phase.agents) && phase.agents.length ? phase.agents.map(String) : ['parent_orchestrator'];
     const parallel = agents.length > 1 && (/parallel|debate|review/i.test(String(phase.id || '')) || phase.max_parallel_subagents);
     const created = parallel
-      ? agents.map((agent) => phaseNode(phase, { agent, suffix: agent, dependsOn: previousIds }))
+      ? agents.map((agent: any) => phaseNode(phase, { agent, suffix: agent, dependsOn: previousIds }))
       : [phaseNode(phase, { agent: agents[0], dependsOn: previousIds })];
     nodes.push(...created);
-    previousIds = created.map((node) => node.id);
+    previousIds = created.map((node: any) => node.id);
   }
   return {
     schema_version: 1,
@@ -202,7 +201,7 @@ function planToTeamDag(plan = {}, opts = {}) {
   };
 }
 
-function phaseNode(phase = {}, opts = {}) {
+function phaseNode(phase: any = {}, opts: any = {}) {
   const idBase = String(phase.id || 'team_task').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'team_task';
   const agentSuffix = opts.suffix ? `_${String(opts.suffix).replace(/[^A-Za-z0-9_-]+/g, '_')}` : '';
   const id = `${idBase}${agentSuffix}`;
@@ -223,14 +222,14 @@ function phaseNode(phase = {}, opts = {}) {
   };
 }
 
-function normalizeTeamDag(dag = {}, plan = {}, opts = {}) {
+function normalizeTeamDag(dag: any = {}, plan: any = {}, opts: any = {}) {
   return {
     schema_version: dag.schema_version || 1,
     source: dag.source || 'explicit_team_dag',
     mission_id: dag.mission_id || plan?.mission_id || opts.missionId || null,
     prompt_hash: dag.prompt_hash || shortHash(plan?.prompt || plan?.task || opts.prompt || ''),
     contract_hash: dag.contract_hash || opts.contractHash || plan?.contract_hash || null,
-    nodes: (dag.nodes || []).map((node) => ({
+    nodes: (dag.nodes || []).map((node: any) => ({
       id: String(node.id || '').trim(),
       subject: String(node.subject || node.id || '').trim(),
       description: String(node.description || node.goal || node.subject || '').trim(),
@@ -246,8 +245,8 @@ function normalizeTeamDag(dag = {}, plan = {}, opts = {}) {
   };
 }
 
-function validateTeamDag(dag) {
-  const errors = [];
+function validateTeamDag(dag: any) {
+  const errors: any[] = [];
   const ids = new Set();
   for (const node of dag.nodes || []) {
     if (!node.id || !/^[A-Za-z0-9_-]+$/.test(node.id)) errors.push(`invalid_node_id:${node.id || 'missing'}`);
@@ -267,12 +266,12 @@ function validateTeamDag(dag) {
   return { ok: errors.length === 0, errors, checked_nodes: (dag.nodes || []).length };
 }
 
-function topologicalOrder(nodes = []) {
-  const byId = new Map(nodes.map((node) => [node.id, node]));
+function topologicalOrder(nodes: any = []) {
+  const byId = new Map(nodes.map((node: any) => [node.id, node]));
   const seen = new Set();
-  const out = [];
-  const visit = (node) => {
-    if (seen.has(node.id)) return;
+  const out: any[] = [];
+  const visit = (node: any): void => {
+    if (!node || seen.has(node.id)) return;
     for (const dep of node.depends_on || []) visit(byId.get(dep));
     seen.add(node.id);
     out.push(node);
@@ -281,12 +280,12 @@ function topologicalOrder(nodes = []) {
   return out;
 }
 
-function findCycle(nodes = []) {
-  const byId = new Map(nodes.map((node) => [node.id, node]));
+function findCycle(nodes: any = []) {
+  const byId = new Map(nodes.map((node: any) => [node.id, node]));
   const visiting = new Set();
   const visited = new Set();
-  const stack = [];
-  const visit = (node) => {
+  const stack: any[] = [];
+  const visit = (node: any): any[] => {
     if (!node) return [];
     if (visiting.has(node.id)) return stack.slice(stack.indexOf(node.id)).concat(node.id);
     if (visited.has(node.id)) return [];
@@ -308,17 +307,17 @@ function findCycle(nodes = []) {
   return [];
 }
 
-function allocateTasks(tasks = [], plan = {}) {
+function allocateTasks(tasks: any = [], plan: any = {}) {
   const roster = plan.roster || {};
   const workerIds = [
     'parent_orchestrator',
-    ...(roster.analysis_team || []).map((agent) => agent.id),
-    ...(roster.debate_team || []).map((agent) => agent.id),
-    ...(roster.development_team || []).map((agent) => agent.id),
-    ...(roster.validation_team || []).map((agent) => agent.id)
+    ...(roster.analysis_team || []).map((agent: any) => agent.id),
+    ...(roster.debate_team || []).map((agent: any) => agent.id),
+    ...(roster.development_team || []).map((agent: any) => agent.id),
+    ...(roster.validation_team || []).map((agent: any) => agent.id)
   ];
-  const workers = Object.fromEntries([...new Set(workerIds)].map((id) => [id, { worker: id, load: 0, file_paths: [], domains: [], tasks: [] }]));
-  const byTask = {};
+  const workers: Record<string, any> = Object.fromEntries([...new Set(workerIds)].map((id: any) => [id, { worker: id, load: 0, file_paths: [], domains: [], tasks: [] }]));
+  const byTask: Record<string, any> = {};
   for (const task of tasks) {
     const worker = workers[task.agent_hint] ? task.agent_hint : chooseWorker(task, workers);
     const state = workers[worker] || workers.parent_orchestrator;
@@ -330,34 +329,34 @@ function allocateTasks(tasks = [], plan = {}) {
     byTask[task.task_id] = { worker: state.worker, reason };
   }
   const writeScopeConflicts = detectWriteScopeConflicts(tasks, byTask);
-  const usedWorkers = Object.values(workers).filter((worker) => worker.tasks.length > 0);
+  const usedWorkers = Object.values(workers).filter((worker: any) => worker.tasks.length > 0);
   return {
     by_task_id: byTask,
     workers: usedWorkers,
-    useful_lane_count: usedWorkers.filter((worker) => worker.worker !== 'parent_orchestrator').length,
-    verification_lane_reserved: tasks.some((task) => task.role === 'executor') && usedWorkers.some((worker) => /^reviewer_/.test(worker.worker)),
+    useful_lane_count: usedWorkers.filter((worker: any) => worker.worker !== 'parent_orchestrator').length,
+    verification_lane_reserved: tasks.some((task: any) => task.role === 'executor') && usedWorkers.some((worker: any) => /^reviewer_/.test(worker.worker)),
     write_scope_conflicts: writeScopeConflicts
   };
 }
 
-function chooseWorker(task, workers) {
-  const candidates = Object.values(workers).filter((worker) => {
+function chooseWorker(task: any, workers: any) {
+  const candidates = Object.values(workers).filter((worker: any) => {
     if (task.role === 'executor') return /^executor_/.test(worker.worker);
     if (task.role === 'scout') return /^analysis_scout_/.test(worker.worker);
     if (task.role === 'reviewer') return /^reviewer_/.test(worker.worker) || /^user_/.test(worker.worker);
     if (task.role === 'planner') return /debate_|team_consensus|parent_orchestrator/.test(worker.worker);
     return true;
   });
-  const scored = (candidates.length ? candidates : Object.values(workers)).map((worker) => {
+  const scored = (candidates.length ? candidates : Object.values(workers)).map((worker: any) => {
     const pathOverlap = overlapCount(task.file_paths || [], worker.file_paths || []);
     const domainOverlap = overlapCount(task.domains || [], worker.domains || []);
     const roleScore = roleMatchesWorker(task.role, worker.worker) ? 4 : 0;
     return { worker, score: roleScore + pathOverlap * 3 + domainOverlap * 2 - worker.load };
-  }).sort((a, b) => b.score - a.score || a.worker.worker.localeCompare(b.worker.worker));
+  }).sort((a: any, b: any) => b.score - a.score || a.worker.worker.localeCompare(b.worker.worker));
   return scored[0]?.worker.worker || 'parent_orchestrator';
 }
 
-function allocationReason(task, worker) {
+function allocationReason(task: any, worker: any) {
   const pathOverlap = overlapCount(task.file_paths || [], worker.file_paths || []);
   const domainOverlap = overlapCount(task.domains || [], worker.domains || []);
   if (pathOverlap || domainOverlap) return `scope_affinity:path_overlap=${pathOverlap},domain_overlap=${domainOverlap}`;
@@ -365,14 +364,14 @@ function allocationReason(task, worker) {
   return 'lowest_load_default';
 }
 
-function detectWriteScopeConflicts(tasks, byTask) {
-  const conflicts = [];
-  const writable = tasks.filter((task) => task.role === 'executor' && task.file_paths?.length);
+function detectWriteScopeConflicts(tasks: any, byTask: any) {
+  const conflicts: any[] = [];
+  const writable = tasks.filter((task: any) => task.role === 'executor' && task.file_paths?.length);
   for (let i = 0; i < writable.length; i++) {
     for (let j = i + 1; j < writable.length; j++) {
       const a = writable[i];
       const b = writable[j];
-      const overlap = a.file_paths.filter((file) => b.file_paths.includes(file));
+      const overlap = a.file_paths.filter((file: any) => b.file_paths.includes(file));
       if (overlap.length && byTask[a.task_id]?.worker !== byTask[b.task_id]?.worker) {
         conflicts.push({ tasks: [a.task_id, b.task_id], file_paths: overlap, workers: [byTask[a.task_id]?.worker, byTask[b.task_id]?.worker] });
       }
@@ -381,7 +380,7 @@ function detectWriteScopeConflicts(tasks, byTask) {
   return conflicts;
 }
 
-async function writeWorkerInboxes(dir, compiled) {
+async function writeWorkerInboxes(dir: any, compiled: any) {
   const inboxRoot = path.join(dir, TEAM_INBOX_DIR);
   await ensureDir(inboxRoot);
   for (const [worker, tasks] of Object.entries(compiled.inboxes || {})) {
@@ -389,7 +388,7 @@ async function writeWorkerInboxes(dir, compiled) {
   }
 }
 
-function inboxMarkdown(worker, tasks, compiled) {
+function inboxMarkdown(worker: any, tasks: any, compiled: any) {
   const lines = [
     `# Team Inbox: ${worker}`,
     '',
@@ -418,16 +417,17 @@ function inboxMarkdown(worker, tasks, compiled) {
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
-function groupTasksByWorker(tasks = []) {
-  const grouped = {};
+function groupTasksByWorker(tasks: any = []) {
+  const grouped: Record<string, any[]> = {};
   for (const task of tasks) {
-    grouped[task.worker || 'parent_orchestrator'] ||= [];
-    grouped[task.worker || 'parent_orchestrator'].push(task);
+    const worker = task.worker || 'parent_orchestrator';
+    grouped[worker] ||= [];
+    grouped[worker].push(task);
   }
   return grouped;
 }
 
-function inferRole(phase = {}, agent = '') {
+function inferRole(phase: any = {}, agent: any = '') {
   const text = `${phase.id || ''} ${phase.write_policy || ''} ${agent || ''}`.toLowerCase();
   if (text.includes('workspace-write') || /^executor_/.test(agent)) return 'executor';
   if (/analysis_scout|scout/.test(text)) return 'scout';
@@ -436,7 +436,7 @@ function inferRole(phase = {}, agent = '') {
   return 'orchestrator';
 }
 
-function inferLane(phase = {}, agent = '') {
+function inferLane(phase: any = {}, agent: any = '') {
   if (/executor_/.test(agent)) return 'implementation';
   if (/analysis_scout/.test(agent)) return 'analysis';
   if (/reviewer_|user_/.test(agent)) return 'verification';
@@ -444,14 +444,14 @@ function inferLane(phase = {}, agent = '') {
   return String(phase.id || 'orchestration');
 }
 
-function extractTaskHints(description, phase = {}) {
+function extractTaskHints(description: any, phase: any = {}) {
   const hay = `${description || ''} ${phase.output ? JSON.stringify(phase.output) : ''}`;
   const filePaths = new Set();
   const re = /(?:^|[\s`"'(])((?:src|bin|scripts|docs|test|tests|\.agents|\.codex|\.sneakoscope|README\.md|CHANGELOG\.md|package\.json|package-lock\.json)[A-Za-z0-9_./-]*)/g;
   let match;
-  while ((match = re.exec(hay))) filePaths.add(match[1].replace(/[),.;:]+$/, ''));
+  while ((match = re.exec(hay))) if (match[1]) filePaths.add(match[1].replace(/[),.;:]+$/, ''));
   const domains = new Set();
-  const domainRules = [
+  const domainRules: Array<[string, RegExp]> = [
     ['triwiki', /triwiki|wiki|context-pack/i],
     ['team', /team|worker|executor|scout|debate|inbox|roster/i],
     ['qa', /qa|test|verify|review/i],
@@ -463,7 +463,7 @@ function extractTaskHints(description, phase = {}) {
   return { file_paths: [...filePaths].sort(), domains: [...domains].sort() };
 }
 
-function roleMatchesWorker(role, worker) {
+function roleMatchesWorker(role: any, worker: any) {
   if (role === 'executor') return /^executor_/.test(worker);
   if (role === 'scout') return /^analysis_scout_/.test(worker);
   if (role === 'reviewer') return /^reviewer_|^user_/.test(worker);
@@ -471,19 +471,19 @@ function roleMatchesWorker(role, worker) {
   return worker === 'parent_orchestrator';
 }
 
-function overlapCount(a = [], b = []) {
+function overlapCount(a: any = [], b: any = []) {
   const set = new Set(b);
-  return a.filter((item) => set.has(item)).length;
+  return a.filter((item: any) => set.has(item)).length;
 }
 
-function shortHash(input) {
+function shortHash(input: any) {
   return sha256(String(input || '')).slice(0, 16);
 }
 
-function humanizeId(id) {
-  return String(id || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+function humanizeId(id: any) {
+  return String(id || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (ch: any) => ch.toUpperCase());
 }
 
-function safeName(name) {
+function safeName(name: any) {
   return String(name || 'worker').replace(/[^A-Za-z0-9_.-]+/g, '_');
 }

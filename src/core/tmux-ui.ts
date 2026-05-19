@@ -1,10 +1,9 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import figlet from 'figlet';
 import { exists, nowIso, PACKAGE_VERSION, packageRoot, readJson, runProcess, sha256, sksRoot, which, writeJsonAtomic } from './fsx.js';
-import { getCodexInfo } from './codex-adapter.js';
+import { EMPTY_CODEX_INFO, getCodexInfo } from './codex-adapter.js';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.js';
 import { REQUIRED_CODEX_MODEL, forceGpt55CodexArgs } from './codex-model-guard.js';
 import { MIN_TEAM_REVIEWER_LANES } from './team-review-policy.js';
@@ -12,15 +11,15 @@ import { appendTeamEvent, isTerminalTeamAgentStatus, readTeamControl, readTeamDa
 
 const SKS_FIGLET_FONT = 'Standard';
 
-function trimFiglet(text = '') {
+function trimFiglet(text: any = '') {
   return String(text || '')
     .split(/\r?\n/)
-    .map((line) => line.replace(/\s+$/g, ''))
+    .map((line: any) => line.replace(/\s+$/g, ''))
     .join('\n')
     .replace(/\n+$/g, '');
 }
 
-export function sksAsciiLogo(opts = {}) {
+export function sksAsciiLogo(opts: any = {}) {
   const version = opts.version || PACKAGE_VERSION;
   const subtitle = opts.subtitle || 'SNEAKOSCOPE CODEX';
   let logo = '';
@@ -49,20 +48,20 @@ const SKS_TMUX_LOGO_ANIMATION_STEPS = Object.freeze([
 export const DEFAULT_SKS_CODEX_MODEL = REQUIRED_CODEX_MODEL;
 export const DEFAULT_SKS_CODEX_REASONING = 'high';
 
-export function defaultCodexLaunchArgs(env = process.env) {
+export function defaultCodexLaunchArgs(env: any = process.env) {
   const model = DEFAULT_SKS_CODEX_MODEL;
   const effort = String(env.SKS_CODEX_REASONING || DEFAULT_SKS_CODEX_REASONING).trim();
-  const args = [];
+  const args: any[] = [];
   if (model) args.push('--model', model);
   args.push('-c', 'service_tier="fast"');
   if (effort) args.push('-c', `model_reasoning_effort="${effort}"`);
   return args;
 }
 
-function codexArgsWithFastServiceTier(args = []) {
+function codexArgsWithFastServiceTier(args: any = []) {
   const input = Array.isArray(args) ? args.map(String) : [];
   for (let i = 0; i < input.length; i += 1) {
-    const arg = input[i];
+    const arg = input[i] || '';
     const next = input[i + 1] || '';
     if ((arg === '-c' || arg === '--config') && /^service_tier\s*=/.test(next.trim())) return input;
     if (/^(?:-c|--config)=service_tier\s*=/.test(arg.trim())) return input;
@@ -70,18 +69,18 @@ function codexArgsWithFastServiceTier(args = []) {
   return ['-c', 'service_tier="fast"', ...input];
 }
 
-export function sanitizeTmuxSessionName(input) {
+export function sanitizeTmuxSessionName(input: any) {
   const base = String(input || 'sks').trim().replace(/[^A-Za-z0-9_.:-]+/g, '-').replace(/^-+|-+$/g, '');
   return (base || 'sks').slice(0, 80);
 }
 
-export function defaultTmuxSessionName(root) {
+export function defaultTmuxSessionName(root: any) {
   const base = sanitizeTmuxSessionName(path.basename(root || process.cwd()) || 'project');
   const hash = sha256(path.resolve(root || process.cwd())).slice(0, 8);
   return sanitizeTmuxSessionName(`sks-${base}-${hash}`);
 }
 
-export function shellEscape(value) {
+export function shellEscape(value: any) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
@@ -90,15 +89,15 @@ export function platformTmuxInstallHint() {
   return 'Install tmux 3.x or newer with your OS package manager, then run: sks tmux check';
 }
 
-export function tmuxStatePath(root = process.cwd()) {
+export function tmuxStatePath(root: any = process.cwd()) {
   return path.join(path.resolve(root || process.cwd()), '.sneakoscope', 'state', 'tmux-sessions.json');
 }
 
-export function tmuxTeamStatePath(root = process.cwd()) {
+export function tmuxTeamStatePath(root: any = process.cwd()) {
   return path.join(path.resolve(root || process.cwd()), '.sneakoscope', 'state', 'tmux-team-sessions.json');
 }
 
-export function tmuxCockpitStatePath(root = process.cwd()) {
+export function tmuxCockpitStatePath(root: any = process.cwd()) {
   return path.join(path.resolve(root || process.cwd()), '.sneakoscope', 'state', 'tmux-cockpit.json');
 }
 
@@ -108,7 +107,7 @@ const DYNAMIC_TEAM_TMUX_LAYOUT = 'main-vertical';
 const TEAM_TMUX_MAIN_PANE_MIN_WIDTH = 48;
 const TEAM_TMUX_MAIN_PANE_WIDTH_RATIO = 0.5;
 
-export function isTmuxShellSession(env = process.env) {
+export function isTmuxShellSession(env: any = process.env) {
   return Boolean(String(env.TMUX || '').trim());
 }
 
@@ -116,12 +115,12 @@ export async function findTmuxBin() {
   return await which('tmux').catch(() => null);
 }
 
-function parseTmuxVersion(text = '') {
+function parseTmuxVersion(text: any = '') {
   const match = String(text || '').match(/tmux\s+([0-9]+(?:\.[0-9]+)?[a-z]?)/i);
   return match ? match[1] : null;
 }
 
-function tmuxVersionOk(version = '') {
+function tmuxVersionOk(version: any = '') {
   const match = String(version || '').match(/^([0-9]+)(?:\.([0-9]+))?/);
   if (!match) return false;
   const major = Number(match[1]);
@@ -129,12 +128,33 @@ function tmuxVersionOk(version = '') {
   return major > 3 || (major === 3 && minor >= 0);
 }
 
-export async function tmuxReadiness(opts = {}) {
+export type TmuxReadiness = {
+  ok: boolean;
+  bin: string | null;
+  version: string | null;
+  min_version: string;
+  current_session: boolean;
+  error: string | null;
+};
+
+export function tmuxReadinessCatchFallback(err: unknown): TmuxReadiness {
+  const message = err instanceof Error ? err.message : String(err);
+  return {
+    ok: false,
+    bin: null,
+    version: null,
+    min_version: '3.0',
+    current_session: isTmuxShellSession(),
+    error: message
+  };
+}
+
+export async function tmuxReadiness(opts: any = {}): Promise<TmuxReadiness> {
   const bin = opts.bin ?? await findTmuxBin();
   let version = opts.version || null;
-  let error = null;
+  let error = null as string | null;
   if (bin && !version) {
-    const run = await runProcess(bin, ['-V'], { timeoutMs: 5000, maxOutputBytes: 4096 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+    const run = await runProcess(bin, ['-V'], { timeoutMs: 5000, maxOutputBytes: 4096 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
     if (run.code === 0) version = parseTmuxVersion(run.stdout || run.stderr || '');
     else error = run.stderr || run.stdout || 'tmux -V failed';
   }
@@ -149,11 +169,11 @@ export async function tmuxReadiness(opts = {}) {
   };
 }
 
-export function tmuxStatusKind(tmux = {}) {
+export function tmuxStatusKind(tmux: any = {}) {
   return tmux.ok ? 'ok' : 'missing';
 }
 
-export function codexLaunchCommand(root, codexBin, codexArgs = []) {
+export function codexLaunchCommand(root: any, codexBin: any, codexArgs: any = []) {
   const extraArgs = forceGpt55CodexArgs(codexArgs);
   return [
     sksLogoIntroCommand(codexBin),
@@ -166,14 +186,14 @@ export function codexLaunchCommand(root, codexBin, codexArgs = []) {
   ].join('; ');
 }
 
-export function sksLogoIntroCommand(codexBin = 'codex') {
+export function sksLogoIntroCommand(codexBin: any = 'codex') {
   const staticLogo = `clear; printf '\\033[1;38;5;51m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO)}`;
   const authenticatedCheck = `${shellEscape(codexBin)} login status >/dev/null 2>&1`;
   const animated = [
     'clear',
     'trap \'printf "\\033[0m\\033[?25h"\' EXIT INT TERM',
     `printf '\\033[?25l'`,
-    ...SKS_TMUX_LOGO_ANIMATION_STEPS.flatMap((step) => {
+    ...SKS_TMUX_LOGO_ANIMATION_STEPS.flatMap((step: any) => {
       const style = `${step.bold ? '1;' : ''}38;5;${step.color}`;
       return [
         `printf '\\033[H\\033[J\\033[${style}m%s\\033[0m\\n' ${shellEscape(SKS_TMUX_LOGO_FRAMES[step.frame])}`,
@@ -187,11 +207,11 @@ export function sksLogoIntroCommand(codexBin = 'codex') {
   return `if [ -n "\${TMUX:-}" ] || [ "\${SKS_TMUX_LOGO_ANIMATION:-1}" = "0" ] || ${authenticatedCheck}; then ${staticLogo}; else ${animated}; fi`;
 }
 
-function terminalTitleCommand(title = '') {
+function terminalTitleCommand(title: any = '') {
   return `printf '\\033]0;%s\\007' ${shellEscape(String(title || '').slice(0, 80))}`;
 }
 
-function ansiColorCode(color = '') {
+function ansiColorCode(color: any = '') {
   return {
     blue: '34',
     cyan: '36',
@@ -202,13 +222,13 @@ function ansiColorCode(color = '') {
   }[String(color || '').toLowerCase()] || '37';
 }
 
-function colorizedLaneBannerCommand(lines = [], color = '') {
+function colorizedLaneBannerCommand(lines: any = [], color: any = '') {
   const code = ansiColorCode(color);
   const text = lines.join('\n');
   return `printf '\\033[1;${code}m%s\\033[0m\\n' ${shellEscape(text)}`;
 }
 
-function selfClosingTeamPaneCommand(command = '') {
+function selfClosingTeamPaneCommand(command: any = '') {
   return [
     `SKS_TEAM_PANE_SELF_CLOSE=1 ${command}`,
     'status=$?',
@@ -217,7 +237,7 @@ function selfClosingTeamPaneCommand(command = '') {
   ].join('; ');
 }
 
-function compactTeamPaneBanner({ missionId, agentId, phase, style, overview = false } = {}) {
+function compactTeamPaneBanner({ missionId, agentId, phase, style, overview = false }: any = {}) {
   const role = overview ? 'overview' : `${style.label} (${style.color_name})`;
   return [
     `SKS Team ${missionId}`,
@@ -238,7 +258,7 @@ export const TMUX_TEAM_LANE_STYLES = Object.freeze({
   safety: Object.freeze({ role: 'safety', label: 'safety', color_name: 'Magenta', color: 'magenta', icon: 'database' })
 });
 
-export function teamLaneStyle(agentId = '') {
+export function teamLaneStyle(agentId: any = '') {
   const id = String(agentId || '').toLowerCase();
   if (!id || id === 'mission_overview' || id === 'overview') return TMUX_TEAM_LANE_STYLES.overview;
   if (/analysis|scout/.test(id)) return TMUX_TEAM_LANE_STYLES.scout;
@@ -249,12 +269,12 @@ export function teamLaneStyle(agentId = '') {
   return TMUX_TEAM_LANE_STYLES.planning;
 }
 
-function teamLaneTitle(agentId = '') {
+function teamLaneTitle(agentId: any = '') {
   const style = teamLaneStyle(agentId);
   return `${style.label}: ${String(agentId || 'mission_overview')}`.slice(0, 80);
 }
 
-export function teamAgentCommand(root, missionId, agentId, phase) {
+export function teamAgentCommand(root: any, missionId: any, agentId: any, phase: any, _promptFile: any = null) {
   const style = teamLaneStyle(agentId);
   const title = teamLaneTitle(agentId);
   const laneCommand = `node ${shellEscape(path.join(packageRoot(), 'dist', 'bin', 'sks.js'))} team lane ${shellEscape(missionId)} --agent ${shellEscape(agentId)} --phase ${shellEscape(phase)} --follow --lines 12`;
@@ -267,7 +287,7 @@ export function teamAgentCommand(root, missionId, agentId, phase) {
   ].join('; ');
 }
 
-export function teamOverviewCommand(root, missionId) {
+export function teamOverviewCommand(root: any, missionId: any) {
   const style = teamLaneStyle('mission_overview');
   const title = teamLaneTitle('mission_overview');
   const watchCommand = `node ${shellEscape(path.join(packageRoot(), 'dist', 'bin', 'sks.js'))} team watch ${shellEscape(missionId)} --follow --lines 18`;
@@ -280,11 +300,11 @@ export function teamOverviewCommand(root, missionId) {
   ].join('; ');
 }
 
-export async function buildTmuxLaunchPlan(opts = {}) {
+export async function buildTmuxLaunchPlan(opts: any = {}) {
   const root = path.resolve(opts.root || await sksRoot());
   const session = sanitizeTmuxSessionName(opts.session || opts.workspace || defaultTmuxSessionName(root));
   const sksBin = opts.sksBin || path.join(packageRoot(), 'dist', 'bin', 'sks.js');
-  const codex = opts.codex || await getCodexInfo().catch(() => ({}));
+  const codex = opts.codex || await getCodexInfo().catch(() => EMPTY_CODEX_INFO);
   const tmux = opts.tmux || await tmuxReadiness(opts);
   const app = opts.app || await codexAppIntegrationStatus({ codex });
   const codexArgs = forceGpt55CodexArgs(codexArgsWithFastServiceTier(Array.isArray(opts.codexArgs) ? opts.codexArgs : defaultCodexLaunchArgs(opts.env || process.env)));
@@ -307,7 +327,7 @@ export async function buildTmuxLaunchPlan(opts = {}) {
   };
 }
 
-export function formatTmuxBanner(status = null) {
+export function formatTmuxBanner(status: any = null) {
   const lines = [
     SKS_TMUX_LOGO,
     '',
@@ -333,17 +353,17 @@ export function formatTmuxBanner(status = null) {
   return lines.join('\n');
 }
 
-function tmuxRun(bin, args, opts = {}) {
+function tmuxRun(bin: any, args: any, opts: any = {}) {
   return runProcess(bin || 'tmux', args, { timeoutMs: opts.timeoutMs || 10000, maxOutputBytes: opts.maxOutputBytes || 32 * 1024 })
-    .catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+    .catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
 }
 
-function paneId(stdout = '') {
+function paneId(stdout: any = '') {
   const id = String(stdout || '').split(/\r?\n/)[0]?.trim() || '';
   return id.startsWith('%') ? id : null;
 }
 
-function currentTerminalDimensions(opts = {}) {
+function currentTerminalDimensions(opts: any = {}) {
   const width = Number(opts.width || opts.detachedWidth || process.stdout?.columns || process.env.COLUMNS || 0);
   const height = Number(opts.height || opts.detachedHeight || process.stdout?.rows || process.env.LINES || 0);
   return {
@@ -352,20 +372,20 @@ function currentTerminalDimensions(opts = {}) {
   };
 }
 
-async function hasTmuxSession(bin, session) {
+async function hasTmuxSession(bin: any, session: any) {
   const run = await tmuxRun(bin, ['has-session', '-t', session], { timeoutMs: 5000 });
   return run.code === 0;
 }
 
-async function tmuxWindowTarget(bin, session) {
+async function tmuxWindowTarget(bin: any, session: any) {
   const fallback = sanitizeTmuxSessionName(session);
   const run = await tmuxRun(bin, ['list-windows', '-t', fallback, '-F', '#{window_id}'], { timeoutMs: 5000, maxOutputBytes: 4096 });
   if (run.code !== 0) return fallback;
-  const windowId = String(run.stdout || '').split(/\r?\n/).map((line) => line.trim()).find((line) => /^@\d+$/.test(line));
+  const windowId = String(run.stdout || '').split(/\r?\n/).map((line: any) => line.trim()).find((line: any) => /^@\d+$/.test(line));
   return windowId || fallback;
 }
 
-async function currentTmuxTarget(bin, env = process.env) {
+async function currentTmuxTarget(bin: any, env: any = process.env): Promise<any> {
   if (!isTmuxShellSession(env)) return { ok: false, reason: 'not running inside tmux' };
   const run = await tmuxRun(bin, ['display-message', '-p', '#{session_name}\t#{window_id}\t#{pane_id}'], { timeoutMs: 5000, maxOutputBytes: 4096 });
   if (run.code !== 0) return { ok: false, reason: run.stderr || run.stdout || 'tmux display-message failed' };
@@ -374,7 +394,7 @@ async function currentTmuxTarget(bin, env = process.env) {
   return { ok: true, session: sanitizeTmuxSessionName(session), window_id: windowId, pane_id: paneId || null };
 }
 
-async function isRecordedSksTmuxSession(root, session) {
+async function isRecordedSksTmuxSession(root: any, session: any) {
   const state = await readJson(tmuxStatePath(root), {}).catch(() => ({}));
   const sessions = state.sessions && typeof state.sessions === 'object' ? state.sessions : {};
   const record = sessions[sanitizeTmuxSessionName(session)] || null;
@@ -385,17 +405,17 @@ async function isRecordedSksTmuxSession(root, session) {
   return { ok: true, record };
 }
 
-function teamCockpitAgentIds(plan = {}, dashboard = null, control = null, opts = {}) {
+function teamCockpitAgentIds(plan: any = {}, dashboard: any = null, control: any = null, opts: any = {}) {
   if (teamCleanupRequested(control)) return [];
-  const visible = teamViewAgentIds(plan).filter((id) => id && id !== 'mission_overview');
+  const visible = teamViewAgentIds(plan).filter((id: any) => id && id !== 'mission_overview');
   const agents = dashboard?.agents && typeof dashboard.agents === 'object' ? dashboard.agents : null;
   if (!agents) return opts.plannedFallback ? visible : [];
-  const concrete = concreteDashboardAgentIds(agents, visible).filter((id) => {
+  const concrete = concreteDashboardAgentIds(agents, visible).filter((id: any) => {
     const status = String(agents[id]?.status || '').trim().toLowerCase();
     return status && status !== 'pending' && !isTerminalTeamAgentStatus(status);
   });
   if (concrete.length) return uniqueAgentIds(concrete);
-  const active = [];
+  const active: any[] = [];
   for (const id of visible) {
     const entry = agents[id] || {};
     const status = String(entry.status || '').trim().toLowerCase();
@@ -407,24 +427,24 @@ function teamCockpitAgentIds(plan = {}, dashboard = null, control = null, opts =
   return uniqueAgentIds(active);
 }
 
-function concreteDashboardAgentIds(agents = {}, planned = []) {
+function concreteDashboardAgentIds(agents: any = {}, planned: any = []) {
   const plannedSet = new Set(planned);
   const concrete = Object.keys(agents)
-    .filter((id) => id && !plannedSet.has(id))
-    .filter((id) => !GENERIC_TEAM_AGENT_IDS.has(id))
-    .filter((id) => !/_(?:\d+)$/.test(id));
+    .filter((id: any) => id && !plannedSet.has(id))
+    .filter((id: any) => !GENERIC_TEAM_AGENT_IDS.has(id))
+    .filter((id: any) => !/_(?:\d+)$/.test(id));
   if (!concrete.length) return [];
-  const plannedRoles = new Set(planned.map((id) => teamLaneStyle(id).role));
-  return concrete.filter((id) => plannedRoles.has(teamLaneStyle(id).role));
+  const plannedRoles = new Set(planned.map((id: any) => teamLaneStyle(id).role));
+  return concrete.filter((id: any) => plannedRoles.has(teamLaneStyle(id).role));
 }
 
-function teamCockpitLanes(plan = {}, dashboard = null, control = null, opts = {}) {
+function teamCockpitLanes(plan: any = {}, dashboard: any = null, control: any = null, opts: any = {}) {
   const agents = teamCockpitAgentIds(plan, dashboard, control, opts);
   if (!agents.length) return [];
   const overview = { agent: 'mission_overview', role: 'overview', command: teamOverviewCommand(opts.root, opts.missionId), style: teamLaneStyle('mission_overview'), title: teamLaneTitle('mission_overview') };
   return [
     overview,
-    ...agents.map((agent) => {
+    ...agents.map((agent: any) => {
       const style = teamLaneStyle(agent);
       return {
         agent,
@@ -437,8 +457,8 @@ function teamCockpitLanes(plan = {}, dashboard = null, control = null, opts = {}
   ];
 }
 
-function parseTmuxPaneLines(stdout = '') {
-  return String(stdout || '').split(/\r?\n/).filter(Boolean).map((line) => {
+function parseTmuxPaneLines(stdout: any = '') {
+  return String(stdout || '').split(/\r?\n/).filter(Boolean).map((line: any) => {
     const [pane_id, title, command, managed, mission_id, agent, role] = line.split('\t');
     return {
       pane_id,
@@ -449,11 +469,11 @@ function parseTmuxPaneLines(stdout = '') {
       agent: agent || '',
       role: role || ''
     };
-  }).filter((pane) => /^%\d+$/.test(pane.pane_id || ''));
+  }).filter((pane: any) => /^%\d+$/.test(pane.pane_id || ''));
 }
 
-function parseTmuxAllPaneLines(stdout = '') {
-  return String(stdout || '').split(/\r?\n/).filter(Boolean).map((line) => {
+function parseTmuxAllPaneLines(stdout: any = '') {
+  return String(stdout || '').split(/\r?\n/).filter(Boolean).map((line: any) => {
     const [session, window_id, pane_id, title, command, managed, mission_id, agent, role] = line.split('\t');
     return {
       session: session || '',
@@ -466,11 +486,11 @@ function parseTmuxAllPaneLines(stdout = '') {
       agent: agent || '',
       role: role || ''
     };
-  }).filter((pane) => pane.session && /^@\d+$/.test(pane.window_id || '') && /^%\d+$/.test(pane.pane_id || ''));
+  }).filter((pane: any) => pane.session && /^@\d+$/.test(pane.window_id || '') && /^%\d+$/.test(pane.pane_id || ''));
 }
 
-function parseTmuxSessionLines(stdout = '') {
-  return String(stdout || '').split(/\r?\n/).filter(Boolean).map((line) => {
+function parseTmuxSessionLines(stdout: any = '') {
+  return String(stdout || '').split(/\r?\n/).filter(Boolean).map((line: any) => {
     const [session, attached, created_at, last_attached_at] = line.split('\t');
     return {
       session: sanitizeTmuxSessionName(session || ''),
@@ -478,47 +498,47 @@ function parseTmuxSessionLines(stdout = '') {
       created_at: Number(created_at || 0) || 0,
       last_attached_at: Number(last_attached_at || 0) || 0
     };
-  }).filter((entry) => entry.session);
+  }).filter((entry: any) => entry.session);
 }
 
-function isLegacyTeamPane(pane = {}) {
+function isLegacyTeamPane(pane: any = {}) {
   return LEGACY_TEAM_PANE_TITLE_RE.test(String(pane.title || '').trim());
 }
 
-async function listTmuxWindowPanes(bin, windowId) {
+async function listTmuxWindowPanes(bin: any, windowId: any) {
   const format = ['#{pane_id}', '#{pane_title}', '#{pane_current_command}', '#{@sks_team_managed}', '#{@sks_mission_id}', '#{@sks_agent_id}', '#{@sks_lane_role}'].join('\t');
   const run = await tmuxRun(bin, ['list-panes', '-t', windowId, '-F', format], { timeoutMs: 5000, maxOutputBytes: 32 * 1024 });
   if (run.code !== 0) return { ok: false, panes: [], stderr: run.stderr || run.stdout || 'tmux list-panes failed' };
   return { ok: true, panes: parseTmuxPaneLines(run.stdout) };
 }
 
-async function listAllTmuxPanes(bin) {
+async function listAllTmuxPanes(bin: any) {
   const format = ['#{session_name}', '#{window_id}', '#{pane_id}', '#{pane_title}', '#{pane_current_command}', '#{@sks_team_managed}', '#{@sks_mission_id}', '#{@sks_agent_id}', '#{@sks_lane_role}'].join('\t');
   const run = await tmuxRun(bin, ['list-panes', '-a', '-F', format], { timeoutMs: 5000, maxOutputBytes: 64 * 1024 });
   if (run.code !== 0) return { ok: false, panes: [], stderr: run.stderr || run.stdout || 'tmux list-panes -a failed' };
   return { ok: true, panes: parseTmuxAllPaneLines(run.stdout) };
 }
 
-async function listAllTmuxSessions(bin) {
+async function listAllTmuxSessions(bin: any) {
   const format = ['#{session_name}', '#{session_attached}', '#{session_created}', '#{session_last_attached}'].join('\t');
   const run = await tmuxRun(bin, ['list-sessions', '-F', format], { timeoutMs: 5000, maxOutputBytes: 64 * 1024 });
   if (run.code !== 0) return { ok: false, sessions: [], stderr: run.stderr || run.stdout || 'tmux list-sessions failed' };
   return { ok: true, sessions: parseTmuxSessionLines(run.stdout) };
 }
 
-async function tmuxPaneExists(bin, paneId) {
+async function tmuxPaneExists(bin: any, paneId: any) {
   if (!paneId || !String(paneId).startsWith('%')) return false;
   const run = await tmuxRun(bin, ['list-panes', '-t', paneId, '-F', '#{pane_dead}\t#{pane_id}'], { timeoutMs: 5000, maxOutputBytes: 4096 });
   if (run.code !== 0) return false;
-  return String(run.stdout || '').split(/\r?\n/).some((line) => {
+  return String(run.stdout || '').split(/\r?\n/).some((line: any) => {
     const [dead = '', id = ''] = line.trim().split('\t');
     return id === paneId && dead !== '1';
   });
 }
 
-async function setTmuxPaneUserOptions(bin, paneId, options = {}) {
-  const applied = [];
-  const failed = [];
+async function setTmuxPaneUserOptions(bin: any, paneId: any, options: any = {}) {
+  const applied: any[] = [];
+  const failed: any[] = [];
   for (const [key, value] of Object.entries(options)) {
     const run = await tmuxRun(bin, ['set-option', '-pt', paneId, key, String(value)], { timeoutMs: 5000 });
     const command = [path.basename(bin), 'set-option', '-pt', paneId, key, String(value)].join(' ');
@@ -528,7 +548,7 @@ async function setTmuxPaneUserOptions(bin, paneId, options = {}) {
   return { applied, failed };
 }
 
-async function writeTmuxCockpitRecord(root, record = {}) {
+async function writeTmuxCockpitRecord(root: any, record: any = {}) {
   if (!record.mission_id || !record.session) return null;
   const statePath = tmuxCockpitStatePath(root);
   const state = await readJson(statePath, {}).catch(() => ({}));
@@ -543,7 +563,7 @@ async function writeTmuxCockpitRecord(root, record = {}) {
   return nextRecord;
 }
 
-async function readRecordedTeamSurfaceHints(root) {
+async function readRecordedTeamSurfaceHints(root: any) {
   const resolvedRoot = path.resolve(root || process.cwd());
   const teamState = await readJson(tmuxTeamStatePath(resolvedRoot), {}).catch(() => ({}));
   const cockpitState = await readJson(tmuxCockpitStatePath(resolvedRoot), {}).catch(() => ({}));
@@ -551,12 +571,12 @@ async function readRecordedTeamSurfaceHints(root) {
   const records = [
     ...Object.values(teamState?.missions || {}),
     ...Object.values(cockpitState?.missions || {})
-  ].filter((entry) => entry && typeof entry === 'object')
-    .filter((entry) => !entry.root || path.resolve(entry.root) === resolvedRoot);
+  ].filter((entry: any) => entry && typeof entry === 'object')
+    .filter((entry: any) => !entry.root || path.resolve(entry.root) === resolvedRoot);
   const missionIds = new Set();
   const sessions = new Set();
   const paneKeys = new Set();
-  for (const record of records) {
+  for (const record of records as any[]) {
     const missionId = String(record.mission_id || '').trim();
     const session = sanitizeTmuxSessionName(record.session || '');
     if (missionId) missionIds.add(missionId);
@@ -574,13 +594,13 @@ async function readRecordedTeamSurfaceHints(root) {
   return { missionIds, sessions, paneKeys, records };
 }
 
-function paneBelongsToKeptMission(pane = {}, keepMissionIds = new Set()) {
+function paneBelongsToKeptMission(pane: any = {}, keepMissionIds: any = new Set()) {
   if (pane.mission_id && keepMissionIds.has(pane.mission_id)) return true;
   const match = String(pane.session || '').match(/^sks-team-(M-\d{8}-\d{6}-[A-Za-z0-9]+)$/);
   return Boolean(match && keepMissionIds.has(match[1]));
 }
 
-function shouldSweepTeamPane(pane = {}, hints = {}, opts = {}) {
+function shouldSweepTeamPane(pane: any = {}, hints: any = {}, opts: any = {}) {
   if (!pane?.pane_id || pane.pane_id === opts.currentPaneId) return false;
   if (paneBelongsToKeptMission(pane, opts.keepMissionIds || new Set())) return false;
   const missionIds = hints.missionIds || new Set();
@@ -593,25 +613,25 @@ function shouldSweepTeamPane(pane = {}, hints = {}, opts = {}) {
   return Boolean(legacySession && missionIds.has(legacySession[1]) && isLegacyTeamPane(pane));
 }
 
-function tmuxLayoutName(value = 'tiled') {
+function tmuxLayoutName(value: any = 'tiled') {
   const layout = String(value || 'tiled').trim();
   return /^(tiled|even-horizontal|even-vertical|main-horizontal|main-horizontal-mirrored|main-vertical|main-vertical-mirrored)$/.test(layout)
     ? layout
     : 'tiled';
 }
 
-function teamMainPaneWidthFromWindow(width) {
+function teamMainPaneWidthFromWindow(width: any) {
   const n = Number(width);
   if (!Number.isFinite(n) || n <= 0) return TEAM_TMUX_MAIN_PANE_MIN_WIDTH;
   return Math.max(TEAM_TMUX_MAIN_PANE_MIN_WIDTH, Math.floor(n * TEAM_TMUX_MAIN_PANE_WIDTH_RATIO));
 }
 
-async function applyStableTeamLayout(tmuxBin, target, mainPaneId = null, opts = {}) {
+async function applyStableTeamLayout(tmuxBin: any, target: any, mainPaneId: any = null, opts: any = {}) {
   const layout = tmuxLayoutName(opts.layout || DYNAMIC_TEAM_TMUX_LAYOUT);
   const windowTarget = target || mainPaneId;
-  const applied = [];
-  const failed = [];
-  const runAndRecord = async (args) => {
+  const applied: any[] = [];
+  const failed: any[] = [];
+  const runAndRecord = async (args: any) => {
     const run = await tmuxRun(tmuxBin, args, { timeoutMs: 5000 });
     const command = [path.basename(tmuxBin), ...args].join(' ');
     if (run.code === 0) applied.push(command);
@@ -628,7 +648,7 @@ async function applyStableTeamLayout(tmuxBin, target, mainPaneId = null, opts = 
   return { ok: failed.length === 0, layout_name: layout, applied, failed };
 }
 
-async function enableTmuxDynamicResize(tmuxBin, session, opts = {}) {
+async function enableTmuxDynamicResize(tmuxBin: any, session: any, opts: any = {}) {
   const layout = tmuxLayoutName(opts.layout || 'tiled');
   const safeSession = sanitizeTmuxSessionName(session);
   const target = await tmuxWindowTarget(tmuxBin, safeSession);
@@ -657,8 +677,8 @@ async function enableTmuxDynamicResize(tmuxBin, session, opts = {}) {
     ...(stableMainVertical ? [['display-message', '-p', '-t', target, '#{window_width}'], ['select-layout', '-t', target, layout]] : []),
     ['set-window-option', '-t', target, 'window-size', 'latest']
   ];
-  const applied = [];
-  const failed = [];
+  const applied: any[] = [];
+  const failed: any[] = [];
   for (const args of commands) {
     const run = await tmuxRun(tmuxBin, args, { timeoutMs: 5000 });
     const command = [path.basename(tmuxBin), ...args].join(' ');
@@ -668,11 +688,11 @@ async function enableTmuxDynamicResize(tmuxBin, session, opts = {}) {
   return { enabled: failed.length === 0, layout, applied, failed };
 }
 
-export function buildTmuxOpenArgs(plan = {}) {
+export function buildTmuxOpenArgs(plan: any = {}) {
   return ['attach-session', '-t', sanitizeTmuxSessionName(plan.session || plan.workspace || defaultTmuxSessionName(plan.root))];
 }
 
-export function shouldAutoAttachTmux(args = [], env = process.env, streams = {}) {
+export function shouldAutoAttachTmux(args: any = [], env: any = process.env, streams: any = {}) {
   const stdin = streams.stdin || process.stdin;
   const stdout = streams.stdout || process.stdout;
   if (args.includes('--json') || args.includes('--status-only') || args.includes('--quiet') || args.includes('--no-attach')) return false;
@@ -680,7 +700,7 @@ export function shouldAutoAttachTmux(args = [], env = process.env, streams = {})
   return Boolean(stdin?.isTTY && stdout?.isTTY);
 }
 
-function attachTmuxSession(plan = {}, args = [], opts = {}) {
+function attachTmuxSession(plan: any = {}, args: any = [], opts: any = {}) {
   const session = sanitizeTmuxSessionName(plan.session || plan.workspace || defaultTmuxSessionName(plan.root));
   const tmuxBin = plan.tmux?.bin || 'tmux';
   const attachArgs = isTmuxShellSession(opts.env || process.env) ? ['switch-client', '-t', session] : buildTmuxOpenArgs({ ...plan, session });
@@ -694,7 +714,7 @@ function attachTmuxSession(plan = {}, args = [], opts = {}) {
   };
 }
 
-export function runTmuxLaunchPlanSyntaxCheck(plan = {}) {
+export function runTmuxLaunchPlanSyntaxCheck(plan: any = {}) {
   const args = buildTmuxOpenArgs(plan);
   return {
     ok: args[0] === 'attach-session' && args[1] === '-t' && Boolean(args[2]),
@@ -703,7 +723,7 @@ export function runTmuxLaunchPlanSyntaxCheck(plan = {}) {
   };
 }
 
-export async function createTmuxSession(plan = {}, panes = [], opts = {}) {
+export async function createTmuxSession(plan: any = {}, panes: any = [], opts: any = {}): Promise<any> {
   const tmuxBin = plan.tmux?.bin || await findTmuxBin() || 'tmux';
   const session = sanitizeTmuxSessionName(plan.session || plan.workspace || defaultTmuxSessionName(plan.root));
   const root = path.resolve(plan.root || process.cwd());
@@ -726,7 +746,7 @@ export async function createTmuxSession(plan = {}, panes = [], opts = {}) {
   let rightStackRootPaneId = null;
   for (const pane of normalizedPanes.slice(1)) {
     const direction = rightSidePanes ? (created.length === 1 ? '-h' : '-v') : (pane.vertical ? '-v' : '-h');
-    const splitTarget = rightSidePanes ? (rightStackRootPaneId || created[0].pane_id || session) : session;
+    const splitTarget = rightSidePanes ? (rightStackRootPaneId || created[0]?.pane_id || session) : session;
     const split = await tmuxRun(tmuxBin, ['split-window', '-t', splitTarget, direction, '-d', '-P', '-F', '#{pane_id}', '-c', path.resolve(pane.cwd || root), pane.command || 'pwd']);
     if (split.code !== 0) return { ok: false, session, panes: created, stderr: split.stderr || split.stdout || 'tmux split-window failed' };
     const newPaneId = paneId(split.stdout);
@@ -735,12 +755,12 @@ export async function createTmuxSession(plan = {}, panes = [], opts = {}) {
     if (rightSidePanes && !rightStackRootPaneId && newPaneId) rightStackRootPaneId = newPaneId;
     if (!rightSidePanes) await tmuxRun(tmuxBin, ['select-layout', '-t', session, layout]).catch(() => null);
   }
-  const stable_layout = rightSidePanes ? await applyStableTeamLayout(tmuxBin, session, created[0].pane_id, { layout }) : null;
+  const stable_layout = rightSidePanes ? await applyStableTeamLayout(tmuxBin, session, created[0]?.pane_id, { layout }) : null;
   const dynamic_resize = await enableTmuxDynamicResize(tmuxBin, session, { layout, stableTeamLayout: rightSidePanes });
   return { ok: true, reused: false, session, panes: created, attach_command: `tmux attach-session -t ${session}`, layout, initial_size: dimensions, stable_layout, dynamic_resize };
 }
 
-export async function launchTmuxUi(args = [], opts = {}) {
+export async function launchTmuxUi(args: any = [], opts: any = {}) {
   const rootArg = readOption(args, '--root', opts.root);
   const sessionArg = readOption(args, '--session', readOption(args, '--workspace', opts.session || opts.workspace));
   const plan = await buildTmuxLaunchPlan({ ...opts, root: rootArg, session: sessionArg });
@@ -752,7 +772,7 @@ export async function launchTmuxUi(args = [], opts = {}) {
   }
   if (args.includes('--status-only')) return { plan };
   const codexLbSweep = (opts.codexLbFreshSession || opts.codexLbBypassed)
-    ? await sweepCodexLbTmuxSessions({ root: plan.root, keepSession: plan.session }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'codex-lb tmux cleanup failed', closed_session_count: 0 }))
+    ? await sweepCodexLbTmuxSessions({ root: plan.root, keepSession: plan.session }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'codex-lb tmux cleanup failed', closed_session_count: 0 }))
     : null;
   const command = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs);
   const created = await createTmuxSession({ ...plan, command }, [{ cwd: plan.root, command, focused: true, role: 'codex', title: 'Codex CLI' }]);
@@ -778,7 +798,7 @@ export async function launchTmuxUi(args = [], opts = {}) {
   return { plan, created: Boolean(created.ok), session: created.session || plan.session, opened: created, attached, codex_lb_cleanup: codexLbSweep };
 }
 
-export async function launchMadTmuxUi(args = [], opts = {}) {
+export async function launchMadTmuxUi(args: any = [], opts: any = {}) {
   const rootArg = readOption(args, '--root', opts.root);
   const sessionArg = readOption(args, '--session', readOption(args, '--workspace', opts.session || opts.workspace));
   const plan = await buildTmuxLaunchPlan({ ...opts, root: rootArg, session: sessionArg });
@@ -790,7 +810,7 @@ export async function launchMadTmuxUi(args = [], opts = {}) {
   }
   if (args.includes('--status-only')) return { plan };
   const codexLbSweep = (opts.codexLbFreshSession || opts.codexLbBypassed)
-    ? await sweepCodexLbTmuxSessions({ root: plan.root, keepSession: plan.session }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'codex-lb tmux cleanup failed', closed_session_count: 0 }))
+    ? await sweepCodexLbTmuxSessions({ root: plan.root, keepSession: plan.session }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'codex-lb tmux cleanup failed', closed_session_count: 0 }))
     : null;
   const missionId = opts.missionId || opts.madMissionId || 'latest';
   const mainCommand = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs);
@@ -819,7 +839,7 @@ export async function launchMadTmuxUi(args = [], opts = {}) {
   return { plan, created: Boolean(created.ok), session: created.session || plan.session, opened: created, attached, mode: 'mad_session', mission_id: missionId, codex_lb_cleanup: codexLbSweep };
 }
 
-function printTmuxLaunchBlocked(plan, opts = {}) {
+function printTmuxLaunchBlocked(plan: any, opts: any = {}) {
   if (opts.concise) {
     console.error('SKS tmux launch blocked.');
     if (!plan.tmux.ok) console.error(`- tmux missing: ${platformTmuxInstallHint()}`);
@@ -831,8 +851,8 @@ function printTmuxLaunchBlocked(plan, opts = {}) {
   for (const blocker of Array.from(new Set(plan.blockers))) console.log(`- ${blocker}`);
 }
 
-function uniqueAgentIds(agents = []) {
-  const ids = [];
+function uniqueAgentIds(agents: any = []) {
+  const ids: any[] = [];
   const seen = new Set();
   for (const agent of agents) {
     const id = agent?.id || String(agent || '');
@@ -843,13 +863,13 @@ function uniqueAgentIds(agents = []) {
   return ids;
 }
 
-function teamViewAgentIds(plan = {}) {
+function teamViewAgentIds(plan: any = {}) {
   const roster = plan.roster || {};
   const analysis = uniqueAgentIds(roster.analysis_team || []);
   const debate = uniqueAgentIds(roster.debate_team || []);
   const development = uniqueAgentIds(roster.development_team || []);
   const validation = uniqueAgentIds(roster.validation_team || []);
-  const reviewers = validation.filter((id) => teamLaneStyle(id).role === 'review');
+  const reviewers = validation.filter((id: any) => teamLaneStyle(id).role === 'review');
   const reviewerTarget = Math.max(MIN_TEAM_REVIEWER_LANES, Number(plan.review_policy?.minimum_reviewer_lanes) || 0, Number(plan.role_counts?.reviewer) || 0);
   const reviewLanes = reviewers.slice(0, reviewerTarget);
   const phaseRepresentatives = [development[0], debate[0]].filter(Boolean);
@@ -859,7 +879,7 @@ function teamViewAgentIds(plan = {}) {
   return uniqueAgentIds(ordered).slice(0, Math.max(1, limit));
 }
 
-function teamLanePhase(agentId = '') {
+function teamLanePhase(agentId: any = '') {
   const role = teamLaneStyle(agentId).role;
   if (role === 'review') return 'review';
   if (role === 'execution') return 'implementation';
@@ -868,7 +888,7 @@ function teamLanePhase(agentId = '') {
   return 'team';
 }
 
-export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, promptFile = null, dashboard = undefined, control = undefined, close = false, plannedFallback = false, env = process.env, tmux = null } = {}) {
+export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, promptFile = null, dashboard = undefined, control = undefined, close = false, plannedFallback = false, env = process.env, tmux = null }: any = {}): Promise<any> {
   const resolvedRoot = path.resolve(root || await sksRoot());
   const id = missionId || 'latest';
   if (String(env.SKS_TMUX_DYNAMIC_TEAM || '1') === '0') return { ok: false, skipped: true, reason: 'SKS_TMUX_DYNAMIC_TEAM=0' };
@@ -883,20 +903,20 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
   const lanes = close
     ? []
     : teamCockpitLanes(plan, loadedDashboard, loadedControl, { root: resolvedRoot, missionId: id, plannedFallback });
-  const desiredAgents = new Set(lanes.map((lane) => lane.agent));
+  const desiredAgents = new Set(lanes.map((lane: any) => lane.agent));
   const paneList = await listTmuxWindowPanes(tmuxBin, target.window_id);
   if (!paneList.ok) return { ok: false, skipped: false, session: target.session, window_id: target.window_id, reason: paneList.stderr };
   const cockpitState = await readJson(tmuxCockpitStatePath(resolvedRoot), {}).catch(() => ({}));
   const previousCockpit = cockpitState?.missions?.[id] || {};
-  const currentPane = paneList.panes.find((pane) => pane.pane_id === target.pane_id);
+  const currentPane = paneList.panes.find((pane: any) => pane.pane_id === target.pane_id);
   const mainPaneId = previousCockpit.main_pane_id || (currentPane?.managed && currentPane?.mission_id === id ? null : target.pane_id);
-  const allManaged = paneList.panes.filter((pane) => pane.managed);
-  const managed = allManaged.filter((pane) => pane.mission_id === id);
-  const staleManaged = allManaged.filter((pane) => pane.mission_id && pane.mission_id !== id);
-  const opened = [];
-  const closed = [];
-  const failed = [];
-  const closePane = async (pane, reason) => {
+  const allManaged = paneList.panes.filter((pane: any) => pane.managed);
+  const managed = allManaged.filter((pane: any) => pane.mission_id === id);
+  const staleManaged = allManaged.filter((pane: any) => pane.mission_id && pane.mission_id !== id);
+  const opened: any[] = [];
+  const closed: any[] = [];
+  const failed: any[] = [];
+  const closePane = async (pane: any, reason: any) => {
     const kill = await tmuxRun(tmuxBin, ['kill-pane', '-t', pane.pane_id], { timeoutMs: 5000 });
     if (kill.code === 0) closed.push({ pane_id: pane.pane_id, agent: pane.agent, role: pane.role, mission_id: pane.mission_id, reason });
     else failed.push({ action: 'kill-pane', pane_id: pane.pane_id, agent: pane.agent, mission_id: pane.mission_id, reason, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
@@ -914,8 +934,8 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
       await closePane(pane, duplicate ? 'duplicate_agent_lane' : 'not_desired');
     }
   }
-  const closedIds = new Set(closed.map((entry) => entry.pane_id));
-  const remainingManaged = managed.filter((pane) => desiredAgents.has(pane.agent) && !closedIds.has(pane.pane_id));
+  const closedIds = new Set(closed.map((entry: any) => entry.pane_id));
+  const remainingManaged = managed.filter((pane: any) => desiredAgents.has(pane.agent) && !closedIds.has(pane.pane_id));
   const byAgent = new Map();
   for (const pane of remainingManaged) {
     if (pane.agent && !byAgent.has(pane.agent)) byAgent.set(pane.agent, pane);
@@ -943,7 +963,7 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
       '@sks_agent_id': lane.agent,
       '@sks_lane_role': lane.role || teamLaneStyle(lane.agent).role
     });
-    failed.push(...optionResult.failed.map((entry) => ({ action: 'set-option', agent: lane.agent, role: lane.role, ...entry })));
+    failed.push(...optionResult.failed.map((entry: any) => ({ action: 'set-option', agent: lane.agent, role: lane.role, ...entry })));
     opened.push({ pane_id, agent: lane.agent, role: lane.role, title: lane.title });
   }
   let relayout = null;
@@ -987,7 +1007,7 @@ export async function reconcileTmuxTeamCockpit({ root, missionId, plan = {}, pro
   };
 }
 
-export async function sweepTmuxTeamSurfaces({ root, keepMissionId = null, env = process.env, tmux = null, dryRun = false } = {}) {
+export async function sweepTmuxTeamSurfaces({ root, keepMissionId = null, env = process.env, tmux = null, dryRun = false }: any = {}): Promise<any> {
   const resolvedRoot = path.resolve(root || await sksRoot());
   const tmuxBin = tmux?.bin || await findTmuxBin() || 'tmux';
   const hints = await readRecordedTeamSurfaceHints(resolvedRoot);
@@ -999,10 +1019,10 @@ export async function sweepTmuxTeamSurfaces({ root, keepMissionId = null, env = 
   const current = await currentTmuxTarget(tmuxBin, env).catch(() => ({ ok: false }));
   const keepMissionIds = new Set(Array.isArray(keepMissionId) ? keepMissionId.filter(Boolean).map(String) : (keepMissionId ? [String(keepMissionId)] : []));
   const targets = paneList.panes
-    .filter((pane) => shouldSweepTeamPane(pane, hints, { currentPaneId: current?.pane_id || '', keepMissionIds }))
-    .filter((pane, index, panes) => panes.findIndex((candidate) => candidate.pane_id === pane.pane_id) === index);
-  const closed = [];
-  const failed = [];
+    .filter((pane: any) => shouldSweepTeamPane(pane, hints, { currentPaneId: current?.pane_id || '', keepMissionIds }))
+    .filter((pane: any, index: any, panes: any) => panes.findIndex((candidate: any) => candidate.pane_id === pane.pane_id) === index);
+  const closed: any[] = [];
+  const failed: any[] = [];
   for (const pane of targets) {
     if (dryRun) {
       closed.push({ pane_id: pane.pane_id, session: pane.session, window_id: pane.window_id, agent: pane.agent, role: pane.role, mission_id: pane.mission_id, title: pane.title, dry_run: true });
@@ -1013,7 +1033,7 @@ export async function sweepTmuxTeamSurfaces({ root, keepMissionId = null, env = 
     else failed.push({ pane_id: pane.pane_id, session: pane.session, window_id: pane.window_id, agent: pane.agent, mission_id: pane.mission_id, title: pane.title, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
   }
   if (!dryRun && closed.length) {
-    for (const windowId of Array.from(new Set(closed.map((pane) => pane.window_id).filter(Boolean)))) {
+    for (const windowId of Array.from(new Set(closed.map((pane: any) => pane.window_id).filter(Boolean)))) {
       await tmuxRun(tmuxBin, ['select-layout', '-t', windowId, DYNAMIC_TEAM_TMUX_LAYOUT], { timeoutMs: 5000 }).catch(() => null);
       await tmuxRun(tmuxBin, ['select-layout', '-t', windowId, '-E'], { timeoutMs: 5000 }).catch(() => null);
     }
@@ -1034,20 +1054,20 @@ export async function sweepTmuxTeamSurfaces({ root, keepMissionId = null, env = 
   };
 }
 
-export async function sweepCodexLbTmuxSessions({ root, keepSession = null, env = process.env, tmux = null, dryRun = false } = {}) {
+export async function sweepCodexLbTmuxSessions({ root, keepSession = null, env = process.env, tmux = null, dryRun = false }: any = {}): Promise<any> {
   const resolvedRoot = path.resolve(root || await sksRoot());
   const tmuxBin = tmux?.bin || await findTmuxBin() || 'tmux';
   const sessionList = await listAllTmuxSessions(tmuxBin);
   if (!sessionList.ok) return { ok: false, skipped: true, reason: sessionList.stderr, closed_session_count: 0, targets: [] };
   const current = await currentTmuxTarget(tmuxBin, env).catch(() => ({ ok: false }));
   const suffix = `-${defaultTmuxSessionName(resolvedRoot)}`;
-  const keep = new Set([keepSession, current?.session].filter(Boolean).map((entry) => sanitizeTmuxSessionName(entry)));
+  const keep = new Set([keepSession, current?.session].filter(Boolean).map((entry: any) => sanitizeTmuxSessionName(entry)));
   const targets = sessionList.sessions
-    .filter((entry) => entry.session.startsWith('sks-codex-lb-') && entry.session.endsWith(suffix))
-    .filter((entry) => !entry.attached && !keep.has(entry.session))
-    .sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
-  const closed = [];
-  const failed = [];
+    .filter((entry: any) => entry.session.startsWith('sks-codex-lb-') && entry.session.endsWith(suffix))
+    .filter((entry: any) => !entry.attached && !keep.has(entry.session))
+    .sort((a: any, b: any) => (a.created_at || 0) - (b.created_at || 0));
+  const closed: any[] = [];
+  const failed: any[] = [];
   for (const target of targets) {
     if (dryRun) {
       closed.push({ session: target.session, dry_run: true, created_at: target.created_at, last_attached_at: target.last_attached_at });
@@ -1073,7 +1093,7 @@ export async function sweepCodexLbTmuxSessions({ root, keepSession = null, env =
   };
 }
 
-export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFile = null, json = false, attach = false, args = [] } = {}) {
+export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFile = null, json = false, attach = false, args = [] }: any = {}): Promise<any> {
   const launch = await buildTmuxLaunchPlan({ root, session: `sks-team-${missionId}` });
   const missionDir = path.join(launch.root, '.sneakoscope', 'missions', missionId);
   const dashboard = await readTeamDashboard(missionDir).catch(() => null);
@@ -1082,14 +1102,14 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
   const concreteAgents = concreteDashboardAgentIds(dashboard?.agents || {}, plannedAgents);
   const cleanupRequested = teamCleanupRequested(control);
   const visibleAgents = cleanupRequested ? [] : (json ? plannedAgents : (concreteAgents.length ? concreteAgents : plannedAgents));
-  const commands = visibleAgents.map((agentId) => ({
+  const commands = visibleAgents.map((agentId: any) => ({
     agent: agentId,
     command: teamAgentCommand(launch.root, missionId, agentId, teamLanePhase(agentId), promptFile),
     style: teamLaneStyle(agentId),
     title: teamLaneTitle(agentId)
   }));
   const overview = { agent: 'mission_overview', role: 'overview', command: teamOverviewCommand(launch.root, missionId), style: teamLaneStyle('mission_overview'), title: teamLaneTitle('mission_overview') };
-  const lanes = cleanupRequested ? [] : [overview, ...commands.map((entry) => ({ ...entry, role: entry.style.role }))];
+  const lanes = cleanupRequested ? [] : [overview, ...commands.map((entry: any) => ({ ...entry, role: entry.style.role }))];
   const splitUi = {
     mode: 'single_window_split_panes',
     window: 'sks',
@@ -1102,7 +1122,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
     panes_show: ['overview', 'scout', 'planning', 'execution', 'review', 'safety'],
     user_attach_command: launch.attach_command
   };
-  const result = {
+  const result: any = {
     ready: launch.ready,
     tmux: launch.tmux,
     session: launch.session,
@@ -1116,7 +1136,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
     attach_command: launch.attach_command
   };
   if (json || !launch.ready) return result;
-  result.preflight_cleanup = await sweepTmuxTeamSurfaces({ root: launch.root, keepMissionId: missionId }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'tmux preflight sweep failed', closed_lane_count: 0 }));
+  result.preflight_cleanup = await sweepTmuxTeamSurfaces({ root: launch.root, keepMissionId: missionId }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'tmux preflight sweep failed', closed_lane_count: 0 }));
   const wantsSeparateSession = args.includes('--separate-session') || args.includes('--new-session') || args.includes('--legacy-team-session') || args.includes('--no-dynamic-team-tmux');
   if (!wantsSeparateSession) {
     const cockpit = await reconcileTmuxTeamCockpit({ root: launch.root, missionId, plan, promptFile, dashboard, control, plannedFallback: true });
@@ -1147,7 +1167,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
         split_ui: result.split_ui,
         cleanup_policy: result.cleanup_policy,
         panes: cockpit.opened || [],
-        lanes: lanes.map((entry) => ({
+        lanes: lanes.map((entry: any) => ({
           agent: entry.agent,
           role: entry.style?.role || teamLaneStyle(entry.agent).role,
           style: entry.style || teamLaneStyle(entry.agent),
@@ -1173,7 +1193,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
       return result;
     }
   }
-  const panes = lanes.map((lane, index) => ({ cwd: launch.root, command: lane.command, focused: index === 0, role: lane.role, title: lane.title, vertical: index > 1 }));
+  const panes = lanes.map((lane: any, index: any) => ({ cwd: launch.root, command: lane.command, focused: index === 0, role: lane.role, title: lane.title, vertical: index > 1 }));
   const created = await createTmuxSession(launch, panes, { layout: DYNAMIC_TEAM_TMUX_LAYOUT, recreate: true, rightSidePanes: true });
   result.created = Boolean(created.ok);
   result.opened = created;
@@ -1189,7 +1209,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
     split_ui: splitUi,
     cleanup_policy: result.cleanup_policy,
     panes: created.panes || [],
-    lanes: lanes.map((entry) => ({
+    lanes: lanes.map((entry: any) => ({
       agent: entry.agent,
       role: entry.style?.role || teamLaneStyle(entry.agent).role,
       style: entry.style || teamLaneStyle(entry.agent),
@@ -1221,7 +1241,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
   return result;
 }
 
-async function writeTmuxSessionRecord(root, record = {}) {
+async function writeTmuxSessionRecord(root: any, record: any = {}) {
   if (!record.session) return null;
   const statePath = tmuxStatePath(root);
   const state = await readJson(statePath, {}).catch(() => ({}));
@@ -1236,7 +1256,7 @@ async function writeTmuxSessionRecord(root, record = {}) {
   return nextRecord;
 }
 
-async function writeTmuxTeamRecord(root, record = {}) {
+async function writeTmuxTeamRecord(root: any, record: any = {}) {
   if (!record.mission_id || !record.session) return null;
   const statePath = tmuxTeamStatePath(root);
   const state = await readJson(statePath, {}).catch(() => ({}));
@@ -1251,21 +1271,21 @@ async function writeTmuxTeamRecord(root, record = {}) {
   return nextRecord;
 }
 
-async function readTmuxTeamRecord(root, missionId) {
+async function readTmuxTeamRecord(root: any, missionId: any) {
   const state = await readJson(tmuxTeamStatePath(root), {}).catch(() => ({}));
   const missions = state.missions && typeof state.missions === 'object' ? state.missions : {};
   if (missionId && missionId !== 'latest') return missions[missionId] || null;
-  const records = Object.values(missions).filter((entry) => entry && typeof entry === 'object');
-  records.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+  const records = Object.values(missions).filter((entry: any) => entry && typeof entry === 'object');
+  records.sort((a: any, b: any) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
   return records[0] || null;
 }
 
-export async function cleanupTmuxTeamView({ root, missionId = 'latest', closeSession = false } = {}) {
+export async function cleanupTmuxTeamView({ root, missionId = 'latest', closeSession = false }: any = {}): Promise<any> {
   const resolvedRoot = path.resolve(root || await sksRoot());
   const record = await readTmuxTeamRecord(resolvedRoot, missionId);
   if (!record?.session) {
-    const legacy = await cleanupLegacyTmuxTeamSurfaces(resolvedRoot, missionId, { closeSession }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'legacy tmux cleanup failed' }));
-    const sweep = await sweepTmuxTeamSurfaces({ root: resolvedRoot }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'tmux sweep failed', closed_lane_count: 0 }));
+    const legacy = await cleanupLegacyTmuxTeamSurfaces(resolvedRoot, missionId, { closeSession }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'legacy tmux cleanup failed' }));
+    const sweep = await sweepTmuxTeamSurfaces({ root: resolvedRoot }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'tmux sweep failed', closed_lane_count: 0 }));
     return {
       ok: legacy.ok && sweep.ok !== false,
       skipped: legacy.closed_lane_count === 0 && !legacy.killed_session && !sweep.closed_lane_count,
@@ -1277,14 +1297,14 @@ export async function cleanupTmuxTeamView({ root, missionId = 'latest', closeSes
       closed_surfaces: (legacy.closed_lane_count || (legacy.killed_session ? 1 : 0)) + (sweep.closed_lane_count || 0)
     };
   }
-  const dynamicCleanup = await reconcileTmuxTeamCockpit({ root: resolvedRoot, missionId: record.mission_id || missionId, close: true }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'dynamic tmux cleanup failed' }));
+  const dynamicCleanup = await reconcileTmuxTeamCockpit({ root: resolvedRoot, missionId: record.mission_id || missionId, close: true }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'dynamic tmux cleanup failed' }));
   const recordedCleanup = dynamicCleanup?.ok && dynamicCleanup.closed_lane_count > 0
     ? null
-    : await cleanupRecordedTmuxTeamPanes(resolvedRoot, record.mission_id || missionId, record).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'recorded tmux cleanup failed' }));
+    : await cleanupRecordedTmuxTeamPanes(resolvedRoot, record.mission_id || missionId, record).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'recorded tmux cleanup failed' }));
   const legacyCleanup = (dynamicCleanup?.closed_lane_count || recordedCleanup?.closed_lane_count)
     ? null
-    : await cleanupLegacyTmuxTeamSurfaces(resolvedRoot, record.mission_id || missionId, { closeSession: false }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'legacy tmux cleanup failed' }));
-  const sweepCleanup = await sweepTmuxTeamSurfaces({ root: resolvedRoot }).catch((err) => ({ ok: false, skipped: true, reason: err.message || 'tmux sweep failed', closed_lane_count: 0 }));
+    : await cleanupLegacyTmuxTeamSurfaces(resolvedRoot, record.mission_id || missionId, { closeSession: false }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'legacy tmux cleanup failed' }));
+  const sweepCleanup = await sweepTmuxTeamSurfaces({ root: resolvedRoot }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'tmux sweep failed', closed_lane_count: 0 }));
   let killed_session = false;
   if ((closeSession || closeSession === true) && record.mode !== 'current_session_dynamic_panes') {
     const tmuxBin = await findTmuxBin() || 'tmux';
@@ -1317,12 +1337,12 @@ export async function cleanupTmuxTeamView({ root, missionId = 'latest', closeSes
   };
 }
 
-async function cleanupLegacyTmuxTeamSurfaces(root, missionId, opts = {}) {
+async function cleanupLegacyTmuxTeamSurfaces(root: any, missionId: any, opts: any = {}): Promise<any> {
   const id = String(missionId || '').trim();
   const tmuxBin = await findTmuxBin() || 'tmux';
   const current = await currentTmuxTarget(tmuxBin).catch(() => ({ ok: false }));
-  const closed = [];
-  const failed = [];
+  const closed: any[] = [];
+  const failed: any[] = [];
   let killed_session = false;
   let session_kill_requested = false;
   const session = id && id !== 'latest' ? sanitizeTmuxSessionName(`sks-team-${id}`) : '';
@@ -1330,7 +1350,7 @@ async function cleanupLegacyTmuxTeamSurfaces(root, missionId, opts = {}) {
     if (current.ok && current.session === session) {
       const panes = await listTmuxWindowPanes(tmuxBin, current.window_id);
       if (panes.ok) {
-        for (const pane of panes.panes.filter((entry) => entry.pane_id !== current.pane_id && isLegacyTeamPane(entry))) {
+        for (const pane of panes.panes.filter((entry: any) => entry.pane_id !== current.pane_id && isLegacyTeamPane(entry))) {
           const kill = await tmuxRun(tmuxBin, ['kill-pane', '-t', pane.pane_id], { timeoutMs: 5000 });
           if (kill.code === 0) closed.push({ pane_id: pane.pane_id, title: pane.title });
           else failed.push({ pane_id: pane.pane_id, title: pane.title, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
@@ -1346,8 +1366,8 @@ async function cleanupLegacyTmuxTeamSurfaces(root, missionId, opts = {}) {
   if (current.ok) {
     const panes = await listTmuxWindowPanes(tmuxBin, current.window_id);
     if (panes.ok) {
-      for (const pane of panes.panes.filter((entry) => !entry.managed && entry.pane_id !== current.pane_id && isLegacyTeamPane(entry))) {
-        if (closed.some((entry) => entry.pane_id === pane.pane_id)) continue;
+      for (const pane of panes.panes.filter((entry: any) => !entry.managed && entry.pane_id !== current.pane_id && isLegacyTeamPane(entry))) {
+        if (closed.some((entry: any) => entry.pane_id === pane.pane_id)) continue;
         const kill = await tmuxRun(tmuxBin, ['kill-pane', '-t', pane.pane_id], { timeoutMs: 5000 });
         if (kill.code === 0) closed.push({ pane_id: pane.pane_id, title: pane.title });
         else failed.push({ pane_id: pane.pane_id, title: pane.title, stderr: kill.stderr || kill.stdout || 'tmux kill-pane failed' });
@@ -1375,7 +1395,7 @@ async function cleanupLegacyTmuxTeamSurfaces(root, missionId, opts = {}) {
   };
 }
 
-async function cleanupRecordedTmuxTeamPanes(root, missionId, record = {}) {
+async function cleanupRecordedTmuxTeamPanes(root: any, missionId: any, record: any = {}): Promise<any> {
   const id = record.mission_id || missionId;
   const cockpitState = await readJson(tmuxCockpitStatePath(root), {}).catch(() => ({}));
   const cockpit = cockpitState?.missions?.[id] || {};
@@ -1387,12 +1407,12 @@ async function cleanupRecordedTmuxTeamPanes(root, missionId, record = {}) {
   const recordedPaneIds = new Set([
     ...(Array.isArray(record.panes) ? record.panes : []),
     ...(Array.isArray(cockpit.panes) ? cockpit.panes : [])
-  ].map((pane) => pane?.pane_id).filter(Boolean));
-  const managed = paneList.panes.filter((pane) => pane.managed && pane.mission_id === id);
-  const recorded = paneList.panes.filter((pane) => recordedPaneIds.has(pane.pane_id));
+  ].map((pane: any) => pane?.pane_id).filter(Boolean));
+  const managed = paneList.panes.filter((pane: any) => pane.managed && pane.mission_id === id);
+  const recorded = paneList.panes.filter((pane: any) => recordedPaneIds.has(pane.pane_id));
   const targets = managed.length ? managed : recorded;
-  const closed = [];
-  const failed = [];
+  const closed: any[] = [];
+  const failed: any[] = [];
   for (const pane of targets) {
     const kill = await tmuxRun(tmuxBin, ['kill-pane', '-t', pane.pane_id], { timeoutMs: 5000 });
     if (kill.code === 0) closed.push({ pane_id: pane.pane_id, agent: pane.agent, role: pane.role });
@@ -1417,18 +1437,18 @@ async function cleanupRecordedTmuxTeamPanes(root, missionId, record = {}) {
   };
 }
 
-export async function runTmuxStatus(args = [], opts = {}) {
+export async function runTmuxStatus(args: any = [], opts: any = {}) {
   const once = args.includes('--once') || !args.includes('--watch');
   do {
     const app = await codexAppIntegrationStatus();
     console.clear();
     console.log(formatTmuxBanner(app));
     if (once) return app;
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await new Promise<any>((resolve: any) => setTimeout(resolve, 5000));
   } while (true);
 }
 
-function readOption(args, name, fallback = null) {
+function readOption(args: any, name: any, fallback: any = null) {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 }

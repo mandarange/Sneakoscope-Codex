@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists } from './fsx.js';
@@ -34,60 +33,60 @@ export const REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS = [
   'plugins'
 ];
 
-export function hasTopLevelCodexModeLock(text = '') {
+export function hasTopLevelCodexModeLock(text: any = '') {
   const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
   const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
   const model = top.match(/^model\s*=\s*"([^"]+)"/m)?.[1];
   return (Boolean(model) && model !== 'gpt-5.5') || /^model_reasoning_effort\s*=/m.test(top);
 }
 
-export function hasDeprecatedCodexHooksFeatureFlag(text = '') {
+export function hasDeprecatedCodexHooksFeatureFlag(text: any = '') {
   const lines = String(text || '').split('\n');
-  const start = lines.findIndex((line) => line.trim() === '[features]');
+  const start = lines.findIndex((line: any) => line.trim() === '[features]');
   if (start === -1) return false;
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
       end = i;
       break;
     }
   }
-  return lines.slice(start + 1, end).some((line) => /^\s*codex_hooks\s*=/.test(line));
+  return lines.slice(start + 1, end).some((line: any) => /^\s*codex_hooks\s*=/.test(line));
 }
 
-export function missingGeneratedCodexAppFeatureFlags(text = '') {
-  if (text && typeof text === 'object') return REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name) => text[name] !== true);
-  return REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name) => !String(text || '').includes(`${name} = true`));
+export function missingGeneratedCodexAppFeatureFlags(text: any = '') {
+  if (text && typeof text === 'object') return REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name: any) => text[name] !== true);
+  return REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name: any) => !String(text || '').includes(`${name} = true`));
 }
 
-export function hasCodexUnstableFeatureWarningSuppression(text = '') {
+export function hasCodexUnstableFeatureWarningSuppression(text: any = '') {
   return /(^|\n)\s*suppress_unstable_features_warning\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(String(text || ''));
 }
 
-export function assertCodexWarningSuppressed(text = '', label = 'Codex config') {
+export function assertCodexWarningSuppressed(text: any = '', label: any = 'Codex config') {
   if (!hasCodexUnstableFeatureWarningSuppression(text)) {
     throw new Error(`selftest: ${label} missing suppress_unstable_features_warning`);
   }
 }
 
-function reflectionInstructionText(commandPrefix = 'sks') {
+function reflectionInstructionText(commandPrefix: any = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write reflection.md; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass reflection-gate.json.`;
 }
 
-export function normalizeInstallScope(scope = 'global') {
+export function normalizeInstallScope(scope: any = 'global') {
   const value = String(scope || 'global').trim().toLowerCase();
   if (value === 'global' || value === 'project') return value;
   throw new Error(`Invalid install scope: ${scope}. Use "global" or "project".`);
 }
 
-export function sksCommandPrefix(scope = 'global', opts = {}) {
+export function sksCommandPrefix(scope: any = 'global', opts: any = {}) {
   return normalizeInstallScope(scope) === 'project'
     ? 'node ./node_modules/sneakoscope/dist/bin/sks.js'
     : (opts.globalCommand || 'sks');
 }
 
-function sksHookCommand(commandPrefix, hookName) {
+function sksHookCommand(commandPrefix: any, hookName: any) {
   return `${commandPrefix} hook ${hookName}`;
 }
 
@@ -99,12 +98,12 @@ const MANAGED_HOOKS = {
   Stop: [{ hooks: [{ type: 'command', command: null, hookName: 'stop', statusMessage: 'SKS checking done gate' }] }]
 };
 
-function buildManagedHooks(commandPrefix) {
-  const hooks = {};
+function buildManagedHooks(commandPrefix: any) {
+  const hooks: Record<string, any> = {};
   for (const [eventName, entries] of Object.entries(MANAGED_HOOKS)) {
-    hooks[eventName] = entries.map((entry) => ({
+    hooks[eventName] = entries.map((entry: any) => ({
       ...('matcher' in entry ? { matcher: entry.matcher } : {}),
-      hooks: entry.hooks.map(({ hookName, ...hook }) => ({
+      hooks: entry.hooks.map(({ hookName, ...hook }: any) => ({
         ...hook,
         command: sksHookCommand(commandPrefix, hookName)
       }))
@@ -113,20 +112,20 @@ function buildManagedHooks(commandPrefix) {
   return { hooks };
 }
 
-export function mergeManagedHooksJson(existingContent, commandPrefix) {
-  let root = {};
+export function mergeManagedHooksJson(existingContent: any, commandPrefix: any) {
+  let root: any = {};
   try {
     root = existingContent?.trim() ? JSON.parse(existingContent) : {};
     if (!root || typeof root !== 'object' || Array.isArray(root)) root = {};
   } catch {
     root = {};
   }
-  const managed = buildManagedHooks(commandPrefix);
+  const managed: any = buildManagedHooks(commandPrefix);
   const currentHooks = root.hooks && typeof root.hooks === 'object' && !Array.isArray(root.hooks) ? root.hooks : {};
   const nextHooks = { ...currentHooks };
-  for (const [eventName, managedEntries] of Object.entries(managed.hooks)) {
+  for (const [eventName, managedEntries] of Object.entries(managed.hooks) as Array<[string, any[]]>) {
     const existingEntries = Array.isArray(currentHooks[eventName]) ? currentHooks[eventName] : [];
-    const preserved = [];
+    const preserved: any[] = [];
     for (const entry of existingEntries) {
       const stripped = stripSksManagedHookEntry(entry);
       if (stripped) preserved.push(stripped);
@@ -136,15 +135,15 @@ export function mergeManagedHooksJson(existingContent, commandPrefix) {
   return `${JSON.stringify({ ...root, hooks: nextHooks }, null, 2)}\n`;
 }
 
-function stripSksManagedHookEntry(entry) {
+function stripSksManagedHookEntry(entry: any) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry) || !Array.isArray(entry.hooks)) return entry;
-  const next = entry.hooks.filter((hook) => !isSksManagedHook(hook));
+  const next = entry.hooks.filter((hook: any) => !isSksManagedHook(hook));
   if (next.length === entry.hooks.length) return entry;
   if (!next.length) return null;
   return { ...entry, hooks: next };
 }
 
-function isSksManagedHook(hook) {
+function isSksManagedHook(hook: any) {
   if (!hook || typeof hook !== 'object' || Array.isArray(hook)) return false;
   const command = String(hook.command || '');
   return hook.type === 'command' && /\bhook\s+(?:user-prompt-submit|pre-tool|post-tool|permission-request|stop)\b/.test(command) && /\b(?:sks|sneakoscope|sks\.js)\b/.test(command);
@@ -158,8 +157,8 @@ function agentsBlockText() {
     .replace('`$ppt`, `$goal`, `$dfix`, `$qa-loop`', '`$ppt`, `$image-ux-review`, `$ux-review`, `$goal`, `$dfix`, `$qa-loop`');
 }
 
-export async function initProject(root, opts = {}) {
-  const created = [];
+export async function initProject(root: any, opts: any = {}) {
+  const created: any[] = [];
   const installScope = normalizeInstallScope(opts.installScope || 'global');
   const localOnly = Boolean(opts.localOnly);
   const sourceProject = await isHarnessSourceProject(root).catch(() => false);
@@ -183,7 +182,7 @@ export async function initProject(root, opts = {}) {
   if (localExclude?.path) created.push(`${path.relative(root, localExclude.path)} local-only excludes`);
   if (sharedIgnore?.changed) created.push(`${path.relative(root, sharedIgnore.path)} SKS generated files ignore`);
 
-  const manifest = {
+  const manifest: any = {
     package: 'sneakoscope',
     version: PACKAGE_VERSION,
     initialized_at: nowIso(),
@@ -209,7 +208,7 @@ export async function initProject(root, opts = {}) {
     },
     prompt_pipeline: {
       default_enabled: true,
-      dollar_commands: DOLLAR_COMMANDS.map((c) => c.command),
+      dollar_commands: DOLLAR_COMMANDS.map((c: any) => c.command),
       dollar_skill_names: DOLLAR_SKILL_NAMES,
       direct_fix_command: '$DFix',
       ppt_skill_allowlist: PPT_PIPELINE_SKILL_ALLOWLIST,
@@ -311,7 +310,7 @@ export async function initProject(root, opts = {}) {
         ...(policy.prompt_pipeline || {}),
         default_enabled: true,
         route_without_command: true,
-        dollar_commands: DOLLAR_COMMANDS.map((c) => c.command),
+        dollar_commands: DOLLAR_COMMANDS.map((c: any) => c.command),
         dollar_skill_names: DOLLAR_SKILL_NAMES,
         direct_fix_command: '$DFix',
         ppt_skill_allowlist: PPT_PIPELINE_SKILL_ALLOWLIST,
@@ -356,7 +355,7 @@ export async function initProject(root, opts = {}) {
     });
   }
 
-  function defaultPolicy(scope, commandPrefix) {
+  function defaultPolicy(scope: any, commandPrefix: any) {
     return {
       schema_version: 1,
       installation: installPolicy(scope, commandPrefix),
@@ -447,7 +446,7 @@ export async function initProject(root, opts = {}) {
       prompt_pipeline: {
         default_enabled: true,
         route_without_command: true,
-        dollar_commands: DOLLAR_COMMANDS.map((c) => c.command),
+        dollar_commands: DOLLAR_COMMANDS.map((c: any) => c.command),
         dollar_skill_names: DOLLAR_SKILL_NAMES,
         direct_fix_command: '$DFix',
         ppt_skill_allowlist: PPT_PIPELINE_SKILL_ALLOWLIST,
@@ -481,7 +480,7 @@ export async function initProject(root, opts = {}) {
     };
   }
 
-function installPolicy(scope, commandPrefix) {
+function installPolicy(scope: any, commandPrefix: any) {
   return {
     scope,
     default_scope: 'global',
@@ -491,7 +490,7 @@ function installPolicy(scope, commandPrefix) {
   };
 }
 
-function mergeManagedCodexConfigToml(existingContent = '') {
+function mergeManagedCodexConfigToml(existingContent: any = '') {
   let next = removeLegacyTopLevelCodexModeLocks(String(existingContent || '').trimEnd());
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
@@ -528,7 +527,7 @@ function mergeManagedCodexConfigToml(existingContent = '') {
   return `${next.trim()}\n`;
 }
 
-async function mergeGlobalCodexConfigIfAvailable(configText = '', configPath = '') {
+async function mergeGlobalCodexConfigIfAvailable(configText: any = '', configPath: any = '') {
   const selectedRe = /(^|\n)\s*model_provider\s*=\s*"codex-lb"\s*(?:#.*)?(?=\n|$)/;
   const home = process.env.HOME || '';
   if (!home) return configText;
@@ -550,11 +549,11 @@ async function mergeGlobalCodexConfigIfAvailable(configText = '', configPath = '
   return `${next.trim()}\n`;
 }
 
-function parseCodexLbEnvKey(text = '') {
+function parseCodexLbEnvKey(text: any = '') {
   return parseShellEnvValue(text, 'CODEX_LB_API_KEY');
 }
 
-function parseCodexLbEnvBaseUrl(text = '') {
+function parseCodexLbEnvBaseUrl(text: any = '') {
   const value = parseShellEnvValue(text, 'CODEX_LB_BASE_URL');
   if (!value) return '';
   let host = value.trim();
@@ -563,7 +562,7 @@ function parseCodexLbEnvBaseUrl(text = '') {
   return /\/backend-api\/codex$/i.test(host) ? host : `${host}/backend-api/codex`;
 }
 
-function parseShellEnvValue(text = '', key = '') {
+function parseShellEnvValue(text: any = '', key: any = '') {
   const re = new RegExp(`^\\s*(?:export\\s+)?${escapeRegExp(key)}\\s*=\\s*(.+?)\\s*$`, 'm');
   const raw = String(text || '').match(re)?.[1]?.trim() || '';
   if (!raw) return '';
@@ -573,53 +572,53 @@ function parseShellEnvValue(text = '', key = '') {
   return raw;
 }
 
-function mergeGlobalMcpServers(configText = '', globalConfig = '') {
+function mergeGlobalMcpServers(configText: any = '', globalConfig: any = '') {
   let next = configText;
   const re = /(?:^|\n)(\[(mcp_servers\.[^\]\r\n]+)\][\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/g;
   for (const match of String(globalConfig || '').matchAll(re)) {
-    const block = match[1].trim();
-    const table = match[2].trim();
+      const block = (match[1] || '').trim();
+      const table = (match[2] || '').trim();
     if (!new RegExp(`(^|\\n)\\[${escapeRegExp(table)}\\]`).test(next)) next = upsertTomlTable(next, table, block);
   }
   return next;
 }
 
-function mergeGlobalCodexAppRuntimeTables(configText = '', globalConfig = '') {
+function mergeGlobalCodexAppRuntimeTables(configText: any = '', globalConfig: any = '') {
   let next = configText;
   const re = /(?:^|\n)(\[((?:marketplaces|plugins)\.[^\]\r\n]+)\][\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/g;
   for (const match of String(globalConfig || '').matchAll(re)) {
-    const block = match[1].trim();
-    const table = match[2].trim();
+      const block = (match[1] || '').trim();
+      const table = (match[2] || '').trim();
     if (!new RegExp(`(^|\\n)\\[${escapeRegExp(table)}\\]`).test(next)) next = upsertTomlTable(next, table, block);
   }
   return next;
 }
 
-function removeLegacyTopLevelCodexModeLocks(text = '') {
+function removeLegacyTopLevelCodexModeLocks(text: any = '') {
   const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
   const end = firstTable === -1 ? lines.length : firstTable;
-  return lines.filter((line, index) => {
+  return lines.filter((line: any, index: any) => {
     if (index >= end) return true;
     return !/^\s*model_reasoning_effort\s*=/.test(line);
   }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
-function removeTopLevelTomlKeyIfValue(text = '', key = '', value = '') {
+function removeTopLevelTomlKeyIfValue(text: any = '', key: any = '', value: any = '') {
   const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
   const end = firstTable === -1 ? lines.length : firstTable;
   const keyPattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"${escapeRegExp(value)}"\\s*(?:#.*)?$`);
-  return lines.filter((line, index) => index >= end || !keyPattern.test(line)).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+  return lines.filter((line: any, index: any) => index >= end || !keyPattern.test(line)).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
-function upsertTopLevelTomlString(text, key, value) {
+function upsertTopLevelTomlString(text: any, key: any, value: any) {
   const line = `${key} = "${value}"`;
   const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
   const end = firstTable === -1 ? lines.length : firstTable;
   for (let i = 0; i < end; i += 1) {
-    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i])) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i] || '')) {
       lines[i] = line;
       return lines.join('\n').replace(/\n{3,}/g, '\n\n');
     }
@@ -628,13 +627,13 @@ function upsertTopLevelTomlString(text, key, value) {
   return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
-function upsertTopLevelTomlBoolean(text, key, value) {
+function upsertTopLevelTomlBoolean(text: any, key: any, value: any) {
   const line = `${key} = ${value ? 'true' : 'false'}`;
   const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
   const end = firstTable === -1 ? lines.length : firstTable;
   for (let i = 0; i < end; i += 1) {
-    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i])) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i] || '')) {
       lines[i] = line;
       return lines.join('\n').replace(/\n{3,}/g, '\n\n');
     }
@@ -643,21 +642,21 @@ function upsertTopLevelTomlBoolean(text, key, value) {
   return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
-function removeTomlTableKey(text, table, key) {
+function removeTomlTableKey(text: any, table: any, key: any) {
   const lines = String(text || '').trimEnd().split('\n');
   if (lines.length === 1 && lines[0] === '') return '';
   const header = `[${table}]`;
-  const start = lines.findIndex((x) => x.trim() === header);
+  const start = lines.findIndex((x: any) => x.trim() === header);
   if (start === -1) return String(text || '');
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
       end = i;
       break;
     }
   }
   const keyPattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`);
-  return lines.filter((line, index) => index <= start || index >= end || !keyPattern.test(line)).join('\n').replace(/\n{3,}/g, '\n\n');
+  return lines.filter((line: any, index: any) => index <= start || index >= end || !keyPattern.test(line)).join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 function managedCodexConfigBlocks() {
@@ -684,16 +683,16 @@ function managedCodexConfigBlocks() {
   ];
 }
 
-function agentConfigBlock(table, description, configFile, nicknames = []) {
+function agentConfigBlock(table: any, description: any, configFile: any, nicknames: any = []) {
   return [
     `[agents.${table}]`,
     `description = "${description}"`,
     `config_file = "${configFile}"`,
-    `nickname_candidates = [${nicknames.map((name) => `"${name}"`).join(', ')}]`
+    `nickname_candidates = [${nicknames.map((name: any) => `"${name}"`).join(', ')}]`
   ].join('\n');
 }
 
-function profileConfigBlock(profile, effort, opts = {}) {
+function profileConfigBlock(profile: any, effort: any, opts: any = {}) {
   return [
     `[profiles.${profile}]`,
     'model = "gpt-5.5"',
@@ -705,25 +704,25 @@ function profileConfigBlock(profile, effort, opts = {}) {
   ].join('\n');
 }
 
-function upsertTomlTableKey(text, table, line) {
-  const key = String(line).split('=')[0].trim();
+function upsertTomlTableKey(text: any, table: any, line: any) {
+  const key = (String(line).split('=')[0] || '').trim();
   let lines = String(text || '').split('\n');
   if (lines.length === 1 && lines[0] === '') lines = [];
   const header = `[${table}]`;
-  let start = lines.findIndex((x) => x.trim() === header);
+  let start = lines.findIndex((x: any) => x.trim() === header);
   if (start === -1) {
-    const prefix = lines.length && lines[lines.length - 1].trim() ? ['', header, line] : [header, line];
+    const prefix = lines.length && (lines[lines.length - 1] || '').trim() ? ['', header, line] : [header, line];
     return [...lines, ...prefix].join('\n').replace(/\n{3,}/g, '\n\n');
   }
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
       end = i;
       break;
     }
   }
   for (let i = start + 1; i < end; i++) {
-    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i])) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i] || '')) {
       lines[i] = line;
       return lines.join('\n').replace(/\n{3,}/g, '\n\n');
     }
@@ -732,18 +731,18 @@ function upsertTomlTableKey(text, table, line) {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
-function upsertTomlTable(text, table, block) {
+function upsertTomlTable(text: any, table: any, block: any) {
   let lines = String(text || '').trimEnd().split('\n');
   if (lines.length === 1 && lines[0] === '') lines = [];
   const header = `[${table}]`;
-  const start = lines.findIndex((x) => x.trim() === header);
+  const start = lines.findIndex((x: any) => x.trim() === header);
   const blockLines = String(block || '').trim().split('\n');
   if (start === -1) {
     return [...lines, ...(lines.length ? [''] : []), ...blockLines].join('\n').replace(/\n{3,}/g, '\n\n');
   }
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
       end = i;
       break;
     }
@@ -816,7 +815,7 @@ function upsertTomlTable(text, table, block) {
   return { created, generated_cleanup: generatedCleanup, skill_install: skillInstall };
 }
 
-async function ensureSharedGitIgnore(root) {
+async function ensureSharedGitIgnore(root: any) {
   const patterns = SKS_GENERATED_GIT_PATTERNS;
   const ignorePath = path.join(root, '.gitignore');
   const markerStart = '# BEGIN Sneakoscope Codex generated files';
@@ -829,8 +828,8 @@ async function ensureSharedGitIgnore(root) {
     if (next !== current) await writeTextAtomic(ignorePath, next.endsWith('\n') ? next : `${next}\n`);
     return { path: ignorePath, patterns, changed: next !== current };
   }
-  const existing = new Set(current.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
-  const missing = patterns.filter((pattern) => !existing.has(pattern));
+  const existing = new Set(current.split(/\r?\n/).map((line: any) => line.trim()).filter(Boolean));
+  const missing = patterns.filter((pattern: any) => !existing.has(pattern));
   if (!missing.length) return { path: ignorePath, patterns, changed: false };
   const block = missing.length === patterns.length
     ? managedBlock
@@ -839,14 +838,14 @@ async function ensureSharedGitIgnore(root) {
   return { path: ignorePath, patterns, changed: true };
 }
 
-async function shouldWriteSharedGitIgnore(root, installScope) {
+async function shouldWriteSharedGitIgnore(root: any, installScope: any) {
   if (normalizeInstallScope(installScope) === 'project') return true;
   if (await exists(path.join(root, '.git'))) return true;
   if (await exists(path.join(root, '.gitignore'))) return true;
   return false;
 }
 
-async function ensureLocalOnlyGitExclude(root) {
+async function ensureLocalOnlyGitExclude(root: any) {
   const gitDir = await resolveGitDir(root);
   if (!gitDir) return { path: null, patterns: [] };
   const patterns = SKS_GENERATED_GIT_PATTERNS;
@@ -861,18 +860,18 @@ async function ensureLocalOnlyGitExclude(root) {
   return { path: excludePath, patterns };
 }
 
-async function resolveGitDir(root) {
+async function resolveGitDir(root: any) {
   const dotGit = path.join(root, '.git');
   if (!(await exists(dotGit))) return null;
   const text = await readText(dotGit, null);
   if (typeof text === 'string') {
     const match = text.match(/^gitdir:\s*(.+)\s*$/m);
-    if (match) return path.resolve(root, match[1]);
+    if (match?.[1]) return path.resolve(root, match[1]);
   }
   return dotGit;
 }
 
-function codexAppQuickReference(scope, commandPrefix) {
+function codexAppQuickReference(scope: any, commandPrefix: any) {
   return [
     '# ㅅㅋㅅ',
     `Install scope: \`${scope}\``,
@@ -880,8 +879,8 @@ function codexAppQuickReference(scope, commandPrefix) {
     'Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, .agents/skills, .codex/agents, .sneakoscope/missions.',
     `Discover: ${commandPrefix} bootstrap; ${commandPrefix} deps check; ${commandPrefix} commands; ${commandPrefix} codex-app check; ${commandPrefix} codex-app remote-control --status; ${commandPrefix} tmux check; ${commandPrefix} dollar-commands; ${commandPrefix} pipeline status; ${commandPrefix} pipeline plan.`,
     'dollar-commands:',
-    ...DOLLAR_COMMANDS.map((c) => `- \`${c.command}\`: ${c.route}`),
-    `Picker skills: ${DOLLAR_COMMAND_ALIASES.map((x) => x.app_skill).join(', ')}.`,
+    ...DOLLAR_COMMANDS.map((c: any) => `- \`${c.command}\`: ${c.route}`),
+    `Picker skills: ${DOLLAR_COMMAND_ALIASES.map((x: any) => x.app_skill).join(', ')}.`,
     'Routing: Answer direct, DFix ultralight no-record, execution routes infer scope/safety/behavior/acceptance answers from prompt, TriWiki/current-code defaults, and conservative policy before sealing contracts.',
     getdesignReferencePolicyText(),
     CODEX_IMAGEGEN_REQUIRED_POLICY,
@@ -896,8 +895,8 @@ function codexAppQuickReference(scope, commandPrefix) {
   ].join('\n') + '\n';
 }
 
-export async function installSkills(root) {
-  const imageUxReviewSkill = (name) => `---\nname: ${name}\ndescription: $Image-UX-Review/$UX-Review imagegen/gpt-image-2 annotated UI/UX review loop.\n---\n\nUse only for $Image-UX-Review, $UX-Review, $visual-review, or $ui-ux-review UI/UX review requests. ${imageUxReviewPipelinePolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY} Core loop: capture or attach source UI screenshots, then invoke Codex App $imagegen with gpt-image-2 to create a new generated annotated review image from each source screenshot, then analyze the generated review image with vision/OCR into image-ux-issue-ledger.json, then apply only requested safe fixes and recheck changed screens. Text-only screenshot critique cannot satisfy this route; missing generated annotated review images must keep image-ux-review-gate.json blocked. Use Codex Computer Use for live UI/browser capture when available; browser automation screenshots are not a substitute for Codex Computer Use evidence. Required artifacts: image-ux-review-policy.json, image-ux-screen-inventory.json, image-ux-generated-review-ledger.json, image-ux-issue-ledger.json, image-ux-iteration-report.json, image-ux-review-gate.json. Finish with reflection and Honest Mode.\n`;
+export async function installSkills(root: any) {
+  const imageUxReviewSkill = (name: any) => `---\nname: ${name}\ndescription: $Image-UX-Review/$UX-Review imagegen/gpt-image-2 annotated UI/UX review loop.\n---\n\nUse only for $Image-UX-Review, $UX-Review, $visual-review, or $ui-ux-review UI/UX review requests. ${imageUxReviewPipelinePolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY} Core loop: capture or attach source UI screenshots, then invoke Codex App $imagegen with gpt-image-2 to create a new generated annotated review image from each source screenshot, then analyze the generated review image with vision/OCR into image-ux-issue-ledger.json, then apply only requested safe fixes and recheck changed screens. Text-only screenshot critique cannot satisfy this route; missing generated annotated review images must keep image-ux-review-gate.json blocked. Use Codex Computer Use for live UI/browser capture when available; browser automation screenshots are not a substitute for Codex Computer Use evidence. Required artifacts: image-ux-review-policy.json, image-ux-screen-inventory.json, image-ux-generated-review-ledger.json, image-ux-issue-ledger.json, image-ux-iteration-report.json, image-ux-review-gate.json. Finish with reflection and Honest Mode.\n`;
   const skills = {
     'dfix': `---\nname: dfix\ndescription: Direct Fix mode for $DFix or $dfix requests and inferred tiny copy/config/docs/labels/spacing/translation/simple mechanical edits.\n---\n\nUse for tiny copy/config/docs/labels/spacing/translation/simple mechanical edits. List exact micro-edits, inspect only needed files, apply only those edits, and run cheap verification. Keep broad implementation routed to Team; for UI/UX micro-edits read \`design.md\` when present and use imagegen for image/logo/raster assets. Bypass broad SKS routing, mission state, TriWiki/TriFix/reflection/state recording, Goal, Research, eval, redesign, and repeated full-route Honest Mode loops. Start the final answer with \`DFix 완료 요약:\` and include one \`DFix 솔직모드:\` line covering verified, not verified, and remaining issues. ${CODEX_IMAGEGEN_REQUIRED_POLICY}\n`,
     'answer': `---\nname: answer\ndescription: Answer-only research route for ordinary questions that should not start implementation.\n---\n\nUse for explanations, comparisons, status, facts, source-backed research, or docs guidance. Use repo/TriWiki first for project-local facts; hydrate low-trust claims from source. Browse or use Context7 for current external package/API/framework/MCP docs. End with a concise answer summary plus Honest Mode; do not create missions, subagents, or file edits.\n`,
@@ -966,18 +965,18 @@ export async function installSkills(root) {
   };
 }
 
-function generatedSkillFiles(skillNames) {
-  return skillNames.flatMap((name) => [
+function generatedSkillFiles(skillNames: any) {
+  return skillNames.flatMap((name: any) => [
     `.agents/skills/${name}/SKILL.md`,
     `.agents/skills/${name}/agents/openai.yaml`
   ]).sort();
 }
 
-function generatedSkillManifestPath(root) {
+function generatedSkillManifestPath(root: any) {
   return path.join(root, '.agents', 'skills', SKS_SKILL_MANIFEST_FILE);
 }
 
-async function writeGeneratedSkillManifest(root, skillNames) {
+async function writeGeneratedSkillManifest(root: any, skillNames: any) {
   const manifestPath = generatedSkillManifestPath(root);
   await writeJsonAtomic(manifestPath, {
     schema_version: 1,
@@ -989,12 +988,12 @@ async function writeGeneratedSkillManifest(root, skillNames) {
   });
 }
 
-async function removeStaleGeneratedSkillsFromManifest(root, skillNames) {
+async function removeStaleGeneratedSkillsFromManifest(root: any, skillNames: any) {
   const previous = await readJson(generatedSkillManifestPath(root), null);
   const previousSkills = Array.isArray(previous?.skills) ? previous.skills : [];
   if (!previousSkills.length) return [];
   const current = new Set(skillNames);
-  const removed = [];
+  const removed: any[] = [];
   for (const name of previousSkills) {
     const skillName = String(name || '').trim();
     if (!skillName || current.has(skillName) || !/^[a-z0-9-]+$/.test(skillName)) continue;
@@ -1006,8 +1005,8 @@ async function removeStaleGeneratedSkillsFromManifest(root, skillNames) {
   return removed.sort();
 }
 
-async function removeGeneratedPluginSkillCollisions(root) {
-  const removed = [];
+async function removeGeneratedPluginSkillCollisions(root: any) {
+  const removed: any[] = [];
   for (const name of RESERVED_CODEX_PLUGIN_SKILL_NAMES) {
     const dir = path.join(root, '.agents', 'skills', name);
     const skillPath = path.join(dir, 'SKILL.md');
@@ -1019,7 +1018,7 @@ async function removeGeneratedPluginSkillCollisions(root) {
   return removed.sort();
 }
 
-function isGeneratedSksPluginCollisionSkill(text, name) {
+function isGeneratedSksPluginCollisionSkill(text: any, name: any) {
   if (typeof text !== 'string') return false;
   const s = String(text);
   if (!new RegExp(`^name:\\s*${escapeRegExp(name)}\\s*$`, 'm').test(s)) return false;
@@ -1027,7 +1026,7 @@ function isGeneratedSksPluginCollisionSkill(text, name) {
   return /Maximum-speed \$Computer-Use\/\$CU lane|Codex App pipeline activation:|Sneakoscope generated|Dollar-command route generated by SKS/i.test(s);
 }
 
-function enrichSkillContent(name, content) {
+function enrichSkillContent(name: any, content: any) {
   if (!['sks', 'answer', 'wiki', 'team', 'qa-loop', 'ppt', 'image-ux-review', 'ux-review', 'visual-review', 'ui-ux-review', 'computer-use-fast', 'cu', 'goal', 'research', 'autoresearch', 'db', 'gx', 'reflection', 'prompt-pipeline', 'pipeline-runner', 'context7-docs', 'turbo-context-pack', 'hproof-evidence-bind'].includes(name)) return content;
   const text = String(content || '').trimEnd();
   const activation = pipelineActivationText(name);
@@ -1045,7 +1044,7 @@ Context tracking:
 `;
 }
 
-function pipelineActivationText(name) {
+function pipelineActivationText(name: any) {
   const stateful = new Set(['sks', 'team', 'qa-loop', 'ppt', 'image-ux-review', 'ux-review', 'visual-review', 'ui-ux-review', 'computer-use-fast', 'cu', 'goal', 'research', 'autoresearch', 'db', 'gx', 'prompt-pipeline', 'pipeline-runner']);
   if (!stateful.has(name)) return '';
   return `Codex App pipeline activation:
@@ -1055,7 +1054,7 @@ function pipelineActivationText(name) {
 - Do not treat this skill text alone as completion of the SKS route; a stateful SKS route must materialize mission/pipeline artifacts or explicitly report why the hook could not run.`;
 }
 
-async function writeSkillMetadata(dir, name) {
+async function writeSkillMetadata(dir: any, name: any) {
   const effort = ['computer-use-fast', 'cu'].includes(name)
     ? 'low'
     : ['research', 'autoresearch', 'research-discovery', 'autoresearch-loop', 'from-chat-img'].includes(name)
@@ -1065,11 +1064,11 @@ async function writeSkillMetadata(dir, name) {
   await writeTextAtomic(path.join(dir, 'agents', 'openai.yaml'), `name: ${name}\nmodel_reasoning_effort: ${effort}\nrouting: temporary\nreturn_to_default_after_route: true\n`);
 }
 
-async function removeGeneratedCodexSkillMirrors(root, skillNames) {
+async function removeGeneratedCodexSkillMirrors(root: any, skillNames: any) {
   const legacyRoot = path.join(root, '.codex', 'skills');
   if (!(await exists(legacyRoot))) return [];
-  const removed = [];
-  const names = Array.from(new Set([...skillNames, ...DOLLAR_COMMANDS.map((c) => c.command.slice(1)), 'ralph', 'Ralph', 'ralph-supervisor', 'ralph-resolver']));
+  const removed: any[] = [];
+  const names = Array.from(new Set([...skillNames, ...DOLLAR_COMMANDS.map((c: any) => c.command.slice(1)), 'ralph', 'Ralph', 'ralph-supervisor', 'ralph-resolver']));
   for (const name of names) {
     const dir = path.join(legacyRoot, name);
     const skillPath = path.join(dir, 'SKILL.md');
@@ -1083,10 +1082,10 @@ async function removeGeneratedCodexSkillMirrors(root, skillNames) {
   return removed;
 }
 
-async function removeGeneratedAgentSkillAliases(root, skillNames) {
+async function removeGeneratedAgentSkillAliases(root: any, skillNames: any) {
   const current = new Set(skillNames);
   const obsolete = ['agent-team', 'qaloop', 'wiki-refresh', 'wikirefresh', 'ralph', 'ralph-supervisor', 'ralph-resolver'];
-  const removed = [];
+  const removed: any[] = [];
   for (const name of obsolete) {
     if (current.has(name)) continue;
     const dir = path.join(root, '.agents', 'skills', name);
@@ -1099,7 +1098,7 @@ async function removeGeneratedAgentSkillAliases(root, skillNames) {
   return removed;
 }
 
-function isGeneratedSksAgentSkill(text, name) {
+function isGeneratedSksAgentSkill(text: any, name: any) {
   if (!text) return false;
   const s = String(text);
   if (!new RegExp(`name:\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(s)) return false;
@@ -1107,23 +1106,23 @@ function isGeneratedSksAgentSkill(text, name) {
   return /Sneakoscope generated|Fallback Codex App picker alias|Codex App picker alias for|Dollar-command route generated by SKS/i.test(s);
 }
 
-function isGeneratedSksLegacySkill(text, name) {
+function isGeneratedSksLegacySkill(text: any, name: any) {
   if (typeof text !== 'string') return false;
   return text.startsWith('---') && new RegExp(`^name:\\s*${escapeRegExp(name)}\\s*$`, 'm').test(text);
 }
 
-function escapeRegExp(value) {
+function escapeRegExp(value: any) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-async function removeDirIfEmpty(dir) {
+async function removeDirIfEmpty(dir: any) {
   try {
     const entries = await fsp.readdir(dir);
     if (!entries.length) await fsp.rmdir(dir);
   } catch {}
 }
 
-async function installCodexAgents(root) {
+async function installCodexAgents(root: any) {
   const agents = {
     'analysis-scout.toml': `name = "analysis_scout"\ndescription = "Read-only Team analysis scout. Maps one independent repo/docs/tests/API/risk/user-friction slice and returns TriWiki-ready source-backed findings before debate starts."\nmodel = "gpt-5.5"\nmodel_reasoning_effort = "medium"\nsandbox_mode = "read-only"\ndeveloper_instructions = """\nYou are an SKS Team analysis scout.\nDo not edit files.\nOwn exactly one investigation slice assigned by the parent orchestrator.\nUse the mission roster or worker inbox reasoning_effort when the host exposes it; simple bounded work can use low, tool-heavy runtime work medium, and knowledge/research/safety/release work high or xhigh. Default to medium only when no assignment is visible.\nMap relevant source files, docs, tests, APIs, DB or safety risks, UX friction, and likely implementation boundaries.\nReturn concise source-backed claims suitable for team-analysis.md and TriWiki ingestion: claim, source path, evidence hash or quoted anchor, risk, confidence, and recommended implementation slice.\nDo not debate the final plan and do not implement code.\nAlso return a concise LIVE_EVENT line that the parent can record with sks team event.\n"""\n`,
     'team-consensus.toml': `name = "team_consensus"\ndescription = "Planning and debate specialist for SKS Team mode. Maps options, constraints, role-persona risks, and proposes the agreed objective before implementation starts."\nmodel = "gpt-5.5"\nmodel_reasoning_effort = "high"\nsandbox_mode = "read-only"\ndeveloper_instructions = """\nYou are the SKS Team consensus specialist.\nDo not edit files.\nUse the mission roster reasoning_effort when the host exposes it; planning has a medium minimum, with high or xhigh for knowledge, safety, release, research, or recovery work.\nMap the affected code paths, viable approaches, constraints, risks, and acceptance criteria.\nRun the debate as role-persona synthesis: final users are low-context, self-interested, stubborn, and inconvenience-averse; executors are capable developers; reviewers are strict.\nArgue for the smallest coherent objective that can be handed to a fresh executor_N development team.\nPlan for at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes before integration or final.\nReturn: recommended objective, rejected alternatives, implementation slices, required reviewers, user-friction risks, and unresolved risks.\nAlso return a concise LIVE_EVENT line that the parent can record with sks team event.\n"""\n`,
@@ -1138,11 +1137,11 @@ async function installCodexAgents(root) {
   }
   return {
     installed_agents: Object.keys(agents),
-    generated_files: Object.keys(agents).map((file) => `.codex/agents/${file}`).sort()
+    generated_files: Object.keys(agents).map((file: any) => `.codex/agents/${file}`).sort()
   };
 }
 
-function currentGeneratedFileInventory(skillInstall = {}, agentInstall = {}) {
+function currentGeneratedFileInventory(skillInstall: any = {}, agentInstall: any = {}) {
   return Array.from(new Set([
     '.codex/config.toml',
     '.codex/SNEAKOSCOPE.md',
@@ -1156,12 +1155,12 @@ function currentGeneratedFileInventory(skillInstall = {}, agentInstall = {}) {
   ])).sort();
 }
 
-async function pruneStaleGeneratedFiles(root, previousManifest, currentFiles) {
+async function pruneStaleGeneratedFiles(root: any, previousManifest: any, currentFiles: any) {
   const previousFiles = Array.isArray(previousManifest?.generated_files?.files) ? previousManifest.generated_files.files : [];
   if (!previousFiles.length) return { pruned: [] };
   const current = new Set(currentFiles);
-  const pruned = [];
-  const already_absent = [];
+  const pruned: any[] = [];
+  const already_absent: any[] = [];
   for (const rel of previousFiles) {
     const relPath = normalizeGeneratedRelPath(rel);
     if (!relPath || current.has(relPath) || !isPrunableGeneratedPath(relPath)) continue;
@@ -1172,14 +1171,14 @@ async function pruneStaleGeneratedFiles(root, previousManifest, currentFiles) {
   return { pruned: pruned.sort(), already_absent: already_absent.sort() };
 }
 
-function normalizeGeneratedRelPath(value) {
+function normalizeGeneratedRelPath(value: any) {
   const rel = String(value || '').trim().replaceAll('\\', '/');
   if (!rel || rel.startsWith('/') || rel.includes('\0')) return null;
-  if (rel.split('/').some((part) => part === '..')) return null;
+  if (rel.split('/').some((part: any) => part === '..')) return null;
   return rel;
 }
 
-function isPrunableGeneratedPath(rel) {
+function isPrunableGeneratedPath(rel: any) {
   if (rel.startsWith('.agents/skills/')) return true;
   if (rel.startsWith('.codex/agents/')) return true;
   if (rel.startsWith('.codex/skills/')) return true;
@@ -1193,7 +1192,7 @@ function isPrunableGeneratedPath(rel) {
   ]).has(rel);
 }
 
-async function removeGeneratedRelPath(root, rel) {
+async function removeGeneratedRelPath(root: any, rel: any) {
   const absRoot = path.resolve(root);
   const abs = path.resolve(absRoot, rel);
   if (abs !== absRoot && !abs.startsWith(`${absRoot}${path.sep}`)) return null;
@@ -1203,7 +1202,7 @@ async function removeGeneratedRelPath(root, rel) {
   return rel;
 }
 
-async function removeEmptyGeneratedParents(root, rel) {
+async function removeEmptyGeneratedParents(root: any, rel: any) {
   const parts = rel.split('/');
   if (parts.length <= 1) return;
   const stopDirs = new Set([

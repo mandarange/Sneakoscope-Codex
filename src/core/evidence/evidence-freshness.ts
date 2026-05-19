@@ -1,7 +1,6 @@
-// @ts-nocheck
 import fsp from 'node:fs/promises';
 
-export async function fileFreshness(file, { staleAfter = null } = {}) {
+export async function fileFreshness(file: any, { staleAfter = null }: any = {}) {
   let stat = null;
   try {
     stat = await fsp.stat(file);
@@ -16,7 +15,7 @@ export async function fileFreshness(file, { staleAfter = null } = {}) {
   return { exists: true, freshness: 'fresh', mtime_ms: stat.mtimeMs, issues: [] };
 }
 
-export async function lastJsonlEventTime(file) {
+export async function lastJsonlEventTime(file: any) {
   let text = '';
   try {
     text = await fsp.readFile(file, 'utf8');

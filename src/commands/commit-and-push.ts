@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { simpleGitCommitCommand } from '../core/git-simple.js';
 
-export async function run(_command, args = []) {
+export async function run(_command: any, args: any = []) {
   return simpleGitCommitCommand(args, { push: true });
 }

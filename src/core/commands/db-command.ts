@@ -1,12 +1,12 @@
-// @ts-nocheck
 import path from 'node:path';
 import { readStdin, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { createMission } from '../mission.js';
 import { checkDbOperation, checkSqlFile, classifyCommand, classifySql, loadDbSafetyPolicy, safeSupabaseMcpConfig, scanDbSafety } from '../db-safety.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
-import { flag } from './command-utils.js';
+import { recordDbSafetyMismatchWrongness } from '../triwiki-wrongness/wrongness-ledger.js';
+import { flag, readOption } from './command-utils.js';
 
-export async function dbCommand(sub, args = []) {
+export async function dbCommand(sub: any, args: any = []) {
   const root = await sksRoot();
   if (sub === 'policy') {
     console.log(JSON.stringify(await loadDbSafetyPolicy(root), null, 2));
@@ -39,7 +39,16 @@ export async function dbCommand(sub, args = []) {
     else result = classifySql(args.join(' ').trim());
     const blocked = ['destructive', 'write', 'possible_db'].includes(result.level);
     const proof = await finalizeDbCheck(root, { action: sub, args, result, exitCode: blocked ? 2 : 0 });
-    const output = flag(args, '--json') ? { ...result, completion_proof: { ok: proof.ok, validation: proof.validation, mission_id: proof.proof?.mission_id } } : result;
+    const expected = readOption(args, '--expected', readOption(args, '--expect', null));
+    const wrongness = await recordDbExpectation(root, {
+      expected,
+      actual: blocked ? 'blocked' : 'safe',
+      command: `sks db ${sub} ${args.join(' ')}`.trim(),
+      sql: sqlIdx >= 0 ? args[sqlIdx + 1] : null,
+      mission_id: proof.proof?.mission_id,
+      artifact: proof.proof?.mission_id ? `.sneakoscope/missions/${proof.proof.mission_id}/db-operation-report.json` : null
+    });
+    const output = flag(args, '--json') ? { ...result, wrongness, completion_proof: { ok: proof.ok, validation: proof.validation, mission_id: proof.proof?.mission_id } } : result;
     console.log(JSON.stringify(output, null, 2));
     process.exitCode = blocked ? 2 : 0;
     return;
@@ -57,7 +66,13 @@ export async function dbCommand(sub, args = []) {
   process.exitCode = 1;
 }
 
-async function finalizeDbCheck(root, { action, args, result, exitCode }) {
+async function recordDbExpectation(root: string, input: any = {}) {
+  if (!input.expected) return null;
+  const normalizedExpected = /block|deny|unsafe|destructive/i.test(String(input.expected)) ? 'blocked' : 'safe';
+  return recordDbSafetyMismatchWrongness(root, { ...input, expected: normalizedExpected });
+}
+
+async function finalizeDbCheck(root: any, { action, args, result, exitCode }: any) {
   const prompt = `sks db ${action} ${args.join(' ')}`.trim();
   const { id, dir } = await createMission(root, { mode: 'db', prompt });
   const blocked = exitCode !== 0 || result.action === 'block' || result.level === 'destructive';

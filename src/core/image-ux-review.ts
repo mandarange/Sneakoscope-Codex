@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, sha256, writeJsonAtomic } from './fsx.js';
@@ -25,20 +24,20 @@ export const IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS = Object.freeze([
   'honest_mode_complete'
 ]);
 
-function cleanText(value, fallback = '') {
+function cleanText(value: any, fallback: any = '') {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim();
   return text || fallback;
 }
 
-function contractText(contract = {}) {
+function contractText(contract: any = {}) {
   return cleanText(`${contract.prompt || ''} ${JSON.stringify(contract.answers || {})}`);
 }
 
-function compactId(prefix, text) {
+function compactId(prefix: any, text: any) {
   return `${prefix}-${sha256(cleanText(text, prefix)).slice(0, 10)}`;
 }
 
-export function buildImageUxReviewPolicy(contract = {}) {
+export function buildImageUxReviewPolicy(contract: any = {}) {
   return {
     schema_version: 1,
     created_at: nowIso(),
@@ -114,12 +113,12 @@ export function buildImageUxReviewPolicy(contract = {}) {
   };
 }
 
-export function buildImageUxScreenInventory(contract = {}) {
+export function buildImageUxScreenInventory(contract: any = {}) {
   const text = contractText(contract);
   const suppliedImages = [
     ...(Array.isArray(contract.answers?.IMAGE_UX_REVIEW_SOURCE_IMAGES) ? contract.answers.IMAGE_UX_REVIEW_SOURCE_IMAGES : []),
     ...(Array.isArray(contract.answers?.SOURCE_SCREENSHOTS) ? contract.answers.SOURCE_SCREENSHOTS : [])
-  ].map((item) => cleanText(item)).filter(Boolean);
+  ].map((item: any) => cleanText(item)).filter(Boolean);
   const target = cleanText(contract.answers?.TARGET_URL || contract.answers?.TARGET_SURFACE || contract.prompt, 'UI surface to review');
   return {
     schema_version: 1,
@@ -128,7 +127,7 @@ export function buildImageUxScreenInventory(contract = {}) {
     target,
     task_signature: compactId('image-ux-target', text),
     capture_required: suppliedImages.length === 0,
-    source_screens: suppliedImages.map((source, index) => ({
+    source_screens: suppliedImages.map((source: any, index: any) => ({
       id: `screen-${index + 1}`,
       source,
       source_type: /^https?:\/\//i.test(source) ? 'url_or_remote_image' : 'local_or_named_image',
@@ -140,11 +139,11 @@ export function buildImageUxScreenInventory(contract = {}) {
   };
 }
 
-export function buildImageUxGeneratedReviewLedger(contract = {}, inventory = buildImageUxScreenInventory(contract), existing = null) {
+export function buildImageUxGeneratedReviewLedger(contract: any = {}, inventory: any = buildImageUxScreenInventory(contract), existing: any = null) {
   const existingImages = Array.isArray(existing?.generated_review_images) ? existing.generated_review_images : [];
   const sourceScreens = inventory.source_screens || [];
-  const missingScreens = sourceScreens.filter((screen) => !existingImages.some((image) => image.source_screen_id === screen.id));
-  const blockers = [];
+  const missingScreens = sourceScreens.filter((screen: any) => !existingImages.some((image: any) => image.source_screen_id === screen.id));
+  const blockers: any[] = [];
   if (sourceScreens.length === 0) blockers.push('no_source_screenshots_for_imagegen_review');
   if (missingScreens.length > 0) blockers.push('missing_generated_annotated_review_images');
   return {
@@ -159,10 +158,10 @@ export function buildImageUxGeneratedReviewLedger(contract = {}, inventory = bui
     },
     required: true,
     generated_review_images: existingImages,
-    planned_reviews: sourceScreens.map((screen) => ({
+    planned_reviews: sourceScreens.map((screen: any) => ({
       id: compactId('image-ux-review', `${screen.id}:${screen.source || screen.id}`),
       source_screen_id: screen.id,
-      status: existingImages.some((image) => image.source_screen_id === screen.id) ? 'generated' : 'pending_imagegen',
+      status: existingImages.some((image: any) => image.source_screen_id === screen.id) ? 'generated' : 'pending_imagegen',
       required_output: 'annotated_review_image_with_numbered_callouts_and_optional_mini_comp'
     })),
     generated_count: existingImages.length,
@@ -177,11 +176,11 @@ export function buildImageUxGeneratedReviewLedger(contract = {}, inventory = bui
   };
 }
 
-export function buildImageUxIssueLedger(contract = {}, generatedReviewLedger = buildImageUxGeneratedReviewLedger(contract), existing = null) {
+export function buildImageUxIssueLedger(contract: any = {}, generatedReviewLedger: any = buildImageUxGeneratedReviewLedger(contract), existing: any = null) {
   const issues = Array.isArray(existing?.issues) ? existing.issues : [];
   const missingGeneratedReview = generatedReviewLedger.passed !== true;
   const blockers = missingGeneratedReview ? ['generated_review_images_missing_or_incomplete'] : [];
-  const blockingIssues = issues.filter((issue) => ['P0', 'P1'].includes(issue.severity) && issue.status !== 'fixed' && issue.status !== 'accepted_not_applicable');
+  const blockingIssues = issues.filter((issue: any) => ['P0', 'P1'].includes(issue.severity) && issue.status !== 'fixed' && issue.status !== 'accepted_not_applicable');
   if (blockingIssues.length > 0) blockers.push('p0_p1_issues_unresolved');
   return {
     schema_version: 1,
@@ -203,7 +202,7 @@ export function buildImageUxIssueLedger(contract = {}, generatedReviewLedger = b
   };
 }
 
-export function buildImageUxIterationReport(contract = {}, policy = buildImageUxReviewPolicy(contract), generatedReviewLedger = buildImageUxGeneratedReviewLedger(contract), issueLedger = buildImageUxIssueLedger(contract, generatedReviewLedger)) {
+export function buildImageUxIterationReport(contract: any = {}, policy: any = buildImageUxReviewPolicy(contract), generatedReviewLedger: any = buildImageUxGeneratedReviewLedger(contract), issueLedger: any = buildImageUxIssueLedger(contract, generatedReviewLedger)) {
   const passed = generatedReviewLedger.passed === true
     && issueLedger.passed === true
     && Number(issueLedger.scorecard?.overall_score || 0) >= Number(policy.score_threshold || 0.88);
@@ -233,7 +232,7 @@ export function buildImageUxIterationReport(contract = {}, policy = buildImageUx
   };
 }
 
-export function defaultImageUxReviewGate(contract = {}, parts = {}) {
+export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
   const policy = parts.policy || buildImageUxReviewPolicy(contract);
   const inventory = parts.inventory || buildImageUxScreenInventory(contract);
   const generatedReviewLedger = parts.generatedReviewLedger || buildImageUxGeneratedReviewLedger(contract, inventory);
@@ -273,7 +272,7 @@ export function defaultImageUxReviewGate(contract = {}, parts = {}) {
   };
 }
 
-export async function writeImageUxReviewRouteArtifacts(dir, contract = {}) {
+export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any = {}) {
   const policy = buildImageUxReviewPolicy(contract);
   const inventory = buildImageUxScreenInventory(contract);
   const existingGenerated = await readExistingJson(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT);
@@ -291,7 +290,7 @@ export async function writeImageUxReviewRouteArtifacts(dir, contract = {}) {
   return { policy, inventory, generated_review_ledger: generatedReviewLedger, issue_ledger: issueLedger, iteration_report: iterationReport, gate };
 }
 
-async function readExistingJson(dir, file) {
+async function readExistingJson(dir: any, file: any) {
   try {
     const raw = await fsp.readFile(path.join(dir, file), 'utf8');
     return JSON.parse(raw);

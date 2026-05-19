@@ -1,16 +1,15 @@
-// @ts-nocheck
 import path from 'node:path';
 import { nowIso, packageRoot, readJson } from '../fsx.js';
 import { addVisualAnchor, readImageVoxelLedger, writeImageVoxelLedger } from './image-voxel-ledger.js';
 import { validateImageVoxelLedger } from './validation.js';
 
-export async function importComputerUseEvidence(root = packageRoot(), file, opts = {}) {
+export async function importComputerUseEvidence(root: any = packageRoot(), file: any, opts: any = {}) {
   const ledger = await readJson(path.resolve(root, file), {});
   const current = await readImageVoxelLedger(root);
   const screens = Array.isArray(ledger.screens) ? ledger.screens : [];
   const images = [
     ...(current.images || []),
-    ...screens.map((screen) => ({
+    ...screens.map((screen: any) => ({
       id: screen.id,
       path: screen.path,
       sha256: screen.sha256 || 'fixture',
@@ -19,7 +18,7 @@ export async function importComputerUseEvidence(root = packageRoot(), file, opts
       source: screen.source || 'codex-computer-use',
       captured_at: screen.captured_at || nowIso()
     }))
-  ].filter((image, index, all) => image.id && all.findIndex((entry) => entry.id === image.id) === index);
+  ].filter((image: any, index: any, all: any) => image.id && all.findIndex((entry: any) => entry.id === image.id) === index);
   let next = await writeImageVoxelLedger(root, { ...current, mission_id: opts.missionId || current.mission_id || null, images });
   for (const action of ledger.actions || []) {
     if (!action.bbox) continue;

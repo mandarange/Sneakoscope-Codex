@@ -1,4 +1,3 @@
-// @ts-nocheck
 const HANGUL_RE = /[\u3131-\u318e\uac00-\ud7a3]/gu;
 const LATIN_WORD_RE = /[A-Za-z][A-Za-z']*/g;
 
@@ -14,15 +13,15 @@ const ENGLISH_OVERRIDE_PATTERNS = [
   /(?:답|응답|말|작성|설명|정리|써)\S{0,12}영어(?:로|으로)?/i
 ];
 
-function countMatches(text, pattern) {
+function countMatches(text: any, pattern: any) {
   return (String(text || '').match(pattern) || []).length;
 }
 
-function hasExplicitOverride(text, patterns) {
-  return patterns.some((pattern) => pattern.test(text));
+function hasExplicitOverride(text: any, patterns: any) {
+  return patterns.some((pattern: any) => pattern.test(text));
 }
 
-export function detectResponseLanguage(prompt = '') {
+export function detectResponseLanguage(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) {
     return { code: 'unknown', label: 'unknown', confidence: 0, reason: 'empty_prompt' };
@@ -64,7 +63,7 @@ export function detectResponseLanguage(prompt = '') {
   return { code: 'unknown', label: 'unknown', confidence: 0.2, reason: 'insufficient_language_signal' };
 }
 
-export function responseLanguageInstruction(prompt = '') {
+export function responseLanguageInstruction(prompt: any = '') {
   const language = detectResponseLanguage(prompt);
   if (language.code === 'ko') {
     return [
@@ -88,7 +87,7 @@ export function responseLanguageInstruction(prompt = '') {
   ].join(' ');
 }
 
-export function localizedFinalizationReason(kind, prompt = '') {
+export function localizedFinalizationReason(kind: any, prompt: any = '') {
   const language = detectResponseLanguage(prompt);
   const korean = language.code === 'ko';
   if (kind === 'completion_summary_missing') {

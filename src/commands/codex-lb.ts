@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { projectRoot } from '../core/fsx.js';
 import { flag, readOption } from '../cli/args.js';
@@ -6,7 +5,7 @@ import { printJson } from '../cli/output.js';
 import { codexLbMetrics, readCodexLbCircuit, recordCodexLbHealthEvent, resetCodexLbCircuit, codexLbProofEvidence } from '../core/codex-lb-circuit.js';
 import { checkCodexLbResponseChain, codexLbStatus, configureCodexLb, formatCodexLbStatusText, releaseCodexLbAuthHold, repairCodexLbAuth, unselectCodexLbProvider } from '../cli/install-helpers.js';
 
-export async function run(command, args = []) {
+export async function run(command: any, args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'status';
   if (action === 'metrics') {
@@ -68,7 +67,7 @@ export async function run(command, args = []) {
     return;
   }
   if (action === 'doctor' && flag(args, '--deep')) {
-    const result = { schema: 'sks.codex-lb-doctor.v1', deep: true, ...codexLbMetrics(await readCodexLbCircuit(root)) };
+    const result = { ...codexLbMetrics(await readCodexLbCircuit(root)), schema: 'sks.codex-lb-doctor.v1', deep: true };
     if (flag(args, '--json')) return printJson(result);
     console.log(`codex-lb deep doctor: ${result.ok ? 'ok' : 'blocked'} (${result.circuit.state})`);
     if (!result.ok) process.exitCode = 1;

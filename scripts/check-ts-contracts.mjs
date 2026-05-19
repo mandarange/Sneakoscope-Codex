@@ -17,7 +17,26 @@ const requiredFiles = [
   'src/core/features/feature-fixtures.ts'
 ];
 
+const suppressFreeBootstrap = [
+  'src/cli/main.ts',
+  'src/cli/router.ts',
+  'src/core/fsx.ts',
+  'src/core/commands/run-command.ts'
+];
+
 const issues = [];
+
+for (const rel of suppressFreeBootstrap) {
+  const file = path.join(root, rel);
+  if (!fs.existsSync(file)) {
+    issues.push(`${rel}:missing`);
+    continue;
+  }
+  const text = fs.readFileSync(file, 'utf8');
+  if (/@ts-nocheck\b/.test(text)) issues.push(`${rel}:ts_nocheck`);
+  if (/@ts-ignore\b/.test(text)) issues.push(`${rel}:ts_ignore`);
+}
+
 for (const rel of requiredFiles) {
   const file = path.join(root, rel);
   if (!fs.existsSync(file)) {

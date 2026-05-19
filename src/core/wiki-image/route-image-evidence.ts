@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, exists, packageRoot } from '../fsx.js';
@@ -8,13 +7,13 @@ import { emptyImageVoxelLedger } from './image-voxel-schema.js';
 
 const ONE_BY_ONE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/axX7V8AAAAASUVORK5CYII=';
 
-export async function ensureRouteImageEvidence(root = packageRoot(), {
+export async function ensureRouteImageEvidence(root: any = packageRoot(), {
   missionId,
   route,
   mock = false,
   requireRelation = false,
   source = 'route-finalizer'
-} = {}) {
+}: any = {}) {
   if (!missionId) return { ok: false, status: 'blocked', issues: ['mission_id_missing'] };
   const missionLedger = missionImageLedgerPath(root, missionId);
   let ledger = await readImageVoxelLedger(root, await exists(missionLedger) ? missionLedger : undefined);
@@ -77,25 +76,25 @@ export async function ensureRouteImageEvidence(root = packageRoot(), {
   };
 }
 
-function sanitizeMissionLedger(ledger = emptyImageVoxelLedger(), missionId) {
+function sanitizeMissionLedger(ledger: any = emptyImageVoxelLedger(), missionId: any) {
   const marker = String(missionId || '');
-  const images = (ledger.images || []).filter((image) => {
+  const images = (ledger.images || []).filter((image: any) => {
     const id = String(image.id || '');
     const file = String(image.path || '');
     return id.startsWith(`${marker}-`) || file.includes(`/missions/${marker}/`) || file.includes(`missions/${marker}/`);
   });
-  const imageIds = new Set(images.map((image) => image.id));
-  const anchors = (ledger.anchors || []).filter((anchor) => {
+  const imageIds = new Set(images.map((image: any) => image.id));
+  const anchors = (ledger.anchors || []).filter((anchor: any) => {
     const id = String(anchor.id || '');
     const evidence = String(anchor.evidence_path || anchor.evidencePath || '');
     return imageIds.has(anchor.image_id) && (id.startsWith(`${marker}-`) || evidence.includes(marker));
   });
-  const anchorIds = new Set(anchors.map((anchor) => anchor.id));
-  const relations = (ledger.relations || []).filter((relation) => {
+  const anchorIds = new Set(anchors.map((anchor: any) => anchor.id));
+  const relations = (ledger.relations || []).filter((relation: any) => {
     const changed = relation.changed_anchor_ids || relation.anchors || [];
     return imageIds.has(relation.before_image_id)
       && imageIds.has(relation.after_image_id)
-      && changed.every((anchorId) => anchorIds.has(anchorId));
+      && changed.every((anchorId: any) => anchorIds.has(anchorId));
   });
   return {
     ...emptyImageVoxelLedger(),

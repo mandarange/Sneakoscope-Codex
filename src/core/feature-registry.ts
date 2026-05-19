@@ -1,11 +1,10 @@
-// @ts-nocheck
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS } from './routes.js';
 import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.js';
 import { runFeatureFixture, writeFeatureFixtureReports } from './feature-fixture-runner.js';
-import { exists, nowIso, packageRoot, readJson, readText, runProcess, writeTextAtomic } from './fsx.js';
+import { exists, nowIso, packageRoot, readJson, readText, runProcess, writeTextAtomic, type JsonData } from './fsx.js';
 
 export const FEATURE_REGISTRY_SCHEMA = 'sks.feature-registry.v1';
 export const FEATURE_INVENTORY_SCHEMA = 'sks.feature-inventory.v1';
@@ -28,24 +27,24 @@ const FEATURE_ACCEPTANCE_DEFAULTS = Object.freeze([
   'release-mapped'
 ]);
 
-export async function buildFeatureRegistry({ root = packageRoot(), generatedAt = nowIso() } = {}) {
+export async function buildFeatureRegistry({ root = packageRoot(), generatedAt = nowIso() }: any = {}): Promise<JsonData> {
   const handlerKeys = await parseMainHandlerKeys(root);
   const skillNames = await listProjectSkillNames(root);
   const docRouteMentions = await collectDocRouteMentions(root);
-  const handlerToFeature = mapHandlerKeysToFeatureIds(handlerKeys);
-  const features = [];
+  const handlerToFeature: Record<string, string> = mapHandlerKeysToFeatureIds(handlerKeys);
+  const features: any[] = [];
 
   for (const command of COMMAND_CATALOG) {
     const handlerAliases = Object.entries(handlerToFeature)
-      .filter(([, featureId]) => featureId === `cli-${command.name}`)
-      .map(([handler]) => handler)
-      .filter((handler) => handler !== command.name);
+      .filter(([, featureId]: any) => featureId === `cli-${command.name}`)
+      .map(([handler]: any) => handler)
+      .filter((handler: any) => handler !== command.name);
     features.push(commandFeature(command, handlerAliases));
   }
 
   for (const handler of handlerKeys) {
     const featureId = handlerToFeature[handler];
-    if (!features.some((feature) => feature.id === featureId)) {
+    if (!features.some((feature: any) => feature.id === featureId)) {
       features.push(hiddenHandlerFeature(handler));
     }
   }
@@ -57,7 +56,7 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
     if (!skillCoveredByRoute(skillName)) features.push(skillFeature(skillName));
   }
 
-  const registry = {
+  const registry: any = {
     schema: FEATURE_REGISTRY_SCHEMA,
     generated_at: generatedAt,
     inventory_sources: {
@@ -71,10 +70,10 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
     fixture_summary: fixtureSummary(features),
     feature_quality_summary: featureQualitySummary(features),
     source_inventory: {
-      cli_command_names: COMMAND_CATALOG.map((entry) => entry.name),
+      cli_command_names: COMMAND_CATALOG.map((entry: any) => entry.name),
       handler_keys: handlerKeys,
-      dollar_commands: DOLLAR_COMMANDS.map((entry) => entry.command),
-      app_skill_aliases: DOLLAR_COMMAND_ALIASES.map((entry) => entry.app_skill),
+      dollar_commands: DOLLAR_COMMANDS.map((entry: any) => entry.command),
+      app_skill_aliases: DOLLAR_COMMAND_ALIASES.map((entry: any) => entry.app_skill),
       skills: skillNames,
       doc_route_mentions: docRouteMentions
     }
@@ -83,7 +82,7 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
   return registry;
 }
 
-export function validateFeatureRegistry(registry = {}) {
+export function validateFeatureRegistry(registry: any = {}): JsonData {
   const features = Array.isArray(registry.features) ? registry.features : [];
   const source = registry.source_inventory || {};
   const mappedCli = new Set(flatMapSourceRefs(features, 'cli_command_names'));
@@ -94,19 +93,19 @@ export function validateFeatureRegistry(registry = {}) {
   const mappedRouteMentions = new Set([...mappedRoutes, ...mappedAliases].map(normalizeDollar));
 
   const unmapped = {
-    cli_command_names: (source.cli_command_names || []).filter((name) => !mappedCli.has(name)),
-    handler_keys: (source.handler_keys || []).filter((name) => !mappedHandlers.has(name)),
-    dollar_commands: (source.dollar_commands || []).filter((name) => !mappedRoutes.has(name)),
-    app_skill_aliases: (source.app_skill_aliases || []).filter((name) => !mappedAliases.has(name)),
-    skills: (source.skills || []).filter((name) => !mappedSkills.has(name))
+    cli_command_names: (source.cli_command_names || []).filter((name: any) => !mappedCli.has(name)),
+    handler_keys: (source.handler_keys || []).filter((name: any) => !mappedHandlers.has(name)),
+    dollar_commands: (source.dollar_commands || []).filter((name: any) => !mappedRoutes.has(name)),
+    app_skill_aliases: (source.app_skill_aliases || []).filter((name: any) => !mappedAliases.has(name)),
+    skills: (source.skills || []).filter((name: any) => !mappedSkills.has(name))
   };
-  const duplicateFeatureIds = duplicateValues(features.map((feature) => feature.id));
+  const duplicateFeatureIds = duplicateValues(features.map((feature: any) => feature.id));
   const routeMentionsWithoutRoute = (source.doc_route_mentions || [])
-    .filter((mention) => !mappedRouteMentions.has(normalizeDollar(mention)) && !isExternalPromptCommandMention(mention));
+    .filter((mention: any) => !mappedRouteMentions.has(normalizeDollar(mention)) && !isExternalPromptCommandMention(mention));
   const blockers = [
-    ...Object.entries(unmapped).flatMap(([kind, values]) => values.map((value) => `${kind}:${value}`)),
-    ...duplicateFeatureIds.map((id) => `duplicate_feature_id:${id}`),
-    ...routeMentionsWithoutRoute.map((mention) => `doc_route_mention_without_route:${mention}`)
+    ...Object.entries(unmapped).flatMap(([kind, values]: any) => values.map((value: any) => `${kind}:${value}`)),
+    ...duplicateFeatureIds.map((id: any) => `duplicate_feature_id:${id}`),
+    ...routeMentionsWithoutRoute.map((mention: any) => `doc_route_mention_without_route:${mention}`)
   ];
   return {
     ok: blockers.length === 0,
@@ -132,41 +131,41 @@ export function validateFeatureRegistry(registry = {}) {
   };
 }
 
-export async function writeFeatureInventoryDocs({ root = packageRoot(), outFile = path.join(root, 'docs', 'feature-inventory.md') } = {}) {
+export async function writeFeatureInventoryDocs({ root = packageRoot(), outFile = path.join(root, 'docs', 'feature-inventory.md') }: any = {}): Promise<JsonData> {
   const registry = await buildFeatureRegistry({ root });
   const markdown = renderFeatureInventoryMarkdown(registry);
   await writeTextAtomic(outFile, markdown);
   return { ok: registry.coverage.ok, path: outFile, registry };
 }
 
-export function buildAllFeaturesSelftest(registry, opts = {}) {
+export function buildAllFeaturesSelftest(registry: any, opts: any = {}): JsonData {
   const coverage = validateFeatureRegistry(registry);
   const fixtures = validateFeatureFixtures(registry.features || []);
-  const fixturesSummary = fixtureSummary(registry.features || []);
+  const fixturesSummary: any = fixtureSummary(registry.features || []);
   const executable = opts.executeFixtures ? executeFeatureFixtures(registry.features || [], opts) : null;
   const checks = [
     checkRow('feature_registry_completeness', coverage.ok, coverage.blockers),
     checkRow('command_lazy_load_availability', coverage.unmapped.cli_command_names.length === 0 && coverage.unmapped.handler_keys.length === 0, [...coverage.unmapped.cli_command_names, ...coverage.unmapped.handler_keys]),
     checkRow('json_schema_validation', registry.schema === FEATURE_REGISTRY_SCHEMA && Array.isArray(registry.features), []),
-    checkRow('proof_integration_contracts_present', registry.features.every((feature) => Boolean(feature.completion_proof_integration)), missingFeatureField(registry, 'completion_proof_integration')),
-    checkRow('voxel_triwiki_contracts_present', registry.features.every((feature) => Boolean(feature.voxel_triwiki_integration)), missingFeatureField(registry, 'voxel_triwiki_integration')),
-    checkRow('failure_contracts_present', registry.features.every((feature) => Array.isArray(feature.known_gaps)), missingFeatureField(registry, 'known_gaps')),
+    checkRow('proof_integration_contracts_present', registry.features.every((feature: any) => Boolean(feature.completion_proof_integration)), missingFeatureField(registry, 'completion_proof_integration')),
+    checkRow('voxel_triwiki_contracts_present', registry.features.every((feature: any) => Boolean(feature.voxel_triwiki_integration)), missingFeatureField(registry, 'voxel_triwiki_integration')),
+    checkRow('failure_contracts_present', registry.features.every((feature: any) => Array.isArray(feature.known_gaps)), missingFeatureField(registry, 'known_gaps')),
     checkRow('fixture_contracts_present', fixtures.ok, fixtures.blockers),
-    checkRow('feature_quality_levels_present', FEATURE_QUALITY_LEVELS.every((level) => Object.hasOwn(fixturesSummary.quality_counts || {}, level)), FEATURE_QUALITY_LEVELS),
+    checkRow('feature_quality_levels_present', FEATURE_QUALITY_LEVELS.every((level: any) => Object.hasOwn(fixturesSummary.quality_counts || {}, level)), FEATURE_QUALITY_LEVELS),
     checkRow('runtime_routes_not_static_contract', runtimeRoutesNotStaticContract(registry.features || []).ok, runtimeRoutesNotStaticContract(registry.features || []).blockers),
-    checkRow('fixture_fallback_removed', registry.features.every((feature) => feature.fixture?.fallback_removed === true && feature.fixture?.status !== 'missing'), registry.features.filter((feature) => feature.fixture?.fallback_removed !== true || feature.fixture?.status === 'missing').map((feature) => feature.id)),
-    checkRow('proof_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-proof' && feature.fixture?.status === 'pass'), ['cli-proof']),
-    checkRow('voxel_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact) => expectedArtifactPath(artifact).includes('image-voxel-ledger'))), ['cli-wiki']),
-    checkRow('five_scout_intake_contract_present', registry.features.some((feature) => feature.id === 'route-five-scout-intake'), ['route-five-scout-intake']),
-    checkRow('scout_gate_fixture_pass', registry.features.some((feature) => feature.id === 'cli-scouts' && feature.fixture?.status === 'pass' && feature.fixture.expected_artifacts?.some((artifact) => expectedArtifactPath(artifact).includes('scout-gate'))), ['cli-scouts']),
-    checkRow('scout_proof_evidence_contract_present', registry.features.some((feature) => feature.id === 'proof-scout-evidence'), ['proof-scout-evidence']),
-    checkRow('scout_read_only_policy_present', registry.features.some((feature) => feature.id === 'route-five-scout-intake' && /read-only/i.test(JSON.stringify(feature.contract || {}))), ['route-five-scout-intake']),
+    checkRow('fixture_fallback_removed', registry.features.every((feature: any) => feature.fixture?.fallback_removed === true && feature.fixture?.status !== 'missing'), registry.features.filter((feature: any) => feature.fixture?.fallback_removed !== true || feature.fixture?.status === 'missing').map((feature: any) => feature.id)),
+    checkRow('proof_fixture_contract_present', registry.features.some((feature: any) => feature.id === 'cli-proof' && feature.fixture?.status === 'pass'), ['cli-proof']),
+    checkRow('voxel_fixture_contract_present', registry.features.some((feature: any) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact: any) => expectedArtifactPath(artifact).includes('image-voxel-ledger'))), ['cli-wiki']),
+    checkRow('five_scout_intake_contract_present', registry.features.some((feature: any) => feature.id === 'route-five-scout-intake'), ['route-five-scout-intake']),
+    checkRow('scout_gate_fixture_pass', registry.features.some((feature: any) => feature.id === 'cli-scouts' && feature.fixture?.status === 'pass' && feature.fixture.expected_artifacts?.some((artifact: any) => expectedArtifactPath(artifact).includes('scout-gate'))), ['cli-scouts']),
+    checkRow('scout_proof_evidence_contract_present', registry.features.some((feature: any) => feature.id === 'proof-scout-evidence'), ['proof-scout-evidence']),
+    checkRow('scout_read_only_policy_present', registry.features.some((feature: any) => feature.id === 'route-five-scout-intake' && /read-only/i.test(JSON.stringify(feature.contract || {}))), ['route-five-scout-intake']),
     checkRow('fixture_pass_threshold', (fixturesSummary.counts.pass || 0) >= 90, [`pass=${fixturesSummary.counts.pass || 0}`]),
     checkRow('fixture_not_required_ceiling', (fixturesSummary.counts.not_required || 0) <= 16, [`not_required=${fixturesSummary.counts.not_required || 0}`]),
     checkRow('fixture_mock_blocked_zero', (fixturesSummary.counts.blocked || 0) === 0, [`blocked=${fixturesSummary.counts.blocked || 0}`]),
     ...(executable ? [checkRow('executable_fixture_contracts', executable.ok, executable.failures)] : [])
   ];
-  const ok = checks.every((check) => check.ok);
+  const ok = checks.every((check: any) => check.ok);
   return {
     schema: ALL_FEATURES_SELFTEST_SCHEMA,
     generated_at: registry.generated_at || nowIso(),
@@ -183,11 +182,11 @@ export function buildAllFeaturesSelftest(registry, opts = {}) {
   };
 }
 
-export function executeFeatureFixtures(features = [], opts = {}) {
-  const selected = features.filter((feature) => feature.fixture?.status === 'pass' && ['mock', 'static', 'execute', 'execute_and_validate_artifacts'].includes(feature.fixture.kind));
-  const failures = [];
-  const checked = [];
-  const executed = [];
+export function executeFeatureFixtures(features: any = [], opts: any = {}): JsonData {
+  const selected = features.filter((feature: any) => feature.fixture?.status === 'pass' && ['mock', 'static', 'execute', 'execute_and_validate_artifacts'].includes(feature.fixture.kind));
+  const failures: any[] = [];
+  const checked: any[] = [];
+  const executed: any[] = [];
   let artifactValidated = 0;
   for (const feature of selected) {
     const fx = feature.fixture;
@@ -198,7 +197,7 @@ export function executeFeatureFixtures(features = [], opts = {}) {
     const artifactOk = Array.isArray(fx.expected_artifacts);
     if (!artifactOk) failures.push(`${feature.id}:expected_artifacts`);
     const strict = opts.strictArtifacts || opts.validateArtifacts;
-    const commandSpec = SAFE_EXECUTABLE_FIXTURE_ARGS[feature.id] || null;
+    const commandSpec = (SAFE_EXECUTABLE_FIXTURE_ARGS as unknown as Record<string, any>)[feature.id] || null;
     const artifactRun = runFeatureFixture(feature, {
       root: opts.root || packageRoot(),
       execute: Boolean(commandSpec),
@@ -210,7 +209,7 @@ export function executeFeatureFixtures(features = [], opts = {}) {
       if (!artifactRun.execution.ok) failures.push(`${feature.id}:command_exit_${artifactRun.execution.status}`);
     }
     if (strict) artifactValidated += artifactRun.expected_artifacts.length;
-    failures.push(...artifactRun.failures.filter((failure) => !failures.includes(failure)));
+    failures.push(...artifactRun.failures.filter((failure: any) => !failures.includes(failure)));
     checked.push({
       id: feature.id,
       kind: fx.kind,
@@ -219,7 +218,7 @@ export function executeFeatureFixtures(features = [], opts = {}) {
       mode: commandSpec ? 'execute_and_validate_artifacts' : strict ? 'contract_no_artifacts' : 'contract'
     });
   }
-  const report = {
+  const report: any = {
     schema: 'sks.feature-fixture-execution.v1',
     mode: 'mock',
     ok: failures.length === 0,
@@ -235,8 +234,8 @@ export function executeFeatureFixtures(features = [], opts = {}) {
   return report;
 }
 
-function executeSafeFixtureCommand(featureId, opts = {}) {
-  const args = SAFE_EXECUTABLE_FIXTURE_ARGS[featureId];
+function executeSafeFixtureCommand(featureId: any, opts: any = {}) {
+  const args = (SAFE_EXECUTABLE_FIXTURE_ARGS as unknown as Record<string, any>)[featureId];
   if (!args) return null;
   const root = opts.root || packageRoot();
   const entrypoint = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
@@ -257,7 +256,7 @@ function executeSafeFixtureCommand(featureId, opts = {}) {
   };
 }
 
-function expectedArtifactPath(artifact) {
+function expectedArtifactPath(artifact: any) {
   if (typeof artifact === 'string') return artifact;
   return String(artifact?.path || '');
 }
@@ -283,6 +282,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-proof-field': ['proof-field', 'scan', '--json', '--intent', 'fixture'],
   'cli-proof': ['proof', 'smoke', '--json'],
   'cli-trust': { setup: [['run', 'fixture', '--mock', '--json']], command: ['trust', 'report', 'latest', '--json'] },
+  'cli-wrongness': ['wrongness', 'add', '--kind', 'missing_evidence', '--claim', 'fixture wrongness', '--json'],
   'cli-db': ['db', 'policy'],
   'cli-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
   'cli-codex-lb': ['codex-lb', 'metrics', '--json'],
@@ -309,7 +309,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'route-gx': ['gx', 'validate', 'fixture', '--mock', '--json']
 });
 
-export function renderFeatureInventoryMarkdown(registry) {
+export function renderFeatureInventoryMarkdown(registry: any) {
   const coverage = registry.coverage || validateFeatureRegistry(registry);
   const lines = [
     '# SKS Feature Inventory',
@@ -325,8 +325,8 @@ export function renderFeatureInventoryMarkdown(registry) {
     `- Dollar routes: ${coverage.counts.dollar_commands}`,
     `- App skill aliases: ${coverage.counts.app_skill_aliases}`,
     `- Skills: ${coverage.counts.skills}`,
-    `- Fixture statuses: ${Object.entries(fixtureSummary(registry.features).counts).map(([status, count]) => `${status}=${count}`).join(', ')}`,
-    `- Feature quality: ${Object.entries(fixtureSummary(registry.features).quality_counts).map(([quality, count]) => `${quality}=${count}`).join(', ')}`,
+    `- Fixture statuses: ${Object.entries(fixtureSummary(registry.features).counts).map(([status, count]: any) => `${status}=${count}`).join(', ')}`,
+    `- Feature quality: ${Object.entries(fixtureSummary(registry.features).quality_counts).map(([quality, count]: any) => `${quality}=${count}`).join(', ')}`,
     '',
     '## Release Coverage Rule',
     '',
@@ -345,7 +345,7 @@ export function renderFeatureInventoryMarkdown(registry) {
     lines.push(`| \`${feature.id}\` | ${feature.category} | ${feature.maturity} | ${commands || '-'} | ${fixture} | ${quality} | ${gaps} |`);
   }
   lines.push('', '## Unmapped Coverage', '');
-  for (const [kind, values] of Object.entries(coverage.unmapped || {})) {
+  for (const [kind, values] of Object.entries(coverage.unmapped || {}) as Array<[string, any[]]>) {
     lines.push(`- ${kind}: ${values.length ? values.join(', ') : 'none'}`);
   }
   if (coverage.doc_route_mentions_without_route?.length) {
@@ -364,11 +364,11 @@ export function renderFeatureInventoryMarkdown(registry) {
   return `${lines.join('\n')}\n`;
 }
 
-function commandFeature(command, handlerAliases = []) {
+function commandFeature(command: any, handlerAliases: any = []) {
   const name = command.name;
   const category = commandCategory(name);
   const maturity = commandMaturity(name);
-  const aliases = [...new Set(handlerAliases.map((alias) => `sks ${alias}`))];
+  const aliases = [...new Set(handlerAliases.map((alias: any) => `sks ${alias}`))];
   return baseFeature({
     id: `cli-${name}`,
     commands: [command.usage],
@@ -389,7 +389,7 @@ function commandFeature(command, handlerAliases = []) {
   });
 }
 
-function hiddenHandlerFeature(handler) {
+function hiddenHandlerFeature(handler: any) {
   return baseFeature({
     id: `handler-${handler}`,
     commands: [`sks ${handler}`],
@@ -410,10 +410,10 @@ function hiddenHandlerFeature(handler) {
   });
 }
 
-function routeFeature(route) {
+function routeFeature(route: any) {
   const aliases = DOLLAR_COMMAND_ALIASES
-    .filter((entry) => entry.canonical === route.command)
-    .map((entry) => entry.app_skill);
+    .filter((entry: any) => entry.canonical === route.command)
+    .map((entry: any) => entry.app_skill);
   return baseFeature({
     id: `route-${slug(route.command)}`,
     commands: [route.command],
@@ -429,7 +429,7 @@ function routeFeature(route) {
       handler_keys: [],
       dollar_commands: [route.command],
       app_skill_aliases: aliases,
-      skills: aliases.map((alias) => alias.replace(/^\$/, ''))
+      skills: aliases.map((alias: any) => alias.replace(/^\$/, ''))
     }
   });
 }
@@ -486,7 +486,7 @@ function scoutProofEvidenceFeature() {
   });
 }
 
-function skillFeature(skillName) {
+function skillFeature(skillName: any) {
   return baseFeature({
     id: `skill-${slug(skillName)}`,
     commands: [],
@@ -507,7 +507,7 @@ function skillFeature(skillName) {
   });
 }
 
-function baseFeature(feature) {
+function baseFeature(feature: any) {
   const merged = {
     contract: {
       input: feature.commands?.[0] || feature.aliases?.[0] || 'skill invocation',
@@ -528,36 +528,36 @@ function baseFeature(feature) {
   };
 }
 
-function mapHandlerKeysToFeatureIds(handlerKeys = []) {
-  const catalogNames = new Set(COMMAND_CATALOG.map((entry) => entry.name));
-  const out = {};
+function mapHandlerKeysToFeatureIds(handlerKeys: any = []) {
+  const catalogNames = new Set(COMMAND_CATALOG.map((entry: any) => entry.name));
+  const out: Record<string, string> = {};
   for (const handler of handlerKeys) {
-    const commandName = HANDLER_ALIAS_TO_COMMAND[handler] || handler;
+    const commandName = (HANDLER_ALIAS_TO_COMMAND as Record<string, string>)[handler] || handler;
     out[handler] = catalogNames.has(commandName) ? `cli-${commandName}` : `handler-${handler}`;
   }
   return out;
 }
 
-async function parseMainHandlerKeys(root) {
+async function parseMainHandlerKeys(root: any) {
   const registryText = await readText(path.join(root, 'src', 'cli', 'command-registry.js'), '');
   const registryMatch = registryText.match(/export const COMMANDS = \{([\s\S]*?)\n\};/);
   if (registryMatch) return parseObjectKeys(registryMatch[1]);
   return [];
 }
 
-function parseObjectKeys(text = '') {
-  const keys = [];
+function parseObjectKeys(text: any = '') {
+  const keys: any[] = [];
   for (const keyMatch of text.matchAll(/^\s{2}(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$-]*))\s*:/gm)) {
     keys.push(keyMatch[1] || keyMatch[2] || keyMatch[3]);
   }
   return [...new Set(keys)].sort();
 }
 
-async function listProjectSkillNames(root) {
+async function listProjectSkillNames(root: any) {
   const dir = path.join(root, '.agents', 'skills');
   if (!await exists(dir)) return [];
   const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
-  const names = [];
+  const names: any[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
     const skillFile = path.join(dir, entry.name, 'SKILL.md');
@@ -568,7 +568,7 @@ async function listProjectSkillNames(root) {
   return [...new Set(names)].sort();
 }
 
-async function collectDocRouteMentions(root) {
+async function collectDocRouteMentions(root: any) {
   const docs = ['README.md', '.codex/SNEAKOSCOPE.md', 'AGENTS.md', '.agents/skills/.sks-generated.json'];
   const mentions = new Set();
   for (const file of docs) {
@@ -580,11 +580,11 @@ async function collectDocRouteMentions(root) {
   return [...mentions].sort();
 }
 
-function flatMapSourceRefs(features, key) {
-  return features.flatMap((feature) => feature.source_refs?.[key] || []);
+function flatMapSourceRefs(features: any, key: any) {
+  return features.flatMap((feature: any) => feature.source_refs?.[key] || []);
 }
 
-function duplicateValues(values) {
+function duplicateValues(values: any) {
   const seen = new Set();
   const dupes = new Set();
   for (const value of values) {
@@ -594,103 +594,103 @@ function duplicateValues(values) {
   return [...dupes].sort();
 }
 
-function markdownTableCell(value) {
+function markdownTableCell(value: any) {
   return String(value || '').replace(/\|/g, '\\|').replace(/\n/g, '<br>');
 }
 
-function skillCoveredByRoute(skillName) {
+function skillCoveredByRoute(skillName: any) {
   const normalized = String(skillName || '').toLowerCase();
-  return DOLLAR_COMMAND_ALIASES.some((entry) => entry.app_skill.replace(/^\$/, '').toLowerCase() === normalized);
+  return DOLLAR_COMMAND_ALIASES.some((entry: any) => entry.app_skill.replace(/^\$/, '').toLowerCase() === normalized);
 }
 
-function isExternalPromptCommandMention(mention) {
+function isExternalPromptCommandMention(mention: any) {
   return ['$IMAGEGEN'].includes(String(mention || '').toUpperCase());
 }
 
-function canonicalDollar(value) {
+function canonicalDollar(value: any) {
   const raw = String(value || '').trim();
-  const hit = DOLLAR_COMMANDS.find((entry) => entry.command.toLowerCase() === raw.toLowerCase());
+  const hit = DOLLAR_COMMANDS.find((entry: any) => entry.command.toLowerCase() === raw.toLowerCase());
   if (hit) return hit.command;
-  const aliasHit = DOLLAR_COMMAND_ALIASES.find((entry) => entry.app_skill.toLowerCase() === raw.toLowerCase());
+  const aliasHit = DOLLAR_COMMAND_ALIASES.find((entry: any) => entry.app_skill.toLowerCase() === raw.toLowerCase());
   return aliasHit ? aliasHit.app_skill : raw;
 }
 
-function normalizeDollar(value) {
+function normalizeDollar(value: any) {
   return String(value || '').trim().toLowerCase();
 }
 
-function slug(value) {
+function slug(value: any) {
   return String(value || '').replace(/^\$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-function commandCategory(name) {
+function commandCategory(name: any) {
   if (['team', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts', 'scouts', 'scout'].includes(name)) return 'proof-route';
   if (['qa-loop', 'research', 'recallpulse', 'skill-dream', 'eval', 'perf'].includes(name)) return 'loop';
   if (['codex-app', 'codex-lb', 'auth', 'hooks', 'context7', 'openclaw'].includes(name)) return 'integration';
   if (['db', 'guard', 'conflicts', 'harness', 'versioning'].includes(name)) return 'safety';
-  if (['wiki', 'gx', 'image-ux-review', 'ppt'].includes(name)) return 'visual-memory';
+  if (['wiki', 'wrongness', 'gx', 'image-ux-review', 'ppt'].includes(name)) return 'visual-memory';
   if (['setup', 'bootstrap', 'doctor', 'deps', 'init', 'postinstall', 'fix-path'].includes(name)) return 'install';
   return 'core-cli';
 }
 
-function commandMaturity(name) {
+function commandMaturity(name: any) {
   if (['help', 'version', 'commands', 'usage', 'root', 'quickstart', 'setup', 'doctor', 'selftest', 'update-check'].includes(name)) return 'stable';
-  if (['codex-app', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'team', 'pipeline', 'goal', 'db', 'guard', 'scouts', 'scout'].includes(name)) return 'beta';
+  if (['codex-app', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'team', 'pipeline', 'goal', 'db', 'guard', 'scouts', 'scout'].includes(name)) return 'beta';
   return 'labs';
 }
 
-function routeMaturity(command) {
+function routeMaturity(command: any) {
   if (['$Answer', '$DFix', '$SKS', '$Wiki', '$Help'].includes(command)) return 'stable';
   if (['$Team', '$Goal', '$DB', '$Computer-Use', '$CU', '$QA-LOOP', '$MAD-SKS'].includes(command)) return 'beta';
   return 'labs';
 }
 
-function voxelContract(category) {
+function voxelContract(category: any) {
   if (category === 'visual-memory') return 'visual/image anchors required';
   if (category === 'safety') return 'policy voxel required';
   if (category === 'loop' || category === 'proof-route') return 'context/source/test anchors required';
   return 'context anchor when evidence is written';
 }
 
-function proofContract(category) {
+function proofContract(category: any) {
   if (['proof-route', 'loop', 'safety', 'visual-memory'].includes(category)) return 'required';
   return 'required for route/release use';
 }
 
-function knownGapsForCommand(name) {
+function knownGapsForCommand(name: any) {
   if (['features', 'all-features'].includes(name)) return ['feature fixtures remain progressive'];
   if (['codex-app', 'hooks'].includes(name)) return ['mobile/event payload details remain unknown'];
   return [];
 }
 
-function routeVoxelContract(command) {
+function routeVoxelContract(command: any) {
   if (['$Image-UX-Review', '$UX-Review', '$PPT', '$From-Chat-IMG', '$GX'].includes(command)) return 'image/source/bbox voxel required';
   if (command === '$DB' || command === '$MAD-SKS') return 'DB policy voxel required';
   return 'TriWiki anchors required';
 }
 
-function routeKnownGaps(command) {
+function routeKnownGaps(command: any) {
   if (['$Image-UX-Review', '$UX-Review', '$PPT'].includes(command)) return ['live imagegen/CU evidence required'];
   if (command === '$MAD-SKS') return ['permission closed by owning gate'];
   return [];
 }
 
-function checkRow(id, ok, blockers = []) {
+function checkRow(id: any, ok: any, blockers: any = []) {
   return { id, ok: Boolean(ok), blockers: ok ? [] : blockers };
 }
 
-export function featureQualitySummary(features = []) {
+export function featureQualitySummary(features: any = []) {
   return fixtureSummary(features).quality_counts;
 }
 
-export function runtimeRoutesNotStaticContract(features = []) {
+export function runtimeRoutesNotStaticContract(features: any = []) {
   const blockers = features
-    .filter((feature) => feature.category === 'route' || String(feature.id || '').startsWith('route-'))
-    .filter((feature) => feature.fixture?.quality === 'static_contract')
-    .map((feature) => `${feature.id}:static_contract`);
+    .filter((feature: any) => feature.category === 'route' || String(feature.id || '').startsWith('route-'))
+    .filter((feature: any) => feature.fixture?.quality === 'static_contract')
+    .map((feature: any) => `${feature.id}:static_contract`);
   return { ok: blockers.length === 0, blockers };
 }
 
-function missingFeatureField(registry, field) {
-  return (registry.features || []).filter((feature) => !feature[field]).map((feature) => feature.id);
+function missingFeatureField(registry: any, field: any) {
+  return (registry.features || []).filter((feature: any) => !feature[field]).map((feature: any) => feature.id);
 }

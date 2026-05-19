@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const FEATURE_FIXTURE_SCHEMA = 'sks.feature-fixtures.v1';
 export const FEATURE_QUALITY_LEVELS = Object.freeze([
   'runtime_verified',
@@ -31,7 +30,6 @@ const FIXTURES = Object.freeze({
   'cli-versioning': fixture('execute', 'sks versioning status --json', [], 'pass'),
   'cli-aliases': fixture('execute', 'sks aliases', [], 'pass'),
   'cli-fix-path': fixture('execute', 'sks fix-path --json', [], 'pass'),
-  'cli-init': fixture('static', 'sks init --local-only', [], 'pass'),
   'cli-selftest': fixture('execute', 'sks selftest --mock', [], 'pass'),
   'cli-goal': fixture('mock', 'sks goal status latest --json', ['goal-workflow.json'], 'pass'),
   'cli-research': fixture('mock', 'sks research status latest --json', ['research-gate.json', 'completion-proof.json'], 'pass'),
@@ -83,6 +81,7 @@ const FIXTURES = Object.freeze({
   'skill-context7-docs': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
   'cli-proof': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['.sneakoscope/proof/latest.json'], 'pass'),
   'cli-trust': fixture('execute_and_validate_artifacts', 'sks trust report latest --json', ['trust-report.json'], 'pass'),
+  'cli-wrongness': fixture('execute_and_validate_artifacts', 'sks wrongness add --kind missing_evidence --claim "fixture wrongness" --json', ['.sneakoscope/wiki/wrongness-ledger.json'], 'pass'),
   'route-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --mock --json', ['completion-proof.json', 'team-gate.json', 'team-session-cleanup.json'], 'pass'),
   'route-qa-loop': fixture('execute_and_validate_artifacts', 'sks qa-loop run latest --mock --json', ['completion-proof.json', 'qa-gate.json'], 'pass'),
   'route-research': fixture('execute_and_validate_artifacts', 'sks research run latest --mock --json', ['completion-proof.json', 'research-gate.json'], 'pass'),
@@ -136,8 +135,9 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'handler-postinstall'
 ]);
 
-export function fixtureForFeature(featureId) {
-  if (FIXTURES[featureId]) return FIXTURES[featureId];
+export function fixtureForFeature(featureId: any) {
+  const fixtures = FIXTURES as Record<string, any>;
+  if (fixtures[featureId]) return fixtures[featureId];
   if (STATIC_CONTRACT_FEATURES.has(featureId)) {
     return fixture('static', `explicit static contract fixture: ${featureId}`, [], 'pass', {
       quality: 'static_contract',
@@ -154,10 +154,10 @@ export function fixtureForFeature(featureId) {
   });
 }
 
-export function fixtureSummary(features = []) {
-  const counts = {};
-  const quality_counts = Object.fromEntries(FEATURE_QUALITY_LEVELS.map((level) => [level, 0]));
-  const missing = [];
+export function fixtureSummary(features: any = []) {
+  const counts: Record<string, number> = {};
+  const quality_counts: Record<string, number> = Object.fromEntries(FEATURE_QUALITY_LEVELS.map((level: any) => [level, 0]));
+  const missing: any[] = [];
   for (const feature of features) {
     const status = feature.fixture?.status || 'missing';
     counts[status] = (counts[status] || 0) + 1;
@@ -174,8 +174,8 @@ export function fixtureSummary(features = []) {
   };
 }
 
-export function validateFeatureFixtures(features = []) {
-  const blockers = [];
+export function validateFeatureFixtures(features: any = []) {
+  const blockers: any[] = [];
   for (const feature of features) {
     const fx = feature.fixture;
     if (!fx) {
@@ -191,7 +191,7 @@ export function validateFeatureFixtures(features = []) {
   return { ok: blockers.length === 0, blockers };
 }
 
-function fixture(kind, command, expected_artifacts, status, extra = {}) {
+function fixture(kind: any, command: any, expected_artifacts: any, status: any, extra: any = {}) {
   const quality = extra.quality || qualityForKind(kind);
   const rootMode = extra.root_mode || (kind === 'execute_and_validate_artifacts' || kind === 'execute' || kind === 'mock' ? 'hermetic_temp_project' : 'source_checkout_required');
   return {
@@ -207,7 +207,7 @@ function fixture(kind, command, expected_artifacts, status, extra = {}) {
   };
 }
 
-function qualityForKind(kind) {
+function qualityForKind(kind: any) {
   if (kind === 'execute' || kind === 'execute_and_validate_artifacts') return 'runtime_verified';
   if (kind === 'mock') return 'runtime_mock_verified';
   if (kind === 'real_optional') return 'integration_optional';

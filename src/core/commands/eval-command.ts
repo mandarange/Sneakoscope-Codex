@@ -1,10 +1,9 @@
-// @ts-nocheck
 import path from 'node:path';
 import { ensureDir, nowIso, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { DEFAULT_EVAL_THRESHOLDS, compareEvaluationReports, runEvaluationBenchmark } from '../evaluation.js';
 import { flag, positionalArgs, readFlagValue } from './command-utils.js';
 
-export async function evalCommand(sub, args = []) {
+export async function evalCommand(sub: any, args: any = []) {
   if (!sub || sub === 'help' || sub === '--help') {
     console.log('Usage: sks eval run [--json] [--out report.json] [--iterations N] | sks eval compare --baseline old.json --candidate new.json [--json]');
     return;
@@ -34,7 +33,7 @@ export async function evalCommand(sub, args = []) {
   process.exitCode = 1;
 }
 
-async function saveEvalReport(root, args, report, prefix) {
+async function saveEvalReport(root: any, args: any, report: any, prefix: any) {
   if (flag(args, '--no-save')) return null;
   const requested = readFlagValue(args, '--out', null);
   const file = requested ? path.resolve(requested) : path.join(root, '.sneakoscope', 'reports', `${prefix}-${nowIso().replace(/[:.]/g, '-')}.json`);
@@ -43,11 +42,11 @@ async function saveEvalReport(root, args, report, prefix) {
   return file;
 }
 
-function pct(x) {
+function pct(x: any) {
   return `${(100 * x).toFixed(1)}%`;
 }
 
-function printEvalRun(report, saved) {
+function printEvalRun(report: any, saved: any) {
   const c = report.comparison;
   console.log('Sneakoscope Eval');
   console.log(`Scenario:  ${report.scenario.id}`);
@@ -57,7 +56,7 @@ function printEvalRun(report, saved) {
   if (saved) console.log(`Report:    ${saved}`);
 }
 
-function printEvalCompare(report, saved) {
+function printEvalCompare(report: any, saved: any) {
   const c = report.comparison;
   console.log('Sneakoscope Eval Compare');
   console.log(`Baseline:  ${report.baseline_label}`);

@@ -1,21 +1,20 @@
-// @ts-nocheck
 import path from 'node:path';
 import { runCodexExec } from '../../codex-adapter.js';
 import { nowIso } from '../../fsx.js';
 import { appendScoutLedger } from '../scout-artifacts.js';
 import { buildScoutPrompt } from './scout-engine-base.js';
 
-export async function runCodexExecParallelEngine(root, {
+export async function runCodexExecParallelEngine(root: any, {
   missionId,
   dir,
   route,
   task,
   roles,
   timeoutMs = Number(process.env.SKS_SCOUT_TIMEOUT_MS || 120000)
-} = {}) {
+}: any = {}) {
   const startedAt = nowIso();
   const startMs = Date.now();
-  const jobs = roles.map(async (role) => {
+  const jobs = roles.map(async (role: any) => {
     const outputFile = path.join(dir, `${role.id}.codex.md`);
     const stdoutFile = path.join(dir, `${role.id}.stdout.log`);
     const stderrFile = path.join(dir, `${role.id}.stderr.log`);
@@ -51,7 +50,7 @@ export async function runCodexExecParallelEngine(root, {
     started_at: startedAt,
     completed_at: completedAt,
     duration_ms: Date.now() - startMs,
-    jobs: settled.map((entry) => entry.status === 'fulfilled'
+    jobs: settled.map((entry: any) => entry.status === 'fulfilled'
       ? {
           status: 'fulfilled',
           scout_id: entry.value.role.id,

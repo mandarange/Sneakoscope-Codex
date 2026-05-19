@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, exists, nowIso, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
@@ -43,7 +42,7 @@ export function skillDreamPolicyText() {
   return 'Skill dreaming policy: record only cheap route/skill usage counters in `.sneakoscope/skills/dream-state.json`; do not evaluate every conversation. Run `sks skill-dream run` or the automatic due check only after the configured event count and cooldown, defaulting to one due check every 10 route events subject to cooldown. Reports are recommendation-only: keep/merge/prune/improve candidates may update future generated skill wording, but skill deletion or merge requires explicit user approval.';
 }
 
-export function createSkillCandidate(opts = {}) {
+export function createSkillCandidate(opts: any = {}) {
   const successfulRuns = Number(opts.evidence?.successful_runs || opts.successful_runs || 0);
   const failedRuns = Number(opts.evidence?.failed_runs || opts.failed_runs || 0);
   const passRate = successfulRuns + failedRuns > 0 ? successfulRuns / (successfulRuns + failedRuns) : 0;
@@ -67,41 +66,41 @@ export function createSkillCandidate(opts = {}) {
   };
 }
 
-export function decideSkillInjection({ route = 'team', task_signature = '', skills = [], topK } = {}) {
+export function decideSkillInjection({ route = 'team', task_signature = '', skills = [], topK }: any = {}) {
   const k = Number(topK || (String(route).toLowerCase().includes('from-chat-img') ? 5 : 3));
   const ranked = skills
-    .filter((skill) => skill.status === 'active' && !skill.stale && !skill.conflicting)
-    .map((skill) => ({
+    .filter((skill: any) => skill.status === 'active' && !skill.stale && !skill.conflicting)
+    .map((skill: any) => ({
       ...skill,
       match_score: skillMatchScore(skill, route, task_signature)
     }))
-    .filter((skill) => skill.match_score > 0)
-    .sort((a, b) => (b.match_score + Number(b.quality_score || 0) + Number(b.injection_priority || 0)) - (a.match_score + Number(a.quality_score || 0) + Number(a.injection_priority || 0)));
+    .filter((skill: any) => skill.match_score > 0)
+    .sort((a: any, b: any) => (b.match_score + Number(b.quality_score || 0) + Number(b.injection_priority || 0)) - (a.match_score + Number(a.quality_score || 0) + Number(a.injection_priority || 0)));
   return {
     schema_version: 1,
     route,
     task_signature,
     top_k: k,
     considered: skills.length,
-    injected: ranked.slice(0, k).map(({ id, version, status, quality_score, match_score, files }) => ({ id, version, status, quality_score, match_score, files })),
+    injected: ranked.slice(0, k).map(({ id, version, status, quality_score, match_score, files }: any) => ({ id, version, status, quality_score, match_score, files })),
     decided_at: nowIso()
   };
 }
 
-export async function writeSkillCandidate(dir, opts = {}) {
+export async function writeSkillCandidate(dir: any, opts: any = {}) {
   const candidate = createSkillCandidate(opts);
   await writeJsonAtomic(path.join(dir, ARTIFACT_FILES.skill_candidate), candidate);
   return validateSkillCandidate(candidate);
 }
 
-export async function writeSkillInjectionDecision(dir, opts = {}) {
+export async function writeSkillInjectionDecision(dir: any, opts: any = {}) {
   const decision = decideSkillInjection(opts);
   await writeJsonAtomic(path.join(dir, ARTIFACT_FILES.skill_injection_decision), decision);
   return validateSkillInjectionDecision(decision);
 }
 
-export function createSkillForgeReport(opts = {}) {
-  const candidates = (opts.candidates || []).map((candidate) => ({
+export function createSkillForgeReport(opts: any = {}) {
+  const candidates = (opts.candidates || []).map((candidate: any) => ({
     ...candidate,
     promotion_ready: Number(candidate.evidence?.successful_runs || 0) >= 3
       && Number(candidate.evidence?.failed_runs || 0) === 0
@@ -118,7 +117,7 @@ export function createSkillForgeReport(opts = {}) {
     mission_id: opts.mission_id || null,
     created_at: nowIso(),
     candidates,
-    skill_cards: candidates.map((candidate) => createSkillCard({
+    skill_cards: candidates.map((candidate: any) => createSkillCard({
       skill_id: candidate.id,
       name: candidate.id,
       version: `1.0.${Number(candidate.version || 1) - 1}`,
@@ -132,7 +131,7 @@ export function createSkillForgeReport(opts = {}) {
       implicit_invocation_allowed: candidate.promotion_ready
     })),
     injection,
-    retirements: (opts.skills || []).filter((skill) => skill.stale || skill.conflicting || Number(skill.failed_runs || skill.evidence?.failed_runs || 0) >= 2).map((skill) => ({
+    retirements: (opts.skills || []).filter((skill: any) => skill.stale || skill.conflicting || Number(skill.failed_runs || skill.evidence?.failed_runs || 0) >= 2).map((skill: any) => ({
       id: skill.id,
       reason_codes: [
         skill.stale ? 'stale' : null,
@@ -148,17 +147,17 @@ export function createSkillForgeReport(opts = {}) {
   };
 }
 
-export async function writeSkillForgeReport(dir, opts = {}) {
+export async function writeSkillForgeReport(dir: any, opts: any = {}) {
   const report = createSkillForgeReport(opts);
   await writeJsonAtomic(path.join(dir, 'skill-forge-report.json'), report);
   return report;
 }
 
-export async function loadSkillDreamState(root, opts = {}) {
+export async function loadSkillDreamState(root: any, opts: any = {}) {
   return normalizeSkillDreamState(await readJson(skillDreamStatePath(root), null), opts);
 }
 
-export function skillDreamDue(state, opts = {}) {
+export function skillDreamDue(state: any, opts: any = {}) {
   const policy = normalizeSkillDreamPolicy(opts.policy || state?.policy || {});
   const events = Number(state?.counters?.events_since_last_run || 0);
   if (opts.force) return { due: true, reason_codes: ['forced'], events_remaining: 0, not_before_at: null };
@@ -186,7 +185,7 @@ export function skillDreamDue(state, opts = {}) {
   return { due: true, reason_codes: lastRunAt ? ['event_threshold_reached', 'cooldown_elapsed'] : ['event_threshold_reached'], events_remaining: 0, not_before_at: null };
 }
 
-export async function recordSkillDreamEvent(root, event = {}, opts = {}) {
+export async function recordSkillDreamEvent(root: any, event: any = {}, opts: any = {}) {
   const state = normalizeSkillDreamState(opts.state || await readJson(skillDreamStatePath(root), null), opts);
   const ts = opts.now || nowIso();
   const route = safeId(event.route || event.route_id || event.mode || 'unknown');
@@ -218,7 +217,7 @@ export async function recordSkillDreamEvent(root, event = {}, opts = {}) {
   return { state: report?.state || state, due, report };
 }
 
-export async function runSkillDream(root, opts = {}) {
+export async function runSkillDream(root: any, opts: any = {}) {
   const state = normalizeSkillDreamState(opts.state || await readJson(skillDreamStatePath(root), null), opts);
   const ts = opts.now || nowIso();
   const inventory = await inventorySkillDream(root, {
@@ -244,14 +243,14 @@ export async function runSkillDream(root, opts = {}) {
   return { ...report, report_path: reportPath, state };
 }
 
-export function createSkillDreamReport(opts = {}) {
+export function createSkillDreamReport(opts: any = {}) {
   const state = normalizeSkillDreamState(opts.state || {}, opts);
   const inventory = opts.inventory || { skills: [], summary: {} };
   const skillStats = state.skills || {};
-  const generated = inventory.skills.filter((skill) => skill.ownership !== 'unknown_or_user');
-  const keep = [];
-  const pruneCandidates = [];
-  const improveCandidates = [];
+  const generated = inventory.skills.filter((skill: any) => skill.ownership !== 'unknown_or_user');
+  const keep: any[] = [];
+  const pruneCandidates: any[] = [];
+  const improveCandidates: any[] = [];
   const protectedNames = new Set([...(opts.protected_skill_names || []), ...PROTECTED_SKILL_NAMES]);
   for (const skill of inventory.skills) {
     const stats = skillStats[skill.name] || { use_count: 0, routes: {} };
@@ -292,8 +291,8 @@ export function createSkillDreamReport(opts = {}) {
     }
   }
   const mergeCandidates = MERGE_GROUPS
-    .map((group) => {
-      const present = group.skills.filter((name) => inventory.skills.some((skill) => skill.name === name));
+    .map((group: any) => {
+      const present = group.skills.filter((name: any) => inventory.skills.some((skill: any) => skill.name === name));
       if (present.length < 2) return null;
       return {
         id: group.id,
@@ -341,7 +340,7 @@ export function createSkillDreamReport(opts = {}) {
   };
 }
 
-export async function skillDreamFixture(root) {
+export async function skillDreamFixture(root: any) {
   const skillRoot = path.join(root, '.agents', 'skills');
   await writeFixtureSkill(skillRoot, 'used-generated', 'Used generated skill.\nNo unrequested fallback implementation code.\n');
   await writeFixtureSkill(skillRoot, 'unused-generated', 'Unused generated skill with lots of overlap.\n');
@@ -353,15 +352,15 @@ export async function skillDreamFixture(root) {
   const report = second.report || await runSkillDream(root, { ...opts, force: true });
   return {
     passed: Boolean(report.no_auto_delete)
-      && report.keep.some((item) => item.name === 'used-generated')
-      && report.prune_candidates.some((item) => item.name === 'unused-generated')
-      && !report.prune_candidates.some((item) => item.name === 'custom-keep')
+      && report.keep.some((item: any) => item.name === 'used-generated')
+      && report.prune_candidates.some((item: any) => item.name === 'unused-generated')
+      && !report.prune_candidates.some((item: any) => item.name === 'custom-keep')
       && (await exists(path.join(skillRoot, 'unused-generated', 'SKILL.md'))),
     report
   };
 }
 
-function skillMatchScore(skill, route, taskSignature) {
+function skillMatchScore(skill: any, route: any, taskSignature: any) {
   const hay = `${route} ${taskSignature}`.toLowerCase();
   let score = 0;
   for (const trigger of skill.triggers || []) {
@@ -371,23 +370,23 @@ function skillMatchScore(skill, route, taskSignature) {
   return Math.min(1, score);
 }
 
-function safeId(value) {
+function safeId(value: any) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'item';
 }
 
-function skillDreamStatePath(root) {
+function skillDreamStatePath(root: any) {
   return path.join(root, SKILL_DREAM_POLICY.state_path);
 }
 
-async function writeSkillDreamState(root, state) {
+async function writeSkillDreamState(root: any, state: any) {
   state.next_run = skillDreamDue(state, { policy: state.policy });
   await writeJsonAtomic(skillDreamStatePath(root), state);
 }
 
-function normalizeSkillDreamPolicy(policy = {}) {
+function normalizeSkillDreamPolicy(policy: any = {}) {
   return {
     ...SKILL_DREAM_POLICY,
-    ...Object.fromEntries(Object.entries(policy || {}).filter(([, value]) => value !== undefined && value !== null)),
+    ...Object.fromEntries(Object.entries(policy || {}).filter(([, value]: any) => value !== undefined && value !== null)),
     min_events_between_runs: Number(policy.min_events_between_runs ?? SKILL_DREAM_POLICY.min_events_between_runs),
     min_interval_hours: Number(policy.min_interval_hours ?? SKILL_DREAM_POLICY.min_interval_hours),
     max_events_retained: Number(policy.max_events_retained ?? SKILL_DREAM_POLICY.max_events_retained),
@@ -398,7 +397,7 @@ function normalizeSkillDreamPolicy(policy = {}) {
   };
 }
 
-function normalizeSkillDreamState(raw = null, opts = {}) {
+function normalizeSkillDreamState(raw: any = null, opts: any = {}) {
   const policy = normalizeSkillDreamPolicy(opts.policy || raw?.policy || {});
   const state = {
     schema_version: 1,
@@ -421,12 +420,12 @@ function normalizeSkillDreamState(raw = null, opts = {}) {
   return state;
 }
 
-function normalizeSkillNames(values) {
+function normalizeSkillNames(values: any) {
   const raw = Array.isArray(values) ? values : String(values || '').split(',');
-  return Array.from(new Set(raw.map((value) => safeId(value)).filter(Boolean)));
+  return Array.from(new Set(raw.map((value: any) => safeId(value)).filter(Boolean)));
 }
 
-function bumpRouteCounter(current = {}, ts, skillNames = [], command = null) {
+function bumpRouteCounter(current: any = {}, ts: any, skillNames: any = [], command: any = null) {
   const skills = { ...(current.skills || {}) };
   for (const skill of skillNames) skills[skill] = Number(skills[skill] || 0) + 1;
   return {
@@ -437,7 +436,7 @@ function bumpRouteCounter(current = {}, ts, skillNames = [], command = null) {
   };
 }
 
-function bumpSkillCounter(current = {}, ts, route) {
+function bumpSkillCounter(current: any = {}, ts: any, route: any) {
   const routes = { ...(current.routes || {}) };
   routes[route] = Number(routes[route] || 0) + 1;
   return {
@@ -447,7 +446,7 @@ function bumpSkillCounter(current = {}, ts, route) {
   };
 }
 
-async function inventorySkillDream(root, opts = {}) {
+async function inventorySkillDream(root: any, opts: any = {}) {
   const skillRoot = path.join(root, '.agents', 'skills');
   const known = new Set(normalizeSkillNames(opts.known_skill_names || []));
   const manifest = await readJson(path.join(root, '.sneakoscope', 'manifest.json'), null);
@@ -455,8 +454,8 @@ async function inventorySkillDream(root, opts = {}) {
     ...(manifest?.prompt_pipeline?.dollar_skill_names || []),
     ...(manifest?.recommended_skills || [])
   ])) known.add(name);
-  const skills = [];
-  let entries = [];
+  const skills: any[] = [];
+  let entries: any[] = [];
   try { entries = await fsp.readdir(skillRoot, { withFileTypes: true }); } catch {}
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -482,22 +481,22 @@ async function inventorySkillDream(root, opts = {}) {
   }
   const summary = {
     total: skills.length,
-    generated: skills.filter((skill) => skill.ownership !== 'unknown_or_user').length,
-    unknown_or_user: skills.filter((skill) => skill.ownership === 'unknown_or_user').length,
-    total_skill_lines: skills.reduce((sum, skill) => sum + skill.line_count, 0),
-    total_skill_words: skills.reduce((sum, skill) => sum + skill.word_count, 0)
+    generated: skills.filter((skill: any) => skill.ownership !== 'unknown_or_user').length,
+    unknown_or_user: skills.filter((skill: any) => skill.ownership === 'unknown_or_user').length,
+    total_skill_lines: skills.reduce((sum: any, skill: any) => sum + skill.line_count, 0),
+    total_skill_words: skills.reduce((sum: any, skill: any) => sum + skill.word_count, 0)
   };
   return { skill_root: skillRoot, skills, summary };
 }
 
-function metadataLooksGenerated(text, name) {
+function metadataLooksGenerated(text: any, name: any) {
   const s = String(text || '');
   return new RegExp(`^name:\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm').test(s)
     && /^routing:\s*temporary\s*$/m.test(s)
     && /^return_to_default_after_route:\s*true\s*$/m.test(s);
 }
 
-async function writeFixtureSkill(skillRoot, name, body) {
+async function writeFixtureSkill(skillRoot: any, name: any, body: any) {
   const dir = path.join(skillRoot, name);
   await ensureDir(path.join(dir, 'agents'));
   await writeTextAtomic(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: Fixture skill.\n---\n\n${body}`);

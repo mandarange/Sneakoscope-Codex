@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { nowIso, readJson, writeJsonAtomic } from './fsx.js';
 import { ARTIFACT_FILES, validateTeamDashboardState } from './artifact-schemas.js';
@@ -22,7 +21,7 @@ export const TEAM_DASHBOARD_PANES = [
   'From-Chat-IMG Visual Map'
 ];
 
-export async function buildTeamDashboardState(dir, opts = {}) {
+export async function buildTeamDashboardState(dir: any, opts: any = {}) {
   const mission = opts.mission || await readJson(path.join(dir, 'mission.json'), {});
   const dashboard = await readJson(path.join(dir, 'team-dashboard.json'), {});
   const runtime = await readJson(path.join(dir, 'team-runtime-tasks.json'), {});
@@ -37,7 +36,7 @@ export async function buildTeamDashboardState(dir, opts = {}) {
   return {
     schema_version: 1,
     updated_at: nowIso(),
-    panes: isFromChat ? TEAM_DASHBOARD_PANES : TEAM_DASHBOARD_PANES.filter((pane) => pane !== 'From-Chat-IMG Visual Map'),
+    panes: isFromChat ? TEAM_DASHBOARD_PANES : TEAM_DASHBOARD_PANES.filter((pane: any) => pane !== 'From-Chat-IMG Visual Map'),
     mission: {
       id: mission.id || dashboard.mission_id || opts.missionId || 'unknown',
       route: mission.mode || opts.route || 'team',
@@ -46,11 +45,11 @@ export async function buildTeamDashboardState(dir, opts = {}) {
       progress_pct: Number(opts.progress_pct || 0),
       next_action: opts.next_action || 'continue mission lifecycle'
     },
-    gates: Object.entries(gate || {}).filter(([, value]) => typeof value === 'boolean').map(([name, value]) => ({ name, status: value ? 'pass' : 'fail', evidence: [] })),
-    agents: Object.entries(dashboard.agents || {}).map(([id, value]) => ({ id, role: value.role || null, status: value.status || 'pending', current_task: value.phase || null })),
-    tasks: (runtime.tasks || []).map((task) => ({ id: task.task_id, deps: task.depends_on || [], status: task.status || 'pending' })),
+    gates: Object.entries(gate || {}).filter(([, value]: any) => typeof value === 'boolean').map(([name, value]: any) => ({ name, status: value ? 'pass' : 'fail', evidence: [] })),
+    agents: Object.entries(dashboard.agents || {}).map(([id, value]: any) => ({ id, role: value.role || null, status: value.status || 'pending', current_task: value.phase || null })),
+    tasks: (runtime.tasks || []).map((task: any) => ({ id: task.task_id, deps: task.depends_on || [], status: task.status || 'pending' })),
     qa: {
-      failed_checks: (dogfood?.findings || []).filter((finding) => finding.post_fix_verification === 'failed').map((finding) => finding.id),
+      failed_checks: (dogfood?.findings || []).filter((finding: any) => finding.post_fix_verification === 'failed').map((finding: any) => finding.id),
       unresolved_fixable_findings: Number(dogfood?.unresolved_fixable_findings || 0)
     },
     performance: {
@@ -62,8 +61,8 @@ export async function buildTeamDashboardState(dir, opts = {}) {
     },
     artifacts: opts.artifacts || ['team-plan.json', 'team-gate.json', 'team-live.md', 'team-dashboard.json', 'team-runtime-tasks.json'],
     memory: {
-      retrieved: (memorySweep?.operations || []).filter((op) => op.operation === 'NOOP').slice(0, 8),
-      forget_queue: (memorySweep?.operations || []).filter((op) => ['DEMOTE', 'SOFT_FORGET', 'ARCHIVE', 'HARD_DELETE', 'CONSOLIDATE'].includes(op.operation)).slice(0, 12)
+      retrieved: (memorySweep?.operations || []).filter((op: any) => op.operation === 'NOOP').slice(0, 8),
+      forget_queue: (memorySweep?.operations || []).filter((op: any) => ['DEMOTE', 'SOFT_FORGET', 'ARCHIVE', 'HARD_DELETE', 'CONSOLIDATE'].includes(op.operation)).slice(0, 12)
     },
     skills: {
       injected: skillForge?.injection?.injected || [],
@@ -82,14 +81,14 @@ export async function buildTeamDashboardState(dir, opts = {}) {
   };
 }
 
-export async function writeTeamDashboardState(dir, opts = {}) {
+export async function writeTeamDashboardState(dir: any, opts: any = {}) {
   const state = await buildTeamDashboardState(dir, opts);
   await writeJsonAtomic(path.join(dir, ARTIFACT_FILES.team_dashboard_state), state);
   return validateTeamDashboardState(state);
 }
 
-export function renderTeamDashboardState(state = {}) {
-  const lines = [];
+export function renderTeamDashboardState(state: any = {}) {
+  const lines: any[] = [];
   lines.push(`Mission: ${state.mission?.id || 'unknown'} (${state.mission?.route || 'team'})`);
   lines.push(`Effort: ${state.mission?.effort || 'unknown'} | Phase: ${state.mission?.phase || 'unknown'} | Progress: ${state.mission?.progress_pct || 0}%`);
   lines.push(`Next: ${state.mission?.next_action || 'unknown'}`);

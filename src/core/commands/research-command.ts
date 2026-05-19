@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -20,7 +19,7 @@ const RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES = 120;
 const RESEARCH_MIN_CYCLE_TIMEOUT_MINUTES = 15;
 const RESEARCH_MAX_CYCLE_TIMEOUT_MINUTES = 240;
 
-export async function researchCommand(sub, args = []) {
+export async function researchCommand(sub: any, args: any = []) {
   if (sub === 'prepare') return researchPrepare(args);
   if (sub === 'run') return researchRun(args);
   if (sub === 'status') return researchStatus(args);
@@ -28,17 +27,17 @@ export async function researchCommand(sub, args = []) {
   process.exitCode = 1;
 }
 
-export async function autoresearchCommand(sub, args = []) {
+export async function autoresearchCommand(sub: any, args: any = []) {
   return researchCommand(sub || 'status', args);
 }
 
-async function researchPrepare(args) {
+async function researchPrepare(args: any) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
   const prompt = positionalArgs(args).join(' ').trim();
   if (!prompt) throw new Error('Missing research topic.');
   const { id, dir } = await createMission(root, { mode: 'research', prompt });
-  const route = ROUTES.find((entry) => entry.id === 'Research') || routePrompt('$Research');
+  const route = ROUTES.find((entry: any) => entry.id === 'Research') || routePrompt('$Research');
   const context7Required = routeNeedsContext7(route, prompt);
   const reasoning = routeReasoning(route, prompt);
   const plan = await writeResearchPlan(dir, prompt, { depth: readFlagValue(args, '--depth', 'frontier') });
@@ -92,7 +91,7 @@ async function researchPrepare(args) {
   console.log(`Run: sks research run ${id} --max-cycles ${RESEARCH_DEFAULT_MAX_CYCLES} --cycle-timeout-minutes ${RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES}`);
 }
 
-async function researchRun(args) {
+async function researchRun(args: any) {
   const root = await sksRoot();
   const id = await resolveMissionId(root, args[0]);
   if (!id) throw new Error('Usage: sks research run <mission-id|latest> [--mock] [--max-cycles N] [--cycle-timeout-minutes N]');
@@ -192,7 +191,7 @@ async function researchRun(args) {
   console.log(`Research paused after max cycles without unanimous scout consensus: ${id}`);
 }
 
-async function researchStatus(args) {
+async function researchStatus(args: any) {
   const root = await sksRoot();
   const id = await resolveMissionId(root, args[0]);
   if (!id) throw new Error('Usage: sks research status <mission-id|latest>');
@@ -211,7 +210,7 @@ async function researchStatus(args) {
   const paperText = paperArtifact.exists ? await readText(paperArtifact.path, '') : '';
   const scoutRows = Array.isArray(scoutLedger?.scouts) ? scoutLedger.scouts : [];
   const sourceLayerRows = Array.isArray(sourceLedger?.source_layers) ? sourceLedger.source_layers : [];
-  const sourceLayersCovered = sourceLayerRows.filter((layer) => layer.status === 'covered' && ((Array.isArray(layer.source_ids) && layer.source_ids.length) || (Array.isArray(layer.counterevidence_ids) && layer.counterevidence_ids.length))).length;
+  const sourceLayersCovered = sourceLayerRows.filter((layer: any) => layer.status === 'covered' && ((Array.isArray(layer.source_ids) && layer.source_ids.length) || (Array.isArray(layer.counterevidence_ids) && layer.counterevidence_ids.length))).length;
   console.log(JSON.stringify({
     mission,
     state,
@@ -223,9 +222,9 @@ async function researchStatus(args) {
     triangulation_checks: sourceLedger?.triangulation?.cross_layer_checks?.length ?? gate?.metrics?.triangulation_checks ?? gate?.triangulation_checks ?? null,
     genius_opinion_summaries: gate?.metrics?.genius_opinion_summaries ?? gate?.genius_opinion_summaries ?? (geniusSummaryText.trim() ? countGeniusOpinionSummaries(geniusSummaryText) : null),
     counterevidence_sources: sourceLedger?.counterevidence_sources?.length ?? null,
-    xhigh_scouts: scoutRows.length ? scoutRows.filter((scout) => scout.effort === 'xhigh').length : null,
-    eureka_moments: scoutRows.length ? scoutRows.filter((scout) => scout.eureka?.exclamation === 'Eureka!' && String(scout.eureka?.idea || '').trim()).length : null,
-    scout_findings: scoutRows.length ? scoutRows.reduce((sum, scout) => sum + (Array.isArray(scout.findings) ? scout.findings.length : 0), 0) : null,
+    xhigh_scouts: scoutRows.length ? scoutRows.filter((scout: any) => scout.effort === 'xhigh').length : null,
+    eureka_moments: scoutRows.length ? scoutRows.filter((scout: any) => scout.eureka?.exclamation === 'Eureka!' && String(scout.eureka?.idea || '').trim()).length : null,
+    scout_findings: scoutRows.length ? scoutRows.reduce((sum: any, scout: any) => sum + (Array.isArray(scout.findings) ? scout.findings.length : 0), 0) : null,
     debate_exchanges: debateLedger?.exchanges?.length ?? null,
     consensus_iterations: gate?.metrics?.consensus_iterations ?? gate?.consensus_iterations ?? debateLedger?.consensus_iterations ?? null,
     unanimous_consensus: gate?.metrics?.unanimous_consensus ?? gate?.unanimous_consensus ?? debateLedger?.unanimous_consensus ?? false,
@@ -238,13 +237,13 @@ async function researchStatus(args) {
   }, null, 2));
 }
 
-async function researchCodeMutationSnapshot(root, missionId = null) {
-  const tracked = await runProcess('git', ['ls-files'], { cwd: root, timeoutMs: 15000, maxOutputBytes: 2 * 1024 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
-  const status = await runProcess('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: root, timeoutMs: 15000, maxOutputBytes: 2 * 1024 * 1024 }).catch((err) => ({ code: 1, stderr: err.message, stdout: '' }));
+async function researchCodeMutationSnapshot(root: any, missionId: any = null) {
+  const tracked = await runProcess('git', ['ls-files'], { cwd: root, timeoutMs: 15000, maxOutputBytes: 2 * 1024 * 1024 }).catch((err: any) => ({ code: 1, stderr: err.message, stdout: '' }));
+  const status = await runProcess('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: root, timeoutMs: 15000, maxOutputBytes: 2 * 1024 * 1024 }).catch((err: any) => ({ code: 1, stderr: err.message, stdout: '' }));
   if (tracked.code !== 0 || status.code !== 0) return { ok: false, reason: 'git_unavailable', hashes: {}, status_rows: [], error: tracked.stderr || status.stderr };
   const allowedPrefixes = researchAllowedMutationPrefixes(missionId);
-  const hashes = {};
-  for (const rel of tracked.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)) {
+  const hashes: Record<string, string | null> = {};
+  for (const rel of tracked.stdout.split(/\r?\n/).map((line: any) => line.trim()).filter(Boolean)) {
     if (researchMutationAllowedPath(rel, allowedPrefixes)) continue;
     const file = path.join(root, rel);
     try {
@@ -257,7 +256,7 @@ async function researchCodeMutationSnapshot(root, missionId = null) {
   return { ok: true, hashes, status_rows: status.stdout.split(/\r?\n/).filter(Boolean), allowed_prefixes: allowedPrefixes };
 }
 
-async function researchCodeMutationDelta(root, baseline, missionId) {
+async function researchCodeMutationDelta(root: any, baseline: any, missionId: any) {
   if (!baseline?.ok) return { blocked: false, changed_paths: [], reason: baseline?.reason || 'baseline_unavailable' };
   const current = await researchCodeMutationSnapshot(root, missionId);
   if (!current.ok) return { blocked: false, changed_paths: [], reason: current.reason || 'current_snapshot_unavailable' };
@@ -278,22 +277,22 @@ async function researchCodeMutationDelta(root, baseline, missionId) {
   return { blocked: changedPaths.length > 0, changed_paths: changedPaths, allowed_prefixes: current.allowed_prefixes };
 }
 
-function researchAllowedMutationPrefixes(missionId = null) {
+function researchAllowedMutationPrefixes(missionId: any = null) {
   return missionId ? [`.sneakoscope/missions/${missionId}/`] : ['.sneakoscope/missions/'];
 }
 
-function researchMutationAllowedPath(rel = '', prefixes = []) {
+function researchMutationAllowedPath(rel: any = '', prefixes: any = []) {
   const normalized = String(rel || '').replace(/\\/g, '/').replace(/^\.\//, '');
-  return prefixes.some((prefix) => normalized.startsWith(prefix));
+  return prefixes.some((prefix: any) => normalized.startsWith(prefix));
 }
 
-function porcelainStatusPath(row = '') {
+function porcelainStatusPath(row: any = '') {
   const payload = String(row || '').slice(3).trim();
   if (!payload) return '';
   const renamed = payload.split(' -> ').pop();
   return String(renamed || '').replace(/^"|"$/g, '');
 }
 
-function readResearchCycleTimeoutMinutes(args) {
+function readResearchCycleTimeoutMinutes(args: any) {
   return readBoundedIntegerFlag(args, '--cycle-timeout-minutes', RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES, RESEARCH_MIN_CYCLE_TIMEOUT_MINUTES, RESEARCH_MAX_CYCLE_TIMEOUT_MINUTES);
 }

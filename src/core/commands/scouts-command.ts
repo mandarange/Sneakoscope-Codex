@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { ensureDir, exists, projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
 import { createMission, loadMission, missionDir, setCurrent, stateFile } from '../mission.js';
@@ -14,7 +13,7 @@ import { flag, readFlagValue, resolveMissionId } from './command-utils.js';
 
 const ACTIONS = new Set(['plan', 'run', 'status', 'consensus', 'handoff', 'validate', 'engines', 'bench', 'help', '--help', '-h']);
 
-export async function scoutsCommand(args = []) {
+export async function scoutsCommand(args: any = []) {
   const root = await projectRoot();
   const action = ACTIONS.has(args[0]) ? args[0] : 'status';
   const actionArgs = ACTIONS.has(args[0]) ? args.slice(1) : args;
@@ -26,7 +25,7 @@ export async function scoutsCommand(args = []) {
   const requireRealParallel = flag(actionArgs, '--require-real-parallel');
   const force = flag(actionArgs, '--force-scouts') || flag(actionArgs, '--force');
   const noScouts = flag(actionArgs, '--no-scouts');
-  const missionArg = actionArgs.find((arg) => !String(arg).startsWith('--')) || 'latest';
+  const missionArg = actionArgs.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
   if (action === 'engines') {
     const result = await detectScoutEngines(root, {});
     if (json) return console.log(JSON.stringify(result, null, 2));
@@ -88,7 +87,7 @@ export async function scoutsCommand(args = []) {
       mission_id: id,
       route: context.route,
       scout_count: SCOUT_COUNT,
-      completed_scouts: results.filter((row) => row.status === 'done').length,
+      completed_scouts: results.filter((row: any) => row.status === 'done').length,
       engine: gate.gate?.engine || null,
       real_parallel: gate.gate?.real_parallel === true,
       gate: gate.gate,
@@ -183,13 +182,14 @@ export async function scoutsCommand(args = []) {
     const sequentialMs = Number(sequentialRun.performance?.duration_ms || 0);
     const parallelMs = Number(parallelRun.performance?.duration_ms || 0);
     const parsedRealOutputs = Number(parallelRun.consensus?.source_policy?.counts?.parsed_scout_output || 0);
-    const speedup = selection.real_parallel && parallelMs > 0 ? Number((sequentialMs / parallelMs).toFixed(2)) : null;
+    const parallelRunAny: any = parallelRun;
+    const speedup: number = selection.real_parallel && parallelMs > 0 ? Number((sequentialMs / parallelMs).toFixed(2)) : 0;
     const claimAllowed = selection.real_parallel === true
       && parsedRealOutputs === SCOUT_COUNT
-      && parallelRun.performance?.claim_allowed === true
+      && parallelRunAny.performance?.claim_allowed === true
       && speedup > 1.1
-      && parallelRun.gate?.read_only_guard === true
-      && !parallelRun.gate?.blockers?.length;
+      && parallelRunAny.gate?.read_only_guard === true
+      && !parallelRunAny.gate?.blockers?.length;
     const result = {
       schema: 'sks.scout-benchmark.v2',
       mission_id: id,
@@ -201,7 +201,7 @@ export async function scoutsCommand(args = []) {
       speedup,
       claim_allowed: claimAllowed,
       confidence: selection.real_parallel ? 'medium' : 'low',
-      read_only_guard: parallelRun.gate?.read_only_guard === true ? 'passed' : 'blocked',
+      read_only_guard: parallelRunAny.gate?.read_only_guard === true ? 'passed' : 'blocked',
       notes: selection.real_parallel ? [] : ['mock/static benchmarks cannot claim real speedup']
     };
     await writeJsonAtomic(path.join(dir, 'scout-benchmark.json'), result);
@@ -218,7 +218,7 @@ export async function scoutsCommand(args = []) {
   }
 }
 
-async function resolveOrCreateScoutMission(root, missionArg, opts = {}) {
+async function resolveOrCreateScoutMission(root: any, missionArg: any, opts: any = {}) {
   const resolved = await resolveMissionId(root, missionArg);
   if (resolved) return { id: resolved, ...(await loadMission(root, resolved)), created: false };
   if (opts.strict) {
@@ -231,7 +231,7 @@ async function resolveOrCreateScoutMission(root, missionArg, opts = {}) {
   return { id: created.id, dir: created.dir, mission: created.mission, created: true };
 }
 
-async function inferScoutContext(root, id, opts = {}) {
+async function inferScoutContext(root: any, id: any, opts: any = {}) {
   const dir = missionDir(root, id);
   const mission = await readJson(path.join(dir, 'mission.json'), {});
   const routeContext = await readJson(path.join(dir, 'route-context.json'), {});
@@ -247,7 +247,7 @@ async function inferScoutContext(root, id, opts = {}) {
   return { route, task, policy: normalizeScoutPolicy(route, task, {}) };
 }
 
-function modeToRoute(mode = '') {
+function modeToRoute(mode: any = '') {
   const key = String(mode || '').toLowerCase();
   const map = {
     team: '$Team',
@@ -264,7 +264,7 @@ function modeToRoute(mode = '') {
     madsks: '$MAD-SKS',
     scouts: '$Team'
   };
-  return map[key] || null;
+  return (map as Record<string, string>)[key] || null;
 }
 
 function scoutsHelp() {

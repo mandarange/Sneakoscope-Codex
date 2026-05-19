@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, PACKAGE_VERSION } from './fsx.js';
 import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, evidenceMentionsForbiddenBrowserAutomation } from './routes.js';
@@ -7,19 +6,19 @@ export const QA_LOOP_ROUTE = 'QALoop';
 const QA_REPORT_SUFFIX = 'qa-report.md';
 const UI_COMPUTER_USE_ONLY_ACK = 'use_codex_computer_use_only_no_chrome_mcp_no_browser_use_no_playwright_or_mark_ui_not_verified';
 
-function promptText(prompt = '') {
+function promptText(prompt: any = '') {
   return String(prompt || '').trim();
 }
 
-function lowerPrompt(prompt = '') {
+function lowerPrompt(prompt: any = '') {
   return promptText(prompt).toLowerCase();
 }
 
-function firstUrl(prompt = '') {
+function firstUrl(prompt: any = '') {
   return promptText(prompt).match(/https?:\/\/[^\s)\]}>,]+/i)?.[0] || '';
 }
 
-function qaScopeFromPrompt(prompt = '') {
+function qaScopeFromPrompt(prompt: any = '') {
   const lower = lowerPrompt(prompt);
   const wantsUi = /\b(ui|browser|screen|visual)\b|화면|브라우저|시각|첫\s*화면|내비|네비/.test(lower);
   const wantsApi = /\b(api|endpoint|http|request|response)\b|엔드포인트|응답|요청/.test(lower);
@@ -28,14 +27,14 @@ function qaScopeFromPrompt(prompt = '') {
   return 'ui_e2e_only';
 }
 
-function targetEnvironmentFromPrompt(prompt = '') {
+function targetEnvironmentFromPrompt(prompt: any = '') {
   const lower = lowerPrompt(prompt);
   if (/\b(prod|production|deployed|live)\b|프로덕션|운영|배포된|실서비스/.test(lower)) return 'deployed_production_domain';
   if (/\b(preview|staging|stage)\b|프리뷰|스테이징|스테이지/.test(lower)) return 'preview_or_staging_domain';
   return 'local_dev_server';
 }
 
-function loginPolicyFromPrompt(prompt = '') {
+function loginPolicyFromPrompt(prompt: any = '') {
   const lower = lowerPrompt(prompt);
   const required = /\b(login|log in|signin|sign in|auth|authenticated|credential)\b|로그인|인증|계정/.test(lower);
   if (!required) {
@@ -52,7 +51,7 @@ function loginPolicyFromPrompt(prompt = '') {
   };
 }
 
-export function inferQaLoopAnswers(prompt = '') {
+export function inferQaLoopAnswers(prompt: any = '') {
   const text = promptText(prompt);
   const environment = targetEnvironmentFromPrompt(text);
   const url = firstUrl(text);
@@ -91,27 +90,27 @@ export function inferQaLoopAnswers(prompt = '') {
   };
 }
 
-function qaReportDateStamp(date = new Date()) {
+function qaReportDateStamp(date: any = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
-function sanitizeVersion(version = PACKAGE_VERSION) {
+function sanitizeVersion(version: any = PACKAGE_VERSION) {
   return String(version || PACKAGE_VERSION).replace(/^v/i, '').replace(/[^0-9A-Za-z.-]/g, '_');
 }
 
-export function qaReportFilename(date = new Date(), version = PACKAGE_VERSION) {
+export function qaReportFilename(date: any = new Date(), version: any = PACKAGE_VERSION) {
   return `${qaReportDateStamp(date)}-v${sanitizeVersion(version)}-${QA_REPORT_SUFFIX}`;
 }
 
-export function isQaReportFilename(name = '') {
+export function isQaReportFilename(name: any = '') {
   return /^\d{4}-\d{2}-\d{2}-v[0-9A-Za-z][0-9A-Za-z.-]*-qa-report\.md$/.test(String(name || ''));
 }
 
-function qaReportFileFromGate(gate = {}) {
+function qaReportFileFromGate(gate: any = {}) {
   return String(gate?.qa_report_file || '').trim();
 }
 
-export function buildQaLoopQuestionSchema(prompt) {
+export function buildQaLoopQuestionSchema(prompt: any) {
   const inferred = inferQaLoopAnswers(prompt);
   return {
     schema_version: 1,
@@ -155,12 +154,12 @@ export function qaLoopQuestionSlots() {
     ];
 }
 
-export function validateQaLoopAnswers(schema, answers = {}) {
+export function validateQaLoopAnswers(schema: any, answers: any = {}) {
   if (schema?.route !== QA_LOOP_ROUTE) return [];
-  const errors = [];
+  const errors: any[] = [];
   const env = answers.TARGET_ENVIRONMENT;
   const mutation = answers.QA_MUTATION_POLICY;
-  const extra = Object.keys(answers).filter((k) => /(password|passwd|token|secret|cookie|storage_state|login_username|login_password)/i.test(k));
+  const extra = Object.keys(answers).filter((k: any) => /(password|passwd|token|secret|cookie|storage_state|login_username|login_password)/i.test(k));
   if (extra.length) errors.push({ slot: extra.join(','), error: 'qa_loop_credentials_must_not_be_saved_in_answers_json' });
   if (env !== 'local_dev_server' && mutation === 'seeded_create_change_remove_local_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'destructive_removal_tests_are_local_dev_only' });
   if (env === 'deployed_production_domain' && mutation !== 'read_only_smoke_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'production_deployed_qa_is_read_only_smoke_only' });
@@ -172,38 +171,38 @@ export function validateQaLoopAnswers(schema, answers = {}) {
   return errors;
 }
 
-export function isUiScope(scope) {
+export function isUiScope(scope: any) {
   return ['ui_e2e_only', 'ui_and_api_e2e', 'all_available'].includes(scope);
 }
 
-export function isApiScope(scope) {
+export function isApiScope(scope: any) {
   return ['api_e2e_only', 'ui_and_api_e2e', 'all_available'].includes(scope);
 }
 
-function targetUrl(value) {
+function targetUrl(value: any) {
   const text = String(value || '').trim().toLowerCase();
   return Boolean(text) && !['none', 'not_required', 'n/a', 'na', 'unset'].includes(text);
 }
 
-function hasUiTarget(a = {}) {
+function hasUiTarget(a: any = {}) {
   return targetUrl(a.TARGET_BASE_URL);
 }
 
-function hasApiTarget(a = {}) {
+function hasApiTarget(a: any = {}) {
   const api = String(a.API_BASE_URL || '').trim();
   if (!api || /^same_as_target$/i.test(api)) return hasUiTarget(a);
   return targetUrl(api);
 }
 
-export function qaUiRequired(a = {}) {
+export function qaUiRequired(a: any = {}) {
   return a.QA_SCOPE === 'all_available' ? hasUiTarget(a) : isUiScope(a.QA_SCOPE);
 }
 
-export function qaApiRequired(a = {}) {
+export function qaApiRequired(a: any = {}) {
   return a.QA_SCOPE === 'all_available' ? hasApiTarget(a) : isApiScope(a.QA_SCOPE);
 }
 
-export function defaultQaGate(contract = {}, opts = {}) {
+export function defaultQaGate(contract: any = {}, opts: any = {}) {
   const a = contract.answers || {};
   const uiRequired = qaUiRequired(a);
   const apiRequired = qaApiRequired(a);
@@ -237,7 +236,7 @@ export function defaultQaGate(contract = {}, opts = {}) {
   };
 }
 
-export async function writeQaLoopArtifacts(dir, mission, contract) {
+export async function writeQaLoopArtifacts(dir: any, mission: any, contract: any) {
   const a = contract.answers || {};
   const checklist = qaChecklist(a);
   const reportFile = qaReportFilename();
@@ -255,10 +254,10 @@ export async function writeQaLoopArtifacts(dir, mission, contract) {
   return { checklist_count: checklist.length, report_file: reportFile };
 }
 
-export async function evaluateQaGate(dir) {
+export async function evaluateQaGate(dir: any) {
   const gate = await readJson(path.join(dir, 'qa-gate.json'), {});
   const reportFile = qaReportFileFromGate(gate);
-  const reasons = [];
+  const reasons: any[] = [];
   for (const key of ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'ui_computer_use_evidence', 'honest_mode_complete']) {
     if (gate[key] !== true) reasons.push(`${key}_missing`);
   }
@@ -283,7 +282,7 @@ export async function evaluateQaGate(dir) {
   return result;
 }
 
-export async function writeMockQaResult(dir, mission, contract) {
+export async function writeMockQaResult(dir: any, mission: any, contract: any) {
   const previousGate = await readJson(path.join(dir, 'qa-gate.json'), {});
   const previousReportFile = qaReportFileFromGate(previousGate);
   const reportFile = isQaReportFilename(previousReportFile) ? previousReportFile : qaReportFilename();
@@ -293,7 +292,7 @@ export async function writeMockQaResult(dir, mission, contract) {
   return evaluateQaGate(dir);
 }
 
-export function buildQaLoopPrompt({ id, mission, contract, cycle, previous, reportFile }) {
+export function buildQaLoopPrompt({ id, mission, contract, cycle, previous, reportFile }: any) {
   const report = reportFile && isQaReportFilename(reportFile) ? reportFile : 'the date/version-prefixed report named by qa-gate.json.qa_report_file';
   return `SKS QA-LOOP
 MISSION: ${id}
@@ -312,7 +311,7 @@ ${String(previous || '').slice(-2500)}
 `;
 }
 
-export async function qaStatus(dir) {
+export async function qaStatus(dir: any) {
   const gate = await readJson(path.join(dir, 'qa-gate.evaluated.json'), await readJson(path.join(dir, 'qa-gate.json'), null));
   const ledger = await readJson(path.join(dir, 'qa-ledger.json'), null);
   const reportFile = qaReportFileFromGate(gate?.gate || gate || {}) || ledger?.qa_report_file || null;
@@ -320,7 +319,7 @@ export async function qaStatus(dir) {
   return { gate, checklist_count: ledger?.checklist?.length ?? null, report_file: reportFile, report_written: Boolean(report.trim()) };
 }
 
-function qaChecklist(a) {
+function qaChecklist(a: any) {
   const cases = [
     ['preflight.target', 'Confirm target, environment, and mutation policy.'],
     ['preflight.safety', 'Block destructive, billing, messaging, webhook, admin, bulk writes.'],
@@ -353,15 +352,15 @@ function qaChecklist(a) {
     ['api.security', 'Check CORS, auth headers, PII redaction, and permission boundaries.']
   );
   cases.push(['report.evidence', 'Record pass/fail/blocked/skipped with evidence.'], ['report.corrective_loop', 'Record fixes, rechecks, unresolved findings, deferred blockers.'], ['report.honest', 'Run Honest Mode.']);
-  return cases.map(([id, title]) => ({ id, title, status: 'pending', evidence: [] }));
+  return cases.map(([id, title]: any) => ({ id, title, status: 'pending', evidence: [] }));
 }
 
-function qaReportTemplate(mission, contract, checklist) {
+function qaReportTemplate(mission: any, contract: any, checklist: any) {
   const a = contract.answers || {};
-  return `# QA-LOOP Report\n\nMission: ${mission.id}\nTarget: ${a.TARGET_BASE_URL || 'unset'}\nScope: ${a.QA_SCOPE || 'unset'}\nEnvironment: ${a.TARGET_ENVIRONMENT || 'unset'}\n\n## Safety\n\n- Deployed destructive tests: never\n- Credentials: temp-only, never saved\n- UI evidence: ${CODEX_COMPUTER_USE_ONLY_POLICY}\n\n## Checklist\n\n${checklist.map((item) => `- [ ] ${item.id}: ${item.title}`).join('\n')}\n\n## Findings\n\nTBD\n\n## Corrections And Rechecks\n\nTBD\n\n## Honest Mode\n\nTBD\n`;
+  return `# QA-LOOP Report\n\nMission: ${mission.id}\nTarget: ${a.TARGET_BASE_URL || 'unset'}\nScope: ${a.QA_SCOPE || 'unset'}\nEnvironment: ${a.TARGET_ENVIRONMENT || 'unset'}\n\n## Safety\n\n- Deployed destructive tests: never\n- Credentials: temp-only, never saved\n- UI evidence: ${CODEX_COMPUTER_USE_ONLY_POLICY}\n\n## Checklist\n\n${checklist.map((item: any) => `- [ ] ${item.id}: ${item.title}`).join('\n')}\n\n## Findings\n\nTBD\n\n## Corrections And Rechecks\n\nTBD\n\n## Honest Mode\n\nTBD\n`;
 }
 
-function positiveCount(value) {
+function positiveCount(value: any) {
   const n = Number(value || 0);
   return Number.isFinite(n) && n > 0;
 }

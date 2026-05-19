@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { exists, PACKAGE_VERSION, packageRoot, readText, runProcess, which } from './fsx.js';
 import { sha256File } from './wiki-image/image-hash.js';
@@ -30,7 +29,7 @@ export async function findRustAccelerator() {
   return null;
 }
 
-export async function runRustOrFallback(command, args = [], fallbackFn = async () => null) {
+export async function runRustOrFallback(command: any, args: any = [], fallbackFn: any = async () => null) {
   const probe = await rustAcceleratorProbe();
   if (!probe.bin) return normalizeAcceleratorResult(command, { engine: 'js', available: false, result: await fallbackFn() });
   if (!probe.compatible) {
@@ -42,16 +41,16 @@ export async function runRustOrFallback(command, args = [], fallbackFn = async (
     });
   }
   const bin = probe.bin;
-  const result = await runProcess(bin, [command, ...args], { timeoutMs: 10000, maxOutputBytes: 1024 * 1024 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  const result = await runProcess(bin, [command, ...args], { timeoutMs: 10000, maxOutputBytes: 1024 * 1024 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   if (result.code !== 0) return normalizeAcceleratorResult(command, { engine: 'js', available: true, rust_error: classifyRustError(command, result.stderr || result.stdout), result: await fallbackFn() });
   return normalizeAcceleratorResult(command, { engine: 'rust', available: true, stdout: result.stdout.trim(), result: parseRustJson(result.stdout) });
 }
 
-export async function rustImageHash(file) {
+export async function rustImageHash(file: any) {
   return runRustOrFallback('image-hash', [file], async () => ({ ok: true, engine: 'js', path: file, sha256: await sha256File(file) }));
 }
 
-export async function rustVoxelValidate(file, opts = {}) {
+export async function rustVoxelValidate(file: any, opts: any = {}) {
   const args = [file, ...(opts.requireAnchors ? ['--require-anchors'] : []), ...(opts.requireRelations ? ['--require-relations'] : [])];
   return runRustOrFallback('voxel-validate', args, async () => {
     const validation = validateImageVoxelLedger(await readImageVoxelLedger(packageRoot(), file), {
@@ -63,14 +62,14 @@ export async function rustVoxelValidate(file, opts = {}) {
   });
 }
 
-export async function rustSecretScan(file) {
+export async function rustSecretScan(file: any) {
   return runRustOrFallback('secret-scan', [file], async () => {
     const text = await readText(file, '');
     return { ok: !/(CODEX_ACCESS_TOKEN|OPENAI_API_KEY|CODEX_LB_API_KEY|sk-proj-|sk-clb-|github_pat_)/.test(text) };
   });
 }
 
-export async function rustInfo() {
+export async function rustInfo(): Promise<any> {
   const probe = await rustAcceleratorProbe();
   const sourceIncluded = await exists(path.join(packageRoot(), 'crates', 'sks-core', 'Cargo.toml'));
   const base = {
@@ -106,7 +105,7 @@ export async function rustInfo() {
 async function rustAcceleratorProbe() {
   const bin = await findRustAccelerator();
   if (!bin) return { bin: null, compatible: false };
-  const result = await runProcess(bin, ['--version'], { timeoutMs: 3000, maxOutputBytes: 20_000 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+  const result = await runProcess(bin, ['--version'], { timeoutMs: 3000, maxOutputBytes: 20_000 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   const version = `${result.stdout || ''}${result.stderr || ''}`.trim();
   const compatible = result.code === 0 && version === `sks-rs ${PACKAGE_VERSION}`;
   return {
@@ -118,17 +117,17 @@ async function rustAcceleratorProbe() {
   };
 }
 
-function parseRustJson(text = '') {
+function parseRustJson(text: any = '') {
   try { return JSON.parse(text); } catch { return text.trim(); }
 }
 
-function classifyRustError(command, text = '') {
+function classifyRustError(command: any, text: any = '') {
   const s = String(text || '');
   if (/unknown|Commands:|optional accelerator/i.test(s)) return { kind: 'command_missing', command, message: s };
   return { kind: 'runtime_error', command, message: s };
 }
 
-function normalizeAcceleratorResult(command, value) {
+function normalizeAcceleratorResult(command: any, value: any) {
   const result = value.result && typeof value.result === 'object' ? value.result : { ok: false, value: value.result };
   return {
     command,

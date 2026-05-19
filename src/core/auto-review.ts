@@ -1,4 +1,3 @@
-// @ts-nocheck
 import os from 'node:os';
 import path from 'node:path';
 import { ensureDir, exists, readText, writeTextAtomic } from './fsx.js';
@@ -9,19 +8,19 @@ export const AUTO_REVIEW_PROFILE = 'sks-auto-review';
 export const AUTO_REVIEW_HIGH_PROFILE = 'sks-auto-review-high';
 export const MAD_HIGH_PROFILE = 'sks-mad-high';
 
-export function codexHome(env = process.env) {
+export function codexHome(env: any = process.env) {
   return path.resolve(env.CODEX_HOME || path.join(env.HOME || os.homedir(), '.codex'));
 }
 
-export function codexConfigPath(env = process.env) {
+export function codexConfigPath(env: any = process.env) {
   return path.join(codexHome(env), 'config.toml');
 }
 
-export function autoReviewProfileName(opts = {}) {
+export function autoReviewProfileName(opts: any = {}) {
   return opts.high ? AUTO_REVIEW_HIGH_PROFILE : AUTO_REVIEW_PROFILE;
 }
 
-export async function autoReviewStatus(opts = {}) {
+export async function autoReviewStatus(opts: any = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
   const text = await readText(configPath, '');
   const approvalsReviewer = readTomlString(text, 'approvals_reviewer');
@@ -39,7 +38,7 @@ export async function autoReviewStatus(opts = {}) {
   };
 }
 
-export async function enableAutoReview(opts = {}) {
+export async function enableAutoReview(opts: any = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
   const high = Boolean(opts.high);
   await ensureDir(path.dirname(configPath));
@@ -58,7 +57,7 @@ export async function enableAutoReview(opts = {}) {
   };
 }
 
-export async function enableMadHighProfile(opts = {}) {
+export async function enableMadHighProfile(opts: any = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
   await ensureDir(path.dirname(configPath));
   const current = await readText(configPath, '');
@@ -90,7 +89,7 @@ export function madHighProfileName() {
   return MAD_HIGH_PROFILE;
 }
 
-export async function disableAutoReview(opts = {}) {
+export async function disableAutoReview(opts: any = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
   const current = await readText(configPath, '');
   let next = upsertTopLevelString(current, 'approvals_reviewer', 'user');
@@ -101,7 +100,7 @@ export async function disableAutoReview(opts = {}) {
   return autoReviewStatus({ configPath });
 }
 
-export function autoReviewSummary(status = {}) {
+export function autoReviewSummary(status: any = {}) {
   const lines = [
     'Codex Auto-Review',
     '',
@@ -121,25 +120,25 @@ export function autoReviewSummary(status = {}) {
   return lines.join('\n');
 }
 
-function readTomlString(text, key) {
+function readTomlString(text: any, key: any) {
   const re = new RegExp(`^${escapeRegExp(key)}\\s*=\\s*"([^"]*)"\\s*$`, 'm');
   return text.match(re)?.[1] || null;
 }
 
-function readTableString(text, table, key) {
+function readTableString(text: any, table: any, key: any) {
   const body = tableBody(text, table);
   if (!body) return null;
   return readTomlString(body, key);
 }
 
-function tableHasString(text, table, key, value) {
+function tableHasString(text: any, table: any, key: any, value: any) {
   return readTableString(text, table, key) === value;
 }
 
-function tableBody(text, table) {
+function tableBody(text: any, table: any) {
   const lines = String(text || '').split('\n');
   const header = `[${table}]`;
-  const out = [];
+  const out: any[] = [];
   let inTable = false;
   for (const line of lines) {
     if (/^\s*\[.+\]\s*$/.test(line)) {
@@ -152,13 +151,13 @@ function tableBody(text, table) {
   return inTable || out.length ? out.join('\n') : '';
 }
 
-function upsertTopLevelString(text, key, value) {
+function upsertTopLevelString(text: any, key: any, value: any) {
   const line = `${key} = "${value}"`;
   const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
   const end = firstTable === -1 ? lines.length : firstTable;
   for (let i = 0; i < end; i++) {
-    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i])) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i] || '')) {
       lines[i] = line;
       return lines.join('\n').replace(/\n+$/, '\n');
     }
@@ -167,7 +166,7 @@ function upsertTopLevelString(text, key, value) {
   return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
-function upsertProfile(text, profile, effort, reviewer = AUTO_REVIEW_REVIEWER) {
+function upsertProfile(text: any, profile: any, effort: any, reviewer: any = AUTO_REVIEW_REVIEWER) {
   const block = [
     `[profiles.${profile}]`,
     'model = "gpt-5.5"',
@@ -180,7 +179,7 @@ function upsertProfile(text, profile, effort, reviewer = AUTO_REVIEW_REVIEWER) {
   return upsertTable(text, `profiles.${profile}`, block);
 }
 
-function upsertAutoReviewPolicy(text) {
+function upsertAutoReviewPolicy(text: any) {
   const policy = [
     '[auto_review]',
     'policy = "In MAD launches, allow live-server work, normal DB writes, Supabase MCP DB writes, direct execute SQL, schema cleanup, and migration application for the active invocation. Deny only catastrophic database wipes, all-row value deletion/update, dangerous project or branch management, credential exfiltration, persistent security weakening, broad unrelated file deletion, and unrequested fallback implementation code."'
@@ -190,16 +189,16 @@ function upsertAutoReviewPolicy(text) {
   return upsertTable(text, 'auto_review', policy);
 }
 
-function upsertTable(text, table, block) {
+function upsertTable(text: any, table: any, block: any) {
   const lines = String(text || '').replace(/\s+$/, '').split('\n');
   const header = `[${table}]`;
-  const start = lines.findIndex((x) => x.trim() === header);
+  const start = lines.findIndex((x: any) => x.trim() === header);
   if (start === -1) {
-    return `${lines.filter((x, i) => i > 0 || x.trim()).join('\n')}${lines.some((x) => x.trim()) ? '\n\n' : ''}${block}\n`;
+    return `${lines.filter((x: any, i: any) => i > 0 || x.trim()).join('\n')}${lines.some((x: any) => x.trim()) ? '\n\n' : ''}${block}\n`;
   }
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i])) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
       end = i;
       break;
     }
@@ -208,6 +207,6 @@ function upsertTable(text, table, block) {
   return `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`;
 }
 
-function escapeRegExp(value) {
+function escapeRegExp(value: any) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

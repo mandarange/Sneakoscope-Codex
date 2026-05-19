@@ -1,11 +1,10 @@
-// @ts-nocheck
 import path from 'node:path';
 import { appendJsonl, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from './fsx.js';
 
 export const GOAL_WORKFLOW_ARTIFACT = 'goal-workflow.json';
 export const GOAL_BRIDGE_ARTIFACT = 'goal-bridge.md';
 
-export function nativeGoalCommand(action = 'create', prompt = '') {
+export function nativeGoalCommand(action: any = 'create', prompt: any = '') {
   const cleanAction = String(action || 'create').toLowerCase();
   const cleanPrompt = String(prompt || '').trim();
   if (cleanAction === 'pause') return '/goal pause';
@@ -14,7 +13,7 @@ export function nativeGoalCommand(action = 'create', prompt = '') {
   return cleanPrompt ? `/goal create ${cleanPrompt}` : '/goal create';
 }
 
-export async function writeGoalWorkflow(dir, mission, opts = {}) {
+export async function writeGoalWorkflow(dir: any, mission: any, opts: any = {}) {
   const action = String(opts.action || 'create').toLowerCase();
   const prompt = String(opts.prompt || mission?.prompt || '').trim();
   const workflow = {
@@ -76,7 +75,7 @@ export async function writeGoalWorkflow(dir, mission, opts = {}) {
   return workflow;
 }
 
-export async function updateGoalWorkflow(dir, action) {
+export async function updateGoalWorkflow(dir: any, action: any) {
   const current = await readJson(path.join(dir, GOAL_WORKFLOW_ARTIFACT), {});
   const next = {
     ...current,
@@ -107,7 +106,7 @@ export async function updateGoalWorkflow(dir, action) {
   return next;
 }
 
-function goalBridgeMarkdown(workflow) {
+function goalBridgeMarkdown(workflow: any) {
   return `# SKS Goal Persistence Bridge
 
 Mission: ${workflow.mission_id}

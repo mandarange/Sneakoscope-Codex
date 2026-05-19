@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { nowIso } from '../../fsx.js';
 import { SCOUT_COUNT, SCOUT_ROLES } from '../scout-schema.js';
@@ -19,7 +18,7 @@ export const REAL_PARALLEL_SCOUT_ENGINES = new Set([
   'codex-app-subagents'
 ]);
 
-export function normalizeScoutEngineName(value = 'auto') {
+export function normalizeScoutEngineName(value: any = 'auto') {
   const raw = String(value || 'auto').trim();
   if (!raw || raw === 'auto') return 'auto';
   const normalized = raw.toLowerCase().replace(/_/g, '-');
@@ -27,7 +26,7 @@ export function normalizeScoutEngineName(value = 'auto') {
   return normalized;
 }
 
-export function isRealParallelScoutEngine(engine) {
+export function isRealParallelScoutEngine(engine: any) {
   return REAL_PARALLEL_SCOUT_ENGINES.has(String(engine || ''));
 }
 
@@ -47,7 +46,7 @@ export function scoutEngineResult({
   unverified = [],
   jobs = [],
   sourcePolicy = null
-} = {}) {
+}: any = {}) {
   return {
     schema: SCOUT_ENGINE_RESULT_SCHEMA,
     engine,
@@ -68,7 +67,7 @@ export function scoutEngineResult({
   };
 }
 
-export function buildScoutPrompt({ missionId, route, task, role, outputPath }) {
+export function buildScoutPrompt({ missionId, route, task, role, outputPath }: any) {
   const relOutput = outputPath ? path.normalize(outputPath) : role.json;
   return [
     `You are ${role.role} for SKS Five-Scout read-only intake.`,
@@ -92,7 +91,7 @@ export function buildScoutPrompt({ missionId, route, task, role, outputPath }) {
   ].join('\n');
 }
 
-export function unavailableEngine(name, reason, extra = {}) {
+export function unavailableEngine(name: any, reason: any, extra: any = {}) {
   return {
     name,
     available: false,
@@ -106,7 +105,7 @@ export function unavailableEngine(name, reason, extra = {}) {
   };
 }
 
-export function availableEngine(name, extra = {}) {
+export function availableEngine(name: any, extra: any = {}) {
   return {
     name,
     available: true,
@@ -118,6 +117,6 @@ export function availableEngine(name, extra = {}) {
   };
 }
 
-export function emptyScoutDurations(value = 0) {
-  return Object.fromEntries(SCOUT_ROLES.map((role) => [role.id, value]));
+export function emptyScoutDurations(value: any = 0) {
+  return Object.fromEntries(SCOUT_ROLES.map((role: any) => [role.id, value]));
 }

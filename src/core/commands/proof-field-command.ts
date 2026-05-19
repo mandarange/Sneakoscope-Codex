@@ -1,10 +1,9 @@
-// @ts-nocheck
 import path from 'node:path';
 import { sksRoot } from '../fsx.js';
 import { writeProofFieldReport } from '../proof-field.js';
 import { flag, positionalArgs, readFlagValue } from './command-utils.js';
 
-export async function proofFieldCommand(sub, args = []) {
+export async function proofFieldCommand(sub: any, args: any = []) {
   const action = sub || 'scan';
   if (!['scan', 'help', '--help'].includes(action)) {
     console.error('Usage: sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]');

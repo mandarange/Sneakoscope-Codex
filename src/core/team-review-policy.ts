@@ -1,9 +1,8 @@
-// @ts-nocheck
 export const MIN_TEAM_REVIEWER_LANES = 5;
 export const MIN_TEAM_REVIEW_STAGE_AGENT_SESSIONS = MIN_TEAM_REVIEWER_LANES;
 export const MIN_TEAM_REVIEW_POLICY_TEXT = `Minimum Team review policy: run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes before integration or final, even when the requested reviewer role count is lower.`;
 
-function numericCount(value, fallback = 0) {
+function numericCount(value: any, fallback: any = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : fallback;
 }
@@ -17,21 +16,21 @@ export function teamReviewPolicy() {
   };
 }
 
-export function teamValidationReviewerCount(roster = {}) {
+export function teamValidationReviewerCount(roster: any = {}) {
   const validation = Array.isArray(roster?.validation_team) ? roster.validation_team : [];
-  return validation.filter((agent) => {
+  return validation.filter((agent: any) => {
     const id = String(agent?.id || agent || '');
     const role = String(agent?.role || '');
     return /review|qa|validation/i.test(`${role} ${id}`);
   }).length;
 }
 
-export function evaluateTeamReviewPolicyGate({ roleCounts = {}, agentSessions = 0, roster = {} } = {}) {
+export function evaluateTeamReviewPolicyGate({ roleCounts = {}, agentSessions = 0, roster = {} }: any = {}) {
   const requestedReviewerLanes = numericCount(roleCounts.reviewer);
   const requiredReviewerLanes = Math.max(MIN_TEAM_REVIEWER_LANES, requestedReviewerLanes);
   const validationReviewerLanes = teamValidationReviewerCount(roster);
   const sessionCount = numericCount(agentSessions);
-  const blockers = [];
+  const blockers: any[] = [];
 
   if (requestedReviewerLanes < MIN_TEAM_REVIEWER_LANES) blockers.push('role_counts.reviewer_below_minimum');
   if (validationReviewerLanes < requiredReviewerLanes) blockers.push('validation_team_reviewers_below_required');

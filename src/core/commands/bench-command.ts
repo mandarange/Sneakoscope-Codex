@@ -1,15 +1,14 @@
-// @ts-nocheck
 import { benchRoot, runCoreBench } from '../bench.js';
 import { runProcess } from '../fsx.js';
 import { flag, readFlagValue } from './command-utils.js';
 
-export async function benchCommand(args = []) {
+export async function benchCommand(args: any = []) {
   const action = args[0] || 'core';
   const root = await benchRoot();
   if (action === 'core' || action === 'trust-kernel') {
     const report = await runCoreBench(root, { iterations: readFlagValue(args, '--iterations', 3), tier: readFlagValue(args, '--tier', 'source-local') });
     const result = action === 'trust-kernel'
-      ? { schema: 'sks.trust-kernel-bench.v1', ok: report.commands.find((row) => row.command === 'sks trust validate latest --json')?.ok === true, core: report }
+      ? { schema: 'sks.trust-kernel-bench.v1', ok: report.commands.find((row: any) => row.command === 'sks trust validate latest --json')?.ok === true, core: report }
       : report;
     if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
     console.log(`${action}: ${result.ok ? 'pass' : 'blocked'}`);
@@ -22,7 +21,7 @@ export async function benchCommand(args = []) {
   process.exitCode = 2;
 }
 
-async function commandBench(schema, commandArgs, args = []) {
+async function commandBench(schema: any, commandArgs: any, args: any = []) {
   if (schema === 'sks.blackbox-bench.v1') {
     const result = {
       schema,

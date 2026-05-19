@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { nowIso } from '../fsx.js';
 import { FIVE_SCOUT_STAGE_ID, SCOUT_COUNT, SCOUT_GATE_OUTPUTS, SCOUT_REQUIRED_OUTPUTS, SCOUT_ROLES, SCOUT_TEAM_PLAN_SCHEMA } from './scout-schema.js';
 
@@ -40,7 +39,7 @@ const LIGHTWEIGHT_ROUTE_KEYS = new Set([
   'sks'
 ]);
 
-export function normalizeScoutRoute(route) {
+export function normalizeScoutRoute(route: any) {
   if (!route) return '';
   const raw = typeof route === 'string'
     ? route
@@ -51,13 +50,13 @@ export function normalizeScoutRoute(route) {
     .toLowerCase();
 }
 
-export function scoutRouteLabel(route) {
+export function scoutRouteLabel(route: any) {
   if (!route) return '$SKS';
   if (typeof route === 'string') return route.startsWith('$') ? route : `$${route}`;
   return route.command || (route.id ? `$${route.id}` : '$SKS');
 }
 
-export function routeRequiresScoutIntake(route, opts = {}) {
+export function routeRequiresScoutIntake(route: any, opts: any = {}) {
   if (opts.noScouts || opts.disabled || opts.scouts === false) return false;
   if (opts.force || opts.forceScouts || opts.scouts === SCOUT_COUNT) return true;
   const key = normalizeScoutRoute(route);
@@ -74,7 +73,7 @@ export function routeRequiresScoutIntake(route, opts = {}) {
   return SCOUT_REQUIRED_ROUTE_KEYS.has(key);
 }
 
-export function normalizeScoutPolicy(route, task = '', input = {}) {
+export function normalizeScoutPolicy(route: any, task: any = '', input: any = {}) {
   const force = Boolean(input.force || input.forceScouts || input.force_scouts);
   const noScouts = Boolean(input.noScouts || input.no_scouts || input.disabled || input.scouts === false);
   const explicitScoutCount = Object.hasOwn(input, 'count') || Object.hasOwn(input, 'scouts');
@@ -113,7 +112,7 @@ export function buildScoutTeamPlan({
   timeBudget = {},
   scouts = SCOUT_ROLES,
   createdAt = nowIso()
-} = {}) {
+}: any = {}) {
   return {
     schema: SCOUT_TEAM_PLAN_SCHEMA,
     mission_id: missionId,
@@ -124,7 +123,7 @@ export function buildScoutTeamPlan({
     parallel_mode: parallelMode,
     scout_count: SCOUT_COUNT,
     read_only: true,
-    scouts: scouts.map((scout) => ({
+    scouts: scouts.map((scout: any) => ({
       id: scout.id,
       role: scout.role,
       status: 'pending',
@@ -138,7 +137,7 @@ export function buildScoutTeamPlan({
   };
 }
 
-export function scoutPipelineStage(policy = { required: true }) {
+export function scoutPipelineStage(policy: any = { required: true }) {
   return {
     id: FIVE_SCOUT_STAGE_ID,
     status: policy.required ? 'required' : 'skipped',

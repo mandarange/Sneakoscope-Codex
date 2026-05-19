@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { appendJsonlBounded, exists, nowIso, readJson, sksRoot, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
@@ -20,13 +19,13 @@ import { ambientGoalContinuation, flag, readFlagValue } from './command-utils.js
 
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 
-export async function team(args = []) {
+export async function team(args: any = []) {
   const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'open-tmux', 'attach-tmux', 'cleanup-tmux']);
   if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
   const jsonOutput = flag(args, '--json');
   const mock = flag(args, '--mock');
   const openTmux = !mock && !jsonOutput && !flag(args, '--no-open-tmux') && !flag(args, '--no-tmux');
-  const cleanCreateArgs = args.filter((arg) => !['--open-tmux', '--tmux-open', '--no-open-tmux', '--no-tmux', '--no-attach', '--mock'].includes(String(arg)));
+  const cleanCreateArgs = args.filter((arg: any) => !['--open-tmux', '--tmux-open', '--no-open-tmux', '--no-tmux', '--no-attach', '--mock'].includes(String(arg)));
   const opts = parseTeamCreateArgs(cleanCreateArgs);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   if (!prompt) {
@@ -71,11 +70,11 @@ export async function team(args = []) {
   let dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team analysis scouts' });
   await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
   dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team analysis scouts' });
-  const route = routePrompt(`$Team ${prompt}`) || ROUTES.find((candidate) => candidate.id === 'Team');
+  const route = routePrompt(`$Team ${prompt}`) || ROUTES.find((candidate: any) => candidate.id === 'Team');
   const routeReason = routeReasoning(route, prompt);
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: prompt, required: false, ambiguity: { required: false, status: 'team_cli_direct' } });
   await setCurrent(root, { mission_id: id, route: 'Team', route_command: '$Team', mode: 'TEAM', phase: mock ? 'TEAM_FIXTURE_DONE' : 'TEAM_PARALLEL_ANALYSIS_SCOUTING', questions_allowed: false, implementation_allowed: true, context7_required: false, context7_verified: mock, subagents_required: true, subagents_verified: mock, reflection_required: true, visible_progress_required: true, context_tracking: 'triwiki', required_skills: route?.requiredSkills || ['team'], stop_gate: 'team-gate.json', reasoning_effort: routeReason.effort, reasoning_profile: routeReason.profile, reasoning_temporary: true, team_agent_reasoning_policy: teamReasoning, goal_continuation: pipelinePlan.goal_continuation, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, team_live_ready: true, from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, prompt });
-  const result = {
+  const result: any = {
     mission_id: id,
     mission_dir: dir,
     plan: path.join(dir, 'team-plan.json'),
@@ -121,14 +120,14 @@ export async function team(args = []) {
   console.log(`Artifacts: .sneakoscope/missions/${id}`);
 }
 
-export function parseTeamCreateArgs(args) {
+export function parseTeamCreateArgs(args: any) {
   const spec = parseTeamSpecArgs(args);
   const prompt = spec.cleanArgs.join(' ').trim();
   const normalized = normalizeTeamSpec({ agentSessions: spec.agentSessions, roleCounts: spec.roleCounts, prompt });
   return { prompt, agentSessions: normalized.agentSessions, roleCounts: normalized.roleCounts, roster: normalized.roster };
 }
 
-export function buildTeamPlan(id, prompt, opts = {}) {
+export function buildTeamPlan(id: any, prompt: any, opts: any = {}) {
   const spec = normalizeTeamSpec({ ...opts, prompt });
   const { agentSessions, roleCounts, roster } = spec;
   const fromChatImgRequired = hasFromChatImgSignal(prompt);
@@ -165,12 +164,12 @@ export function buildTeamPlan(id, prompt, opts = {}) {
     context_tracking: triwikiContextTracking(),
     phases: [
       { id: 'team_roster_confirmation', goal: 'Materialize Team roster and write team-roster.json.', agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'parallel_analysis_scouting', goal: fromChatImgRequired ? `Complete From-Chat-IMG source inventory and coverage artifacts. ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'Read relevant TriWiki context and run read-only analysis scouts before debate.', agents: roster.analysis_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only', output: 'team-analysis.md' },
+      { id: 'parallel_analysis_scouting', goal: fromChatImgRequired ? `Complete From-Chat-IMG source inventory and coverage artifacts. ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'Read relevant TriWiki context and run read-only analysis scouts before debate.', agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only', output: 'team-analysis.md' },
       { id: 'triwiki_refresh', goal: 'Refresh and validate TriWiki from scout findings.', agents: ['parent_orchestrator'], commands: ['sks wiki refresh', 'sks wiki validate .sneakoscope/wiki/context-pack.json'], output: '.sneakoscope/wiki/context-pack.json' },
-      { id: 'planning_debate', goal: 'Debate risks and viable approaches with refreshed context.', agents: roster.debate_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
+      { id: 'planning_debate', goal: 'Debate risks and viable approaches with refreshed context.', agents: roster.debate_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
       { id: 'runtime_task_graph_compile', goal: `Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}.`, agents: ['parent_orchestrator'] },
-      { id: 'parallel_implementation', goal: 'Fresh executor developers implement disjoint slices.', agents: roster.development_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'workspace-write with explicit ownership' },
-      { id: 'review_and_integrate', goal: `Review with at least ${MIN_TEAM_REVIEWER_LANES} independent lanes.`, agents: roster.validation_team.map((agent) => agent.id).concat(['parent_orchestrator']), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
+      { id: 'parallel_implementation', goal: 'Fresh executor developers implement disjoint slices.', agents: roster.development_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'workspace-write with explicit ownership' },
+      { id: 'review_and_integrate', goal: `Review with at least ${MIN_TEAM_REVIEWER_LANES} independent lanes.`, agents: roster.validation_team.map((agent: any) => agent.id).concat(['parent_orchestrator']), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
       { id: 'session_cleanup', goal: `Write ${TEAM_SESSION_CLEANUP_ARTIFACT}.`, agents: ['parent_orchestrator'], output: TEAM_SESSION_CLEANUP_ARTIFACT }
     ],
     invariants: ['The parent thread remains the orchestrator and owns final integration.', 'Analysis scouts are read-only.', 'Implementation workers receive disjoint ownership scopes.', MIN_TEAM_REVIEW_POLICY_TEXT],
@@ -180,7 +179,7 @@ export function buildTeamPlan(id, prompt, opts = {}) {
   };
 }
 
-export function teamWorkflowMarkdown(plan) {
+export function teamWorkflowMarkdown(plan: any) {
   const ctx = plan.context_tracking || triwikiContextTracking();
   return `# SKS Team Mission
 
@@ -206,31 +205,31 @@ Use at most ${plan.agent_session_count || MIN_TEAM_REVIEWER_LANES} subagent sess
 
 ## Analysis Scouts
 
-${plan.roster.analysis_team.map((agent) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
+${plan.roster.analysis_team.map((agent: any) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
 
 ## Debate Team
 
-${plan.roster.debate_team.map((agent) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
+${plan.roster.debate_team.map((agent: any) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
 
 ## Development Team
 
-${plan.roster.development_team.map((agent) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
+${plan.roster.development_team.map((agent: any) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
 
 ## Validation Team
 
-${plan.roster.validation_team.map((agent) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
+${plan.roster.validation_team.map((agent: any) => `- ${agent.id}: ${agent.persona} [reasoning: ${formatAgentReasoning(agent)}]`).join('\n')}
 
 ## Phases
 
-${plan.phases.map((phase, idx) => `${idx + 1}. ${phase.id}: ${phase.goal}`).join('\n')}
+${plan.phases.map((phase: any, idx: any) => `${idx + 1}. ${phase.id}: ${phase.goal}`).join('\n')}
 
 ## Invariants
 
-${plan.invariants.map((x) => `- ${x}`).join('\n')}
+${plan.invariants.map((x: any) => `- ${x}`).join('\n')}
 `;
 }
 
-async function teamCommand(sub, args) {
+async function teamCommand(sub: any, args: any) {
   const root = await sksRoot();
   const missionArg = args[0] && !String(args[0]).startsWith('--') ? args[0] : 'latest';
   const { resolveMissionId } = await import('./command-utils.js');

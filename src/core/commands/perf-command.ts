@@ -1,10 +1,9 @@
-// @ts-nocheck
 import path from 'node:path';
 import { sksRoot, writeJsonAtomic } from '../fsx.js';
 import { runPerfBench, runWorkflowPerfBench } from '../perf-bench.js';
 import { flag, positionalArgs, readFlagValue } from './command-utils.js';
 
-export async function perfCommand(sub, args = []) {
+export async function perfCommand(sub: any, args: any = []) {
   if (!['run', 'workflow'].includes(sub)) {
     console.error('Usage: sks perf run|workflow [--json] [--iterations N] [--intent "task"] [--changed file1,file2]');
     process.exitCode = 1;

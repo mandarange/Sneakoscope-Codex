@@ -12,6 +12,19 @@ requiredFile('dist/bin/sks.js');
 requiredFile('dist/cli/command-registry.js');
 requiredFile('dist/build-manifest.json');
 
+const bmPath = path.join(root, 'dist/build-manifest.json');
+if (fs.existsSync(bmPath)) {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(bmPath, 'utf8'));
+    if (manifest.schema !== 'sks.dist-build.v2') issues.push(`build_manifest_schema:${manifest.schema || 'missing'}`);
+    if (Object.hasOwn(manifest, 'generated_at')) issues.push('build_manifest_generated_at_non_deterministic');
+    const mjs = Number(manifest.mjs_runtime_files);
+    if (Number.isFinite(mjs) && mjs !== 0) issues.push(`build_manifest_mjs:${mjs}`);
+  } catch (err) {
+    issues.push(`build_manifest_invalid:${err?.message || err}`);
+  }
+}
+
 const bin = path.join(root, 'dist/bin/sks.js');
 if (fs.existsSync(bin) && (fs.statSync(bin).mode & 0o111) === 0) issues.push('bin_not_executable:dist/bin/sks.js');
 

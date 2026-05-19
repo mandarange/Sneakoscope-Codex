@@ -1,18 +1,17 @@
-// @ts-nocheck
 import { detectScoutEngines } from './scout-engine-detect.js';
 import { normalizeScoutEngineName, SCOUT_ENGINE_NAMES } from './scout-engine-base.js';
 
-export async function selectScoutEngine(root, {
+export async function selectScoutEngine(root: any, {
   requested = 'auto',
   requireRealParallel = false,
   missionId = null,
   route = '$Team',
   mock = false
-} = {}) {
+}: any = {}) {
   const normalized = normalizeScoutEngineName(requested);
   const report = await detectScoutEngines(root, { missionId, route, mock });
-  const byName = new Map(report.engines.map((engine) => [engine.name, engine]));
-  const blockers = [];
+  const byName = new Map(report.engines.map((engine: any) => [engine.name, engine]));
+  const blockers: any[] = [];
 
   let selected = null;
   if (normalized !== 'auto') {
@@ -34,7 +33,7 @@ export async function selectScoutEngine(root, {
       byName.get('tmux-lanes'),
       byName.get('local-static'),
       byName.get('sequential-fallback')
-    ].find((engine) => engine?.available);
+    ].find((engine: any) => engine?.available);
   }
 
   if (!selected) {

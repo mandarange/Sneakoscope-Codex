@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
 import { createMission, findLatestMission, loadMission } from '../mission.js';
@@ -7,7 +6,7 @@ import { printJson } from '../../cli/output.js';
 import { writePptBuildArtifacts, writePptRouteArtifacts } from '../ppt.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 
-export async function pptCommand(_command, args = []) {
+export async function pptCommand(_command: any, args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'status';
   if (action === 'fixture') return pptFixture(root, args);
@@ -45,7 +44,7 @@ export async function pptCommand(_command, args = []) {
   process.exitCode = 1;
 }
 
-async function pptFixture(root, args) {
+async function pptFixture(root: any, args: any) {
   const { id, dir, mission } = await createMission(root, { mode: 'ppt', prompt: 'PPT fixture route build' });
   const contract = { prompt: mission.prompt, answers: fixtureAnswers(), sealed_hash: 'ppt-fixture-contract' };
   await writeJsonAtomic(path.join(dir, 'decision-contract.json'), contract);
@@ -59,7 +58,7 @@ async function pptFixture(root, args) {
   console.log(`PPT fixture: ${proof.ok ? 'ok' : 'blocked'} ${id}`);
 }
 
-function mockPptFixtureGate(gate = {}) {
+function mockPptFixtureGate(gate: any = {}) {
   return {
     ...gate,
     passed: true,

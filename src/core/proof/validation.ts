@@ -1,21 +1,27 @@
-// @ts-nocheck
 import { containsPlaintextSecret } from '../secret-redaction.js';
 import { COMPLETION_PROOF_SCHEMA, COMPLETION_PROOF_STATUSES } from './proof-schema.js';
 
-export function validateCompletionProof(proof = {}) {
-  const issues = [];
-  if (proof.schema !== COMPLETION_PROOF_SCHEMA) issues.push('schema');
-  if (!COMPLETION_PROOF_STATUSES.includes(proof.status)) issues.push('status');
-  if (!proof.summary || typeof proof.summary !== 'object') issues.push('summary');
-  if (!proof.evidence || typeof proof.evidence !== 'object') issues.push('evidence');
-  if (!Array.isArray(proof.claims)) issues.push('claims');
-  if (!Array.isArray(proof.unverified)) issues.push('unverified');
-  if (!Array.isArray(proof.blockers)) issues.push('blockers');
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+export function validateCompletionProof(proof: unknown = {}) {
+  const issues: string[] = [];
+  const record = asRecord(proof);
+  if (record.schema !== COMPLETION_PROOF_SCHEMA) issues.push('schema');
+  if (!COMPLETION_PROOF_STATUSES.includes(String(record.status))) issues.push('status');
+  if (!record.summary || typeof record.summary !== 'object') issues.push('summary');
+  if (!record.evidence || typeof record.evidence !== 'object') issues.push('evidence');
+  if (!Array.isArray(record.claims)) issues.push('claims');
+  if (!Array.isArray(record.unverified)) issues.push('unverified');
+  if (!Array.isArray(record.blockers)) issues.push('blockers');
   if (containsPlaintextSecret(proof)) issues.push('plaintext_secret');
-  if (proof.status === 'failed') issues.push('proof_failed');
+  if (record.status === 'failed') issues.push('proof_failed');
   return {
     ok: issues.length === 0,
-    status: issues.length ? 'failed' : proof.status,
+    status: issues.length ? 'failed' : String(record.status || 'not_verified'),
     issues
   };
 }

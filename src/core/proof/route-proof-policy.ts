@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const SERIOUS_ROUTE_ALIASES = Object.freeze([
   '$Team',
   '$DFix',
@@ -69,30 +68,30 @@ const ROUTE_NORMALIZATION = Object.freeze({
   recallpulse: 'recallpulse'
 });
 
-export function normalizeProofRoute(route) {
+export function normalizeProofRoute(route: any) {
   const raw = String(route || '').trim();
   if (!raw) return null;
   if (SERIOUS_ROUTE_ALIASES.includes(raw) || VISUAL_ROUTE_ALIASES.includes(raw)) return raw;
   const stripped = raw.replace(/^\$/, '').replace(/[^A-Za-z0-9-]+/g, '').toLowerCase();
-  return ROUTE_NORMALIZATION[stripped] || raw;
+  return (ROUTE_NORMALIZATION as Record<string, string>)[stripped] || raw;
 }
 
-export function routeRequiresCompletionProof(route) {
+export function routeRequiresCompletionProof(route: any) {
   const normalized = normalizeProofRoute(route);
-  return SERIOUS_ROUTE_ALIASES.includes(normalized);
+  return Boolean(normalized && SERIOUS_ROUTE_ALIASES.includes(normalized));
 }
 
-export function routeRequiresImageVoxelAnchors(route, opts = {}) {
+export function routeRequiresImageVoxelAnchors(route: any, opts: any = {}) {
   if (opts.visualClaim === true) return true;
   const normalized = normalizeProofRoute(route);
   if (opts.visualClaim === false) return false;
-  return VISUAL_ROUTE_ALIASES.includes(normalized);
+  return Boolean(normalized && VISUAL_ROUTE_ALIASES.includes(normalized));
 }
 
-export function routeFromState(state = {}) {
+export function routeFromState(state: any = {}) {
   return normalizeProofRoute(state.route_command || state.route || state.mode || state.route_id || state.id);
 }
 
-export function proofStatusBlocks(status) {
+export function proofStatusBlocks(status: any) {
   return status === 'failed' || status === 'blocked' || status === 'not_verified';
 }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { writeRouteCompletionProof } from './route-adapter.js';
 
 const CLAIM_TEXT = {
@@ -25,15 +24,15 @@ const DEFAULTS = {
   }
 };
 
-export async function writeSelftestRouteProof(root, {
+export async function writeSelftestRouteProof(root: any, {
   missionId,
   route = '$Team',
   kind = 'team_gate',
   artifacts = null,
   gateSource = null,
   unverified = null
-} = {}) {
-  const defaults = DEFAULTS[kind] || DEFAULTS.team_gate;
+}: any = {}) {
+  const defaults = (DEFAULTS as Record<string, any>)[kind] || DEFAULTS.team_gate;
   return writeRouteCompletionProof(root, {
     missionId,
     route,
@@ -47,7 +46,7 @@ export async function writeSelftestRouteProof(root, {
     },
     claims: [{
       id: `selftest-${kind.replaceAll('_', '-')}-proof`,
-      text: CLAIM_TEXT[kind] || CLAIM_TEXT.team_gate,
+      text: (CLAIM_TEXT as Record<string, string>)[kind] || CLAIM_TEXT.team_gate,
       status: 'verified_partial'
     }],
     unverified: unverified || defaults.unverified

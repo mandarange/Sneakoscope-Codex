@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { spawn } from 'node:child_process';
 
 const DEFAULT_CONTEXT7_COMMAND = 'npx';
@@ -13,7 +12,7 @@ export function defaultContext7ServerConfig() {
   return { command, args };
 }
 
-export async function context7Tools(opts = {}) {
+export async function context7Tools(opts: any = {}) {
   const client = new LocalMcpClient(resolveContext7Config(opts), opts);
   try {
     const initialize = await client.initialize();
@@ -22,7 +21,7 @@ export async function context7Tools(opts = {}) {
       ok: true,
       initialize,
       tools,
-      tool_names: tools.map((tool) => tool.name),
+      tool_names: tools.map((tool: any) => tool.name),
       server: client.serverInfo()
     };
   } finally {
@@ -30,7 +29,7 @@ export async function context7Tools(opts = {}) {
   }
 }
 
-export async function context7Resolve(libraryName, opts = {}) {
+export async function context7Resolve(libraryName: any, opts: any = {}) {
   const client = new LocalMcpClient(resolveContext7Config(opts), opts);
   try {
     await client.initialize();
@@ -51,12 +50,12 @@ export async function context7Resolve(libraryName, opts = {}) {
   }
 }
 
-export async function context7Docs(libraryNameOrId, opts = {}) {
+export async function context7Docs(libraryNameOrId: any, opts: any = {}) {
   const client = new LocalMcpClient(resolveContext7Config(opts), opts);
   try {
     await client.initialize();
     const tools = await client.listTools();
-    const toolNames = tools.map((tool) => tool.name);
+    const toolNames = tools.map((tool: any) => tool.name);
     const docsTool = pickDocsTool(toolNames);
     if (!docsTool) {
       return {
@@ -116,46 +115,55 @@ export async function context7Docs(libraryNameOrId, opts = {}) {
   }
 }
 
-export function extractContext7LibraryId(result) {
+export function extractContext7LibraryId(result: any) {
   const text = context7Text(result);
   const direct = text.match(/Context7-compatible library ID:\s*(\/[^\s]+)/i);
-  if (direct) return direct[1].trim();
+  if (direct?.[1]) return direct[1].trim();
   const selected = text.match(/(?:Selected|Library ID)\s*:?\s*(\/[A-Za-z0-9._~/-]+)/i);
-  if (selected) return selected[1].trim();
-  const any = text.match(/\/[A-Za-z0-9._~/-]+/);
-  return any ? any[0].trim() : null;
+  if (selected?.[1]) return selected[1].trim();
+  const match = text.match(/\/[A-Za-z0-9._~/-]+/);
+  return match?.[0] ? match[0].trim() : null;
 }
 
-export function context7Text(result) {
+export function context7Text(result: any) {
   const content = result?.content;
   if (!Array.isArray(content)) return '';
   return content
-    .map((item) => (item && item.type === 'text' ? String(item.text || '') : ''))
+    .map((item: any) => (item && item.type === 'text' ? String(item.text || '') : ''))
     .filter(Boolean)
     .join('\n');
 }
 
-export function isContext7DocsTool(name) {
+export function isContext7DocsTool(name: any) {
   return name === 'query-docs' || name === 'get-library-docs';
 }
 
-function pickDocsTool(toolNames) {
+function pickDocsTool(toolNames: any) {
   if (toolNames.includes('query-docs')) return 'query-docs';
   if (toolNames.includes('get-library-docs')) return 'get-library-docs';
   return null;
 }
 
-function isContext7LibraryId(value) {
+function isContext7LibraryId(value: any) {
   return /^\/[A-Za-z0-9._~/-]+$/.test(String(value || '').trim());
 }
 
-function resolveContext7Config(opts) {
+function resolveContext7Config(opts: any) {
   if (opts.command) return { command: opts.command, args: opts.args || [] };
   return defaultContext7ServerConfig();
 }
 
 class LocalMcpClient {
-  constructor(config, opts = {}) {
+  config: any;
+  timeoutMs: number;
+  child: ReturnType<typeof spawn> | null;
+  nextId: number;
+  pending: Map<number, { resolve: (value: any) => void; reject: (reason?: any) => void; timer: NodeJS.Timeout }>;
+  stdoutBuffer: string;
+  stderr: string;
+  initializeResult: any;
+
+  constructor(config: any, opts: any = {}) {
     this.config = config;
     this.timeoutMs = Number(opts.timeoutMs || process.env.SKS_CONTEXT7_TIMEOUT_MS || 30000);
     this.child = null;
@@ -192,7 +200,7 @@ class LocalMcpClient {
     return Array.isArray(result?.tools) ? result.tools : [];
   }
 
-  async callTool(name, args = {}) {
+  async callTool(name: any, args: any = {}) {
     const result = await this.request('tools/call', { name, arguments: args });
     return result;
   }
@@ -204,18 +212,18 @@ class LocalMcpClient {
       shell: false,
       env: process.env
     });
-    this.child.stdout.on('data', (chunk) => this.handleStdout(chunk));
-    this.child.stderr.on('data', (chunk) => {
+    this.child.stdout?.on('data', (chunk: any) => this.handleStdout(chunk));
+    this.child.stderr?.on('data', (chunk: any) => {
       this.stderr += chunk.toString('utf8');
       if (this.stderr.length > 64 * 1024) this.stderr = this.stderr.slice(-64 * 1024);
     });
-    this.child.on('error', (err) => this.rejectAll(err));
-    this.child.on('close', (code) => {
+    this.child.on('error', (err: any) => this.rejectAll(err));
+    this.child.on('close', (code: any) => {
       this.rejectAll(new Error(`Context7 MCP exited before response (code ${code ?? 'signal'}). ${this.stderr.trim()}`.trim()));
     });
   }
 
-  handleStdout(chunk) {
+  handleStdout(chunk: any) {
     this.stdoutBuffer += chunk.toString('utf8');
     const lines = this.stdoutBuffer.split(/\r?\n/);
     this.stdoutBuffer = lines.pop() || '';
@@ -229,6 +237,7 @@ class LocalMcpClient {
       }
       if (!message.id || !this.pending.has(message.id)) continue;
       const pending = this.pending.get(message.id);
+      if (!pending) continue;
       this.pending.delete(message.id);
       clearTimeout(pending.timer);
       if (message.error) pending.reject(new Error(message.error.message || JSON.stringify(message.error)));
@@ -236,27 +245,27 @@ class LocalMcpClient {
     }
   }
 
-  request(method, params) {
+  request(method: any, params: any) {
     this.start();
     const id = this.nextId++;
     const message = { jsonrpc: '2.0', id, method, params };
-    return new Promise((resolve, reject) => {
+    return new Promise<any>((resolve: any, reject: any) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`Context7 MCP request timed out: ${method}. ${this.stderr.trim()}`.trim()));
       }, this.timeoutMs);
       timer.unref?.();
       this.pending.set(id, { resolve, reject, timer });
-      this.child.stdin.write(`${JSON.stringify(message)}\n`);
+      this.child?.stdin?.write(`${JSON.stringify(message)}\n`);
     });
   }
 
-  notify(method, params) {
+  notify(method: any, params: any) {
     this.start();
-    this.child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
+    this.child?.stdin?.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
   }
 
-  rejectAll(err) {
+  rejectAll(err: any) {
     for (const [id, pending] of this.pending.entries()) {
       clearTimeout(pending.timer);
       pending.reject(err);
@@ -268,13 +277,13 @@ class LocalMcpClient {
     if (!this.child) return;
     const child = this.child;
     this.child = null;
-    try { child.stdin.end(); } catch {}
+    try { child.stdin?.end(); } catch {}
     try { child.kill('SIGTERM'); } catch {}
   }
 }
 
-function splitShellWords(value) {
+function splitShellWords(value: any) {
   return String(value || '')
     .match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)
-    ?.map((part) => part.replace(/^["']|["']$/g, '')) || [];
+    ?.map((part: any) => part.replace(/^["']|["']$/g, '')) || [];
 }

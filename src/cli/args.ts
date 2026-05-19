@@ -1,15 +1,14 @@
-// @ts-nocheck
-export function flag(args = [], name) {
+export function flag(args: any = [], name: any) {
   return args.includes(name);
 }
 
-export function readOption(args = [], name, fallback = null) {
+export function readOption(args: any = [], name: any, fallback: any = null) {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 }
 
-export function positionalArgs(args = []) {
-  const out = [];
+export function positionalArgs(args: any = []) {
+  const out: any[] = [];
   const valueFlags = new Set([
     '--source',
     '--format',

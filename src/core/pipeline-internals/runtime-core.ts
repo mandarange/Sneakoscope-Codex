@@ -1,4 +1,3 @@
-// @ts-nocheck
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
@@ -77,11 +76,11 @@ const FULL_ROUTE_STAGES = Object.freeze([
   'honest_mode'
 ]);
 
-function reflectionInstructionText(commandPrefix = 'sks') {
+function reflectionInstructionText(commandPrefix: any = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write ${REFLECTION_ARTIFACT}; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass ${REFLECTION_GATE}.`;
 }
 
-export function buildPipelinePlan(input = {}) {
+export function buildPipelinePlan(input: any = {}) {
   const route = input.route || routePrompt(input.task || '$SKS');
   const task = String(input.task || '').trim();
   const ambiguity = normalizeAmbiguity(input.ambiguity, route);
@@ -90,8 +89,8 @@ export function buildPipelinePlan(input = {}) {
   const scoutPolicy = normalizeScoutPolicy(route, task, input.scouts === undefined ? {} : input.scouts);
   const stages = buildPipelineStages(route, task, ambiguity, lane, Boolean(input.required), scoutPolicy);
   const verification = planVerification(route, proof);
-  const skipped = stages.filter((stage) => stage.status === 'skipped').map((stage) => stage.id);
-  const kept = stages.filter((stage) => stage.status !== 'skipped' && stage.status !== 'not_applicable').map((stage) => stage.id);
+  const skipped = stages.filter((stage: any) => stage.status === 'skipped').map((stage: any) => stage.id);
+  const kept = stages.filter((stage: any) => stage.status !== 'skipped' && stage.status !== 'not_applicable').map((stage: any) => stage.id);
   const routeEconomy = routeEconomyPlan(proof);
   return {
     schema_version: PIPELINE_PLAN_SCHEMA_VERSION,
@@ -115,7 +114,7 @@ export function buildPipelinePlan(input = {}) {
       total: stages.length,
       kept: kept.length,
       skipped: skipped.length,
-      not_applicable: stages.filter((stage) => stage.status === 'not_applicable').length
+      not_applicable: stages.filter((stage: any) => stage.status === 'not_applicable').length
     },
     skipped_stages: skipped,
     kept_stages: kept,
@@ -131,14 +130,14 @@ export function buildPipelinePlan(input = {}) {
   };
 }
 
-export async function writePipelinePlan(dir, input = {}) {
+export async function writePipelinePlan(dir: any, input: any = {}) {
   const plan = buildPipelinePlan(input);
   await writeJsonAtomic(path.join(dir, PIPELINE_PLAN_ARTIFACT), plan);
   return plan;
 }
 
-export function validatePipelinePlan(plan = {}) {
-  const issues = [];
+export function validatePipelinePlan(plan: any = {}) {
+  const issues: any[] = [];
   if (plan.schema_version !== PIPELINE_PLAN_SCHEMA_VERSION) issues.push('schema_version');
   if (!plan.route?.id || !plan.route?.command) issues.push('route');
   if (!plan.runtime_lane?.lane) issues.push('runtime_lane');
@@ -146,17 +145,17 @@ export function validatePipelinePlan(plan = {}) {
   if (!Array.isArray(plan.verification) || !plan.verification.length) issues.push('verification');
   if (!plan.route_economy?.mode) issues.push('route_economy');
   const routeEconomyLatticeIssues = validateRouteEconomyDecisionLattice(plan.route_economy, plan.proof_field);
-  if (routeEconomyLatticeIssues.length) issues.push(...routeEconomyLatticeIssues.map((issue) => `route_economy.decision_lattice:${issue}`));
+  if (routeEconomyLatticeIssues.length) issues.push(...routeEconomyLatticeIssues.map((issue: any) => `route_economy.decision_lattice:${issue}`));
   if (plan.no_unrequested_fallback_code !== true || !plan.invariants?.includes('no_unrequested_fallback_code')) issues.push('fallback_guard');
   if (!plan.next_actions?.length) issues.push('next_actions');
-  if (plan.scout_intake?.required && !plan.stages?.some((stage) => stage.id === FIVE_SCOUT_STAGE_ID && stage.scout_count === SCOUT_COUNT && stage.read_only === true)) issues.push('scout_intake_stage');
+  if (plan.scout_intake?.required && !plan.stages?.some((stage: any) => stage.id === FIVE_SCOUT_STAGE_ID && stage.scout_count === SCOUT_COUNT && stage.read_only === true)) issues.push('scout_intake_stage');
   return { ok: issues.length === 0, issues };
 }
 
-function validateRouteEconomyDecisionLattice(routeEconomy = {}, proof = {}) {
+function validateRouteEconomyDecisionLattice(routeEconomy: any = {}, proof: any = {}) {
   const lattice = routeEconomy.decision_lattice;
   if (!lattice) return [];
-  const issues = [];
+  const issues: any[] = [];
   if (routeEconomy.report_only !== true || routeEconomy.mode !== 'report_only') issues.push('requires_report_only_route_economy');
   if (lattice.report_only !== true) issues.push('report_only');
   if (!lattice.selected_path) issues.push('selected_path');
@@ -172,7 +171,7 @@ function validateRouteEconomyDecisionLattice(routeEconomy = {}, proof = {}) {
   return issues;
 }
 
-function normalizeAmbiguity(value = {}, route) {
+function normalizeAmbiguity(value: any = {}, route: any) {
   const required = value.required ?? !CLARIFICATION_BYPASS_ROUTES.has(route?.id);
   const slots = Number(value.slots || 0);
   let status = value.status || (required ? 'required' : 'not_required');
@@ -189,7 +188,7 @@ function normalizeAmbiguity(value = {}, route) {
   };
 }
 
-function normalizeProofField(report) {
+function normalizeProofField(report: any) {
   if (!report) return { attached: false, reason: 'not built during route intake; attach with sks pipeline plan --proof-field after concrete scope/changed files are known' };
   return {
     attached: true,
@@ -200,7 +199,7 @@ function normalizeProofField(report) {
     skip_when_fast: report.execution_lane?.skip_when_fast || [],
     keep: report.execution_lane?.keep || SPEED_LANE_POLICY.always_keep,
     verification: report.execution_lane?.verification || report.fast_lane_decision?.verification || [],
-    proof_cones: (report.proof_cones || []).map((cone) => cone.id),
+    proof_cones: (report.proof_cones || []).map((cone: any) => cone.id),
     source_hash: report.source_hash || null,
     contract_clarity: report.contract_clarity || null,
     workflow_complexity: report.workflow_complexity || null,
@@ -210,7 +209,7 @@ function normalizeProofField(report) {
   };
 }
 
-function routeEconomyPlan(proof = {}) {
+function routeEconomyPlan(proof: any = {}) {
   if (!proof.attached) {
     return {
       schema_version: 1,
@@ -243,7 +242,7 @@ function routeEconomyPlan(proof = {}) {
   };
 }
 
-function selectPipelineLane(route, task, proof) {
+function selectPipelineLane(route: any, task: any, proof: any) {
   if (proof.attached && proof.lane) {
     return {
       lane: proof.lane,
@@ -261,8 +260,8 @@ function selectPipelineLane(route, task, proof) {
   return { lane: SPEED_LANE_POLICY.balanced_lane, source: 'route_policy', fast_lane_allowed: false, reason: 'Balanced parent-owned route until Proof Field proves a narrower lane.', blockers: ['proof_field_not_attached'], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
 }
 
-function buildPipelineStages(route, task, ambiguity, lane, context7Required, scoutPolicy = normalizeScoutPolicy(route, task, {})) {
-  return FULL_ROUTE_STAGES.map((id) => {
+function buildPipelineStages(route: any, task: any, ambiguity: any, lane: any, context7Required: any, scoutPolicy: any = normalizeScoutPolicy(route, task, {})) {
+  return FULL_ROUTE_STAGES.map((id: any) => {
     const optional = optionalStage(route, task, ambiguity, context7Required, id);
     const skippedByFast = lane.fast_lane_allowed && SPEED_LANE_POLICY.skip_when_fast.includes(id);
     const skipped = skippedByFast || optional.skip;
@@ -278,7 +277,7 @@ function buildPipelineStages(route, task, ambiguity, lane, context7Required, sco
   });
 }
 
-function optionalStage(route, task, ambiguity, context7Required, id) {
+function optionalStage(route: any, task: any, ambiguity: any, context7Required: any, id: any) {
   if (id === FIVE_SCOUT_STAGE_ID && !routeRequiresScoutIntake(route, { task })) return { skip: true, notApplicable: true, reason: 'five_scout_intake_not_required_for_route' };
   if (id === FIVE_SCOUT_STAGE_ID) return { skip: false, reason: 'serious_route_requires_five_scout_intake' };
   if (id === SOLUTION_SCOUT_STAGE_ID && !looksLikeProblemSolvingRequest(task)) return { skip: true, notApplicable: true, reason: 'no_problem_solving_signal' };
@@ -292,7 +291,7 @@ function optionalStage(route, task, ambiguity, context7Required, id) {
   return { skip: false, reason: 'required_by_lane' };
 }
 
-function planVerification(route, proof) {
+function planVerification(route: any, proof: any) {
   const out = new Set(proof.verification || []);
   if (route?.id === 'Team') out.add('sks validate-artifacts latest --json');
   if (reflectionRequiredForRoute(route)) out.add('sks wiki validate .sneakoscope/wiki/context-pack.json');
@@ -301,7 +300,7 @@ function planVerification(route, proof) {
   return [...out];
 }
 
-function planNextActions(route, task, ambiguity, lane, scoutPolicy = normalizeScoutPolicy(route, task, {})) {
+function planNextActions(route: any, task: any, ambiguity: any, lane: any, scoutPolicy: any = normalizeScoutPolicy(route, task, {})) {
   if (ambiguity.required && !ambiguity.passed) {
     return [
       'auto-seal execution contract from inferred answers',
@@ -317,7 +316,7 @@ function planNextActions(route, task, ambiguity, lane, scoutPolicy = normalizeSc
   return actions;
 }
 
-export function promptPipelineContext(prompt, route = null) {
+export function promptPipelineContext(prompt: any, route: any = null) {
   const cleanPrompt = stripVisibleDecisionAnswerBlocks(prompt);
   route = route || routePrompt(cleanPrompt);
   const required = routeNeedsContext7(route, cleanPrompt);
@@ -369,7 +368,7 @@ export function promptPipelineContext(prompt, route = null) {
   return lines.join('\n');
 }
 
-export function dfixQuickContext(prompt, route = routePrompt(prompt)) {
+export function dfixQuickContext(prompt: any, route: any = routePrompt(prompt)) {
   const task = stripDollarCommand(prompt) || String(prompt || '').trim();
   const routeLabel = route?.command || '$DFix';
   return [
@@ -386,7 +385,7 @@ export function dfixQuickContext(prompt, route = routePrompt(prompt)) {
   ].join('\n');
 }
 
-export function answerOnlyContext(prompt, route = routePrompt(prompt)) {
+export function answerOnlyContext(prompt: any, route: any = routePrompt(prompt)) {
   const task = stripDollarCommand(prompt) || String(prompt || '').trim();
   const required = routeNeedsContext7(route, task);
   return [
@@ -405,7 +404,7 @@ export function answerOnlyContext(prompt, route = routePrompt(prompt)) {
   ].join('\n');
 }
 
-export async function prepareRoute(root, prompt, state = {}) {
+export async function prepareRoute(root: any, prompt: any, state: any = {}): Promise<any> {
   const cleanPrompt = stripVisibleDecisionAnswerBlocks(prompt);
   const route = routePrompt(cleanPrompt);
   const madSksAuthorization = hasMadSksSignal(cleanPrompt);
@@ -435,7 +434,7 @@ export async function prepareRoute(root, prompt, state = {}) {
   }, dreamContext);
 }
 
-async function routeSkillDreamContext(root, route, task) {
+async function routeSkillDreamContext(root: any, route: any, task: any) {
   try {
     const result = await recordSkillDreamEvent(root, {
       route: route.id,
@@ -450,38 +449,38 @@ async function routeSkillDreamContext(root, route, task) {
       `Mode: ${result.report.apply_mode}; no_auto_delete=${result.report.no_auto_delete}.`,
       'Review keep/merge/prune/improve candidates before adding more generated skills.'
     ].join('\n');
-  } catch (err) {
+  } catch (err: any) {
     return `Skill dreaming record failed: ${err.message || err}. Do not claim .sneakoscope/skills/dream-state.json was updated.`;
   }
 }
 
-function withSkillDreamContext(result, dreamContext) {
+function withSkillDreamContext(result: any, dreamContext: any) {
   if (!dreamContext) return result;
   return { ...result, additionalContext: `${result.additionalContext || ''}\n\n${dreamContext}`.trim() };
 }
 
-async function prepareDfixQuickRoute(route, task) {
+async function prepareDfixQuickRoute(route: any, task: any) {
   return {
     route,
     additionalContext: dfixQuickContext(task, route)
   };
 }
 
-async function prepareAnswerOnlyRoute(route, task) {
+async function prepareAnswerOnlyRoute(route: any, task: any) {
   return {
     route,
     additionalContext: answerOnlyContext(task, route)
   };
 }
 
-async function prepareComputerUseFastRoute(route, task) {
+async function prepareComputerUseFastRoute(route: any, task: any) {
   return {
     route,
     additionalContext: computerUseFastContext(task, route)
   };
 }
 
-export function computerUseFastContext(prompt, route = routePrompt(prompt)) {
+export function computerUseFastContext(prompt: any, route: any = routePrompt(prompt)) {
   const task = stripDollarCommand(prompt) || String(prompt || '').trim();
   return [
     `Computer Use fast lane active. Route: ${route?.command || '$Computer-Use'} (${route?.route || 'Computer Use fast lane'}).`,
@@ -499,7 +498,7 @@ export function computerUseFastContext(prompt, route = routePrompt(prompt)) {
   ].join('\n');
 }
 
-async function prepareWikiQuickRoute(route, task) {
+async function prepareWikiQuickRoute(route: any, task: any) {
   return {
     route,
     additionalContext: [
@@ -513,7 +512,7 @@ async function prepareWikiQuickRoute(route, task) {
   };
 }
 
-async function prepareImageUxReview(root, route, task, required) {
+async function prepareImageUxReview(root: any, route: any, task: any, required: any) {
   const { id, dir, mission } = await createMission(root, { mode: 'image-ux-review', prompt: task });
   const contract = {
     prompt: task,
@@ -552,7 +551,7 @@ async function prepareImageUxReview(root, route, task, required) {
   return routeContext(route, id, task, required, `Capture or attach source UI screenshots, run Codex App $imagegen/gpt-image-2 to generate annotated review images, extract those generated images into ${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}, then update ${IMAGE_UX_REVIEW_GATE_ARTIFACT}. ${CODEX_IMAGEGEN_REQUIRED_POLICY} Initial gate blockers: ${(artifacts.gate.blockers || []).join(', ') || 'none'}.`);
 }
 
-export async function activeRouteContext(root, state) {
+export async function activeRouteContext(root: any, state: any) {
   if (!state?.route && !state?.mode) return '';
   const id = state.route || state.mode;
   const reasoningNote = state.reasoning_effort ? ` Temporary reasoning remains ${state.reasoning_effort} (${state.reasoning_profile}); return to the default profile after this route completes.` : '';
@@ -583,7 +582,7 @@ export async function activeRouteContext(root, state) {
   return planNote.trim();
 }
 
-async function activePipelinePlanNote(root, state = {}) {
+async function activePipelinePlanNote(root: any, state: any = {}) {
   if (!state?.mission_id) return '';
   const plan = await readJson(path.join(missionDir(root, state.mission_id), PIPELINE_PLAN_ARTIFACT), null);
   if (!plan) return '';
@@ -594,7 +593,7 @@ async function activePipelinePlanNote(root, state = {}) {
   return ` Pipeline plan: .sneakoscope/missions/${state.mission_id}/${PIPELINE_PLAN_ARTIFACT} (${lane}; kept=${kept}, skipped=${skipped}).${next}`;
 }
 
-async function prepareGoal(root, route, task, required) {
+async function prepareGoal(root: any, route: any, task: any, required: any): Promise<any> {
   const { id, dir, mission } = await createMission(root, { mode: 'goal', prompt: task });
   const workflow = await writeGoalWorkflow(dir, mission, { action: 'create', prompt: task });
   await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, native_goal: workflow.native_goal, stop_gate: route.stopGate });
@@ -605,7 +604,7 @@ async function prepareGoal(root, route, task, required) {
     && !['Answer', 'DFix', 'Goal', 'Help'].includes(executionRoute.id);
   if (shouldDelegateExecution) {
     await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'goal.delegated_execution_route', route: executionRoute.id, command: executionRoute.command });
-    const delegated = await prepareRoute(root, task, {});
+    const delegated: any = await prepareRoute(root, task, {});
     return {
       route,
       additionalContext: [
@@ -622,7 +621,7 @@ Delegated execution route: ${executionRoute.command}. The delegated route missio
   return routeContext(route, id, task, required, `Use Codex native ${workflow.native_goal.slash_command} control for persisted continuation, then continue the relevant SKS route gates for any implementation work.`);
 }
 
-async function prepareClarificationGate(root, route, task, required, opts = {}) {
+async function prepareClarificationGate(root: any, route: any, task: any, required: any, opts: any = {}) {
   const { id, dir, mission } = await createMission(root, { mode: String(route.mode || route.id || 'route').toLowerCase(), prompt: task });
   const schema = buildQuestionSchemaForRoute(route, task);
   if (opts.madSksAuthorization) applyMadSksAuthorizationToSchema(schema);
@@ -632,7 +631,7 @@ async function prepareClarificationGate(root, route, task, required, opts = {}) 
   {
     await writeJsonAtomic(path.join(dir, 'answers.json'), autoAnswersForSchema(schema));
     const result = await sealContract(dir, mission);
-    let materialized = {};
+    let materialized: any = {};
     if (result.ok && route?.id === 'Team') {
       materialized = await materializeAutoSealedTeam(root, id, dir, route, task, result.contract?.sealed_hash || null);
       if (opts.madSksAuthorization) {
@@ -698,7 +697,7 @@ Next atomic action: continue the original route lifecycle with the sealed decisi
   }
 }
 
-function autoAnswersForSchema(schema = {}) {
+function autoAnswersForSchema(schema: any = {}) {
   const answers = { ...(schema.inferred_answers || {}) };
   for (const slot of schema.slots || []) {
     if (answers[slot.id] !== undefined) continue;
@@ -709,7 +708,7 @@ function autoAnswersForSchema(schema = {}) {
   return answers;
 }
 
-function applyMadSksAuthorizationToSchema(schema = {}) {
+function applyMadSksAuthorizationToSchema(schema: any = {}) {
   schema.domain_hints = Array.from(new Set([...(schema.domain_hints || []), 'mad-sks']));
   schema.inferred_answers = {
     ...(schema.inferred_answers || {}),
@@ -728,11 +727,11 @@ function applyMadSksAuthorizationToSchema(schema = {}) {
     MAD_SKS_MODE: 'explicit dollar command modifier is the permission boundary',
     DESTRUCTIVE_DB_OPERATIONS_ALLOWED: 'MAD-SKS opens live-server DB changes, Supabase MCP cleanup, direct SQL, and needed migrations while blocking only catastrophic database wipe operations'
   };
-  schema.slots = (schema.slots || []).filter((slot) => !/^(DB_|DATABASE_|DESTRUCTIVE_DB_|SUPABASE_MCP_POLICY$)/.test(slot.id));
+  schema.slots = (schema.slots || []).filter((slot: any) => !/^(DB_|DATABASE_|DESTRUCTIVE_DB_|SUPABASE_MCP_POLICY$)/.test(slot.id));
   return schema;
 }
 
-async function materializeAutoSealedMadSks(dir, id, route, routeContext = {}, contract = {}) {
+async function materializeAutoSealedMadSks(dir: any, id: any, route: any, routeContext: any = {}, contract: any = {}) {
   await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), {
     schema_version: 1,
     passed: false,
@@ -771,7 +770,7 @@ async function materializeAutoSealedMadSks(dir, id, route, routeContext = {}, co
   };
 }
 
-async function materializeMadSksAuthorization(dir, id, route, routeContext = {}, contract = {}) {
+async function materializeMadSksAuthorization(dir: any, id: any, route: any, routeContext: any = {}, contract: any = {}) {
   if (!routeContext.mad_sks_authorization || route?.id === 'MadSKS') return {};
   const gateFile = route?.stopGate || 'done-gate.json';
   await writeJsonAtomic(path.join(dir, 'mad-sks-authorization.json'), {
@@ -810,7 +809,7 @@ async function materializeMadSksAuthorization(dir, id, route, routeContext = {},
   };
 }
 
-async function materializeAutoSealedTeam(root, id, dir, route, task, contractHash = null) {
+async function materializeAutoSealedTeam(root: any, id: any, dir: any, route: any, task: any, contractHash: any = null) {
   const spec = parseTeamSpecText(task);
   const cleanTask = spec.prompt || task;
   const fromChatImgRequired = hasFromChatImgSignal(cleanTask);
@@ -841,12 +840,12 @@ async function materializeAutoSealedTeam(root, id, dir, route, task, contractHas
     team_runtime: teamRuntimePlanMetadata(),
     phases: [
       { id: 'team_roster_confirmation', goal: `Materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'parallel_analysis_scouting', goal: `Read TriWiki context, then spawn exactly ${roster.bundle_size} read-only analysis_scout_N agents in parallel. ${fromChatImgRequired ? `From-Chat-IMG active: ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'}`, agents: roster.analysis_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
+      { id: 'parallel_analysis_scouting', goal: `Read TriWiki context, then spawn exactly ${roster.bundle_size} read-only analysis_scout_N agents in parallel. ${fromChatImgRequired ? `From-Chat-IMG active: ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'}`, agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
       { id: 'triwiki_refresh', goal: `Refresh or pack TriWiki and run ${triwikiContextTracking().validate_command}.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
-      { id: 'planning_debate', goal: 'Run read-only planning debate, map constraints and implementation slices, then seal one objective.', agents: roster.debate_team.map((agent) => agent.id) },
+      { id: 'planning_debate', goal: 'Run read-only planning debate, map constraints and implementation slices, then seal one objective.', agents: roster.debate_team.map((agent: any) => agent.id) },
       { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR}.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
-      { id: 'parallel_implementation', goal: `Close debate agents, then spawn a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership.`, agents: roster.development_team.map((agent) => agent.id) },
-      { id: 'review_integration', goal: `${MIN_TEAM_REVIEW_POLICY_TEXT} Integrate, verify, and record evidence before final.`, agents: roster.validation_team.map((agent) => agent.id), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
+      { id: 'parallel_implementation', goal: `Close debate agents, then spawn a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership.`, agents: roster.development_team.map((agent: any) => agent.id) },
+      { id: 'review_integration', goal: `${MIN_TEAM_REVIEW_POLICY_TEXT} Integrate, verify, and record evidence before final.`, agents: roster.validation_team.map((agent: any) => agent.id), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
       { id: 'session_cleanup', goal: `Close or account for Team subagent sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.`, agents: ['parent_orchestrator'] }
     ],
     live_visibility: {
@@ -900,7 +899,7 @@ async function materializeAutoSealedTeam(root, id, dir, route, task, contractHas
   };
 }
 
-async function prepareTeam(root, route, task, required, opts = {}) {
+async function prepareTeam(root: any, route: any, task: any, required: any, opts: any = {}) {
   const spec = parseTeamSpecText(task);
   const cleanTask = spec.prompt || task;
   const fromChatImgRequired = hasFromChatImgSignal(cleanTask);
@@ -931,13 +930,13 @@ async function prepareTeam(root, route, task, required, opts = {}) {
     team_runtime: teamRuntimePlanMetadata(),
     phases: [
       { id: 'team_roster_confirmation', goal: `Before any implementation, materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}. Implementation cannot be considered complete unless team-gate.json has team_roster_confirmed=true.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'parallel_analysis_scouting', goal: `Before scouting, read TriWiki context. ${fromChatImgRequired ? `From-Chat-IMG active: use Codex Computer Use visual inspection, list every visible customer request, match every screenshot image region to attachments, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, then require scoped QA-LOOP evidence in ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} after the customer-request work is done. ${CODEX_COMPUTER_USE_ONLY_POLICY}` : `From-Chat-IMG inactive: do not assume ordinary images are chat captures. ${CODEX_COMPUTER_USE_ONLY_POLICY}`} Spawn exactly ${roster.bundle_size} read-only analysis_scout_N agents in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, and record source-backed findings.`, agents: roster.analysis_team.map((agent) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
+      { id: 'parallel_analysis_scouting', goal: `Before scouting, read TriWiki context. ${fromChatImgRequired ? `From-Chat-IMG active: use Codex Computer Use visual inspection, list every visible customer request, match every screenshot image region to attachments, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, then require scoped QA-LOOP evidence in ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} after the customer-request work is done. ${CODEX_COMPUTER_USE_ONLY_POLICY}` : `From-Chat-IMG inactive: do not assume ordinary images are chat captures. ${CODEX_COMPUTER_USE_ONLY_POLICY}`} Spawn exactly ${roster.bundle_size} read-only analysis_scout_N agents in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, and record source-backed findings.`, agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
       { id: 'triwiki_refresh', goal: `Parent orchestrator updates Team analysis artifacts, then runs ${triwikiContextTracking().refresh_command} or ${triwikiContextTracking().pack_command}, prunes with ${triwikiContextTracking().prune_command} when stale/oversized wiki state would pollute handoffs, and runs ${triwikiContextTracking().validate_command} so the next stage uses current TriWiki context.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
-      { id: 'planning_debate', goal: `Before debate, read the refreshed TriWiki pack. Debate team of exactly ${roster.bundle_size} participants maps user inconvenience, options, constraints, affected files, DB/test risk, and tradeoffs while applying compact Hyperplan-derived lenses: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative. Hydrate low-trust claims from source.`, agents: roster.debate_team.map((agent) => agent.id) },
+      { id: 'planning_debate', goal: `Before debate, read the refreshed TriWiki pack. Debate team of exactly ${roster.bundle_size} participants maps user inconvenience, options, constraints, affected files, DB/test risk, and tradeoffs while applying compact Hyperplan-derived lenses: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative. Hydrate low-trust claims from source.`, agents: roster.debate_team.map((agent: any) => agent.id) },
       { id: 'consensus', goal: `Seal one objective with acceptance criteria and disjoint implementation slices, then refresh/validate TriWiki so implementation receives current consensus context.` },
       { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}; remap symbolic plan nodes to concrete task ids, allocate role/path/domain worker lanes, and write ${TEAM_INBOX_DIR} before executor work starts.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
-      { id: 'parallel_implementation', goal: `Before implementation, read relevant TriWiki context and current source. Close debate agents, then spawn a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership. Refresh TriWiki after implementation changes or blockers.`, agents: roster.development_team.map((agent) => agent.id) },
-      { id: 'review_integration', goal: `Before review and final output, read/validate current TriWiki context, integrate executor output, run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes for correctness/DB safety/tests/evidence, validate user friction with validation_team, refresh after review findings, and record evidence.`, agents: roster.validation_team.map((agent) => agent.id), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
+      { id: 'parallel_implementation', goal: `Before implementation, read relevant TriWiki context and current source. Close debate agents, then spawn a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership. Refresh TriWiki after implementation changes or blockers.`, agents: roster.development_team.map((agent: any) => agent.id) },
+      { id: 'review_integration', goal: `Before review and final output, read/validate current TriWiki context, integrate executor output, run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes for correctness/DB safety/tests/evidence, validate user friction with validation_team, refresh after review findings, and record evidence.`, agents: roster.validation_team.map((agent: any) => agent.id), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
       { id: 'session_cleanup', goal: `Close or account for all Team subagent sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection or final.`, agents: ['parent_orchestrator'] }
     ],
     live_visibility: {
@@ -952,7 +951,7 @@ async function prepareTeam(root, route, task, required, opts = {}) {
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
   const contextTracking = triwikiContextTracking();
-  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReview policy: ${MIN_TEAM_REVIEW_POLICY_TEXT}\nReasoning: dynamic per-agent Fast reasoning; simple bounded lanes can use low, tool-heavy runtime lanes medium, and knowledge/safety/release lanes high or xhigh.\nGoal continuation: ambient Codex native /goal overlay is available when useful, without replacing Team route gates.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\nAnalysis scout reasoning:\n${roster.analysis_team.map((agent) => `- ${agent.id}: ${formatAgentReasoning(agent)}`).join('\n')}\n\n1. Run exactly ${roster.bundle_size} read-only analysis_scout_N agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants through the compact Hyperplan-derived adversarial lens pass, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent analysis_scout_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
+  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReview policy: ${MIN_TEAM_REVIEW_POLICY_TEXT}\nReasoning: dynamic per-agent Fast reasoning; simple bounded lanes can use low, tool-heavy runtime lanes medium, and knowledge/safety/release lanes high or xhigh.\nGoal continuation: ambient Codex native /goal overlay is available when useful, without replacing Team route gates.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\nAnalysis scout reasoning:\n${roster.analysis_team.map((agent: any) => `- ${agent.id}: ${formatAgentReasoning(agent)}`).join('\n')}\n\n1. Run exactly ${roster.bundle_size} read-only analysis_scout_N agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants through the compact Hyperplan-derived adversarial lens pass, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent analysis_scout_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
   await initTeamLive(id, dir, cleanTask, { agentSessions, roleCounts, roster });
   const runtime = await writeTeamRuntimeArtifacts(dir, plan, {});
   await writeMemorySweepReport(root, dir, { missionId: id }).catch(() => null);
@@ -968,7 +967,7 @@ async function prepareTeam(root, route, task, required, opts = {}) {
   return routeContext(route, id, cleanTask, required, `Run scouts, refresh/validate TriWiki, debate, close debate agents, form a fresh ${roster.bundle_size}-person executor team, run minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, then close/clean Team sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection.`);
 }
 
-async function prepareResearch(root, route, task, required) {
+async function prepareResearch(root: any, route: any, task: any, required: any) {
   const { id, dir } = await createMission(root, { mode: 'research', prompt: task });
   await writeResearchPlan(dir, task, {});
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
@@ -976,7 +975,7 @@ async function prepareResearch(root, route, task, required) {
   return routeContext(route, id, task, required, 'Run sks research run latest as a real long-running source-gathering pass, never an automatic mock fallback; do not modify repository source code; create research-source-skill.md, maximize layered public source search, require every scout effort=xhigh plus one Eureka! idea, repeat scout/debate/falsification cycles until unanimous_consensus=true for every scout or the explicit safety cap pauses the run, fill source-ledger.json, scout-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json, research-report.md, research-paper.md, genius-opinion-summary.md, and pass research-gate.json.');
 }
 
-async function prepareAutoResearch(root, route, task, required) {
+async function prepareAutoResearch(root: any, route: any, task: any, required: any) {
   const { id, dir } = await createMission(root, { mode: 'autoresearch', prompt: task });
   await writeJsonAtomic(path.join(dir, 'autoresearch-plan.json'), { schema_version: 1, task, loop: ['program', 'hypothesis', 'experiment', 'measure', 'keep_or_discard', 'falsify', 'honest_conclusion'] });
   await writeJsonAtomic(path.join(dir, 'experiment-ledger.json'), { schema_version: 1, entries: [] });
@@ -986,9 +985,9 @@ async function prepareAutoResearch(root, route, task, required) {
   return routeContext(route, id, task, required, 'Run the smallest useful experiment loop, update experiment-ledger.json, falsify the result, and pass autoresearch-gate.json.');
 }
 
-async function prepareDb(root, route, task, required) {
+async function prepareDb(root: any, route: any, task: any, required: any) {
   const { id, dir } = await createMission(root, { mode: 'db', prompt: task });
-  const scan = await scanDbSafety(root).catch((err) => ({ ok: false, findings: [{ id: 'db_scan_failed', severity: 'high', reason: err.message }] }));
+  const scan = await scanDbSafety(root).catch((err: any) => ({ ok: false, findings: [{ id: 'db_scan_failed', severity: 'high', reason: err.message }] }));
   await writeJsonAtomic(path.join(dir, 'db-safety-scan.json'), scan);
   await writeJsonAtomic(path.join(dir, 'db-review.json'), { passed: false, scan_ok: scan.ok, destructive_operation_zero: true, safe_mcp_policy: false, context7_evidence: false, notes: [] });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
@@ -996,7 +995,7 @@ async function prepareDb(root, route, task, required) {
   return routeContext(route, id, task, required, 'Run sks db policy/scan/check as needed, keep DB operations read-only, record safe MCP policy, and pass db-review.json.');
 }
 
-async function prepareGx(root, route, task, required) {
+async function prepareGx(root: any, route: any, task: any, required: any) {
   const { id, dir } = await createMission(root, { mode: 'gx', prompt: task });
   await writeJsonAtomic(path.join(dir, 'gx-gate.json'), { passed: false, vgraph_beta_render: false, validation: false, drift_snapshot: false, context7_evidence: false });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
@@ -1004,7 +1003,7 @@ async function prepareGx(root, route, task, required) {
   return routeContext(route, id, task, required, 'Run sks gx init/render/validate/drift/snapshot, then pass gx-gate.json.');
 }
 
-async function prepareLightRoute(root, route, task, required) {
+async function prepareLightRoute(root: any, route: any, task: any, required: any) {
   const { id, dir } = await createMission(root, { mode: route.id.toLowerCase(), prompt: task });
   await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, task, required_skills: route.requiredSkills, context7_required: required, context_tracking: triwikiContextTracking(), stop_gate: 'honest_mode' });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'light_route' } });
@@ -1012,13 +1011,13 @@ async function prepareLightRoute(root, route, task, required) {
   return routeContext(route, id, task, required, 'Load the route skill context, execute the smallest matching action, and finish with Honest Mode.');
 }
 
-function routeState(id, route, phase, context7Required, extra = {}) {
+function routeState(id: any, route: any, phase: any, context7Required: any, extra: any = {}) {
   const reasoning = routeReasoning(route, extra.prompt || '');
   const subagentsRequired = routeRequiresSubagents(route, extra.prompt || '');
   return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: false, scouts_required: routeRequiresScoutIntake(route, { task: extra.prompt }), scout_count: SCOUT_COUNT, reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, goal_continuation: ambientGoalContinuation(), ...extra };
 }
 
-function routeContext(route, id, task, required, next) {
+function routeContext(route: any, id: any, task: any, required: any, next: any) {
   const visibleTask = stripVisibleDecisionAnswerBlocks(task);
   return {
     route,
@@ -1040,14 +1039,14 @@ Next atomic action: ${next}`
   };
 }
 
-async function clarificationAwaitingAnswersContext(root, state) {
+async function clarificationAwaitingAnswersContext(root: any, state: any) {
   const id = state.mission_id;
   if (!id) return '';
   const planNote = await activePipelinePlanNote(root, state);
   return `Active SKS route ${state.route_command || state.route || state.mode} is paused at its ambiguity gate and waiting for explicit user answers. Do not advance to implementation, tests, route materialization, or a new pipeline stage. If the user's reply is now available, seal it with "sks pipeline answer ${id} --stdin"; otherwise show only the missing slot ids from .sneakoscope/missions/${id}/questions.md and wait.${planNote}`;
 }
 
-function clarificationVisibleResponseContract(id) {
+function clarificationVisibleResponseContract(id: any) {
   const answerCommand = `sks pipeline answer ${id} --stdin`;
   return `
 
@@ -1057,7 +1056,7 @@ VISIBLE RESPONSE CONTRACT:
 - Seal internally with inferred answers using \`${answerCommand}\`, or re-prepare the current prompt so the route auto-seals.`;
 }
 
-function clarificationPlanHint(route, id) {
+function clarificationPlanHint(route: any, id: any) {
   const command = `sks pipeline answer ${id} --stdin`;
   return `
 
@@ -1068,15 +1067,15 @@ Use update_plan only for real execution work:
 Do not surface a prequestion sheet. Legacy answer command if needed: \`${command}\`.`;
 }
 
-function formatRequiredQuestions(schema) {
-  return schema.slots.map((s, i) => {
+function formatRequiredQuestions(schema: any) {
+  return schema.slots.map((s: any, i: any) => {
     const options = s.options ? ` Options: ${s.options.join(', ')}.` : '';
     const examples = s.examples ? ` Examples: ${s.examples.join(', ')}.` : '';
     return `${i + 1}. ${s.id}: ${s.question}${options}${examples}`;
   }).join('\n');
 }
 
-async function clarificationStopReason(root, state, kind) {
+export async function clarificationStopReason(root: any, state: any, kind: any) {
   const id = state?.mission_id || 'latest';
   const routeName = state?.route_command || state?.route || state?.mode || 'route';
   const files = state?.mission_id ? `
@@ -1089,7 +1088,7 @@ Do not continue to implementation or the next pipeline stage until the ambiguity
 After the contract is sealed, continue the original ${routeName} route.`;
 }
 
-export async function recordContext7Evidence(root, state, payload) {
+export async function recordContext7Evidence(root: any, state: any, payload: any) {
   const stage = context7Stage(payload);
   if (!stage) return null;
   if (!await shouldWritePipelineEvidence(root, state)) return null;
@@ -1104,7 +1103,7 @@ export async function recordContext7Evidence(root, state, payload) {
   return record;
 }
 
-export async function recordSubagentEvidence(root, state, payload) {
+export async function recordSubagentEvidence(root: any, state: any, payload: any) {
   const stage = subagentStage(payload);
   if (!stage) return null;
   if (!await shouldWritePipelineEvidence(root, state)) return null;
@@ -1119,17 +1118,17 @@ export async function recordSubagentEvidence(root, state, payload) {
   return record;
 }
 
-async function shouldWritePipelineEvidence(root, state = {}) {
+async function shouldWritePipelineEvidence(root: any, state: any = {}) {
   if (state?.mission_id) return exists(missionDir(root, state.mission_id));
   return exists(path.join(root, '.sneakoscope', 'state', 'current.json'));
 }
 
-function subagentToolName(payload) {
+function subagentToolName(payload: any) {
   const obj = payload || {};
   return String(obj.tool_name || obj.name || obj.tool?.name || obj.mcp_tool || obj.command || obj.type || '');
 }
 
-function subagentStage(payload) {
+function subagentStage(payload: any) {
   const hay = JSON.stringify(payload || {});
   if (!/(spawn_agent|send_input|wait_agent|close_agent|subagent|worker|explorer)/i.test(hay)) return null;
   if (/subagent[_ -]?unavailable|subagents unavailable|unsafe to split|unsplittable|cannot safely split/i.test(hay)) return 'exception';
@@ -1138,7 +1137,7 @@ function subagentStage(payload) {
   return 'subagent';
 }
 
-export async function subagentEvidence(root, state) {
+export async function subagentEvidence(root: any, state: any) {
   const id = state?.mission_id;
   if (!id) return { spawn: false, result: false, exception: false, ok: false, count: 0 };
   const text = await readText(path.join(missionDir(root, id), 'subagent-evidence.jsonl'), '');
@@ -1157,16 +1156,16 @@ export async function subagentEvidence(root, state) {
   return { spawn, result, exception, ok: spawn || exception, count: lines.length };
 }
 
-export async function hasSubagentEvidence(root, state) {
+export async function hasSubagentEvidence(root: any, state: any) {
   return (await subagentEvidence(root, state)).ok;
 }
 
-function context7ToolName(payload) {
+function context7ToolName(payload: any) {
   const obj = payload || {};
   return String(obj.tool_name || obj.name || obj.tool?.name || obj.mcp_tool || obj.command || obj.type || '');
 }
 
-function context7Stage(payload) {
+function context7Stage(payload: any) {
   const hay = JSON.stringify(payload || {});
   if (!/(context7|resolve[-_]?library[-_]?id|get[-_]?library[-_]?docs|query[-_]?docs)/i.test(hay)) return null;
   if (/resolve[-_]?library[-_]?id/i.test(hay)) return 'resolve-library-id';
@@ -1174,7 +1173,7 @@ function context7Stage(payload) {
   return 'context7';
 }
 
-export async function context7Evidence(root, state) {
+export async function context7Evidence(root: any, state: any) {
   const id = state?.mission_id;
   if (!id) return { resolve: false, docs: false, ok: false, count: 0 };
   const text = await readText(path.join(missionDir(root, id), 'context7-evidence.jsonl'), '');
@@ -1191,7 +1190,7 @@ export async function context7Evidence(root, state) {
   return { resolve, docs, ok: resolve && docs, count: lines.length };
 }
 
-export async function hasContext7DocsEvidence(root, state) {
+export async function hasContext7DocsEvidence(root: any, state: any) {
   return (await context7Evidence(root, state)).ok;
 }
 
