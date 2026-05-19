@@ -5,12 +5,50 @@ SKS keeps codex-lb separate from ChatGPT OAuth. The codex-lb proxy key is stored
 ## Commands
 
 ```bash
+sks codex-lb setup
+sks codex-lb setup --host lb.example.com --api-key-stdin --yes --json
+sks codex-lb status --json
 sks codex-lb metrics --json
 sks codex-lb doctor --deep --json
 sks codex-lb circuit reset
 sks codex-lb circuit record-fixture test/fixtures/codex-lb/5xx.json --json
 sks codex-lb proof-evidence --json
 ```
+
+## Setup Wizard
+
+SKS 1.0.4 makes `sks codex-lb setup` the repair path for missing codex-lb keys. Interactive setup asks for:
+
+- codex-lb domain or base URL
+- API key with hidden input
+- whether to use the proxy as the default Codex launch target
+- whether to write the shell env loader
+- whether to run a health check
+
+Non-interactive setup accepts `--host`, `--domain`, `--base-url`, `--api-key`, and `--api-key-stdin`.
+
+Base URL normalization:
+
+```text
+lb.example.com -> https://lb.example.com/backend-api/codex
+https://lb.example.com -> https://lb.example.com/backend-api/codex
+https://lb.example.com/backend-api/codex -> unchanged
+```
+
+The fallback env file is `~/.codex/sks-codex-lb.env` with mode `0600`. Status and doctor report only redacted key presence:
+
+```json
+{
+  "configured": true,
+  "api_key": {
+    "present": true,
+    "redacted": true
+  },
+  "env_auto_load": true
+}
+```
+
+SKS must never print the raw `Missing environment variable: CODEX_LB_API_KEY` error. It reports setup guidance instead and records wrongness if a fixture ever exposes the raw missing-env message or a secret.
 
 ## Circuit Policy
 

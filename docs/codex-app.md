@@ -1,0 +1,20 @@
+# Codex App
+
+SKS uses Codex App as the app-facing control surface for dollar-command skills, managed hooks, image generation, and macOS Computer Use evidence.
+
+## 1.0.4 Compatibility Notes
+
+Codex CLI/App hook compatibility is pinned to the OpenAI Codex CLI `rust-v0.131.0` baseline. Hook output validation is handled through the vendored generated schemas documented in [codex-cli-compat.md](codex-cli-compat.md).
+
+Useful checks:
+
+```bash
+sks codex-app check
+sks codex compatibility --json
+sks hooks warning-check --json
+sks computer-use status --json
+```
+
+Computer Use is treated as a Codex App/macOS capability, not a MAD-SKS permission. Visual/UI routes may require Computer Use evidence; when the official app or OS blocks that capability, SKS records the external block and marks live UI verification unverified instead of substituting browser automation.
+
+Secrets such as `CODEX_ACCESS_TOKEN`, `OPENAI_API_KEY`, and `CODEX_LB_API_KEY` are reported only as redacted presence states.

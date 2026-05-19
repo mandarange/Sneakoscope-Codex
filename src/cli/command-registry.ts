@@ -151,6 +151,7 @@ export const COMMANDS = {
   paths: entry('beta', 'Inspect SKS managed paths', 'dist/core/commands/paths-command.js', argsCommand(() => import('../core/commands/paths-command.js'), 'pathsCommand', 'dist/core/commands/paths-command.js')),
   rollback: entry('beta', 'List or apply managed-path rollback actions', 'dist/core/commands/rollback-command.js', argsCommand(() => import('../core/commands/rollback-command.js'), 'rollbackCommand', 'dist/core/commands/rollback-command.js')),
   postinstall: entry('stable', 'Run postinstall bootstrap', 'dist/core/commands/basic-cli.js', basicArgs('postinstallCommand')),
+  codex: entry('beta', 'Check Codex CLI compatibility and vendored hook schemas', 'dist/commands/codex.js', directCommand(() => import('../commands/codex.js'), 'dist/commands/codex.js')),
   'codex-app': entry('beta', 'Check Codex App readiness', 'dist/commands/codex-app.js', directCommand(() => import('../commands/codex-app.js'), 'dist/commands/codex-app.js')),
   'codex-lb': entry('beta', 'Inspect codex-lb status and circuit health', 'dist/commands/codex-lb.js', directCommand(() => import('../commands/codex-lb.js'), 'dist/commands/codex-lb.js')),
   auth: entry('beta', 'Alias for codex-lb auth commands', 'dist/commands/codex-lb.js', directCommand(() => import('../commands/codex-lb.js'), 'dist/commands/codex-lb.js')),

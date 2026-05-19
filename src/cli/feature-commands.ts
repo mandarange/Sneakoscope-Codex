@@ -7,6 +7,9 @@ import { redactSecrets } from '../core/secret-redaction.js';
 import { evaluateHookPayload } from '../core/hooks-runtime.js';
 import { buildAllFeaturesSelftest, buildFeatureRegistry, validateFeatureRegistry, writeFeatureInventoryDocs } from '../core/feature-registry.js';
 import { recordHookPolicyMismatchWrongness } from '../core/triwiki-wrongness/wrongness-ledger.js';
+import { codexSchemaSnapshotReport } from '../core/codex-compat/codex-schema-snapshot.js';
+import { validateCodexFixtureOutputs } from '../core/codex-compat/codex-hook-schema.js';
+import { codexHookWarningCheck } from '../core/codex-compat/codex-hook-warning-detector.js';
 
 const flag = (args: any, name: any) => args.includes(name);
 
@@ -89,8 +92,37 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     if (report.decision) console.log(`Decision: ${report.decision}`);
     return;
   }
+  if (action === 'codex-schema') {
+    const report = await codexSchemaSnapshotReport();
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`Codex hook schema snapshot: ${report.ok ? 'ok' : 'blocked'} (${report.baseline})`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'codex-validate') {
+    const report = await validateCodexFixtureOutputs(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`Codex hook output validation: ${report.ok ? 'ok' : 'blocked'} (${report.checked} fixture outputs)`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'warning-check') {
+    const report = await codexHookWarningCheck(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`Codex hook warning check: ${report.ok ? 'ok' : 'blocked'} (${report.warnings_count} warnings)`);
+    for (const warning of report.warnings) console.log(`- ${warning}`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'replay-codex-fixtures') {
+    const report = await codexHookWarningCheck(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`Codex hook fixture replay: ${report.ok ? 'ok' : 'blocked'} (${report.warnings_count} warnings)`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
   if (action !== 'explain') {
-    console.error('Usage: sks hooks explain|status|trust-report|replay <fixture.json> [--json]');
+    console.error('Usage: sks hooks explain|status|trust-report|replay <fixture.json>|codex-schema|codex-validate|warning-check|replay-codex-fixtures [--json]');
     process.exitCode = 1;
     return;
   }

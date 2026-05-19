@@ -286,6 +286,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-wrongness': ['wrongness', 'add', '--kind', 'missing_evidence', '--claim', 'fixture wrongness', '--json'],
   'cli-db': ['db', 'policy'],
   'cli-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
+  'cli-codex': ['codex', 'compatibility', '--json'],
   'cli-codex-lb': ['codex-lb', 'metrics', '--json'],
   'cli-hooks': ['hooks', 'trust-report', '--json'],
   'cli-scouts': ['scouts', 'run', 'latest', '--engine', 'local-static', '--mock', '--json'],
@@ -627,7 +628,7 @@ function slug(value: any) {
 function commandCategory(name: any) {
   if (['team', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts', 'scouts', 'scout'].includes(name)) return 'proof-route';
   if (['qa-loop', 'research', 'recallpulse', 'skill-dream', 'eval', 'perf'].includes(name)) return 'loop';
-  if (['codex-app', 'codex-lb', 'auth', 'hooks', 'context7', 'openclaw'].includes(name)) return 'integration';
+  if (['codex', 'codex-app', 'codex-lb', 'auth', 'hooks', 'context7', 'openclaw'].includes(name)) return 'integration';
   if (['db', 'guard', 'conflicts', 'harness', 'versioning'].includes(name)) return 'safety';
   if (['wiki', 'wrongness', 'gx', 'image-ux-review', 'ppt'].includes(name)) return 'visual-memory';
   if (['setup', 'bootstrap', 'doctor', 'deps', 'init', 'postinstall', 'fix-path'].includes(name)) return 'install';
@@ -636,7 +637,7 @@ function commandCategory(name: any) {
 
 function commandMaturity(name: any) {
   if (['help', 'version', 'commands', 'usage', 'root', 'quickstart', 'setup', 'doctor', 'selftest', 'update-check'].includes(name)) return 'stable';
-  if (['codex-app', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'team', 'pipeline', 'goal', 'db', 'guard', 'scouts', 'scout'].includes(name)) return 'beta';
+  if (['codex', 'codex-app', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'team', 'pipeline', 'goal', 'db', 'guard', 'scouts', 'scout'].includes(name)) return 'beta';
   return 'labs';
 }
 

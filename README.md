@@ -4,6 +4,8 @@ Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
 Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable.
 
+SKS **1.0.4** targets OpenAI Codex CLI `rust-v0.131.0`: hook outputs are validated against vendored upstream schemas, `sks codex-lb setup` is a guided/redacted setup path, and macOS Computer Use is treated as a Codex App visual evidence capability independent from MAD-SKS.
+
 SKS **1.0.3** adds git-collaboration hygiene for shared TriWiki memory: `sks git ...`, tracked shared shards under `.sneakoscope/wiki/**`, runtime-only ignores, shared wrongness publish/sync, and Codex App hook trust-state generation for current hook trust syntax.
 
 SKS **1.0.2** removed the last blanket TypeScript suppressions from runtime sources (`@ts-nocheck`/`@ts-ignore` are gated out by `npm run typecheck:suppressions`). The package remains `dist`-only, the typed command registry is still the genuine runtime registry, and release checks additionally block stray `.mjs` under `dist`, command-registry import drift (`blackbox:command-import-smoke`), typed contract probes, plus suppression + migration summaries.
@@ -17,7 +19,22 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 ![Sneakoscope Codex architecture and pipeline](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/dev/docs/assets/sneakoscope-architecture-pipeline.jpg)
 
 
-## 1.0.3 Current Release Notes
+## 1.0.4 Codex CLI Compatibility
+
+SKS 1.0.4 targets OpenAI Codex CLI `rust-v0.131.0`. Hook outputs are validated against vendored upstream schemas, so SKS fails release checks if it emits deprecated hook shapes or unknown fields. `sks codex-lb setup` now guides users through domain/base URL and API key setup, stores secrets securely, and prevents raw `CODEX_LB_API_KEY` missing messages. On macOS, Computer Use is treated as a first-class Codex App visual evidence capability and is never blocked by MAD-SKS or a generic SKS safety policy.
+
+If the Codex App or OS itself denies Computer Use capability, SKS records `external_capability_blocked` and does not fabricate UI evidence.
+
+New checks:
+
+- `sks codex compatibility --json`
+- `sks codex doctor --json`
+- `sks hooks codex-validate --json`
+- `sks hooks warning-check --json`
+- `sks codex-lb setup --host <domain> --api-key-stdin --yes --json`
+- `sks computer-use status --json`
+
+## 1.0.3 Previous Release Notes
 
 SKS **1.0.3 makes TriWiki collaboration git-safe.** Shared claims, wrongness records, image voxels, and avoidance rules publish to one-record JSON shards; generated indexes are ignored and rebuilt. `.gitignore` no longer hides all of `.sneakoscope/`, so shared memory can be committed while missions, logs, reports, caches, and temporary packs stay local.
 
@@ -96,6 +113,8 @@ Learn more:
 - Wrongness Learning Loop: [docs/wrongness-learning-loop.md](docs/wrongness-learning-loop.md)
 - Package boundary: [docs/package-boundary.md](docs/package-boundary.md)
 - Black-box package tests: [docs/black-box-package-tests.md](docs/black-box-package-tests.md)
+- Codex CLI compatibility: [docs/codex-cli-compat.md](docs/codex-cli-compat.md)
+- Codex App: [docs/codex-app.md](docs/codex-app.md)
 - Core dominance: [docs/core-dominance.md](docs/core-dominance.md)
 - Performance budgets: [docs/performance-budgets.md](docs/performance-budgets.md)
 - Five-Scout Pipeline: [docs/five-scout-pipeline.md](docs/five-scout-pipeline.md)
@@ -123,6 +142,8 @@ sks status
 sks trust report latest
 sks wrongness validate project --json
 sks git doctor --json
+sks codex compatibility --json
+sks hooks warning-check --json
 sks codex-app check
 sks selftest --mock
 sks rust smoke --json

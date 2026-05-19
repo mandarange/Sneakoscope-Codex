@@ -55,6 +55,7 @@ export const COMMANDS = {
   paths: { maturity: 'beta', summary: 'Inspect SKS managed paths', lazy: argsCommand(() => import('../core/commands/paths-command.mjs'), 'pathsCommand') },
   rollback: { maturity: 'beta', summary: 'List or apply managed-path rollback actions', lazy: argsCommand(() => import('../core/commands/rollback-command.mjs'), 'rollbackCommand') },
   postinstall: { maturity: 'stable', summary: 'Run postinstall bootstrap', lazy: basicArgs('postinstallCommand') },
+  codex: { maturity: 'beta', summary: 'Check Codex CLI compatibility and vendored hook schemas', lazy: () => import('../commands/codex.mjs') },
   'codex-app': { maturity: 'beta', summary: 'Check Codex App readiness', lazy: () => import('../commands/codex-app.mjs') },
   'codex-lb': { maturity: 'beta', summary: 'Inspect codex-lb status and circuit health', lazy: () => import('../commands/codex-lb.mjs') },
   auth: { maturity: 'beta', summary: 'Alias for codex-lb auth commands', lazy: () => import('../commands/codex-lb.mjs') },

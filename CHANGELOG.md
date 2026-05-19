@@ -3,6 +3,27 @@
 ## [Unreleased]
 
 
+## [1.0.4] - 2026-05-20
+
+### Added
+- Add Codex CLI `rust-v0.131.0` compatibility layer with vendored hook schema snapshots and strict hook output validation.
+- Add `sks codex-lb setup` interactive wizard for domain/base URL and API key capture with secure storage and env auto-load.
+- Add codex-lb missing-env prevention so macOS users do not see raw `Missing environment variable: CODEX_LB_API_KEY` after setup or update.
+- Add macOS Codex App Computer Use capability detector and visual-route integration that treats Computer Use as a first-class visual evidence source.
+- Add hook warning black-box tests that fail release if Codex hook output produces deprecated-shape or unknown-field warnings.
+- Add `sks codex compatibility` and `sks hooks codex-validate` surfaces for checking Codex CLI version, hook schemas, and SKS output shape.
+
+### Fixed
+- Replace legacy hook output shapes with Codex `rust-v0.131.0` canonical `hookSpecificOutput` / camelCase output syntax.
+- Prevent SKS from misclassifying Codex App Computer Use as a MAD-SKS or generic safety block.
+- Prevent codex-lb launch/setup paths from throwing raw missing-env errors when setup can repair or explain the missing key.
+- Prevent secrets from being written to proof, logs, screenshots, hook replay, black-box reports, or wrongness memory.
+
+### Changed
+- Treat Codex CLI compatibility and hook-schema freshness as release invariants.
+- Treat Computer Use availability as a capability check, not an SKS safety policy decision.
+
+
 ## [1.0.3] - 2026-05-19
 
 ### Added
