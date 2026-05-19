@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists } from './fsx.js';
+import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists, sha256 } from './fsx.js';
 import { DEFAULT_RETENTION_POLICY } from './retention.js';
 import { DEFAULT_DB_SAFETY_POLICY } from './db-safety.js';
 import { isHarnessSourceProject, writeHarnessGuardPolicy } from './harness-guard.js';
@@ -11,7 +11,37 @@ import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_
 import { SKILL_DREAM_POLICY, skillDreamPolicyText } from './skill-forge.js';
 
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
-const SKS_GENERATED_GIT_PATTERNS = ['.sneakoscope/', '.codex/', '.agents/', 'AGENTS.md'];
+const SKS_GENERATED_GIT_PATTERNS = [
+  '.sneakoscope/missions/',
+  '.sneakoscope/reports/',
+  '.sneakoscope/tmp/',
+  '.sneakoscope/cache/',
+  '.sneakoscope/arenas/',
+  '.sneakoscope/processes/',
+  '.sneakoscope/bench/',
+  '.sneakoscope/blackbox/',
+  '.sneakoscope/logs/',
+  '.sneakoscope/state/',
+  '.sneakoscope/db/',
+  '.sneakoscope/evidence/',
+  '.sneakoscope/proof/',
+  '.sneakoscope/perf/',
+  '.sneakoscope/research/',
+  '.sneakoscope/skills/',
+  '.sneakoscope/smoke-archives/',
+  '.sneakoscope/memory/',
+  '.sneakoscope/wiki/indexes/',
+  '.sneakoscope/wiki/context-packs/',
+  '.sneakoscope/wiki/tmp/',
+  '.sneakoscope/wiki/context-pack.json',
+  '.sneakoscope/wiki/image-assets.json',
+  '.sneakoscope/wiki/image-voxel-ledger.json',
+  '.sneakoscope/wiki/visual-anchors.json',
+  '.sneakoscope/wiki/last-sweep-report.json',
+  '.codex/',
+  '.agents/',
+  'AGENTS.md'
+];
 const SKS_SKILL_MANIFEST_FILE = '.sks-generated.json';
 const GENERATED_PRUNE_POLICY = 'remove_previous_sks_generated_paths_absent_from_current_manifest';
 
@@ -110,6 +140,87 @@ function buildManagedHooks(commandPrefix: any) {
     }));
   }
   return { hooks };
+}
+
+const CODEX_HOOK_EVENT_KEYS: Record<string, string> = {
+  UserPromptSubmit: 'user_prompt_submit',
+  PreToolUse: 'pre_tool_use',
+  PostToolUse: 'post_tool_use',
+  PermissionRequest: 'permission_request',
+  Stop: 'stop'
+};
+
+export function buildManagedHookTrustStateToml(root: string, commandPrefix: string): string {
+  const source = path.join(root, '.codex', 'hooks.json');
+  const managed = buildManagedHooks(commandPrefix).hooks;
+  const blocks: string[] = [];
+  for (const [eventName, entries] of Object.entries(managed) as Array<[string, any[]]>) {
+    const eventKey = CODEX_HOOK_EVENT_KEYS[eventName] || eventName;
+    entries.forEach((entry, groupIndex) => {
+      (entry.hooks || []).forEach((hook: any, handlerIndex: number) => {
+        const key = `${source}:${eventKey}:${groupIndex}:${handlerIndex}`;
+        const table = `hooks.state."${tomlQuotedKey(key)}"`;
+        blocks.push(`[${table}]\ntrusted_hash = "${codexHookTrustedHash(eventName, entry, hook)}"`);
+      });
+    });
+  }
+  return `${blocks.join('\n\n')}\n`;
+}
+
+export function mergeManagedHookTrustStateToml(existingContent: string, root: string, commandPrefix: string): string {
+  let next = String(existingContent || '').trimEnd();
+  for (const block of buildManagedHookTrustStateToml(root, commandPrefix).trim().split(/\n\n+/)) {
+    const table = block.match(/^\[([^\]]+)\]/)?.[1];
+    if (table) next = upsertCodexTrustTomlTable(next, table, block);
+  }
+  return `${next.trim()}\n`;
+}
+
+export function codexHookTrustedHash(eventName: string, entry: any, hook: any): string {
+  const normalizedHook = {
+    type: String(hook.type || 'command'),
+    command: String(hook.command || ''),
+    timeout: Number(hook.timeout || 600),
+    async: Boolean(hook.async),
+    statusMessage: String(hook.statusMessage || '')
+  };
+  const identity: Record<string, unknown> = {
+    event_name: eventName,
+    hooks: [normalizedHook]
+  };
+  if (!['UserPromptSubmit', 'Stop'].includes(eventName) && entry?.matcher != null) identity.matcher = String(entry.matcher);
+  return `sha256:${sha256(canonicalJson(identity))}`;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function tomlQuotedKey(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function upsertCodexTrustTomlTable(text: string, table: string, block: string): string {
+  let lines = String(text || '').trimEnd().split('\n');
+  if (lines.length === 1 && lines[0] === '') lines = [];
+  const header = `[${table}]`;
+  const start = lines.findIndex((line) => line.trim() === header);
+  const blockLines = String(block || '').trim().split('\n');
+  if (start === -1) return [...lines, ...(lines.length ? [''] : []), ...blockLines].join('\n').replace(/\n{3,}/g, '\n\n');
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
+      end = i;
+      break;
+    }
+  }
+  lines.splice(start, end - start, ...blockLines);
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 export function mergeManagedHooksJson(existingContent: any, commandPrefix: any) {
@@ -782,6 +893,11 @@ function upsertTomlTable(text: any, table: any, block: any) {
   const hooksPath = path.join(root, '.codex', 'hooks.json');
   await writeTextAtomic(hooksPath, mergeManagedHooksJson(await readText(hooksPath, ''), hookCommandPrefix));
   created.push(`.codex/hooks.json (${installScope})`);
+  await writeTextAtomic(
+    generatedCodexConfigPath,
+    mergeManagedHookTrustStateToml(await readText(generatedCodexConfigPath, ''), root, hookCommandPrefix)
+  );
+  created.push('.codex/config.toml hook trust state');
 
   const skillInstall = await installSkills(root);
   created.push('.agents/skills/*');

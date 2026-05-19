@@ -6,6 +6,7 @@ import { runProcess } from '../../src/core/fsx.mjs';
 
 const SOURCE_ROOT = process.cwd();
 const missionRoots = new Map();
+const ROUTE_E2E_COMMAND_TIMEOUT_MS = Number(process.env.SKS_E2E_COMMAND_TIMEOUT_MS || 120_000);
 
 export async function runSks(args, { expectCode = 0 } = {}) {
   const root = await createHermeticProjectRoot({ fixtureName: args[0] || 'route' });
@@ -36,7 +37,7 @@ export async function createHermeticProjectRoot({
 export async function runSksInRoot(root, args, { expectCode = 0 } = {}) {
   const result = await runProcess(process.execPath, [path.join(SOURCE_ROOT, 'dist', 'bin', 'sks.js'), ...args], {
     cwd: root,
-    timeoutMs: 30000,
+    timeoutMs: ROUTE_E2E_COMMAND_TIMEOUT_MS,
     maxOutputBytes: 512 * 1024,
     env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true' }
   });

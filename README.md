@@ -4,7 +4,9 @@ Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
 Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable.
 
-SKS **1.0.2** removes the last blanket TypeScript suppressions from runtime sources (`@ts-nocheck`/`@ts-ignore` are gated out by `npm run typecheck:suppressions`). The package remains `dist`-only, the typed command registry is still the genuine runtime registry, and release checks additionally block stray `.mjs` under `dist`, command-registry import drift (`blackbox:command-import-smoke`), typed contract probes, plus the new suppression + migration summaries.
+SKS **1.0.3** adds git-collaboration hygiene for shared TriWiki memory: `sks git ...`, tracked shared shards under `.sneakoscope/wiki/**`, runtime-only ignores, shared wrongness publish/sync, and Codex App hook trust-state generation for current hook trust syntax.
+
+SKS **1.0.2** removed the last blanket TypeScript suppressions from runtime sources (`@ts-nocheck`/`@ts-ignore` are gated out by `npm run typecheck:suppressions`). The package remains `dist`-only, the typed command registry is still the genuine runtime registry, and release checks additionally block stray `.mjs` under `dist`, command-registry import drift (`blackbox:command-import-smoke`), typed contract probes, plus suppression + migration summaries.
 
 SKS **1.0.2** also adds TriWiki Wrongness Memory: `sks wrongness ...` records negative evidence for wrong claims, stale or missing proof, test failures, image anchor mistakes, DB safety mismatches, hook policy mismatches, mock-real confusion, and trust overclaims. Active wrongness is retrieved by TriWiki/scouts and lowers or blocks trust until corrected.
 
@@ -15,7 +17,21 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 ![Sneakoscope Codex architecture and pipeline](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/dev/docs/assets/sneakoscope-architecture-pipeline.jpg)
 
 
-## 1.0.2 Current Release Notes
+## 1.0.3 Current Release Notes
+
+SKS **1.0.3 makes TriWiki collaboration git-safe.** Shared claims, wrongness records, image voxels, and avoidance rules publish to one-record JSON shards; generated indexes are ignored and rebuilt. `.gitignore` no longer hides all of `.sneakoscope/`, so shared memory can be committed while missions, logs, reports, caches, and temporary packs stay local.
+
+New commands:
+
+- `sks git policy|install|status|doctor|precommit|publish-plan|summary`
+- `sks wiki publish latest --shared`
+- `sks wrongness publish latest --shared`
+- `sks wiki rebuild-index --json`
+- `sks wiki validate-shared --json`
+
+Codex App setup now writes hook trust-state hashes into `.codex/config.toml` for the managed `.codex/hooks.json`, matching the current Codex hook trust model.
+
+## 1.0.2 Previous Release Notes
 
 SKS **1.0.2 removes the blanket `@ts-nocheck` / `@ts-ignore` layer from runtime TypeScript.** The shipped package stays `dist`-only, keeps the typed command registry as the real runtime dispatcher, runs `npm run typecheck:suppressions` ahead of builds in `release:check`, and records migration counters under `.sneakoscope/reports/typescript-migration.*`.
 
@@ -72,6 +88,11 @@ Learn more:
 - TypeScript architecture: [docs/typescript-architecture.md](docs/typescript-architecture.md)
 - Trust Kernel: [docs/trust-kernel.md](docs/trust-kernel.md)
 - TriWiki Wrongness Memory: [docs/triwiki-wrongness-memory.md](docs/triwiki-wrongness-memory.md)
+- Git collaboration: [docs/git-collaboration.md](docs/git-collaboration.md)
+- Git hygiene: [docs/git-hygiene.md](docs/git-hygiene.md)
+- Shared TriWiki: [docs/shared-triwiki.md](docs/shared-triwiki.md)
+- Shared Wrongness Memory: [docs/shared-wrongness-memory.md](docs/shared-wrongness-memory.md)
+- Git policy: [docs/git-policy.md](docs/git-policy.md)
 - Wrongness Learning Loop: [docs/wrongness-learning-loop.md](docs/wrongness-learning-loop.md)
 - Package boundary: [docs/package-boundary.md](docs/package-boundary.md)
 - Black-box package tests: [docs/black-box-package-tests.md](docs/black-box-package-tests.md)
@@ -101,6 +122,7 @@ sks doctor
 sks status
 sks trust report latest
 sks wrongness validate project --json
+sks git doctor --json
 sks codex-app check
 sks selftest --mock
 sks rust smoke --json

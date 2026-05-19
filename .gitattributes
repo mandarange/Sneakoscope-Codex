@@ -1,0 +1,8 @@
+# BEGIN SKS MANAGED GIT ATTRIBUTES
+.sneakoscope/wiki/records/**/*.json merge=union
+.sneakoscope/wiki/wrongness/**/*.json merge=union
+.sneakoscope/wiki/avoidance-rules/**/*.json merge=union
+.sneakoscope/wiki/summaries/**/*.md merge=union
+.sneakoscope/wiki/image-voxels/**/*.json merge=union
+# Large raw visual artifacts should use LFS only if explicitly enabled.
+# END SKS MANAGED GIT ATTRIBUTES

@@ -277,6 +277,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-aliases': ['aliases'],
   'cli-fix-path': ['fix-path', '--json'],
   'cli-selftest': ['selftest', '--mock'],
+  'cli-git': ['git', 'policy', '--json'],
   'cli-paths': ['paths', 'managed', '--json'],
   'cli-rollback': ['rollback', 'list', '--json'],
   'cli-proof-field': ['proof-field', 'scan', '--json', '--intent', 'fixture'],

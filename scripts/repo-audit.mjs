@@ -15,6 +15,17 @@ const riskyPathPatterns = [
   /\.(pem|key|p12|pfx|crt|cer|asc|kubeconfig|db|sqlite|sqlite3|dump|bak|backup|sql\.gz)$/i
 ];
 
+const allowedSneakoscopeSharedPathPatterns = [
+  /^\.sneakoscope\/git-policy\.json$/,
+  /^\.sneakoscope\/shared-memory-manifest\.json$/,
+  /^\.sneakoscope\/wiki\/project-policy\.json$/,
+  /^\.sneakoscope\/wiki\/records\/claims\/[^/]+\.json$/,
+  /^\.sneakoscope\/wiki\/wrongness\/[^/]+\.json$/,
+  /^\.sneakoscope\/wiki\/image-voxels\/[^/]+\/[^/]+\.json$/,
+  /^\.sneakoscope\/wiki\/avoidance-rules\/[^/]+\.json$/,
+  /^\.sneakoscope\/wiki\/summaries\/[^/]+\.md$/
+];
+
 const secretContentPatterns = [
   /-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/,
   /\bnpm_[A-Za-z0-9]{20,}\b/,
@@ -41,12 +52,16 @@ function isProbablyBinary(buf) {
   return buf.includes(0);
 }
 
+function isAllowedRiskyPath(file) {
+  return allowedSneakoscopeSharedPathPatterns.some((pattern) => pattern.test(file));
+}
+
 const files = [...new Set(candidateFiles())];
 const findings = [];
 
 for (const file of files) {
   for (const pattern of riskyPathPatterns) {
-    if (pattern.test(file)) findings.push({ file, reason: 'risky tracked path' });
+    if (pattern.test(file) && !isAllowedRiskyPath(file)) findings.push({ file, reason: 'risky tracked path' });
   }
 
   let buf;

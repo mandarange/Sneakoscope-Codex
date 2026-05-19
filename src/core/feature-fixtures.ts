@@ -31,6 +31,7 @@ const FIXTURES = Object.freeze({
   'cli-aliases': fixture('execute', 'sks aliases', [], 'pass'),
   'cli-fix-path': fixture('execute', 'sks fix-path --json', [], 'pass'),
   'cli-selftest': fixture('execute', 'sks selftest --mock', [], 'pass'),
+  'cli-git': fixture('execute', 'sks git policy --json', [], 'pass'),
   'cli-goal': fixture('mock', 'sks goal status latest --json', ['goal-workflow.json'], 'pass'),
   'cli-research': fixture('mock', 'sks research status latest --json', ['research-gate.json', 'completion-proof.json'], 'pass'),
   'cli-qa-loop': fixture('mock', 'sks qa-loop status latest --json', ['qa-loop-proof.json', 'completion-proof.json'], 'pass'),

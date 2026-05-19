@@ -10,7 +10,7 @@
 - Feature quality improved to zero missing fixtures and lower static contracts, but `runtime_mock_verified >= 45` remains a P1 target rather than a 0.9.20 P0 claim.
 
 Static contracts are not runtime verification. They document expected behavior and must be promoted through executable fixtures before being used as completion proof.
-# 1.0.2 Known Gaps
+# 1.0.3 Known Gaps
 
 No P0 stable-release blocker is intentionally left open for TypeScript-built `dist` runtime, actual typed command registry, package boundary, command import smoke, `sks run --execute`, strict TypeScript suppression gates, feature quality, architecture hard-fail, performance tiers, or Trust Kernel stale/mock/static blocking.
 
@@ -20,3 +20,4 @@ Remaining non-P0 work:
 - Add more native/Rust acceleration paths for large Image Voxel ledgers.
 - Legacy `.mjs` source files are retained only outside the published package boundary as compatibility/reference surfaces; the package runtime and command import closure are TypeScript-built `.js` under `dist`.
 - Wrongness memory now captures DB, hook, image, trust, and test negative evidence in fixtures; broader real-world classification coverage remains future work and must not be claimed as exhaustive.
+- Git collaboration now validates shared memory shards and local runtime ignores, but SKS still does not auto-install Git hooks. Teams must wire `sks git precommit` into their own hook if they want automatic local enforcement.

@@ -147,6 +147,7 @@ export const COMMANDS = {
   deps: entry('stable', 'Check local dependencies', 'dist/core/commands/basic-cli.js', subcommand(() => import(basicModule), 'depsCommand', 'dist/core/commands/basic-cli.js', 'check')),
   'fix-path': entry('stable', 'Repair hook command paths', 'dist/core/commands/basic-cli.js', basicArgs('fixPathCommand')),
   doctor: entry('stable', 'Check and repair SKS install', 'dist/commands/doctor.js', directCommand(() => import('../commands/doctor.js'), 'dist/commands/doctor.js')),
+  git: entry('beta', 'Inspect and enforce SKS git collaboration hygiene', 'dist/commands/git.js', directCommand(() => import('../commands/git.js'), 'dist/commands/git.js')),
   paths: entry('beta', 'Inspect SKS managed paths', 'dist/core/commands/paths-command.js', argsCommand(() => import('../core/commands/paths-command.js'), 'pathsCommand', 'dist/core/commands/paths-command.js')),
   rollback: entry('beta', 'List or apply managed-path rollback actions', 'dist/core/commands/rollback-command.js', argsCommand(() => import('../core/commands/rollback-command.js'), 'rollbackCommand', 'dist/core/commands/rollback-command.js')),
   postinstall: entry('stable', 'Run postinstall bootstrap', 'dist/core/commands/basic-cli.js', basicArgs('postinstallCommand')),

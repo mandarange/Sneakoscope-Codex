@@ -51,7 +51,7 @@ for (const rel of requiredFiles) {
 const runtimeRegistry = await import(pathToFileURL(path.join(root, 'dist', 'cli', 'command-registry.js')));
 const runtimeCommands = Object.keys(runtimeRegistry.COMMANDS || {}).sort();
 const typedText = fs.readFileSync(path.join(root, 'src', 'cli', 'command-registry.ts'), 'utf8');
-for (const name of ['help', 'version', 'commands', 'run', 'team', 'trust', 'proof', 'scouts', 'db', 'wiki', 'bench', 'features']) {
+for (const name of ['help', 'version', 'commands', 'run', 'team', 'trust', 'proof', 'scouts', 'db', 'git', 'wiki', 'bench', 'features']) {
   if (!runtimeCommands.includes(name)) issues.push(`typed_registry_runtime_missing:${name}`);
   if (!new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:`).test(typedText)) issues.push(`typed_registry_ts_missing:${name}`);
 }
