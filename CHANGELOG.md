@@ -3,6 +3,26 @@
 ## [Unreleased]
 
 
+## [1.0.3] - 2026-05-19
+
+### Added
+- Add `sks git policy|install|status|doctor|precommit|publish-plan|summary` for SKS git collaboration hygiene.
+- Add tracked shared-memory policy files: `.sneakoscope/git-policy.json` and `.sneakoscope/shared-memory-manifest.json`.
+- Add merge-friendly shared TriWiki shards for claims, wrongness, image voxels, and avoidance rules under `.sneakoscope/wiki/**`.
+- Add `sks wiki publish latest --shared`, `sks wrongness publish latest --shared`, `sks wiki rebuild-index --json`, and `sks wiki validate-shared --json`.
+- Add release checks for git hygiene, precommit fixtures, shared memory validation, and git collaboration E2E coverage.
+- Add Codex App hook trust-state generation for current hook trust syntax so managed hooks are written with matching trusted hashes.
+
+### Fixed
+- Replace broad `.sneakoscope/` ignore behavior with runtime-only ignores so shared memory shards can be committed.
+- Surface shared wrongness shards in wrongness retrieval even when the local project ledger is missing.
+- Add git collaboration status to Trust Kernel reports.
+
+### Changed
+- Update managed-path manifest schema to `sks.managed-paths.v2` with explicit shared-memory, generated-index, local-runtime, and harness planes.
+- Bump npm package and optional Rust crate metadata to `1.0.3`.
+
+
 ## [1.0.2] - 2026-05-19
 
 ### Added

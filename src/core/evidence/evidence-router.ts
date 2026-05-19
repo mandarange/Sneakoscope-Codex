@@ -59,7 +59,7 @@ export async function evidenceCandidatesForProof(root: any, proof: any = {}, opt
 async function evidenceRecordForCandidate(root: any, candidate: any, { missionId, staleAfter, proof }: any) {
   const relPath = normalizeRelPath(candidate.relPath, missionId, root);
   const absolute = path.resolve(root, relPath);
-  const freshness = await fileFreshness(absolute, { staleAfter });
+  const freshness = await fileFreshness(absolute, { staleAfter: candidate.ignoreStale ? null : staleAfter });
   if (candidate.optional && !freshness.exists) return null;
   const issues = candidate.optional && !freshness.exists ? [] : [...freshness.issues];
   let digest = null;
@@ -125,14 +125,14 @@ function addTestCandidates(candidates: any, tests: any = null, missionId: any = 
 
 function addWrongnessCandidates(candidates: any, wrongness: any = null, missionId: any = null) {
   if (!wrongness) {
-    candidates.push({ kind: 'wrongness', relPath: '.sneakoscope/wiki/wrongness-ledger.json', source: 'real', optional: true });
-    if (missionId) candidates.push({ kind: 'wrongness', relPath: `.sneakoscope/missions/${missionId}/wrongness-ledger.json`, source: 'real', optional: true });
+    candidates.push({ kind: 'wrongness', relPath: '.sneakoscope/wiki/wrongness-ledger.json', source: 'real', optional: true, ignoreStale: true });
+    if (missionId) candidates.push({ kind: 'wrongness', relPath: `.sneakoscope/missions/${missionId}/wrongness-ledger.json`, source: 'real', optional: true, ignoreStale: true });
     return;
   }
-  candidates.push({ kind: 'wrongness', relPath: wrongness.project_ledger || '.sneakoscope/wiki/wrongness-ledger.json', source: 'real', optional: true });
-  if (wrongness.mission_ledger) candidates.push({ kind: 'wrongness', relPath: wrongness.mission_ledger, source: 'real', optional: true });
-  candidates.push({ kind: 'image_wrongness', relPath: '.sneakoscope/wiki/image-wrongness-index.json', source: 'real', optional: true });
-  if (missionId) candidates.push({ kind: 'image_wrongness', relPath: `.sneakoscope/missions/${missionId}/image-wrongness-ledger.json`, source: 'real', optional: true });
+  candidates.push({ kind: 'wrongness', relPath: wrongness.project_ledger || '.sneakoscope/wiki/wrongness-ledger.json', source: 'real', optional: true, ignoreStale: true });
+  if (wrongness.mission_ledger) candidates.push({ kind: 'wrongness', relPath: wrongness.mission_ledger, source: 'real', optional: true, ignoreStale: true });
+  candidates.push({ kind: 'image_wrongness', relPath: '.sneakoscope/wiki/image-wrongness-index.json', source: 'real', optional: true, ignoreStale: true });
+  if (missionId) candidates.push({ kind: 'image_wrongness', relPath: `.sneakoscope/missions/${missionId}/image-wrongness-ledger.json`, source: 'real', optional: true, ignoreStale: true });
 }
 
 function uniqueCandidates(candidates: any) {

@@ -1,0 +1,171 @@
+{
+  "schema": "sks.shared-memory-manifest.v1",
+  "version": "1.0.3",
+  "generated_at": "2026-05-19T15:19:07.541Z",
+  "mode": "team",
+  "source_of_truth": "canonical_sharded_records",
+  "shared_memory_plane": [
+    {
+      "id": "claims",
+      "path": ".sneakoscope/wiki/records/claims/<claim-id>.json",
+      "record_schema": "sks.triwiki-claim-record.v1",
+      "git": "tracked",
+      "merge": "single-record-json"
+    },
+    {
+      "id": "wrongness",
+      "path": ".sneakoscope/wiki/wrongness/<wrongness-id>.json",
+      "record_schema": "sks.triwiki-wrongness-record.v1",
+      "git": "tracked",
+      "merge": "single-record-json"
+    },
+    {
+      "id": "image_voxels",
+      "path": ".sneakoscope/wiki/image-voxels/<image-asset-id>/<anchor-id>.json",
+      "record_schema": "sks.image-voxel-record.v1",
+      "git": "tracked",
+      "merge": "single-record-json"
+    },
+    {
+      "id": "avoidance_rules",
+      "path": ".sneakoscope/wiki/avoidance-rules/<rule-id>.json",
+      "record_schema": "sks.avoidance-rule-record.v1",
+      "git": "tracked",
+      "merge": "single-record-json"
+    },
+    {
+      "id": "summaries",
+      "path": ".sneakoscope/wiki/summaries/*.md",
+      "record_schema": "markdown-summary",
+      "git": "tracked",
+      "merge": "single-record-json"
+    }
+  ],
+  "generated_indexes": [
+    {
+      "id": "project_index",
+      "path": ".sneakoscope/wiki/indexes/project-index.json",
+      "git": "ignored",
+      "rebuild": "sks wiki rebuild-index --json"
+    },
+    {
+      "id": "wrongness_index",
+      "path": ".sneakoscope/wiki/indexes/wrongness-index.json",
+      "git": "ignored",
+      "rebuild": "sks wiki rebuild-index --json"
+    },
+    {
+      "id": "context_packs",
+      "path": ".sneakoscope/wiki/context-packs/latest.json",
+      "git": "ignored",
+      "rebuild": "sks wiki refresh"
+    }
+  ],
+  "local_runtime_plane": [
+    {
+      "id": "missions",
+      "path": ".sneakoscope/missions/**",
+      "git": "ignored"
+    },
+    {
+      "id": "reports",
+      "path": ".sneakoscope/reports/**",
+      "git": "ignored"
+    },
+    {
+      "id": "tmp",
+      "path": ".sneakoscope/tmp/**",
+      "git": "ignored"
+    },
+    {
+      "id": "cache",
+      "path": ".sneakoscope/cache/**",
+      "git": "ignored"
+    },
+    {
+      "id": "arenas",
+      "path": ".sneakoscope/arenas/**",
+      "git": "ignored"
+    },
+    {
+      "id": "processes",
+      "path": ".sneakoscope/processes/**",
+      "git": "ignored"
+    },
+    {
+      "id": "bench",
+      "path": ".sneakoscope/bench/**",
+      "git": "ignored"
+    },
+    {
+      "id": "blackbox",
+      "path": ".sneakoscope/blackbox/**",
+      "git": "ignored"
+    },
+    {
+      "id": "logs",
+      "path": ".sneakoscope/logs/**",
+      "git": "ignored"
+    },
+    {
+      "id": "state",
+      "path": ".sneakoscope/state/**",
+      "git": "ignored"
+    },
+    {
+      "id": "db",
+      "path": ".sneakoscope/db/**",
+      "git": "ignored"
+    },
+    {
+      "id": "evidence",
+      "path": ".sneakoscope/evidence/**",
+      "git": "ignored"
+    },
+    {
+      "id": "proof",
+      "path": ".sneakoscope/proof/**",
+      "git": "ignored"
+    },
+    {
+      "id": "perf",
+      "path": ".sneakoscope/perf/**",
+      "git": "ignored"
+    },
+    {
+      "id": "research",
+      "path": ".sneakoscope/research/**",
+      "git": "ignored"
+    },
+    {
+      "id": "skills",
+      "path": ".sneakoscope/skills/**",
+      "git": "ignored"
+    },
+    {
+      "id": "smoke-archives",
+      "path": ".sneakoscope/smoke-archives/**",
+      "git": "ignored"
+    },
+    {
+      "id": "memory",
+      "path": ".sneakoscope/memory/**",
+      "git": "ignored"
+    }
+  ],
+  "promotion_flow": [
+    "mission runtime artifact",
+    "validate schema",
+    "secret scan",
+    "mock/static policy check",
+    "redact when requested",
+    "write deterministic canonical shard",
+    "rebuild ignored indexes",
+    "show intended git status"
+  ],
+  "security": {
+    "require_redaction": true,
+    "block_secret_patterns": true,
+    "block_mock_real_confusion": true
+  }
+}

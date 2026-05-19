@@ -53,6 +53,16 @@ export async function resolveWrongnessMissionId(root: string, missionArg: unknow
 }
 
 export async function readWrongnessLedger(root: string, missionId: string | null = null): Promise<WrongnessLedger> {
+  const ledger = await readBaseWrongnessLedger(root, missionId);
+  if (missionId) return ledger;
+  const shared = await readSharedWrongnessShardRecords(root);
+  return {
+    ...ledger,
+    records: dedupeRecords([...shared, ...ledger.records])
+  };
+}
+
+async function readBaseWrongnessLedger(root: string, missionId: string | null = null): Promise<WrongnessLedger> {
   const file = missionId ? missionWrongnessLedgerPath(root, missionId) : projectWrongnessLedgerPath(root);
   if (!(await exists(file))) return emptyWrongnessLedger(missionId ? 'mission' : 'project', missionId);
   const raw = await readJson(file, emptyWrongnessLedger(missionId ? 'mission' : 'project', missionId));
@@ -323,7 +333,7 @@ function normalizeWrongnessLedger(value: unknown, scope: 'project' | 'mission', 
 }
 
 async function upsertIntoScope(root: string, missionId: string | null, record: WrongnessRecord): Promise<WrongnessLedger> {
-  const ledger = await readWrongnessLedger(root, missionId);
+  const ledger = await readBaseWrongnessLedger(root, missionId);
   const nextRecords = upsertRecord(ledger.records, record);
   return writeWrongnessLedger(root, { ...ledger, records: nextRecords });
 }
@@ -366,6 +376,25 @@ function dedupeRecords(records: readonly WrongnessRecord[]): WrongnessRecord[] {
   const byId = new Map<string, WrongnessRecord>();
   for (const record of records) byId.set(record.id, record);
   return Array.from(byId.values()).sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
+async function readSharedWrongnessShardRecords(root: string): Promise<WrongnessRecord[]> {
+  const dir = path.join(root, '.sneakoscope', 'wiki', 'wrongness');
+  const records: WrongnessRecord[] = [];
+  let entries: string[] = [];
+  try {
+    entries = await fsp.readdir(dir);
+  } catch {
+    return records;
+  }
+  for (const name of entries.filter((entry) => entry.endsWith('.json')).sort()) {
+    const row = await readJson(path.join(dir, name), null);
+    if (!row || typeof row !== 'object') continue;
+    const wrapped = row as Record<string, unknown>;
+    if (wrapped.schema === 'sks.triwiki-wrongness-record.v1' && wrapped.wrongness) records.push(createWrongnessRecord(wrapped.wrongness));
+    else records.push(createWrongnessRecord(wrapped));
+  }
+  return records;
 }
 
 async function writeProjectWrongnessIndex(root: string): Promise<void> {

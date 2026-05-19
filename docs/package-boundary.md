@@ -1,6 +1,6 @@
 # Package Boundary
 
-`1.0.2` continues to treat the packed npm tarball as the release source of truth and expects a TypeScript-built, `.mjs`-free `dist` runtime keyed by manifest schema `sks.dist-build.v2`.
+`1.0.3` continues to treat the packed npm tarball as the release source of truth and expects a TypeScript-built, `.mjs`-free `dist` runtime keyed by manifest schema `sks.dist-build.v2`.
 
 ## Policy
 
@@ -15,6 +15,7 @@
 - `npm run dist:check` rejects `dist/**/*.mjs`, `.mjs` imports, missing build manifest, volatile build-manifest timestamps, missing executable bin, and contract-only runtime markers.
 - `npm run blackbox:command-import-smoke` packs the tarball, installs it into a temp consumer, imports `dist/cli/command-registry.js`, and lazy-imports every registered command.
 - `npm run blackbox:matrix` runs real pack install, npx one-shot, global shim, no-git, spaces, Unicode, and optional read-only directory scenarios.
+- `npm run git-hygiene:check`, `npm run shared-memory:check`, and `npm run git-collaboration:e2e` validate the new shared-memory git collaboration surface before release.
 
 ## Current Stable Evidence
 

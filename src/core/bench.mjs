@@ -118,7 +118,7 @@ export async function runCoreBench(root = process.cwd(), { iterations = 3, tier 
 }
 
 async function ensureBenchTrustMission(root, script) {
-  await runProcess(process.execPath, [script, 'run', 'bench trust fixture', '--mock', '--json'], {
+  await runProcess(process.execPath, [script, 'run', 'fixture', '--mock', '--json'], {
     cwd: root,
     timeoutMs: 60_000,
     maxOutputBytes: 256 * 1024,

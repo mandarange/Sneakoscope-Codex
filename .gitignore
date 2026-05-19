@@ -21,7 +21,6 @@ temp/
 logs/
 .dcodex/
 .omx/
-.sneakoscope/
 .codex/
 .agents/
 AGENTS.md
@@ -87,3 +86,51 @@ id_ed25519
 *.mov
 *.webm
 *.psd
+# BEGIN SKS MANAGED GIT HYGIENE
+# Local SKS runtime noise
+.sneakoscope/missions/
+.sneakoscope/reports/
+.sneakoscope/tmp/
+.sneakoscope/cache/
+.sneakoscope/arenas/
+.sneakoscope/processes/
+.sneakoscope/bench/
+.sneakoscope/blackbox/
+.sneakoscope/logs/
+.sneakoscope/state/
+.sneakoscope/db/
+.sneakoscope/evidence/
+.sneakoscope/proof/
+.sneakoscope/perf/
+.sneakoscope/research/
+.sneakoscope/skills/
+.sneakoscope/smoke-archives/
+.sneakoscope/memory/
+.sneakoscope/manifest.json
+.sneakoscope/policy.json
+.sneakoscope/db-safety.json
+.sneakoscope/db-safety-scan.json
+.sneakoscope/harness-guard.json
+.sneakoscope/managed-paths.json
+.sneakoscope/**/*.log
+
+# Generated TriWiki indexes and transient context packs
+.sneakoscope/wiki/indexes/
+.sneakoscope/wiki/context-packs/
+.sneakoscope/wiki/tmp/
+.sneakoscope/wiki/context-pack.json
+.sneakoscope/wiki/image-assets.json
+.sneakoscope/wiki/image-voxel-ledger.json
+.sneakoscope/wiki/wrongness-ledger.json
+.sneakoscope/wiki/wrongness-index.json
+.sneakoscope/wiki/wrongness-summary.md
+.sneakoscope/wiki/image-wrongness-index.json
+.sneakoscope/wiki/visual-anchors.json
+.sneakoscope/wiki/last-sweep-report.json
+
+# Shared SKS memory records are intentionally tracked:
+# .sneakoscope/wiki/records/
+# .sneakoscope/wiki/wrongness/
+# .sneakoscope/wiki/image-voxels/
+# .sneakoscope/wiki/avoidance-rules/
+# END SKS MANAGED GIT HYGIENE

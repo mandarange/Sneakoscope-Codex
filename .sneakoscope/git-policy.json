@@ -1,0 +1,46 @@
+{
+  "schema": "sks.git-policy.v1",
+  "version": "1.0.3",
+  "mode": "team",
+  "shared_memory": {
+    "track": [
+      ".sneakoscope/wiki/records/**/*.json",
+      ".sneakoscope/wiki/wrongness/**/*.json",
+      ".sneakoscope/wiki/image-voxels/**/*.json",
+      ".sneakoscope/wiki/avoidance-rules/**/*.json",
+      ".sneakoscope/wiki/summaries/**/*.md",
+      ".sneakoscope/wiki/project-policy.json",
+      ".sneakoscope/shared-memory-manifest.json",
+      ".sneakoscope/git-policy.json"
+    ],
+    "generated_ignore": [
+      ".sneakoscope/wiki/indexes/**/*.json",
+      ".sneakoscope/wiki/context-packs/**/*.json",
+      ".sneakoscope/wiki/tmp/**"
+    ]
+  },
+  "local_runtime": {
+    "ignore": [
+      ".sneakoscope/missions/**",
+      ".sneakoscope/reports/**",
+      ".sneakoscope/tmp/**",
+      ".sneakoscope/cache/**",
+      ".sneakoscope/arenas/**",
+      ".sneakoscope/processes/**",
+      ".sneakoscope/bench/**",
+      ".sneakoscope/blackbox/**",
+      ".sneakoscope/logs/**",
+      ".sneakoscope/**/*.log"
+    ]
+  },
+  "large_artifacts": {
+    "image_binary_policy": "lfs_or_manual",
+    "track_raw_screenshots": false,
+    "max_tracked_file_bytes": 262144
+  },
+  "security": {
+    "require_redaction": true,
+    "block_secret_patterns": true,
+    "block_mock_real_confusion": true
+  }
+}

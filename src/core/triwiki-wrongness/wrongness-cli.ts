@@ -14,6 +14,7 @@ import {
 import { wrongnessContextForRoute } from './wrongness-retrieval.js';
 import { renderAvoidanceRules } from './avoidance-rules.js';
 import { normalizeWrongnessKind } from './wrongness-schema.js';
+import { publishSharedMemory } from '../git-hygiene/shared-memory-publish.js';
 
 export async function wrongnessCommand(args: string[] = []) {
   const root = await projectRoot();
@@ -27,7 +28,8 @@ export async function wrongnessCommand(args: string[] = []) {
   if (action === 'validate') return validateWrongnessCommand(root, rest);
   if (action === 'context') return contextWrongness(root, rest);
   if (action === 'rules') return avoidanceRules(root, rest);
-  console.error('Usage: sks wrongness list|show|add|resolve|summarize|validate|context|rules [latest|mission-id|project] [--json]');
+  if (action === 'publish') return publishWrongness(root, rest);
+  console.error('Usage: sks wrongness list|show|add|resolve|summarize|validate|context|rules|publish [latest|mission-id|project] [--json]');
   process.exitCode = 2;
 }
 
@@ -39,7 +41,8 @@ export async function wikiWrongnessCommand(args: string[] = []) {
   if (action === 'validate') return validateWrongnessCommand(root, rest);
   if (action === 'summarize' || action === 'summary') return summarizeWrongnessCommand(root, rest);
   if (action === 'context') return contextWrongness(root, rest);
-  console.error('Usage: sks wiki wrongness list|validate|pack|summarize|context [latest|mission-id|project] [--json]');
+  if (action === 'publish') return publishWrongness(root, rest);
+  console.error('Usage: sks wiki wrongness list|validate|pack|summarize|context|publish [latest|mission-id|project] [--json]');
   process.exitCode = 2;
 }
 
@@ -181,6 +184,21 @@ async function avoidanceRules(root: string, args: string[]) {
   if (flag(args, '--json')) console.log(JSON.stringify(output, null, 2));
   else console.log(renderAvoidanceRules(context.active_avoidance_rules));
   return output;
+}
+
+async function publishWrongness(root: string, args: string[]) {
+  if (!flag(args, '--shared')) throw new Error('Usage: sks wrongness publish latest --shared [--redact] [--json]');
+  const target = positionalArgs(args)[0] || 'latest';
+  if (target !== 'latest') throw new Error('Usage: sks wrongness publish latest --shared [--redact] [--json]');
+  const result = await publishSharedMemory(root, { target: 'wrongness', redact: flag(args, '--redact') });
+  process.exitCode = result.ok ? 0 : 2;
+  if (flag(args, '--json')) console.log(JSON.stringify(result, null, 2));
+  else {
+    console.log(`Shared wrongness publish: ${result.ok ? 'ok' : 'blocked'}`);
+    console.log(`Written: ${result.written.length}`);
+    for (const blocker of result.blockers) console.log(`- ${blocker}`);
+  }
+  return result;
 }
 
 function splitCsv(value: unknown): string[] {

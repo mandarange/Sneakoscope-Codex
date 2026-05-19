@@ -12,6 +12,7 @@ import { routeStateMachineSnapshot } from './route-state-machine.js';
 import { combineTrustStatus } from './trust-status.js';
 import { TRUST_REPORT_SCHEMA, trustKernelMetadata } from './trust-kernel-schema.js';
 import { evaluateWrongnessTrust, applyWrongnessTrustStatus } from '../triwiki-wrongness/wrongness-trust-policy.js';
+import { gitCollaborationTrust } from '../git-hygiene/collaboration-trust.js';
 
 export function trustReportPath(root: any, missionId: any) {
   return path.join(missionDir(root, missionId), 'trust-report.json');
@@ -22,6 +23,13 @@ export async function writeTrustArtifactsForProof(root: any, proof: any = {}) {
   const evidenceIndex = await writeEvidenceIndexForProof(root, proof);
   const contract = await writeRouteCompletionContract(root, proof, evidenceIndex);
   const report = buildTrustReport({ proof, evidenceIndex, contract });
+  (report as any).git_collaboration = await gitCollaborationTrust(root).catch((err) => ({
+    schema: 'sks.git-collaboration-trust.v1',
+    ok: false,
+    status: 'blocked',
+    issues: [`git_collaboration_trust_error:${err instanceof Error ? err.message : String(err)}`],
+    summary: {}
+  }));
   await writeJsonAtomic(trustReportPath(root, proof.mission_id), report);
   return { evidenceIndex, contract, report };
 }

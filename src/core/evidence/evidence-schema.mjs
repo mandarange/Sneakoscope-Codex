@@ -19,6 +19,10 @@ export const EVIDENCE_KINDS = Object.freeze([
   'route_contract',
   'trust_report',
   'route_gate',
+  'wrongness',
+  'image_wrongness',
+  'correction',
+  'avoidance_rule',
   'artifact'
 ]);
 

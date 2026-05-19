@@ -17,11 +17,12 @@ import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { wikiWrongnessCommand } from '../triwiki-wrongness/wrongness-cli.js';
 import { wrongnessContextForRoute } from '../triwiki-wrongness/wrongness-retrieval.js';
 import { recordImageWrongnessFromValidation } from '../triwiki-wrongness/image-wrongness.js';
+import { publishSharedMemory, rebuildSharedIndexes, sharedMemorySummary, validateSharedMemory } from '../git-hygiene/shared-memory-publish.js';
 import { flag, positionalArgs, readFlagValue, readOption, resolveMissionId } from './command-utils.js';
 
 export async function wikiCommand(sub: any, args: any = []) {
   if (!sub || sub === 'help' || sub === '--help') {
-    console.log('Usage: sks wiki coords --rgba R,G,B,A | sks wiki pack|refresh|sweep|prune|validate|wrongness | sks wiki image-ingest|anchor-add|relation-add|image-validate|image-summary');
+    console.log('Usage: sks wiki coords --rgba R,G,B,A | sks wiki pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness | sks wiki image-ingest|anchor-add|relation-add|image-validate|image-summary');
     return;
   }
   if (sub === 'image-ingest') return wikiImageIngest(args);
@@ -44,6 +45,42 @@ export async function wikiCommand(sub: any, args: any = []) {
     const { pack, file } = await writeWikiContextPack(root, args);
     if (flag(args, '--json')) return console.log(JSON.stringify({ ...pack, path: file }, null, 2));
     printWikiPackSummary(root, file, pack);
+    return;
+  }
+  if (sub === 'publish') {
+    const root = await sksRoot();
+    if (!flag(args, '--shared')) throw new Error('Usage: sks wiki publish latest --shared [--redact] [--json]');
+    const target = positionalArgs(args)[0] || 'latest';
+    if (target !== 'latest') throw new Error('Usage: sks wiki publish latest --shared [--redact] [--json]');
+    const result = await publishSharedMemory(root, { target: 'wiki', redact: flag(args, '--redact') });
+    process.exitCode = result.ok ? 0 : 2;
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log(`Shared wiki publish: ${result.ok ? 'ok' : 'blocked'}`);
+    console.log(`Written: ${result.written.length}`);
+    for (const blocker of result.blockers) console.log(`- ${blocker}`);
+    return;
+  }
+  if (sub === 'rebuild-index') {
+    const root = await sksRoot();
+    const result = await rebuildSharedIndexes(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log(`Shared wiki indexes rebuilt: ${result.indexes.join(', ')}`);
+    return;
+  }
+  if (sub === 'validate-shared') {
+    const root = await sksRoot();
+    const result = await validateSharedMemory(root);
+    process.exitCode = result.ok ? 0 : 2;
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log(`Shared wiki validation: ${result.ok ? 'ok' : 'failed'} (${result.checked} checked)`);
+    for (const issue of result.issues) console.log(`- ${issue}`);
+    return;
+  }
+  if (sub === 'shared-summary') {
+    const root = await sksRoot();
+    const result = await sharedMemorySummary(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log(`Shared wiki summary: ${result.ok ? 'ok' : 'blocked'} (${result.files} files)`);
     return;
   }
   if (sub === 'refresh') {
@@ -125,7 +162,7 @@ export async function wikiCommand(sub: any, args: any = []) {
     process.exitCode = result.ok ? 0 : 2;
     return;
   }
-  console.error('Usage: sks wiki coords|pack|refresh|sweep|prune|validate|wrongness|image-ingest|anchor-add|relation-add|image-validate|image-summary');
+  console.error('Usage: sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness|image-ingest|anchor-add|relation-add|image-validate|image-summary');
   process.exitCode = 1;
 }
 
