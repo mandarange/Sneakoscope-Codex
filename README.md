@@ -20,7 +20,7 @@ Hybrid-free **`1.0.1`** already delivered the CLI entrypoint/router/registry/Tru
 
 SKS does not try to clone every other harness. It focuses on one thing: making Codex work auditable, visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
 
-![Sneakoscope Codex architecture and pipeline](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/dev/docs/assets/sneakoscope-architecture-pipeline.jpg)
+![Sneakoscope Codex 1.0.6 trust harness overview](docs/assets/sneakoscope-architecture-pipeline.jpg)
 
 
 ## 1.0.6 Final Precision Polish
