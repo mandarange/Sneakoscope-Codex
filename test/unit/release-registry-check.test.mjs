@@ -21,7 +21,7 @@ fs.appendFileSync(process.env.SKS_FAKE_NPM_LOG, JSON.stringify({
 }) + '\\n');
 
 if (args[0] === 'pack') {
-  console.log(JSON.stringify([{ name: 'sneakoscope', version: '1.0.4' }]));
+  console.log(JSON.stringify([{ name: 'sneakoscope', version: '1.0.5' }]));
   process.exit(0);
 }
 
@@ -30,8 +30,8 @@ if (args[0] === 'view' && args[1] === 'sneakoscope@latest') {
   process.exit(0);
 }
 
-if (args[0] === 'view' && args[1] === 'sneakoscope@1.0.4') {
-  console.error('No match found for version 1.0.4');
+if (args[0] === 'view' && args[1] === 'sneakoscope@1.0.5') {
+  console.error('No match found for version 1.0.5');
   process.exit(1);
 }
 
@@ -61,6 +61,6 @@ exec "${process.execPath}" "${fakeNpm}" "$@"
 
   const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
   const viewCalls = calls.filter((call) => call.args[0] === 'view');
-  assert.deepEqual(viewCalls.map((call) => call.args[1]), ['sneakoscope@latest', 'sneakoscope@1.0.4']);
+  assert.deepEqual(viewCalls.map((call) => call.args[1]), ['sneakoscope@latest', 'sneakoscope@1.0.5']);
   assert.deepEqual(viewCalls.map((call) => call.tag), [null, null]);
 });

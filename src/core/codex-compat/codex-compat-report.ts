@@ -8,7 +8,8 @@ export async function codexCompatibilityReport(opts: any = {}) {
   const root = opts.root || await projectRoot();
   const version = await codexVersionReport(opts);
   const snapshot = await codexSchemaSnapshotReport();
-  const ok = Boolean(version.policy.ok && snapshot.ok);
+  const hooks = await codexHookWarningCheck(root, { recordWrongness: false });
+  const ok = Boolean(version.policy.ok && snapshot.ok && hooks.ok);
   return {
     schema: CODEX_COMPAT_SCHEMA,
     required_baseline: CODEX_REQUIRED_BASELINE_TAG,
@@ -16,11 +17,22 @@ export async function codexCompatibilityReport(opts: any = {}) {
     hooks_schema: {
       snapshot: CODEX_REQUIRED_BASELINE_TAG,
       ok: snapshot.ok,
-      files: snapshot.files.length
+      files: snapshot.files.length,
+      metadata: {
+        upstream: snapshot.metadata?.upstream || null,
+        tag: snapshot.metadata?.tag || null,
+        commit: snapshot.metadata?.commit || null,
+        captured_at: snapshot.metadata?.captured_at || null
+      }
+    },
+    hooks_semantic: {
+      ok: hooks.ok,
+      warnings_count: hooks.warnings_count,
+      events: hooks.events
     },
     ok,
     status: ok ? version.policy.status : 'blocked',
-    warnings: version.policy.warnings,
+    warnings: [...version.policy.warnings, ...(hooks.ok ? [] : hooks.warnings)],
     root
   };
 }

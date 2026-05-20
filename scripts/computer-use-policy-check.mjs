@@ -39,7 +39,7 @@ async function recordComputerUseWrongness(forbidden) {
   const { addWrongnessRecord } = await import('../dist/core/triwiki-wrongness/wrongness-ledger.js');
   await addWrongnessRecord(process.cwd(), {
     route: '$Computer-Use',
-    wrongness_kind: 'route_misclassification',
+    wrongness_kind: 'computer_use_policy_misclassification',
     severity: 'high',
     claim: { text: `Computer Use was described with forbidden safety/MAD-SKS block wording: ${forbidden.join(', ')}` },
     detected_by: {

@@ -73,10 +73,18 @@ export async function codexSchemaSnapshotReport() {
   for (const event of CODEX_HOOK_EVENTS) {
     for (const direction of ['input', 'output'] as const) {
       const file = await codexHookSchemaPath(event, direction);
-      files.push({ event, direction, path: file, exists: await exists(file) });
+      const present = await exists(file);
+      const parsed = present ? await readJson(file, null).catch(() => null) : null;
+      files.push({ event, direction, path: file, exists: present, valid_json: Boolean(parsed && typeof parsed === 'object') });
     }
   }
-  const ok = files.every((file) => file.exists) && metadata.tag === CODEX_REQUIRED_BASELINE_TAG;
+  const ok = files.every((file) => file.exists && file.valid_json)
+    && metadata.upstream === 'openai/codex'
+    && metadata.tag === CODEX_REQUIRED_BASELINE_TAG
+    && typeof metadata.commit === 'string'
+    && Boolean(metadata.commit)
+    && typeof metadata.captured_at === 'string'
+    && Boolean(metadata.captured_at);
   return {
     schema: 'sks.codex-hook-schema-snapshot-report.v1',
     ok,

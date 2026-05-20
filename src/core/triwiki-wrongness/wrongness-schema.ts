@@ -20,7 +20,10 @@ export const WRONGNESS_KINDS = Object.freeze([
   'db_safety_false_positive',
   'db_safety_false_negative',
   'hook_policy_mismatch',
+  'hook_semantic_mismatch',
   'codex_lb_health_misread',
+  'codex_lb_missing_env_raw_message',
+  'computer_use_policy_misclassification',
   'mock_real_confusion',
   'user_intent_misread',
   'artifact_schema_error',
@@ -344,11 +347,15 @@ function defaultAvoidanceRule(kind: WrongnessKind, claimText: string): string {
   if (kind === 'image_bbox_error' || kind === 'visual_anchor_error') return 'Revalidate screenshot anchors, bounding boxes, image dimensions, and before/after relations before making visual claims.';
   if (kind.startsWith('db_safety_')) return 'Keep database classification conservative and bind mismatches to the DB safety report before allowing mutation claims.';
   if (kind === 'hook_policy_mismatch') return 'Treat hook policy mismatch as a blocking trust issue until hook replay output matches the configured policy.';
+  if (kind === 'hook_semantic_mismatch') return 'Validate Codex hook outputs against runtime semantic parser rules after schema validation and before release.';
+  if (kind === 'codex_lb_missing_env_raw_message') return 'Never expose raw CODEX_LB_API_KEY missing-env errors; return structured setup or repair guidance with redacted secrets.';
+  if (kind === 'computer_use_policy_misclassification') return 'Treat Computer Use as a Codex App/macOS capability, independent from MAD-SKS and generic safety policy.';
   return `Do not reuse this claim without source-backed correction: ${claimText.slice(0, 160)}`;
 }
 
 function severityForKind(kind: WrongnessKind): WrongnessSeverity {
-  if (kind === 'db_safety_false_negative' || kind === 'hook_policy_mismatch' || kind === 'trust_status_overclaim') return 'high';
+  if (kind === 'db_safety_false_negative' || kind === 'hook_policy_mismatch' || kind === 'hook_semantic_mismatch' || kind === 'trust_status_overclaim') return 'high';
+  if (kind === 'codex_lb_missing_env_raw_message' || kind === 'computer_use_policy_misclassification') return 'high';
   if (kind === 'mock_real_confusion' || kind === 'artifact_schema_error' || kind === 'test_failure') return 'high';
   if (kind === 'image_bbox_error' || kind === 'visual_anchor_error' || kind === 'missing_evidence') return 'medium';
   return 'medium';

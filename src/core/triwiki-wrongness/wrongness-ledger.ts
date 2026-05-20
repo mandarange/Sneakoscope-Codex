@@ -284,16 +284,17 @@ export async function recordDbSafetyMismatchWrongness(root: string, input: unkno
 export async function recordHookPolicyMismatchWrongness(root: string, input: unknown = {}): Promise<WrongnessRecord> {
   const row = asRecord(input);
   const missionId = typeof row.mission_id === 'string' ? row.mission_id : null;
+  const kind = normalizeWrongnessKind(row.wrongness_kind ?? row.kind ?? 'hook_policy_mismatch');
   const saved = await addWrongnessRecord(root, {
-    id: deterministicWrongnessId(['hook_mismatch', missionId, row.expected, row.actual, row.artifact]),
+    id: deterministicWrongnessId([kind, missionId, row.expected, row.actual, row.artifact]),
     mission_id: missionId,
     route: typeof row.route === 'string' ? row.route : null,
-    wrongness_kind: 'hook_policy_mismatch',
+    wrongness_kind: kind,
     severity: 'high',
     claim: { text: `Hook policy mismatch: expected ${String(row.expected || 'unknown')} but observed ${String(row.actual || 'unknown')}.` },
-    detected_by: { source: 'hook_replay', command: 'sks hooks replay', artifact: typeof row.artifact === 'string' ? row.artifact : null, detail: typeof row.detail === 'string' ? row.detail : null },
-    root_cause: { category: 'route_policy_gap', explanation: 'Hook replay output diverged from the configured route/trust policy.' },
-    corrective_action: { summary: 'Align hook policy, replay fixture, and trust expectation before accepting hook evidence.', required_evidence: ['hooks replay output'], patch_status: 'pending' },
+    detected_by: { source: kind === 'hook_semantic_mismatch' ? 'hook_semantic_validator' : 'hook_replay', command: 'sks hooks replay', artifact: typeof row.artifact === 'string' ? row.artifact : null, detail: typeof row.detail === 'string' ? row.detail : null },
+    root_cause: { category: 'route_policy_gap', explanation: kind === 'hook_semantic_mismatch' ? 'Hook output passed schema-tolerant shape but violated Codex runtime semantic parser rules.' : 'Hook replay output diverged from the configured route/trust policy.' },
+    corrective_action: { summary: kind === 'hook_semantic_mismatch' ? 'Align hook builders and fixtures with Codex runtime semantic parser rules before release.' : 'Align hook policy, replay fixture, and trust expectation before accepting hook evidence.', required_evidence: ['hooks replay output'], patch_status: 'pending' },
     links: { artifacts: typeof row.artifact === 'string' ? [row.artifact] : [] }
   }, { missionId });
   return saved.record;

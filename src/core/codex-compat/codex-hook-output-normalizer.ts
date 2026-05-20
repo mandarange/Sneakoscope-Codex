@@ -1,67 +1,61 @@
 import { codexHookEventName } from './codex-schema-snapshot.js';
+import {
+  buildPermissionRequestAllow,
+  buildPermissionRequestDeny,
+  buildPostToolUseBlock,
+  buildPostToolUseContinue,
+  buildPreToolUseAllowRewrite,
+  buildPreToolUseContinue,
+  buildPreToolUseDeny,
+  buildSessionStartContinue,
+  buildStopBlock,
+  buildStopContinue,
+  buildUserPromptSubmitBlock,
+  buildUserPromptSubmitContinue
+} from './codex-hook-output-builders.js';
 
 export function normalizeCodexHookOutput(name: unknown, result: any = {}) {
   const eventName = codexHookEventName(name) || 'UserPromptSubmit';
   const out = { ...result };
-  const normalized: any = { continue: out.continue !== false };
-  if (out.stopReason) normalized.stopReason = out.stopReason;
-  if (out.suppressOutput === true) normalized.suppressOutput = true;
-  if (out.systemMessage) normalized.systemMessage = out.systemMessage;
   const reason = out.reason || out.permissionDecisionReason || 'SKS guard denied this action.';
+  const systemMessage = typeof out.systemMessage === 'string' ? out.systemMessage : undefined;
 
-  if (eventName === 'UserPromptSubmit' || eventName === 'PostToolUse' || eventName === 'SessionStart') {
-    if (out.decision === 'block') {
-      normalized.decision = 'block';
-      normalized.reason = reason;
-    }
-    if (out.additionalContext) {
-      normalized.hookSpecificOutput = { hookEventName: eventName, additionalContext: out.additionalContext };
-    }
-    return normalized;
+  if (eventName === 'UserPromptSubmit') {
+    if (out.decision === 'block') return buildUserPromptSubmitBlock(reason, { systemMessage });
+    return buildUserPromptSubmitContinue({ additionalContext: out.additionalContext, systemMessage });
+  }
+
+  if (eventName === 'PostToolUse') {
+    if (out.decision === 'block') return buildPostToolUseBlock(reason, { systemMessage });
+    return buildPostToolUseContinue({ additionalContext: out.additionalContext, systemMessage });
+  }
+
+  if (eventName === 'SessionStart') {
+    return buildSessionStartContinue({ additionalContext: out.additionalContext, systemMessage });
   }
 
   if (eventName === 'PreToolUse') {
     const decision = out.permissionDecision || (out.decision === 'allow' ? 'allow' : null);
     if (out.decision === 'block' || out.decision === 'deny' || decision === 'deny') {
-      normalized.hookSpecificOutput = {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'deny',
-        permissionDecisionReason: reason
-      };
-    } else if (decision === 'allow' || decision === 'ask') {
-      normalized.hookSpecificOutput = {
-        hookEventName: 'PreToolUse',
-        permissionDecision: decision
-      };
-      if (decision === 'ask' || out.permissionDecisionReason) normalized.hookSpecificOutput.permissionDecisionReason = reason;
+      return buildPreToolUseDeny(reason, { systemMessage });
     }
-    return normalized;
+    if (decision === 'allow' && out.updatedInput !== undefined) return buildPreToolUseAllowRewrite(out.updatedInput, { systemMessage });
+    return buildPreToolUseContinue({ systemMessage });
   }
 
   if (eventName === 'PermissionRequest') {
     if (out.decision === 'deny' || out.permissionDecision === 'deny') {
-      normalized.hookSpecificOutput = {
-        hookEventName: 'PermissionRequest',
-        decision: { behavior: 'deny', message: reason }
-      };
+      return buildPermissionRequestDeny(reason, { systemMessage });
     } else if (out.decision === 'allow' || out.permissionDecision === 'allow') {
-      normalized.hookSpecificOutput = {
-        hookEventName: 'PermissionRequest',
-        decision: { behavior: 'allow', ...(out.message ? { message: out.message } : {}) }
-      };
+      return buildPermissionRequestAllow({ systemMessage });
     }
-    return normalized;
+    return buildPermissionRequestAllow({ systemMessage });
   }
 
   if (eventName === 'Stop') {
-    if (out.decision === 'block') {
-      normalized.continue = out.continue === false ? false : normalized.continue;
-      normalized.decision = 'block';
-      normalized.reason = reason;
-      if (!normalized.stopReason && out.continue === false) normalized.stopReason = reason;
-    }
-    return normalized;
+    if (out.decision === 'block') return buildStopBlock(reason, { systemMessage });
+    return buildStopContinue({ systemMessage });
   }
 
-  return normalized;
+  return { continue: true };
 }

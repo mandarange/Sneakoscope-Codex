@@ -3,6 +3,7 @@ import { projectRoot, readJson } from '../fsx.js';
 import { recordHookPolicyMismatchWrongness } from '../triwiki-wrongness/wrongness-ledger.js';
 import { CODEX_HOOK_EVENTS, type CodexHookEventName, codexHookEventName } from './codex-schema-snapshot.js';
 import { validateCodexFixtureOutputs, validateCodexHookOutput } from './codex-hook-schema.js';
+import { validateCodexHookSemanticOutput } from './codex-hook-semantic-validator.js';
 import { validateCodexHookConfigFiles } from './codex-config-policy.js';
 
 const RESERVED_PERMISSION_REQUEST_FIELDS = ['updatedInput', 'updatedPermissions', 'interrupt'];
@@ -11,7 +12,11 @@ const LEGACY_TOP_LEVEL_KEYS = ['permissionDecision', 'permissionDecisionReason',
 export async function detectCodexHookOutputWarnings(eventLike: unknown, output: any) {
   const event = codexHookEventName(eventLike) || 'UserPromptSubmit';
   const validation = await validateCodexHookOutput(event, output);
+  const semantic = validateCodexHookSemanticOutput(event, output);
   const warnings = [...validation.issues];
+  warnings.push(...semantic.warnings.map((issue) => `semantic_warning:${issue}`));
+  warnings.push(...semantic.unsupported.map((issue) => `semantic_unsupported:${issue}`));
+  warnings.push(...semantic.fatal.map((issue) => `semantic_fatal:${issue}`));
   warnings.push(...snakeCaseKeyWarnings(output));
   for (const key of LEGACY_TOP_LEVEL_KEYS) {
     if (output && typeof output === 'object' && Object.prototype.hasOwnProperty.call(output, key)) warnings.push(`legacy_top_level:${key}`);
@@ -29,6 +34,7 @@ export async function detectCodexHookOutputWarnings(eventLike: unknown, output: 
     schema: 'sks.codex-hook-warning-detection.v1',
     ok: warnings.length === 0,
     event,
+    semantic,
     warnings: [...new Set(warnings)]
   };
 }
@@ -56,12 +62,14 @@ export async function codexHookWarningCheck(root?: string, opts: any = {}) {
   ];
   let wrongness = null;
   if (warnings.length && opts.recordWrongness !== false) {
+    const semanticMismatch = warnings.some((warning) => /semantic_(?:warning|unsupported|fatal):/.test(warning));
     wrongness = await recordHookPolicyMismatchWrongness(root, {
       artifact: 'test/fixtures/codex-hooks/rust-v0.131.0',
       expected: 'Codex rust-v0.131.0 schema-compatible hook output with warning count 0',
       actual: warnings.join(', '),
       detail: 'Codex hook warning check failed',
-      route: '$Hooks'
+      route: '$Hooks',
+      wrongness_kind: semanticMismatch ? 'hook_semantic_mismatch' : 'hook_policy_mismatch'
     }).catch(() => null);
   }
   return {
