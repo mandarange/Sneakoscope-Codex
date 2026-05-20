@@ -1,6 +1,6 @@
 # Codex CLI Compatibility
 
-SKS 1.0.7 keeps the OpenAI Codex CLI `rust-v0.131.0` compatibility baseline from 1.0.6 and treats the hook surface as upstream schema plus the stricter SKS zero-warning strict subset. The release gate validates generated JSON schemas, upstream semantic unsupported cases, and the stricter SKS zero-warning subset separately. SKS does not claim to mirror every Codex runtime parser rule exactly; it validates the upstream schema and then intentionally rejects additional warning-prone shapes.
+SKS 1.0.8 targets the OpenAI Codex CLI `rust-v0.132.0` runtime compatibility baseline. The hook surface intentionally remains pinned to the vendored `rust-v0.131.0` generated hook schemas plus the stricter SKS zero-warning strict subset, because 1.0.8 adds runtime capability detection rather than inventing a new hook schema. The release gate validates generated JSON schemas, upstream semantic unsupported cases, and the stricter SKS zero-warning subset separately. SKS does not claim to mirror every Codex runtime parser rule exactly; it validates the upstream schema and then intentionally rejects additional warning-prone shapes.
 
 Computer Use and codex-lb compatibility notes are bounded: Computer Use live evidence can be `probe_only`, `live_capture_success`, or a structured blocker depending on the local Codex App/macOS capability, and codex-lb can be durable or `process_only_ephemeral` depending on setup choices. Recovery commands are `sks computer-use smoke --json` for a probe-only status and `sks codex-lb setup --write-env-file --keychain --launchctl` for durable persistence. Local screenshots and secrets stay private/redacted by default.
 
@@ -11,13 +11,28 @@ sks codex compatibility --json
 sks codex version --json
 sks codex doctor --json
 sks codex schema --json
+npm run codex:0.132-compat
+npm run codex:output-schema-fixture
 sks hooks codex-validate --json
 sks hooks warning-check --json
 npm run hooks:semantic-check
 npm run hooks:strict-subset-check
 ```
 
-Version detection checks `codex --version`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored snapshot metadata. A missing live Codex binary is `integration_optional`; release hook validation uses the vendored snapshot, not the local binary.
+Version detection checks `codex --version`, `codex exec resume --help`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored snapshot metadata. A missing live Codex binary is `integration_optional`; release hook validation uses the vendored snapshot, not the local binary.
+
+## Codex 0.132 Capabilities
+
+The 1.0.8 compatibility matrix records these capability ids:
+
+- `exec_resume_output_schema`: preferred structured output for Scout, UX-Review callout extraction, Completion Proof, and Wrongness artifacts.
+- `app_server_image_fidelity`: original-resolution image metadata for UX-Review source screenshots, generated callout images, and Image Voxel coordinate alignment.
+- `memory_summary_version_rebuild`: schema-versioned TriWiki, Wrongness, and shared memory summaries with rebuild commands.
+- `goal_continuation_blocker_stop`: repeated blocker and usage-limit stops for Goal, QA, Research, and UX-Review loops.
+- `tui_probe_batching`: batchable doctor/probe inventory with timeout budgets.
+- `remote_executor_standard_auth`, `python_sdk_auth`, and `python_sdk_turn_result`: P1 warning-only review items unless a route explicitly uses those SDK surfaces.
+
+Unknown newer Codex fields are warning-only. Codex versions below 0.132 are degraded but supported, and output-schema fallbacks cannot support claims above `verified_partial`.
 
 ## Vendored Snapshot
 
@@ -64,6 +79,8 @@ SKS strict-subset examples:
 
 ```bash
 npm run codex:compat
+npm run codex:0.132-compat
+npm run codex:output-schema-fixture
 npm run hooks:codex-validate
 npm run hooks:warning-check
 npm run hooks:semantic-check

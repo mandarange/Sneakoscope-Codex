@@ -9,6 +9,7 @@ import { writeMemorySweepReport } from '../memory-governor.js';
 import { writeSkillForgeReport } from '../skill-forge.js';
 import { writeMistakeMemoryReport } from '../mistake-memory.js';
 import { writeCodeStructureReport } from '../code-structure.js';
+import { rebuildMemorySummaries } from '../memory-summary.js';
 import { missionDir, createMission } from '../mission.js';
 import { addImageRelation, addVisualAnchor, ingestImage, imageVoxelSummary, readImageVoxelLedger } from '../wiki-image/image-voxel-ledger.js';
 import { imageVoxelProofEvidence } from '../wiki-image/proof-linker.js';
@@ -22,7 +23,7 @@ import { flag, positionalArgs, readFlagValue, readOption, resolveMissionId } fro
 
 export async function wikiCommand(sub: any, args: any = []) {
   if (!sub || sub === 'help' || sub === '--help') {
-    console.log('Usage: sks wiki coords --rgba R,G,B,A | sks wiki pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness | sks wiki image-ingest|anchor-add|relation-add|image-validate|image-summary');
+    console.log('Usage: sks wiki coords --rgba R,G,B,A | sks wiki pack|refresh|publish|rebuild-index|rebuild-summary|validate|validate-shared|wrongness | sks wiki image-ingest|anchor-add|relation-add|image-validate|image-summary');
     return;
   }
   if (sub === 'image-ingest') return wikiImageIngest(args);
@@ -81,6 +82,13 @@ export async function wikiCommand(sub: any, args: any = []) {
     const result = await sharedMemorySummary(root);
     if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
     console.log(`Shared wiki summary: ${result.ok ? 'ok' : 'blocked'} (${result.files} files)`);
+    return;
+  }
+  if (sub === 'rebuild-summary') {
+    const root = await sksRoot();
+    const result = await rebuildMemorySummaries(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log(`Memory summary rebuilt: ${result.ok ? 'ok' : 'blocked'}`);
     return;
   }
   if (sub === 'refresh') {
@@ -162,7 +170,7 @@ export async function wikiCommand(sub: any, args: any = []) {
     process.exitCode = result.ok ? 0 : 2;
     return;
   }
-  console.error('Usage: sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness|image-ingest|anchor-add|relation-add|image-validate|image-summary');
+  console.error('Usage: sks wiki coords|pack|refresh|publish|rebuild-index|rebuild-summary|validate|validate-shared|wrongness|image-ingest|anchor-add|relation-add|image-validate|image-summary');
   process.exitCode = 1;
 }
 

@@ -10,9 +10,20 @@ export async function run(_command, args = []) {
   const detected = detectCodex();
   const result = {
     schema: action === 'doctor' ? 'sks.codex-doctor.v1' : 'sks.codex-compat.v1',
-    required_baseline: 'rust-v0.131.0',
+    required_baseline: 'rust-v0.132.0',
     detected,
     hooks_schema: { snapshot: 'rust-v0.131.0', ok: schemaFiles.length >= 16, files: schemaFiles.length },
+    codex_0_132: {
+      baseline: 'rust-v0.132.0',
+      capabilities: [
+        'exec_resume_output_schema',
+        'app_server_image_fidelity',
+        'memory_summary_version_rebuild',
+        'goal_continuation_blocker_stop',
+        'tui_probe_batching'
+      ],
+      hook_strict_subset_baseline: 'rust-v0.131.0'
+    },
     ok: schemaFiles.length >= 16,
     warnings: detected.available ? [] : ['codex binary not detected; release schema checks use vendored rust-v0.131.0 snapshots']
   };

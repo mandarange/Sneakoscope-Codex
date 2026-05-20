@@ -2,7 +2,7 @@
 
 Computer Use evidence is real-dependency evidence when Codex Computer Use is available and mock evidence when loaded from fixtures. Mock evidence must stay labeled `mock`, `fixture`, or `verified_partial`.
 
-In SKS 1.0.7, Computer Use is a macOS Codex App capability check with an optional live evidence surface. It is independent from MAD-SKS, DB safety, and generic SKS safety policy. SKS must not describe Computer Use as blocked by MAD-SKS or by an SKS safety policy.
+In SKS 1.0.8, Computer Use is a macOS Codex App capability check with an optional live evidence surface. It is independent from MAD-SKS, DB safety, and generic SKS safety policy. SKS must not describe Computer Use as blocked by MAD-SKS or by an SKS safety policy. For UX-Review, Computer Use screenshots are one accepted source path into the gpt-image-2 generated callout loop, and original-resolution metadata must be preserved when available.
 
 Status commands:
 
@@ -79,3 +79,5 @@ Expected ledgers:
 UI verification claims require Computer Use evidence. Browser automation evidence can support ordinary browser checks, but it is not accepted as a substitute for UI-level Computer Use verification.
 
 Visual route fixtures call `sks computer-use require --route ... --json` for `$Image-UX-Review`, `$QA-LOOP`, `$PPT`, `$Computer-Use`, and `$From-Chat-IMG`. If Computer Use is unavailable, Completion Proof records the status and visual claims remain `verified_partial` or lower unless explicit screenshot/image evidence covers the claim. `external_capability_blocked` cannot support a high-confidence visual claim by itself.
+
+Generated gpt-image-2 callout images follow the same local-only default as Computer Use screenshots: SKS may publish metadata, hashes, dimensions, bbox anchors, and Image Voxel relations, but it does not automatically publish screen-content binaries into shared TriWiki.

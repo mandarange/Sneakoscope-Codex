@@ -3,6 +3,29 @@
 ## [Unreleased]
 
 
+## [1.0.8] - 2026-05-20
+
+### Added
+- Add Codex CLI `rust-v0.132.0` compatibility matrix and feature detection.
+- Add `codex exec resume --output-schema` integration for schema-bound Scout, UX-Review callout extraction, Completion Proof, and Wrongness outputs.
+- Add app-server image fidelity preservation support for UX-Review source screenshots, gpt-image-2 callouts, and Image Voxel coordinate alignment.
+- Add real `$UX-Review` gpt-image-2 callout generation contracts, generated image ingestion, schema-bound callout extraction, fix task creation, bounded fix loop, recapture, and re-review gates.
+- Add UX-Review before/after Image Voxel relations and visual wrongness records for bad callouts, stale screenshots, and failed fixes.
+- Add Codex memory summary version/rebuild integration for TriWiki/Wrongness generated summaries.
+- Add Goal/QA/Research repeated blocker and usage-limit loop stop behavior aligned with Codex 0.132.
+
+### Fixed
+- Prevent UX-Review from passing with prose-only screenshot critique.
+- Prevent mock gpt-image-2 callout fixtures from being promoted to verified real UX evidence.
+- Prevent visual fix claims without post-fix recapture and changed-screen re-review.
+- Prevent version drift between package metadata, runtime version, Rust crate version, changelog, and release stamp.
+
+### Changed
+- Treat `$UX-Review this screenshot with gpt-image-2 callouts, then fix the issues` as a first-class real execution route.
+- Treat source screenshot fidelity and coordinate alignment as release-gated visual evidence requirements.
+- Treat Codex 0.132 structured resume output as the preferred path for schema-bound automation artifacts.
+
+
 
 
 ## [1.0.7] - 2026-05-20

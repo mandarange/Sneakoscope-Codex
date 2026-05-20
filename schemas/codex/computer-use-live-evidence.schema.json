@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex/computer-use-live-evidence.schema.json",
+  "title": "SKS Computer Use Live Evidence",
+  "type": "object",
+  "required": ["schema", "mode", "status"],
+  "properties": {
+    "schema": { "const": "sks.computer-use-live-evidence.v1" },
+    "mode": {
+      "enum": ["probe_only", "live_capture_attempted", "live_capture_success", "live_capture_blocked", "missing"]
+    },
+    "status": { "type": "string" },
+    "image_voxel": { "type": "object" },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

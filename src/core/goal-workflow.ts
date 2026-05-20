@@ -40,6 +40,12 @@ export async function writeGoalWorkflow(dir: any, mission: any, opts: any = {}) 
       implementation: 'continue implementation through the selected SKS execution route; Goal is not a heavyweight independent implementation pipeline',
       evidence: ['goal-workflow.json', 'goal-bridge.md']
     },
+    repeated_blocker_policy: {
+      aligned_with_codex_0_132: true,
+      stop_after_same_blocker_count: 2,
+      structured_blocker: 'sks.loop-blocker.v1',
+      applies_to: ['Goal continuation', 'QA loop', 'Research loop', 'UX-Review fix loop']
+    },
     phase: action === 'clear' ? 'reporting' : 'intake',
     user_outcome: prompt,
     work_order_ledger_id: null,

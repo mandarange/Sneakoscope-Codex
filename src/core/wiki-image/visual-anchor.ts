@@ -30,9 +30,14 @@ export function createVisualAnchor({ id, imageId, bbox, label, source, evidenceP
   };
 }
 
-export function createImageRelation({ type = 'before_after', beforeImageId, afterImageId, anchors = [], verification = 'changed-screen-recheck', status = 'verified_partial' }: any = {}) {
+export function createImageRelation({ type = 'before_after', beforeImageId, afterImageId, sourceImageId, generatedImageId, fixedImageId, issueId, fixTaskId, anchors = [], verification = 'changed-screen-recheck', status = 'verified_partial' }: any = {}) {
   return {
     type,
+    source_image_id: sourceImageId || beforeImageId || null,
+    generated_image_id: generatedImageId || (type === 'generated_callout_review_of' ? afterImageId : null),
+    fixed_image_id: fixedImageId || null,
+    issue_id: issueId || null,
+    fix_task_id: fixTaskId || null,
     before_image_id: beforeImageId,
     after_image_id: afterImageId,
     changed_anchor_ids: Array.isArray(anchors) ? anchors : String(anchors || '').split(',').map((x: any) => x.trim()).filter(Boolean),

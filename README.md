@@ -4,6 +4,8 @@ Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
 Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable.
 
+SKS **1.0.8** is the Codex 0.132 UX-Review Seal: Codex CLI `rust-v0.132.0` compatibility is explicit, `codex exec resume --output-schema` is the preferred structured-output path, and `$UX-Review this screenshot with gpt-image-2 callouts, then fix the issues` is a real visual trust loop from source screenshot fidelity to generated callout ingestion, issue ledger extraction, bounded safe fixes, recapture/re-review, Image Voxel relations, Wrongness, Completion Proof, and Trust Report gates.
+
 SKS **1.0.7** is the Ultimate Final Completion seal for the Codex trust harness: Computer Use live evidence is an opt-in, local-only macOS evidence path with explicit `probe_only`, `live_capture_attempted`, `live_capture_success`, and `live_capture_blocked` modes; `codex-lb setup` reports durable persistence versus `process_only_ephemeral` honestly; and docs/release readiness checks block mock/probe/live overclaims.
 
 SKS **1.0.6** is the final precision polish for the Codex trust harness: hook compatibility is classified as upstream schema plus an SKS zero-warning strict subset, `sks codex-lb setup` previews and applies the exact choices the user selected, and Computer Use has an optional live smoke surface for macOS capability/evidence status.
@@ -24,6 +26,34 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ![Sneakoscope Codex Trust Layer](docs/assets/sneakoscope-architecture-pipeline.jpg)
 
+
+## 1.0.8 Codex 0.132 UX-Review Seal
+
+1.0.8 makes UX-Review the representative SKS visual trust harness rather than a policy-only fixture. The CLI/App route now records source screenshot original-resolution metadata, requires real `gpt-image-2` generated callout images before verified UX claims, extracts visible callouts into `schemas/codex/image-ux-issue-ledger.schema.json`, plans bounded P0/P1-first fixes, and requires recapture/re-review before visual fix verification.
+
+```bash
+sks codex compatibility --json
+sks ux-review run --image ./screenshot.png --fix --json
+sks ux-review callouts --image ./screenshot.png --json
+sks ux-review extract-issues --generated-image ./generated-callouts.png --json
+sks ux-review fix latest --json
+sks ux-review recapture latest --json
+sks ux-review recheck latest --json
+sks ux-review status latest --json
+```
+
+Release checks now include:
+
+- `npm run codex:0.132-compat`
+- `npm run codex:output-schema-fixture`
+- `npm run image-fidelity:check`
+- `npm run ux-review:real-loop-fixture`
+- `npm run ux-review:no-text-fallback`
+- `npm run ux-review:image-voxel-relations`
+- `npm run memory-summary:rebuild-check`
+- `npm run loop-blocker:check`
+
+`gpt-image-2` output is local-only by default. Text-only critique is blocked, mock fixtures stay `verified_partial` or lower, screenshot binaries are not automatically published to shared TriWiki, and unavailable Codex/App image-generation capability is recorded as a blocker instead of being faked.
 
 ## 1.0.7 Ultimate Final Completion
 

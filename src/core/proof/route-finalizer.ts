@@ -29,6 +29,7 @@ export async function finalizeRouteWithProof(root: any, {
 }: any = {}) {
   const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation, visualClaim });
   const localBlockers = [...blockers];
+  const providedVisualEvidence = visualEvidence;
   let imageEvidence = visualEvidence;
   if (policy.requires_image_voxel_anchors) {
     imageEvidence = await ensureRouteImageEvidence(root, {
@@ -95,6 +96,7 @@ export async function finalizeRouteWithProof(root: any, {
       relations: imageEvidence.ledger.relations?.length || 0,
       mock: Boolean(imageEvidence.mock)
     } } : {}),
+    ...(providedVisualEvidence?.image_ux_review ? { image_ux_review: providedVisualEvidence.image_ux_review } : {}),
     ...(scoutEvidence ? { scouts: scoutEvidence } : {}),
     ...(wrongnessEvidence ? { wrongness: wrongnessEvidence } : {}),
     ...(computerUse ? { computer_use: {

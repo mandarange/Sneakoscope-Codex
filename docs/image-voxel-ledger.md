@@ -15,4 +15,6 @@ Validation fails when anchors point at missing images, bbox values exceed image 
 
 0.9.20 also treats stale image evidence as a trust blocker. Images marked `stale` or `freshness: "stale"`, and anchors marked stale or with `voxel_layers.fresh <= 0`, cannot support high-confidence visual completion.
 
-Mock fixtures are allowed for release selftests only when they are marked as mock or `verified_partial`. Real visual completion still requires real screenshots or generated image evidence, valid image hashes, anchors inside image bounds, and before/after relations for fix claims.
+In SKS 1.0.8, UX-Review writes source/generated/fixed image relations such as `generated_callout_review_of`, `issue_detected_in`, `fix_attempt_for_issue`, `after_screenshot_of`, `re_review_of`, and `wrong_callout`. Validators reject unresolved image refs, duplicate relations, stale source screenshots, and bbox coordinates outside image dimensions.
+
+Mock fixtures are allowed for release selftests only when they are marked as mock or `verified_partial`. Real visual completion still requires real screenshots or generated gpt-image-2 callout evidence, valid image hashes, anchors inside image bounds, and before/after relations for fix claims.

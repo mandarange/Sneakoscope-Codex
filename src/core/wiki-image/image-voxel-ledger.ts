@@ -133,14 +133,41 @@ export async function addImageRelation(root: any = packageRoot(), input: any = {
     type: input.type || 'before_after',
     beforeImageId: input.beforeImageId,
     afterImageId: input.afterImageId,
+    sourceImageId: input.sourceImageId,
+    generatedImageId: input.generatedImageId,
+    fixedImageId: input.fixedImageId,
+    issueId: input.issueId,
+    fixTaskId: input.fixTaskId,
     anchors: input.anchors || [],
     verification: input.verification || 'changed-screen-recheck',
     status: input.status || 'verified_partial'
   });
-  const relations = [...(ledger.relations || []), relation];
+  const relations = dedupeRelations([...(ledger.relations || []), relation]);
   const next = await writeImageVoxelLedger(root, { ...ledger, mission_id: input.missionId || ledger.mission_id || null, relations });
   const validation = validateImageVoxelLedger(next, { requireAnchors: true, requireRelations: true, route: input.route || '$Wiki' });
   return { ok: validation.ok, relation, ledger: next, validation };
+}
+
+function dedupeRelations(relations: any[] = []) {
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const relation of relations) {
+    const key = [
+      relation.type,
+      relation.before_image_id,
+      relation.after_image_id,
+      relation.source_image_id,
+      relation.generated_image_id,
+      relation.fixed_image_id,
+      relation.issue_id,
+      relation.fix_task_id,
+      JSON.stringify(relation.changed_anchor_ids || relation.anchors || [])
+    ].join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(relation);
+  }
+  return out;
 }
 
 function stableImageId(rel: any, sha256: any) {

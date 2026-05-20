@@ -18,7 +18,7 @@ sks codex-lb proof-evidence --json
 
 ## Setup Wizard
 
-SKS 1.0.7 makes `sks codex-lb setup` a two-phase plan/apply repair path for missing codex-lb keys and reports whether the chosen persistence is durable or `process_only_ephemeral`. Interactive setup asks for:
+SKS 1.0.8 keeps `sks codex-lb setup` as a two-phase plan/apply repair path for missing codex-lb keys and reports whether the chosen persistence is durable or `process_only_ephemeral`. Codex 0.132 remote executor standard-auth registration is recorded as a P1 policy review item; SKS does not invent credential fallback behavior. Interactive setup asks for:
 
 - codex-lb domain or base URL
 - API key with hidden input

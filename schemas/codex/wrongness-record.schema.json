@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex/wrongness-record.schema.json",
+  "title": "SKS Wrongness Record",
+  "type": "object",
+  "required": ["schema", "id", "wrongness_kind", "severity", "claim", "detected_by", "corrective_action"],
+  "properties": {
+    "schema": { "const": "sks.triwiki-wrongness.v1" },
+    "id": { "type": "string", "minLength": 1 },
+    "wrongness_kind": { "type": "string", "minLength": 1 },
+    "severity": { "enum": ["low", "medium", "high", "critical"] },
+    "claim": { "type": "object" },
+    "detected_by": { "type": "object" },
+    "corrective_action": { "type": "object" }
+  },
+  "additionalProperties": true
+}

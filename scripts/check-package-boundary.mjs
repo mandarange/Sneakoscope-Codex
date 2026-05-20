@@ -29,7 +29,7 @@ if (pack.status === 0) {
   }
 }
 
-for (const required of ['package.json', 'README.md', 'LICENSE', 'dist/bin/sks.js', 'dist/cli/command-registry.js']) {
+for (const required of ['package.json', 'README.md', 'LICENSE', 'dist/bin/sks.js', 'dist/cli/command-registry.js', 'schemas/codex/image-ux-issue-ledger.schema.json', 'schemas/codex/ux-review-callout-extraction.schema.json']) {
   if (!files.includes(required)) issues.push(`packed_missing:${required}`);
 }
 for (const forbidden of files.filter((file) => /^(src|scripts|test|\.sneakoscope|\.codex|\.agents)\//.test(file))) {

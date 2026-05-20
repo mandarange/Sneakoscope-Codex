@@ -32,7 +32,15 @@ export const WRONGNESS_KINDS = Object.freeze([
   'mock_real_confusion',
   'user_intent_misread',
   'artifact_schema_error',
-  'trust_status_overclaim'
+  'trust_status_overclaim',
+  'ux_review_text_only_fallback',
+  'gpt_image_2_callout_generation_failed',
+  'callout_extraction_schema_failed',
+  'callout_bbox_out_of_bounds',
+  'fix_loop_noop_patch',
+  'visual_fix_not_rechecked',
+  'post_fix_regression_detected',
+  'repeated_blocker_stop'
 ] as const);
 
 export const WRONGNESS_ROOT_CAUSES = Object.freeze([
@@ -360,10 +368,19 @@ function defaultAvoidanceRule(kind: WrongnessKind, claimText: string): string {
   if (kind === 'computer_use_policy_misclassification') return 'Treat Computer Use as a Codex App/macOS capability, independent from MAD-SKS and generic safety policy.';
   if (kind === 'computer_use_live_smoke_mismatch') return 'Do not claim live Computer Use evidence without an opt-in live smoke or explicit evidence artifact.';
   if (kind === 'computer_use_external_block_overclaimed') return 'Do not upgrade external_capability_blocked Computer Use status into high-confidence visual verification.';
+  if (kind === 'ux_review_text_only_fallback') return 'Do not pass UX-Review with prose-only screenshot critique; require a generated gpt-image-2 callout image.';
+  if (kind === 'gpt_image_2_callout_generation_failed') return 'Do not create verified UX evidence when gpt-image-2 callout image generation failed or is unavailable.';
+  if (kind === 'callout_extraction_schema_failed') return 'Do not start or trust a UX fix loop until generated callouts are extracted into the schema-bound issue ledger.';
+  if (kind === 'callout_bbox_out_of_bounds') return 'Revalidate generated callout bounding boxes against image dimensions before mapping issues to fixes.';
+  if (kind === 'fix_loop_noop_patch') return 'Do not mark UX issues fixed from no-op patches or unchanged files.';
+  if (kind === 'visual_fix_not_rechecked') return 'Do not claim visual fixes without post-fix recapture and re-review.';
+  if (kind === 'post_fix_regression_detected') return 'Treat new post-fix P0/P1 visual issues as regression blockers until repaired or accepted.';
+  if (kind === 'repeated_blocker_stop') return 'Stop repeated Goal/QA/Research/UX loops after recurring blockers instead of burning continuation budget.';
   return `Do not reuse this claim without source-backed correction: ${claimText.slice(0, 160)}`;
 }
 
 function severityForKind(kind: WrongnessKind): WrongnessSeverity {
+  if (kind === 'ux_review_text_only_fallback' || kind === 'gpt_image_2_callout_generation_failed' || kind === 'callout_extraction_schema_failed' || kind === 'callout_bbox_out_of_bounds' || kind === 'visual_fix_not_rechecked' || kind === 'post_fix_regression_detected' || kind === 'repeated_blocker_stop') return 'high';
   if (kind === 'db_safety_false_negative' || kind === 'hook_policy_mismatch' || kind === 'hook_semantic_mismatch' || kind === 'hook_strict_subset_misclassified' || kind === 'trust_status_overclaim') return 'high';
   if (kind === 'codex_lb_missing_env_raw_message' || kind === 'codex_lb_setup_choice_drift' || kind === 'codex_lb_env_persistence_failure' || kind === 'computer_use_policy_misclassification' || kind === 'computer_use_live_smoke_mismatch' || kind === 'computer_use_external_block_overclaimed') return 'high';
   if (kind === 'mock_real_confusion' || kind === 'artifact_schema_error' || kind === 'test_failure') return 'high';
