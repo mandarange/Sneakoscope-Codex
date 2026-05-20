@@ -89,13 +89,16 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
   const baseStatus = validation.ok ? combineTrustStatus(statuses) : 'blocked';
   const status = applyWrongnessTrustStatus(baseStatus, wrongness);
   const issues = [...new Set([...(validation.issues || []), ...(evidenceIndex.issues || []), ...(wrongness.issues || [])])];
+  const imageUxReview = imageUxReviewTrust(proof);
+  issues.push(...imageUxReview.issues);
+  const finalStatus = imageUxReview.issues.length && status === 'verified' ? 'verified_partial' : status;
   return {
     schema: TRUST_REPORT_SCHEMA,
     ...trustKernelMetadata(),
-    ok: issues.length === 0 && !['blocked', 'failed', 'not_verified'].includes(status),
+    ok: issues.length === 0 && !['blocked', 'failed', 'not_verified'].includes(finalStatus),
     mission_id: proof.mission_id || contract.mission_id || null,
     route: proof.route || contract.route || null,
-    status,
+    status: finalStatus,
     proof_status: proof.status || 'not_verified',
     evidence_status: evidenceIndex.status || 'not_verified',
     route_contract_status: validation.status || 'not_verified',
@@ -106,11 +109,40 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
       route_contract: proof.mission_id ? `.sneakoscope/missions/${proof.mission_id}/route-completion-contract.json` : null,
       evidence_index: proof.mission_id ? `.sneakoscope/missions/${proof.mission_id}/evidence-index.json` : null,
       evidence_records: evidenceIndex.records?.length || 0,
-      wrongness: wrongness.summary
+      wrongness: wrongness.summary,
+      image_ux_review: imageUxReview.summary
     },
+    image_ux_review: imageUxReview.summary,
     wrongness: wrongness.summary,
     scout_quality: scoutQualityFromProof(proof),
-    blockers: issues.filter((issue: any) => /missing|blocked|stale|secret|not_passed|cannot_verify/i.test(issue))
+    blockers: issues.filter((issue: any) => /missing|blocked|stale|secret|not_passed|cannot_verify|text_only|mock_gpt_image_2_fixture/i.test(issue))
+  };
+}
+
+function imageUxReviewTrust(proof: any = {}) {
+  const evidence = proof.evidence?.image_ux_review;
+  if (!evidence) return { issues: [], summary: { required: false, status: 'not_required' } };
+  const issues: string[] = [];
+  if (Number(evidence.generated_images_total || 0) > 0 && Number(evidence.generated_gpt_image_2_callout_images_count || 0) === 0) {
+    issues.push('mock_gpt_image_2_fixture_cannot_be_real_verified');
+  }
+  if ((evidence.blockers || []).includes('ux_review_text_only_fallback')) issues.push('text_only_ux_review_cannot_be_verified');
+  if ((evidence.blockers || []).includes('missing_generated_annotated_review_images')) issues.push('gpt_image_2_callout_image_missing');
+  return {
+    issues,
+    summary: {
+      schema: evidence.schema || 'sks.image-ux-review-proof-evidence.v1',
+      required: true,
+      status: evidence.status || 'not_verified',
+      source_screenshots_count: evidence.source_screenshots_count || 0,
+      generated_gpt_image_2_callout_images_count: evidence.generated_gpt_image_2_callout_images_count || 0,
+      generated_images_total: evidence.generated_images_total || 0,
+      callout_extraction_schema_status: evidence.callout_extraction_schema_status || 'unknown',
+      open_p0_p1_count: evidence.open_p0_p1_count || 0,
+      recapture_re_review_status: evidence.recapture_re_review_status || 'unknown',
+      image_voxel_relation_count: evidence.image_voxel_relation_count || 0,
+      blockers: evidence.blockers || []
+    }
   };
 }
 

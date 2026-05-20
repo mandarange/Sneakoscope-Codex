@@ -23,7 +23,9 @@ sks wrongness summarize latest --json
 sks wrongness validate project --json
 sks wrongness context --route '$Team' --json
 sks wrongness publish latest --shared --json
+sks wrongness rebuild-summary --json
 sks wiki wrongness list --json
+sks wiki rebuild-summary --json
 ```
 
 ## Trust Rules
@@ -33,3 +35,5 @@ Active high-severity wrongness blocks full trust. Active medium-severity wrongne
 Wrongness evidence is attached to Completion Proof under `evidence.wrongness`, indexed by the evidence router as `wrongness` and `image_wrongness`, and surfaced in `trust-report.json`.
 
 Shared wrongness shards are merged back into project wrongness context. That means a fresh checkout can still retrieve active avoidance rules after `sks wrongness publish latest --shared` has committed the shard files.
+
+SKS 1.0.8 adds schema-versioned memory summary rebuilds for TriWiki, Wrongness, and shared memory generated indexes. Stale summaries should be rebuilt before long-running route handoff or final claims.

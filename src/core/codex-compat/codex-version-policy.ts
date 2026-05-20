@@ -1,6 +1,8 @@
 export const CODEX_COMPAT_SCHEMA = 'sks.codex-compat.v1';
-export const CODEX_REQUIRED_BASELINE_TAG = 'rust-v0.131.0';
-export const CODEX_REQUIRED_VERSION = '0.131.0';
+export const CODEX_REQUIRED_BASELINE_TAG = 'rust-v0.132.0';
+export const CODEX_REQUIRED_VERSION = '0.132.0';
+export const CODEX_HOOK_SCHEMA_BASELINE_TAG = 'rust-v0.131.0';
+export const CODEX_HOOK_SCHEMA_VERSION = '0.131.0';
 
 export function compareSemverLike(a: unknown, b: unknown): number {
   const pa = parseVersionParts(a);
@@ -24,7 +26,7 @@ export function codexVersionPolicy(detected: { available?: boolean; version?: st
     return {
       ok: true,
       status: 'integration_optional',
-      warnings: ['codex binary not detected; release schema checks use vendored rust-v0.131.0 snapshots']
+      warnings: [`codex binary not detected; release checks use ${CODEX_REQUIRED_BASELINE_TAG} compatibility policy and vendored ${CODEX_HOOK_SCHEMA_BASELINE_TAG} hook snapshots`]
     };
   }
   if (compareSemverLike(detected.version, CODEX_REQUIRED_VERSION) >= 0) {

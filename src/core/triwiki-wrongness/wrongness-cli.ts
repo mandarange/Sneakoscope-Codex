@@ -15,6 +15,7 @@ import { wrongnessContextForRoute } from './wrongness-retrieval.js';
 import { renderAvoidanceRules } from './avoidance-rules.js';
 import { normalizeWrongnessKind } from './wrongness-schema.js';
 import { publishSharedMemory } from '../git-hygiene/shared-memory-publish.js';
+import { rebuildMemorySummaries } from '../memory-summary.js';
 
 export async function wrongnessCommand(args: string[] = []) {
   const root = await projectRoot();
@@ -29,6 +30,7 @@ export async function wrongnessCommand(args: string[] = []) {
   if (action === 'context') return contextWrongness(root, rest);
   if (action === 'rules') return avoidanceRules(root, rest);
   if (action === 'publish') return publishWrongness(root, rest);
+  if (action === 'rebuild-summary') return rebuildWrongnessSummary(root, rest);
   console.error('Usage: sks wrongness list|show|add|resolve|summarize|validate|context|rules|publish [latest|mission-id|project] [--json]');
   process.exitCode = 2;
 }
@@ -42,8 +44,17 @@ export async function wikiWrongnessCommand(args: string[] = []) {
   if (action === 'summarize' || action === 'summary') return summarizeWrongnessCommand(root, rest);
   if (action === 'context') return contextWrongness(root, rest);
   if (action === 'publish') return publishWrongness(root, rest);
+  if (action === 'rebuild-summary') return rebuildWrongnessSummary(root, rest);
   console.error('Usage: sks wiki wrongness list|validate|pack|summarize|context|publish [latest|mission-id|project] [--json]');
   process.exitCode = 2;
+}
+
+async function rebuildWrongnessSummary(root: string, args: string[]) {
+  const missionId = await resolveWrongnessMissionId(root, positionalArgs(args)[0] || 'project');
+  const result = await rebuildMemorySummaries(root, { missionId });
+  if (flag(args, '--json')) console.log(JSON.stringify(result.summaries.wrongness, null, 2));
+  else console.log(`Wrongness summary rebuilt: active=${result.summaries.wrongness.active} total=${result.summaries.wrongness.total}`);
+  return result.summaries.wrongness;
 }
 
 async function listWrongness(root: string, args: string[]) {

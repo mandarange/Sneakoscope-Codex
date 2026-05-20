@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { exists, packageRoot, readJson } from '../fsx.js';
-import { CODEX_REQUIRED_BASELINE_TAG, CODEX_REQUIRED_VERSION } from './codex-version-policy.js';
+import { CODEX_HOOK_SCHEMA_BASELINE_TAG, CODEX_HOOK_SCHEMA_VERSION } from './codex-version-policy.js';
 
 export const CODEX_HOOK_EVENTS = [
   'PreToolUse',
@@ -61,8 +61,8 @@ export async function readCodexSchemaSnapshotMetadata() {
   return {
     schema: 'sks.codex-hook-schema-snapshot.v1',
     upstream: 'openai/codex',
-    tag: CODEX_REQUIRED_BASELINE_TAG,
-    codex_version: CODEX_REQUIRED_VERSION,
+    tag: CODEX_HOOK_SCHEMA_BASELINE_TAG,
+    codex_version: CODEX_HOOK_SCHEMA_VERSION,
     status: 'missing'
   };
 }
@@ -80,7 +80,7 @@ export async function codexSchemaSnapshotReport() {
   }
   const ok = files.every((file) => file.exists && file.valid_json)
     && metadata.upstream === 'openai/codex'
-    && metadata.tag === CODEX_REQUIRED_BASELINE_TAG
+    && metadata.tag === CODEX_HOOK_SCHEMA_BASELINE_TAG
     && typeof metadata.commit === 'string'
     && Boolean(metadata.commit)
     && typeof metadata.captured_at === 'string'
@@ -88,7 +88,7 @@ export async function codexSchemaSnapshotReport() {
   return {
     schema: 'sks.codex-hook-schema-snapshot-report.v1',
     ok,
-    baseline: CODEX_REQUIRED_BASELINE_TAG,
+    baseline: CODEX_HOOK_SCHEMA_BASELINE_TAG,
     metadata,
     files
   };
@@ -97,7 +97,7 @@ export async function codexSchemaSnapshotReport() {
 function candidateSnapshotDirs(): string[] {
   const root = packageRoot();
   return [
-    path.join(root, 'src', 'vendor', 'openai-codex', CODEX_REQUIRED_BASELINE_TAG, 'hooks'),
-    path.join(root, 'dist', 'vendor', 'openai-codex', CODEX_REQUIRED_BASELINE_TAG, 'hooks')
+    path.join(root, 'src', 'vendor', 'openai-codex', CODEX_HOOK_SCHEMA_BASELINE_TAG, 'hooks'),
+    path.join(root, 'dist', 'vendor', 'openai-codex', CODEX_HOOK_SCHEMA_BASELINE_TAG, 'hooks')
   ];
 }

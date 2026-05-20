@@ -2,6 +2,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import fs from 'node:fs';
 
 const root = process.cwd();
 const tsc = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['tsc', '-p', 'tsconfig.json', '--noEmit'], {
@@ -49,6 +50,28 @@ try {
   issues.push(`validator_import:${err.message}`);
 }
 if (!validatorsOk) issues.push('validator_smoke_failed');
+
+const codexSchemaDir = path.join(root, 'schemas', 'codex');
+for (const file of [
+  'ux-review-callout-extraction.schema.json',
+  'image-ux-issue-ledger.schema.json',
+  'completion-proof.schema.json',
+  'wrongness-record.schema.json',
+  'scout-result.schema.json',
+  'computer-use-live-evidence.schema.json'
+]) {
+  const full = path.join(codexSchemaDir, file);
+  if (!fs.existsSync(full)) {
+    issues.push(`codex_schema_missing:${file}`);
+    continue;
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
+    if (parsed.type !== 'object') issues.push(`codex_schema_root_type:${file}`);
+  } catch (err) {
+    issues.push(`codex_schema_invalid_json:${file}:${err.message}`);
+  }
+}
 
 const result = { schema: 'sks.runtime-schema-check.v1', ok: issues.length === 0, validators_ok: validatorsOk, issues };
 console.log(JSON.stringify(result, null, 2));

@@ -35,9 +35,30 @@ export function validateImageVoxelLedger(ledger: any = {}, opts: any = {}) {
     }
   }
   if (opts.requireRelations && relations.length === 0) issues.push(`missing_relations:${opts.route || 'visual-route'}`);
+  const relationKeys = new Set();
   for (const relation of relations) {
+    const relationKey = [
+      relation.type,
+      relation.before_image_id,
+      relation.after_image_id,
+      relation.source_image_id,
+      relation.generated_image_id,
+      relation.fixed_image_id,
+      relation.issue_id,
+      relation.fix_task_id
+    ].join('|');
+    if (relationKeys.has(relationKey)) issues.push(`duplicate_relation:${relation.type || 'unknown'}`);
+    relationKeys.add(relationKey);
     if (relation.before_image_id && !imageById.has(relation.before_image_id)) issues.push(`relation_before:${relation.before_image_id}`);
     if (relation.after_image_id && !imageById.has(relation.after_image_id)) issues.push(`relation_after:${relation.after_image_id}`);
+    if (relation.source_image_id && !imageById.has(relation.source_image_id)) issues.push(`relation_source:${relation.source_image_id}`);
+    if (relation.generated_image_id && !imageById.has(relation.generated_image_id)) issues.push(`relation_generated:${relation.generated_image_id}`);
+    if (relation.fixed_image_id && !imageById.has(relation.fixed_image_id)) issues.push(`relation_fixed:${relation.fixed_image_id}`);
+    if (relation.bbox) {
+      const image = imageById.get(relation.generated_image_id || relation.after_image_id || relation.source_image_id || relation.before_image_id) || {};
+      const bbox = validateBbox(relation.bbox, image);
+      for (const issue of bbox.issues) issues.push(`${issue}:relation:${relation.type || 'unknown'}`);
+    }
     for (const anchorId of relation.changed_anchor_ids || relation.anchors || []) {
       if (!anchorById.has(anchorId)) issues.push(`relation_anchor:${anchorId}`);
     }

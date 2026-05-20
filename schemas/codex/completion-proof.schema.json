@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex/completion-proof.schema.json",
+  "title": "SKS Completion Proof",
+  "type": "object",
+  "required": ["schema", "mission_id", "route", "status", "evidence", "claims", "unverified", "blockers"],
+  "properties": {
+    "schema": { "const": "sks.completion-proof.v1" },
+    "mission_id": { "type": ["string", "null"] },
+    "route": { "type": ["string", "null"] },
+    "status": { "enum": ["verified", "verified_partial", "blocked", "failed", "not_verified"] },
+    "evidence": { "type": "object" },
+    "claims": { "type": "array" },
+    "unverified": { "type": "array" },
+    "blockers": { "type": "array" }
+  },
+  "additionalProperties": true
+}

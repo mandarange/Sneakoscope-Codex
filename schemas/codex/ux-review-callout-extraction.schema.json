@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex/ux-review-callout-extraction.schema.json",
+  "title": "SKS UX Review Callout Extraction",
+  "type": "object",
+  "required": ["schema", "source_screen_id", "generated_review_image_id", "issues"],
+  "properties": {
+    "schema": { "const": "sks.ux-review-callout-extraction.v1" },
+    "source_screen_id": { "type": "string", "minLength": 1 },
+    "generated_review_image_id": { "type": "string", "minLength": 1 },
+    "issues": {
+      "type": "array",
+      "items": { "$ref": "./image-ux-issue-ledger.schema.json#/$defs/issue" }
+    }
+  },
+  "additionalProperties": false
+}

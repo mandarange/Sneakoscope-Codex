@@ -92,7 +92,13 @@ function addArtifactCandidates(candidates: any, artifacts: any = [], missionId: 
   for (const artifact of artifacts || []) {
     const relPath = typeof artifact === 'string' ? artifact : artifact?.path;
     if (!relPath) continue;
-    candidates.push({ kind: inferKind(relPath), relPath: normalizeRelPath(relPath, missionId), source: sourceForPath(relPath) });
+    candidates.push({
+      kind: artifact?.kind || inferKind(relPath),
+      relPath: normalizeRelPath(relPath, missionId),
+      source: artifact?.source || sourceForPath(relPath),
+      optional: artifact?.optional === true,
+      ignoreStale: artifact?.ignoreStale === true
+    });
   }
 }
 

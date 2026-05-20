@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex/scout-result.schema.json",
+  "title": "SKS Scout Result",
+  "type": "object",
+  "required": ["schema", "scout_id", "findings", "suggested_tasks"],
+  "properties": {
+    "schema": { "const": "sks.scout-result.v1" },
+    "scout_id": { "type": "string", "minLength": 1 },
+    "findings": { "type": "array" },
+    "suggested_tasks": { "type": "array" }
+  },
+  "additionalProperties": true
+}

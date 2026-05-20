@@ -1,5 +1,21 @@
 # Known Gaps
 
+## 1.0.8 Known Gaps
+
+No P0 blocker is intentionally left open for Codex CLI `rust-v0.132.0` compatibility detection, `codex exec resume --output-schema` fixture coverage, UX-Review generated callout ingestion, text-only fallback blocking, mock-as-real blocking, Image Voxel relation validation, memory summary rebuilds, repeated blocker stops, version drift, or release readiness reporting.
+
+Bounded 1.0.8 claims:
+
+- The Codex hook schema snapshot remains `rust-v0.131.0`; the 1.0.8 runtime matrix targets `rust-v0.132.0` capability detection and preserves the existing zero-warning strict subset.
+- Real UX-Review verification requires a real generated gpt-image-2 annotated callout image and post-fix recapture/re-review evidence for changed screens. Fixture and mock loops are `verified_partial`.
+- If Codex App imagegen or Computer Use is unavailable, SKS records a structured blocker such as `imagegen_capability_missing` or `live_capture_blocked`; it does not fabricate screenshots, generated callouts, or fixed-screen evidence.
+- Codex Python SDK auth and richer TurnResult integration are P1 warning-only review items; no live SDK accuracy or performance claim is made.
+
+P1 future enhancements:
+
+- Wire a real Codex App-hosted imagegen adapter once the host exposes a callable artifact handoff to CLI processes.
+- Expand real-world doctor probe batching benchmarks across terminal/App launch modes.
+
 ## 1.0.7 Known Gaps
 
 No P0 blocker is intentionally left open for Computer Use live evidence mode, Computer Use local-only privacy, Image Voxel linkage-or-reason recording, codex-lb persistence truthfulness, process-only ephemeral warnings, docs truthfulness, or release readiness reporting.
