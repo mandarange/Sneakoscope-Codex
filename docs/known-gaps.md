@@ -1,5 +1,22 @@
 # Known Gaps
 
+## 1.0.7 Known Gaps
+
+No P0 blocker is intentionally left open for Computer Use live evidence mode, Computer Use local-only privacy, Image Voxel linkage-or-reason recording, codex-lb persistence truthfulness, process-only ephemeral warnings, docs truthfulness, or release readiness reporting.
+
+Bounded 1.0.7 claims:
+
+- Computer Use live evidence is opt-in. `probe_only` is the default and `live_capture_success` requires official Codex App/macOS capture capability; unavailable capture records `live_capture_blocked` with a structured reason instead of fabricated evidence.
+- Computer Use screenshots are local-only by default. Shared TriWiki can record metadata/anchors, but screenshot binaries are not published automatically.
+- Browser Use evidence and manual screenshots are separate evidence sources, not substitutes for Computer Use live evidence.
+- codex-lb setup reports `durable_env_file`, `durable_keychain`, `durable_launchctl`, `shell_profile`, `process_only_ephemeral`, or `none` according to actual setup choices and effects. If all durable choices are off, the next shell may require setup or explicit environment variables again.
+- Recovery commands: `sks computer-use smoke --json`, `sks computer-use smoke --real --capture-screenshot --json`, and `sks codex-lb setup --write-env-file --keychain --launchctl`.
+
+P1 future enhancements:
+
+- Broaden real-world macOS Screen Recording/Accessibility detection once Codex App exposes a stable capture API to CLI processes.
+- Add more fixture permutations for GUI-launch environment propagation across shells and managed macOS profiles.
+
 ## 1.0.6 Known Gaps
 
 No P0 blocker is intentionally left open for Codex CLI `rust-v0.131.0` hook schema validation, category-aware strict-subset semantic hook validation, hook warning-zero release gates, codex-lb setup plan/apply truthfulness, codex-lb missing-env prevention, or optional Computer Use live smoke status.

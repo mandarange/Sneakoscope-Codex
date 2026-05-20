@@ -12,7 +12,14 @@ import { codexLaunchCommand, platformTmuxInstallHint, tmuxReadiness, tmuxReadine
 import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.js';
 import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.js';
 import { loadCodexLbEnv, writeCodexLbKeychain, codexLbMetadataPath } from '../core/codex-lb/codex-lb-env.js';
-import { buildCodexLbSetupPlan, installCodexLbShellProfileSnippet } from '../core/codex-lb/codex-lb-setup.js';
+import {
+  buildCodexLbSetupPlan,
+  codexLbPersistenceSummary,
+  installCodexLbShellProfileSnippet,
+  selectedCodexLbPersistenceModes,
+  type CodexLbPersistenceSummary,
+  type CodexLbPersistenceMode
+} from '../core/codex-lb/codex-lb-setup.js';
 
 type CodexLbStatusSnapshot = Awaited<ReturnType<typeof codexLbStatus>>;
 
@@ -75,6 +82,7 @@ export type ConfigureCodexLbResult = {
   plan?: Record<string, unknown>;
   applied_actions?: Array<Record<string, unknown>>;
   drift?: string[];
+  persistence?: CodexLbPersistenceSummary;
   config_path?: string;
   env_path?: string;
   metadata_path?: string;
@@ -369,6 +377,7 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
     run_health_check: opts.runHealth === true,
     allow_insecure_localhost: opts.allowInsecureHttp === true || opts.allowInsecureLocalhost === true
   };
+  const selectedPersistenceModes = selectedCodexLbPersistenceModes(setupAnswers as any);
   const plan = buildCodexLbSetupPlan(setupAnswers as any, {
     home,
     configPath,
@@ -382,6 +391,7 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   const insecureLocalWarning = /^http:\/\//i.test(baseUrl) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(baseUrl) && !opts.allowInsecureHttp
     ? ['codex-lb base URL uses http outside localhost; prefer https or pass an explicit allow flag in the calling surface.']
     : [];
+  const beforeState = await captureCodexLbSetupWriteState({ home, configPath, envPath, shellProfile });
   const appliedActions: Array<Record<string, unknown>> = [];
   await ensureDir(path.dirname(configPath));
   const current = await readText(configPath, '');
@@ -418,6 +428,7 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, home, status: codexLb }).catch((err: any) => ({ status: 'failed', reason: 'exception', error: err.message }));
   const finalCodexLb = await codexLbStatus({ ...opts, home, configPath, envPath });
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
+  const afterState = await captureCodexLbSetupWriteState({ home, configPath, envPath, shellProfile });
   const drift = detectCodexLbSetupDrift({
     useDefaultProvider,
     writeEnvFile,
@@ -428,21 +439,41 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
     envFile: finalCodexLb.env_file,
     keychain,
     codexEnvironment,
-    shellProfileResult
+    shellProfileResult,
+    beforeState,
+    afterState
   });
+  const appliedPersistenceModes = appliedCodexLbPersistenceModes({
+    writeEnvFile,
+    storeKeychain,
+    syncLaunchctl,
+    shellProfile,
+    envFile: finalCodexLb.env_file,
+    keychain,
+    codexEnvironment,
+    shellProfileResult,
+    apiKeySource: finalCodexLb.env_loader?.api_key?.source || null
+  });
+  const persistence = codexLbPersistenceSummary({
+    selectedModes: selectedPersistenceModes,
+    appliedModes: appliedPersistenceModes,
+    processOnly: appliedPersistenceModes.includes('process_only_ephemeral')
+  });
+  const warnings = [...insecureLocalWarning, ...persistence.warnings];
   return {
     ok: ok && drift.length === 0,
     status: ok && drift.length === 0 ? 'configured' : drift.length ? 'setup_choice_drift' : (codexEnvironment.status || codexLogin.status),
     plan: plan as any,
     applied_actions: appliedActions,
     drift,
+    persistence,
     config_path: configPath,
     env_path: envPath,
     metadata_path: metadataPath,
     base_url: baseUrl,
     env_key: 'CODEX_LB_API_KEY',
     keychain,
-    warnings: insecureLocalWarning,
+    warnings,
     auth_reconcile: authReconcile,
     codex_lb: finalCodexLb,
     codex_environment: codexEnvironment,
@@ -1321,11 +1352,51 @@ function detectCodexLbSetupDrift(state: any = {}): string[] {
   if (state.useDefaultProvider && state.selected !== true) drift.push('default_provider_not_selected');
   if (!state.useDefaultProvider && state.selected === true) drift.push('default_provider_selected_despite_no_default_provider');
   if (state.writeEnvFile && state.envFile !== true) drift.push('env_file_not_written');
-  if (!state.writeEnvFile && state.envFile === true) drift.push('env_file_written_despite_no_env_file');
+  if (!state.writeEnvFile && state.beforeState && state.afterState && state.beforeState.envHash !== state.afterState.envHash) drift.push('env_file_changed_despite_no_env_file');
+  if (!state.writeEnvFile && !state.beforeState && state.envFile === true) drift.push('env_file_written_despite_no_env_file');
   if (!state.storeKeychain && state.keychain?.status && state.keychain.status !== 'skipped') drift.push('keychain_touched_despite_no_keychain');
   if (!state.syncLaunchctl && state.codexEnvironment?.launch_environment?.status === 'synced') drift.push('launchctl_synced_despite_no_launchctl');
   if (state.shellProfile === 'skip' && state.shellProfileResult?.status === 'installed') drift.push('shell_profile_written_despite_skip');
+  if (state.shellProfile === 'skip' && state.beforeState && state.afterState && state.beforeState.profileHash !== state.afterState.profileHash) drift.push('shell_profile_changed_despite_skip');
   return drift;
+}
+
+async function captureCodexLbSetupWriteState({ home, configPath, envPath, shellProfile }: any = {}) {
+  const profileFiles = profileFilesForDrift(home, shellProfile);
+  return {
+    configHash: await fileHashOrMissing(configPath),
+    envHash: await fileHashOrMissing(envPath),
+    profileHash: (await Promise.all(profileFiles.map((file: string) => fileHashOrMissing(file)))).join('|')
+  };
+}
+
+async function fileHashOrMissing(file: string) {
+  const text = await readText(file, null).catch(() => null);
+  return text === null ? 'missing' : await sha256Text(String(text));
+}
+
+function profileFilesForDrift(home: string, shellProfile: string) {
+  const targets = {
+    zsh: path.join(home, '.zshrc'),
+    bash: path.join(home, '.bashrc'),
+    fish: path.join(home, '.config', 'fish', 'config.fish')
+  };
+  if (shellProfile === 'zsh') return [targets.zsh];
+  if (shellProfile === 'bash') return [targets.bash];
+  if (shellProfile === 'fish') return [targets.fish];
+  if (shellProfile === 'all') return [targets.zsh, targets.bash, targets.fish];
+  return [targets.zsh, targets.bash, targets.fish];
+}
+
+function appliedCodexLbPersistenceModes(state: any = {}): CodexLbPersistenceMode[] {
+  const modes: CodexLbPersistenceMode[] = [];
+  if (state.writeEnvFile && state.envFile === true) modes.push('durable_env_file');
+  if (state.storeKeychain && state.keychain?.ok === true) modes.push('durable_keychain');
+  if (state.syncLaunchctl && state.codexEnvironment?.launch_environment?.status === 'synced') modes.push('durable_launchctl');
+  if (state.shellProfile !== 'skip' && state.shellProfileResult?.status === 'installed') modes.push('shell_profile');
+  if (!modes.length && state.apiKeySource === 'process.env') modes.push('process_only_ephemeral');
+  if (!modes.length) modes.push('none');
+  return modes;
 }
 
 export async function ensureGlobalCodexFastModeDuringInstall(opts: any = {}) {

@@ -1,10 +1,11 @@
 import path from 'node:path';
 import { nowIso, projectRoot, writeJsonAtomic } from '../fsx.js';
 import { createMission, findLatestMission } from '../mission.js';
-import { flag } from '../../cli/args.js';
+import { flag, readOption } from '../../cli/args.js';
 import { printJson } from '../../cli/output.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { computerUseLiveSmoke, computerUseStatusReport } from '../computer-use-status.js';
+import { computerUseLiveEvidencePath } from '../computer-use-live-evidence.js';
 
 export async function computerUseCommand(command: any, args: any = []) {
   const root = await projectRoot();
@@ -18,17 +19,27 @@ export async function computerUseCommand(command: any, args: any = []) {
     return;
   }
   if (action === 'smoke') {
-    const evidencePath = path.join(root, '.sneakoscope', 'reports', 'computer-use-smoke-evidence.json');
+    const missionArg = readOption(args, '--mission', null);
+    const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+    const route = readOption(args, '--route', null);
+    const evidencePath = computerUseLiveEvidencePath(root, { missionId });
     const result = await computerUseLiveSmoke({
+      root,
       real: flag(args, '--real'),
       requireReal: flag(args, '--require-real'),
+      captureScreenshot: flag(args, '--capture-screenshot'),
       allowAction: flag(args, '--allow-action'),
+      route,
+      missionId,
       evidencePath
     });
     if (flag(args, '--json')) {
       printJson(result);
     } else {
-      console.log(`Computer Use smoke: ${result.status}`);
+      console.log(`Computer Use smoke: ${result.status} (${result.evidence_mode})`);
+      if (result.live_evidence_path) console.log(`Live evidence: ${result.live_evidence_path}`);
+      if (result.blockers?.length) for (const blocker of result.blockers) console.log(`- blocker: ${blocker}`);
+      if (result.warnings?.length) for (const warning of result.warnings) console.log(`- warning: ${warning}`);
       if (result.guidance?.length) for (const line of result.guidance) console.log(`- ${line}`);
     }
     if (!result.ok) process.exitCode = 1;

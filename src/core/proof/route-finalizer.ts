@@ -5,6 +5,7 @@ import { ensureRouteImageEvidence } from '../wiki-image/route-image-evidence.js'
 import { readScoutProofEvidence } from '../scouts/scout-proof-evidence.js';
 import { wrongnessProofEvidence } from '../triwiki-wrongness/wrongness-proof-linker.js';
 import { computerUseStatusReport } from '../computer-use-status.js';
+import { readComputerUseLiveEvidence } from '../computer-use-live-evidence.js';
 
 export async function finalizeRouteWithProof(root: any, {
   missionId,
@@ -47,13 +48,34 @@ export async function finalizeRouteWithProof(root: any, {
   const computerUse = policy.requires_image_voxel_anchors
     ? await computerUseStatusReport().catch((err: any) => ({ schema: 'sks.computer-use-status.v1', status: 'unknown', ok: false, guidance: [err.message], evidence: { status: 'unknown' } }))
     : null;
+  const computerUseLive = policy.requires_image_voxel_anchors
+    ? await readComputerUseLiveEvidence(root, { missionId }).catch(() => ({ ok: false, path: null, evidence: null }))
+    : null;
   if (computerUse && computerUse.status !== 'available') {
     unverified.push(`Computer Use evidence unavailable: ${computerUse.status}. Visual claim remains verified_partial unless explicit screenshot/image evidence covers it.`);
+  }
+  if (computerUse && !computerUseLive?.evidence) {
+    unverified.push('Computer Use live evidence is missing for this visual route; high-confidence visual claims require live evidence or explicit screenshot/image coverage.');
+    if (strict) localBlockers.push('computer_use_live_evidence_missing');
+  }
+  if (computerUseLive?.evidence?.mode === 'probe_only') {
+    unverified.push('Computer Use evidence mode is probe_only; visual claim confidence is capped below high confidence.');
+  }
+  if (computerUseLive?.evidence?.mode === 'live_capture_blocked') {
+    unverified.push(`Computer Use live capture blocked: ${(computerUseLive.evidence.blockers || []).join(',') || computerUseLive.evidence.status}.`);
+  }
+  if (computerUseLive?.evidence && computerUseLive.evidence.image_voxel?.linked !== true && statusHint === 'verified') {
+    unverified.push(`Computer Use live evidence is not linked to Image Voxel: ${computerUseLive.evidence.image_voxel?.reason || 'missing_relation'}.`);
   }
   if (Number(wrongnessEvidence?.high_severity_active || 0) > 0) {
     localBlockers.push('active_high_severity_wrongness');
   }
-  const visualComputerUseDowngrade = Boolean(computerUse && computerUse.status !== 'available' && statusHint === 'verified');
+  const visualComputerUseDowngrade = Boolean(statusHint === 'verified' && (
+    (computerUse && computerUse.status !== 'available')
+    || !computerUseLive?.evidence
+    || computerUseLive.evidence.mode !== 'live_capture_success'
+    || computerUseLive.evidence.image_voxel?.linked !== true
+  ));
   const status = localBlockers.length
     ? (strict ? 'blocked' : statusHint === 'verified' ? 'verified_partial' : statusHint)
     : visualComputerUseDowngrade ? 'verified_partial'
@@ -81,7 +103,11 @@ export async function finalizeRouteWithProof(root: any, {
       ok: Boolean(computerUse.ok),
       mad_sks_independent: computerUse.mad_sks_independent === true,
       external_capability_blocked: computerUse.external_capability_blocked === true,
-      evidence: computerUse.evidence || null
+      evidence_mode: computerUseLive?.evidence?.mode || 'missing',
+      live_evidence_path: computerUseLive?.path || null,
+      image_voxel_linked: computerUseLive?.evidence?.image_voxel?.linked === true,
+      evidence: computerUse.evidence || null,
+      live_evidence: computerUseLive?.evidence || null
     } } : {}),
     route_gate: gate || (gateFile ? { source: gateFile } : null)
   };

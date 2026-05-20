@@ -6,7 +6,7 @@ import { flag, readOption } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { codexLbMetrics, readCodexLbCircuit, recordCodexLbHealthEvent, resetCodexLbCircuit, codexLbProofEvidence } from '../core/codex-lb-circuit.js';
 import { checkCodexLbResponseChain, codexLbStatus, configureCodexLb, formatCodexLbStatusText, releaseCodexLbAuthHold, repairCodexLbAuth, unselectCodexLbProvider } from '../cli/install-helpers.js';
-import { buildCodexLbSetupPlan, renderCodexLbSetupPlan } from '../core/codex-lb/codex-lb-setup.js';
+import { buildCodexLbSetupPlan, codexLbPersistenceSummary, renderCodexLbSetupPlan } from '../core/codex-lb/codex-lb-setup.js';
 
 export async function run(command: any, args: any = []) {
   const root = await projectRoot();
@@ -98,12 +98,13 @@ export async function run(command: any, args: any = []) {
       return;
     }
     if (flag(args, '--plan')) {
-      const result = { schema: 'sks.codex-lb-setup-plan-result.v1', ok: plan.blockers.length === 0, plan, writes: false };
+      const result = { schema: 'sks.codex-lb-setup-plan-result.v1', ok: plan.blockers.length === 0, plan, writes: false, expected_actions: plan.expected_actions, persistence: plan.persistence };
       if (flag(args, '--json')) return printJson(result);
       process.stdout.write(renderCodexLbSetupPlan(plan));
       if (!result.ok) process.exitCode = 1;
       return;
     }
+    const processOnly = plan.persistence.effective_mode === 'process_only_ephemeral';
     if (options.interactive && !options.yes) {
       process.stdout.write(renderCodexLbSetupPlan(plan));
       const confirm = (await ask('Apply this codex-lb setup plan? [y/N] ')).trim();
@@ -114,6 +115,38 @@ export async function run(command: any, args: any = []) {
         process.exitCode = 1;
         return;
       }
+      if (processOnly) {
+        const confirmProcessOnly = (await ask('This setup keeps credentials only in the current process. Type process-only to continue: ')).trim();
+        if (confirmProcessOnly !== 'process-only') {
+          const result = { schema: 'sks.codex-lb-setup.v1', ok: false, status: 'process_only_cancelled', plan, applied_actions: [], persistence: plan.persistence };
+          if (flag(args, '--json')) {
+            printJson(result);
+            process.exitCode = 1;
+            return;
+          }
+          console.log('codex-lb setup cancelled: process-only ephemeral setup was not confirmed.');
+          process.exitCode = 1;
+          return;
+        }
+      }
+    } else if (processOnly && !options.yes) {
+      const result = {
+        schema: 'sks.codex-lb-setup.v1',
+        ok: false,
+        status: 'process_only_requires_yes',
+        plan,
+        applied_actions: [],
+        persistence: plan.persistence,
+        guidance: ['Pass --yes to acknowledge process_only_ephemeral setup, or enable --write-env-file, --keychain, --launchctl, or --shell-profile.']
+      };
+      if (flag(args, '--json')) {
+        printJson(result);
+        process.exitCode = 1;
+        return;
+      }
+      console.error('codex-lb setup would be process-only ephemeral. Pass --yes to acknowledge, or enable a durable persistence mode.');
+      process.exitCode = 1;
+      return;
     }
     const result = await configureCodexLb({
       host: options.host,
@@ -133,6 +166,7 @@ export async function run(command: any, args: any = []) {
     if (options.health) shaped.chain_health = result.ok ? await checkCodexLbResponseChain(result, { force: true, root }) : null;
     if (flag(args, '--json')) return printJson(shaped);
     console.log(`codex-lb configured: ${result.base_url || result.status}`);
+    if (shaped.persistence?.warning) console.log(`warning: ${shaped.persistence.warning}`);
     if (!result.ok) process.exitCode = 1;
     return;
   }
@@ -168,6 +202,18 @@ export async function run(command: any, args: any = []) {
 }
 
 function shapeCodexLbStatus(status: any = {}) {
+  const mode = status.env_loader?.api_key?.source === 'env-file'
+    ? 'durable_env_file'
+    : status.env_loader?.api_key?.source === 'keychain'
+      ? 'durable_keychain'
+      : status.env_loader?.api_key?.source === 'process.env'
+        ? 'process_only_ephemeral'
+        : 'none';
+  const persistence = codexLbPersistenceSummary({
+    selectedModes: mode === 'none' ? [] : [mode],
+    appliedModes: mode === 'none' ? ['none'] : [mode],
+    processOnly: mode === 'process_only_ephemeral'
+  });
   return {
     schema: 'sks.codex-lb-status.v1',
     ...status,
@@ -179,6 +225,7 @@ function shapeCodexLbStatus(status: any = {}) {
       source: status.env_loader?.api_key?.source || null,
       redacted: true
     },
+    persistence,
     env_loader: status.env_loader || null,
     env_auto_load: Boolean(status.env_file && status.env_key_configured),
     guidance: status.ok ? [] : [

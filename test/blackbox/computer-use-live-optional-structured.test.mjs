@@ -10,6 +10,6 @@ test('black-box Computer Use optional live smoke returns structured status', asy
   });
   const json = JSON.parse(result.stdout);
   assert.equal(result.code, 0);
-  assert.equal(json.schema, 'sks.computer-use-live-smoke.v1');
+  assert.equal(json.schema, 'sks.computer-use-live-smoke.v2');
   assert.equal(json.ok, true);
 });

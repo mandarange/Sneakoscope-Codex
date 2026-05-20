@@ -1,4 +1,14 @@
 import { codexAppIntegrationStatus } from './codex-app.js';
+import {
+  buildComputerUseLiveEvidence,
+  computerUseLiveEvidencePath,
+  writeComputerUseLiveEvidence
+} from './computer-use-live-evidence.js';
+export type {
+  ComputerUseCaptureStatus,
+  ComputerUseEvidenceMode,
+  ComputerUseLiveEvidence
+} from './computer-use-live-evidence.js';
 
 export type ComputerUseStatus =
   | 'available'
@@ -66,47 +76,63 @@ export function computerUseEvidenceSkeleton(status: ComputerUseStatus = 'unknown
 export async function computerUseLiveSmoke(opts: any = {}) {
   const realOptIn = opts.real === true || process.env.SKS_TEST_REAL_COMPUTER_USE === '1';
   const requireReal = opts.requireReal === true;
+  const captureScreenshot = opts.captureScreenshot === true || requireReal;
   const status = await computerUseStatusReport(opts);
-  const available = status.status === 'available';
-  const realAllowed = realOptIn && available;
-  const evidencePath = opts.evidencePath || null;
+  const root = opts.root || process.cwd();
+  const evidencePath = opts.evidencePath || (realOptIn ? computerUseLiveEvidencePath(root, { missionId: opts.missionId || null }) : null);
+  const liveEvidence = realOptIn
+    ? await buildComputerUseLiveEvidence({
+      root,
+      route: opts.route || null,
+      missionId: opts.missionId || null,
+      statusReport: status,
+      realOptIn,
+      captureScreenshot,
+      allowAction: opts.allowAction === true,
+      screenshotAdapter: opts.screenshotAdapter || null,
+      capabilityAdapter: opts.capabilityAdapter || null,
+      evidencePath
+    })
+    : null;
+  if (liveEvidence && evidencePath) await writeComputerUseLiveEvidence(evidencePath, liveEvidence);
+  const evidenceMode = liveEvidence?.mode || 'probe_only';
+  const liveCaptureSuccess = evidenceMode === 'live_capture_success';
+  const blockers = [...(liveEvidence?.blockers || [])];
+  if (!realOptIn && status.status === 'not_macos') blockers.push('not_macos');
+  const warnings = [...(liveEvidence?.warnings || [])];
+  const ok = requireReal ? liveCaptureSuccess : true;
   const smoke = {
-    schema: 'sks.computer-use-live-smoke.v1',
-    ok: realAllowed || !requireReal,
-    mode: realOptIn ? 'optional_real' : 'optional_probe',
+    schema: 'sks.computer-use-live-smoke.v2',
+    ok,
+    mode: evidenceMode,
+    evidence_mode: evidenceMode,
     status: status.status,
     platform: status.platform || process.platform,
     codex_app: {
       installed: Boolean(status.app?.app?.installed),
-      capability_detected: available
+      capability_detected: status.status === 'available'
     },
     permission: {
       screen_recording: status.permission_status || 'unknown',
       accessibility: 'unknown'
     },
+    live_evidence_path: liveEvidence && evidencePath ? evidencePath : null,
+    image_voxel_linked: liveEvidence?.image_voxel?.linked === true,
+    blockers,
+    warnings,
     evidence: {
-      screenshot_captured: false,
-      action_captured: false,
-      image_voxel_linked: false,
-      evidence_path: evidencePath
+      screenshot_captured: liveEvidence?.capture?.screenshot?.status === 'captured',
+      action_captured: liveEvidence?.capture?.action?.status === 'captured',
+      image_voxel_linked: liveEvidence?.image_voxel?.linked === true,
+      evidence_path: liveEvidence && evidencePath ? evidencePath : null
     },
+    live_evidence: liveEvidence,
     external_capability_blocked: status.external_capability_blocked === true || ['codex_app_missing', 'macos_permission_missing', 'codex_app_capability_missing', 'unknown'].includes(status.status),
     mock: false,
-    guidance: realAllowed
-      ? ['Computer Use capability appears available. Capture screenshots through official Codex Computer Use in the active route; SKS smoke does not synthesize evidence.']
+    guidance: status.status === 'available' && realOptIn
+      ? ['Computer Use capability appears available. SKS records only official, local-only live evidence and does not synthesize screenshots.']
       : status.guidance || []
   };
-  if (available && realOptIn && evidencePath) {
-    const { writeJsonAtomic } = await import('./fsx.js');
-    await writeJsonAtomic(evidencePath, smoke);
-    return {
-      ...smoke,
-      evidence: {
-        ...smoke.evidence,
-        evidence_path: evidencePath
-      }
-    };
-  }
   return smoke;
 }
 

@@ -9,7 +9,7 @@ test('Computer Use --require-real fails when optional real capability is unavail
     maxOutputBytes: 256 * 1024
   });
   const json = JSON.parse(result.stdout);
-  assert.equal(json.schema, 'sks.computer-use-live-smoke.v1');
+  assert.equal(json.schema, 'sks.computer-use-live-smoke.v2');
   assert.equal(json.ok, false);
   assert.equal(result.code, 1);
 });

@@ -5,6 +5,26 @@
 
 
 
+## [1.0.7] - 2026-05-20
+
+### Added
+- Add Computer Use live evidence capture mode with opt-in real macOS screenshot/action evidence attempts.
+- Add Computer Use live evidence schemas for capability probe, screenshot capture, action capture, Image Voxel linkage, and external capability blockers.
+- Add codex-lb persistence truthfulness report that distinguishes durable setup from process-only ephemeral setup.
+- Add setup plan/apply drift checks that compare requested codex-lb persistence choices with actual filesystem, Keychain, launchctl, and shell profile state.
+- Add release readiness report for Computer Use real evidence, codex-lb persistence, hook strict subset, and docs truthfulness.
+
+### Fixed
+- Prevent Computer Use smoke from being described as real capture when it only ran a capability probe.
+- Prevent codex-lb setup from silently producing process-only credentials without a clear warning.
+- Prevent README/docs from overclaiming universal Computer Use availability or live evidence.
+- Prevent setup action reports from passing when actual filesystem changes differ from requested setup choices.
+
+### Changed
+- Treat Computer Use evidence mode as one of `probe_only`, `live_capture_attempted`, `live_capture_success`, or `live_capture_blocked`.
+- Treat codex-lb persistence as explicit: `durable_env_file`, `durable_keychain`, `durable_launchctl`, `shell_profile`, or `process_only_ephemeral`.
+- Treat documentation truthfulness as a release invariant.
+
 ## [1.0.6] - 2026-05-20
 
 ### Added
