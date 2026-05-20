@@ -2,11 +2,13 @@ import path from 'node:path';
 import { exists, projectRoot, readJson } from '../fsx.js';
 import { CODEX_HOOK_EVENTS, type CodexHookEventName, codexHookEventName, readCodexHookSchema } from './codex-schema-snapshot.js';
 import { validateCodexHookSemanticOutput, type CodexHookSemanticValidation } from './codex-hook-semantic-validator.js';
+import { schemaIssueToCodexHookIssue, type CodexHookIssue } from './codex-hook-issues.js';
 
 export type CodexSchemaValidation = {
   ok: boolean;
   event: CodexHookEventName;
   issues: string[];
+  structured_issues: CodexHookIssue[];
 };
 
 export type CodexHookOutputValidation = CodexSchemaValidation & {
@@ -17,7 +19,7 @@ export async function validateCodexHookOutput(eventLike: unknown, output: unknow
   const event = codexHookEventName(eventLike) || 'UserPromptSubmit';
   const schema = await readCodexHookSchema(event, 'output');
   const issues = validateJsonValue(output, schema, schema, '$');
-  return { ok: issues.length === 0, event, issues };
+  return { ok: issues.length === 0, event, issues, structured_issues: issues.map(schemaIssueToCodexHookIssue) };
 }
 
 export async function validateCodexFixtureOutputs(root?: string) {
@@ -37,9 +39,11 @@ export async function validateCodexFixtureOutputs(root?: string) {
         ok: validation.ok && semantic.ok,
         issues: [
           ...validation.issues,
-          ...semantic.warnings.map((issue) => `semantic_warning:${issue}`),
-          ...semantic.unsupported.map((issue) => `semantic_unsupported:${issue}`),
-          ...semantic.fatal.map((issue) => `semantic_fatal:${issue}`)
+          ...semantic.issues.map((issue) => `${issue.category}:${issue.code}:${issue.message}`)
+        ],
+        structured_issues: [
+          ...validation.structured_issues,
+          ...semantic.issues
         ]
       });
     }

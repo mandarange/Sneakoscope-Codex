@@ -28,6 +28,7 @@ export async function codexCompatibilityReport(opts: any = {}) {
     hooks_semantic: {
       ok: hooks.ok,
       warnings_count: hooks.warnings_count,
+      issues_by_category: hooks.issues_by_category,
       events: hooks.events
     },
     ok,

@@ -292,9 +292,9 @@ export async function recordHookPolicyMismatchWrongness(root: string, input: unk
     wrongness_kind: kind,
     severity: 'high',
     claim: { text: `Hook policy mismatch: expected ${String(row.expected || 'unknown')} but observed ${String(row.actual || 'unknown')}.` },
-    detected_by: { source: kind === 'hook_semantic_mismatch' ? 'hook_semantic_validator' : 'hook_replay', command: 'sks hooks replay', artifact: typeof row.artifact === 'string' ? row.artifact : null, detail: typeof row.detail === 'string' ? row.detail : null },
-    root_cause: { category: 'route_policy_gap', explanation: kind === 'hook_semantic_mismatch' ? 'Hook output passed schema-tolerant shape but violated Codex runtime semantic parser rules.' : 'Hook replay output diverged from the configured route/trust policy.' },
-    corrective_action: { summary: kind === 'hook_semantic_mismatch' ? 'Align hook builders and fixtures with Codex runtime semantic parser rules before release.' : 'Align hook policy, replay fixture, and trust expectation before accepting hook evidence.', required_evidence: ['hooks replay output'], patch_status: 'pending' },
+    detected_by: { source: kind === 'hook_semantic_mismatch' || kind === 'hook_strict_subset_misclassified' ? 'hook_semantic_validator' : 'hook_replay', command: 'sks hooks replay', artifact: typeof row.artifact === 'string' ? row.artifact : null, detail: typeof row.detail === 'string' ? row.detail : null },
+    root_cause: { category: 'route_policy_gap', explanation: kind === 'hook_strict_subset_misclassified' ? 'Hook output classification mixed upstream parser unsupported fields with SKS zero-warning strict-subset rules.' : kind === 'hook_semantic_mismatch' ? 'Hook output passed schema-tolerant shape but violated Codex runtime semantic parser rules.' : 'Hook replay output diverged from the configured route/trust policy.' },
+    corrective_action: { summary: kind === 'hook_strict_subset_misclassified' ? 'Separate upstream semantic unsupported issues from SKS strict-subset policy issues and rerun warning gates.' : kind === 'hook_semantic_mismatch' ? 'Align hook builders and fixtures with Codex runtime semantic parser rules before release.' : 'Align hook policy, replay fixture, and trust expectation before accepting hook evidence.', required_evidence: ['hooks replay output'], patch_status: 'pending' },
     links: { artifacts: typeof row.artifact === 'string' ? [row.artifact] : [] }
   }, { missionId });
   return saved.record;

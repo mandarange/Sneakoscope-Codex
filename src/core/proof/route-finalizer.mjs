@@ -48,8 +48,10 @@ export async function finalizeRouteWithProof(root, {
   if (computerUse && computerUse.status !== 'available') {
     unverified.push(`Computer Use evidence unavailable: ${computerUse.status}. Visual claim remains verified_partial unless explicit screenshot/image evidence covers it.`);
   }
+  const visualComputerUseDowngrade = Boolean(computerUse && computerUse.status !== 'available' && statusHint === 'verified');
   const status = localBlockers.length
     ? (strict ? 'blocked' : statusHint === 'verified' ? 'verified_partial' : statusHint)
+    : visualComputerUseDowngrade ? 'verified_partial'
     : statusHint;
   const evidence = {
     ...collected,

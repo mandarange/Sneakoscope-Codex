@@ -1,15 +1,15 @@
 # Known Gaps
 
-## 1.0.5 Known Gaps
+## 1.0.6 Known Gaps
 
-No P0 blocker is intentionally left open for Codex CLI `rust-v0.131.0` hook schema validation, runtime semantic hook validation, hook warning-zero release gates, codex-lb setup/missing-env prevention, or Computer Use/MAD-SKS policy separation.
+No P0 blocker is intentionally left open for Codex CLI `rust-v0.131.0` hook schema validation, category-aware strict-subset semantic hook validation, hook warning-zero release gates, codex-lb setup plan/apply truthfulness, codex-lb missing-env prevention, or optional Computer Use live smoke status.
 
 Bounded claims:
 
 - A local Codex CLI older than `0.131.0` reports `compatibility_degraded`; release hook validation still uses the vendored `rust-v0.131.0` snapshot and semantic validator.
-- Live Computer Use availability depends on Codex App and macOS permissions. If the official capability is blocked or unavailable, SKS records the status and does not fabricate UI evidence.
+- Live Computer Use availability depends on Codex App and macOS permissions. If the official capability is blocked or unavailable, SKS records the status and does not fabricate UI evidence. Real smoke remains opt-in with `SKS_TEST_REAL_COMPUTER_USE=1`.
 - codex-lb health checks can still report structured network/auth blockers; the fixed invariant is that raw missing `CODEX_LB_API_KEY` messages and secret leaks are release failures.
-- The 1.0.5 black-box fixtures validate warning-zero, semantic failure fixtures, codex-lb missing-env prevention, and no forbidden Computer Use wording; broader real-world Codex App/OS capability permutations remain environment-dependent.
+- The 1.0.6 black-box fixtures validate warning-zero, strict-subset classification, setup plan/apply truthfulness, codex-lb missing-env prevention, and no forbidden Computer Use wording; broader real-world Codex App/OS capability permutations remain environment-dependent.
 
 0.9.20 strengthens the core trust kernel, but these claims remain bounded:
 

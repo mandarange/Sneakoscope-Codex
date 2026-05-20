@@ -16,7 +16,7 @@ sks codex-app pat status --json
 
 ## Codex `rust-v0.131.0` Hook Shape
 
-SKS 1.0.5 validates Codex hook output against vendored OpenAI Codex CLI `rust-v0.131.0` generated schemas and the runtime semantic parser rules mirrored by `src/core/codex-compat/codex-hook-semantic-validator.ts`.
+SKS 1.0.6 validates Codex hook output against vendored OpenAI Codex CLI `rust-v0.131.0` generated schemas and a category-aware semantic validator in `src/core/codex-compat/codex-hook-semantic-validator.ts`. The validator is an upstream-schema baseline plus an SKS zero-warning strict subset, not a claim that SKS mirrors every upstream runtime parser rule exactly.
 
 Supported event names are `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SessionStart`, `UserPromptSubmit`, and `Stop`.
 
@@ -43,7 +43,9 @@ Output uses camelCase Codex fields. Examples:
 }
 ```
 
-Snake_case output keys, legacy top-level `permissionDecision`, PermissionRequest reserved fields, unsupported config fields, PreToolUse `permissionDecision:"ask"`, PreToolUse `allow` without `updatedInput`, Stop `continue:false`, Stop `stopReason`, and Stop blocks without a reason are release-blocking warning patterns.
+Snake_case output keys, legacy top-level `permissionDecision`, PermissionRequest reserved fields, unsupported config fields, PreToolUse `permissionDecision:"ask"`, PreToolUse `allow` without `updatedInput`, Stop `continue:false`, Stop `stopReason`, and Stop blocks without a reason are release-blocking warning patterns. `sks hooks warning-check --json` reports them by `schema_violation`, `upstream_semantic_unsupported`, `sks_zero_warning_disallowed`, `legacy_shape`, and `policy_disallowed`.
+
+Strict-subset examples include PreToolUse `additionalContext` and PermissionRequest allow `message`: upstream schema may allow them, but SKS rejects them to preserve a zero-warning release surface.
 
 PreToolUse simple allow is:
 

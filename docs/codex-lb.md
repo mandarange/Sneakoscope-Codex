@@ -6,6 +6,7 @@ SKS keeps codex-lb separate from ChatGPT OAuth. The codex-lb proxy key is stored
 
 ```bash
 sks codex-lb setup
+sks codex-lb setup --host lb.example.com --api-key-stdin --plan --json
 sks codex-lb setup --host lb.example.com --api-key-stdin --yes --json
 sks codex-lb status --json
 sks codex-lb metrics --json
@@ -17,16 +18,20 @@ sks codex-lb proof-evidence --json
 
 ## Setup Wizard
 
-SKS 1.0.5 makes `sks codex-lb setup` the repair path for missing codex-lb keys. Interactive setup asks for:
+SKS 1.0.6 makes `sks codex-lb setup` a two-phase plan/apply repair path for missing codex-lb keys. Interactive setup asks for:
 
 - codex-lb domain or base URL
 - API key with hidden input
 - whether to use the proxy as the default Codex launch target
 - whether to write the shell env loader
 - whether to store the key in macOS Keychain when available
+- whether to sync the macOS `launchctl` environment
+- whether to install a shell profile snippet
 - whether to run a health check
 
-Non-interactive setup accepts `--host`, `--domain`, `--base-url`, `--api-key`, `--api-key-stdin`, `--keychain`, `--yes`, and `--json`.
+Non-interactive setup accepts `--host`, `--domain`, `--base-url`, `--api-key`, `--api-key-stdin`, `--plan`, `--apply`, `--yes`, `--use-default-provider`, `--no-default-provider`, `--write-env-file`, `--no-env-file`, `--keychain`, `--no-keychain`, `--launchctl`, `--no-launchctl`, `--shell-profile zsh|bash|fish|all|skip`, `--health`, `--no-health`, and `--json`.
+
+Plan mode prints the exact files and commands that would change and writes nothing. Apply mode records the plan, applied actions, and drift list in the result. `--yes` applies without an interactive confirmation.
 
 Base URL normalization:
 
@@ -57,10 +62,21 @@ The fallback env file is `~/.codex/sks-codex-lb.env` with mode `0600`. Metadata 
 
 SKS must never print raw CODEX_LB_API_KEY missing-env text. It reports setup guidance instead and records wrongness if a fixture ever exposes the raw missing-env message or a secret.
 
+Exact setup-choice effects:
+
+- `--use-default-provider` writes `[model_providers.codex-lb]` and selects top-level `model_provider = "codex-lb"`.
+- `--no-default-provider` writes the provider block but does not select top-level `model_provider`.
+- `--write-env-file` writes `~/.codex/sks-codex-lb.env` with mode `0600`.
+- `--no-env-file` does not write the env file; the current process can still verify the supplied key.
+- `--keychain` attempts macOS Keychain storage; `--no-keychain` never runs the `security` command.
+- `--launchctl` syncs the GUI launch environment when available; `--no-launchctl` never runs `launchctl setenv`.
+- `--shell-profile skip` modifies no shell profile.
+
 Release gates:
 
 ```bash
 npm run codex-lb:setup-fixture
+npm run codex-lb:setup-truthfulness
 npm run codex-lb:missing-env-regression
 node --test test/blackbox/codex-lb-setup-stdin-no-secret-leak.test.mjs
 ```

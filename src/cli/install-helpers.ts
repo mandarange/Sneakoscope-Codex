@@ -12,6 +12,7 @@ import { codexLaunchCommand, platformTmuxInstallHint, tmuxReadiness, tmuxReadine
 import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.js';
 import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.js';
 import { loadCodexLbEnv, writeCodexLbKeychain, codexLbMetadataPath } from '../core/codex-lb/codex-lb-env.js';
+import { buildCodexLbSetupPlan, installCodexLbShellProfileSnippet } from '../core/codex-lb/codex-lb-setup.js';
 
 type CodexLbStatusSnapshot = Awaited<ReturnType<typeof codexLbStatus>>;
 
@@ -71,6 +72,9 @@ export type CodexLbAuthInstallResult = {
 export type ConfigureCodexLbResult = {
   ok?: boolean;
   status: string;
+  plan?: Record<string, unknown>;
+  applied_actions?: Array<Record<string, unknown>>;
+  drift?: string[];
   config_path?: string;
   env_path?: string;
   metadata_path?: string;
@@ -349,18 +353,49 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   const rawHost = String(opts.host || opts.baseUrl || '');
   const baseUrl = normalizeCodexLbBaseUrl(rawHost);
   const apiKey = String(opts.apiKey || '').trim();
+  const useDefaultProvider = opts.useDefaultProvider !== false;
+  const writeEnvFile = opts.writeEnvFile !== false;
+  const storeKeychain = opts.storeKeychain === true || opts.keychain === true;
+  const syncLaunchctl = opts.syncLaunchctl !== false && opts.syncLaunchEnv !== false;
+  const shellProfile = opts.shellProfile || 'skip';
+  const setupAnswers = {
+    host_or_base_url: rawHost,
+    api_key_source: opts.apiKeySource || 'cli_option',
+    use_as_default_provider: useDefaultProvider,
+    write_env_file: writeEnvFile,
+    store_keychain: storeKeychain,
+    sync_launchctl: syncLaunchctl,
+    install_shell_profile: shellProfile,
+    run_health_check: opts.runHealth === true,
+    allow_insecure_localhost: opts.allowInsecureHttp === true || opts.allowInsecureLocalhost === true
+  };
+  const plan = buildCodexLbSetupPlan(setupAnswers as any, {
+    home,
+    configPath,
+    envPath,
+    metadataPath: opts.metadataPath || codexLbMetadataPath(home)
+  });
   if (!baseUrl) return { ok: false, status: 'missing_host_or_base_url', config_path: configPath, env_path: envPath };
+  if (plan.blockers.length) return { ok: false, status: 'plan_blocked', plan: plan as any, drift: plan.blockers, config_path: configPath, env_path: envPath };
   if (/[\u0000-\u001f\u007f\s]/.test(rawHost.trim())) return { ok: false, status: 'invalid_host_or_base_url', config_path: configPath, env_path: envPath, error: 'host_or_base_url_contains_whitespace_or_control_character' };
   if (!apiKey) return { ok: false, status: 'missing_api_key', config_path: configPath, env_path: envPath };
   const insecureLocalWarning = /^http:\/\//i.test(baseUrl) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(baseUrl) && !opts.allowInsecureHttp
     ? ['codex-lb base URL uses http outside localhost; prefer https or pass an explicit allow flag in the calling surface.']
     : [];
+  const appliedActions: Array<Record<string, unknown>> = [];
   await ensureDir(path.dirname(configPath));
   const current = await readText(configPath, '');
-  const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, baseUrl));
+  const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, baseUrl, useDefaultProvider));
   await writeTextAtomic(configPath, next);
-  await writeTextAtomic(envPath, `export CODEX_LB_BASE_URL=${shellSingleQuote(baseUrl)}\nexport CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
-  await fsp.chmod(envPath, 0o600).catch(() => {});
+  appliedActions.push({ type: 'write_config_provider', target: configPath, ok: true });
+  if (useDefaultProvider) appliedActions.push({ type: 'select_default_provider', target: configPath, ok: true });
+  if (writeEnvFile) {
+    await writeTextAtomic(envPath, `export CODEX_LB_BASE_URL=${shellSingleQuote(baseUrl)}\nexport CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
+    await fsp.chmod(envPath, 0o600).catch(() => {});
+    appliedActions.push({ type: 'write_env_file', target: envPath, ok: true });
+  }
+  process.env.CODEX_LB_BASE_URL = baseUrl;
+  process.env.CODEX_LB_API_KEY = apiKey;
   const keyFingerprint = await sha256Text(apiKey);
   const metadataPath = opts.metadataPath || codexLbMetadataPath(home);
   await writeTextAtomic(metadataPath, `${JSON.stringify({
@@ -371,16 +406,36 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
     api_key: { redacted: true, sha256: keyFingerprint }
   }, null, 2)}\n`);
   await fsp.chmod(metadataPath, 0o600).catch(() => {});
-  const keychain = opts.keychain ? await writeCodexLbKeychain(apiKey, opts).catch((err: any) => ({ ok: false, status: 'keychain_store_failed', error: err.message })) : { ok: false, status: 'skipped' };
-  const codexEnvironment = await syncCodexLbProviderEnvironment({ env_path: envPath, base_url: baseUrl }, { ...opts, home });
+  appliedActions.push({ type: 'write_metadata', target: metadataPath, ok: true });
+  const keychain = storeKeychain ? await writeCodexLbKeychain(apiKey, opts).catch((err: any) => ({ ok: false, status: 'keychain_store_failed', error: err.message })) : { ok: false, status: 'skipped' };
+  if (storeKeychain) appliedActions.push({ type: 'store_keychain', target: 'macOS Keychain service sks-codex-lb', ok: keychain.ok === true, status: keychain.status });
+  const codexEnvironment = await syncCodexLbProviderEnvironment({ env_path: envPath, base_url: baseUrl }, { ...opts, home, apiKey, baseUrl, syncLaunchEnv: syncLaunchctl });
+  if (syncLaunchctl) appliedActions.push({ type: 'sync_launchctl', target: 'macOS launchctl user environment', ok: codexEnvironment.ok === true, status: codexEnvironment.status });
+  const shellProfileResult = await installCodexLbShellProfileSnippet({ home, envPath, shellProfile }).catch((err: any) => ({ ok: false, status: 'failed', files: [], error: err.message }));
+  if (shellProfile !== 'skip') appliedActions.push({ type: 'install_shell_profile_snippet', target: shellProfileResult.files?.join(', ') || shellProfile, ok: shellProfileResult.ok === true, status: shellProfileResult.status });
   const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home, force: true });
   const codexLb = await codexLbStatus({ ...opts, home, configPath, envPath });
   const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, home, status: codexLb }).catch((err: any) => ({ status: 'failed', reason: 'exception', error: err.message }));
   const finalCodexLb = await codexLbStatus({ ...opts, home, configPath, envPath });
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
+  const drift = detectCodexLbSetupDrift({
+    useDefaultProvider,
+    writeEnvFile,
+    storeKeychain,
+    syncLaunchctl,
+    shellProfile,
+    selected: finalCodexLb.selected,
+    envFile: finalCodexLb.env_file,
+    keychain,
+    codexEnvironment,
+    shellProfileResult
+  });
   return {
-    ok,
-    status: ok ? 'configured' : (codexEnvironment.status || codexLogin.status),
+    ok: ok && drift.length === 0,
+    status: ok && drift.length === 0 ? 'configured' : drift.length ? 'setup_choice_drift' : (codexEnvironment.status || codexLogin.status),
+    plan: plan as any,
+    applied_actions: appliedActions,
+    drift,
     config_path: configPath,
     env_path: envPath,
     metadata_path: metadataPath,
@@ -1179,9 +1234,9 @@ async function syncCodexLbProviderEnvironment(status: any = {}, opts: any = {}):
   const home = opts.home || process.env.HOME || os.homedir();
   const envPath = opts.envPath || status.env_path || codexLbEnvPath(home);
   const envText = await readText(envPath, '');
-  const apiKey = parseCodexLbEnvKey(envText);
+  const apiKey = String(opts.apiKey || '').trim() || parseCodexLbEnvKey(envText);
   if (!apiKey) return { ok: false, status: 'missing_env_key' };
-  const baseUrl = status.base_url || parseCodexLbEnvBaseUrl(envText);
+  const baseUrl = status.base_url || opts.baseUrl || parseCodexLbEnvBaseUrl(envText);
   process.env.CODEX_LB_API_KEY = apiKey;
   if (baseUrl) process.env.CODEX_LB_BASE_URL = baseUrl;
   const launchEnv = await syncCodexLbMacLaunchEnvironment({ CODEX_LB_API_KEY: apiKey, ...(baseUrl ? { CODEX_LB_BASE_URL: baseUrl } : {}) }, opts);
@@ -1244,8 +1299,10 @@ async function syncCodexApiKeyLogin(apiKey: any, opts: any = {}) {
   return { ok: false, status: 'login_failed', error: redactSecretText(login.stderr || login.stdout || 'codex login failed', [apiKey]).trim() };
 }
 
-function upsertCodexLbConfig(text: any = '', baseUrl: any) {
-  let next = upsertTopLevelTomlString(text, 'model_provider', 'codex-lb');
+function upsertCodexLbConfig(text: any = '', baseUrl: any, selectDefault = true) {
+  let next = selectDefault
+    ? upsertTopLevelTomlString(text, 'model_provider', 'codex-lb')
+    : removeTopLevelTomlKeyIfValue(text, 'model_provider', 'codex-lb');
   const block = [
     '[model_providers.codex-lb]',
     'name = "OpenAI"',
@@ -1257,6 +1314,18 @@ function upsertCodexLbConfig(text: any = '', baseUrl: any) {
   ].join('\n');
   next = upsertTomlTable(next, 'model_providers.codex-lb', block);
   return `${next.trim()}\n`;
+}
+
+function detectCodexLbSetupDrift(state: any = {}): string[] {
+  const drift: string[] = [];
+  if (state.useDefaultProvider && state.selected !== true) drift.push('default_provider_not_selected');
+  if (!state.useDefaultProvider && state.selected === true) drift.push('default_provider_selected_despite_no_default_provider');
+  if (state.writeEnvFile && state.envFile !== true) drift.push('env_file_not_written');
+  if (!state.writeEnvFile && state.envFile === true) drift.push('env_file_written_despite_no_env_file');
+  if (!state.storeKeychain && state.keychain?.status && state.keychain.status !== 'skipped') drift.push('keychain_touched_despite_no_keychain');
+  if (!state.syncLaunchctl && state.codexEnvironment?.launch_environment?.status === 'synced') drift.push('launchctl_synced_despite_no_launchctl');
+  if (state.shellProfile === 'skip' && state.shellProfileResult?.status === 'installed') drift.push('shell_profile_written_despite_skip');
+  return drift;
 }
 
 export async function ensureGlobalCodexFastModeDuringInstall(opts: any = {}) {

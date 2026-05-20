@@ -4,6 +4,27 @@
 
 
 
+
+## [1.0.6] - 2026-05-20
+
+### Added
+- Add explicit Codex hook strictness classification: upstream schema, upstream semantic unsupported, SKS zero-warning strict subset, and SKS policy-disallowed.
+- Add codex-lb setup plan/preview and exact answer-to-action mapping for default provider selection, env file writing, Keychain storage, launchctl sync, shell profile snippets, and health checks.
+- Add optional real macOS Computer Use smoke under `SKS_TEST_REAL_COMPUTER_USE=1` to verify live capability handshake and evidence status when available.
+- Add Computer Use live evidence report that distinguishes available, permission missing, Codex App missing, capability missing, external block, and not-macOS.
+- Add wrongness records for setup-choice drift and Computer Use live-smoke mismatch.
+
+### Fixed
+- Prevent hook validators from overclaiming exact upstream parser mirroring when SKS intentionally enforces a stricter zero-warning subset.
+- Prevent codex-lb setup wizard prompts from being ignored.
+- Prevent env file, provider selection, launchctl, Keychain, or shell profile writes from happening contrary to the user's explicit setup choices.
+- Prevent Computer Use optional live checks from fabricating visual evidence when Codex App or macOS permissions are unavailable.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
+### Changed
+- Treat codex-lb setup as a two-phase plan/apply workflow.
+- Treat Computer Use live evidence as optional real verification, separate from mock-safe route fixtures.
+
 ## [1.0.5] - 2026-05-20
 
 ### Added
