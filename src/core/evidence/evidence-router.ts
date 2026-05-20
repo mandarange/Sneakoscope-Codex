@@ -50,6 +50,7 @@ export async function evidenceCandidatesForProof(root: any, proof: any = {}, opt
   addDbCandidates(candidates, proof.evidence?.db || proof.evidence?.db_safety, missionId);
   addTestCandidates(candidates, proof.evidence?.tests, missionId);
   addWrongnessCandidates(candidates, proof.evidence?.wrongness, missionId);
+  addComputerUseCandidates(candidates, proof.evidence?.computer_use, missionId);
   if (missionId && routeRequiresImageVoxelAnchors(route)) {
     candidates.push({ kind: 'image_voxel', relPath: `.sneakoscope/missions/${missionId}/image-voxel-ledger.json`, source: proof.evidence?.image_voxels?.mock ? 'mock' : sourceForProof(proof) });
   }
@@ -135,6 +136,12 @@ function addWrongnessCandidates(candidates: any, wrongness: any = null, missionI
   if (missionId) candidates.push({ kind: 'image_wrongness', relPath: `.sneakoscope/missions/${missionId}/image-wrongness-ledger.json`, source: 'real', optional: true, ignoreStale: true });
 }
 
+function addComputerUseCandidates(candidates: any, computerUse: any = null, missionId: any = null) {
+  const relPath = computerUse?.live_evidence_path || computerUse?.live_evidence?.path || null;
+  if (relPath) candidates.push({ kind: 'computer_use', relPath: normalizeRelPath(relPath, missionId), source: 'real', ignoreStale: true });
+  else if (missionId) candidates.push({ kind: 'computer_use', relPath: `.sneakoscope/missions/${missionId}/computer-use-live-evidence.json`, source: 'blocked', optional: true, ignoreStale: true });
+}
+
 function uniqueCandidates(candidates: any) {
   const seen = new Set();
   const out: any[] = [];
@@ -183,6 +190,7 @@ function inferKind(relPath: any = '') {
   if (/image-wrongness/.test(relPath)) return 'image_wrongness';
   if (/wrongness/.test(relPath)) return 'wrongness';
   if (/image-voxel-ledger\.json$|visual-anchors\.json$|image-assets\.json$/.test(relPath)) return 'image_voxel';
+  if (/computer-use-live-evidence\.json$|computer-use.*evidence/.test(relPath)) return 'computer_use';
   if (/scout/.test(relPath)) return 'scout';
   if (/db/.test(relPath)) return 'db_safety';
   if (/blackbox|npx|global-shim|pack-install/.test(relPath)) return 'blackbox';

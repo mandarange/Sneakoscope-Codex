@@ -14,7 +14,7 @@ try { parsed = JSON.parse(result.stdout); } catch {}
 
 const structuredStatus = ['available', 'codex_app_missing', 'macos_permission_missing', 'codex_app_capability_missing', 'external_capability_blocked', 'not_macos', 'unknown'].includes(parsed.status);
 const ok = result.code === 0
-  && parsed.schema === 'sks.computer-use-live-smoke.v1'
+  && parsed.schema === 'sks.computer-use-live-smoke.v2'
   && parsed.ok === true
   && structuredStatus
   && parsed.mock === false
@@ -24,7 +24,7 @@ console.log(JSON.stringify({
   schema: 'sks.computer-use-live-optional-check.v1',
   ok,
   status: parsed.status || null,
-  mode: parsed.mode || null,
+  mode: parsed.evidence_mode || parsed.mode || null,
   structured_status: structuredStatus
 }, null, 2));
 if (!ok) process.exitCode = 1;

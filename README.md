@@ -4,6 +4,8 @@ Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
 Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable.
 
+SKS **1.0.7** is the Ultimate Final Completion seal for the Codex trust harness: Computer Use live evidence is an opt-in, local-only macOS evidence path with explicit `probe_only`, `live_capture_attempted`, `live_capture_success`, and `live_capture_blocked` modes; `codex-lb setup` reports durable persistence versus `process_only_ephemeral` honestly; and docs/release readiness checks block mock/probe/live overclaims.
+
 SKS **1.0.6** is the final precision polish for the Codex trust harness: hook compatibility is classified as upstream schema plus an SKS zero-warning strict subset, `sks codex-lb setup` previews and applies the exact choices the user selected, and Computer Use has an optional live smoke surface for macOS capability/evidence status.
 
 SKS **1.0.5** sealed the prior trust harness: hook outputs were validated against both vendored OpenAI Codex CLI `rust-v0.131.0` schemas and runtime semantic parser rules, codex-lb setup survived macOS user-session launches through env-file/Keychain/launchctl-aware repair surfaces, and Computer Use became the preferred macOS visual evidence capability when available.
@@ -20,8 +22,42 @@ Hybrid-free **`1.0.1`** already delivered the CLI entrypoint/router/registry/Tru
 
 SKS does not try to clone every other harness. It focuses on one thing: making Codex work auditable, visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
 
-![Sneakoscope Codex 1.0.6 trust harness overview](docs/assets/sneakoscope-architecture-pipeline.jpg)
+![Sneakoscope Codex Trust Layer](docs/assets/sneakoscope-architecture-pipeline.jpg)
 
+
+## 1.0.7 Ultimate Final Completion
+
+1.0.7 does not add a new route, skill, or competing harness. It closes the last trust gaps around live visual evidence, persistence truth, and release documentation.
+
+Computer Use live evidence stays optional and explicit:
+
+```bash
+sks computer-use smoke --json
+sks computer-use smoke --real --capture-screenshot --json
+sks computer-use smoke --real --require-real --json
+npm run computer-use:live-evidence
+```
+
+Default smoke is `probe_only` and never attempts screen capture. Real mode records `live_capture_attempted`, `live_capture_success`, or `live_capture_blocked`; if Codex App, macOS permission, or the official Computer Use capture surface is unavailable, SKS writes a structured blocker instead of fabricated evidence. Browser Use evidence and manual screenshots remain separate sources. Computer Use screenshots are local-only by default, carry SHA-256 metadata, and link to Image Voxel only when a mission-local anchor can be made.
+
+codex-lb setup now reports the exact persistence truth:
+
+```bash
+sks codex-lb setup --host lb.example.com --api-key-stdin --plan --json
+sks codex-lb setup --host lb.example.com --api-key-stdin --yes --no-env-file --no-keychain --no-launchctl --shell-profile skip --json
+npm run codex-lb:persistence-truth
+```
+
+Durable modes are `durable_env_file`, `durable_keychain`, `durable_launchctl`, and `shell_profile`. If all durable modes are disabled, setup is classified as `process_only_ephemeral`, emits `next_shell_requires_setup_or_env`, and warns that Codex App GUI launches may not see credentials. Use `sks codex-lb setup --write-env-file --keychain --launchctl` to recover durable persistence.
+
+Documentation truthfulness is now a release invariant:
+
+```bash
+npm run docs:truthfulness
+npm run release:readiness
+```
+
+The hook compatibility surface remains the upstream schema plus the SKS zero-warning strict subset; SKS does not claim to mirror every upstream runtime parser rule or guarantee universal Computer Use availability.
 
 ## 1.0.6 Final Precision Polish
 

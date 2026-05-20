@@ -16,7 +16,9 @@ sks codex-app pat status --json
 
 ## Codex `rust-v0.131.0` Hook Shape
 
-SKS 1.0.6 validates Codex hook output against vendored OpenAI Codex CLI `rust-v0.131.0` generated schemas and a category-aware semantic validator in `src/core/codex-compat/codex-hook-semantic-validator.ts`. The validator is an upstream-schema baseline plus an SKS zero-warning strict subset, not a claim that SKS mirrors every upstream runtime parser rule exactly.
+SKS 1.0.7 validates Codex hook output against vendored OpenAI Codex CLI `rust-v0.131.0` generated schemas and a category-aware semantic validator in `src/core/codex-compat/codex-hook-semantic-validator.ts`. The validator is an upstream-schema baseline plus an SKS zero-warning strict subset, not a claim that SKS mirrors every upstream runtime parser rule exactly.
+
+This page is documentation-only evidence: it distinguishes probe/mock/live evidence, avoids universal Computer Use availability claims, and keeps PAT/secret handling private and redacted. For recovery, run `sks hooks warning-check --json`, `sks computer-use smoke --json`, or `sks codex-lb setup --write-env-file --keychain --launchctl` depending on the failing surface.
 
 Supported event names are `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SessionStart`, `UserPromptSubmit`, and `Stop`.
 

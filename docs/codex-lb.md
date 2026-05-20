@@ -18,7 +18,7 @@ sks codex-lb proof-evidence --json
 
 ## Setup Wizard
 
-SKS 1.0.6 makes `sks codex-lb setup` a two-phase plan/apply repair path for missing codex-lb keys. Interactive setup asks for:
+SKS 1.0.7 makes `sks codex-lb setup` a two-phase plan/apply repair path for missing codex-lb keys and reports whether the chosen persistence is durable or `process_only_ephemeral`. Interactive setup asks for:
 
 - codex-lb domain or base URL
 - API key with hidden input
@@ -32,6 +32,38 @@ SKS 1.0.6 makes `sks codex-lb setup` a two-phase plan/apply repair path for miss
 Non-interactive setup accepts `--host`, `--domain`, `--base-url`, `--api-key`, `--api-key-stdin`, `--plan`, `--apply`, `--yes`, `--use-default-provider`, `--no-default-provider`, `--write-env-file`, `--no-env-file`, `--keychain`, `--no-keychain`, `--launchctl`, `--no-launchctl`, `--shell-profile zsh|bash|fish|all|skip`, `--health`, `--no-health`, and `--json`.
 
 Plan mode prints the exact files and commands that would change and writes nothing. Apply mode records the plan, applied actions, and drift list in the result. `--yes` applies without an interactive confirmation.
+
+Persistence modes:
+
+- `durable_env_file`: `~/.codex/sks-codex-lb.env` was written with `0600`.
+- `durable_keychain`: macOS Keychain storage succeeded.
+- `durable_launchctl`: `launchctl setenv` synced the GUI launch environment.
+- `shell_profile`: a managed shell profile snippet was installed.
+- `process_only_ephemeral`: all durable persistence choices were disabled, so the supplied credentials live only in the current process.
+- `none`: no credential source is effective.
+
+The combination `--no-env-file --no-keychain --no-launchctl --shell-profile skip` is process-only. Non-interactive process-only setup requires `--yes`; interactive setup asks for a separate `process-only` confirmation. JSON output includes:
+
+```json
+{
+  "persistence": {
+    "effective_mode": "process_only_ephemeral",
+    "durable": false,
+    "warning": "process_only_ephemeral",
+    "warnings": [
+      "process_only_ephemeral",
+      "next_shell_requires_setup_or_env",
+      "Codex App GUI launch may not see credentials"
+    ]
+  }
+}
+```
+
+Recovery command for durable persistence:
+
+```bash
+sks codex-lb setup --host lb.example.com --api-key-stdin --yes --write-env-file --keychain --launchctl --shell-profile zsh
+```
 
 Base URL normalization:
 
@@ -71,12 +103,14 @@ Exact setup-choice effects:
 - `--keychain` attempts macOS Keychain storage; `--no-keychain` never runs the `security` command.
 - `--launchctl` syncs the GUI launch environment when available; `--no-launchctl` never runs `launchctl setenv`.
 - `--shell-profile skip` modifies no shell profile.
+- Action reports list only actions actually performed, and drift checks fail setup when requested choices do not match actual filesystem, Keychain, launchctl, or shell-profile effects.
 
 Release gates:
 
 ```bash
 npm run codex-lb:setup-fixture
 npm run codex-lb:setup-truthfulness
+npm run codex-lb:persistence-truth
 npm run codex-lb:missing-env-regression
 node --test test/blackbox/codex-lb-setup-stdin-no-secret-leak.test.mjs
 ```

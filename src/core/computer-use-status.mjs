@@ -57,14 +57,27 @@ export function computerUseEvidenceSkeleton(status = 'unknown') {
 export async function computerUseLiveSmoke(opts = {}) {
   const realOptIn = opts.real === true || process.env.SKS_TEST_REAL_COMPUTER_USE === '1';
   const requireReal = opts.requireReal === true;
+  const captureScreenshot = opts.captureScreenshot === true || requireReal;
   const status = await computerUseStatusReport(opts);
   const available = status.status === 'available';
-  const realAllowed = realOptIn && available;
   const evidencePath = opts.evidencePath || null;
+  const blockers = [];
+  let evidenceMode = 'probe_only';
+  if (realOptIn && status.status === 'not_macos') blockers.push('not_macos');
+  else if (realOptIn && !available) {
+    evidenceMode = 'live_capture_blocked';
+    blockers.push(status.status);
+  } else if (realOptIn && available && captureScreenshot) {
+    evidenceMode = 'live_capture_blocked';
+    blockers.push('codex_app_capability_missing');
+  } else if (realOptIn && available) {
+    evidenceMode = 'live_capture_attempted';
+  }
   const smoke = {
-    schema: 'sks.computer-use-live-smoke.v1',
-    ok: realAllowed || !requireReal,
-    mode: realOptIn ? 'optional_real' : 'optional_probe',
+    schema: 'sks.computer-use-live-smoke.v2',
+    ok: requireReal ? evidenceMode === 'live_capture_success' : true,
+    mode: evidenceMode,
+    evidence_mode: evidenceMode,
     status: status.status,
     platform: status.platform || process.platform,
     codex_app: {
@@ -75,19 +88,24 @@ export async function computerUseLiveSmoke(opts = {}) {
       screen_recording: status.permission_status || 'unknown',
       accessibility: 'unknown'
     },
+    live_evidence_path: realOptIn ? evidencePath : null,
+    image_voxel_linked: false,
+    blockers,
+    warnings: evidenceMode === 'live_capture_blocked' && available ? ['Official Codex App Computer Use screenshot adapter is not exposed to this CLI process.'] : [],
     evidence: {
       screenshot_captured: false,
       action_captured: false,
       image_voxel_linked: false,
-      evidence_path: evidencePath
+      evidence_path: realOptIn ? evidencePath : null
     },
+    live_evidence: null,
     external_capability_blocked: status.external_capability_blocked === true || ['codex_app_missing', 'macos_permission_missing', 'codex_app_capability_missing', 'unknown'].includes(status.status),
     mock: false,
-    guidance: realAllowed
-      ? ['Computer Use capability appears available. Capture screenshots through official Codex Computer Use in the active route; SKS smoke does not synthesize evidence.']
+    guidance: available && realOptIn
+      ? ['Computer Use capability appears available. SKS records only official, local-only live evidence and does not synthesize screenshots.']
       : status.guidance || []
   };
-  if (available && realOptIn && evidencePath) {
+  if (realOptIn && evidencePath) {
     const { writeJsonAtomic } = await import('./fsx.mjs');
     await writeJsonAtomic(evidencePath, smoke);
   }

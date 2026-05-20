@@ -1,6 +1,8 @@
 # Codex CLI Compatibility
 
-SKS 1.0.6 targets OpenAI Codex CLI `rust-v0.131.0` and treats that tag as the hook/config compatibility baseline. The release gate validates generated JSON schemas, upstream semantic unsupported cases, and the stricter SKS zero-warning subset separately. SKS does not claim to mirror every Codex runtime parser rule exactly; it validates the upstream schema and then intentionally rejects additional warning-prone shapes.
+SKS 1.0.7 keeps the OpenAI Codex CLI `rust-v0.131.0` compatibility baseline from 1.0.6 and treats the hook surface as upstream schema plus the stricter SKS zero-warning strict subset. The release gate validates generated JSON schemas, upstream semantic unsupported cases, and the stricter SKS zero-warning subset separately. SKS does not claim to mirror every Codex runtime parser rule exactly; it validates the upstream schema and then intentionally rejects additional warning-prone shapes.
+
+Computer Use and codex-lb compatibility notes are bounded: Computer Use live evidence can be `probe_only`, `live_capture_success`, or a structured blocker depending on the local Codex App/macOS capability, and codex-lb can be durable or `process_only_ephemeral` depending on setup choices. Recovery commands are `sks computer-use smoke --json` for a probe-only status and `sks codex-lb setup --write-env-file --keychain --launchctl` for durable persistence. Local screenshots and secrets stay private/redacted by default.
 
 ## Checks
 
