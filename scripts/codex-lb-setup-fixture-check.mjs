@@ -60,7 +60,7 @@ async function recordCodexLbWrongness(leaks) {
   const { addWrongnessRecord } = await import('../dist/core/triwiki-wrongness/wrongness-ledger.js');
   await addWrongnessRecord(process.cwd(), {
     route: '$CodexLB',
-    wrongness_kind: 'codex_lb_health_misread',
+    wrongness_kind: 'codex_lb_missing_env_raw_message',
     severity: 'high',
     claim: { text: `codex-lb fixture exposed forbidden output: ${leaks.join(', ')}` },
     detected_by: {

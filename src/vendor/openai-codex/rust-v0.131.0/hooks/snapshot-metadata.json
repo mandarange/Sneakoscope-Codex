@@ -2,10 +2,12 @@
   "schema": "sks.codex-hook-schema-snapshot.v1",
   "upstream": "openai/codex",
   "tag": "rust-v0.131.0",
+  "commit": "02d0ab56b9201fbb6f8e0e9be914c19053058eb1",
   "codex_version": "0.131.0",
   "captured_at": "2026-05-19T16:04:03.464Z",
   "source_files": [
     "codex-rs/hooks/src/schema.rs",
+    "codex-rs/hooks/src/engine/output_parser.rs",
     "codex-rs/hooks/schema/generated/*.schema.json"
   ],
   "source_urls": [

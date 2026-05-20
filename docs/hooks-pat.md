@@ -16,7 +16,7 @@ sks codex-app pat status --json
 
 ## Codex `rust-v0.131.0` Hook Shape
 
-SKS 1.0.4 validates Codex hook output against vendored OpenAI Codex CLI `rust-v0.131.0` generated schemas in `src/vendor/openai-codex/rust-v0.131.0/hooks/`.
+SKS 1.0.5 validates Codex hook output against vendored OpenAI Codex CLI `rust-v0.131.0` generated schemas and the runtime semantic parser rules mirrored by `src/core/codex-compat/codex-hook-semantic-validator.ts`.
 
 Supported event names are `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SessionStart`, `UserPromptSubmit`, and `Stop`.
 
@@ -37,14 +37,36 @@ Output uses camelCase Codex fields. Examples:
 
 ```json
 {
-  "continue": false,
-  "stopReason": "SKS Completion Proof missing",
+  "continue": true,
   "decision": "block",
   "reason": "SKS serious route cannot finalize without valid Completion Proof."
 }
 ```
 
-Snake_case output keys, legacy top-level `permissionDecision`, PermissionRequest reserved fields, unsupported config fields, and Stop blocks without a reason are release-blocking warning patterns.
+Snake_case output keys, legacy top-level `permissionDecision`, PermissionRequest reserved fields, unsupported config fields, PreToolUse `permissionDecision:"ask"`, PreToolUse `allow` without `updatedInput`, Stop `continue:false`, Stop `stopReason`, and Stop blocks without a reason are release-blocking warning patterns.
+
+PreToolUse simple allow is:
+
+```json
+{
+  "continue": true
+}
+```
+
+PreToolUse rewrite is:
+
+```json
+{
+  "continue": true,
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "allow",
+    "updatedInput": {
+      "command": "npm test"
+    }
+  }
+}
+```
 
 PAT and access-token policy:
 

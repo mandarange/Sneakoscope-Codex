@@ -10,6 +10,18 @@ import { classifyToolError } from './evaluation.js';
 import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.js';
 import { dollarCommand, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { appendMissionStatus } from './recallpulse.js';
+import {
+  buildPermissionRequestAllow,
+  buildPermissionRequestDeny,
+  buildPostToolUseBlock,
+  buildPostToolUseContinue,
+  buildPreToolUseContinue,
+  buildPreToolUseDeny,
+  buildStopBlock,
+  buildStopContinue,
+  buildUserPromptSubmitBlock,
+  buildUserPromptSubmitContinue
+} from './codex-compat/codex-hook-output-builders.js';
 
 const TEAM_DIGEST_MAX_EVENTS = 4;
 const TEAM_DIGEST_MESSAGE_CHARS = 180;
@@ -1139,72 +1151,39 @@ function normalizeHookResult(name: any, result: any = {}) {
   const eventName = codexHookEventName(name);
   const out = { ...result };
   const systemMessage = out.systemMessage || visibleHookMessage(name, out.reason || out.additionalContext || '');
-  const normalized: any = { continue: out.continue !== false, systemMessage };
   const reason = out.reason || 'SKS guard denied this action.';
 
   if (eventName === 'UserPromptSubmit' || eventName === 'PostToolUse') {
-    if (out.decision === 'block') {
-      normalized.decision = 'block';
-      normalized.reason = reason;
+    if (eventName === 'UserPromptSubmit') {
+      if (out.decision === 'block') return buildUserPromptSubmitBlock(reason, { systemMessage });
+      return buildUserPromptSubmitContinue({ additionalContext: out.additionalContext, systemMessage });
     }
-    if (out.additionalContext) {
-      normalized.hookSpecificOutput = {
-        hookEventName: eventName,
-        additionalContext: out.additionalContext
-      };
-    }
-    return normalized;
+    if (out.decision === 'block') return buildPostToolUseBlock(reason, { systemMessage });
+    return buildPostToolUseContinue({ additionalContext: out.additionalContext, systemMessage });
   }
 
   if (eventName === 'PreToolUse') {
     if (out.decision === 'block' || out.permissionDecision === 'deny' || out.decision === 'deny') {
-      normalized.hookSpecificOutput = {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'deny',
-        permissionDecisionReason: reason
-      };
-    } else if (out.permissionDecision === 'allow' || out.decision === 'allow') {
-      normalized.hookSpecificOutput = {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'allow'
-      };
-    } else if (out.permissionDecision === 'ask') {
-      normalized.hookSpecificOutput = {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'ask',
-        permissionDecisionReason: reason
-      };
+      return buildPreToolUseDeny(reason, { systemMessage });
     }
-    return normalized;
+    return buildPreToolUseContinue({ systemMessage });
   }
 
   if (eventName === 'PermissionRequest') {
     if (out.decision === 'deny' || out.permissionDecision === 'deny') {
-      normalized.hookSpecificOutput = {
-        hookEventName: 'PermissionRequest',
-        decision: {
-          behavior: 'deny',
-          message: reason
-        }
-      };
+      return buildPermissionRequestDeny(reason, { systemMessage });
     } else if (out.decision === 'allow' || out.permissionDecision === 'allow') {
-      normalized.hookSpecificOutput = {
-        hookEventName: 'PermissionRequest',
-        decision: { behavior: 'allow' }
-      };
+      return buildPermissionRequestAllow({ systemMessage });
     }
-    return normalized;
+    return buildPermissionRequestAllow({ systemMessage });
   }
 
   if (eventName === 'Stop') {
-    if (out.decision === 'block') {
-      normalized.decision = 'block';
-      normalized.reason = reason;
-    }
-    return normalized;
+    if (out.decision === 'block') return buildStopBlock(reason, { systemMessage });
+    return buildStopContinue({ systemMessage });
   }
 
-  return normalized;
+  return { continue: true, systemMessage };
 }
 
 function codexHookEventName(name: any) {

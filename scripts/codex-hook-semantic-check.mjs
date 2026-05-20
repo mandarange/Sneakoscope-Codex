@@ -1,0 +1,12 @@
+#!/usr/bin/env node
+import { codexHookWarningCheck } from '../dist/core/codex-compat/codex-hook-warning-detector.js';
+
+const result = await codexHookWarningCheck(process.cwd());
+console.log(JSON.stringify({
+  schema: 'sks.codex-hook-semantic-check.v1',
+  ok: result.ok,
+  baseline: result.baseline,
+  warnings_count: result.warnings_count,
+  events: result.events
+}, null, 2));
+if (!result.ok) process.exitCode = 1;

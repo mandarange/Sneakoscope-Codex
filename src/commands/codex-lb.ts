@@ -35,7 +35,8 @@ export async function run(command: any, args: any = []) {
   }
   if (action === 'health' || action === 'verify-chain' || action === 'chain') {
     const status = await codexLbStatus();
-    const result = status.ok ? await checkCodexLbResponseChain(status, { force: true, root }) : { ok: false, status: 'not_configured', codex_lb: status };
+    const blocker = !status.env_key_configured ? 'missing_env_key' : !status.base_url ? 'missing_base_url' : 'not_configured';
+    const result = status.ok ? await checkCodexLbResponseChain(status, { force: true, root }) : { ok: false, status: blocker, codex_lb: status };
     if (flag(args, '--json')) return printJson(result);
     console.log(`codex-lb response chain: ${result.ok ? 'ok' : `failed (${result.status})`}`);
     if (!result.ok) process.exitCode = 1;
@@ -84,7 +85,7 @@ export async function run(command: any, args: any = []) {
       process.exitCode = 1;
       return;
     }
-    const result = await configureCodexLb({ host: options.host, apiKey: options.apiKey });
+    const result = await configureCodexLb({ host: options.host, apiKey: options.apiKey, keychain: options.keychain });
     const shaped: any = { schema: 'sks.codex-lb-setup.v1', ...result, api_key: { present: Boolean(options.apiKey), redacted: true }, env_file_chmod: '0600' };
     if (options.health) shaped.chain_health = result.ok ? await checkCodexLbResponseChain(result, { force: true, root }) : null;
     if (flag(args, '--json')) return printJson(shaped);
@@ -129,11 +130,13 @@ function shapeCodexLbStatus(status: any = {}) {
     ...status,
     configured: Boolean(status.ok),
     setup_needed: !status.ok,
+    repair_available: !status.ok,
     api_key: {
       present: Boolean(status.env_key_configured),
-      source: status.env_key_configured ? 'env-file' : null,
+      source: status.env_loader?.api_key?.source || null,
       redacted: true
     },
+    env_loader: status.env_loader || null,
     env_auto_load: Boolean(status.env_file && status.env_key_configured),
     guidance: status.ok ? [] : [
       'codex-lb API key is not configured.',
@@ -147,6 +150,7 @@ async function codexLbSetupOptions(args: any = []) {
   const baseUrl = readOption(args, '--base-url', null);
   let host = baseUrl || readOption(args, '--host', readOption(args, '--domain', null));
   let apiKey = readOption(args, '--api-key', readOption(args, '--key', null));
+  let keychain = flag(args, '--keychain');
   if (flag(args, '--api-key-stdin')) apiKey = (await readStdin()).trim();
   let health = flag(args, '--health') || flag(args, '--check');
   if ((!host || !apiKey) && canAskInteractive(args)) {
@@ -155,10 +159,12 @@ async function codexLbSetupOptions(args: any = []) {
     apiKey ||= (await askHidden('2. API key?\n   Input hidden. Value will be stored securely and never printed.\n> ')).trim();
     await ask('3. Use this codex-lb as default for Codex launches? [Y/n] ');
     await ask('4. Write shell env loader to ~/.codex/sks-codex-lb.env? [Y/n] ');
-    const runHealth = (await ask('5. Run health check now? [Y/n] ')).trim();
+    const storeKeychain = (await ask('5. Store the key in macOS Keychain when available? [Y/n] ')).trim();
+    keychain = !/^(n|no|아니|아니요|ㄴ)$/i.test(storeKeychain || 'y');
+    const runHealth = (await ask('6. Run health check now? [Y/n] ')).trim();
     health = !/^(n|no|아니|아니요|ㄴ)$/i.test(runHealth || 'y');
   }
-  return { host, apiKey, health };
+  return { host, apiKey, health, keychain };
 }
 
 function canAskInteractive(args: any = []) {

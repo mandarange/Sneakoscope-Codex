@@ -17,15 +17,16 @@ sks codex-lb proof-evidence --json
 
 ## Setup Wizard
 
-SKS 1.0.4 makes `sks codex-lb setup` the repair path for missing codex-lb keys. Interactive setup asks for:
+SKS 1.0.5 makes `sks codex-lb setup` the repair path for missing codex-lb keys. Interactive setup asks for:
 
 - codex-lb domain or base URL
 - API key with hidden input
 - whether to use the proxy as the default Codex launch target
 - whether to write the shell env loader
+- whether to store the key in macOS Keychain when available
 - whether to run a health check
 
-Non-interactive setup accepts `--host`, `--domain`, `--base-url`, `--api-key`, and `--api-key-stdin`.
+Non-interactive setup accepts `--host`, `--domain`, `--base-url`, `--api-key`, `--api-key-stdin`, `--keychain`, `--yes`, and `--json`.
 
 Base URL normalization:
 
@@ -35,20 +36,34 @@ https://lb.example.com -> https://lb.example.com/backend-api/codex
 https://lb.example.com/backend-api/codex -> unchanged
 ```
 
-The fallback env file is `~/.codex/sks-codex-lb.env` with mode `0600`. Status and doctor report only redacted key presence:
+The fallback env file is `~/.codex/sks-codex-lb.env` with mode `0600`. Metadata lives at `~/.codex/sks-codex-lb.json` and stores only `base_url`, `updated_at`, `source`, and a SHA-256 key fingerprint. Status and doctor report only redacted key presence:
 
 ```json
 {
   "configured": true,
+  "repair_available": false,
   "api_key": {
     "present": true,
+    "source": "env-file",
     "redacted": true
+  },
+  "env_loader": {
+    "configured": true,
+    "source_priority": ["process.env", "keychain", "env-file", "legacy-env-file"]
   },
   "env_auto_load": true
 }
 ```
 
-SKS must never print the raw `Missing environment variable: CODEX_LB_API_KEY` error. It reports setup guidance instead and records wrongness if a fixture ever exposes the raw missing-env message or a secret.
+SKS must never print raw CODEX_LB_API_KEY missing-env text. It reports setup guidance instead and records wrongness if a fixture ever exposes the raw missing-env message or a secret.
+
+Release gates:
+
+```bash
+npm run codex-lb:setup-fixture
+npm run codex-lb:missing-env-regression
+node --test test/blackbox/codex-lb-setup-stdin-no-secret-leak.test.mjs
+```
 
 ## Circuit Policy
 

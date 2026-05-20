@@ -6,7 +6,7 @@ import { runProcess } from '../../src/core/fsx.mjs';
 test('fresh codex-lb status is structured and never prints raw missing env text', async () => {
   const entry = path.join(process.cwd(), 'dist', 'bin', 'sks.js');
   const result = await runProcess(process.execPath, [entry, 'codex-lb', 'status', '--json'], {
-    env: { ...process.env, HOME: path.join(process.cwd(), '.sneakoscope', 'tmp', 'codex-lb-unit-home'), CI: 'true' },
+    env: { ...process.env, HOME: path.join(process.cwd(), '.sneakoscope', 'tmp', 'codex-lb-unit-home'), CI: 'true', CODEX_LB_API_KEY: '', CODEX_LB_BASE_URL: '' },
     timeoutMs: 15_000,
     maxOutputBytes: 128 * 1024
   });

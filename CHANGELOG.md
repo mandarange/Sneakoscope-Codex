@@ -3,12 +3,37 @@
 ## [Unreleased]
 
 
+
+## [1.0.5] - 2026-05-20
+
+### Added
+- Add Codex hook semantic validator that mirrors `rust-v0.131.0` runtime parser rules, not just JSON schema.
+- Add strict PreToolUse rule enforcement for unsupported `permissionDecision:ask`, `allow` without `updatedInput`, unsupported `continue:false`, `stopReason`, and `suppressOutput`.
+- Add Stop/UserPromptSubmit/PostToolUse block output normalization with non-empty reason requirements.
+- Add macOS codex-lb env loader metadata, Keychain-aware lookup/storage hooks, launchctl repair visibility, and missing-env regression checks.
+- Add raw `CODEX_LB_API_KEY` missing-message regression gate.
+- Add Computer Use capability handshake checks, visual route requirement fixture, and external capability block evidence shape.
+- Add hook/codex-lb/Computer Use wrongness kinds and avoidance rules for regression learning.
+
+### Fixed
+- Prevent hook outputs that pass JSON schema but fail Codex runtime semantic rules.
+- Prevent `permissionDecision:ask`, PreToolUse allow-without-rewrite, unsupported universal hook fields, and legacy top-level hook fields from reaching release fixtures.
+- Prevent raw codex-lb missing env errors from appearing in status, doctor, health, postinstall, setup fixture, or black-box outputs.
+- Prevent SKS from describing Computer Use as blocked by safety policy or MAD-SKS.
+- Prevent visual route proof from omitting Computer Use status when image/visual evidence is required.
+
+### Changed
+- Treat Codex hook semantic compatibility as stricter than schema compatibility.
+- Treat codex-lb readiness as a durable macOS/user-session setup contract.
+- Treat Computer Use as the preferred macOS visual verification path when available.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [1.0.4] - 2026-05-20
 
 ### Added
 - Add Codex CLI `rust-v0.131.0` compatibility layer with vendored hook schema snapshots and strict hook output validation.
 - Add `sks codex-lb setup` interactive wizard for domain/base URL and API key capture with secure storage and env auto-load.
-- Add codex-lb missing-env prevention so macOS users do not see raw `Missing environment variable: CODEX_LB_API_KEY` after setup or update.
+- Add codex-lb missing-env prevention so macOS users do not see the raw CODEX_LB_API_KEY missing-env text after setup or update.
 - Add macOS Codex App Computer Use capability detector and visual-route integration that treats Computer Use as a first-class visual evidence source.
 - Add hook warning black-box tests that fail release if Codex hook output produces deprecated-shape or unknown-field warnings.
 - Add `sks codex compatibility` and `sks hooks codex-validate` surfaces for checking Codex CLI version, hook schemas, and SKS output shape.

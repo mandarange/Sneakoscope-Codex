@@ -4,6 +4,7 @@ import { routeFinalizerPolicy } from './route-finalizer-policy.js';
 import { ensureRouteImageEvidence } from '../wiki-image/route-image-evidence.js';
 import { readScoutProofEvidence } from '../scouts/scout-proof-evidence.js';
 import { wrongnessProofEvidence } from '../triwiki-wrongness/wrongness-proof-linker.js';
+import { computerUseStatusReport } from '../computer-use-status.js';
 
 export async function finalizeRouteWithProof(root: any, {
   missionId,
@@ -43,6 +44,12 @@ export async function finalizeRouteWithProof(root: any, {
   const collected = await collectProofEvidence(root);
   const scoutEvidence = await readScoutProofEvidence(root, missionId).catch(() => null);
   const wrongnessEvidence = await wrongnessProofEvidence(root, missionId).catch(() => null);
+  const computerUse = policy.requires_image_voxel_anchors
+    ? await computerUseStatusReport().catch((err: any) => ({ schema: 'sks.computer-use-status.v1', status: 'unknown', ok: false, guidance: [err.message], evidence: { status: 'unknown' } }))
+    : null;
+  if (computerUse && computerUse.status !== 'available') {
+    unverified.push(`Computer Use evidence unavailable: ${computerUse.status}. Visual claim remains verified_partial unless explicit screenshot/image evidence covers it.`);
+  }
   if (Number(wrongnessEvidence?.high_severity_active || 0) > 0) {
     localBlockers.push('active_high_severity_wrongness');
   }
@@ -66,6 +73,14 @@ export async function finalizeRouteWithProof(root: any, {
     } } : {}),
     ...(scoutEvidence ? { scouts: scoutEvidence } : {}),
     ...(wrongnessEvidence ? { wrongness: wrongnessEvidence } : {}),
+    ...(computerUse ? { computer_use: {
+      schema: computerUse.schema,
+      status: computerUse.status,
+      ok: Boolean(computerUse.ok),
+      mad_sks_independent: computerUse.mad_sks_independent === true,
+      external_capability_blocked: computerUse.external_capability_blocked === true,
+      evidence: computerUse.evidence || null
+    } } : {}),
     route_gate: gate || (gateFile ? { source: gateFile } : null)
   };
   return writeRouteCompletionProof(root, {

@@ -5,6 +5,8 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { runProcess } from '../../src/core/fsx.mjs';
 
+const rawMissingEnvPattern = new RegExp(['Missing environment variable:', '\\s*`?CODEX_LB_API_KEY`?'].join(''), 'i');
+
 test('codex-lb doctor sees redacted key after setup', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-lb-doctor-'));
   const secret = 'sk-fixture-doctor-secret';
@@ -25,7 +27,7 @@ test('codex-lb doctor sees redacted key after setup', async () => {
   assert.equal(doctor.code, 0, doctor.stderr || doctor.stdout);
   const text = `${doctor.stdout}\n${doctor.stderr}`;
   assert.doesNotMatch(text, new RegExp(secret));
-  assert.doesNotMatch(text, /Missing environment variable:\s*`?CODEX_LB_API_KEY`?/i);
+  assert.doesNotMatch(text, rawMissingEnvPattern);
   const json = JSON.parse(doctor.stdout);
   assert.equal(json.schema, 'sks.codex-lb-doctor.v1');
   assert.equal(json.status.api_key.redacted, true);

@@ -9,7 +9,10 @@ test('normalizer emits camelCase PreToolUse decisions', () => {
   assert.ok(!Object.hasOwn(deny, 'permissionDecision'));
 
   const allow = normalizeCodexHookOutput('pre-tool', { permissionDecision: 'allow' });
-  assert.equal(allow.hookSpecificOutput.permissionDecision, 'allow');
+  assert.deepEqual(allow, { continue: true });
+  const rewrite = normalizeCodexHookOutput('pre-tool', { permissionDecision: 'allow', updatedInput: { command: 'npm test' } });
+  assert.equal(rewrite.hookSpecificOutput.permissionDecision, 'allow');
+  assert.deepEqual(rewrite.hookSpecificOutput.updatedInput, { command: 'npm test' });
 });
 
 test('normalizer keeps PermissionRequest reserved fields out', () => {

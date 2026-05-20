@@ -1,11 +1,16 @@
 import path from 'node:path';
 import { exists, projectRoot, readJson } from '../fsx.js';
 import { CODEX_HOOK_EVENTS, type CodexHookEventName, codexHookEventName, readCodexHookSchema } from './codex-schema-snapshot.js';
+import { validateCodexHookSemanticOutput, type CodexHookSemanticValidation } from './codex-hook-semantic-validator.js';
 
 export type CodexSchemaValidation = {
   ok: boolean;
   event: CodexHookEventName;
   issues: string[];
+};
+
+export type CodexHookOutputValidation = CodexSchemaValidation & {
+  semantic: CodexHookSemanticValidation;
 };
 
 export async function validateCodexHookOutput(eventLike: unknown, output: unknown): Promise<CodexSchemaValidation> {
@@ -24,7 +29,19 @@ export async function validateCodexFixtureOutputs(root?: string) {
     for (const file of candidates) {
       const output = await readJson(file, {});
       const validation = await validateCodexHookOutput(event, output);
-      outputs.push({ file, ...validation });
+      const semantic = validateCodexHookSemanticOutput(event, output);
+      outputs.push({
+        file,
+        ...validation,
+        semantic,
+        ok: validation.ok && semantic.ok,
+        issues: [
+          ...validation.issues,
+          ...semantic.warnings.map((issue) => `semantic_warning:${issue}`),
+          ...semantic.unsupported.map((issue) => `semantic_unsupported:${issue}`),
+          ...semantic.fatal.map((issue) => `semantic_fatal:${issue}`)
+        ]
+      });
     }
   }
   const ok = outputs.length > 0 && outputs.every((row) => row.ok);

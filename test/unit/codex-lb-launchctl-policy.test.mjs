@@ -1,0 +1,25 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import { configureCodexLb } from '../../dist/cli/install-helpers.js';
+
+test('codex-lb launchctl failure is structured and redacted', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-unit-codex-lb-launchctl-'));
+  const fakeLaunchctl = path.join(home, 'launchctl');
+  await fs.writeFile(fakeLaunchctl, '#!/bin/sh\necho "launchctl denied $3" >&2\nexit 7\n');
+  await fs.chmod(fakeLaunchctl, 0o755);
+  const result = await configureCodexLb({
+    home,
+    host: 'lb.example.test',
+    apiKey: 'sk-launchctl-secret',
+    forceLaunchEnv: true,
+    launchctlBin: fakeLaunchctl,
+    syncCodexLogin: false
+  });
+  const text = JSON.stringify(result);
+  assert.doesNotMatch(text, /sk-launchctl-secret/);
+  assert.equal(result.codex_environment.launch_environment.status, 'launch_env_failed');
+  assert.equal(result.status, 'launch_env_failed');
+});

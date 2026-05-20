@@ -38,7 +38,7 @@ $Goal SKS 1.0.4 업데이트를 수행한다. OpenAI Codex CLI rust-v0.131.0을 
 
 2. codex-lb setup reliability
    - `sks codex-lb setup`이 질문형 wizard로 domain/base URL과 API key를 받아 설정한다.
-   - macOS 사용자에게 `[Missing environment variable: CODEX_LB_API_KEY]`가 다시 뜨면 release failure다.
+   - macOS 사용자에게 raw CODEX_LB_API_KEY missing-env text가 다시 뜨면 release failure다.
 
 3. macOS Computer Use active capability
    - Mac에서 visual/UI verification이 필요하면 Codex App Computer Use를 적극적으로 사용하도록 한다.
@@ -128,7 +128,7 @@ Repository: openai/codex
 ### Added
 - Add Codex CLI `rust-v0.131.0` compatibility layer with vendored hook schema snapshots and strict hook output validation.
 - Add `sks codex-lb setup` interactive wizard for domain/base URL and API key capture with secure storage and env auto-load.
-- Add codex-lb missing-env prevention so macOS users do not see raw `Missing environment variable: CODEX_LB_API_KEY` after setup or update.
+- Add codex-lb missing-env prevention so macOS users do not see raw CODEX_LB_API_KEY missing-env text after setup or update.
 - Add macOS Codex App Computer Use capability detector and visual-route integration that treats Computer Use as a first-class visual evidence source.
 - Add hook warning black-box tests that fail release if Codex hook output produces deprecated-shape or unknown-field warnings.
 - Add `sks codex compatibility` and `sks hooks codex-validate` surfaces for checking Codex CLI version, hook schemas, and SKS output shape.
@@ -633,7 +633,7 @@ Add to `release:check`.
 사용자 macOS 환경에서 SKS 업데이트 후 다음 raw error가 뜬다.
 
 ```text
-Missing environment variable: CODEX_LB_API_KEY
+raw CODEX_LB_API_KEY missing-env text
 ```
 
 이 메시지가 사용자에게 다시 노출되면 1.0.4 release failure다.
@@ -763,12 +763,7 @@ Should show redacted key status:
 
 ### 9.1 Hard rule
 
-SKS must never print raw:
-
-```text
-Missing environment variable: `CODEX_LB_API_KEY`.
-Missing environment variable: CODEX_LB_API_KEY
-```
+SKS must never print raw CODEX_LB_API_KEY missing-env text.
 
 Instead print structured, actionable message:
 

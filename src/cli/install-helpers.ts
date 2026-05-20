@@ -11,6 +11,7 @@ import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext
 import { codexLaunchCommand, platformTmuxInstallHint, tmuxReadiness, tmuxReadinessCatchFallback } from '../core/tmux-ui.js';
 import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.js';
 import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.js';
+import { loadCodexLbEnv, writeCodexLbKeychain, codexLbMetadataPath } from '../core/codex-lb/codex-lb-env.js';
 
 type CodexLbStatusSnapshot = Awaited<ReturnType<typeof codexLbStatus>>;
 
@@ -72,8 +73,11 @@ export type ConfigureCodexLbResult = {
   status: string;
   config_path?: string;
   env_path?: string;
+  metadata_path?: string;
   base_url?: string;
   env_key?: string;
+  keychain?: Record<string, unknown>;
+  warnings?: string[];
   auth_reconcile?: CodexLbAuthReconcileResult;
   codex_lb?: CodexLbStatusSnapshot;
   codex_environment?: CodexLbEnvSyncResult;
@@ -332,7 +336,7 @@ async function restorePostinstallCodexLbConfigSnapshot(snapshot: any) {
 
 export function normalizeCodexLbBaseUrl(input: any = '') {
   let host = String(input || '').trim();
-  if (!host) host = 'http://127.0.0.1:2455';
+  if (!host) return '';
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(host)) host = `https://${host}`;
   host = host.replace(/\/+$/, '');
   return /\/backend-api\/codex$/i.test(host) ? host : `${host}/backend-api/codex`;
@@ -342,15 +346,32 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   const home = opts.home || process.env.HOME || os.homedir();
   const configPath = opts.configPath || codexLbConfigPath(home);
   const envPath = opts.envPath || codexLbEnvPath(home);
-  const baseUrl = normalizeCodexLbBaseUrl(opts.host || opts.baseUrl);
+  const rawHost = String(opts.host || opts.baseUrl || '');
+  const baseUrl = normalizeCodexLbBaseUrl(rawHost);
   const apiKey = String(opts.apiKey || '').trim();
+  if (!baseUrl) return { ok: false, status: 'missing_host_or_base_url', config_path: configPath, env_path: envPath };
+  if (/[\u0000-\u001f\u007f\s]/.test(rawHost.trim())) return { ok: false, status: 'invalid_host_or_base_url', config_path: configPath, env_path: envPath, error: 'host_or_base_url_contains_whitespace_or_control_character' };
   if (!apiKey) return { ok: false, status: 'missing_api_key', config_path: configPath, env_path: envPath };
+  const insecureLocalWarning = /^http:\/\//i.test(baseUrl) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(baseUrl) && !opts.allowInsecureHttp
+    ? ['codex-lb base URL uses http outside localhost; prefer https or pass an explicit allow flag in the calling surface.']
+    : [];
   await ensureDir(path.dirname(configPath));
   const current = await readText(configPath, '');
   const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, baseUrl));
   await writeTextAtomic(configPath, next);
   await writeTextAtomic(envPath, `export CODEX_LB_BASE_URL=${shellSingleQuote(baseUrl)}\nexport CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
   await fsp.chmod(envPath, 0o600).catch(() => {});
+  const keyFingerprint = await sha256Text(apiKey);
+  const metadataPath = opts.metadataPath || codexLbMetadataPath(home);
+  await writeTextAtomic(metadataPath, `${JSON.stringify({
+    schema: 'sks.codex-lb-metadata.v1',
+    base_url: baseUrl,
+    updated_at: new Date().toISOString(),
+    source: opts.source || 'setup',
+    api_key: { redacted: true, sha256: keyFingerprint }
+  }, null, 2)}\n`);
+  await fsp.chmod(metadataPath, 0o600).catch(() => {});
+  const keychain = opts.keychain ? await writeCodexLbKeychain(apiKey, opts).catch((err: any) => ({ ok: false, status: 'keychain_store_failed', error: err.message })) : { ok: false, status: 'skipped' };
   const codexEnvironment = await syncCodexLbProviderEnvironment({ env_path: envPath, base_url: baseUrl }, { ...opts, home });
   const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home, force: true });
   const codexLb = await codexLbStatus({ ...opts, home, configPath, envPath });
@@ -362,8 +383,11 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
     status: ok ? 'configured' : (codexEnvironment.status || codexLogin.status),
     config_path: configPath,
     env_path: envPath,
+    metadata_path: metadataPath,
     base_url: baseUrl,
     env_key: 'CODEX_LB_API_KEY',
+    keychain,
+    warnings: insecureLocalWarning,
     auth_reconcile: authReconcile,
     codex_lb: finalCodexLb,
     codex_environment: codexEnvironment,
@@ -379,13 +403,14 @@ export async function codexLbStatus(opts: any = {}) {
   const config = await readText(configPath, '');
   const envExists = await exists(envPath);
   const envText = envExists ? await readText(envPath, '') : '';
+  const envLoad = await loadCodexLbEnv({ ...opts, home, envPath });
   const authPath = opts.authPath || codexAuthPath(home);
   const authText = await readText(authPath, '');
   const authMode = codexAuthModeSummary(authText);
-  const envKeyConfigured = Boolean(parseCodexLbEnvKey(envText));
+  const envKeyConfigured = Boolean(envLoad.api_key.present);
   const providerConfigured = /\[model_providers\.codex-lb\]/.test(config);
   const selected = hasTopLevelCodexLbSelected(config);
-  const baseUrl = codexLbProviderBaseUrl(config) || parseCodexLbEnvBaseUrl(envText) || null;
+  const baseUrl = codexLbProviderBaseUrl(config) || envLoad.base_url || null;
   const providerRequiresOpenAiAuth = codexLbProviderRequiresOpenAiAuth(config);
   return {
     ok: providerConfigured && envKeyConfigured && Boolean(baseUrl) && providerRequiresOpenAiAuth,
@@ -396,7 +421,16 @@ export async function codexLbStatus(opts: any = {}) {
     selected,
     env_file: envExists,
     env_key_configured: envKeyConfigured,
-    env_base_url_configured: Boolean(parseCodexLbEnvBaseUrl(envText)),
+    env_base_url_configured: Boolean(envLoad.base_url),
+    env_loader: {
+      configured: envLoad.configured,
+      missing: envLoad.missing,
+      source: envLoad.source,
+      source_priority: envLoad.source_priority,
+      api_key: envLoad.api_key,
+      keychain: envLoad.keychain,
+      env_paths: envLoad.env_paths
+    },
     base_url: baseUrl,
     auth_path: authPath,
     auth_mode: authMode.mode,
@@ -1458,6 +1492,11 @@ function redactSecretText(text: any = '', secrets: any = []) {
     out = out.split(value).join('[redacted]');
   }
   return out;
+}
+
+async function sha256Text(value: any = '') {
+  const { createHash } = await import('node:crypto');
+  return createHash('sha256').update(String(value || '')).digest('hex');
 }
 
 function escapeRegExp(value: any) {

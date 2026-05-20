@@ -4,7 +4,9 @@ Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
 Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable.
 
-SKS **1.0.4** targets OpenAI Codex CLI `rust-v0.131.0`: hook outputs are validated against vendored upstream schemas, `sks codex-lb setup` is a guided/redacted setup path, and macOS Computer Use is treated as a Codex App visual evidence capability independent from MAD-SKS.
+SKS **1.0.5** seals the Codex trust harness: hook outputs are validated against both vendored OpenAI Codex CLI `rust-v0.131.0` schemas and runtime semantic parser rules, codex-lb setup survives macOS user-session launches through env-file/Keychain/launchctl-aware repair surfaces, and Computer Use is the preferred macOS visual evidence capability when available.
+
+SKS **1.0.4** introduced the `rust-v0.131.0` schema snapshot, guided codex-lb setup path, and Computer Use/MAD-SKS separation that 1.0.5 now hardens into release gates.
 
 SKS **1.0.3** adds git-collaboration hygiene for shared TriWiki memory: `sks git ...`, tracked shared shards under `.sneakoscope/wiki/**`, runtime-only ignores, shared wrongness publish/sync, and Codex App hook trust-state generation for current hook trust syntax.
 
@@ -18,6 +20,31 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ![Sneakoscope Codex architecture and pipeline](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/dev/docs/assets/sneakoscope-architecture-pipeline.jpg)
 
+
+## 1.0.5 Ultimate Harness Seal
+
+SKS 1.0.5 treats Codex hook semantic compatibility as stricter than schema compatibility. `sks hooks warning-check --json` and `npm run hooks:semantic-check` fail if an output uses `permissionDecision:"ask"`, PreToolUse `allow` without `updatedInput`, Stop `continue:false`, `stopReason`, `suppressOutput`, snake_case keys, unknown fields, or legacy top-level hook decisions.
+
+codex-lb setup now has a durable setup/repair path:
+
+```bash
+sks codex-lb setup --host lb.example.com --api-key-stdin --yes --json
+sks codex-lb status --json
+sks codex-lb doctor --deep --json
+npm run codex-lb:missing-env-regression
+```
+
+The API key is written only to redacted status surfaces. The env file is `~/.codex/sks-codex-lb.env`, metadata is `~/.codex/sks-codex-lb.json`, and reports expose only a redacted presence state plus a fingerprint. Raw `CODEX_LB_API_KEY` missing-env errors are release failures.
+
+Computer Use is a Codex App/macOS capability, not a MAD-SKS or DB permission. Visual routes use:
+
+```bash
+sks computer-use status --json
+sks computer-use require --route '$QA-LOOP' --json
+npm run computer-use:visual-route-fixture
+```
+
+If Codex App or macOS blocks the capability, SKS records `external_capability_blocked`, `codex_app_missing`, `macos_permission_missing`, or the closest structured status and does not fabricate UI evidence.
 
 ## 1.0.4 Codex CLI Compatibility
 
