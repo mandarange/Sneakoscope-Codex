@@ -2,7 +2,7 @@
 
 Computer Use evidence is real-dependency evidence when Codex Computer Use is available and mock evidence when loaded from fixtures. Mock evidence must stay labeled `mock`, `fixture`, or `verified_partial`.
 
-In SKS 1.0.5, Computer Use is a macOS Codex App capability check. It is independent from MAD-SKS, DB safety, and generic SKS safety policy. SKS must not describe Computer Use as blocked by MAD-SKS or by an SKS safety policy.
+In SKS 1.0.6, Computer Use is a macOS Codex App capability check with an optional live smoke surface. It is independent from MAD-SKS, DB safety, and generic SKS safety policy. SKS must not describe Computer Use as blocked by MAD-SKS or by an SKS safety policy.
 
 Status commands:
 
@@ -11,6 +11,8 @@ sks computer-use status --json
 sks computer-use doctor --json
 sks computer-use enable --macos --json
 sks computer-use require --route '$Image-UX-Review' --json
+sks computer-use smoke --json
+SKS_TEST_REAL_COMPUTER_USE=1 sks computer-use smoke --real --json
 ```
 
 Status values:
@@ -24,6 +26,8 @@ Status values:
 - `unknown`
 
 If Codex App or macOS denies access, SKS records `external_capability_blocked` or the closest capability status and does not fabricate UI evidence.
+
+`sks computer-use smoke --json` is optional and returns a structured status without requiring real Computer Use. `--require-real` fails unless the real opt-in path is active and capability is available. Real smoke is opt-in through `SKS_TEST_REAL_COMPUTER_USE=1`; screenshots are local-only evidence and are not published into shared TriWiki automatically.
 
 The status payload always includes:
 
@@ -43,4 +47,4 @@ Expected ledgers:
 
 UI verification claims require Computer Use evidence. Browser automation evidence can support ordinary browser checks, but it is not accepted as a substitute for UI-level Computer Use verification.
 
-Visual route fixtures call `sks computer-use require --route ... --json` for `$Image-UX-Review`, `$QA-LOOP`, `$PPT`, `$Computer-Use`, and `$From-Chat-IMG`. If Computer Use is unavailable, Completion Proof records the status and visual claims remain `verified_partial` or lower unless explicit screenshot/image evidence covers the claim.
+Visual route fixtures call `sks computer-use require --route ... --json` for `$Image-UX-Review`, `$QA-LOOP`, `$PPT`, `$Computer-Use`, and `$From-Chat-IMG`. If Computer Use is unavailable, Completion Proof records the status and visual claims remain `verified_partial` or lower unless explicit screenshot/image evidence covers the claim. `external_capability_blocked` cannot support a high-confidence visual claim by itself.

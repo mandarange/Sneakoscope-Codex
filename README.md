@@ -4,7 +4,9 @@ Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
 Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable.
 
-SKS **1.0.5** seals the Codex trust harness: hook outputs are validated against both vendored OpenAI Codex CLI `rust-v0.131.0` schemas and runtime semantic parser rules, codex-lb setup survives macOS user-session launches through env-file/Keychain/launchctl-aware repair surfaces, and Computer Use is the preferred macOS visual evidence capability when available.
+SKS **1.0.6** is the final precision polish for the Codex trust harness: hook compatibility is classified as upstream schema plus an SKS zero-warning strict subset, `sks codex-lb setup` previews and applies the exact choices the user selected, and Computer Use has an optional live smoke surface for macOS capability/evidence status.
+
+SKS **1.0.5** sealed the prior trust harness: hook outputs were validated against both vendored OpenAI Codex CLI `rust-v0.131.0` schemas and runtime semantic parser rules, codex-lb setup survived macOS user-session launches through env-file/Keychain/launchctl-aware repair surfaces, and Computer Use became the preferred macOS visual evidence capability when available.
 
 SKS **1.0.4** introduced the `rust-v0.131.0` schema snapshot, guided codex-lb setup path, and Computer Use/MAD-SKS separation that 1.0.5 now hardens into release gates.
 
@@ -20,6 +22,26 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ![Sneakoscope Codex architecture and pipeline](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/dev/docs/assets/sneakoscope-architecture-pipeline.jpg)
 
+
+## 1.0.6 Final Precision Polish
+
+SKS validates Codex hooks against the OpenAI Codex `rust-v0.131.0` schema and enforces a stricter SKS zero-warning subset. Some fields may be accepted by upstream but are intentionally disallowed by SKS to avoid user-facing hook warnings and release drift. `sks hooks warning-check --json` now reports `schema_violation`, `upstream_semantic_unsupported`, `sks_zero_warning_disallowed`, `legacy_shape`, and `policy_disallowed` category counts.
+
+`sks codex-lb setup` is now a two-phase plan/apply wizard. Every question maps to an actual action: provider selection, env file writing, Keychain storage, launchctl sync, shell profile snippets, and health checks.
+
+```bash
+sks codex-lb setup --host lb.example.com --api-key-stdin --plan --json
+sks codex-lb setup --host lb.example.com --api-key-stdin --yes --no-default-provider --no-env-file --json
+npm run codex-lb:setup-truthfulness
+```
+
+Computer Use live validation is optional and opt-in. On macOS, `SKS_TEST_REAL_COMPUTER_USE=1 sks computer-use smoke --real --json` attempts a non-destructive capability/evidence check. If Codex App or macOS denies the capability, SKS records a structured blocker and does not fabricate visual evidence.
+
+```bash
+sks computer-use smoke --json
+SKS_TEST_REAL_COMPUTER_USE=1 sks computer-use smoke --real --json
+npm run computer-use:live-optional
+```
 
 ## 1.0.5 Ultimate Harness Seal
 

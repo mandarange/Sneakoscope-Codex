@@ -54,6 +54,46 @@ export function computerUseEvidenceSkeleton(status = 'unknown') {
   };
 }
 
+export async function computerUseLiveSmoke(opts = {}) {
+  const realOptIn = opts.real === true || process.env.SKS_TEST_REAL_COMPUTER_USE === '1';
+  const requireReal = opts.requireReal === true;
+  const status = await computerUseStatusReport(opts);
+  const available = status.status === 'available';
+  const realAllowed = realOptIn && available;
+  const evidencePath = opts.evidencePath || null;
+  const smoke = {
+    schema: 'sks.computer-use-live-smoke.v1',
+    ok: realAllowed || !requireReal,
+    mode: realOptIn ? 'optional_real' : 'optional_probe',
+    status: status.status,
+    platform: status.platform || process.platform,
+    codex_app: {
+      installed: Boolean(status.app?.app?.installed),
+      capability_detected: available
+    },
+    permission: {
+      screen_recording: status.permission_status || 'unknown',
+      accessibility: 'unknown'
+    },
+    evidence: {
+      screenshot_captured: false,
+      action_captured: false,
+      image_voxel_linked: false,
+      evidence_path: evidencePath
+    },
+    external_capability_blocked: status.external_capability_blocked === true || ['codex_app_missing', 'macos_permission_missing', 'codex_app_capability_missing', 'unknown'].includes(status.status),
+    mock: false,
+    guidance: realAllowed
+      ? ['Computer Use capability appears available. Capture screenshots through official Codex Computer Use in the active route; SKS smoke does not synthesize evidence.']
+      : status.guidance || []
+  };
+  if (available && realOptIn && evidencePath) {
+    const { writeJsonAtomic } = await import('./fsx.mjs');
+    await writeJsonAtomic(evidencePath, smoke);
+  }
+  return smoke;
+}
+
 function baseReport(status, extra = {}) {
   return {
     schema: 'sks.computer-use-status.v1',

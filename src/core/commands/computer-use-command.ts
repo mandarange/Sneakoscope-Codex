@@ -4,7 +4,7 @@ import { createMission, findLatestMission } from '../mission.js';
 import { flag } from '../../cli/args.js';
 import { printJson } from '../../cli/output.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
-import { computerUseStatusReport } from '../computer-use-status.js';
+import { computerUseLiveSmoke, computerUseStatusReport } from '../computer-use-status.js';
 
 export async function computerUseCommand(command: any, args: any = []) {
   const root = await projectRoot();
@@ -15,6 +15,23 @@ export async function computerUseCommand(command: any, args: any = []) {
     console.log(`Computer Use status: ${result.status}`);
     if (result.guidance?.length) for (const line of result.guidance) console.log(`- ${line}`);
     if (!result.ok && action === 'doctor') process.exitCode = result.status === 'not_macos' ? 0 : 1;
+    return;
+  }
+  if (action === 'smoke') {
+    const evidencePath = path.join(root, '.sneakoscope', 'reports', 'computer-use-smoke-evidence.json');
+    const result = await computerUseLiveSmoke({
+      real: flag(args, '--real'),
+      requireReal: flag(args, '--require-real'),
+      allowAction: flag(args, '--allow-action'),
+      evidencePath
+    });
+    if (flag(args, '--json')) {
+      printJson(result);
+    } else {
+      console.log(`Computer Use smoke: ${result.status}`);
+      if (result.guidance?.length) for (const line of result.guidance) console.log(`- ${line}`);
+    }
+    if (!result.ok) process.exitCode = 1;
     return;
   }
   if (action === 'enable') {

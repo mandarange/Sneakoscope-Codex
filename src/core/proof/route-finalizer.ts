@@ -53,8 +53,10 @@ export async function finalizeRouteWithProof(root: any, {
   if (Number(wrongnessEvidence?.high_severity_active || 0) > 0) {
     localBlockers.push('active_high_severity_wrongness');
   }
+  const visualComputerUseDowngrade = Boolean(computerUse && computerUse.status !== 'available' && statusHint === 'verified');
   const status = localBlockers.length
     ? (strict ? 'blocked' : statusHint === 'verified' ? 'verified_partial' : statusHint)
+    : visualComputerUseDowngrade ? 'verified_partial'
     : statusHint;
   const evidence = {
     ...collected,

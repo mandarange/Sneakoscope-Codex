@@ -21,9 +21,14 @@ export const WRONGNESS_KINDS = Object.freeze([
   'db_safety_false_negative',
   'hook_policy_mismatch',
   'hook_semantic_mismatch',
+  'hook_strict_subset_misclassified',
   'codex_lb_health_misread',
   'codex_lb_missing_env_raw_message',
+  'codex_lb_setup_choice_drift',
+  'codex_lb_env_persistence_failure',
   'computer_use_policy_misclassification',
+  'computer_use_live_smoke_mismatch',
+  'computer_use_external_block_overclaimed',
   'mock_real_confusion',
   'user_intent_misread',
   'artifact_schema_error',
@@ -348,14 +353,19 @@ function defaultAvoidanceRule(kind: WrongnessKind, claimText: string): string {
   if (kind.startsWith('db_safety_')) return 'Keep database classification conservative and bind mismatches to the DB safety report before allowing mutation claims.';
   if (kind === 'hook_policy_mismatch') return 'Treat hook policy mismatch as a blocking trust issue until hook replay output matches the configured policy.';
   if (kind === 'hook_semantic_mismatch') return 'Validate Codex hook outputs against runtime semantic parser rules after schema validation and before release.';
+  if (kind === 'hook_strict_subset_misclassified') return 'Do not claim exact upstream parser mirroring when SKS intentionally enforces a stricter zero-warning subset.';
   if (kind === 'codex_lb_missing_env_raw_message') return 'Never expose raw CODEX_LB_API_KEY missing-env errors; return structured setup or repair guidance with redacted secrets.';
+  if (kind === 'codex_lb_setup_choice_drift') return 'Do not ask codex-lb setup questions whose answers are ignored by the actual write/apply path.';
+  if (kind === 'codex_lb_env_persistence_failure') return 'Do not write env files, shell profiles, launchctl values, or Keychain entries contrary to explicit codex-lb setup answers.';
   if (kind === 'computer_use_policy_misclassification') return 'Treat Computer Use as a Codex App/macOS capability, independent from MAD-SKS and generic safety policy.';
+  if (kind === 'computer_use_live_smoke_mismatch') return 'Do not claim live Computer Use evidence without an opt-in live smoke or explicit evidence artifact.';
+  if (kind === 'computer_use_external_block_overclaimed') return 'Do not upgrade external_capability_blocked Computer Use status into high-confidence visual verification.';
   return `Do not reuse this claim without source-backed correction: ${claimText.slice(0, 160)}`;
 }
 
 function severityForKind(kind: WrongnessKind): WrongnessSeverity {
-  if (kind === 'db_safety_false_negative' || kind === 'hook_policy_mismatch' || kind === 'hook_semantic_mismatch' || kind === 'trust_status_overclaim') return 'high';
-  if (kind === 'codex_lb_missing_env_raw_message' || kind === 'computer_use_policy_misclassification') return 'high';
+  if (kind === 'db_safety_false_negative' || kind === 'hook_policy_mismatch' || kind === 'hook_semantic_mismatch' || kind === 'hook_strict_subset_misclassified' || kind === 'trust_status_overclaim') return 'high';
+  if (kind === 'codex_lb_missing_env_raw_message' || kind === 'codex_lb_setup_choice_drift' || kind === 'codex_lb_env_persistence_failure' || kind === 'computer_use_policy_misclassification' || kind === 'computer_use_live_smoke_mismatch' || kind === 'computer_use_external_block_overclaimed') return 'high';
   if (kind === 'mock_real_confusion' || kind === 'artifact_schema_error' || kind === 'test_failure') return 'high';
   if (kind === 'image_bbox_error' || kind === 'visual_anchor_error' || kind === 'missing_evidence') return 'medium';
   return 'medium';

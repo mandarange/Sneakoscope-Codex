@@ -1,9 +1,20 @@
 import { type CodexHookEventName, codexHookEventName } from './codex-schema-snapshot.js';
+import {
+  codexHookIssuesByCategory,
+  dedupeCodexHookIssues,
+  makeCodexHookIssue,
+  type CodexHookIssue,
+  type CodexHookIssueCategory
+} from './codex-hook-issues.js';
+
+export type { CodexHookIssue, CodexHookIssueCategory } from './codex-hook-issues.js';
 
 export type CodexHookSemanticValidation = {
-  schema: 'sks.codex-hook-semantic-validation.v1';
+  schema: 'sks.codex-hook-semantic-validation.v2';
   ok: boolean;
   event: CodexHookEventName;
+  issues: CodexHookIssue[];
+  issues_by_category: Record<CodexHookIssueCategory, number>;
   warnings: string[];
   unsupported: string[];
   fatal: string[];
@@ -22,49 +33,47 @@ const LEGACY_TOP_LEVEL_KEYS = new Set([
 
 export function validateCodexHookSemanticOutput(eventLike: unknown, output: any): CodexHookSemanticValidation {
   const event = codexHookEventName(eventLike) || 'UserPromptSubmit';
-  const fatal: string[] = [];
-  const unsupported: string[] = [];
-  const warnings: string[] = [];
+  const issues: CodexHookIssue[] = [];
 
   if (!output || typeof output !== 'object' || Array.isArray(output)) {
-    fatal.push('output_not_object');
-    return result(event, warnings, unsupported, fatal);
+    pushIssue(issues, 'schema_violation', 'output_not_object', 'Codex hook output must be a JSON object.', '$', { upstream_supported: false });
+    return result(event, issues);
   }
 
-  fatal.push(...snakeCaseKeyIssues(output));
+  issues.push(...snakeCaseKeyIssues(output));
   for (const key of Object.keys(output)) {
-    if (LEGACY_TOP_LEVEL_KEYS.has(key)) fatal.push(`legacy_top_level:${key}`);
+    if (LEGACY_TOP_LEVEL_KEYS.has(key)) pushIssue(issues, 'legacy_shape', `legacy_top_level_${key}`, `Legacy top-level hook field is not accepted by SKS: ${key}.`, `$.${key}`, { upstream_supported: false });
   }
 
   const actualEvent = output.hookSpecificOutput?.hookEventName;
-  if (actualEvent && actualEvent !== event) fatal.push(`hook_event_mismatch:${actualEvent}`);
+  if (actualEvent && actualEvent !== event) pushIssue(issues, 'upstream_semantic_unsupported', 'hook_event_mismatch', `Hook output event mismatch: expected ${event} but saw ${actualEvent}.`, '$.hookSpecificOutput.hookEventName', { upstream_supported: false });
 
   switch (event) {
     case 'PreToolUse':
-      validatePreToolUse(output, fatal, unsupported);
+      validatePreToolUse(output, issues);
       break;
     case 'PermissionRequest':
-      validatePermissionRequest(output, fatal, unsupported);
+      validatePermissionRequest(output, issues);
       break;
     case 'PostToolUse':
-      validatePostToolUse(output, fatal, unsupported);
+      validatePostToolUse(output, issues);
       break;
     case 'UserPromptSubmit':
-      validateUserPromptSubmit(output, fatal);
+      validateUserPromptSubmit(output, issues);
       break;
     case 'Stop':
-      validateStop(output, fatal, unsupported);
+      validateStop(output, issues);
       break;
     case 'PreCompact':
     case 'PostCompact':
-      validateCompact(event, output, fatal, unsupported);
+      validateCompact(event, output, issues);
       break;
     case 'SessionStart':
-      validateSessionStart(output, fatal);
+      validateSessionStart(output, issues);
       break;
   }
 
-  return result(event, warnings, unsupported, fatal);
+  return result(event, issues);
 }
 
 export function validatePreToolUseSemanticOutput(output: any): CodexHookSemanticValidation {
@@ -95,98 +104,114 @@ export function validateSessionStartSemanticOutput(output: any): CodexHookSemant
   return validateCodexHookSemanticOutput('SessionStart', output);
 }
 
-function validatePreToolUse(output: any, fatal: string[], unsupported: string[]) {
-  rejectUniversal(output, 'PreToolUse', fatal, unsupported, { continueFalse: true, stopReason: true, suppressOutput: true });
+function validatePreToolUse(output: any, issues: CodexHookIssue[]) {
+  rejectUniversal(output, 'PreToolUse', issues, { continueFalse: true, stopReason: true, suppressOutput: true });
   if (output.decision !== undefined) {
-    if (output.decision === 'approve') pushBoth(fatal, unsupported, 'PreToolUse hook returned unsupported decision:approve');
-    else if (output.decision === 'block') fatal.push('pre_tool_use_legacy_decision_block');
-    else fatal.push(`pre_tool_use_legacy_decision:${String(output.decision)}`);
+    if (output.decision === 'approve') pushUpstreamUnsupported(issues, 'pretooluse_decision_approve', 'PreToolUse hook returned unsupported decision:approve', '$.decision');
+    else if (output.decision === 'block') pushIssue(issues, 'legacy_shape', 'pre_tool_use_legacy_decision_block', 'PreToolUse hook returned legacy top-level decision:block.', '$.decision', { upstream_supported: false });
+    else pushIssue(issues, 'legacy_shape', 'pre_tool_use_legacy_decision', `PreToolUse hook returned legacy top-level decision:${String(output.decision)}.`, '$.decision', { upstream_supported: false });
   }
-  if (output.reason !== undefined) fatal.push('pre_tool_use_legacy_reason');
+  if (output.reason !== undefined) pushIssue(issues, 'legacy_shape', 'pre_tool_use_legacy_reason', 'PreToolUse hook returned legacy top-level reason.', '$.reason', { upstream_supported: false });
 
   const specific = asRecord(output.hookSpecificOutput);
   if (!specific) return;
-  if (specific.additionalContext !== undefined) fatal.push('pre_tool_use_additional_context_unsupported');
+  if (specific.additionalContext !== undefined) pushStrictSubset(issues, 'pretooluse_additional_context', 'PreToolUse additionalContext is schema-compatible but disallowed by the SKS zero-warning strict subset.', '$.hookSpecificOutput.additionalContext');
   const decision = specific.permissionDecision;
   const hasUpdatedInput = Object.prototype.hasOwnProperty.call(specific, 'updatedInput');
   const hasReason = Object.prototype.hasOwnProperty.call(specific, 'permissionDecisionReason');
 
-  if (decision === 'ask') pushBoth(fatal, unsupported, 'PreToolUse hook returned unsupported permissionDecision:ask');
-  if (decision === 'allow' && !hasUpdatedInput) pushBoth(fatal, unsupported, 'PreToolUse hook returned unsupported permissionDecision:allow');
-  if (hasUpdatedInput && decision !== 'allow') fatal.push('PreToolUse hook returned updatedInput without permissionDecision:allow');
-  if (decision === 'deny' && !nonEmpty(specific.permissionDecisionReason)) fatal.push('PreToolUse hook returned permissionDecision:deny without a non-empty permissionDecisionReason');
-  if (!decision && hasReason) fatal.push('PreToolUse hook returned permissionDecisionReason without permissionDecision');
+  if (decision === 'ask') pushUpstreamUnsupported(issues, 'pretooluse_permission_decision_ask', 'PreToolUse hook returned unsupported permissionDecision:ask', '$.hookSpecificOutput.permissionDecision');
+  if (decision === 'allow' && !hasUpdatedInput) pushUpstreamUnsupported(issues, 'pretooluse_allow_without_updated_input', 'PreToolUse hook returned unsupported permissionDecision:allow', '$.hookSpecificOutput.permissionDecision');
+  if (hasUpdatedInput && decision !== 'allow') pushUpstreamUnsupported(issues, 'pretooluse_updated_input_without_allow', 'PreToolUse hook returned updatedInput without permissionDecision:allow', '$.hookSpecificOutput.updatedInput');
+  if (decision === 'deny' && !nonEmpty(specific.permissionDecisionReason)) pushUpstreamUnsupported(issues, 'pretooluse_deny_without_reason', 'PreToolUse hook returned permissionDecision:deny without a non-empty permissionDecisionReason', '$.hookSpecificOutput.permissionDecisionReason');
+  if (!decision && hasReason) pushUpstreamUnsupported(issues, 'pretooluse_reason_without_decision', 'PreToolUse hook returned permissionDecisionReason without permissionDecision', '$.hookSpecificOutput.permissionDecisionReason');
 }
 
-function validatePermissionRequest(output: any, fatal: string[], unsupported: string[]) {
-  rejectUniversal(output, 'PermissionRequest', fatal, unsupported, { continueFalse: true, stopReason: true, suppressOutput: true });
+function validatePermissionRequest(output: any, issues: CodexHookIssue[]) {
+  rejectUniversal(output, 'PermissionRequest', issues, { continueFalse: true, stopReason: true, suppressOutput: true });
   const decision = asRecord(output.hookSpecificOutput?.decision);
   if (!decision) return;
-  if (decision.updatedInput !== undefined) pushBoth(fatal, unsupported, 'PermissionRequest hook returned unsupported updatedInput');
-  if (decision.updatedPermissions !== undefined) pushBoth(fatal, unsupported, 'PermissionRequest hook returned unsupported updatedPermissions');
-  if (decision.interrupt === true) pushBoth(fatal, unsupported, 'PermissionRequest hook returned unsupported interrupt:true');
-  if (decision.behavior === 'deny' && !nonEmpty(decision.message)) fatal.push('PermissionRequest hook returned deny without a non-empty message');
-  if (decision.behavior === 'allow' && decision.message !== undefined) fatal.push('PermissionRequest hook returned allow with message');
+  if (decision.updatedInput !== undefined) pushUpstreamUnsupported(issues, 'permission_request_reserved_updatedInput', 'PermissionRequest hook returned unsupported updatedInput', '$.hookSpecificOutput.decision.updatedInput');
+  if (decision.updatedPermissions !== undefined) pushUpstreamUnsupported(issues, 'permission_request_reserved_updatedPermissions', 'PermissionRequest hook returned unsupported updatedPermissions', '$.hookSpecificOutput.decision.updatedPermissions');
+  if (decision.interrupt === true) pushUpstreamUnsupported(issues, 'permission_request_reserved_interrupt', 'PermissionRequest hook returned unsupported interrupt:true', '$.hookSpecificOutput.decision.interrupt');
+  if (decision.behavior === 'deny' && !nonEmpty(decision.message)) pushUpstreamUnsupported(issues, 'permission_request_deny_without_message', 'PermissionRequest hook returned deny without a non-empty message', '$.hookSpecificOutput.decision.message');
+  if (decision.behavior === 'allow' && decision.message !== undefined) pushStrictSubset(issues, 'permission_request_allow_message', 'PermissionRequest allow message is schema-compatible but disallowed by the SKS zero-warning strict subset.', '$.hookSpecificOutput.decision.message');
 }
 
-function validatePostToolUse(output: any, fatal: string[], unsupported: string[]) {
-  rejectUniversal(output, 'PostToolUse', fatal, unsupported, { suppressOutput: true });
+function validatePostToolUse(output: any, issues: CodexHookIssue[]) {
+  rejectUniversal(output, 'PostToolUse', issues, { suppressOutput: true });
   const block = output.decision === 'block';
-  if (block && !nonEmpty(output.reason)) fatal.push('PostToolUse hook returned decision:block without a non-empty reason');
-  if (!block && output.reason !== undefined) fatal.push('PostToolUse hook returned reason without decision');
+  if (block && !nonEmpty(output.reason)) pushUpstreamUnsupported(issues, 'posttooluse_block_without_reason', 'PostToolUse hook returned decision:block without a non-empty reason', '$.reason');
+  if (!block && output.reason !== undefined) pushUpstreamUnsupported(issues, 'posttooluse_reason_without_decision', 'PostToolUse hook returned reason without decision', '$.reason');
   if (output.hookSpecificOutput?.updatedMCPToolOutput !== undefined) {
-    pushBoth(fatal, unsupported, 'PostToolUse hook returned unsupported updatedMCPToolOutput');
+    pushUpstreamUnsupported(issues, 'posttooluse_updated_mcp_tool_output', 'PostToolUse hook returned unsupported updatedMCPToolOutput', '$.hookSpecificOutput.updatedMCPToolOutput');
   }
 }
 
-function validateUserPromptSubmit(output: any, fatal: string[]) {
+function validateUserPromptSubmit(output: any, issues: CodexHookIssue[]) {
   const block = output.decision === 'block';
-  if (block && !nonEmpty(output.reason)) fatal.push('UserPromptSubmit hook returned decision:block without a non-empty reason');
-  if (!block && output.reason !== undefined) fatal.push('UserPromptSubmit hook returned reason without decision');
+  if (block && !nonEmpty(output.reason)) pushUpstreamUnsupported(issues, 'userpromptsubmit_block_without_reason', 'UserPromptSubmit hook returned decision:block without a non-empty reason', '$.reason');
+  if (!block && output.reason !== undefined) pushUpstreamUnsupported(issues, 'userpromptsubmit_reason_without_decision', 'UserPromptSubmit hook returned reason without decision', '$.reason');
 }
 
-function validateStop(output: any, fatal: string[], unsupported: string[]) {
-  rejectUniversal(output, 'Stop', fatal, unsupported, { continueFalse: true, stopReason: true, suppressOutput: true });
+function validateStop(output: any, issues: CodexHookIssue[]) {
+  rejectUniversal(output, 'Stop', issues, { continueFalse: true, stopReason: true, suppressOutput: true });
   const block = output.decision === 'block';
-  if (block && !nonEmpty(output.reason)) fatal.push('Stop hook returned decision:block without a non-empty reason');
-  if (!block && output.reason !== undefined) fatal.push('Stop hook returned reason without decision');
+  if (block && !nonEmpty(output.reason)) pushUpstreamUnsupported(issues, 'stop_block_without_reason', 'Stop hook returned decision:block without a non-empty reason', '$.reason');
+  if (!block && output.reason !== undefined) pushUpstreamUnsupported(issues, 'stop_reason_without_decision', 'Stop hook returned reason without decision', '$.reason');
 }
 
-function validateCompact(event: CodexHookEventName, output: any, fatal: string[], unsupported: string[]) {
-  rejectUniversal(output, event, fatal, unsupported, { continueFalse: true, stopReason: true, suppressOutput: true });
+function validateCompact(event: CodexHookEventName, output: any, issues: CodexHookIssue[]) {
+  rejectUniversal(output, event, issues, { continueFalse: true, stopReason: true, suppressOutput: true });
   for (const key of ['decision', 'reason', 'hookSpecificOutput']) {
-    if (output[key] !== undefined) fatal.push(`${event} hook returned unsupported ${key}`);
+    if (output[key] !== undefined) pushUpstreamUnsupported(issues, `${event}_${key}_unsupported`, `${event} hook returned unsupported ${key}`, `$.${key}`);
   }
 }
 
-function validateSessionStart(output: any, fatal: string[]) {
-  if (output.reason !== undefined) fatal.push('SessionStart hook returned reason');
-  if (output.decision !== undefined) fatal.push('SessionStart hook returned decision');
+function validateSessionStart(output: any, issues: CodexHookIssue[]) {
+  if (output.reason !== undefined) pushUpstreamUnsupported(issues, 'sessionstart_reason', 'SessionStart hook returned reason', '$.reason');
+  if (output.decision !== undefined) pushUpstreamUnsupported(issues, 'sessionstart_decision', 'SessionStart hook returned decision', '$.decision');
 }
 
-function rejectUniversal(output: any, event: string, fatal: string[], unsupported: string[], rules: { continueFalse?: boolean; stopReason?: boolean; suppressOutput?: boolean }) {
-  if (rules.continueFalse && output.continue === false) pushBoth(fatal, unsupported, `${event} hook returned unsupported continue:false`);
-  if (rules.stopReason && output.stopReason !== undefined) pushBoth(fatal, unsupported, `${event} hook returned unsupported stopReason`);
-  if (rules.suppressOutput && output.suppressOutput === true) pushBoth(fatal, unsupported, `${event} hook returned unsupported suppressOutput`);
+function rejectUniversal(output: any, event: string, issues: CodexHookIssue[], rules: { continueFalse?: boolean; stopReason?: boolean; suppressOutput?: boolean }) {
+  const stem = event.toLowerCase();
+  if (rules.continueFalse && output.continue === false) pushUpstreamUnsupported(issues, `${stem}_continue_false`, `${event} hook returned unsupported continue:false`, '$.continue');
+  if (rules.stopReason && output.stopReason !== undefined) pushUpstreamUnsupported(issues, `${stem}_stop_reason`, `${event} hook returned unsupported stopReason`, '$.stopReason');
+  if (rules.suppressOutput && output.suppressOutput === true) pushUpstreamUnsupported(issues, `${stem}_suppress_output`, `${event} hook returned unsupported suppressOutput`, '$.suppressOutput');
 }
 
-function pushBoth(fatal: string[], unsupported: string[], issue: string) {
-  fatal.push(issue);
-  unsupported.push(issue);
+function pushUpstreamUnsupported(issues: CodexHookIssue[], code: string, message: string, path?: string) {
+  pushIssue(issues, 'upstream_semantic_unsupported', code, message, path, { upstream_supported: false });
 }
 
-function result(event: CodexHookEventName, warnings: string[], unsupported: string[], fatal: string[]): CodexHookSemanticValidation {
-  const uniqueWarnings = [...new Set(warnings)];
-  const uniqueUnsupported = [...new Set(unsupported)];
-  const uniqueFatal = [...new Set(fatal)];
+function pushStrictSubset(issues: CodexHookIssue[], code: string, message: string, path?: string) {
+  pushIssue(issues, 'sks_zero_warning_disallowed', code, message, path, { upstream_supported: true, sks_disallowed: true });
+}
+
+function pushIssue(issues: CodexHookIssue[], category: CodexHookIssueCategory, code: string, message: string, path?: string, flags: { upstream_supported?: boolean; sks_disallowed?: boolean } = {}) {
+  issues.push(makeCodexHookIssue(category, code, message, {
+    ...(path ? { path } : {}),
+    ...flags,
+    sks_disallowed: flags.sks_disallowed ?? true
+  }));
+}
+
+function result(event: CodexHookEventName, issues: CodexHookIssue[]): CodexHookSemanticValidation {
+  const uniqueIssues = dedupeCodexHookIssues(issues);
+  const uniqueUnsupported = uniqueIssues
+    .filter((issue) => issue.category === 'upstream_semantic_unsupported')
+    .map((issue) => issue.message);
+  const uniqueFatal = uniqueIssues.map((issue) => issue.message);
   return {
-    schema: 'sks.codex-hook-semantic-validation.v1',
-    ok: uniqueWarnings.length === 0 && uniqueUnsupported.length === 0 && uniqueFatal.length === 0,
+    schema: 'sks.codex-hook-semantic-validation.v2',
+    ok: uniqueIssues.length === 0,
     event,
-    warnings: uniqueWarnings,
+    issues: uniqueIssues,
+    issues_by_category: codexHookIssuesByCategory(uniqueIssues),
+    warnings: [],
     unsupported: uniqueUnsupported,
     fatal: uniqueFatal,
-    reason: uniqueFatal[0] || uniqueUnsupported[0] || uniqueWarnings[0] || null
+    reason: uniqueFatal[0] || null
   };
 }
 
@@ -198,13 +223,13 @@ function nonEmpty(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function snakeCaseKeyIssues(value: unknown, pointer = '$'): string[] {
+function snakeCaseKeyIssues(value: unknown, pointer = '$'): CodexHookIssue[] {
   if (!value || typeof value !== 'object') return [];
   if (Array.isArray(value)) return value.flatMap((item, index) => snakeCaseKeyIssues(item, `${pointer}[${index}]`));
-  const issues: string[] = [];
+  const issues: CodexHookIssue[] = [];
   for (const [key, child] of Object.entries(value)) {
     if (key === 'updatedInput' || key === 'updatedMCPToolOutput') continue;
-    if (/_/.test(key)) issues.push(`${pointer}.${key}:snake_case`);
+    if (/_/.test(key)) issues.push(makeCodexHookIssue('legacy_shape', 'snake_case', `Snake_case hook key is not accepted by SKS: ${pointer}.${key}.`, { path: `${pointer}.${key}`, upstream_supported: false, sks_disallowed: true }));
     issues.push(...snakeCaseKeyIssues(child, `${pointer}.${key}`));
   }
   return issues;
