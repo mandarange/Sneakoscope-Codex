@@ -10,6 +10,7 @@ import { classifyToolError } from './evaluation.js';
 import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.js';
 import { dollarCommand, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { appendMissionStatus } from './recallpulse.js';
+import { runSksUpdateCheck } from './update-check.js';
 import {
   buildPermissionRequestAllow,
   buildPermissionRequestDeny,
@@ -866,12 +867,8 @@ function sksUpdateInstallCommand(version: any) {
 }
 
 async function checkLatestVersion() {
-  if (process.env.SKS_NPM_VIEW_SNEAKOSCOPE_VERSION) return { latest: process.env.SKS_NPM_VIEW_SNEAKOSCOPE_VERSION };
-  const npm = await which('npm').catch(() => null);
-  if (!npm) return { error: 'npm not found' };
-  const result = await runProcess(npm, ['view', 'sneakoscope', 'version'], { timeoutMs: 3500, maxOutputBytes: 4096 });
-  if (result.code !== 0) return { error: `${result.stderr || result.stdout || 'npm view failed'}`.trim() };
-  return { latest: result.stdout.trim().split(/\s+/).pop() };
+  const check = await runSksUpdateCheck({ timeoutMs: 3500 });
+  return { latest: check.latest, error: check.error || undefined };
 }
 
 async function detectInstalledSksVersion() {
