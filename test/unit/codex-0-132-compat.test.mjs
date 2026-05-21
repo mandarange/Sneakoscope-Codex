@@ -13,5 +13,5 @@ test('Codex 0.132 matrix exposes P0 and P1 capabilities', () => {
   assert.ok(ids.includes('tui_probe_batching'));
   assert.ok(ids.includes('python_sdk_turn_result'));
   assert.equal(matrix.ux_review_output_schema_preferred, true);
-  assert.equal(matrix.hook_strict_subset_baseline, 'rust-v0.131.0');
+  assert.equal(matrix.hook_strict_subset_baseline, 'latest');
 });

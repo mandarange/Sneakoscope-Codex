@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.12.0';
+const RELEASE_VERSION = '1.13.0';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 
@@ -42,9 +42,17 @@ const checks = {
   ppt_image_voxel_relations: scriptContains('release:check', 'ppt:image-voxel-relations'),
   ppt_proof_trust_fixture: scriptContains('release:check', 'ppt:proof-trust-fixture'),
   dfix_fixture: scriptContains('release:check', 'dfix:fixture'),
+  dfix_fast_kernel: scriptContains('release:check', 'dfix:fast-kernel'),
+  dfix_blackbox_fast: scriptContains('release:check', 'dfix:blackbox-fast'),
+  dfix_performance: scriptContains('release:check', 'dfix:performance'),
   dfix_patch_handoff: scriptContains('release:check', 'dfix:patch-handoff'),
   dfix_verification_recommendation: scriptContains('release:check', 'dfix:verification-recommendation'),
   dfix_verification: scriptContains('release:check', 'dfix:verification'),
+  hooks_latest_schema_check: scriptContains('release:check', 'hooks:latest-schema-check'),
+  hooks_trust_state_check: scriptContains('release:check', 'hooks:trust-state-check'),
+  hooks_trust_warning_zero: scriptContains('release:check', 'hooks:trust-warning-zero'),
+  hooks_subagent_events_check: scriptContains('release:check', 'hooks:subagent-events-check'),
+  hooks_no_unsupported_handlers: scriptContains('release:check', 'hooks:no-unsupported-handlers'),
   all_features_completion: scriptContains('release:check', 'all-features:completion'),
   all_features_deep_completion: scriptContains('release:check', 'all-features:deep-completion'),
   evidence_flagship_coverage: scriptContains('release:check', 'evidence:flagship-coverage'),
@@ -59,7 +67,7 @@ const checks = {
 };
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
 const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
-const releaseMetadata = runNodeScript('scripts/release-metadata-1-12-check.mjs');
+const releaseMetadata = runNodeScript('scripts/release-metadata-1-13-check.mjs');
 const remainingP0 = [];
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
 for (const [name, ok] of Object.entries(checks)) if (!ok) remainingP0.push(`${name}_gate_missing`);
@@ -124,13 +132,24 @@ const report = {
     }
   },
   dfix: {
-    status: checks.dfix_fixture && checks.dfix_patch_handoff && checks.dfix_verification_recommendation && checks.dfix_verification ? 'present' : 'missing',
+    status: checks.dfix_fixture && checks.dfix_fast_kernel && checks.dfix_blackbox_fast && checks.dfix_performance && checks.dfix_patch_handoff && checks.dfix_verification_recommendation && checks.dfix_verification ? 'present' : 'missing',
     gates: {
       fixture: checks.dfix_fixture,
+      fast_kernel: checks.dfix_fast_kernel,
+      blackbox_fast: checks.dfix_blackbox_fast,
+      performance: checks.dfix_performance,
       patch_handoff: checks.dfix_patch_handoff,
       verification_recommendation: checks.dfix_verification_recommendation,
       verification: checks.dfix_verification
     }
+  },
+  hook_trust_warning_zero: {
+    status: checks.hooks_latest_schema_check && checks.hooks_trust_state_check && checks.hooks_trust_warning_zero && checks.hooks_subagent_events_check && checks.hooks_no_unsupported_handlers ? 'present' : 'missing',
+    latest_schema: checks.hooks_latest_schema_check,
+    trust_state: checks.hooks_trust_state_check,
+    warning_zero: checks.hooks_trust_warning_zero,
+    subagent_events: checks.hooks_subagent_events_check,
+    no_unsupported_handlers: checks.hooks_no_unsupported_handlers
   },
   all_feature_completion: {
     status: checks.all_features_completion && checks.all_features_deep_completion && checks.evidence_flagship_coverage ? 'present' : 'missing',
@@ -226,6 +245,7 @@ function renderMarkdown(report) {
 - UX-Review real callout loop gates: \`${report.image_ux_review.status}\`
 - PPT imagegen review gates: \`${report.ppt_imagegen_review.status}\`
 - DFix gates: \`${report.dfix.status}\`
+- Hook trust warning-zero: \`${report.hook_trust_warning_zero.status}\`
 - All-feature completion: \`${report.all_feature_completion.status}\`
 - Recursive JSON schema check: \`${report.json_schema_recursive.status}\`
 - Official docs compatibility: \`${report.official_docs_compatibility.status}\`

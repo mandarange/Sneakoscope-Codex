@@ -1,0 +1,10 @@
+{
+  "continue": true,
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "allow",
+    "updatedInput": {
+      "command": "npm test -- --runInBand"
+    }
+  }
+}

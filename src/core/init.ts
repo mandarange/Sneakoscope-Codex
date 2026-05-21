@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists, sha256 } from './fsx.js';
+import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists } from './fsx.js';
 import { DEFAULT_RETENTION_POLICY } from './retention.js';
 import { DEFAULT_DB_SAFETY_POLICY } from './db-safety.js';
 import { isHarnessSourceProject, writeHarnessGuardPolicy } from './harness-guard.js';
@@ -9,6 +9,8 @@ import { disableVersionGitHook } from './version-manager.js';
 import { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT } from './team-review-policy.js';
 import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_COMMAND_ALIASES, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, GETDESIGN_REFERENCE, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_DESIGN_REFERENCES, RECOMMENDED_MCP_SERVERS, RECOMMENDED_SKILLS, RESERVED_CODEX_PLUGIN_SKILL_NAMES, SOLUTION_SCOUT_SKILL_NAME, chatCaptureIntakeText, context7ConfigToml, getdesignReferencePolicyText, imageUxReviewPipelinePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, solutionScoutPolicyText, speedLanePolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.js';
 import { SKILL_DREAM_POLICY, skillDreamPolicyText } from './skill-forge.js';
+import { CODEX_HOOK_EVENT_STATE_KEYS } from './codex-compat/codex-hook-events.js';
+import { codexCommandHookCurrentHash } from './codex-hooks/codex-hook-hash.js';
 
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
 const SKS_GENERATED_GIT_PATTERNS = [
@@ -121,10 +123,15 @@ function sksHookCommand(commandPrefix: any, hookName: any) {
 }
 
 const MANAGED_HOOKS = {
+  SessionStart: [{ hooks: [{ type: 'command', command: null, hookName: 'session-start', statusMessage: 'SKS preparing session context' }] }],
   UserPromptSubmit: [{ hooks: [{ type: 'command', command: null, hookName: 'user-prompt-submit', statusMessage: 'SKS routing prompt and context' }] }],
   PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: null, hookName: 'pre-tool', statusMessage: 'SKS checking tool safety' }] }],
   PostToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: null, hookName: 'post-tool', statusMessage: 'SKS recording tool evidence' }] }],
   PermissionRequest: [{ matcher: '*', hooks: [{ type: 'command', command: null, hookName: 'permission-request', statusMessage: 'SKS reviewing permission request' }] }],
+  PreCompact: [{ hooks: [{ type: 'command', command: null, hookName: 'pre-compact', statusMessage: 'SKS preparing compact context' }] }],
+  PostCompact: [{ hooks: [{ type: 'command', command: null, hookName: 'post-compact', statusMessage: 'SKS recording compact context' }] }],
+  SubagentStart: [{ hooks: [{ type: 'command', command: null, hookName: 'subagent-start', statusMessage: 'SKS recording subagent start' }] }],
+  SubagentStop: [{ hooks: [{ type: 'command', command: null, hookName: 'subagent-stop', statusMessage: 'SKS recording subagent stop' }] }],
   Stop: [{ hooks: [{ type: 'command', command: null, hookName: 'stop', statusMessage: 'SKS checking done gate' }] }]
 };
 
@@ -142,13 +149,7 @@ function buildManagedHooks(commandPrefix: any) {
   return { hooks };
 }
 
-const CODEX_HOOK_EVENT_KEYS: Record<string, string> = {
-  UserPromptSubmit: 'user_prompt_submit',
-  PreToolUse: 'pre_tool_use',
-  PostToolUse: 'post_tool_use',
-  PermissionRequest: 'permission_request',
-  Stop: 'stop'
-};
+const CODEX_HOOK_EVENT_KEYS: Record<string, string> = { ...CODEX_HOOK_EVENT_STATE_KEYS };
 
 export function buildManagedHookTrustStateToml(root: string, commandPrefix: string): string {
   const source = path.join(root, '.codex', 'hooks.json');
@@ -177,28 +178,14 @@ export function mergeManagedHookTrustStateToml(existingContent: string, root: st
 }
 
 export function codexHookTrustedHash(eventName: string, entry: any, hook: any): string {
-  const normalizedHook = {
-    type: String(hook.type || 'command'),
+  return codexCommandHookCurrentHash({
+    event: eventName as any,
+    matcher: !['UserPromptSubmit', 'Stop', 'SessionStart', 'SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact'].includes(eventName) && entry?.matcher != null ? String(entry.matcher) : null,
     command: String(hook.command || ''),
     timeout: Number(hook.timeout || 600),
     async: Boolean(hook.async),
     statusMessage: String(hook.statusMessage || '')
-  };
-  const identity: Record<string, unknown> = {
-    event_name: eventName,
-    hooks: [normalizedHook]
-  };
-  if (!['UserPromptSubmit', 'Stop'].includes(eventName) && entry?.matcher != null) identity.matcher = String(entry.matcher);
-  return `sha256:${sha256(canonicalJson(identity))}`;
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
-    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
+  });
 }
 
 function tomlQuotedKey(value: string): string {
@@ -257,7 +244,7 @@ function stripSksManagedHookEntry(entry: any) {
 function isSksManagedHook(hook: any) {
   if (!hook || typeof hook !== 'object' || Array.isArray(hook)) return false;
   const command = String(hook.command || '');
-  return hook.type === 'command' && /\bhook\s+(?:user-prompt-submit|pre-tool|post-tool|permission-request|stop)\b/.test(command) && /\b(?:sks|sneakoscope|sks\.js)\b/.test(command);
+  return hook.type === 'command' && /\bhook\s+(?:session-start|user-prompt-submit|pre-tool|post-tool|permission-request|pre-compact|post-compact|subagent-start|subagent-stop|stop)\b/.test(command) && /\b(?:sks|sneakoscope|sks\.js)\b/.test(command);
 }
 
 const AGENTS_BLOCK = "\n# Sneakoscope Codex Managed Rules\n\nThis repository uses Sneakoscope Codex.\n\n## Core Rules\n\n- Codex native `/goal` workflows are the persisted continuation surface; Ralph is removed from the user-facing SKS surface.\n- Keep runtime state bounded: raw logs go to files, prompts get tails/summaries, and `sks gc` may prune stale artifacts.\n- Before substantive work, SKS checks npm for a newer package. If newer, ask update-now vs skip-for-this-conversation.\n- Versioning is explicit: use `sks versioning bump` when preparing release metadata. SKS must not install Git pre-commit hooks.\n- Installed harness files are immutable to LLM edits: `.codex/*`, `.agents/skills/`, `.codex/agents/`, `.sneakoscope/*policy*.json`, `AGENTS.md`, and `node_modules/sneakoscope`. The Sneakoscope engine source repo is the only automatic exception.\n- OMX/DCodex conflicts block setup/doctor. Show `sks conflicts prompt`; cleanup requires explicit human approval.\n- Do not stop at a plan when implementation was requested. Finish, verify, or report the hard blocker.\n- Do not create unrequested fallback implementation code. If the requested path is impossible, block with evidence instead of inventing substitute behavior.\n\n## Routes\n\n- General execution/code-changing prompts default to `$Team`: analysis scouts, TriWiki refresh/validate, read-only debate, consensus, concrete runtime task graph/inboxes, fresh executor team, minimum five-lane Team review, integration, Honest Mode.\n- `$Computer-Use` / `$CU` is the maximum-speed Codex Computer Use lane for UI/browser/visual tasks: skip Team debate and upfront TriWiki loops, use Codex Computer Use directly, then refresh/validate TriWiki and run Honest Mode at final closeout.\n- `$Goal` is a fast bridge/overlay for Codex native `/goal` create/pause/resume/clear persistence controls; implementation continues through the selected SKS execution route.\n- TriWiki recall must stay bounded. Use `sks wiki sweep` to record demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim.\n- Team missions must keep schema-backed evidence current: `work-order-ledger.json`, `effort-decision.json`, `team-dashboard-state.json`, and route-specific visual/dogfood artifacts where applicable. Team completion requires at least five independent reviewer/QA validation lanes before integration or final, even when a prompt requests fewer reviewers. Use `sks validate-artifacts latest` before claiming those artifacts pass.\n- `$DFix` is Direct Fix: only tiny copy/config/docs/labels/spacing/translation/simple mechanical edits, bypassing the main pipeline, Team, TriWiki/TriFix/reflection recording, and persistent route state; it still uses a one-line DFix-specific Honest check before final. Broad implementation stays on `$Team`, while UI design specifics follow the relevant design/UI route rules. `$PPT` is the restrained, information-first HTML/PDF presentation route and must seal delivery context, audience profile, STP, decision context, and 3+ pain-point/solution/aha mappings before design/render work. It must avoid over-designed visuals, carry detail through hierarchy, spacing, alignment, thin rules, source clarity, and subtle accents, preserve editable source HTML under `source-html/`, record `ppt-parallel-report.json`, and clean PPT-only temporary build files before completion. `$Answer`, `$Help`, and `$Wiki` stay lightweight.\n- For code work, surface route/guard/write scopes first, split independent worker scopes when available, and keep parent-owned integration and verification.\n- Design work reads `design.md` as the only design decision SSOT. If missing, create it through `design-system-builder` from `docs/Design-Sys-Prompt.md`; getdesign.md, getdesign-reference, and curated DESIGN.md examples from https://github.com/VoltAgent/awesome-design-md are source inputs to fuse into that SSOT or route-local style tokens, not parallel design authorities. Image/logo/raster assets use `imagegen`, which must prefer official Codex App built-in image generation via `$imagegen` / `gpt-image-2` before API generation and must not be replaced by placeholder SVG/HTML/CSS, prose-only reviews, or fabricated files when generated raster evidence is required.\n- Research, AutoResearch, performance, token, accuracy, SEO/GEO, or workflow-improvement claims need experiment/eval evidence. Do not claim live model accuracy without a scored dataset.\n- Treat handwritten files above 3000 lines as split-review risks. Run `sks code-structure scan` and prefer extraction before adding substantial logic.\n- Skill dreaming stays lightweight: route use records JSON counters in `.sneakoscope/skills/dream-state.json`, and full skill inventory/recommendation runs only after the configured 10-route-event threshold and cooldown. Reports are recommendation-only; deleting or merging skills needs explicit user approval.\n\n## Evidence And Context\n\n- Context7 is required for external libraries, APIs, MCPs, package managers, SDKs, and generated docs: resolve-library-id then query-docs.\n- When tech stack, framework, package, runtime, or deployment-platform versions change, use Context7 or official vendor web docs, record current syntax/security/limit guidance as high-priority TriWiki claims, then refresh and validate before coding.\n- TriWiki is the context-tracking SSOT for long-running missions, Team handoffs, and context-pressure recovery. Read `.sneakoscope/wiki/context-pack.json` before each stage, use `attention.use_first` for compact high-trust recall, hydrate `attention.hydrate_first` from source before risky or lower-trust decisions, refresh after findings or artifact changes, and validate before handoffs/final claims.\n- Source priority: current code/tests/config, decision contract, vgraph, beta, GX render/snapshot metadata, LLM Wiki coordinate index, then model knowledge only if allowed.\n- Final response before stop: summarize what was done, what changed for the user/repo, what was verified, and what remains unverified or blocked; then run Honest Mode. Say what passed and what was not verified.\n- `$From-Chat-IMG` uses forensic visual effort, not ordinary Team effort. Completion is blocked until source inventory, visual mapping, work-order coverage, scoped dogfood/QA, and post-fix verification artifacts are present and valid.\n\n## Safety\n\n- Database access is high risk. Use read-only inspection by default; live data mutation is out of scope unless a sealed contract allows local or branch-only migration files.\n- MAD and MAD-SKS widen only explicit scoped permissions; they still do not authorize unrequested fallback implementation code.\n- Task completion requires relevant tests or justification, zero unsupported critical claims, accepted visual/wiki drift, and final evidence.\n\n## Codex App\n\nUse `.codex/SNEAKOSCOPE.md`, generated `.agents/skills`, `.codex/hooks.json`, and SKS dollar commands (`$sks`, `$team`, `$computer-use`, `$cu`, `$ppt`, `$goal`, `$dfix`, `$qa-loop`, etc.) as the app control surface.\n";

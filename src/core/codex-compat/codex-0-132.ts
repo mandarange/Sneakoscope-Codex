@@ -132,6 +132,6 @@ export function codex0132Matrix(input: {
     capabilities,
     ux_review_output_schema_preferred: capabilities.find((capability) => capability.id === 'exec_resume_output_schema')?.preferred === true,
     unknown_future_fields_policy: 'warning_only_baseline_validation',
-    hook_strict_subset_baseline: 'rust-v0.131.0'
+    hook_strict_subset_baseline: 'latest'
   };
 }

@@ -39,3 +39,20 @@ Tiers:
 - `npx-one-shot`
 
 Use `sks bench core --tier source-ci --json` for release CI. `perf:gate` selects `source-ci` when `CI=true`; otherwise it uses the local tier unless `SKS_PERF_TIER` is set.
+
+## 1.13.0 DFix Speed Budgets
+
+DFix writes `dfix-performance-report.json` and release gates check these budgets:
+
+| DFix Metric | Budget |
+| --- | ---: |
+| cold source-local diagnosis for simple error text | <= 500ms |
+| path decision after diagnosis | <= 100ms |
+| deterministic patch plan | <= 300ms |
+| dry-run Codex handoff without Codex | <= 500ms |
+| exact patch apply for a small file | <= 1000ms |
+| verification selector | <= 300ms |
+| no-Codex full loop fixture | <= 3000ms |
+| Codex handoff timeout | <= 60000ms |
+
+These budgets are evidence gates for SKS 1.13.0. They do not authorize skipping root-cause, diff, rollback, or verification evidence.

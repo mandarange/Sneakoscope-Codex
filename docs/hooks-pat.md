@@ -14,15 +14,17 @@ sks hooks replay-codex-fixtures --json
 sks codex-app pat status --json
 ```
 
-## Codex `rust-v0.131.0` Hook Shape
+## SKS 1.13.0 Latest Codex Hook Shape
 
-SKS 1.0.8 targets Codex CLI `rust-v0.132.0` for runtime capability detection, while hook output validation still uses vendored OpenAI Codex CLI `rust-v0.131.0` generated schemas and a category-aware semantic validator in `src/core/codex-compat/codex-hook-semantic-validator.ts`. The validator is an upstream-schema baseline plus an SKS zero-warning strict subset, not a claim that SKS mirrors every upstream runtime parser rule exactly.
+SKS 1.13.0 validates against the vendored OpenAI Codex `latest` hook snapshot from `openai/codex` HEAD. The snapshot has 10 events and 20 command schema files. `SubagentStart` and `SubagentStop` are release-blocking events, not compatibility warnings.
 
 This page is documentation-only evidence: it distinguishes probe/mock/live evidence, avoids universal Computer Use availability claims, and keeps PAT/secret handling private and redacted. For recovery, run `sks hooks warning-check --json`, `sks computer-use smoke --json`, or `sks codex-lb setup --write-env-file --keychain --launchctl` depending on the failing surface.
 
-Supported event names are `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SessionStart`, `UserPromptSubmit`, and `Stop`.
+Supported event names are `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SessionStart`, `UserPromptSubmit`, `SubagentStart`, `SubagentStop`, and `Stop`.
 
 Command hook config must use the upstream handler fields `command`, `commandWindows` or `command_windows`, `timeout`, `async`, and `statusMessage`. `allow_managed_hooks_only = true` is valid only in `requirements.toml`; SKS must not write it to `config.toml`.
+
+SKS writes command hooks only. It must not generate prompt hooks, agent hooks, async hooks, empty commands, invalid matchers, or same-layer `hooks.json` plus `config.toml` hook definitions. `sks hooks trust-doctor --json` reports `current_hash`, `trusted_hash`, and `trust_status` as `Managed`, `Trusted`, `Modified`, or `Untrusted`; `sks hooks trust-fix --json` updates trusted hash state when repair is safe.
 
 Output uses camelCase Codex fields. Examples:
 
@@ -47,7 +49,7 @@ Output uses camelCase Codex fields. Examples:
 
 Snake_case output keys, legacy top-level `permissionDecision`, PermissionRequest reserved fields, unsupported config fields, PreToolUse `permissionDecision:"ask"`, PreToolUse `allow` without `updatedInput`, Stop `continue:false`, Stop `stopReason`, and Stop blocks without a reason are release-blocking warning patterns. `sks hooks warning-check --json` reports them by `schema_violation`, `upstream_semantic_unsupported`, `sks_zero_warning_disallowed`, `legacy_shape`, and `policy_disallowed`.
 
-Strict-subset examples include PreToolUse `additionalContext` and PermissionRequest allow `message`: upstream schema may allow them, but SKS rejects them to preserve a zero-warning release surface.
+Strict-subset examples include PreToolUse `additionalContext` and PermissionRequest allow `message`: upstream schema may allow them, but SKS rejects them to preserve a zero-warning release surface. This strict subset is intentional release policy, not an upstream schema limitation.
 
 PreToolUse simple allow is:
 

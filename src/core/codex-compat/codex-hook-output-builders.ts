@@ -98,10 +98,23 @@ export function buildStopContinue(options: { systemMessage?: string } = {}): Cod
 }
 
 export function buildStopBlock(reason: unknown, options: { systemMessage?: string } = {}): CodexHookOutput {
+  return buildStopLikeBlock('Stop', reason, options);
+}
+
+export function buildSubagentStopContinue(options: { systemMessage?: string } = {}): CodexHookOutput {
+  return withOptionalSystemMessage({ continue: true }, options.systemMessage);
+}
+
+export function buildSubagentStopBlock(reason: unknown, options: { systemMessage?: string } = {}): CodexHookOutput {
+  return buildStopLikeBlock('SubagentStop', reason, options);
+}
+
+function buildStopLikeBlock(event: Extract<CodexHookEventName, 'Stop' | 'SubagentStop'>, reason: unknown, options: { systemMessage?: string } = {}): CodexHookOutput {
+  void event;
   return withOptionalSystemMessage({
     continue: true,
     decision: 'block',
-    reason: requiredReason(reason, 'Stop block requires a non-empty reason')
+    reason: requiredReason(reason, `${event} block requires a non-empty reason`)
   }, options.systemMessage);
 }
 
@@ -111,11 +124,19 @@ export function buildCompactContinue(event: Extract<CodexHookEventName, 'PreComp
 }
 
 export function buildSessionStartContinue(options: { additionalContext?: string; systemMessage?: string } = {}): CodexHookOutput {
+  return buildStartLikeContinue('SessionStart', options);
+}
+
+export function buildSubagentStartContinue(options: { additionalContext?: string; systemMessage?: string } = {}): CodexHookOutput {
+  return buildStartLikeContinue('SubagentStart', options);
+}
+
+function buildStartLikeContinue(event: Extract<CodexHookEventName, 'SessionStart' | 'SubagentStart'>, options: { additionalContext?: string; systemMessage?: string } = {}): CodexHookOutput {
   const output: CodexHookOutput = { continue: true };
   const additionalContext = optionalText(options.additionalContext);
   if (additionalContext) {
     output.hookSpecificOutput = {
-      hookEventName: 'SessionStart',
+      hookEventName: event,
       additionalContext
     };
   }

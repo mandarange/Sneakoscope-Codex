@@ -1,0 +1,7 @@
+{
+  "continue": true,
+  "hookSpecificOutput": {
+    "hookEventName": "SubagentStart",
+    "additionalContext": "subagent context"
+  }
+}

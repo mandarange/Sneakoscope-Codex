@@ -64,12 +64,18 @@ export function validateCodexHookSemanticOutput(eventLike: unknown, output: any)
     case 'Stop':
       validateStop(output, issues);
       break;
+    case 'SubagentStop':
+      validateStopLike('SubagentStop', output, issues);
+      break;
     case 'PreCompact':
     case 'PostCompact':
       validateCompact(event, output, issues);
       break;
     case 'SessionStart':
-      validateSessionStart(output, issues);
+      validateSessionStartLike('SessionStart', output, issues);
+      break;
+    case 'SubagentStart':
+      validateSessionStartLike('SubagentStart', output, issues);
       break;
   }
 
@@ -102,6 +108,14 @@ export function validateCompactSemanticOutput(event: Extract<CodexHookEventName,
 
 export function validateSessionStartSemanticOutput(output: any): CodexHookSemanticValidation {
   return validateCodexHookSemanticOutput('SessionStart', output);
+}
+
+export function validateSubagentStartSemanticOutput(output: any): CodexHookSemanticValidation {
+  return validateCodexHookSemanticOutput('SubagentStart', output);
+}
+
+export function validateSubagentStopSemanticOutput(output: any): CodexHookSemanticValidation {
+  return validateCodexHookSemanticOutput('SubagentStop', output);
 }
 
 function validatePreToolUse(output: any, issues: CodexHookIssue[]) {
@@ -155,10 +169,15 @@ function validateUserPromptSubmit(output: any, issues: CodexHookIssue[]) {
 }
 
 function validateStop(output: any, issues: CodexHookIssue[]) {
-  rejectUniversal(output, 'Stop', issues, { continueFalse: true, stopReason: true, suppressOutput: true });
+  validateStopLike('Stop', output, issues);
+}
+
+function validateStopLike(event: Extract<CodexHookEventName, 'Stop' | 'SubagentStop'>, output: any, issues: CodexHookIssue[]) {
+  rejectUniversal(output, event, issues, { continueFalse: true, stopReason: true, suppressOutput: true });
   const block = output.decision === 'block';
-  if (block && !nonEmpty(output.reason)) pushUpstreamUnsupported(issues, 'stop_block_without_reason', 'Stop hook returned decision:block without a non-empty reason', '$.reason');
-  if (!block && output.reason !== undefined) pushUpstreamUnsupported(issues, 'stop_reason_without_decision', 'Stop hook returned reason without decision', '$.reason');
+  const stem = event.toLowerCase();
+  if (block && !nonEmpty(output.reason)) pushUpstreamUnsupported(issues, `${stem}_block_without_reason`, `${event} hook returned decision:block without a non-empty reason`, '$.reason');
+  if (!block && output.reason !== undefined) pushUpstreamUnsupported(issues, `${stem}_reason_without_decision`, `${event} hook returned reason without decision`, '$.reason');
 }
 
 function validateCompact(event: CodexHookEventName, output: any, issues: CodexHookIssue[]) {
@@ -168,9 +187,10 @@ function validateCompact(event: CodexHookEventName, output: any, issues: CodexHo
   }
 }
 
-function validateSessionStart(output: any, issues: CodexHookIssue[]) {
-  if (output.reason !== undefined) pushUpstreamUnsupported(issues, 'sessionstart_reason', 'SessionStart hook returned reason', '$.reason');
-  if (output.decision !== undefined) pushUpstreamUnsupported(issues, 'sessionstart_decision', 'SessionStart hook returned decision', '$.decision');
+function validateSessionStartLike(event: Extract<CodexHookEventName, 'SessionStart' | 'SubagentStart'>, output: any, issues: CodexHookIssue[]) {
+  const stem = event.toLowerCase();
+  if (output.reason !== undefined) pushUpstreamUnsupported(issues, `${stem}_reason`, `${event} hook returned reason`, '$.reason');
+  if (output.decision !== undefined) pushUpstreamUnsupported(issues, `${stem}_decision`, `${event} hook returned decision`, '$.decision');
 }
 
 function rejectUniversal(output: any, event: string, issues: CodexHookIssue[], rules: { continueFalse?: boolean; stopReason?: boolean; suppressOutput?: boolean }) {

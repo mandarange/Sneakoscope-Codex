@@ -8,7 +8,7 @@ const buildManifestWriter = fs.readFileSync('scripts/write-build-manifest.mjs', 
 const distRuntimeCheck = fs.readFileSync('scripts/check-dist-runtime.mjs', 'utf8');
 
 test('publish lifecycle runs the expensive release gate only once', () => {
-  assert.equal(pkg.version, '1.12.0');
+  assert.equal(pkg.version, '1.13.0');
   assert.equal(pkg.publishConfig?.tag, 'latest');
   assert.match(scripts['feature-quality:check'], /--release/);
   assert.doesNotMatch(scripts['feature-quality:check'], /--rc/);

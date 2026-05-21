@@ -13,7 +13,7 @@ test('packed Codex compatibility includes schema snapshot and semantic status', 
   assert.equal(json.schema, 'sks.codex-compat.v1');
   assert.equal(json.required_baseline, 'rust-v0.132.0');
   assert.equal(json.hooks_schema?.ok, true);
-  assert.equal(json.hooks_schema?.metadata?.tag, 'rust-v0.131.0');
+  assert.equal(json.hooks_schema?.metadata?.tag, 'latest');
   assert.equal(json.hooks_semantic?.ok, true);
   assert.equal(json.codex_0_132?.baseline, 'rust-v0.132.0');
 });
