@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const jsonPath = path.join(reportDir, 'release-readiness-1.0.8.json');
-const mdPath = path.join(reportDir, 'release-readiness-1.0.8.md');
+const jsonPath = path.join(reportDir, 'release-readiness-1.0.9.json');
+const mdPath = path.join(reportDir, 'release-readiness-1.0.9.md');
 
 const checks = {
   hook_strict_subset: scriptContains('release:check', 'hooks:strict-subset-check'),
@@ -23,13 +23,16 @@ const checks = {
   ux_review_no_text_fallback: scriptContains('release:check', 'ux-review:no-text-fallback'),
   ux_review_image_voxel_relations: scriptContains('release:check', 'ux-review:image-voxel-relations'),
   memory_summary_rebuild_check: scriptContains('release:check', 'memory-summary:rebuild-check'),
-  loop_blocker_check: scriptContains('release:check', 'loop-blocker:check')
+  loop_blocker_check: scriptContains('release:check', 'loop-blocker:check'),
+  official_docs_compat: scriptContains('release:check', 'official-docs:compat')
 };
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
+const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
 const remainingP0 = [];
-if (pkg.version !== '1.0.8') remainingP0.push('package_version_not_1.0.8');
+if (pkg.version !== '1.0.9') remainingP0.push('package_version_not_1.0.9');
 for (const [name, ok] of Object.entries(checks)) if (!ok) remainingP0.push(`${name}_gate_missing`);
 if (docs.status !== 0) remainingP0.push('docs_truthfulness_failed');
+if (officialDocs.status !== 0) remainingP0.push('official_docs_compat_failed');
 
 const stamp = readJson('.sneakoscope/reports/release-check-stamp.json', null);
 const report = {
@@ -63,6 +66,11 @@ const report = {
       no_text_fallback: checks.ux_review_no_text_fallback,
       image_voxel_relations: checks.ux_review_image_voxel_relations
     }
+  },
+  official_docs_compatibility: {
+    status: checks.official_docs_compat && officialDocs.status === 0 ? 'pass' : 'fail',
+    report_path: '.sneakoscope/reports/official-docs-compat-1.0.9.json',
+    stdout: trimOutput(officialDocs.stdout)
   },
   memory_summary_rebuild: {
     status: checks.memory_summary_rebuild_check ? 'present' : 'missing',
@@ -118,7 +126,7 @@ function trimOutput(text) {
 }
 
 function renderMarkdown(report) {
-  return `# SKS 1.0.8 Release Readiness
+  return `# SKS 1.0.9 Release Readiness
 
 - Schema: \`${report.schema}\`
 - Package: \`${report.package.name}@${report.package.version}\`
@@ -127,6 +135,7 @@ function renderMarkdown(report) {
 - Computer Use evidence modes: \`${report.computer_use_evidence_mode_support.status}\`
 - Codex 0.132 compatibility: \`${report.codex_0_132.status}\`
 - UX-Review real callout loop gates: \`${report.image_ux_review.status}\`
+- Official docs compatibility: \`${report.official_docs_compatibility.status}\`
 - Memory summary rebuild: \`${report.memory_summary_rebuild.status}\`
 - Loop blocker stop: \`${report.loop_blocker_stop.status}\`
 - Docs truthfulness: \`${report.docs_truthfulness.status}\`

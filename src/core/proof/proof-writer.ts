@@ -3,6 +3,7 @@ import { appendJsonl, ensureDir, nowIso, packageRoot, writeJsonAtomic, writeText
 import { redactSecrets } from '../secret-redaction.js';
 import { emptyCompletionProof } from './proof-schema.js';
 import { validateCompletionProof } from './validation.js';
+import { codexSchemaPath, runCodexExecResumeWithOutputSchema } from '../codex-exec-output-schema.js';
 
 export function proofDir(root: any = packageRoot()) {
   return path.join(root, '.sneakoscope', 'proof');
@@ -29,6 +30,28 @@ export async function writeCompletionProof(root: any = packageRoot(), input: any
     await writeTextAtomic(path.join(missionDir, 'completion-proof.md'), renderProofMarkdown(proof, validation));
   }
   return { ok: validation.ok, proof, validation, files: { latest_json: latestJson, latest_md: latestMd } };
+}
+
+export async function generateCompletionProofWithOutputSchema(root: any = packageRoot(), {
+  sessionId,
+  prompt,
+  outputFile = null
+}: any = {}) {
+  if (!sessionId) {
+    return {
+      schema: 'sks.completion-proof-output-schema-run.v1',
+      ok: false,
+      status: 'integration_optional',
+      blocker: 'codex_resume_session_required'
+    };
+  }
+  const schemaPath = await codexSchemaPath('completion-proof');
+  return runCodexExecResumeWithOutputSchema({
+    sessionId,
+    prompt: prompt || 'Generate SKS Completion Proof as strict schema-bound JSON.',
+    outputSchemaPath: schemaPath,
+    outputFile
+  }, { cwd: root });
 }
 
 export function renderProofMarkdown(proof: any = {}, validation: any = validateCompletionProof(proof)) {

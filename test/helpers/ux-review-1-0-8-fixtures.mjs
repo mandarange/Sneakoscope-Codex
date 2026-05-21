@@ -36,9 +36,11 @@ export function realGeneratedReviewImage(overrides = {}) {
     privacy: 'local-only',
     width: 1,
     height: 1,
+    sha256: 'fixture-real-generated-sha256',
     real_generated: true,
     mock: false,
     source: 'real_gpt_image_2_callout',
+    callout_extraction_status: 'succeeded',
     callouts: [
       {
         id: 'callout-1',

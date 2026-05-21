@@ -21,8 +21,11 @@ export const IMAGE_UX_REVIEW_FIX_LOOP_ARTIFACT = 'image-ux-fix-loop.json';
 export const IMAGE_UX_REVIEW_RECAPTURE_ARTIFACT = 'image-ux-recapture-plan.json';
 export const IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT = 'image-ux-iteration-report.json';
 export const IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT = 'image-ux-imagegen-request.json';
+export const IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT = 'image-ux-gpt-image-2-request.json';
+export const IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT = 'image-ux-gpt-image-2-response.json';
 export const IMAGE_UX_REVIEW_API_DOC_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
 export const GPT_IMAGE_2_MODEL_DOC_URL = 'https://developers.openai.com/api/docs/models/gpt-image-2';
+export const STRUCTURED_OUTPUTS_DOC_URL = 'https://developers.openai.com/api/docs/guides/structured-outputs';
 
 export const IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS = Object.freeze([
   'real_source_screenshot_present',
@@ -90,6 +93,8 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
       codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
       api_image_generation_doc: IMAGE_UX_REVIEW_API_DOC_URL,
       gpt_image_2_model_doc: GPT_IMAGE_2_MODEL_DOC_URL,
+      image_input_fidelity_note: 'high_fidelity_automatic',
+      unsupported_parameters_omitted: ['input_fidelity'],
       required_policy: CODEX_IMAGEGEN_REQUIRED_POLICY,
       output_artifact: IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
       anti_substitution_rule: 'A text-only visual review cannot satisfy this route. Missing generated annotated review images block the gate instead of being simulated.',
@@ -116,8 +121,10 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
       input_artifact: IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
       output_artifact: IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
       preferred_path: 'codex exec resume --output-schema schemas/codex/image-ux-issue-ledger.schema.json',
+      fallback_path: 'OpenAI Responses Structured Outputs text.format json_schema strict true',
+      structured_outputs_doc: STRUCTURED_OUTPUTS_DOC_URL,
       fallback_cap: 'verified_partial',
-      required_issue_fields: ['id', 'severity', 'source_screen_id', 'generated_review_image_id', 'callout_id', 'bbox', 'region', 'title', 'detail', 'likely_cause', 'fix_action', 'target_surface', 'status', 'confidence', 'source']
+      required_issue_fields: ['id', 'severity', 'source_screen_id', 'generated_review_image_id', 'callout_id', 'bbox', 'region', 'title', 'detail', 'likely_cause', 'fix_action', 'target_surface', 'status', 'confidence', 'source', 'extraction_provider', 'generated_image_sha256', 'bbox_coordinate_space', 'bbox_confidence']
     },
     remediation_policy: {
       code_changes_allowed: 'only_when_user_or_route_contract_requests_fixing',
@@ -129,6 +136,8 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
     },
     evidence_artifacts: [
       IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT,
+      IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT,
+      IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
       IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
       IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
       IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT,
@@ -251,7 +260,8 @@ export function buildImageUxGeneratedReviewLedger(contract: any = {}, inventory:
       prompt: buildCalloutPrompt(screen.id, { target: inventory.target }),
       status: normalizedImages.some((image: any) => image.source_screen_id === screen.id) ? 'generated_or_attached' : 'pending_imagegen',
       required_output: 'annotated_review_image_with_numbered_callouts_severity_labels_markers_arrows_and_mini_comp',
-      requested_fidelity: 'original',
+      requested_fidelity: 'high_fidelity_automatic',
+      image_input_fidelity_note: 'gpt-image-2 processes image inputs at high fidelity automatically; SKS omits unsupported input_fidelity.',
       privacy: 'local-only'
     })),
     generated_count: normalizedImages.length,
@@ -357,6 +367,8 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
     required_artifacts: [
       IMAGE_UX_REVIEW_POLICY_ARTIFACT,
       IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT,
+      IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT,
+      IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
       IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
       IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
       IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT,
@@ -418,9 +430,12 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
     honestModeComplete: opts.honestModeComplete === true
   });
   const imagegenRequest = buildImagegenRequestArtifact(contract, inventory);
+  const imagegenResponse = buildImagegenResponseArtifact(generatedReviewLedger);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_POLICY_ARTIFACT), policy);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT), inventory);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT), imagegenRequest);
+  await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT), imagegenRequest);
+  await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT), imagegenResponse);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), generatedReviewLedger);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), issueLedger);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT), fixTaskPlan);
@@ -432,6 +447,7 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
     policy,
     inventory,
     imagegen_request: imagegenRequest,
+    imagegen_response: imagegenResponse,
     generated_review_ledger: generatedReviewLedger,
     issue_ledger: issueLedger,
     fix_task_plan: fixTaskPlan,
@@ -458,26 +474,57 @@ export function imageUxReviewProofEvidence(gate: any = {}, artifacts: any = {}) 
     recapture_re_review_status: artifacts.recapture_plan?.changed_screens_rechecked_or_not_applicable ? 'complete_or_not_applicable' : 'blocked',
     image_voxel_relation_count: generated.generated_review_images?.filter((image: any) => image.image_voxel_relation).length || 0,
     computer_use_evidence_mode: artifacts.inventory?.source_screens?.some((screen: any) => screen.capture_source === 'codex_computer_use_screenshot') ? 'source_screenshot' : 'user_or_static_screenshot',
+    claims: {
+      ux_review_source_screenshot_verified: artifacts.inventory?.passed === true,
+      ux_review_gpt_image_2_callouts_generated: (generated.real_generated_count || 0) > 0,
+      ux_review_issues_extracted_from_callout_image: issueLedger.extracted_from_generated_callout === true,
+      ux_review_p0_p1_fixed_or_blocked: (issueLedger.blocking_issue_count || 0) === 0 || (gate.blockers || []).length > 0,
+      ux_review_changed_screens_rechecked: artifacts.recapture_plan?.changed_screens_rechecked_or_not_applicable === true,
+      ux_review_image_voxel_relations_verified: (generated.generated_review_images || []).some((image: any) => image.image_voxel_relation)
+    },
     blockers: gate.blockers || []
   };
 }
 
 function buildImagegenRequestArtifact(contract: any, inventory: any) {
   return {
-    schema: 'sks.image-ux-imagegen-request.v1',
+    schema: 'sks.image-ux-gpt-image-2-request.v1',
     created_at: nowIso(),
     model: 'gpt-image-2',
     surface: 'Codex App $imagegen',
+    endpoint: 'Codex App $imagegen or OpenAI /v1/images/edits fallback',
+    api_docs: IMAGE_UX_REVIEW_API_DOC_URL,
     privacy: 'local-only',
     requests: (inventory.source_screens || []).map((screen: any) => ({
       source_screen_id: screen.id,
       source_image_path: screen.source,
       source_sha256: screen.sha256 || null,
-      requested_fidelity: 'original',
+      requested_fidelity: 'high_fidelity_automatic',
+      image_input_fidelity_note: 'gpt-image-2 high-fidelity image input is automatic; do not send input_fidelity.',
       output_dir: 'mission',
       prompt: buildCalloutPrompt(screen.id, { target: inventory.target || contract.prompt })
     })),
     blocker_if_unavailable: imagegenCapabilityBlocker()
+  };
+}
+
+function buildImagegenResponseArtifact(generatedReviewLedger: any = {}) {
+  const image = (generatedReviewLedger.generated_review_images || [])[0] || null;
+  return {
+    schema: 'sks.image-ux-gpt-image-2-response.v1',
+    created_at: nowIso(),
+    provider: image?.provider_surface || generatedReviewLedger.provider?.preferred_surface || 'none',
+    model: 'gpt-image-2',
+    ok: generatedReviewLedger.passed === true,
+    status: generatedReviewLedger.passed === true ? 'generated' : 'blocked_or_pending',
+    output_image_path: image?.path || null,
+    output_image_sha256: image?.sha256 || null,
+    output_id: image?.output_id || null,
+    dimensions: image ? { width: image.width || null, height: image.height || null, format: image.format || null } : null,
+    latency_ms: image?.latency_ms || null,
+    token_cost_metadata: image?.token_cost_metadata || null,
+    local_only: true,
+    blockers: generatedReviewLedger.blockers || []
   };
 }
 
@@ -490,11 +537,14 @@ function normalizeGeneratedReviewImage(image: any = {}, screen: any = {}) {
     source_screen_id: sourceScreenId,
     provider_model: image.provider_model || image.model || 'gpt-image-2',
     provider_surface: image.provider_surface || 'Codex App $imagegen',
-    requested_fidelity: image.requested_fidelity || 'original',
+    requested_fidelity: image.requested_fidelity || 'high_fidelity_automatic',
+    image_input_fidelity_note: image.image_input_fidelity_note || 'gpt-image-2 high-fidelity image input is automatic',
     privacy: image.privacy || 'local-only',
     real_generated: realGenerated,
     mock: image.mock === true || image.source === 'mock_fixture',
     callout_extraction_required: true,
+    callout_extraction_status: Array.isArray(image.callouts) && image.callouts.length ? 'succeeded' : (image.callout_extraction_status || 'pending'),
+    callouts: Array.isArray(image.callouts) ? image.callouts : [],
     image_size_relation: {
       source_width: screen.width || null,
       source_height: screen.height || null,

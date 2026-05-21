@@ -2,6 +2,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, exists, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { findLatestMission, missionDir, missionsDir } from '../mission.js';
+import { codexSchemaPath, runCodexExecResumeWithOutputSchema } from '../codex-exec-output-schema.js';
 import {
   WRONGNESS_INDEX_SCHEMA,
   WRONGNESS_LEDGER_SCHEMA,
@@ -95,6 +96,28 @@ export async function addWrongnessRecord(root: string, input: unknown = {}, opts
   const mission = missionId ? await upsertIntoScope(root, missionId, record) : null;
   await writeWrongnessSummaries(root, missionId);
   return { record, project, mission };
+}
+
+export async function extractWrongnessWithOutputSchema(root: string, {
+  sessionId,
+  prompt,
+  outputFile = null
+}: { sessionId?: string | null; prompt?: string | null; outputFile?: string | null } = {}) {
+  if (!sessionId) {
+    return {
+      schema: 'sks.wrongness-output-schema-run.v1',
+      ok: false,
+      status: 'integration_optional',
+      blocker: 'codex_resume_session_required'
+    };
+  }
+  const schemaPath = await codexSchemaPath('wrongness-record');
+  return runCodexExecResumeWithOutputSchema({
+    sessionId,
+    prompt: prompt || 'Extract a single SKS Wrongness record as strict schema-bound JSON.',
+    outputSchemaPath: schemaPath,
+    outputFile
+  }, { cwd: root });
 }
 
 export async function resolveWrongnessRecord(root: string, id: string, reason = 'Resolved after corrective action', status: 'resolved' | 'false_alarm' = 'resolved'): Promise<{ updated: number; records: WrongnessRecord[] }> {

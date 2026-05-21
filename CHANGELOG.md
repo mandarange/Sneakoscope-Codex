@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-05-21
+
+### Added
+- Add real `codex exec resume --output-schema` runner with output-file parsing, redaction, timeout, and schema validation.
+- Add official docs compatibility report for Codex 0.132, `gpt-image-2` image generation/edit fidelity, and Structured Outputs strict schemas.
+- Add OpenAI Structured Outputs fallback adapter and optional OpenAI Images API `gpt-image-2` callout generation fallback.
+- Add `image-ux-gpt-image-2-request.json` and `image-ux-gpt-image-2-response.json` artifacts.
+- Add Issue Ledger v3 extraction metadata, patch handoff prompts/results, attach-after recapture metadata, UX evidence kinds, and expanded UX wrongness kinds.
+
+### Fixed
+- Prevent attached generated images from creating generic callouts before schema-bound pixel extraction succeeds.
+- Prevent UX-Review verified claims when generated callout extraction is pending, invalid, text-only, or mock-as-real.
+- Prevent visual fix verification without patch evidence plus recapture/re-review evidence.
+
+### Changed
+- Treat `gpt-image-2` image input fidelity as high-fidelity automatic metadata and omit unsupported `input_fidelity`.
+- Treat Structured Outputs strict schemas as the real fallback when Codex output-schema is unavailable.
+- Treat official documentation drift as a release-readiness input.
 
 ## [1.0.8] - 2026-05-20
 

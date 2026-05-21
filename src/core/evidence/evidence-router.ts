@@ -193,6 +193,11 @@ function inferKind(relPath: any = '') {
   if (/completion-proof\.json$/.test(relPath)) return 'proof';
   if (/route-completion-contract\.json$/.test(relPath)) return 'route_contract';
   if (/trust-report\.json$/.test(relPath)) return 'trust_report';
+  if (/image-ux-screen-inventory\.json$/.test(relPath)) return 'ux_review_source_screenshot';
+  if (/image-ux-gpt-image-2-response\.json$|image-ux-generated-review-ledger\.json$/.test(relPath)) return 'ux_review_gpt_image_2_callout';
+  if (/image-ux-issue-ledger\.json$/.test(relPath)) return 'ux_review_callout_extraction';
+  if (/image-ux-fix-loop\.json$|image-ux-fix-task-plan\.json$/.test(relPath)) return 'ux_review_patch_result';
+  if (/image-ux-recapture-plan\.json$/.test(relPath)) return 'ux_review_recheck';
   if (/image-wrongness/.test(relPath)) return 'image_wrongness';
   if (/wrongness/.test(relPath)) return 'wrongness';
   if (/image-voxel-ledger\.json$|visual-anchors\.json$|image-assets\.json$/.test(relPath)) return 'image_voxel';

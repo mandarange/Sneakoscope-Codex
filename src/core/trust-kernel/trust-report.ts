@@ -128,6 +128,9 @@ function imageUxReviewTrust(proof: any = {}) {
   }
   if ((evidence.blockers || []).includes('ux_review_text_only_fallback')) issues.push('text_only_ux_review_cannot_be_verified');
   if ((evidence.blockers || []).includes('missing_generated_annotated_review_images')) issues.push('gpt_image_2_callout_image_missing');
+  if (evidence.callout_extraction_schema_status !== 'valid') issues.push('ux_review_extraction_schema_invalid');
+  if (evidence.recapture_re_review_status === 'blocked') issues.push('ux_review_recapture_re_review_missing');
+  if ((evidence.blockers || []).includes('callout_extraction_pending')) issues.push('ux_review_callout_extraction_pending');
   return {
     issues,
     summary: {

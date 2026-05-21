@@ -4,6 +4,8 @@ Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
 Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable.
 
+SKS **1.0.9** is the Official Docs Ultimate Kernel: Codex CLI `rust-v0.132.0` structured resume output is now an actual runner, `gpt-image-2` review generation uses Codex App `$imagegen` evidence or an optional OpenAI Images API fallback, Structured Outputs strict schemas are the extraction fallback, and `$UX-Review this screenshot with gpt-image-2 callouts, then fix the issues` blocks fake callouts until generated image pixels are schema-extracted, patched, recaptured, and re-reviewed.
+
 SKS **1.0.8** is the Codex 0.132 UX-Review Seal: Codex CLI `rust-v0.132.0` compatibility is explicit, `codex exec resume --output-schema` is the preferred structured-output path, and `$UX-Review this screenshot with gpt-image-2 callouts, then fix the issues` is a real visual trust loop from source screenshot fidelity to generated callout ingestion, issue ledger extraction, bounded safe fixes, recapture/re-review, Image Voxel relations, Wrongness, Completion Proof, and Trust Report gates.
 
 SKS **1.0.7** is the Ultimate Final Completion seal for the Codex trust harness: Computer Use live evidence is an opt-in, local-only macOS evidence path with explicit `probe_only`, `live_capture_attempted`, `live_capture_success`, and `live_capture_blocked` modes; `codex-lb setup` reports durable persistence versus `process_only_ephemeral` honestly; and docs/release readiness checks block mock/probe/live overclaims.
@@ -26,6 +28,22 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ![Sneakoscope Codex Trust Layer](docs/assets/sneakoscope-architecture-pipeline.jpg)
 
+
+## 1.0.9 Official Docs Ultimate Kernel
+
+1.0.9 closes the remaining policy-vs-run-path gap. Attached generated images are recorded with `callout_extraction_status: pending` and empty callouts until `codex exec resume --output-schema` or the OpenAI Structured Outputs fallback returns a schema-valid issue ledger. Real `gpt-image-2` generation records request/response artifacts, source SHA-256, high-fidelity automatic input metadata, output hashes, local-only privacy, and blockers instead of substituting prose or generic callouts.
+
+```bash
+sks ux-review run --image ./screenshot.png --generate-callouts --json
+sks ux-review attach-generated latest --image ./generated-callouts.png --json
+sks ux-review extract-issues --generated-image ./generated-callouts.png --json
+sks ux-review attach-after latest --image ./after.png --json
+sks ux-review proof latest --json
+sks ux-review explain latest
+npm run official-docs:compat
+```
+
+Release checks now include `npm run official-docs:compat` and write `.sneakoscope/reports/official-docs-compat-1.0.9.json` plus `.sneakoscope/reports/release-readiness-1.0.9.json`.
 
 ## 1.0.8 Codex 0.132 UX-Review Seal
 

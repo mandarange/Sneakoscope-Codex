@@ -8,7 +8,9 @@ import {
   IMAGE_UX_REVIEW_FIX_LOOP_ARTIFACT,
   IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT,
   IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
+  IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
   IMAGE_UX_REVIEW_GATE_ARTIFACT,
+  IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT,
   IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT,
   IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT,
   IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
@@ -19,14 +21,18 @@ import {
   writeImageUxReviewRouteArtifacts
 } from '../image-ux-review.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
-import { generatedImageMetadata } from '../image-ux-review/imagegen-adapter.js';
+import { generatedImageMetadata, generateGptImage2CalloutReview } from '../image-ux-review/imagegen-adapter.js';
+import { extractRealCallouts } from '../image-ux-review/real-callout-extractor.js';
 import { addImageRelation, ingestImage } from '../wiki-image/image-voxel-ledger.js';
+import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 
 const ONE_BY_ONE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/axX7V8AAAAASUVORK5CYII=';
 const IMAGE_UX_REVIEW_ARTIFACT_PATHS: Record<string, string | Record<string, any>> = {
   policy: IMAGE_UX_REVIEW_POLICY_ARTIFACT,
   inventory: IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT,
   imagegen_request: IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT,
+  gpt_image_2_request: IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT,
+  imagegen_response: IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
   generated_review_ledger: IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
   issue_ledger: IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
   fix_task_plan: IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT,
@@ -49,8 +55,12 @@ export async function imageUxReviewCommand(command: any, args: any = []) {
   if (action === 'run') return runImageUxReview(root, command, args.slice(1));
   if (action === 'callouts') return calloutsImageUxReview(root, command, args.slice(1));
   if (action === 'extract-issues') return extractIssuesImageUxReview(root, command, args.slice(1));
+  if (action === 'attach-generated') return attachGeneratedImageCommand(root, command, args.slice(1));
+  if (action === 'attach-after') return attachAfterImageCommand(root, command, args.slice(1));
   if (action === 'fix') return rebuildExistingMission(root, command, args.slice(1), { fixRequested: true });
   if (action === 'recapture' || action === 'recheck') return rebuildExistingMission(root, command, args.slice(1), { recaptureRequested: true });
+  if (action === 'proof') return rebuildExistingMission(root, command, args.slice(1), { proofRequested: true });
+  if (action === 'explain') return explainImageUxReview(root, args.slice(1));
   return statusImageUxReview(root, args.slice(action === 'status' ? 1 : 0));
 }
 
@@ -83,12 +93,25 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
   };
   await writeJsonAtomic(path.join(dir, 'decision-contract.json'), contract);
   if (generatedImage) await attachGeneratedReviewImage(root, dir, contract, generatedImage, { realGenerated: !flag(args, '--mock'), mock: flag(args, '--mock') });
+  if (!generatedImage && flag(args, '--generate-callouts')) {
+    const outputDir = path.join(dir, 'generated-callouts');
+    const result = await generateGptImage2CalloutReview({
+      mission_id: id,
+      source_screen_id: 'screen-1',
+      source_image_path: path.resolve(root, sourceRel || imagePath),
+      output_dir: outputDir,
+      prompt: promptForRun(command, args),
+      requested_fidelity: 'original',
+      privacy: 'local-only'
+    });
+    if (result.generated_image_path) await attachGeneratedReviewImage(root, dir, contract, result.generated_image_path, { realGenerated: true, mock: false, providerSurface: result.provider });
+  }
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true });
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} run` });
-  const result = { schema: 'sks.image-ux-review-run.v1', ok: proof.ok, mission_id: id, artifacts, proof: proof.validation };
+  const result = { schema: 'sks.image-ux-review-run.v1', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.passed ? 'passed' : 'blocked', mission_id: id, artifacts, proof: proof.validation };
+  if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) return printJson(result);
-  console.log(`Image UX review: ${proof.ok ? 'ok' : 'blocked'} ${id}`);
-  if (!proof.ok) process.exitCode = 1;
+  console.log(`Image UX review: ${result.ok ? 'ok' : 'blocked'} ${id}`);
   return result;
 }
 
@@ -123,12 +146,68 @@ async function extractIssuesImageUxReview(root: string, command: string, args: a
   };
   await writeJsonAtomic(path.join(dir, 'decision-contract.json'), contract);
   await attachGeneratedReviewImage(root, dir, contract, generatedImage, { realGenerated: !flag(args, '--mock'), mock: flag(args, '--mock') });
+  if (!flag(args, '--mock')) {
+    const extraction = await extractRealCallouts({
+      root,
+      generatedImagePath: generatedImage,
+      sourceScreenshot: { id: 'screen-1' },
+      sessionId: readOption(args, '--session-id', null)
+    });
+    if (extraction.ok) await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), extraction.issue_ledger);
+  }
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true });
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} extract-issues` });
-  const result = { schema: 'sks.image-ux-review-extract-issues.v1', ok: proof.ok, mission_id: id, issue_ledger: artifacts.issue_ledger, proof: proof.validation };
+  const result = { schema: 'sks.image-ux-review-extract-issues.v1', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.passed ? 'passed' : 'blocked', mission_id: id, issue_ledger: artifacts.issue_ledger, proof: proof.validation };
+  if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) return printJson(result);
-  console.log(`Image UX issue extraction: ${proof.ok ? 'ok' : 'blocked'} ${id}`);
-  if (!proof.ok) process.exitCode = 1;
+  console.log(`Image UX issue extraction: ${result.ok ? 'ok' : 'blocked'} ${id}`);
+  return result;
+}
+
+async function attachGeneratedImageCommand(root: string, command: string, args: any[] = []) {
+  const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
+  const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+  const imagePath = readOption(args, '--image', null) || readOption(args, '--generated-image', null);
+  if (!missionId || !imagePath) {
+    const result = { schema: 'sks.image-ux-review-attach-generated.v1', ok: false, status: 'blocked', blocker: !missionId ? 'mission_required' : 'generated_image_required' };
+    if (flag(args, '--json')) return printJson(result);
+    process.exitCode = 1;
+    return result;
+  }
+  const { dir, mission } = await loadMission(root, missionId);
+  const contract = await readJson(path.join(dir, 'decision-contract.json'), { prompt: mission.prompt, answers: {}, sealed_hash: null });
+  const ledger = await attachGeneratedReviewImage(root, dir, contract, imagePath, { realGenerated: !flag(args, '--mock'), mock: flag(args, '--mock') });
+  const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true });
+  const result = { schema: 'sks.image-ux-review-attach-generated.v1', ok: artifacts.gate.generated_image_ingested === true, mission_id: missionId, generated_review_ledger: ledger, gate: artifacts.gate };
+  if (flag(args, '--json')) return printJson(result);
+  console.log(`Generated image attached: ${missionId}`);
+  return result;
+}
+
+async function attachAfterImageCommand(root: string, command: string, args: any[] = []) {
+  const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
+  const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+  const imagePath = readOption(args, '--image', null) || readOption(args, '--screenshot', null);
+  if (!missionId || !imagePath) {
+    const result = { schema: 'sks.image-ux-review-attach-after.v1', ok: false, status: 'blocked', blocker: !missionId ? 'mission_required' : 'after_image_required' };
+    if (flag(args, '--json')) return printJson(result);
+    process.exitCode = 1;
+    return result;
+  }
+  const { dir, mission } = await loadMission(root, missionId);
+  const contract = await readJson(path.join(dir, 'decision-contract.json'), { prompt: mission.prompt, answers: {}, sealed_hash: null });
+  const staged = await stageImage(root, dir, imagePath, 'after-screens');
+  const absolute = path.resolve(root, staged);
+  const dims = await imageDimensions(absolute);
+  const sha = await sha256File(absolute);
+  const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, {
+    root,
+    wrongnessChecked: true,
+    recapture: { userScreenshot: staged, recapturedSha256: sha, recapturedDimensions: dims }
+  });
+  const result = { schema: 'sks.image-ux-review-attach-after.v1', ok: true, mission_id: missionId, after_screenshot: { path: staged, sha256: sha, dimensions: dims, privacy: 'local-only' }, recapture_plan: artifacts.recapture_plan };
+  if (flag(args, '--json')) return printJson(result);
+  console.log(`After screenshot attached: ${missionId}`);
   return result;
 }
 
@@ -145,10 +224,10 @@ async function rebuildExistingMission(root: string, command: string, args: any[]
     recapture: { computerUseAvailable: false }
   });
   const proof = await finalizeImageUx(root, missionId, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} ${opts.fixRequested ? 'fix' : opts.recaptureRequested ? 'recapture' : 'build'}` });
-  const result = { schema: 'sks.image-ux-review-build.v2', ok: proof.ok, mission_id: missionId, artifacts, proof: proof.validation };
+  const result = { schema: 'sks.image-ux-review-build.v2', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.passed ? 'passed' : 'blocked', mission_id: missionId, artifacts, proof: proof.validation };
+  if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) return printJson(result);
-  console.log(`Image UX review: ${proof.ok ? 'ok' : 'blocked'} ${missionId}`);
-  if (!proof.ok) process.exitCode = 1;
+  console.log(`Image UX review: ${result.ok ? 'ok' : 'blocked'} ${missionId}`);
   return result;
 }
 
@@ -167,6 +246,26 @@ async function statusImageUxReview(root: string, args: any[] = []) {
   return result;
 }
 
+async function explainImageUxReview(root: string, args: any[] = []) {
+  const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
+  const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+  if (!missionId) return missingMission(args);
+  const { dir } = await loadMission(root, missionId);
+  const gate = await readJson(path.join(dir, IMAGE_UX_REVIEW_GATE_ARTIFACT), null);
+  const result = {
+    schema: 'sks.image-ux-review-explain.v1',
+    ok: Boolean(gate),
+    mission_id: missionId,
+    status: gate?.passed ? 'passed' : 'blocked',
+    blockers: gate?.blockers || [],
+    next_action: nextActionForGate(gate)
+  };
+  if (flag(args, '--json')) return printJson(result);
+  console.log(`Status: ${result.status}`);
+  console.log(`Next: ${result.next_action}`);
+  return result;
+}
+
 async function imageUxFixture(root: string, command: string, args: any[]) {
   const { id, dir, mission } = await createMission(root, { mode: 'image-ux-review', prompt: 'Image UX Review fixture' });
   const sourceImage = path.join(dir, 'image-ux-source-fixture.png');
@@ -181,8 +280,8 @@ async function imageUxFixture(root: string, command: string, args: any[]) {
   await writeJsonAtomic(path.join(dir, 'decision-contract.json'), contract);
   await attachGeneratedReviewImage(root, dir, contract, sourceImage, { mock: true, realGenerated: false });
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), {
-    schema: 'sks.image-ux-issue-ledger.v2',
-    schema_version: 2,
+    schema: 'sks.image-ux-issue-ledger.v3',
+    schema_version: 3,
     issues: [{
       id: 'issue-fixture-1',
       severity: 'P2',
@@ -202,7 +301,17 @@ async function imageUxFixture(root: string, command: string, args: any[]) {
       status: 'fixed',
       confidence: 0.5,
       source: 'mock_fixture',
-      extracted_from_generated_image: true
+      extracted_from_generated_image: true,
+      extraction_provider: 'mock_fixture',
+      extraction_schema: 'sks.image-ux-issue-ledger.v3',
+      generated_image_sha256: 'mock_fixture_sha256',
+      bbox_coordinate_space: 'generated_image',
+      bbox_confidence: 0.5,
+      severity_visible: true,
+      callout_number_visible: true,
+      text_ocr_confidence: 0.5,
+      fix_verification_status: 'recheck_verified',
+      post_fix_recheck_issue_id: null
     }]
   });
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, imageVoxelRelationsCreated: true, wrongnessChecked: true, honestModeComplete: true });
@@ -232,7 +341,7 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
   const metadata = await generatedImageMetadata(root, staged, {
     id: opts.mock ? 'generated-review-fixture-1' : undefined,
     source_screen_id: sourceScreen.id || 'screen-1',
-    provider_surface: 'Codex App $imagegen',
+    provider_surface: opts.providerSurface || 'Codex App $imagegen',
     real_generated: opts.realGenerated === true,
     mock: opts.mock === true
   });
@@ -246,7 +355,8 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
       source_screen_id: 'screen-1',
       status: 'generated',
       image_voxel_relation: 'generated_callout_review_of',
-      callouts: [{
+      callout_extraction_status: opts.mock ? 'succeeded' : 'pending',
+      callouts: opts.mock ? [{
         id: 'callout-1',
         callout_id: 'callout-1',
         severity: 'P2',
@@ -257,8 +367,18 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
         fix_action: 'Apply targeted UI adjustment, then recapture and re-review.',
         status: opts.mock ? 'fixed' : 'open',
         source: opts.mock ? 'mock_fixture' : 'real_gpt_image_2_callout',
-        confidence: opts.mock ? 0.5 : 0.82
-      }]
+        confidence: opts.mock ? 0.5 : 0.82,
+        extraction_provider: 'mock_fixture',
+        extraction_schema: 'sks.image-ux-issue-ledger.v3',
+        generated_image_sha256: metadata.sha256,
+        bbox_coordinate_space: 'generated_image',
+        bbox_confidence: 0.5,
+        severity_visible: true,
+        callout_number_visible: true,
+        text_ocr_confidence: 0.5,
+        fix_verification_status: 'recheck_verified',
+        post_fix_recheck_issue_id: null
+      }] : []
     }],
     generated_count: 1,
     required_count: 1,
@@ -268,6 +388,14 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
   };
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), ledger);
   return ledger;
+}
+
+function nextActionForGate(gate: any = {}) {
+  const blockers = gate?.blockers || [];
+  if (blockers.includes('missing_generated_annotated_review_images')) return 'Run `sks ux-review run --image <path> --generate-callouts --json` or attach a real generated image.';
+  if (blockers.includes('callout_extraction_pending')) return 'Run `sks ux-review extract-issues --generated-image <path> --json` with Codex output-schema session or OpenAI API fallback.';
+  if (blockers.includes('manual_recapture_required')) return 'Run `sks ux-review attach-after --image <path> --json` after applying patches.';
+  return blockers.length ? 'Resolve listed blockers, then rerun `sks ux-review proof latest --json`.' : 'No blockers recorded.';
 }
 
 async function finalizeImageUx(root: string, missionId: string, command: string, artifacts: any, opts: any = {}) {

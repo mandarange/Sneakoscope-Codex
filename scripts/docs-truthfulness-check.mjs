@@ -15,13 +15,13 @@ const files = [
 ];
 
 const required = {
-  'README.md': ['1.0.8 Codex 0.132 UX-Review Seal', 'gpt-image-2', 'probe_only', 'live_capture_success', 'process_only_ephemeral'],
+  'README.md': ['1.0.9 Official Docs Ultimate Kernel', 'gpt-image-2', 'probe_only', 'live_capture_success', 'process_only_ephemeral'],
   'docs/computer-use-evidence.md': ['sks.computer-use-live-evidence.v1', 'probe_only', 'live_capture_blocked', 'local-only'],
   'docs/codex-lb.md': ['durable_env_file', 'durable_keychain', 'durable_launchctl', 'shell_profile', 'process_only_ephemeral'],
   'docs/codex-cli-compat.md': ['rust-v0.132.0', 'sks_zero_warning_disallowed', 'strict subset'],
   'docs/hooks-pat.md': ['strict subset', 'zero-warning'],
   'docs/known-gaps.md': ['No P0', 'P1'],
-  'docs/release-readiness.md': ['sks.release-readiness.v1', 'release:readiness']
+  'docs/release-readiness.md': ['sks.release-readiness.v1', 'release:readiness', 'official-docs:compat']
 };
 
 const forbidden = [

@@ -88,5 +88,17 @@
       "sks root --json": 3000,
       "sks features check --json": 5000
     }
+  },
+  "ux_review_staged_latency_ms": {
+    "source_screenshot_ingest": 500,
+    "gpt_image_2_generation": 120000,
+    "callout_extraction": 120000,
+    "fix_task_planning": 500,
+    "recapture_re_review": 120000,
+    "image_voxel_relation_validation": 800,
+    "codex_compat_probe_batch": 5000,
+    "computer_use_status_probe_batch": 5000,
+    "codex_lb_status_probe_batch": 5000,
+    "scout_engine_probe_batch": 5000
   }
 }

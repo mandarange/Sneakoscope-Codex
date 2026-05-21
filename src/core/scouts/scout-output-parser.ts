@@ -2,6 +2,7 @@ import path from 'node:path';
 import { nowIso, readText } from '../fsx.js';
 import { SCOUT_RESULT_SCHEMA } from './scout-schema.js';
 import { scoutRouteLabel } from './scout-plan.js';
+import { codexSchemaPath, runCodexExecResumeWithOutputSchema } from '../codex-exec-output-schema.js';
 
 export async function parseScoutOutputFile({
   outputFile,
@@ -12,11 +13,31 @@ export async function parseScoutOutputFile({
   role,
   engine = null,
   realParallel = false,
-  generatedAt = nowIso()
+  generatedAt = nowIso(),
+  outputSchemaSessionId = null
 }: any = {}) {
   const outputText = outputFile ? await readText(outputFile, '') : '';
   const stdoutText = stdoutFile ? await readText(stdoutFile, '') : '';
   const source = buildSource({ outputFile, stdoutFile, stderrFile, engine, realParallel });
+  if (outputSchemaSessionId && outputFile) {
+    const schemaPath = await codexSchemaPath('scout-result');
+    const structured = await runCodexExecResumeWithOutputSchema({
+      sessionId: outputSchemaSessionId,
+      prompt: `Parse scout output from ${outputFile} into the scout-result schema.`,
+      outputSchemaPath: schemaPath
+    });
+    if (structured.ok && structured.parsed_json) {
+      return normalizeParsedScoutResult(structured.parsed_json, {
+        missionId,
+        route,
+        role,
+        engine,
+        realParallel,
+        source: { ...source, output_schema_run: structured.output_file },
+        generatedAt
+      });
+    }
+  }
   let parsed = parseScoutOutputText(outputText);
   if (!parsed.ok && stdoutText) parsed = parseScoutOutputText(stdoutText);
   if (!parsed.ok) {
