@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const jsonPath = path.join(reportDir, 'official-docs-compat-1.11.0.json');
-const mdPath = path.join(reportDir, 'official-docs-compat-1.11.0.md');
+const jsonPath = path.join(reportDir, 'official-docs-compat-1.12.0.json');
+const mdPath = path.join(reportDir, 'official-docs-compat-1.12.0.md');
 
 const sources = {
   codex_release: 'https://github.com/openai/codex/releases/tag/rust-v0.132.0',
@@ -73,7 +73,7 @@ function row(feature, baseline, relFile, needles) {
 
 function renderMarkdown(report) {
   const lines = [
-    '# SKS 1.11.0 Official Docs Compatibility',
+    '# SKS 1.12.0 Official Docs Compatibility',
     '',
     `- Schema: \`${report.schema}\``,
     `- Codex baseline: \`${report.codex_release_baseline}\``,

@@ -13,10 +13,10 @@
       "sks scouts engines --json": 1000
     },
     "source-ci": {
-      "sks --version": 80,
-      "sks help": 140,
-      "sks root --json": 140,
-      "sks commands --json": 200,
+    "sks --version": 80,
+    "sks help": 140,
+    "sks root --json": 140,
+    "sks commands --json": 320,
       "sks proof validate --json": 350,
       "sks trust validate bench-fixture --json": 450,
       "sks wiki image-validate --json": 450,

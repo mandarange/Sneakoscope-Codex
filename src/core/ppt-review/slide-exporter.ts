@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { exists, nowIso } from '../fsx.js';
+import { exists, nowIso, runProcess, which } from '../fsx.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 
 export const PPT_DECK_INVENTORY_ARTIFACT = 'ppt-deck-inventory.json';
@@ -92,11 +92,17 @@ export async function exportSlidesToImages({ root, dir, deckPath = null, deckInv
       local_only: true
     });
   }
-  const deckSlideCount = Number(inventory?.slide_count || 0);
-  if (manualImages.length === 0 && !mock) blockers.push('slide_export_unavailable');
-  if (manualImages.length > 0 && deckSlideCount > 0 && exportedSlides.length < deckSlideCount) blockers.push('partial_export');
-  if (inventory?.passed !== true) blockers.push(...(inventory?.blockers || []));
   const exportAdapter = manualImages.length ? 'manual_slide_image_attach' : mock ? 'mock_fixture' : await detectSlideExportAdapter();
+  if (!manualImages.length && !mock && inventory?.passed === true) {
+    const adapterExport = await exportWithDetectedAdapter({ root, dir, deckPath, inventory, adapter: exportAdapter });
+    exportedSlides.push(...adapterExport.slides);
+    blockers.push(...adapterExport.blockers);
+  }
+  const deckSlideCount = Number(inventory?.slide_count || 0);
+  if (manualImages.length === 0 && !mock && exportedSlides.length === 0) blockers.push('slide_export_unavailable');
+  if (manualImages.length > 0 && deckSlideCount > 0 && exportedSlides.length < deckSlideCount) blockers.push('partial_export');
+  if (manualImages.length === 0 && !mock && deckSlideCount > 0 && exportedSlides.length > 0 && exportedSlides.length < deckSlideCount) blockers.push('partial_export');
+  if (inventory?.passed !== true) blockers.push(...(inventory?.blockers || []));
   const exportLedger = {
     schema: 'sks.ppt-slide-export-ledger.v1',
     schema_version: 1,
@@ -136,7 +142,101 @@ async function detectPptxSlideCount(file: string) {
 }
 
 async function detectSlideExportAdapter() {
+  const soffice = await which('soffice').catch(() => null) || await which('libreoffice').catch(() => null);
+  if (soffice) return `soffice:${soffice}`;
+  const osascript = await which('osascript').catch(() => null);
+  if (osascript && process.platform === 'darwin') return `powerpoint_osascript:${osascript}`;
   return 'unavailable_in_cli_without_manual_slide_images';
+}
+
+async function exportWithDetectedAdapter({ root, dir, deckPath, adapter }: any = {}) {
+  if (!deckPath || !adapter || adapter === 'unavailable_in_cli_without_manual_slide_images') {
+    return { slides: [], blockers: ['slide_export_unavailable'] };
+  }
+  if (String(adapter).startsWith('soffice:')) return exportWithSoffice({ root, dir, deckPath, soffice: String(adapter).slice('soffice:'.length) });
+  if (String(adapter).startsWith('powerpoint_osascript:')) return exportWithPowerPoint({ root, dir, deckPath, osascript: String(adapter).slice('powerpoint_osascript:'.length) });
+  return { slides: [], blockers: ['slide_export_unavailable'] };
+}
+
+async function exportWithSoffice({ root, dir, deckPath, soffice }: any = {}) {
+  const outDir = path.join(dir, 'slide-export-soffice');
+  await fsp.mkdir(outDir, { recursive: true });
+  const absoluteDeck = path.resolve(root, deckPath);
+  const result = await runProcess(soffice, ['--headless', '--convert-to', 'png', '--outdir', outDir, absoluteDeck], {
+    cwd: root,
+    timeoutMs: 60_000,
+    maxOutputBytes: 64 * 1024
+  }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err), timedOut: false }));
+  if (result.code !== 0) return { slides: [], blockers: ['slide_export_unavailable', 'soffice_slide_export_failed'] };
+  const files = (await fsp.readdir(outDir)).filter((name) => /\.(png|jpg|jpeg)$/i.test(name)).sort();
+  const slides = [];
+  for (let index = 0; index < files.length; index += 1) {
+    const name = files[index];
+    if (!name) continue;
+    const file = path.join(outDir, name);
+    const rel = await stageSlideImage(root, dir, file, `slide-${index + 1}${path.extname(file) || '.png'}`);
+    const absolute = path.resolve(root, rel);
+    const dimensions = await imageDimensions(absolute);
+    slides.push({
+      slide_id: `slide-${index + 1}`,
+      slide_index: index + 1,
+      image_path: rel,
+      sha256: await sha256File(absolute),
+      width: dimensions.width,
+      height: dimensions.height,
+      format: dimensions.format,
+      fidelity: 'soffice_export_png',
+      source: 'soffice_slide_export',
+      local_only: true
+    });
+  }
+  return { slides, blockers: slides.length ? [] : ['slide_export_unavailable', 'soffice_slide_export_empty'] };
+}
+
+async function exportWithPowerPoint({ root, dir, deckPath, osascript }: any = {}) {
+  const outDir = path.join(dir, 'slide-export-powerpoint');
+  await fsp.mkdir(outDir, { recursive: true });
+  const script = [
+    'on run argv',
+    'set deckPath to POSIX file (item 1 of argv)',
+    'set outPath to POSIX file (item 2 of argv)',
+    'tell application "Microsoft PowerPoint"',
+    'open deckPath',
+    'set activePresentation to active presentation',
+    'save activePresentation in outPath as save as PNG',
+    'close activePresentation saving no',
+    'end tell',
+    'end run'
+  ].join('\n');
+  const result = await runProcess(osascript, ['-e', script, path.resolve(root, deckPath), outDir], {
+    cwd: root,
+    timeoutMs: 60_000,
+    maxOutputBytes: 64 * 1024
+  }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err), timedOut: false }));
+  if (result.code !== 0) return { slides: [], blockers: ['slide_export_unavailable', 'powerpoint_osascript_export_failed'] };
+  const files = (await fsp.readdir(outDir, { recursive: true } as any)).map(String).filter((name) => /\.(png|jpg|jpeg)$/i.test(name)).sort();
+  const slides = [];
+  for (let index = 0; index < files.length; index += 1) {
+    const name = files[index];
+    if (!name) continue;
+    const file = path.join(outDir, name);
+    const rel = await stageSlideImage(root, dir, file, `slide-${index + 1}${path.extname(file) || '.png'}`);
+    const absolute = path.resolve(root, rel);
+    const dimensions = await imageDimensions(absolute);
+    slides.push({
+      slide_id: `slide-${index + 1}`,
+      slide_index: index + 1,
+      image_path: rel,
+      sha256: await sha256File(absolute),
+      width: dimensions.width,
+      height: dimensions.height,
+      format: dimensions.format,
+      fidelity: 'powerpoint_osascript_png',
+      source: 'powerpoint_osascript_slide_export',
+      local_only: true
+    });
+  }
+  return { slides, blockers: slides.length ? [] : ['slide_export_unavailable', 'powerpoint_osascript_export_empty'] };
 }
 
 async function stageSlideImage(root: string, dir: string, source: string, preferredName: string) {

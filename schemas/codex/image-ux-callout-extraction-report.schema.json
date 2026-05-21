@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex/image-ux-callout-extraction-report.schema.json",
+  "title": "SKS Image UX Callout Extraction Report",
+  "type": "object",
+  "required": ["schema", "provider", "generated_image_path", "output_schema_path", "parsed_json_present", "validation_status", "issue_count", "bbox_validation_issues", "blocker", "fallback_used", "verified_cap"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "sks.image-ux-callout-extraction-report.v1" },
+    "provider": { "type": "string" },
+    "generated_image_path": { "type": ["string", "null"] },
+    "generated_image_sha256": { "type": ["string", "null"] },
+    "source_screenshot_sha256": { "type": ["string", "null"] },
+    "output_schema_path": { "type": "string" },
+    "parsed_json_present": { "type": "boolean" },
+    "validation_status": { "type": "string" },
+    "issue_count": { "type": "integer", "minimum": 0 },
+    "bbox_validation_issues": { "type": "array", "items": { "type": "string" } },
+    "blocker": { "type": ["string", "object", "null"] },
+    "fallback_used": { "type": "boolean" },
+    "verified_cap": { "type": "string" }
+  }
+}

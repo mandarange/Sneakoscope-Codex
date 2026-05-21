@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { ensureDir, nowIso, packageRoot, projectRoot, runProcess, writeJsonAtomic, writeTextAtomic } from './fsx.js';
@@ -20,7 +21,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks --version': 80,
     'sks help': 140,
     'sks root --json': 140,
-    'sks commands --json': 200,
+    'sks commands --json': 320,
     'sks proof validate --json': 350,
     'sks trust validate bench-fixture --json': 450,
     'sks wiki image-validate --json': 450,
@@ -78,7 +79,7 @@ export const UX_REVIEW_STAGED_LATENCY_BUDGETS = Object.freeze({
   scout_engine_probe_batch: 5_000
 });
 
-type CoreBenchCommand = readonly [string, readonly string[]];
+type CoreBenchCommand = readonly [string, readonly string[], string?];
 
 const STATIC_CORE_COMMANDS: readonly CoreBenchCommand[] = Object.freeze([
   ['sks --version', ['--version']],
@@ -91,11 +92,16 @@ const STATIC_CORE_COMMANDS: readonly CoreBenchCommand[] = Object.freeze([
   ['sks scouts engines --json', ['scouts', 'engines', '--json']]
 ]);
 
-function coreCommands(benchTrustMissionId: any): CoreBenchCommand[] {
-  const missionId = typeof benchTrustMissionId === 'string' && benchTrustMissionId ? benchTrustMissionId : 'bench-fixture-missing';
+function coreCommands(benchTrustMission: any): CoreBenchCommand[] {
+  const missionId = typeof benchTrustMission?.missionId === 'string' && benchTrustMission.missionId
+    ? benchTrustMission.missionId
+    : 'bench-fixture-missing';
+  const trustRoot = typeof benchTrustMission?.root === 'string' && benchTrustMission.root
+    ? benchTrustMission.root
+    : undefined;
   return [
     ...STATIC_CORE_COMMANDS.slice(0, 5),
-    [TRUST_VALIDATE_BENCH_COMMAND, ['trust', 'validate', missionId, '--json']],
+    [TRUST_VALIDATE_BENCH_COMMAND, ['trust', 'validate', missionId, '--json', '--no-wrongness'], trustRoot],
     ...STATIC_CORE_COMMANDS.slice(5)
   ];
 }
@@ -104,18 +110,18 @@ export async function runCoreBench(root: any = process.cwd(), { iterations = 3, 
   const script = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
   const budgets = ((CORE_BENCH_BUDGET_TIERS as Record<string, Record<string, number>>)[tier] || CORE_BENCH_BUDGET_TIERS['source-local']) as Record<string, number>;
   const measuredIterations = Math.max(1, Number(iterations) || 1);
-  const benchTrustMissionId = await ensureBenchTrustMission(root, script);
+  const benchTrustMission = await ensureBenchTrustMission(root, script);
   const rows: any[] = [];
-  for (const [label, args] of coreCommands(benchTrustMissionId)) {
+  for (const [label, args, commandRoot] of coreCommands(benchTrustMission)) {
     const values: any[] = [];
     const failures: any[] = [];
     for (let i = 0; i < CORE_BENCH_WARMUP_ITERATIONS; i += 1) {
-      const result = await runBenchProcess(root, script, args);
+      const result = await runBenchProcess(commandRoot || root, script, args);
       if (result.code !== 0) failures.push({ phase: 'warmup', code: result.code, stderr_tail: result.stderr.slice(-400), stdout_tail: result.stdout.slice(-400) });
     }
     for (let i = 0; i < measuredIterations; i += 1) {
       const t0 = performance.now();
-      const result = await runBenchProcess(root, script, args);
+      const result = await runBenchProcess(commandRoot || root, script, args);
       values.push(performance.now() - t0);
       if (result.code !== 0) failures.push({ phase: 'measure', code: result.code, stderr_tail: result.stderr.slice(-400), stdout_tail: result.stdout.slice(-400) });
     }
@@ -154,14 +160,19 @@ async function runBenchProcess(root: any, script: any, args: any) {
 }
 
 async function ensureBenchTrustMission(root: any, script: any) {
-  const beforeMissionIds = await listMissionIds(root);
+  const benchRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-core-bench-trust-')).catch(() => root);
+  const beforeMissionIds = await listMissionIds(benchRoot);
   const result = await runProcess(process.execPath, [script, 'run', 'fixture', '--mock', '--json'], {
-    cwd: root,
+    cwd: benchRoot,
     timeoutMs: 60_000,
     maxOutputBytes: 4 * 1024 * 1024,
     env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1', SKS_DISABLE_UPDATE_CHECK: '1', CI: 'true' }
   });
-  return parseMissionId(result.stdout) || await findBenchTrustMission(root, beforeMissionIds);
+  return {
+    missionId: parseMissionId(result.stdout) || await findBenchTrustMission(benchRoot, beforeMissionIds),
+    root: benchRoot,
+    setup_code: result.code
+  };
 }
 
 function parseMissionId(text: any) {

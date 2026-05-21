@@ -9,6 +9,7 @@ export const DFIX_DIAGNOSIS_ARTIFACT = 'dfix-diagnosis.json';
 export const DFIX_ROOT_CAUSE_ARTIFACT = 'dfix-root-cause.json';
 export const DFIX_PATCH_PLAN_ARTIFACT = 'dfix-patch-plan.json';
 export const DFIX_PATCH_RESULT_ARTIFACT = 'dfix-patch-result.json';
+export const DFIX_VERIFICATION_SUGGESTION_ARTIFACT = 'dfix-verification-suggestion.json';
 export const DFIX_VERIFICATION_ARTIFACT = 'dfix-verification.json';
 export const DFIX_GATE_ARTIFACT = 'dfix-gate.json';
 
@@ -17,6 +18,7 @@ export const DFIX_ARTIFACT_PATHS: Record<string, string> = {
   root_cause: DFIX_ROOT_CAUSE_ARTIFACT,
   patch_plan: DFIX_PATCH_PLAN_ARTIFACT,
   patch_result: DFIX_PATCH_RESULT_ARTIFACT,
+  verification_suggestion: DFIX_VERIFICATION_SUGGESTION_ARTIFACT,
   verification: DFIX_VERIFICATION_ARTIFACT,
   gate: DFIX_GATE_ARTIFACT
 };
@@ -70,7 +72,8 @@ export async function writeDfixDiagnosis(root: string, dir: string, opts: any = 
   };
   await writeJsonAtomic(path.join(dir, DFIX_DIAGNOSIS_ARTIFACT), diagnosis);
   await writeJsonAtomic(path.join(dir, DFIX_ROOT_CAUSE_ARTIFACT), rootCause);
-  return { diagnosis, root_cause: rootCause };
+  const verification_suggestion = await writeDfixVerificationSuggestion(root, dir, opts);
+  return { diagnosis, root_cause: rootCause, verification_suggestion };
 }
 
 export async function writeDfixPatchPlan(dir: string, opts: any = {}) {
@@ -84,7 +87,17 @@ export async function writeDfixPatchPlan(dir: string, opts: any = {}) {
     target_file: opts.file || diagnosis.target_file || null,
     find_text_present: Boolean(opts.findText),
     replace_text_present: Boolean(opts.replaceText),
+    patch_mode: opts.findText != null && opts.replaceText != null ? 'exact_find_replace' : 'codex_patch_handoff',
+    codex_patch_handoff: opts.findText == null || opts.replaceText == null ? {
+      mode: opts.apply ? 'apply_requested_requires_external_codex_patch' : 'dry_run',
+      prompt: buildDfixCodexPatchPrompt(diagnosis, rootCause, opts),
+      output_schema: {
+        required: ['changed_files', 'patch_applied', 'diff_summary', 'verification_commands', 'rollback_plan'],
+        forbidden_operations: ['destructive filesystem operations', 'DB writes', 'broad refactors', 'unrequested fallback implementation']
+      }
+    } : null,
     root_cause: rootCause.root_cause || null,
+    verification_commands: (await readJson(path.join(dir, DFIX_VERIFICATION_SUGGESTION_ARTIFACT), { suggested_commands: [] })).suggested_commands || [],
     safety: {
       direct_fix_only: true,
       destructive_operations_allowed: false,
@@ -107,6 +120,7 @@ export async function writeDfixPatchPlan(dir: string, opts: any = {}) {
 export async function writeDfixPatchResult(root: string, dir: string, opts: any = {}) {
   const plan = await readJson(path.join(dir, DFIX_PATCH_PLAN_ARTIFACT), {});
   const file = opts.file || plan.target_file || null;
+  const diffBefore = await gitDiff(root);
   let changed = false;
   let noOpReason: string | null = null;
   const changedFiles: string[] = [];
@@ -125,15 +139,21 @@ export async function writeDfixPatchResult(root: string, dir: string, opts: any 
       }
     }
   } else {
-    noOpReason = opts.apply ? 'apply_requires_file_find_and_replace' : 'dry_run_no_patch_applied';
+    noOpReason = opts.apply ? 'codex_patch_handoff_requires_external_patch_runner' : 'dry_run_no_patch_applied';
   }
+  const diffAfter = await gitDiff(root);
   const result = {
     schema: 'sks.dfix-patch-result.v1',
     created_at: nowIso(),
     explicit_apply_opt_in: opts.apply === true,
+    apply_opt_in: opts.apply === true,
+    patch_mode: plan.patch_mode || (opts.findText != null && opts.replaceText != null ? 'exact_find_replace' : 'codex_patch_handoff'),
     patch_result_present: true,
     patch_applied: changed,
     changed_files: changedFiles,
+    git_diff_before: diffBefore,
+    git_diff_after: diffAfter,
+    diff_captured: true,
     no_op_reason: changed ? null : noOpReason,
     noop_patch_wrongness: opts.apply === true && !changed,
     rollback_plan: changedFiles.map((rel) => ({ file: rel, action: 'restore from git or apply inverse exact replacement before re-running verification' })),
@@ -146,17 +166,24 @@ export async function writeDfixPatchResult(root: string, dir: string, opts: any 
 
 export async function writeDfixVerification(root: string, dir: string, opts: any = {}) {
   const patchResult = await readJson(path.join(dir, DFIX_PATCH_RESULT_ARTIFACT), {});
+  const suggestion = await readJson(path.join(dir, DFIX_VERIFICATION_SUGGESTION_ARTIFACT), null) || await writeDfixVerificationSuggestion(root, dir, opts);
   const command = opts.command || null;
-  const commandResult = command ? await runDiagnosticCommand(root, command) : null;
+  const shouldRun = Boolean(command && (opts.runCommand === true || opts.verifyAuto === true));
+  const commandResult = shouldRun ? await runDiagnosticCommand(root, command) : null;
   const verification = redactSecrets({
     schema: 'sks.dfix-verification.v1',
     created_at: nowIso(),
     verification_present: true,
     verification_command: command,
+    suggested_verification_commands: suggestion.suggested_commands || [],
+    best_safe_verification_command: suggestion.best_command || null,
+    auto_run_opt_in: opts.runCommand === true || opts.verifyAuto === true,
     command_result: commandResult,
     patch_applied: patchResult.patch_applied === true,
     status: commandResult ? commandResult.status : opts.mock ? 'passed' : 'blocked',
-    blockers: commandResult ? (commandResult.ok ? [] : ['verification_command_failed']) : opts.mock ? [] : ['verification_command_missing'],
+    blockers: command && !shouldRun
+      ? ['verification_command_not_run_without_explicit_run_flag']
+      : commandResult ? (commandResult.ok ? [] : ['verification_command_failed']) : opts.mock ? [] : ['verification_command_missing'],
     passed: commandResult ? commandResult.ok : opts.mock === true
   });
   await writeJsonAtomic(path.join(dir, DFIX_VERIFICATION_ARTIFACT), verification);
@@ -168,6 +195,7 @@ export async function writeDfixGate(dir: string, opts: any = {}) {
   const rootCause = await readJson(path.join(dir, DFIX_ROOT_CAUSE_ARTIFACT), {});
   const plan = await readJson(path.join(dir, DFIX_PATCH_PLAN_ARTIFACT), {});
   const patchResult = await readJson(path.join(dir, DFIX_PATCH_RESULT_ARTIFACT), {});
+  const verificationSuggestion = await readJson(path.join(dir, DFIX_VERIFICATION_SUGGESTION_ARTIFACT), {});
   const verification = await readJson(path.join(dir, DFIX_VERIFICATION_ARTIFACT), {});
   const blockers = [
     ...(diagnosis.blockers || []),
@@ -183,6 +211,7 @@ export async function writeDfixGate(dir: string, opts: any = {}) {
     root_cause_present: rootCause.root_cause_present === true,
     patch_plan_present: plan.patch_plan_present === true,
     patch_result_present: patchResult.patch_result_present === true,
+    verification_suggestion_present: Array.isArray(verificationSuggestion.suggested_commands),
     verification_present: verification.verification_present === true,
     rollback_plan_present: Array.isArray(patchResult.rollback_plan),
     noop_patch_wrongness: patchResult.noop_patch_wrongness === true,
@@ -198,7 +227,7 @@ export async function writeDfixGate(dir: string, opts: any = {}) {
     && verification.passed === true
     && gate.blockers.length === 0;
   await writeJsonAtomic(path.join(dir, DFIX_GATE_ARTIFACT), gate);
-  return { gate, diagnosis, root_cause: rootCause, patch_plan: plan, patch_result: patchResult, verification };
+  return { gate, diagnosis, root_cause: rootCause, patch_plan: plan, patch_result: patchResult, verification_suggestion: verificationSuggestion, verification };
 }
 
 export function dfixProofEvidence(gate: any = {}) {
@@ -210,9 +239,69 @@ export function dfixProofEvidence(gate: any = {}) {
     patch_plan_present: gate.patch_plan_present === true,
     patch_result_present: gate.patch_result_present === true,
     verification_present: gate.verification_present === true,
+    verification_suggestion_present: gate.verification_suggestion_present === true,
     verification_status: gate.passed ? 'passed' : 'blocked',
     noop_patch_wrongness: gate.noop_patch_wrongness === true,
     blockers: gate.blockers || []
+  };
+}
+
+export async function writeDfixVerificationSuggestion(root: string, dir: string, opts: any = {}) {
+  const pkg = await readJson(path.join(root, 'package.json'), null);
+  const cargoToml = await fsp.readFile(path.join(root, 'Cargo.toml'), 'utf8').catch(() => null)
+    || await fsp.readFile(path.join(root, 'crates', 'sks-core', 'Cargo.toml'), 'utf8').catch(() => null);
+  const pyproject = await fsp.readFile(path.join(root, 'pyproject.toml'), 'utf8').catch(() => null);
+  const suggestions: string[] = [];
+  const scripts = pkg?.scripts || {};
+  for (const script of ['typecheck', 'test:unit', 'test', 'lint', 'packcheck']) {
+    if (scripts[script]) suggestions.push(`npm run ${script}`);
+  }
+  if (cargoToml) {
+    suggestions.push('cargo check --manifest-path crates/sks-core/Cargo.toml');
+    suggestions.push('cargo test --manifest-path crates/sks-core/Cargo.toml');
+  }
+  if (pyproject) {
+    suggestions.push('python -m pytest');
+    suggestions.push('python -m ruff check .');
+    suggestions.push('python -m mypy .');
+  }
+  if (!suggestions.length) suggestions.push('npm test');
+  const artifact = {
+    schema: 'sks.dfix-verification-suggestion.v1',
+    created_at: nowIso(),
+    package_type: pkg ? 'node' : cargoToml ? 'rust' : pyproject ? 'python' : 'unknown',
+    package_scripts_detected: Object.keys(scripts),
+    suggested_commands: [...new Set(suggestions)],
+    best_command: suggestions[0],
+    auto_run_requires_opt_in: true,
+    recovery_action: opts.command ? 'Run the supplied verification command after patch result.' : 'Run the best safe verification command with `sks dfix verify --command <cmd> --json`, or pass --run/--verify-auto only when command execution is intended.'
+  };
+  await writeJsonAtomic(path.join(dir, DFIX_VERIFICATION_SUGGESTION_ARTIFACT), artifact);
+  return artifact;
+}
+
+function buildDfixCodexPatchPrompt(diagnosis: any = {}, rootCause: any = {}, opts: any = {}) {
+  return [
+    'Prepare a bounded Codex patch for the DFix diagnosis.',
+    `Diagnosis: ${diagnosis.observed_failure || '<missing>'}`,
+    `Root cause: ${rootCause.root_cause || '<missing>'}`,
+    `Target files: ${opts.file || diagnosis.target_file || '<scout first>'}`,
+    `Verification commands: ${(opts.verificationCommands || []).join(', ') || '<use dfix-verification-suggestion.json>'}`,
+    'Forbidden operations: destructive filesystem operations, DB writes, migrations, auth/payment/security weakening, broad refactors, and unrequested fallback implementation.',
+    'Return a patch result with changed_files, patch_applied, diff_summary, verification_commands, rollback_plan, and no_op_reason.'
+  ].join('\n');
+}
+
+async function gitDiff(root: string) {
+  const result = await runProcess('git', ['diff', '--'], {
+    cwd: root,
+    timeoutMs: 10_000,
+    maxOutputBytes: 128 * 1024
+  }).catch((err: unknown) => ({ stdout: '', stderr: err instanceof Error ? err.message : String(err), code: 1 }));
+  return {
+    captured: result.code === 0,
+    stdout_tail: String(result.stdout || '').slice(-32_000),
+    stderr_tail: String(result.stderr || '').slice(-4000)
   };
 }
 

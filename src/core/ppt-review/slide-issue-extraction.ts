@@ -4,10 +4,12 @@ import { nowIso, readJson, writeJsonAtomic } from '../fsx.js';
 import { codexSchemaPath, runCodexExecResumeWithOutputSchema, structuredOutputBlocker } from '../codex-exec-output-schema.js';
 import { runOpenAIStructuredOutput } from '../structured-output-adapter.js';
 import { validateJsonSchemaRecursive } from '../json-schema-validator.js';
+import { sha256File } from '../wiki-image/image-hash.js';
 import { PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT } from './slide-imagegen-review.js';
 
 export const PPT_SLIDE_ISSUE_LEDGER_ARTIFACT = 'ppt-slide-issue-ledger.json';
 export const PPT_DECK_ISSUE_LEDGER_ARTIFACT = 'ppt-deck-issue-ledger.json';
+export const PPT_SLIDE_EXTRACTION_REPORT_ARTIFACT = 'ppt-slide-extraction-report.json';
 
 export async function extractSlideIssues(input: any = {}) {
   const root = String(input.root || process.cwd());
@@ -18,19 +20,23 @@ export async function extractSlideIssues(input: any = {}) {
   const jsonSchema = await readJson<Record<string, unknown>>(schemaPath);
   let issues: any[] = [];
   const blockers: string[] = [];
+  const reports: any[] = [];
   const images = Array.isArray(calloutLedger.generated_slide_callout_images) ? calloutLedger.generated_slide_callout_images : [];
   if (mock) {
     issues = images.flatMap((image: any) => (image.callouts || []).map((callout: any, index: number) => normalizePptIssue(callout, image, index, 'mock_fixture')));
+    for (const image of images) reports.push(await buildSlideExtractionReport(root, image, { provider: 'mock_fixture', issues, schemaPath, ok: true, blockers: [] }));
   } else if (input.generatedSlidePath) {
     const extraction = await extractOneGeneratedSlide(root, schemaPath, jsonSchema, input.generatedSlidePath, input.sessionId || null);
     if (extraction.ok) issues = extraction.issues;
     else blockers.push(extraction.blocker?.reason || 'ppt_slide_issue_extraction_missing');
+    reports.push(await buildSlideExtractionReport(root, { path: input.generatedSlidePath }, { ...extraction, schemaPath }));
   } else {
     for (const image of images) {
       if (!image.path) continue;
       const extraction = await extractOneGeneratedSlide(root, schemaPath, jsonSchema, image.path, input.sessionId || null, image);
       if (extraction.ok) issues.push(...extraction.issues);
       else blockers.push(extraction.blocker?.reason || 'ppt_slide_issue_extraction_missing');
+      reports.push(await buildSlideExtractionReport(root, image, { ...extraction, schemaPath }));
     }
   }
   if (!issues.length) blockers.push('ppt_slide_issue_extraction_missing');
@@ -48,9 +54,23 @@ export async function extractSlideIssues(input: any = {}) {
     passed: blockers.length === 0
   };
   await writeJsonAtomic(path.join(dir, PPT_SLIDE_ISSUE_LEDGER_ARTIFACT), ledger);
+  const extractionReport = {
+    schema: 'sks.ppt-slide-extraction-report.v1',
+    schema_version: 1,
+    created_at: nowIso(),
+    provider: mock ? 'mock_fixture' : input.sessionId ? 'codex_exec_resume_output_schema' : 'structured_outputs_callout_extraction',
+    output_schema_path: schemaPath,
+    slide_reports: reports,
+    issue_count: issues.length,
+    blockers: [...new Set(blockers)],
+    fallback_used: !mock && !input.sessionId,
+    validation_status: ledger.validation.ok ? 'valid' : 'blocked',
+    passed: blockers.length === 0 && reports.every((report: any) => report.passed !== false)
+  };
+  await writeJsonAtomic(path.join(dir, PPT_SLIDE_EXTRACTION_REPORT_ARTIFACT), extractionReport);
   const deckLedger = buildDeckIssueLedger(ledger, calloutLedger);
   await writeJsonAtomic(path.join(dir, PPT_DECK_ISSUE_LEDGER_ARTIFACT), deckLedger);
-  return { slide_issue_ledger: ledger, deck_issue_ledger: deckLedger };
+  return { slide_issue_ledger: ledger, deck_issue_ledger: deckLedger, extraction_report: extractionReport };
 }
 
 export function buildDeckIssueLedger(slideLedger: any = {}, calloutLedger: any = {}) {
@@ -110,8 +130,41 @@ async function extractOneGeneratedSlide(root: string, schemaPath: string, jsonSc
   return {
     ok: rows.length > 0,
     issues: rows.map((row: any, index: number) => normalizePptIssue(row, image, index, sessionId ? 'real_gpt_image_2_callout' : 'structured_outputs_callout_extraction')),
+    provider: sessionId ? 'codex_exec_resume_output_schema' : 'structured_outputs_callout_extraction',
     blocker: rows.length ? null : structuredOutputBlocker('ppt_slide_issue_extraction_missing', 'Generated slide review image yielded no visible callouts.')
   };
+}
+
+async function buildSlideExtractionReport(root: string, image: any = {}, extraction: any = {}) {
+  const imagePath = image.path || image.image_path || null;
+  const sha = image.sha256 || (imagePath ? await sha256File(path.resolve(root, imagePath)).catch(() => null) : null);
+  const issues = Array.isArray(extraction.issues) ? extraction.issues : [];
+  const bboxIssues = issues.flatMap((issue: any) => bboxOutOfBounds(issue, image));
+  const blocker = extraction.blocker?.reason || extraction.blocker || (extraction.ok ? null : 'ppt_slide_issue_extraction_missing');
+  return {
+    schema: 'sks.ppt-slide-extraction-report-item.v1',
+    slide_id: image.slide_id || issues[0]?.slide_id || null,
+    slide_index: image.slide_index || issues[0]?.slide_index || null,
+    generated_image_path: imagePath,
+    generated_image_sha256: sha,
+    provider: extraction.provider || 'unknown',
+    schema_validation: extraction.ok ? 'valid' : 'blocked',
+    issue_count: issues.length,
+    bbox_validation_issues: bboxIssues,
+    blocker,
+    passed: extraction.ok === true && issues.length > 0 && bboxIssues.length === 0
+  };
+}
+
+function bboxOutOfBounds(issue: any = {}, image: any = {}) {
+  const bbox = Array.isArray(issue.bbox) ? issue.bbox : [];
+  const width = Number(image.width || 0);
+  const height = Number(image.height || 0);
+  if (bbox.length !== 4) return [`ppt_slide_bbox_invalid:${issue.id || 'unknown'}`];
+  const [x, y, w, h] = bbox.map(Number);
+  if ([x, y, w, h].some((value) => !Number.isFinite(value)) || w <= 0 || h <= 0) return [`ppt_slide_bbox_invalid:${issue.id || 'unknown'}`];
+  if (width > 0 && height > 0 && (x < 0 || y < 0 || x + w > width || y + h > height)) return [`ppt_slide_bbox_out_of_bounds:${issue.id || 'unknown'}`];
+  return [];
 }
 
 function normalizePptIssue(issue: any = {}, image: any = {}, index = 0, source = 'real_gpt_image_2_callout') {

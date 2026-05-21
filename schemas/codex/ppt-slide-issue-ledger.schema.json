@@ -3,23 +3,37 @@
   "$id": "https://sneakoscope.local/schemas/ppt-slide-issue-ledger.schema.json",
   "title": "SKS PPT Slide Issue Ledger",
   "type": "object",
-  "required": ["schema", "generated_at", "status", "issues"],
+  "required": ["schema", "schema_version", "created_at", "issues", "issue_count", "blockers", "validation", "passed"],
   "additionalProperties": true,
   "properties": {
     "schema": { "const": "sks.ppt-slide-issue-ledger.v1" },
-    "generated_at": { "type": "string" },
-    "status": { "type": "string" },
+    "schema_version": { "const": 1 },
+    "created_at": { "type": "string" },
+    "issue_count": { "type": "integer", "minimum": 0 },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "passed": { "type": "boolean" },
+    "validation": { "type": "object" },
     "issues": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "slide_id", "severity", "kind", "status"],
+        "required": ["id", "slide_id", "slide_index", "generated_review_image_id", "callout_id", "bbox", "severity", "category", "title", "detail", "fix_action", "target_element", "confidence", "source", "status"],
         "additionalProperties": true,
         "properties": {
           "id": { "type": "string" },
           "slide_id": { "type": "string" },
           "severity": { "type": "string" },
-          "kind": { "type": "string" },
+          "slide_index": { "type": "number" },
+          "generated_review_image_id": { "type": "string" },
+          "callout_id": { "type": "string" },
+          "bbox": { "type": "array", "minItems": 4, "maxItems": 4 },
+          "category": { "type": "string" },
+          "title": { "type": "string" },
+          "detail": { "type": "string" },
+          "fix_action": { "type": "string" },
+          "target_element": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "source": { "type": "string" },
           "status": { "type": "string" }
         }
       }

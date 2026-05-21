@@ -141,6 +141,7 @@ function options(args: any[]) {
     prompt: args.filter((arg: any) => !String(arg).startsWith('--')).join(' '),
     command: readOption(args, '--command', null),
     runCommand: flag(args, '--run'),
+    verifyAuto: flag(args, '--verify-auto'),
     file: readOption(args, '--file', null),
     error: readOption(args, '--error', null),
     rootCause: readOption(args, '--root-cause', null),

@@ -263,6 +263,16 @@ export function renderAllFeatureCompletionMarkdown(report: any) {
 }
 
 const SECTION_29_PACKAGE_SCRIPTS = Object.freeze([
+  'ux-review:run-wires-imagegen',
+  'ux-review:extract-wires-real-extractor',
+  'ux-review:patch-diff-recheck',
+  'ppt:real-export-adapter',
+  'ppt:real-imagegen-wiring',
+  'ppt:reexport-rereview',
+  'dfix:patch-handoff',
+  'dfix:verification-recommendation',
+  'all-features:deep-completion',
+  'evidence:flagship-coverage',
   'ux-review:generate-callouts-fixture',
   'ux-review:extract-real-callouts-fixture',
   'ux-review:patch-handoff-fixture',
@@ -316,8 +326,8 @@ function featureCompletionRow(feature: any) {
 
 function derivedReleaseFeatureRows(root: string, packageJson: any) {
   const derived = [
-    { id: 'release-version-1-11', title: 'Release version metadata 1.11.0', artifact: 'package.json', ok: packageJson.version === PACKAGE_VERSION },
-    { id: 'all-feature-completion', title: 'All feature completion matrix', artifact: '.sneakoscope/reports/all-feature-completion-1.11.0.json', ok: true },
+    { id: 'release-version-1-12', title: `Release version metadata ${PACKAGE_VERSION}`, artifact: 'package.json', ok: packageJson.version === PACKAGE_VERSION },
+    { id: 'all-feature-completion', title: 'All feature completion matrix', artifact: `.sneakoscope/reports/all-feature-completion-${PACKAGE_VERSION}.json`, ok: true },
     { id: 'ppt-imagegen-review', title: 'PPT imagegen review route', artifact: 'src/core/ppt-review/index.ts', ok: existsSync(path.join(root, 'src', 'core', 'ppt-review', 'index.ts')) },
     { id: 'dfix-loop', title: 'DFix diagnose/plan/patch/verify loop', artifact: 'src/core/commands/dfix-command.ts', ok: existsSync(path.join(root, 'src', 'core', 'commands', 'dfix-command.ts')) },
     { id: 'recursive-json-schema-validator', title: 'Recursive JSON schema validator', artifact: 'src/core/json-schema-validator.ts', ok: existsSync(path.join(root, 'src', 'core', 'json-schema-validator.ts')) },
