@@ -12,6 +12,8 @@ import { validateCodexFixtureOutputs } from '../core/codex-compat/codex-hook-sch
 import { codexHookWarningCheck } from '../core/codex-compat/codex-hook-warning-detector.js';
 import { codexHookTrustDoctor } from '../core/codex-hooks/codex-hook-trust-doctor.js';
 import { writeTrustedHashStateForHooksFile } from '../core/codex-hooks/codex-hook-state-writer.js';
+import { installManagedCodexHooks } from '../core/codex-hooks/codex-hook-managed-install.js';
+import { writeCodexHookOfficialParityReport } from '../core/codex-hooks/codex-hook-official-parity.js';
 
 const flag = (args: any, name: any) => args.includes(name);
 
@@ -106,7 +108,7 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     return;
   }
   if (action === 'doctor' || action === 'trust-doctor') {
-    const report = await codexHookTrustDoctor(root, { fix: flag(args, '--fix'), managed: flag(args, '--managed') });
+    const report = await codexHookTrustDoctor(root, { fix: flag(args, '--fix'), managed: flag(args, '--managed'), actual: flag(args, '--actual') });
     if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
     console.log(`Hooks trust doctor: ${report.ok ? 'ok' : 'blocked'}`);
     for (const warning of report.warnings) console.log(`- ${warning}`);
@@ -114,8 +116,9 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     return;
   }
   if (action === 'trust-state') {
-    const report = await codexHookTrustDoctor(root, { managed: flag(args, '--managed') });
-    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.codex-hook-trust-state-command.v1', ok: report.ok, entries: report.entries, trust: report.trust }, null, 2));
+    const report = await codexHookTrustDoctor(root, { managed: flag(args, '--managed'), actual: flag(args, '--actual') });
+    const anyReport = report as any;
+    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--actual') ? 'sks.codex-hook-trust-state-command.v2' : 'sks.codex-hook-trust-state-command.v1', ok: report.ok, actual: flag(args, '--actual'), entries: report.entries, trust: report.trust, sources: anyReport.sources || [], managed_dirs: anyReport.managed_dirs || [], blockers: anyReport.blockers || [] }, null, 2));
     console.log(`Hook trust entries: ${report.entries.length}`);
     return;
   }
@@ -127,9 +130,19 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     return;
   }
   if (action === 'install') {
-    const report = await writeTrustedHashStateForHooksFile(root);
-    if (flag(args, '--json')) return console.log(JSON.stringify({ ...report, schema: 'sks.codex-hook-install-command.v1', ok: true, mode: flag(args, '--managed') ? 'managed' : flag(args, '--project') ? 'project' : 'trust-state-only', trusted: flag(args, '--trusted') }, null, 2));
-    console.log(`Hooks install trust state updated: ${report.updated}`);
+    const report = flag(args, '--managed')
+      ? await installManagedCodexHooks(root)
+      : await writeTrustedHashStateForHooksFile(root, undefined, undefined, { allowSksHashFallback: flag(args, '--trusted'), reason: 'Use --managed unless you intentionally accept SKS-only trusted_hash fallback with --trusted.' });
+    if (flag(args, '--json')) return console.log(JSON.stringify({ ...report, schema: flag(args, '--managed') ? 'sks.codex-hooks-managed-install.v1' : 'sks.codex-hook-install-command.v2', mode: flag(args, '--managed') ? 'managed' : flag(args, '--project') ? 'project' : 'trust-state-only', trusted: flag(args, '--trusted') }, null, 2));
+    console.log(flag(args, '--managed') ? `Hooks managed install: ${report.ok ? 'ok' : 'blocked'}` : `Hooks install trust state: ${report.ok ? 'ok' : 'blocked'}`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'actual-parity' || action === 'official-parity') {
+    const report = await writeCodexHookOfficialParityReport(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`Hooks official parity: ${report.ok ? 'ok' : 'blocked'} (${report.path})`);
+    if (!report.ok) process.exitCode = 1;
     return;
   }
   if (action === 'replay') {
@@ -170,7 +183,7 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     return;
   }
   if (action !== 'explain') {
-    console.error('Usage: sks hooks explain|status|doctor|trust-report|trust-state|trust-doctor|trust-fix|install|replay <fixture.json>|codex-schema|codex-validate|warning-check|replay-codex-fixtures [--json]');
+    console.error('Usage: sks hooks explain|status|doctor|trust-report|trust-state|trust-doctor|trust-fix|install|actual-parity|official-parity|replay <fixture.json>|codex-schema|codex-validate|warning-check|replay-codex-fixtures [--json]');
     process.exitCode = 1;
     return;
   }

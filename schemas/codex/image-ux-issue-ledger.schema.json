@@ -7,6 +7,23 @@
   "properties": {
     "schema": { "const": "sks.image-ux-issue-ledger.v3" },
     "schema_version": { "const": 3 },
+    "extraction_source": { "type": "string" },
+    "extraction_method": { "type": "string" },
+    "extraction_schema": { "type": "string" },
+    "extracted_from_generated_callout": { "type": "boolean" },
+    "blocking_issue_count": { "type": "integer", "minimum": 0 },
+    "p0_p1_zero": { "type": "boolean" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "passed": { "type": "boolean" },
+    "validation": {
+      "type": "object",
+      "required": ["ok", "issues"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
     "issues": {
       "type": "array",
       "items": { "$ref": "#/$defs/issue" }
@@ -57,6 +74,7 @@
         "id": { "type": "string", "minLength": 1 },
         "severity": { "enum": ["P0", "P1", "P2", "P3"] },
         "source_screen_id": { "type": "string", "minLength": 1 },
+        "screen_id": { "type": "string" },
         "generated_review_image_id": { "type": "string", "minLength": 1 },
         "evidence_image_id": { "type": "string" },
         "callout_id": { "type": "string", "minLength": 1 },
@@ -83,8 +101,8 @@
         "fix_verification_status": { "enum": ["not_verified", "patch_attempted", "recapture_required", "recheck_verified", "blocked", "accepted_not_applicable"] },
         "post_fix_recheck_issue_id": { "type": ["string", "null"] }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

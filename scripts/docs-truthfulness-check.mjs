@@ -10,6 +10,7 @@ const files = [
   'docs/computer-use-evidence.md',
   'docs/codex-lb.md',
   'docs/codex-cli-compat.md',
+  'docs/official-docs-compat.md',
   'docs/hooks-pat.md',
   'docs/known-gaps.md',
   'docs/release-readiness.md'
@@ -17,10 +18,11 @@ const files = [
 
 const required = {
   'README.md': ['CHANGELOG.md', 'docs/release-readiness.md', 'gpt-image-2'],
-  'CHANGELOG.md': ['1.13.0', 'DFix Extreme Speed Kernel', 'hook trust doctor', 'warning-zero'],
+  'CHANGELOG.md': ['1.14.0', 'DFix Extreme Speed Kernel', 'hook trust doctor', 'warning-zero'],
   'docs/computer-use-evidence.md': ['sks.computer-use-live-evidence.v1', 'probe_only', 'live_capture_blocked', 'local-only'],
   'docs/codex-lb.md': ['durable_env_file', 'durable_keychain', 'durable_launchctl', 'shell_profile', 'process_only_ephemeral'],
-  'docs/codex-cli-compat.md': ['rust-v0.132.0', 'SubagentStart', 'sks_zero_warning_disallowed', 'strict subset'],
+  'docs/codex-cli-compat.md': ['rust-v0.133.0', 'goals_default_enabled', 'permission_profiles_requirements', 'SubagentStart', 'sks_zero_warning_disallowed', 'strict subset'],
+  'docs/official-docs-compat.md': ['official-docs:compat', 'rust-v0.133.0', 'gpt-image-2', 'input_fidelity', 'additionalProperties:false'],
   'docs/hooks-pat.md': ['SubagentStop', 'strict subset', 'zero-warning'],
   'docs/known-gaps.md': ['No P0', 'P1'],
   'docs/release-readiness.md': ['sks.release-readiness.v1', 'release:readiness', 'official-docs:compat']

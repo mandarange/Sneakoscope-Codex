@@ -4,14 +4,14 @@ SKS uses Codex App as the app-facing control surface for dollar-command skills, 
 
 ## 1.0.8 Compatibility Notes
 
-Codex CLI/App runtime compatibility targets OpenAI Codex CLI `rust-v0.132.0`. Hook output validation uses the vendored OpenAI Codex `latest` generated schemas plus the SKS zero-warning strict subset documented in [codex-cli-compat.md](codex-cli-compat.md).
+Codex CLI/App runtime compatibility targets OpenAI Codex CLI `rust-v0.133.0`. Hook output validation uses the vendored OpenAI Codex `latest` generated schemas plus the SKS zero-warning strict subset documented in [codex-cli-compat.md](codex-cli-compat.md). Codex 0.133 goal defaults, remote-control foreground app-server behavior, permission profiles/requirements, plugin discovery, and marketplace config are represented in the SKS compatibility matrix.
 
 Useful checks:
 
 ```bash
 sks codex-app check
 sks codex compatibility --json
-npm run codex:0.132-compat
+npm run codex:0.133-compat
 sks hooks warning-check --json
 sks hooks codex-validate --json
 sks computer-use status --json

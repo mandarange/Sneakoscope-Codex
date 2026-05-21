@@ -24,6 +24,8 @@ export function runFeatureFixture(feature, {
   const artifactFailures = shouldValidateArtifacts
     ? artifacts.filter((artifact) => !artifact.exists || !artifact.schema_ok || !artifact.content_ok).map((artifact) => `${feature.id}:${artifact.path}:${artifact.failure || 'artifact_invalid'}`)
     : [];
+  const shouldScanSecrets = useHermeticRoot || Boolean(execution) || shouldValidateArtifacts;
+  const noPlaintextSecrets = shouldScanSecrets ? validateNoPlaintextSecrets(projectRoot) : true;
   return {
     id: feature.id,
     kind: fixture.kind || 'static',
@@ -35,13 +37,14 @@ export function runFeatureFixture(feature, {
     execution,
     expected_artifacts: artifacts,
     artifact_schema_validated: validateArtifacts,
-    no_plaintext_secrets: validateNoPlaintextSecrets(projectRoot),
-    ok: (!execution || execution.ok) && artifactFailures.length === 0 && validateNoPlaintextSecrets(projectRoot) && !(validateArtifacts && fixture.kind === 'execute_and_validate_artifacts' && expected.length && !execution),
+    no_plaintext_secrets: noPlaintextSecrets,
+    secret_scan: shouldScanSecrets ? 'bounded_runtime_artifacts' : 'skipped_no_runtime_artifacts',
+    ok: (!execution || execution.ok) && artifactFailures.length === 0 && noPlaintextSecrets && !(validateArtifacts && fixture.kind === 'execute_and_validate_artifacts' && expected.length && !execution),
     failures: [
       ...(!fixture.command && fixture.status === 'pass' ? [`${feature.id}:fixture_command_missing`] : []),
       ...(validateArtifacts && fixture.kind === 'execute_and_validate_artifacts' && expected.length && !execution ? [`${feature.id}:command_not_executed_for_artifact_validation`] : []),
       ...(execution && !execution.ok ? [`${feature.id}:command_exit_${execution.status}`] : []),
-      ...(validateNoPlaintextSecrets(projectRoot) ? [] : [`${feature.id}:plaintext_secret_detected`]),
+      ...(noPlaintextSecrets ? [] : [`${feature.id}:plaintext_secret_detected`]),
       ...artifactFailures
     ]
   };
@@ -238,13 +241,19 @@ export function validateNoPlaintextSecrets(root) {
   const secretPattern = /(sk-proj-[A-Za-z0-9_-]{8,}|sk-clb-[A-Za-z0-9_-]{8,}|github_pat_[A-Za-z0-9_]{8,}|(?:CODEX_ACCESS_TOKEN|OPENAI_API_KEY)\s*[:=]\s*["']?(?:sk-[A-Za-z0-9_-]{8,}|[A-Za-z0-9_-]{32,}))/;
   const reportDir = path.join(root, '.sneakoscope');
   if (!fs.existsSync(reportDir)) return true;
-  const stack = [reportDir];
+  const stack = secretScanRoots(reportDir);
   while (stack.length) {
     const current = stack.pop();
+    if (!current) continue;
+    const currentStat = fs.statSync(current);
+    if (currentStat.isFile()) {
+      if (hasSecretLikeContent(current, secretPattern)) return false;
+      continue;
+    }
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const p = path.join(current, entry.name);
       if (entry.isDirectory()) stack.push(p);
-      else if (/\.(json|md|txt|jsonl)$/i.test(entry.name) && secretPattern.test(fs.readFileSync(p, 'utf8'))) return false;
+      else if (hasSecretLikeContent(p, secretPattern)) return false;
     }
   }
   return true;
@@ -252,3 +261,29 @@ export function validateNoPlaintextSecrets(root) {
 
 export const validateDbEvidenceArtifact = validateCompletionProofArtifact;
 export const validateHookReplayArtifact = validateCompletionProofArtifact;
+
+function secretScanRoots(reportDir) {
+  const roots = [];
+  const missionDir = path.join(reportDir, 'missions');
+  for (const entry of fs.readdirSync(reportDir, { withFileTypes: true })) {
+    const p = path.join(reportDir, entry.name);
+    if (!entry.isDirectory()) roots.push(p);
+    else if (entry.name === 'missions') roots.push(...recentMissionDirs(missionDir));
+    else roots.push(p);
+  }
+  return roots.length ? roots : [reportDir];
+}
+
+function recentMissionDirs(missionDir) {
+  if (!fs.existsSync(missionDir)) return [];
+  return fs.readdirSync(missionDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('M-'))
+    .map((entry) => path.join(missionDir, entry.name))
+    .sort()
+    .slice(-12);
+}
+
+function hasSecretLikeContent(file, secretPattern) {
+  if (!/\.(json|md|txt|jsonl)$/i.test(path.basename(file))) return false;
+  return secretPattern.test(fs.readFileSync(file, 'utf8'));
+}

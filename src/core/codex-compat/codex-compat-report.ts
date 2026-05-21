@@ -3,7 +3,7 @@ import { codexVersionReport } from './codex-version.js';
 import { CODEX_COMPAT_SCHEMA, CODEX_HOOK_SCHEMA_BASELINE_TAG, CODEX_REQUIRED_BASELINE_TAG } from './codex-version-policy.js';
 import { codexSchemaSnapshotReport } from './codex-schema-snapshot.js';
 import { codexHookWarningCheck } from './codex-hook-warning-detector.js';
-import { codex0132Matrix } from './codex-0-132.js';
+import { codex0133Matrix } from './codex-0-133.js';
 import { detectCodexExecResumeOutputSchema } from '../codex-exec-output-schema.js';
 
 export async function codexCompatibilityReport(opts: any = {}) {
@@ -16,7 +16,7 @@ export async function codexCompatibilityReport(opts: any = {}) {
     output_schema_supported: false,
     warnings: [`codex output-schema detector failed: ${err.message}`]
   }));
-  const matrix = codex0132Matrix({
+  const matrix = codex0133Matrix({
     version: version.detected?.version,
     available: version.detected?.available,
     execResumeHelp: outputSchema.output_schema_supported ? '--output-schema' : ''
@@ -44,7 +44,14 @@ export async function codexCompatibilityReport(opts: any = {}) {
       events: hooks.events
     },
     capabilities: matrix.capabilities,
-    codex_0_132: matrix,
+    codex_0_133: matrix,
+    legacy_baselines: {
+      codex_0_132: {
+        baseline: 'rust-v0.132.0',
+        status: 'superseded',
+        superseded_by: matrix.baseline
+      }
+    },
     structured_resume_output: outputSchema,
     ux_review_output_schema_preferred: matrix.ux_review_output_schema_preferred,
     ok,

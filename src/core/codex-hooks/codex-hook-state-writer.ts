@@ -3,7 +3,27 @@ import { readJson, readText, writeTextAtomic } from '../fsx.js';
 import { CODEX_HOOK_EVENTS } from '../codex-compat/codex-hook-events.js';
 import { codexCommandHookCurrentHash, codexHookStateKey } from './codex-hook-hash.js';
 
-export async function writeTrustedHashStateForHooksFile(root: string, hooksPath = path.join(root, '.codex', 'hooks.json'), statePath = path.join(root, '.codex', 'config.toml')) {
+export async function writeTrustedHashStateForHooksFile(
+  root: string,
+  hooksPath = path.join(root, '.codex', 'hooks.json'),
+  statePath = path.join(root, '.codex', 'config.toml'),
+  opts: { allowSksHashFallback?: boolean; reason?: string } = {}
+) {
+  if (opts.allowSksHashFallback !== true) {
+    return {
+      schema: 'sks.codex-hook-state-writer.v2',
+      ok: false,
+      hooks_path: hooksPath,
+      state_path: statePath,
+      updated: 0,
+      blocks: [],
+      blocked: true,
+      blocker: 'official_codex_hook_hash_unavailable',
+      policy: 'use_sks_hooks_install_managed_instead_of_writing_sks_only_trusted_hashes',
+      repair_action: 'sks hooks install --managed --json',
+      reason: opts.reason || 'SKS refuses to write trusted_hash values from its own canonicalJson hash unless official Codex hash parity is proven.'
+    };
+  }
   const hooksFile = await readJson(hooksPath, {});
   const blocks = trustedHashBlocksForHooksFile(hooksPath, hooksFile);
   const next = upsertTrustBlocks(await readText(statePath, ''), blocks);

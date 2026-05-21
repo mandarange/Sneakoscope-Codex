@@ -157,6 +157,7 @@ export const COMMANDS = {
   auth: entry('beta', 'Alias for codex-lb auth commands', 'dist/commands/codex-lb.js', directCommand(() => import('../commands/codex-lb.js'), 'dist/commands/codex-lb.js')),
   hooks: entry('beta', 'Explain and inspect Codex hooks', 'dist/commands/hooks.js', directCommand(() => import('../commands/hooks.js'), 'dist/commands/hooks.js')),
   openclaw: entry('labs', 'Create OpenClaw skill package', 'dist/commands/openclaw.js', directCommand(() => import('../commands/openclaw.js'), 'dist/commands/openclaw.js')),
+  hermes: entry('labs', 'Create Hermes Agent skill package', 'dist/commands/hermes.js', directCommand(() => import('../commands/hermes.js'), 'dist/commands/hermes.js')),
   tmux: entry('beta', 'Open/check SKS tmux UI', 'dist/commands/tmux.js', directCommand(() => import('../commands/tmux.js'), 'dist/commands/tmux.js')),
   mad: entry('beta', 'MAD-SKS tmux permission launcher', 'dist/commands/mad-sks.js', directCommand(() => import('../commands/mad-sks.js'), 'dist/commands/mad-sks.js')),
   'mad-sks': entry('beta', 'MAD-SKS scoped permission modifier', 'dist/commands/mad-sks.js', directCommand(() => import('../commands/mad-sks.js'), 'dist/commands/mad-sks.js')),

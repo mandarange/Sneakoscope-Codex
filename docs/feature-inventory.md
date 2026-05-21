@@ -5,14 +5,14 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 ## Coverage
 
 - Status: coverage-ok
-- Features: 119
-- CLI commands: 70
+- Features: 121
+- CLI commands: 72
 - Handler keys: 0
 - Dollar routes: 21
 - App skill aliases: 23
 - Skills: 49
-- Fixture statuses: pass=119
-- Feature quality: runtime_verified=45, runtime_mock_verified=47, integration_optional=5, static_contract=22, missing=0
+- Fixture statuses: pass=121
+- Feature quality: runtime_verified=47, runtime_mock_verified=47, integration_optional=5, static_contract=22, missing=0
 
 ## Release Coverage Rule
 
@@ -29,26 +29,28 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-commands` | core-cli | stable | sks commands [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-run` | core-cli | labs | sks run "task" [--visual\|--research\|--db] [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-status` | core-cli | labs | sks status [--json] | execute:pass | runtime_verified | none recorded |
-| `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|tmux\|auto-review\|team\|qa-loop\|ppt\|image-ux-review\|goal\|research\|db\|git\|codex-app\|hooks\|features\|all-features\|openclaw\|dfix\|commit\|commit-and-push\|design\|imagegen\|dollar\|context7\|pipeline\|scouts\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|wrongness\|code-structure\|proof-field\|skill-dream\|rust] | execute:pass | runtime_verified | none recorded |
+| `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|tmux\|auto-review\|team\|qa-loop\|ppt\|image-ux-review\|goal\|research\|db\|git\|codex\|codex-app\|hooks\|features\|all-features\|openclaw\|hermes\|dfix\|commit\|commit-and-push\|design\|imagegen\|dollar\|context7\|pipeline\|scouts\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|wrongness\|code-structure\|proof-field\|skill-dream\|rust] | execute:pass | runtime_verified | none recorded |
 | `cli-quickstart` | core-cli | stable | sks quickstart | execute:pass | runtime_verified | none recorded |
 | `cli-bootstrap` | install | labs | sks bootstrap [--install-scope global\|project] [--local-only] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-root` | core-cli | stable | sks root [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-deps` | install | labs | sks deps check\|install [tmux\|codex\|context7\|all] [--yes] | mock:pass | runtime_mock_verified | none recorded |
+| `cli-codex` | integration | beta | sks codex compatibility\|version\|doctor\|schema [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-codex-app` | integration | beta | sks codex-app [check\|open\|pat status\|remote-control] | real_optional:pass | integration_optional | mobile/event payload details remain unknown |
-| `cli-hooks` | integration | beta | sks hooks explain\|status\|trust-report\|replay ... [--json] | mock:pass | runtime_mock_verified | mobile/event payload details remain unknown |
+| `cli-hooks` | integration | beta | sks hooks explain\|status\|trust-report\|replay\|codex-validate\|warning-check ... [--json] | mock:pass | runtime_mock_verified | mobile/event payload details remain unknown |
 | `cli-codex-lb` | integration | beta | sks codex-lb status\|health\|metrics\|doctor\|circuit\|repair\|setup ... | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-auth` | integration | labs | sks auth status\|health\|repair\|setup --host <domain> --api-key <key> | mock:pass | runtime_mock_verified | none recorded |
 | `cli-openclaw` | integration | labs | sks openclaw install\|path\|print [--dir path] [--force] [--json] | mock:pass | runtime_mock_verified | none recorded |
+| `cli-hermes` | integration | labs | sks hermes install\|status\|path\|print [--dir path] [--force] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-tmux` | core-cli | labs | sks \| sks tmux open\|check\|status [--workspace name] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-mad` | core-cli | labs | sks --mad [--high] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-auto-review` | core-cli | labs | sks auto-review status\|enable\|start [--high] \| sks --Auto-review --high | mock:pass | runtime_mock_verified | none recorded |
 | `cli-dollar-commands` | core-cli | labs | sks dollar-commands [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-commit` | core-cli | labs | sks commit [--message "msg"] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-commit-and-push` | core-cli | labs | sks commit-and-push [--message "msg"] [--json] | mock:pass | runtime_mock_verified | none recorded |
-| `cli-dfix` | core-cli | labs | sks dfix | execute:pass | runtime_verified | none recorded |
+| `cli-dfix` | core-cli | labs | sks dfix | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-qa-loop` | loop | labs | sks qa-loop prepare\|answer\|run\|status ... | mock:pass | runtime_mock_verified | none recorded |
 | `cli-ppt` | visual-memory | labs | sks ppt build\|status <mission-id\|latest> [--json] | mock:pass | runtime_mock_verified | none recorded |
-| `cli-image-ux-review` | visual-memory | labs | sks image-ux-review status <mission-id\|latest> [--json] | mock:pass | runtime_mock_verified | none recorded |
+| `cli-image-ux-review` | visual-memory | labs | sks ux-review run --image <path> --fix --json \| sks image-ux-review status <mission-id\|latest> [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-context7` | integration | labs | sks context7 check\|setup\|tools\|resolve\|docs\|evidence ... | real_optional:pass | integration_optional | none recorded |
 | `cli-recallpulse` | loop | labs | sks recallpulse run\|status\|eval\|governance\|checklist <mission-id\|latest> | mock:pass | runtime_mock_verified | none recorded |
 | `cli-pipeline` | proof-route | beta | sks pipeline status\|resume\|plan\|answer ... | mock:pass | runtime_mock_verified | none recorded |
@@ -92,7 +94,7 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-gc` | core-cli | labs | sks gc [--dry-run] [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-memory` | core-cli | labs | sks memory [--dry-run] [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-stats` | core-cli | labs | sks stats [--json] | execute:pass | runtime_verified | none recorded |
-| `route-dfix` | route | stable | $DFix<br>$dfix | mock:pass | runtime_mock_verified | none recorded |
+| `route-dfix` | route | stable | $DFix<br>$dfix | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `route-answer` | route | stable | $Answer<br>$answer | mock:pass | runtime_mock_verified | none recorded |
 | `route-sks` | route | stable | $SKS<br>$sks | mock:pass | runtime_mock_verified | none recorded |
 | `route-team` | route | beta | $Team<br>$team<br>$from-chat-img | execute_and_validate_artifacts:pass | runtime_verified | none recorded |

@@ -4,9 +4,11 @@
   "title": "SKS PPT Slide Extraction Report",
   "type": "object",
   "required": ["schema", "provider", "output_schema_path", "slide_reports", "issue_count", "blockers", "validation_status", "passed"],
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "schema": { "const": "sks.ppt-slide-extraction-report.v1" },
+    "schema_version": { "const": 1 },
+    "created_at": { "type": "string" },
     "provider": { "type": "string" },
     "output_schema_path": { "type": "string" },
     "slide_reports": {
@@ -14,9 +16,11 @@
       "items": {
         "type": "object",
         "required": ["schema", "generated_image_path", "generated_image_sha256", "provider", "schema_validation", "issue_count", "bbox_validation_issues", "blocker", "passed"],
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "schema": { "const": "sks.ppt-slide-extraction-report-item.v1" },
+          "slide_id": { "type": ["string", "null"] },
+          "slide_index": { "type": ["number", "null"] },
           "generated_image_path": { "type": ["string", "null"] },
           "generated_image_sha256": { "type": ["string", "null"] },
           "provider": { "type": "string" },
@@ -30,6 +34,7 @@
     },
     "issue_count": { "type": "integer", "minimum": 0 },
     "blockers": { "type": "array", "items": { "type": "string" } },
+    "fallback_used": { "type": "boolean" },
     "validation_status": { "type": "string" },
     "passed": { "type": "boolean" }
   }

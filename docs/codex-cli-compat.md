@@ -1,6 +1,6 @@
 # Codex CLI Compatibility
 
-SKS 1.13.0 targets the OpenAI Codex CLI `rust-v0.132.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
+SKS 1.14.0 targets the OpenAI Codex CLI `rust-v0.133.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
 
 Computer Use and codex-lb compatibility notes are bounded: Computer Use live evidence can be `probe_only`, `live_capture_success`, or a structured blocker depending on the local Codex App/macOS capability, and codex-lb can be durable or `process_only_ephemeral` depending on setup choices. Recovery commands are `sks computer-use smoke --json` for a probe-only status and `sks codex-lb setup --write-env-file --keychain --launchctl` for durable persistence. Local screenshots and secrets stay private/redacted by default.
 
@@ -11,7 +11,7 @@ sks codex compatibility --json
 sks codex version --json
 sks codex doctor --json
 sks codex schema --json
-npm run codex:0.132-compat
+npm run codex:0.133-compat
 npm run codex:output-schema-fixture
 sks hooks codex-validate --json
 sks hooks warning-check --json
@@ -21,18 +21,23 @@ npm run hooks:strict-subset-check
 
 Version detection checks `codex --version`, `codex exec resume --help`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored snapshot metadata. A missing live Codex binary is `integration_optional`; release hook validation uses the vendored snapshot, not the local binary.
 
-## Codex 0.132 Capabilities
+## Codex 0.133 Capabilities
 
-The 1.13.0 compatibility matrix records these capability ids:
+The 1.14.0 compatibility matrix records these capability ids:
 
 - `exec_resume_output_schema`: preferred structured output for Scout, UX-Review callout extraction, Completion Proof, and Wrongness artifacts.
 - `app_server_image_fidelity`: original-resolution image metadata for UX-Review source screenshots, generated callout images, and Image Voxel coordinate alignment.
 - `memory_summary_version_rebuild`: schema-versioned TriWiki, Wrongness, and shared memory summaries with rebuild commands.
 - `goal_continuation_blocker_stop`: repeated blocker and usage-limit stops for Goal, QA, Research, and UX-Review loops.
 - `tui_probe_batching`: batchable doctor/probe inventory with timeout budgets.
+- `goals_default_enabled`: native `/goal` is treated as the active persisted continuation surface under Codex 0.133.
+- `remote_control_foreground_app_server`: `codex remote-control` readiness prefers the latest foregrounded app-server.
+- `permission_profiles_requirements`: Codex 0.133 permission/profile/requirements surfaces are first-class policy inputs; `allow_managed_hooks_only = true` remains in `requirements.toml`.
+- `plugin_discovery_marketplaces`: plugin discovery and `marketplaces` are recorded as P1 warning-only unless a route explicitly needs them.
+- `extension_lifecycle_events`: extension lifecycle events for turn/tool/model/item phases are tracked separately from hook schema validation.
 - `remote_executor_standard_auth`, `python_sdk_auth`, and `python_sdk_turn_result`: P1 warning-only review items unless a route explicitly uses those SDK surfaces.
 
-Unknown newer Codex fields are warning-only. Codex versions below 0.132 are degraded but supported, and output-schema fallbacks cannot support claims above `verified_partial`.
+Unknown newer Codex fields are warning-only. Codex versions below 0.133 are degraded but supported, and output-schema fallbacks cannot support claims above `verified_partial`.
 
 ## Vendored Snapshot
 
@@ -79,7 +84,7 @@ SKS strict-subset examples:
 
 ```bash
 npm run codex:compat
-npm run codex:0.132-compat
+npm run codex:0.133-compat
 npm run codex:output-schema-fixture
 npm run hooks:codex-validate
 npm run hooks:warning-check

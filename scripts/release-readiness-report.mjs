@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.13.0';
+const RELEASE_VERSION = '1.14.0';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 
@@ -17,12 +17,15 @@ const checks = {
   computer_use_live_evidence: scriptContains('release:check', 'computer-use:live-evidence'),
   docs_truthfulness: scriptContains('release:check', 'docs:truthfulness'),
   release_readiness: scriptContains('release:check', 'release:readiness'),
-  codex_0132_compat: scriptContains('release:check', 'codex:0.132-compat'),
+  codex_0133_compat: scriptContains('release:check', 'codex:0.133-compat'),
   codex_output_schema_fixture: scriptContains('release:check', 'codex:output-schema-fixture'),
   image_fidelity_check: scriptContains('release:check', 'image-fidelity:check'),
+  imagegen_capability: scriptContains('release:check', 'imagegen:capability'),
+  gpt_image_2_request_validator: scriptContains('release:check', 'imagegen:gpt-image-2-request-validator'),
   ux_review_run_wires_imagegen: scriptContains('release:check', 'ux-review:run-wires-imagegen'),
   ux_review_extract_wires_real_extractor: scriptContains('release:check', 'ux-review:extract-wires-real-extractor'),
   ux_review_patch_diff_recheck: scriptContains('release:check', 'ux-review:patch-diff-recheck'),
+  ux_review_imagegen_blackbox: scriptContains('release:check', 'ux-review:imagegen-blackbox'),
   ux_review_real_loop_fixture: scriptContains('release:check', 'ux-review:real-loop-fixture'),
   ux_review_generate_callouts_fixture: scriptContains('release:check', 'ux-review:generate-callouts-fixture'),
   ux_review_extract_real_callouts_fixture: scriptContains('release:check', 'ux-review:extract-real-callouts-fixture'),
@@ -35,6 +38,8 @@ const checks = {
   ppt_real_export_adapter: scriptContains('release:check', 'ppt:real-export-adapter'),
   ppt_real_imagegen_wiring: scriptContains('release:check', 'ppt:real-imagegen-wiring'),
   ppt_reexport_rereview: scriptContains('release:check', 'ppt:reexport-rereview'),
+  ppt_imagegen_blackbox: scriptContains('release:check', 'ppt:imagegen-blackbox'),
+  ux_ppt_structured_extraction: scriptContains('release:check', 'ux-ppt:structured-extraction'),
   ppt_slide_export_fixture: scriptContains('release:check', 'ppt:slide-export-fixture'),
   ppt_no_text_fallback: scriptContains('release:check', 'ppt:no-text-fallback'),
   ppt_no_mock_as_real: scriptContains('release:check', 'ppt:no-mock-as-real'),
@@ -53,6 +58,10 @@ const checks = {
   hooks_trust_warning_zero: scriptContains('release:check', 'hooks:trust-warning-zero'),
   hooks_subagent_events_check: scriptContains('release:check', 'hooks:subagent-events-check'),
   hooks_no_unsupported_handlers: scriptContains('release:check', 'hooks:no-unsupported-handlers'),
+  hooks_actual_parity_check: scriptContains('release:check', 'hooks:actual-parity-check'),
+  hooks_official_hash_parity: scriptContains('release:check', 'hooks:official-hash-parity'),
+  hooks_managed_install_fixture: scriptContains('release:check', 'hooks:managed-install-fixture'),
+  hooks_runtime_replay_warning_zero: scriptContains('release:check', 'hooks:runtime-replay-warning-zero'),
   all_features_completion: scriptContains('release:check', 'all-features:completion'),
   all_features_deep_completion: scriptContains('release:check', 'all-features:deep-completion'),
   evidence_flagship_coverage: scriptContains('release:check', 'evidence:flagship-coverage'),
@@ -67,7 +76,7 @@ const checks = {
 };
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
 const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
-const releaseMetadata = runNodeScript('scripts/release-metadata-1-13-check.mjs');
+const releaseMetadata = runNodeScript('scripts/release-metadata-1-14-check.mjs');
 const remainingP0 = [];
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
 for (const [name, ok] of Object.entries(checks)) if (!ok) remainingP0.push(`${name}_gate_missing`);
@@ -94,18 +103,21 @@ const report = {
     status: checks.computer_use_live_evidence ? 'present' : 'missing',
     modes: ['probe_only', 'live_capture_attempted', 'live_capture_success', 'live_capture_blocked']
   },
-  codex_0_132: {
-    status: checks.codex_0132_compat ? 'present' : 'missing',
-    baseline: 'rust-v0.132.0',
+  codex_0_133: {
+    status: checks.codex_0133_compat ? 'present' : 'missing',
+    baseline: 'rust-v0.133.0',
     output_schema_resume: checks.codex_output_schema_fixture ? 'present' : 'missing'
   },
   image_ux_review: {
-    status: checks.ux_review_run_wires_imagegen && checks.ux_review_extract_wires_real_extractor && checks.ux_review_patch_diff_recheck && checks.ux_review_real_loop_fixture && checks.ux_review_generate_callouts_fixture && checks.ux_review_extract_real_callouts_fixture && checks.ux_review_patch_handoff_fixture && checks.ux_review_recapture_recheck_fixture && checks.ux_review_no_text_fallback && checks.ux_review_no_fake_callouts && checks.ux_review_image_voxel_relations ? 'present' : 'missing',
+    status: checks.imagegen_capability && checks.gpt_image_2_request_validator && checks.ux_review_run_wires_imagegen && checks.ux_review_extract_wires_real_extractor && checks.ux_review_patch_diff_recheck && checks.ux_review_imagegen_blackbox && checks.ux_review_real_loop_fixture && checks.ux_review_generate_callouts_fixture && checks.ux_review_extract_real_callouts_fixture && checks.ux_review_patch_handoff_fixture && checks.ux_review_recapture_recheck_fixture && checks.ux_review_no_text_fallback && checks.ux_review_no_fake_callouts && checks.ux_review_image_voxel_relations ? 'present' : 'missing',
     gates: {
       image_fidelity: checks.image_fidelity_check,
+      imagegen_capability: checks.imagegen_capability,
+      gpt_image_2_request_validator: checks.gpt_image_2_request_validator,
       run_wires_imagegen: checks.ux_review_run_wires_imagegen,
       extract_wires_real_extractor: checks.ux_review_extract_wires_real_extractor,
       patch_diff_recheck: checks.ux_review_patch_diff_recheck,
+      imagegen_blackbox: checks.ux_review_imagegen_blackbox,
       real_loop_fixture: checks.ux_review_real_loop_fixture,
       generate_callouts_fixture: checks.ux_review_generate_callouts_fixture,
       extract_real_callouts_fixture: checks.ux_review_extract_real_callouts_fixture,
@@ -117,12 +129,14 @@ const report = {
     }
   },
   ppt_imagegen_review: {
-    status: checks.ppt_imagegen_review_fixture && checks.ppt_real_export_adapter && checks.ppt_real_imagegen_wiring && checks.ppt_reexport_rereview && checks.ppt_slide_export_fixture && checks.ppt_no_text_fallback && checks.ppt_no_mock_as_real && checks.ppt_issue_extraction_fixture && checks.ppt_image_voxel_relations && checks.ppt_proof_trust_fixture ? 'present' : 'missing',
+    status: checks.ppt_imagegen_review_fixture && checks.ppt_real_export_adapter && checks.ppt_real_imagegen_wiring && checks.ppt_reexport_rereview && checks.ppt_imagegen_blackbox && checks.ux_ppt_structured_extraction && checks.ppt_slide_export_fixture && checks.ppt_no_text_fallback && checks.ppt_no_mock_as_real && checks.ppt_issue_extraction_fixture && checks.ppt_image_voxel_relations && checks.ppt_proof_trust_fixture ? 'present' : 'missing',
     gates: {
       imagegen_review_fixture: checks.ppt_imagegen_review_fixture,
       real_export_adapter: checks.ppt_real_export_adapter,
       real_imagegen_wiring: checks.ppt_real_imagegen_wiring,
       reexport_rereview: checks.ppt_reexport_rereview,
+      imagegen_blackbox: checks.ppt_imagegen_blackbox,
+      structured_extraction: checks.ux_ppt_structured_extraction,
       slide_export_fixture: checks.ppt_slide_export_fixture,
       no_text_fallback: checks.ppt_no_text_fallback,
       no_mock_as_real: checks.ppt_no_mock_as_real,
@@ -144,12 +158,16 @@ const report = {
     }
   },
   hook_trust_warning_zero: {
-    status: checks.hooks_latest_schema_check && checks.hooks_trust_state_check && checks.hooks_trust_warning_zero && checks.hooks_subagent_events_check && checks.hooks_no_unsupported_handlers ? 'present' : 'missing',
+    status: checks.hooks_latest_schema_check && checks.hooks_trust_state_check && checks.hooks_trust_warning_zero && checks.hooks_subagent_events_check && checks.hooks_no_unsupported_handlers && checks.hooks_actual_parity_check && checks.hooks_official_hash_parity && checks.hooks_managed_install_fixture && checks.hooks_runtime_replay_warning_zero ? 'present' : 'missing',
     latest_schema: checks.hooks_latest_schema_check,
     trust_state: checks.hooks_trust_state_check,
     warning_zero: checks.hooks_trust_warning_zero,
     subagent_events: checks.hooks_subagent_events_check,
-    no_unsupported_handlers: checks.hooks_no_unsupported_handlers
+    no_unsupported_handlers: checks.hooks_no_unsupported_handlers,
+    actual_parity_check: checks.hooks_actual_parity_check,
+    official_hash_parity: checks.hooks_official_hash_parity,
+    managed_install_fixture: checks.hooks_managed_install_fixture,
+    runtime_replay_warning_zero: checks.hooks_runtime_replay_warning_zero
   },
   all_feature_completion: {
     status: checks.all_features_completion && checks.all_features_deep_completion && checks.evidence_flagship_coverage ? 'present' : 'missing',
@@ -241,7 +259,7 @@ function renderMarkdown(report) {
 - Hook strict subset: \`${report.hook_strict_subset.status}\`
 - codex-lb persistence truth: \`${report.codex_lb_setup_truthfulness.status}\`
 - Computer Use evidence modes: \`${report.computer_use_evidence_mode_support.status}\`
-- Codex 0.132 compatibility: \`${report.codex_0_132.status}\`
+- Codex 0.133 compatibility: \`${report.codex_0_133.status}\`
 - UX-Review real callout loop gates: \`${report.image_ux_review.status}\`
 - PPT imagegen review gates: \`${report.ppt_imagegen_review.status}\`
 - DFix gates: \`${report.dfix.status}\`

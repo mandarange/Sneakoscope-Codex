@@ -22,6 +22,6 @@
   "source_path": "codex-rs/hooks/schema/generated",
   "notes": [
     "Captured from upstream OpenAI Codex HEAD using vendored generated hook schema fixtures.",
-    "SubagentStart and SubagentStop are release-blocking events for SKS 1.13.0 hook compatibility."
+    "SubagentStart and SubagentStop are release-blocking events for SKS 1.14.0 hook compatibility."
   ]
 }

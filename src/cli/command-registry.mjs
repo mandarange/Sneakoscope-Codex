@@ -61,6 +61,7 @@ export const COMMANDS = {
   auth: { maturity: 'beta', summary: 'Alias for codex-lb auth commands', lazy: () => import('../commands/codex-lb.mjs') },
   hooks: { maturity: 'beta', summary: 'Explain and inspect Codex hooks', lazy: () => import('../commands/hooks.mjs') },
   openclaw: { maturity: 'labs', summary: 'Create OpenClaw skill package', lazy: () => import('../commands/openclaw.mjs') },
+  hermes: { maturity: 'labs', summary: 'Create Hermes Agent skill package', lazy: () => import('../commands/hermes.mjs') },
   tmux: { maturity: 'beta', summary: 'Open/check SKS tmux UI', lazy: () => import('../commands/tmux.mjs') },
   mad: { maturity: 'beta', summary: 'MAD-SKS tmux permission launcher', lazy: () => import('../commands/mad-sks.mjs') },
   'mad-sks': { maturity: 'beta', summary: 'MAD-SKS scoped permission modifier', lazy: () => import('../commands/mad-sks.mjs') },

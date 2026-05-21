@@ -10,14 +10,15 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.13.0** focuses on the DFix Extreme Speed Kernel and Codex hook trust warning-zero: DFix now records error signatures, path decisions, patch runner results, verification selection, rollback plans, wrongness/cache hints, and speed budgets, while hooks validate the latest 10-event Codex schema including `SubagentStart` and `SubagentStop`.
+SKS **1.14.0** focuses on Codex hook trust parity and real imagegen route hardening: hooks now prefer managed installs when official hashes are unavailable, `trust-doctor --actual` reports real config state, and UX/PPT image routes validate gpt-image-2 requests before generation while fake blackbox checks stay explicitly mock-like.
 
 ```bash
 sks features complete --json
 sks ux-review run --image <path> --generate-callouts --json
 sks ppt fixture --mock --json
 sks dfix fixture --json
-sks hooks trust-doctor --json
+sks hooks trust-doctor --actual --json
+sks hooks install --managed --json
 ```
 
 Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release gate status lives in [docs/release-readiness.md](docs/release-readiness.md).
@@ -115,7 +116,7 @@ sks selftest --mock
 
 ## What Sneakoscope Adds
 
-`sks` adds a tmux Codex CLI runtime, Codex App `$` commands, Team/QA/PPT/Research/DB/GX/Wiki routes, OpenClaw skill generation, Context7-gated current docs, TriWiki context packs, DB safety, design SSOT policy, skill dreaming, release checks, and Honest Mode.
+`sks` adds a tmux Codex CLI runtime, Codex App `$` commands, Team/QA/PPT/Research/DB/GX/Wiki routes, OpenClaw and Hermes skill generation, Context7-gated current docs, TriWiki context packs, DB safety, design SSOT policy, skill dreaming, release checks, and Honest Mode.
 
 ## Report-Only Planning Surfaces
 
@@ -409,7 +410,7 @@ SKS does not install Git pre-commit hooks. Release metadata is changed only by e
 
 TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks harness fixture` validates the broader Harness Growth Factory contract: deliberate forgetting fixtures, skill card metadata, experiment schema, tool-error taxonomy, permission profiles, MultiAgentV2 defaults, and tmux cockpit view coverage. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
 
-## OpenClaw Agent Usage
+## OpenClaw And Hermes Agent Usage
 
 Sneakoscope can generate an OpenClaw skill package for agents that need to operate SKS-enabled repositories.
 
@@ -429,6 +430,23 @@ SKS_OPENCLAW=1 sks proof-field scan --intent "small CLI change" --changed src/cl
 ```
 
 If OpenClaw runs in a sandbox, grant shell execution only for trusted workspaces. Database, migration, and destructive work still follows SKS safety routes.
+
+Sneakoscope can also generate a Hermes Agent skill package for the Hermes `/skills` surface.
+
+```sh
+sks hermes install
+sks hermes status --json
+sks hermes path
+```
+
+By default this writes `~/.hermes/skills/sneakoscope-codex/` with `SKILL.md`, a README, `hermes-config.example.yaml`, and `skill-bundle.example.yaml`. Set `HERMES_HOME` or pass `--dir` for a custom location. Hermes agents should invoke `/sneakoscope-codex` with the terminal toolset enabled and run shell commands with `SKS_HERMES=1`; this enables non-interactive dependency/update prompts while leaving SKS DB, migration, and destructive-operation safety routes intact. If you use Hermes `skills.external_dirs`, remember writable external directories can be updated by Hermes, so protect shared skill folders with filesystem permissions when needed.
+
+```sh
+SKS_HERMES=1 sks root --json
+SKS_HERMES=1 sks commands --json
+SKS_HERMES=1 sks dollar-commands --json
+SKS_HERMES=1 sks status --json
+```
 
 ## Prompt `$` Commands
 

@@ -11,12 +11,16 @@ sks hooks codex-schema --json
 sks hooks codex-validate --json
 sks hooks warning-check --json
 sks hooks replay-codex-fixtures --json
+sks hooks trust-doctor --actual --json
+sks hooks trust-state --actual --json
+sks hooks install --managed --json
+sks hooks official-parity --json
 sks codex-app pat status --json
 ```
 
-## SKS 1.13.0 Latest Codex Hook Shape
+## SKS 1.14.0 Latest Codex Hook Shape
 
-SKS 1.13.0 validates against the vendored OpenAI Codex `latest` hook snapshot from `openai/codex` HEAD. The snapshot has 10 events and 20 command schema files. `SubagentStart` and `SubagentStop` are release-blocking events, not compatibility warnings.
+SKS 1.14.0 validates against the vendored OpenAI Codex `latest` hook snapshot from `openai/codex` HEAD. The snapshot has 10 events and 20 command schema files. `SubagentStart` and `SubagentStop` are release-blocking events, not compatibility warnings.
 
 This page is documentation-only evidence: it distinguishes probe/mock/live evidence, avoids universal Computer Use availability claims, and keeps PAT/secret handling private and redacted. For recovery, run `sks hooks warning-check --json`, `sks computer-use smoke --json`, or `sks codex-lb setup --write-env-file --keychain --launchctl` depending on the failing surface.
 
@@ -24,7 +28,9 @@ Supported event names are `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Pre
 
 Command hook config must use the upstream handler fields `command`, `commandWindows` or `command_windows`, `timeout`, `async`, and `statusMessage`. `allow_managed_hooks_only = true` is valid only in `requirements.toml`; SKS must not write it to `config.toml`.
 
-SKS writes command hooks only. It must not generate prompt hooks, agent hooks, async hooks, empty commands, invalid matchers, or same-layer `hooks.json` plus `config.toml` hook definitions. `sks hooks trust-doctor --json` reports `current_hash`, `trusted_hash`, and `trust_status` as `Managed`, `Trusted`, `Modified`, or `Untrusted`; `sks hooks trust-fix --json` updates trusted hash state when repair is safe.
+SKS writes command hooks only. It must not generate prompt hooks, agent hooks, async hooks, empty commands, invalid matchers, or same-layer `hooks.json` plus `config.toml` hook definitions. `sks hooks trust-doctor --actual --json` reports `current_hash`, `trusted_hash`, and `trust_status` as `Managed`, `Trusted`, `Modified`, or `Untrusted` from `hooks.json`, inline TOML, `requirements.toml`, and managed directories.
+
+When Codex does not expose an official hook hash list, SKS does not write SKS-only `trusted_hash` values by default. The safe repair is `sks hooks install --managed --json`, which writes `allow_managed_hooks_only = true` in `.codex/requirements.toml` and records managed command hooks under `.codex/managed-hooks/`.
 
 Output uses camelCase Codex fields. Examples:
 

@@ -4,7 +4,7 @@
   "title": "SKS PPT Slide Issue Ledger",
   "type": "object",
   "required": ["schema", "schema_version", "created_at", "issues", "issue_count", "blockers", "validation", "passed"],
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "schema": { "const": "sks.ppt-slide-issue-ledger.v1" },
     "schema_version": { "const": 1 },
@@ -12,13 +12,22 @@
     "issue_count": { "type": "integer", "minimum": 0 },
     "blockers": { "type": "array", "items": { "type": "string" } },
     "passed": { "type": "boolean" },
-    "validation": { "type": "object" },
+    "extraction_source": { "type": "string" },
+    "mock_fixture": { "type": "boolean" },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ok": { "type": "boolean" },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      }
+    },
     "issues": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["id", "slide_id", "slide_index", "generated_review_image_id", "callout_id", "bbox", "severity", "category", "title", "detail", "fix_action", "target_element", "confidence", "source", "status"],
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "id": { "type": "string" },
           "slide_id": { "type": "string" },

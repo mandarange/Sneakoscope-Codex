@@ -2,9 +2,11 @@ import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, exists, nowIso, readJson, runProcess, which, writeJsonAtomic } from '../fsx.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
+import { detectImagegenCapability } from '../imagegen/imagegen-capability.js';
+import { validateGptImage2Request } from '../imagegen/gpt-image-2-request-validator.js';
 
 export interface ImageUxReviewImagegenAdapter {
-  surface: 'codex_app_imagegen' | 'openai_images_api';
+  surface: 'codex_app_imagegen' | 'openai_images_api' | 'fake_imagegen_adapter';
   model: 'gpt-image-2';
   available: boolean;
   generateCalloutReview(input: ImageUxReviewImagegenRequest): Promise<ImageUxReviewImagegenResult>;
@@ -87,10 +89,78 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
     available: opts.available === true || process.env.SKS_CODEX_APP_IMAGEGEN_AVAILABLE === '1',
     async generateCalloutReview(input: ImageUxReviewImagegenRequest) {
       const suppliedOutput = opts.outputImagePath || process.env.SKS_CODEX_APP_IMAGEGEN_OUTPUT || null;
+      if (!input?.output_dir && !suppliedOutput) {
+        return {
+          ok: false,
+          status: 'blocked',
+          generated_image_path: null,
+          output_id: null,
+          blocker: 'imagegen_capability_missing',
+          provider: 'codex_app_imagegen',
+          latency_ms: null
+        };
+      }
+      await ensureDir(input.output_dir);
+      const requestArtifact = path.join(input.output_dir, 'image-ux-gpt-image-2-request.json');
+      const responseArtifact = path.join(input.output_dir, 'image-ux-gpt-image-2-response.json');
+      const validation = await validateGptImage2Request({
+        provider: 'codex_app_imagegen',
+        endpoint: 'Codex App $imagegen',
+        model: 'gpt-image-2',
+        prompt: input.prompt,
+        source_image_path: input.source_image_path,
+        output_dir: input.output_dir,
+        params: { size: 'auto' },
+        privacy: input.privacy
+      });
+      await writeJsonAtomic(requestArtifact, {
+        schema: 'sks.image-ux-gpt-image-2-request.v1',
+        created_at: nowIso(),
+        provider: 'codex_app_imagegen',
+        endpoint: 'Codex App $imagegen',
+        model: 'gpt-image-2',
+        source_screen_id: input.source_screen_id,
+        source_image_path: path.resolve(input.source_image_path),
+        prompt: input.prompt,
+        validation,
+        unsupported_parameters_omitted: ['input_fidelity'],
+        privacy: input.privacy
+      });
+      if (!validation.ok) {
+        await writeJsonAtomic(responseArtifact, {
+          schema: 'sks.image-ux-gpt-image-2-response.v1',
+          created_at: nowIso(),
+          provider: 'codex_app_imagegen',
+          model: 'gpt-image-2',
+          ok: false,
+          status: 'blocked',
+          blocker: 'gpt_image_2_request_validation_failed',
+          validation_blockers: validation.blockers,
+          local_only: true
+        });
+        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: 'gpt_image_2_request_validation_failed', provider: 'codex_app_imagegen', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: null };
+      }
       if (suppliedOutput && await exists(path.resolve(suppliedOutput))) {
-        await ensureDir(input.output_dir);
         const dest = path.join(input.output_dir, path.basename(String(suppliedOutput)));
         await fsp.copyFile(path.resolve(suppliedOutput), dest);
+        const meta = await generatedImageMetadata(process.cwd(), dest, {
+          source_screen_id: input.source_screen_id,
+          provider_surface: 'codex_app_imagegen',
+          output_id: opts.outputId || null,
+          real_generated: true
+        });
+        await writeJsonAtomic(responseArtifact, {
+          schema: 'sks.image-ux-gpt-image-2-response.v1',
+          created_at: nowIso(),
+          provider: 'codex_app_imagegen',
+          model: 'gpt-image-2',
+          ok: true,
+          status: 'generated',
+          output_image_path: dest,
+          output_image_sha256: meta.sha256,
+          output_id: meta.output_id,
+          local_only: true
+        });
         return {
           ok: true,
           status: 'generated',
@@ -98,9 +168,21 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
           output_id: opts.outputId || null,
           blocker: null,
           provider: 'codex_app_imagegen',
+          request_artifact: requestArtifact,
+          response_artifact: responseArtifact,
           latency_ms: null
         };
       }
+      await writeJsonAtomic(responseArtifact, {
+        schema: 'sks.image-ux-gpt-image-2-response.v1',
+        created_at: nowIso(),
+        provider: 'codex_app_imagegen',
+        model: 'gpt-image-2',
+        ok: false,
+        status: 'blocked',
+        blocker: 'imagegen_capability_missing',
+        local_only: true
+      });
       return {
         ok: false,
         status: 'blocked',
@@ -108,8 +190,93 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
         output_id: null,
         blocker: 'imagegen_capability_missing',
         provider: 'codex_app_imagegen',
+        request_artifact: requestArtifact,
+        response_artifact: responseArtifact,
         latency_ms: null
       };
+    }
+  };
+}
+
+export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegenAdapter {
+  return {
+    surface: 'fake_imagegen_adapter',
+    model: 'gpt-image-2',
+    available: opts.available !== false,
+    async generateCalloutReview(input: ImageUxReviewImagegenRequest) {
+      const started = Date.now();
+      await ensureDir(input.output_dir);
+      const requestArtifact = path.join(input.output_dir, 'image-ux-gpt-image-2-request.json');
+      const responseArtifact = path.join(input.output_dir, 'image-ux-gpt-image-2-response.json');
+      const validation = await validateGptImage2Request({
+        provider: 'fake_imagegen_adapter',
+        endpoint: 'local hermetic fixture',
+        model: 'gpt-image-2',
+        prompt: input.prompt,
+        source_image_path: input.source_image_path,
+        output_dir: input.output_dir,
+        params: { size: 'auto' },
+        privacy: input.privacy
+      });
+      await writeJsonAtomic(requestArtifact, {
+        schema: 'sks.image-ux-gpt-image-2-request.v1',
+        created_at: nowIso(),
+        provider: 'fake_imagegen_adapter',
+        endpoint: 'local hermetic fixture',
+        model: 'gpt-image-2',
+        source_screen_id: input.source_screen_id,
+        source_image_path: path.resolve(input.source_image_path),
+        prompt: input.prompt,
+        validation,
+        fake_adapter: true,
+        source: 'mock_like_fixture',
+        real_generation_claim_allowed: false,
+        unsupported_parameters_omitted: ['input_fidelity'],
+        privacy: input.privacy
+      });
+      if (!validation.ok) {
+        await writeJsonAtomic(responseArtifact, {
+          schema: 'sks.image-ux-gpt-image-2-response.v1',
+          created_at: nowIso(),
+          provider: 'fake_imagegen_adapter',
+          model: 'gpt-image-2',
+          ok: false,
+          status: 'blocked',
+          blocker: 'gpt_image_2_request_validation_failed',
+          validation_blockers: validation.blockers,
+          local_only: true
+        });
+        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: 'gpt_image_2_request_validation_failed', provider: 'fake_imagegen_adapter', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+      }
+      const sourcePath = path.resolve(input.source_image_path);
+      const out = path.join(input.output_dir, `fake-gpt-image-2-callout-${input.source_screen_id || 'screen'}.png`);
+      await fsp.copyFile(sourcePath, out);
+      const meta = await generatedImageMetadata(process.cwd(), out, {
+        source_screen_id: input.source_screen_id,
+        provider_surface: 'fake_imagegen_adapter',
+        output_id: `fake-${Date.now()}`,
+        real_generated: false,
+        mock: true
+      });
+      await writeJsonAtomic(responseArtifact, {
+        schema: 'sks.image-ux-gpt-image-2-response.v1',
+        created_at: nowIso(),
+        provider: 'fake_imagegen_adapter',
+        model: 'gpt-image-2',
+        ok: true,
+        status: 'generated',
+        output_image_path: out,
+        output_image_sha256: meta.sha256,
+        output_id: meta.output_id,
+        dimensions: { width: meta.width, height: meta.height, format: meta.format },
+        latency_ms: Date.now() - started,
+        fake_adapter: true,
+        source: 'mock_like_fixture',
+        real_generated: false,
+        mock: true,
+        local_only: true
+      });
+      return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'fake_imagegen_adapter', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
     }
   };
 }
@@ -127,6 +294,16 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
       const responseArtifact = path.join(input.output_dir, 'image-ux-gpt-image-2-response.json');
       const sourcePath = path.resolve(input.source_image_path);
       const sourceSha = await sha256File(sourcePath);
+      const validation = await validateGptImage2Request({
+        provider: 'openai_images_api',
+        endpoint: '/v1/images/edits',
+        model: 'gpt-image-2',
+        prompt: input.prompt,
+        source_image_path: sourcePath,
+        output_dir: input.output_dir,
+        params: { size: 'auto' },
+        privacy: input.privacy
+      });
       await writeJsonAtomic(requestArtifact, {
         schema: 'sks.image-ux-gpt-image-2-request.v1',
         created_at: nowIso(),
@@ -137,10 +314,25 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
         source_image_path: sourcePath,
         source_screenshot_sha256: sourceSha,
         prompt: input.prompt,
+        validation,
         image_input_fidelity_note: 'high_fidelity_automatic',
         unsupported_parameters_omitted: ['input_fidelity'],
         privacy: input.privacy
       });
+      if (!validation.ok) {
+        await writeJsonAtomic(responseArtifact, {
+          schema: 'sks.image-ux-gpt-image-2-response.v1',
+          created_at: nowIso(),
+          provider: 'openai_images_api',
+          model: 'gpt-image-2',
+          ok: false,
+          status: 'blocked',
+          blocker: 'gpt_image_2_request_validation_failed',
+          validation_blockers: validation.blockers,
+          local_only: true
+        });
+        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: 'gpt_image_2_request_validation_failed', provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+      }
       if (!apiKey) {
         const blocked = {
           schema: 'sks.image-ux-gpt-image-2-response.v1',
@@ -211,6 +403,10 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
 }
 
 export async function generateGptImage2CalloutReview(input: ImageUxReviewImagegenRequest, opts: any = {}) {
+  if (opts.fake === true || process.env.SKS_TEST_FAKE_IMAGEGEN === '1') {
+    return createFakeImagegenAdapter(opts.fakeAdapter || {}).generateCalloutReview(input);
+  }
+  await detectImagegenCapability(opts.capability || {}).catch(() => null);
   const codexAdapter = createCodexAppImagegenAdapter(opts.codexApp || {});
   if (codexAdapter.available) {
     const result = await codexAdapter.generateCalloutReview(input);

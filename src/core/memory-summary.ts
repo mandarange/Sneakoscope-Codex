@@ -20,6 +20,7 @@ export async function rebuildMemorySummaries(root: string, opts: any = {}) {
     schema: 'sks.memory-summary.v2',
     schema_version: TRIWIKI_SUMMARY_SCHEMA_VERSION,
     generated_at: nowIso(),
+    codex_0_133_behavior: 'versioned_summary_rebuild',
     codex_0_132_behavior: 'versioned_summary_rebuild',
     summaries: {
       triwiki: {
