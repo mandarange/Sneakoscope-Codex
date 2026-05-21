@@ -1,0 +1,6 @@
+import test from 'node:test';
+import { runNpmScript } from '../helpers/real-execution-closure.mjs';
+
+test('ppt re-export/re-review gate passes', () => {
+  runNpmScript('ppt:reexport-rereview');
+});

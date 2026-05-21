@@ -10,10 +10,11 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.11.0** focuses on release confidence: all-feature completion reporting, PPT imagegen review evidence, DFix diagnose/plan/patch/verify artifacts, recursive JSON schema checks, and stricter release metadata gates.
+SKS **1.12.0** focuses on real execution closure: UX-Review, PPT Imagegen Review, DFix, and all-feature completion now require command-path wiring, extraction reports, proof/trust/wrongness evidence, mock/real separation, and release gates that block static-only or fake evidence paths.
 
 ```bash
 sks features complete --json
+sks ux-review run --image <path> --generate-callouts --json
 sks ppt fixture --mock --json
 sks dfix fixture --json
 ```

@@ -47,6 +47,8 @@ export async function extractRealCallouts(input: RealCalloutExtractionInput) {
       provider: providerResult.provider || 'codex_exec_resume_output_schema',
       blocker: providerResult.blocker || structuredOutputBlocker('callout_extraction_schema_failed', 'Callout extraction did not return schema-valid JSON.'),
       generated_image_sha256: generated.sha256,
+      parsed_json_present: false,
+      validation_status: 'blocked',
       issue_ledger: buildIssueLedgerFromGeneratedCallouts({
         schema: 'sks.image-ux-generated-review-ledger.v2',
         generated_review_images: [{ ...generated, callout_extraction_status: 'pending', callouts: [] }],
@@ -73,6 +75,8 @@ export async function extractRealCallouts(input: RealCalloutExtractionInput) {
     status: ledger.validation.ok && ledger.issues.length > 0 ? 'extracted' : 'blocked',
     provider: providerResult.provider || 'codex_exec_resume_output_schema',
     generated_image_sha256: generated.sha256,
+    parsed_json_present: true,
+    validation_status: ledger.validation.ok ? 'valid' : 'blocked',
     issue_ledger: ledger,
     blocker: ledger.issues.length ? null : structuredOutputBlocker('callout_extraction_schema_failed', 'Generated image did not yield visible callouts.')
   };

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex/dfix-patch-result.schema.json",
+  "title": "SKS DFix Patch Result",
+  "type": "object",
+  "required": ["schema", "explicit_apply_opt_in", "patch_mode", "patch_result_present", "patch_applied", "changed_files", "diff_captured", "rollback_plan", "blockers", "passed"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "sks.dfix-patch-result.v1" },
+    "explicit_apply_opt_in": { "type": "boolean" },
+    "patch_mode": { "type": "string" },
+    "patch_result_present": { "type": "boolean" },
+    "patch_applied": { "type": "boolean" },
+    "changed_files": { "type": "array", "items": { "type": "string" } },
+    "diff_captured": { "type": "boolean" },
+    "rollback_plan": { "type": "array" },
+    "blockers": { "type": "array" },
+    "passed": { "type": "boolean" }
+  }
+}

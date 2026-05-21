@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex/ppt-slide-extraction-report.schema.json",
+  "title": "SKS PPT Slide Extraction Report",
+  "type": "object",
+  "required": ["schema", "provider", "output_schema_path", "slide_reports", "issue_count", "blockers", "validation_status", "passed"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "sks.ppt-slide-extraction-report.v1" },
+    "provider": { "type": "string" },
+    "output_schema_path": { "type": "string" },
+    "slide_reports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["schema", "generated_image_path", "generated_image_sha256", "provider", "schema_validation", "issue_count", "bbox_validation_issues", "blocker", "passed"],
+        "additionalProperties": true,
+        "properties": {
+          "schema": { "const": "sks.ppt-slide-extraction-report-item.v1" },
+          "generated_image_path": { "type": ["string", "null"] },
+          "generated_image_sha256": { "type": ["string", "null"] },
+          "provider": { "type": "string" },
+          "schema_validation": { "type": "string" },
+          "issue_count": { "type": "integer", "minimum": 0 },
+          "bbox_validation_issues": { "type": "array", "items": { "type": "string" } },
+          "blocker": { "type": ["string", "object", "null"] },
+          "passed": { "type": "boolean" }
+        }
+      }
+    },
+    "issue_count": { "type": "integer", "minimum": 0 },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "validation_status": { "type": "string" },
+    "passed": { "type": "boolean" }
+  }
+}

@@ -2,8 +2,15 @@ import path from 'node:path';
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js';
 import { addImageRelation, ingestImage } from '../wiki-image/image-voxel-ledger.js';
 import { exportSlidesToImages, PPT_DECK_INVENTORY_ARTIFACT, PPT_SLIDE_EXPORT_LEDGER_ARTIFACT } from './slide-exporter.js';
-import { generateSlideCalloutReviews, PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT } from './slide-imagegen-review.js';
-import { extractSlideIssues, PPT_DECK_ISSUE_LEDGER_ARTIFACT, PPT_SLIDE_ISSUE_LEDGER_ARTIFACT } from './slide-issue-extraction.js';
+import {
+  buildSlideImagegenRequestArtifact,
+  buildSlideImagegenResponseArtifact,
+  generateSlideCalloutReviews,
+  PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT,
+  PPT_SLIDE_IMAGEGEN_REQUEST_ARTIFACT,
+  PPT_SLIDE_IMAGEGEN_RESPONSE_ARTIFACT
+} from './slide-imagegen-review.js';
+import { extractSlideIssues, PPT_DECK_ISSUE_LEDGER_ARTIFACT, PPT_SLIDE_EXTRACTION_REPORT_ARTIFACT, PPT_SLIDE_ISSUE_LEDGER_ARTIFACT } from './slide-issue-extraction.js';
 import { writePptFixTaskPlan, PPT_FIX_TASK_PLAN_ARTIFACT } from './ppt-fix-task-planner.js';
 import { writePptPatchHandoff, PPT_PATCH_HANDOFF_ARTIFACT, PPT_PATCH_RESULT_ARTIFACT } from './ppt-patch-handoff.js';
 
@@ -14,7 +21,10 @@ export const PPT_REVIEW_ARTIFACT_PATHS: Record<string, string> = {
   deck_inventory: PPT_DECK_INVENTORY_ARTIFACT,
   slide_export_ledger: PPT_SLIDE_EXPORT_LEDGER_ARTIFACT,
   slide_callout_ledger: PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT,
+  slide_imagegen_request: PPT_SLIDE_IMAGEGEN_REQUEST_ARTIFACT,
+  slide_imagegen_response: PPT_SLIDE_IMAGEGEN_RESPONSE_ARTIFACT,
   slide_issue_ledger: PPT_SLIDE_ISSUE_LEDGER_ARTIFACT,
+  slide_extraction_report: PPT_SLIDE_EXTRACTION_REPORT_ARTIFACT,
   deck_issue_ledger: PPT_DECK_ISSUE_LEDGER_ARTIFACT,
   fix_task_plan: PPT_FIX_TASK_PLAN_ARTIFACT,
   patch_handoff: PPT_PATCH_HANDOFF_ARTIFACT,
@@ -33,8 +43,14 @@ export async function writePptImagegenReviewArtifacts(input: any = {}) {
   const callouts = input.skipCallouts
     ? await readJson(path.join(dir, PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT), { generated_slide_callout_images: [], blockers: ['ppt_imagegen_callouts_missing'] })
     : await generateSlideCalloutReviews({ root, dir, missionId, exportLedger: exported.export_ledger, mock });
+  await writeJsonAtomic(path.join(dir, PPT_SLIDE_IMAGEGEN_REQUEST_ARTIFACT), buildSlideImagegenRequestArtifact(callouts));
+  await writeJsonAtomic(path.join(dir, PPT_SLIDE_IMAGEGEN_RESPONSE_ARTIFACT), buildSlideImagegenResponseArtifact(callouts));
   const extracted = input.skipExtraction
-    ? { slide_issue_ledger: await readJson(path.join(dir, PPT_SLIDE_ISSUE_LEDGER_ARTIFACT), { issues: [], blockers: ['ppt_slide_issue_extraction_missing'] }), deck_issue_ledger: await readJson(path.join(dir, PPT_DECK_ISSUE_LEDGER_ARTIFACT), { blockers: ['ppt_slide_issue_extraction_missing'] }) }
+    ? {
+        slide_issue_ledger: await readJson(path.join(dir, PPT_SLIDE_ISSUE_LEDGER_ARTIFACT), { issues: [], blockers: ['ppt_slide_issue_extraction_missing'] }),
+        deck_issue_ledger: await readJson(path.join(dir, PPT_DECK_ISSUE_LEDGER_ARTIFACT), { blockers: ['ppt_slide_issue_extraction_missing'] }),
+        extraction_report: await readJson(path.join(dir, PPT_SLIDE_EXTRACTION_REPORT_ARTIFACT), { schema: 'sks.ppt-slide-extraction-report.v1', blockers: ['ppt_slide_issue_extraction_missing'] })
+      }
     : await extractSlideIssues({ root, dir, calloutLedger: callouts, generatedSlidePath: input.generatedSlidePath || null, sessionId: input.sessionId || null, mock });
   const planInput = { ...(extracted.deck_issue_ledger || {}), issues: extracted.slide_issue_ledger?.issues || [] };
   const fixTaskPlan = await writePptFixTaskPlan(dir, exported.inventory.deck_path, planInput);
@@ -66,7 +82,10 @@ export async function writePptImagegenReviewArtifacts(input: any = {}) {
     deck_inventory: exported.inventory,
     slide_export_ledger: exported.export_ledger,
     slide_callout_ledger: callouts,
+    slide_imagegen_request: await readJson(path.join(dir, PPT_SLIDE_IMAGEGEN_REQUEST_ARTIFACT), null),
+    slide_imagegen_response: await readJson(path.join(dir, PPT_SLIDE_IMAGEGEN_RESPONSE_ARTIFACT), null),
     slide_issue_ledger: extracted.slide_issue_ledger,
+    slide_extraction_report: extracted.extraction_report,
     deck_issue_ledger: extracted.deck_issue_ledger,
     fix_task_plan: fixTaskPlan,
     patch_handoff: patchHandoff,

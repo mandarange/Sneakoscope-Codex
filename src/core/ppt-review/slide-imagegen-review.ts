@@ -3,6 +3,7 @@ import fsp from 'node:fs/promises';
 import { nowIso } from '../fsx.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY } from '../routes.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
+import { generateGptImage2CalloutReview } from '../image-ux-review/imagegen-adapter.js';
 
 export const PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT = 'ppt-slide-callout-ledger.json';
 export const PPT_SLIDE_IMAGEGEN_REQUEST_ARTIFACT = 'ppt-slide-imagegen-request.json';
@@ -71,7 +72,34 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
       callouts: []
     });
   } else if (slides.length > 0) {
-    blockers.push('ppt_imagegen_callouts_missing', 'imagegen_capability_missing');
+    for (const slide of slides) {
+      const generated = await generateGptImage2CalloutReview({
+        mission_id: null,
+        source_screen_id: slide.slide_id || `slide-${slide.slide_index}`,
+        source_image_path: path.resolve(root, slide.image_path),
+        output_dir: path.join(dir, 'generated-slide-reviews'),
+        prompt: buildSlideCalloutPrompt(slide, { deckContext }),
+        requested_fidelity: 'original',
+        privacy: 'local-only'
+      });
+      if (!generated.ok || !generated.generated_image_path) {
+        blockers.push(generated.blocker || 'ppt_imagegen_callouts_missing');
+        continue;
+      }
+      generatedReviewImages.push({
+        ...await generatedSlideMetadata(root, generated.generated_image_path, slide, {
+          mock: false,
+          realGenerated: true,
+          providerSurface: generated.provider || 'gpt-image-2'
+        }),
+        status: 'generated',
+        source: 'real_gpt_image_2_callout',
+        callout_extraction_status: 'pending',
+        callouts: [],
+        imagegen_request_artifact: generated.request_artifact || null,
+        imagegen_response_artifact: generated.response_artifact || null
+      });
+    }
   }
   if (ledger?.passed !== true) blockers.push(...(ledger?.blockers || []));
   const textOnlyCount = generatedReviewImages.filter((image: any) => image.text_only === true).length;
@@ -96,8 +124,10 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
     generated_count: generatedReviewImages.length,
     real_generated_count: generatedReviewImages.filter((image: any) => image.real_generated === true && image.mock !== true).length,
     mock_generated_count: generatedReviewImages.filter((image: any) => image.mock === true).length,
+    extraction_ready_count: generatedReviewImages.filter((image: any) => image.callout_extraction_status === 'succeeded').length,
+    extraction_pending_count: generatedReviewImages.filter((image: any) => image.callout_extraction_status === 'pending').length,
     blockers: [...new Set(blockers)],
-    passed: slides.length > 0 && generatedReviewImages.length === slides.length && blockers.length === 0,
+    passed: slides.length > 0 && generatedReviewImages.length === slides.length && blockers.length === 0 && generatedReviewImages.every((image: any) => image.callout_extraction_status === 'succeeded'),
     verified_level: mock ? 'verified_partial' : generatedReviewImages.length ? 'verified_partial' : 'blocked',
     next_action: blockers.includes('imagegen_capability_missing')
       ? 'Generate slide callout review images with Codex App $imagegen/gpt-image-2, then attach them or rerun extraction.'
@@ -144,7 +174,7 @@ async function generatedSlideMetadata(root: string, relPath: string, slide: any,
     width: dims.width,
     height: dims.height,
     format: dims.format,
-    provider_surface: opts.mock ? 'mock_fixture' : 'Codex App $imagegen',
+    provider_surface: opts.mock ? 'mock_fixture' : (opts.providerSurface || 'Codex App $imagegen'),
     real_generated: opts.realGenerated === true,
     mock: opts.mock === true,
     local_only: true

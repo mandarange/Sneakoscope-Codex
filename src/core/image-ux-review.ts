@@ -16,6 +16,7 @@ export const IMAGE_UX_REVIEW_POLICY_ARTIFACT = 'image-ux-review-policy.json';
 export const IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT = 'image-ux-screen-inventory.json';
 export const IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT = 'image-ux-generated-review-ledger.json';
 export const IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT = 'image-ux-issue-ledger.json';
+export const IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT = 'image-ux-callout-extraction-report.json';
 export const IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT = 'image-ux-fix-task-plan.json';
 export const IMAGE_UX_REVIEW_FIX_LOOP_ARTIFACT = 'image-ux-fix-loop.json';
 export const IMAGE_UX_REVIEW_RECAPTURE_ARTIFACT = 'image-ux-recapture-plan.json';
@@ -140,6 +141,7 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
       IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
       IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
       IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
+      IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT,
       IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT,
       IMAGE_UX_REVIEW_FIX_LOOP_ARTIFACT,
       IMAGE_UX_REVIEW_RECAPTURE_ARTIFACT,
@@ -236,7 +238,7 @@ export function buildImageUxGeneratedReviewLedger(contract: any = {}, inventory:
   const textOnlyCount = normalizedImages.filter((image: any) => image.text_only === true).length;
   const blockers: string[] = [];
   if (sourceScreens.length === 0) blockers.push('no_source_screenshots_for_imagegen_review');
-  if (missingScreens.length > 0) blockers.push('missing_generated_annotated_review_images');
+  if (missingScreens.length > 0) blockers.push('missing_generated_annotated_review_images', 'imagegen_capability_missing');
   if (textOnlyCount > 0) blockers.push('ux_review_text_only_fallback');
   if (normalizedImages.some((image: any) => image.mock === true && image.real_generated === true)) blockers.push('mock_fixture_marked_real');
   return {
@@ -371,6 +373,7 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
       IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
       IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
       IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
+      IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT,
       IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT,
       IMAGE_UX_REVIEW_FIX_LOOP_ARTIFACT,
       IMAGE_UX_REVIEW_RECAPTURE_ARTIFACT,
@@ -409,6 +412,7 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
   inventory = await hydrateImageUxScreenInventory(root, inventory);
   const existingGenerated = await readExistingJson(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT);
   const existingIssues = await readExistingJson(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT);
+  const extractionReport = await readExistingJson(dir, IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT);
   const generatedReviewLedger = buildImageUxGeneratedReviewLedger(contract, inventory, existingGenerated);
   const issueLedger = buildImageUxIssueLedger(contract, generatedReviewLedger, existingIssues);
   const fixTaskPlan = planImageUxFixTasks(issueLedger);
@@ -438,6 +442,7 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT), imagegenResponse);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), generatedReviewLedger);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), issueLedger);
+  if (extractionReport) await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT), extractionReport);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT), fixTaskPlan);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_FIX_LOOP_ARTIFACT), fixLoop);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_RECAPTURE_ARTIFACT), recapturePlan);
@@ -450,6 +455,7 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
     imagegen_response: imagegenResponse,
     generated_review_ledger: generatedReviewLedger,
     issue_ledger: issueLedger,
+    callout_extraction_report: extractionReport,
     fix_task_plan: fixTaskPlan,
     fix_loop: fixLoop,
     recapture_plan: recapturePlan,
@@ -469,6 +475,7 @@ export function imageUxReviewProofEvidence(gate: any = {}, artifacts: any = {}) 
     generated_gpt_image_2_callout_images_count: generated.real_generated_count || 0,
     generated_images_total: generated.generated_count || 0,
     callout_extraction_schema_status: issueLedger.validation?.ok ? 'valid' : 'blocked',
+    callout_extraction_report_status: artifacts.callout_extraction_report?.validation_status || (issueLedger.validation?.ok ? 'valid' : 'missing_or_blocked'),
     open_p0_p1_count: issueLedger.blocking_issue_count || 0,
     fixed_p0_p1_count: (issueLedger.issues || []).filter((issue: any) => ['P0', 'P1'].includes(issue.severity) && issue.status === 'fixed').length,
     recapture_re_review_status: artifacts.recapture_plan?.changed_screens_rechecked_or_not_applicable ? 'complete_or_not_applicable' : 'blocked',
@@ -483,6 +490,45 @@ export function imageUxReviewProofEvidence(gate: any = {}, artifacts: any = {}) 
       ux_review_image_voxel_relations_verified: (generated.generated_review_images || []).some((image: any) => image.image_voxel_relation)
     },
     blockers: gate.blockers || []
+  };
+}
+
+export async function buildImageUxCalloutExtractionReport(root: string, extraction: any = {}, opts: any = {}) {
+  const generatedPath = opts.generatedImagePath || null;
+  const sourcePath = opts.sourceImagePath || null;
+  const generatedSha = extraction.generated_image_sha256 || (generatedPath ? await sha256File(resolveImagePath(root, generatedPath)).catch(() => null) : null);
+  const sourceSha = sourcePath ? await sha256File(resolveImagePath(root, sourcePath)).catch(() => null) : null;
+  const ledger = extraction.issue_ledger || {};
+  const validationIssues = Array.isArray(ledger.validation?.issues) ? ledger.validation.issues : [];
+  const bboxIssues = validationIssues.filter((item: any) => /bbox|bounds|coordinate/i.test(String(item)));
+  const issues = Array.isArray(ledger.issues) ? ledger.issues : [];
+  const confidences = issues.map((issue: any) => Number(issue.confidence)).filter(Number.isFinite);
+  const averageConfidence = confidences.length
+    ? Number((confidences.reduce((sum: number, value: number) => sum + value, 0) / confidences.length).toFixed(3))
+    : null;
+  const blocker = extraction.blocker?.reason || extraction.blocker || (extraction.ok ? null : 'callout_extraction_unavailable');
+  return {
+    schema: 'sks.image-ux-callout-extraction-report.v1',
+    created_at: nowIso(),
+    provider: extraction.provider || opts.provider || 'unknown',
+    generated_image_path: generatedPath,
+    generated_image_sha256: generatedSha,
+    source_screenshot_sha256: sourceSha,
+    output_schema_path: 'schemas/codex/image-ux-issue-ledger.schema.json',
+    parsed_json_present: Boolean(extraction.ok && ledger.schema),
+    validation_status: ledger.validation?.ok ? 'valid' : 'blocked',
+    issue_count: issues.length,
+    bbox_validation_issues: bboxIssues,
+    extraction_confidence_summary: {
+      issue_count: issues.length,
+      average_confidence: averageConfidence,
+      min_confidence: confidences.length ? Math.min(...confidences) : null,
+      max_confidence: confidences.length ? Math.max(...confidences) : null
+    },
+    blocker,
+    fallback_used: extraction.provider === 'openai_structured_outputs',
+    verified_cap: extraction.ok ? 'verified' : 'blocked',
+    passed: extraction.ok === true && ledger.validation?.ok === true && issues.length > 0
   };
 }
 

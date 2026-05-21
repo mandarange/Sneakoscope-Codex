@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.11.0';
+const RELEASE_VERSION = '1.12.0';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 
@@ -20,6 +20,9 @@ const checks = {
   codex_0132_compat: scriptContains('release:check', 'codex:0.132-compat'),
   codex_output_schema_fixture: scriptContains('release:check', 'codex:output-schema-fixture'),
   image_fidelity_check: scriptContains('release:check', 'image-fidelity:check'),
+  ux_review_run_wires_imagegen: scriptContains('release:check', 'ux-review:run-wires-imagegen'),
+  ux_review_extract_wires_real_extractor: scriptContains('release:check', 'ux-review:extract-wires-real-extractor'),
+  ux_review_patch_diff_recheck: scriptContains('release:check', 'ux-review:patch-diff-recheck'),
   ux_review_real_loop_fixture: scriptContains('release:check', 'ux-review:real-loop-fixture'),
   ux_review_generate_callouts_fixture: scriptContains('release:check', 'ux-review:generate-callouts-fixture'),
   ux_review_extract_real_callouts_fixture: scriptContains('release:check', 'ux-review:extract-real-callouts-fixture'),
@@ -29,6 +32,9 @@ const checks = {
   ux_review_no_fake_callouts: scriptContains('release:check', 'ux-review:no-fake-callouts'),
   ux_review_image_voxel_relations: scriptContains('release:check', 'ux-review:image-voxel-relations'),
   ppt_imagegen_review_fixture: scriptContains('release:check', 'ppt:imagegen-review-fixture'),
+  ppt_real_export_adapter: scriptContains('release:check', 'ppt:real-export-adapter'),
+  ppt_real_imagegen_wiring: scriptContains('release:check', 'ppt:real-imagegen-wiring'),
+  ppt_reexport_rereview: scriptContains('release:check', 'ppt:reexport-rereview'),
   ppt_slide_export_fixture: scriptContains('release:check', 'ppt:slide-export-fixture'),
   ppt_no_text_fallback: scriptContains('release:check', 'ppt:no-text-fallback'),
   ppt_no_mock_as_real: scriptContains('release:check', 'ppt:no-mock-as-real'),
@@ -36,8 +42,12 @@ const checks = {
   ppt_image_voxel_relations: scriptContains('release:check', 'ppt:image-voxel-relations'),
   ppt_proof_trust_fixture: scriptContains('release:check', 'ppt:proof-trust-fixture'),
   dfix_fixture: scriptContains('release:check', 'dfix:fixture'),
+  dfix_patch_handoff: scriptContains('release:check', 'dfix:patch-handoff'),
+  dfix_verification_recommendation: scriptContains('release:check', 'dfix:verification-recommendation'),
   dfix_verification: scriptContains('release:check', 'dfix:verification'),
   all_features_completion: scriptContains('release:check', 'all-features:completion'),
+  all_features_deep_completion: scriptContains('release:check', 'all-features:deep-completion'),
+  evidence_flagship_coverage: scriptContains('release:check', 'evidence:flagship-coverage'),
   json_schema_recursive_check: scriptContains('release:check', 'json-schema:recursive-check'),
   release_metadata: scriptContains('release:check', 'release:metadata'),
   memory_summary_rebuild_check: scriptContains('release:check', 'memory-summary:rebuild-check'),
@@ -49,7 +59,7 @@ const checks = {
 };
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
 const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
-const releaseMetadata = runNodeScript('scripts/release-metadata-1-11-check.mjs');
+const releaseMetadata = runNodeScript('scripts/release-metadata-1-12-check.mjs');
 const remainingP0 = [];
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
 for (const [name, ok] of Object.entries(checks)) if (!ok) remainingP0.push(`${name}_gate_missing`);
@@ -82,9 +92,12 @@ const report = {
     output_schema_resume: checks.codex_output_schema_fixture ? 'present' : 'missing'
   },
   image_ux_review: {
-    status: checks.ux_review_real_loop_fixture && checks.ux_review_generate_callouts_fixture && checks.ux_review_extract_real_callouts_fixture && checks.ux_review_patch_handoff_fixture && checks.ux_review_recapture_recheck_fixture && checks.ux_review_no_text_fallback && checks.ux_review_no_fake_callouts && checks.ux_review_image_voxel_relations ? 'present' : 'missing',
+    status: checks.ux_review_run_wires_imagegen && checks.ux_review_extract_wires_real_extractor && checks.ux_review_patch_diff_recheck && checks.ux_review_real_loop_fixture && checks.ux_review_generate_callouts_fixture && checks.ux_review_extract_real_callouts_fixture && checks.ux_review_patch_handoff_fixture && checks.ux_review_recapture_recheck_fixture && checks.ux_review_no_text_fallback && checks.ux_review_no_fake_callouts && checks.ux_review_image_voxel_relations ? 'present' : 'missing',
     gates: {
       image_fidelity: checks.image_fidelity_check,
+      run_wires_imagegen: checks.ux_review_run_wires_imagegen,
+      extract_wires_real_extractor: checks.ux_review_extract_wires_real_extractor,
+      patch_diff_recheck: checks.ux_review_patch_diff_recheck,
       real_loop_fixture: checks.ux_review_real_loop_fixture,
       generate_callouts_fixture: checks.ux_review_generate_callouts_fixture,
       extract_real_callouts_fixture: checks.ux_review_extract_real_callouts_fixture,
@@ -96,9 +109,12 @@ const report = {
     }
   },
   ppt_imagegen_review: {
-    status: checks.ppt_imagegen_review_fixture && checks.ppt_slide_export_fixture && checks.ppt_no_text_fallback && checks.ppt_no_mock_as_real && checks.ppt_issue_extraction_fixture && checks.ppt_image_voxel_relations && checks.ppt_proof_trust_fixture ? 'present' : 'missing',
+    status: checks.ppt_imagegen_review_fixture && checks.ppt_real_export_adapter && checks.ppt_real_imagegen_wiring && checks.ppt_reexport_rereview && checks.ppt_slide_export_fixture && checks.ppt_no_text_fallback && checks.ppt_no_mock_as_real && checks.ppt_issue_extraction_fixture && checks.ppt_image_voxel_relations && checks.ppt_proof_trust_fixture ? 'present' : 'missing',
     gates: {
       imagegen_review_fixture: checks.ppt_imagegen_review_fixture,
+      real_export_adapter: checks.ppt_real_export_adapter,
+      real_imagegen_wiring: checks.ppt_real_imagegen_wiring,
+      reexport_rereview: checks.ppt_reexport_rereview,
       slide_export_fixture: checks.ppt_slide_export_fixture,
       no_text_fallback: checks.ppt_no_text_fallback,
       no_mock_as_real: checks.ppt_no_mock_as_real,
@@ -108,14 +124,16 @@ const report = {
     }
   },
   dfix: {
-    status: checks.dfix_fixture && checks.dfix_verification ? 'present' : 'missing',
+    status: checks.dfix_fixture && checks.dfix_patch_handoff && checks.dfix_verification_recommendation && checks.dfix_verification ? 'present' : 'missing',
     gates: {
       fixture: checks.dfix_fixture,
+      patch_handoff: checks.dfix_patch_handoff,
+      verification_recommendation: checks.dfix_verification_recommendation,
       verification: checks.dfix_verification
     }
   },
   all_feature_completion: {
-    status: checks.all_features_completion ? 'present' : 'missing',
+    status: checks.all_features_completion && checks.all_features_deep_completion && checks.evidence_flagship_coverage ? 'present' : 'missing',
     report_path: `.sneakoscope/reports/all-feature-completion-${RELEASE_VERSION}.json`
   },
   json_schema_recursive: {

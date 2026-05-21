@@ -7,6 +7,7 @@ import { printJson } from '../../cli/output.js';
 import {
   IMAGE_UX_REVIEW_FIX_LOOP_ARTIFACT,
   IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT,
+  IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT,
   IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
   IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
   IMAGE_UX_REVIEW_GATE_ARTIFACT,
@@ -18,6 +19,7 @@ import {
   IMAGE_UX_REVIEW_RECAPTURE_ARTIFACT,
   IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT,
   imageUxReviewProofEvidence,
+  buildImageUxCalloutExtractionReport,
   writeImageUxReviewRouteArtifacts
 } from '../image-ux-review.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
@@ -35,6 +37,7 @@ const IMAGE_UX_REVIEW_ARTIFACT_PATHS: Record<string, string | Record<string, any
   imagegen_response: IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
   generated_review_ledger: IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
   issue_ledger: IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
+  callout_extraction_report: IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT,
   fix_task_plan: IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT,
   fix_loop: IMAGE_UX_REVIEW_FIX_LOOP_ARTIFACT,
   recapture_plan: IMAGE_UX_REVIEW_RECAPTURE_ARTIFACT,
@@ -71,6 +74,7 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
     : null;
   const imagePath = readOption(args, '--image', null) || readOption(args, '--screenshot', null);
   const generatedImage = readOption(args, '--generated-image', null);
+  const shouldGenerateCallouts = flag(args, '--generate-callouts') || flag(args, '--fix');
   if (missionId) return rebuildExistingMission(root, command, [missionId, ...args], { fixRequested: flag(args, '--fix') });
   if (!imagePath && !readOption(args, '--from-computer-use', null)) {
     const result = { schema: 'sks.image-ux-review-run.v1', ok: false, status: 'blocked', blocker: 'screenshot_required' };
@@ -93,7 +97,7 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
   };
   await writeJsonAtomic(path.join(dir, 'decision-contract.json'), contract);
   if (generatedImage) await attachGeneratedReviewImage(root, dir, contract, generatedImage, { realGenerated: !flag(args, '--mock'), mock: flag(args, '--mock') });
-  if (!generatedImage && flag(args, '--generate-callouts')) {
+  if (!generatedImage && shouldGenerateCallouts) {
     const outputDir = path.join(dir, 'generated-callouts');
     const result = await generateGptImage2CalloutReview({
       mission_id: id,
@@ -104,7 +108,23 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
       requested_fidelity: 'original',
       privacy: 'local-only'
     });
-    if (result.generated_image_path) await attachGeneratedReviewImage(root, dir, contract, result.generated_image_path, { realGenerated: true, mock: false, providerSurface: result.provider });
+    if (result.generated_image_path) {
+      await attachGeneratedReviewImage(root, dir, contract, result.generated_image_path, { realGenerated: true, mock: false, providerSurface: result.provider });
+      if (flag(args, '--fix')) {
+        const extraction = await extractRealCallouts({
+          root,
+          generatedImagePath: result.generated_image_path,
+          sourceScreenshot: { id: 'screen-1' },
+          sessionId: readOption(args, '--session', null) || readOption(args, '--session-id', null)
+        });
+        await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), extraction.issue_ledger);
+        await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT), await buildImageUxCalloutExtractionReport(root, extraction, {
+          generatedImagePath: result.generated_image_path,
+          sourceImagePath: sourceRel || imagePath,
+          provider: extraction.provider
+        }));
+      }
+    }
   }
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true });
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} run` });
@@ -153,8 +173,12 @@ async function extractIssuesImageUxReview(root: string, command: string, args: a
       sourceScreenshot: { id: 'screen-1' },
       sessionId: readOption(args, '--session', null) || readOption(args, '--session-id', null)
     });
-    if (extraction.ok) await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), extraction.issue_ledger);
-    await writeJsonAtomic(path.join(dir, 'image-ux-extraction-report.json'), extraction);
+    await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), extraction.issue_ledger);
+    await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT), await buildImageUxCalloutExtractionReport(root, extraction, {
+      generatedImagePath: generatedImage,
+      sourceImagePath: sourceRel || sourceImage,
+      provider: extraction.provider
+    }));
   }
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true });
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} extract-issues` });

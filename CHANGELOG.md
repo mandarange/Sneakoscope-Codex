@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-05-21
+
+1.12.0 Real Execution Closure tightens the previously advertised UX/PPT/DFix/all-feature paths so mock, manual, pending, and real evidence cannot be mistaken for each other. Computer Use evidence modes such as `probe_only` and `live_capture_success`, plus codex-lb persistence states such as `process_only_ephemeral`, remain explicit in release truthfulness reports.
+
+### Added
+- Add real UX-Review command wiring so `run`, `callouts`, and `extract-issues` invoke gpt-image-2 generation and real callout extraction instead of only rebuilding artifacts.
+- Add PPT real adapter closure for slide export, slide imagegen review, issue extraction, deck patch handoff, re-export, and re-review with honest blockers for unavailable external tools.
+- Add DFix Codex patch handoff runner metadata, diff capture, verification recommendation, and rollback readiness artifacts.
+- Add all-feature completion deep coverage gates for command registry, fixtures, artifacts, Evidence Router coverage, Completion Proof links, Trust Report links, Wrongness mappings, docs, recovery, and blackbox coverage.
+- Add stricter mock/real separation checks for UX, PPT, DFix, and advertised runtime features.
+- Add recursive schema validation targets for flagship feature artifacts and release-readiness reports.
+
+### Fixed
+- Prevent UX-Review `extract-issues` from bypassing `extractRealCallouts()`.
+- Prevent UX-Review `run --generate-callouts` and `run --fix` from skipping `generateGptImage2CalloutReview()`.
+- Prevent PPT review from passing when slide export, imagegen, issue extraction, or re-review is only pending.
+- Prevent DFix from claiming a fix without patch evidence, diff evidence, and verification evidence.
+- Prevent advertised features from appearing complete when they only have static contracts or command names.
+- Prevent mock fixtures from being treated as real verified evidence in all-feature completion.
+
+### Changed
+- Treat feature completion as deep runtime coverage, not command presence.
+- Treat UX/PPT/DFix as flagship real execution paths with explicit unavailable blockers.
+- Treat release readiness as invalid when advertised runtime commands lack proof/trust/wrongness coverage.
+- Bump package, runtime, release-readiness, and Rust crate metadata to 1.12.0.
+
 ## [1.11.0] - 2026-05-21
 
 1.11.0 Extreme Feature Completion Kernel keeps the README focused on product usage while this changelog carries release history and detailed gate context, including Computer Use evidence modes such as `probe_only` and `live_capture_success`, plus codex-lb persistence states such as `process_only_ephemeral`.
