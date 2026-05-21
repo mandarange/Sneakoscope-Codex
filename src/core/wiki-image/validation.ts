@@ -36,6 +36,17 @@ export function validateImageVoxelLedger(ledger: any = {}, opts: any = {}) {
   }
   if (opts.requireRelations && relations.length === 0) issues.push(`missing_relations:${opts.route || 'visual-route'}`);
   const relationKeys = new Set();
+  const allowedUxRelationTypes = new Set([
+    'source_screenshot',
+    'gpt_image_2_callout_of',
+    'generated_callout_review_of',
+    'callout_issue_bbox',
+    'patch_attempt_for_issue',
+    'after_screenshot_of',
+    're_review_callout_of_after',
+    'issue_resolved_by_recheck',
+    'issue_regressed_after_patch'
+  ]);
   for (const relation of relations) {
     const relationKey = [
       relation.type,
@@ -54,6 +65,12 @@ export function validateImageVoxelLedger(ledger: any = {}, opts: any = {}) {
     if (relation.source_image_id && !imageById.has(relation.source_image_id)) issues.push(`relation_source:${relation.source_image_id}`);
     if (relation.generated_image_id && !imageById.has(relation.generated_image_id)) issues.push(`relation_generated:${relation.generated_image_id}`);
     if (relation.fixed_image_id && !imageById.has(relation.fixed_image_id)) issues.push(`relation_fixed:${relation.fixed_image_id}`);
+    if (String(relation.type || '').includes('callout') || String(relation.type || '').includes('issue') || String(relation.type || '').includes('screenshot')) {
+      if (!allowedUxRelationTypes.has(relation.type)) issues.push(`relation_type:${relation.type || 'unknown'}`);
+    }
+    if ((relation.type === 'gpt_image_2_callout_of' || relation.type === 'generated_callout_review_of') && (!relation.source_image_id || !relation.generated_image_id)) issues.push(`relation_source_generated:${relation.type}`);
+    if (relation.type === 'after_screenshot_of' && (!relation.before_image_id || !relation.after_image_id)) issues.push('relation_after_screenshot_pair');
+    if ((relation.type === 'callout_issue_bbox' || relation.type === 'patch_attempt_for_issue') && !relation.issue_id) issues.push(`relation_issue:${relation.type}`);
     if (relation.bbox) {
       const image = imageById.get(relation.generated_image_id || relation.after_image_id || relation.source_image_id || relation.before_image_id) || {};
       const bbox = validateBbox(relation.bbox, image);

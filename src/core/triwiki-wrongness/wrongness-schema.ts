@@ -34,9 +34,16 @@ export const WRONGNESS_KINDS = Object.freeze([
   'artifact_schema_error',
   'trust_status_overclaim',
   'ux_review_text_only_fallback',
+  'ux_generated_image_not_real',
+  'ux_fake_generic_callout_detected',
+  'ux_callout_ocr_uncertain',
   'gpt_image_2_callout_generation_failed',
   'callout_extraction_schema_failed',
   'callout_bbox_out_of_bounds',
+  'ux_patch_applied_without_recheck',
+  'ux_after_recheck_regression',
+  'ux_image_fidelity_mismatch',
+  'ux_output_schema_unavailable_fallback',
   'fix_loop_noop_patch',
   'visual_fix_not_rechecked',
   'post_fix_regression_detected',
@@ -369,9 +376,16 @@ function defaultAvoidanceRule(kind: WrongnessKind, claimText: string): string {
   if (kind === 'computer_use_live_smoke_mismatch') return 'Do not claim live Computer Use evidence without an opt-in live smoke or explicit evidence artifact.';
   if (kind === 'computer_use_external_block_overclaimed') return 'Do not upgrade external_capability_blocked Computer Use status into high-confidence visual verification.';
   if (kind === 'ux_review_text_only_fallback') return 'Do not pass UX-Review with prose-only screenshot critique; require a generated gpt-image-2 callout image.';
+  if (kind === 'ux_generated_image_not_real') return 'Do not treat attached, placeholder, or mock images as real gpt-image-2 outputs without provider evidence and hashes.';
+  if (kind === 'ux_fake_generic_callout_detected') return 'Do not auto-create generic callouts from generated image metadata; only schema extraction from pixels may create issue rows.';
+  if (kind === 'ux_callout_ocr_uncertain') return 'Downgrade uncertain OCR/callout extraction to verified_partial and require human or re-review confirmation.';
   if (kind === 'gpt_image_2_callout_generation_failed') return 'Do not create verified UX evidence when gpt-image-2 callout image generation failed or is unavailable.';
   if (kind === 'callout_extraction_schema_failed') return 'Do not start or trust a UX fix loop until generated callouts are extracted into the schema-bound issue ledger.';
   if (kind === 'callout_bbox_out_of_bounds') return 'Revalidate generated callout bounding boxes against image dimensions before mapping issues to fixes.';
+  if (kind === 'ux_patch_applied_without_recheck') return 'Do not mark patched UX issues fixed until changed screens are recaptured and re-reviewed.';
+  if (kind === 'ux_after_recheck_regression') return 'Treat new after-screenshot P0/P1 findings as regression blockers.';
+  if (kind === 'ux_image_fidelity_mismatch') return 'Preserve source/generated image fidelity metadata and block coordinate claims on mismatch.';
+  if (kind === 'ux_output_schema_unavailable_fallback') return 'Cap output-schema fallback extraction at verified_partial and record the fallback provider.';
   if (kind === 'fix_loop_noop_patch') return 'Do not mark UX issues fixed from no-op patches or unchanged files.';
   if (kind === 'visual_fix_not_rechecked') return 'Do not claim visual fixes without post-fix recapture and re-review.';
   if (kind === 'post_fix_regression_detected') return 'Treat new post-fix P0/P1 visual issues as regression blockers until repaired or accepted.';
@@ -380,7 +394,7 @@ function defaultAvoidanceRule(kind: WrongnessKind, claimText: string): string {
 }
 
 function severityForKind(kind: WrongnessKind): WrongnessSeverity {
-  if (kind === 'ux_review_text_only_fallback' || kind === 'gpt_image_2_callout_generation_failed' || kind === 'callout_extraction_schema_failed' || kind === 'callout_bbox_out_of_bounds' || kind === 'visual_fix_not_rechecked' || kind === 'post_fix_regression_detected' || kind === 'repeated_blocker_stop') return 'high';
+  if (kind === 'ux_review_text_only_fallback' || kind === 'ux_generated_image_not_real' || kind === 'ux_fake_generic_callout_detected' || kind === 'ux_callout_ocr_uncertain' || kind === 'gpt_image_2_callout_generation_failed' || kind === 'callout_extraction_schema_failed' || kind === 'callout_bbox_out_of_bounds' || kind === 'ux_patch_applied_without_recheck' || kind === 'ux_after_recheck_regression' || kind === 'ux_image_fidelity_mismatch' || kind === 'ux_output_schema_unavailable_fallback' || kind === 'visual_fix_not_rechecked' || kind === 'post_fix_regression_detected' || kind === 'repeated_blocker_stop') return 'high';
   if (kind === 'db_safety_false_negative' || kind === 'hook_policy_mismatch' || kind === 'hook_semantic_mismatch' || kind === 'hook_strict_subset_misclassified' || kind === 'trust_status_overclaim') return 'high';
   if (kind === 'codex_lb_missing_env_raw_message' || kind === 'codex_lb_setup_choice_drift' || kind === 'codex_lb_env_persistence_failure' || kind === 'computer_use_policy_misclassification' || kind === 'computer_use_live_smoke_mismatch' || kind === 'computer_use_external_block_overclaimed') return 'high';
   if (kind === 'mock_real_confusion' || kind === 'artifact_schema_error' || kind === 'test_failure') return 'high';

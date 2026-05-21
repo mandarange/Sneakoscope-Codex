@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { exists, packageRoot, readJson, runProcess, which } from './fsx.js';
+import fsp from 'node:fs/promises';
+import { ensureDir, exists, packageRoot, readJson, runProcess, which } from './fsx.js';
 import { codexVersionPolicy, compareSemverLike, parseCodexVersionText } from './codex-compat/codex-version-policy.js';
 
 export interface CodexExecResumeOutputSchemaAvailability {
@@ -20,6 +21,22 @@ export interface CodexResumeOutputSchemaCommandInput {
   outputFile?: string | null;
   json?: boolean;
   extraArgs?: readonly string[];
+}
+
+export interface CodexExecResumeOutputSchemaRunResult {
+  schema: 'sks.codex-exec-output-schema-run.v1';
+  ok: boolean;
+  status: 'parsed' | 'blocked' | 'integration_optional' | 'degraded_supported';
+  args: string[];
+  codex_bin: string | null;
+  output_file: string | null;
+  parsed_json: unknown | null;
+  blocker: ReturnType<typeof structuredOutputBlocker> | null;
+  validation: { ok: boolean; issues: string[] };
+  stdout_tail: string;
+  stderr_tail: string;
+  timed_out: boolean;
+  exit_code: number | null;
 }
 
 export async function detectCodexExecResumeOutputSchema(opts: any = {}): Promise<CodexExecResumeOutputSchemaAvailability> {
@@ -100,6 +117,68 @@ export async function buildCodexExecResumeOutputSchemaArgs(input: CodexResumeOut
   return args;
 }
 
+export async function runCodexExecResumeWithOutputSchema(
+  input: CodexResumeOutputSchemaCommandInput,
+  opts: { codexBin?: string | null; timeoutMs?: number; maxOutputBytes?: number; cwd?: string; env?: NodeJS.ProcessEnv } = {}
+): Promise<CodexExecResumeOutputSchemaRunResult> {
+  const availability = await detectCodexExecResumeOutputSchema({ codexBin: opts.codexBin || undefined });
+  if (!availability.codex_bin || availability.status !== 'available' || !availability.output_schema_supported) {
+    const status = availability.status === 'available' ? 'degraded_supported' : availability.status;
+    return {
+      schema: 'sks.codex-exec-output-schema-run.v1',
+      ok: false,
+      status,
+      args: [],
+      codex_bin: availability.codex_bin,
+      output_file: null,
+      parsed_json: null,
+      blocker: structuredOutputBlocker('output_schema_unavailable', availability.warnings.join('; ') || 'codex exec resume --output-schema unavailable'),
+      validation: { ok: false, issues: ['output_schema_unavailable'] },
+      stdout_tail: '',
+      stderr_tail: '',
+      timed_out: false,
+      exit_code: null
+    };
+  }
+
+  const outputFile = input.outputFile
+    ? path.resolve(input.outputFile)
+    : path.join(packageRoot(), '.sneakoscope', 'tmp', `codex-output-schema-${Date.now()}.json`);
+  await ensureDir(path.dirname(outputFile));
+  const args = await buildCodexExecResumeOutputSchemaArgs({ ...input, outputFile });
+  const runOpts: Parameters<typeof runProcess>[2] = {
+    cwd: opts.cwd || packageRoot(),
+    timeoutMs: opts.timeoutMs || 120_000,
+    maxOutputBytes: opts.maxOutputBytes || 256 * 1024
+  };
+  if (opts.env) runOpts.env = opts.env;
+  const result = await runProcess(availability.codex_bin, args, runOpts);
+  const outputText = await readOutputText(outputFile, result.stdout);
+  const parsed = parseStructuredCodexOutput(outputText);
+  const schema = await readJson<any>(path.resolve(input.outputSchemaPath), null);
+  const validation = parsed.ok ? validateStructuredOutput(parsed.value, schema) : { ok: false, issues: ['json_parse_failed'] };
+  const blocker = !parsed.ok
+    ? parsed.blocker
+    : validation.ok
+      ? null
+      : structuredOutputBlocker('schema_validation_failed', validation.issues.join(', '));
+  return {
+    schema: 'sks.codex-exec-output-schema-run.v1',
+    ok: result.code === 0 && parsed.ok && validation.ok,
+    status: result.code === 0 && parsed.ok && validation.ok ? 'parsed' : 'blocked',
+    args,
+    codex_bin: availability.codex_bin,
+    output_file: outputFile,
+    parsed_json: parsed.ok ? parsed.value : null,
+    blocker,
+    validation,
+    stdout_tail: redactCodexOutput(result.stdout).slice(-12_000),
+    stderr_tail: redactCodexOutput(result.stderr).slice(-12_000),
+    timed_out: result.timedOut,
+    exit_code: result.code
+  };
+}
+
 export function parseStructuredCodexOutput(text: unknown): { ok: boolean; value: unknown | null; blocker: any | null } {
   const raw = String(text || '').trim();
   if (!raw) {
@@ -119,6 +198,12 @@ export function validateStructuredOutput(value: unknown, schema: any): { ok: boo
   const required = Array.isArray(schema?.required) ? schema.required.map(String) : [];
   for (const key of required) {
     if (!row || !Object.hasOwn(row, key)) issues.push(`required:${key}`);
+  }
+  if (schema?.additionalProperties === false && row) {
+    const allowed = new Set(Object.keys(schema.properties || {}));
+    for (const key of Object.keys(row)) {
+      if (!allowed.has(key)) issues.push(`additional:${key}`);
+    }
   }
   return { ok: issues.length === 0, issues };
 }
@@ -144,4 +229,12 @@ function sanitizeResumeId(value: unknown): string {
   const id = String(value || '').trim();
   if (!/^[A-Za-z0-9._:-]{1,160}$/.test(id)) throw new Error('Unsafe Codex resume session id');
   return id;
+}
+
+async function readOutputText(outputFile: string, stdout: string) {
+  try {
+    const text = await fsp.readFile(outputFile, 'utf8');
+    if (text.trim()) return text;
+  } catch {}
+  return stdout;
 }

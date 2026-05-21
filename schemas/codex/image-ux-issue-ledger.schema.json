@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sneakoscope.local/schemas/codex/image-ux-issue-ledger.schema.json",
-  "title": "SKS Image UX Issue Ledger v2",
+  "title": "SKS Image UX Issue Ledger v3",
   "type": "object",
   "required": ["schema", "schema_version", "issues"],
   "properties": {
-    "schema": { "const": "sks.image-ux-issue-ledger.v2" },
-    "schema_version": { "const": 2 },
+    "schema": { "const": "sks.image-ux-issue-ledger.v3" },
+    "schema_version": { "const": 3 },
     "issues": {
       "type": "array",
       "items": { "$ref": "#/$defs/issue" }
@@ -42,7 +42,16 @@
         "status",
         "confidence",
         "source",
-        "extracted_from_generated_image"
+        "extracted_from_generated_image",
+        "extraction_provider",
+        "extraction_schema",
+        "generated_image_sha256",
+        "bbox_coordinate_space",
+        "bbox_confidence",
+        "severity_visible",
+        "callout_number_visible",
+        "text_ocr_confidence",
+        "fix_verification_status"
       ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
@@ -62,7 +71,17 @@
         "status": { "enum": ["open", "fixed", "accepted_not_applicable", "blocked", "needs_human", "suggestion_only", "remains_open"] },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "source": { "enum": ["real_gpt_image_2_callout", "mock_fixture"] },
-        "extracted_from_generated_image": { "type": "boolean" }
+        "extracted_from_generated_image": { "type": "boolean" },
+        "extraction_provider": { "type": "string", "minLength": 1 },
+        "extraction_schema": { "type": "string", "minLength": 1 },
+        "generated_image_sha256": { "type": "string", "minLength": 1 },
+        "bbox_coordinate_space": { "const": "generated_image" },
+        "bbox_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "severity_visible": { "type": "boolean" },
+        "callout_number_visible": { "type": "boolean" },
+        "text_ocr_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "fix_verification_status": { "enum": ["not_verified", "patch_attempted", "recapture_required", "recheck_verified", "blocked", "accepted_not_applicable"] },
+        "post_fix_recheck_issue_id": { "type": ["string", "null"] }
       },
       "additionalProperties": true
     }

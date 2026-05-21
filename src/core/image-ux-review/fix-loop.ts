@@ -1,4 +1,5 @@
 import { detectRepeatedBlocker } from '../loop-blocker.js';
+import { createPatchHandoff } from './patch-handoff.js';
 
 export function runImageUxFixLoop(issueLedger: any = {}, taskPlan: any = {}, opts: any = {}) {
   const tasks = Array.isArray(taskPlan.tasks) ? taskPlan.tasks : [];
@@ -6,6 +7,14 @@ export function runImageUxFixLoop(issueLedger: any = {}, taskPlan: any = {}, opt
   const repeated = detectRepeatedBlocker(blockerEvents, 2);
   const risky = tasks.filter((task: any) => task.requires_human_review || task.risk_level === 'high');
   const patchable = tasks.filter((task: any) => !task.requires_human_review && task.risk_level !== 'high');
+  const patchResults = tasks.map((task: any) => createPatchHandoff(task, {
+    apply: opts.apply === true,
+    changedFiles: Array.isArray(opts.changedFiles) ? opts.changedFiles : [],
+    evidence: {
+      generated_image_id: issueForTask(issueLedger, task)?.generated_review_image_id || null,
+      generated_image_sha256: issueForTask(issueLedger, task)?.generated_image_sha256 || null
+    }
+  }));
   const patchApplied = opts.patchApplied === true;
   const blockers = [
     ...(repeated.stop_required ? ['repeated_blocker_stop'] : []),
@@ -21,6 +30,14 @@ export function runImageUxFixLoop(issueLedger: any = {}, taskPlan: any = {}, opt
     dirty_status_before_patch: opts.gitDirtyStatus || null,
     changed_files: Array.isArray(opts.changedFiles) ? opts.changedFiles : [],
     patch_commands: Array.isArray(opts.patchCommands) ? opts.patchCommands : [],
+    patch_results: patchResults,
+    counts: {
+      before: Array.isArray(issueLedger.issues) ? issueLedger.issues.length : 0,
+      open: Array.isArray(issueLedger.issues) ? issueLedger.issues.filter((issue: any) => !['fixed', 'accepted_not_applicable'].includes(issue.status)).length : 0,
+      fixed: Array.isArray(issueLedger.issues) ? issueLedger.issues.filter((issue: any) => issue.status === 'fixed').length : 0,
+      remains_open: Array.isArray(issueLedger.issues) ? issueLedger.issues.filter((issue: any) => ['open', 'remains_open', 'blocked', 'needs_human'].includes(issue.status)).length : 0,
+      regression: Number(opts.regressionCount || 0)
+    },
     patchable_tasks: patchable.length,
     risky_tasks_blocked: risky.length,
     repeated_blocker: repeated,
@@ -32,4 +49,8 @@ export function runImageUxFixLoop(issueLedger: any = {}, taskPlan: any = {}, opt
     result_status: blockers.length ? 'blocked' : patchApplied ? 'patched_recapture_required' : 'no_patch_needed_or_not_requested',
     issue_count: Array.isArray(issueLedger.issues) ? issueLedger.issues.length : 0
   };
+}
+
+function issueForTask(issueLedger: any = {}, task: any = {}) {
+  return (Array.isArray(issueLedger.issues) ? issueLedger.issues : []).find((issue: any) => issue.id === task.issue_id) || null;
 }

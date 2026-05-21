@@ -62,6 +62,18 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
 });
 
 export const CORE_BENCH_BUDGETS = CORE_BENCH_BUDGET_TIERS['source-local'];
+export const UX_REVIEW_STAGED_LATENCY_BUDGETS = Object.freeze({
+  source_screenshot_ingest: 500,
+  gpt_image_2_generation: 120_000,
+  callout_extraction: 120_000,
+  fix_task_planning: 500,
+  recapture_re_review: 120_000,
+  image_voxel_relation_validation: 800,
+  codex_compat_probe_batch: 5_000,
+  computer_use_status_probe_batch: 5_000,
+  codex_lb_status_probe_batch: 5_000,
+  scout_engine_probe_batch: 5_000
+});
 
 const CORE_COMMANDS = Object.freeze([
   ['sks --version', ['--version']],
@@ -110,6 +122,7 @@ export async function runCoreBench(root: any = process.cwd(), { iterations = 3, 
     tier,
     iterations: Math.max(1, Number(iterations) || 1),
     budget_tiers: CORE_BENCH_BUDGET_TIERS,
+    ux_review_staged_latency_budgets: UX_REVIEW_STAGED_LATENCY_BUDGETS,
     ok: rows.every((row: any) => row.ok),
     commands: rows
   };

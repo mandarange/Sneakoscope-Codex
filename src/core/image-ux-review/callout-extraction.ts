@@ -14,12 +14,12 @@ export async function outputSchemaExtractionPreference() {
 }
 
 export function buildIssueLedgerFromGeneratedCallouts(generatedReviewLedger: any = {}, existing: any = null) {
-  const existingIssues = Array.isArray(existing?.issues) ? existing.issues : [];
+  const existingIssues = Array.isArray(existing?.issues) ? migrateIssueRowsToV3(existing.issues) : [];
   const generated = Array.isArray(generatedReviewLedger.generated_review_images)
     ? generatedReviewLedger.generated_review_images
     : [];
   const calloutIssues = generated.flatMap((image: any) =>
-    Array.isArray(image.callouts)
+    image.callout_extraction_status === 'succeeded' && Array.isArray(image.callouts)
       ? image.callouts.map((callout: any, index: number) => normalizeIssueRow(callout, image, index))
       : []
   );
@@ -30,12 +30,13 @@ export function buildIssueLedgerFromGeneratedCallouts(generatedReviewLedger: any
   const blockers = [...validation.issues];
   if (!generated.length) blockers.push('generated_review_image_missing');
   if (generated.some((image: any) => image.text_only === true)) blockers.push('ux_review_text_only_fallback');
-  if (generated.length && !issues.length) blockers.push('callout_extraction_schema_failed');
+  if (generated.length && !issues.length) blockers.push(generated.some((image: any) => image.callout_extraction_status === 'pending') ? 'callout_extraction_pending' : 'callout_extraction_schema_failed');
   return {
-    schema: 'sks.image-ux-issue-ledger.v2',
-    schema_version: 2,
+    schema: 'sks.image-ux-issue-ledger.v3',
+    schema_version: 3,
     extraction_source: 'image-ux-generated-review-ledger.json',
     extraction_method: 'codex_exec_resume_output_schema_preferred',
+    extraction_schema: 'schemas/codex/image-ux-issue-ledger.schema.json',
     extracted_from_generated_callout: issues.length > 0,
     issues,
     blocking_issue_count: issues.filter((issue: any) => ['P0', 'P1'].includes(issue.severity) && !['fixed', 'accepted_not_applicable'].includes(issue.status)).length,
@@ -73,7 +74,17 @@ export function normalizeIssueRow(issue: any = {}, image: any = {}, index = 0) {
     status,
     confidence: clampConfidence(issue.confidence ?? (source === 'mock_fixture' ? 0.5 : 0.82)),
     source,
-    extracted_from_generated_image: issue.extracted_from_generated_image !== false
+    extracted_from_generated_image: issue.extracted_from_generated_image !== false,
+    extraction_provider: issue.extraction_provider || image.extraction_provider || 'codex_exec_resume_output_schema',
+    extraction_schema: issue.extraction_schema || 'sks.image-ux-issue-ledger.v3',
+    generated_image_sha256: issue.generated_image_sha256 || image.sha256 || 'sha256_unavailable',
+    bbox_coordinate_space: issue.bbox_coordinate_space || 'generated_image',
+    bbox_confidence: clampConfidence(issue.bbox_confidence ?? issue.confidence ?? (source === 'mock_fixture' ? 0.5 : 0.82)),
+    severity_visible: issue.severity_visible !== false,
+    callout_number_visible: issue.callout_number_visible !== false,
+    text_ocr_confidence: clampConfidence(issue.text_ocr_confidence ?? 0.75),
+    fix_verification_status: issue.fix_verification_status || (status === 'fixed' ? 'recheck_verified' : 'not_verified'),
+    post_fix_recheck_issue_id: issue.post_fix_recheck_issue_id || null
   };
 }
 
@@ -81,7 +92,7 @@ export function validateIssueRows(issues: readonly any[] = [], generatedImages: 
   const validationIssues: string[] = [];
   const imageById = new Map(generatedImages.map((image: any) => [image.id, image]));
   for (const issue of issues) {
-    for (const field of ['id', 'severity', 'source_screen_id', 'generated_review_image_id', 'callout_id', 'bbox', 'title', 'detail', 'fix_action', 'status', 'confidence', 'source']) {
+    for (const field of ['id', 'severity', 'source_screen_id', 'generated_review_image_id', 'callout_id', 'bbox', 'title', 'detail', 'fix_action', 'status', 'confidence', 'source', 'extraction_provider', 'extraction_schema', 'generated_image_sha256', 'bbox_coordinate_space', 'bbox_confidence', 'fix_verification_status']) {
       if (issue[field] === undefined || issue[field] === null || issue[field] === '') validationIssues.push(`issue_${field}:${issue.id || 'unknown'}`);
     }
     if (!SEVERITIES.has(issue.severity)) validationIssues.push(`issue_severity:${issue.id}`);
@@ -91,11 +102,16 @@ export function validateIssueRows(issues: readonly any[] = [], generatedImages: 
     const bbox = validateBbox(issue.bbox, image as Record<string, unknown>);
     for (const bboxIssue of bbox.issues) validationIssues.push(`${bboxIssue}:${issue.id}`);
     if (issue.source === 'mock_fixture' && image && (image as any).real_generated === true) validationIssues.push(`mock_source_on_real_image:${issue.id}`);
+    if (issue.bbox_coordinate_space !== 'generated_image') validationIssues.push(`bbox_coordinate_space:${issue.id}`);
   }
   return {
     ok: validationIssues.length === 0,
     issues: [...new Set(validationIssues)]
   };
+}
+
+export function migrateIssueRowsToV3(issues: readonly any[] = []) {
+  return issues.map((issue: any, index: number) => normalizeIssueRow(issue, {}, index));
 }
 
 function clampConfidence(value: unknown) {
