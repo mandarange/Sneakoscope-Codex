@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/dfix-patch-plan.schema.json",
+  "title": "SKS DFix Patch Plan",
+  "type": "object",
+  "required": ["schema", "generated_at", "status", "steps", "files_allowed", "tests_required", "destructive_actions_allowed", "blockers"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "sks.dfix-patch-plan.v1" },
+    "generated_at": { "type": "string" },
+    "status": { "type": "string" },
+    "steps": { "type": "array", "items": { "type": "string" } },
+    "files_allowed": { "type": "array", "items": { "type": "string" } },
+    "tests_required": { "type": "array", "items": { "type": "string" } },
+    "destructive_actions_allowed": { "type": "boolean" },
+    "blockers": { "type": "array" }
+  }
+}

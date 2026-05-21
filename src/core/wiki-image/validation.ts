@@ -45,7 +45,15 @@ export function validateImageVoxelLedger(ledger: any = {}, opts: any = {}) {
     'after_screenshot_of',
     're_review_callout_of_after',
     'issue_resolved_by_recheck',
-    'issue_regressed_after_patch'
+    'issue_regressed_after_patch',
+    'ppt_generated_slide_callout_review_of',
+    'slide_callout_review_of',
+    'slide_issue_detected_in',
+    'deck_patch_attempt_for_issue',
+    'fixed_slide_after',
+    'slide_re_review_of_after',
+    'slide_issue_resolved_by_recheck',
+    'slide_issue_regressed_after_patch'
   ]);
   for (const relation of relations) {
     const relationKey = [

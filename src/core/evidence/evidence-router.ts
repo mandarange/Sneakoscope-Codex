@@ -198,6 +198,15 @@ function inferKind(relPath: any = '') {
   if (/image-ux-issue-ledger\.json$/.test(relPath)) return 'ux_review_callout_extraction';
   if (/image-ux-fix-loop\.json$|image-ux-fix-task-plan\.json$/.test(relPath)) return 'ux_review_patch_result';
   if (/image-ux-recapture-plan\.json$/.test(relPath)) return 'ux_review_recheck';
+  if (/ppt-deck-inventory\.json$|ppt-slide-export-ledger\.json$/.test(relPath)) return 'ppt_slide_export';
+  if (/ppt-slide-callout-ledger\.json$/.test(relPath)) return 'ppt_gpt_image_2_callout';
+  if (/ppt-slide-issue-ledger\.json$|ppt-deck-issue-ledger\.json$/.test(relPath)) return 'ppt_slide_issue_extraction';
+  if (/ppt-fix-task-plan\.json$|ppt-patch-handoff\.json$|ppt-patch-result\.json$/.test(relPath)) return 'ppt_patch_result';
+  if (/ppt-recheck-report\.json$|ppt-imagegen-review-gate\.json$/.test(relPath)) return 'ppt_recheck';
+  if (/dfix-diagnosis\.json$|dfix-root-cause\.json$/.test(relPath)) return 'dfix_diagnosis';
+  if (/dfix-patch-plan\.json$/.test(relPath)) return 'dfix_patch_plan';
+  if (/dfix-patch-result\.json$/.test(relPath)) return 'dfix_patch_result';
+  if (/dfix-verification\.json$|dfix-gate\.json$/.test(relPath)) return 'dfix_verification';
   if (/image-wrongness/.test(relPath)) return 'image_wrongness';
   if (/wrongness/.test(relPath)) return 'wrongness';
   if (/image-voxel-ledger\.json$|visual-anchors\.json$|image-assets\.json$/.test(relPath)) return 'image_voxel';

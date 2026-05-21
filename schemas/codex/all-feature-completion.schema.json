@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/all-feature-completion.schema.json",
+  "title": "SKS All Feature Completion Report",
+  "type": "object",
+  "required": ["schema", "version", "generated_at", "ok", "status", "features", "blockers"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "sks.all-feature-completion.v1" },
+    "version": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "ok": { "type": "boolean" },
+    "status": { "type": "string" },
+    "features": { "type": "array", "items": { "type": "object" } },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  }
+}

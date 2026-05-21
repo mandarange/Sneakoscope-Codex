@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/ppt-slide-issue-ledger.schema.json",
+  "title": "SKS PPT Slide Issue Ledger",
+  "type": "object",
+  "required": ["schema", "generated_at", "status", "issues"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "sks.ppt-slide-issue-ledger.v1" },
+    "generated_at": { "type": "string" },
+    "status": { "type": "string" },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "slide_id", "severity", "kind", "status"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "slide_id": { "type": "string" },
+          "severity": { "type": "string" },
+          "kind": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      }
+    }
+  }
+}

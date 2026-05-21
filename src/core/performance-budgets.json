@@ -7,7 +7,7 @@
       "sks root --json": 80,
       "sks commands --json": 120,
       "sks proof validate --json": 250,
-      "sks trust validate latest --json": 300,
+      "sks trust validate bench-fixture --json": 300,
       "sks wiki image-validate --json": 300,
       "sks features check --json": 1200,
       "sks scouts engines --json": 1000
@@ -18,7 +18,7 @@
       "sks root --json": 140,
       "sks commands --json": 200,
       "sks proof validate --json": 350,
-      "sks trust validate latest --json": 450,
+      "sks trust validate bench-fixture --json": 450,
       "sks wiki image-validate --json": 450,
       "sks features check --json": 1800,
       "sks scouts engines --json": 1400
@@ -29,7 +29,7 @@
       "sks root --json": 180,
       "sks commands --json": 260,
       "sks proof validate --json": 500,
-      "sks trust validate latest --json": 650,
+      "sks trust validate bench-fixture --json": 650,
       "sks wiki image-validate --json": 650,
       "sks features check --json": 2400,
       "sks scouts engines --json": 1800
@@ -40,7 +40,7 @@
       "sks root --json": 240,
       "sks commands --json": 320,
       "sks proof validate --json": 700,
-      "sks trust validate latest --json": 800,
+      "sks trust validate bench-fixture --json": 800,
       "sks wiki image-validate --json": 800,
       "sks features check --json": 2800,
       "sks scouts engines --json": 2200
@@ -51,7 +51,7 @@
       "sks root --json": 3000,
       "sks commands --json": 3500,
       "sks proof validate --json": 3500,
-      "sks trust validate latest --json": 3500,
+      "sks trust validate bench-fixture --json": 3500,
       "sks wiki image-validate --json": 3500,
       "sks features check --json": 5000,
       "sks scouts engines --json": 5000

@@ -1,14 +1,31 @@
 # Release Readiness
 
-SKS 1.10.0 writes the `sks.release-readiness.v1` final release seal against the Codex `rust-v0.132.0` compatibility matrix, OpenAI Image Generation `gpt-image-2` docs, OpenAI Structured Outputs docs, the UX-Review gpt-image-2 callout/fix/recheck loop, and the function-only SKS update check contract.
+SKS 1.11.0 writes the `sks.release-readiness.v1` final release seal against the Codex `rust-v0.132.0` compatibility matrix, OpenAI Image Generation `gpt-image-2` docs, OpenAI Structured Outputs docs, the UX-Review gpt-image-2 callout/fix/recheck loop, PPT imagegen review, DFix evidence loops, the all-feature completion matrix, recursive JSON schema validation, and the function-only SKS update check contract.
 
 ```bash
 npm run codex:0.132-compat
 npm run codex:output-schema-fixture
 npm run image-fidelity:check
 npm run ux-review:real-loop-fixture
+npm run ux-review:generate-callouts-fixture
+npm run ux-review:extract-real-callouts-fixture
+npm run ux-review:patch-handoff-fixture
+npm run ux-review:recapture-recheck-fixture
 npm run ux-review:no-text-fallback
+npm run ux-review:no-fake-callouts
 npm run ux-review:image-voxel-relations
+npm run ppt:imagegen-review-fixture
+npm run ppt:slide-export-fixture
+npm run ppt:no-text-fallback
+npm run ppt:no-mock-as-real
+npm run ppt:issue-extraction-fixture
+npm run ppt:image-voxel-relations
+npm run ppt:proof-trust-fixture
+npm run dfix:fixture
+npm run dfix:verification
+npm run all-features:completion
+npm run json-schema:recursive-check
+npm run release:metadata
 npm run memory-summary:rebuild-check
 npm run loop-blocker:check
 npm run official-docs:compat
@@ -20,12 +37,14 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.10.0.json`
-- `.sneakoscope/reports/release-readiness-1.10.0.md`
-- `.sneakoscope/reports/official-docs-compat-1.10.0.json`
-- `.sneakoscope/reports/official-docs-compat-1.10.0.md`
+- `.sneakoscope/reports/release-readiness-1.11.0.json`
+- `.sneakoscope/reports/release-readiness-1.11.0.md`
+- `.sneakoscope/reports/all-feature-completion-1.11.0.json`
+- `.sneakoscope/reports/all-feature-completion-1.11.0.md`
+- `.sneakoscope/reports/official-docs-compat-1.11.0.json`
+- `.sneakoscope/reports/official-docs-compat-1.11.0.md`
 
-The report covers version drift, Codex 0.132 structured resume output, source image fidelity metadata, UX-Review generated callout ingestion, text-only fallback blocking, Image Voxel relations, memory summary rebuilds, repeated blocker stops, official docs compatibility, hook strict subset status, Computer Use evidence mode support, codex-lb persistence truth, docs truthfulness, and remaining P0 gaps. A passing report has no remaining P0 gaps.
+The report covers version drift, Codex 0.132 structured resume output, source image fidelity metadata, UX-Review generated callout ingestion, text-only fallback blocking, PPT generated slide callouts, DFix verification artifacts, all-feature matrix coverage, recursive JSON schema recursion checks, Image Voxel relations, memory summary rebuilds, repeated blocker stops, official docs compatibility, hook strict subset status, Computer Use evidence mode support, codex-lb persistence truth, docs truthfulness, and remaining P0 gaps. A passing report has no remaining P0 gaps.
 
 Computer Use truthfulness remains bounded: `probe_only` is a capability probe, `live_capture_success` is local-only captured evidence, and `live_capture_blocked` records Codex App, macOS permission, or official capture-surface blockers. SKS does not fabricate screenshots and does not claim universal Computer Use availability.
 

@@ -90,8 +90,13 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
   const status = applyWrongnessTrustStatus(baseStatus, wrongness);
   const issues = [...new Set([...(validation.issues || []), ...(evidenceIndex.issues || []), ...(wrongness.issues || [])])];
   const imageUxReview = imageUxReviewTrust(proof);
+  const pptReview = pptReviewTrust(proof);
+  const dfix = dfixTrust(proof);
   issues.push(...imageUxReview.issues);
-  const finalStatus = imageUxReview.issues.length && status === 'verified' ? 'verified_partial' : status;
+  issues.push(...pptReview.issues);
+  issues.push(...dfix.issues);
+  const routeSpecificIssues = imageUxReview.issues.length + pptReview.issues.length + dfix.issues.length;
+  const finalStatus = routeSpecificIssues && status === 'verified' ? 'verified_partial' : status;
   return {
     schema: TRUST_REPORT_SCHEMA,
     ...trustKernelMetadata(),
@@ -110,9 +115,13 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
       evidence_index: proof.mission_id ? `.sneakoscope/missions/${proof.mission_id}/evidence-index.json` : null,
       evidence_records: evidenceIndex.records?.length || 0,
       wrongness: wrongness.summary,
-      image_ux_review: imageUxReview.summary
+      image_ux_review: imageUxReview.summary,
+      ppt_review: pptReview.summary,
+      dfix: dfix.summary
     },
     image_ux_review: imageUxReview.summary,
+    ppt_review: pptReview.summary,
+    dfix: dfix.summary,
     wrongness: wrongness.summary,
     scout_quality: scoutQualityFromProof(proof),
     blockers: issues.filter((issue: any) => /missing|blocked|stale|secret|not_passed|cannot_verify|text_only|mock_gpt_image_2_fixture/i.test(issue))
@@ -144,6 +153,61 @@ function imageUxReviewTrust(proof: any = {}) {
       open_p0_p1_count: evidence.open_p0_p1_count || 0,
       recapture_re_review_status: evidence.recapture_re_review_status || 'unknown',
       image_voxel_relation_count: evidence.image_voxel_relation_count || 0,
+      blockers: evidence.blockers || []
+    }
+  };
+}
+
+function pptReviewTrust(proof: any = {}) {
+  const evidence = proof.evidence?.ppt_review;
+  if (!evidence) return { issues: [], summary: { required: false, status: 'not_required' } };
+  const issues: string[] = [];
+  const blockers = evidence.blockers || [];
+  if (evidence.slide_export_status !== 'exported') issues.push('ppt_slide_export_missing');
+  if (Number(evidence.generated_slide_callout_images_count || 0) === 0) issues.push('ppt_gpt_image_2_callout_image_missing');
+  if (evidence.slide_issue_extraction_status !== 'valid') issues.push('ppt_slide_issue_extraction_pending');
+  if (evidence.patch_requested === true && evidence.recheck_status !== 'complete') issues.push('ppt_patch_without_reexport_rereview');
+  if (blockers.includes('ppt_text_only_review_fallback')) issues.push('ppt_text_only_review_cannot_be_verified');
+  if (blockers.includes('ppt_mock_as_real')) issues.push('ppt_mock_fixture_cannot_be_real_verified');
+  return {
+    issues,
+    summary: {
+      schema: evidence.schema || 'sks.ppt-review-proof-evidence.v1',
+      required: true,
+      status: evidence.status || 'not_verified',
+      deck_sha256: evidence.deck_sha256 || null,
+      slide_count: evidence.slide_count || 0,
+      exported_slide_images_count: evidence.exported_slide_images_count || 0,
+      generated_slide_callout_images_count: evidence.generated_slide_callout_images_count || 0,
+      slide_issue_extraction_status: evidence.slide_issue_extraction_status || 'unknown',
+      open_p0_p1_count: evidence.open_p0_p1_count || 0,
+      recheck_status: evidence.recheck_status || 'unknown',
+      image_voxel_relation_count: evidence.image_voxel_relation_count || 0,
+      blockers
+    }
+  };
+}
+
+function dfixTrust(proof: any = {}) {
+  const evidence = proof.evidence?.dfix;
+  if (!evidence) return { issues: [], summary: { required: false, status: 'not_required' } };
+  const issues: string[] = [];
+  if (evidence.diagnosis_present !== true) issues.push('dfix_diagnosis_missing');
+  if (evidence.root_cause_present !== true) issues.push('dfix_root_cause_missing');
+  if (evidence.patch_plan_present !== true) issues.push('dfix_patch_plan_missing');
+  if (evidence.verification_present !== true) issues.push('dfix_verification_missing');
+  if (evidence.noop_patch_wrongness === true) issues.push('dfix_noop_patch_wrongness');
+  return {
+    issues,
+    summary: {
+      schema: evidence.schema || 'sks.dfix-proof-evidence.v1',
+      required: true,
+      status: evidence.status || 'not_verified',
+      diagnosis_present: evidence.diagnosis_present === true,
+      root_cause_present: evidence.root_cause_present === true,
+      patch_plan_present: evidence.patch_plan_present === true,
+      patch_result_present: evidence.patch_result_present === true,
+      verification_present: evidence.verification_present === true,
       blockers: evidence.blockers || []
     }
   };

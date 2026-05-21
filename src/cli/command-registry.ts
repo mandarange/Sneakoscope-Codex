@@ -167,7 +167,7 @@ export const COMMANDS = {
   '$': entry('stable', 'Alias for dollar-commands', 'dist/core/commands/basic-cli.js', basicArgs('dollarCommandsCommand')),
   commit: entry('stable', 'Create a simple git commit', 'dist/commands/commit.js', directCommand(() => import('../commands/commit.js'), 'dist/commands/commit.js')),
   'commit-and-push': entry('stable', 'Create a simple git commit and push', 'dist/commands/commit-and-push.js', directCommand(() => import('../commands/commit-and-push.js'), 'dist/commands/commit-and-push.js')),
-  dfix: entry('stable', 'Explain DFix route', 'dist/core/commands/basic-cli.js', basicNoArgs('dfixCommand')),
+  dfix: entry('stable', 'Run DFix diagnose/plan/patch/verify loop', 'dist/core/commands/dfix-command.js', commandArgsCommand(() => import('../core/commands/dfix-command.js'), 'dfixCommand', 'dist/core/commands/dfix-command.js')),
   team: entry('beta', 'Create and observe Team missions', 'dist/core/commands/team-command.js', argsCommand(() => import('../core/commands/team-command.js'), 'team', 'dist/core/commands/team-command.js')),
   'qa-loop': entry('beta', 'Run QA loop missions', 'dist/core/commands/qa-loop-command.js', subcommand(() => import('../core/commands/qa-loop-command.js'), 'qaLoopCommand', 'dist/core/commands/qa-loop-command.js')),
   research: entry('labs', 'Run research missions', 'dist/core/commands/research-command.js', subcommand(() => import('../core/commands/research-command.js'), 'researchCommand', 'dist/core/commands/research-command.js')),

@@ -1,2 +1,5 @@
-import { dfixCommand } from '../core/commands/basic-cli.js';
-export async function run() { return dfixCommand(); }
+import { dfixCommand } from '../core/commands/dfix-command.js';
+
+export async function run(command: any, args: any = []) {
+  return dfixCommand(args);
+}

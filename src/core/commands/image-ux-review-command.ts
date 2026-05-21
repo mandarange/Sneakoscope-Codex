@@ -124,7 +124,7 @@ async function calloutsImageUxReview(root: string, command: string, args: any[] 
     process.exitCode = 1;
     return result;
   }
-  return runImageUxReview(root, command, ['--image', imagePath, '--json', ...(flag(args, '--mock') ? ['--mock'] : [])]);
+  return runImageUxReview(root, command, ['--image', imagePath, '--generate-callouts', '--json', ...(flag(args, '--mock') ? ['--mock'] : [])]);
 }
 
 async function extractIssuesImageUxReview(root: string, command: string, args: any[] = []) {
@@ -151,9 +151,10 @@ async function extractIssuesImageUxReview(root: string, command: string, args: a
       root,
       generatedImagePath: generatedImage,
       sourceScreenshot: { id: 'screen-1' },
-      sessionId: readOption(args, '--session-id', null)
+      sessionId: readOption(args, '--session', null) || readOption(args, '--session-id', null)
     });
     if (extraction.ok) await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), extraction.issue_ledger);
+    await writeJsonAtomic(path.join(dir, 'image-ux-extraction-report.json'), extraction);
   }
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true });
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} extract-issues` });
@@ -349,6 +350,7 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
     schema: 'sks.image-ux-generated-review-ledger.v2',
     schema_version: 2,
     created_at: nowIso(),
+    status: 'generated',
     provider: { model: 'gpt-image-2', preferred_surface: 'Codex App $imagegen' },
     generated_review_images: [{
       ...metadata,
@@ -362,8 +364,8 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
         severity: 'P2',
         bbox: [0, 0, Math.max(1, Number(metadata.width || 1)), Math.max(1, Number(metadata.height || 1))],
         region: 'full image fixture region',
-        title: opts.mock ? 'Mock fixture callout' : 'Generated visual callout',
-        detail: opts.mock ? 'Mock fixture callout for schema validation.' : 'Generated callout extracted from an attached gpt-image-2 review image.',
+        title: 'Mock fixture callout',
+        detail: 'Mock fixture callout for schema validation.',
         fix_action: 'Apply targeted UI adjustment, then recapture and re-review.',
         status: opts.mock ? 'fixed' : 'open',
         source: opts.mock ? 'mock_fixture' : 'real_gpt_image_2_callout',

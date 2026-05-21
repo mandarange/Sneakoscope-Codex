@@ -47,6 +47,20 @@ export const WRONGNESS_KINDS = Object.freeze([
   'fix_loop_noop_patch',
   'visual_fix_not_rechecked',
   'post_fix_regression_detected',
+  'ppt_text_only_review_fallback',
+  'ppt_slide_export_failed',
+  'ppt_imagegen_callout_generation_failed',
+  'ppt_slide_callout_extraction_failed',
+  'ppt_slide_bbox_out_of_bounds',
+  'ppt_deck_patch_noop',
+  'ppt_fix_not_reexported',
+  'ppt_slide_not_rechecked',
+  'ppt_post_fix_regression_detected',
+  'dfix_diagnosis_missing',
+  'dfix_root_cause_missing',
+  'dfix_patch_plan_missing',
+  'dfix_verification_missing',
+  'dfix_noop_patch',
   'repeated_blocker_stop'
 ] as const);
 

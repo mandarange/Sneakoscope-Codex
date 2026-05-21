@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/dfix-diagnosis.schema.json",
+  "title": "SKS DFix Diagnosis",
+  "type": "object",
+  "required": ["schema", "generated_at", "status", "scope", "symptoms", "evidence", "blockers"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "sks.dfix-diagnosis.v1" },
+    "generated_at": { "type": "string" },
+    "status": { "type": "string" },
+    "scope": { "type": "string" },
+    "symptoms": { "type": "array", "items": { "type": "string" } },
+    "evidence": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array" }
+  }
+}

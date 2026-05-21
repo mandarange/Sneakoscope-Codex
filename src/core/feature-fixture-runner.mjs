@@ -80,7 +80,8 @@ function executeCommand(sourceRoot, projectRoot, spec, fixture = {}) {
 }
 
 function spawnSks(sourceRoot, projectRoot, args = []) {
-  const result = spawnSync(process.execPath, [path.join(sourceRoot, 'bin', 'sks.mjs'), ...args], {
+  const entrypoint = resolveSksEntrypoint(sourceRoot);
+  const result = spawnSync(process.execPath, [entrypoint, ...args], {
     cwd: projectRoot,
     encoding: 'utf8',
     timeout: 30_000,
@@ -97,6 +98,14 @@ function spawnSks(sourceRoot, projectRoot, args = []) {
     stderr_bytes: Buffer.byteLength(result.stderr || ''),
     stderr_tail: String(result.stderr || '').slice(-600)
   };
+}
+
+function resolveSksEntrypoint(sourceRoot) {
+  const candidates = [
+    path.join(sourceRoot, 'dist', 'bin', 'sks.js'),
+    path.join(sourceRoot, 'bin', 'sks.mjs')
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
 }
 
 function prepareHermeticFixtureRoot(sourceRoot, tempRoot) {

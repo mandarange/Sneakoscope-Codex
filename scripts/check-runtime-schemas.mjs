@@ -58,7 +58,12 @@ for (const file of [
   'completion-proof.schema.json',
   'wrongness-record.schema.json',
   'scout-result.schema.json',
-  'computer-use-live-evidence.schema.json'
+  'computer-use-live-evidence.schema.json',
+  'ppt-slide-issue-ledger.schema.json',
+  'dfix-diagnosis.schema.json',
+  'dfix-patch-plan.schema.json',
+  'dfix-verification.schema.json',
+  'all-feature-completion.schema.json'
 ]) {
   const full = path.join(codexSchemaDir, file);
   if (!fs.existsSync(full)) {
