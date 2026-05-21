@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const files = [
   'README.md',
+  'CHANGELOG.md',
   'docs/computer-use-evidence.md',
   'docs/codex-lb.md',
   'docs/codex-cli-compat.md',
@@ -15,7 +16,8 @@ const files = [
 ];
 
 const required = {
-  'README.md': ['1.10.0 Function-Only Update Check', 'gpt-image-2', 'probe_only', 'live_capture_success', 'process_only_ephemeral'],
+  'README.md': ['CHANGELOG.md', 'docs/release-readiness.md', 'gpt-image-2'],
+  'CHANGELOG.md': ['1.11.0 Extreme Feature Completion Kernel', 'probe_only', 'live_capture_success', 'process_only_ephemeral'],
   'docs/computer-use-evidence.md': ['sks.computer-use-live-evidence.v1', 'probe_only', 'live_capture_blocked', 'local-only'],
   'docs/codex-lb.md': ['durable_env_file', 'durable_keychain', 'durable_launchctl', 'shell_profile', 'process_only_ephemeral'],
   'docs/codex-cli-compat.md': ['rust-v0.132.0', 'sks_zero_warning_disallowed', 'strict subset'],

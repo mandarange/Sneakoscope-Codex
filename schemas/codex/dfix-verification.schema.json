@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/dfix-verification.schema.json",
+  "title": "SKS DFix Verification",
+  "type": "object",
+  "required": ["schema", "generated_at", "status", "checks", "wrongness", "blockers"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "sks.dfix-verification.v1" },
+    "generated_at": { "type": "string" },
+    "status": { "type": "string" },
+    "checks": { "type": "array", "items": { "type": "object" } },
+    "wrongness": { "type": "object" },
+    "blockers": { "type": "array" }
+  }
+}

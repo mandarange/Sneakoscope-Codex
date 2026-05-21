@@ -5,7 +5,7 @@ import { exists, projectRoot, readJson, writeJsonAtomic } from '../core/fsx.js';
 import { CODEX_ACCESS_TOKENS_DOCS_URL } from '../core/codex-app.js';
 import { redactSecrets } from '../core/secret-redaction.js';
 import { evaluateHookPayload } from '../core/hooks-runtime.js';
-import { buildAllFeaturesSelftest, buildFeatureRegistry, validateFeatureRegistry, writeFeatureInventoryDocs } from '../core/feature-registry.js';
+import { buildAllFeaturesSelftest, buildFeatureRegistry, validateFeatureRegistry, writeAllFeatureCompletionReport, writeFeatureInventoryDocs } from '../core/feature-registry.js';
 import { recordHookPolicyMismatchWrongness } from '../core/triwiki-wrongness/wrongness-ledger.js';
 import { codexSchemaSnapshotReport } from '../core/codex-compat/codex-schema-snapshot.js';
 import { validateCodexFixtureOutputs } from '../core/codex-compat/codex-hook-schema.js';
@@ -43,14 +43,33 @@ export async function featuresCommand(sub: any = 'list', args: any = []) {
     if (!result.registry.coverage.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks features list|check|inventory [--json] [--write-docs]');
+  if (action === 'complete') {
+    const report = await writeAllFeatureCompletionReport({ root });
+    if (flag(args, '--json')) console.log(JSON.stringify(report, null, 2));
+    else {
+      console.log(`All feature completion: ${report.status}`);
+      console.log(`Report: ${path.relative(root, report.files.json)}`);
+    }
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+  console.error('Usage: sks features list|check|inventory|complete [--json] [--write-docs]');
   process.exitCode = 1;
 }
 
 export async function allFeaturesCommand(sub: any = 'selftest', args: any = []) {
   const action = sub || 'selftest';
+  if (action === 'complete' || action === 'completion') {
+    const root = await projectRoot();
+    const report = await writeAllFeatureCompletionReport({ root });
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`All feature completion: ${report.status}`);
+    console.log(`Report: ${path.relative(root, report.files.json)}`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
   if (action !== 'selftest') {
-    console.error('Usage: sks all-features selftest --mock [--execute-fixtures] [--json]');
+    console.error('Usage: sks all-features selftest|complete --mock [--execute-fixtures] [--json]');
     process.exitCode = 1;
     return;
   }

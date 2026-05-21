@@ -97,6 +97,8 @@ export async function finalizeRouteWithProof(root: any, {
       mock: Boolean(imageEvidence.mock)
     } } : {}),
     ...(providedVisualEvidence?.image_ux_review ? { image_ux_review: providedVisualEvidence.image_ux_review } : {}),
+    ...(providedVisualEvidence?.ppt_review ? { ppt_review: providedVisualEvidence.ppt_review } : {}),
+    ...(providedVisualEvidence?.dfix ? { dfix: providedVisualEvidence.dfix } : {}),
     ...(scoutEvidence ? { scouts: scoutEvidence } : {}),
     ...(wrongnessEvidence ? { wrongness: wrongnessEvidence } : {}),
     ...(computerUse ? { computer_use: {

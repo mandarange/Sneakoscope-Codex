@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-05-21
+
+1.11.0 Extreme Feature Completion Kernel keeps the README focused on product usage while this changelog carries release history and detailed gate context, including Computer Use evidence modes such as `probe_only` and `live_capture_success`, plus codex-lb persistence states such as `process_only_ephemeral`.
+
+### Added
+- Add `sks features complete --json` and the `sks.all-feature-completion.v1` report for command, fixture, artifact, evidence, proof, trust, wrongness, blackbox, mock/truthfulness, and JSON recovery coverage.
+- Add PPT imagegen review fixtures for slide export, generated callout images, issue extraction, patch handoff, re-export, re-review, Image Voxel relations, Completion Proof, and Trust Report evidence.
+- Add DFix diagnose, plan, patch, verify, rollback-plan, status, and fixture commands with DFix proof evidence.
+- Add a lightweight recursive JSON schema validator and release gate script.
+
+### Fixed
+- Block the release gate when Section 29 scripts, 1.11.0 metadata, PPT review proof, DFix verification, all-feature completion, or recursive schema checks are missing.
+
+### Changed
+- Bump package, runtime, release-readiness, and Rust crate metadata to 1.11.0.
+
 ## [1.10.0] - 2026-05-21
 
 ### Added

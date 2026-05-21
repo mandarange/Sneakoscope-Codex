@@ -2,6 +2,7 @@ import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, exists, packageRoot, readJson, runProcess, which } from './fsx.js';
 import { codexVersionPolicy, compareSemverLike, parseCodexVersionText } from './codex-compat/codex-version-policy.js';
+import { validateJsonSchemaRecursive } from './json-schema-validator.js';
 
 export interface CodexExecResumeOutputSchemaAvailability {
   schema: 'sks.codex-exec-output-schema-availability.v1';
@@ -192,20 +193,7 @@ export function parseStructuredCodexOutput(text: unknown): { ok: boolean; value:
 }
 
 export function validateStructuredOutput(value: unknown, schema: any): { ok: boolean; issues: string[] } {
-  const issues: string[] = [];
-  const row = value && typeof value === 'object' ? value as Record<string, unknown> : null;
-  if (!row) issues.push('output_not_object');
-  const required = Array.isArray(schema?.required) ? schema.required.map(String) : [];
-  for (const key of required) {
-    if (!row || !Object.hasOwn(row, key)) issues.push(`required:${key}`);
-  }
-  if (schema?.additionalProperties === false && row) {
-    const allowed = new Set(Object.keys(schema.properties || {}));
-    for (const key of Object.keys(row)) {
-      if (!allowed.has(key)) issues.push(`additional:${key}`);
-    }
-  }
-  return { ok: issues.length === 0, issues };
+  return validateJsonSchemaRecursive(value, schema);
 }
 
 export function structuredOutputBlocker(reason: string, detail: string) {

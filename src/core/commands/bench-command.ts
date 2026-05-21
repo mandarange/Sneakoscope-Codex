@@ -1,4 +1,4 @@
-import { benchRoot, runCoreBench } from '../bench.js';
+import { TRUST_VALIDATE_BENCH_COMMAND, benchRoot, runCoreBench } from '../bench.js';
 import { runProcess } from '../fsx.js';
 import { flag, readFlagValue } from './command-utils.js';
 
@@ -8,11 +8,11 @@ export async function benchCommand(args: any = []) {
   if (action === 'core' || action === 'trust-kernel') {
     const report = await runCoreBench(root, { iterations: readFlagValue(args, '--iterations', 3), tier: readFlagValue(args, '--tier', 'source-local') });
     const result = action === 'trust-kernel'
-      ? { schema: 'sks.trust-kernel-bench.v1', ok: report.commands.find((row: any) => row.command === 'sks trust validate latest --json')?.ok === true, core: report }
+      ? { schema: 'sks.trust-kernel-bench.v1', ok: report.commands.find((row: any) => row.command === TRUST_VALIDATE_BENCH_COMMAND)?.ok === true, core: report }
       : report;
+    if (!result.ok) process.exitCode = 1;
     if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
     console.log(`${action}: ${result.ok ? 'pass' : 'blocked'}`);
-    if (!result.ok) process.exitCode = 1;
     return result;
   }
   if (action === 'route-fixtures') return commandBench('sks.route-fixture-bench.v1', ['all-features', 'selftest', '--mock', '--execute-fixtures', '--strict-artifacts', '--json'], args);
