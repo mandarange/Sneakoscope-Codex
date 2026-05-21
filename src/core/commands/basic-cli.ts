@@ -3,13 +3,14 @@ import { spawnSync } from 'node:child_process';
 import { COMMANDS, type CommandEntry } from '../../cli/command-registry.js';
 import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
-import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, runProcess, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
+import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction } from '../routes.js';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../init.js';
 import { buildFeatureRegistry, validateFeatureRegistry } from '../feature-registry.js';
 import { hooksExplainReport } from '../../cli/feature-commands.js';
 import { writeSelftestRouteProof } from '../proof/selftest-proof-fixtures.js';
 import { createMission } from '../mission.js';
+import { formatSksUpdateCheckText, runSksUpdateCheck } from '../update-check.js';
 
 interface CommandRow {
   name: string;
@@ -113,22 +114,9 @@ For implementation work, use Codex App prompt routes such as $Team, $Goal, $QA-L
 }
 
 export async function updateCheckCommand(args: any = []) {
-  const latest = await npmViewVersion('sneakoscope');
-  const result = {
-    package: 'sneakoscope',
-    current: PACKAGE_VERSION,
-    runtime_current: PACKAGE_VERSION,
-    latest: latest.version,
-    update_available: latest.version ? compareVersions(latest.version, PACKAGE_VERSION) > 0 : false,
-    error: latest.error || null
-  };
+  const result = await runSksUpdateCheck();
   if (flag(args, '--json')) return printJson(result);
-  console.log(`${sksTextLogo()}\n\nUpdate Check`);
-  console.log(`Current: ${result.current}`);
-  console.log(`Latest:  ${result.latest || 'unknown'}`);
-  console.log(`Update:  ${result.update_available ? 'available' : 'not needed'}`);
-  if (result.error) console.log(`Error:   ${result.error}`);
-  if (result.update_available) console.log(`Run:     npm i -g sneakoscope@${result.latest}`);
+  console.log(`${sksTextLogo()}\n\n${formatSksUpdateCheckText(result)}`);
 }
 
 export async function setupCommand(args: any = []) {
@@ -294,23 +282,6 @@ function installScopeFromArgs(args: any = [], fallback: any = 'global') {
   if (flag(args, '--global')) return 'global';
   const index = args.indexOf('--install-scope');
   return normalizeInstallScope(index >= 0 && args[index + 1] ? args[index + 1] : fallback);
-}
-
-async function npmViewVersion(name: any) {
-  const npm = whichSync('npm');
-  if (!npm) return { version: null, error: 'npm not found on PATH' };
-  const result = await runProcess(npm, ['view', name, 'version', '--silent'], { timeoutMs: 15000, maxOutputBytes: 4096 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
-  if (result.code !== 0) return { version: null, error: (result.stderr || result.stdout || 'npm view failed').trim() };
-  return { version: String(result.stdout || '').trim().split(/\s+/).pop() || null };
-}
-
-function compareVersions(a: any, b: any) {
-  const pa = String(a || '').split('.').map((x: any) => Number.parseInt(x, 10) || 0);
-  const pb = String(b || '').split('.').map((x: any) => Number.parseInt(x, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
-    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
-  }
-  return 0;
 }
 
 function whichSync(command: any) {

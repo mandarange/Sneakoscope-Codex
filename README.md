@@ -4,6 +4,8 @@ Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
 
 Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable.
 
+SKS **1.10.0** is the Function-Only Update Check release: `sks update-check` and the pre-work update gate now share a lightweight npm freshness function that reports `route_required: false` and `pipeline_required: false`, so checking for a newer SKS package never starts Team, setup, doctor, or any execution pipeline.
+
 SKS **1.0.9** is the Official Docs Ultimate Kernel: Codex CLI `rust-v0.132.0` structured resume output is now an actual runner, `gpt-image-2` review generation uses Codex App `$imagegen` evidence or an optional OpenAI Images API fallback, Structured Outputs strict schemas are the extraction fallback, and `$UX-Review this screenshot with gpt-image-2 callouts, then fix the issues` blocks fake callouts until generated image pixels are schema-extracted, patched, recaptured, and re-reviewed.
 
 SKS **1.0.8** is the Codex 0.132 UX-Review Seal: Codex CLI `rust-v0.132.0` compatibility is explicit, `codex exec resume --output-schema` is the preferred structured-output path, and `$UX-Review this screenshot with gpt-image-2 callouts, then fix the issues` is a real visual trust loop from source screenshot fidelity to generated callout ingestion, issue ledger extraction, bounded safe fixes, recapture/re-review, Image Voxel relations, Wrongness, Completion Proof, and Trust Report gates.
@@ -28,6 +30,16 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ![Sneakoscope Codex Trust Layer](docs/assets/sneakoscope-architecture-pipeline.jpg)
 
+
+## 1.10.0 Function-Only Update Check
+
+1.10.0 keeps the update freshness check out of the SKS mission pipeline. The shared `runSksUpdateCheck` function performs only an npm `view sneakoscope version` lookup, honors `SKS_NPM_VIEW_SNEAKOSCOPE_VERSION` for hermetic tests, and returns explicit `mode: "function"`, `route_required: false`, and `pipeline_required: false` evidence for CLI JSON output and hook-gate reuse.
+
+```bash
+sks update-check --json
+```
+
+Release checks now write `.sneakoscope/reports/official-docs-compat-1.10.0.json` plus `.sneakoscope/reports/release-readiness-1.10.0.json`.
 
 ## 1.0.9 Official Docs Ultimate Kernel
 

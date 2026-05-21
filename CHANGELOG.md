@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-05-21
+
+### Added
+- Add a shared `runSksUpdateCheck` function that performs the npm freshness check without creating a route, mission, setup, doctor, or Team pipeline.
+- Add `sks.update-check.v2` JSON output with explicit `mode`, `route_required`, and `pipeline_required` fields.
+
+### Fixed
+- Reuse the function-only update check from the pre-work hook gate so SKS update freshness checks stay outside the execution pipeline.
+
+### Changed
+- Bump package, runtime, release-readiness, and Rust crate metadata to 1.10.0.
+
 ## [1.0.9] - 2026-05-21
 
 ### Added
