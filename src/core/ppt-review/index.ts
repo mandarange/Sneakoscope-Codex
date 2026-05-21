@@ -43,6 +43,7 @@ export async function writePptImagegenReviewArtifacts(input: any = {}) {
   const callouts = input.skipCallouts
     ? await readJson(path.join(dir, PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT), { generated_slide_callout_images: [], blockers: ['ppt_imagegen_callouts_missing'] })
     : await generateSlideCalloutReviews({ root, dir, missionId, exportLedger: exported.export_ledger, mock });
+  await writeJsonAtomic(path.join(dir, PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT), callouts);
   await writeJsonAtomic(path.join(dir, PPT_SLIDE_IMAGEGEN_REQUEST_ARTIFACT), buildSlideImagegenRequestArtifact(callouts));
   await writeJsonAtomic(path.join(dir, PPT_SLIDE_IMAGEGEN_RESPONSE_ARTIFACT), buildSlideImagegenResponseArtifact(callouts));
   const extracted = input.skipExtraction

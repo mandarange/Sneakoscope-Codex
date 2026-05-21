@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-05-22
+
+### Added
+- Add Codex CLI `rust-v0.133.0` compatibility matrix coverage for goal defaults, remote-control foreground app-server behavior, permission profiles/requirements, plugin discovery/marketplaces, and extension lifecycle events.
+- Add Codex hook actual trust parity, managed install fixtures, and official-hash parity reports for the 10-event hook surface.
+- Add real imagegen capability detection, gpt-image-2 request validation, UX/PPT fake-adapter blackbox checks, structured extraction strictness checks, and optional real imagegen smoke.
+- Add release gates for managed hook install, runtime replay warning-zero, imagegen capability, UX/PPT generated-image artifact graphs, and strict Structured Outputs schemas.
+
+### Fixed
+- Block SKS-only trusted_hash writes unless official Codex hash parity is available; the default repair path is managed hooks via `.codex/requirements.toml`.
+- Reject prompt/agent/async/empty/invalid hook handlers in actual trust doctor reports.
+- Keep fake imagegen evidence explicitly marked as mock-like so hermetic release checks cannot be mistaken for real gpt-image-2 generation.
+
+### Changed
+- Treat Codex 0.133 as the release-readiness runtime baseline while preserving Codex 0.132 structured output detection as inherited compatibility.
+- Bump package, runtime, release-readiness, and Rust crate metadata to 1.14.0.
+
 ## [1.13.0] - 2026-05-21
 
 ### Added

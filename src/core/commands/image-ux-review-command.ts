@@ -109,21 +109,22 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
       privacy: 'local-only'
     });
     if (result.generated_image_path) {
-      await attachGeneratedReviewImage(root, dir, contract, result.generated_image_path, { realGenerated: true, mock: false, providerSurface: result.provider });
-      if (flag(args, '--fix')) {
-        const extraction = await extractRealCallouts({
-          root,
-          generatedImagePath: result.generated_image_path,
-          sourceScreenshot: { id: 'screen-1' },
-          sessionId: readOption(args, '--session', null) || readOption(args, '--session-id', null)
-        });
-        await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), extraction.issue_ledger);
-        await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT), await buildImageUxCalloutExtractionReport(root, extraction, {
-          generatedImagePath: result.generated_image_path,
-          sourceImagePath: sourceRel || imagePath,
-          provider: extraction.provider
-        }));
-      }
+      const fakeGenerated = result.provider === 'fake_imagegen_adapter';
+      if (result.request_artifact) await fsp.copyFile(result.request_artifact, path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT)).catch(() => {});
+      if (result.response_artifact) await fsp.copyFile(result.response_artifact, path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT)).catch(() => {});
+      await attachGeneratedReviewImage(root, dir, contract, result.generated_image_path, { realGenerated: !fakeGenerated, mock: fakeGenerated, providerSurface: result.provider });
+      const extraction = await extractRealCallouts({
+        root,
+        generatedImagePath: result.generated_image_path,
+        sourceScreenshot: { id: 'screen-1' },
+        sessionId: readOption(args, '--session', null) || readOption(args, '--session-id', null)
+      });
+      await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), extraction.issue_ledger);
+      await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT), await buildImageUxCalloutExtractionReport(root, extraction, {
+        generatedImagePath: result.generated_image_path,
+        sourceImagePath: sourceRel || imagePath,
+        provider: extraction.provider
+      }));
     }
   }
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true });

@@ -41,6 +41,7 @@ export async function writeGoalWorkflow(dir: any, mission: any, opts: any = {}) 
       evidence: ['goal-workflow.json', 'goal-bridge.md']
     },
     repeated_blocker_policy: {
+      aligned_with_codex_0_133: true,
       aligned_with_codex_0_132: true,
       stop_after_same_blocker_count: 2,
       structured_blocker: 'sks.loop-blocker.v1',

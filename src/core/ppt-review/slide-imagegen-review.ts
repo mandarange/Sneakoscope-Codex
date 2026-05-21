@@ -86,16 +86,26 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
         blockers.push(generated.blocker || 'ppt_imagegen_callouts_missing');
         continue;
       }
+      const fakeGenerated = generated.provider === 'fake_imagegen_adapter';
       generatedReviewImages.push({
         ...await generatedSlideMetadata(root, generated.generated_image_path, slide, {
-          mock: false,
-          realGenerated: true,
+          mock: fakeGenerated,
+          realGenerated: !fakeGenerated,
           providerSurface: generated.provider || 'gpt-image-2'
         }),
         status: 'generated',
-        source: 'real_gpt_image_2_callout',
-        callout_extraction_status: 'pending',
-        callouts: [],
+        source: fakeGenerated ? 'mock_fixture' : 'real_gpt_image_2_callout',
+        callout_extraction_status: fakeGenerated ? 'succeeded' : 'pending',
+        callouts: fakeGenerated ? [{
+          callout_id: 'fake-slide-callout-1',
+          severity: 'P2',
+          bbox: [0, 0, 1, 1],
+          category: 'visual_hierarchy',
+          target_element: 'fake slide canvas',
+          fix_action: 'No-op fixture recheck',
+          confidence: 0.5,
+          source: 'mock_fixture'
+        }] : [],
         imagegen_request_artifact: generated.request_artifact || null,
         imagegen_response_artifact: generated.response_artifact || null
       });

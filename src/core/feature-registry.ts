@@ -326,7 +326,7 @@ function featureCompletionRow(feature: any) {
 
 function derivedReleaseFeatureRows(root: string, packageJson: any) {
   const derived = [
-    { id: 'release-version-1-13', title: `Release version metadata ${PACKAGE_VERSION}`, artifact: 'package.json', ok: packageJson.version === PACKAGE_VERSION },
+    { id: 'release-version-1-14', title: `Release version metadata ${PACKAGE_VERSION}`, artifact: 'package.json', ok: packageJson.version === PACKAGE_VERSION },
     { id: 'all-feature-completion', title: 'All feature completion matrix', artifact: `.sneakoscope/reports/all-feature-completion-${PACKAGE_VERSION}.json`, ok: true },
     { id: 'ppt-imagegen-review', title: 'PPT imagegen review route', artifact: 'src/core/ppt-review/index.ts', ok: existsSync(path.join(root, 'src', 'core', 'ppt-review', 'index.ts')) },
     { id: 'dfix-loop', title: 'DFix diagnose/plan/patch/verify loop', artifact: 'src/core/commands/dfix-command.ts', ok: existsSync(path.join(root, 'src', 'core', 'commands', 'dfix-command.ts')) },
@@ -480,7 +480,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-hooks': ['hooks', 'trust-report', '--json'],
   'cli-scouts': ['scouts', 'run', 'latest', '--engine', 'local-static', '--mock', '--json'],
   'cli-perf': ['perf', 'cold-start', '--json', '--iterations', '1'],
-  'cli-bench': ['bench', 'core', '--json', '--iterations', '1'],
+  'cli-bench': ['bench', 'core', '--tier', 'source-ci', '--json', '--iterations', '1'],
   'cli-code-structure': ['code-structure', 'scan', '--json'],
   'cli-rust': ['rust', 'smoke', '--json'],
   'cli-skill-dream': ['skill-dream', 'status', '--json'],
@@ -819,7 +819,7 @@ function slug(value: any) {
 function commandCategory(name: any) {
   if (['team', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts', 'scouts', 'scout'].includes(name)) return 'proof-route';
   if (['qa-loop', 'research', 'recallpulse', 'skill-dream', 'eval', 'perf'].includes(name)) return 'loop';
-  if (['codex', 'codex-app', 'codex-lb', 'auth', 'hooks', 'context7', 'openclaw'].includes(name)) return 'integration';
+  if (['codex', 'codex-app', 'codex-lb', 'auth', 'hooks', 'context7', 'openclaw', 'hermes'].includes(name)) return 'integration';
   if (['db', 'guard', 'conflicts', 'harness', 'versioning'].includes(name)) return 'safety';
   if (['wiki', 'wrongness', 'gx', 'image-ux-review', 'ppt'].includes(name)) return 'visual-memory';
   if (['setup', 'bootstrap', 'doctor', 'deps', 'init', 'postinstall', 'fix-path'].includes(name)) return 'install';

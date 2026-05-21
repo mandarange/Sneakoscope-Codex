@@ -10,7 +10,7 @@ The wrongness loop is intentionally small:
 
 Automatic sources now include trust validation blockers, image voxel validation failures, DB safety expectation mismatches, hook replay expectation mismatches, and test failure fixtures. Manual entries use `sks wrongness add`.
 
-In 1.13.0, DFix adds fast wrongness memory through `.sneakoscope/cache/dfix/`. Error signatures carry redacted command/cwd/file/line/error-code data, successful patch hints, failed patch avoidance rules, verification command hints, file hash, project hash, and recurrence counts. A repeated no-op patch, failed verification, trust hook warning, modified hook state, schema drift, unsupported handler, or dual hook representation must produce a structured blocker or wrongness record instead of being retried silently.
+In 1.14.0, DFix adds fast wrongness memory through `.sneakoscope/cache/dfix/`. Error signatures carry redacted command/cwd/file/line/error-code data, successful patch hints, failed patch avoidance rules, verification command hints, file hash, project hash, and recurrence counts. A repeated no-op patch, failed verification, trust hook warning, modified hook state, schema drift, unsupported handler, or dual hook representation must produce a structured blocker or wrongness record instead of being retried silently.
 
 Release gates run:
 

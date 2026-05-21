@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises';
 import { nowIso, sha256, writeJsonAtomic } from './fsx.js';
 import { imageDimensions, sha256File } from './wiki-image/image-hash.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY } from './routes.js';
-import { codex0132Matrix } from './codex-compat/codex-0-132.js';
+import { codex0133Matrix } from './codex-compat/codex-0-133.js';
 import { detectCodexExecResumeOutputSchema } from './codex-exec-output-schema.js';
 import { buildCalloutPrompt, imagegenCapabilityBlocker } from './image-ux-review/imagegen-adapter.js';
 import { buildIssueLedgerFromGeneratedCallouts } from './image-ux-review/callout-extraction.js';
@@ -58,6 +58,7 @@ function compactId(prefix: any, text: any) {
 
 export function buildImageUxReviewPolicy(contract: any = {}) {
   const outputSchema = {
+    preferred_for_codex_0_133: true,
     preferred_for_codex_0_132: true,
     schemas: [
       'schemas/codex/ux-review-callout-extraction.schema.json',
@@ -78,7 +79,7 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
     minimum_delta_to_continue: 0.03,
     max_full_surface_passes: 2,
     max_screen_retries: 2,
-    codex_compatibility: codex0132Matrix(),
+    codex_compatibility: codex0133Matrix(),
     output_schema: outputSchema,
     source_capture: {
       required: true,
@@ -413,6 +414,8 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
   const existingGenerated = await readExistingJson(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT);
   const existingIssues = await readExistingJson(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT);
   const extractionReport = await readExistingJson(dir, IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT);
+  const existingImagegenRequest = await readExistingJson(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT);
+  const existingImagegenResponse = await readExistingJson(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT);
   const generatedReviewLedger = buildImageUxGeneratedReviewLedger(contract, inventory, existingGenerated);
   const issueLedger = buildImageUxIssueLedger(contract, generatedReviewLedger, existingIssues);
   const fixTaskPlan = planImageUxFixTasks(issueLedger);
@@ -433,8 +436,8 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
     wrongnessChecked: opts.wrongnessChecked === true,
     honestModeComplete: opts.honestModeComplete === true
   });
-  const imagegenRequest = buildImagegenRequestArtifact(contract, inventory);
-  const imagegenResponse = buildImagegenResponseArtifact(generatedReviewLedger);
+  const imagegenRequest = existingImagegenRequest || buildImagegenRequestArtifact(contract, inventory);
+  const imagegenResponse = existingImagegenResponse || buildImagegenResponseArtifact(generatedReviewLedger);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_POLICY_ARTIFACT), policy);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT), inventory);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT), imagegenRequest);

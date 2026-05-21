@@ -40,7 +40,7 @@ export async function extractSlideIssues(input: any = {}) {
     }
   }
   if (!issues.length) blockers.push('ppt_slide_issue_extraction_missing');
-  const ledger = {
+  const ledgerBase = {
     schema: 'sks.ppt-slide-issue-ledger.v1',
     schema_version: 1,
     created_at: nowIso(),
@@ -50,8 +50,12 @@ export async function extractSlideIssues(input: any = {}) {
     extraction_source: mock ? 'mock_fixture' : input.sessionId ? 'codex_exec_resume_output_schema' : 'structured_outputs_callout_extraction',
     mock_fixture: mock,
     blockers: [...new Set(blockers)],
-    validation: validateJsonSchemaRecursive({ schema: 'sks.ppt-slide-issue-ledger.v1', schema_version: 1, issues }, jsonSchema),
+    validation: { ok: true, issues: [] as string[] },
     passed: blockers.length === 0
+  };
+  const ledger = {
+    ...ledgerBase,
+    validation: validateJsonSchemaRecursive(ledgerBase, jsonSchema)
   };
   await writeJsonAtomic(path.join(dir, PPT_SLIDE_ISSUE_LEDGER_ARTIFACT), ledger);
   const extractionReport = {
@@ -102,6 +106,27 @@ export function buildDeckIssueLedger(slideLedger: any = {}, calloutLedger: any =
 }
 
 async function extractOneGeneratedSlide(root: string, schemaPath: string, jsonSchema: Record<string, unknown>, generatedSlidePath: string, sessionId: string | null, image: any = {}) {
+  if (process.env.SKS_TEST_FAKE_IMAGEGEN === '1' || process.env.SKS_TEST_FAKE_EXTRACTOR === '1') {
+    const issue = normalizePptIssue({
+      id: 'fake-ppt-slide-issue-1',
+      callout_id: 'fake-slide-callout-1',
+      severity: 'P2',
+      bbox: [0, 0, Math.max(1, Number(image.width || 1)), Math.max(1, Number(image.height || 1))],
+      category: 'visual_hierarchy',
+      title: 'Fake slide fixture callout',
+      detail: 'Hermetic fake extractor issue from generated PPT slide callout fixture.',
+      fix_action: 'No-op fixture recheck',
+      target_element: 'fake slide canvas',
+      confidence: 0.5,
+      status: 'fixed'
+    }, image, 0, 'mock_fixture');
+    return {
+      ok: true,
+      issues: [issue],
+      provider: 'fake_structured_extractor',
+      blocker: null
+    };
+  }
   const prompt = [
     'Extract only visible numbered PPT slide review callouts from the generated review image.',
     'Return schema-valid JSON for sks.ppt-slide-issue-ledger.v1.',

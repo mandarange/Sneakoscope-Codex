@@ -1753,7 +1753,7 @@ export async function maybePromptCodexUpdateForLaunch(args = [], opts = {}) {
 }
 
 export function shouldAutoApproveInstall(args = [], env = process.env) {
-  return hasFlag(args, '--yes') || hasFlag(args, '-y') || isOpenClawRuntime(env);
+  return hasFlag(args, '--yes') || hasFlag(args, '-y') || isAgentRuntime(env);
 }
 
 function canAskYesNo() {
@@ -1764,8 +1764,18 @@ function hasFlag(args = [], name) {
   return args.includes(name);
 }
 
-function isOpenClawRuntime(env = process.env) {
-  return ['SKS_OPENCLAW', 'OPENCLAW', 'OPENCLAW_AGENT', 'OPENCLAW_RUN_ID', 'OPENCLAW_SESSION_ID']
+function isAgentRuntime(env = process.env) {
+  return [
+    'SKS_OPENCLAW',
+    'OPENCLAW',
+    'OPENCLAW_AGENT',
+    'OPENCLAW_RUN_ID',
+    'OPENCLAW_SESSION_ID',
+    'SKS_HERMES',
+    'HERMES_AGENT',
+    'HERMES_RUN_ID',
+    'HERMES_SESSION_ID'
+  ]
     .some((key) => /^(1|true|yes|y)$/i.test(String(env[key] || '').trim()));
 }
 

@@ -2,11 +2,12 @@
 
 ## 1.0.8 Known Gaps
 
-No P0 blocker is intentionally left open for Codex CLI `rust-v0.132.0` compatibility detection, `codex exec resume --output-schema` fixture coverage, UX-Review generated callout ingestion, text-only fallback blocking, mock-as-real blocking, Image Voxel relation validation, memory summary rebuilds, repeated blocker stops, version drift, or release readiness reporting.
+No P0 blocker is intentionally left open for Codex CLI `rust-v0.133.0` compatibility detection, `codex exec resume --output-schema` fixture coverage, UX-Review generated callout ingestion, text-only fallback blocking, mock-as-real blocking, Image Voxel relation validation, memory summary rebuilds, repeated blocker stops, version drift, or release readiness reporting.
 
 Bounded 1.0.8 claims:
 
-- The Codex hook schema snapshot is `latest` for SKS 1.13.0; the runtime matrix still targets `rust-v0.132.0` capability detection and preserves the zero-warning strict subset.
+- The Codex hook schema snapshot is `latest` for SKS 1.14.0; the runtime matrix targets `rust-v0.133.0` capability detection and preserves the zero-warning strict subset.
+- Codex 0.133 plugin discovery and marketplace config are P1 warning-only unless a route explicitly depends on those surfaces.
 - Real UX-Review verification requires a real generated gpt-image-2 annotated callout image and post-fix recapture/re-review evidence for changed screens. Fixture and mock loops are `verified_partial`.
 - If Codex App imagegen or Computer Use is unavailable, SKS records a structured blocker such as `imagegen_capability_missing` or `live_capture_blocked`; it does not fabricate screenshots, generated callouts, or fixed-screen evidence.
 - Codex Python SDK auth and richer TurnResult integration are P1 warning-only review items; no live SDK accuracy or performance claim is made.
@@ -39,7 +40,7 @@ No P0 blocker is intentionally left open for latest Codex hook schema validation
 
 Bounded claims:
 
-- A local Codex CLI older than `0.132.0` reports `compatibility_degraded`; release hook validation still uses the vendored `latest` snapshot and semantic validator.
+- A local Codex CLI older than `0.133.0` reports `compatibility_degraded`; release hook validation still uses the vendored `latest` snapshot and semantic validator.
 - Live Computer Use availability depends on Codex App and macOS permissions. If the official capability is blocked or unavailable, SKS records the status and does not fabricate UI evidence. Real smoke remains opt-in with `SKS_TEST_REAL_COMPUTER_USE=1`.
 - codex-lb health checks can still report structured network/auth blockers; the fixed invariant is that raw missing `CODEX_LB_API_KEY` messages and secret leaks are release failures.
 - The 1.0.6 black-box fixtures validate warning-zero, strict-subset classification, setup plan/apply truthfulness, codex-lb missing-env prevention, and no forbidden Computer Use wording; broader real-world Codex App/OS capability permutations remain environment-dependent.
