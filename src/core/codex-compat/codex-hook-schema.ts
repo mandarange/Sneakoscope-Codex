@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { exists, projectRoot, readJson } from '../fsx.js';
-import { CODEX_HOOK_EVENTS, type CodexHookEventName, codexHookEventName, readCodexHookSchema } from './codex-schema-snapshot.js';
+import { CODEX_HOOK_EVENT_TO_FILE_STEM, CODEX_HOOK_EVENTS, type CodexHookEventName, codexHookEventName, readCodexHookSchema } from './codex-schema-snapshot.js';
 import { validateCodexHookSemanticOutput, type CodexHookSemanticValidation } from './codex-hook-semantic-validator.js';
 import { schemaIssueToCodexHookIssue, type CodexHookIssue } from './codex-hook-issues.js';
 
@@ -24,7 +24,7 @@ export async function validateCodexHookOutput(eventLike: unknown, output: unknow
 
 export async function validateCodexFixtureOutputs(root?: string) {
   root ||= await projectRoot();
-  const fixtureRoot = path.join(root, 'test', 'fixtures', 'codex-hooks', 'rust-v0.131.0');
+  const fixtureRoot = path.join(root, 'test', 'fixtures', 'codex-hooks', 'latest');
   const outputs = [];
   for (const event of CODEX_HOOK_EVENTS) {
     const candidates = await expectedOutputFilesForEvent(fixtureRoot, event);
@@ -61,16 +61,7 @@ export async function validateCodexFixtureOutputs(root?: string) {
 async function expectedOutputFilesForEvent(fixtureRoot: string, event: CodexHookEventName): Promise<string[]> {
   if (!(await exists(fixtureRoot))) return [];
   const fs = await import('node:fs/promises');
-  const eventStem = {
-    PreToolUse: 'pre-tool-use',
-    PermissionRequest: 'permission-request',
-    PostToolUse: 'post-tool-use',
-    PreCompact: 'pre-compact',
-    PostCompact: 'post-compact',
-    SessionStart: 'session-start',
-    UserPromptSubmit: 'user-prompt-submit',
-    Stop: 'stop'
-  }[event];
+  const eventStem = CODEX_HOOK_EVENT_TO_FILE_STEM[event];
   const entries = await fs.readdir(fixtureRoot).catch(() => []);
   return entries
     .filter((entry) => entry.startsWith(eventStem) && entry.endsWith('.output.expected.json'))

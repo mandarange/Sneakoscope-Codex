@@ -5,14 +5,14 @@ import path from 'node:path';
 export async function run(_command, args = []) {
   const action = args[0] || 'compatibility';
   const json = args.includes('--json');
-  const snapshotDir = path.resolve('src/vendor/openai-codex/rust-v0.131.0/hooks');
+  const snapshotDir = path.resolve('src/vendor/openai-codex/latest/hooks');
   const schemaFiles = fs.existsSync(snapshotDir) ? fs.readdirSync(snapshotDir).filter((file) => file.endsWith('.schema.json')) : [];
   const detected = detectCodex();
   const result = {
     schema: action === 'doctor' ? 'sks.codex-doctor.v1' : 'sks.codex-compat.v1',
     required_baseline: 'rust-v0.132.0',
     detected,
-    hooks_schema: { snapshot: 'rust-v0.131.0', ok: schemaFiles.length >= 16, files: schemaFiles.length },
+    hooks_schema: { snapshot: 'latest', ok: schemaFiles.length >= 20, files: schemaFiles.length },
     codex_0_132: {
       baseline: 'rust-v0.132.0',
       capabilities: [
@@ -22,10 +22,10 @@ export async function run(_command, args = []) {
         'goal_continuation_blocker_stop',
         'tui_probe_batching'
       ],
-      hook_strict_subset_baseline: 'rust-v0.131.0'
+      hook_strict_subset_baseline: 'latest'
     },
-    ok: schemaFiles.length >= 16,
-    warnings: detected.available ? [] : ['codex binary not detected; release schema checks use vendored rust-v0.131.0 snapshots']
+    ok: schemaFiles.length >= 20,
+    warnings: detected.available ? [] : ['codex binary not detected; release schema checks use vendored latest snapshots']
   };
   if (json) {
     console.log(JSON.stringify(result, null, 2));

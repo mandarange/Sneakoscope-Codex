@@ -10,6 +10,8 @@ import { recordHookPolicyMismatchWrongness } from '../core/triwiki-wrongness/wro
 import { codexSchemaSnapshotReport } from '../core/codex-compat/codex-schema-snapshot.js';
 import { validateCodexFixtureOutputs } from '../core/codex-compat/codex-hook-schema.js';
 import { codexHookWarningCheck } from '../core/codex-compat/codex-hook-warning-detector.js';
+import { codexHookTrustDoctor } from '../core/codex-hooks/codex-hook-trust-doctor.js';
+import { writeTrustedHashStateForHooksFile } from '../core/codex-hooks/codex-hook-state-writer.js';
 
 const flag = (args: any, name: any) => args.includes(name);
 
@@ -103,6 +105,33 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     for (const event of report.events) console.log(`- ${event.event}: ${event.command}`);
     return;
   }
+  if (action === 'doctor' || action === 'trust-doctor') {
+    const report = await codexHookTrustDoctor(root, { fix: flag(args, '--fix'), managed: flag(args, '--managed') });
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`Hooks trust doctor: ${report.ok ? 'ok' : 'blocked'}`);
+    for (const warning of report.warnings) console.log(`- ${warning}`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'trust-state') {
+    const report = await codexHookTrustDoctor(root, { managed: flag(args, '--managed') });
+    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.codex-hook-trust-state-command.v1', ok: report.ok, entries: report.entries, trust: report.trust }, null, 2));
+    console.log(`Hook trust entries: ${report.entries.length}`);
+    return;
+  }
+  if (action === 'trust-fix') {
+    const report = await codexHookTrustDoctor(root, { fix: true, managed: flag(args, '--managed') });
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`Hooks trust fix: ${report.ok ? 'ok' : 'blocked'}`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'install') {
+    const report = await writeTrustedHashStateForHooksFile(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify({ ...report, schema: 'sks.codex-hook-install-command.v1', ok: true, mode: flag(args, '--managed') ? 'managed' : flag(args, '--project') ? 'project' : 'trust-state-only', trusted: flag(args, '--trusted') }, null, 2));
+    console.log(`Hooks install trust state updated: ${report.updated}`);
+    return;
+  }
   if (action === 'replay') {
     const fixture = args.find((arg: any) => !String(arg).startsWith('--'));
     const report = await hooksReplayReport(root, fixture);
@@ -141,7 +170,7 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     return;
   }
   if (action !== 'explain') {
-    console.error('Usage: sks hooks explain|status|trust-report|replay <fixture.json>|codex-schema|codex-validate|warning-check|replay-codex-fixtures [--json]');
+    console.error('Usage: sks hooks explain|status|doctor|trust-report|trust-state|trust-doctor|trust-fix|install|replay <fixture.json>|codex-schema|codex-validate|warning-check|replay-codex-fixtures [--json]');
     process.exitCode = 1;
     return;
   }
@@ -177,17 +206,25 @@ async function hooksStatusReport(root: any) {
 
 async function hooksTrustReport(root: any) {
   const status = await hooksStatusReport(root);
+  const trust = await codexHookTrustDoctor(root).catch(() => null);
   return redactSecrets({
     schema: 'sks.hooks-trust-report.v1',
     hooks_files: status.hooks_files.map((file: any) => file.path),
     events: [
+      { event: 'SessionStart', command: 'sks hook session-start', writes: ['.sneakoscope/state'], network: false, secret_policy: 'redacted', risk: 'low' },
       { event: 'PreToolUse', command: 'sks hook pre-tool', writes: ['.sneakoscope/bus/tool-events.jsonl'], network: false, secret_policy: 'redacted', risk: 'medium' },
       { event: 'PermissionRequest', command: 'sks hook permission-request', writes: ['.sneakoscope/state'], network: false, secret_policy: 'redacted', risk: 'medium' },
+      { event: 'PostToolUse', command: 'sks hook post-tool', writes: ['.sneakoscope/missions'], network: false, secret_policy: 'redacted', risk: 'medium' },
+      { event: 'PreCompact', command: 'sks hook pre-compact', writes: ['.sneakoscope/state'], network: false, secret_policy: 'redacted', risk: 'low' },
+      { event: 'PostCompact', command: 'sks hook post-compact', writes: ['.sneakoscope/state'], network: false, secret_policy: 'redacted', risk: 'low' },
       { event: 'UserPromptSubmit', command: 'sks hook user-prompt-submit', writes: ['.sneakoscope/missions'], network: false, secret_policy: 'redacted', risk: 'medium' },
+      { event: 'SubagentStart', command: 'sks hook subagent-start', writes: ['.sneakoscope/missions'], network: false, secret_policy: 'redacted', risk: 'low' },
+      { event: 'SubagentStop', command: 'sks hook subagent-stop', writes: ['.sneakoscope/missions'], network: false, secret_policy: 'redacted', risk: 'low' },
       { event: 'Stop', command: 'sks hook stop', writes: ['.sneakoscope/missions', '.sneakoscope/proof'], network: false, secret_policy: 'redacted', risk: 'high' }
     ],
-    ok: true,
-    warnings: status.ok ? [] : ['no hooks.json file found in project or user config']
+    trust,
+    ok: status.ok && (trust?.ok ?? true),
+    warnings: [...(status.ok ? [] : ['no hooks.json file found in project or user config']), ...(trust?.warnings || [])]
   });
 }
 
@@ -277,6 +314,11 @@ function normalizeReplayHookName(event: any = '') {
   if (normalized.includes('permission')) return 'permission-request';
   if (normalized.includes('userprompt') || normalized.includes('user-prompt')) return 'user-prompt-submit';
   if (normalized.includes('posttool') || normalized.includes('post-tool')) return 'post-tool';
+  if (normalized.includes('sessionstart') || normalized.includes('session-start')) return 'session-start';
+  if (normalized.includes('subagentstart') || normalized.includes('subagent-start')) return 'subagent-start';
+  if (normalized.includes('subagentstop') || normalized.includes('subagent-stop')) return 'subagent-stop';
+  if (normalized.includes('precompact') || normalized.includes('pre-compact')) return 'pre-compact';
+  if (normalized.includes('postcompact') || normalized.includes('post-compact')) return 'post-compact';
   if (normalized.includes('stop')) return 'stop';
   return normalized || 'pre-tool';
 }
@@ -294,7 +336,7 @@ export function hooksExplainReport() {
     feature_key: 'features.hooks',
     deprecated_feature_alias: 'features.codex_hooks',
     config_paths: ['~/.codex/hooks.json', '~/.codex/config.toml', '<repo>/.codex/hooks.json', '<repo>/.codex/config.toml'],
-    events: ['SessionStart', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'UserPromptSubmit', 'Stop'],
+    events: ['PreToolUse', 'PermissionRequest', 'PostToolUse', 'PreCompact', 'PostCompact', 'SessionStart', 'UserPromptSubmit', 'SubagentStart', 'SubagentStop', 'Stop'],
     handlers: {
       supported: ['command'],
       parsed_but_skipped: ['prompt', 'agent'],

@@ -1,8 +1,8 @@
 export const CODEX_COMPAT_SCHEMA = 'sks.codex-compat.v1';
 export const CODEX_REQUIRED_BASELINE_TAG = 'rust-v0.132.0';
 export const CODEX_REQUIRED_VERSION = '0.132.0';
-export const CODEX_HOOK_SCHEMA_BASELINE_TAG = 'rust-v0.131.0';
-export const CODEX_HOOK_SCHEMA_VERSION = '0.131.0';
+export const CODEX_HOOK_SCHEMA_BASELINE_TAG = 'latest';
+export const CODEX_HOOK_SCHEMA_VERSION = 'main-2026-05-21';
 
 export function compareSemverLike(a: unknown, b: unknown): number {
   const pa = parseVersionParts(a);

@@ -1,0 +1,5 @@
+{
+  "continue": true,
+  "decision": "block",
+  "reason": "SKS serious route cannot finalize without valid Completion Proof."
+}

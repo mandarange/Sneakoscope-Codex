@@ -147,6 +147,8 @@ function options(args: any[]) {
     rootCause: readOption(args, '--root-cause', null),
     findText: readOption(args, '--find', null),
     replaceText: readOption(args, '--replace', null),
-    apply: flag(args, '--apply')
+    apply: flag(args, '--apply'),
+    applyCodexPatch: flag(args, '--apply-codex-patch'),
+    fullVerify: flag(args, '--full-verify')
   };
 }

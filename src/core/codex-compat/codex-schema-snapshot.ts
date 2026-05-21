@@ -1,43 +1,13 @@
 import path from 'node:path';
 import { exists, packageRoot, readJson } from '../fsx.js';
 import { CODEX_HOOK_SCHEMA_BASELINE_TAG, CODEX_HOOK_SCHEMA_VERSION } from './codex-version-policy.js';
-
-export const CODEX_HOOK_EVENTS = [
-  'PreToolUse',
-  'PermissionRequest',
-  'PostToolUse',
-  'PreCompact',
-  'PostCompact',
-  'SessionStart',
-  'UserPromptSubmit',
-  'Stop'
-] as const;
-
-export type CodexHookEventName = typeof CODEX_HOOK_EVENTS[number];
-
-export const CODEX_HOOK_EVENT_TO_FILE_STEM: Record<CodexHookEventName, string> = {
-  PreToolUse: 'pre-tool-use',
-  PermissionRequest: 'permission-request',
-  PostToolUse: 'post-tool-use',
-  PreCompact: 'pre-compact',
-  PostCompact: 'post-compact',
-  SessionStart: 'session-start',
-  UserPromptSubmit: 'user-prompt-submit',
-  Stop: 'stop'
-};
-
-export function codexHookEventName(value: unknown): CodexHookEventName | null {
-  const normalized = String(value || '').replace(/[_\s]+/g, '-').toLowerCase();
-  if (normalized === 'pre-tool' || normalized === 'pre-tool-use' || normalized === 'pretooluse') return 'PreToolUse';
-  if (normalized === 'permission-request' || normalized === 'permissionrequest') return 'PermissionRequest';
-  if (normalized === 'post-tool' || normalized === 'post-tool-use' || normalized === 'posttooluse') return 'PostToolUse';
-  if (normalized === 'pre-compact' || normalized === 'precompact') return 'PreCompact';
-  if (normalized === 'post-compact' || normalized === 'postcompact') return 'PostCompact';
-  if (normalized === 'session-start' || normalized === 'sessionstart') return 'SessionStart';
-  if (normalized === 'user-prompt-submit' || normalized === 'userpromptsubmit') return 'UserPromptSubmit';
-  if (normalized === 'stop') return 'Stop';
-  return CODEX_HOOK_EVENTS.find((event) => event.toLowerCase() === normalized.toLowerCase()) ?? null;
-}
+export {
+  CODEX_HOOK_EVENTS,
+  CODEX_HOOK_EVENT_TO_FILE_STEM,
+  codexHookEventName,
+  type CodexHookEventName
+} from './codex-hook-events.js';
+import { CODEX_HOOK_EVENTS, CODEX_HOOK_EVENT_TO_FILE_STEM, type CodexHookEventName } from './codex-hook-events.js';
 
 export async function codexHookSchemaPath(event: CodexHookEventName, direction: 'input' | 'output' = 'output'): Promise<string> {
   const stem = CODEX_HOOK_EVENT_TO_FILE_STEM[event];
@@ -84,11 +54,25 @@ export async function codexSchemaSnapshotReport() {
     && typeof metadata.commit === 'string'
     && Boolean(metadata.commit)
     && typeof metadata.captured_at === 'string'
-    && Boolean(metadata.captured_at);
+    && Boolean(metadata.captured_at)
+    && CODEX_HOOK_EVENTS.length === 10;
+  const eventCountOk = CODEX_HOOK_EVENTS.length === 10;
+  const missingEvents = ['SubagentStart', 'SubagentStop'].filter((event) => !CODEX_HOOK_EVENTS.includes(event as CodexHookEventName));
   return {
     schema: 'sks.codex-hook-schema-snapshot-report.v1',
     ok,
     baseline: CODEX_HOOK_SCHEMA_BASELINE_TAG,
+    supported_events: CODEX_HOOK_EVENTS,
+    supported_events_count: CODEX_HOOK_EVENTS.length,
+    expected_schema_files_count: CODEX_HOOK_EVENTS.length * 2,
+    schema_files_count: files.length,
+    event_count_ok: eventCountOk,
+    missing_events: missingEvents,
+    release_blockers: [
+      ...(!eventCountOk ? ['hook_event_count_less_than_10'] : []),
+      ...(missingEvents.length ? ['missing_subagent_hook_events'] : []),
+      ...(files.length !== CODEX_HOOK_EVENTS.length * 2 ? ['schema_files_count_not_20'] : [])
+    ],
     metadata,
     files
   };

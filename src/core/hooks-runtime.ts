@@ -12,14 +12,19 @@ import { dollarCommand, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { appendMissionStatus } from './recallpulse.js';
 import { runSksUpdateCheck } from './update-check.js';
 import {
+  buildCompactContinue,
   buildPermissionRequestAllow,
   buildPermissionRequestDeny,
   buildPostToolUseBlock,
   buildPostToolUseContinue,
   buildPreToolUseContinue,
   buildPreToolUseDeny,
+  buildSessionStartContinue,
   buildStopBlock,
   buildStopContinue,
+  buildSubagentStartContinue,
+  buildSubagentStopBlock,
+  buildSubagentStopContinue,
   buildUserPromptSubmitBlock,
   buildUserPromptSubmitContinue
 } from './codex-compat/codex-hook-output-builders.js';
@@ -1179,6 +1184,19 @@ function normalizeHookResult(name: any, result: any = {}) {
     if (out.decision === 'block') return buildStopBlock(reason, { systemMessage });
     return buildStopContinue({ systemMessage });
   }
+  if (eventName === 'SessionStart') {
+    return buildSessionStartContinue({ additionalContext: out.additionalContext, systemMessage });
+  }
+  if (eventName === 'PreCompact' || eventName === 'PostCompact') {
+    return buildCompactContinue(eventName, { systemMessage });
+  }
+  if (eventName === 'SubagentStart') {
+    return buildSubagentStartContinue({ additionalContext: out.additionalContext, systemMessage });
+  }
+  if (eventName === 'SubagentStop') {
+    if (out.decision === 'block') return buildSubagentStopBlock(reason, { systemMessage });
+    return buildSubagentStopContinue({ systemMessage });
+  }
 
   return { continue: true, systemMessage };
 }
@@ -1191,6 +1209,8 @@ function codexHookEventName(name: any) {
     'pre-compact': 'PreCompact',
     'post-compact': 'PostCompact',
     'session-start': 'SessionStart',
+    'subagent-start': 'SubagentStart',
+    'subagent-stop': 'SubagentStop',
     'permission-request': 'PermissionRequest',
     'stop': 'Stop'
   } as Record<string, string>)[name] || name;

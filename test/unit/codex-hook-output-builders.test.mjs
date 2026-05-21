@@ -12,6 +12,9 @@ import {
   buildSessionStartContinue,
   buildStopBlock,
   buildStopContinue,
+  buildSubagentStartContinue,
+  buildSubagentStopBlock,
+  buildSubagentStopContinue,
   buildUserPromptSubmitBlock,
   buildUserPromptSubmitContinue
 } from '../../dist/core/codex-compat/codex-hook-output-builders.js';
@@ -32,7 +35,10 @@ const cases = [
   ['Stop', buildStopBlock('blocked')],
   ['PreCompact', buildCompactContinue('PreCompact')],
   ['PostCompact', buildCompactContinue('PostCompact')],
-  ['SessionStart', buildSessionStartContinue({ additionalContext: 'context' })]
+  ['SessionStart', buildSessionStartContinue({ additionalContext: 'context' })],
+  ['SubagentStart', buildSubagentStartContinue({ additionalContext: 'context' })],
+  ['SubagentStop', buildSubagentStopContinue()],
+  ['SubagentStop', buildSubagentStopBlock('blocked')]
 ];
 
 test('hook output builders emit schema-valid and semantic-valid canonical output', async () => {
@@ -49,6 +55,7 @@ test('hook output builders reject empty required reasons', () => {
   assert.throws(() => buildPostToolUseBlock(''));
   assert.throws(() => buildUserPromptSubmitBlock(''));
   assert.throws(() => buildStopBlock(''));
+  assert.throws(() => buildSubagentStopBlock(''));
   assert.throws(() => buildPreToolUseAllowRewrite(undefined));
 });
 

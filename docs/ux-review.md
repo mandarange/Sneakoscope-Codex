@@ -1,6 +1,6 @@
 # UX-Review Release Gate
 
-UX-Review is release-gated as an image evidence route. In 1.12.0, `run`, `callouts`, and `extract-issues` must reach the real gpt-image-2 adapter and real callout extractor. A passing fixture must generate annotated callout image evidence, extract an issue ledger, write `image-ux-callout-extraction-report.json`, produce a patch handoff/fix task plan, and record recapture/recheck status before visual claims can move beyond fixture trust.
+UX-Review is release-gated as an image evidence route. In 1.13.0, `run`, `callouts`, and `extract-issues` must reach the real gpt-image-2 adapter and real callout extractor. A passing fixture must generate annotated callout image evidence, extract an issue ledger, write `image-ux-callout-extraction-report.json`, produce a patch handoff/fix task plan, and record recapture/recheck status before visual claims can move beyond fixture trust.
 
 Required scripts:
 

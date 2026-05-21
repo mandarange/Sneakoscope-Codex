@@ -42,6 +42,9 @@ export async function detectCodexHookOutputWarnings(eventLike: unknown, output: 
   if (event === 'Stop' && output?.decision === 'block' && !String(output?.reason || '').trim()) {
     issues.push(makeCodexHookIssue('upstream_semantic_unsupported', 'stop_block_without_reason', 'Stop hook returned decision:block without a non-empty reason', { path: '$.reason', upstream_supported: false, sks_disallowed: true }));
   }
+  if (event === 'SubagentStop' && output?.decision === 'block' && !String(output?.reason || '').trim()) {
+    issues.push(makeCodexHookIssue('upstream_semantic_unsupported', 'subagentstop_block_without_reason', 'SubagentStop hook returned decision:block without a non-empty reason', { path: '$.reason', upstream_supported: false, sks_disallowed: true }));
+  }
   const actualEvent = output?.hookSpecificOutput?.hookEventName;
   if (actualEvent && actualEvent !== event) {
     issues.push(makeCodexHookIssue('upstream_semantic_unsupported', 'hook_event_mismatch', `Hook output event mismatch: expected ${event} but saw ${actualEvent}.`, { path: '$.hookSpecificOutput.hookEventName', upstream_supported: false, sks_disallowed: true }));
@@ -77,14 +80,18 @@ export async function codexHookWarningCheck(root?: string, opts: any = {}) {
     rows.push({ event: row.event, file: row.file, warnings: warning.warnings, issues: warning.issues, ok: warning.ok });
   }
   const config = await validateCodexHookConfigFiles(root);
+  const missingFixtureEvents = CODEX_HOOK_EVENTS.filter((event: CodexHookEventName) => rows.filter((row) => row.event === event).length === 0);
   const configIssues = config.issues.map((issue: string) => makeCodexHookIssue('policy_disallowed', 'hook_config_policy', `Codex hook config policy issue: ${issue}`, { upstream_supported: true, sks_disallowed: true }));
+  const fixtureIssues = missingFixtureEvents.map((event) => makeCodexHookIssue('policy_disallowed', 'missing_latest_event_fixture', `Codex hook fixture missing for latest event: ${event}`, { upstream_supported: true, sks_disallowed: true }));
   const warnings = [
     ...rows.flatMap((row) => row.warnings.map((warning: string) => `${path.relative(root, row.file)}:${warning}`)),
-    ...config.issues
+    ...config.issues,
+    ...missingFixtureEvents.map((event) => `missing_latest_event_fixture:${event}`)
   ];
   const allIssues = [
     ...rows.flatMap((row) => row.issues.map((issue) => ({ ...issue, path: issue.path || path.relative(root, row.file) }))),
-    ...configIssues
+    ...configIssues,
+    ...fixtureIssues
   ];
   const issuesByCategory = codexHookIssuesByCategory(allIssues);
   let wrongness = null;
@@ -92,8 +99,8 @@ export async function codexHookWarningCheck(root?: string, opts: any = {}) {
     const semanticMismatch = allIssues.some((issue) => issue.category === 'upstream_semantic_unsupported');
     const strictSubsetMismatch = allIssues.some((issue) => issue.category === 'sks_zero_warning_disallowed');
     wrongness = await recordHookPolicyMismatchWrongness(root, {
-      artifact: 'test/fixtures/codex-hooks/rust-v0.131.0',
-      expected: 'Codex rust-v0.131.0 schema-compatible hook output with warning count 0',
+      artifact: 'test/fixtures/codex-hooks/latest',
+      expected: 'Codex latest schema-compatible hook output with warning count 0 and all 10 events covered',
       actual: warnings.join(', '),
       detail: `Codex hook warning check failed; issues_by_category=${JSON.stringify(issuesByCategory)}`,
       route: '$Hooks',
@@ -103,7 +110,7 @@ export async function codexHookWarningCheck(root?: string, opts: any = {}) {
   return {
     schema: 'sks.codex-hook-warning-check.v2',
     ok: warnings.length === 0,
-    baseline: 'rust-v0.131.0',
+    baseline: 'latest',
     warnings_count: warnings.length,
     issues_by_category: issuesByCategory,
     issues: allIssues,

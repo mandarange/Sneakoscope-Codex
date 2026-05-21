@@ -17,11 +17,11 @@ const files = [
 
 const required = {
   'README.md': ['CHANGELOG.md', 'docs/release-readiness.md', 'gpt-image-2'],
-  'CHANGELOG.md': ['1.12.0 Real Execution Closure', 'probe_only', 'live_capture_success', 'process_only_ephemeral'],
+  'CHANGELOG.md': ['1.13.0', 'DFix Extreme Speed Kernel', 'hook trust doctor', 'warning-zero'],
   'docs/computer-use-evidence.md': ['sks.computer-use-live-evidence.v1', 'probe_only', 'live_capture_blocked', 'local-only'],
   'docs/codex-lb.md': ['durable_env_file', 'durable_keychain', 'durable_launchctl', 'shell_profile', 'process_only_ephemeral'],
-  'docs/codex-cli-compat.md': ['rust-v0.132.0', 'sks_zero_warning_disallowed', 'strict subset'],
-  'docs/hooks-pat.md': ['strict subset', 'zero-warning'],
+  'docs/codex-cli-compat.md': ['rust-v0.132.0', 'SubagentStart', 'sks_zero_warning_disallowed', 'strict subset'],
+  'docs/hooks-pat.md': ['SubagentStop', 'strict subset', 'zero-warning'],
   'docs/known-gaps.md': ['No P0', 'P1'],
   'docs/release-readiness.md': ['sks.release-readiness.v1', 'release:readiness', 'official-docs:compat']
 };

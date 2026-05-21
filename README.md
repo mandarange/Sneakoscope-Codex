@@ -10,13 +10,14 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.12.0** focuses on real execution closure: UX-Review, PPT Imagegen Review, DFix, and all-feature completion now require command-path wiring, extraction reports, proof/trust/wrongness evidence, mock/real separation, and release gates that block static-only or fake evidence paths.
+SKS **1.13.0** focuses on the DFix Extreme Speed Kernel and Codex hook trust warning-zero: DFix now records error signatures, path decisions, patch runner results, verification selection, rollback plans, wrongness/cache hints, and speed budgets, while hooks validate the latest 10-event Codex schema including `SubagentStart` and `SubagentStop`.
 
 ```bash
 sks features complete --json
 sks ux-review run --image <path> --generate-callouts --json
 sks ppt fixture --mock --json
 sks dfix fixture --json
+sks hooks trust-doctor --json
 ```
 
 Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release gate status lives in [docs/release-readiness.md](docs/release-readiness.md).

@@ -1,0 +1,27 @@
+{
+  "schema": "sks.codex-hook-schema-snapshot.v1",
+  "upstream": "openai/codex",
+  "upstream_url": "https://github.com/openai/codex",
+  "tag": "latest",
+  "commit": "791b69dd53703e928cbbda4ca41cfc795b7397b0",
+  "codex_version": "main-2026-05-21",
+  "captured_at": "2026-05-21T11:46:38Z",
+  "schema_files_count": 20,
+  "events": [
+    "PreToolUse",
+    "PermissionRequest",
+    "PostToolUse",
+    "PreCompact",
+    "PostCompact",
+    "SessionStart",
+    "UserPromptSubmit",
+    "SubagentStart",
+    "SubagentStop",
+    "Stop"
+  ],
+  "source_path": "codex-rs/hooks/schema/generated",
+  "notes": [
+    "Captured from upstream OpenAI Codex HEAD using vendored generated hook schema fixtures.",
+    "SubagentStart and SubagentStop are release-blocking events for SKS 1.13.0 hook compatibility."
+  ]
+}

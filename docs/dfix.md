@@ -1,6 +1,6 @@
 # DFix Evidence Loop
 
-DFix is the bounded direct-fix route for tiny copy, config, docs, labels, spacing, translation, and simple mechanical edits. In 1.12.0 it records runtime evidence instead of only static help text, including Codex patch handoff metadata, git diff capture, verification recommendations, and rollback readiness.
+DFix is the bounded direct-fix route for tiny copy, config, docs, labels, spacing, translation, and simple mechanical edits. In 1.13.0 it is the Extreme Speed Kernel: fast diagnosis, minimum root-cause scope, safe patch, minimum verification, proof/trust/wrongness, and rollback evidence stay in one direct-fix loop.
 
 The command surface is:
 
@@ -14,4 +14,13 @@ sks dfix status --json
 sks dfix fixture --json
 ```
 
-The fixture writes diagnosis, root cause, patch plan, patch result, verification suggestion, verification, gate, Completion Proof, and Trust Report evidence. It does not mutate source files. Real verification commands are suggested automatically, but execution requires explicit `--run` or `--verify-auto`.
+The 1.13.0 artifact graph includes `dfix-error-signature.json`, `dfix-cache-hit.json` or `dfix-cache-miss.json`, `dfix-path-decision.json`, `dfix-root-cause-ranking.json`, `dfix-patch-template.json`, `dfix-codex-handoff.json`, `dfix-patch-runner-result.json`, `dfix-verification-selection.json`, `dfix-verification-runner.json`, `dfix-performance-report.json`, the legacy DFix gate artifacts, Completion Proof, and Trust Report evidence.
+
+DFix paths:
+
+- L0 deterministic: exact find/replace, simple version drift, missing import/path typo, schema required field, and other high-confidence tiny patches.
+- L1 local static: stack path, changed files, package metadata, and targeted source/test inspection within a tight budget.
+- L2 bounded Codex patch handoff: dry-run by default, schema-bound, blocked for broad refactors and unsafe operations.
+- L3 human review: high-risk files, auth/payment/security, DB/migration, broad ambiguity, or low root-cause confidence.
+
+Patch application requires explicit `--apply`; Codex handoff application requires `--apply-codex-patch` or `--apply`. Verification runs only the selected command first and requires `--run` or `--verify-auto`. Full verification is reserved for `--full-verify` or release paths.

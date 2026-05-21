@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-05-21
+
+### Added
+- Add DFix Extreme Speed Kernel with L0 deterministic, L1 local static, L2 bounded Codex patch handoff, and L3 human-review paths.
+- Add DFix error signature cache, root-cause ranking, patch template selection, verification command selector, patch runner, verification runner, rollback plan, and speed budget artifacts.
+- Add DFix fast black-box fixture and performance release gates for the no-Codex direct-fix loop.
+- Add latest OpenAI Codex hook schema snapshot with 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
+- Add hook trust doctor/state/fix commands, current hash/trusted hash reporting, and warning-zero release gates for trust state, subagent events, unsupported handlers, and schema drift.
+- Add flagship artifact graph validation hooks for UX/PPT/DFix so release checks validate command, artifact, evidence, proof, trust, and wrongness linkage.
+
+### Fixed
+- Prevent DFix from claiming success on no-op patches, missing verification, broad/high-risk changes, or repeated blocker paths.
+- Prevent Codex hook release checks from passing when prompt/agent/async handlers, invalid matchers, dual hook representations, stale 8-event snapshots, or trust warnings are present.
+- Prevent all-feature completion from relying on source-string-only checks for flagship routes.
+
+### Changed
+- Treat DFix speed and correctness as co-equal release invariants.
+- Treat Codex hook warning-zero as a release blocker, not a cosmetic warning.
+- Bump package, runtime, release-readiness, and Rust crate metadata to 1.13.0.
+
 ## [1.12.0] - 2026-05-21
 
 1.12.0 Real Execution Closure tightens the previously advertised UX/PPT/DFix/all-feature paths so mock, manual, pending, and real evidence cannot be mistaken for each other. Computer Use evidence modes such as `probe_only` and `live_capture_success`, plus codex-lb persistence states such as `process_only_ephemeral`, remain explicit in release truthfulness reports.

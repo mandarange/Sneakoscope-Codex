@@ -8,5 +8,5 @@ test('dist CLI reports Codex 0.132 compatibility matrix', () => {
   const json = JSON.parse(result.stdout);
   assert.equal(json.required_baseline, 'rust-v0.132.0');
   assert.equal(json.codex_0_132.baseline, 'rust-v0.132.0');
-  assert.equal(json.hooks_schema.snapshot, 'rust-v0.131.0');
+  assert.equal(json.hooks_schema.snapshot, 'latest');
 });
