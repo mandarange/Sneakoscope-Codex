@@ -1,24 +1,29 @@
 import path from 'node:path';
 import { exists, readJson } from '../fsx.js';
 import { missionDir } from '../mission.js';
-import { SCOUT_COUNT, SCOUT_GATE_SCHEMA, SCOUT_ROLES } from './scout-schema.js';
+import { SCOUT_COUNT, SCOUT_GATE_SCHEMA, SCOUT_RESULT_SCHEMA, SCOUT_ROLES } from './scout-schema.js';
 
 export function evaluateScoutGate({ missionId = null, route = '$Team', plan = null, results = [], consensus = null, handoffWritten = false }: any = {}) {
-  const completed = results.filter((result: any) => result.status === 'done').length;
-  const readOnlyConfirmed = results.length === SCOUT_COUNT && results.every((result: any) => result.read_only === true);
+  const schemaBlockers = results.flatMap((result: any) => scoutGateResultBlockers(result).map((issue) => `${result?.scout_id || 'unknown'}:${issue}`));
+  const completed = results.filter((result: any) => result.status === 'done' && scoutGateResultBlockers(result).length === 0).length;
+  const readOnlyConfirmed = results.length === SCOUT_COUNT && results.every((result: any) => result.read_only === true && result.read_only_confirmed === true);
+  const schemaValidConfirmed = results.length === SCOUT_COUNT && schemaBlockers.length === 0;
   const implementationSlicesPresent = Array.isArray(consensus?.implementation_slices) && consensus.implementation_slices.length > 0;
   const verificationPlanPresent = Array.isArray(consensus?.required_tests) && consensus.required_tests.length > 0;
-  const riskReviewPresent = results.some((result: any) => result.scout_id === 'scout-3-safety-db' && result.status === 'done');
-  const visualVoxelReviewPresent = results.some((result: any) => result.scout_id === 'scout-4-visual-voxel' && result.status === 'done');
+  const riskReviewPresent = results.some((result: any) => result.scout_id === 'scout-3-safety-db' && result.status === 'done' && scoutGateResultBlockers(result).length === 0);
+  const visualVoxelReviewPresent = results.some((result: any) => result.scout_id === 'scout-4-visual-voxel' && result.status === 'done' && scoutGateResultBlockers(result).length === 0);
   const blockers = [
     ...(completed !== SCOUT_COUNT ? [`completed_scouts_${completed}_of_${SCOUT_COUNT}`] : []),
     ...(readOnlyConfirmed ? [] : ['read_only_not_confirmed']),
+    ...(schemaValidConfirmed ? [] : ['schema_valid_results_not_confirmed']),
     ...(consensus ? [] : ['scout-consensus.json_missing']),
+    ...(consensus?.status && consensus.status !== 'passed' ? [`consensus_${consensus.status}`] : []),
     ...(handoffWritten ? [] : ['scout-handoff.md_missing']),
     ...(implementationSlicesPresent ? [] : ['implementation_slices_missing']),
     ...(verificationPlanPresent ? [] : ['verification_plan_missing']),
     ...(riskReviewPresent ? [] : ['risk_review_missing']),
     ...(visualVoxelReviewPresent ? [] : ['visual_voxel_review_missing']),
+    ...schemaBlockers,
     ...results.flatMap((result: any) => result.blockers || []),
     ...(plan?.scout_count === SCOUT_COUNT ? [] : ['scout-team-plan_count_mismatch'])
   ];
@@ -30,6 +35,7 @@ export function evaluateScoutGate({ missionId = null, route = '$Team', plan = nu
     required_scouts: SCOUT_COUNT,
     completed_scouts: completed,
     read_only_confirmed: readOnlyConfirmed,
+    schema_valid_confirmed: schemaValidConfirmed,
     consensus_written: Boolean(consensus),
     handoff_written: Boolean(handoffWritten),
     implementation_slices_present: implementationSlicesPresent,
@@ -39,6 +45,16 @@ export function evaluateScoutGate({ missionId = null, route = '$Team', plan = nu
     blockers,
     unverified: results.flatMap((result: any) => result.unverified || [])
   };
+}
+
+function scoutGateResultBlockers(result: any = {}) {
+  const blockers: string[] = [];
+  if (result.schema !== SCOUT_RESULT_SCHEMA) blockers.push(`invalid_schema:${result.schema || 'missing'}`);
+  if (result.status !== 'done') blockers.push(`not_done:${result.status || 'missing'}`);
+  if (result.schema_validation?.ok === false) blockers.push('schema_validation_failed');
+  if (Array.isArray(result.parse_issues) && result.parse_issues.length) blockers.push('parse_issues_present');
+  if (result.read_only !== true || result.read_only_confirmed !== true) blockers.push('read_only_not_confirmed');
+  return blockers;
 }
 
 export async function readScoutResults(root: any, missionId: any) {

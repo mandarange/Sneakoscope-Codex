@@ -18,10 +18,18 @@ export async function readScoutProofEvidence(root: any, missionId: any) {
     schema: SCOUT_PROOF_EVIDENCE_SCHEMA,
     required: true,
     status: gate?.passed === true ? 'passed' : 'blocked',
+    engine_run_id: engineResult?.engine_run_id || performance?.engine_run_id || gate?.engine_run_id || null,
+    artifact_namespace: engineResult?.artifact_namespace || performance?.artifact_namespace || gate?.artifact_namespace || 'canonical',
+    artifacts_dir: engineResult?.artifacts_dir || performance?.artifacts_dir || null,
     engine: engineResult?.engine || performance?.engine || gate?.engine || null,
+    engine_mode: engineResult?.engine_mode || null,
     real_parallel: Boolean(engineResult?.real_parallel ?? performance?.real_parallel ?? gate?.real_parallel),
+    output_schema_used: engineResult?.output_schema_used === true,
+    output_schema_path: engineResult?.output_schema_path || null,
     scout_count: Number(consensus?.scout_count || gate?.required_scouts || SCOUT_COUNT),
     completed_scouts: Number(consensus?.completed_scouts || gate?.completed_scouts || 0),
+    schema_valid_results: Number(consensus?.schema_valid_results || 0),
+    schema_invalid_results: consensus?.schema_invalid_results || [],
     parallel_mode: consensus?.parallel_mode || null,
     gate: gate?.passed === true ? 'passed' : 'blocked',
     consensus: `.sneakoscope/missions/${missionId}/scout-consensus.json`,
@@ -29,12 +37,30 @@ export async function readScoutProofEvidence(root: any, missionId: any) {
     gate_file: `.sneakoscope/missions/${missionId}/scout-gate.json`,
     performance: performance ? `.sneakoscope/missions/${missionId}/scout-performance.json` : null,
     engine_result: engineResult ? `.sneakoscope/missions/${missionId}/scout-engine-result.json` : null,
+    scout_artifacts: artifactListFor(missionId, engineResult?.artifact_namespace || performance?.artifact_namespace || 'canonical'),
+    engine_jobs: engineResult?.jobs || [],
     read_only_confirmed: gate?.read_only_confirmed === true,
+    schema_valid_confirmed: gate?.schema_valid_confirmed === true,
     speedup_claim_allowed: Boolean(performance?.claim_allowed),
     status_detail: performance?.real_parallel ? 'verified' : 'verified_partial',
     blockers: gate?.blockers || [],
     unverified: gate?.unverified || []
   };
+}
+
+function artifactListFor(missionId: any, namespace: any = 'canonical') {
+  const prefix = namespace && namespace !== 'canonical'
+    ? `.sneakoscope/missions/${missionId}/${namespace}`
+    : `.sneakoscope/missions/${missionId}`;
+  return [
+    `${prefix}/scout-team-plan.json`,
+    `${prefix}/scout-consensus.json`,
+    `${prefix}/scout-handoff.md`,
+    `${prefix}/scout-gate.json`,
+    `${prefix}/scout-engine-result.json`,
+    `${prefix}/scout-readonly-guard.json`,
+    `${prefix}/scout-performance.json`
+  ];
 }
 
 export function disabledScoutProofEvidence(reason: any = 'explicitly disabled by sealed contract') {

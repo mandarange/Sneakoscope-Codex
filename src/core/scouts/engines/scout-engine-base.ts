@@ -1,11 +1,12 @@
 import path from 'node:path';
-import { nowIso } from '../../fsx.js';
-import { SCOUT_COUNT, SCOUT_ROLES } from '../scout-schema.js';
+import { nowIso, randomId, sha256 } from '../../fsx.js';
+import { SCOUT_COUNT, SCOUT_RESULT_SCHEMA, SCOUT_ROLES, type ScoutEngineRunId } from '../scout-schema.js';
 
-export const SCOUT_ENGINE_RESULT_SCHEMA = 'sks.scout-engine-result.v1';
+export const SCOUT_ENGINE_RESULT_SCHEMA = 'sks.scout-engine-result.v2';
 
 export const SCOUT_ENGINE_NAMES = Object.freeze([
   'codex-exec-parallel',
+  'fake-codex-exec',
   'tmux-lanes',
   'codex-app-subagents',
   'local-static',
@@ -30,11 +31,41 @@ export function isRealParallelScoutEngine(engine: any) {
   return REAL_PARALLEL_SCOUT_ENGINES.has(String(engine || ''));
 }
 
+export function createScoutEngineRunId({ engine = 'unknown', timestamp = nowIso(), seed = randomId(8) }: any = {}): ScoutEngineRunId {
+  const stamp = String(timestamp).replace(/[^0-9A-Za-z]+/g, '').slice(0, 17) || String(Date.now());
+  const cleanEngine = normalizeScoutEngineName(engine).replace(/[^a-z0-9-]+/g, '-');
+  const shortHash = sha256(`${timestamp}:${cleanEngine}:${seed}`).slice(0, 8);
+  return `scout-run-${stamp}-${cleanEngine}-${shortHash}` as ScoutEngineRunId;
+}
+
+export function scoutBenchmarkNamespace(engineRunId: any) {
+  return `scout-benchmarks/${String(engineRunId || 'unknown')}`;
+}
+
+export function scoutEngineMode(engine: any, { outputSchemaUsed = false }: any = {}) {
+  const normalized = normalizeScoutEngineName(engine);
+  if (normalized === 'codex-exec-parallel') return outputSchemaUsed ? 'codex_exec_resume_schema' : 'codex_exec';
+  if (normalized === 'tmux-lanes') return 'tmux_lane';
+  if (normalized === 'codex-app-subagents') return 'codex_app_subagent';
+  if (normalized === 'local-static') return 'local_static';
+  if (normalized === 'sequential-fallback') return 'sequential_fallback';
+  if (normalized === 'fake-codex-exec') return 'fake_codex_exec';
+  return 'unknown';
+}
+
 export function scoutEngineResult({
+  engineRunId = null,
   engine,
   realParallel = isRealParallelScoutEngine(engine),
   mock = false,
   parallelMode = realParallel ? 'parallel' : 'sequential',
+  artifactNamespace = null,
+  artifactsDir = null,
+  outputSchemaUsed = false,
+  outputSchemaPath = null,
+  codexVersion = null,
+  compatibilityPolicy = null,
+  readOnlyConfirmed = null,
   scoutCount = SCOUT_COUNT,
   completedScouts = 0,
   startedAt = nowIso(),
@@ -49,10 +80,19 @@ export function scoutEngineResult({
 }: any = {}) {
   return {
     schema: SCOUT_ENGINE_RESULT_SCHEMA,
+    engine_run_id: engineRunId,
     engine,
+    engine_mode: scoutEngineMode(engine, { outputSchemaUsed }),
     real_parallel: Boolean(realParallel),
     mock: Boolean(mock),
     parallel_mode: parallelMode,
+    artifact_namespace: artifactNamespace,
+    artifacts_dir: artifactsDir,
+    output_schema_used: Boolean(outputSchemaUsed),
+    output_schema_path: outputSchemaPath,
+    codex_version: codexVersion,
+    compatibility_policy: compatibilityPolicy,
+    read_only_confirmed: readOnlyConfirmed,
     scout_count: scoutCount,
     completed_scouts: completedScouts,
     started_at: startedAt,
@@ -75,7 +115,10 @@ export function buildScoutPrompt({ missionId, route, task, role, outputPath }: a
     'Read-only policy:',
     '- Do not modify source files, package files, migrations, generated app assets, git state, or database state.',
     '- Do not install packages or run DB writes.',
-    '- Write only the requested scout output path when the runtime supports output redirection.',
+    '- Do not create or edit the requested output path yourself; the Codex CLI captures your final response there.',
+    '- Use only bounded read-only inspection such as rg, sed, git status, npm script listing, and existing artifact reads.',
+    '- Do not start SKS routes, Team missions, wiki/wrongness writes, hooks, package installs, or long-running servers.',
+    '- Read-only mode is expected and is not a blocker by itself.',
     '',
     `Mission id: ${missionId}`,
     `Route: ${route}`,
@@ -83,9 +126,15 @@ export function buildScoutPrompt({ missionId, route, task, role, outputPath }: a
     `Output path: ${relOutput}`,
     '',
     'Required JSON-compatible content:',
-    '- schema: sks.scout-result.v1',
+    `- schema: ${SCOUT_RESULT_SCHEMA}`,
     '- scout_id, role, route, status, read_only, summary, findings, suggested_tasks',
-    '- blockers and unverified arrays when evidence is incomplete',
+    '- engine_run_id, scout_session_id, engine, engine_mode, output_schema_used, schema_validation, session_lifecycle',
+    '- Use unverified for normal evidence gaps, skipped risky checks, or lower-confidence follow-ups.',
+    '- Use blockers only for a real reason this scout intake cannot safely proceed.',
+    '- Do not list read-only mode, JSON schema output, or Codex output redirection as blockers.',
+    '- If the runtime supplies --output-schema, return only JSON matching the schema.',
+    '- Tool calls for read-only inspection are allowed before the final JSON response.',
+    '- If inspection is constrained, return status "partial" with unverified items; use status "blocked" only for a real intake blocker.',
     '',
     `Task: ${task || 'Inspect the current route context and identify risks, suggested tasks, and verification evidence.'}`
   ].join('\n');

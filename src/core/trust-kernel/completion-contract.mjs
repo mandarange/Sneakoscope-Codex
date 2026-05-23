@@ -14,11 +14,31 @@ export function validateCompletionContract(contract = {}, proof = {}, evidenceIn
   if (evidenceIndex?.status === 'blocked') issues.push(...(evidenceIndex.issues || []).map((issue) => `evidence:${issue}`));
   if (proof.status === 'verified' && mockOrStaticEvidence(evidenceIndex)) issues.push('mock_or_static_evidence_cannot_verify_real_status');
   if (runtimeRoute(proof.route || contract.route) && staticContractEvidence(evidenceIndex)) issues.push('static_contract_evidence_for_runtime_route');
+  const wrongness = proof.evidence?.wrongness || {};
+  const activeWrongness = Number(wrongness.active_count || 0);
+  const highWrongness = Number(wrongness.high_severity_active || 0);
+  const referenceOnlyPartial = imageUxReferenceOnlyPartial(proof);
+  if (highWrongness > 0 && !referenceOnlyPartial) issues.push('active_wrongness_high');
+  if (proof.status === 'verified' && activeWrongness > 0) issues.push('active_wrongness_requires_verified_partial');
+  if (claimLinksActiveWrongness(proof, wrongness)) issues.push('claim_linked_to_active_wrongness');
   return {
     ok: issues.length === 0,
     status: issues.length ? 'blocked' : (proof.status || contract.status || 'not_verified'),
     issues: [...new Set(issues)]
   };
+}
+
+function imageUxReferenceOnlyPartial(proof = {}) {
+  const imageUxReview = proof.evidence?.image_ux_review || {};
+  return proof.status === 'verified_partial'
+    && imageUxReview.reference_only === true
+    && imageUxReview.status === 'verified_partial';
+}
+
+function claimLinksActiveWrongness(proof = {}, wrongness = {}) {
+  const activeIds = new Set((wrongness.active_ids || []).map((item) => String(item)));
+  if (!activeIds.size) return false;
+  return (proof.claims || []).some((claim) => (claim.wrongness || []).some((id) => activeIds.has(String(id))));
 }
 
 function imageVoxelEvidenceOk(proof = {}, evidenceIndex = {}) {

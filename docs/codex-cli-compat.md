@@ -1,6 +1,6 @@
 # Codex CLI Compatibility
 
-SKS 1.14.0 targets the OpenAI Codex CLI `rust-v0.133.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
+SKS 1.14.1 targets the OpenAI Codex CLI `rust-v0.133.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
 
 Computer Use and codex-lb compatibility notes are bounded: Computer Use live evidence can be `probe_only`, `live_capture_success`, or a structured blocker depending on the local Codex App/macOS capability, and codex-lb can be durable or `process_only_ephemeral` depending on setup choices. Recovery commands are `sks computer-use smoke --json` for a probe-only status and `sks codex-lb setup --write-env-file --keychain --launchctl` for durable persistence. Local screenshots and secrets stay private/redacted by default.
 
@@ -23,7 +23,7 @@ Version detection checks `codex --version`, `codex exec resume --help`, `codex -
 
 ## Codex 0.133 Capabilities
 
-The 1.14.0 compatibility matrix records these capability ids:
+The 1.14.1 compatibility matrix records these capability ids:
 
 - `exec_resume_output_schema`: preferred structured output for Scout, UX-Review callout extraction, Completion Proof, and Wrongness artifacts.
 - `app_server_image_fidelity`: original-resolution image metadata for UX-Review source screenshots, generated callout images, and Image Voxel coordinate alignment.

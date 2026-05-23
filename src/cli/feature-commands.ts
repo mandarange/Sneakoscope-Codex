@@ -129,6 +129,38 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     if (!report.ok) process.exitCode = 1;
     return;
   }
+  if (action === 'repair') {
+    if (flag(args, '--trusted')) {
+      const parity = await writeCodexHookOfficialParityReport(root);
+      if (!parity.official_hash_available) {
+        const blocked = {
+          schema: 'sks.codex-hooks-repair.v1',
+          ok: false,
+          mode: 'trusted',
+          status: 'blocked',
+          blocker: 'official_hash_oracle_unavailable',
+          next_command: 'sks hooks repair --managed --json',
+          parity
+        };
+        if (flag(args, '--json')) return console.log(JSON.stringify(blocked, null, 2));
+        console.log('Hooks trusted repair blocked: official hash oracle unavailable. Run `sks hooks repair --managed --json`.');
+        process.exitCode = 1;
+        return;
+      }
+    }
+    const report = await installManagedCodexHooks(root);
+    const result = {
+      ...report,
+      schema: 'sks.codex-hooks-repair.v1',
+      mode: 'managed',
+      next_command: 'sks hooks trust-doctor --actual --json',
+      actions: ['requirements_toml_managed_install_default']
+    };
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log(`Hooks managed repair: ${report.ok ? 'ok' : 'blocked'}`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
   if (action === 'install') {
     const report = flag(args, '--managed')
       ? await installManagedCodexHooks(root)
@@ -138,7 +170,7 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     if (!report.ok) process.exitCode = 1;
     return;
   }
-  if (action === 'actual-parity' || action === 'official-parity') {
+  if (action === 'actual-parity' || action === 'official-parity' || (action === 'parity' && flag(args, '--official'))) {
     const report = await writeCodexHookOfficialParityReport(root);
     if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
     console.log(`Hooks official parity: ${report.ok ? 'ok' : 'blocked'} (${report.path})`);
@@ -183,7 +215,7 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     return;
   }
   if (action !== 'explain') {
-    console.error('Usage: sks hooks explain|status|doctor|trust-report|trust-state|trust-doctor|trust-fix|install|actual-parity|official-parity|replay <fixture.json>|codex-schema|codex-validate|warning-check|replay-codex-fixtures [--json]');
+    console.error('Usage: sks hooks explain|status|doctor|trust-report|trust-state|trust-doctor|trust-fix|install|repair|actual-parity|official-parity|parity --official|replay <fixture.json>|codex-schema|codex-validate|warning-check|replay-codex-fixtures [--json]');
     process.exitCode = 1;
     return;
   }

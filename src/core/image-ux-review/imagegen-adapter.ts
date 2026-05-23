@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { ensureDir, exists, nowIso, readJson, runProcess, which, writeJsonAtomic } from '../fsx.js';
+import { ensureDir, exists, nowIso, readJson, writeJsonAtomic } from '../fsx.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 import { detectImagegenCapability } from '../imagegen/imagegen-capability.js';
 import { validateGptImage2Request } from '../imagegen/gpt-image-2-request-validator.js';
@@ -52,50 +52,39 @@ export function buildCalloutPrompt(sourceScreenId: string, context: any = {}) {
 }
 
 export async function detectCodexAppImagegenCapability(opts: any = {}) {
-  const codexBin = opts.codexBin || await which('codex').catch(() => null);
-  if (!codexBin) {
-    return {
-      schema: 'sks.codex-app-imagegen-capability.v1',
-      ok: true,
-      available: false,
-      status: 'integration_optional',
-      detector: 'codex_binary_missing',
-      raw: null
-    };
-  }
-  const run = await runProcess(codexBin, ['features', 'list', '--json'], {
-    timeoutMs: opts.timeoutMs || 5000,
-    maxOutputBytes: 64 * 1024
-  }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err) }));
-  let parsed: any = null;
-  try { parsed = JSON.parse(run.stdout || '{}'); } catch {}
-  const haystack = JSON.stringify(parsed || run.stdout || run.stderr || '');
-  const available = /image[_-]?generation|imagegen|\$imagegen/i.test(haystack)
-    && !/false|disabled|missing/i.test(String(parsed?.image_generation ?? parsed?.features?.image_generation ?? ''));
+  const capability = await detectImagegenCapability(opts).catch(() => null);
+  const codexApp = capability?.codex_app || {
+    available: false,
+    detector: 'capability_detection_failed',
+    raw: null
+  };
+  const available = codexApp.available === true;
   return {
     schema: 'sks.codex-app-imagegen-capability.v1',
     ok: true,
     available,
     status: available ? 'available' : 'integration_optional',
-    detector: 'codex_features_list',
-    raw: parsed || String(run.stdout || run.stderr || '').slice(0, 2000)
+    detector: codexApp.detector || 'codex_features_list',
+    raw: codexApp.raw || null
   };
 }
 
 export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImagegenAdapter {
+  const available = opts.available === true || process.env.SKS_CODEX_APP_IMAGEGEN_AVAILABLE === '1';
   return {
     surface: 'codex_app_imagegen',
     model: 'gpt-image-2',
-    available: opts.available === true || process.env.SKS_CODEX_APP_IMAGEGEN_AVAILABLE === '1',
+    available,
     async generateCalloutReview(input: ImageUxReviewImagegenRequest) {
       const suppliedOutput = opts.outputImagePath || process.env.SKS_CODEX_APP_IMAGEGEN_OUTPUT || null;
       if (!input?.output_dir && !suppliedOutput) {
+        const blocker = available ? 'imagegen_request_output_dir_missing' : 'imagegen_capability_missing';
         return {
           ok: false,
           status: 'blocked',
           generated_image_path: null,
           output_id: null,
-          blocker: 'imagegen_capability_missing',
+          blocker,
           provider: 'codex_app_imagegen',
           latency_ms: null
         };
@@ -180,7 +169,10 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
         model: 'gpt-image-2',
         ok: false,
         status: 'blocked',
-        blocker: 'imagegen_capability_missing',
+        blocker: available ? 'codex_app_imagegen_output_missing' : 'imagegen_capability_missing',
+        setup_guidance: available
+          ? 'Codex App image generation is available, but SKS did not receive an attached generated annotated review image. Re-run with $imagegen/gpt-image-2 and provide SKS_CODEX_APP_IMAGEGEN_OUTPUT or attach the generated image path.'
+          : 'Codex App image generation was not detected. Run in Codex App with $imagegen/gpt-image-2 or set OPENAI_API_KEY for the optional Images API fallback.',
         local_only: true
       });
       return {
@@ -188,7 +180,7 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
         status: 'blocked',
         generated_image_path: null,
         output_id: null,
-        blocker: 'imagegen_capability_missing',
+        blocker: available ? 'codex_app_imagegen_output_missing' : 'imagegen_capability_missing',
         provider: 'codex_app_imagegen',
         request_artifact: requestArtifact,
         response_artifact: responseArtifact,
@@ -406,11 +398,17 @@ export async function generateGptImage2CalloutReview(input: ImageUxReviewImagege
   if (opts.fake === true || process.env.SKS_TEST_FAKE_IMAGEGEN === '1') {
     return createFakeImagegenAdapter(opts.fakeAdapter || {}).generateCalloutReview(input);
   }
-  await detectImagegenCapability(opts.capability || {}).catch(() => null);
-  const codexAdapter = createCodexAppImagegenAdapter(opts.codexApp || {});
+  const capability = await detectImagegenCapability(opts.capability || {}).catch(() => null);
+  const codexAdapter = createCodexAppImagegenAdapter({
+    ...(opts.codexApp || {}),
+    available: opts.codexApp?.available === true || capability?.codex_app?.available === true
+  });
   if (codexAdapter.available) {
     const result = await codexAdapter.generateCalloutReview(input);
     if (result.ok) return result;
+    const openaiAdapter = createOpenAIImagesApiAdapter(opts.openai || {});
+    if (!openaiAdapter.available) return result;
+    return openaiAdapter.generateCalloutReview(input);
   }
   return createOpenAIImagesApiAdapter(opts.openai || {}).generateCalloutReview(input);
 }

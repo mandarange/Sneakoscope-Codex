@@ -10,7 +10,7 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.14.0** focuses on Codex hook trust parity and real imagegen route hardening: hooks now prefer managed installs when official hashes are unavailable, `trust-doctor --actual` reports real config state, and UX/PPT image routes validate gpt-image-2 requests before generation while fake blackbox checks stay explicitly mock-like.
+SKS **1.14.1** is an extreme stabilization release for hook trust, real imagegen smoke checks, PPT E2E review evidence, Codex 0.133 compatibility, and Scout multi-session intake. Scout runs now carry `engine_run_id`, `scout_session_id`, output-schema metadata, isolated benchmark artifacts, read-only guard v2 evidence, and speedup-claim caps for mock/static paths.
 
 ```bash
 sks features complete --json

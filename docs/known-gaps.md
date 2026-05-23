@@ -6,9 +6,9 @@ No P0 blocker is intentionally left open for Codex CLI `rust-v0.133.0` compatibi
 
 Bounded 1.0.8 claims:
 
-- The Codex hook schema snapshot is `latest` for SKS 1.14.0; the runtime matrix targets `rust-v0.133.0` capability detection and preserves the zero-warning strict subset.
+- The Codex hook schema snapshot is `latest` for SKS 1.14.1; the runtime matrix targets `rust-v0.133.0` capability detection and preserves the zero-warning strict subset.
 - Codex 0.133 plugin discovery and marketplace config are P1 warning-only unless a route explicitly depends on those surfaces.
-- Real UX-Review verification requires a real generated gpt-image-2 annotated callout image and post-fix recapture/re-review evidence for changed screens. Fixture and mock loops are `verified_partial`.
+- Real UX-Review verification requires a real generated gpt-image-2 annotated callout image and post-fix recapture/re-review evidence for changed screens. Fixture, mock, and unavailable/unlinked imagegen loops are `verified_partial`; unavailable/unlinked imagegen may close as `verified_partial/reference-only` only with source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence.
 - If Codex App imagegen or Computer Use is unavailable, SKS records a structured blocker such as `imagegen_capability_missing` or `live_capture_blocked`; it does not fabricate screenshots, generated callouts, or fixed-screen evidence.
 - Codex Python SDK auth and richer TurnResult integration are P1 warning-only review items; no live SDK accuracy or performance claim is made.
 

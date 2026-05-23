@@ -7,12 +7,25 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.14.0';
+const RELEASE_VERSION = '1.14.1';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 
 const checks = {
   hook_strict_subset: scriptContains('release:check', 'hooks:strict-subset-check'),
+  hooks_official_hash_oracle: scriptContains('release:check', 'hooks:official-hash-oracle'),
+  hooks_actual_parity_v2: scriptContains('release:check', 'hooks:actual-parity-v2'),
+  hooks_runtime_replay_warning_zero_v2: scriptContains('release:check', 'hooks:runtime-replay-warning-zero-v2'),
+  ppt_full_e2e_blackbox: scriptContains('release:check', 'ppt:full-e2e-blackbox'),
+  ppt_full_e2e_artifact_graph: scriptContains('release:check', 'ppt:full-e2e-artifact-graph'),
+  codex_0133_official_compat: scriptContains('release:check', 'codex:0.133-official-compat'),
+  flagship_proof_graph_v2: scriptContains('release:check', 'flagship:proof-graph-v2'),
+  scouts_multisession_artifact_graph: scriptContains('release:check', 'scouts:multisession-artifact-graph'),
+  scouts_benchmark_isolation: scriptContains('release:check', 'scouts:benchmark-isolation'),
+  scouts_output_schema_wiring: scriptContains('release:check', 'scouts:output-schema-wiring'),
+  scouts_session_lifecycle: scriptContains('release:check', 'scouts:session-lifecycle'),
+  scouts_readonly_guard_v2: scriptContains('release:check', 'scouts:readonly-guard-v2'),
+  scouts_no_speedup_overclaim: scriptContains('release:check', 'scouts:no-speedup-overclaim'),
   codex_lb_persistence_truth: scriptContains('release:check', 'codex-lb:persistence-truth'),
   computer_use_live_evidence: scriptContains('release:check', 'computer-use:live-evidence'),
   docs_truthfulness: scriptContains('release:check', 'docs:truthfulness'),
@@ -77,9 +90,21 @@ const checks = {
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
 const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
 const releaseMetadata = runNodeScript('scripts/release-metadata-1-14-check.mjs');
+const runtimeReports = {
+  ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
+  flagship_proof_graph_v2: readJson('.sneakoscope/reports/flagship-proof-graph-v2.json', null)
+};
+const runtimeChecks = {
+  ppt_full_e2e_blackbox: runtimeReports.ppt_full_e2e_blackbox?.ok === true
+    && ['verified', 'verified_partial'].includes(String(runtimeReports.ppt_full_e2e_blackbox?.proof_status || ''))
+    && runtimeReports.ppt_full_e2e_blackbox?.trust_ok === true
+    && !['blocked', 'failed', 'not_verified'].includes(String(runtimeReports.ppt_full_e2e_blackbox?.trust_status || '')),
+  flagship_proof_graph_v2: runtimeReports.flagship_proof_graph_v2?.ok === true
+};
 const remainingP0 = [];
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
 for (const [name, ok] of Object.entries(checks)) if (!ok) remainingP0.push(`${name}_gate_missing`);
+for (const [name, ok] of Object.entries(runtimeChecks)) if (!ok) remainingP0.push(`${name}_report_not_ok`);
 if (docs.status !== 0) remainingP0.push('docs_truthfulness_failed');
 if (officialDocs.status !== 0) remainingP0.push('official_docs_compat_failed');
 if (releaseMetadata.status !== 0) remainingP0.push('release_metadata_failed');
@@ -158,16 +183,40 @@ const report = {
     }
   },
   hook_trust_warning_zero: {
-    status: checks.hooks_latest_schema_check && checks.hooks_trust_state_check && checks.hooks_trust_warning_zero && checks.hooks_subagent_events_check && checks.hooks_no_unsupported_handlers && checks.hooks_actual_parity_check && checks.hooks_official_hash_parity && checks.hooks_managed_install_fixture && checks.hooks_runtime_replay_warning_zero ? 'present' : 'missing',
+    status: checks.hooks_latest_schema_check && checks.hooks_trust_state_check && checks.hooks_trust_warning_zero && checks.hooks_subagent_events_check && checks.hooks_no_unsupported_handlers && checks.hooks_actual_parity_check && checks.hooks_actual_parity_v2 && checks.hooks_official_hash_parity && checks.hooks_official_hash_oracle && checks.hooks_managed_install_fixture && checks.hooks_runtime_replay_warning_zero && checks.hooks_runtime_replay_warning_zero_v2 ? 'present' : 'missing',
     latest_schema: checks.hooks_latest_schema_check,
     trust_state: checks.hooks_trust_state_check,
     warning_zero: checks.hooks_trust_warning_zero,
     subagent_events: checks.hooks_subagent_events_check,
     no_unsupported_handlers: checks.hooks_no_unsupported_handlers,
     actual_parity_check: checks.hooks_actual_parity_check,
+    actual_parity_v2: checks.hooks_actual_parity_v2,
     official_hash_parity: checks.hooks_official_hash_parity,
+    official_hash_oracle: checks.hooks_official_hash_oracle,
     managed_install_fixture: checks.hooks_managed_install_fixture,
-    runtime_replay_warning_zero: checks.hooks_runtime_replay_warning_zero
+    runtime_replay_warning_zero: checks.hooks_runtime_replay_warning_zero,
+    runtime_replay_warning_zero_v2: checks.hooks_runtime_replay_warning_zero_v2
+  },
+  extreme_stabilization_1_14_1: {
+    status: checks.hooks_official_hash_oracle && checks.hooks_actual_parity_v2 && checks.hooks_runtime_replay_warning_zero_v2 && checks.ppt_full_e2e_blackbox && runtimeChecks.ppt_full_e2e_blackbox && checks.ppt_full_e2e_artifact_graph && checks.codex_0133_official_compat && checks.flagship_proof_graph_v2 && runtimeChecks.flagship_proof_graph_v2 ? 'present' : 'missing',
+    hooks_official_hash_oracle: checks.hooks_official_hash_oracle,
+    hooks_actual_parity_v2: checks.hooks_actual_parity_v2,
+    hooks_runtime_replay_warning_zero_v2: checks.hooks_runtime_replay_warning_zero_v2,
+    ppt_full_e2e_blackbox: checks.ppt_full_e2e_blackbox,
+    ppt_full_e2e_blackbox_report_ok: runtimeChecks.ppt_full_e2e_blackbox,
+    ppt_full_e2e_artifact_graph: checks.ppt_full_e2e_artifact_graph,
+    codex_0_133_official_compat: checks.codex_0133_official_compat,
+    flagship_proof_graph_v2: checks.flagship_proof_graph_v2,
+    flagship_proof_graph_v2_report_ok: runtimeChecks.flagship_proof_graph_v2
+  },
+  scout_multisession_addendum: {
+    status: checks.scouts_multisession_artifact_graph && checks.scouts_benchmark_isolation && checks.scouts_output_schema_wiring && checks.scouts_session_lifecycle && checks.scouts_readonly_guard_v2 && checks.scouts_no_speedup_overclaim ? 'present' : 'missing',
+    artifact_graph: checks.scouts_multisession_artifact_graph,
+    benchmark_isolation: checks.scouts_benchmark_isolation,
+    output_schema_wiring: checks.scouts_output_schema_wiring,
+    session_lifecycle: checks.scouts_session_lifecycle,
+    readonly_guard_v2: checks.scouts_readonly_guard_v2,
+    no_speedup_overclaim: checks.scouts_no_speedup_overclaim
   },
   all_feature_completion: {
     status: checks.all_features_completion && checks.all_features_deep_completion && checks.evidence_flagship_coverage ? 'present' : 'missing',

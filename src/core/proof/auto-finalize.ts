@@ -24,7 +24,8 @@ export async function maybeFinalizeRoute(root: any, {
   testEvidence = null,
   blockers = [],
   unverified = [],
-  scouts = undefined
+  scouts = undefined,
+  allowActiveWrongnessPartial = false
 }: any = {}): Promise<JsonData> {
   if (!missionId || !route) {
     return { ok: false, skipped: true, reason: 'mission_id_or_route_missing' };
@@ -45,7 +46,7 @@ export async function maybeFinalizeRoute(root: any, {
       mode: mock ? 'auto-finalize-mock' : 'auto-finalize'
     })
     : null;
-  const scoutArtifacts = scoutResult ? (scoutResult.required === false ? [] : scoutArtifactList()) : [];
+  const scoutArtifacts = scoutResult ? (scoutResult.required === false ? [] : await existingScoutArtifacts(root, missionId)) : [];
   const scoutBlockers = scoutResult?.required && scoutResult.gate?.passed !== true && scoutResult.status !== 'already_passed'
     ? ['scout_gate_not_passed']
     : [];
@@ -76,7 +77,18 @@ export async function maybeFinalizeRoute(root: any, {
     mock,
     fixClaim,
     requireRelation,
-    visualClaim: visual
+    visualClaim: visual,
+    scouts,
+    allowActiveWrongnessPartial
   });
   return { ...proof, auto_finalized: true, gate_passed: passed, status_hint: finalStatus };
+}
+
+async function existingScoutArtifacts(root: any, missionId: any) {
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId);
+  const artifacts: any[] = [];
+  for (const artifact of scoutArtifactList()) {
+    if (await exists(path.join(dir, artifact))) artifacts.push(artifact);
+  }
+  return artifacts;
 }

@@ -3,6 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+const FEATURE_FIXTURE_COMMAND_TIMEOUT_MS = 60_000;
+
 export function runFeatureFixture(feature: any, {
   root = process.cwd(),
   tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-feature-fixture-')),
@@ -43,7 +45,7 @@ export function runFeatureFixture(feature: any, {
     failures: [
       ...(!fixture.command && fixture.status === 'pass' ? [`${feature.id}:fixture_command_missing`] : []),
       ...(validateArtifacts && fixture.kind === 'execute_and_validate_artifacts' && expected.length && !execution ? [`${feature.id}:command_not_executed_for_artifact_validation`] : []),
-      ...(execution && !execution.ok ? [`${feature.id}:command_exit_${execution.status}`] : []),
+      ...(execution && !execution.ok ? [fixtureExecutionFailure(feature.id, execution)] : []),
       ...(noPlaintextSecrets ? [] : [`${feature.id}:plaintext_secret_detected`]),
       ...artifactFailures
     ]
@@ -87,20 +89,29 @@ function spawnSks(sourceRoot: any, projectRoot: any, args: any = []) {
   const result = spawnSync(process.execPath, [entrypoint, ...args], {
     cwd: projectRoot,
     encoding: 'utf8',
-    timeout: 30_000,
+    timeout: FEATURE_FIXTURE_COMMAND_TIMEOUT_MS,
     env: { ...process.env, CI: 'true', SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
   });
   const parsed = parseJsonOutput(result.stdout || '');
+  const timedOut = (result.error as any)?.code === 'ETIMEDOUT';
   return {
     args,
     status: result.status,
     signal: result.signal || null,
     ok: result.status === 0,
+    timed_out: timedOut,
+    timeout_ms: FEATURE_FIXTURE_COMMAND_TIMEOUT_MS,
+    error_code: (result.error as any)?.code || null,
     mission_id: parsed?.mission_id || parsed?.id || parsed?.proof?.mission_id || parsed?.completion_proof?.mission_id || null,
     stdout_bytes: Buffer.byteLength(result.stdout || ''),
     stderr_bytes: Buffer.byteLength(result.stderr || ''),
     stderr_tail: String(result.stderr || '').slice(-600)
   };
+}
+
+function fixtureExecutionFailure(featureId: any, execution: any) {
+  if (execution?.timed_out) return `${featureId}:command_timeout_${execution.timeout_ms || 'unknown'}`;
+  return `${featureId}:command_exit_${execution?.status}`;
 }
 
 function resolveSksEntrypoint(sourceRoot: any) {

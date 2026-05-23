@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { nowIso, readText } from '../fsx.js';
-import { SCOUT_RESULT_SCHEMA } from './scout-schema.js';
+import { SCOUT_RESULT_COMPATIBLE_SCHEMAS, SCOUT_RESULT_SCHEMA } from './scout-schema.js';
 import { scoutRouteLabel } from './scout-plan.js';
 import { codexSchemaPath, runCodexExecResumeWithOutputSchema } from '../codex-exec-output-schema.js';
 
@@ -14,11 +14,19 @@ export async function parseScoutOutputFile({
   engine = null,
   realParallel = false,
   generatedAt = nowIso(),
-  outputSchemaSessionId = null
+  outputSchemaSessionId = null,
+  engineRunId = null,
+  scoutSessionId = null,
+  artifactNamespace = 'canonical',
+  outputSchemaUsed = false,
+  outputSchemaPath = null,
+  engineMode = null
 }: any = {}) {
   const outputText = outputFile ? await readText(outputFile, '') : '';
   const stdoutText = stdoutFile ? await readText(stdoutFile, '') : '';
-  const source = buildSource({ outputFile, stdoutFile, stderrFile, engine, realParallel });
+  const stderrText = stderrFile ? await readText(stderrFile, '') : '';
+  const source = buildSource({ outputFile, stdoutFile, stderrFile, engine, realParallel, engineRunId, scoutSessionId, artifactNamespace, outputSchemaUsed, outputSchemaPath, engineMode });
+  const secretIssues = secretLeakIssues(`${outputText}\n${stdoutText}\n${stderrText}`);
   if (outputSchemaSessionId && outputFile) {
     const schemaPath = await codexSchemaPath('scout-result');
     const structured = await runCodexExecResumeWithOutputSchema({
@@ -52,7 +60,7 @@ export async function parseScoutOutputFile({
       reason: parsed.error || 'no_parseable_json_object'
     });
   }
-  return normalizeParsedScoutResult(parsed.value, {
+  const result = normalizeParsedScoutResult(parsed.value, {
     missionId,
     route,
     role,
@@ -61,6 +69,13 @@ export async function parseScoutOutputFile({
     source,
     generatedAt
   });
+  if (secretIssues.length) {
+    result.status = 'blocked';
+    result.schema_validation = { ...(result.schema_validation || {}), ok: false, issues: [...(result.schema_validation?.issues || []), ...secretIssues] };
+    result.blockers = [...new Set([...(result.blockers || []), ...secretIssues])];
+    result.parse_issues = [...new Set([...(result.parse_issues || []), ...secretIssues])];
+  }
+  return result;
 }
 
 export function parseScoutOutput(text: any, ctx: any = {}) {
@@ -114,11 +129,17 @@ export function normalizeParsedScoutResult(raw: any = {}, {
   engine = null,
   realParallel = false,
   source = {},
+  engineRunId = source.engine_run_id || null,
+  scoutSessionId = source.scout_session_id || null,
+  artifactNamespace = source.artifact_namespace || 'canonical',
+  outputSchemaUsed = source.output_schema_used === true,
+  outputSchemaPath = source.output_schema_path || null,
   generatedAt = nowIso()
 }: any = {}) {
   const blockers = arrayOfStrings(raw.blockers);
   const validationBlockers: any[] = [];
-  if (raw.schema !== SCOUT_RESULT_SCHEMA) validationBlockers.push(`invalid_schema:${raw.schema || 'missing'}`);
+  const schemaCompatible = SCOUT_RESULT_COMPATIBLE_SCHEMAS.includes(raw.schema);
+  if (!schemaCompatible) validationBlockers.push(`invalid_schema:${raw.schema || 'missing'}`);
   if (raw.scout_id && raw.scout_id !== role.id) validationBlockers.push(`scout_id_mismatch:${raw.scout_id}`);
   if (raw.read_only !== true) validationBlockers.push('read_only_not_confirmed');
   if (!String(raw.summary || '').trim()) validationBlockers.push('summary_missing');
@@ -140,9 +161,28 @@ export function normalizeParsedScoutResult(raw: any = {}, {
     context7_libraries: arrayOfStrings(raw.context7_libraries),
     required_image_voxel_evidence: arrayOfStrings(raw.required_image_voxel_evidence),
     engine: raw.engine || engine,
+    engine_run_id: raw.engine_run_id || engineRunId,
+    scout_session_id: raw.scout_session_id || scoutSessionId || `${engineRunId || raw.mission_id || missionId || 'scout-run'}-${role.id}`,
+    engine_mode: raw.engine_mode || source.engine_mode || null,
     real_parallel: Boolean(raw.real_parallel ?? realParallel),
+    output_schema_used: Boolean(raw.output_schema_used ?? outputSchemaUsed),
+    output_schema_path: raw.output_schema_path || outputSchemaPath,
+    schema_validation: raw.schema_validation || { ok: true, schema: SCOUT_RESULT_SCHEMA, migrated_from_schema: raw.schema === SCOUT_RESULT_SCHEMA ? null : raw.schema || null, issues: [] },
+    session_lifecycle: raw.session_lifecycle || {
+      status: status === 'blocked' ? 'blocked' : 'completed',
+      started_at: source.started_at || generatedAt,
+      completed_at: source.completed_at || generatedAt,
+      timeout: source.timed_out === true,
+      session_id: raw.session_id || scoutSessionId || null,
+      resume_id: raw.resume_id || source.resume_id || null,
+      lane_id: source.lane_id || null
+    },
     source: 'real_engine_output',
     source_file: source.output_file || null,
+    stdout_file: source.stdout_file || null,
+    stderr_file: source.stderr_file || null,
+    read_only_confirmed: raw.read_only_confirmed ?? raw.read_only === true,
+    artifact_namespace: raw.artifact_namespace || artifactNamespace,
     parsed: true,
     parse_issues: [],
     source_policy: 'parsed_scout_output',
@@ -150,11 +190,13 @@ export function normalizeParsedScoutResult(raw: any = {}, {
     blockers: [...blockers, ...validationBlockers],
     unverified: arrayOfStrings(raw.unverified)
   };
+  if (result.status === 'blocked') result.blocked_reason = result.blockers?.[0] || 'blocked';
   const validation = validateScoutResult(result);
   if (!validation.ok) {
     result.status = 'blocked';
     result.blockers = [...new Set([...(result.blockers || []), ...validation.blockers])] as any[];
     result.parse_issues = validation.blockers;
+    result.blocked_reason = result.blockers?.[0] || 'schema_validation_failed';
   }
   return result;
 }
@@ -190,18 +232,38 @@ function blockedScoutResult({ missionId, route, role, engine, realParallel, sour
     read_only: true,
     write_policy: 'read_only',
     generated_at: generatedAt,
-    summary: 'Scout output could not be parsed into sks.scout-result.v1.',
+    summary: `Scout output could not be parsed into ${SCOUT_RESULT_SCHEMA}.`,
     findings: [],
     suggested_tasks: [],
     context7_required: false,
     context7_libraries: [],
     required_image_voxel_evidence: [],
     engine,
+    engine_run_id: source.engine_run_id || null,
+    scout_session_id: source.scout_session_id || `${source.engine_run_id || missionId || 'scout-run'}-${role.id}`,
+    engine_mode: source.engine_mode || null,
     real_parallel: Boolean(realParallel),
+    output_schema_used: source.output_schema_used === true,
+    output_schema_path: source.output_schema_path || null,
+    schema_validation: { ok: false, schema: SCOUT_RESULT_SCHEMA, issues: [`scout_output_parse_failed:${reason}`] },
+    session_lifecycle: {
+      status: 'blocked',
+      started_at: source.started_at || generatedAt,
+      completed_at: source.completed_at || generatedAt,
+      timeout: source.timed_out === true,
+      session_id: source.scout_session_id || null,
+      resume_id: source.resume_id || null,
+      lane_id: source.lane_id || null
+    },
     source: 'real_engine_output',
     source_file: source.output_file || null,
+    stdout_file: source.stdout_file || null,
+    stderr_file: source.stderr_file || null,
+    read_only_confirmed: true,
+    artifact_namespace: source.artifact_namespace || 'canonical',
     parsed: false,
     parse_issues: [`scout_output_parse_failed:${reason}`],
+    blocked_reason: `scout_output_parse_failed:${reason}`,
     source_policy: 'parse_failed_blocked',
     source_details: source,
     blockers: [`scout_output_parse_failed:${reason}`],
@@ -209,11 +271,26 @@ function blockedScoutResult({ missionId, route, role, engine, realParallel, sour
   };
 }
 
-function buildSource({ outputFile, stdoutFile, stderrFile, engine, realParallel }: any) {
+function secretLeakIssues(text: any) {
+  const raw = String(text || '');
+  const issues: string[] = [];
+  if (/sk-[A-Za-z0-9_-]{16,}/.test(raw)) issues.push('secret_leak:openai_key');
+  if (/github_pat_[A-Za-z0-9_]+/.test(raw)) issues.push('secret_leak:github_pat');
+  if (/-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----/.test(raw)) issues.push('secret_leak:private_key');
+  return issues;
+}
+
+function buildSource({ outputFile, stdoutFile, stderrFile, engine, realParallel, engineRunId = null, scoutSessionId = null, artifactNamespace = 'canonical', outputSchemaUsed = false, outputSchemaPath = null, engineMode = null }: any) {
   return {
     type: 'engine_output',
     engine: engine || null,
+    engine_run_id: engineRunId,
+    scout_session_id: scoutSessionId,
+    artifact_namespace: artifactNamespace,
+    engine_mode: engineMode,
     real_parallel: Boolean(realParallel),
+    output_schema_used: Boolean(outputSchemaUsed),
+    output_schema_path: outputSchemaPath,
     output_file: normalizePath(outputFile),
     stdout_file: normalizePath(stdoutFile),
     stderr_file: normalizePath(stderrFile)

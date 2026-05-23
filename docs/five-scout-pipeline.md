@@ -8,8 +8,9 @@ SKS serious routes now start with a read-only five-scout intake before implement
 sks scouts plan latest --json
 sks scouts run latest --engine auto --json
 sks scouts run latest --engine local-static --mock --json
+sks scouts run latest --engine codex-exec-parallel --require-output-schema --json
 sks scouts run latest --require-real-parallel --json
-sks scouts status latest --json
+sks scouts status latest --engine-runs --json
 sks scouts engines --json
 sks scouts bench latest --engine local-static --mock --json
 sks scouts consensus latest --json
@@ -40,6 +41,8 @@ Each mission writes:
 
 The package-level summary is `.sneakoscope/reports/scout-performance-summary.json`.
 
+In 1.14.1, every Scout intake has a `scout-run-<timestamp>-<engine>-<hash>` `engine_run_id`. Canonical route intake still writes the normal mission-level `scout-*.json` files, while benchmark runs write under `.sneakoscope/missions/<id>/scout-benchmarks/<engine_run_id>/` and record `canonical_artifacts_modified:false` in `scout-benchmark.json`.
+
 ## Route Policy
 
 Default serious routes require the `five_scout_parallel_intake` pipeline stage: Team, QA-LOOP, Research, AutoResearch, PPT, Image UX Review, From-Chat-IMG, Computer Use/CU, DB, GX, MAD-SKS, and serious Goal continuations. Wiki requires scouts only when it is stateful, visual, or proof-bearing. Lightweight routes such as DFix, Answer, Help, Commit, Commit-And-Push, `sks version`, `sks help`, and `sks root` skip scouts unless explicitly forced.
@@ -61,4 +64,4 @@ If real parallel execution is unavailable or not requested, SKS records `local-s
 
 ## Real Output Binding
 
-Real engines write raw markdown/output files first. SKS then parses those files into normal scout JSON artifacts. `scout-consensus.json` records `source_policy.primary_source="parsed_real_scout_outputs"` only when parsed real outputs are used. Unparseable real output becomes a blocked scout with `scout_output_parse_failed:*`; SKS does not replace that result with a synthetic static finding.
+Real engines write raw markdown/output files first. SKS then parses those files into normal scout JSON artifacts. `sks.scout-result.v3` records `engine_run_id`, `scout_session_id`, `engine_mode`, output-schema use, lifecycle status, stdout/stderr paths, read-only confirmation, and artifact namespace. `scout-consensus.json` promotes only schema-valid completed results. Unparseable or schema-invalid real output becomes a structured blocker; SKS does not replace that result with a synthetic static finding.

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { ensureDir, exists, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.mjs';
+import { ensureDir, exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.mjs';
 import { createMission, loadMission, missionDir } from '../mission.mjs';
 import { buildScoutConsensus, renderScoutHandoff } from './scout-consensus.mjs';
 import { evaluateScoutGate, readScoutGateStatus } from './scout-gate.mjs';
@@ -11,7 +11,7 @@ import { snapshotScoutReadableTree, assertScoutReadOnly } from './scout-readonly
 import { runCodexExecParallelEngine } from './engines/codex-exec-parallel-engine.mjs';
 import { runCodexAppSubagentEngine } from './engines/codex-app-subagent-engine.mjs';
 import { selectScoutEngine } from './engines/scout-engine-policy.mjs';
-import { scoutEngineResult } from './engines/scout-engine-base.mjs';
+import { createScoutEngineRunId, scoutEngineMode, scoutEngineResult } from './engines/scout-engine-base.mjs';
 import { runTmuxLaneEngine } from './engines/tmux-lane-engine.mjs';
 import { parseScoutOutputFile } from './scout-output-parser.mjs';
 
@@ -46,6 +46,8 @@ export async function ensureFiveScoutIntake(root, {
   parallel = true,
   engine = 'auto',
   requireRealParallel = false,
+  requireOutputSchema = false,
+  engineRunId = null,
   mock = false,
   timeBudget = {},
   force = false,
@@ -66,7 +68,7 @@ export async function ensureFiveScoutIntake(root, {
     gate: status.gate,
     artifacts: scoutArtifactList()
   };
-  return runFiveScoutIntake(root, { missionId, route, task, mode, parallel, engine, requireRealParallel, mock, timeBudget });
+  return runFiveScoutIntake(root, { missionId, route, task, mode, parallel, engine, requireRealParallel, requireOutputSchema, engineRunId, mock, timeBudget });
 }
 
 export async function runFiveScoutIntake(root, {
@@ -77,6 +79,8 @@ export async function runFiveScoutIntake(root, {
   parallel = true,
   engine = 'auto',
   requireRealParallel = false,
+  requireOutputSchema = false,
+  engineRunId = null,
   mock = false,
   timeBudget = {}
 } = {}) {
@@ -91,17 +95,23 @@ export async function runFiveScoutIntake(root, {
   const selection = await selectScoutEngine(root, {
     requested: engine,
     requireRealParallel,
+    requireOutputSchema,
     missionId: id,
     route: routeLabel,
     mock
   });
   const selectedEngine = selection.selected;
+  const runId = engineRunId || createScoutEngineRunId({ engine: selectedEngine, timestamp: startedAt, seed: `${id}:${mode}` });
+  const artifactNamespace = 'canonical';
   const realParallel = selection.real_parallel === true;
   const parallelMode = realParallel || (parallel && selectedEngine === 'local-static') ? 'parallel' : 'sequential_fallback';
   let plan = buildScoutTeamPlan({ missionId: id, route: routeLabel, task: task || mission.mission?.prompt || '', parallelMode, mode, timeBudget, createdAt: startedAt });
   plan = {
     ...plan,
     engine: selectedEngine,
+    engine_run_id: runId,
+    artifact_namespace: artifactNamespace,
+    artifacts_dir: dir,
     real_parallel: realParallel,
     engine_selection: selection
   };
@@ -110,10 +120,13 @@ export async function runFiveScoutIntake(root, {
   if (!selection.available) {
     const completedAt = nowIso();
     const engineResult = scoutEngineResult({
+      engineRunId: runId,
       engine: selectedEngine,
       realParallel,
       mock,
       parallelMode,
+      artifactNamespace,
+      artifactsDir: dir,
       startedAt,
       completedAt,
       durationMs: Date.now() - startMs,
@@ -130,6 +143,8 @@ export async function runFiveScoutIntake(root, {
       completed_scouts: 0,
       read_only_confirmed: false,
       engine: selectedEngine,
+      engine_run_id: runId,
+      artifact_namespace: artifactNamespace,
       real_parallel: realParallel,
       blockers: selection.blockers,
       unverified: engineResult.unverified
@@ -139,6 +154,9 @@ export async function runFiveScoutIntake(root, {
       missionId: id,
       route: routeLabel,
       engine: selectedEngine,
+      engineRunId: runId,
+      artifactNamespace,
+      artifactsDir: dir,
       realParallel,
       mock,
       parallelMode,
@@ -159,6 +177,9 @@ export async function runFiveScoutIntake(root, {
       mission_id: id,
       route: routeLabel,
       engine: selectedEngine,
+      engine_run_id: runId,
+      artifact_namespace: artifactNamespace,
+      artifacts_dir: dir,
       real_parallel: realParallel,
       parallel_mode: parallelMode,
       scout_count: SCOUT_COUNT,
@@ -200,10 +221,29 @@ export async function runFiveScoutIntake(root, {
     });
   }
   const engineJobs = Array.isArray(engineRun?.jobs) ? engineRun.jobs : [];
+  const realEngineSelected = ['codex-exec-parallel', 'tmux-lanes', 'codex-app-subagents'].includes(selectedEngine);
+  const engineUnavailable = realEngineSelected && !requireRealParallel
+    ? await detectScoutEngineUnavailable(engineRun, { selectedEngine })
+    : null;
+  const useUnavailableFallback = engineUnavailable?.unavailable === true;
+  if (useUnavailableFallback) {
+    await writeJsonAtomic(path.join(dir, 'scout-engine-unavailable.json'), engineUnavailable);
+    await appendScoutLedger(root, id, {
+      type: 'scout.engine_unavailable_fallback',
+      selected_engine: selectedEngine,
+      fallback_engine: 'local-static',
+      reason: engineUnavailable.reason,
+      failed_jobs: engineUnavailable.failed_jobs
+    });
+  }
+  const resultEngine = useUnavailableFallback ? 'local-static' : selectedEngine;
+  const resultRealParallel = useUnavailableFallback ? false : realParallel;
+  const resultParallelMode = useUnavailableFallback ? 'sequential_fallback' : parallelMode;
+  const parseEngineOutput = realEngineSelected && !useUnavailableFallback;
   const work = SCOUT_ROLES.map((role) => async () => {
     const scoutStart = Date.now();
     const job = engineJobs.find((candidate) => candidate.scout_id === role.id);
-    const result = ['codex-exec-parallel', 'tmux-lanes', 'codex-app-subagents'].includes(selectedEngine)
+    const result = parseEngineOutput
       ? await parseScoutOutputFile({
           outputFile: job?.output_file || path.join(dir, `${role.id}.${selectedEngine}.md`),
           stdoutFile: job?.stdout_file || path.join(dir, `${role.id}.${selectedEngine}.stdout.log`),
@@ -212,7 +252,13 @@ export async function runFiveScoutIntake(root, {
           route: routeLabel,
           role,
           engine: selectedEngine,
-          realParallel
+          realParallel,
+          engineRunId: runId,
+          scoutSessionId: job?.scout_session_id || job?.session_id || `${runId}-${role.id}`,
+          artifactNamespace,
+          outputSchemaUsed: job?.output_schema_used === true,
+          outputSchemaPath: job?.output_schema_path || null,
+          engineMode: job?.engine_mode || scoutEngineMode(selectedEngine, { outputSchemaUsed: job?.output_schema_used === true })
         })
       : await buildScoutResult(root, {
           missionId: id,
@@ -220,22 +266,25 @@ export async function runFiveScoutIntake(root, {
           task: task || mission.mission?.prompt || '',
           role,
           mock,
-          engine: selectedEngine,
-          realParallel,
-          triwiki
+          engine: resultEngine,
+          engineRunId: runId,
+          artifactNamespace,
+          realParallel: resultRealParallel,
+          triwiki,
+          engineUnavailable
         });
-    if (['codex-exec-parallel', 'tmux-lanes', 'codex-app-subagents'].includes(selectedEngine) && job?.status === 'rejected') {
+    if (parseEngineOutput && job?.status === 'rejected') {
       result.status = 'blocked';
       result.blockers = [...(result.blockers || []), `scout_engine_rejected:${job.reason || 'unknown'}`];
     }
-    if (['codex-exec-parallel', 'tmux-lanes', 'codex-app-subagents'].includes(selectedEngine) && Number(job?.code || 0) !== 0) {
+    if (parseEngineOutput && Number(job?.code || 0) !== 0) {
       result.status = 'blocked';
       result.blockers = [...(result.blockers || []), `scout_engine_exit_code:${job.code}`];
     }
     const durationMs = job?.duration_ms || Date.now() - scoutStart;
     await writeJsonAtomic(path.join(dir, role.json), result);
     await writeTextAtomic(path.join(dir, role.md), renderScoutMarkdown(result));
-    await appendScoutLedger(root, id, { type: 'scout.done', scout_id: role.id, duration_ms: durationMs, status: result.status });
+    await appendScoutLedger(root, id, { type: 'scout.done', scout_id: role.id, scout_session_id: result.scout_session_id || job?.scout_session_id || null, duration_ms: durationMs, status: result.status });
     return { result, durationMs };
   });
   const rows = (realParallel || parallel) && selectedEngine !== 'sequential-fallback' ? await Promise.all(work.map((fn) => fn())) : [];
@@ -251,7 +300,7 @@ export async function runFiveScoutIntake(root, {
     scouts: plan.scouts.map((scout) => ({ ...scout, status: results.some((result) => result.scout_id === scout.id && result.status === 'done') ? 'done' : 'blocked' }))
   };
   await writeJsonAtomic(path.join(dir, 'scout-team-plan.json'), plan);
-  const consensus = buildScoutConsensus({ missionId: id, route: routeLabel, results, parallelMode });
+  const consensus = buildScoutConsensus({ missionId: id, route: routeLabel, results, parallelMode: resultParallelMode });
   await writeJsonAtomic(path.join(dir, 'scout-consensus.json'), consensus);
   await writeTextAtomic(path.join(dir, 'scout-handoff.md'), renderScoutHandoff(consensus));
   const readOnlyGuard = await assertScoutReadOnly(root, before, { missionId: id });
@@ -259,7 +308,9 @@ export async function runFiveScoutIntake(root, {
   const gate = {
     ...evaluateScoutGate({ missionId: id, route: routeLabel, plan, results, consensus, handoffWritten: true }),
     engine: selectedEngine,
-    real_parallel: realParallel,
+    engine_run_id: runId,
+    artifact_namespace: artifactNamespace,
+    real_parallel: resultRealParallel,
     read_only_guard: readOnlyGuard.passed === true,
     blockers: [
       ...evaluateScoutGate({ missionId: id, route: routeLabel, plan, results, consensus, handoffWritten: true }).blockers,
@@ -272,8 +323,9 @@ export async function runFiveScoutIntake(root, {
   const durationMs = Date.now() - startMs;
   const perScout = Object.fromEntries(SCOUT_ROLES.map((role) => [role.id, rows.find((row) => row.result.scout_id === role.id)?.durationMs || 0]));
   const estimatedSequentialMs = Object.values(perScout).reduce((sum, ms) => sum + Number(ms || 0), 0);
-  const claimAllowed = realParallel
+  const claimAllowed = resultRealParallel
     && !mock
+    && !useUnavailableFallback
     && readOnlyGuard.passed === true
     && durationMs > 0
     && estimatedSequentialMs > durationMs
@@ -281,10 +333,13 @@ export async function runFiveScoutIntake(root, {
   const performance = scoutPerformance({
     missionId: id,
     route: routeLabel,
-    engine: selectedEngine,
-    realParallel,
-    mock,
-    parallelMode,
+    engine: resultEngine,
+    engineRunId: runId,
+    artifactNamespace,
+    artifactsDir: dir,
+    realParallel: resultRealParallel,
+    mock: mock || useUnavailableFallback,
+    parallelMode: resultParallelMode,
     startedAt,
     completedAt,
     durationMs,
@@ -293,23 +348,36 @@ export async function runFiveScoutIntake(root, {
     claimAllowed,
     claimReason: claimAllowed
       ? 'real parallel engine with measured wall-clock and sequential baseline'
-      : (mock || selectedEngine === 'local-static' ? 'mock/static fallback cannot support real speedup claims' : 'real engine ran, but no measured sequential baseline supports a speedup claim')
+      : (mock || resultEngine === 'local-static' ? 'mock/static fallback cannot support real speedup claims' : 'real engine ran, but no measured sequential baseline supports a speedup claim')
   });
   const engineResult = scoutEngineResult({
-    engine: selectedEngine,
-    realParallel,
-    mock,
-    parallelMode,
+    engineRunId: runId,
+    engine: resultEngine,
+    realParallel: resultRealParallel,
+    mock: mock || useUnavailableFallback,
+    parallelMode: resultParallelMode,
+    artifactNamespace,
+    artifactsDir: dir,
+    outputSchemaUsed: !useUnavailableFallback && engineJobs.some((job) => job.output_schema_used === true),
+    outputSchemaPath: engineJobs.find((job) => job.output_schema_path)?.output_schema_path || null,
     startedAt,
     completedAt,
     durationMs,
     perScoutDurationMs: perScout,
     completedScouts: gate.completed_scouts,
     claimAllowed,
-    sourcePolicy: consensus.source_policy,
+    sourcePolicy: {
+      ...consensus.source_policy,
+      selected_engine: selectedEngine,
+      fallback_engine: useUnavailableFallback ? resultEngine : null,
+      engine_unavailable: useUnavailableFallback ? engineUnavailable : null
+    },
     jobs: engineJobs,
     blockers: gate.blockers,
-    unverified: gate.unverified
+    unverified: [
+      ...(gate.unverified || []),
+      ...(useUnavailableFallback ? [`${selectedEngine} unavailable; scout intake used local-static fallback evidence recorded in scout-engine-unavailable.json.`] : [])
+    ]
   });
   await writeJsonAtomic(path.join(dir, 'scout-engine-result.json'), engineResult);
   await writeJsonAtomic(path.join(dir, 'scout-performance.json'), performance);
@@ -322,8 +390,12 @@ export async function runFiveScoutIntake(root, {
     mission_id: id,
     route: routeLabel,
     engine: selectedEngine,
-    real_parallel: realParallel,
-    parallel_mode: parallelMode,
+    effective_engine: resultEngine,
+    engine_run_id: runId,
+    artifact_namespace: artifactNamespace,
+    artifacts_dir: dir,
+    real_parallel: resultRealParallel,
+    parallel_mode: resultParallelMode,
     scout_count: SCOUT_COUNT,
     completed_scouts: gate.completed_scouts,
     gate,
@@ -338,6 +410,9 @@ function scoutPerformance({
   missionId,
   route,
   engine,
+  engineRunId = null,
+  artifactNamespace = null,
+  artifactsDir = null,
   realParallel,
   mock,
   parallelMode,
@@ -353,6 +428,9 @@ function scoutPerformance({
     schema: SCOUT_PERFORMANCE_SCHEMA,
     mission_id: missionId,
     route,
+    engine_run_id: engineRunId,
+    artifact_namespace: artifactNamespace,
+    artifacts_dir: artifactsDir,
     engine,
     execution_engine: engine,
     real_parallel: Boolean(realParallel),
@@ -371,14 +449,55 @@ function scoutPerformance({
   };
 }
 
-async function buildScoutResult(root, { missionId, route, task, role, mock, engine = 'local-static', realParallel = false, triwiki }) {
+async function detectScoutEngineUnavailable(engineRun, { selectedEngine = null } = {}) {
+  const jobs = Array.isArray(engineRun?.jobs) ? engineRun.jobs : [];
+  if (!jobs.length) return null;
+  const failed = [];
+  for (const job of jobs) {
+    const outputExists = job?.output_file ? await exists(job.output_file) : false;
+    if (outputExists && Number(job?.code || 0) === 0) return null;
+    const stdout = await readText(job?.stdout_file || '', '').catch(() => '');
+    const stderr = await readText(job?.stderr_file || '', '').catch(() => '');
+    const log = `${stdout}\n${stderr}`;
+    const networkLike = /failed to lookup address information|stream disconnected before completion|error sending request for url|failed to connect to websocket|nodename nor servname provided|responses_websocket/i.test(log);
+    const systemSkillRace = /failed to install system skills|Directory not empty/i.test(log);
+    if (!outputExists && (networkLike || systemSkillRace || job?.timed_out === true || Number(job?.code || 0) !== 0)) {
+      failed.push({
+        scout_id: job?.scout_id || null,
+        code: job?.code ?? null,
+        timed_out: job?.timed_out === true,
+        output_file: job?.output_file || null,
+        stdout_file: job?.stdout_file || null,
+        stderr_file: job?.stderr_file || null,
+        reason: networkLike ? 'codex_network_unavailable' : systemSkillRace ? 'codex_system_skill_install_race' : 'codex_scout_output_missing'
+      });
+    }
+  }
+  if (failed.length !== jobs.length) return null;
+  return {
+    schema: 'sks.scout-engine-unavailable.v1',
+    unavailable: true,
+    selected_engine: selectedEngine,
+    fallback_engine: 'local-static',
+    reason: 'real_parallel_scout_engine_unavailable_before_output',
+    generated_at: nowIso(),
+    failed_jobs: failed,
+    honesty: 'Real Codex scout lanes did not produce schema output; fallback evidence is static and cannot support live subagent or speedup claims.'
+  };
+}
+
+async function buildScoutResult(root, { missionId, route, task, role, mock, engine = 'local-static', engineRunId = null, artifactNamespace = 'canonical', realParallel = false, triwiki, engineUnavailable = null }) {
   const packageJson = await readJson(path.join(root, 'package.json'), {});
   const hasCommandRegistry = await exists(path.join(root, 'src', 'cli', 'command-registry.mjs'));
   const hasPipeline = await exists(path.join(root, 'src', 'core', 'pipeline.mjs'));
   const hasAutoFinalizer = await exists(path.join(root, 'src', 'core', 'proof', 'auto-finalize.mjs'));
   const routeText = `${route} ${task}`;
   const context7Required = /\b(package|library|framework|SDK|API|MCP|Supabase|React|Next|Vue|Vite|Prisma|Drizzle|Knex|Postgres|npm|node_modules|docs?|documentation)\b/i.test(routeText);
-  const unverified = mock ? ['Mock/static scout fixture evidence; do not claim live subagent analysis or real speedup.'] : [];
+  const staticFixture = mock || engine === 'local-static' || engine === 'sequential-fallback';
+  const unverified = staticFixture ? ['Static scout fixture evidence; do not claim live subagent analysis or real speedup.'] : [];
+  if (engineUnavailable?.unavailable === true) {
+    unverified.push(`Real scout engine unavailable: ${engineUnavailable.reason}; see scout-engine-unavailable.json.`);
+  }
   const common = {
     schema: SCOUT_RESULT_SCHEMA,
     mission_id: missionId,
@@ -392,16 +511,37 @@ async function buildScoutResult(root, { missionId, route, task, role, mock, engi
     context7_required: context7Required,
     context7_libraries: context7Required ? context7LibrariesFor(routeText) : [],
     engine,
+    engine_run_id: engineRunId,
+    scout_session_id: `${engineRunId || missionId || 'scout-run'}-${role.id}`,
+    engine_mode: scoutEngineMode(engine),
     real_parallel: Boolean(realParallel),
-    source_policy: mock || engine === 'local-static' || engine === 'sequential-fallback' ? 'static_fixture' : 'generated_in_process',
-    source: mock || engine === 'local-static' || engine === 'sequential-fallback' ? 'local_static_fixture' : 'generated_in_process',
+    output_schema_used: false,
+    output_schema_path: null,
+    schema_validation: { ok: true, schema: SCOUT_RESULT_SCHEMA, issues: [] },
+    session_lifecycle: {
+      status: 'completed',
+      started_at: nowIso(),
+      completed_at: nowIso(),
+      timeout: false,
+      session_id: `${engineRunId || missionId || 'scout-run'}-${role.id}`,
+      resume_id: null,
+      lane_id: null
+    },
+    stdout_file: null,
+    stderr_file: null,
+    read_only_confirmed: true,
+    artifact_namespace: artifactNamespace,
+    source_policy: staticFixture ? 'static_fixture' : 'generated_in_process',
+    source: staticFixture ? 'local_static_fixture' : 'generated_in_process',
     source_file: null,
     parsed: false,
     parse_issues: [],
     source_details: {
-      type: mock || engine === 'local-static' || engine === 'sequential-fallback' ? 'static_fixture' : 'generated_in_process',
+      type: staticFixture ? 'static_fixture' : 'generated_in_process',
       engine,
       real_parallel: Boolean(realParallel),
+      fallback_from_engine: engineUnavailable?.selected_engine || null,
+      engine_unavailable_reason: engineUnavailable?.reason || null,
       output_file: null,
       stdout_file: null,
       stderr_file: null

@@ -7,10 +7,12 @@ import { SCOUT_ROLES } from '../../src/core/scouts/scout-schema.mjs';
 
 test('evaluateScoutGate passes when all five read-only scouts complete', () => {
   const results = SCOUT_ROLES.map((role) => ({
-    schema: 'sks.scout-result.v1',
+    schema: 'sks.scout-result.v3',
     scout_id: role.id,
     status: 'done',
     read_only: true,
+    read_only_confirmed: true,
+    schema_validation: { ok: true, schema: 'sks.scout-result.v3', issues: [] },
     findings: [],
     suggested_tasks: [{ id: `${role.id}-task`, title: role.role, files: [], verification: ['npm run packcheck'] }],
     blockers: [],
@@ -27,8 +29,11 @@ test('evaluateScoutGate passes when all five read-only scouts complete', () => {
 test('evaluateScoutGate blocks when a scout is missing', () => {
   const results = SCOUT_ROLES.slice(0, 4).map((role) => ({
     scout_id: role.id,
+    schema: 'sks.scout-result.v3',
     status: 'done',
     read_only: true,
+    read_only_confirmed: true,
+    schema_validation: { ok: true, schema: 'sks.scout-result.v3', issues: [] },
     findings: [],
     suggested_tasks: [{ id: `${role.id}-task`, title: role.role, files: [], verification: ['npm run packcheck'] }],
     blockers: [],

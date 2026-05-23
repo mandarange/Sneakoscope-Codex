@@ -34,7 +34,8 @@ export async function validateRouteCompletionProof(root: any, { missionId = null
     }
   }
   const wrongness = proof.evidence?.wrongness;
-  if (Number(wrongness?.high_severity_active || 0) > 0) issues.push('active_wrongness_high');
+  const imageUxReferenceOnlyPartial = proof.status === 'verified_partial' && proof.evidence?.image_ux_review?.reference_only === true;
+  if (Number(wrongness?.high_severity_active || 0) > 0 && !imageUxReferenceOnlyPartial) issues.push('active_wrongness_high');
   if (proof.status === 'verified' && Number(wrongness?.active_count || 0) > 0) issues.push('active_wrongness_requires_partial');
   return {
     ok: issues.length === 0,

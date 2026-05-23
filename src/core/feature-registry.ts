@@ -395,7 +395,7 @@ export function executeFeatureFixtures(features: any = [], opts: any = {}): Json
     });
     if (artifactRun.execution) {
       executed.push({ id: feature.id, ...artifactRun.execution });
-      if (!artifactRun.execution.ok) failures.push(`${feature.id}:command_exit_${artifactRun.execution.status}`);
+      if (!artifactRun.execution.ok) failures.push(fixtureExecutionFailure(feature.id, artifactRun.execution));
     }
     if (strict) artifactValidated += artifactRun.expected_artifacts.length;
     failures.push(...artifactRun.failures.filter((failure: any) => !failures.includes(failure)));
@@ -421,6 +421,11 @@ export function executeFeatureFixtures(features: any = [], opts: any = {}): Json
   };
   if (opts.root) report.report_files = writeFeatureFixtureReports(opts.root, report);
   return report;
+}
+
+function fixtureExecutionFailure(featureId: any, execution: any) {
+  if (execution?.timed_out) return `${featureId}:command_timeout_${execution.timeout_ms || 'unknown'}`;
+  return `${featureId}:command_exit_${execution?.status}`;
 }
 
 function executeSafeFixtureCommand(featureId: any, opts: any = {}) {

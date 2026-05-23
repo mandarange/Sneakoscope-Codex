@@ -18,9 +18,11 @@ sks hooks official-parity --json
 sks codex-app pat status --json
 ```
 
-## SKS 1.14.0 Latest Codex Hook Shape
+## SKS 1.14.1 Latest Codex Hook Shape
 
-SKS 1.14.0 validates against the vendored OpenAI Codex `latest` hook snapshot from `openai/codex` HEAD. The snapshot has 10 events and 20 command schema files. `SubagentStart` and `SubagentStop` are release-blocking events, not compatibility warnings.
+SKS 1.14.1 validates against the vendored OpenAI Codex `latest` hook snapshot from `openai/codex` HEAD. The snapshot has 10 events and 20 command schema files. `SubagentStart` and `SubagentStop` are release-blocking events, not compatibility warnings.
+
+1.14.1 also writes `codex-hook-parity-1.14.1.json`, uses `sks.codex-hook-official-parity.v2`, and records an official hash oracle result. When the official hash is unavailable, SKS enforces managed-only hook repair and keeps unmanaged trusted-hash writing disabled.
 
 This page is documentation-only evidence: it distinguishes probe/mock/live evidence, avoids universal Computer Use availability claims, and keeps PAT/secret handling private and redacted. For recovery, run `sks hooks warning-check --json`, `sks computer-use smoke --json`, or `sks codex-lb setup --write-env-file --keychain --launchctl` depending on the failing surface.
 

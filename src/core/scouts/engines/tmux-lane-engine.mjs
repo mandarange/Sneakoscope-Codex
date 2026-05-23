@@ -40,7 +40,14 @@ export async function runTmuxLaneEngine(root, {
     const window = `${role.index}-${role.kind || role.id}`;
     await runProcess(tmux, ['new-window', '-t', session, '-n', window, '-c', root], { timeoutMs: 10000, maxOutputBytes: 8192 });
     const prompt = buildScoutPrompt({ missionId, route, task, role, outputPath: job.output_file });
-    const args = buildCodexExecArgs({ root, prompt, outputFile: job.output_file, json: true, profile: process.env.SKS_SCOUT_CODEX_PROFILE || 'sks-scout-readonly' });
+    const args = buildCodexExecArgs({
+      root,
+      prompt,
+      outputFile: job.output_file,
+      json: true,
+      profile: process.env.SKS_SCOUT_CODEX_PROFILE || null,
+      extraArgs: ['--sandbox', 'read-only', '--ignore-rules', '--ignore-user-config', '--disable', 'hooks', '--disable', 'plugins', '--disable', 'apps']
+    });
     const command = `${shellQuote(codex)} ${args.map(shellQuote).join(' ')} > ${shellQuote(job.stdout_file)} 2> ${shellQuote(job.stderr_file)}`;
     await runProcess(tmux, ['send-keys', '-t', `${session}:${window}`, command, 'C-m'], { timeoutMs: 10000, maxOutputBytes: 8192 });
     await appendScoutLedger(root, missionId, { type: 'scout.tmux_lane.started', scout_id: role.id, session, window, output_file: job.output_file });

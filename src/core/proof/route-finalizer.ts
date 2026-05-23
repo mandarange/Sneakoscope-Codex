@@ -25,7 +25,9 @@ export async function finalizeRouteWithProof(root: any, {
   mock = false,
   fixClaim = false,
   requireRelation = false,
-  visualClaim = undefined
+  visualClaim = undefined,
+  scouts = undefined,
+  allowActiveWrongnessPartial = false
 }: any = {}) {
   const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation, visualClaim });
   const localBlockers = [...blockers];
@@ -44,8 +46,8 @@ export async function finalizeRouteWithProof(root: any, {
     }
   }
   const collected = await collectProofEvidence(root);
-  const scoutEvidence = await readScoutProofEvidence(root, missionId).catch(() => null);
-  const wrongnessEvidence = await wrongnessProofEvidence(root, missionId).catch(() => null);
+  const scoutEvidence = scouts === false ? null : await readScoutProofEvidence(root, missionId).catch(() => null);
+  const wrongnessEvidence = await wrongnessProofEvidence(root, missionId, { route: policy.route }).catch(() => null);
   const computerUse = policy.requires_image_voxel_anchors
     ? await computerUseStatusReport().catch((err: any) => ({ schema: 'sks.computer-use-status.v1', status: 'unknown', ok: false, guidance: [err.message], evidence: { status: 'unknown' } }))
     : null;
@@ -69,7 +71,11 @@ export async function finalizeRouteWithProof(root: any, {
     unverified.push(`Computer Use live evidence is not linked to Image Voxel: ${computerUseLive.evidence.image_voxel?.reason || 'missing_relation'}.`);
   }
   if (Number(wrongnessEvidence?.high_severity_active || 0) > 0) {
-    localBlockers.push('active_high_severity_wrongness');
+    if (allowActiveWrongnessPartial) {
+      unverified.push('Active high-severity wrongness memory remains; this reference-only closeout is capped at verified_partial and does not claim full route verification.');
+    } else {
+      localBlockers.push('active_high_severity_wrongness');
+    }
   }
   const visualComputerUseDowngrade = Boolean(statusHint === 'verified' && (
     (computerUse && computerUse.status !== 'available')

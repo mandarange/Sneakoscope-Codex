@@ -1,13 +1,20 @@
 export const SCOUT_TEAM_PLAN_SCHEMA = 'sks.scout-team-plan.v1';
-export const SCOUT_RESULT_SCHEMA = 'sks.scout-result.v1';
+export const SCOUT_RESULT_SCHEMA = 'sks.scout-result.v3';
+export const SCOUT_RESULT_COMPATIBLE_SCHEMAS = Object.freeze([
+  'sks.scout-result.v1',
+  'sks.scout-result.v2',
+  SCOUT_RESULT_SCHEMA
+]);
 export const SCOUT_CONSENSUS_SCHEMA = 'sks.scout-consensus.v1';
 export const SCOUT_GATE_SCHEMA = 'sks.scout-gate.v1';
 export const SCOUT_PROOF_EVIDENCE_SCHEMA = 'sks.scout-proof-evidence.v2';
-export const SCOUT_PERFORMANCE_SCHEMA = 'sks.scout-performance.v2';
+export const SCOUT_PERFORMANCE_SCHEMA = 'sks.scout-performance.v3';
 export const SCOUT_PERFORMANCE_SUMMARY_SCHEMA = 'sks.scout-performance-summary.v1';
 
 export const FIVE_SCOUT_STAGE_ID = 'five_scout_parallel_intake';
 export const SCOUT_COUNT = 5;
+
+export type ScoutEngineRunId = `scout-run-${string}`;
 
 export const SCOUT_ROLES = Object.freeze([
   {
@@ -76,6 +83,7 @@ export const SCOUT_ALL_OUTPUTS = Object.freeze([
   'scout-parallel-ledger.jsonl',
   ...SCOUT_REQUIRED_OUTPUTS,
   'scout-engine-result.json',
+  'scout-engine-unavailable.json',
   'scout-readonly-guard.json',
   'scout-performance.json'
 ]);

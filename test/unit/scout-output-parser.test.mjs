@@ -47,7 +47,8 @@ test('parseScoutOutputFile normalizes real scout output with source file metadat
     engine: 'codex-exec-parallel',
     realParallel: true
   });
-  assert.equal(result.schema, 'sks.scout-result.v1');
+  assert.equal(result.schema, 'sks.scout-result.v3');
+  assert.equal(result.schema_validation.migrated_from_schema, 'sks.scout-result.v1');
   assert.equal(result.status, 'done');
   assert.equal(result.source_policy, 'parsed_scout_output');
   assert.equal(result.source, 'real_engine_output');

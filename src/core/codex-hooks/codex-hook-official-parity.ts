@@ -2,13 +2,24 @@ import path from 'node:path';
 import { ensureDir, nowIso, runProcess, which, writeJsonAtomic } from '../fsx.js';
 import { readCodexHookActualState } from './codex-hook-actual-discovery.js';
 import { CODEX_HOOK_EVENTS } from '../codex-compat/codex-hook-events.js';
+import { resolveCodexHookHashOracle } from './codex-hook-official-hash-oracle.js';
 
 export async function codexHookOfficialParityReport(root: string, opts: any = {}) {
   const actual = await readCodexHookActualState(root);
   const codex = await tryReadCodexHookList(opts);
-  const entries = actual.entries.map((entry) => {
+  const oracleRows = await Promise.all(actual.entries.map((entry) => resolveCodexHookHashOracle(root, {
+    event: entry.event,
+    matcher: entry.matcher,
+    command: entry.command,
+    timeout: entry.timeout,
+    async: entry.async,
+    statusMessage: (entry as any).statusMessage || null,
+    commandWindows: (entry as any).commandWindows || null
+  }, opts)));
+  const entries = actual.entries.map((entry, index) => {
     const codexEntry = findCodexEntry(codex.entries, entry);
-    const codexHash = codexEntry?.current_hash || codexEntry?.hash || null;
+    const oracle = oracleRows[index];
+    const codexHash = codexEntry?.current_hash || codexEntry?.hash || oracle?.official_hash || null;
     return {
       key: entry.key,
       source_path: entry.source_path,
@@ -19,6 +30,9 @@ export async function codexHookOfficialParityReport(root: string, opts: any = {}
       matcher: entry.matcher,
       current_hash_by_sks: entry.current_hash,
       current_hash_by_codex: codexHash,
+      official_oracle_mode: oracle?.mode || 'unavailable',
+      official_hash_available: oracle?.official_hash_available === true || Boolean(codexHash),
+      official_hash_proven: oracle?.official_hash_proven === true || (Boolean(codexHash) && codexHash === entry.current_hash),
       trusted_hash: entry.trusted_hash,
       sks_trust_status: entry.trust_status,
       codex_trust_status: codexEntry?.trust_status || (codex.available ? 'unknown' : 'integration_optional'),
@@ -28,14 +42,21 @@ export async function codexHookOfficialParityReport(root: string, opts: any = {}
   });
   const mismatches = entries.filter((entry) => entry.hash_match === false);
   const fixtureParity = buildVendoredFixtureParity();
-  const officialHashAvailable = codex.available && entries.some((entry) => entry.current_hash_by_codex);
+  const officialHashAvailable = entries.some((entry) => entry.official_hash_available);
+  const officialHashProven = entries.length > 0 && entries.every((entry) => entry.official_hash_proven || entry.managed);
+  const oracleMode = oracleRows.find((row) => row.mode !== 'unavailable')?.mode || (codex.available ? 'cli' : 'unavailable');
   const managedOnlyEnforced = actual.managed_dirs.length > 0 || entries.every((entry) => entry.managed === true);
   return {
-    schema: 'sks.codex-hook-official-parity.v1',
+    schema: 'sks.codex-hook-official-parity.v2',
     ok: mismatches.length === 0 && fixtureParity.ok && (officialHashAvailable || managedOnlyEnforced || entries.length === 0),
     status: officialHashAvailable ? 'official_hash_parity_checked' : 'integration_optional_managed_policy',
     created_at: nowIso(),
     root,
+    oracle_mode: oracleMode,
+    official_hash_available: officialHashAvailable,
+    official_hash_proven: officialHashProven,
+    managed_policy_used: !officialHashAvailable,
+    unmanaged_trusted_hash_writer_enabled: officialHashAvailable,
     codex: {
       available: codex.available,
       version: codex.version,
@@ -45,8 +66,10 @@ export async function codexHookOfficialParityReport(root: string, opts: any = {}
     },
     policy: {
       official_hash_available: officialHashAvailable,
+      official_hash_proven: officialHashProven,
       managed_only_enforced: managedOnlyEnforced,
       sks_trusted_hash_fallback_allowed: false,
+      unmanaged_trusted_hash_writer_enabled: officialHashAvailable,
       trusted_hash_writer_policy: 'managed_install_required_when_official_hash_is_unavailable'
     },
     counts: {
@@ -56,8 +79,17 @@ export async function codexHookOfficialParityReport(root: string, opts: any = {}
       codex_hashes_seen: entries.filter((entry) => entry.current_hash_by_codex).length
     },
     fixture_parity: fixtureParity,
+    oracle_rows: oracleRows,
     entries,
     mismatches,
+    trust_status_mismatches: entries.filter((entry) => entry.codex_trust_status !== 'integration_optional' && entry.codex_trust_status !== 'unknown' && entry.codex_trust_status !== entry.sks_trust_status),
+    coverage: {
+      plugin_source: actual.warnings.some((warning) => String(warning).includes('plugin_source_not_available')) ? 'warning' : 'not_detected_or_not_required',
+      requirements_toml: actual.sources.some((source) => source.source_format === 'requirements_toml' && source.exists) ? 'covered' : 'absent',
+      config_toml_inline_hooks: actual.sources.some((source) => source.source_format === 'config_toml' && source.inline_hooks) ? 'covered' : 'absent',
+      hooks_json: actual.sources.some((source) => source.source_format === 'hooks_json' && source.exists) ? 'covered' : 'absent',
+      managed_dir: actual.managed_dirs.length ? 'covered' : 'absent'
+    },
     blockers: [
       ...(mismatches.length ? ['codex_hook_hash_mismatch'] : []),
       ...actual.blockers
@@ -67,7 +99,7 @@ export async function codexHookOfficialParityReport(root: string, opts: any = {}
 
 export async function writeCodexHookOfficialParityReport(root: string, opts: any = {}) {
   const report = await codexHookOfficialParityReport(root, opts);
-  const out = opts.outputPath || path.join(root, '.sneakoscope', 'reports', 'codex-hook-parity-1.14.0.json');
+  const out = opts.outputPath || path.join(root, '.sneakoscope', 'reports', 'codex-hook-parity-1.14.1.json');
   await ensureDir(path.dirname(out));
   await writeJsonAtomic(out, report);
   return { ...report, path: out };

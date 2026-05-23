@@ -132,11 +132,12 @@ function imageUxReviewTrust(proof: any = {}) {
   const evidence = proof.evidence?.image_ux_review;
   if (!evidence) return { issues: [], summary: { required: false, status: 'not_required' } };
   const issues: string[] = [];
+  const referenceOnly = evidence.reference_only === true && evidence.status === 'verified_partial';
   if (Number(evidence.generated_images_total || 0) > 0 && Number(evidence.generated_gpt_image_2_callout_images_count || 0) === 0) {
     issues.push('mock_gpt_image_2_fixture_cannot_be_real_verified');
   }
   if ((evidence.blockers || []).includes('ux_review_text_only_fallback')) issues.push('text_only_ux_review_cannot_be_verified');
-  if ((evidence.blockers || []).includes('missing_generated_annotated_review_images')) issues.push('gpt_image_2_callout_image_missing');
+  if (!referenceOnly && (evidence.blockers || []).includes('missing_generated_annotated_review_images')) issues.push('gpt_image_2_callout_image_missing');
   if (evidence.callout_extraction_schema_status !== 'valid') issues.push('ux_review_extraction_schema_invalid');
   if (evidence.recapture_re_review_status === 'blocked') issues.push('ux_review_recapture_re_review_missing');
   if ((evidence.blockers || []).includes('callout_extraction_pending')) issues.push('ux_review_callout_extraction_pending');
@@ -146,6 +147,7 @@ function imageUxReviewTrust(proof: any = {}) {
       schema: evidence.schema || 'sks.image-ux-review-proof-evidence.v1',
       required: true,
       status: evidence.status || 'not_verified',
+      reference_only: referenceOnly,
       source_screenshots_count: evidence.source_screenshots_count || 0,
       generated_gpt_image_2_callout_images_count: evidence.generated_gpt_image_2_callout_images_count || 0,
       generated_images_total: evidence.generated_images_total || 0,
@@ -153,6 +155,7 @@ function imageUxReviewTrust(proof: any = {}) {
       open_p0_p1_count: evidence.open_p0_p1_count || 0,
       recapture_re_review_status: evidence.recapture_re_review_status || 'unknown',
       image_voxel_relation_count: evidence.image_voxel_relation_count || 0,
+      full_verification_blockers: evidence.full_verification_blockers || [],
       blockers: evidence.blockers || []
     }
   };

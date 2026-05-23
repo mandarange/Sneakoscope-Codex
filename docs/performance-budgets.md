@@ -1,6 +1,6 @@
 # Performance Budgets
 
-SKS 1.0.1 records core hot-path budgets with:
+SKS 1.14.1 records core hot-path budgets with:
 
 ```bash
 sks bench core --json
@@ -40,7 +40,7 @@ Tiers:
 
 Use `sks bench core --tier source-ci --json` for release CI. `perf:gate` selects `source-ci` when `CI=true`; otherwise it uses the local tier unless `SKS_PERF_TIER` is set.
 
-## 1.14.0 DFix Speed Budgets
+## 1.14.1 DFix Speed Budgets
 
 DFix writes `dfix-performance-report.json` and release gates check these budgets:
 
@@ -55,4 +55,4 @@ DFix writes `dfix-performance-report.json` and release gates check these budgets
 | no-Codex full loop fixture | <= 3000ms |
 | Codex handoff timeout | <= 60000ms |
 
-These budgets are evidence gates for SKS 1.14.0. They do not authorize skipping root-cause, diff, rollback, or verification evidence.
+These budgets are evidence gates for SKS 1.14.1. They do not authorize skipping root-cause, diff, rollback, or verification evidence.
