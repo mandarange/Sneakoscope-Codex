@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.14.1';
+const RELEASE_VERSION = '1.15.0';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 
@@ -19,7 +19,7 @@ const checks = {
   ppt_full_e2e_blackbox: scriptContains('release:check', 'ppt:full-e2e-blackbox'),
   ppt_full_e2e_artifact_graph: scriptContains('release:check', 'ppt:full-e2e-artifact-graph'),
   codex_0133_official_compat: scriptContains('release:check', 'codex:0.133-official-compat'),
-  flagship_proof_graph_v2: scriptContains('release:check', 'flagship:proof-graph-v2'),
+  flagship_proof_graph_v3: scriptContains('release:check', 'flagship:proof-graph-v3'),
   scouts_multisession_artifact_graph: scriptContains('release:check', 'scouts:multisession-artifact-graph'),
   scouts_benchmark_isolation: scriptContains('release:check', 'scouts:benchmark-isolation'),
   scouts_output_schema_wiring: scriptContains('release:check', 'scouts:output-schema-wiring'),
@@ -89,17 +89,17 @@ const checks = {
 };
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
 const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
-const releaseMetadata = runNodeScript('scripts/release-metadata-1-14-check.mjs');
+const releaseMetadata = runNodeScript('scripts/release-metadata-1-15-check.mjs');
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
-  flagship_proof_graph_v2: readJson('.sneakoscope/reports/flagship-proof-graph-v2.json', null)
+  flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null)
 };
 const runtimeChecks = {
   ppt_full_e2e_blackbox: runtimeReports.ppt_full_e2e_blackbox?.ok === true
     && ['verified', 'verified_partial'].includes(String(runtimeReports.ppt_full_e2e_blackbox?.proof_status || ''))
     && runtimeReports.ppt_full_e2e_blackbox?.trust_ok === true
     && !['blocked', 'failed', 'not_verified'].includes(String(runtimeReports.ppt_full_e2e_blackbox?.trust_status || '')),
-  flagship_proof_graph_v2: runtimeReports.flagship_proof_graph_v2?.ok === true
+  flagship_proof_graph_v3: runtimeReports.flagship_proof_graph_v3?.ok === true
 };
 const remainingP0 = [];
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
@@ -198,7 +198,7 @@ const report = {
     runtime_replay_warning_zero_v2: checks.hooks_runtime_replay_warning_zero_v2
   },
   extreme_stabilization_1_14_1: {
-    status: checks.hooks_official_hash_oracle && checks.hooks_actual_parity_v2 && checks.hooks_runtime_replay_warning_zero_v2 && checks.ppt_full_e2e_blackbox && runtimeChecks.ppt_full_e2e_blackbox && checks.ppt_full_e2e_artifact_graph && checks.codex_0133_official_compat && checks.flagship_proof_graph_v2 && runtimeChecks.flagship_proof_graph_v2 ? 'present' : 'missing',
+    status: checks.hooks_official_hash_oracle && checks.hooks_actual_parity_v2 && checks.hooks_runtime_replay_warning_zero_v2 && checks.ppt_full_e2e_blackbox && runtimeChecks.ppt_full_e2e_blackbox && checks.ppt_full_e2e_artifact_graph && checks.codex_0133_official_compat && checks.flagship_proof_graph_v3 && runtimeChecks.flagship_proof_graph_v3 ? 'present' : 'missing',
     hooks_official_hash_oracle: checks.hooks_official_hash_oracle,
     hooks_actual_parity_v2: checks.hooks_actual_parity_v2,
     hooks_runtime_replay_warning_zero_v2: checks.hooks_runtime_replay_warning_zero_v2,
@@ -206,8 +206,8 @@ const report = {
     ppt_full_e2e_blackbox_report_ok: runtimeChecks.ppt_full_e2e_blackbox,
     ppt_full_e2e_artifact_graph: checks.ppt_full_e2e_artifact_graph,
     codex_0_133_official_compat: checks.codex_0133_official_compat,
-    flagship_proof_graph_v2: checks.flagship_proof_graph_v2,
-    flagship_proof_graph_v2_report_ok: runtimeChecks.flagship_proof_graph_v2
+    flagship_proof_graph_v3: checks.flagship_proof_graph_v3,
+    flagship_proof_graph_v3_report_ok: runtimeChecks.flagship_proof_graph_v3
   },
   scout_multisession_addendum: {
     status: checks.scouts_multisession_artifact_graph && checks.scouts_benchmark_isolation && checks.scouts_output_schema_wiring && checks.scouts_session_lifecycle && checks.scouts_readonly_guard_v2 && checks.scouts_no_speedup_overclaim ? 'present' : 'missing',

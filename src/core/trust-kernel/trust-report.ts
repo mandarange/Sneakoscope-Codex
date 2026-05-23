@@ -92,10 +92,12 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
   const imageUxReview = imageUxReviewTrust(proof);
   const pptReview = pptReviewTrust(proof);
   const dfix = dfixTrust(proof);
+  const madSks = madSksTrust(proof);
   issues.push(...imageUxReview.issues);
   issues.push(...pptReview.issues);
   issues.push(...dfix.issues);
-  const routeSpecificIssues = imageUxReview.issues.length + pptReview.issues.length + dfix.issues.length;
+  issues.push(...madSks.issues);
+  const routeSpecificIssues = imageUxReview.issues.length + pptReview.issues.length + dfix.issues.length + madSks.issues.length;
   const finalStatus = routeSpecificIssues && status === 'verified' ? 'verified_partial' : status;
   return {
     schema: TRUST_REPORT_SCHEMA,
@@ -117,14 +119,41 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
       wrongness: wrongness.summary,
       image_ux_review: imageUxReview.summary,
       ppt_review: pptReview.summary,
-      dfix: dfix.summary
+      dfix: dfix.summary,
+      mad_sks: madSks.summary
     },
     image_ux_review: imageUxReview.summary,
     ppt_review: pptReview.summary,
     dfix: dfix.summary,
+    mad_sks: madSks.summary,
     wrongness: wrongness.summary,
     scout_quality: scoutQualityFromProof(proof),
     blockers: issues.filter((issue: any) => /missing|blocked|stale|secret|not_passed|cannot_verify|text_only|mock_gpt_image_2_fixture/i.test(issue))
+  };
+}
+
+function madSksTrust(proof: any = {}) {
+  const evidence = proof.evidence?.mad_sks;
+  if (!evidence) return { issues: [], summary: { required: false, status: 'not_required' } };
+  const issues: string[] = [];
+  if (evidence.protected_core_unchanged !== true) issues.push('mad_sks_protected_core_changed_or_unverified');
+  if (!evidence.authorization_manifest_path) issues.push('mad_sks_authorization_manifest_missing');
+  if (!evidence.audit_ledger_path) issues.push('mad_sks_audit_ledger_missing');
+  if (!evidence.rollback_plan_path) issues.push('mad_sks_rollback_plan_missing');
+  if (!Array.isArray(evidence.verification) || evidence.verification.length === 0) issues.push('mad_sks_verification_missing');
+  return {
+    issues,
+    summary: {
+      schema: evidence.schema || 'sks.mad-sks-proof-evidence.v1',
+      required: true,
+      status: evidence.status || 'not_verified',
+      protected_core_unchanged: evidence.protected_core_unchanged === true,
+      authorization_manifest_path: evidence.authorization_manifest_path || null,
+      audit_ledger_path: evidence.audit_ledger_path || null,
+      rollback_plan_path: evidence.rollback_plan_path || null,
+      blocked_actions: evidence.blocked_actions?.length || 0,
+      local_only_artifact_policy: evidence.local_only_artifact_policy === true
+    }
   };
 }
 

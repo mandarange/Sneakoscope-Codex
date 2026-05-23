@@ -1,10 +1,15 @@
 # Release Readiness
 
-SKS 1.14.1 writes the `sks.release-readiness.v1` final release seal against the Codex `rust-v0.133.0` runtime compatibility matrix plus the OpenAI Codex `latest` 10-event hook schema snapshot, OpenAI Image Generation `gpt-image-2` docs, OpenAI Structured Outputs docs, UX-Review real imagegen smoke, PPT full synthetic deck E2E evidence, Scout multi-session artifact isolation, DFix evidence loops, the all-feature completion matrix, recursive JSON schema validation, hook trust warning-zero v2, and the function-only SKS update check contract.
+SKS 1.15.0 writes the `sks.release-readiness.v1` final release seal against the Codex `rust-v0.133.0` runtime compatibility matrix plus the OpenAI Codex `latest` 10-event hook schema snapshot, MAD-SKS full-system authority evidence, Immutable Harness Guard evidence, stale-`dist` freshness checks, Codex exec output-schema syntax parity for fresh `exec` and `exec resume`, Scout engine-run query UX and opt-in real smoke, proof graph v3, OpenAI Image Generation `gpt-image-2` docs, OpenAI Structured Outputs docs, UX-Review real imagegen smoke, PPT full synthetic deck E2E evidence, DFix evidence loops, recursive JSON schema validation, hook trust warning-zero v2, and the function-only SKS update check contract.
 
 ```bash
 npm run codex:0.133-compat
+npm run codex:exec-syntax-parity
 npm run codex:output-schema-fixture
+npm run mad-sks:permission-kernel
+npm run mad-sks:immutable-guard
+npm run mad-sks:blackbox
+npm run release:dist-freshness
 npm run image-fidelity:check
 npm run imagegen:capability
 npm run imagegen:gpt-image-2-request-validator
@@ -41,7 +46,9 @@ npm run dfix:verification-recommendation
 npm run dfix:verification
 npm run all-features:completion
 npm run all-features:deep-completion
-npm run evidence:flagship-coverage
+npm run evidence:flagship-proof-graph-v3
+npm run scouts:engine-run-ux
+npm run scouts:real-smoke
 npm run json-schema:recursive-check
 npm run release:metadata
 npm run memory-summary:rebuild-check
@@ -64,14 +71,16 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.14.1.json`
-- `.sneakoscope/reports/release-readiness-1.14.1.md`
-- `.sneakoscope/reports/all-feature-completion-1.14.1.json`
-- `.sneakoscope/reports/all-feature-completion-1.14.1.md`
-- `.sneakoscope/reports/official-docs-compat-1.14.1.json`
-- `.sneakoscope/reports/official-docs-compat-1.14.1.md`
+- `.sneakoscope/reports/release-readiness-1.15.0.json`
+- `.sneakoscope/reports/release-readiness-1.15.0.md`
+- `.sneakoscope/reports/all-feature-completion-1.15.0.json`
+- `.sneakoscope/reports/all-feature-completion-1.15.0.md`
+- `.sneakoscope/reports/official-docs-compat-1.15.0.json`
+- `.sneakoscope/reports/official-docs-compat-1.15.0.md`
 
-The report covers version drift, Codex 0.133 structured resume output, goal defaults, remote-control foreground app-server behavior, permission profiles/requirements, plugin discovery/marketplace mapping, latest 10-event hook schema and trust state, source image fidelity metadata, UX-Review command wiring, generated callout ingestion, real extraction reports, text-only fallback blocking, PPT real export/imagegen/re-review wiring, DFix error signatures/path decisions/cache/patch runner/verification selector/performance artifacts, all-feature deep coverage, recursive JSON schema recursion checks, Image Voxel relations, memory summary rebuilds, repeated blocker stops, official docs compatibility, hook strict subset status, Computer Use evidence mode support, codex-lb persistence truth, docs truthfulness, and remaining P0 gaps. A passing report has no remaining P0 gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, Codex 0.133 structured output for `exec` and `exec resume`, MAD-SKS authorization manifests, allowed/forbidden scope decisions, immutable protected-core snapshots, audit ledgers, rollback plans, proof graph v3 links, Scout engine-run lookup and real-smoke status, goal defaults, remote-control foreground app-server behavior, permission profiles/requirements, plugin discovery/marketplace mapping, latest 10-event hook schema and trust state, source image fidelity metadata, UX-Review command wiring, generated callout ingestion, real extraction reports, PPT real export/imagegen/re-review wiring, DFix evidence, all-feature deep coverage, recursive JSON schema checks, Image Voxel relations, memory summary rebuilds, repeated blocker stops, official docs compatibility, hook strict subset status, Computer Use evidence mode support, codex-lb persistence truth, docs truthfulness, and remaining P0 gaps. A passing report has no remaining P0 gaps.
+
+MAD-SKS readiness is intentionally high-friction: full-system authority requires explicit user authorization, scoped target roots, separate consent for system access, DB writes, package installation, service control, admin operations, network, Computer Use, destructive delete, and generated-asset edits. The SKS harness protected core remains immutable even under MAD-SKS.
 
 Computer Use truthfulness remains bounded: `probe_only` is a capability probe, `live_capture_success` is local-only captured evidence, and `live_capture_blocked` records Codex App, macOS permission, or official capture-surface blockers. SKS does not fabricate screenshots and does not claim universal Computer Use availability.
 

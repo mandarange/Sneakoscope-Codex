@@ -3,21 +3,16 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { ensureDistFresh } from './lib/ensure-dist-fresh.mjs';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const reportDir = path.join(root, '.sneakoscope', 'reports');
 
 export async function ensureDist() {
   const bin = path.join(root, 'dist', 'bin', 'sks.js');
-  if (fs.existsSync(bin)) return bin;
-  const result = spawnSync('npm', ['run', 'build', '--silent'], {
-    cwd: root,
-    encoding: 'utf8',
-    stdio: 'pipe'
-  });
-  if (result.status !== 0) {
-    throw new Error(`build_failed:${trim(result.stderr || result.stdout)}`);
-  }
+  const freshness = ensureDistFresh({ rebuild: true });
+  if (!freshness.ok) throw new Error(`dist_not_fresh:${freshness.issues.join(',')}`);
+  if (!fs.existsSync(bin)) throw new Error('dist_bin_missing_after_freshness_check');
   return bin;
 }
 

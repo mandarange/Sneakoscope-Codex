@@ -12,7 +12,7 @@ import { selectScoutEngine } from '../scouts/engines/scout-engine-policy.js';
 import { SCOUT_COUNT } from '../scouts/scout-schema.js';
 import { flag, readFlagValue, resolveMissionId } from './command-utils.js';
 
-const ACTIONS = new Set(['plan', 'run', 'status', 'consensus', 'handoff', 'validate', 'engines', 'bench', 'help', '--help', '-h']);
+const ACTIONS = new Set(['plan', 'run', 'status', 'consensus', 'handoff', 'validate', 'show-run', 'engines', 'bench', 'help', '--help', '-h']);
 
 export async function scoutsCommand(args: any = []) {
   const root = await projectRoot();
@@ -108,36 +108,49 @@ export async function scoutsCommand(args: any = []) {
     if (result.missing?.length) console.log(`Missing: ${result.missing.join(', ')}`);
     return;
   }
+  const artifactDir = engineRunId ? await resolveScoutEngineRunDir(dir, engineRunId) : dir;
+  if (action === 'show-run') {
+    if (!engineRunId) {
+      process.exitCode = 2;
+      return emitScoutJsonOrText({ schema: 'sks.scouts-show-run.v1', ok: false, mission_id: id, missing: ['--engine-run-id'] }, json);
+    }
+    const result = await readScoutRunArtifacts(artifactDir, id, engineRunId);
+    if (!result.ok) process.exitCode = 1;
+    return emitScoutJsonOrText(result, json);
+  }
   if (action === 'consensus') {
-    const consensus = await readJson(path.join(dir, 'scout-consensus.json'), null);
+    const consensus = await readJson(path.join(artifactDir, 'scout-consensus.json'), null);
     if (!consensus) {
       process.exitCode = 2;
-      const result = { schema: 'sks.scouts-consensus.v1', ok: false, mission_id: id, missing: ['scout-consensus.json'] };
+      const result = { schema: 'sks.scouts-consensus.v1', ok: false, mission_id: id, engine_run_id: engineRunId, missing: ['scout-consensus.json'] };
       if (json) return console.log(JSON.stringify(result, null, 2));
       console.error(`Scout consensus missing for ${id}.`);
       return;
     }
-    if (json) return console.log(JSON.stringify(consensus, null, 2));
+    const scoped = engineRunId && !consensus.engine_run_id ? { ...consensus, engine_run_id: engineRunId } : consensus;
+    if (json) return console.log(JSON.stringify(scoped, null, 2));
     console.log(JSON.stringify(consensus, null, 2));
     return;
   }
   if (action === 'handoff') {
     const fs = await import('node:fs/promises');
-    const file = path.join(dir, 'scout-handoff.md');
+    const file = path.join(artifactDir, 'scout-handoff.md');
     if (!(await exists(file))) {
       process.exitCode = 2;
-      if (json) return console.log(JSON.stringify({ schema: 'sks.scouts-handoff.v1', ok: false, mission_id: id, missing: ['scout-handoff.md'] }, null, 2));
+      if (json) return console.log(JSON.stringify({ schema: 'sks.scouts-handoff.v1', ok: false, mission_id: id, engine_run_id: engineRunId, missing: ['scout-handoff.md'] }, null, 2));
       console.error(`Scout handoff missing for ${id}.`);
       return;
     }
     const text = await fs.readFile(file, 'utf8');
-    if (json) return console.log(JSON.stringify({ schema: 'sks.scouts-handoff.v1', ok: true, mission_id: id, path: `.sneakoscope/missions/${id}/scout-handoff.md`, text }, null, 2));
+    if (json) return console.log(JSON.stringify({ schema: 'sks.scouts-handoff.v1', ok: true, mission_id: id, engine_run_id: engineRunId, path: scoutArtifactDisplayPath(id, artifactDir, 'scout-handoff.md'), text }, null, 2));
     console.log(text.trimEnd());
     return;
   }
   if (action === 'validate') {
-    let gate = await readScoutGateStatus(root, id);
-    if (!gate.ok && !strict) {
+    let gate = engineRunId
+      ? await readScopedScoutGateStatus(artifactDir)
+      : await readScoutGateStatus(root, id);
+    if (!engineRunId && !gate.ok && !strict) {
       const run = await runFiveScoutIntake(root, {
         missionId: id,
         route: context.route,
@@ -150,11 +163,14 @@ export async function scoutsCommand(args: any = []) {
       });
       gate = { ok: run.gate?.passed === true, gate: run.gate, missing: run.gate?.blockers || [] };
     }
-    const evidence = await readScoutProofEvidence(root, id);
+    const evidence = engineRunId
+      ? await readJson(path.join(artifactDir, 'scout-proof-evidence.json'), null)
+      : await readScoutProofEvidence(root, id);
     const result = {
       schema: 'sks.scouts-validate.v1',
       ok: gate.ok && evidence?.gate === 'passed',
       mission_id: id,
+      engine_run_id: engineRunId,
       gate: gate.gate,
       proof_evidence: evidence,
       missing: gate.missing || []
@@ -308,11 +324,12 @@ Usage:
   sks scouts run latest --engine codex-exec-parallel --require-output-schema --json
   sks scouts run latest --require-real-parallel --json
   sks scouts status latest --engine-runs --json
+  sks scouts show-run latest --engine-run-id <id> --json
   sks scouts engines --json
   sks scouts bench latest --engine local-static --mock --json
-  sks scouts consensus latest --json
-  sks scouts handoff latest
-  sks scouts validate latest --strict --json
+  sks scouts consensus latest [--engine-run-id <id>] --json
+  sks scouts handoff latest [--engine-run-id <id>]
+  sks scouts validate latest [--engine-run-id <id>] --strict --json
 
 Alias:
   sks scout run latest --json
@@ -340,6 +357,62 @@ async function listScoutEngineRuns(dir: string) {
     });
   }
   return runs.sort((a: any, b: any) => String(b.completed_at || b.engine_run_id).localeCompare(String(a.completed_at || a.engine_run_id)));
+}
+
+async function resolveScoutEngineRunDir(dir: string, engineRunId: string) {
+  if (!/^[A-Za-z0-9._:-]{1,180}$/.test(engineRunId)) throw new Error('Unsafe scout engine run id');
+  const canonical = await readJson(path.join(dir, 'scout-engine-result.json'), null);
+  const canonicalGate = await readJson(path.join(dir, 'scout-gate.json'), null);
+  if (canonical?.engine_run_id === engineRunId || canonicalGate?.engine_run_id === engineRunId) return dir;
+  const candidate = path.resolve(dir, 'scout-benchmarks', engineRunId);
+  const rel = path.relative(path.resolve(dir, 'scout-benchmarks'), candidate);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('Scout engine run path traversal rejected');
+  return candidate;
+}
+
+async function readScopedScoutGateStatus(artifactDir: string) {
+  const gate = await readJson(path.join(artifactDir, 'scout-gate.json'), null);
+  if (!gate) return { ok: false, missing: ['scout-gate.json'], gate: null };
+  return {
+    ok: gate.passed === true && !(gate.blockers || []).length,
+    missing: gate.passed === true ? [] : gate.blockers || ['scout_gate_not_passed'],
+    gate
+  };
+}
+
+async function readScoutRunArtifacts(artifactDir: string, missionId: string, engineRunId: string) {
+  const [engine, gate, consensus, proof] = await Promise.all([
+    readJson(path.join(artifactDir, 'scout-engine-result.json'), null),
+    readJson(path.join(artifactDir, 'scout-gate.json'), null),
+    readJson(path.join(artifactDir, 'scout-consensus.json'), null),
+    readJson(path.join(artifactDir, 'scout-proof-evidence.json'), null)
+  ]);
+  const ok = Boolean(gate || consensus || engine || proof);
+  return {
+    schema: 'sks.scouts-show-run.v1',
+    ok,
+    mission_id: missionId,
+    engine_run_id: engineRunId,
+    artifact_namespace: path.basename(path.dirname(artifactDir)) === 'scout-benchmarks' ? `scout-benchmarks/${engineRunId}` : 'canonical',
+    artifacts_dir: artifactDir,
+    engine,
+    gate,
+    consensus,
+    proof_evidence: proof,
+    missing: ok ? [] : ['engine_run_artifacts_missing']
+  };
+}
+
+function scoutArtifactDisplayPath(missionId: string, artifactDir: string, file: string) {
+  if (path.basename(path.dirname(artifactDir)) === 'scout-benchmarks') {
+    return `.sneakoscope/missions/${missionId}/scout-benchmarks/${path.basename(artifactDir)}/${file}`;
+  }
+  return `.sneakoscope/missions/${missionId}/${file}`;
+}
+
+function emitScoutJsonOrText(result: any, json: boolean) {
+  if (json) return console.log(JSON.stringify(result, null, 2));
+  console.log(JSON.stringify(result, null, 2));
 }
 
 async function canonicalScoutArtifactFingerprint(dir: string) {

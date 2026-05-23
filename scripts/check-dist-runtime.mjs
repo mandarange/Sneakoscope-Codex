@@ -15,8 +15,11 @@ requiredFile('dist/build-manifest.json');
 const bmPath = path.join(root, 'dist/build-manifest.json');
 if (fs.existsSync(bmPath)) {
   try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     const manifest = JSON.parse(fs.readFileSync(bmPath, 'utf8'));
     if (manifest.schema !== 'sks.dist-build.v2') issues.push(`build_manifest_schema:${manifest.schema || 'missing'}`);
+    if (manifest.version !== pkg.version || manifest.package_version !== pkg.version) issues.push(`build_manifest_version:${manifest.version || manifest.package_version || 'missing'}!=${pkg.version}`);
+    if (!manifest.source_digest) issues.push('build_manifest_source_digest_missing');
     if (Object.hasOwn(manifest, 'generated_at')) issues.push('build_manifest_generated_at_non_deterministic');
     const mjs = Number(manifest.mjs_runtime_files);
     if (Number.isFinite(mjs) && mjs !== 0) issues.push(`build_manifest_mjs:${mjs}`);

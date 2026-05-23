@@ -1,0 +1,26 @@
+# MAD-SKS
+
+MAD-SKS 1.15.0 is user-authorized full-system maintenance mode, not a DB-only unlock. It can operate on a declared target root and approved resource scopes, but every expanded capability is evidence-bound and the SKS harness protected core remains immutable.
+
+## Authority Model
+
+```bash
+sks mad-sks plan --target-root <path> --json
+sks mad-sks permissions --json
+sks mad-sks run --target-root <path> --json
+sks mad-sks apply --target-root <path> --yes --json
+sks mad-sks status --json
+sks mad-sks proof --json
+```
+
+MAD-SKS starts disabled. Write-capable operation requires an authorization manifest with user intent, target root, allowed scopes, forbidden scopes, timestamp, and hash. Separate consent is required for system access, DB writes, package installation, service control, admin operations, network operations, Computer Use, destructive delete, browser automation, and generated asset edits.
+
+## Evidence
+
+Every full-system action is recorded in the MAD-SKS audit ledger with action type, before/after hash where available, exit code, duration, risk level, rollback availability, secret-redaction status, protected-core impact, and local-only artifact policy. Completion Proof, Trust Report, Evidence Router, Wrongness Memory, and rollback plans must link to that ledger before MAD-SKS can claim success.
+
+## Boundaries
+
+MAD-SKS can modify user-authorized target project files, package manager state, build/test/lint/typecheck outputs, local services, DB migrations or data, browser/Computer Use workflows, generated assets, and system configuration only inside the approved scope. It must not store sudo passwords, leak secrets into logs, perform destructive delete without explicit confirmation, or treat third-party systems as authorized targets.
+
+Even when the target root is this repository, SKS package root, `dist`, `src/core`, `src/cli`, `src/commands`, `scripts`, `schemas`, `crates/sks-core`, package metadata, release metadata, managed hooks, and protected policy files are read-only protected core.

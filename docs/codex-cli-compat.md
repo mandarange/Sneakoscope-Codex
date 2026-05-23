@@ -1,6 +1,6 @@
 # Codex CLI Compatibility
 
-SKS 1.14.1 targets the OpenAI Codex CLI `rust-v0.133.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
+SKS 1.15.0 targets the OpenAI Codex CLI `rust-v0.133.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
 
 Computer Use and codex-lb compatibility notes are bounded: Computer Use live evidence can be `probe_only`, `live_capture_success`, or a structured blocker depending on the local Codex App/macOS capability, and codex-lb can be durable or `process_only_ephemeral` depending on setup choices. Recovery commands are `sks computer-use smoke --json` for a probe-only status and `sks codex-lb setup --write-env-file --keychain --launchctl` for durable persistence. Local screenshots and secrets stay private/redacted by default.
 
@@ -12,6 +12,7 @@ sks codex version --json
 sks codex doctor --json
 sks codex schema --json
 npm run codex:0.133-compat
+npm run codex:exec-syntax-parity
 npm run codex:output-schema-fixture
 sks hooks codex-validate --json
 sks hooks warning-check --json
@@ -19,13 +20,15 @@ npm run hooks:semantic-check
 npm run hooks:strict-subset-check
 ```
 
-Version detection checks `codex --version`, `codex exec resume --help`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored snapshot metadata. A missing live Codex binary is `integration_optional`; release hook validation uses the vendored snapshot, not the local binary.
+Version detection checks `codex --version`, `codex exec --help`, `codex exec resume --help`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored snapshot metadata. A missing live Codex binary is `integration_optional`; release hook validation uses the vendored snapshot, not the local binary.
 
 ## Codex 0.133 Capabilities
 
-The 1.14.1 compatibility matrix records these capability ids:
+The 1.15.0 compatibility matrix records these capability ids:
 
-- `exec_resume_output_schema`: preferred structured output for Scout, UX-Review callout extraction, Completion Proof, and Wrongness artifacts.
+- `exec_output_schema`: preferred structured output for fresh Codex exec sessions used by Scout real smoke and route automation.
+- `exec_resume_output_schema`: preferred structured output for resumed Codex sessions used by Scout, UX-Review callout extraction, Completion Proof, and Wrongness artifacts.
+- `exec_syntax_parity`: release-bound check that fresh `codex exec` and `codex exec resume` expose compatible output-schema syntax instead of inferring one from the other.
 - `app_server_image_fidelity`: original-resolution image metadata for UX-Review source screenshots, generated callout images, and Image Voxel coordinate alignment.
 - `memory_summary_version_rebuild`: schema-versioned TriWiki, Wrongness, and shared memory summaries with rebuild commands.
 - `goal_continuation_blocker_stop`: repeated blocker and usage-limit stops for Goal, QA, Research, and UX-Review loops.
@@ -38,6 +41,8 @@ The 1.14.1 compatibility matrix records these capability ids:
 - `remote_executor_standard_auth`, `python_sdk_auth`, and `python_sdk_turn_result`: P1 warning-only review items unless a route explicitly uses those SDK surfaces.
 
 Unknown newer Codex fields are warning-only. Codex versions below 0.133 are degraded but supported, and output-schema fallbacks cannot support claims above `verified_partial`.
+
+Fresh `codex exec` and `codex exec resume` are checked independently because a release gate that only inspects resume help can miss syntax drift in new sessions. Scout real-smoke and output-schema fixtures must record which command form was exercised.
 
 ## Vendored Snapshot
 
@@ -85,6 +90,7 @@ SKS strict-subset examples:
 ```bash
 npm run codex:compat
 npm run codex:0.133-compat
+npm run codex:exec-syntax-parity
 npm run codex:output-schema-fixture
 npm run hooks:codex-validate
 npm run hooks:warning-check

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { runCodexExec } from '../../codex-adapter.js';
 import { nowIso } from '../../fsx.js';
-import { codexSchemaPath, detectCodexExecResumeOutputSchema } from '../../codex-exec-output-schema.js';
+import { codexSchemaPath, detectCodexExecOutputSchemaSyntax } from '../../codex-exec-output-schema.js';
 import { appendScoutLedger } from '../scout-artifacts.js';
 import { buildScoutPrompt, scoutEngineMode } from './scout-engine-base.js';
 
@@ -18,8 +18,8 @@ export async function runCodexExecParallelEngine(root: any, {
   const startedAt = nowIso();
   const startMs = Date.now();
   const outputSchemaPath = await codexSchemaPath('scout-result').catch(() => null);
-  const availability = await detectCodexExecResumeOutputSchema().catch(() => null);
-  const outputSchemaUsed = Boolean(outputSchemaPath && availability?.output_schema_supported);
+  const availability = await detectCodexExecOutputSchemaSyntax().catch(() => null);
+  const outputSchemaUsed = Boolean(outputSchemaPath && availability?.exec?.output_schema_supported);
   const jobs = roles.map(async (role: any) => {
     const scoutSessionId = `${engineRunId || missionId || 'scout-run'}-${role.id}`;
     const outputFile = path.join(dir, `${role.id}.${engineRunId || 'codex'}.codex.json`);

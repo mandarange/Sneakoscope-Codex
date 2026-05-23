@@ -8,6 +8,18 @@ export const MAD_SKS_PERMISSION_PROFILE = Object.freeze({
   scope: 'active_invocation_only',
   authority_surface: 'skill_or_mcp_gate_function',
   allowed: Object.freeze([
+    'target_project_file_writes',
+    'target_project_config_writes',
+    'target_project_shell_commands',
+    'target_project_package_manager',
+    'package_install_with_allow_package_install',
+    'service_control_with_allow_service_control',
+    'system_commands_with_allow_system',
+    'network_operations_with_allow_network',
+    'computer_use_with_allow_computer_use',
+    'browser_automation_with_allow_browser_use',
+    'generated_asset_edits_with_allow_generated_assets',
+    'file_permission_changes_with_allow_file_permissions',
     'live_server_changes',
     'supabase_mcp_database_writes',
     'direct_execute_sql_writes',
@@ -27,7 +39,12 @@ export const MAD_SKS_PERMISSION_PROFILE = Object.freeze({
     'dangerous_project_or_branch_management',
     'credential_exfiltration',
     'persistent_security_weakening',
-    'unrequested_fallback_implementation'
+    'unrequested_fallback_implementation',
+    'sks_harness_code_mutation',
+    'sks_package_root_mutation',
+    'sks_dist_runtime_mutation',
+    'sks_release_metadata_mutation',
+    'sks_managed_hook_core_mutation'
   ]),
   deactivation: 'mission_gate_passed_or_permissions_deactivated'
 });

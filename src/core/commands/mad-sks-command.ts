@@ -1,12 +1,21 @@
 import path from 'node:path';
-import { appendJsonlBounded, exists, nowIso, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
+import { appendJsonlBounded, exists, nowIso, packageRoot, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
 import { createMission, setCurrent } from '../mission.js';
 import { enableMadHighProfile, madHighProfileName } from '../auto-review.js';
 import { permissionGateSummary } from '../permission-gates.js';
 import { defaultTmuxSessionName, launchMadTmuxUi, sanitizeTmuxSessionName } from '../tmux-ui.js';
+import { createMadSksAuthorizationManifest, validateMadSksAuthorizationManifest } from '../mad-sks/authorization-manifest.js';
+import { createMadSksAuditLedger, madSksAuditAction, writeMadSksAuditLedger } from '../mad-sks/audit-ledger.js';
+import { compareProtectedCoreSnapshots, evaluateMadSksWrite, resolveProtectedCore, snapshotProtectedCore } from '../mad-sks/immutable-harness-guard.js';
+import { buildMadSksPermissionModel, parseMadSksFlags } from '../mad-sks/permission-model.js';
+import { createMadSksProofEvidence, writeMadSksProofEvidence } from '../mad-sks/proof-evidence.js';
+import { createMadSksRollbackPlan, writeMadSksRollbackPlan } from '../mad-sks/rollback-plan.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
+  const subcommand = firstSubcommand(args);
+  if (subcommand) return madSksSubcommand(subcommand, args.filter((arg: any) => String(arg) !== subcommand));
+
   const cleanArgs = args.filter((arg: any) => !['--mad', '--MAD', '--mad-sks', '--high', '--no-auto-install-tmux'].includes(arg));
   if (args.includes('--json')) {
     const profile = await enableMadHighProfile();
@@ -126,4 +135,256 @@ export async function madSksFixture(root: any) {
   const gate = { schema_version: 1, passed: true, mad_sks_permission_active: true, permissions_deactivated: true, catastrophic_safety_guard_active: true, permission_profile: permissionGateSummary(), fixture: true };
   await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
   return { mission_id: id, dir, gate };
+}
+
+const MAD_SKS_COMMAND_SURFACE = Object.freeze([
+  'plan',
+  'run',
+  'apply',
+  'doctor',
+  'status',
+  'permissions',
+  'proof',
+  'rollback-plan',
+  'audit',
+  'explain'
+]);
+
+async function madSksSubcommand(subcommand: string, args: any[] = []) {
+  const json = args.includes('--json');
+  const targetRoot = path.resolve(readOption(args, '--target-root', process.cwd()));
+  const userIntent = readOption(args, '--intent', 'MAD-SKS user-authorized maintenance');
+  const flags = parseMadSksFlags(['--mad-sks', subcommand === 'plan' ? '--plan-only' : '', ...args].filter(Boolean));
+  const permission = buildMadSksPermissionModel({ targetRoot, userIntent, flags });
+  const root = await sksRoot();
+
+  if (subcommand === 'permissions') {
+    return emit({
+      schema: 'sks.mad-sks-permissions.v1',
+      ok: true,
+      command_surface: [...MAD_SKS_COMMAND_SURFACE],
+      permission_flags: [
+        '--mad-sks',
+        '--allow-system',
+        '--allow-db-write',
+        '--allow-package-install',
+        '--allow-service-control',
+        '--allow-admin',
+        '--allow-network',
+        '--allow-computer-use',
+        '--allow-browser-use',
+        '--allow-generated-assets',
+        '--allow-file-permissions',
+        '--allow-delete',
+        '--confirm-delete'
+      ],
+      permission_model: permission,
+      protected_core: resolveProtectedCore({ packageRoot: packageRoot(), targetRoot }),
+      protected_core_immutable: true,
+      protected_core_write_allowed: false
+    }, json);
+  }
+
+  if (subcommand === 'explain') {
+    return emit({
+      schema: 'sks.mad-sks-explain.v1',
+      ok: true,
+      summary: 'MAD-SKS is a user-authorized high-power maintenance mode. Target project work can be widened by explicit flags, while SKS harness/package/dist/scripts/schemas/release metadata remain immutable protected core.',
+      command_surface: [...MAD_SKS_COMMAND_SURFACE],
+      catastrophic_safeguards: permission.forbidden_scopes,
+      immutable_harness_guard: 'always_on'
+    }, json);
+  }
+
+  if (subcommand === 'doctor' || subcommand === 'status') {
+    const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot });
+    const before = await snapshotProtectedCore(packageRoot(), 'status');
+    return emit({
+      schema: subcommand === 'doctor' ? 'sks.mad-sks-doctor.v1' : 'sks.mad-sks-status.v1',
+      ok: true,
+      target_root: targetRoot,
+      permission_model: permission,
+      protected_core: protectedCore,
+      protected_core_snapshot: before,
+      protected_core_immutable: true,
+      permission_active: false
+    }, json);
+  }
+
+  if (subcommand === 'plan') {
+    const manifest = createMadSksAuthorizationManifest({ permission, userIntent });
+    return emit({
+      schema: 'sks.mad-sks-plan.v1',
+      ok: true,
+      dry_run: true,
+      writes_performed: false,
+      permission_model: permission,
+      authorization_manifest_preview: manifest,
+      protected_core: resolveProtectedCore({ packageRoot: packageRoot(), targetRoot }),
+      required_artifacts: [
+        'mad-sks-authorization.json',
+        'mad-sks-audit-ledger.json',
+        'mad-sks-rollback-plan.json',
+        'mad-sks-proof-evidence.json',
+        'mad-sks-protected-core-before.json',
+        'mad-sks-protected-core-after.json'
+      ]
+    }, json);
+  }
+
+  if (subcommand === 'apply') {
+    const manifestPath = readOption(args, '--authorization-manifest', null);
+    const manifest = manifestPath ? await readJson(path.resolve(manifestPath), null) : null;
+    const validation = validateMadSksAuthorizationManifest(manifest);
+    if (!validation.ok) {
+      const result = {
+        schema: 'sks.mad-sks-apply.v1',
+        ok: false,
+        status: 'blocked',
+        target_root: targetRoot,
+        issues: ['authorization_manifest_required', ...validation.issues],
+        permission_model: permission
+      };
+      process.exitCode = 1;
+      return emit(result, json);
+    }
+    return materializeMadSksRun(root, targetRoot, permission, userIntent, json, { action: 'apply', authorizationManifest: validation.manifest, authorizationManifestPath: path.resolve(manifestPath) });
+  }
+
+  if (subcommand === 'run') {
+    return materializeMadSksRun(root, targetRoot, permission, userIntent, json, { action: 'run' });
+  }
+
+  if (subcommand === 'rollback-plan' || subcommand === 'audit' || subcommand === 'proof') {
+    const latest = await latestMadSksArtifact(root, subcommand);
+    if (!latest) {
+      const result = { schema: `sks.mad-sks-${subcommand}.v1`, ok: false, status: 'missing', missing: [`mad-sks-${subcommand}.json`] };
+      process.exitCode = 1;
+      return emit(result, json);
+    }
+    return emit(latest, json);
+  }
+}
+
+async function materializeMadSksRun(root: string, targetRoot: string, permission: any, userIntent: string, json: boolean, opts: any = {}) {
+  if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
+  const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: userIntent });
+  const before = await snapshotProtectedCore(packageRoot(), 'before');
+  const authorization = opts.authorizationManifest || createMadSksAuthorizationManifest({ permission, userIntent });
+  const authorizationPath = opts.authorizationManifestPath || path.join(dir, 'mad-sks-authorization.json');
+  if (!opts.authorizationManifestPath) await writeJsonAtomic(authorizationPath, authorization);
+  const targetProbe = await evaluateMadSksWrite({ packageRoot: packageRoot(), targetRoot, operation: 'file_write', path: path.join(targetRoot, '.sneakoscope', 'mad-sks-target-probe') });
+  const protectedProbe = await evaluateMadSksWrite({ packageRoot: packageRoot(), targetRoot, operation: 'file_write', path: path.join(packageRoot(), 'src', 'core', 'version.ts') });
+  const audit = createMadSksAuditLedger({
+    authorizationManifestPath: authorizationPath,
+    targetRoot,
+    actions: [
+      madSksAuditAction({
+        type: 'file_write',
+        target: targetProbe.path,
+        rollback_available: true,
+        risk_level: 'low',
+        protected_core_impact: 'none',
+        notes: ['probe_only_no_target_write_performed']
+      })
+    ],
+    blockedActions: [protectedProbe]
+  });
+  const rollback = createMadSksRollbackPlan({
+    targetRoot,
+    fileRollbacks: [{ path: targetProbe.path, previous_content_hash: null, status: 'snapshot_required_before_real_write' }],
+    unavailable: permission.high_risk_confirmation_required ? ['high_risk_final_confirmation_required_before_apply'] : []
+  });
+  const after = await snapshotProtectedCore(packageRoot(), 'after');
+  const comparison = compareProtectedCoreSnapshots(before, after);
+  const auditPath = path.join(dir, 'mad-sks-audit-ledger.json');
+  const rollbackPath = path.join(dir, 'mad-sks-rollback-plan.json');
+  const beforePath = path.join(dir, 'mad-sks-protected-core-before.json');
+  const afterPath = path.join(dir, 'mad-sks-protected-core-after.json');
+  const proofPath = path.join(dir, 'mad-sks-proof-evidence.json');
+  await writeJsonAtomic(beforePath, before);
+  await writeJsonAtomic(afterPath, after);
+  await writeJsonAtomic(path.join(dir, 'mad-sks-protected-core-comparison.json'), comparison);
+  await writeMadSksAuditLedger(auditPath, audit);
+  await writeMadSksRollbackPlan(rollbackPath, rollback);
+  const proof = createMadSksProofEvidence({
+    authorizationManifestPath: authorizationPath,
+    auditLedgerPath: auditPath,
+    rollbackPlanPath: rollbackPath,
+    immutableHarnessGuard: protectedProbe,
+    protectedCoreBefore: beforePath,
+    protectedCoreAfter: afterPath,
+    protectedCoreComparison: comparison,
+    changedTargetFiles: [],
+    blockedActions: [protectedProbe],
+    verification: [{ command: 'mad-sks protected core snapshot compare', ok: comparison.ok }]
+  });
+  await writeMadSksProofEvidence(proofPath, proof);
+  const gate = {
+    schema_version: 1,
+    passed: proof.ok === true,
+    mad_sks_permission_active: true,
+    permissions_deactivated: true,
+    full_system_authority: permission.mode === 'full_system_authority',
+    immutable_harness_guard_passed: comparison.ok === true,
+    audit_ledger: auditPath,
+    rollback_plan: rollbackPath,
+    proof_evidence: proofPath,
+    permission_profile: permissionGateSummary()
+  };
+  await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
+  await setCurrent(root, {
+    mission_id: id,
+    route: 'MadSKS',
+    route_command: '$MAD-SKS',
+    mode: 'MADSKS',
+    phase: 'MADSKS_PERMISSION_CLOSED',
+    mad_sks_active: false,
+    mad_sks_modifier: true,
+    mad_sks_gate_file: 'mad-sks-gate.json',
+    prompt: userIntent
+  });
+  return emit({
+    schema: opts.action === 'apply' ? 'sks.mad-sks-apply.v1' : 'sks.mad-sks-run.v1',
+    ok: proof.ok === true,
+    status: proof.status,
+    mission_id: id,
+    target_root: targetRoot,
+    permission_model: permission,
+    authorization_manifest: authorizationPath,
+    audit_ledger: auditPath,
+    rollback_plan: rollbackPath,
+    proof_evidence: proofPath,
+    protected_core_before: beforePath,
+    protected_core_after: afterPath,
+    protected_core_unchanged: comparison.ok === true,
+    blocked_actions: [protectedProbe]
+  }, json);
+}
+
+async function latestMadSksArtifact(root: string, kind: string) {
+  const current = await readJson(path.join(root, '.sneakoscope', 'current.json'), null);
+  const missionId = current?.mission_id;
+  if (!missionId) return null;
+  const fileMap: Record<string, string> = {
+    proof: 'mad-sks-proof-evidence.json',
+    audit: 'mad-sks-audit-ledger.json',
+    'rollback-plan': 'mad-sks-rollback-plan.json'
+  };
+  const file = path.join(root, '.sneakoscope', 'missions', missionId, fileMap[kind] || '');
+  return readJson(file, null);
+}
+
+function firstSubcommand(args: any[] = []) {
+  const found = args.find((arg) => MAD_SKS_COMMAND_SURFACE.includes(String(arg)));
+  return found ? String(found) : null;
+}
+
+function emit(result: any, json: boolean) {
+  if (json) return console.log(JSON.stringify(result, null, 2));
+  if (result.ok === false) {
+    console.error(`${result.schema}: ${result.status || 'blocked'}`);
+    return;
+  }
+  console.log(JSON.stringify(result, null, 2));
 }
