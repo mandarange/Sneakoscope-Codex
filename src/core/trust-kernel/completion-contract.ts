@@ -32,7 +32,8 @@ export function validateCompletionContract(contract: unknown = {}, proof: unknow
   const wrongness = asRecord(proofEvidence.wrongness);
   const activeWrongness = Number(wrongness.active_count || 0);
   const highWrongness = Number(wrongness.high_severity_active || 0);
-  if (highWrongness > 0) issues.push('active_wrongness_high');
+  const referenceOnlyPartial = imageUxReferenceOnlyPartial(proofRecord);
+  if (highWrongness > 0 && !referenceOnlyPartial) issues.push('active_wrongness_high');
   if (proofRecord.status === 'verified' && activeWrongness > 0) issues.push('active_wrongness_requires_verified_partial');
   if (claimLinksActiveWrongness(proofRecord, wrongness)) issues.push('claim_linked_to_active_wrongness');
   const status = typeof proofRecord.status === 'string'
@@ -45,6 +46,14 @@ export function validateCompletionContract(contract: unknown = {}, proof: unknow
     status: issues.length ? 'blocked' : status,
     issues: [...new Set(issues)]
   };
+}
+
+function imageUxReferenceOnlyPartial(proofRecord: JsonRecord) {
+  const evidence = asRecord(proofRecord.evidence);
+  const imageUxReview = asRecord(evidence.image_ux_review);
+  return proofRecord.status === 'verified_partial'
+    && imageUxReview.reference_only === true
+    && imageUxReview.status === 'verified_partial';
 }
 
 function claimLinksActiveWrongness(proofRecord: JsonRecord, wrongness: JsonRecord) {

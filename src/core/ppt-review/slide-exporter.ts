@@ -88,11 +88,11 @@ export async function exportSlidesToImages({ root, dir, deckPath = null, deckInv
       height: 1,
       format: 'png',
       fidelity: 'mock_fixture_one_by_one_png',
-      source: 'mock_fixture',
+      source: deckPath ? 'fake_export' : 'mock_fixture',
       local_only: true
     });
   }
-  const exportAdapter = manualImages.length ? 'manual_slide_image_attach' : mock ? 'mock_fixture' : await detectSlideExportAdapter();
+  const exportAdapter = manualImages.length ? 'manual_slide_image_attach' : mock ? (deckPath ? 'fake_export' : 'mock_fixture') : await detectSlideExportAdapter();
   if (!manualImages.length && !mock && inventory?.passed === true) {
     const adapterExport = await exportWithDetectedAdapter({ root, dir, deckPath, inventory, adapter: exportAdapter });
     exportedSlides.push(...adapterExport.slides);

@@ -43,21 +43,86 @@ async function detectCodexAppImagegen(codexBin: string | null, opts: any = {}) {
     return { available: true, detector: 'env_or_option', blocker: null, raw: null };
   }
   if (!codexBin) return { available: false, detector: 'codex_binary_missing', blocker: 'codex_binary_missing', raw: null };
-  const run = await runProcess(codexBin, ['features', 'list', '--json'], {
+  const jsonRun = await runProcess(codexBin, ['features', 'list', '--json'], {
     timeoutMs: opts.timeoutMs || 5000,
     maxOutputBytes: 64 * 1024
   }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err) }));
   let parsed: any = null;
   try {
-    parsed = JSON.parse(run.stdout || '{}');
+    const candidate = JSON.parse(jsonRun.stdout || 'null');
+    parsed = hasCodexFeatureSignal(candidate) ? candidate : null;
   } catch {}
-  const haystack = JSON.stringify(parsed || run.stdout || run.stderr || '');
-  const available = /image[_-]?generation|imagegen|\$imagegen/i.test(haystack)
-    && !/false|disabled|missing/i.test(String(parsed?.image_generation ?? parsed?.features?.image_generation ?? ''));
+  let plainRun: any = null;
+  if (!parsed) {
+    plainRun = await runProcess(codexBin, ['features', 'list'], {
+      timeoutMs: opts.timeoutMs || 5000,
+      maxOutputBytes: 64 * 1024
+    }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err) }));
+  }
+  const rawText = String(plainRun?.stdout || plainRun?.stderr || jsonRun.stdout || jsonRun.stderr || '');
+  const available = codexFeatureEnabled(parsed, rawText);
   return {
     available,
     detector: 'codex_features_list',
     blocker: available ? null : 'codex_app_imagegen_not_detected',
-    raw: parsed || String(run.stdout || run.stderr || '').slice(0, 2000)
+    raw: parsed || rawText.slice(0, 2000)
   };
+}
+
+function hasCodexFeatureSignal(value: any): boolean {
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.length > 0;
+  return Object.keys(value).length > 0;
+}
+
+function codexFeatureEnabled(parsed: any, rawText: string): boolean {
+  const parsedValue = parsedFeatureEnabled(parsed);
+  if (parsedValue !== null) return parsedValue;
+  const plainValue = plainFeatureEnabled(rawText);
+  if (plainValue !== null) return plainValue;
+  const haystack = JSON.stringify(parsed || rawText || '');
+  return /image[_-]?generation|imagegen|\$imagegen/i.test(haystack)
+    && !/false|disabled|missing/i.test(String(parsed?.image_generation ?? parsed?.features?.image_generation ?? ''));
+}
+
+function parsedFeatureEnabled(parsed: any): boolean | null {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const direct = boolish(parsed.image_generation ?? parsed.imageGeneration ?? parsed.imagegen);
+  if (direct !== null) return direct;
+  const featureMap = parsed.features && typeof parsed.features === 'object' && !Array.isArray(parsed.features)
+    ? boolish(parsed.features.image_generation ?? parsed.features.imageGeneration ?? parsed.features.imagegen)
+    : null;
+  if (featureMap !== null) return featureMap;
+  const featureLists = [
+    Array.isArray(parsed) ? parsed : null,
+    Array.isArray(parsed.features) ? parsed.features : null
+  ].filter(Boolean);
+  for (const list of featureLists) {
+    for (const item of list as any[]) {
+      if (!item || typeof item !== 'object') continue;
+      const name = String(item.name ?? item.key ?? item.id ?? item.feature ?? '');
+      if (!/^image[_-]?generation$|^imagegen$/i.test(name)) continue;
+      const value = boolish(item.enabled ?? item.value ?? item.available ?? item.status);
+      if (value !== null) return value;
+    }
+  }
+  return null;
+}
+
+function plainFeatureEnabled(rawText: string): boolean | null {
+  for (const line of rawText.split(/\r?\n/)) {
+    const columns = line.trim().split(/\s+/).filter(Boolean);
+    if (columns.length < 2) continue;
+    if (!/^image[_-]?generation$|^imagegen$/i.test(columns[0] || '')) continue;
+    return boolish(columns[columns.length - 1]);
+  }
+  return null;
+}
+
+function boolish(value: unknown): boolean | null {
+  if (value === true || value === false) return value;
+  if (typeof value !== 'string') return null;
+  if (/^(true|enabled|available|on|yes)$/i.test(value.trim())) return true;
+  if (/^(false|disabled|missing|off|no)$/i.test(value.trim())) return false;
+  return null;
 }

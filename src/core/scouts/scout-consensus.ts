@@ -1,5 +1,5 @@
 import { nowIso } from '../fsx.js';
-import { SCOUT_CONSENSUS_SCHEMA, SCOUT_COUNT } from './scout-schema.js';
+import { SCOUT_CONSENSUS_SCHEMA, SCOUT_COUNT, SCOUT_RESULT_SCHEMA } from './scout-schema.js';
 import { scoutRouteLabel } from './scout-plan.js';
 
 export function buildScoutConsensus({
@@ -9,14 +9,22 @@ export function buildScoutConsensus({
   parallelMode = 'parallel',
   generatedAt = nowIso()
 }: any = {}) {
-  const completed = results.filter((result: any) => result.status === 'done').length;
-  const blockers = results.flatMap((result: any) => result.blockers || []);
-  const unverified = results.flatMap((result: any) => result.unverified || []);
-  const findings = results.flatMap((result: any) => result.findings || []);
-  const suggested = results.flatMap((result: any) => result.suggested_tasks || []);
-  const wrongnessReferences = [...new Set(results.flatMap((result: any) => result.wrongness_references || []))];
-  const activeAvoidanceRules = dedupeRules(results.flatMap((result: any) => result.wrongness_context?.active_avoidance_rules || []));
-  const sourcePolicy = summarizeSourcePolicy(results);
+  const invalidResults = results.flatMap((result: any) => scoutResultSchemaBlockers(result).map((issue) => `${result?.scout_id || 'unknown'}:${issue}`));
+  const consensusResults = results.filter((result: any) => scoutResultSchemaBlockers(result).length === 0 && result.status === 'done');
+  const completed = consensusResults.length;
+  const blockers = [
+    ...results.flatMap((result: any) => result.blockers || []),
+    ...invalidResults
+  ];
+  const unverified = [
+    ...results.flatMap((result: any) => result.unverified || []),
+    ...(invalidResults.length ? ['Schema-invalid scout results were excluded from consensus/proof promotion.'] : [])
+  ];
+  const findings = consensusResults.flatMap((result: any) => result.findings || []);
+  const suggested = consensusResults.flatMap((result: any) => result.suggested_tasks || []);
+  const wrongnessReferences = [...new Set(consensusResults.flatMap((result: any) => result.wrongness_references || []))];
+  const activeAvoidanceRules = dedupeRules(consensusResults.flatMap((result: any) => result.wrongness_context?.active_avoidance_rules || []));
+  const sourcePolicy = summarizeSourcePolicy(consensusResults, { rejected: invalidResults.length });
   const requiredTests = [...new Set(suggested.flatMap((task: any) => task.verification || []))];
   const implementationSlices = suggested.length ? suggested.map((task: any, index: any) => ({
     id: task.id || `slice-${String(index + 1).padStart(3, '0')}`,
@@ -31,8 +39,8 @@ export function buildScoutConsensus({
     risk: 'medium',
     verification: ['npm run packcheck']
   }];
-  const dbRequired = results.some((result: any) => result.scout_id === 'scout-3-safety-db' && result.findings?.some((finding: any) => finding.kind === 'db' || finding.kind === 'risk'));
-  const visualRequired = results.some((result: any) => result.scout_id === 'scout-4-visual-voxel' && result.required_image_voxel_evidence?.length);
+  const dbRequired = consensusResults.some((result: any) => result.scout_id === 'scout-3-safety-db' && result.findings?.some((finding: any) => finding.kind === 'db' || finding.kind === 'risk'));
+  const visualRequired = consensusResults.some((result: any) => result.scout_id === 'scout-4-visual-voxel' && result.required_image_voxel_evidence?.length);
   return {
     schema: SCOUT_CONSENSUS_SCHEMA,
     mission_id: missionId,
@@ -62,9 +70,11 @@ export function buildScoutConsensus({
       reason: dbRequired ? 'Scout 3 found DB/security/permission risk cues.' : null
     },
     context7: {
-      required: results.some((result: any) => result.context7_required === true),
-      libraries: [...new Set(results.flatMap((result: any) => result.context7_libraries || []))]
+      required: consensusResults.some((result: any) => result.context7_required === true),
+      libraries: [...new Set(consensusResults.flatMap((result: any) => result.context7_libraries || []))]
     },
+    schema_valid_results: completed,
+    schema_invalid_results: invalidResults,
     blockers,
     unverified
   };
@@ -82,7 +92,7 @@ function dedupeRules(rules: any = []) {
   return out;
 }
 
-function summarizeSourcePolicy(results: any = []) {
+function summarizeSourcePolicy(results: any = [], { rejected = 0 }: any = {}) {
   const counts: Record<string, number> = {
     parsed_scout_output: 0,
     static_fixture: 0,
@@ -99,6 +109,7 @@ function summarizeSourcePolicy(results: any = []) {
     synthetic_static_used: (counts.static_fixture ?? 0) > 0,
     mode: counts.parse_failed_blocked ? 'blocked_on_parse_failure' : (counts.parsed_scout_output ? 'parsed_real_outputs' : 'static_or_fixture_outputs'),
     parse_failures_block: true,
+    rejected_schema_invalid_count: rejected,
     counts,
     accepted_sources: [
       'parsed_scout_output',
@@ -109,6 +120,16 @@ function summarizeSourcePolicy(results: any = []) {
       'invalid_scout_result_schema'
     ]
   };
+}
+
+export function scoutResultSchemaBlockers(result: any = {}) {
+  const blockers: string[] = [];
+  if (result.schema !== SCOUT_RESULT_SCHEMA) blockers.push(`invalid_schema:${result.schema || 'missing'}`);
+  if (result.status !== 'done') blockers.push(`not_done:${result.status || 'missing'}`);
+  if (result.schema_validation?.ok === false) blockers.push('schema_validation_failed');
+  if (Array.isArray(result.parse_issues) && result.parse_issues.length) blockers.push('parse_issues_present');
+  if (result.read_only !== true || result.read_only_confirmed !== true) blockers.push('read_only_not_confirmed');
+  return blockers;
 }
 
 export function renderScoutHandoff(consensus: any = {}) {

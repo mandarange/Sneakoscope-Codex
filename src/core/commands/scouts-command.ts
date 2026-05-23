@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { ensureDir, exists, projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
+import fs from 'node:fs/promises';
+import { ensureDir, exists, projectRoot, readJson, readText, sha256, writeJsonAtomic } from '../fsx.js';
 import { createMission, loadMission, missionDir, setCurrent, stateFile } from '../mission.js';
 import { routePrompt } from '../routes.js';
 import { buildScoutTeamPlan, normalizeScoutPolicy, routeRequiresScoutIntake, scoutRouteLabel } from '../scouts/scout-plan.js';
@@ -23,6 +24,10 @@ export async function scoutsCommand(args: any = []) {
   const strict = flag(actionArgs, '--strict');
   const requestedEngine = readFlagValue(actionArgs, '--engine', 'auto');
   const requireRealParallel = flag(actionArgs, '--require-real-parallel');
+  const requireOutputSchema = flag(actionArgs, '--require-output-schema');
+  const isolateArtifacts = flag(actionArgs, '--isolate-artifacts');
+  const engineRunId = readFlagValue(actionArgs, '--engine-run-id', null);
+  const sessionPrefix = readFlagValue(actionArgs, '--session-prefix', null);
   const force = flag(actionArgs, '--force-scouts') || flag(actionArgs, '--force');
   const noScouts = flag(actionArgs, '--no-scouts');
   const missionArg = actionArgs.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
@@ -64,6 +69,10 @@ export async function scoutsCommand(args: any = []) {
       parallel: !flag(actionArgs, '--sequential'),
       engine: requestedEngine,
       requireRealParallel,
+      requireOutputSchema,
+      engineRunId,
+      sessionPrefix,
+      writeCanonical: !isolateArtifacts,
       mock
     });
     await setCurrent(root, {
@@ -91,7 +100,8 @@ export async function scoutsCommand(args: any = []) {
       engine: gate.gate?.engine || null,
       real_parallel: gate.gate?.real_parallel === true,
       gate: gate.gate,
-      missing: gate.missing
+      missing: gate.missing,
+      engine_runs: flag(actionArgs, '--engine-runs') ? await listScoutEngineRuns(dir) : undefined
     };
     if (json) return console.log(JSON.stringify(result, null, 2));
     console.log(`Five-scout intake: ${result.ok ? 'passed' : 'not passed'} (${result.completed_scouts}/${SCOUT_COUNT})`);
@@ -135,6 +145,7 @@ export async function scoutsCommand(args: any = []) {
         mode: 'validate-fixture',
         parallel: true,
         engine: 'local-static',
+        requireOutputSchema,
         mock: true
       });
       gate = { ok: run.gate?.passed === true, gate: run.gate, missing: run.gate?.blockers || [] };
@@ -148,6 +159,7 @@ export async function scoutsCommand(args: any = []) {
       proof_evidence: evidence,
       missing: gate.missing || []
     };
+    if (!result.ok) process.exitCode = 1;
     if (json) return console.log(JSON.stringify(result, null, 2));
     console.log(`Scout validation: ${result.ok ? 'pass' : 'blocked'}`);
     return;
@@ -156,10 +168,12 @@ export async function scoutsCommand(args: any = []) {
     const selection = await selectScoutEngine(root, {
       requested: requestedEngine,
       requireRealParallel,
+      requireOutputSchema,
       missionId: id,
       route: context.route,
       mock
     });
+    const canonicalBefore = await canonicalScoutArtifactFingerprint(dir);
     const parallelRun = await runFiveScoutIntake(root, {
       missionId: id,
       route: context.route,
@@ -168,6 +182,9 @@ export async function scoutsCommand(args: any = []) {
       parallel: true,
       engine: selection.selected,
       requireRealParallel,
+      requireOutputSchema,
+      writeCanonical: false,
+      sessionPrefix: sessionPrefix ? `${sessionPrefix}-parallel` : null,
       mock
     });
     const sequentialRun = await runFiveScoutIntake(root, {
@@ -177,8 +194,12 @@ export async function scoutsCommand(args: any = []) {
       mode: 'bench-sequential',
       parallel: false,
       engine: 'sequential-fallback',
+      writeCanonical: false,
+      sessionPrefix: sessionPrefix ? `${sessionPrefix}-sequential` : null,
       mock: true
     });
+    const canonicalAfter = await canonicalScoutArtifactFingerprint(dir);
+    const canonicalArtifactsModified = JSON.stringify(canonicalBefore) !== JSON.stringify(canonicalAfter);
     const sequentialMs = Number(sequentialRun.performance?.duration_ms || 0);
     const parallelMs = Number(parallelRun.performance?.duration_ms || 0);
     const parsedRealOutputs = Number(parallelRun.consensus?.source_policy?.counts?.parsed_scout_output || 0);
@@ -191,9 +212,16 @@ export async function scoutsCommand(args: any = []) {
       && parallelRunAny.gate?.read_only_guard === true
       && !parallelRunAny.gate?.blockers?.length;
     const result = {
-      schema: 'sks.scout-benchmark.v2',
+      schema: 'sks.scout-benchmark.v3',
       mission_id: id,
       engine: selection.selected,
+      parallel_engine_run_id: parallelRun.engine_run_id,
+      sequential_engine_run_id: sequentialRun.engine_run_id,
+      parallel_artifacts_dir: parallelRun.artifacts_dir,
+      sequential_artifacts_dir: sequentialRun.artifacts_dir,
+      parallel_artifact_namespace: parallelRun.artifact_namespace,
+      sequential_artifact_namespace: sequentialRun.artifact_namespace,
+      canonical_artifacts_modified: canonicalArtifactsModified,
       real_parallel: selection.real_parallel === true,
       parsed_real_outputs: parsedRealOutputs,
       sequential_ms: sequentialMs,
@@ -202,13 +230,16 @@ export async function scoutsCommand(args: any = []) {
       claim_allowed: claimAllowed,
       confidence: selection.real_parallel ? 'medium' : 'low',
       read_only_guard: parallelRunAny.gate?.read_only_guard === true ? 'passed' : 'blocked',
-      notes: selection.real_parallel ? [] : ['mock/static benchmarks cannot claim real speedup']
+      notes: [
+        ...(selection.real_parallel ? [] : ['mock/static benchmarks cannot claim real speedup']),
+        ...(canonicalArtifactsModified ? ['canonical scout artifacts changed during benchmark'] : [])
+      ]
     };
     await writeJsonAtomic(path.join(dir, 'scout-benchmark.json'), result);
     const reportDir = path.join(root, '.sneakoscope', 'reports');
     await ensureDir(reportDir);
     await writeJsonAtomic(path.join(reportDir, 'scout-benchmark-summary.json'), {
-      schema: 'sks.scout-benchmark-summary.v1',
+      schema: 'sks.scout-benchmark-summary.v2',
       updated_at: new Date().toISOString(),
       latest: result
     });
@@ -274,8 +305,9 @@ Usage:
   sks scouts plan latest --json
   sks scouts run latest --engine auto --json
   sks scouts run latest --engine local-static --mock --json
+  sks scouts run latest --engine codex-exec-parallel --require-output-schema --json
   sks scouts run latest --require-real-parallel --json
-  sks scouts status latest --json
+  sks scouts status latest --engine-runs --json
   sks scouts engines --json
   sks scouts bench latest --engine local-static --mock --json
   sks scouts consensus latest --json
@@ -285,4 +317,55 @@ Usage:
 Alias:
   sks scout run latest --json
 `);
+}
+
+async function listScoutEngineRuns(dir: string) {
+  const base = path.join(dir, 'scout-benchmarks');
+  if (!(await exists(base))) return [];
+  const entries = await fs.readdir(base, { withFileTypes: true }).catch(() => []);
+  const runs = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const runDir = path.join(base, entry.name);
+    const engine = await readJson(path.join(runDir, 'scout-engine-result.json'), null);
+    const gate = await readJson(path.join(runDir, 'scout-gate.json'), null);
+    runs.push({
+      engine_run_id: entry.name,
+      artifacts_dir: runDir,
+      artifact_namespace: `scout-benchmarks/${entry.name}`,
+      engine: engine?.engine || gate?.engine || null,
+      passed: gate?.passed === true,
+      completed_scouts: gate?.completed_scouts || engine?.completed_scouts || 0,
+      completed_at: engine?.completed_at || null
+    });
+  }
+  return runs.sort((a: any, b: any) => String(b.completed_at || b.engine_run_id).localeCompare(String(a.completed_at || a.engine_run_id)));
+}
+
+async function canonicalScoutArtifactFingerprint(dir: string) {
+  const files = [
+    'scout-team-plan.json',
+    'scout-parallel-ledger.jsonl',
+    'scout-consensus.json',
+    'scout-handoff.md',
+    'scout-gate.json',
+    'scout-engine-result.json',
+    'scout-readonly-guard.json',
+    'scout-performance.json',
+    'scout-1-code-surface.json',
+    'scout-2-verification.json',
+    'scout-3-safety-db.json',
+    'scout-4-visual-voxel.json',
+    'scout-5-simplification-integration.json'
+  ];
+  const out: Record<string, any> = {};
+  for (const file of files) {
+    const absolute = path.join(dir, file);
+    if (!(await exists(absolute))) {
+      out[file] = null;
+      continue;
+    }
+    out[file] = sha256(await readText(absolute, ''));
+  }
+  return out;
 }

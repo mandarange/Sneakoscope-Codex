@@ -1,4 +1,5 @@
 import { getCodexInfo } from '../../codex-adapter.js';
+import { detectCodexExecResumeOutputSchema } from '../../codex-exec-output-schema.js';
 import { runProcess, which } from '../../fsx.js';
 import { availableEngine, unavailableEngine } from './scout-engine-base.js';
 import { readCodexAppSubagentCapability } from './codex-app-subagent-engine.js';
@@ -16,6 +17,14 @@ export async function detectScoutEngines(root: any, opts: any = {}) {
       codex,
       tmux,
       app,
+      availableEngine('fake-codex-exec', {
+        real_parallel: false,
+        claim_allowed: false,
+        fallback_only: true,
+        supports_output_schema: true,
+        output_schema_status: 'fixture',
+        reason: 'deterministic fake Codex exec fixture for blackbox output-schema wiring checks'
+      }),
       availableEngine('local-static', {
         real_parallel: false,
         claim_allowed: false,
@@ -35,9 +44,12 @@ export async function detectScoutEngines(root: any, opts: any = {}) {
 export async function detectCodexExecParallel(root: any, opts: any = {}) {
   const info: any = await getCodexInfo().catch((err: any) => ({ available: false, error: err.message }));
   if (!info?.available || !info.bin) return unavailableEngine('codex-exec-parallel', 'Codex CLI not available; set SKS_CODEX_BIN or install codex CLI.');
+  const outputSchema = await detectCodexExecResumeOutputSchema({ codexBin: info.bin }).catch(() => null);
   return availableEngine('codex-exec-parallel', {
     bin: info.bin,
     version: info.version || null,
+    supports_output_schema: outputSchema?.output_schema_supported === true,
+    output_schema_status: outputSchema?.status || 'unknown',
     reason: 'Codex CLI found and can run separate exec jobs.'
   });
 }
@@ -59,7 +71,13 @@ export async function detectCodexAppSubagents(root: any, opts: any = {}) {
   if (capability.available) {
     return availableEngine('codex-app-subagents', {
       capability_file: capability.file,
+      capability_schema: capability.descriptor?.schema || null,
       event_schema_version: capability.descriptor?.event_schema_version || null,
+      supports_output_schema: capability.descriptor?.supports_output_schema === true,
+      supports_session_ids: capability.descriptor?.supports_session_ids === true,
+      supports_parallel_subagents: capability.descriptor?.supports_parallel_subagents === true,
+      max_parallel_subagents: capability.descriptor?.max_parallel_subagents || null,
+      degraded_supported: capability.degraded_supported === true,
       reason: 'Codex App subagent capability descriptor is present and valid.'
     });
   }

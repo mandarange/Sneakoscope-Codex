@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.14.0 writes the `sks.release-readiness.v1` final release seal against the Codex `rust-v0.133.0` runtime compatibility matrix plus the OpenAI Codex `latest` 10-event hook schema snapshot, OpenAI Image Generation `gpt-image-2` docs, OpenAI Structured Outputs docs, the UX-Review gpt-image-2 callout/fix/recheck loop, PPT imagegen review, DFix Extreme Speed Kernel evidence loops, the all-feature completion matrix, recursive JSON schema validation, hook trust warning-zero, and the function-only SKS update check contract.
+SKS 1.14.1 writes the `sks.release-readiness.v1` final release seal against the Codex `rust-v0.133.0` runtime compatibility matrix plus the OpenAI Codex `latest` 10-event hook schema snapshot, OpenAI Image Generation `gpt-image-2` docs, OpenAI Structured Outputs docs, UX-Review real imagegen smoke, PPT full synthetic deck E2E evidence, Scout multi-session artifact isolation, DFix evidence loops, the all-feature completion matrix, recursive JSON schema validation, hook trust warning-zero v2, and the function-only SKS update check contract.
 
 ```bash
 npm run codex:0.133-compat
@@ -64,18 +64,18 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.14.0.json`
-- `.sneakoscope/reports/release-readiness-1.14.0.md`
-- `.sneakoscope/reports/all-feature-completion-1.14.0.json`
-- `.sneakoscope/reports/all-feature-completion-1.14.0.md`
-- `.sneakoscope/reports/official-docs-compat-1.14.0.json`
-- `.sneakoscope/reports/official-docs-compat-1.14.0.md`
+- `.sneakoscope/reports/release-readiness-1.14.1.json`
+- `.sneakoscope/reports/release-readiness-1.14.1.md`
+- `.sneakoscope/reports/all-feature-completion-1.14.1.json`
+- `.sneakoscope/reports/all-feature-completion-1.14.1.md`
+- `.sneakoscope/reports/official-docs-compat-1.14.1.json`
+- `.sneakoscope/reports/official-docs-compat-1.14.1.md`
 
 The report covers version drift, Codex 0.133 structured resume output, goal defaults, remote-control foreground app-server behavior, permission profiles/requirements, plugin discovery/marketplace mapping, latest 10-event hook schema and trust state, source image fidelity metadata, UX-Review command wiring, generated callout ingestion, real extraction reports, text-only fallback blocking, PPT real export/imagegen/re-review wiring, DFix error signatures/path decisions/cache/patch runner/verification selector/performance artifacts, all-feature deep coverage, recursive JSON schema recursion checks, Image Voxel relations, memory summary rebuilds, repeated blocker stops, official docs compatibility, hook strict subset status, Computer Use evidence mode support, codex-lb persistence truth, docs truthfulness, and remaining P0 gaps. A passing report has no remaining P0 gaps.
 
 Computer Use truthfulness remains bounded: `probe_only` is a capability probe, `live_capture_success` is local-only captured evidence, and `live_capture_blocked` records Codex App, macOS permission, or official capture-surface blockers. SKS does not fabricate screenshots and does not claim universal Computer Use availability.
 
-UX-Review truthfulness is bounded the same way: a real verified UX claim requires a source screenshot, a generated gpt-image-2 annotated callout image, schema-bound issue extraction from generated image pixels, bounded safe fixes when requested, and recapture/re-review evidence for changed screens. Attached generated images start with `callout_extraction_status: pending`; mock fixtures remain `verified_partial`, and prose-only screenshot critique or generic fake callouts cannot pass the gate.
+UX-Review truthfulness is bounded the same way: a real verified UX claim requires a source screenshot, a generated gpt-image-2 annotated callout image, schema-bound issue extraction from generated image pixels, bounded safe fixes when requested, and recapture/re-review evidence for changed screens. Attached generated images start with `callout_extraction_status: pending`; mock fixtures remain `verified_partial`, and prose-only screenshot critique or generic fake callouts cannot pass the gate. When generated annotated images cannot be created or linked, release readiness may accept only `verified_partial/reference-only` closeout, requiring source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence.
 
 codex-lb truthfulness remains bounded: `durable_env_file`, `durable_keychain`, `durable_launchctl`, and `shell_profile` are durable setup modes, while `process_only_ephemeral` means the supplied key is only effective in the current process. Recovery command:
 

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { detectImagegenCapability } from '../dist/core/imagegen/imagegen-capability.js';
 
 const report = await detectImagegenCapability();
-const out = path.join(process.cwd(), '.sneakoscope', 'reports', 'imagegen-capability-1.14.0.json');
+const out = path.join(process.cwd(), '.sneakoscope', 'reports', 'imagegen-capability-1.14.1.json');
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
 const ok = report.ok

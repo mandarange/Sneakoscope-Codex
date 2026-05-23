@@ -12,6 +12,7 @@ export async function maybeFinalizeRoute(root, {
   gate = null,
   artifacts = [],
   claims = [],
+  visualEvidence = null,
   visual = false,
   fixClaim = false,
   requireRelation = false,
@@ -23,7 +24,8 @@ export async function maybeFinalizeRoute(root, {
   testEvidence = null,
   blockers = [],
   unverified = [],
-  scouts = undefined
+  scouts = undefined,
+  allowActiveWrongnessPartial = false
 } = {}) {
   if (!missionId || !route) {
     return { ok: false, skipped: true, reason: 'mission_id_or_route_missing' };
@@ -44,7 +46,7 @@ export async function maybeFinalizeRoute(root, {
       mode: mock ? 'auto-finalize-mock' : 'auto-finalize'
     })
     : null;
-  const scoutArtifacts = scoutResult ? (scoutResult.required === false ? [] : scoutArtifactList()) : [];
+  const scoutArtifacts = scoutResult ? (scoutResult.required === false ? [] : await existingScoutArtifacts(root, missionId)) : [];
   const scoutBlockers = scoutResult?.required && scoutResult.gate?.passed !== true && scoutResult.status !== 'already_passed'
     ? ['scout_gate_not_passed']
     : [];
@@ -56,7 +58,7 @@ export async function maybeFinalizeRoute(root, {
     gate: gateObject,
     artifacts: [...artifacts, ...scoutArtifacts],
     claims: claims.length ? claims : [{ id: `${String(route).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()}-auto-finalize`, status: mock ? 'verified_partial' : 'supported', evidence: gateFile || 'route-command' }],
-    visualEvidence: null,
+    visualEvidence,
     dbEvidence,
     testEvidence,
     commandEvidence: command ? [{ ...command, ok: command.ok !== false }] : null,
@@ -75,7 +77,18 @@ export async function maybeFinalizeRoute(root, {
     mock,
     fixClaim,
     requireRelation,
-    visualClaim: visual
+    visualClaim: visual,
+    scouts,
+    allowActiveWrongnessPartial
   });
   return { ...proof, auto_finalized: true, gate_passed: passed, status_hint: finalStatus };
+}
+
+async function existingScoutArtifacts(root, missionId) {
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId);
+  const artifacts = [];
+  for (const artifact of scoutArtifactList()) {
+    if (await exists(path.join(dir, artifact))) artifacts.push(artifact);
+  }
+  return artifacts;
 }

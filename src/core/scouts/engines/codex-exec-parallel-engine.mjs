@@ -19,12 +19,14 @@ export async function runCodexExecParallelEngine(root, {
     const stdoutFile = path.join(dir, `${role.id}.stdout.log`);
     const stderrFile = path.join(dir, `${role.id}.stderr.log`);
     const prompt = buildScoutPrompt({ missionId, route, task, role, outputPath: outputFile });
+    const scoutProfile = process.env.SKS_SCOUT_CODEX_PROFILE || null;
     const result = await runCodexExec({
       root,
       prompt,
       outputFile,
       json: true,
-      profile: process.env.SKS_SCOUT_CODEX_PROFILE || 'sks-scout-readonly',
+      profile: scoutProfile,
+      extraArgs: ['--sandbox', 'read-only', '--ignore-rules', '--ignore-user-config', '--disable', 'hooks', '--disable', 'plugins', '--disable', 'apps'],
       timeoutMs,
       maxBufferBytes: Number(process.env.SKS_SCOUT_MAX_OUTPUT_BYTES || 256 * 1024),
       stdoutFile,

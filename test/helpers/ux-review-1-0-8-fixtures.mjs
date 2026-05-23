@@ -4,6 +4,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/axX7V8AAAAASUVORK5CYII=';
+export const PNG_1X1_SHA256 = 'b8db98b40cf585edc010e103508e120d13708be9d2b655b8c6eb8e09a8a01c6b';
 
 export async function importDist(modulePath) {
   return import(pathToFileURL(path.join(process.cwd(), 'dist', modulePath)));
@@ -12,8 +13,11 @@ export async function importDist(modulePath) {
 export async function tempImageRoot(prefix = 'sks-ux-108-') {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   const imagePath = path.join(root, 'screen.png');
-  await fs.writeFile(imagePath, Buffer.from(PNG_1X1, 'base64'));
-  return { root, imagePath };
+  const generatedImagePath = path.join(root, 'generated-review-real.png');
+  const png = Buffer.from(PNG_1X1, 'base64');
+  await fs.writeFile(imagePath, png);
+  await fs.writeFile(generatedImagePath, png);
+  return { root, imagePath, generatedImagePath, generatedImageSha256: PNG_1X1_SHA256 };
 }
 
 export async function capturedInventory(imageUx, root, imagePath) {
@@ -36,7 +40,7 @@ export function realGeneratedReviewImage(overrides = {}) {
     privacy: 'local-only',
     width: 1,
     height: 1,
-    sha256: 'fixture-real-generated-sha256',
+    sha256: PNG_1X1_SHA256,
     real_generated: true,
     mock: false,
     source: 'real_gpt_image_2_callout',

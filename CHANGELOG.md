@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.14.1] - 2026-05-22
+
+### Added
+- Add 1.14.1 hook official hash oracle and hook parity v2 reports with managed-only fallback when official hashes are unavailable.
+- Add UX/PPT real imagegen smoke gates, PPT synthetic deck E2E blackbox/artifact-graph gates, Codex 0.133 official compatibility reporting, and flagship proof graph v2.
+- Upgrade Scout outputs to `sks.scout-result.v3` with `engine_run_id`, `scout_session_id`, output-schema metadata, lifecycle records, stdout/stderr paths, read-only confirmation, and artifact namespaces.
+- Add Scout benchmark isolation under `scout-benchmarks/<engine_run_id>/` so parallel/sequential benchmark runs do not overwrite canonical route intake artifacts.
+
+### Changed
+- Bump package, runtime, release-readiness, and Rust crate metadata to 1.14.1.
+- Gate Scout consensus/proof promotion on schema-valid completed results only, while schema-invalid or unparseable real outputs remain structured blockers.
+- Strengthen Scout read-only guard to v2 with file snapshots, git-status delta checks, benchmark artifact allow-listing, and external workspace boundary evidence.
+
+### Fixed
+- Prevent mock/local-static Scout benchmarks from producing real speedup claims.
+- Preserve Codex exec, Codex App subagent, and tmux lane lifecycle metadata in Scout artifacts.
+
 ## [1.14.0] - 2026-05-22
 
 ### Added

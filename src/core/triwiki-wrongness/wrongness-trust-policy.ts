@@ -14,11 +14,12 @@ export function evaluateWrongnessTrust(input: unknown = {}): {
   const activeCount = numberValue(evidence.active_count);
   const high = numberValue(evidence.high_severity_active);
   const medium = numberValue(evidence.medium_severity_active);
+  const referenceOnlyPartial = imageUxReferenceOnlyPartial(proof);
   const issues: string[] = [];
-  if (high > 0) issues.push('wrongness:active_high_severity_negative_evidence');
+  if (high > 0 && !referenceOnlyPartial) issues.push('wrongness:active_high_severity_negative_evidence');
   if (activeCount > 0 && missingCorrectiveAction(evidence)) issues.push('wrongness:corrective_action_missing');
   if (claimLinksActiveWrongness(proof, evidence)) issues.push('wrongness:claim_linked_to_active_wrongness');
-  const status: TrustStatus = high > 0
+  const status: TrustStatus = high > 0 && !referenceOnlyPartial
     ? 'blocked'
     : activeCount > 0 || medium > 0
       ? 'verified_partial'
@@ -37,6 +38,13 @@ export function evaluateWrongnessTrust(input: unknown = {}): {
       records: Array.isArray(evidence.records) ? evidence.records : []
     }
   };
+}
+
+function imageUxReferenceOnlyPartial(proof: JsonRecord): boolean {
+  const imageUxReview = asRecord(asRecord(proof.evidence).image_ux_review);
+  return proof.status === 'verified_partial'
+    && imageUxReview.reference_only === true
+    && imageUxReview.status === 'verified_partial';
 }
 
 export function applyWrongnessTrustStatus(base: TrustStatus, impact: { status?: TrustStatus; issues?: unknown[] }): TrustStatus {

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.14.0';
+const RELEASE_VERSION = '1.14.1';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const requiredDocs = [
   'README.md',

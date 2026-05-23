@@ -40,6 +40,8 @@ export async function writePptImagegenReviewArtifacts(input: any = {}) {
   const mock = input.mock === true;
   const deckPath = input.deckPath || null;
   const exported = await exportSlidesToImages({ root, dir, deckPath, manualImages: input.manualImages || [], mock });
+  await writeJsonAtomic(path.join(dir, PPT_DECK_INVENTORY_ARTIFACT), exported.inventory);
+  await writeJsonAtomic(path.join(dir, PPT_SLIDE_EXPORT_LEDGER_ARTIFACT), exported.export_ledger);
   const callouts = input.skipCallouts
     ? await readJson(path.join(dir, PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT), { generated_slide_callout_images: [], blockers: ['ppt_imagegen_callouts_missing'] })
     : await generateSlideCalloutReviews({ root, dir, missionId, exportLedger: exported.export_ledger, mock });

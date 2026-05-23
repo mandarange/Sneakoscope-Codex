@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-import { emitGate, requireContains } from './sks-1-12-real-execution-check-lib.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { emitGate, requireContains, root } from './sks-1-12-real-execution-check-lib.mjs';
 
 requireContains('evidence:flagship-coverage', 'src/core/commands/image-ux-review-command.ts', [
   'visualEvidence: { image_ux_review',
@@ -19,5 +21,35 @@ requireContains('evidence:flagship-coverage', 'scripts/release-readiness-report.
   'ppt_imagegen_review',
   'dfix'
 ]);
+requireContains('evidence:flagship-coverage', 'src/core/proof/route-finalizer.ts', [
+  'wrongnessProofEvidence',
+  'writeRouteCompletionProof'
+]);
+requireContains('evidence:flagship-coverage', 'src/core/trust-kernel/trust-report.ts', [
+  'buildTrustReport',
+  'evaluateWrongnessTrust'
+]);
+requireContains('evidence:flagship-coverage', 'src/core/evidence/flagship-proof-graph-validator.ts', [
+  'completionProofStatusOk',
+  'trustStatusOk'
+]);
 
-emitGate('evidence:flagship-coverage', { flagship_routes: ['UX-Review', 'PPT Imagegen Review', 'DFix', 'All-feature completion'] });
+const report = {
+  schema: 'sks.evidence-flagship-coverage.v1',
+  ok: true,
+  gate: 'evidence:flagship-coverage',
+  flagship_routes: ['UX-Review', 'PPT Imagegen Review', 'DFix', 'All-feature completion'],
+  evidence_index_linked: true,
+  completion_proof_linked: true,
+  trust_linked: true,
+  wrongness_behavior_defined: true,
+  completion_proof_link_source: 'static_source_contract_and_status_validator',
+  trust_link_source: 'static_source_contract_and_status_validator',
+  wrongness_link_source: 'static_source_contract',
+  mock_real_cap_checked: true,
+  local_only_policy_checked: true
+};
+const out = path.join(root, '.sneakoscope', 'reports', 'evidence-flagship-coverage.json');
+fs.mkdirSync(path.dirname(out), { recursive: true });
+fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
+emitGate('evidence:flagship-coverage', report);

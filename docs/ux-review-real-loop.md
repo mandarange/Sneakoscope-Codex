@@ -22,3 +22,5 @@ sks ux-review status latest --json
 ```
 
 Mock fixtures remain `verified_partial`. Text-only screenshot critique, placeholder generated images, fabricated ledgers, and mock-as-real evidence are blocked by `image-ux-review-gate.json`.
+
+If gpt-image-2 annotated images cannot be created or linked, the route may stop as `verified_partial/reference-only` instead of looping forever. That status is allowed only when source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence exist, and the gate plainly records that generated-image callout extraction and full UX verification are unavailable.

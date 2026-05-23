@@ -8,7 +8,7 @@ import { writeCodexHookOfficialParityReport } from '../dist/core/codex-hooks/cod
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-hooks-actual-parity-'));
 const install = await installManagedCodexHooks(root);
 const report = await writeCodexHookOfficialParityReport(root, {
-  outputPath: path.join(root, '.sneakoscope', 'reports', 'codex-hook-parity-1.14.0.json')
+  outputPath: path.join(root, '.sneakoscope', 'reports', 'codex-hook-parity-1.14.1.json')
 });
 const ok = install.ok && report.ok && report.policy.managed_only_enforced === true;
 console.log(JSON.stringify({ schema: 'sks.hooks-actual-parity-check.v1', ok, install, report_path: report.path, policy: report.policy }, null, 2));

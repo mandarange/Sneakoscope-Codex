@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const jsonPath = path.join(reportDir, 'official-docs-compat-1.14.0.json');
-const mdPath = path.join(reportDir, 'official-docs-compat-1.14.0.md');
+const jsonPath = path.join(reportDir, 'official-docs-compat-1.14.1.json');
+const mdPath = path.join(reportDir, 'official-docs-compat-1.14.1.md');
 
 const sources = {
   codex_release: 'https://github.com/openai/codex/releases/tag/rust-v0.133.0',
@@ -19,6 +19,9 @@ const sources = {
 
 const checks = [
   row('codex_0133_release_matrix', 'rust-v0.133.0', 'src/core/codex-compat/codex-0-133.ts', ['rust-v0.133.0', 'goals_default_enabled', 'remote_control_foreground_app_server', 'permission_profiles_requirements']),
+  row('codex_0133_official_compat_report', 'rust-v0.133.0', 'scripts/codex-0-133-official-compat-report.mjs', ['sks.codex-0-133-official-compat.v1', 'release_source_url', 'structured_output_inheritance']),
+  row('hook_official_hash_oracle', 'OpenAI Codex hook trust', 'src/core/codex-hooks/codex-hook-official-hash-oracle.ts', ['sks.codex-hook-hash-oracle.v1', 'golden-fixture', 'unavailable']),
+  row('scout_multisession_output_schema', 'Codex 0.133 exec resume --output-schema', 'src/core/scouts/engines/codex-exec-parallel-engine.ts', ['output_schema_path', 'session_id', 'engine_run_id']),
   row('codex_plugin_discovery_marketplaces', 'rust-v0.133.0', 'src/core/codex-compat/codex-0-133.ts', ['plugin_discovery_marketplaces', 'plugins and marketplaces']),
   row('codex_extension_lifecycle_events', 'rust-v0.133.0', 'src/core/codex-compat/codex-0-133.ts', ['extension_lifecycle_events', 'turn/tool/model/item phases']),
   row('codex_exec_resume_output_schema', 'rust-v0.133.0', 'src/core/codex-exec-output-schema.ts', ['runCodexExecResumeWithOutputSchema', '--output-schema', '--output-last-message']),
@@ -78,7 +81,7 @@ function row(feature, baseline, relFile, needles) {
 
 function renderMarkdown(report) {
   const lines = [
-    '# SKS 1.14.0 Official Docs Compatibility',
+    '# SKS 1.14.1 Official Docs Compatibility',
     '',
     `- Schema: \`${report.schema}\``,
     `- Codex baseline: \`${report.codex_release_baseline}\``,

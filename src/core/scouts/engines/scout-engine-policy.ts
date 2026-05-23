@@ -4,6 +4,7 @@ import { normalizeScoutEngineName, SCOUT_ENGINE_NAMES } from './scout-engine-bas
 export async function selectScoutEngine(root: any, {
   requested = 'auto',
   requireRealParallel = false,
+  requireOutputSchema = false,
   missionId = null,
   route = '$Team',
   mock = false
@@ -28,8 +29,8 @@ export async function selectScoutEngine(root: any, {
     selected = byName.get('local-static');
   } else {
     selected = [
-      byName.get('codex-app-subagents'),
       byName.get('codex-exec-parallel'),
+      byName.get('codex-app-subagents'),
       byName.get('tmux-lanes'),
       byName.get('local-static'),
       byName.get('sequential-fallback')
@@ -58,9 +59,12 @@ export async function selectScoutEngine(root: any, {
   if (requireRealParallel && selected.real_parallel === true && selected.available !== true) {
     blockers.push(...(selected.blockers || [selected.reason || `${selected.name}:not_available`]));
   }
+  if (requireOutputSchema && selected.supports_output_schema !== true) {
+    blockers.push('output_schema_required_but_unavailable');
+  }
 
   return {
-    schema: 'sks.scout-engine-selection.v1',
+    schema: 'sks.scout-engine-selection.v2',
     mission_id: missionId,
     route,
     requested: normalized,
@@ -70,6 +74,7 @@ export async function selectScoutEngine(root: any, {
     real_parallel: selected.real_parallel === true,
     mock: Boolean(mock),
     require_real_parallel: Boolean(requireRealParallel),
+    require_output_schema: Boolean(requireOutputSchema),
     blockers,
     engines: report.engines
   };

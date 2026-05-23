@@ -3,6 +3,7 @@ import { writeRouteCompletionProof } from './route-adapter.mjs';
 import { routeFinalizerPolicy } from './route-finalizer-policy.mjs';
 import { ensureRouteImageEvidence } from '../wiki-image/route-image-evidence.mjs';
 import { readScoutProofEvidence } from '../scouts/scout-proof-evidence.mjs';
+import { wrongnessProofEvidence } from '../triwiki-wrongness/wrongness-proof-linker.mjs';
 import { computerUseStatusReport } from '../computer-use-status.mjs';
 
 export async function finalizeRouteWithProof(root, {
@@ -23,10 +24,13 @@ export async function finalizeRouteWithProof(root, {
   mock = false,
   fixClaim = false,
   requireRelation = false,
-  visualClaim = undefined
+  visualClaim = undefined,
+  scouts = undefined,
+  allowActiveWrongnessPartial = false
 } = {}) {
   const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation, visualClaim });
   const localBlockers = [...blockers];
+  const providedVisualEvidence = visualEvidence;
   let imageEvidence = visualEvidence;
   if (policy.requires_image_voxel_anchors) {
     imageEvidence = await ensureRouteImageEvidence(root, {
@@ -41,12 +45,20 @@ export async function finalizeRouteWithProof(root, {
     }
   }
   const collected = await collectProofEvidence(root);
-  const scoutEvidence = await readScoutProofEvidence(root, missionId).catch(() => null);
+  const scoutEvidence = scouts === false ? null : await readScoutProofEvidence(root, missionId).catch(() => null);
+  const wrongnessEvidence = await wrongnessProofEvidence(root, missionId, { route: policy.route }).catch(() => null);
   const computerUse = policy.requires_image_voxel_anchors
     ? await computerUseStatusReport().catch((err) => ({ schema: 'sks.computer-use-status.v1', status: 'unknown', ok: false, guidance: [err.message], evidence: { status: 'unknown' } }))
     : null;
   if (computerUse && computerUse.status !== 'available') {
     unverified.push(`Computer Use evidence unavailable: ${computerUse.status}. Visual claim remains verified_partial unless explicit screenshot/image evidence covers it.`);
+  }
+  if (Number(wrongnessEvidence?.high_severity_active || 0) > 0) {
+    if (allowActiveWrongnessPartial) {
+      unverified.push('Active high-severity wrongness memory remains; this reference-only closeout is capped at verified_partial and does not claim full route verification.');
+    } else {
+      localBlockers.push('active_high_severity_wrongness');
+    }
   }
   const visualComputerUseDowngrade = Boolean(computerUse && computerUse.status !== 'available' && statusHint === 'verified');
   const status = localBlockers.length
@@ -69,6 +81,8 @@ export async function finalizeRouteWithProof(root, {
       mock: Boolean(imageEvidence.mock)
     } } : {}),
     ...(scoutEvidence ? { scouts: scoutEvidence } : {}),
+    ...(wrongnessEvidence ? { wrongness: wrongnessEvidence } : {}),
+    ...(providedVisualEvidence?.image_ux_review ? { image_ux_review: providedVisualEvidence.image_ux_review } : {}),
     ...(computerUse ? { computer_use: {
       schema: computerUse.schema,
       status: computerUse.status,
@@ -89,7 +103,8 @@ export async function finalizeRouteWithProof(root, {
     claims,
     unverified: [
       ...unverified,
-      ...(imageEvidence?.mock ? ['Image voxel evidence is mock fixture evidence and does not claim a real visual run.'] : [])
+      ...(imageEvidence?.mock ? ['Image voxel evidence is mock fixture evidence and does not claim a real visual run.'] : []),
+      ...(Number(wrongnessEvidence?.medium_severity_active || 0) > 0 ? ['Active medium-severity wrongness memory remains and prevents full verification claims.'] : [])
     ],
     blockers: localBlockers,
     summary: {

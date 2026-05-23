@@ -11,6 +11,7 @@ import {
   IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
   IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
   IMAGE_UX_REVIEW_GATE_ARTIFACT,
+  IMAGE_UX_REVIEW_HONEST_MODE_ARTIFACT,
   IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT,
   IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT,
   IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT,
@@ -48,6 +49,7 @@ const IMAGE_UX_REVIEW_ARTIFACT_PATHS: Record<string, string | Record<string, any
     source: 'real',
     ignoreStale: true
   },
+  honest_mode_evidence: IMAGE_UX_REVIEW_HONEST_MODE_ARTIFACT,
   gate: IMAGE_UX_REVIEW_GATE_ARTIFACT
 };
 
@@ -129,7 +131,7 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
   }
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true });
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} run` });
-  const result = { schema: 'sks.image-ux-review-run.v1', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.passed ? 'passed' : 'blocked', mission_id: id, artifacts, proof: proof.validation };
+  const result = { schema: 'sks.image-ux-review-run.v1', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.status || (artifacts.gate?.passed ? 'passed' : 'blocked'), mission_id: id, artifacts, proof: proof.validation };
   if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) return printJson(result);
   console.log(`Image UX review: ${result.ok ? 'ok' : 'blocked'} ${id}`);
@@ -183,7 +185,7 @@ async function extractIssuesImageUxReview(root: string, command: string, args: a
   }
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true });
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} extract-issues` });
-  const result = { schema: 'sks.image-ux-review-extract-issues.v1', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.passed ? 'passed' : 'blocked', mission_id: id, issue_ledger: artifacts.issue_ledger, proof: proof.validation };
+  const result = { schema: 'sks.image-ux-review-extract-issues.v1', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.status || (artifacts.gate?.passed ? 'passed' : 'blocked'), mission_id: id, issue_ledger: artifacts.issue_ledger, proof: proof.validation };
   if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) return printJson(result);
   console.log(`Image UX issue extraction: ${result.ok ? 'ok' : 'blocked'} ${id}`);
@@ -247,10 +249,11 @@ async function rebuildExistingMission(root: string, command: string, args: any[]
     root,
     wrongnessChecked: true,
     fixLoop: { requirePatch: opts.fixRequested === true },
-    recapture: { computerUseAvailable: false }
+    recapture: { computerUseAvailable: false },
+    honestModeComplete: opts.proofRequested === true
   });
   const proof = await finalizeImageUx(root, missionId, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} ${opts.fixRequested ? 'fix' : opts.recaptureRequested ? 'recapture' : 'build'}` });
-  const result = { schema: 'sks.image-ux-review-build.v2', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.passed ? 'passed' : 'blocked', mission_id: missionId, artifacts, proof: proof.validation };
+  const result = { schema: 'sks.image-ux-review-build.v2', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.status || (artifacts.gate?.passed ? 'passed' : 'blocked'), mission_id: missionId, artifacts, proof: proof.validation };
   if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) return printJson(result);
   console.log(`Image UX review: ${result.ok ? 'ok' : 'blocked'} ${missionId}`);
@@ -268,7 +271,8 @@ async function statusImageUxReview(root: string, args: any[] = []) {
   const result = { schema: 'sks.image-ux-review-status.v2', ok: true, mission_id: missionId, gate, issue_ledger: issueLedger, generated_review_ledger: generatedLedger };
   if (flag(args, '--json')) return printJson(result);
   console.log(`Image UX Review mission: ${missionId}`);
-  console.log(`Gate: ${gate?.passed ? 'passed' : gate ? 'present' : 'missing'}`);
+  console.log(`Gate: ${gate?.status || (gate?.passed ? 'passed' : gate ? 'present' : 'missing')}`);
+  if (gate?.verified_level) console.log(`Verified level: ${gate.verified_level}`);
   return result;
 }
 
@@ -282,7 +286,9 @@ async function explainImageUxReview(root: string, args: any[] = []) {
     schema: 'sks.image-ux-review-explain.v1',
     ok: Boolean(gate),
     mission_id: missionId,
-    status: gate?.passed ? 'passed' : 'blocked',
+    status: gate?.status || (gate?.passed ? 'passed' : 'blocked'),
+    verified_level: gate?.verified_level || null,
+    reference_only: gate?.reference_only === true,
     blockers: gate?.blockers || [],
     next_action: nextActionForGate(gate)
   };
@@ -427,6 +433,10 @@ function nextActionForGate(gate: any = {}) {
 
 async function finalizeImageUx(root: string, missionId: string, command: string, artifacts: any, opts: any = {}) {
   const visualEvidence = imageUxReviewProofEvidence(artifacts.gate, artifacts);
+  const claimStatus = artifacts.gate?.verified_level || (opts.mock ? 'verified_partial' : artifacts.gate?.passed ? 'verified' : 'blocked');
+  const artifactList = Object.entries(artifacts)
+    .filter(([, value]) => value !== null && value !== undefined)
+    .map(([key]) => IMAGE_UX_REVIEW_ARTIFACT_PATHS[key] || key);
   return maybeFinalizeRoute(root, {
     missionId,
     route: routeForCommand(command),
@@ -437,9 +447,11 @@ async function finalizeImageUx(root: string, missionId: string, command: string,
     requireRelation: opts.requireRelation === true,
     statusHint: artifacts.gate?.passed ? 'verified_partial' : 'blocked',
     visualEvidence: { image_ux_review: visualEvidence },
-    artifacts: Object.keys(artifacts).map((key) => IMAGE_UX_REVIEW_ARTIFACT_PATHS[key] || key),
-    claims: [{ id: 'image-ux-review-callout-loop', status: opts.mock ? 'verified_partial' : artifacts.gate?.passed ? 'verified' : 'blocked' }],
+    artifacts: artifactList,
+    claims: [{ id: 'image-ux-review-callout-loop', status: claimStatus }],
     blockers: artifacts.gate?.blockers || [],
+    scouts: artifacts.gate?.full_review_passed === true ? undefined : false,
+    allowActiveWrongnessPartial: artifacts.gate?.reference_only === true,
     command: { cmd: opts.cmd || `sks ${command}`, status: artifacts.gate?.blockers?.length ? 1 : 0 }
   });
 }
