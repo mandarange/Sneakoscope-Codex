@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.15.0';
+const RELEASE_VERSION = '1.15.1';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 
@@ -20,6 +20,16 @@ const checks = {
   ppt_full_e2e_artifact_graph: scriptContains('release:check', 'ppt:full-e2e-artifact-graph'),
   codex_0133_official_compat: scriptContains('release:check', 'codex:0.133-official-compat'),
   flagship_proof_graph_v3: scriptContains('release:check', 'flagship:proof-graph-v3'),
+  flagship_proof_graph_v4: scriptContains('release:check', 'flagship:proof-graph-v4'),
+  mad_sks_actual_executor: scriptContains('release:check', 'mad-sks:actual-executor'),
+  mad_sks_file_write_executor: scriptContains('release:check', 'mad-sks:file-write-executor'),
+  mad_sks_shell_executor: scriptContains('release:check', 'mad-sks:shell-executor'),
+  mad_sks_package_executor: scriptContains('release:check', 'mad-sks:package-executor'),
+  mad_sks_service_executor: scriptContains('release:check', 'mad-sks:service-executor'),
+  mad_sks_db_executor: scriptContains('release:check', 'mad-sks:db-executor'),
+  mad_sks_rollback_apply: scriptContains('release:check', 'mad-sks:rollback-apply'),
+  mad_sks_live_guard_smoke: scriptContains('release:check', 'mad-sks:live-guard-smoke'),
+  mad_sks_executor_proof_graph: scriptContains('release:check', 'mad-sks:executor-proof-graph'),
   scouts_multisession_artifact_graph: scriptContains('release:check', 'scouts:multisession-artifact-graph'),
   scouts_benchmark_isolation: scriptContains('release:check', 'scouts:benchmark-isolation'),
   scouts_output_schema_wiring: scriptContains('release:check', 'scouts:output-schema-wiring'),
@@ -92,14 +102,16 @@ const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
 const releaseMetadata = runNodeScript('scripts/release-metadata-1-15-check.mjs');
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
-  flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null)
+  flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null),
+  flagship_proof_graph_v4: readJson('.sneakoscope/reports/flagship-proof-graph-v4.json', null)
 };
 const runtimeChecks = {
   ppt_full_e2e_blackbox: runtimeReports.ppt_full_e2e_blackbox?.ok === true
     && ['verified', 'verified_partial'].includes(String(runtimeReports.ppt_full_e2e_blackbox?.proof_status || ''))
     && runtimeReports.ppt_full_e2e_blackbox?.trust_ok === true
     && !['blocked', 'failed', 'not_verified'].includes(String(runtimeReports.ppt_full_e2e_blackbox?.trust_status || '')),
-  flagship_proof_graph_v3: runtimeReports.flagship_proof_graph_v3?.ok === true
+  flagship_proof_graph_v3: runtimeReports.flagship_proof_graph_v3?.ok === true,
+  flagship_proof_graph_v4: runtimeReports.flagship_proof_graph_v4?.ok === true
 };
 const remainingP0 = [];
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
@@ -132,6 +144,32 @@ const report = {
     status: checks.codex_0133_compat ? 'present' : 'missing',
     baseline: 'rust-v0.133.0',
     output_schema_resume: checks.codex_output_schema_fixture ? 'present' : 'missing'
+  },
+  mad_sks_actual_executor_closure: {
+    status: checks.mad_sks_actual_executor
+      && checks.mad_sks_file_write_executor
+      && checks.mad_sks_shell_executor
+      && checks.mad_sks_package_executor
+      && checks.mad_sks_service_executor
+      && checks.mad_sks_db_executor
+      && checks.mad_sks_rollback_apply
+      && checks.mad_sks_live_guard_smoke
+      && checks.mad_sks_executor_proof_graph
+      && checks.flagship_proof_graph_v4
+      && runtimeChecks.flagship_proof_graph_v4 ? 'present' : 'missing',
+    gates: {
+      actual_executor_blackbox: checks.mad_sks_actual_executor,
+      file_write_executor: checks.mad_sks_file_write_executor,
+      shell_executor: checks.mad_sks_shell_executor,
+      package_executor: checks.mad_sks_package_executor,
+      service_executor: checks.mad_sks_service_executor,
+      db_executor: checks.mad_sks_db_executor,
+      rollback_apply: checks.mad_sks_rollback_apply,
+      live_guard_smoke: checks.mad_sks_live_guard_smoke,
+      executor_proof_graph: checks.mad_sks_executor_proof_graph,
+      flagship_proof_graph_v4: checks.flagship_proof_graph_v4,
+      flagship_proof_graph_v4_report_ok: runtimeChecks.flagship_proof_graph_v4
+    }
   },
   image_ux_review: {
     status: checks.imagegen_capability && checks.gpt_image_2_request_validator && checks.ux_review_run_wires_imagegen && checks.ux_review_extract_wires_real_extractor && checks.ux_review_patch_diff_recheck && checks.ux_review_imagegen_blackbox && checks.ux_review_real_loop_fixture && checks.ux_review_generate_callouts_fixture && checks.ux_review_extract_real_callouts_fixture && checks.ux_review_patch_handoff_fixture && checks.ux_review_recapture_recheck_fixture && checks.ux_review_no_text_fallback && checks.ux_review_no_fake_callouts && checks.ux_review_image_voxel_relations ? 'present' : 'missing',
@@ -208,6 +246,11 @@ const report = {
     codex_0_133_official_compat: checks.codex_0133_official_compat,
     flagship_proof_graph_v3: checks.flagship_proof_graph_v3,
     flagship_proof_graph_v3_report_ok: runtimeChecks.flagship_proof_graph_v3
+  },
+  mad_sks_1_15_1: {
+    status: checks.flagship_proof_graph_v4 && runtimeChecks.flagship_proof_graph_v4 ? 'present' : 'missing',
+    flagship_proof_graph_v4: checks.flagship_proof_graph_v4,
+    flagship_proof_graph_v4_report_ok: runtimeChecks.flagship_proof_graph_v4
   },
   scout_multisession_addendum: {
     status: checks.scouts_multisession_artifact_graph && checks.scouts_benchmark_isolation && checks.scouts_output_schema_wiring && checks.scouts_session_lifecycle && checks.scouts_readonly_guard_v2 && checks.scouts_no_speedup_overclaim ? 'present' : 'missing',
@@ -309,6 +352,7 @@ function renderMarkdown(report) {
 - codex-lb persistence truth: \`${report.codex_lb_setup_truthfulness.status}\`
 - Computer Use evidence modes: \`${report.computer_use_evidence_mode_support.status}\`
 - Codex 0.133 compatibility: \`${report.codex_0_133.status}\`
+- MAD-SKS actual executor closure: \`${report.mad_sks_actual_executor_closure.status}\`
 - UX-Review real callout loop gates: \`${report.image_ux_review.status}\`
 - PPT imagegen review gates: \`${report.ppt_imagegen_review.status}\`
 - DFix gates: \`${report.dfix.status}\`

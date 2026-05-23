@@ -224,11 +224,18 @@ async function realPathForCheck(candidate: string) {
   try {
     return await fsp.realpath(candidate);
   } catch {
-    const parent = path.dirname(candidate);
-    try {
-      return path.join(await fsp.realpath(parent), path.basename(candidate));
-    } catch {
-      return path.resolve(candidate);
+    const suffix = [];
+    let current = path.resolve(candidate);
+    while (current !== path.dirname(current)) {
+      const parent = path.dirname(current);
+      suffix.unshift(path.basename(current));
+      try {
+        const realParent = await fsp.realpath(parent);
+        return path.join(realParent, ...suffix);
+      } catch {
+        current = parent;
+      }
     }
+    return path.resolve(candidate);
   }
 }

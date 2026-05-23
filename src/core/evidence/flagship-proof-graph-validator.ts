@@ -4,6 +4,7 @@ import { missionDir } from '../mission.js';
 
 export const FLAGSHIP_PROOF_GRAPH_SCHEMA = 'sks.flagship-proof-graph.v2';
 export const FLAGSHIP_PROOF_GRAPH_V3_SCHEMA = 'sks.flagship-proof-graph.v3';
+export const FLAGSHIP_PROOF_GRAPH_V4_SCHEMA = 'sks.flagship-proof-graph.v4';
 
 export async function validateFlagshipProofGraph(root: string, opts: any = {}) {
   const missionId = opts.missionId || null;
@@ -33,7 +34,7 @@ export async function validateFlagshipProofGraphV3(root: string, opts: any = {})
   ]);
   const scoutUx = await validateReportSet(root, 'scout_engine_run_ux', [
     '.sneakoscope/reports/scouts-engine-run-ux.json',
-    '.sneakoscope/reports/scouts-real-smoke-1.15.0.json'
+    '.sneakoscope/reports/scouts-real-smoke-1.15.1.json'
   ], { allowIntegrationOptional: true });
   const codexSyntax = await validateReportSet(root, 'codex_exec_output_schema_actual_syntax', [
     '.sneakoscope/reports/codex-exec-output-schema-actual-syntax.json'
@@ -56,6 +57,42 @@ export async function validateFlagshipProofGraphV3(root: string, opts: any = {})
     scout_real_smoke_linked: scoutUx.artifacts.some((artifact: any) => /scouts-real-smoke/.test(artifact.path) && artifact.present),
     codex_exec_actual_syntax_linked: codexSyntax.ok === true,
     rollback_plan_required_when_mad_sks_modifies_target: true,
+    local_only_policy: routes.every((route: any) => route.local_only_policy !== 'blocked'),
+    blockers
+  };
+}
+
+export async function validateFlagshipProofGraphV4(root: string, opts: any = {}) {
+  const v3 = await validateFlagshipProofGraphV3(root, opts);
+  const executorClosure = await validateReportSet(root, 'mad_sks_actual_executor_closure', [
+    '.sneakoscope/reports/mad-sks-actual-executor-blackbox.json',
+    '.sneakoscope/reports/mad-sks-file-write-executor.json',
+    '.sneakoscope/reports/mad-sks-shell-executor.json',
+    '.sneakoscope/reports/mad-sks-package-executor.json',
+    '.sneakoscope/reports/mad-sks-service-executor.json',
+    '.sneakoscope/reports/mad-sks-db-executor.json',
+    '.sneakoscope/reports/mad-sks-rollback-apply.json',
+    '.sneakoscope/reports/mad-sks-live-protected-core-smoke.json',
+    '.sneakoscope/reports/mad-sks-executor-proof-graph.json'
+  ]);
+  const routes = [...(v3.routes || []), executorClosure];
+  const blockers = [
+    ...(v3.blockers || []),
+    ...routes.flatMap((route: any) => route.blockers || [])
+  ];
+  return {
+    schema: FLAGSHIP_PROOF_GRAPH_V4_SCHEMA,
+    ok: blockers.length === 0,
+    mission_id: opts.missionId || null,
+    routes,
+    mad_sks_actual_executor_closure_linked: executorClosure.ok === true,
+    target_file_write_verified: executorClosure.artifacts.some((artifact: any) => /file-write-executor/.test(artifact.path) && artifact.ok === true),
+    shell_argv_classifier_verified: executorClosure.artifacts.some((artifact: any) => /shell-executor/.test(artifact.path) && artifact.ok === true),
+    package_service_db_boundaries_verified: ['package-executor', 'service-executor', 'db-executor'].every((name) =>
+      executorClosure.artifacts.some((artifact: any) => artifact.path.includes(name) && artifact.ok === true)
+    ),
+    rollback_apply_verified: executorClosure.artifacts.some((artifact: any) => /rollback-apply/.test(artifact.path) && artifact.ok === true),
+    live_protected_core_guard_verified: executorClosure.artifacts.some((artifact: any) => /live-protected-core-smoke/.test(artifact.path) && artifact.ok === true),
     local_only_policy: routes.every((route: any) => route.local_only_policy !== 'blocked'),
     blockers
   };

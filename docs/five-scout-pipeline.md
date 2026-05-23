@@ -2,6 +2,8 @@
 
 SKS serious routes now start with a read-only five-scout intake before implementation or route finalization. The scouts inspect code surface, verification, safety/DB, visual/Voxel evidence, and simplification/integration. Their consensus becomes the implementation handoff and is recorded in Completion Proof.
 
+For SKS 1.15.1, Scout evidence remains part of release readiness while MAD-SKS actual executor closure is bound separately through flagship proof graph v4.
+
 ## Commands
 
 ```bash
@@ -45,7 +47,7 @@ Each mission writes:
 
 The package-level summary is `.sneakoscope/reports/scout-performance-summary.json`.
 
-In 1.15.0, every Scout intake has a `scout-run-<timestamp>-<engine>-<hash>` `engine_run_id`. Canonical route intake still writes the normal mission-level `scout-*.json` files, while benchmark and real-smoke runs write under `.sneakoscope/missions/<id>/scout-benchmarks/<engine_run_id>/` or a smoke-specific namespace and record `canonical_artifacts_modified:false`.
+In 1.15.1, every Scout intake has a `scout-run-<timestamp>-<engine>-<hash>` `engine_run_id`. Canonical route intake still writes the normal mission-level `scout-*.json` files, while benchmark and real-smoke runs write under `.sneakoscope/missions/<id>/scout-benchmarks/<engine_run_id>/` or a smoke-specific namespace and record `canonical_artifacts_modified:false`.
 
 Engine-run query UX is release-bound: `status`, `consensus`, `handoff`, and `validate` must all accept `--engine-run-id` so users can inspect a specific Scout engine run without confusing it with canonical route intake. Opt-in real smoke verifies Codex exec parallel output-schema sessions when the local Codex runtime is available; unavailable real execution is a structured blocker or verified-partial result, not a synthetic success.
 

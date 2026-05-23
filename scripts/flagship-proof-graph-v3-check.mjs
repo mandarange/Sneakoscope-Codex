@@ -24,7 +24,7 @@ const dependencies = [
   ['mad-sks-audit-proof.json', './scripts/mad-sks-audit-proof-check.mjs'],
   ['mad-sks-no-harness-modification.json', './scripts/mad-sks-no-harness-modification-check.mjs'],
   ['scouts-engine-run-ux.json', './scripts/scouts-engine-run-ux-check.mjs'],
-  ['scouts-real-smoke-1.15.0.json', './scripts/scouts-real-smoke-check.mjs'],
+  ['scouts-real-smoke-1.15.1.json', './scripts/scouts-real-smoke-check.mjs'],
   ['codex-exec-output-schema-actual-syntax.json', './scripts/codex-exec-output-schema-actual-syntax-check.mjs'],
   ['release-dist-freshness.json', './scripts/release-dist-freshness-check.mjs']
 ];

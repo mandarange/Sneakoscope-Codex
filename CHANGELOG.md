@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-05-23
+
+### Added
+- Add MAD-SKS actual executor closure for guarded target-file writes, argv/no-shell command execution, package install routing, service control routing, DB write planning, Computer/Browser/generated-asset handoff evidence, and rollback apply.
+- Add `sks mad-sks rollback-apply --rollback-plan <path> --yes --json`.
+- Add flagship proof graph v4 and MAD-SKS actual executor release reports for file write, shell, package, service, DB, rollback apply, live protected-core guard smoke, and executor proof graph aggregation.
+
+### Fixed
+- Replace the previous probe-only `mad-sks run/apply` path with real executor dispatch and structured executor result evidence.
+- Prevent macOS `/var` to `/private/var` canonicalization from causing false target-boundary escape blockers for new nested target files.
+- Preserve immutable protected-core blocking for SKS source, scripts, package metadata, release metadata, and runtime artifacts during MAD-SKS execution.
+
+### Changed
+- Bump package, runtime, release-readiness, and Rust crate metadata to 1.15.1.
+- Extend release metadata and release readiness gates to require MAD-SKS actual executor closure and proof graph v4.
+
 ## [1.15.0] - 2026-05-23
 
 ### Added

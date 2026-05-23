@@ -15,8 +15,8 @@ test('MAD-SKS immutable harness guard blocks SKS core writes even inside target 
   await fs.mkdir(path.join(root, 'src', 'core'), { recursive: true });
   await fs.mkdir(path.join(root, 'scripts'), { recursive: true });
   await fs.mkdir(path.join(root, 'customer-app'), { recursive: true });
-  await fs.writeFile(path.join(root, 'package.json'), '{"name":"sneakoscope","version":"1.15.0"}\n');
-  await fs.writeFile(path.join(root, 'src', 'core', 'version.ts'), 'export const PACKAGE_VERSION = "1.15.0";\n');
+  await fs.writeFile(path.join(root, 'package.json'), '{"name":"sneakoscope","version":"1.15.1"}\n');
+  await fs.writeFile(path.join(root, 'src', 'core', 'version.ts'), 'export const PACKAGE_VERSION = "1.15.1";\n');
   await fs.writeFile(path.join(root, 'customer-app', 'app.ts'), 'export const ok = true;\n');
 
   const core = await resolveProtectedCore({ packageRoot: root, targetRoot: root });

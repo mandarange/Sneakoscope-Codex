@@ -4,7 +4,7 @@ import path from 'node:path';
 import { runFiveScoutFixture, writeReport } from './scouts-1-14-1-lib.mjs';
 
 if (process.env.SKS_TEST_REAL_SCOUTS !== '1') {
-  await writeReport('scouts-real-smoke-1.15.0.json', {
+  await writeReport('scouts-real-smoke-1.15.1.json', {
     schema: 'sks.scouts-real-smoke.v1',
     ok: true,
     status: 'integration_optional',
@@ -21,7 +21,7 @@ const run = await runFiveScoutFixture({
   requireOutputSchema: true,
   writeCanonical: false,
   mode: full ? 'real-smoke-full' : 'real-smoke-minimal',
-  task: full ? 'SKS 1.15.0 full real Scout smoke' : 'SKS 1.15.0 minimal real Scout smoke'
+  task: full ? 'SKS 1.15.1 full real Scout smoke' : 'SKS 1.15.1 minimal real Scout smoke'
 });
 const noSourceMutation = run.gate?.read_only_guard === true;
 const outputSchemaParsed = run.performance?.claim_allowed === true || run.completed_scouts > 0;
@@ -38,7 +38,7 @@ const report = {
   speedup_claim_policy: run.performance?.claim_allowed === true ? 'claim_allowed_with_evidence' : 'no_speedup_claim_without_evidence',
   blockers: run.gate?.blockers || []
 };
-const out = path.join(process.cwd(), '.sneakoscope', 'reports', 'scouts-real-smoke-1.15.0.json');
+const out = path.join(process.cwd(), '.sneakoscope', 'reports', 'scouts-real-smoke-1.15.1.json');
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));

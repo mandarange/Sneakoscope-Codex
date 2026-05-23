@@ -173,9 +173,13 @@ export function tmuxStatusKind(tmux: any = {}) {
   return tmux.ok ? 'ok' : 'missing';
 }
 
-export function codexLaunchCommand(root: any, codexBin: any, codexArgs: any = []) {
+export function codexLaunchCommand(root: any, codexBin: any, codexArgs: any = [], launchEnv: Record<string, unknown> = {}) {
   const extraArgs = forceGpt55CodexArgs(codexArgs);
+  const envExports = Object.entries(launchEnv || {})
+    .filter(([, value]) => value !== undefined && value !== null && String(value).length > 0)
+    .map(([key, value]) => `export ${key}=${shellEscape(value)}`);
   return [
+    ...envExports,
     sksLogoIntroCommand(codexBin),
     `printf '\\nProject: %s\\n' ${shellEscape(root)}`,
     'printf \'Runtime: tmux session for Codex CLI\\n\'',
@@ -317,6 +321,7 @@ export async function buildTmuxLaunchPlan(opts: any = {}) {
     tmux,
     app,
     codexArgs,
+    launchEnv: opts.launchEnv || opts.madSksEnv || {},
     attach_command: `tmux attach-session -t ${session}`,
     ready: Boolean(tmux.ok && codex.bin),
     warnings: app.ok ? [] : app.guidance || [],
@@ -727,7 +732,7 @@ export async function createTmuxSession(plan: any = {}, panes: any = [], opts: a
   const tmuxBin = plan.tmux?.bin || await findTmuxBin() || 'tmux';
   const session = sanitizeTmuxSessionName(plan.session || plan.workspace || defaultTmuxSessionName(plan.root));
   const root = path.resolve(plan.root || process.cwd());
-  const normalizedPanes = panes.length ? panes : [{ cwd: root, command: plan.command || codexLaunchCommand(root, plan.codex?.bin || 'codex', plan.codexArgs), focused: true }];
+  const normalizedPanes = panes.length ? panes : [{ cwd: root, command: plan.command || codexLaunchCommand(root, plan.codex?.bin || 'codex', plan.codexArgs, plan.launchEnv), focused: true }];
   if (await hasTmuxSession(tmuxBin, session)) {
     if (opts.recreate || opts.replaceExisting) {
       const killed = await tmuxRun(tmuxBin, ['kill-session', '-t', session], { timeoutMs: 5000 });
@@ -774,7 +779,7 @@ export async function launchTmuxUi(args: any = [], opts: any = {}) {
   const codexLbSweep = (opts.codexLbFreshSession || opts.codexLbBypassed)
     ? await sweepCodexLbTmuxSessions({ root: plan.root, keepSession: plan.session }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'codex-lb tmux cleanup failed', closed_session_count: 0 }))
     : null;
-  const command = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs);
+  const command = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs, plan.launchEnv);
   const created = await createTmuxSession({ ...plan, command }, [{ cwd: plan.root, command, focused: true, role: 'codex', title: 'Codex CLI' }]);
   if (created.ok) await writeTmuxSessionRecord(plan.root, { session: created.session, attach_command: created.attach_command, panes: created.panes, mode: opts.codexLbBypassed ? 'codex_lb_bypassed_openai_session' : opts.codexLbFreshSession ? 'codex_lb_fresh_session' : 'codex_session' }).catch(() => null);
   if (!args.includes('--quiet')) {
@@ -813,7 +818,7 @@ export async function launchMadTmuxUi(args: any = [], opts: any = {}) {
     ? await sweepCodexLbTmuxSessions({ root: plan.root, keepSession: plan.session }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'codex-lb tmux cleanup failed', closed_session_count: 0 }))
     : null;
   const missionId = opts.missionId || opts.madMissionId || 'latest';
-  const mainCommand = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs);
+  const mainCommand = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs, plan.launchEnv || opts.launchEnv || opts.madSksEnv);
   const panes = [
     { cwd: plan.root, command: mainCommand, focused: true, role: 'codex', title: 'Codex CLI' }
   ];

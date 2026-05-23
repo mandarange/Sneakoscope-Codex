@@ -1,6 +1,6 @@
 # Permission Kernel
 
-The 1.15.0 permission kernel turns MAD-SKS authority into explicit state and evidence instead of broad implicit bypass.
+The 1.15.1 permission kernel turns MAD-SKS authority into explicit state and evidence instead of broad implicit bypass.
 
 ## Modes
 
@@ -16,4 +16,4 @@ MAD-SKS scopes are additive. Target project writes do not imply system writes, D
 
 ## Release Invariants
 
-Permission decisions must resolve real paths, reject symlink/path traversal escapes, classify destructive shell commands, redact secrets from stdout/stderr, and emit structured blockers when authorization is missing. Proof cannot pass unless permission decisions, audit ledger entries, rollback notes, and verification evidence agree.
+Permission decisions must resolve real paths, reject symlink/path traversal escapes, classify shell argv, reject protected-core command targets, redact secrets from stdout/stderr, and emit structured blockers when authorization is missing. Proof cannot pass unless permission decisions, audit ledger entries, rollback notes, and verification evidence agree.
