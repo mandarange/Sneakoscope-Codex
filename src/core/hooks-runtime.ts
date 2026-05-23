@@ -291,7 +291,14 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       const additionalContext = [madSksConfirmation.additionalContext, teamDigest?.context].filter(Boolean).join('\n\n');
       return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
     }
-    const updateContext = await updateCheckContext(root, payload, prompt);
+    const updateCheck = await updateCheckContext(root, payload, prompt);
+    const updateContext = updateCheck.text;
+    if (updateCheck.blocksRouting) {
+      const teamDigest = updateCheck.resumeActiveRoute ? await teamLiveDigest(root, state) : null;
+      const activeContext = updateCheck.resumeActiveRoute ? await activeRouteContext(root, state) : '';
+      const additionalContext = [updateContext, activeContext, teamDigest?.context].filter(Boolean).join('\n\n');
+      return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
+    }
     const command = dollarCommand(prompt);
     const route = routePrompt(prompt);
     const bypassActiveRoute = route?.id === 'DFix' || route?.id === 'Answer';
@@ -797,7 +804,7 @@ function pruneStopRepeatEntries(entries: any = {}, now: any = nowIso()) {
 }
 
 async function updateCheckContext(root: any, payload: any, prompt: any) {
-  if (process.env.SKS_DISABLE_UPDATE_CHECK === '1') return '';
+  if (process.env.SKS_DISABLE_UPDATE_CHECK === '1') return updateCheckResult('');
   const statePath = path.join(root, '.sneakoscope', 'state', 'update-check.json');
   const updateState = await readJson(statePath, {});
   const conv = conversationId(payload);
@@ -826,7 +833,7 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
         pending_offer: null,
         check_error: null
       });
-      return '';
+      return updateCheckResult('');
     }
   }
   if (updateState.skipped?.latest) {
@@ -843,7 +850,29 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
         skipped: null,
         check_error: null
       });
-      return '';
+      return updateCheckResult('');
+    }
+  }
+  if (updateState.accepted?.latest) {
+    const currentCheck = await effectiveVersion();
+    if (compareVersions(updateState.accepted.latest, currentCheck.current) <= 0) {
+      await writeJsonAtomic(statePath, {
+        ...updateState,
+        current: currentCheck.current,
+        runtime_current: PACKAGE_VERSION,
+        installed_current: currentCheck.installed.version || null,
+        latest: updateState.accepted.latest,
+        checked_at: nowIso(),
+        pending_offer: null,
+        accepted: null,
+        check_error: null
+      });
+      return updateCheckResult('');
+    }
+    if (updateState.accepted.conversation_id === conv) {
+      return updateCheckResult(`SKS update check: update ${updateState.accepted.latest} was already accepted for this conversation. Run exactly this command and nothing else: ${sksUpdateInstallCommand(updateState.accepted.latest)}. Do not ask again or start a pipeline route until the update command has completed.`, {
+        blocksRouting: true
+      });
     }
   }
   if (pending?.conversation_id === conv && pending?.latest && looksLikeUpdateDecline(prompt)) {
@@ -852,7 +881,10 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
       pending_offer: null,
       skipped: { conversation_id: conv, latest: pending.latest, skipped_at: nowIso() }
     });
-    return `SKS update check: user skipped update to ${pending.latest} for this conversation only. Continue the previous task without updating. Check again on the next conversation.`;
+    return updateCheckResult(`SKS update check: user skipped update to ${pending.latest} for this conversation only. Continue the previous task without updating. Check again on the next conversation.`, {
+      blocksRouting: true,
+      resumeActiveRoute: true
+    });
   }
   if (pending?.conversation_id === conv && pending?.latest && looksLikeUpdateAccept(prompt)) {
     const command = sksUpdateInstallCommand(pending.latest);
@@ -861,10 +893,12 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
       pending_offer: null,
       accepted: { conversation_id: conv, latest: pending.latest, accepted_at: nowIso() }
     });
-    return `SKS update check: user accepted update to ${pending.latest}. Before doing other work, run exactly this command and nothing else: ${command}. Do not start a pipeline route, run setup, or run doctor for this accepted update command.`;
+    return updateCheckResult(`SKS update check: user accepted update to ${pending.latest}. Before doing other work, run exactly this command and nothing else: ${command}. Do not start a pipeline route, run setup, or run doctor for this accepted update command.`, {
+      blocksRouting: true
+    });
   }
   if (updateState.skipped?.conversation_id === conv && updateState.skipped?.latest) {
-    return `SKS update check: update ${updateState.skipped.latest} was skipped for this conversation only. Do not ask again in this conversation; check again next conversation.`;
+    return updateCheckResult(`SKS update check: update ${updateState.skipped.latest} was skipped for this conversation only. Do not ask again in this conversation; check again next conversation.`);
   }
   const check = await checkLatestVersion();
   const { installed, current } = await effectiveVersion();
@@ -879,7 +913,7 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
     pending_offer: isCurrent ? null : updateState.pending_offer || null,
     check_error: check.error || null
   });
-  if (!check.latest || check.error || isCurrent) return '';
+  if (!check.latest || check.error || isCurrent) return updateCheckResult('');
   await writeJsonAtomic(statePath, {
     ...updateState,
     current,
@@ -890,7 +924,17 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
     pending_offer: { conversation_id: conv, latest: check.latest, offered_at: nowIso() },
     skipped: updateState.skipped?.conversation_id === conv ? null : updateState.skipped || null
   });
-  return `SKS update check: installed ${current}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run exactly this command and nothing else: ${sksUpdateInstallCommand(check.latest)}. Do not start a pipeline route, run setup, or run doctor for this accepted update command. If they skip, do not ask again in this conversation, but check again next conversation.`;
+  return updateCheckResult(`SKS update check: installed ${current}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run exactly this command and nothing else: ${sksUpdateInstallCommand(check.latest)}. Do not start a pipeline route, run setup, or run doctor for this accepted update command. If they skip, do not ask again in this conversation, but check again next conversation.`, {
+    blocksRouting: true
+  });
+}
+
+function updateCheckResult(text: any, opts: any = {}) {
+  return {
+    text: String(text || ''),
+    blocksRouting: opts.blocksRouting === true,
+    resumeActiveRoute: opts.resumeActiveRoute === true
+  };
 }
 
 function sksUpdateInstallCommand(version: any) {
