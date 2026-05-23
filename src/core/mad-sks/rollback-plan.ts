@@ -9,7 +9,8 @@ export function createMadSksRollbackPlan({
   dbRollbacks = [],
   serviceRollbacks = [],
   packageRollbacks = [],
-  unavailable = []
+  unavailable = [],
+  authorizationManifestPath = null
 }: {
   targetRoot: string;
   fileRollbacks?: unknown[];
@@ -17,6 +18,7 @@ export function createMadSksRollbackPlan({
   serviceRollbacks?: unknown[];
   packageRollbacks?: unknown[];
   unavailable?: unknown[];
+  authorizationManifestPath?: string | null;
 }) {
   const highRisk = unavailable.length > 0;
   return {
@@ -24,6 +26,7 @@ export function createMadSksRollbackPlan({
     ok: !highRisk,
     generated_at: nowIso(),
     target_root: path.resolve(targetRoot),
+    authorization_manifest_path: authorizationManifestPath,
     file_rollbacks: fileRollbacks,
     db_rollbacks: dbRollbacks,
     service_rollbacks: serviceRollbacks,

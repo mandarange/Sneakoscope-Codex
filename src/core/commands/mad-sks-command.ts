@@ -11,6 +11,8 @@ import { compareProtectedCoreSnapshots, evaluateMadSksWrite, resolveProtectedCor
 import { buildMadSksPermissionModel, parseMadSksFlags } from '../mad-sks/permission-model.js';
 import { createMadSksProofEvidence, writeMadSksProofEvidence } from '../mad-sks/proof-evidence.js';
 import { createMadSksRollbackPlan, writeMadSksRollbackPlan } from '../mad-sks/rollback-plan.js';
+import { runMadSksExecutor } from '../mad-sks/executors/index.js';
+import { applyMadSksRollbackPlan } from '../mad-sks/rollback-apply.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
@@ -54,7 +56,12 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   console.log(`SKS MAD ready: ${madHighProfileName()} | gate ${madLaunch.mission_id}`);
   console.log('Live full-access active; catastrophic DB wipe/all-row/project-management guards remain.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
-  const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true });
+  const madSksEnv = {
+    SKS_PROTECTED_CORE_POLICY: madLaunch.gate.protected_core_policy,
+    SKS_MAD_SKS_TARGET_ROOT: madLaunch.gate.cwd,
+    SKS_MAD_SKS_PROTECTED_CORE_DIGEST: madLaunch.gate.protected_core_digest
+  };
+  const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
   return launchMadTmuxUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, codexArgs: profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, missionId: madLaunch.mission_id });
 }
@@ -63,6 +70,18 @@ async function activateMadTmuxPermissionState(cwd: any = process.cwd()) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad tmux live full-access session' });
+  const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot: cwd });
+  const protectedCoreBefore = await snapshotProtectedCore(packageRoot(), 'mad-live-before');
+  const protectedCorePolicyPath = path.join(dir, 'mad-sks-protected-core-policy.json');
+  const protectedCoreBeforePath = path.join(dir, 'mad-sks-live-protected-core-before.json');
+  await writeJsonAtomic(protectedCorePolicyPath, {
+    schema: 'sks.mad-sks-live-protected-core-policy.v1',
+    generated_at: nowIso(),
+    target_root: path.resolve(cwd || process.cwd()),
+    protected_core: protectedCore,
+    immutable_harness_guard: 'always_on'
+  });
+  await writeJsonAtomic(protectedCoreBeforePath, protectedCoreBefore);
   const gate = {
     schema_version: 1,
     passed: false,
@@ -75,6 +94,9 @@ async function activateMadTmuxPermissionState(cwd: any = process.cwd()) {
     migration_apply_allowed: true,
     catastrophic_safety_guard_active: true,
     permission_profile: permissionGateSummary(),
+    protected_core_policy: protectedCorePolicyPath,
+    protected_core_before: protectedCoreBeforePath,
+    protected_core_digest: protectedCoreBefore.digest,
     activated_by: 'sks --mad',
     cwd: path.resolve(cwd || process.cwd())
   };
@@ -93,6 +115,8 @@ async function activateMadTmuxPermissionState(cwd: any = process.cwd()) {
     mad_sks_modifier: true,
     mad_sks_gate_file: 'mad-sks-gate.json',
     mad_sks_gate_ready: true,
+    mad_sks_protected_core_policy: protectedCorePolicyPath,
+    mad_sks_protected_core_digest: protectedCoreBefore.digest,
     live_server_writes_allowed: true,
     supabase_mcp_schema_cleanup_allowed: true,
     direct_execute_sql_allowed: true,
@@ -146,6 +170,7 @@ const MAD_SKS_COMMAND_SURFACE = Object.freeze([
   'permissions',
   'proof',
   'rollback-plan',
+  'rollback-apply',
   'audit',
   'explain'
 ]);
@@ -248,11 +273,24 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
       process.exitCode = 1;
       return emit(result, json);
     }
-    return materializeMadSksRun(root, targetRoot, permission, userIntent, json, { action: 'apply', authorizationManifest: validation.manifest, authorizationManifestPath: path.resolve(manifestPath) });
+    return materializeMadSksRun(root, targetRoot, permission, userIntent, json, { action: 'apply', args, authorizationManifest: validation.manifest, authorizationManifestPath: path.resolve(manifestPath) });
   }
 
   if (subcommand === 'run') {
-    return materializeMadSksRun(root, targetRoot, permission, userIntent, json, { action: 'run' });
+    return materializeMadSksRun(root, targetRoot, permission, userIntent, json, { action: 'run', args });
+  }
+
+  if (subcommand === 'rollback-apply') {
+    const rollbackPlanPath = readOption(args, '--rollback-plan', readOption(args, '--plan', null));
+    const result = await applyMadSksRollbackPlan({
+      rollbackPlanPath,
+      targetRoot,
+      dryRun: args.includes('--dry-run'),
+      yes: args.includes('--yes'),
+      root: packageRoot()
+    });
+    if (!result.ok) process.exitCode = 1;
+    return emit(result, json);
   }
 
   if (subcommand === 'rollback-plan' || subcommand === 'audit' || subcommand === 'proof') {
@@ -273,27 +311,58 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
   const authorization = opts.authorizationManifest || createMadSksAuthorizationManifest({ permission, userIntent });
   const authorizationPath = opts.authorizationManifestPath || path.join(dir, 'mad-sks-authorization.json');
   if (!opts.authorizationManifestPath) await writeJsonAtomic(authorizationPath, authorization);
-  const targetProbe = await evaluateMadSksWrite({ packageRoot: packageRoot(), targetRoot, operation: 'file_write', path: path.join(targetRoot, '.sneakoscope', 'mad-sks-target-probe') });
+  const args = Array.isArray(opts.args) ? opts.args : [];
+  const executorId = readOption(args, '--executor', inferMadSksExecutor(args));
+  const targetFile = readOption(args, '--write-file', readOption(args, '--path', path.join('.sneakoscope', 'mad-sks-target-file.txt')));
+  const executorInput: any = {
+    executor: executorId,
+    dry_run: opts.action !== 'apply' || args.includes('--dry-run'),
+    target_root: targetRoot,
+    target_path: targetFile,
+    path: targetFile,
+    content: readOption(args, '--content', 'MAD-SKS authorized target mutation\n'),
+    cwd: readOption(args, '--cwd', targetRoot),
+    artifact_dir: dir,
+    authorization_manifest: authorization,
+    authorization_manifest_path: authorizationPath,
+    permission_model: permission,
+    yes: args.includes('--yes')
+  };
+  const operation = readOption(args, '--operation', null);
+  const command = readOption(args, '--command', null);
+  const argv = readRepeatedOption(args, '--argv');
+  const sql = readOption(args, '--sql', null);
+  const rollbackSql = readOption(args, '--rollback-sql', null);
+  if (operation) executorInput.operation = operation;
+  if (command) executorInput.command = command;
+  if (argv) executorInput.argv = argv;
+  if (sql) executorInput.sql = sql;
+  if (rollbackSql) executorInput.rollback_sql = rollbackSql;
+  const executorResult = await runMadSksExecutor(executorInput);
   const protectedProbe = await evaluateMadSksWrite({ packageRoot: packageRoot(), targetRoot, operation: 'file_write', path: path.join(packageRoot(), 'src', 'core', 'version.ts') });
   const audit = createMadSksAuditLedger({
     authorizationManifestPath: authorizationPath,
     targetRoot,
     actions: [
       madSksAuditAction({
-        type: 'file_write',
-        target: targetProbe.path,
-        rollback_available: true,
-        risk_level: 'low',
+        type: executorResult.action_type || 'file_write',
+        target: executorResult.changed_files?.[0] || path.resolve(targetRoot, targetFile),
+        rollback_available: Boolean(executorResult.rollback_plan_path),
+        risk_level: executorResult.ok ? 'low' : 'high',
         protected_core_impact: 'none',
-        notes: ['probe_only_no_target_write_performed']
+        notes: [`executor:${executorResult.executor}`, `status:${executorResult.status}`]
       })
     ],
-    blockedActions: [protectedProbe]
+    blockedActions: [protectedProbe, ...(executorResult.blocked_actions || [])]
   });
   const rollback = createMadSksRollbackPlan({
     targetRoot,
-    fileRollbacks: [{ path: targetProbe.path, previous_content_hash: null, status: 'snapshot_required_before_real_write' }],
-    unavailable: permission.high_risk_confirmation_required ? ['high_risk_final_confirmation_required_before_apply'] : []
+    authorizationManifestPath: authorizationPath,
+    fileRollbacks: executorResult.rollback_plan_path ? [{ executor: executorResult.executor, rollback_plan_path: executorResult.rollback_plan_path }] : [],
+    unavailable: [
+      ...(permission.high_risk_confirmation_required ? ['high_risk_final_confirmation_required_before_apply'] : []),
+      ...(executorResult.rollback_plan_path ? [] : ['executor_rollback_plan_missing'])
+    ]
   });
   const after = await snapshotProtectedCore(packageRoot(), 'after');
   const comparison = compareProtectedCoreSnapshots(before, after);
@@ -315,14 +384,17 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
     protectedCoreBefore: beforePath,
     protectedCoreAfter: afterPath,
     protectedCoreComparison: comparison,
-    changedTargetFiles: [],
-    blockedActions: [protectedProbe],
-    verification: [{ command: 'mad-sks protected core snapshot compare', ok: comparison.ok }]
+    changedTargetFiles: executorResult.changed_files || [],
+    blockedActions: [protectedProbe, ...(executorResult.blocked_actions || [])],
+    verification: [
+      { command: 'mad-sks executor result', ok: executorResult.ok === true, executor: executorResult.executor, status: executorResult.status },
+      { command: 'mad-sks protected core snapshot compare', ok: comparison.ok }
+    ]
   });
   await writeMadSksProofEvidence(proofPath, proof);
   const gate = {
     schema_version: 1,
-    passed: proof.ok === true,
+    passed: proof.ok === true && executorResult.ok === true,
     mad_sks_permission_active: true,
     permissions_deactivated: true,
     full_system_authority: permission.mode === 'full_system_authority',
@@ -346,8 +418,8 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
   });
   return emit({
     schema: opts.action === 'apply' ? 'sks.mad-sks-apply.v1' : 'sks.mad-sks-run.v1',
-    ok: proof.ok === true,
-    status: proof.status,
+    ok: proof.ok === true && executorResult.ok === true,
+    status: executorResult.status,
     mission_id: id,
     target_root: targetRoot,
     permission_model: permission,
@@ -355,11 +427,32 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
     audit_ledger: auditPath,
     rollback_plan: rollbackPath,
     proof_evidence: proofPath,
+    executor_result: executorResult,
     protected_core_before: beforePath,
     protected_core_after: afterPath,
     protected_core_unchanged: comparison.ok === true,
-    blocked_actions: [protectedProbe]
+    blocked_actions: [protectedProbe, ...(executorResult.blocked_actions || [])]
   }, json);
+}
+
+function inferMadSksExecutor(args: any[] = []) {
+  if (readOption(args, '--sql', null)) return 'db-write';
+  if (readOption(args, '--command', null) || args.includes('--argv')) return 'shell-command';
+  if (readOption(args, '--package', null) || args.includes('--allow-package-install')) return 'package-install';
+  if (readOption(args, '--service', null) || args.includes('--allow-service-control')) return 'service-control';
+  if (args.includes('--allow-computer-use')) return 'computer-use';
+  if (args.includes('--allow-browser-use') || args.includes('--allow-browser')) return 'browser-use';
+  if (args.includes('--allow-generated-assets')) return 'generated-asset';
+  return 'file-write';
+}
+
+function readRepeatedOption(args: any[] = [], name: string) {
+  const values = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] !== name) continue;
+    if (args[i + 1]) values.push(String(args[i + 1]));
+  }
+  return values.length ? values : undefined;
 }
 
 async function latestMadSksArtifact(root: string, kind: string) {

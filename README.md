@@ -10,12 +10,13 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.15.0** promotes MAD-SKS into explicit user-authorized full-system authority while keeping the SKS harness itself immutable. It also closes the 1.14.1 freshness gaps: release gates check for stale `dist`, Codex exec output-schema syntax is verified for both fresh `exec` and `exec resume`, Scout engine-run lookup covers status/consensus/handoff/validate plus opt-in real smoke, and flagship proof graph v3 binds MAD-SKS audit, rollback, immutable guard, Hook, UX/PPT, DFix, and Scout evidence.
+SKS **1.15.1** closes the MAD-SKS actual executor loop: `run/apply` now dispatch through guarded executors, target-file writes are real, shell commands use argv/no-shell execution, package/service/DB and visual handoff scopes are evidence-bound, rollback plans can be applied, and flagship proof graph v4 binds the new executor blackbox reports while the SKS protected core remains immutable.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
 sks mad-sks permissions --json
 sks mad-sks proof --json
+sks mad-sks rollback-apply --rollback-plan <path> --yes --json
 sks features complete --json
 sks scouts status latest --engine-runs --json
 npm run release:readiness
@@ -38,6 +39,7 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release 
 - Package boundary: [docs/package-boundary.md](docs/package-boundary.md)
 - Black-box package tests: [docs/black-box-package-tests.md](docs/black-box-package-tests.md)
 - Codex CLI compatibility: [docs/codex-cli-compat.md](docs/codex-cli-compat.md)
+- MAD-SKS rollback: [docs/mad-sks-rollback.md](docs/mad-sks-rollback.md)
 - MAD-SKS: [docs/mad-sks.md](docs/mad-sks.md)
 - Permission kernel: [docs/permission-kernel.md](docs/permission-kernel.md)
 - Immutable harness guard: [docs/immutable-harness-guard.md](docs/immutable-harness-guard.md)
