@@ -10,15 +10,15 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.14.1** is an extreme stabilization release for hook trust, real imagegen smoke checks, PPT E2E review evidence, Codex 0.133 compatibility, and Scout multi-session intake. Scout runs now carry `engine_run_id`, `scout_session_id`, output-schema metadata, isolated benchmark artifacts, read-only guard v2 evidence, and speedup-claim caps for mock/static paths.
+SKS **1.15.0** promotes MAD-SKS into explicit user-authorized full-system authority while keeping the SKS harness itself immutable. It also closes the 1.14.1 freshness gaps: release gates check for stale `dist`, Codex exec output-schema syntax is verified for both fresh `exec` and `exec resume`, Scout engine-run lookup covers status/consensus/handoff/validate plus opt-in real smoke, and flagship proof graph v3 binds MAD-SKS audit, rollback, immutable guard, Hook, UX/PPT, DFix, and Scout evidence.
 
 ```bash
+sks mad-sks plan --target-root <path> --json
+sks mad-sks permissions --json
+sks mad-sks proof --json
 sks features complete --json
-sks ux-review run --image <path> --generate-callouts --json
-sks ppt fixture --mock --json
-sks dfix fixture --json
-sks hooks trust-doctor --actual --json
-sks hooks install --managed --json
+sks scouts status latest --engine-runs --json
+npm run release:readiness
 ```
 
 Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release gate status lives in [docs/release-readiness.md](docs/release-readiness.md).
@@ -38,6 +38,9 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release 
 - Package boundary: [docs/package-boundary.md](docs/package-boundary.md)
 - Black-box package tests: [docs/black-box-package-tests.md](docs/black-box-package-tests.md)
 - Codex CLI compatibility: [docs/codex-cli-compat.md](docs/codex-cli-compat.md)
+- MAD-SKS: [docs/mad-sks.md](docs/mad-sks.md)
+- Permission kernel: [docs/permission-kernel.md](docs/permission-kernel.md)
+- Immutable harness guard: [docs/immutable-harness-guard.md](docs/immutable-harness-guard.md)
 - Codex App: [docs/codex-app.md](docs/codex-app.md)
 - Core dominance: [docs/core-dominance.md](docs/core-dominance.md)
 - Performance budgets: [docs/performance-budgets.md](docs/performance-budgets.md)

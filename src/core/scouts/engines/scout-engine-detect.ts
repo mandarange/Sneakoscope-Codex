@@ -1,5 +1,5 @@
 import { getCodexInfo } from '../../codex-adapter.js';
-import { detectCodexExecResumeOutputSchema } from '../../codex-exec-output-schema.js';
+import { detectCodexExecOutputSchemaSyntax } from '../../codex-exec-output-schema.js';
 import { runProcess, which } from '../../fsx.js';
 import { availableEngine, unavailableEngine } from './scout-engine-base.js';
 import { readCodexAppSubagentCapability } from './codex-app-subagent-engine.js';
@@ -44,11 +44,13 @@ export async function detectScoutEngines(root: any, opts: any = {}) {
 export async function detectCodexExecParallel(root: any, opts: any = {}) {
   const info: any = await getCodexInfo().catch((err: any) => ({ available: false, error: err.message }));
   if (!info?.available || !info.bin) return unavailableEngine('codex-exec-parallel', 'Codex CLI not available; set SKS_CODEX_BIN or install codex CLI.');
-  const outputSchema = await detectCodexExecResumeOutputSchema({ codexBin: info.bin }).catch(() => null);
+  const outputSchema = await detectCodexExecOutputSchemaSyntax({ codexBin: info.bin }).catch(() => null);
   return availableEngine('codex-exec-parallel', {
     bin: info.bin,
     version: info.version || null,
-    supports_output_schema: outputSchema?.output_schema_supported === true,
+    supports_output_schema: outputSchema?.exec?.output_schema_supported === true,
+    exec_output_schema_supported: outputSchema?.exec?.output_schema_supported === true,
+    exec_resume_output_schema_supported: outputSchema?.resume?.output_schema_supported === true,
     output_schema_status: outputSchema?.status || 'unknown',
     reason: 'Codex CLI found and can run separate exec jobs.'
   });

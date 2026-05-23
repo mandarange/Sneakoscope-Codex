@@ -11,8 +11,12 @@ sks scouts run latest --engine local-static --mock --json
 sks scouts run latest --engine codex-exec-parallel --require-output-schema --json
 sks scouts run latest --require-real-parallel --json
 sks scouts status latest --engine-runs --json
+sks scouts consensus latest --engine-run-id <engine_run_id> --json
+sks scouts handoff latest --engine-run-id <engine_run_id>
+sks scouts validate latest --engine-run-id <engine_run_id> --strict --json
 sks scouts engines --json
 sks scouts bench latest --engine local-static --mock --json
+sks scouts smoke latest --engine codex-exec-parallel --require-output-schema --real --json
 sks scouts consensus latest --json
 sks scouts handoff latest
 sks scouts validate latest --strict --json
@@ -41,11 +45,13 @@ Each mission writes:
 
 The package-level summary is `.sneakoscope/reports/scout-performance-summary.json`.
 
-In 1.14.1, every Scout intake has a `scout-run-<timestamp>-<engine>-<hash>` `engine_run_id`. Canonical route intake still writes the normal mission-level `scout-*.json` files, while benchmark runs write under `.sneakoscope/missions/<id>/scout-benchmarks/<engine_run_id>/` and record `canonical_artifacts_modified:false` in `scout-benchmark.json`.
+In 1.15.0, every Scout intake has a `scout-run-<timestamp>-<engine>-<hash>` `engine_run_id`. Canonical route intake still writes the normal mission-level `scout-*.json` files, while benchmark and real-smoke runs write under `.sneakoscope/missions/<id>/scout-benchmarks/<engine_run_id>/` or a smoke-specific namespace and record `canonical_artifacts_modified:false`.
+
+Engine-run query UX is release-bound: `status`, `consensus`, `handoff`, and `validate` must all accept `--engine-run-id` so users can inspect a specific Scout engine run without confusing it with canonical route intake. Opt-in real smoke verifies Codex exec parallel output-schema sessions when the local Codex runtime is available; unavailable real execution is a structured blocker or verified-partial result, not a synthetic success.
 
 ## Route Policy
 
-Default serious routes require the `five_scout_parallel_intake` pipeline stage: Team, QA-LOOP, Research, AutoResearch, PPT, Image UX Review, From-Chat-IMG, Computer Use/CU, DB, GX, MAD-SKS, and serious Goal continuations. Wiki requires scouts only when it is stateful, visual, or proof-bearing. Lightweight routes such as DFix, Answer, Help, Commit, Commit-And-Push, `sks version`, `sks help`, and `sks root` skip scouts unless explicitly forced.
+Default serious routes require the `five_scout_parallel_intake` pipeline stage: Team, QA-LOOP, Research, AutoResearch, PPT, Image UX Review, From-Chat-IMG, Computer Use/CU, DB, GX, MAD-SKS, and serious Goal continuations. MAD-SKS Scout intake must include permission-kernel, immutable-guard, audit/rollback, and protected-core risks. Wiki requires scouts only when it is stateful, visual, or proof-bearing. Lightweight routes such as DFix, Answer, Help, Commit, Commit-And-Push, `sks version`, `sks help`, and `sks root` skip scouts unless explicitly forced.
 
 Force or disable scout planning:
 

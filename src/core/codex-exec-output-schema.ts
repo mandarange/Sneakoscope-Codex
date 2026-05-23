@@ -15,6 +15,27 @@ export interface CodexExecResumeOutputSchemaAvailability {
   warnings: string[];
 }
 
+export interface CodexExecOutputSchemaSyntaxAvailability {
+  schema: 'sks.codex-exec-output-schema-syntax.v1';
+  ok: boolean;
+  status: 'available' | 'integration_optional' | 'degraded_supported';
+  codex_bin: string | null;
+  version: string | null;
+  exec: {
+    output_schema_supported: boolean;
+    output_last_message_supported: boolean;
+    help_checked: boolean;
+  };
+  resume: {
+    output_schema_supported: boolean;
+    output_last_message_supported: boolean;
+    help_checked: boolean;
+  };
+  parity: boolean;
+  blockers: string[];
+  warnings: string[];
+}
+
 export interface CodexResumeOutputSchemaCommandInput {
   sessionId: string;
   prompt?: string;
@@ -22,6 +43,81 @@ export interface CodexResumeOutputSchemaCommandInput {
   outputFile?: string | null;
   json?: boolean;
   extraArgs?: readonly string[];
+}
+
+export interface CodexExecOutputSchemaCommandInput {
+  prompt: string;
+  outputSchemaPath: string;
+  outputFile?: string | null;
+  json?: boolean;
+  extraArgs?: readonly string[];
+}
+
+export async function detectCodexExecOutputSchemaSyntax(opts: any = {}): Promise<CodexExecOutputSchemaSyntaxAvailability> {
+  const codexBin = opts.codexBin || await which('codex').catch(() => null);
+  if (!codexBin) {
+    return {
+      schema: 'sks.codex-exec-output-schema-syntax.v1',
+      ok: true,
+      status: 'integration_optional',
+      codex_bin: null,
+      version: null,
+      exec: { output_schema_supported: false, output_last_message_supported: false, help_checked: false },
+      resume: { output_schema_supported: false, output_last_message_supported: false, help_checked: false },
+      parity: false,
+      blockers: [],
+      warnings: ['codex binary not detected; output-schema syntax check is integration_optional']
+    };
+  }
+  const versionResult = opts.versionText
+    ? { code: 0, stdout: String(opts.versionText), stderr: '' }
+    : await runProcess(codexBin, ['--version'], { timeoutMs: opts.timeoutMs || 3000, maxOutputBytes: 16 * 1024 });
+  const execHelpResult = opts.execHelpText
+    ? { code: 0, stdout: String(opts.execHelpText), stderr: '' }
+    : await runProcess(codexBin, ['exec', '--help'], { timeoutMs: opts.timeoutMs || 5000, maxOutputBytes: 64 * 1024 });
+  const resumeHelpResult = opts.resumeHelpText
+    ? { code: 0, stdout: String(opts.resumeHelpText), stderr: '' }
+    : await runProcess(codexBin, ['exec', 'resume', '--help'], { timeoutMs: opts.timeoutMs || 5000, maxOutputBytes: 64 * 1024 });
+  const rawVersion = `${versionResult.stdout || ''}\n${versionResult.stderr || ''}`;
+  const version = parseCodexVersionText(rawVersion);
+  const execHelp = `${execHelpResult.stdout || ''}\n${execHelpResult.stderr || ''}`;
+  const resumeHelp = `${resumeHelpResult.stdout || ''}\n${resumeHelpResult.stderr || ''}`;
+  const execSupported = /--output-schema\b/.test(execHelp);
+  const resumeSupported = /--output-schema\b/.test(resumeHelp) || Boolean(version && compareSemverLike(version, '0.132.0') >= 0 && /--output-schema\b/.test(resumeHelp));
+  const execLastMessage = /--output-last-message\b|-o,/.test(execHelp);
+  const resumeLastMessage = /--output-last-message\b|-o,/.test(resumeHelp);
+  const policy = codexVersionPolicy({ available: Boolean(version), version, source: 'codex --version' });
+  const blockers = [
+    ...(execHelpResult.code === 0 ? [] : ['codex_exec_help_failed']),
+    ...(resumeHelpResult.code === 0 ? [] : ['codex_exec_resume_help_failed'])
+  ];
+  const status = policy.status === 'integration_optional'
+    ? 'integration_optional'
+    : execSupported || resumeSupported ? 'available' : 'degraded_supported';
+  return {
+    schema: 'sks.codex-exec-output-schema-syntax.v1',
+    ok: blockers.length === 0,
+    status,
+    codex_bin: codexBin,
+    version,
+    exec: {
+      output_schema_supported: execSupported,
+      output_last_message_supported: execLastMessage,
+      help_checked: execHelpResult.code === 0
+    },
+    resume: {
+      output_schema_supported: resumeSupported,
+      output_last_message_supported: resumeLastMessage,
+      help_checked: resumeHelpResult.code === 0
+    },
+    parity: execSupported === resumeSupported,
+    blockers,
+    warnings: [
+      ...policy.warnings,
+      ...(execSupported ? [] : ['codex exec --output-schema unavailable']),
+      ...(resumeSupported ? [] : ['codex exec resume --output-schema unavailable'])
+    ]
+  };
 }
 
 export interface CodexExecResumeOutputSchemaRunResult {
@@ -83,6 +179,19 @@ export async function detectCodexExecResumeOutputSchema(opts: any = {}): Promise
     output_last_message_supported: outputLastMessageSupported,
     warnings
   };
+}
+
+export async function buildCodexExecOutputSchemaArgs(input: CodexExecOutputSchemaCommandInput): Promise<string[]> {
+  const schemaPath = path.resolve(input.outputSchemaPath);
+  const schema = await assertCodexSchemaFile(schemaPath);
+  if (!schema.ok) throw new Error(`Invalid output schema: ${schema.issues.join(', ')}`);
+  const args = ['exec'];
+  if (input.json !== false) args.push('--json');
+  args.push('--output-schema', schemaPath);
+  if (input.outputFile) args.push('--output-last-message', path.resolve(input.outputFile));
+  args.push(...Array.from(input.extraArgs || []));
+  args.push(String(input.prompt || ''));
+  return args;
 }
 
 export async function codexSchemaPath(name: string): Promise<string> {

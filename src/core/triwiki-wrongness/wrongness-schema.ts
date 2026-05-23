@@ -61,6 +61,14 @@ export const WRONGNESS_KINDS = Object.freeze([
   'dfix_patch_plan_missing',
   'dfix_verification_missing',
   'dfix_noop_patch',
+  'mad_sks_protected_core_write_attempt',
+  'mad_sks_symlink_escape_attempt',
+  'mad_sks_unapproved_system_access',
+  'mad_sks_missing_rollback_plan',
+  'mad_sks_secret_leak_detected',
+  'mad_sks_unverified_system_change',
+  'mad_sks_db_write_without_snapshot',
+  'mad_sks_service_control_without_previous_state',
   'repeated_blocker_stop'
 ] as const);
 

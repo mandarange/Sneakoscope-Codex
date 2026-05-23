@@ -15,6 +15,7 @@ export async function finalizeRouteWithProof(root: any, {
   artifacts = [],
   visualEvidence = null,
   dbEvidence = null,
+  madSksEvidence = null,
   testEvidence = null,
   commandEvidence = null,
   claims = [],
@@ -90,6 +91,7 @@ export async function finalizeRouteWithProof(root: any, {
   const evidence = {
     ...collected,
     ...(dbEvidence ? { db: dbEvidence } : {}),
+    ...(madSksEvidence ? { mad_sks: madSksEvidence } : {}),
     ...(testEvidence ? { tests: testEvidence } : {}),
     ...(commandEvidence ? { commands: commandEvidence } : {}),
     ...(imageEvidence?.ledger ? { image_voxels: {

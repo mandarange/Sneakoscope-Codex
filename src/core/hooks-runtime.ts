@@ -4,6 +4,8 @@ import { looksInteractiveCommand, interactiveCommandReason } from './no-question
 import { missionDir, setCurrent, stateFile } from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
 import { checkHarnessModification, harnessGuardBlockReason } from './harness-guard.js';
+import { isMadSksRouteState } from './permission-gates.js';
+import { classifyMadSksShellCommand } from './mad-sks/write-guard.js';
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.js';
 import { localizedFinalizationReason } from './language-preference.js';
 import { classifyToolError } from './evaluation.js';
@@ -347,6 +349,10 @@ function activeGoalOverlayContext(state: any = {}, route: any = null) {
 }
 
 async function hookPreTool(root: any, state: any, payload: any, noQuestion: any) {
+  const madSksImmutableDecision = await checkMadSksImmutableModification(root, state, payload);
+  if (madSksImmutableDecision.action === 'block') {
+    return { decision: 'block', permissionDecision: 'deny', reason: madSksImmutableBlockReason(madSksImmutableDecision) };
+  }
   const harnessDecision = await checkHarnessModification(root, payload, { phase: 'pre-tool' });
   if (harnessDecision.action === 'block') {
     return { decision: 'block', permissionDecision: 'deny', reason: harnessGuardBlockReason(harnessDecision) };
@@ -411,6 +417,10 @@ async function recordToolErrorTaxonomy(root: any, state: any = {}, payload: any 
 }
 
 async function hookPermission(root: any, state: any, payload: any, noQuestion: any) {
+  const madSksImmutableDecision = await checkMadSksImmutableModification(root, state, payload);
+  if (madSksImmutableDecision.action === 'block') {
+    return { decision: 'deny', permissionDecision: 'deny', reason: madSksImmutableBlockReason(madSksImmutableDecision) };
+  }
   const harnessDecision = await checkHarnessModification(root, payload, { phase: 'permission-request' });
   if (harnessDecision.action === 'block') {
     return { decision: 'deny', permissionDecision: 'deny', reason: harnessGuardBlockReason(harnessDecision) };
@@ -429,6 +439,22 @@ async function hookPermission(root: any, state: any, payload: any, noQuestion: a
     permissionDecision: 'deny',
     reason: 'SKS no-question mode forbids mid-loop approval prompts. Choose a non-approval safe alternative using the active plan.'
   };
+}
+
+async function checkMadSksImmutableModification(root: any, state: any = {}, payload: any = {}) {
+  if (!isMadSksRouteState(state)) return { action: 'allow' };
+  const command = extractCommand(payload);
+  const classified: any = await classifyMadSksShellCommand({ command: command || JSON.stringify(payload || {}), cwd: payload.cwd || process.cwd(), root: packageRoot() }).catch((err: any) => ({ action: 'allow', error: err.message }));
+  if (classified.action === 'block' && (classified.protected_core_matches?.length || classified.reasons?.includes('cwd_is_protected_core'))) {
+    await appendJsonl(path.join(root, '.sneakoscope', 'state', 'mad-sks-immutable-guard.jsonl'), { ts: nowIso(), classified }).catch(() => {});
+    return { action: 'block', classified };
+  }
+  return { action: 'allow', classified };
+}
+
+function madSksImmutableBlockReason(decision: any = {}) {
+  const reasons = decision.classified?.reasons?.join(', ') || 'protected_core_path';
+  return `MAD-SKS immutable harness guard blocked this tool call. SKS package/source/dist/scripts/schemas/release metadata remain read-only even in MAD-SKS mode: ${reasons}.`;
 }
 
 function looksLikeUserGitAction(payload: any = {}) {

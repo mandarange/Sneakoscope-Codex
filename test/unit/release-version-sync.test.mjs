@@ -11,7 +11,7 @@ const lock = JSON.parse(read('package-lock.json'));
 
 test('stable release metadata and runtime versions stay synchronized', () => {
   const expected = pkg.version;
-  assert.equal(expected, '1.14.1');
+  assert.equal(expected, '1.15.0');
   assert.doesNotMatch(expected, /-/);
   assert.equal(pkg.publishConfig?.tag, 'latest');
 

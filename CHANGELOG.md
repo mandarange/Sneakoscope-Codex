@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-05-23
+
+### Added
+- Add MAD-SKS Full-System Authority Mode with explicit user authorization, target-root scoping, system access consent, DB write consent, package/service/system operation consent, audit ledger, rollback plan, Evidence Router integration, Completion Proof, and Trust Report.
+- Add Immutable Harness Guard that prevents MAD-SKS from modifying the SKS package root, source core, dist runtime, scripts, schemas, Rust crate, release metadata, managed hooks, and protected SKS policy files.
+- Add protected-core path resolution, symlink/path traversal guard coverage, write interception, pre/post protected-core snapshots, and git diff validation.
+- Add `sks mad-sks plan/run/apply/doctor/status/proof --json`, `sks mad-sks permissions --json`, rollback-plan, audit, and explain surfaces.
+- Add release gate freshness hardening so Scout and flagship checks cannot pass against stale `dist`.
+- Add Codex exec output-schema syntax parity checks for both `codex exec` and `codex exec resume`.
+- Add opt-in real Scout smoke for Codex exec parallel output-schema sessions.
+- Add engine-run-id query UX for `scouts consensus`, `handoff`, `validate`, and `status`.
+- Add flagship proof graph v3 with immutable harness guard, MAD-SKS audit ledger, rollback, Scout real smoke, Hook parity, UX/PPT imagegen graph, and DFix graph.
+
+### Fixed
+- Prevent MAD-SKS from being limited to DB permissions only.
+- Prevent MAD-SKS from modifying SKS harness code, even when the target root is the SKS repository.
+- Prevent release gates from using stale `dist` when source changed.
+- Prevent Codex exec output-schema checks from relying only on `exec resume --help` when fresh `exec` syntax differs.
+- Prevent Scout benchmark artifacts from being confused with canonical route intake artifacts.
+- Prevent MAD-SKS proof from claiming success without audit, diff, rollback, and verification evidence.
+
+### Changed
+- Treat MAD-SKS as user-authorized full-system maintenance mode with immutable SKS self-protection.
+- Treat SKS harness code as protected infrastructure, not a normal project target, in MAD-SKS mode.
+- Treat release gate freshness as a P0 trust invariant.
+
 ## [1.14.1] - 2026-05-22
 
 ### Added
