@@ -344,7 +344,7 @@ function chooseWorker(task: any, workers: any) {
     if (task.role === 'executor') return /^executor_/.test(worker.worker);
     if (task.role === 'analysis') return /^native_agent_/.test(worker.worker);
     if (task.role === 'reviewer') return /^reviewer_/.test(worker.worker) || /^user_/.test(worker.worker);
-    if (task.role === 'planner') return /debate_|team_consensus|parent_orchestrator/.test(worker.worker);
+    if (task.role === 'planner') return /debate_|native_agent_orchestrator|parent_orchestrator/.test(worker.worker);
     return true;
   });
   const scored = (candidates.length ? candidates : Object.values(workers)).map((worker: any) => {
@@ -467,7 +467,7 @@ function roleMatchesWorker(role: any, worker: any) {
   if (role === 'executor') return /^executor_/.test(worker);
   if (role === 'analysis') return /^native_agent_/.test(worker);
   if (role === 'reviewer') return /^reviewer_|^user_/.test(worker);
-  if (role === 'planner') return /^debate_|team_consensus|parent_orchestrator/.test(worker);
+  if (role === 'planner') return /^debate_|native_agent_orchestrator|parent_orchestrator/.test(worker);
   return worker === 'parent_orchestrator';
 }
 

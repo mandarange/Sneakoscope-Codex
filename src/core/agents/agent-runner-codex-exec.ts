@@ -1,6 +1,6 @@
 import path from 'node:path'
-import { runProcess, writeJsonAtomic } from '../fsx.js'
-import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
+import { readJson, runProcess, writeJsonAtomic } from '../fsx.js'
+import { agentWorkerEnv, validateAgentWorkerResult } from './agent-worker-pipeline.js'
 
 export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = {}) {
   const resultFile = opts.resultFile || path.join(opts.cwd || process.cwd(), agent.session_id + '-agent-result.json')
@@ -44,7 +44,9 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
   const logRoot = path.join(opts.agentRoot || opts.cwd || process.cwd(), 'sessions', agent.id)
   const stdoutFile = path.join(logRoot, 'codex-exec.stdout.log')
   const stderrFile = path.join(logRoot, 'codex-exec.stderr.log')
-  const result = await runProcess(opts.codexBin || 'codex', command.args, { cwd: opts.cwd || process.cwd(), env: opts.env, timeoutMs: opts.timeoutMs || 30 * 60 * 1000, maxOutputBytes: 256 * 1024, stdoutFile, stderrFile })
+  const allowedCommandsFile = path.join(opts.agentRoot || opts.cwd || process.cwd(), 'agent-allowed-commands.json')
+  const workerEnv = agentWorkerEnv(agent, allowedCommandsFile)
+  const result = await runProcess(opts.codexBin || 'codex', command.args, { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...workerEnv }, timeoutMs: opts.timeoutMs || 30 * 60 * 1000, maxOutputBytes: 256 * 1024, stdoutFile, stderrFile })
   const report = await writeCodexProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
     command: [opts.codexBin || 'codex', ...command.args],
     pid: result.pid || null,
@@ -59,7 +61,15 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
     timed_out: result.timedOut,
     dry_run: false
   })
-  return validateAgentWorkerResult({ mission_id: opts.missionId || opts.mission_id || '', agent_id: agent.id, session_id: agent.session_id, persona_id: agent.persona_id || agent.id, task_slice_id: slice?.id || '', status: result.code === 0 ? 'done' : 'failed', backend: 'codex-exec', summary: result.stdout.slice(-1000) || result.stderr.slice(-1000), artifacts: [command.resultFile, report], blockers: result.code === 0 ? [] : ['codex_exec_exit_' + result.code], unverified: [], writes: [], verification: { status: result.code === 0 ? 'passed' : 'failed', checks: ['codex-exec-exit-code', 'codex-exec-process-report'] } })
+  if (result.code === 0) {
+    const parsed = await readJson<any>(command.resultFile, null).catch(() => null)
+    if (parsed) {
+      const validated = validateAgentWorkerResult({ ...parsed, mission_id: parsed.mission_id || opts.missionId || opts.mission_id || '', agent_id: parsed.agent_id || agent.id, session_id: parsed.session_id || agent.session_id, persona_id: parsed.persona_id || agent.persona_id || agent.id, task_slice_id: parsed.task_slice_id || slice?.id || '', backend: 'codex-exec', artifacts: [...(Array.isArray(parsed.artifacts) ? parsed.artifacts : []), command.resultFile, report], verification: { status: parsed.verification?.status || 'passed', checks: [...(Array.isArray(parsed.verification?.checks) ? parsed.verification.checks : []), 'codex-exec-output-last-message', 'agent-result-schema'] } })
+      if (!validated.blockers.some((blocker: string) => blocker.startsWith('schema_invalid:'))) return validated
+      return { ...validated, status: 'blocked', blockers: [...validated.blockers, 'codex_exec_result_schema_invalid'] }
+    }
+  }
+  return validateAgentWorkerResult({ mission_id: opts.missionId || opts.mission_id || '', agent_id: agent.id, session_id: agent.session_id, persona_id: agent.persona_id || agent.id, task_slice_id: slice?.id || '', status: result.code === 0 ? 'done' : 'failed', backend: 'codex-exec', summary: result.stdout.slice(-1000) || result.stderr.slice(-1000), artifacts: [command.resultFile, report], blockers: result.code === 0 ? ['codex_exec_output_last_message_missing_or_invalid'] : ['codex_exec_exit_' + result.code], confidence: 'verified_partial', unverified: result.code === 0 ? ['codex-exec stdout fallback; resultFile JSON missing or invalid'] : [], writes: [], verification: { status: result.code === 0 ? 'partial' : 'failed', checks: ['codex-exec-exit-code', 'codex-exec-process-report', 'codex-exec-output-last-message'] } })
 }
 
 async function writeCodexProcessReport(root: string, agent: any, report: any) {

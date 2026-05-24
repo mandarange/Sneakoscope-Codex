@@ -223,6 +223,29 @@ function assertReleaseScripts() {
   }
 }
 
+
+function assertRouteNativeBlackbox(routeName) {
+  if (routeName === 'team') {
+    const result = runSksJson(['team', 'native backend fixture', '--mock', '--json']);
+    assertGate(result.mock === true, 'Team mock blackbox did not execute', result);
+    assertGate(result.native_agent_run?.proof?.ok === true, 'Team blackbox missing native agent proof', result.native_agent_run?.proof);
+    assertGate(!JSON.stringify(result).includes('analysis_scout'), 'Team runtime artifact leaked legacy analysis_scout');
+  }
+  if (routeName === 'research') {
+    const prepared = runSksJson(['research', 'prepare', 'native backend fixture', '--json']);
+    const result = runSksJson(['research', 'run', prepared.mission_id, '--mock', '--json']);
+    assertGate(result.ok === true, 'Research mock blackbox did not pass', result);
+    assertGate(result.gate?.gate?.native_agent_proof === true || result.gate?.native_agent_proof === true || result.proof?.ok === true, 'Research proof missing native agent evidence artifact', result);
+    assertGate(!JSON.stringify(result).includes('scout-ledger'), 'Research runtime artifact leaked scout-ledger as SSOT');
+  }
+  if (routeName === 'qa') {
+    const prepared = runSksJson(['qa-loop', 'prepare', 'native backend fixture', '--json']);
+    const result = runSksJson(['qa-loop', 'run', prepared.mission_id, '--mock', '--json']);
+    assertGate(result.ok === true, 'QA mock blackbox did not pass', result);
+    assertGate(result.gate?.gate?.native_agent_proof === true || result.gate?.native_agent_proof === true || result.proof?.ok === true, 'QA proof missing native agent evidence artifact', result);
+  }
+}
+
 function assertBlackboxAgent() {
   const result = runSksJson(['agent', 'run', 'fixture', '--mock', '--json']);
   assertGate(result.ok === true, 'fake agent blackbox run failed', result);
@@ -236,6 +259,9 @@ assertAgentSurface();
 assertReleaseScripts();
 
 if (gate.includes('legacy-multiagent') || gate === 'team-native-agent-backend' || gate === 'research-native-agent-backend' || gate === 'qa-native-agent-backend') assertLegacyMultiagentRemoved();
+if (gate === 'team-native-agent-backend') assertRouteNativeBlackbox('team');
+if (gate === 'research-native-agent-backend') assertRouteNativeBlackbox('research');
+if (gate === 'qa-native-agent-backend') assertRouteNativeBlackbox('qa');
 if (gate.includes('non-recursive')) assertNonRecursive();
 if (gate.includes('central-ledger')) assertCentralLedger();
 if (gate.includes('work-partition') || gate.includes('no-overlap') || gate.includes('lease-conflicts')) assertWorkPartition();

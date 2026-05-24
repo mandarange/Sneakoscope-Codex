@@ -28,3 +28,7 @@ The parent orchestrator assigns effort from the slice risk: simple read-only lan
 ## Native Agent Policy
 
 Team mode must use native agent proof artifacts for analysis, execution handoff, verification, and closeout. Removed legacy multi-agent artifacts do not satisfy Team gates.
+
+## 1.16.1 Runtime Closure
+
+SKS 1.16.1 routes release-critical Team, Research, QA, and native agent proof checks through the native agent orchestrator, Codex exec output-last-message parsing, central ledger proof, and no-scout runtime gates.

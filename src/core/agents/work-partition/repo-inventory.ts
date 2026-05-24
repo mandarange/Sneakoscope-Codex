@@ -5,7 +5,7 @@ const IGNORE = new Set(['.git', 'node_modules', 'dist', '.sneakoscope', '.codex'
 
 export async function collectRepoInventory(root: string, opts: { maxFiles?: number } = {}) {
   const files: string[] = []
-  await walk(root, root, files, opts.maxFiles || 2000)
+  await walk(root, root, files, opts.maxFiles || Number(process.env.SKS_AGENT_REPO_INVENTORY_MAX_FILES || 10000))
   const classify = (re: RegExp) => files.filter((file) => re.test(file))
   return {
     schema: 'sks.agent-repo-inventory.v1',

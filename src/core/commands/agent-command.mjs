@@ -1,6 +1,86 @@
-export async function agentCommand(command, args = []) {
-  const mod = await import('../../../dist/core/commands/agent-command.js');
-  return mod.agentCommand(command, args);
+import path from 'node:path';
+import { findLatestMission, loadMission } from '../mission.mjs';
+import { readJson, readText, sksRoot, writeJsonAtomic } from '../fsx.mjs';
+import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.mjs';
+import { parseAgentCommandArgs } from '../agents/agent-command-surface.mjs';
+import { buildAgentRoster } from '../agents/agent-roster.mjs';
+import { buildAgentWorkPartition } from '../agents/agent-work-partition.mjs';
+const AGENT_ACTION_SCHEMA = 'sks.agent-command-result.v1';
+export async function agentCommand(commandOrArgs = 'agent', maybeArgs = []) {
+    const args = Array.isArray(commandOrArgs) ? commandOrArgs : maybeArgs;
+    const parsed = parseAgentCommandArgs('agent', args);
+    if (parsed.action === 'run' || parsed.action === 'spawn')
+        return agentRun(parsed);
+    if (parsed.action === 'plan')
+        return agentPlan(parsed);
+    return agentMissionAction(parsed);
 }
-
-export const run = agentCommand;
+async function agentRun(parsed) {
+    const result = await runNativeAgentOrchestrator(parsed);
+    return emit(parsed, result, () => {
+        console.log('Native agent mission: ' + result.mission_id);
+        console.log('Backend: ' + result.backend);
+        console.log('Agents: ' + result.roster.agent_count + ' (concurrency ' + result.roster.concurrency + ')');
+        console.log('Proof: ' + result.proof.status);
+    });
+}
+async function agentPlan(parsed) {
+    const root = await sksRoot();
+    const roster = buildAgentRoster({ agents: parsed.agents, concurrency: parsed.concurrency, prompt: parsed.prompt, readonly: parsed.readonly });
+    const partition = await buildAgentWorkPartition(root, roster, parsed.prompt);
+    const result = { schema: 'sks.agent-plan.v1', ok: partition.ok, prompt: parsed.prompt, route: parsed.route, backend: parsed.backend, roster, partition: { slice_count: partition.slices.length, lease_count: partition.leases.length, blockers: partition.blockers, no_overlap_proof: partition.no_overlap_proof } };
+    return emit(parsed, result, () => {
+        console.log('Native agent plan');
+        console.log('Agents: ' + roster.agent_count + ' (concurrency ' + roster.concurrency + ')');
+        console.log('Slices: ' + partition.slices.length + ', leases: ' + partition.leases.length);
+        if (partition.blockers.length)
+            console.log('Blockers: ' + partition.blockers.join(', '));
+    });
+}
+async function agentMissionAction(parsed) {
+    const root = await sksRoot();
+    const id = await resolveAgentMission(root, parsed.missionId);
+    if (!id)
+        return emit(parsed, { schema: AGENT_ACTION_SCHEMA, ok: false, action: parsed.action, status: 'missing_mission' }, () => console.log('No mission found.'));
+    const { dir } = await loadMission(root, id);
+    const agentRoot = path.join(dir, 'agents');
+    const readers = {
+        status: 'agent-proof-evidence.json',
+        watch: 'agent-events.jsonl',
+        lane: parsed.lane ? path.join('sessions', parsed.lane + '.json') : 'agent-sessions.json',
+        board: 'agent-task-board.json',
+        ledger: 'agent-central-ledger.json',
+        collect: 'agent-output-validation.json',
+        consensus: 'agent-consensus.json',
+        close: 'agent-cleanup.json',
+        cleanup: 'agent-cleanup.json',
+        proof: 'agent-proof-evidence.json',
+        explain: 'agent-trust-report.json'
+    };
+    const artifact = readers[parsed.action] || 'agent-proof-evidence.json';
+    if (parsed.action === 'close' || parsed.action === 'cleanup') {
+        const cleanupPath = path.join(agentRoot, 'agent-command-cleanup.json');
+        await writeJsonAtomic(cleanupPath, { schema: 'sks.agent-command-cleanup.v1', ok: true, mission_id: id, action: parsed.action, note: 'cleanup command observed existing native agent ledger artifacts' });
+    }
+    const full = path.join(agentRoot, artifact);
+    const value = artifact.endsWith('.jsonl') ? await readText(full, '') : await readJson(full, null);
+    const result = { schema: AGENT_ACTION_SCHEMA, ok: value !== null && value !== '', action: parsed.action, mission_id: id, artifact: path.join('agents', artifact), data: value };
+    return emit(parsed, result, () => {
+        console.log('Native agent mission: ' + id);
+        console.log('Action: ' + parsed.action);
+        console.log('Artifact: agents/' + artifact);
+        if (parsed.action === 'proof' || parsed.action === 'status')
+            console.log('Proof: ' + (value?.status || 'missing'));
+    });
+}
+async function resolveAgentMission(root, requested) {
+    if (requested && requested !== 'latest')
+        return requested;
+    return findLatestMission(root);
+}
+function emit(parsed, result, text) {
+    if (parsed.json)
+        return console.log(JSON.stringify(result, null, 2));
+    text();
+}
+//# sourceMappingURL=agent-command.js.map

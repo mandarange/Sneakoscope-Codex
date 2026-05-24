@@ -11,3 +11,7 @@ Research status reports native agent sessions and proof state. `agent-ledger.jso
 ## AutoResearch
 
 AutoResearch cycles inherit the same policy: no removed legacy multi-agent backend, no recursive `sks research run` from agent workers, and no final proof until native agent evidence passes.
+
+## 1.16.1 Runtime Closure
+
+SKS 1.16.1 routes release-critical Team, Research, QA, and native agent proof checks through the native agent orchestrator, Codex exec output-last-message parsing, central ledger proof, and no-scout runtime gates.

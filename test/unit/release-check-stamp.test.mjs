@@ -29,6 +29,6 @@ test('release-check stamp can be written and verified without rerunning release:
   const parsed = JSON.parse(await fs.readFile(stamp, 'utf8'));
   assert.equal(parsed.schema, 'sks.release-check-stamp.v1');
   assert.equal(parsed.package_name, 'sneakoscope');
-  assert.equal(parsed.package_version, '1.16.0');
+  assert.equal(parsed.package_version, '1.16.1');
   assert.match(parsed.source_digest, /^[a-f0-9]{64}$/);
 });

@@ -15,6 +15,7 @@ import { renderTeamDashboardState, writeTeamDashboardState } from '../team-dashb
 import { PIPELINE_PLAN_ARTIFACT, validatePipelinePlan, writePipelinePlan } from '../pipeline.js';
 import { cleanupTmuxTeamView, launchTmuxTeamView, reconcileTmuxTeamCockpit } from '../tmux-ui.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
+import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
 import { ambientGoalContinuation, flag, readFlagValue } from './command-utils.js';
 
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
@@ -67,13 +68,31 @@ export async function team(args: any = []) {
   const workOrder = createWorkOrderLedger({ missionId: id, route: fromChatImgRequired ? 'from-chat-img' : 'team', sourcesComplete: !fromChatImgRequired, requests: [{ verbatim: prompt, normalized_requirement: prompt, implementation_tasks: ['TASK-001'], status: 'pending' }] });
   await writeWorkOrderLedger(dir, workOrder);
   if (fromChatImgRequired) await writeFromChatImgArtifacts(dir, { missionId: id, requests: [{ verbatim: prompt }], ambiguities: ['image source inventory must be completed before implementation'] });
+  const nativeAgentRun = await runNativeAgentOrchestrator({
+    root,
+    missionId: id,
+    route: '$Team',
+    prompt,
+    backend: mock ? 'fake' : 'codex-exec',
+    mock,
+    agents: roster.bundle_size,
+    concurrency: Math.min(agentSessions, roster.bundle_size),
+    readonly: true
+  });
+  await appendTeamEvent(dir, {
+    agent: 'native_agent_orchestrator',
+    phase: 'native_agent_intake',
+    type: nativeAgentRun.ok ? 'complete' : 'blocked',
+    artifact: 'agents/agent-proof-evidence.json',
+    message: 'Native agent orchestrator completed with ' + nativeAgentRun.backend + ' backend; proof ' + (nativeAgentRun.proof?.status || 'unknown') + '.'
+  });
   let dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team native agent intake agents' });
-  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
+  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, native_agent_proof: nativeAgentRun.proof?.ok === true, agent_central_ledger: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
   dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team native agent intake agents' });
   const route = routePrompt(`$Team ${prompt}`) || ROUTES.find((candidate: any) => candidate.id === 'Team');
   const routeReason = routeReasoning(route, prompt);
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: prompt, required: false, ambiguity: { required: false, status: 'team_cli_direct' } });
-  await setCurrent(root, { mission_id: id, route: 'Team', route_command: '$Team', mode: 'TEAM', phase: mock ? 'TEAM_FIXTURE_DONE' : 'TEAM_NATIVE_AGENT_INTAKE', questions_allowed: false, implementation_allowed: true, context7_required: false, context7_verified: mock, subagents_required: true, subagents_verified: mock, reflection_required: true, visible_progress_required: true, context_tracking: 'triwiki', required_skills: route?.requiredSkills || ['team'], stop_gate: 'team-gate.json', reasoning_effort: routeReason.effort, reasoning_profile: routeReason.profile, reasoning_temporary: true, team_agent_reasoning_policy: teamReasoning, goal_continuation: pipelinePlan.goal_continuation, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, team_live_ready: true, from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, prompt });
+  await setCurrent(root, { mission_id: id, route: 'Team', route_command: '$Team', mode: 'TEAM', phase: mock ? 'TEAM_FIXTURE_DONE' : 'TEAM_NATIVE_AGENT_INTAKE', questions_allowed: false, implementation_allowed: true, context7_required: false, context7_verified: mock, subagents_required: true, subagents_verified: nativeAgentRun.proof?.ok === true, reflection_required: true, visible_progress_required: true, context_tracking: 'triwiki', required_skills: route?.requiredSkills || ['team'], stop_gate: 'team-gate.json', reasoning_effort: routeReason.effort, reasoning_profile: routeReason.profile, reasoning_temporary: true, team_agent_reasoning_policy: teamReasoning, goal_continuation: pipelinePlan.goal_continuation, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, team_live_ready: true, from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, native_agent_backend: nativeAgentRun.backend, native_agent_proof: 'agents/agent-proof-evidence.json', prompt });
   const result: any = {
     mission_id: id,
     mission_dir: dir,
@@ -96,7 +115,8 @@ export async function team(args: any = []) {
     bundle_size: roster.bundle_size,
     role_counts: roleCounts,
     questions: path.join(dir, 'questions.md'),
-    codex_agents: ['native_agent', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']
+    native_agent_run: nativeAgentRun,
+    codex_agents: ['native_agent_orchestrator', 'agent_central_ledger', 'agent_proof_evidence', 'agent_review_lane', 'agent_integration_lane']
   };
   if (mock) {
     await writeTextAtomic(path.join(dir, 'team-analysis.md'), `# Team Native Agent Analysis\n\nMock Team fixture completed native agent intake for ${id}.\n`);
@@ -105,9 +125,9 @@ export async function team(args: any = []) {
     await writeTextAtomic(path.join(dir, 'context7-evidence.jsonl'), `${JSON.stringify({ schema: 'sks.context7-evidence.v1', mission_id: id, route: '$Team', status: 'mock_not_required', generated_at: nowIso() })}\n`);
     const cleanup = { schema_version: 1, mission_id: id, status: 'clean', outstanding_sessions: 0, mock: true, generated_at: nowIso() };
     await writeJsonAtomic(path.join(dir, TEAM_SESSION_CLEANUP_ARTIFACT), cleanup);
-    const gate = { passed: true, team_roster_confirmed: true, analysis_artifact: true, triwiki_refreshed: true, triwiki_validated: true, consensus_artifact: true, ...runtime.gate_fields, implementation_team_fresh: true, review_artifact: true, review_lanes: MIN_TEAM_REVIEWER_LANES, integration_evidence: true, session_cleanup: true, context7_evidence: true, mock: true };
+    const gate = { passed: true, team_roster_confirmed: true, native_agent_proof: nativeAgentRun.proof?.ok === true, agent_central_ledger: true, analysis_artifact: true, triwiki_refreshed: true, triwiki_validated: true, consensus_artifact: true, ...runtime.gate_fields, implementation_team_fresh: true, review_artifact: true, review_lanes: MIN_TEAM_REVIEWER_LANES, integration_evidence: true, session_cleanup: true, context7_evidence: true, mock: true };
     await writeJsonAtomic(path.join(dir, 'team-gate.json'), gate);
-    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Team', gateFile: 'team-gate.json', gate, mock: true, artifacts: ['team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-plan.json', 'team-runtime-tasks.json', 'completion-proof.json'], claims: [{ id: 'team-fixture-complete', status: 'verified_partial' }], command: { cmd: `sks team "${prompt}" --mock`, status: 0 } });
+    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Team', gateFile: 'team-gate.json', gate, mock: true, artifacts: ['agents/agent-proof-evidence.json', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-plan.json', 'team-runtime-tasks.json', 'completion-proof.json'], claims: [{ id: 'team-fixture-complete', status: 'verified_partial' }], command: { cmd: `sks team "${prompt}" --mock`, status: 0 } });
     result.mock = true;
     result.proof = proof.validation;
   } else {
@@ -135,7 +155,7 @@ export function buildTeamPlan(id: any, prompt: any, opts: any = {}) {
   const spec = normalizeTeamSpec({ ...opts, prompt });
   const { agentSessions, roleCounts, roster } = spec;
   const fromChatImgRequired = hasFromChatImgSignal(prompt);
-  const requiredArtifacts = ['team-roster.json', 'work-order-ledger.json', 'effort-decision.json', 'team-dashboard-state.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'];
+  const requiredArtifacts = ['team-roster.json', 'work-order-ledger.json', 'effort-decision.json', 'team-dashboard-state.json', 'agents/agent-proof-evidence.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'];
   return {
     schema_version: 1,
     mission_id: id,

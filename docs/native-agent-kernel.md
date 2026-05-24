@@ -50,3 +50,7 @@ The `fake` backend is for fixtures only and must not be described as real parall
 ## Route Collaboration
 
 Review, PPT-Collab, UX-Collab, DB-Review, and Release-Review all write the same native collaboration evidence: central ledger, task board, non-overlap leases, session cleanup, proof graph, trust report, and a route-specific `*-native-agent-plan.json`. These plans include route personas and a native-only backend note.
+
+## 1.16.1 Runtime Closure
+
+SKS 1.16.1 routes release-critical Team, Research, QA, and native agent proof checks through the native agent orchestrator, Codex exec output-last-message parsing, central ledger proof, and no-scout runtime gates.

@@ -12,6 +12,7 @@ import { PIPELINE_PLAN_ARTIFACT, validatePipelinePlan, writePipelinePlan } from 
 import { enforceRetention } from '../retention.js';
 import { scanDbSafety } from '../db-safety.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
+import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
 import { flag, positionalArgs, readFlagValue, readMaxCycles, readBoundedIntegerFlag, resolveMissionId, safeReadTextFile } from './command-utils.js';
 
 const RESEARCH_DEFAULT_MAX_CYCLES = 12;
@@ -113,13 +114,25 @@ async function researchRun(args: any) {
   const mock = flag(args, '--mock');
   await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false, implementation_allowed: false, research_real_run_required: !mock, research_cycle_timeout_minutes: cycleTimeoutMinutes });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock, cycleTimeoutMinutes, real_run_required: !mock });
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-exec', mock, agents: plan.native_agent_plan?.session_count || 5, concurrency: Math.min(plan.native_agent_plan?.session_count || 5, 5), readonly: true, roster: plan.native_agent_plan });
+  await writeJsonAtomic(path.join(dir, 'research-native-agent-run.json'), nativeAgentRun);
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (mock) {
-    const gate = await writeMockResearchResult(dir, plan);
-    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: gate.gate || gate, artifacts: ['research-gate.json', 'research-report.md', researchPaperArtifactForPlan(plan), 'source-ledger.json', 'agent-ledger.json', 'debate-ledger.json', 'completion-proof.json'], mock, command: { cmd: `sks research run ${id} --mock`, status: 0 } });
+    let gate = await writeMockResearchResult(dir, plan);
+    const nativeGate = { ...(gate.gate || gate), native_agent_proof: nativeAgentRun.proof?.ok === true, agent_central_ledger: true };
+    await writeJsonAtomic(path.join(dir, 'research-gate.json'), nativeGate);
+    gate = { ...gate, gate: nativeGate, passed: nativeGate.passed };
+    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'research-native-agent-run.json', 'research-gate.json', 'research-report.md', researchPaperArtifactForPlan(plan), 'source-ledger.json', 'agent-ledger.json', 'debate-ledger.json', 'completion-proof.json'], mock, command: { cmd: `sks research run ${id} --mock`, status: 0 } });
     await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true, implementation_allowed: false });
     if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
     console.log(`Mock research done: ${id}`);
     console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
+    return;
+  }
+  if (!nativeAgentRun.ok) {
+    await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: await readJson(path.join(dir, 'research-gate.json'), null), artifacts: ['agents/agent-proof-evidence.json', 'research-native-agent-run.json', 'completion-proof.json'], statusHint: 'blocked', blockers: nativeAgentRun.proof?.blockers || ['native_agent_backend_blocked'], command: { cmd: `sks research run ${id}`, status: 2 } });
+    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_BLOCKED_NATIVE_AGENTS', questions_allowed: true, implementation_allowed: false, blocker: 'agents/agent-proof-evidence.json' });
+    process.exitCode = 2;
     return;
   }
   const codex = await getCodexInfo();

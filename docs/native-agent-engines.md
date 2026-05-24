@@ -16,3 +16,7 @@ The codex-exec backend prepares workers with `--json`, `--output-schema schemas/
 The tmux backend writes an `agent-tmux-report.json` plan with a native-agent overview pane and self-closing worker pane policy. If tmux is not launched, the result remains a structured blocker rather than a real parallel execution claim.
 
 Removed legacy multi-agent engines are not a release-supported diagnostics or route-finalization surface; Team/Research/QA/Review route finalization relies on native `agents/agent-proof-evidence.json`.
+
+## 1.16.1 Runtime Closure
+
+SKS 1.16.1 routes release-critical Team, Research, QA, and native agent proof checks through the native agent orchestrator, Codex exec output-last-message parsing, central ledger proof, and no-scout runtime gates.

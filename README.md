@@ -10,7 +10,7 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.16.0** closes the native multi-session agent kernel: `sks agent` and `sks --agent` create bounded agent rosters, non-overlapping leases, append-only ledgers, session lifecycle proof, recursion guards, dynamic per-agent effort routing, and native agent proof evidence. The old multi-agent command surface has been removed; native agents are the only release-supported route collaboration backend.
+SKS **1.16.1** closes the native multi-session agent kernel: `sks agent` and `sks --agent` create bounded agent rosters, non-overlapping leases, append-only ledgers, session lifecycle proof, recursion guards, dynamic per-agent effort routing, and native agent proof evidence. The old multi-agent command surface has been removed; native agents are the only release-supported route collaboration backend.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
