@@ -34,7 +34,7 @@ export function buildRouteCompletionContract(proof = {}, evidenceIndex = {}) {
 
 export function routeRequirements(route, proof = {}) {
   return {
-    scouts: Boolean(proof.evidence?.scouts?.required),
+    agents: Boolean(proof.evidence?.agents?.schema || proof.evidence?.agents?.ok || proof.evidence?.agents?.status),
     completion_proof: routeRequiresCompletionProof(route),
     image_voxels: routeRequiresImageVoxelAnchors(route),
     db_safety: route === '$DB' || Boolean(proof.evidence?.db || proof.evidence?.db_safety),
@@ -46,7 +46,7 @@ export function routeRequirements(route, proof = {}) {
 function evidencePathsForContract(missionId, proof, evidenceIndex, required) {
   const base = missionId ? `.sneakoscope/missions/${missionId}` : null;
   return {
-    scouts: proof.evidence?.scouts?.gate_file || (required.scouts && base ? `${base}/scout-gate.json` : null),
+    agents: base && required.agents ? `${base}/agents/agent-proof-evidence.json` : null,
     proof: base ? `${base}/completion-proof.json` : null,
     image_voxels: required.image_voxels && base ? `${base}/image-voxel-ledger.json` : null,
     tests: pathFromEvidence(proof.evidence?.tests),

@@ -2,7 +2,7 @@ import { collectProofEvidence } from './evidence-collector.js';
 import { writeRouteCompletionProof } from './route-adapter.js';
 import { routeFinalizerPolicy } from './route-finalizer-policy.js';
 import { ensureRouteImageEvidence } from '../wiki-image/route-image-evidence.js';
-import { readScoutProofEvidence } from '../scouts/scout-proof-evidence.js';
+import { readAgentProofEvidence } from '../agents/agent-proof-evidence.js';
 import { wrongnessProofEvidence } from '../triwiki-wrongness/wrongness-proof-linker.js';
 import { computerUseStatusReport } from '../computer-use-status.js';
 import { readComputerUseLiveEvidence } from '../computer-use-live-evidence.js';
@@ -27,7 +27,7 @@ export async function finalizeRouteWithProof(root: any, {
   fixClaim = false,
   requireRelation = false,
   visualClaim = undefined,
-  scouts = undefined,
+  agents = undefined,
   allowActiveWrongnessPartial = false
 }: any = {}) {
   const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation, visualClaim });
@@ -47,7 +47,7 @@ export async function finalizeRouteWithProof(root: any, {
     }
   }
   const collected = await collectProofEvidence(root);
-  const scoutEvidence = scouts === false ? null : await readScoutProofEvidence(root, missionId).catch(() => null);
+  const agentEvidence = agents === false ? null : await readAgentProofEvidence(root, missionId).catch(() => null);
   const wrongnessEvidence = await wrongnessProofEvidence(root, missionId, { route: policy.route }).catch(() => null);
   const computerUse = policy.requires_image_voxel_anchors
     ? await computerUseStatusReport().catch((err: any) => ({ schema: 'sks.computer-use-status.v1', status: 'unknown', ok: false, guidance: [err.message], evidence: { status: 'unknown' } }))
@@ -107,7 +107,7 @@ export async function finalizeRouteWithProof(root: any, {
     ...(providedVisualEvidence?.image_ux_review ? { image_ux_review: providedVisualEvidence.image_ux_review } : {}),
     ...(providedVisualEvidence?.ppt_review ? { ppt_review: providedVisualEvidence.ppt_review } : {}),
     ...(providedVisualEvidence?.dfix ? { dfix: providedVisualEvidence.dfix } : {}),
-    ...(scoutEvidence ? { scouts: scoutEvidence } : {}),
+    ...(agentEvidence ? { agents: agentEvidence } : {}),
     ...(wrongnessEvidence ? { wrongness: wrongnessEvidence } : {}),
     ...(computerUse ? { computer_use: {
       schema: computerUse.schema,

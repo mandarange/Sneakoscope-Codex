@@ -101,8 +101,8 @@ export function tmuxCockpitStatePath(root: any = process.cwd()) {
   return path.join(path.resolve(root || process.cwd()), '.sneakoscope', 'state', 'tmux-cockpit.json');
 }
 
-const LEGACY_TEAM_PANE_TITLE_RE = /^(?:overview: mission_overview|scout: analysis_scout|plan: (?:debate|consensus|planner|user)|exec: (?:executor|implementation|worker)|review: (?:reviewer|qa|validation)|safety:)/;
-const GENERIC_TEAM_AGENT_IDS = new Set(['parent_orchestrator', 'analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']);
+const LEGACY_TEAM_PANE_TITLE_RE = /^(?:overview: mission_overview|agent: native_agent|plan: (?:debate|consensus|planner|user)|exec: (?:executor|implementation|worker)|review: (?:reviewer|qa|validation)|safety:)/;
+const GENERIC_TEAM_AGENT_IDS = new Set(['parent_orchestrator', 'native_agent', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']);
 const DYNAMIC_TEAM_TMUX_LAYOUT = 'main-vertical';
 const TEAM_TMUX_MAIN_PANE_MIN_WIDTH = 48;
 const TEAM_TMUX_MAIN_PANE_WIDTH_RATIO = 0.5;
@@ -255,7 +255,7 @@ function compactTeamPaneBanner({ missionId, agentId, phase, style, overview = fa
 
 export const TMUX_TEAM_LANE_STYLES = Object.freeze({
   overview: Object.freeze({ role: 'overview', label: 'overview', color_name: 'Blue', color: 'blue', icon: 'layout-dashboard' }),
-  scout: Object.freeze({ role: 'scout', label: 'scout', color_name: 'Cyan', color: 'cyan', icon: 'search' }),
+  agent: Object.freeze({ role: 'agent', label: 'agent', color_name: 'Cyan', color: 'cyan', icon: 'search' }),
   planning: Object.freeze({ role: 'planning', label: 'plan', color_name: 'Yellow', color: 'yellow', icon: 'messages-square' }),
   execution: Object.freeze({ role: 'execution', label: 'exec', color_name: 'Green', color: 'green', icon: 'hammer' }),
   review: Object.freeze({ role: 'review', label: 'review', color_name: 'Red', color: 'red', icon: 'shield-check' }),
@@ -265,7 +265,7 @@ export const TMUX_TEAM_LANE_STYLES = Object.freeze({
 export function teamLaneStyle(agentId: any = '') {
   const id = String(agentId || '').toLowerCase();
   if (!id || id === 'mission_overview' || id === 'overview') return TMUX_TEAM_LANE_STYLES.overview;
-  if (/analysis|scout/.test(id)) return TMUX_TEAM_LANE_STYLES.scout;
+  if (/analysis|agent/.test(id)) return TMUX_TEAM_LANE_STYLES.agent;
   if (/debate|consensus|planner|user/.test(id)) return TMUX_TEAM_LANE_STYLES.planning;
   if (/db|safety/.test(id)) return TMUX_TEAM_LANE_STYLES.safety;
   if (/review|qa|validation/.test(id)) return TMUX_TEAM_LANE_STYLES.review;
@@ -888,7 +888,7 @@ function teamLanePhase(agentId: any = '') {
   const role = teamLaneStyle(agentId).role;
   if (role === 'review') return 'review';
   if (role === 'execution') return 'implementation';
-  if (role === 'scout') return 'analysis';
+  if (role === 'agent') return 'analysis';
   if (role === 'safety') return 'safety';
   return 'team';
 }
@@ -1124,7 +1124,7 @@ export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFil
     window_size: 'latest',
     resize_hooks: ['client-attached', 'client-resized'],
     live_updates: true,
-    panes_show: ['overview', 'scout', 'planning', 'execution', 'review', 'safety'],
+    panes_show: ['overview', 'agent', 'planning', 'execution', 'review', 'safety'],
     user_attach_command: launch.attach_command
   };
   const result: any = {

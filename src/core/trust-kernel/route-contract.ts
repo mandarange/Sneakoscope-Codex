@@ -52,9 +52,9 @@ export function buildRouteCompletionContract(proof: unknown = {}, evidenceIndex:
 export function routeRequirements(route: unknown, proof: unknown = {}): RouteRequirements {
   const proofRecord = asRecord(proof);
   const evidence = asRecord(proofRecord.evidence);
-  const scouts = asRecord(evidence.scouts);
+  const agents = asRecord(evidence.agents);
   return {
-    scouts: Boolean(scouts.required),
+    agents: Boolean(agents.schema || agents.ok || agents.status),
     completion_proof: routeRequiresCompletionProof(route),
     image_voxels: routeRequiresImageVoxelAnchors(route),
     db_safety: route === '$DB' || Boolean(evidence.db || evidence.db_safety),
@@ -66,11 +66,11 @@ export function routeRequirements(route: unknown, proof: unknown = {}): RouteReq
 function evidencePathsForContract(missionId: string | null, proof: unknown, evidenceIndex: unknown, required: RouteRequirements) {
   const proofRecord = asRecord(proof);
   const proofEvidence = asRecord(proofRecord.evidence);
-  const scouts = asRecord(proofEvidence.scouts);
+  const agents = asRecord(proofEvidence.agents);
   const evidenceIndexRecord = asRecord(evidenceIndex);
   const base = missionId ? `.sneakoscope/missions/${missionId}` : null;
   return {
-    scouts: stringOrNull(scouts.gate_file) || (required.scouts && base ? `${base}/scout-gate.json` : null),
+    agents: base && required.agents ? `${base}/agents/agent-proof-evidence.json` : null,
     proof: base ? `${base}/completion-proof.json` : null,
     image_voxels: required.image_voxels && base ? `${base}/image-voxel-ledger.json` : null,
     tests: pathFromEvidence(proofEvidence.tests),
@@ -97,9 +97,9 @@ function pathFromEvidence(value: unknown) {
 export interface RouteRequirements {
   completion_proof: boolean;
   evidence_index?: boolean;
+  agents?: boolean;
   image_voxels?: boolean;
   db_safety?: boolean;
-  scouts?: boolean;
   tests?: boolean;
   blackbox?: boolean;
 }

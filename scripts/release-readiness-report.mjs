@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.15.1';
+const RELEASE_VERSION = '1.16.0';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 
@@ -30,16 +30,12 @@ const checks = {
   mad_sks_rollback_apply: scriptContains('release:check', 'mad-sks:rollback-apply'),
   mad_sks_live_guard_smoke: scriptContains('release:check', 'mad-sks:live-guard-smoke'),
   mad_sks_executor_proof_graph: scriptContains('release:check', 'mad-sks:executor-proof-graph'),
-  scouts_multisession_artifact_graph: scriptContains('release:check', 'scouts:multisession-artifact-graph'),
-  scouts_benchmark_isolation: scriptContains('release:check', 'scouts:benchmark-isolation'),
-  scouts_output_schema_wiring: scriptContains('release:check', 'scouts:output-schema-wiring'),
-  scouts_session_lifecycle: scriptContains('release:check', 'scouts:session-lifecycle'),
-  scouts_readonly_guard_v2: scriptContains('release:check', 'scouts:readonly-guard-v2'),
-  scouts_no_speedup_overclaim: scriptContains('release:check', 'scouts:no-speedup-overclaim'),
+  legacy_multiagent_removed: scriptContains('release:check', 'agent:legacy-multiagent-removed'),
   codex_lb_persistence_truth: scriptContains('release:check', 'codex-lb:persistence-truth'),
   computer_use_live_evidence: scriptContains('release:check', 'computer-use:live-evidence'),
   docs_truthfulness: scriptContains('release:check', 'docs:truthfulness'),
   release_readiness: scriptContains('release:check', 'release:readiness'),
+  release_native_agent_backend: scriptContains('release:check', 'release:native-agent-backend'),
   codex_0133_compat: scriptContains('release:check', 'codex:0.133-compat'),
   codex_output_schema_fixture: scriptContains('release:check', 'codex:output-schema-fixture'),
   image_fidelity_check: scriptContains('release:check', 'image-fidelity:check'),
@@ -99,7 +95,7 @@ const checks = {
 };
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
 const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
-const releaseMetadata = runNodeScript('scripts/release-metadata-1-15-check.mjs');
+const releaseMetadata = runNodeScript('scripts/release-metadata-1-16-check.mjs');
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
   flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null),
@@ -247,19 +243,15 @@ const report = {
     flagship_proof_graph_v3: checks.flagship_proof_graph_v3,
     flagship_proof_graph_v3_report_ok: runtimeChecks.flagship_proof_graph_v3
   },
-  mad_sks_1_15_1: {
+  mad_sks_1_16_0: {
     status: checks.flagship_proof_graph_v4 && runtimeChecks.flagship_proof_graph_v4 ? 'present' : 'missing',
     flagship_proof_graph_v4: checks.flagship_proof_graph_v4,
     flagship_proof_graph_v4_report_ok: runtimeChecks.flagship_proof_graph_v4
   },
-  scout_multisession_addendum: {
-    status: checks.scouts_multisession_artifact_graph && checks.scouts_benchmark_isolation && checks.scouts_output_schema_wiring && checks.scouts_session_lifecycle && checks.scouts_readonly_guard_v2 && checks.scouts_no_speedup_overclaim ? 'present' : 'missing',
-    artifact_graph: checks.scouts_multisession_artifact_graph,
-    benchmark_isolation: checks.scouts_benchmark_isolation,
-    output_schema_wiring: checks.scouts_output_schema_wiring,
-    session_lifecycle: checks.scouts_session_lifecycle,
-    readonly_guard_v2: checks.scouts_readonly_guard_v2,
-    no_speedup_overclaim: checks.scouts_no_speedup_overclaim
+  release_native_agent_backend: {
+    status: checks.release_native_agent_backend && checks.legacy_multiagent_removed ? 'present' : 'missing',
+    backend: 'native_multi_session_agent_kernel',
+    legacy_multiagent_surface: checks.legacy_multiagent_removed ? 'removed' : 'missing_removal_gate'
   },
   all_feature_completion: {
     status: checks.all_features_completion && checks.all_features_deep_completion && checks.evidence_flagship_coverage ? 'present' : 'missing',
@@ -353,6 +345,7 @@ function renderMarkdown(report) {
 - Computer Use evidence modes: \`${report.computer_use_evidence_mode_support.status}\`
 - Codex 0.133 compatibility: \`${report.codex_0_133.status}\`
 - MAD-SKS actual executor closure: \`${report.mad_sks_actual_executor_closure.status}\`
+- Release native agent backend: \`${report.release_native_agent_backend.status}\`
 - UX-Review real callout loop gates: \`${report.image_ux_review.status}\`
 - PPT imagegen review gates: \`${report.ppt_imagegen_review.status}\`
 - DFix gates: \`${report.dfix.status}\`

@@ -33,3 +33,13 @@ test('hook command emits Codex canonical PreToolUse deny output shape', async ()
   assert.equal(typeof output.hookSpecificOutput.permissionDecisionReason, 'string');
   assert.ok(!Object.hasOwn(output, 'reason'));
 });
+
+test('PreToolUse hook denies recursive SKS route command in agent worker context', async () => {
+  const output = await runHook('pre-tool', {
+    tool_name: 'Bash',
+    tool_input: { command: 'sks team "nested route"', env: { SKS_AGENT_WORKER: '1' } }
+  });
+  assert.equal(output.hookSpecificOutput?.hookEventName, 'PreToolUse');
+  assert.equal(output.hookSpecificOutput?.permissionDecision, 'deny');
+  assert.match(output.hookSpecificOutput?.permissionDecisionReason, /recursion guard/i);
+});

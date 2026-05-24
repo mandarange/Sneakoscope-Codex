@@ -74,6 +74,7 @@ export const COMMANDS = {
   'commit-and-push': { maturity: 'stable', summary: 'Create a simple git commit and push', lazy: () => import('../commands/commit-and-push.mjs') },
   dfix: { maturity: 'stable', summary: 'Explain DFix route', lazy: basicNoArgs('dfixCommand') },
   team: { maturity: 'beta', summary: 'Create and observe Team missions', lazy: argsCommand(() => import('../core/commands/team-command.mjs'), 'team') },
+  agent: { maturity: 'beta', summary: 'Run native multi-session agent missions', lazy: argsCommand(() => import('../core/commands/agent-command.mjs'), 'agentCommand') },
   'qa-loop': { maturity: 'beta', summary: 'Run QA loop missions', lazy: subcommand(() => import('../core/commands/qa-loop-command.mjs'), 'qaLoopCommand') },
   research: { maturity: 'labs', summary: 'Run research missions', lazy: subcommand(() => import('../core/commands/research-command.mjs'), 'researchCommand') },
   autoresearch: { maturity: 'labs', summary: 'Alias for research/autoresearch route', lazy: subcommand(() => import('../core/commands/autoresearch-command.mjs'), 'autoresearchCommand', 'status') },
@@ -87,8 +88,6 @@ export const COMMANDS = {
   context7: { maturity: 'beta', summary: 'Context7 checks and docs', lazy: subcommand(() => import('./context7-command.mjs'), 'context7Command', 'check') },
   recallpulse: { maturity: 'labs', summary: 'RecallPulse evidence route', lazy: () => import('../commands/recallpulse.mjs') },
   pipeline: { maturity: 'beta', summary: 'Inspect pipeline missions', lazy: () => import('../commands/pipeline.mjs') },
-  scouts: { maturity: 'beta', summary: 'Run the default read-only 5-scout intake phase', lazy: () => import('../commands/scouts.mjs') },
-  scout: { maturity: 'beta', summary: 'Alias for scouts', lazy: () => import('../commands/scouts.mjs') },
   guard: { maturity: 'beta', summary: 'Check harness guard', lazy: () => import('../commands/guard.mjs') },
   conflicts: { maturity: 'beta', summary: 'Check harness conflicts', lazy: () => import('../commands/conflicts.mjs') },
   versioning: { maturity: 'stable', summary: 'Manage release version metadata', lazy: () => import('../commands/versioning.mjs') },
@@ -127,7 +126,8 @@ export const COMMAND_ALIASES = {
   '-v': 'version',
   '--mad': 'mad',
   '--MAD': 'mad',
-  '--mad-sks': 'mad-sks'
+  '--mad-sks': 'mad-sks',
+  '--agent': 'agent'
 };
 
 export function commandNames() {

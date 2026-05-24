@@ -30,7 +30,7 @@ sks wiki rebuild-summary --json
 
 ## Trust Rules
 
-Active high-severity wrongness blocks full trust. Active medium-severity wrongness keeps completion at `verified_partial`. Mock, fixture, stale, missing, image, DB, hook, and trust-overclaim issues are stored as negative evidence so the next scout, proof, or trust validation pass can retrieve avoidance rules before reusing the same claim.
+Active high-severity wrongness blocks full trust. Active medium-severity wrongness keeps completion at `verified_partial`. Mock, fixture, stale, missing, image, DB, hook, and trust-overclaim issues are stored as negative evidence so the next agent, proof, or trust validation pass can retrieve avoidance rules before reusing the same claim.
 
 Wrongness evidence is attached to Completion Proof under `evidence.wrongness`, indexed by the evidence router as `wrongness` and `image_wrongness`, and surfaced in `trust-report.json`.
 

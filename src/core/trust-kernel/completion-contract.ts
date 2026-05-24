@@ -24,8 +24,8 @@ export function validateCompletionContract(contract: unknown = {}, proof: unknow
   if (required.image_voxels && !imageVoxelEvidenceOk(proof, evidenceIndex)) issues.push('image_voxel_anchor_missing');
   if (required.db_safety && !dbEvidenceOk(proof, evidenceIndex)) issues.push('db_safety_evidence_missing');
   const proofEvidence = asRecord(proofRecord.evidence);
-  const scouts = asRecord(proofEvidence.scouts);
-  if (required.scouts && scouts.gate !== 'passed') issues.push('scout_gate_not_passed');
+  const agents = asRecord(proofEvidence.agents);
+  if (required.agents && (agents.ok !== true || agents.status !== 'passed')) issues.push('agent_gate_not_passed');
   if (evidenceIndexRecord.status === 'blocked') issues.push(...asList(evidenceIndexRecord.issues).map((issue) => `evidence:${String(issue)}`));
   if (proofRecord.status === 'verified' && mockOrStaticEvidence(evidenceIndex)) issues.push('mock_or_static_evidence_cannot_verify_real_status');
   if (runtimeRoute(proofRecord.route || contractRecord.route) && staticContractEvidence(evidenceIndex)) issues.push('static_contract_evidence_for_runtime_route');

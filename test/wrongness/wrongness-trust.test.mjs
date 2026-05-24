@@ -42,10 +42,10 @@ test('wrongness proof evidence blocks only route-relevant high severity records'
     route: '$UX-Review',
     wrongness_kind: 'trust_status_overclaim',
     severity: 'high',
-    claim: { text: 'UX-Review scout gate was not passed.' },
-    detected_by: { source: 'test', detail: 'scout_gate_not_passed' },
+    claim: { text: 'UX-Review agent gate was not passed.' },
+    detected_by: { source: 'test', detail: 'agent_gate_not_passed' },
     root_cause: { category: 'unknown', explanation: 'fixture' },
-    corrective_action: { summary: 'Fix UX-Review scout evidence.', required_evidence: ['trust-report.json'], patch_status: 'pending' },
+    corrective_action: { summary: 'Fix UX-Review agent evidence.', required_evidence: ['trust-report.json'], patch_status: 'pending' },
     avoidance_rule: { id: 'avoid-trust-overclaim', text: 'Do not overclaim UX trust.', applies_to: ['$UX-Review'], severity: 'high' }
   });
 

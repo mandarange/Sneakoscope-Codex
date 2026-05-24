@@ -6,7 +6,7 @@ SKS 0.9.19 keeps `src/core/pipeline.mjs` and `src/core/pipeline-runtime.mjs` as 
 
 - `plan-schema.mjs`: plan constants.
 - `stage-policy.mjs`: stage policy exports.
-- `scout-stage-policy.mjs`: scout-stage policy exports.
+- `agent-stage-policy.mjs`: native agent stage policy exports.
 - `route-prep.mjs`: route preparation entrypoint.
 - `route-prep-team.mjs`, `route-prep-research.mjs`, `route-prep-qa.mjs`, `route-prep-ppt.mjs`, `route-prep-image-ux.mjs`, `route-prep-db.mjs`, `route-prep-gx.mjs`: route-family preparation surfaces.
 - `stop-gate.mjs`: Context7, subagent, proof, reflection, and stop-gate exports.

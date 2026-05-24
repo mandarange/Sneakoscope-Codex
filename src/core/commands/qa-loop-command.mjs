@@ -5,7 +5,7 @@ import { getCodexInfo, runCodexExec } from '../codex-adapter.mjs';
 import { createMission, loadMission, setCurrent, stateFile } from '../mission.mjs';
 import { writeQuestions } from '../questions.mjs';
 import { sealContract } from '../decision-contract.mjs';
-import { buildQaLoopQuestionSchema, buildQaLoopPrompt, evaluateQaGate, qaStatus, writeMockQaResult, writeQaLoopArtifacts } from '../qa-loop.mjs';
+import { buildQaLoopQuestionSchema, buildQaLoopPrompt, evaluateQaGate, qaStatus, writeMockQaResult, writeQaLoopArtifacts, writeQaNativeAgentLedger } from '../qa-loop.mjs';
 import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.mjs';
 import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, ROUTES, routePrompt, stripVisibleDecisionAnswerBlocks } from '../routes.mjs';
 import { scanDbSafety } from '../db-safety.mjs';
@@ -55,9 +55,10 @@ async function qaLoopPrepare(args) {
       return;
     }
     const artifactResult = await writeQaLoopArtifacts(dir, { id, prompt, mode: 'qaloop' }, result.contract);
+    const nativeAgentPlan = await writeQaNativeAgentLedger(dir, { id, prompt, reportFile: artifactResult.report_file });
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.prepare.auto_sealed', slots: 0, hash: result.contract.sealed_hash, checklist_count: artifactResult.checklist_count });
     await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED', questions_allowed: false, implementation_allowed: true, clarification_required: false, clarification_passed: true, ambiguity_gate_required: true, ambiguity_gate_passed: true, stop_gate: 'qa-gate.json', qa_loop_artifacts_ready: true, qa_report_file: artifactResult.report_file, qa_checklist_count: artifactResult.checklist_count, reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
-    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-prepare.v1', ok: true, mission_id: id, report_file: artifactResult.report_file, checklist_count: artifactResult.checklist_count }, null, 2));
+    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-prepare.v1', ok: true, mission_id: id, report_file: artifactResult.report_file, checklist_count: artifactResult.checklist_count, native_agent_plan: nativeAgentPlan }, null, 2));
     console.log(`QA-LOOP mission created: ${id}`);
     console.log('QA-LOOP contract auto-sealed from prompt, TriWiki/current-code defaults, and conservative safety policy.');
     console.log(`Checklist: ${artifactResult.checklist_count} cases`);
@@ -65,8 +66,10 @@ async function qaLoopPrepare(args) {
     console.log(`Run: sks qa-loop run ${id} --max-cycles ${schema.inferred_answers?.MAX_QA_CYCLES || 1}`);
     return;
   }
+  const nativeAgentPlan = await writeQaNativeAgentLedger(dir, { id, prompt });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.prepare.questions_created', slots: schema.slots.length });
   await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_AWAITING_ANSWERS', questions_allowed: true, implementation_allowed: false, clarification_required: true, ambiguity_gate_required: true, stop_gate: 'clarification-gate', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
+  if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-prepare.v1', ok: true, mission_id: id, questions_required: true, native_agent_plan: nativeAgentPlan }, null, 2));
   console.log(`QA-LOOP mission created: ${id}`);
   console.log(`Answer schema: ${path.relative(root, path.join(dir, 'required-answers.schema.json'))}`);
 }
@@ -177,7 +180,9 @@ async function qaLoopStatus(args) {
   const { dir, mission } = await loadMission(root, id);
   const state = await readJson(stateFile(root), {});
   const status = await qaStatus(dir);
-  if (flag(args, '--json')) return console.log(JSON.stringify({ mission, state, qa: status }, null, 2));
+  const nativeAgentPlan = await readJson(path.join(dir, 'qa-agent-plan.json'), null);
+  const agentSessions = await readJson(path.join(dir, 'agents', 'agent-sessions.json'), null);
+  if (flag(args, '--json')) return console.log(JSON.stringify({ mission, state, qa: status, native_agent_plan: nativeAgentPlan, agent_sessions: agentSessions?.sessions || null }, null, 2));
   console.log('SKS QA-LOOP Status\n');
   console.log(`Mission:   ${id}`);
   console.log(`Phase:     ${state.phase || mission.phase}`);

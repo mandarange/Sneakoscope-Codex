@@ -170,6 +170,7 @@ export const COMMANDS = {
   'commit-and-push': entry('stable', 'Create a simple git commit and push', 'dist/commands/commit-and-push.js', directCommand(() => import('../commands/commit-and-push.js'), 'dist/commands/commit-and-push.js')),
   dfix: entry('stable', 'Run DFix diagnose/plan/patch/verify loop', 'dist/core/commands/dfix-command.js', commandArgsCommand(() => import('../core/commands/dfix-command.js'), 'dfixCommand', 'dist/core/commands/dfix-command.js')),
   team: entry('beta', 'Create and observe Team missions', 'dist/core/commands/team-command.js', argsCommand(() => import('../core/commands/team-command.js'), 'team', 'dist/core/commands/team-command.js')),
+  agent: entry('beta', 'Run native multi-session agent missions', 'dist/core/commands/agent-command.js', argsCommand(() => import('../core/commands/agent-command.js'), 'agentCommand', 'dist/core/commands/agent-command.js')),
   'qa-loop': entry('beta', 'Run QA loop missions', 'dist/core/commands/qa-loop-command.js', subcommand(() => import('../core/commands/qa-loop-command.js'), 'qaLoopCommand', 'dist/core/commands/qa-loop-command.js')),
   research: entry('labs', 'Run research missions', 'dist/core/commands/research-command.js', subcommand(() => import('../core/commands/research-command.js'), 'researchCommand', 'dist/core/commands/research-command.js')),
   autoresearch: entry('labs', 'Alias for research/autoresearch route', 'dist/core/commands/autoresearch-command.js', subcommand(() => import('../core/commands/autoresearch-command.js'), 'autoresearchCommand', 'dist/core/commands/autoresearch-command.js', 'status')),
@@ -183,8 +184,6 @@ export const COMMANDS = {
   context7: entry('beta', 'Context7 checks and docs', 'dist/cli/context7-command.js', subcommand(() => import('./context7-command.js'), 'context7Command', 'dist/cli/context7-command.js', 'check')),
   recallpulse: entry('labs', 'RecallPulse evidence route', 'dist/commands/recallpulse.js', directCommand(() => import('../commands/recallpulse.js'), 'dist/commands/recallpulse.js')),
   pipeline: entry('beta', 'Inspect pipeline missions', 'dist/commands/pipeline.js', directCommand(() => import('../commands/pipeline.js'), 'dist/commands/pipeline.js')),
-  scouts: entry('beta', 'Run the default read-only 5-scout intake phase', 'dist/commands/scouts.js', directCommand(() => import('../commands/scouts.js'), 'dist/commands/scouts.js')),
-  scout: entry('beta', 'Alias for scouts', 'dist/commands/scouts.js', directCommand(() => import('../commands/scouts.js'), 'dist/commands/scouts.js')),
   guard: entry('beta', 'Check harness guard', 'dist/commands/guard.js', directCommand(() => import('../commands/guard.js'), 'dist/commands/guard.js')),
   conflicts: entry('beta', 'Check harness conflicts', 'dist/commands/conflicts.js', directCommand(() => import('../commands/conflicts.js'), 'dist/commands/conflicts.js')),
   versioning: entry('stable', 'Manage release version metadata', 'dist/commands/versioning.js', directCommand(() => import('../commands/versioning.js'), 'dist/commands/versioning.js')),
@@ -226,7 +225,8 @@ export const COMMAND_ALIASES = {
   '-v': 'version',
   '--mad': 'mad',
   '--MAD': 'mad',
-  '--mad-sks': 'mad-sks'
+  '--mad-sks': 'mad-sks',
+  '--agent': 'agent'
 } as const;
 
 export type CommandName = Extract<keyof typeof COMMANDS, string>;

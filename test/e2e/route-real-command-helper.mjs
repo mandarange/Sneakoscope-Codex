@@ -60,15 +60,19 @@ export async function assertCompletionProofInRoot(root, missionId, route) {
   return proof;
 }
 
-export async function assertScoutProof(missionId) {
+export async function assertAgentProof(missionId, { route } = {}) {
   const file = path.join(missionRoot(missionId), '.sneakoscope', 'missions', missionId, 'completion-proof.json');
   const proof = JSON.parse(await fs.readFile(file, 'utf8'));
-  assert.equal(proof.evidence?.scouts?.schema, 'sks.scout-proof-evidence.v2');
-  assert.equal(proof.evidence.scouts.scout_count, 5);
-  assert.equal(proof.evidence.scouts.completed_scouts, 5);
-  assert.equal(proof.evidence.scouts.gate, 'passed');
-  assert.equal(proof.evidence.scouts.read_only_confirmed, true);
-  return proof.evidence.scouts;
+  const agents = proof.evidence?.agents;
+  assert.equal(agents?.schema, 'sks.agent-proof-evidence.v1');
+  assert.equal(agents.ok, true);
+  assert.equal(agents.status, 'passed');
+  assert.equal(agents.agent_count, 5);
+  assert.equal(agents.all_sessions_closed, true);
+  assert.equal(agents.no_overlap_ok, true);
+  assert.equal(agents.ledger_hash_chain_ok, true);
+  if (route) assert.equal(agents.route, route);
+  return agents;
 }
 
 export async function assertImageAnchors(missionId, { relations = false } = {}) {

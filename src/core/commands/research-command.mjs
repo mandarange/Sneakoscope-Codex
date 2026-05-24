@@ -40,7 +40,8 @@ async function researchPrepare(args) {
   const route = ROUTES.find((entry) => entry.id === 'Research') || routePrompt('$Research');
   const context7Required = routeNeedsContext7(route, prompt);
   const reasoning = routeReasoning(route, prompt);
-  const plan = await writeResearchPlan(dir, prompt, { depth: readFlagValue(args, '--depth', 'frontier') });
+  const autoresearch = flag(args, '--autoresearch');
+  const plan = await writeResearchPlan(dir, prompt, { depth: readFlagValue(args, '--depth', 'frontier'), missionId: id, autoresearch });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: prompt, required: context7Required, ambiguity: { required: false, status: 'direct_research_cli' } });
   await writeJsonAtomic(path.join(dir, 'route-context.json'), {
     route: route.id,
@@ -84,7 +85,7 @@ async function researchPrepare(args) {
     pipeline_plan_path: PIPELINE_PLAN_ARTIFACT,
     prompt
   });
-  if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.research-prepare.v1', ok: true, mission_id: id, methodology: plan.methodology, paper: researchPaperArtifactForPlan(plan), pipeline_plan: PIPELINE_PLAN_ARTIFACT }, null, 2));
+  if (flag(args, '--json')) return console.log(JSON.stringify({ schema: autoresearch ? 'sks.autoresearch-prepare.v1' : 'sks.research-prepare.v1', ok: true, mission_id: id, methodology: plan.methodology, paper: researchPaperArtifactForPlan(plan), pipeline_plan: PIPELINE_PLAN_ARTIFACT, native_agent_plan: plan.native_agent_plan, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
   console.log(`Research mission created: ${id}`);
   console.log(`Methodology: ${plan.methodology}`);
   console.log(`Plan: ${path.relative(root, path.join(dir, 'research-plan.md'))}`);
@@ -97,7 +98,7 @@ async function researchRun(args) {
   if (!id) throw new Error('Usage: sks research run <mission-id|latest> [--mock] [--max-cycles N] [--cycle-timeout-minutes N]');
   const { dir, mission } = await loadMission(root, id);
   const planPath = path.join(dir, 'research-plan.json');
-  if (!(await exists(planPath))) await writeResearchPlan(dir, mission.prompt || '', {});
+  if (!(await exists(planPath))) await writeResearchPlan(dir, mission.prompt || '', { missionId: id, autoresearch: flag(args, '--autoresearch') });
   const plan = await readJson(planPath);
   const dbScan = await scanDbSafety(root);
   if (!dbScan.ok) {
@@ -114,9 +115,9 @@ async function researchRun(args) {
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock, cycleTimeoutMinutes, real_run_required: !mock });
   if (mock) {
     const gate = await writeMockResearchResult(dir, plan);
-    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: gate.gate || gate, artifacts: ['research-gate.json', 'research-report.md', researchPaperArtifactForPlan(plan), 'source-ledger.json', 'scout-ledger.json', 'debate-ledger.json', 'completion-proof.json'], mock, command: { cmd: `sks research run ${id} --mock`, status: 0 } });
+    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: gate.gate || gate, artifacts: ['research-gate.json', 'research-report.md', researchPaperArtifactForPlan(plan), 'source-ledger.json', 'agent-ledger.json', 'debate-ledger.json', 'completion-proof.json'], mock, command: { cmd: `sks research run ${id} --mock`, status: 0 } });
     await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true, implementation_allowed: false });
-    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation }, null, 2));
+    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
     console.log(`Mock research done: ${id}`);
     console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
     return;
@@ -176,11 +177,11 @@ async function researchRun(args) {
     }
     const gate = await evaluateResearchGate(dir);
     if (gate.passed) {
-      const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: gate.gate || gate, artifacts: ['research-gate.json', 'research-report.md', researchPaperArtifactForPlan(plan), 'source-ledger.json', 'scout-ledger.json', 'debate-ledger.json', 'completion-proof.json'], command: { cmd: `sks research run ${id}`, status: 0 } });
+      const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: gate.gate || gate, artifacts: ['research-gate.json', 'research-report.md', researchPaperArtifactForPlan(plan), 'source-ledger.json', 'agent-ledger.json', 'debate-ledger.json', 'completion-proof.json'], command: { cmd: `sks research run ${id}`, status: 0 } });
       await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_DONE', questions_allowed: true, implementation_allowed: false });
       await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.done', cycle });
       await enforceRetention(root).catch(() => {});
-      if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation }, null, 2));
+      if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
       console.log(`Research done: ${id}`);
       return;
     }
@@ -188,7 +189,7 @@ async function researchRun(args) {
   const gate = await evaluateResearchGate(dir);
   await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: gate.gate || gate, artifacts: ['research-gate.json', 'completion-proof.json'], statusHint: 'blocked', blockers: ['research_max_cycles_without_consensus'], command: { cmd: `sks research run ${id}`, status: 2 } });
   await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_PAUSED_MAX_CYCLES', questions_allowed: true, implementation_allowed: false });
-  console.log(`Research paused after max cycles without unanimous scout consensus: ${id}`);
+  console.log(`Research paused after max cycles without unanimous agent consensus: ${id}`);
 }
 
 async function researchStatus(args) {
@@ -200,20 +201,30 @@ async function researchStatus(args) {
   const gate = await readJson(path.join(dir, 'research-gate.evaluated.json'), await readJson(path.join(dir, 'research-gate.json'), null));
   const ledger = await readJson(path.join(dir, 'novelty-ledger.json'), null);
   const sourceLedger = await readJson(path.join(dir, 'source-ledger.json'), null);
-  const scoutLedger = await readJson(path.join(dir, 'scout-ledger.json'), null);
+  const agentLedger = await readJson(path.join(dir, 'agent-ledger.json'), null);
   const debateLedger = await readJson(path.join(dir, 'debate-ledger.json'), null);
   const falsificationLedger = await readJson(path.join(dir, 'falsification-ledger.json'), null);
   const sourceSkillText = await readText(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT), '');
   const geniusSummaryText = await readText(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), '');
   const plan = await readJson(path.join(dir, 'research-plan.json'), null);
+  const agentSessions = await readJson(path.join(dir, 'agents', 'agent-sessions.json'), null);
+  const agentTaskBoard = await readJson(path.join(dir, 'agents', 'agent-task-board.json'), null);
+  const agentBatches = await readJson(path.join(dir, 'research-agent-batches.json'), null);
   const paperArtifact = await findResearchPaperArtifact(dir, plan);
   const paperText = paperArtifact.exists ? await readText(paperArtifact.path, '') : '';
-  const scoutRows = Array.isArray(scoutLedger?.scouts) ? scoutLedger.scouts : [];
+  const agentRows = Array.isArray(agentLedger?.agents) ? agentLedger.agents : [];
   const sourceLayerRows = Array.isArray(sourceLedger?.source_layers) ? sourceLedger.source_layers : [];
   const sourceLayersCovered = sourceLayerRows.filter((layer) => layer.status === 'covered' && ((Array.isArray(layer.source_ids) && layer.source_ids.length) || (Array.isArray(layer.counterevidence_ids) && layer.counterevidence_ids.length))).length;
   console.log(JSON.stringify({
     mission,
     state,
+    agent_backend: plan?.native_agent_plan?.backend || 'native_multi_session_agent_kernel',
+    native_agent_plan: plan?.native_agent_plan || null,
+    agent_sessions: agentSessions?.sessions || null,
+    agent_task_slices: agentTaskBoard?.slices || null,
+    agent_batches: agentBatches?.batches || plan?.agent_batches || null,
+    autoresearch_cycle_policy: plan?.autoresearch_cycle_policy || null,
+    legacy_alias_policy: plan?.native_agent_plan?.legacy_artifact_alias_policy || null,
     gate,
     novelty_entries: ledger?.entries?.length ?? null,
     source_entries: sourceLedger?.sources?.length ?? null,
@@ -222,9 +233,9 @@ async function researchStatus(args) {
     triangulation_checks: sourceLedger?.triangulation?.cross_layer_checks?.length ?? gate?.metrics?.triangulation_checks ?? gate?.triangulation_checks ?? null,
     genius_opinion_summaries: gate?.metrics?.genius_opinion_summaries ?? gate?.genius_opinion_summaries ?? (geniusSummaryText.trim() ? countGeniusOpinionSummaries(geniusSummaryText) : null),
     counterevidence_sources: sourceLedger?.counterevidence_sources?.length ?? null,
-    xhigh_scouts: scoutRows.length ? scoutRows.filter((scout) => scout.effort === 'xhigh').length : null,
-    eureka_moments: scoutRows.length ? scoutRows.filter((scout) => scout.eureka?.exclamation === 'Eureka!' && String(scout.eureka?.idea || '').trim()).length : null,
-    scout_findings: scoutRows.length ? scoutRows.reduce((sum, scout) => sum + (Array.isArray(scout.findings) ? scout.findings.length : 0), 0) : null,
+    xhigh_agents: agentRows.length ? agentRows.filter((agent) => agent.effort === 'xhigh').length : null,
+    eureka_moments: agentRows.length ? agentRows.filter((agent) => agent.eureka?.exclamation === 'Eureka!' && String(agent.eureka?.idea || '').trim()).length : null,
+    agent_findings: agentRows.length ? agentRows.reduce((sum, agent) => sum + (Array.isArray(agent.findings) ? agent.findings.length : 0), 0) : null,
     debate_exchanges: debateLedger?.exchanges?.length ?? null,
     consensus_iterations: gate?.metrics?.consensus_iterations ?? gate?.consensus_iterations ?? debateLedger?.consensus_iterations ?? null,
     unanimous_consensus: gate?.metrics?.unanimous_consensus ?? gate?.unanimous_consensus ?? debateLedger?.unanimous_consensus ?? false,

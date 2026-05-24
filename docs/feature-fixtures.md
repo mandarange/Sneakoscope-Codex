@@ -17,8 +17,9 @@ The fixture gate checks:
 - `not_required` count is at most 16;
 - mock fixture blocked count is zero;
 - expected artifacts exist where the command generated them and expose declared schemas or route gate pass fields.
-- `cli-scouts` executes `sks scouts run latest --engine local-static --mock --json` and validates `scout-team-plan.json`, `scout-consensus.json`, `scout-handoff.md`, `scout-gate.json`, and `scout-engine-result.json`.
-- all-features selftest checks `five_scout_intake_contract_present`, `scout_gate_fixture_pass`, `scout_proof_evidence_contract_present`, and `scout_read_only_policy_present`.
+- `cli-agent` executes `sks agent run fixture --mock --json` and validates the native central ledger, task board, leases, no-overlap proof, cleanup, proof evidence, and dynamic effort policy.
+- `cli-agent` is the native multi-session fixture surface and validates `agents/agent-proof-evidence.json`, agent sessions, leases, task board, central ledger, and cleanup evidence.
+- all-features selftest checks `native_agent_intake_contract_present`, `cli_agent_fixture_pass`, `legacy_multiagent_removed`, `agent_proof_evidence_contract_present`, and `agent_lease_policy_present`.
 
 External dependency routes remain honest: a mock fixture can pass while the real dependency path remains `blocked`, `not_verified`, or `verified_partial` until real evidence exists.
 

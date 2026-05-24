@@ -10,9 +10,9 @@ import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_U
 import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, evidenceMentionsForbiddenBrowserAutomation, reflectionRequiredForRoute } from '../routes.mjs';
 import { validateRouteCompletionProof } from '../proof/route-proof-gate.mjs';
 import { routeFromState, routeRequiresCompletionProof } from '../proof/route-proof-policy.mjs';
-import { FIVE_SCOUT_STAGE_ID } from '../scouts/scout-schema.mjs';
-import { routeRequiresScoutIntake } from '../scouts/scout-plan.mjs';
-import { readScoutGateStatus } from '../scouts/scout-gate.mjs';
+import { AGENT_INTAKE_STAGE_ID } from '../agents/agent-schema.mjs';
+import { routeRequiresAgentIntake } from '../agents/agent-plan.mjs';
+import { readAgentGateStatus } from '../agents/agent-gate.mjs';
 import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from '../mistake-recall.mjs';
 import { validateTeamRuntimeArtifacts } from '../team-dag.mjs';
 
@@ -124,13 +124,13 @@ export async function projectGateStatus(root, state = {}) {
       source: id ? `.sneakoscope/missions/${id}/subagent-evidence.jsonl` : '.sneakoscope/state/subagent-evidence.jsonl'
     });
   }
-  if (id && routeRequiresScoutIntake(routeFromState(state), { task: state.prompt, force: state.force_scouts === true, noScouts: state.scouts_required === false })) {
-    const scoutGate = await readScoutGateStatus(root, id);
+  if (id && routeRequiresAgentIntake(routeFromState(state), { task: state.prompt, force: state.forceAgents === true, noAgents: state.agents_required === false })) {
+    const agentGate = await readAgentGateStatus(root, id);
     gates.push({
-      id: FIVE_SCOUT_STAGE_ID,
-      ok: scoutGate.ok,
-      missing: scoutGate.ok ? [] : (scoutGate.missing || ['scout-gate.json']),
-      source: `.sneakoscope/missions/${id}/scout-gate.json`
+      id: AGENT_INTAKE_STAGE_ID,
+      ok: agentGate.ok,
+      missing: agentGate.ok ? [] : (agentGate.missing || ['agents/agent-proof-evidence.json']),
+      source: `.sneakoscope/missions/${id}/agents/agent-proof-evidence.json`
     });
   }
   if (id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate)) {
@@ -190,10 +190,10 @@ export async function evaluateStop(root, state, payload, opts = {}) {
   if (state?.subagents_required && !(await hasSubagentEvidence(root, state))) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires subagent execution evidence before completion. Spawn worker/reviewer subagents for disjoint code-changing work, or record explicit evidence that subagents were unavailable or unsafe to split.`, { gate: 'subagent-evidence' });
   }
-  if (state?.mission_id && !(await exists(path.join(missionDir(root, state.mission_id), 'completion-proof.json'))) && routeRequiresScoutIntake(routeFromState(state), { task: state.prompt, force: state.force_scouts === true, noScouts: state.scouts_required === false })) {
-    const scoutGate = await readScoutGateStatus(root, state.mission_id);
-    if (!scoutGate.ok) {
-      return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot continue to implementation/finalization: 5-scout intake gate is missing or blocked. Run: sks scouts run latest --json`, { gate: FIVE_SCOUT_STAGE_ID, missing: scoutGate.missing || ['scout-gate.json'] });
+  if (state?.mission_id && !(await exists(path.join(missionDir(root, state.mission_id), 'completion-proof.json'))) && routeRequiresAgentIntake(routeFromState(state), { task: state.prompt, force: state.forceAgents === true, noAgents: state.agents_required === false })) {
+    const agentGate = await readAgentGateStatus(root, state.mission_id);
+    if (!agentGate.ok) {
+      return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot continue to implementation/finalization: native agent intake gate is missing or blocked. Run: sks agent run latest --mock --json`, { gate: AGENT_INTAKE_STAGE_ID, missing: agentGate.missing || ['agents/agent-proof-evidence.json'] });
     }
   }
   const mistakeRecall = await mistakeRecallGateStatus(root, state);

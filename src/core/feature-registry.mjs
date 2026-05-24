@@ -50,8 +50,8 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
   }
 
   for (const route of DOLLAR_COMMANDS) features.push(routeFeature(route));
-  features.push(fiveScoutIntakeFeature());
-  features.push(scoutProofEvidenceFeature());
+  features.push(nativeAgentIntakeFeature());
+  features.push(agentProofEvidenceFeature());
   for (const skillName of skillNames) {
     if (!skillCoveredByRoute(skillName)) features.push(skillFeature(skillName));
   }
@@ -156,10 +156,10 @@ export function buildAllFeaturesSelftest(registry, opts = {}) {
     checkRow('fixture_fallback_removed', registry.features.every((feature) => feature.fixture?.fallback_removed === true && feature.fixture?.status !== 'missing'), registry.features.filter((feature) => feature.fixture?.fallback_removed !== true || feature.fixture?.status === 'missing').map((feature) => feature.id)),
     checkRow('proof_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-proof' && feature.fixture?.status === 'pass'), ['cli-proof']),
     checkRow('voxel_fixture_contract_present', registry.features.some((feature) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact) => expectedArtifactPath(artifact).includes('image-voxel-ledger'))), ['cli-wiki']),
-    checkRow('five_scout_intake_contract_present', registry.features.some((feature) => feature.id === 'route-five-scout-intake'), ['route-five-scout-intake']),
-    checkRow('scout_gate_fixture_pass', registry.features.some((feature) => feature.id === 'cli-scouts' && feature.fixture?.status === 'pass' && feature.fixture.expected_artifacts?.some((artifact) => expectedArtifactPath(artifact).includes('scout-gate'))), ['cli-scouts']),
-    checkRow('scout_proof_evidence_contract_present', registry.features.some((feature) => feature.id === 'proof-scout-evidence'), ['proof-scout-evidence']),
-    checkRow('scout_read_only_policy_present', registry.features.some((feature) => feature.id === 'route-five-scout-intake' && /read-only/i.test(JSON.stringify(feature.contract || {}))), ['route-five-scout-intake']),
+    checkRow('native_agent_intake_contract_present', registry.features.some((feature) => feature.id === 'route-native-agent-intake'), ['route-native-agent-intake']),
+    checkRow('cli_agent_fixture_pass', registry.features.some((feature) => feature.id === 'cli-agent' && feature.fixture?.status === 'pass' && feature.fixture.expected_artifacts?.some((artifact) => expectedArtifactPath(artifact).includes('agent-proof-evidence'))), ['cli-agent']),
+    checkRow('agent_proof_evidence_contract_present', registry.features.some((feature) => feature.id === 'proof-agent-evidence'), ['proof-agent-evidence']),
+    checkRow('agent_lease_policy_present', registry.features.some((feature) => feature.id === 'route-native-agent-intake' && /read-only/i.test(JSON.stringify(feature.contract || {})) && /lease/i.test(JSON.stringify(feature.contract || {}))), ['route-native-agent-intake']),
     checkRow('fixture_pass_threshold', (fixturesSummary.counts.pass || 0) >= 90, [`pass=${fixturesSummary.counts.pass || 0}`]),
     checkRow('fixture_not_required_ceiling', (fixturesSummary.counts.not_required || 0) <= 16, [`not_required=${fixturesSummary.counts.not_required || 0}`]),
     checkRow('fixture_mock_blocked_zero', (fixturesSummary.counts.blocked || 0) === 0, [`blocked=${fixturesSummary.counts.blocked || 0}`]),
@@ -291,7 +291,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-codex': ['codex', 'compatibility', '--json'],
   'cli-codex-lb': ['codex-lb', 'metrics', '--json'],
   'cli-hooks': ['hooks', 'trust-report', '--json'],
-  'cli-scouts': ['scouts', 'run', 'latest', '--engine', 'local-static', '--mock', '--json'],
+  'cli-agent': ['agent', 'run', 'fixture', '--mock', '--json'],
   'cli-perf': ['perf', 'cold-start', '--json', '--iterations', '1'],
   'cli-bench': ['bench', 'core', '--tier', 'source-ci', '--json', '--iterations', '1'],
   'cli-code-structure': ['code-structure', 'scan', '--json'],
@@ -439,26 +439,26 @@ function routeFeature(route) {
   });
 }
 
-function fiveScoutIntakeFeature() {
+function nativeAgentIntakeFeature() {
   return baseFeature({
-    id: 'route-five-scout-intake',
-    commands: ['sks scouts run latest --engine local-static --mock --json'],
-    aliases: ['sks scout run latest --json'],
+    id: 'route-native-agent-intake',
+    commands: ['sks agent run "task" --route "$Team" --agents 5 --concurrency 5 --mock --json'],
+    aliases: ['sks team "task" [executor:5 reviewer:6 user:1]'],
     category: 'proof-route',
-    maturity: 'beta',
-    intent: 'Default read-only five-scout intake before serious route implementation.',
-    voxel_triwiki_integration: 'scout findings are TriWiki-ready and can require image voxel evidence for visual routes',
-    completion_proof_integration: 'Completion Proof evidence.scouts records scout_count, completed_scouts, gate, consensus, and handoff',
-    known_gaps: ['real speedup claims require scout-performance evidence; mock/static timing is not enough'],
+    maturity: 'stable',
+    intent: 'Default read-only native multi-session agent intake before serious route implementation.',
+    voxel_triwiki_integration: 'native agent findings are TriWiki-ready and can require image voxel evidence for visual routes',
+    completion_proof_integration: 'Completion Proof evidence.agents records agent_count, route, leases, no-overlap proof, cleanup, proof graph, and dynamic effort policy',
+    known_gaps: ['real speedup claims require runtime timing/eval evidence; mock/static timing is not enough'],
     contract: {
-      input: 'serious route mission or explicit sks scouts run',
-      output: 'scout-team-plan.json, five scout result pairs, scout-consensus.json, scout-handoff.md, scout-gate.json',
-      state: 'mission-local scout artifacts',
-      safety: 'read-only scouts; no code/DB/git/package mutation',
-      proof: 'evidence.scouts required for serious route proof',
-      voxel: 'visual scout records image voxel requirements without satisfying visual evidence by itself',
-      tests: 'unit, integration, e2e route fixtures, release scouts scripts',
-      docs: 'docs/five-scout-pipeline.md'
+      input: 'serious route mission, route collaboration fixture, or explicit sks agent run',
+      output: 'agents/agent-central-ledger.json, agents/agent-task-board.json, agents/agent-leases.json, agents/agent-no-overlap-proof.json, agents/agent-session-cleanup.json, agents/agent-proof-evidence.json, agents/agent-effort-policy.json',
+      state: 'mission-local native agent artifacts',
+      safety: 'read-only analysis agents; central leases prevent overlapping write scopes; parent owns integration',
+      proof: 'evidence.agents required for serious native route proof',
+      voxel: 'visual agent records image voxel requirements without satisfying visual evidence by itself',
+      tests: 'unit, integration, e2e route fixtures, native release gate scripts',
+      docs: 'docs/native-agent-kernel.md'
     },
     source_refs: {
       cli_command_names: [],
@@ -470,17 +470,17 @@ function fiveScoutIntakeFeature() {
   });
 }
 
-function scoutProofEvidenceFeature() {
+function agentProofEvidenceFeature() {
   return baseFeature({
-    id: 'proof-scout-evidence',
-    commands: ['completion-proof.json evidence.scouts'],
+    id: 'proof-agent-evidence',
+    commands: ['completion-proof.json evidence.agents'],
     aliases: [],
     category: 'proof-route',
-    maturity: 'beta',
-    intent: 'Completion Proof binding for five-scout intake artifacts.',
-    voxel_triwiki_integration: 'inherits route Voxel/TriWiki evidence and references scout visual decisions',
-    completion_proof_integration: 'required evidence.scouts contract for serious route finalization',
-    known_gaps: ['disabled scouts must be recorded as not_verified_for_parallel_speed'],
+    maturity: 'stable',
+    intent: 'Completion Proof binding for native multi-session agent artifacts.',
+    voxel_triwiki_integration: 'inherits route Voxel/TriWiki evidence and references native agent visual decisions',
+    completion_proof_integration: 'required evidence.agents contract for serious route finalization',
+    known_gaps: ['disabled native agents must be recorded as not_verified_for_parallel_speed'],
     source_refs: {
       cli_command_names: [],
       handler_keys: [],
@@ -629,7 +629,7 @@ function slug(value) {
 }
 
 function commandCategory(name) {
-  if (['team', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts', 'scouts', 'scout'].includes(name)) return 'proof-route';
+  if (['team', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts'].includes(name)) return 'proof-route';
   if (['qa-loop', 'research', 'recallpulse', 'skill-dream', 'eval', 'perf'].includes(name)) return 'loop';
   if (['codex', 'codex-app', 'codex-lb', 'auth', 'hooks', 'context7', 'openclaw', 'hermes'].includes(name)) return 'integration';
   if (['db', 'guard', 'conflicts', 'harness', 'versioning'].includes(name)) return 'safety';
@@ -640,7 +640,7 @@ function commandCategory(name) {
 
 function commandMaturity(name) {
   if (['help', 'version', 'commands', 'usage', 'root', 'quickstart', 'setup', 'doctor', 'selftest', 'update-check'].includes(name)) return 'stable';
-  if (['codex', 'codex-app', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'team', 'pipeline', 'goal', 'db', 'guard', 'scouts', 'scout'].includes(name)) return 'beta';
+  if (['codex', 'codex-app', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'team', 'pipeline', 'goal', 'db', 'guard'].includes(name)) return 'beta';
   return 'labs';
 }
 

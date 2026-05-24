@@ -19,7 +19,7 @@ export function buildPatchHandoffPrompt(task: PatchHandoffTask, evidence: any = 
     task.callout_id ? `Generated callout id: ${task.callout_id}.` : '',
     evidence.generated_image_id ? `Generated callout evidence: ${evidence.generated_image_id}.` : '',
     evidence.generated_image_sha256 ? `Generated image sha256: ${evidence.generated_image_sha256}.` : '',
-    `Candidate files: ${(task.candidate_files || []).join(', ') || '<none provided; scout first>'}.`,
+    `Candidate files: ${(task.candidate_files || []).join(', ') || '<none provided; inspect first>'}.`,
     `Expected visual delta: ${task.expected_visual_delta || 'targeted visible UI improvement'}.`,
     'Forbidden operations: DB writes, migrations, auth/payment/security weakening, destructive filesystem operations, broad refactors, unrelated fallback implementations.',
     'Output JSON with changed_files, patch_applied, no_op_reason, requires_human_review, command_exit_status, recapture_required.'

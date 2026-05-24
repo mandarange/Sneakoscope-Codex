@@ -43,8 +43,7 @@ const FIXTURES = Object.freeze({
   'cli-hproof': fixture('mock', 'sks hproof check latest', ['completion-proof.json'], 'pass'),
   'cli-proof-field': fixture('execute', 'sks proof-field scan --json --intent fixture', [], 'pass'),
   'cli-recallpulse': fixture('mock', 'sks recallpulse status latest --json', ['recallpulse-report.json'], 'pass'),
-  'cli-scouts': fixture('execute_and_validate_artifacts', 'sks scouts run latest --engine local-static --mock --json', ['scout-team-plan.json', 'scout-consensus.json', 'scout-handoff.md', 'scout-gate.json', 'scout-engine-result.json'], 'pass'),
-  'cli-scout': fixture('mock', 'sks scout status latest --json', ['scout-gate.json'], 'pass'),
+  'cli-agent': fixture('execute_and_validate_artifacts', 'sks agent run fixture --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass'),
   'cli-gx': fixture('mock', 'sks gx validate fixture', ['gx-validation.json'], 'pass'),
   'cli-perf': fixture('execute', 'sks perf cold-start --json --iterations 1', [], 'pass'),
   'cli-bench': fixture('execute_and_validate_artifacts', 'sks bench core --tier source-ci --json --iterations 1', ['.sneakoscope/reports/performance/core-bench.json'], 'pass'),
@@ -70,7 +69,7 @@ const FIXTURES = Object.freeze({
   'cli-commit': fixture('mock', 'sks commit --dry-run', [], 'pass'),
   'cli-commit-and-push': fixture('mock', 'sks commit-and-push --dry-run', [], 'pass'),
   'cli-context7': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
-  'cli-all-features': fixture('mock', 'sks all-features complete --json', ['.sneakoscope/reports/all-feature-completion-1.15.1.json'], 'pass'),
+  'cli-all-features': fixture('mock', 'sks all-features complete --json', ['.sneakoscope/reports/all-feature-completion-1.16.0.json'], 'pass'),
   'cli-init': fixture('mock', 'sks init --local-only --dry-run', [], 'pass'),
   'cli-eval': fixture('mock', 'sks eval run --mock --json', [], 'pass'),
   'cli-harness': fixture('mock', 'sks harness fixture --mock --json', [], 'pass'),
@@ -106,8 +105,9 @@ const FIXTURES = Object.freeze({
   'route-help': fixture('mock', '$Help lightweight route', [], 'pass'),
   'route-commit': fixture('mock', '$Commit git route', ['completion-proof.json'], 'pass'),
   'route-commit-and-push': fixture('mock', '$Commit-And-Push git route', ['completion-proof.json'], 'pass'),
-  'route-five-scout-intake': fixture('mock', 'sks scouts validate latest --strict --json', ['scout-team-plan.json', 'scout-consensus.json', 'scout-handoff.md', 'scout-gate.json'], 'pass'),
-  'proof-scout-evidence': fixture('mock', 'sks team "fixture" --mock --json', ['completion-proof.json', 'scout-gate.json'], 'pass')
+  'route-release-review': fixture('mock', 'sks agent run "release audit" --route "$Release-Review" --agents 10 --concurrency 5 --mock --json', ['release-review-native-agent-plan.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass'),
+  'route-native-agent-intake': fixture('mock', 'sks agent run "fixture" --route "$Team" --agents 5 --concurrency 5 --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass'),
+  'proof-agent-evidence': fixture('mock', 'sks team "fixture" --mock --json', ['completion-proof.json', 'agents/agent-proof-evidence.json'], 'pass')
 });
 
 const STATIC_CONTRACT_FEATURES = new Set([

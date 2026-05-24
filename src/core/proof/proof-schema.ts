@@ -31,7 +31,7 @@ export function emptyCompletionProof(overrides: Record<string, unknown> = {}) {
       codex_app: null,
       computer_use: null,
       image_voxels: null,
-      scouts: null,
+      agents: null,
       triwiki: null,
       wrongness: null
     },
@@ -52,7 +52,7 @@ export interface ProofEvidence {
   codex_app?: unknown;
   computer_use?: unknown;
   image_voxels?: unknown;
-  scouts?: unknown;
+  agents?: unknown;
   triwiki?: unknown;
   wrongness?: unknown;
   evidence_router?: { records: number };

@@ -23,7 +23,7 @@ Artifacts:
 | `sks trust validate latest --json` | 300ms |
 | `sks wiki image-validate --json` | 300ms |
 | `sks features check --json` | 1200ms |
-| `sks scouts engines --json` | 1000ms |
+| `sks agent status --json` | 1000ms |
 
 Budget misses are evidence, not marketing copy. README or release notes should only claim a speed win when the benchmark artifact exists and passes on the target environment.
 # 1.0.0 Tiered Budgets

@@ -10,7 +10,7 @@ export function validateCompletionContract(contract = {}, proof = {}, evidenceIn
   if (required.completion_proof && proof.status === 'not_verified') issues.push('completion_proof_not_verified');
   if (required.image_voxels && !imageVoxelEvidenceOk(proof, evidenceIndex)) issues.push('image_voxel_anchor_missing');
   if (required.db_safety && !dbEvidenceOk(proof, evidenceIndex)) issues.push('db_safety_evidence_missing');
-  if (required.scouts && proof.evidence?.scouts?.gate !== 'passed') issues.push('scout_gate_not_passed');
+  if (required.agents && (proof.evidence?.agents?.ok !== true || proof.evidence?.agents?.status !== 'passed')) issues.push('agent_gate_not_passed');
   if (evidenceIndex?.status === 'blocked') issues.push(...(evidenceIndex.issues || []).map((issue) => `evidence:${issue}`));
   if (proof.status === 'verified' && mockOrStaticEvidence(evidenceIndex)) issues.push('mock_or_static_evidence_cannot_verify_real_status');
   if (runtimeRoute(proof.route || contract.route) && staticContractEvidence(evidenceIndex)) issues.push('static_contract_evidence_for_runtime_route');

@@ -57,13 +57,14 @@ for (const file of [
   'image-ux-issue-ledger.schema.json',
   'completion-proof.schema.json',
   'wrongness-record.schema.json',
-  'scout-result.schema.json',
+  'agent-result.schema.json',
   'computer-use-live-evidence.schema.json',
   'ppt-slide-issue-ledger.schema.json',
   'dfix-diagnosis.schema.json',
   'dfix-patch-plan.schema.json',
   'dfix-verification.schema.json',
-  'all-feature-completion.schema.json'
+  'all-feature-completion.schema.json',
+  'non-recursive-pipeline-report.schema.json'
 ]) {
   const full = path.join(codexSchemaDir, file);
   if (!fs.existsSync(full)) {

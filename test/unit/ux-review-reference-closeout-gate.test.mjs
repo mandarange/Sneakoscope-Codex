@@ -46,7 +46,7 @@ test('runtime gate accepts Image UX reference-only partial closeout without gene
     reflection_required: false,
     context7_required: false,
     subagents_required: false,
-    scouts_required: false
+    agents_required: false
   });
 
   assert.equal(status.ok, true);
@@ -107,7 +107,7 @@ test('completion proof accepts Image UX reference-only partial closeout with act
   const status = await proofGate.validateRouteCompletionProof(root, {
     missionId,
     route: '$Image-UX-Review',
-    state: { proof_required: true, scouts_required: false },
+    state: { proof_required: true, agents_required: false },
     visualClaim: true
   });
 

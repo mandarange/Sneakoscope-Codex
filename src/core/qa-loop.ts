@@ -1,10 +1,108 @@
 import path from 'node:path';
 import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, PACKAGE_VERSION } from './fsx.js';
 import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, evidenceMentionsForbiddenBrowserAutomation } from './routes.js';
+import { appendAgentLedgerEvent, initializeAgentCentralLedger } from './agents/agent-central-ledger.js';
 
 export const QA_LOOP_ROUTE = 'QALoop';
 const QA_REPORT_SUFFIX = 'qa-report.md';
 const UI_COMPUTER_USE_ONLY_ACK = 'use_codex_computer_use_only_no_chrome_mcp_no_browser_use_no_playwright_or_mark_ui_not_verified';
+
+export const QA_NATIVE_AGENT_PERSONAS = Object.freeze([
+  {
+    id: 'qa_verifier_ui',
+    role: 'verifier',
+    label: 'QA UI Verifier',
+    read_only: true,
+    mandate: 'Verify UI evidence boundaries and report unverified flows without mutating app data.',
+    outputs: ['qa-ledger.json', 'qa-report.md']
+  },
+  {
+    id: 'qa_verifier_api',
+    role: 'verifier',
+    label: 'QA API Verifier',
+    read_only: true,
+    mandate: 'Verify API smoke evidence with read-only or explicitly seeded-safe requests only.',
+    outputs: ['qa-ledger.json']
+  },
+  {
+    id: 'qa_safety',
+    role: 'safety',
+    label: 'QA Safety Reviewer',
+    read_only: true,
+    mandate: 'Block destructive deployed tests, credential persistence, and unsupported UI verification claims.',
+    outputs: ['qa-gate.json']
+  }
+]);
+
+export function qaNativeAgentPlan(input: any = {}) {
+  const reportFile = input.reportFile || qaReportFilename();
+  return {
+    schema: 'sks.qa-loop-native-agent-plan.v1',
+    backend: 'native_multi_session_agent_kernel',
+    legacy_runtime: false,
+    central_ledger: 'agents/agent-events.jsonl',
+    personas: QA_NATIVE_AGENT_PERSONAS.map((persona: any) => ({
+      ...persona,
+      session_id: input.missionId ? `${input.missionId}-${persona.id}` : `${persona.id}-session`,
+      outputs: (persona.outputs || []).map((artifact: any) => artifact === 'qa-report.md' ? reportFile : artifact)
+    })),
+    verifier_personas_read_only_by_default: true,
+    batches: [
+      { id: 'qa-read-only-verification', agents: ['qa_verifier_ui', 'qa_verifier_api'], read_only: true, outputs: ['qa-ledger.json', reportFile] },
+      { id: 'qa-safety-review', agents: ['qa_safety'], read_only: true, outputs: ['qa-gate.json'] }
+    ]
+  };
+}
+
+export async function writeQaNativeAgentLedger(dir: any, input: any = {}) {
+  const missionId = input.id || input.missionId;
+  if (!missionId) return null;
+  const plan = qaNativeAgentPlan({ missionId, reportFile: input.reportFile });
+  await writeJsonAtomic(path.join(dir, 'qa-agent-plan.json'), plan);
+  const root = await initializeAgentCentralLedger(dir, {
+    missionId,
+    route: '$QA-LOOP',
+    prompt: input.prompt || '',
+    roster: {
+      schema: 'sks.qa-loop-agent-roster.v1',
+      mission_id: missionId,
+      backend: plan.backend,
+      roster: plan.personas.map((persona: any) => ({
+        id: persona.id,
+        session_id: persona.session_id,
+        persona_id: persona.id,
+        role: persona.role,
+        read_only: persona.read_only,
+        output_artifacts: persona.outputs || []
+      })),
+      personas: plan.personas
+    },
+    partition: {
+      slices: plan.batches.map((batch: any) => ({
+        id: batch.id,
+        owner_agent_id: batch.agents[0],
+        domain: 'qa-loop',
+        write_paths: batch.outputs,
+        read_only: batch.read_only
+      })),
+      leases: plan.batches.flatMap((batch: any) => batch.outputs.map((artifact: any) => ({
+        path: artifact,
+        owner_agent_id: batch.agents[0],
+        mode: batch.read_only ? 'read-only-verification' : 'route-local-artifact'
+      })))
+    }
+  });
+  for (const batch of plan.batches) {
+    const agentId = batch.agents[0] || 'qa_safety';
+    await appendAgentLedgerEvent(root, {
+      agent_id: agentId,
+      session_id: `${missionId}-${agentId}`,
+      event_type: 'qa_agent_batch_planned',
+      payload: { batch_id: batch.id, read_only: batch.read_only, outputs: batch.outputs }
+    });
+  }
+  return plan;
+}
 
 function promptText(prompt: any = '') {
   return String(prompt || '').trim();

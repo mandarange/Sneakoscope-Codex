@@ -68,7 +68,7 @@ const targetSchemas = [
   'schemas/codex/dfix-verification.schema.json',
   'schemas/codex/completion-proof.schema.json',
   'schemas/codex/wrongness-record.schema.json',
-  'schemas/codex/scout-result.schema.json',
+  'schemas/codex/agent-result.schema.json',
   'schemas/codex/all-feature-completion.schema.json'
 ];
 const missing = targetSchemas.filter((rel) => !fs.existsSync(path.join(process.cwd(), rel)));

@@ -7,7 +7,7 @@ export { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, MIN_TEAM_REVIEW_S
 const MAX_LIVE_BYTES = 192 * 1024;
 const TEAM_RUNTIME_TASKS_ARTIFACT = 'team-runtime-tasks.json';
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
-const DEFAULT_AGENTS = ['parent_orchestrator', 'analysis_scout', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer'];
+const DEFAULT_AGENTS = ['parent_orchestrator', 'native_agent', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer'];
 const TERMINAL_TEAM_AGENT_STATUSES = new Set([
   'agent_closed',
   'agent_done',
@@ -186,7 +186,7 @@ export function defaultTeamDashboard(id: any, prompt: any, opts: any = {}) {
       cleanup: `sks team cleanup-tmux ${id}`
     },
     agents: Object.fromEntries([...new Set([...DEFAULT_AGENTS, ...spec.roster.all_agents.map((agent: any) => agent.id)])].map((name: any) => [name, { status: 'pending', phase: null, last_seen: null }])),
-    phases: ['parallel_analysis_scouting', 'triwiki_refresh', 'debate_team', 'triwiki_refresh_after_consensus', 'parallel_development_team', 'triwiki_refresh_after_implementation', 'strict_review_and_user_acceptance', 'session_cleanup'],
+    phases: ['native_agent_intake', 'triwiki_refresh', 'debate_team', 'triwiki_refresh_after_consensus', 'parallel_development_team', 'triwiki_refresh_after_implementation', 'strict_review_and_user_acceptance', 'session_cleanup'],
     latest_messages: []
   };
 }
@@ -211,9 +211,9 @@ ${prompt}
 
 - This file is the Codex App-visible replacement for tmux-style team panes.
 - Use at most ${spec.agentSessions} subagent sessions at a time unless the mission is recreated with a different budget.
-- Team mode has three bundles: parallel analysis scouts first, debate team second, then fresh parallel development team.
+- Team mode has three bundles: parallel native agent intake agents first, debate team second, then fresh parallel development team.
 - Use relevant TriWiki context before every stage, hydrate low-trust claims from source during the stage, refresh after findings/artifact changes, and validate before handoffs or final claims.
-- Analysis scouts are read-only and split repo, docs, tests, risk, API, and user-flow investigation before the parent refreshes TriWiki for debate.
+- Native agent intake agents are read-only and split repo, docs, tests, risk, API, and user-flow investigation before the parent refreshes TriWiki for debate.
 - executor:N means build N debate participants and then a separate N-person executor development team.
 - Debate uses compact Hyperplan-derived adversarial lenses: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative.
 - User personas are intentionally impatient, self-interested, stubborn, low-context, and dislike inconvenience.
@@ -234,15 +234,15 @@ sks team log ${id}
 sks team tail ${id}
 sks team open-tmux ${id}
 sks team watch ${id}
-sks team lane ${id} --agent analysis_scout_1 --follow
-sks team event ${id} --agent analysis_scout_1 --phase parallel_analysis_scouting --message "mapped repo slice"
-sks team message ${id} --from analysis_scout_1 --to executor_1 --message "handoff note"
+sks team lane ${id} --agent native_agent_1 --follow
+sks team event ${id} --agent native_agent_1 --phase native_agent_intake --message "mapped repo slice"
+sks team message ${id} --from native_agent_1 --to executor_1 --message "handoff note"
 sks team cleanup-tmux ${id}
 \`\`\`
 
 ## Roster
 
-Analysis scouts (${spec.roster.analysis_team.length} scouts):
+Native agent intake (${spec.roster.analysis_team.length} agents):
 ${spec.roster.analysis_team.map(formatRosterLine).join('\n')}
 
 Debate team (${spec.roster.debate_team.length} participants):
@@ -266,12 +266,12 @@ export async function initTeamLive(id: any, dir: any, prompt: any, opts: any = {
   await writeTextAtomic(files.live, teamLiveMarkdown(id, prompt, opts));
   await writeTextAtomic(files.transcript, '');
   await appendTeamEvent(dir, { agent: 'parent_orchestrator', phase: 'mission_created', type: 'status', message: 'Team mission created and live transcript initialized.' });
-  for (const scout of spec.roster.analysis_team || []) {
+  for (const analysisAgent of spec.roster.analysis_team || []) {
     await appendTeamEvent(dir, {
-      agent: scout.id,
-      phase: 'parallel_analysis_scouting',
+      agent: analysisAgent.id,
+      phase: 'native_agent_intake',
       type: 'assigned',
-      message: `${scout.id} scout lane assigned; waiting for read-only repository/docs/tests/API/risk slice activity.`
+      message: `${analysisAgent.id} agent lane assigned; waiting for read-only repository/docs/tests/API/risk slice activity.`
     });
   }
   return files;
@@ -393,21 +393,21 @@ export function buildTeamRoster(roleCounts: any = DEFAULT_TEAM_ROLE_COUNTS, opts
   const debateReviewers = numberedAgents('debate_reviewer', counts.reviewer, 'Strict debate reviewer: applies validator/researcher lenses to correctness, safety, DB risk, tests, regressions, and unsupported assumptions.', 'reviewer', { prompt });
   const debateExecutorPool = numberedAgents('debate_executor', bundleSize, 'Capable developer voice in debate: applies skeptic/architect lenses to implementation shape, ownership boundaries, dependencies, coupling, and risks before coding starts.', 'executor', { prompt });
   const debateTeam = composeDebateTeam({ users: debateUsers, planners: debatePlanners, reviewers: debateReviewers, executors: debateExecutorPool, bundleSize });
-  const analysisScouts = numberedAgents('analysis_scout', bundleSize, 'Read-only analysis scout: quickly maps one independent slice of repo/docs/tests/API risk, records source paths and evidence, and returns TriWiki-ready findings.', 'scout', { prompt });
+  const nativeAgents = numberedAgents('native_agent', bundleSize, 'Read-only native agent: quickly maps one independent slice of repo/docs/tests/API risk, records source paths and evidence, and returns TriWiki-ready findings.', 'analysis', { prompt });
   const developmentExecutors = numberedAgents('executor', bundleSize, 'Capable developer executor: owns one disjoint implementation slice and coordinates without reverting others.', 'executor', { prompt });
   const validationReviewers = numberedAgents('reviewer', counts.reviewer, 'Strict reviewer: adversarial about correctness, safety, DB risk, tests, regressions, and unsupported claims.', 'reviewer', { prompt });
   const validationUsers = numberedAgents('user', counts.user, 'Impatient final user acceptance persona: low-context, self-interested, stubborn, dislikes inconvenience, rejects clever work that feels annoying.', 'user', { prompt });
   return {
     role_counts: counts,
     bundle_size: bundleSize,
-    analysis_team: analysisScouts.map((agent: any) => ({ ...agent, write_policy: 'read-only scouting', output: 'team-analysis.md' })),
+    analysis_team: nativeAgents.map((agent: any) => ({ ...agent, write_policy: 'read-only native analysis', output: 'team-analysis.md' })),
     debate_team: debateTeam,
     development_team: developmentExecutors.map((agent: any) => ({ ...agent, write_policy: 'workspace-write with explicit ownership' })),
     validation_team: [
       ...validationReviewers.map((agent: any) => ({ ...agent, write_policy: 'read-only strict review' })),
       ...validationUsers.map((agent: any) => ({ ...agent, phase_role: 'acceptance_persona' }))
     ],
-    all_agents: [...analysisScouts, ...debateTeam, ...developmentExecutors, ...validationReviewers, ...validationUsers]
+    all_agents: [...nativeAgents, ...debateTeam, ...developmentExecutors, ...validationReviewers, ...validationUsers]
   };
 }
 
@@ -655,7 +655,7 @@ export async function renderTeamWatch(dir: any, opts: any = {}) {
     '- Run `sks team open-tmux ...` to materialize or reopen the split-pane Team tmux view for an existing mission.',
     '- Inside an SKS-owned tmux session, Team panes are reconciled in the current window with the Codex pane on the left and Team lanes stacked on the right.',
     '- Neighbor tmux panes follow individual `sks team lane ... --agent <name>` chat-style views.',
-    '- Use `sks team event ...` to mirror scout, debate, executor, review, and verification status into the live panes.',
+    '- Use `sks team event ...` to mirror native analysis, debate, executor, review, and verification status into the live panes.',
     '- Use `sks team message ... --from <agent> --to <agent|all>` for bounded inter-agent communication in transcript/lane views.',
     '- Use `sks team cleanup-tmux ...` at session end; follow loops show cleanup and managed Team panes close when reachable.',
     '',
@@ -835,7 +835,7 @@ function numberedLaneOrdinal(agent: any = '') {
 function teamLaneTextStyle(agentId: any = '') {
   const id = String(agentId || '').toLowerCase();
   if (!id || id === 'mission_overview' || id === 'overview') return { role: 'overview', color_name: 'Blue' };
-  if (/analysis|scout/.test(id)) return { role: 'scout', color_name: 'Cyan' };
+  if (/analysis|native_agent/.test(id)) return { role: 'agent', color_name: 'Cyan' };
   if (/debate|consensus|planner|user/.test(id)) return { role: 'planning', color_name: 'Yellow' };
   if (/db|safety/.test(id)) return { role: 'safety', color_name: 'Magenta' };
   if (/review|qa|validation/.test(id)) return { role: 'review', color_name: 'Red' };

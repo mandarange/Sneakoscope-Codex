@@ -342,7 +342,7 @@ function allocateTasks(tasks: any = [], plan: any = {}) {
 function chooseWorker(task: any, workers: any) {
   const candidates = Object.values(workers).filter((worker: any) => {
     if (task.role === 'executor') return /^executor_/.test(worker.worker);
-    if (task.role === 'scout') return /^analysis_scout_/.test(worker.worker);
+    if (task.role === 'analysis') return /^native_agent_/.test(worker.worker);
     if (task.role === 'reviewer') return /^reviewer_/.test(worker.worker) || /^user_/.test(worker.worker);
     if (task.role === 'planner') return /debate_|team_consensus|parent_orchestrator/.test(worker.worker);
     return true;
@@ -430,7 +430,7 @@ function groupTasksByWorker(tasks: any = []) {
 function inferRole(phase: any = {}, agent: any = '') {
   const text = `${phase.id || ''} ${phase.write_policy || ''} ${agent || ''}`.toLowerCase();
   if (text.includes('workspace-write') || /^executor_/.test(agent)) return 'executor';
-  if (/analysis_scout|scout/.test(text)) return 'scout';
+  if (/native_agent|analysis/.test(text)) return 'analysis';
   if (/reviewer|review|qa|user_/.test(text)) return 'reviewer';
   if (/debate|planner|consensus/.test(text)) return 'planner';
   return 'orchestrator';
@@ -438,7 +438,7 @@ function inferRole(phase: any = {}, agent: any = '') {
 
 function inferLane(phase: any = {}, agent: any = '') {
   if (/executor_/.test(agent)) return 'implementation';
-  if (/analysis_scout/.test(agent)) return 'analysis';
+  if (/native_agent/.test(agent)) return 'analysis';
   if (/reviewer_|user_/.test(agent)) return 'verification';
   if (/debate_/.test(agent)) return 'debate';
   return String(phase.id || 'orchestration');
@@ -453,7 +453,7 @@ function extractTaskHints(description: any, phase: any = {}) {
   const domains = new Set();
   const domainRules: Array<[string, RegExp]> = [
     ['triwiki', /triwiki|wiki|context-pack/i],
-    ['team', /team|worker|executor|scout|debate|inbox|roster/i],
+    ['team', /team|worker|executor|analysis|debate|inbox|roster/i],
     ['qa', /qa|test|verify|review/i],
     ['codex-app', /codex|skill|agent/i],
     ['release', /version|changelog|publish|package|npm|size/i],
@@ -465,7 +465,7 @@ function extractTaskHints(description: any, phase: any = {}) {
 
 function roleMatchesWorker(role: any, worker: any) {
   if (role === 'executor') return /^executor_/.test(worker);
-  if (role === 'scout') return /^analysis_scout_/.test(worker);
+  if (role === 'analysis') return /^native_agent_/.test(worker);
   if (role === 'reviewer') return /^reviewer_|^user_/.test(worker);
   if (role === 'planner') return /^debate_|team_consensus|parent_orchestrator/.test(worker);
   return worker === 'parent_orchestrator';

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-05-23
+
+### Added
+- Add native multi-session agent kernel with `sks agent`, `sks --agent`, roster/concurrency caps, lease/no-overlap proof, session lifecycle evidence, recursion guard, and Codex exec output-schema preparation.
+- Add `schemas/codex/agent-result.schema.json`, native agent docs, and agent command/policy tests.
+
+### Changed
+- Route Team, Research, QA/Review proof, and auto-finalization gates to native `agents/agent-proof-evidence.json`.
+- Remove the legacy multi-agent command surface, archived legacy 0.9.13 files, and old Scout multi-session goal surface so native agents are the only release-supported route collaboration backend.
+- Bump package metadata to 1.16.0.
+
 ## [1.15.1] - 2026-05-23
 
 ### Added
@@ -421,7 +432,7 @@
 
 ### Fixed
 - Prevent new features from receiving implicit static-pass fixture fallback.
-- Prevent `sks scouts validate --strict` from silently creating a passing scout run during release checks.
+- Prevent the former legacy multi-agent strict validation path from silently creating a passing run during release checks.
 - Prevent E2E latest-mission collisions by isolating route tests in temp project roots.
 - Prevent scout read-only violations by detecting source changes outside allowed scout artifacts.
 

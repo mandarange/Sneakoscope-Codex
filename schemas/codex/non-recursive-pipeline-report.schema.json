@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex/non-recursive-pipeline-report.schema.json",
+  "title": "SKS Non-Recursive Pipeline Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ok",
+    "generated_at",
+    "local_only",
+    "secret_redaction_ok",
+    "performance_budget_ms",
+    "elapsed_ms",
+    "performance_ok",
+    "scan_contract",
+    "env_policy",
+    "denylist",
+    "scanned_records",
+    "channel_coverage",
+    "worker_surface_records",
+    "violations",
+    "redaction_samples",
+    "wrongness_records",
+    "proof",
+    "trust_report",
+    "evidence_router",
+    "next_action"
+  ],
+  "properties": {
+    "schema": { "const": "sks.non-recursive-pipeline-report.v1" },
+    "ok": { "type": "boolean" },
+    "generated_at": { "type": "string" },
+    "local_only": { "type": "boolean" },
+    "secret_redaction_ok": { "type": "boolean" },
+    "performance_budget_ms": { "type": "number" },
+    "elapsed_ms": { "type": "number" },
+    "performance_ok": { "type": "boolean" },
+    "scan_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "local_only", "scan_groups", "artifacts", "performance_budget_ms"],
+      "properties": {
+        "schema": { "const": "sks.non-recursive-pipeline-report.v1" },
+        "local_only": { "type": "boolean" },
+        "scan_groups": { "type": "array", "items": { "type": "string" } },
+        "artifacts": { "type": "array", "items": { "type": "string" } },
+        "performance_budget_ms": { "type": "number" }
+      }
+    },
+    "env_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "required_tokens", "present", "missing"],
+      "properties": {
+        "schema": { "const": "sks.agent-worker-env-policy.v1" },
+        "required_tokens": { "type": "array", "items": { "type": "string" } },
+        "present": { "type": "array", "items": { "type": "string" } },
+        "missing": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "denylist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "commands", "routes"],
+      "properties": {
+        "schema": { "const": "sks.agent-worker-recursion-denylist.v1" },
+        "commands": { "type": "array", "items": { "type": "string" } },
+        "routes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "scanned_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "channel", "bytes"],
+        "properties": {
+          "path": { "type": "string" },
+          "channel": { "type": "string" },
+          "bytes": { "type": "number" }
+        }
+      }
+    },
+    "channel_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stdout", "stderr", "agent_result"],
+      "properties": {
+        "stdout": { "type": "boolean" },
+        "stderr": { "type": "boolean" },
+        "agent_result": { "type": "boolean" }
+      }
+    },
+    "worker_surface_records": { "type": "number" },
+    "violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema", "file", "channel", "group", "rule_id", "index", "snippet", "next_action"],
+        "properties": {
+          "schema": { "const": "sks.non-recursive-pipeline-violation.v1" },
+          "file": { "type": "string" },
+          "channel": { "type": "string" },
+          "group": { "type": "string" },
+          "rule_id": { "type": "string" },
+          "index": { "type": ["number", "null"] },
+          "snippet": { "type": "string" },
+          "next_action": { "type": "string" }
+        }
+      }
+    },
+    "redaction_samples": { "type": "array", "items": { "type": "string" } },
+    "wrongness_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema", "kind", "file", "channel", "group", "rule_id", "next_action"],
+        "properties": {
+          "schema": { "const": "sks.non-recursive-pipeline-wrongness.v1" },
+          "kind": { "const": "agent_recursive_pipeline_attempt" },
+          "file": { "type": "string" },
+          "channel": { "type": "string" },
+          "group": { "type": "string" },
+          "rule_id": { "type": "string" },
+          "next_action": { "type": "string" }
+        }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "ok",
+        "env_guard_configured",
+        "command_denylist_enforced",
+        "route_denylist_enforced",
+        "worker_mission_creation_blocked",
+        "current_json_write_blocked",
+        "top_level_command_blocked",
+        "stdout_transcript_scan",
+        "stderr_transcript_scan",
+        "agent_result_scan",
+        "wrongness_records_written"
+      ],
+      "properties": {
+        "schema": { "const": "sks.non-recursive-pipeline-proof.v1" },
+        "ok": { "type": "boolean" },
+        "env_guard_configured": { "type": "boolean" },
+        "command_denylist_enforced": { "type": "boolean" },
+        "route_denylist_enforced": { "type": "boolean" },
+        "worker_mission_creation_blocked": { "type": "boolean" },
+        "current_json_write_blocked": { "type": "boolean" },
+        "top_level_command_blocked": { "type": "boolean" },
+        "stdout_transcript_scan": { "type": "boolean" },
+        "stderr_transcript_scan": { "type": "boolean" },
+        "agent_result_scan": { "type": "boolean" },
+        "wrongness_records_written": { "type": "boolean" }
+      }
+    },
+    "trust_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "ok", "trust", "evidence_count", "local_only"],
+      "properties": {
+        "schema": { "const": "sks.non-recursive-pipeline-trust.v1" },
+        "ok": { "type": "boolean" },
+        "trust": { "type": "string" },
+        "evidence_count": { "type": "number" },
+        "local_only": { "type": "boolean" }
+      }
+    },
+    "evidence_router": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "records", "blocked_records"],
+      "properties": {
+        "schema": { "const": "sks.non-recursive-pipeline-evidence-router.v1" },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "channel", "source", "redacted"],
+            "properties": {
+              "file": { "type": "string" },
+              "channel": { "type": "string" },
+              "source": { "type": "string" },
+              "redacted": { "type": "boolean" }
+            }
+          }
+        },
+        "blocked_records": { "type": "number" }
+      }
+    },
+    "next_action": { "type": "string" }
+  }
+}

@@ -2,7 +2,7 @@ import { containsPlaintextSecret } from '../secret-redaction.mjs';
 import { readRouteProof } from './proof-reader.mjs';
 import { validateCompletionProof } from './validation.mjs';
 import { proofStatusBlocks, routeRequiresCompletionProof, routeRequiresImageVoxelAnchors } from './route-proof-policy.mjs';
-import { routeRequiresScoutIntake } from '../scouts/scout-plan.mjs';
+import { routeRequiresAgentIntake } from '../agents/agent-plan.mjs';
 
 export async function validateRouteCompletionProof(root, { missionId = null, route = null, state = {}, visualClaim = undefined } = {}) {
   const proofRequired = state.proof_required === true || routeRequiresCompletionProof(route);
@@ -24,13 +24,13 @@ export async function validateRouteCompletionProof(root, { missionId = null, rou
     const anchors = proof.evidence?.image_voxels?.anchors ?? proof.evidence?.image_voxels?.anchor_count ?? 0;
     if (Number(anchors) <= 0) issues.push('image_voxel_anchors_missing');
   }
-  if ((state.scouts_required === true || proof.evidence?.scouts) && routeRequiresScoutIntake(route || proof.route, { task: state.prompt, noScouts: state.scouts_required === false })) {
-    const scouts = proof.evidence?.scouts;
-    if (!scouts) issues.push('scout_proof_evidence_missing');
+  if ((state.agents_required === true || proof.evidence?.agents) && routeRequiresAgentIntake(route || proof.route, { task: state.prompt, noAgents: state.agents_required === false })) {
+    const agents = proof.evidence?.agents;
+    if (!agents) issues.push('agent_proof_evidence_missing');
     else {
-      if (scouts.gate !== 'passed') issues.push('scout_gate_not_passed');
-      if (Number(scouts.completed_scouts || 0) !== 5) issues.push('scout_count_not_5');
-      if (scouts.read_only_confirmed !== true) issues.push('scout_read_only_not_confirmed');
+      if (agents.status !== 'passed' && agents.ok !== true) issues.push('agent_gate_not_passed');
+      if (Number(agents.agent_count || 0) !== 5) issues.push('agent_count_not_5');
+      if (agents.all_sessions_closed !== true) issues.push('agent_sessions_not_closed');
     }
   }
   const wrongness = proof.evidence?.wrongness;

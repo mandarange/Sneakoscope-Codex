@@ -40,7 +40,7 @@ export async function imageUxReviewCommand(command, args = []) {
         full_verification_blockers: artifacts.gate?.full_verification_blockers || []
       }
     };
-    const proof = await maybeFinalizeRoute(root, { missionId, route, gateFile: 'image-ux-review-gate.json', gate: artifacts.gate, mock: flag(args, '--mock'), visual: true, visualEvidence, artifacts: artifactList, claims: [{ id: 'image-ux-review-fixture', status: 'verified_partial' }], scouts: artifacts.gate?.full_review_passed === true ? undefined : false, allowActiveWrongnessPartial: artifacts.gate?.reference_only === true, command: { cmd: `sks ${command} ${action}`, status: 0 } });
+    const proof = await maybeFinalizeRoute(root, { missionId, route, gateFile: 'image-ux-review-gate.json', gate: artifacts.gate, mock: flag(args, '--mock'), visual: true, visualEvidence, artifacts: artifactList, claims: [{ id: 'image-ux-review-fixture', status: 'verified_partial' }], allowActiveWrongnessPartial: artifacts.gate?.reference_only === true, command: { cmd: `sks ${command} ${action}`, status: 0 } });
     const result = { schema: 'sks.image-ux-review-build.v1', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.status || (artifacts.gate?.passed ? 'passed' : 'blocked'), mission_id: missionId, artifacts, proof: proof.validation };
     if (flag(args, '--json')) return printJson(result);
     console.log(`Image UX review: ${proof.ok ? 'ok' : 'blocked'} ${missionId}`);

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/codex/agent-result.schema.json",
+  "title": "SKS Native Agent Result",
+  "type": "object",
+  "required": [
+    "schema",
+    "mission_id",
+    "agent_id",
+    "session_id",
+    "persona_id",
+    "task_slice_id",
+    "status",
+    "backend",
+    "summary",
+    "findings",
+    "proposed_changes",
+    "changed_files",
+    "lease_compliance",
+    "recursion_guard",
+    "verification",
+    "blockers",
+    "confidence",
+    "handoff_notes",
+    "artifacts",
+    "unverified",
+    "writes"
+  ],
+  "properties": {
+    "schema": { "type": "string", "const": "sks.agent-result.v1" },
+    "mission_id": { "type": "string" },
+    "agent_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "persona_id": { "type": "string" },
+    "task_slice_id": { "type": "string" },
+    "status": { "type": "string", "enum": ["done", "blocked", "failed"] },
+    "backend": { "type": "string", "enum": ["fake", "process", "codex-exec", "tmux"] },
+    "summary": { "type": "string" },
+    "findings": { "type": "array", "items": { "type": "string" } },
+    "proposed_changes": { "type": "array", "items": { "type": "string" } },
+    "changed_files": { "type": "array", "items": { "type": "string" } },
+    "lease_compliance": {
+      "type": "object",
+      "required": ["ok", "violations"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "violations": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "artifacts": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "confidence": { "type": "string" },
+    "handoff_notes": { "type": "string" },
+    "unverified": { "type": "array", "items": { "type": "string" } },
+    "writes": { "type": "array", "items": { "type": "string" } },
+    "recursion_guard": {
+      "type": "object",
+      "required": ["ok", "violations"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "violations": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "object",
+      "required": ["status", "checks"],
+      "properties": {
+        "status": { "type": "string" },
+        "checks": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

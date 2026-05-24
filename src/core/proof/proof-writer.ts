@@ -78,7 +78,7 @@ export function renderProofMarkdown(proof: any = {}, validation: any = validateC
     `- Commands: ${proof.evidence?.commands?.length || 0}`,
     `- Files: ${proof.evidence?.files?.length || 0}`,
     `- Image voxels: ${proof.evidence?.image_voxels?.anchors || proof.evidence?.image_voxels?.anchor_count || 0}`,
-    `- Scouts: ${proof.evidence?.scouts?.completed_scouts ?? 0}/${proof.evidence?.scouts?.scout_count ?? 0} (${proof.evidence?.scouts?.gate || 'not_recorded'})`,
+    `- Agents: ${proof.evidence?.agents?.agent_count ?? 0} (${proof.evidence?.agents?.status || 'not_recorded'})`,
     `- TriWiki: ${proof.evidence?.triwiki?.status || 'not_recorded'}`,
     `- Wrongness: ${proof.evidence?.wrongness?.active_count ?? 0} active (${proof.evidence?.wrongness?.high_severity_active ?? 0} high)`,
     `- Evidence router: ${proof.evidence?.evidence_router?.records ?? 0} record(s)`,
