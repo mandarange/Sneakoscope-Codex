@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.16.0';
+const RELEASE_VERSION = '1.16.1';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 

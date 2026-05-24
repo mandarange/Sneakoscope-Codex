@@ -10,6 +10,7 @@ import { containsUserQuestion, noQuestionContinuationReason } from '../no-questi
 import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, ROUTES, routePrompt, stripVisibleDecisionAnswerBlocks } from '../routes.js';
 import { scanDbSafety } from '../db-safety.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
+import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
 import { flag, promptOf, readMaxCycles, resolveMissionId, safeReadTextFile } from './command-utils.js';
 import fsp from 'node:fs/promises';
 
@@ -118,6 +119,10 @@ async function qaLoopRun(args: any) {
   const reportFile = qaGate.qa_report_file;
   await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_RUNNING_NO_QUESTIONS', questions_allowed: false, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.run.started', maxCycles, mock });
+  const nativeAgentPlan = await readJson(path.join(dir, 'qa-agent-plan.json'), null);
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-exec', mock, agents: 3, concurrency: 3, readonly: true, roster: nativeAgentPlan });
+  await writeJsonAtomic(path.join(dir, 'qa-native-agent-run.json'), nativeAgentRun);
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (mock) {
     let gate = await writeMockQaResult(dir, mission, contract);
     const needsVisual = contract.answers?.QA_SCOPE && String(contract.answers.QA_SCOPE).includes('ui');
@@ -126,19 +131,28 @@ async function qaLoopRun(args: any) {
       await writeJsonAtomic(path.join(dir, 'qa-gate.json'), nextGate);
       gate = await evaluateQaGate(dir);
     }
-    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], visual: needsVisual, mock, command: { cmd: `sks qa-loop run ${id} --mock`, status: 0 } });
+    const nativeGate = { ...(gate.gate || gate), native_agent_proof: nativeAgentRun.proof?.ok === true, agent_central_ledger: true };
+    await writeJsonAtomic(path.join(dir, 'qa-gate.json'), nativeGate);
+    gate = { ...gate, gate: nativeGate, passed: nativeGate.passed };
+    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], visual: needsVisual, mock, command: { cmd: `sks qa-loop run ${id} --mock`, status: 0 } });
     await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: gate.passed ? 'QALOOP_DONE' : 'QALOOP_PAUSED', questions_allowed: true });
     if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation }, null, 2));
     console.log(`Mock QA-LOOP done: ${id}`);
     console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
     return;
   }
+  if (!nativeAgentRun.ok) {
+    await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: await readJson(path.join(dir, 'qa-gate.json'), null), artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'completion-proof.json'], statusHint: 'blocked', blockers: nativeAgentRun.proof?.blockers || ['native_agent_backend_blocked'], command: { cmd: `sks qa-loop run ${id}`, status: 2 } });
+    await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_BLOCKED_NATIVE_AGENTS', questions_allowed: true });
+    process.exitCode = 2;
+    return;
+  }
   const codex = await getCodexInfo();
   if (!codex.bin) {
-    console.error('Codex CLI not found. Running mock QA-LOOP instead.');
-    const gate = await writeMockQaResult(dir, mission, contract);
-    await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], mock: true, statusHint: 'verified_partial', command: { cmd: `sks qa-loop run ${id}`, status: 0 } });
-    await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: gate.passed ? 'QALOOP_DONE' : 'QALOOP_PAUSED', questions_allowed: true });
+    console.error('Codex CLI not found. QA-LOOP cannot fall back to mock output after native agent runtime selection.');
+    await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: await readJson(path.join(dir, 'qa-gate.json'), null), artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'completion-proof.json'], statusHint: 'blocked', blockers: ['codex_cli_missing'], command: { cmd: `sks qa-loop run ${id}`, status: 2 } });
+    await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_BLOCKED_REAL_RUN_REQUIRED', questions_allowed: true });
+    process.exitCode = 2;
     return;
   }
   let last = '';
@@ -157,7 +171,7 @@ async function qaLoopRun(args: any) {
     }
     const gate = await evaluateQaGate(dir);
     if (gate.passed) {
-      const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], visual: contract.answers?.QA_SCOPE && String(contract.answers.QA_SCOPE).includes('ui'), command: { cmd: `sks qa-loop run ${id}`, status: 0 } });
+      const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], visual: contract.answers?.QA_SCOPE && String(contract.answers.QA_SCOPE).includes('ui'), command: { cmd: `sks qa-loop run ${id}`, status: 0 } });
       await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_DONE', questions_allowed: true });
       await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.done', cycle });
       if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation }, null, 2));
@@ -167,7 +181,7 @@ async function qaLoopRun(args: any) {
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.cycle.continue', cycle, reasons: gate.reasons });
   }
   const gate = await evaluateQaGate(dir);
-  const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], mock: false, statusHint: 'blocked', reason: 'max_cycles', command: { cmd: `sks qa-loop run ${id}`, status: 2 } });
+  const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], mock: false, statusHint: 'blocked', reason: 'max_cycles', command: { cmd: `sks qa-loop run ${id}`, status: 2 } });
   await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_PAUSED_MAX_CYCLES', questions_allowed: true });
   if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: false, mission_id: id, gate, proof: proof.validation }, null, 2));
   console.log(`QA-LOOP paused after max cycles: ${id}`);

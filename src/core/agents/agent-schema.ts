@@ -70,6 +70,7 @@ export interface AgentRunOptions {
   route?: string
   agents?: number
   concurrency?: number
+  roster?: unknown
   backend?: AgentBackend | string
   json?: boolean
   mock?: boolean

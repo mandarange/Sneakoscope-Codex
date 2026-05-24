@@ -20,6 +20,12 @@ export async function codexVersion(bin) {
   return result.code === 0 ? text : null;
 }
 
+export const EMPTY_CODEX_INFO = Object.freeze({
+  bin: null,
+  version: null,
+  available: false
+});
+
 export async function getCodexInfo() {
   const bin = await findCodexBinary();
   const version = await codexVersion(bin);

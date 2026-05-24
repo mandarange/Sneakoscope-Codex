@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { createMission, missionDir, setCurrent } from '../mission.js'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
-import { buildAgentRoster } from './agent-roster.js'
+import { buildAgentRoster, normalizeAgentConcurrency } from './agent-roster.js'
 import { buildAgentWorkPartition } from './agent-work-partition.js'
 import { initializeAgentCentralLedger, appendAgentLedgerEvent, compactAgentLedger } from './agent-central-ledger.js'
 import { detectStaleAgentSessions, killTimedOutAgentSessions, openAgentSession, heartbeatAgentSession, collectAgentSession, completeAgentSession, closeAgentSession, writeAgentLifecycleAggregate, writeAgentLifecyclePolicy } from './agent-lifecycle.js'
@@ -28,7 +28,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     : await createMission(root, { mode: 'agent', prompt })
   const missionId = created.id
   const dir = created.dir
-  const roster = buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
+  const roster = buildProvidedAgentRoster(opts.roster, { concurrency: opts.concurrency, readonly: opts.readonly }) || buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
   const partition = await buildAgentWorkPartition(root, roster, prompt)
   const ledgerRoot = await initializeAgentCentralLedger(dir, { missionId, roster, partition, route, prompt })
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-no-overlap-proof.json'), partition.no_overlap_proof || { schema: 'sks.agent-no-overlap-proof.v1', ok: false, blockers: ['missing_no_overlap_proof'] })
@@ -104,6 +104,48 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     trust,
     wrongness,
     proof
+  }
+}
+
+function buildProvidedAgentRoster(input: any, opts: any = {}) {
+  const sourceRows = Array.isArray(input?.roster) ? input.roster : Array.isArray(input?.personas) ? input.personas : []
+  if (!sourceRows.length) return null
+  const agentCount = sourceRows.length
+  const concurrency = normalizeAgentConcurrency(opts.concurrency ?? input?.concurrency ?? agentCount, agentCount)
+  const personas = Array.isArray(input?.personas) ? input.personas : sourceRows
+  const roster = sourceRows.map((entry: any, index: number) => {
+    const readOnly = opts.readonly === true || entry.read_only === true
+    const id = String(entry.id || entry.agent_id || `agent_${index + 1}`)
+    return {
+      id,
+      session_id: String(entry.session_id || `${id}-session-${String(index + 1).padStart(2, '0')}`),
+      persona_id: String(entry.persona_id || id),
+      role: String(entry.role || 'verifier'),
+      index: index + 1,
+      write_policy: String(entry.write_policy || (readOnly ? 'read-only' : 'route-local-artifact')),
+      status: 'pending',
+      reasoning_effort: entry.reasoning_effort || entry.model_reasoning_effort || (readOnly ? 'high' : 'medium'),
+      model_reasoning_effort: entry.model_reasoning_effort || entry.reasoning_effort || (readOnly ? 'high' : 'medium'),
+      reasoning_profile: entry.reasoning_profile || (readOnly ? 'sks-logic-high' : 'sks-logic-medium'),
+      service_tier: entry.service_tier,
+      reasoning_reason: entry.reasoning_reason || 'route_native_agent_plan',
+      dynamic_effort_policy: entry.dynamic_effort_policy || {
+        escalation_triggers: ['route_requires_native_agent_proof'],
+        downshift_triggers: []
+      }
+    }
+  })
+  return {
+    schema: 'sks.agent-roster.v1',
+    default_agents: agentCount,
+    max_agents: Math.max(agentCount, 20),
+    agent_count: agentCount,
+    concurrency,
+    batch_count: Math.ceil(agentCount / concurrency),
+    personas,
+    persona_uniqueness: { ok: true, duplicate_ids: [] },
+    roster,
+    effort_policy: input?.effort_policy || { schema: 'sks.agent-effort-policy.v1', dynamic: true, decisions: [] }
   }
 }
 

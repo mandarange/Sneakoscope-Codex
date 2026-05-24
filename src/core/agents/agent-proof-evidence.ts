@@ -12,7 +12,8 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(ledger.blockers || []),
     ...(input.partition?.blockers || []),
     ...(input.consensus?.blockers || []),
-    ...(input.results || []).flatMap((result: any) => result.blockers || [])
+    ...(input.results || []).flatMap((result: any) => result.blockers || []),
+    ...agentChangedFileLeaseViolations(input.results || [], input.partition?.leases || [])
   ]
   const evidence = {
     schema: AGENT_PROOF_EVIDENCE_SCHEMA,
@@ -38,6 +39,8 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     cleanup_report: 'agent-cleanup.json',
     trust_report: 'agent-trust-report.json',
     wrongness_records: 'agent-wrongness-records.json',
+    changed_files_lease_checked: true,
+    dependency_collision_risk: input.partition?.no_overlap_proof?.dependency_collision_risk || [],
     blockers
   }
   await writeJsonAtomic(path.join(root, 'agent-proof-evidence.json'), evidence)
@@ -46,4 +49,24 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
 
 export async function readAgentProofEvidence(root: string, missionId: string) {
   return readJson(path.join(root, '.sneakoscope', 'missions', missionId, 'agents', 'agent-proof-evidence.json'), null)
+}
+
+function agentChangedFileLeaseViolations(results: any[], leases: any[]) {
+  const activeWrites = leases.filter((lease) => lease.kind === 'write' && lease.status !== 'released')
+  const violations: string[] = []
+  for (const result of results) {
+    const agentId = result.agent_id
+    for (const file of result.changed_files || []) {
+      const normalized = String(file || '').replace(/\\/g, '/').replace(/^\.\//, '')
+      const allowed = activeWrites.some((lease) => lease.agent_id === agentId && pathWithin(normalized, lease.path))
+      if (!allowed) violations.push('lease_changed_file_violation:' + agentId + ':' + normalized)
+    }
+  }
+  return violations
+}
+
+function pathWithin(file: string, leasePath: string) {
+  const left = String(file || '').replace(/\\/g, '/').replace(/^\.\//, '')
+  const right = String(leasePath || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
+  return left === right || left.startsWith(right + '/')
 }

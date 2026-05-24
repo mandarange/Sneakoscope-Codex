@@ -1,10 +1,10 @@
 import type { AgentRosterEntry, AgentTaskSlice } from '../agent-schema.js'
 
 export function createAgentTaskSlices(input: { roster: AgentRosterEntry[]; domains?: any[]; prompt?: string }) {
-  const domains = input.domains?.length ? input.domains : [{ id: 'general', files: [] }]
+  const domains = (input.domains?.length ? [...input.domains] : [{ id: 'general', files: [], criticality: 0 }]).sort((a, b) => Number(b.criticality || 0) - Number(a.criticality || 0))
   const leasedWrites = new Set<string>()
   return input.roster.map((agent, index): AgentTaskSlice => {
-    const domain = domains[index % domains.length] || { id: 'general', files: [] }
+    const domain = selectDomainForAgent(agent, index, domains)
     const writeAllowed = /implementer|integrator|documentation|schema|release|ux/.test(agent.role)
     const targetPaths = Array.isArray(domain.files) ? domain.files.slice(0, 20) : []
     const writePaths = []
@@ -25,7 +25,7 @@ export function createAgentTaskSlices(input: { roster: AgentRosterEntry[]; domai
       target_paths: targetPaths,
       readonly_paths: targetPaths,
       write_paths: writePaths,
-      description: 'Native agent ' + agent.id + ' owns ' + (domain.id || 'general') + (writeAllowed ? ' with leased writes only.' : ' as read-only review.')
+      description: 'Native agent ' + agent.id + ' owns ' + (domain.id || 'general') + ' by domain criticality/dependency routing' + (writeAllowed ? ' with leased writes only.' : ' as read-only review.')
     }
   })
 }
@@ -36,4 +36,14 @@ function normalizeWritePath(file: string) {
 
 function isProtectedWritePath(file: string) {
   return /^(?:\.codex|\.agents|AGENTS\.md|node_modules\/sneakoscope|\.sneakoscope\/.*policy.*\.json)(?:\/|$)/.test(file)
+}
+
+function selectDomainForAgent(agent: AgentRosterEntry, index: number, domains: any[]) {
+  const role = String(agent.role || '')
+  const preferred = role.includes('safety') ? /qa|release|agent-kernel/ : role.includes('verifier') ? /qa|release|schemas/ : role.includes('integrator') ? /agent-kernel|team-route/ : role.includes('documentation') ? /docs/ : null
+  if (preferred) {
+    const found = domains.find((domain) => preferred.test(String(domain.id || '')))
+    if (found) return found
+  }
+  return domains[index % domains.length] || { id: 'general', files: [] }
 }

@@ -9,3 +9,7 @@ Native workers run under `AGENT_WORKER_PIPELINE` and must not call top-level rou
 `npm run agent:non-recursive-pipeline-report` scans the worker pipeline, recursion guard, docs, stdout/stderr transcript samples, and agent-result samples for nested route launches or global state writes. The report writes `.sneakoscope/reports/non-recursive-pipeline-report.json` and `.sneakoscope/reports/non-recursive-pipeline-report.md`.
 
 The report contract covers the worker env guard, command and dollar-route denylists, mission creation blocking, `.sneakoscope/state/current.json` write blocking, top-level command blocking, stdout/stderr transcript scanning, agent-result scanning, wrongness-record mapping, secret redaction, local-only evidence routing, and a 1500ms performance budget. A blocked report must be fixed before agent proof is accepted.
+
+## 1.16.1 Runtime Closure
+
+SKS 1.16.1 routes release-critical Team, Research, QA, and native agent proof checks through the native agent orchestrator, Codex exec output-last-message parsing, central ledger proof, and no-scout runtime gates.

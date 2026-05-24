@@ -7,7 +7,7 @@ export { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, MIN_TEAM_REVIEW_S
 const MAX_LIVE_BYTES = 192 * 1024;
 const TEAM_RUNTIME_TASKS_ARTIFACT = 'team-runtime-tasks.json';
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
-const DEFAULT_AGENTS = ['parent_orchestrator', 'native_agent', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer'];
+const DEFAULT_AGENTS = ['parent_orchestrator', 'native_agent_orchestrator', 'agent_central_ledger', 'agent_proof_evidence', 'agent_review_lane', 'agent_integration_lane'];
 const TERMINAL_TEAM_AGENT_STATUSES = new Set([
   'agent_closed',
   'agent_done',

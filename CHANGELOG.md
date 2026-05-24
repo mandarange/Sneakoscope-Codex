@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-05-25
+
+### Fixed
+- Route Team, Research, and QA runtime execution through the native agent orchestrator and require native agent proof evidence in release gates.
+- Parse Codex exec --output-last-message result JSON before accepting agent completion, with stdout fallback capped at verified_partial.
+- Strengthen native agent command surface, work partitioning, lease/change-file comparison, and no-scout packed blackbox coverage.
+
+### Changed
+- Bump package, runtime, and release-readiness metadata to 1.16.1.
+
 ## [1.16.0] - 2026-05-23
 
 ### Added

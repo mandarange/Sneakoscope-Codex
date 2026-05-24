@@ -102,7 +102,7 @@ export function tmuxCockpitStatePath(root: any = process.cwd()) {
 }
 
 const LEGACY_TEAM_PANE_TITLE_RE = /^(?:overview: mission_overview|agent: native_agent|plan: (?:debate|consensus|planner|user)|exec: (?:executor|implementation|worker)|review: (?:reviewer|qa|validation)|safety:)/;
-const GENERIC_TEAM_AGENT_IDS = new Set(['parent_orchestrator', 'native_agent', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']);
+const GENERIC_TEAM_AGENT_IDS = new Set(['parent_orchestrator', 'native_agent_orchestrator', 'agent_central_ledger', 'agent_proof_evidence', 'agent_review_lane', 'agent_integration_lane']);
 const DYNAMIC_TEAM_TMUX_LAYOUT = 'main-vertical';
 const TEAM_TMUX_MAIN_PANE_MIN_WIDTH = 48;
 const TEAM_TMUX_MAIN_PANE_WIDTH_RATIO = 0.5;

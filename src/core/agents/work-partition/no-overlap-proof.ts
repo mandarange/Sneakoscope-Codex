@@ -9,6 +9,7 @@ export function buildNoOverlapProof(leases: AgentLease[]) {
     write_lease_count: leases.filter((lease) => lease.kind === 'write').length,
     read_lease_count: leases.filter((lease) => lease.kind === 'read').length,
     blockers: validation.blockers,
+    dependency_collision_risk: validation.blockers.filter((blocker) => blocker.startsWith('write_overlap:')),
     rule: 'No two agents can own the same exact file or overlapping subtree for write.'
   }
 }

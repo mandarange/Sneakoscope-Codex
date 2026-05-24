@@ -165,8 +165,19 @@ function normalizeRelPath(value: any = '', missionId: any = null, root: any = pr
   if (!raw) return raw;
   if (path.isAbsolute(raw)) return rel(root, raw);
   if (raw.startsWith('.sneakoscope/')) return raw;
-  if (missionId && !raw.includes('/')) return `.sneakoscope/missions/${missionId}/${raw}`;
+  if (missionId && isMissionLocalArtifact(raw)) return `.sneakoscope/missions/${missionId}/${raw}`;
   return raw.replace(/^\.\//, '');
+}
+
+function isMissionLocalArtifact(relPath: string) {
+  if (!relPath.includes('/')) return true;
+  return [
+    'agents/',
+    'generated-callouts/',
+    'generated-slide-reviews/',
+    'slide-images/',
+    'source-screens/'
+  ].some((prefix) => relPath.startsWith(prefix));
 }
 
 function sourceForProof(proof: any = {}) {
