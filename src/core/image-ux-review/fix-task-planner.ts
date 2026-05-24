@@ -15,7 +15,7 @@ export function planImageUxFixTasks(issueLedger: any = {}, opts: any = {}) {
       requires_human_review: riskLevel(issue) !== 'low' && !opts.allowRisky,
       expected_visual_delta: issue.fix_action || 'visible UI adjustment in the referenced region',
       priority: issue.severity,
-      scout_2_verification_input: true,
+      agent_verification_input: true,
       wrongness_avoidance_rules: [
         'Do not mark an issue fixed without an actual patch or accepted_not_applicable decision.',
         'Do not auto-apply risky patches or DB/destructive operations from visual review.',
@@ -39,7 +39,7 @@ function cheapLocalFix(issue: any) {
 }
 
 function patchStrategy(issue: any) {
-  if (!issue.candidate_files?.length) return 'requires_candidate_file_scout';
+  if (!issue.candidate_files?.length) return 'requires_candidate_file_analysis';
   if (issue.severity === 'P0' || issue.severity === 'P1') return 'targeted_ui_patch_then_recapture';
   if (cheapLocalFix(issue)) return 'cheap_local_patch_then_recapture';
   return 'suggestion_only';

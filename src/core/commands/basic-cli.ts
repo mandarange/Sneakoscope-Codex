@@ -257,14 +257,35 @@ export async function tmuxCommand(sub: any = 'check', args: any = []) {
 
 export async function autoReviewCommand(sub: any = 'status', args: any = []) {
   const { autoReviewStatus, enableAutoReview, disableAutoReview } = await import('../auto-review.js');
+  const { writeRouteCollaborationArtifacts } = await import('../agents/route-collaboration-ledger.js');
   const action = sub || 'status';
-  const result = action === 'enable' || action === 'start'
+  const result = action === 'fixture'
+    ? await reviewNativeAgentFixture()
+    : action === 'enable' || action === 'start'
     ? await enableAutoReview({ high: flag(args, '--high') })
     : action === 'disable'
       ? await disableAutoReview()
       : await autoReviewStatus();
   if (flag(args, '--json')) return printJson(result);
   console.log(JSON.stringify(result, null, 2));
+
+  async function reviewNativeAgentFixture() {
+    const root = await projectRoot();
+    const { id } = await createMission(root, { mode: 'review', prompt: 'Review native agent collaboration fixture' });
+    const native = await writeRouteCollaborationArtifacts(root, {
+      missionId: id,
+      route: '$Review',
+      routeKey: 'Review',
+      prompt: 'Review route approval safety, verification, and integration through the native agent runtime.',
+      mode: 'REVIEW'
+    });
+    return {
+      schema: 'sks.review-native-agent-fixture.v1',
+      ok: native.ok,
+      mission_id: id,
+      native_agent_collaboration: native
+    };
+  }
 }
 
 function commandRows(): CommandRow[] {

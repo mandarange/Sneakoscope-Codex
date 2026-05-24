@@ -11,7 +11,7 @@ In 0.9.20, `maybeFinalizeRoute` and `writeRouteCompletionProof` also bind finali
 - `evidence-index.json`
 - `trust-report.json`
 
-Before `maybeFinalizeRoute` writes proof for a serious route, it ensures the five-scout intake gate has passed. That creates `scout-team-plan.json`, five read-only scout result pairs, `scout-consensus.json`, `scout-handoff.md`, `scout-gate.json`, `scout-engine-result.json`, `scout-readonly-guard.json`, and `scout-performance.json`, then attaches `evidence.scouts` to Completion Proof.
+Before `maybeFinalizeRoute` writes proof for a serious route, it ensures native multi-session agent evidence is present. That creates `agents/agent-central-ledger.json`, `agents/agent-task-board.json`, `agents/agent-leases.json`, `agents/agent-no-overlap-proof.json`, `agents/agent-session-cleanup.json`, `agents/agent-proof-evidence.json`, and `agents/agent-effort-policy.json`, then attaches `evidence.agents` to Completion Proof. Removed legacy multi-agent artifacts do not satisfy default serious-route proof.
 
 For visual routes, the finalizer calls Image Voxel evidence automation before writing proof. When a visual route claims a fix, the finalizer requires a `before_after` relation or lowers/blocks the proof status.
 

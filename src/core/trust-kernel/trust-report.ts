@@ -127,7 +127,6 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
     dfix: dfix.summary,
     mad_sks: madSks.summary,
     wrongness: wrongness.summary,
-    scout_quality: scoutQualityFromProof(proof),
     blockers: issues.filter((issue: any) => /missing|blocked|stale|secret|not_passed|cannot_verify|text_only|mock_gpt_image_2_fixture/i.test(issue))
   };
 }
@@ -242,33 +241,6 @@ function dfixTrust(proof: any = {}) {
       verification_present: evidence.verification_present === true,
       blockers: evidence.blockers || []
     }
-  };
-}
-
-function scoutQualityFromProof(proof: any = {}) {
-  const scouts = proof.evidence?.scouts;
-  if (!scouts) {
-    return {
-      schema: 'sks.scout-quality.v1',
-      required: false,
-      confidence: 'not_required'
-    };
-  }
-  const high = scouts.real_parallel === true
-    && scouts.completed_scouts === 5
-    && scouts.read_only_confirmed === true
-    && scouts.gate === 'passed';
-  return {
-    schema: 'sks.scout-quality.v1',
-    parsed_outputs: high ? 5 : Number(scouts.completed_scouts || 0),
-    blocked_scouts: scouts.gate === 'passed' ? 0 : Math.max(0, Number(scouts.scout_count || 5) - Number(scouts.completed_scouts || 0)),
-    findings_count: Number(scouts.findings_count || 0),
-    suggested_tasks_count: Number(scouts.suggested_tasks_count || 0),
-    read_only_guard: scouts.read_only_confirmed ? 'passed' : 'not_verified',
-    source_policy: high ? 'parsed_real_scout_outputs' : 'local_static_or_verified_partial',
-    confidence: high ? 'high' : 'verified_partial',
-    real_parallel: Boolean(scouts.real_parallel),
-    speedup_claim_allowed: Boolean(scouts.speedup_claim_allowed)
   };
 }
 

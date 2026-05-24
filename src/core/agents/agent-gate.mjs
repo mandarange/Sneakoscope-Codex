@@ -1,0 +1,34 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { AGENT_INTAKE_STAGE_ID } from './agent-schema.mjs'
+
+async function exists(file) {
+  try { await fs.access(file); return true } catch { return false }
+}
+
+async function readJson(file, fallback = null) {
+  try { return JSON.parse(await fs.readFile(file, 'utf8')) } catch { return fallback }
+}
+
+export async function readAgentGateStatus(root, missionId) {
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId)
+  const proofPath = path.join(dir, 'agents', 'agent-proof-evidence.json')
+  const gatePath = path.join(dir, 'agent-gate.json')
+  const proof = await readJson(proofPath, null)
+  const gate = await readJson(gatePath, null)
+  const missing = []
+  if (!(await exists(proofPath))) missing.push('agents/agent-proof-evidence.json')
+  const blockers = [...(Array.isArray(proof?.blockers) ? proof.blockers : []), ...(Array.isArray(gate?.blockers) ? gate.blockers : [])]
+  const sessionsClosed = proof?.all_sessions_closed !== false && gate?.all_sessions_closed !== false
+  const ok = missing.length === 0 && blockers.length === 0 && sessionsClosed && proof?.schema === 'sks.agent-proof-evidence.v1'
+  return {
+    id: AGENT_INTAKE_STAGE_ID,
+    ok,
+    missing,
+    blockers,
+    source: proofPath,
+    proof,
+    gate,
+    all_sessions_closed: sessionsClosed
+  }
+}

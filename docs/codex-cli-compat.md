@@ -26,8 +26,8 @@ Version detection checks `codex --version`, `codex exec --help`, `codex exec res
 
 The 1.15.1 compatibility matrix records these capability ids:
 
-- `exec_output_schema`: preferred structured output for fresh Codex exec sessions used by Scout real smoke and route automation.
-- `exec_resume_output_schema`: preferred structured output for resumed Codex sessions used by Scout, UX-Review callout extraction, Completion Proof, and Wrongness artifacts.
+- `exec_output_schema`: preferred structured output for fresh Codex exec sessions used by native agent backends and route automation.
+- `exec_resume_output_schema`: preferred structured output for resumed Codex sessions used by native agents, UX-Review callout extraction, Completion Proof, and Wrongness artifacts.
 - `exec_syntax_parity`: release-bound check that fresh `codex exec` and `codex exec resume` expose compatible output-schema syntax instead of inferring one from the other.
 - `app_server_image_fidelity`: original-resolution image metadata for UX-Review source screenshots, generated callout images, and Image Voxel coordinate alignment.
 - `memory_summary_version_rebuild`: schema-versioned TriWiki, Wrongness, and shared memory summaries with rebuild commands.
@@ -42,7 +42,7 @@ The 1.15.1 compatibility matrix records these capability ids:
 
 Unknown newer Codex fields are warning-only. Codex versions below 0.133 are degraded but supported, and output-schema fallbacks cannot support claims above `verified_partial`.
 
-Fresh `codex exec` and `codex exec resume` are checked independently because a release gate that only inspects resume help can miss syntax drift in new sessions. Scout real-smoke and output-schema fixtures must record which command form was exercised.
+Fresh `codex exec` and `codex exec resume` are checked independently because a release gate that only inspects resume help can miss syntax drift in new sessions. Native agent output-schema fixtures must record which command form was exercised.
 
 ## Vendored Snapshot
 

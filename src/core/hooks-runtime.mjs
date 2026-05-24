@@ -11,6 +11,7 @@ import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard
 import { dollarCommand, stripVisibleDecisionAnswerBlocks } from './routes.mjs';
 import { appendMissionStatus } from './recallpulse.mjs';
 import { runSksUpdateCheck } from './update-check.mjs';
+import { scanAgentTextForRecursion } from './agents/agent-recursion-guard.mjs';
 import {
   buildPermissionRequestAllow,
   buildPermissionRequestDeny,
@@ -361,8 +362,36 @@ async function hookPreTool(root, state, payload, noQuestion) {
     return { decision: 'block', permissionDecision: 'deny', reason: clarificationPauseBlockReason(state) };
   }
   const command = extractCommand(payload);
+  const agentRecursionDecision = agentWorkerHookRecursionDecision(state, payload, command);
+  if (agentRecursionDecision) return agentRecursionDecision;
   if (noQuestion && looksInteractiveCommand(command)) return { decision: 'block', reason: interactiveCommandReason(command) };
   return { continue: true };
+}
+
+function agentWorkerHookRecursionDecision(state = {}, payload = {}, command = '') {
+  if (!agentWorkerHookContext(state, payload)) return null;
+  const guard = scanAgentTextForRecursion(command);
+  if (guard.ok) return null;
+  return {
+    decision: 'block',
+    permissionDecision: 'deny',
+    reason: `Agent command recursion guard blocked nested SKS route command in Codex PreToolUse hook: ${guard.violations.join(', ')}`
+  };
+}
+
+function agentWorkerHookContext(state = {}, payload = {}) {
+  const env = {
+    ...(payload.env || {}),
+    ...(payload.tool_input?.env || {}),
+    ...(payload.toolInput?.env || {}),
+    ...(payload.input?.env || {}),
+    ...(payload.tool?.input?.env || {})
+  };
+  void state;
+  return Boolean(String(env.SKS_AGENT_WORKER || '') === '1'
+    || String(env.SKS_DISABLE_ROUTE_RECURSION || '') === '1'
+    || payload.agent_worker === true
+    || payload.agentWorker === true);
 }
 
 async function hookPostTool(root, state, payload, noQuestion) {
@@ -1250,7 +1279,7 @@ function visibleHookMessage(name, text = '') {
     if (body.includes('Computer Use fast lane active')) return 'SKS: Computer Use fast lane injected; defer TriWiki/Honest Mode to final closeout.';
     if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: stale clarification gate detected; continue from inferred route contract.';
     if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team route, live transcript, and subagent plan injected.';
-    if (body.includes('$Research route prepared')) return 'SKS: Research route, xhigh Eureka scout council, source/debate ledgers, paper output, and falsification gate injected.';
+    if (body.includes('$Research route prepared')) return 'SKS: Research route, xhigh Eureka agent council, source/debate ledgers, paper output, and falsification gate injected.';
     if (body.includes('$AutoResearch route prepared')) return 'SKS: AutoResearch experiment loop and evidence gate injected.';
     if (body.includes('$PPT route prepared')) return 'SKS: PPT route and delivery-context gate injected.';
     if (body.includes('$Image-UX-Review route prepared') || body.includes('$UX-Review route prepared')) return 'SKS: Image UX Review route and gpt-image-2 evidence gate injected.';

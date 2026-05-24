@@ -25,7 +25,7 @@ export const SPEED_LANE_POLICY = Object.freeze({
   fast_lane: 'proof_field_fast_lane',
   balanced_lane: 'proof_field_balanced_lane',
   full_lane: 'full_team_honest_path',
-  skip_when_fast: ['parallel_analysis_scouting', 'planning_debate', 'fresh_executor_team', 'broad_route_rework'],
+  skip_when_fast: ['native_agent_intake', 'planning_debate', 'fresh_executor_team', 'broad_route_rework'],
   always_keep: ['listed_verification', 'honest_mode', 'triwiki_validate_before_final'],
   fail_closed_on: ['database_surface', 'security_surface', 'visual_forensic_surface', 'unknown_surface', 'broad_change_set', 'verification_failed', 'unsupported_claim']
 });

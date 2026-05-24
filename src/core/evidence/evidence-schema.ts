@@ -5,7 +5,7 @@ export const EVIDENCE_INDEX_SCHEMA = 'sks.evidence-index.v1';
 export const PROJECT_EVIDENCE_INDEX_SCHEMA = 'sks.project-evidence-index.v1';
 
 export const EVIDENCE_KINDS = Object.freeze([
-  'scout',
+  'agent',
   'image_voxel',
   'db_safety',
   'hook',

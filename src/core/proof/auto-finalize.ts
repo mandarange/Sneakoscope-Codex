@@ -1,9 +1,19 @@
 import path from 'node:path';
-import { exists, readJson, type JsonData } from '../fsx.js';
+import { exists, readJson, writeJsonAtomic, type JsonData } from '../fsx.js';
 import { finalizeRouteWithProof } from './route-finalizer.js';
-import { ensureFiveScoutIntake } from '../scouts/scout-runner.js';
-import { routeRequiresScoutIntake } from '../scouts/scout-plan.js';
-import { scoutArtifactList } from '../scouts/scout-artifacts.js';
+import { routeRequiresAgentIntake } from '../agents/agent-plan.js';
+import { readAgentGateStatus } from '../agents/agent-gate.js';
+import { DEFAULT_AGENT_COUNT } from '../agents/agent-schema.js';
+
+const AGENT_ARTIFACTS = [
+  'agents/agent-proof-evidence.json',
+  'agents/agent-sessions.json',
+  'agents/agent-leases.json',
+  'agents/agent-consensus.json',
+  'agents/agent-events.jsonl',
+  'agents/agent-task-board.json',
+  'agents/agent-concurrency-policy.json'
+];
 
 export async function maybeFinalizeRoute(root: any, {
   missionId,
@@ -24,7 +34,7 @@ export async function maybeFinalizeRoute(root: any, {
   testEvidence = null,
   blockers = [],
   unverified = [],
-  scouts = undefined,
+  agents = undefined,
   allowActiveWrongnessPartial = false
 }: any = {}): Promise<JsonData> {
   if (!missionId || !route) {
@@ -36,41 +46,33 @@ export async function maybeFinalizeRoute(root: any, {
     : null);
   const passed = gateObject?.passed === true || gateObject?.ok === true || gateObject?.status === 'pass';
   const mission = await readJson(path.join(missionDir, 'mission.json'), {});
-  const scoutRequired = scouts !== false && routeRequiresScoutIntake(route, { task: mission.prompt || '' });
-  const scoutResult: any = scoutRequired
-    ? await ensureFiveScoutIntake(root, {
-      missionId,
-      route,
-      task: mission.prompt || '',
-      mock,
-      mode: mock ? 'auto-finalize-mock' : 'auto-finalize'
-    })
-    : null;
-  const scoutArtifacts = scoutResult ? (scoutResult.required === false ? [] : await existingScoutArtifacts(root, missionId)) : [];
-  const scoutBlockers = scoutResult?.required && scoutResult.gate?.passed !== true && scoutResult.status !== 'already_passed'
-    ? ['scout_gate_not_passed']
-    : [];
-  const finalStatus = statusHint || (blockers.length ? 'blocked' : (passed ? (mock ? 'verified_partial' : 'verified') : (mock ? 'verified_partial' : 'blocked')));
+  const prompt = mission.prompt || '';
+  const agentRequired = agents !== false && routeRequiresAgentIntake(route, { task: prompt, noAgents: agents === false });
+  if (agentRequired && mock) await ensureMockAgentEvidence(root, missionId, route, prompt);
+  const agentGate = agentRequired ? await readAgentGateStatus(root, missionId) : null;
+  const agentArtifacts = agentGate ? await existingAgentArtifacts(root, missionId) : [];
+  const agentBlockers = agentRequired && agentGate?.ok !== true ? ['agent_gate_not_passed'] : [];
+  const finalStatus = statusHint || (blockers.length || agentBlockers.length ? 'blocked' : (passed ? (mock ? 'verified_partial' : 'verified') : (mock ? 'verified_partial' : 'blocked')));
   const proof = await finalizeRouteWithProof(root, {
     missionId,
     route,
     gateFile,
     gate: gateObject,
-    artifacts: [...artifacts, ...scoutArtifacts],
-    claims: claims.length ? claims : [{ id: `${String(route).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()}-auto-finalize`, status: mock ? 'verified_partial' : 'supported', evidence: gateFile || 'route-command' }],
+    artifacts: [...artifacts, ...agentArtifacts],
+    claims: claims.length ? claims : [{ id: String(route).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() + '-auto-finalize', status: mock ? 'verified_partial' : 'supported', evidence: gateFile || 'route-command' }],
     visualEvidence,
     dbEvidence,
     testEvidence,
     commandEvidence: command ? [{ ...command, ok: command.ok !== false }] : null,
     unverified: [
       ...unverified,
-      ...(scoutResult?.performance?.claim_allowed === false ? ['Scout performance timing recorded; no real speedup claim is made.'] : []),
+      ...(agentGate?.proof?.fake_backend_disclaimer ? [agentGate.proof.fake_backend_disclaimer] : []),
       ...(mock ? ['Route was finalized from an explicit mock/fixture command path.'] : []),
-      ...(!passed && !mock ? [`Route gate did not pass${reason ? `: ${reason}` : ''}.`] : [])
+      ...(!passed && !mock ? ['Route gate did not pass' + (reason ? ': ' + reason : '') + '.'] : [])
     ],
     blockers: [
       ...blockers,
-      ...scoutBlockers,
+      ...agentBlockers,
       ...(!passed && !mock ? ['route_gate_not_passed'] : [])
     ],
     statusHint: finalStatus,
@@ -78,17 +80,43 @@ export async function maybeFinalizeRoute(root: any, {
     fixClaim,
     requireRelation,
     visualClaim: visual,
-    scouts,
+    agents,
     allowActiveWrongnessPartial
   });
   return { ...proof, auto_finalized: true, gate_passed: passed, status_hint: finalStatus };
 }
 
-async function existingScoutArtifacts(root: any, missionId: any) {
+async function existingAgentArtifacts(root: any, missionId: any) {
   const dir = path.join(root, '.sneakoscope', 'missions', missionId);
   const artifacts: any[] = [];
-  for (const artifact of scoutArtifactList()) {
-    if (await exists(path.join(dir, artifact))) artifacts.push(artifact);
+  for (const artifact of AGENT_ARTIFACTS) {
+    if (await exists(path.join(dir, artifact))) artifacts.push('.sneakoscope/missions/' + missionId + '/' + artifact);
   }
   return artifacts;
+}
+
+async function ensureMockAgentEvidence(root: any, missionId: string, route: string, prompt: string) {
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId, 'agents');
+  if (!(await exists(path.join(dir, 'agent-sessions.json')))) await writeJsonAtomic(path.join(dir, 'agent-sessions.json'), { schema: 'sks.agent-sessions.v1', sessions: [], all_closed: true });
+  if (!(await exists(path.join(dir, 'agent-leases.json')))) await writeJsonAtomic(path.join(dir, 'agent-leases.json'), { schema: 'sks.agent-leases.v1', leases: [], no_overlap_ok: true });
+  if (!(await exists(path.join(dir, 'agent-consensus.json')))) await writeJsonAtomic(path.join(dir, 'agent-consensus.json'), { schema: 'sks.agent-consensus.v1', ok: true, route, prompt, blockers: [] });
+  if (!(await exists(path.join(dir, 'agent-task-board.json')))) await writeJsonAtomic(path.join(dir, 'agent-task-board.json'), { schema: 'sks.agent-task-board.v1', tasks: [] });
+  await writeJsonAtomic(path.join(dir, 'agent-concurrency-policy.json'), { schema: 'sks.agent-concurrency-policy.v1', agents: DEFAULT_AGENT_COUNT, concurrency: DEFAULT_AGENT_COUNT, backend: 'fake' });
+  await writeJsonAtomic(path.join(dir, 'agent-proof-evidence.json'), {
+    schema: 'sks.agent-proof-evidence.v1',
+    ok: true,
+    status: 'passed',
+    mission_id: missionId,
+    route,
+    backend: 'fake',
+    real_parallel_claim: false,
+    fake_backend_disclaimer: 'fixture only; no real parallel execution claim',
+    agent_count: DEFAULT_AGENT_COUNT,
+    max_agents: 20,
+    all_sessions_closed: true,
+    ledger_hash_chain_ok: true,
+    no_overlap_ok: true,
+    consensus_ok: true,
+    blockers: []
+  });
 }

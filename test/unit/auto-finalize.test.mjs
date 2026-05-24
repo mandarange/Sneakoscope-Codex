@@ -21,9 +21,9 @@ test('maybeFinalizeRoute writes a route completion proof when gate passes', asyn
   assert.equal(proof.route, '$Team');
 });
 
-test('maybeFinalizeRoute does not require absent optional scout fallback artifact', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-auto-finalize-scout-artifacts-'));
-  const missionId = 'M-auto-finalize-scouts';
+test('maybeFinalizeRoute records native agent fixture artifacts without legacy fallback', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-auto-finalize-agent-artifacts-'));
+  const missionId = 'M-auto-finalize-agents';
   const dir = path.join(root, '.sneakoscope', 'missions', missionId);
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, 'mission.json'), JSON.stringify({ prompt: 'fixture' }));
@@ -33,10 +33,10 @@ test('maybeFinalizeRoute does not require absent optional scout fallback artifac
   await maybeFinalizeRoute(root, { missionId, route: '$Team', gateFile: 'team-gate.json', gate, mock: true });
 
   const proof = JSON.parse(await fs.readFile(path.join(dir, 'completion-proof.json'), 'utf8'));
-  assert.ok(proof.evidence.artifacts.includes('scout-engine-result.json'));
-  assert.equal(proof.evidence.artifacts.includes('scout-engine-unavailable.json'), false);
+  assert.ok(proof.evidence.artifacts.some((artifact) => artifact.endsWith('agents/agent-proof-evidence.json')));
+  assert.equal(proof.evidence.artifacts.includes('legacy-agent-engine-unavailable.json'), false);
 
   const trust = await latestTrustReport(root, missionId);
-  assert.equal(trust.issues.some((issue) => issue.includes('scout-engine-unavailable.json')), false);
+  assert.equal(trust.issues.some((issue) => issue.includes('legacy-agent-engine-unavailable.json')), false);
   assert.equal(trust.status, 'verified_partial');
 });

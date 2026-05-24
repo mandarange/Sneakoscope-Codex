@@ -10,7 +10,7 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.15.1** closes the MAD-SKS actual executor loop: `run/apply` now dispatch through guarded executors, target-file writes are real, shell commands use argv/no-shell execution, package/service/DB and visual handoff scopes are evidence-bound, rollback plans can be applied, and flagship proof graph v4 binds the new executor blackbox reports while the SKS protected core remains immutable.
+SKS **1.16.0** closes the native multi-session agent kernel: `sks agent` and `sks --agent` create bounded agent rosters, non-overlapping leases, append-only ledgers, session lifecycle proof, recursion guards, dynamic per-agent effort routing, and native agent proof evidence. The old multi-agent command surface has been removed; native agents are the only release-supported route collaboration backend.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -18,7 +18,8 @@ sks mad-sks permissions --json
 sks mad-sks proof --json
 sks mad-sks rollback-apply --rollback-plan <path> --yes --json
 sks features complete --json
-sks scouts status latest --engine-runs --json
+sks agent status latest --json
+sks agent run "release review" --agents 8 --concurrency 4 --mock --json
 npm run release:readiness
 ```
 
@@ -46,7 +47,7 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release 
 - Codex App: [docs/codex-app.md](docs/codex-app.md)
 - Core dominance: [docs/core-dominance.md](docs/core-dominance.md)
 - Performance budgets: [docs/performance-budgets.md](docs/performance-budgets.md)
-- Five-Scout Pipeline: [docs/five-scout-pipeline.md](docs/five-scout-pipeline.md)
+- Native Agent Kernel: [docs/native-agent-kernel.md](docs/native-agent-kernel.md)
 - Image Voxel TriWiki: [docs/image-voxel-ledger.md](docs/image-voxel-ledger.md)
 - Image Wrongness: [docs/image-wrongness.md](docs/image-wrongness.md)
 - Route finalization: [docs/route-finalization.md](docs/route-finalization.md)
@@ -54,7 +55,7 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release 
 - Managed paths: [docs/managed-paths.md](docs/managed-paths.md)
 - Rollback: [docs/rollback.md](docs/rollback.md)
 - Known gaps: [docs/known-gaps.md](docs/known-gaps.md)
-- Scout engines: [docs/scout-engines.md](docs/scout-engines.md)
+- Native agent engines: [docs/native-agent-engines.md](docs/native-agent-engines.md)
 - Hermetic E2E: [docs/testing-hermetic-e2e.md](docs/testing-hermetic-e2e.md)
 - Pipeline architecture: [docs/pipeline-architecture.md](docs/pipeline-architecture.md)
 - Rust accelerator: [docs/rust-accelerator.md](docs/rust-accelerator.md)
@@ -298,16 +299,35 @@ Before launching, SKS checks npm for a newer `sneakoscope`; answer `y` to update
 ```sh
 sks team "implement this feature"
 sks team "wide refactor" executor:5 reviewer:6
+sks team "max native fan-out" --agents 12
 sks team watch latest
-sks team lane latest --agent analysis_scout_1 --follow
-sks team message latest --from analysis_scout_1 --to executor_1 --message "handoff note"
+sks team lane latest --agent native_agent_1 --follow
+sks team message latest --from native_agent_1 --to executor_1 --message "handoff note"
 sks team cleanup-tmux latest
 sks team status latest
 sks team dashboard latest
 sks team log latest
 ```
 
-Team missions keep at least five QA/reviewer lanes active, record live events, compile runtime tasks and worker inboxes, write schema-backed effort/work-order/dashboard artifacts, and reconcile split live lanes in tmux when available. Use `sks team watch`, `sks team lane`, `sks team message`, and `sks team cleanup-tmux` to inspect or close the live view.
+Team missions keep at least five QA/reviewer lanes active, record live events, compile runtime tasks and worker inboxes, write schema-backed effort/work-order/dashboard artifacts, and reconcile split live lanes in tmux when available. Native analysis lanes use the agent kernel exclusively. Use `sks team watch`, `sks team lane`, `sks team message`, and `sks team cleanup-tmux` to inspect or close the live view.
+
+### Native Multi-Session Agents
+
+```sh
+sks agent run "map the risky files" --mock --json
+sks agent run "wide release audit" --route '$Release-Review' --agents 10 --concurrency 5 --mock --json
+sks agent run "real one-agent smoke" --backend codex-exec --real --agents 1 --concurrency 1 --json
+```
+
+Defaults are intentionally bounded: 5 agents, maximum 20, and a separate `--concurrency` cap so a 20-agent run batches without overlapping file ownership. The parent orchestrator writes `agents/agent-roster.json`, `agents/agent-effort-policy.json`, `agents/agent-task-board.json`, `agents/agent-leases.json`, `agents/agent-no-overlap-proof.json`, `agents/agent-cleanup.json`, and `agents/agent-proof-evidence.json` under the mission.
+
+Manual fan-out syntax:
+
+- Direct agent route: `sks agent run "<task>" --agents 8 --concurrency 4 --mock --json`
+- Team prompt role counts: `$Team <task> executor:8 reviewer:5`
+- Team CLI flag: `sks team "<task>" --agents 8`
+
+Effort is assigned per agent. Simple read-only/docs slices can run low, ordinary tooling and lease mapping use medium, safety/DB/schema/release lanes use high, and frontier/forensic research can escalate to xhigh. If a lease conflict, schema failure, proof blocker, DB risk, or release risk appears, the parent can escalate that lane while keeping unrelated lanes cheaper and faster.
 
 ### QA, Computer Use, Goal, Research, DB, Wiki, GX
 
@@ -339,7 +359,7 @@ sks skill-dream run --json
 sks code-structure scan --json
 ```
 
-`sks research` prepares a named genius-lens scout council, requires every scout to run at `xhigh`, records one literal `Eureka!` idea per scout, runs an evidence-bound debate, and creates `research-source-skill.md` as a route-local source collection skill before synthesis. Research is not a code-change route: real runs may write only their own mission artifacts under `.sneakoscope/missions/<id>/`, and source/package/docs/config mutations block the run with `research-code-mutation-blocker.json`. The required Research persona lenses are Einstein Scout, Feynman Scout, Turing Scout, von Neumann Scout, and Skeptic Scout; they are cognitive roles, not impersonations, and `scout-ledger.json` must include `display_name`, `persona`, `persona_boundary`, `reasoning_effort`, falsifiers, cheap probes, and `challenge_or_response`. Normal Research is not a fixed three-cycle flow: it repeats source gathering, Eureka ideas, debate, falsification, and synthesis pressure until every scout records final agreement, or pauses at the explicit max-cycle safety cap with an unpassed gate. `debate-ledger.json` must include `consensus_iterations`, `unanimous_consensus`, and per-scout agreements; `research-gate.json` cannot pass until unanimous consensus is true for all scouts. Normal Research is intentionally allowed to take one or two hours when the problem needs it; `--mock` is only for selftests or dry harness checks, and a real run blocks with `research-blocker.json` instead of silently substituting mock output when the Codex execution path is unavailable. The source layer contract separates latest papers, official/government or leading-institution sources, standards/primary docs, current news such as BBC/CNN/GDELT-style sources, public discourse such as X/Reddit, developer/practitioner knowledge such as Stack Overflow/GitHub, traditional background sources, and counterevidence/fact-checking; `source-ledger.json` must record layer coverage, source quality, blockers, citations, and cross-layer triangulation. Context7 is optional for `$Research` and only becomes relevant when the research topic specifically depends on package, API, framework, or SDK documentation. Research runs require `research-report.md`, `research-paper.md`, `genius-opinion-summary.md`, `research-source-skill.md`, `source-ledger.json`, `scout-ledger.json`, `debate-ledger.json`, `novelty-ledger.json`, `falsification-ledger.json`, and `research-gate.json` so they stay source-backed, adversarially checked, falsifiable, paper-ready, and clear about every scout lens opinion. `research status` reports source entries, source-layer coverage, triangulation checks, counterevidence, xhigh scout count, Eureka moments, debate exchanges, consensus iterations, unanimous consensus, paper presence/sections, genius-opinion summary coverage, scout findings, and falsification cases alongside the gate.
+`sks research` prepares a named genius-lens agent council, requires every agent to run at `xhigh`, records one literal `Eureka!` idea per agent, runs an evidence-bound debate, and creates `research-source-skill.md` as a route-local source collection skill before synthesis. Research is not a code-change route: real runs may write only their own mission artifacts under `.sneakoscope/missions/<id>/`, and source/package/docs/config mutations block the run with `research-code-mutation-blocker.json`. The required Research persona lenses are Einstein Agent, Feynman Agent, Turing Agent, von Neumann Agent, and Skeptic Agent; they are cognitive roles, not impersonations, and `agent-ledger.json` must include `display_name`, `persona`, `persona_boundary`, `reasoning_effort`, falsifiers, cheap probes, and `challenge_or_response`. Normal Research is not a fixed three-cycle flow: it repeats source gathering, Eureka ideas, debate, falsification, and synthesis pressure until every agent records final agreement, or pauses at the explicit max-cycle safety cap with an unpassed gate. `debate-ledger.json` must include `consensus_iterations`, `unanimous_consensus`, and per-agent agreements; `research-gate.json` cannot pass until unanimous consensus is true for all agents. Normal Research is intentionally allowed to take one or two hours when the problem needs it; `--mock` is only for selftests or dry harness checks, and a real run blocks with `research-blocker.json` instead of silently substituting mock output when the Codex execution path is unavailable. The source layer contract separates latest papers, official/government or leading-institution sources, standards/primary docs, current news such as BBC/CNN/GDELT-style sources, public discourse such as X/Reddit, developer/practitioner knowledge such as Stack Overflow/GitHub, traditional background sources, and counterevidence/fact-checking; `source-ledger.json` must record layer coverage, source quality, blockers, citations, and cross-layer triangulation. Context7 is optional for `$Research` and only becomes relevant when the research topic specifically depends on package, API, framework, or SDK documentation. Research runs require `research-report.md`, `research-paper.md`, `genius-opinion-summary.md`, `research-source-skill.md`, `source-ledger.json`, `agent-ledger.json`, `debate-ledger.json`, `novelty-ledger.json`, `falsification-ledger.json`, and `research-gate.json` so they stay source-backed, adversarially checked, falsifiable, paper-ready, and clear about every agent lens opinion. `research status` reports source entries, source-layer coverage, triangulation checks, counterevidence, xhigh agent count, Eureka moments, debate exchanges, consensus iterations, unanimous consensus, paper presence/sections, genius-opinion summary coverage, agent findings, and falsification cases alongside the gate.
 
 `sks recallpulse` is the 0.8.0 report-only RecallPulse utility. It writes `recallpulse-decision.json`, `mission-status-ledger.json`, `route-proof-capsule.json`, `evidence-envelope.json`, `recallpulse-governance-report.json`, `recallpulse-task-goal-ledger.json`, and `recallpulse-eval-report.json` for the current mission. RecallPulse does not replace route gates, Honest Mode, DB safety, imagegen evidence, or TriWiki validation; it records cache hits, hydration needs, duplicate suppression, route-governance risks, and final-summary-ready durable status so later releases can promote only measured improvements. Checklist updates are sequential: every `Txxx` row is treated as a child `$Goal` checkpoint, and `sks recallpulse checklist ... --task T001 --apply` refuses out-of-order checks unless explicitly overridden.
 
@@ -392,7 +412,7 @@ $QA-LOOP dogfood localhost:3000 and fix safe issues
 $PPT create an investor deck as HTML/PDF
 $UX-Review this screenshot with gpt-image-2 callouts, then fix the issues
 $Goal persist this migration workflow with native /goal continuation
-$Research investigate this mechanism with source-backed scout lenses
+$Research investigate this mechanism with source-backed agent lenses
 $Wiki refresh and validate the context pack
 $DB inspect this migration for destructive risk
 ```

@@ -28,7 +28,7 @@ export async function wrongnessContextForRoute(root: string, opts: {
   };
 }
 
-export function scoutWrongnessReferences(context: unknown, roleId: string): string[] {
+export function agentWrongnessReferences(context: unknown, roleId: string): string[] {
   const contextRecord = asRecord(context);
   const rows: unknown[] = Array.isArray(contextRecord.active_records) ? contextRecord.active_records : [];
   const roleNeedle = roleId.toLowerCase();

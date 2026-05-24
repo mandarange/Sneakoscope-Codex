@@ -20,7 +20,7 @@ export async function statusCommand(args: any = []) {
     trust_status: trust?.status || 'not_verified',
     trust_ok: trust?.ok === true,
     proof_status: proof?.status || 'not_verified',
-    scout_status: proof?.evidence?.scouts?.gate || (state.scouts_required === false ? 'not_required' : 'not_recorded'),
+    agent_status: proof?.evidence?.agents?.status || (state.agents_required === false ? 'not_required' : 'not_recorded'),
     image_voxel_status: proof?.evidence?.image_voxels?.status || 'not_recorded',
     db_safety_status: proof?.evidence?.db || proof?.evidence?.db_safety ? 'recorded' : 'not_recorded',
     next_action: nextAction(state, trust, proof),
@@ -36,7 +36,7 @@ export async function statusCommand(args: any = []) {
   console.log(`Phase:   ${result.phase || 'unknown'}`);
   console.log(`Trust:   ${result.trust_status}`);
   console.log(`Proof:   ${result.proof_status}`);
-  console.log(`Scout:   ${result.scout_status}`);
+  console.log(`Agents:  ${result.agent_status}`);
   console.log(`Image:   ${result.image_voxel_status}`);
   console.log(`DB:      ${result.db_safety_status}`);
   console.log(`Next:    ${result.next_action}`);

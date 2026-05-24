@@ -28,6 +28,7 @@ import { generatedImageMetadata, generateGptImage2CalloutReview } from '../image
 import { extractRealCallouts } from '../image-ux-review/real-callout-extractor.js';
 import { addImageRelation, ingestImage } from '../wiki-image/image-voxel-ledger.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
+import { writeRouteCollaborationArtifacts } from '../agents/route-collaboration-ledger.js';
 
 const ONE_BY_ONE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/axX7V8AAAAASUVORK5CYII=';
 const IMAGE_UX_REVIEW_ARTIFACT_PATHS: Record<string, string | Record<string, any>> = {
@@ -359,8 +360,15 @@ async function imageUxFixture(root: string, command: string, args: any[]) {
   artifacts.gate = gate;
   await writeJsonAtomic(path.join(dir, 'image-ux-review-gate.json'), gate);
   await ensureFixtureImageVoxelRelation(root, id, relImage);
+  const native = await writeRouteCollaborationArtifacts(root, {
+    missionId: id,
+    route: routeForCommand(command),
+    routeKey: 'UX-Collab',
+    prompt: 'UX collaboration route native agent plan for generated review images, issue extraction, safety, and proof closure.',
+    mode: 'IMAGE_UX_REVIEW'
+  });
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: true, requireRelation: flag(args, '--require-relation'), cmd: `sks ${command} fixture --mock` });
-  const result = { schema: 'sks.image-ux-review-fixture.v2', ok: proof.ok, mission_id: id, artifacts, proof: proof.validation };
+  const result = { schema: 'sks.image-ux-review-fixture.v2', ok: proof.ok && native.ok, mission_id: id, artifacts, native_agent_collaboration: native, proof: proof.validation };
   if (flag(args, '--json')) return printJson(result);
   console.log(`Image UX fixture: ${proof.ok ? 'ok' : 'blocked'} ${id}`);
   return result;
@@ -450,7 +458,6 @@ async function finalizeImageUx(root: string, missionId: string, command: string,
     artifacts: artifactList,
     claims: [{ id: 'image-ux-review-callout-loop', status: claimStatus }],
     blockers: artifacts.gate?.blockers || [],
-    scouts: artifacts.gate?.full_review_passed === true ? undefined : false,
     allowActiveWrongnessPartial: artifacts.gate?.reference_only === true,
     command: { cmd: opts.cmd || `sks ${command}`, status: artifacts.gate?.blockers?.length ? 1 : 0 }
   });

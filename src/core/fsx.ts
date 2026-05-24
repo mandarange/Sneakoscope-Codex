@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export const PACKAGE_VERSION = '1.15.1';
+export const PACKAGE_VERSION = '1.16.0';
 export const DEFAULT_PROCESS_TAIL_BYTES = 256 * 1024;
 export const DEFAULT_PROCESS_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -25,6 +25,7 @@ export interface RunProcessOptions {
 
 export interface RunProcessResult {
   code: number | null;
+  pid?: number | undefined;
   stdout: string;
   stderr: string;
   stdoutBytes: number;
@@ -440,6 +441,7 @@ export function runProcess(
     child.on('error', (err: Error) =>
       void finish({
         code: -1,
+        pid: child.pid,
         stdout: stdoutTail.text(),
         stderr: `${stderrTail.text()}${err.message}`,
         stdoutBytes: stdoutTail.totalBytesCounted,
@@ -451,6 +453,7 @@ export function runProcess(
     child.on('close', (code: number | null) =>
       void finish({
         code: killedByTimeout ? 124 : code,
+        pid: child.pid,
         stdout: stdoutTail.text(),
         stderr: stderrTail.text(),
         stdoutBytes: stdoutTail.totalBytesCounted,

@@ -31,7 +31,7 @@ export function emptyCompletionProof(overrides = {}) {
       codex_app: null,
       computer_use: null,
       image_voxels: null,
-      scouts: null,
+      agents: null,
       triwiki: null
     },
     claims: [],

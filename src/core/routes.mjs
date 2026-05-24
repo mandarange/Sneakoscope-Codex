@@ -28,7 +28,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|git|codex|codex-app|hooks|features|all-features|openclaw|hermes|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|scouts|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|git|codex|codex-app|hooks|features|all-features|openclaw|hermes|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
 export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/codex/app/features#image-generation';
@@ -238,7 +238,7 @@ export function triwikiStagePolicyText(commandPrefix = 'sks') {
     '- Consume `attention.use_first` for the fastest high-trust context path; hydrate `attention.hydrate_first` from source before making risky, user-visible, or final claims.',
     `- If a TriWiki pack is coordinate-only or lacks voxel overlay metadata, run "${ctx.refresh_command}" or "${ctx.pack_command}" and do not use the legacy pack for pipeline decisions.`,
     '- During the phase, when a decision touches a wiki claim, hydrate low-trust or stale claims from their source path/hash/RGBA anchor before relying on them.',
-    `- After new findings, changed artifacts, scout results, debate conclusions, implementation changes, reviews, or blockers, run "${ctx.refresh_command}" or "${ctx.pack_command}" so later stages see the update.`,
+    `- After new findings, changed artifacts, native agent results, debate conclusions, implementation changes, reviews, or blockers, run "${ctx.refresh_command}" or "${ctx.pack_command}" so later stages see the update.`,
     `- When package manifests, framework versions, runtime targets, MCPs, SDKs, DB clients, or deployment platforms change, add current official docs or Context7 evidence to ${stackCurrentDocsPolicy(commandPrefix).memory_path}, refresh/validate TriWiki, and make those claims the coding baseline.`,
     `- Before every handoff and before final output, run or require "${ctx.validate_command}" and re-check high-impact claims against current sources.`
   ].join('\n');
@@ -320,16 +320,30 @@ export const ROUTES = [
     command: '$Team',
     mode: 'TEAM',
     route: 'multi-agent team orchestration',
-    description: 'Run substantial work through Team only when the proof cone is broad enough: scouts, TriWiki, debate, runtime task graph, fresh executors, review, cleanup, reflection, and Honest Mode.',
+    description: 'Run substantial work through Team only when the proof cone is broad enough: native agents, TriWiki, debate, runtime task graph, fresh executors, review, cleanup, reflection, and Honest Mode.',
     requiredSkills: ['team', 'pipeline-runner', 'context7-docs', 'prompt-pipeline', REFLECTION_SKILL_NAME, 'honest-mode'],
     dollarAliases: ['$From-Chat-IMG'],
     appSkillAliases: ['from-chat-img'],
-    lifecycle: ['parallel_analysis_scouting', 'triwiki_refresh', 'planning_debate', 'live_transcript', 'consensus_artifact', 'fresh_implementation_team', 'review_artifact', 'integration_evidence', 'session_cleanup', 'post_route_reflection', 'honest_mode'],
+    lifecycle: ['native_agent_intake', 'triwiki_refresh', 'planning_debate', 'live_transcript', 'consensus_artifact', 'fresh_implementation_team', 'review_artifact', 'integration_evidence', 'session_cleanup', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'team-gate.json',
     cliEntrypoint: 'sks team "task" [executor:5 reviewer:6 user:1] | sks team log|tail|watch|lane|status|event|message|open-tmux|attach-tmux|cleanup-tmux',
     examples: ['$Team executor:5 agree on the best plan and implement it', '$From-Chat-IMG 채팅+첨부 이미지 작업 지시서']
+  },
+  {
+    id: 'ReleaseReview',
+    command: '$Release-Review',
+    mode: 'RELEASE_REVIEW',
+    route: 'native release review',
+    description: 'Run release-readiness collaboration through native multi-session agents with explicit agent count, concurrency, route personas, leases, dynamic effort, proof, and cleanup artifacts.',
+    requiredSkills: ['team', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
+    lifecycle: ['native_agent_intake', 'release_fixture_matrix', 'five_lane_review', 'integration_evidence', 'session_cleanup', 'honest_mode'],
+    context7Policy: 'optional',
+    reasoningPolicy: 'high',
+    stopGate: 'release-readiness-report.json',
+    cliEntrypoint: 'sks agent run "release audit" --route "$Release-Review" --agents <n> --concurrency <n> --mock --json',
+    examples: ['$Release-Review agents:10 concurrency:5 release audit', 'sks agent run "wide release audit" --route "$Release-Review" --agents 10 --concurrency 5 --mock --json']
   },
   {
     id: 'QALoop',
@@ -438,9 +452,9 @@ export const ROUTES = [
     command: '$Research',
     mode: 'RESEARCH',
     route: 'research mission',
-    description: 'Frontier discovery with named xhigh persona-lens scouts, Eureka ideas, vigorous evidence-bound debate, layered public source retrieval, falsification, a paper manuscript, a final genius-opinion summary, and testable predictions.',
+    description: 'Frontier discovery with named xhigh persona-lens agents, Eureka ideas, vigorous evidence-bound debate, layered public source retrieval, falsification, a paper manuscript, a final genius-opinion summary, and testable predictions.',
     requiredSkills: ['research', 'research-discovery', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
-    lifecycle: ['research_plan', 'source_skill', 'layered_source_ledger', 'xhigh_scout_council', 'eureka_moments', 'debate_ledger', 'report', 'paper', 'genius_opinion_summary', 'novelty_ledger', 'falsification_ledger', 'research_gate', 'post_route_reflection', 'honest_mode'],
+    lifecycle: ['research_plan', 'source_skill', 'layered_source_ledger', 'xhigh_agent_council', 'eureka_moments', 'debate_ledger', 'report', 'paper', 'genius_opinion_summary', 'novelty_ledger', 'falsification_ledger', 'research_gate', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'if_external_docs',
     reasoningPolicy: 'xhigh',
     stopGate: 'research-gate.json',
@@ -555,7 +569,7 @@ export const COMMAND_CATALOG = [
   { name: 'wizard', usage: 'sks wizard', description: 'Open an interactive setup UI for install scope, setup, doctor, and verification.' },
   { name: 'commands', usage: 'sks commands [--json]', description: 'List every user-facing command with a short description.' },
   { name: 'run', usage: 'sks run "task" [--visual|--research|--db] [--json]', description: 'Classify a plain-language task, materialize a mission, and route it through the SKS trust kernel.' },
-  { name: 'status', usage: 'sks status [--json]', description: 'Show the active mission, route, phase, proof, trust, scout, image voxel, DB safety, and next action.' },
+  { name: 'status', usage: 'sks status [--json]', description: 'Show the active mission, route, phase, proof, trust, native agent, image voxel, DB safety, and next action.' },
   { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/tmux, and print ready true/false.' },
@@ -581,8 +595,6 @@ export const COMMAND_CATALOG = [
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
   { name: 'recallpulse', usage: 'sks recallpulse run|status|eval|governance|checklist <mission-id|latest>', description: 'Run report-only RecallPulse active recall, durable status, proof capsule, evidence envelope, and governance checks.' },
   { name: 'pipeline', usage: 'sks pipeline status|resume|plan|answer ...', description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.' },
-  { name: 'scouts', usage: 'sks scouts plan|run|status|consensus|handoff|validate <mission-id|latest> [--json]', description: 'Run or inspect the default read-only five-scout intake phase for serious routes.' },
-  { name: 'scout', usage: 'sks scout plan|run|status|consensus|handoff|validate <mission-id|latest> [--json]', description: 'Alias for the five-scout intake command.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
   { name: 'conflicts', usage: 'sks conflicts check|prompt [--json]', description: 'Detect other Codex harnesses such as OMX/DCodex and print the GPT-5.5 high cleanup prompt.' },
   { name: 'versioning', usage: 'sks versioning status|bump|disable [--json]', description: 'Manage explicit project version syncs; SKS does not install Git pre-commit hooks.' },
@@ -597,7 +609,7 @@ export const COMMAND_CATALOG = [
   { name: 'init', usage: 'sks init [--force] [--local-only] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
   { name: 'selftest', usage: 'sks selftest [--mock]', description: 'Run local smoke tests without calling a model.' },
   { name: 'goal', usage: 'sks goal create|pause|resume|clear|status ...', description: 'Prepare and control the fast SKS bridge overlay for Codex native persisted /goal workflows.' },
-  { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run long-form real research missions with xhigh scout Eureka ideas, debate, layered sources, paper, novelty, and falsification gates.' },
+  { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run long-form real research missions with xhigh agent Eureka ideas, debate, layered sources, paper, novelty, and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
   { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and tmux views.' },
@@ -612,7 +624,8 @@ export const COMMAND_CATALOG = [
   { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, effort decisions, visual maps, dogfood reports, skills, mistake memory, Team dashboard state, and Honest Mode.' },
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|prune|validate ...', description: 'Build, refresh, prune, and validate RGBA/trig LLM Wiki context packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:6 user:1]|log|tail|watch|lane|status|dashboard|event|message|open-tmux|attach-tmux|cleanup-tmux ...', description: 'Create and observe a scout-first Team mission with at least five reviewer/QA validation lanes, current-session managed tmux lanes when available, transcript messages, and cleanup-aware follow panes.' },
+  { name: 'agent', usage: 'sks agent run|status <mission-id|latest> [--mock] [--json]', description: 'Run or inspect native multi-session agent missions.' },
+  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:6 user:1]|log|tail|watch|lane|status|dashboard|event|message|open-tmux|attach-tmux|cleanup-tmux ...', description: 'Create and observe a native-agent-first Team mission with at least five reviewer/QA validation lanes, current-session managed tmux lanes when available, transcript messages, and cleanup-aware follow panes.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },

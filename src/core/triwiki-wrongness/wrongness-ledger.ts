@@ -323,22 +323,22 @@ export async function recordHookPolicyMismatchWrongness(root: string, input: unk
   return saved.record;
 }
 
-export async function recordScoutMismatchWrongness(root: string, input: unknown = {}): Promise<WrongnessRecord> {
+export async function recordAgentMismatchWrongness(root: string, input: unknown = {}): Promise<WrongnessRecord> {
   const row = asRecord(input);
   const missionId = typeof row.mission_id === 'string' ? row.mission_id : null;
-  const scoutId = typeof row.scout_id === 'string' ? row.scout_id : 'unknown-scout';
-  const issues = Array.isArray(row.issues) ? row.issues.map(String) : [String(row.issue || 'scout mismatch')];
+  const agentId = typeof row.agent_id === 'string' ? row.agent_id : 'unknown-agent';
+  const issues = Array.isArray(row.issues) ? row.issues.map(String) : [String(row.issue || 'agent mismatch')];
   const saved = await addWrongnessRecord(root, {
-    id: deterministicWrongnessId(['scout_mismatch', missionId, scoutId, issues]),
+    id: deterministicWrongnessId(['agent_mismatch', missionId, agentId, issues]),
     mission_id: missionId,
     route: typeof row.route === 'string' ? row.route : null,
-    wrongness_kind: 'scout_error',
+    wrongness_kind: 'agent_output_error',
     severity: 'medium',
-    claim: { text: `Scout ${scoutId} produced a parse or claim mismatch: ${issues.join(', ')}` },
-    detected_by: { source: 'scout_validation', command: 'sks scouts run', artifact: typeof row.artifact === 'string' ? row.artifact : null, detail: issues.join(', ') },
-    root_cause: { category: 'scout_reasoning_error', explanation: 'Scout output could not be accepted as clean handoff evidence.' },
-    corrective_action: { summary: 'Repair scout output parsing or downgrade the scout claim before consensus uses it.', required_evidence: ['scout result json'], patch_status: 'pending' },
-    avoidance_rule: { text: 'Do not promote scout findings with parse issues or claim mismatches into consensus without correction.', applies_to: ['scouts', '$Team'], severity: 'medium' },
+    claim: { text: `Agent ${agentId} produced a parse or claim mismatch: ${issues.join(', ')}` },
+    detected_by: { source: 'agent_validation', command: 'sks agent run', artifact: typeof row.artifact === 'string' ? row.artifact : null, detail: issues.join(', ') },
+    root_cause: { category: 'agent_reasoning_error', explanation: 'Agent output could not be accepted as clean handoff evidence.' },
+    corrective_action: { summary: 'Repair agent output parsing or downgrade the agent claim before consensus uses it.', required_evidence: ['agent result json'], patch_status: 'pending' },
+    avoidance_rule: { text: 'Do not promote agent findings with parse issues or claim mismatches into consensus without correction.', applies_to: ['agents', '$Team'], severity: 'medium' },
     links: { artifacts: typeof row.artifact === 'string' ? [row.artifact] : [] }
   }, { missionId });
   return saved.record;

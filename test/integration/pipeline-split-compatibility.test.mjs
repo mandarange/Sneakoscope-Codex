@@ -7,5 +7,5 @@ test('pipeline facade and split module exports stay compatible', () => {
   const a = facadePlan({ task: '$Team fixture' });
   const b = splitPlan({ task: '$Team fixture' });
   assert.equal(a.route.command, b.route.command);
-  assert.equal(a.scout_intake.required, b.scout_intake.required);
+  assert.equal(a.agent_intake.required, b.agent_intake.required);
 });

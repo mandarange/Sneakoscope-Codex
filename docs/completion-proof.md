@@ -21,22 +21,24 @@ Completion Proof includes links to the evidence router and trust report so proof
 - `.sneakoscope/missions/<id>/completion-proof.json`
 - `.sneakoscope/missions/<id>/completion-proof.md`
 
-Serious route proof also includes `evidence.scouts` when five-scout intake is required:
+In SKS 1.16.0, serious route proof uses native agent evidence for multi-session collaboration:
 
 ```json
 {
-  "schema": "sks.scout-proof-evidence.v2",
-  "engine": "codex-exec-parallel",
-  "real_parallel": true,
-  "scout_count": 5,
-  "completed_scouts": 5,
-  "gate": "passed",
-  "consensus": ".sneakoscope/missions/<id>/scout-consensus.json",
-  "handoff": ".sneakoscope/missions/<id>/scout-handoff.md",
-  "performance": ".sneakoscope/missions/<id>/scout-performance.json",
-  "speedup_claim_allowed": true
+  "schema": "sks.agent-proof-evidence.v1",
+  "backend": "codex-exec",
+  "real_parallel_claim": true,
+  "agent_count": 5,
+  "all_sessions_closed": true,
+  "ledger_hash_chain_ok": true,
+  "no_overlap_ok": true,
+  "consensus_ok": true,
+  "cleanup_report": "agent-cleanup.json",
+  "trust_report": "agent-trust-report.json"
 }
 ```
+
+`evidence.agents` is the route collaboration proof surface for 1.16. Removed legacy multi-agent evidence fields do not satisfy completion proof.
 
 ## Status Values
 

@@ -22,7 +22,7 @@ export function buildDfixCodexHandoff(input: any = {}) {
       'Return only a bounded DFix patch result.',
       `Diagnosis: ${input.diagnosis || input.signature?.normalized_message || '<missing>'}`,
       `Root cause: ${input.rootCause || input.selected_root_cause?.summary || '<missing>'}`,
-      `Target files: ${input.file || input.signature?.file || '<scout-first>'}`,
+      `Target files: ${input.file || input.signature?.file || '<inspect-first>'}`,
       'Required output schema fields: changed_files, patch_applied, diff_summary, verification_commands, rollback_plan, no_op_reason.',
       'Forbidden: broad refactor, DB write, migration, destructive filesystem operation, auth/payment/security weakening, fallback implementation.'
     ].join('\n'),

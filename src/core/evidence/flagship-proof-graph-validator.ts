@@ -32,9 +32,9 @@ export async function validateFlagshipProofGraphV3(root: string, opts: any = {})
     '.sneakoscope/reports/mad-sks-audit-proof.json',
     '.sneakoscope/reports/mad-sks-no-harness-modification.json'
   ]);
-  const scoutUx = await validateReportSet(root, 'scout_engine_run_ux', [
-    '.sneakoscope/reports/scouts-engine-run-ux.json',
-    '.sneakoscope/reports/scouts-real-smoke-1.15.1.json'
+  const nativeAgentBackend = await validateReportSet(root, 'native_agent_backend', [
+    '.sneakoscope/reports/legacy-multiagent-removal.json',
+    '.sneakoscope/reports/release-native-agent-fixture-check.json'
   ], { allowIntegrationOptional: true });
   const codexSyntax = await validateReportSet(root, 'codex_exec_output_schema_actual_syntax', [
     '.sneakoscope/reports/codex-exec-output-schema-actual-syntax.json'
@@ -42,7 +42,7 @@ export async function validateFlagshipProofGraphV3(root: string, opts: any = {})
   const releaseFreshness = await validateReportSet(root, 'release_dist_freshness', [
     '.sneakoscope/reports/dist-build-stamp.json'
   ]);
-  const routes = [...(base.routes || []), madSks, scoutUx, codexSyntax, releaseFreshness];
+  const routes = [...(base.routes || []), madSks, nativeAgentBackend, codexSyntax, releaseFreshness];
   const blockers = [
     ...(base.blockers || []),
     ...routes.flatMap((route: any) => route.blockers || [])
@@ -54,7 +54,7 @@ export async function validateFlagshipProofGraphV3(root: string, opts: any = {})
     routes,
     mad_sks_audit_ledger_linked: madSks.ok === true,
     immutable_harness_guard_linked: madSks.artifacts.some((artifact: any) => /immutable-harness/.test(artifact.path) && artifact.present),
-    scout_real_smoke_linked: scoutUx.artifacts.some((artifact: any) => /scouts-real-smoke/.test(artifact.path) && artifact.present),
+    native_agent_backend_linked: nativeAgentBackend.ok === true,
     codex_exec_actual_syntax_linked: codexSyntax.ok === true,
     rollback_plan_required_when_mad_sks_modifies_target: true,
     local_only_policy: routes.every((route: any) => route.local_only_policy !== 'blocked'),

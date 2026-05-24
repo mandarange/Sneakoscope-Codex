@@ -4,7 +4,7 @@ import { buildFeatureRegistry, executeFeatureFixtures } from '../../src/core/fea
 
 test('strict executable feature fixtures validate generated artifacts', async () => {
   const registry = await buildFeatureRegistry({ root: process.cwd() });
-  const report = executeFeatureFixtures(registry.features.filter((feature) => ['cli-scouts', 'route-team'].includes(feature.id)), {
+  const report = executeFeatureFixtures(registry.features.filter((feature) => ['cli-agent', 'route-team'].includes(feature.id)), {
     root: process.cwd(),
     strictArtifacts: true
   });

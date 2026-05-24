@@ -56,7 +56,7 @@ export const RECALLPULSE_POLICY = Object.freeze({
     'codex_app_stop_hooks',
     'dfix_ultralight_behavior',
     'team_minimum_five_lane_review',
-    'research_xhigh_scout_requirements',
+    'research_xhigh_agent_requirements',
     'db_destructive_operation_blocking',
     'imagegen_evidence_requirements'
   ],
@@ -179,10 +179,10 @@ export const RECALLPULSE_POLICY = Object.freeze({
   rollback: 'set SKS_RECALLPULSE_MODE=off or leave report_only unpromoted'
 });
 
-export const RESEARCH_SCOUT_PERSONA_CONTRACT = Object.freeze([
+export const RESEARCH_AGENT_PERSONA_CONTRACT = Object.freeze([
   {
     id: 'einstein',
-    display_name: 'Einstein Scout',
+    display_name: 'Einstein Agent',
     historical_inspiration: 'Albert Einstein',
     persona: 'first-principles reframer',
     role: 'first_principles_reframer',
@@ -191,7 +191,7 @@ export const RESEARCH_SCOUT_PERSONA_CONTRACT = Object.freeze([
   },
   {
     id: 'feynman',
-    display_name: 'Feynman Scout',
+    display_name: 'Feynman Agent',
     historical_inspiration: 'Richard Feynman',
     persona: 'explanation experimentalist',
     role: 'explanation_experimentalist',
@@ -200,7 +200,7 @@ export const RESEARCH_SCOUT_PERSONA_CONTRACT = Object.freeze([
   },
   {
     id: 'turing',
-    display_name: 'Turing Scout',
+    display_name: 'Turing Agent',
     historical_inspiration: 'Alan Turing',
     persona: 'formalization and adversarial cases',
     role: 'formalization_and_adversarial_cases',
@@ -209,24 +209,24 @@ export const RESEARCH_SCOUT_PERSONA_CONTRACT = Object.freeze([
   },
   {
     id: 'von_neumann',
-    display_name: 'von Neumann Scout',
+    display_name: 'von Neumann Agent',
     historical_inspiration: 'John von Neumann',
-    persona: 'systems strategy scout',
-    role: 'systems_strategy_scout',
+    persona: 'systems strategy agent',
+    role: 'systems_strategy_agent',
     mandate: 'Map system dynamics, scaling behavior, incentives, and worst-case interactions.',
     required_outputs: ['eureka_moment', 'system_model', 'scaling_risk', 'robustness_condition']
   },
   {
     id: 'skeptic',
-    display_name: 'Skeptic Scout',
+    display_name: 'Skeptic Agent',
     historical_inspiration: 'counterevidence discipline',
-    persona: 'counterevidence scout',
-    role: 'counterevidence_scout',
+    persona: 'counterevidence agent',
+    role: 'counterevidence_agent',
     mandate: 'Attack the strongest surviving claim with counterevidence and base-rate failures.',
     required_outputs: ['eureka_moment', 'counterevidence', 'base_rate_failure_mode', 'claim_to_downgrade']
   }
-].map((scout) => Object.freeze({
-  ...scout,
+].map((agent) => Object.freeze({
+  ...agent,
   persona_boundary: 'persona-inspired cognitive lens only; do not impersonate the historical person',
   reasoning_effort: 'xhigh',
   service_tier: 'fast'
@@ -405,7 +405,7 @@ export function buildEvidenceEnvelope(decision = {}) {
     merge_rules: ['same_claim_ids_merge_by_newest_fresh_source', 'conflicts_block_final_claims'],
     stale_rules: ['stale_when_stage_changes', 'stale_when_gate_updates', 'stale_when_source_hash_changes'],
     route_extensions: {
-      Research: ['source_layer_ids', 'scout_persona_ids', 'falsification_cases'],
+      Research: ['source_layer_ids', 'agent_persona_ids', 'falsification_cases'],
       Team: ['team_roster', 'review_lanes', 'runtime_task_ids'],
       DB: ['db_scan_id', 'destructive_operation_zero'],
       QALoop: ['qa_report', 'checklist_status'],
@@ -430,8 +430,8 @@ export async function evaluateRecallPulseFixtures(root, opts = {}) {
       fixture('stale-memory-current-code-conflict', true, 'L3 hydration is requested for stale or conflicted memory before final claims.'),
       fixture('repeated-stop-hook-blocker', true, 'Duplicate suppression keys collapse repeated blocker text into one durable status row.'),
       fixture('hook-only-status-visibility', true, 'mission-status-ledger.json preserves recoverable user-visible status.'),
-      fixture('research-persona-missing', true, 'Research validation blocks missing scout display_name/persona/persona_boundary.'),
-      fixture('research-effort-not-xhigh', true, 'Research validation blocks non-xhigh scout rows.'),
+      fixture('research-persona-missing', true, 'Research validation blocks missing agent display_name/persona/persona_boundary.'),
+      fixture('research-effort-not-xhigh', true, 'Research validation blocks non-xhigh agent rows.'),
       fixture('research-eureka-missing', true, 'Research validation blocks missing literal Eureka! ideas.'),
       fixture('research-impersonation', true, 'Research validation blocks persona-boundary violations.'),
       fixture('oversized-l1', true, 'L1 token and item limits reject oversized active recall.'),
@@ -602,7 +602,7 @@ export async function buildRecallPulseGovernanceReport(root, opts = {}) {
       ],
       migration_paths: {
         existing_missions: 'Run sks recallpulse run <mission-id> and sks recallpulse governance <mission-id> to add report-only artifacts.',
-        existing_research_artifacts: 'Research gates now require scout display_name/persona/persona_boundary fields; old ledgers should be migrated by adding those fields before claiming pass.',
+        existing_research_artifacts: 'Research gates now require agent display_name/persona/persona_boundary fields; old ledgers should be migrated by adding those fields before claiming pass.',
         generated_skills: 'Do not edit generated installed skills directly; rerun init/bootstrap from engine source when generated text needs refreshing.'
       },
       release_gate: '0.8.0 remains report-only unless packcheck, selftest, sizecheck, registry metadata check, TriWiki validate, and RecallPulse fixture eval pass.'
@@ -612,12 +612,12 @@ export async function buildRecallPulseGovernanceReport(root, opts = {}) {
   return report;
 }
 
-export function validateResearchScoutPersonas(scoutLedger = {}, geniusSummaryText = '') {
-  const rows = Array.isArray(scoutLedger?.scouts) ? scoutLedger.scouts : [];
+export function validateResearchAgentPersonas(agentLedger = {}, geniusSummaryText = '') {
+  const rows = Array.isArray(agentLedger?.agents) ? agentLedger.agents : [];
   const issues = [];
-  const byId = new Map(RESEARCH_SCOUT_PERSONA_CONTRACT.map((scout) => [scout.id, scout]));
+  const byId = new Map(RESEARCH_AGENT_PERSONA_CONTRACT.map((agent) => [agent.id, agent]));
   const displayNames = new Set();
-  for (const expected of RESEARCH_SCOUT_PERSONA_CONTRACT) {
+  for (const expected of RESEARCH_AGENT_PERSONA_CONTRACT) {
     const row = rows.find((item) => item?.id === expected.id);
     if (!row) {
       issues.push(`${expected.id}:missing`);
@@ -640,9 +640,9 @@ export function validateResearchScoutPersonas(scoutLedger = {}, geniusSummaryTex
       issues.push(`${expected.id}:impersonation_claim`);
     }
   }
-  if (displayNames.size !== RESEARCH_SCOUT_PERSONA_CONTRACT.length) issues.push('display_names_not_unique');
+  if (displayNames.size !== RESEARCH_AGENT_PERSONA_CONTRACT.length) issues.push('display_names_not_unique');
   const lowerSummary = String(geniusSummaryText || '').toLowerCase();
-  for (const expected of RESEARCH_SCOUT_PERSONA_CONTRACT) {
+  for (const expected of RESEARCH_AGENT_PERSONA_CONTRACT) {
     if (lowerSummary && !lowerSummary.includes(expected.display_name.toLowerCase())) issues.push(`${expected.id}:summary_display_name_missing`);
   }
   return { ok: issues.length === 0, issues };
@@ -1029,7 +1029,7 @@ function stageFromState(state = {}) {
   if (/final|honest|stop/.test(phase)) return 'before_final';
   if (/review/.test(phase)) return 'before_review';
   if (/implement|execution|running/.test(phase)) return 'before_implementation';
-  if (/plan|scout|debate|prepared/.test(phase)) return 'before_planning';
+  if (/plan|agent|debate|prepared/.test(phase)) return 'before_planning';
   return 'route_intake';
 }
 
@@ -1127,13 +1127,13 @@ function preservedRoutePersonality(routeId = '', routeName = '') {
     DFix: 'ultralight direct-fix path stays tiny and does not start the full pipeline',
     Answer: 'answer-only path stays conversational and does not start implementation',
     SKS: 'general SKS discovery/help personality stays simple',
-    Team: 'Team keeps scout, debate, executor, and five-lane review identity',
+    Team: 'Team keeps analysis, debate, executor, and five-lane review identity',
     QALoop: 'QA-LOOP keeps dogfood, checklist, remediation, and reverification identity',
     PPT: 'PPT keeps restrained information-first HTML/PDF delivery identity',
     ImageUXReview: 'Image UX Review keeps gpt-image-2 annotated raster review identity',
     ComputerUse: 'Computer Use keeps maximum-speed visual/browser lane identity',
     Goal: 'Goal stays a native /goal persistence bridge, not a heavyweight route',
-    Research: 'Research keeps named xhigh persona scout council, Eureka, debate, paper, and falsification identity',
+    Research: 'Research keeps named xhigh persona agent council, Eureka, debate, paper, and falsification identity',
     AutoResearch: 'AutoResearch keeps iterative experiment loop identity',
     DB: 'DB keeps conservative read-first destructive-operation safety identity',
     MadSKS: 'MAD-SKS keeps explicit scoped high-risk authorization identity',

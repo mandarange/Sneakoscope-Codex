@@ -38,11 +38,11 @@ await ledger.recordHookPolicyMismatchWrongness(root, {
   actual: 'continue',
   artifact: 'test/fixtures/hooks/mismatch.json'
 });
-await ledger.recordScoutMismatchWrongness(root, {
+await ledger.recordAgentMismatchWrongness(root, {
   mission_id: 'M-fixture',
-  scout_id: 'scout-2-verification',
+  agent_id: 'agent-2-verification',
   issues: ['parse_failed'],
-  artifact: '.sneakoscope/missions/M-fixture/scout-2-verification.json'
+  artifact: '.sneakoscope/missions/M-fixture/agent-2-verification.json'
 });
 await imageWrongness.recordImageWrongnessFromValidation(root, {
   missionId: 'M-fixture',

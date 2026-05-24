@@ -2,14 +2,14 @@
 
 `1.0.2` advances the runtime towards a fully suppressed-free TypeScript tree: suppression scanning (`npm run typecheck:suppressions`), migration bookkeeping (`.sneakoscope/reports/typescript-migration.*`), and tighter `dist` manifest metadata accompany the existing TypeScript-built `dist` runtime.
 
-The published CLI entrypoint, router, command registry, Trust Kernel, Evidence Router, Completion Proof, Image Voxel, Scout, and route command runtime remain built from TypeScript into `dist`.
+The published CLI entrypoint, router, command registry, Trust Kernel, Evidence Router, Completion Proof, Image Voxel, native agent kernel, and route command runtime remain built from TypeScript into `dist`.
 
 ## Release Invariants
 
 - `tsconfig.json` uses NodeNext, ES2022, `strict`, `noImplicitAny`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`.
 - `src/bin/sks.ts` builds the published `dist/bin/sks.js` binary.
 - `src/cli/command-registry.ts` is the actual typed runtime command registry used by the CLI.
-- Trust Kernel, route contracts, Completion Proof, evidence records, Trust Reports, Image Voxel ledgers, Scout outputs, and feature fixtures have exported TypeScript interfaces and runtime guards.
+- Trust Kernel, route contracts, Completion Proof, evidence records, Trust Reports, Image Voxel ledgers, native agent outputs, and feature fixtures have exported TypeScript interfaces and runtime guards.
 - `npm run build`, `npm run typecheck`, `npm run typecheck:contracts`, `npm run test:types`, `npm run schema:check`, and `npm run dist:check` are required before publish.
 - `npm run typecheck:suppressions` (part of `release:check`) blocks `@ts-nocheck`, `@ts-ignore`, and sloppy `@ts-expect-error` usages outside annotated generated waivers (`SKS-GEN:`).
 - `npm run typescript:migration-report` records suppression counts plus dist `.mjs` drift for auditors (see `.sneakoscope/reports/typescript-migration.json`).
@@ -20,7 +20,7 @@ The published CLI entrypoint, router, command registry, Trust Kernel, Evidence R
 - `src/core/evidence/evidence-schema.ts`: typed evidence records and evidence index.
 - `src/core/proof/proof-schema.ts` and `validation.ts`: Completion Proof schema and type guards.
 - `src/core/wiki-image/image-voxel-schema.ts`: Image Voxel ledger types.
-- `src/core/scouts/scout-schema.ts`: Scout result contracts.
+- `src/core/agents/agent-schema.ts`: Native agent result, lease, session, and proof contracts.
 - `src/core/features/*.ts`: feature fixture and registry contracts.
 
 ## Build Output
@@ -29,4 +29,4 @@ The npm package uses `files: ["dist", ...]`; source implementation files are not
 
 ## Type Contract Tests
 
-`test/types/*.test.ts` compiles the command registry, Trust Kernel, evidence, Completion Proof, Image Voxel, and Scout contracts under the same strict compiler rules as the source tree. These tests are type-only and run through `npm run test:types`.
+`test/types/*.test.ts` compiles the command registry, Trust Kernel, evidence, Completion Proof, Image Voxel, and native agent contracts under the same strict compiler rules as the source tree. These tests are type-only and run through `npm run test:types`.

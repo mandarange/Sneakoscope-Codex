@@ -14,6 +14,7 @@ import { writeDfixCodexHandoffArtifact } from './dfix/codex-handoff.js';
 import { selectDfixVerification } from './dfix/verification-selector.js';
 import { runDfixVerificationCommand } from './dfix/verification-runner.js';
 import { writeDfixPerformanceReport } from './dfix/performance.js';
+import { appendAgentLedgerEvent, initializeAgentCentralLedger } from './agents/agent-central-ledger.js';
 
 export const DFIX_DIAGNOSIS_ARTIFACT = 'dfix-diagnosis.json';
 export const DFIX_ROOT_CAUSE_ARTIFACT = 'dfix-root-cause.json';
@@ -31,6 +32,58 @@ export const DFIX_CODEX_HANDOFF_ARTIFACT = 'dfix-codex-handoff.json';
 export const DFIX_VERIFICATION_SELECTION_ARTIFACT = 'dfix-verification-selection.json';
 export const DFIX_VERIFICATION_RUNNER_ARTIFACT = 'dfix-verification-runner.json';
 export const DFIX_PERFORMANCE_REPORT_ARTIFACT = 'dfix-performance-report.json';
+
+export const DFIX_NATIVE_AGENT_PERSONAS = Object.freeze([
+  {
+    id: 'dfix_implementer',
+    role: 'implementer',
+    label: 'DFix Implementer',
+    exclusive_file_lease: true,
+    read_only: false,
+    mandate: 'Apply the one bounded direct-fix patch only inside the explicit target file lease.',
+    outputs: [DFIX_PATCH_PLAN_ARTIFACT, DFIX_PATCH_RESULT_ARTIFACT]
+  },
+  {
+    id: 'dfix_verifier',
+    role: 'verifier',
+    label: 'DFix Verifier',
+    test_lease: true,
+    read_only: true,
+    mandate: 'Run the selected verification command or record a blocker without broadening the fix.',
+    outputs: [DFIX_VERIFICATION_SELECTION_ARTIFACT, DFIX_VERIFICATION_ARTIFACT, DFIX_VERIFICATION_RUNNER_ARTIFACT]
+  },
+  {
+    id: 'dfix_safety',
+    role: 'safety',
+    label: 'DFix Safety Reviewer',
+    read_only: true,
+    reviews_risky_changes: true,
+    mandate: 'Review risky changes, destructive operations, DB writes, and unrequested fallback implementation before proof.',
+    outputs: [DFIX_GATE_ARTIFACT]
+  }
+]);
+
+export function dfixNativeAgentPlan(input: any = {}) {
+  const targetFile = input.file || null;
+  return {
+    schema: 'sks.dfix-native-agent-plan.v1',
+    backend: 'native_multi_session_agent_kernel',
+    legacy_runtime: false,
+    central_ledger: 'agents/agent-events.jsonl',
+    personas: DFIX_NATIVE_AGENT_PERSONAS.map((persona: any) => ({
+      ...persona,
+      session_id: input.missionId ? `${input.missionId}-${persona.id}` : `${persona.id}-session`
+    })),
+    leases: [
+      { id: 'dfix-exclusive-file-lease', owner_agent_id: 'dfix_implementer', mode: 'exclusive_file_lease', path: targetFile || '<target-file-from-diagnosis>', exclusive: true },
+      { id: 'dfix-test-lease', owner_agent_id: 'dfix_verifier', mode: 'test_lease', path: input.command || '<selected-verification-command>', exclusive: false },
+      { id: 'dfix-safety-review-lease', owner_agent_id: 'dfix_safety', mode: 'read_only_safety_review', path: DFIX_GATE_ARTIFACT, exclusive: false }
+    ],
+    implementer_gets_exclusive_file_leases: true,
+    verifier_gets_test_leases: true,
+    safety_agent_reviews_risky_changes: true
+  };
+}
 
 export const DFIX_ARTIFACT_PATHS: Record<string, string> = {
   diagnosis: DFIX_DIAGNOSIS_ARTIFACT,
@@ -63,7 +116,58 @@ export async function createDfixRun(root: string, args: any[] = []) {
       BROAD_IMPLEMENTATION_BLOCKED: true
     }
   });
+  const fileFlagIndex = args.indexOf('--file');
+  const commandFlagIndex = args.indexOf('--command');
+  await writeDfixNativeAgentLedger(dir, {
+    missionId: id,
+    prompt,
+    file: fileFlagIndex >= 0 ? args[fileFlagIndex + 1] : null,
+    command: commandFlagIndex >= 0 ? args[commandFlagIndex + 1] : null
+  });
   return { id, dir, mission };
+}
+
+export async function writeDfixNativeAgentLedger(dir: string, input: any = {}) {
+  const missionId = input.missionId;
+  if (!missionId) return null;
+  const plan = dfixNativeAgentPlan(input);
+  await writeJsonAtomic(path.join(dir, 'dfix-agent-plan.json'), plan);
+  const root = await initializeAgentCentralLedger(dir, {
+    missionId,
+    route: '$DFix',
+    prompt: input.prompt || '',
+    roster: {
+      schema: 'sks.dfix-agent-roster.v1',
+      mission_id: missionId,
+      backend: plan.backend,
+      roster: plan.personas.map((persona: any) => ({
+        id: persona.id,
+        session_id: persona.session_id,
+        persona_id: persona.id,
+        role: persona.role,
+        read_only: persona.read_only,
+        output_artifacts: persona.outputs || []
+      })),
+      personas: plan.personas
+    },
+    partition: {
+      slices: [
+        { id: 'dfix-implementation', owner_agent_id: 'dfix_implementer', domain: 'dfix-patch', write_paths: [input.file || '<target-file-from-diagnosis>'], exclusive: true },
+        { id: 'dfix-verification', owner_agent_id: 'dfix_verifier', domain: 'dfix-tests', write_paths: [DFIX_VERIFICATION_ARTIFACT], read_only: true },
+        { id: 'dfix-safety', owner_agent_id: 'dfix_safety', domain: 'dfix-safety', write_paths: [DFIX_GATE_ARTIFACT], read_only: true }
+      ],
+      leases: plan.leases
+    }
+  });
+  for (const lease of plan.leases) {
+    await appendAgentLedgerEvent(root, {
+      agent_id: lease.owner_agent_id,
+      session_id: `${missionId}-${lease.owner_agent_id}`,
+      event_type: 'dfix_lease_planned',
+      payload: lease
+    });
+  }
+  return plan;
 }
 
 export async function resolveDfixRun(root: string, missionArg: any = 'latest') {
@@ -336,7 +440,7 @@ function buildDfixCodexPatchPrompt(diagnosis: any = {}, rootCause: any = {}, opt
     'Prepare a bounded Codex patch for the DFix diagnosis.',
     `Diagnosis: ${diagnosis.observed_failure || '<missing>'}`,
     `Root cause: ${rootCause.root_cause || '<missing>'}`,
-    `Target files: ${opts.file || diagnosis.target_file || '<scout first>'}`,
+    `Target files: ${opts.file || diagnosis.target_file || '<inspect first>'}`,
     `Verification commands: ${(opts.verificationCommands || []).join(', ') || '<use dfix-verification-suggestion.json>'}`,
     'Forbidden operations: destructive filesystem operations, DB writes, migrations, auth/payment/security weakening, broad refactors, and unrequested fallback implementation.',
     'Return a patch result with changed_files, patch_applied, diff_summary, verification_commands, rollback_plan, and no_op_reason.'
@@ -368,7 +472,6 @@ export async function finalizeDfix(root: string, missionId: string, artifacts: a
     artifacts: Object.keys(DFIX_ARTIFACT_PATHS).map((key) => DFIX_ARTIFACT_PATHS[key]),
     claims: [{ id: 'dfix-diagnose-plan-patch-verify-loop', status: opts.mock ? 'verified_partial' : artifacts.gate?.passed ? 'verified' : 'blocked' }],
     blockers: artifacts.gate?.blockers || [],
-    scouts: false,
     command: { cmd: opts.cmd || 'sks dfix', status: artifacts.gate?.blockers?.length ? 1 : 0 }
   });
 }

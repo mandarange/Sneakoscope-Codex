@@ -2,7 +2,7 @@ import { collectProofEvidence } from './evidence-collector.mjs';
 import { writeRouteCompletionProof } from './route-adapter.mjs';
 import { routeFinalizerPolicy } from './route-finalizer-policy.mjs';
 import { ensureRouteImageEvidence } from '../wiki-image/route-image-evidence.mjs';
-import { readScoutProofEvidence } from '../scouts/scout-proof-evidence.mjs';
+import { readAgentProofEvidence } from '../agents/agent-proof-evidence.mjs';
 import { wrongnessProofEvidence } from '../triwiki-wrongness/wrongness-proof-linker.mjs';
 import { computerUseStatusReport } from '../computer-use-status.mjs';
 
@@ -25,7 +25,7 @@ export async function finalizeRouteWithProof(root, {
   fixClaim = false,
   requireRelation = false,
   visualClaim = undefined,
-  scouts = undefined,
+  agents = undefined,
   allowActiveWrongnessPartial = false
 } = {}) {
   const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation, visualClaim });
@@ -45,7 +45,7 @@ export async function finalizeRouteWithProof(root, {
     }
   }
   const collected = await collectProofEvidence(root);
-  const scoutEvidence = scouts === false ? null : await readScoutProofEvidence(root, missionId).catch(() => null);
+  const agentEvidence = agents === false ? null : await readAgentProofEvidence(root, missionId).catch(() => null);
   const wrongnessEvidence = await wrongnessProofEvidence(root, missionId, { route: policy.route }).catch(() => null);
   const computerUse = policy.requires_image_voxel_anchors
     ? await computerUseStatusReport().catch((err) => ({ schema: 'sks.computer-use-status.v1', status: 'unknown', ok: false, guidance: [err.message], evidence: { status: 'unknown' } }))
@@ -80,7 +80,7 @@ export async function finalizeRouteWithProof(root, {
       relations: imageEvidence.ledger.relations?.length || 0,
       mock: Boolean(imageEvidence.mock)
     } } : {}),
-    ...(scoutEvidence ? { scouts: scoutEvidence } : {}),
+    ...(agentEvidence ? { agents: agentEvidence } : {}),
     ...(wrongnessEvidence ? { wrongness: wrongnessEvidence } : {}),
     ...(providedVisualEvidence?.image_ux_review ? { image_ux_review: providedVisualEvidence.image_ux_review } : {}),
     ...(computerUse ? { computer_use: {

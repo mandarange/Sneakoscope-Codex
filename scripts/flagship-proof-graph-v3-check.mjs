@@ -23,8 +23,8 @@ const dependencies = [
   ['mad-sks-write-guard.json', './scripts/mad-sks-write-guard-check.mjs'],
   ['mad-sks-audit-proof.json', './scripts/mad-sks-audit-proof-check.mjs'],
   ['mad-sks-no-harness-modification.json', './scripts/mad-sks-no-harness-modification-check.mjs'],
-  ['scouts-engine-run-ux.json', './scripts/scouts-engine-run-ux-check.mjs'],
-  ['scouts-real-smoke-1.15.1.json', './scripts/scouts-real-smoke-check.mjs'],
+  ['legacy-multiagent-removal.json', './scripts/legacy-multiagent-removal-check.mjs'],
+  ['release-native-agent-fixture-check.json', './scripts/release-native-agent-fixture-check.mjs'],
   ['codex-exec-output-schema-actual-syntax.json', './scripts/codex-exec-output-schema-actual-syntax-check.mjs'],
   ['release-dist-freshness.json', './scripts/release-dist-freshness-check.mjs']
 ];

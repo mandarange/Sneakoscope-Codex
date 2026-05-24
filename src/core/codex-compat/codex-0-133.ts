@@ -71,7 +71,7 @@ export function codex0133Capabilities(input: {
       preferred: outputSchemaStatus === 'available',
       detector: 'Codex version >=0.132.0 or `codex exec resume --help` exposes --output-schema; inherited under the 0.133 baseline',
       notes: [
-        'Preferred structured output path for Scout, UX-Review callout extraction, Completion Proof, and Wrongness outputs.',
+        'Preferred structured output path for native agents, UX-Review callout extraction, Completion Proof, and Wrongness outputs.',
         outputSchemaDetected ? 'Local help text exposes --output-schema on exec resume.' : 'Help text did not expose --output-schema; fallback output is capped at verified_partial.'
       ]
     },
@@ -163,7 +163,7 @@ export function codex0133Capabilities(input: {
       priority: 'P1',
       status: status === 'available' ? 'warning_only' : status,
       detector: 'Codex richer Python TurnResult',
-      notes: ['P1 optional timing/usage adapter target for future scout benchmarks.']
+      notes: ['P1 optional timing/usage adapter target for future native agent benchmarks.']
     }
   ];
 }

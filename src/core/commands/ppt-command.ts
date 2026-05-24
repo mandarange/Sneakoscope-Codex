@@ -12,6 +12,7 @@ import {
   pptReviewProofEvidence,
   writePptImagegenReviewArtifacts
 } from '../ppt-review/index.js';
+import { writeRouteCollaborationArtifacts } from '../agents/route-collaboration-ledger.js';
 
 export async function pptCommand(command: any, args: any = []) {
   const root = await projectRoot();
@@ -88,8 +89,7 @@ async function pptImagegenReview(root: string, command: any, action: string, arg
       artifacts: Object.values(PPT_REVIEW_ARTIFACT_PATHS),
       claims: [{ id: 'ppt-imagegen-review-loop', status: 'verified_partial' }],
       blockers: fixture.artifacts.gate?.blockers || [],
-      command: { cmd: `sks ${command} ${action} --fixture`, status: fixture.artifacts.gate?.passed ? 0 : 1 },
-      scouts: false
+      command: { cmd: `sks ${command} ${action} --fixture`, status: fixture.artifacts.gate?.passed ? 0 : 1 }
     });
     const result = {
       schema: 'sks.ppt-imagegen-review.v1',
@@ -132,8 +132,7 @@ async function pptImagegenReview(root: string, command: any, action: string, arg
     artifacts: Object.values(PPT_REVIEW_ARTIFACT_PATHS),
     claims: [{ id: 'ppt-imagegen-review-loop', status: mockMode ? 'verified_partial' : artifacts.gate?.passed ? 'verified' : 'blocked' }],
     blockers: artifacts.gate?.blockers || [],
-    command: { cmd: `sks ${command} ${action}`, status: artifacts.gate?.passed ? 0 : 1 },
-    scouts: false
+    command: { cmd: `sks ${command} ${action}`, status: artifacts.gate?.passed ? 0 : 1 }
   });
   const result = { schema: 'sks.ppt-imagegen-review.v1', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.passed ? 'passed' : 'blocked', mission_id: id, artifacts: pptArtifactAliases(artifacts), proof_evidence: proofEvidence, proof: proof.validation };
   if (!result.ok && !mockMode) process.exitCode = 1;
@@ -151,6 +150,13 @@ async function pptFixture(root: string, command: any, args: any[]) {
   const gate = mockPptFixtureGate(build.gate);
   await writeJsonAtomic(path.join(dir, 'ppt-gate.json'), gate);
   const review = await writePptImagegenReviewArtifacts({ root, dir, missionId: id, mock: true });
+  const native = await writeRouteCollaborationArtifacts(root, {
+    missionId: id,
+    route: '$PPT',
+    routeKey: 'PPT-Collab',
+    prompt: 'PPT collaboration route native agent plan for source HTML, visual review, imagegen evidence, and proof closure.',
+    mode: 'PPT'
+  });
   const proof = await maybeFinalizeRoute(root, {
     missionId: id,
     route: '$PPT',
@@ -159,12 +165,11 @@ async function pptFixture(root: string, command: any, args: any[]) {
     mock: true,
     visual: true,
     visualEvidence: { ppt_review: pptReviewProofEvidence(review.gate, review) },
-    artifacts: [...Object.keys(build.files || {}), ...Object.values(PPT_REVIEW_ARTIFACT_PATHS)],
+    artifacts: [...Object.keys(build.files || {}), ...Object.values(PPT_REVIEW_ARTIFACT_PATHS), ...Object.values(native.artifacts || {})],
     claims: [{ id: 'ppt-fixture', status: 'verified_partial' }],
-    command: { cmd: `sks ${command} fixture --mock`, status: 0 },
-    scouts: false
+    command: { cmd: `sks ${command} fixture --mock`, status: 0 }
   });
-  const result = { schema: 'sks.ppt-fixture.v2', ok: proof.ok, mission_id: id, build: { ...build, ok: true, gate }, imagegen_review: review, proof: proof.validation };
+  const result = { schema: 'sks.ppt-fixture.v2', ok: proof.ok && native.ok, mission_id: id, build: { ...build, ok: true, gate }, imagegen_review: review, native_agent_collaboration: native, proof: proof.validation };
   if (flag(args, '--json')) return printJson(result);
   console.log(`PPT fixture: ${proof.ok ? 'ok' : 'blocked'} ${id}`);
   return result;

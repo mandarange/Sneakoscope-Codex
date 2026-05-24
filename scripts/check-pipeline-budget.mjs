@@ -30,7 +30,7 @@ for (const file of fs.readdirSync(moduleDir).filter((name) => name.endsWith('.mj
 const required = [
   'plan-schema.mjs',
   'stage-policy.mjs',
-  'scout-stage-policy.mjs',
+  'agent-stage-policy.mjs',
   'route-prep.mjs',
   'route-prep-team.mjs',
   'route-prep-research.mjs',

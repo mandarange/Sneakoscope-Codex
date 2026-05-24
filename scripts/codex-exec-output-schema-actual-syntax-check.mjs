@@ -12,7 +12,7 @@ if (!freshness.ok) {
 
 const mod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'codex-exec-output-schema.js')).href);
 const syntax = await mod.detectCodexExecOutputSchemaSyntax();
-const schemaPath = path.join(root, 'schemas', 'codex', 'scout-result.schema.json');
+const schemaPath = path.join(root, 'schemas', 'codex', 'agent-result.schema.json');
 const freshArgs = await mod.buildCodexExecOutputSchemaArgs({ prompt: 'Return {}', outputSchemaPath: schemaPath, outputFile: path.join(root, '.sneakoscope', 'tmp', 'codex-fresh.json') });
 const resumeArgs = await mod.buildCodexExecResumeOutputSchemaArgs({ sessionId: 'fixture-session', prompt: 'Return {}', outputSchemaPath: schemaPath, outputFile: path.join(root, '.sneakoscope', 'tmp', 'codex-resume.json') });
 const report = {

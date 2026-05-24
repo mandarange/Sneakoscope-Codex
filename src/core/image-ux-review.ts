@@ -96,7 +96,7 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
       'schemas/codex/image-ux-issue-ledger.schema.json',
       'schemas/codex/completion-proof.schema.json',
       'schemas/codex/wrongness-record.schema.json',
-      'schemas/codex/scout-result.schema.json',
+      'schemas/codex/agent-result.schema.json',
       'schemas/codex/computer-use-live-evidence.schema.json'
     ]
   };

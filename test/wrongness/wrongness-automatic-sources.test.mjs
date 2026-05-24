@@ -13,7 +13,7 @@ test('automatic wrongness sources cover test, DB, hook, and image validation fai
   await ledger.recordTestFailureWrongness(root, { mission_id: 'M-auto', command: 'npm test', failure: 'fixture failed' });
   await ledger.recordDbSafetyMismatchWrongness(root, { mission_id: 'M-auto', expected: 'safe', actual: 'blocked', command: 'sks db check' });
   await ledger.recordHookPolicyMismatchWrongness(root, { mission_id: 'M-auto', expected: 'block', actual: 'continue' });
-  await ledger.recordScoutMismatchWrongness(root, { mission_id: 'M-auto', scout_id: 'scout-2-verification', issues: ['parse_failed'] });
+  await ledger.recordAgentMismatchWrongness(root, { mission_id: 'M-auto', agent_id: 'agent-2-verification', issues: ['parse_failed'] });
   await image.recordImageWrongnessFromValidation(root, {
     missionId: 'M-auto',
     validation: { ok: false, issues: ['missing_anchors:$Wiki', 'bbox_out_of_bounds:anchor-001'] },
@@ -25,7 +25,7 @@ test('automatic wrongness sources cover test, DB, hook, and image validation fai
   assert.ok(kinds.has('test_failure'));
   assert.ok(kinds.has('db_safety_false_positive'));
   assert.ok(kinds.has('hook_policy_mismatch'));
-  assert.ok(kinds.has('scout_error'));
+  assert.ok(kinds.has('agent_output_error'));
   assert.ok(kinds.has('visual_anchor_error'));
   assert.ok(kinds.has('image_bbox_error'));
 });

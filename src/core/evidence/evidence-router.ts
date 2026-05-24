@@ -46,7 +46,7 @@ export async function evidenceCandidatesForProof(root: any, proof: any = {}, opt
   }
   addArtifactCandidates(candidates, proof.evidence?.artifacts, missionId);
   addGateCandidate(candidates, proof.evidence?.route_gate, missionId);
-  addScoutCandidates(candidates, proof.evidence?.scouts);
+  addAgentCandidates(candidates, proof.evidence?.agents);
   addDbCandidates(candidates, proof.evidence?.db || proof.evidence?.db_safety, missionId);
   addTestCandidates(candidates, proof.evidence?.tests, missionId);
   addWrongnessCandidates(candidates, proof.evidence?.wrongness, missionId);
@@ -107,10 +107,10 @@ function addGateCandidate(candidates: any, gate: any = null, missionId: any = nu
   if (relPath) candidates.push({ kind: 'route_gate', relPath: normalizeRelPath(relPath, missionId), source: 'real' });
 }
 
-function addScoutCandidates(candidates: any, scouts: any = null) {
-  if (!scouts || scouts.required === false) return;
-  for (const key of ['consensus', 'handoff', 'gate_file', 'performance', 'engine_result']) {
-    if (scouts[key]) candidates.push({ kind: 'scout', relPath: scouts[key], source: scouts.real_parallel ? 'real' : 'fixture' });
+function addAgentCandidates(candidates: any, agents: any = null) {
+  if (!agents || agents.required === false) return;
+  for (const key of ['proof_graph', 'sessions', 'leases', 'consensus', 'events', 'task_board', 'concurrency_policy']) {
+    if (agents[key]) candidates.push({ kind: 'agent', relPath: agents[key], source: agents.real_parallel ? 'real' : sourceForPath(agents[key]) });
   }
 }
 
@@ -211,7 +211,7 @@ function inferKind(relPath: any = '') {
   if (/wrongness/.test(relPath)) return 'wrongness';
   if (/image-voxel-ledger\.json$|visual-anchors\.json$|image-assets\.json$/.test(relPath)) return 'image_voxel';
   if (/computer-use-live-evidence\.json$|computer-use.*evidence/.test(relPath)) return 'computer_use';
-  if (/scout/.test(relPath)) return 'scout';
+  if (/agent/.test(relPath)) return 'agent';
   if (/db/.test(relPath)) return 'db_safety';
   if (/blackbox|npx|global-shim|pack-install/.test(relPath)) return 'blackbox';
   if (/test|gate|report/.test(relPath)) return 'test';

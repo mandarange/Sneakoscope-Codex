@@ -7,6 +7,28 @@ export const LEGACY_AUTO_REVIEW_REVIEWER = 'guardian_subagent';
 export const AUTO_REVIEW_PROFILE = 'sks-auto-review';
 export const AUTO_REVIEW_HIGH_PROFILE = 'sks-auto-review-high';
 export const MAD_HIGH_PROFILE = 'sks-mad-high';
+export const REVIEW_NATIVE_AGENT_PLAN = Object.freeze({
+  schema: 'sks.review-native-agent-plan.v1',
+  backend: 'native_multi_session_agent_kernel',
+  central_ledger: 'agents/agent-events.jsonl',
+  personas: [
+    {
+      id: 'review_safety',
+      role: 'safety',
+      label: 'Review Safety',
+      read_only: true,
+      mandate: 'Review permission, DB, destructive action, and unrequested fallback risks before approval.'
+    },
+    {
+      id: 'review_verifier',
+      role: 'verifier',
+      label: 'Review Verifier',
+      read_only: true,
+      mandate: 'Check claims, tests, and route evidence before approval.'
+    }
+  ],
+  safety_personas_read_only_by_default: true
+});
 
 export function codexHome(env = process.env) {
   return path.resolve(env.CODEX_HOME || path.join(env.HOME || os.homedir(), '.codex'));
@@ -34,7 +56,8 @@ export async function autoReviewStatus(opts = {}) {
     profile: profileReviewer === AUTO_REVIEW_REVIEWER,
     high_profile: highProfileReviewer === AUTO_REVIEW_REVIEWER,
     legacy_invalid: [approvalsReviewer, profileReviewer, highProfileReviewer].includes(LEGACY_AUTO_REVIEW_REVIEWER),
-    policy: readTableString(text, 'auto_review', 'policy') || ''
+    policy: readTableString(text, 'auto_review', 'policy') || '',
+    native_agent_plan: REVIEW_NATIVE_AGENT_PLAN
   };
 }
 

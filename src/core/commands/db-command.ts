@@ -5,6 +5,7 @@ import { checkDbOperation, checkSqlFile, classifyCommand, classifySql, loadDbSaf
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { recordDbSafetyMismatchWrongness } from '../triwiki-wrongness/wrongness-ledger.js';
 import { flag, readOption } from './command-utils.js';
+import { writeRouteCollaborationArtifacts } from '../agents/route-collaboration-ledger.js';
 
 export async function dbCommand(sub: any, args: any = []) {
   const root = await sksRoot();
@@ -93,15 +94,23 @@ async function finalizeDbCheck(root: any, { action, args, result, exitCode }: an
   await writeJsonAtomic(path.join(dir, 'db-operation-report.json'), report);
   const gate = { schema_version: 1, passed: !blocked, ok: !blocked, status: blocked ? 'blocked' : 'pass', db_operation_report: 'db-operation-report.json' };
   await writeJsonAtomic(path.join(dir, 'db-gate.json'), gate);
-  return maybeFinalizeRoute(root, {
+  const native = await writeRouteCollaborationArtifacts(root, {
+    missionId: id,
+    route: '$DB',
+    routeKey: 'DB-Review',
+    prompt: 'DB review native agent plan for read-only safety, schema scope, and proof closure.',
+    mode: 'DB'
+  });
+  const completion = await maybeFinalizeRoute(root, {
     missionId: id,
     route: '$DB',
     gateFile: 'db-gate.json',
     gate,
-    artifacts: ['db-operation-report.json', 'completion-proof.json'],
+    artifacts: ['db-operation-report.json', 'completion-proof.json', ...Object.values(native.artifacts || {})],
     dbEvidence: report.db_safety,
     statusHint: blocked ? 'blocked' : 'verified_partial',
     blockers: blocked ? ['db_operation_blocked'] : [],
     command: { cmd: prompt, status: exitCode }
   });
+  return { ...completion, native_agent_collaboration: native };
 }
