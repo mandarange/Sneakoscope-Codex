@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { createMission, missionDir, setCurrent } from '../mission.js'
-import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
 import { buildAgentRoster, normalizeAgentConcurrency } from './agent-roster.js'
 import { buildAgentWorkPartition } from './agent-work-partition.js'
 import { initializeAgentCentralLedger, appendAgentLedgerEvent, compactAgentLedger } from './agent-central-ledger.js'
@@ -23,6 +23,9 @@ import { startAgentTerminalSession, closeAgentTerminalSession } from './agent-te
 import { writeScoutPolicyArtifact } from './scout-policy.js'
 import { writeTmuxRightLaneCockpit } from './tmux-right-lane-cockpit.js'
 import { buildProjectNamespace, namespacedAgentSessionId, writeProjectNamespaceArtifact } from '../session/project-namespace.js'
+import { runAgentScheduler } from './agent-scheduler.js'
+import { runSourceIntelligence } from '../source-intelligence/source-intelligence-runner.js'
+import { detectOfficialGoalMode, writeOfficialGoalModeArtifact } from '../codex/official-goal-mode.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const root = path.resolve(opts.root || process.cwd())
@@ -47,8 +50,25 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     })
   }))
   const partition = await buildAgentWorkPartition(root, roster, prompt)
+  const sourceIntelligence = await runSourceIntelligence({ root, missionDir: dir, route, query: prompt, offline: true, context7Available: true })
+  const sourceIntelligenceRef = {
+    artifact: 'source-intelligence-evidence.json',
+    ok: sourceIntelligence.ok,
+    mode: sourceIntelligence.mode,
+    cache_key: sourceIntelligence.cache.key,
+    proof_ok: sourceIntelligence.proof.ok
+  }
+  const goalMode = await detectOfficialGoalMode({ runCommand: opts.mock !== true && opts.backend !== 'fake' })
+  await writeOfficialGoalModeArtifact(dir, goalMode)
+  const goalModeRef = {
+    artifact: 'goal-mode-applied.json',
+    ok: goalMode.ok,
+    mode: goalMode.mode,
+    official_goal_available: goalMode.official_goal_available,
+    default_enabled: goalMode.default_enabled
+  }
   await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
-  const ledgerRoot = await initializeAgentCentralLedger(dir, { missionId, roster, partition, route, prompt })
+  const ledgerRoot = await initializeAgentCentralLedger(dir, { missionId, roster, partition, route, prompt, dynamicScheduler: true })
   await writeScoutPolicyArtifact(ledgerRoot)
   await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
@@ -61,18 +81,25 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     max_agents: roster.max_agents,
     agents: roster.agent_count,
     concurrency: roster.concurrency,
-    batch_count: roster.batch_count,
-    backpressure: 'batch scheduling by concurrency cap',
+    batch_count: 0,
+    target_active_slots: roster.agent_count,
+    backpressure: 'dynamic scheduler maintains target active slots until the work queue drains',
     rate_limit_delay_ms: backend === 'codex-exec' ? 250 : 0,
     resource_pressure_warnings: roster.agent_count > roster.concurrency ? ['agents_exceed_concurrency_batches'] : []
   })
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: 'sks agent', native_agent_backend: backend })
-  const results = []
-  const slices = partition.slices || []
-  for (let start = 0; start < roster.roster.length; start += roster.concurrency) {
-    const batch = roster.roster.slice(start, start + roster.concurrency)
-    const batchResults = await Promise.all(batch.map(async (agent: any, batchIndex: number) => {
-      const slice = slices[start + batchIndex] || { id: 'slice-' + String(start + batchIndex + 1), description: prompt }
+  const scheduler = await runAgentScheduler({
+    root: ledgerRoot,
+    missionId,
+    rootHash: namespace.root_hash,
+    roster,
+    partition,
+    prompt,
+    targetActiveSlots: roster.agent_count,
+    sourceIntelligenceRefs: sourceIntelligenceRef,
+    goalModeRef,
+    launchSession: async ({ agent, workItem }) => {
+      const slice = workItem.slice || { id: workItem.id, description: workItem.description || prompt }
       await openAgentSession(ledgerRoot, agent)
       await heartbeatAgentSession(ledgerRoot, agent)
       await appendAgentCodexCockpitHookEvent(dir, {
@@ -96,7 +123,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
         stdoutTail: result.summary || '',
         stderrTail: (result.blockers || []).join('\n')
       })
-      result.artifacts = [...(result.artifacts || []), path.join('sessions', agent.id, 'agent-terminal-session.json'), path.join('sessions', agent.id, 'agent-terminal-close-report.json')]
+      result.artifacts = [...(result.artifacts || []), path.join(agent.session_artifact_dir || path.join('sessions', agent.id), 'agent-terminal-session.json'), path.join(agent.session_artifact_dir || path.join('sessions', agent.id), 'agent-terminal-close-report.json')]
+      result.source_intelligence_refs = result.source_intelligence_refs || sourceIntelligenceRef
+      result.goal_mode_ref = result.goal_mode_ref || goalModeRef
       result.verification = {
         status: result.verification?.status || 'not_run',
         checks: [...(result.verification?.checks || []), terminalClose.ok ? 'agent-terminal-close-report' : 'agent-terminal-close-report-missing']
@@ -116,12 +145,19 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       })
       await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
       return result
-    }))
-    results.push(...batchResults)
-    const periodicJanitor = await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
-    if (!periodicJanitor.ok) await appendAgentLedgerEvent(ledgerRoot, { agent_id: 'orchestrator', session_id: 'orchestrator', event_type: 'periodic_janitor_blocked', payload: periodicJanitor })
-    await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
-  }
+    },
+    onSchedulerEvent: async ({ event, slots }) => {
+      const paneBySlot = await readTmuxPaneIdsBySlot(ledgerRoot)
+      const enrichedSlots = slots.map((slot) => ({ ...slot, pane_id: paneBySlot.get(slot.slot_id) || null, launch_status: paneBySlot.has(slot.slot_id) ? 'launched' : slot.status }))
+      await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots: enrichedSlots })
+      await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
+      if (['session_completed', 'backfill_event', 'scheduler_drained'].includes(String(event.event_type))) {
+        const periodicJanitor = await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
+        if (!periodicJanitor.ok) await appendAgentLedgerEvent(ledgerRoot, { agent_id: 'orchestrator', session_id: 'orchestrator', event_type: 'periodic_janitor_blocked', payload: periodicJanitor })
+      }
+    }
+  })
+  const results = scheduler.results
   const stale = await detectStaleAgentSessions(ledgerRoot)
   if (!stale.ok) await appendAgentLedgerEvent(ledgerRoot, { agent_id: 'orchestrator', session_id: 'orchestrator', event_type: 'stale_sessions_detected', payload: stale })
   const timeoutKill = await killTimedOutAgentSessions(ledgerRoot)
@@ -130,7 +166,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const outputValidation = await writeAgentOutputValidationReport(ledgerRoot, results)
   const outputTails = await writeAgentOutputTailReport(ledgerRoot, results)
   const backendReport = await writeAgentBackendReport(ledgerRoot, { backend, results, outputTails })
-  await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster.map((agent: any) => ({ ...agent, status: 'closed' })) })
+  const finalPaneBySlot = await readTmuxPaneIdsBySlot(ledgerRoot)
+  const finalTmuxSlots = scheduler.slots.map((slot: any) => ({ ...slot, pane_id: finalPaneBySlot.get(slot.slot_id) || null, launch_status: finalPaneBySlot.has(slot.slot_id) ? 'launched' : slot.status }))
+  await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots: finalTmuxSlots })
   await compactAgentLedger(ledgerRoot)
   const cleanup = await writeAgentCleanupReport(ledgerRoot)
   const janitor = await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
@@ -141,9 +179,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     ...(recursion.ok ? [] : recursion.violations.map((id: string) => 'recursion:' + id)),
     ...(janitor.ok ? [] : janitor.blockers)
   ]
-  const trust = await writeAgentTrustReport(ledgerRoot, { missionId, backend, roster, partition, cleanup, outputTails, timeoutKill, backendReport, outputValidation, blockers })
+  const trust = await writeAgentTrustReport(ledgerRoot, { missionId, backend, roster, partition, cleanup, outputTails, timeoutKill, backendReport, outputValidation, scheduler: scheduler.state, blockers })
   const wrongness = await writeAgentWrongnessRecords(ledgerRoot, blockers)
-  const proof = await writeAgentProofEvidence(ledgerRoot, { missionId, backend, realParallel: backend === 'codex-exec' && opts.mock !== true, roster, partition, consensus, results, cleanup, janitor, outputTails, timeoutKill, trust, wrongness })
+  const proof = await writeAgentProofEvidence(ledgerRoot, { missionId, backend, realParallel: backend === 'codex-exec' && opts.mock !== true, roster, partition, consensus, results, cleanup, janitor, outputTails, timeoutKill, trust, wrongness, scheduler: scheduler.state })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })
   return {
@@ -155,6 +193,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     ledger_root: path.relative(root, ledgerRoot),
     roster,
     partition: { ok: partition.ok, slice_count: partition.slices.length, lease_count: partition.leases.length, blockers: partition.blockers },
+    scheduler,
+    source_intelligence: sourceIntelligenceRef,
+    goal_mode: goalModeRef,
     results,
     consensus,
     output_validation: outputValidation,
@@ -216,6 +257,18 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
   if (backend === 'codex-exec') return runCodexExecAgent(agent, slice, { ...opts, dryRun: opts.real === true ? false : true })
   if (backend === 'tmux') return runTmuxAgent(agent, slice, opts)
   return runFakeAgent(agent, slice, opts)
+}
+
+async function readTmuxPaneIdsBySlot(root: string) {
+  const out = new Map<string, string>()
+  const text = await readText(path.join(root, 'agent-tmux-pane-launch-ledger.jsonl'), '')
+  for (const line of String(text).split(/\n/).filter(Boolean)) {
+    try {
+      const entry = JSON.parse(line)
+      if (entry.slot_id && entry.pane_id) out.set(String(entry.slot_id), String(entry.pane_id))
+    } catch {}
+  }
+  return out
 }
 
 async function writeAgentOutputTailReport(root: string, results: any[]) {

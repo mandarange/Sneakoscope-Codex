@@ -8,17 +8,25 @@ export function buildTmuxRightLaneCockpit(input: {
   missionId?: string
   sessionName?: string
   agents?: any[]
+  slots?: any[]
   maxVisibleLanes?: number
 } = {}) {
-  const agents = input.agents || []
+  const agents = input.slots || input.agents || []
   const maxVisible = input.maxVisibleLanes || 20
   const lanes = agents.map((agent, index) => ({
     lane_index: index + 1,
+    slot_id: String(agent.slot_id || agent.id || agent.agent_id || `slot-${String(index + 1).padStart(3, '0')}`),
     agent_id: String(agent.id || agent.agent_id || `agent_${index + 1}`),
     persona: String(agent.persona || agent.persona_id || agent.role || 'agent'),
     task: String(agent.task || agent.task_slice_id || agent.role || 'assigned slice'),
     status: String(agent.status || 'pending'),
-    title: `${index + 1}. ${String(agent.id || agent.agent_id || `agent_${index + 1}`)} ${String(agent.role || '').trim()}`.trim(),
+    current_session_id: agent.current_session_id || agent.session_id || null,
+    generation_index: agent.current_generation_index || agent.generation_index || null,
+    generation_count: agent.generation_count || (Array.isArray(agent.history) ? agent.history.length : 0),
+    pane_id: agent.pane_id || agent.current_pane_id || null,
+    launch_status: agent.launch_status || (agent.pane_id || agent.current_pane_id ? 'launched' : 'pending'),
+    history: Array.isArray(agent.history) ? agent.history.slice(-5) : [],
+    title: `${String(agent.slot_id || index + 1)} gen-${String(agent.current_generation_index || agent.generation_index || '-')}`.trim(),
     heartbeat_age_ms: agent.heartbeat_age_ms ?? null,
     transcript_tail: String(agent.transcript_tail || '').slice(-4000),
     closed_marker: ['closed', 'done', 'completed'].includes(String(agent.status || '')) ? 'closed' : null,
@@ -35,6 +43,7 @@ export function buildTmuxRightLaneCockpit(input: {
     agent_count: lanes.length,
     visible_lane_count: Math.min(lanes.length, maxVisible),
     page_count: pageCount,
+    actual_pane_ids: lanes.map((lane) => lane.pane_id).filter(Boolean),
     attach_command: input.sessionName ? `tmux attach -t ${input.sessionName}` : 'sks team open-tmux latest',
     keyboard_hint: 'Use tmux prefix + arrow keys to move panes; detach with prefix + d.',
     cleanup_command_hint: 'sks team cleanup-tmux latest',
@@ -46,6 +55,8 @@ export function buildTmuxRightLaneCockpit(input: {
     mission_id: layout.mission_id,
     lane_count: lanes.length,
     lanes,
+    actual_pane_ids: lanes.map((lane) => lane.pane_id).filter(Boolean),
+    pane_launch_evidence_required: true,
     pagination: {
       max_visible_lanes: maxVisible,
       page_count: pageCount,
@@ -56,7 +67,7 @@ export function buildTmuxRightLaneCockpit(input: {
   return { layout, lanes: laneManifest }
 }
 
-export async function writeTmuxRightLaneCockpit(root: string, input: { missionId?: string; sessionName?: string; agents?: any[] } = {}) {
+export async function writeTmuxRightLaneCockpit(root: string, input: { missionId?: string; sessionName?: string; agents?: any[]; slots?: any[] } = {}) {
   const cockpit = buildTmuxRightLaneCockpit(input)
   await writeJsonAtomic(path.join(root, 'agent-tmux-layout.json'), cockpit.layout)
   await writeJsonAtomic(path.join(root, 'agent-tmux-lanes.json'), cockpit.lanes)

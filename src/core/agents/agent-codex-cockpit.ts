@@ -41,6 +41,13 @@ export interface AgentCodexCockpitState {
   goal_mode_status: string | null
   terminal_session_status: string | null
   tmux_attach_command: string | null
+  target_active_slots: number | null
+  active_slot_count: number | null
+  pending_queue_count: number | null
+  backfill_count: number | null
+  scheduler_status: string | null
+  worker_slots: Array<Record<string, unknown>>
+  session_generations: Array<Record<string, unknown>>
   blockers: string[]
   agents: Array<Record<string, unknown>>
   recent_events: string[]
@@ -88,6 +95,9 @@ export async function buildAgentCodexCockpitState(
   const sourceIntelligence = await readJson<any>(path.join(missionDir, 'source-intelligence-evidence.json'), null)
   const goalMode = await readJson<any>(path.join(missionDir, 'goal-mode-applied.json'), null)
   const tmuxLayout = await readJson<any>(path.join(root, 'agent-tmux-layout.json'), null)
+  const scheduler = await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
+  const workerSlots = await readJson<any>(path.join(root, 'agent-worker-slots.json'), null)
+  const generations = await readJson<any>(path.join(root, 'agent-session-generations.json'), null)
   const terminalClosed = proof?.terminal_sessions_closed === true
   const eventsTail = await readTailLines(path.join(root, 'agent-events.jsonl'), 8)
   const cockpitEventsTail = await readTailLines(path.join(root, AGENT_CODEX_COCKPIT_EVENTS), 8)
@@ -119,6 +129,13 @@ export async function buildAgentCodexCockpitState(
     goal_mode_status: goalMode?.mode || null,
     terminal_session_status: terminalClosed ? 'closed' : proof ? 'blocked_or_unverified' : null,
     tmux_attach_command: tmuxLayout?.attach_command || null,
+    target_active_slots: scheduler?.target_active_slots ?? null,
+    active_slot_count: scheduler?.active_slot_count ?? null,
+    pending_queue_count: scheduler?.pending_count ?? null,
+    backfill_count: scheduler?.backfill_count ?? null,
+    scheduler_status: scheduler?.status || null,
+    worker_slots: Array.isArray(workerSlots?.slots) ? workerSlots.slots : [],
+    session_generations: generations?.generations ? Object.values(generations.generations) : [],
     blockers,
     agents,
     recent_events: [...eventsTail, ...cockpitEventsTail, ...teamTail].slice(-12),
@@ -150,6 +167,11 @@ export function renderAgentCodexDashboard(state: AgentCodexCockpitState): string
     `- Terminal sessions: ${state.terminal_session_status || 'unknown'}`,
     `- tmux attach: ${state.tmux_attach_command || 'unknown'}`,
     `- All sessions closed: ${state.all_sessions_closed ?? 'unknown'}`,
+    `- Scheduler: ${state.scheduler_status || 'unknown'}`,
+    `- Target active slots: ${state.target_active_slots ?? 'unknown'}`,
+    `- Active slots: ${state.active_slot_count ?? 'unknown'}`,
+    `- Pending queue: ${state.pending_queue_count ?? 'unknown'}`,
+    `- Backfill events: ${state.backfill_count ?? 'unknown'}`,
     '',
     '| Agent | Persona | Task | State | Heartbeat age | Lease | Blockers | Artifact |',
     '| --- | --- | --- | --- | --- | --- | --- | --- |',
@@ -169,6 +191,14 @@ export function renderAgentCodexDashboard(state: AgentCodexCockpitState): string
 }
 
 export function renderAgentSessionCards(state: AgentCodexCockpitState): string {
+  const slotBlocks = state.worker_slots.map((slot) => [
+    `## ${cell(slot.slot_id)}`,
+    '',
+    `- Status: ${cell(slot.status)}`,
+    `- Current generation: ${cell(slot.current_generation_index)}`,
+    `- Current session: ${cell(slot.current_session_id)}`,
+    `- Generation count: ${cell(slot.generation_count)}`,
+  ].join('\n'))
   const blocks = state.agents.map((agent) => [
     `## ${cell(agent.id)}`,
     '',
@@ -178,7 +208,7 @@ export function renderAgentSessionCards(state: AgentCodexCockpitState): string {
     `- Lease: ${cell(agent.lease || agent.lease_id || agent.write_policy)}`,
     `- Artifact: ${cell(agent.output_artifact || agent.artifact || '')}`,
   ].join('\n'))
-  return `# Agent Session Cards\n\n${blocks.join('\n\n')}\n`
+  return `# Agent Session Cards\n\n${[...slotBlocks, ...blocks].join('\n\n')}\n`
 }
 
 export function renderAgentProgressTimeline(state: AgentCodexCockpitState): string {
@@ -195,6 +225,13 @@ function summarizeLiveState(state: AgentCodexCockpitState) {
     agent_count: state.agent_count,
     concurrency: state.concurrency,
     active_agents: state.agents.filter((agent) => !['closed', 'done', 'completed'].includes(String(agent.status || ''))).length,
+    target_active_slots: state.target_active_slots,
+    active_slot_count: state.active_slot_count,
+    pending_queue_count: state.pending_queue_count,
+    backfill_count: state.backfill_count,
+    scheduler_status: state.scheduler_status,
+    worker_slot_count: state.worker_slots.length,
+    session_generation_count: state.session_generations.length,
     proof_status: state.proof_status,
     source_intelligence_status: state.source_intelligence_status,
     xai_status: state.xai_status,

@@ -2,6 +2,8 @@
 
 Every native agent now has terminal/session evidence in SKS 1.18.0.
 
+SKS 1.18.1 makes those terminal lane artifacts generation-aware under stable worker slots, so a refilled slot keeps immutable close proof for each completed generation.
+
 Per-agent artifacts live under `agents/sessions/<agent_id>/`:
 
 - `agent-terminal-session.json`

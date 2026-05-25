@@ -2,6 +2,8 @@
 
 SKS 1.18.0 records a tmux cockpit manifest where the orchestrator/main pane is on the left and agent lanes are indexed as a right vertical stack.
 
+SKS 1.18.1 treats each right lane as a worker slot and requires pane launch evidence plus generation history when dynamic pool replenishment refills that slot.
+
 Artifacts:
 
 - `agents/agent-tmux-layout.json`

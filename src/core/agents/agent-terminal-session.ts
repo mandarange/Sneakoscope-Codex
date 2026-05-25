@@ -9,6 +9,8 @@ export interface AgentTerminalSessionRecord {
   schema: typeof AGENT_TERMINAL_SESSION_SCHEMA
   agent_id: string
   session_id: string
+  slot_id: string | null
+  generation_index: number | null
   terminal_session_id: string
   terminal_backend: string
   terminal_transcript_path: string
@@ -24,19 +26,24 @@ export interface AgentTerminalSessionRecord {
 export async function startAgentTerminalSession(
   root: string,
   agent: any,
-  opts: { backend?: string; real?: boolean } = {}
+  opts: { backend?: string; real?: boolean; slotId?: string; generationIndex?: number } = {}
 ): Promise<AgentTerminalSessionRecord> {
-  const sessionDir = path.join(root, 'sessions', agent.id)
+  const relDir = terminalSessionRelDir(agent, opts)
+  const sessionDir = path.join(root, relDir)
   await ensureDir(sessionDir)
+  const slotId = opts.slotId || agent.slot_id || agent.worker_slot_id || null
+  const generationIndex = Number.isFinite(Number(opts.generationIndex ?? agent.generation_index)) ? Number(opts.generationIndex ?? agent.generation_index) : null
   const record: AgentTerminalSessionRecord = {
     schema: AGENT_TERMINAL_SESSION_SCHEMA,
     agent_id: String(agent.id),
     session_id: String(agent.session_id || agent.id),
+    slot_id: slotId ? String(slotId) : null,
+    generation_index: generationIndex,
     terminal_session_id: `${String(agent.session_id || agent.id)}-terminal`,
     terminal_backend: String(opts.backend || 'fake'),
-    terminal_transcript_path: path.join('sessions', agent.id, 'terminal-transcript.log'),
-    terminal_stdout_path: path.join('sessions', agent.id, 'terminal-stdout.log'),
-    terminal_stderr_path: path.join('sessions', agent.id, 'terminal-stderr.log'),
+    terminal_transcript_path: path.join(relDir, 'terminal-transcript.log'),
+    terminal_stdout_path: path.join(relDir, 'terminal-stdout.log'),
+    terminal_stderr_path: path.join(relDir, 'terminal-stderr.log'),
     terminal_started_at: nowIso(),
     terminal_closed_at: null,
     terminal_exit_code: null,
@@ -54,14 +61,20 @@ export async function startAgentTerminalSession(
 export async function closeAgentTerminalSession(
   root: string,
   agent: any,
-  opts: { exitCode?: number | null; status?: string; stdoutTail?: string; stderrTail?: string } = {}
+  opts: { exitCode?: number | null; status?: string; stdoutTail?: string; stderrTail?: string; slotId?: string; generationIndex?: number } = {}
 ) {
-  const sessionDir = path.join(root, 'sessions', agent.id)
+  const relDir = terminalSessionRelDir(agent, opts)
+  const sessionDir = path.join(root, relDir)
   const file = path.join(sessionDir, 'agent-terminal-session.json')
   const current = await readJson<AgentTerminalSessionRecord>(file, null as any)
   const closedAt = nowIso()
   const next: AgentTerminalSessionRecord = {
-    ...(current || await startAgentTerminalSession(root, agent, { backend: 'unknown', real: false })),
+    ...(current || await startAgentTerminalSession(root, agent, {
+      backend: 'unknown',
+      real: false,
+      ...(opts.slotId ? { slotId: opts.slotId } : {}),
+      ...(opts.generationIndex === undefined ? {} : { generationIndex: opts.generationIndex })
+    })),
     terminal_closed_at: closedAt,
     terminal_exit_code: opts.exitCode ?? 0,
     status: 'closed'
@@ -104,8 +117,9 @@ export async function assertAgentTerminalSessionsClosed(root: string) {
   for (const row of rows) {
     const agentId = String(row.agent_id || row.id || '')
     if (!agentId) continue
-    const sessionFile = path.join(root, 'sessions', agentId, 'agent-terminal-session.json')
-    const reportFile = path.join(root, 'sessions', agentId, 'agent-terminal-close-report.json')
+    const relDir = terminalSessionRelDir({ id: agentId, ...row }, {})
+    const sessionFile = path.join(root, relDir, 'agent-terminal-session.json')
+    const reportFile = path.join(root, relDir, 'agent-terminal-close-report.json')
     const terminal = await readJson<any>(sessionFile, null)
     const report = await readJson<any>(reportFile, null)
     if (!terminal) missing.push(agentId)
@@ -125,4 +139,15 @@ export async function assertAgentTerminalSessionsClosed(root: string) {
       ...reports.map((id) => `terminal_close_report_missing:${id}`)
     ]
   }
+}
+
+export function terminalSessionRelDir(agent: any, opts: { slotId?: string; generationIndex?: number } = {}) {
+  const explicitDir = agent.session_artifact_dir || agent.artifact_dir
+  if (explicitDir) return String(explicitDir)
+  const slotId = opts.slotId || agent.slot_id || agent.worker_slot_id
+  const generationIndex = opts.generationIndex ?? agent.generation_index
+  if (slotId && Number.isFinite(Number(generationIndex))) {
+    return path.join('sessions', String(slotId), `gen-${Number(generationIndex)}`)
+  }
+  return path.join('sessions', String(agent.id || agent.agent_id || 'agent'))
 }

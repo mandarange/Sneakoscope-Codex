@@ -3,6 +3,26 @@
 ## [Unreleased]
 
 
+
+## [1.18.1] - 2026-05-25
+
+### Added
+- Add Dynamic Agent Pool Scheduler that maintains target active concurrency until the work queue is empty.
+- Add worker slots, session generations, task queue, backfill events, active slot health, and scheduler proof evidence.
+- Add session-generation-aware terminal artifacts and close reports.
+- Add real tmux right-lane runtime where lanes represent worker slots and update as session generations change.
+- Add scheduler blackbox fixtures proving that when 2 of 5 sessions close while work remains, 2 new sessions are opened immediately.
+- Add work queue / slot / session generation ledgers and proof gates.
+- Add Source Intelligence and Goal mode propagation across dynamic session generations.
+
+### Fixed
+
+- Prevent fixed batch execution from starving pending work while completed slots sit idle.
+- Prevent proof from passing when pending work exists but no active sessions are running.
+- Prevent tmux mode from passing with manifest-only lanes.
+- Prevent terminal session artifacts from being overwritten across generations.
+- Prevent janitor from treating intentionally replaced session generations as stale errors.
+
 ## [1.18.0] - 2026-05-25
 
 ### Added

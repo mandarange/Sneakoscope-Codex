@@ -20,6 +20,8 @@ export async function runFakeAgent(agent: any, slice: any, opts: any = {}) {
     handoff_notes: 'No handoff required for fake backend fixture.',
     unverified: ['fake backend does not prove real parallel execution'],
     writes: [],
+    source_intelligence_refs: agent.source_intelligence_refs || null,
+    goal_mode_ref: agent.goal_mode_ref || null,
     verification: { status: 'fixture', checks: ['schema-normalized-result'] },
     recursion_guard: { ok: true, violations: [] }
   })

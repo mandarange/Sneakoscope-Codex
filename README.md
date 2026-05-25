@@ -10,7 +10,7 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.18.0** adds Universal Source Intelligence for Context7 + Codex Web Search, optional X AI MCP search when configured, main no-Scout / worker Scout-limited proof policy, per-agent terminal close evidence, tmux right-lane cockpit manifests, Codex official Goal mode detection, and full P0-P4 release readiness tracking.
+SKS **1.18.1** adds Dynamic Agent Pool replenishment: `agents=5` now means keep up to five active worker slots running until the work queue drains, with immutable session generations, generation-aware terminal close reports, real/fake-tmux pane launch evidence, and Source Intelligence / Goal mode refs propagated to every generation.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -612,7 +612,7 @@ npm run release:check
 npm run publish:dry
 ```
 
-`release:check` runs the 1.18.0 parallel P0-P4 closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.17 baseline gates and adds Source Intelligence, X AI/Codex Web policy, Goal mode, main no-Scout, worker Scout-limited, agent terminal, tmux right-lane, visual consistency, release full-coverage, and priority closure checks. Broader live or historical gates remain explicit scripts such as `release:real-check`. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
+`release:check` runs the 1.18.1 dynamic agent pool closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.18 baseline gates and adds dynamic pool, backfill replenishment, scheduler proof, session generation, terminal generation, tmux real right-lane, dynamic cockpit, Source Intelligence propagation, and Goal mode propagation checks. Broader live or historical gates remain explicit scripts such as `release:real-check`. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
 
 Version bumps are manual. Run `sks versioning bump` only when preparing release metadata; SKS will not create `.git/hooks/pre-commit` or auto-bump during ordinary commits.
 

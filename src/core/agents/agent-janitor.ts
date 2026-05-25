@@ -12,6 +12,9 @@ export interface AgentJanitorReport {
   stale_heartbeat_sessions: string[]
   zombie_process_sessions: string[]
   stale_tmux_sessions: string[]
+  active_generation_sessions: string[]
+  orphan_generation_dirs: string[]
+  slot_generation_cleanup: string[]
   orphan_temp_dirs: string[]
   stale_locks: string[]
   cleaned: string[]
@@ -31,6 +34,11 @@ export async function runAgentJanitor(input: {
   const namespace = await readJson<any>(path.join(input.missionDir, 'project-session-namespace.json'), null)
   const projectHash = input.projectHash || namespace?.root_hash || null
   const rows = normalizeAgentSessionRows(sessions)
+  const generations = await readJson<any>(path.join(agentRoot, 'agent-session-generations.json'), null)
+  const generationRows = generations?.generations ? Object.values<any>(generations.generations) : []
+  const activeGenerationSessions = generationRows
+    .filter((row) => !row.closed_at && ['running', 'launching', 'collecting'].includes(String(row.status || 'running')))
+    .map((row) => String(row.session_id))
   const now = Date.now()
   const staleHeartbeat: string[] = rows
     .filter((row: any) => {
@@ -49,10 +57,15 @@ export async function runAgentJanitor(input: {
   }
   const zombieProcesses = await detectZombieProcessSessions(agentRoot, statusByAgent, statusBySession)
   const staleTmuxSessions = await detectStaleTmuxSessions(agentRoot, staleMs)
+  const orphanGenerationDirs = await detectOrphanGenerationDirs(agentRoot, new Set(generationRows.map((row) => String(row.artifact_dir || ''))))
   const orphanTempDirs = await scopedExistingPaths(Array.isArray(namespace?.orphan_temp_dirs) ? namespace.orphan_temp_dirs : [], projectHash)
   const staleLocks = await scopedStaleLockPaths(namespace?.lock_dir ? [namespace.lock_dir] : [], projectHash, staleMs)
   const cleaned: string[] = []
   if (input.cleanup) {
+    for (const dir of orphanGenerationDirs) {
+      await fsp.rm(path.join(agentRoot, dir), { recursive: true, force: true }).catch(() => {})
+      cleaned.push(path.join(agentRoot, dir))
+    }
     for (const dir of orphanTempDirs) {
       await fsp.rm(dir, { recursive: true, force: true }).catch(() => {})
       cleaned.push(dir)
@@ -73,6 +86,9 @@ export async function runAgentJanitor(input: {
     stale_heartbeat_sessions: staleHeartbeat,
     zombie_process_sessions: zombieProcesses,
     stale_tmux_sessions: staleTmuxSessions,
+    active_generation_sessions: activeGenerationSessions,
+    orphan_generation_dirs: orphanGenerationDirs,
+    slot_generation_cleanup: cleaned.filter((entry) => entry.includes(`${path.sep}sessions${path.sep}`)),
     orphan_temp_dirs: orphanTempDirs,
     stale_locks: staleLocks,
     cleaned,
@@ -80,6 +96,22 @@ export async function runAgentJanitor(input: {
   }
   await writeAgentJanitorReport(input.missionDir, report)
   return report
+}
+
+async function detectOrphanGenerationDirs(agentRoot: string, knownGenerationDirs: Set<string>): Promise<string[]> {
+  const sessionsDir = path.join(agentRoot, 'sessions')
+  const out: string[] = []
+  if (!(await exists(sessionsDir))) return out
+  for (const slot of await fsp.readdir(sessionsDir, { withFileTypes: true }).catch(() => [])) {
+    if (!slot.isDirectory()) continue
+    const slotDir = path.join(sessionsDir, slot.name)
+    for (const gen of await fsp.readdir(slotDir, { withFileTypes: true }).catch(() => [])) {
+      if (!gen.isDirectory() || !/^gen-\d+$/.test(gen.name)) continue
+      const rel = path.join('sessions', slot.name, gen.name)
+      if (!knownGenerationDirs.has(rel)) out.push(rel)
+    }
+  }
+  return out
 }
 
 export async function writeAgentJanitorReport(missionDir: string, report: AgentJanitorReport): Promise<void> {

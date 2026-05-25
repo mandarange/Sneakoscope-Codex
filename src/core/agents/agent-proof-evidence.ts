@@ -4,18 +4,32 @@ import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { validateAgentLedgerHashChain } from './agent-central-ledger.js'
 import { assertAllAgentSessionsClosed } from './agent-lifecycle.js'
 import { assertAgentTerminalSessionsClosed } from './agent-terminal-session.js'
+import { assertAgentSessionGenerationsClosed } from './agent-session-generation.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
+  const generations = await assertAgentSessionGenerationsClosed(root)
   const ledger = await validateAgentLedgerHashChain(root)
   const tmuxLanes = await readJson<any>(path.join(root, 'agent-tmux-lanes.json'), null)
+  const scheduler = input.scheduler || await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
+  const slots = await readJson<any>(path.join(root, 'agent-worker-slots.json'), null)
+  const tmuxLaunchLedger = await readTextSafe(path.join(root, 'agent-tmux-pane-launch-ledger.jsonl'))
+  const tmuxPaneLaunchCount = tmuxLaunchLedger.split(/\n/).filter(Boolean).length
   const blockers = [
     ...(lifecycle.ok ? [] : ['agent_lifecycle_not_all_closed']),
     ...(lifecycle.ok ? [] : lifecycle.open_sessions.map((id: string) => 'session_open:' + id)),
     ...((input.timeoutKill?.killed_sessions || []).map((id: string) => 'session_timeout_killed:' + id)),
     ...(terminal.ok ? [] : terminal.blockers),
+    ...(generations.ok ? [] : generations.blockers),
+    ...(!scheduler ? ['agent_scheduler_state_missing'] : []),
+    ...(Array.isArray(scheduler?.blockers) ? scheduler.blockers : []),
+    ...(scheduler && scheduler.pending_count > 0 && scheduler.active_slot_count === 0 ? ['scheduler_pending_queue_without_active_sessions'] : []),
+    ...(scheduler && scheduler.pending_queue_drained !== true ? ['scheduler_pending_queue_not_drained'] : []),
+    ...(scheduler && Number(scheduler.expected_backfill_count || 0) > Number(scheduler.backfill_count || 0) ? ['scheduler_backfill_count_below_expected'] : []),
+    ...(slots && slots.all_slots_closed_after_drain !== true ? ['agent_worker_slots_not_closed_after_drain'] : []),
     ...(input.backend === 'tmux' && tmuxLanes?.ok !== true ? ['tmux_right_lane_manifest_missing'] : []),
+    ...(input.backend === 'tmux' && tmuxPaneLaunchCount === 0 ? ['tmux_pane_launch_evidence_missing'] : []),
     ...(ledger.blockers || []),
     ...(input.partition?.blockers || []),
     ...(input.consensus?.blockers || []),
@@ -39,9 +53,27 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     closed_session_count: lifecycle.closed_session_count,
     terminal_sessions_closed: terminal.ok,
     terminal_session_count: terminal.total_sessions,
-    terminal_close_report: 'sessions/<agent_id>/agent-terminal-close-report.json',
+    terminal_generation_count: generations.generation_count,
+    terminal_close_report_count: terminal.total_sessions,
+    terminal_close_report: 'sessions/<slot_id>/gen-<n>/agent-terminal-close-report.json',
+    session_generation_count: generations.generation_count,
+    all_generations_closed: generations.ok,
+    scheduler_state: 'agent-scheduler-state.json',
+    target_active_slots: scheduler?.target_active_slots || input.roster?.agent_count || 0,
+    max_observed_active_slots: scheduler?.max_observed_active_slots || 0,
+    pending_queue_drained: scheduler?.pending_queue_drained === true,
+    backfill_count: scheduler?.backfill_count || 0,
+    expected_backfill_count: scheduler?.expected_backfill_count || 0,
+    slot_count: slots?.slot_count || 0,
+    generation_count: generations.generation_count,
+    all_slots_closed_after_drain: slots?.all_slots_closed_after_drain === true,
+    generated_work_item_count: scheduler?.generated_work_item_count || 0,
+    source_intelligence_generation_refs_ok: generations.missing_source_intelligence_refs.length === 0,
+    goal_mode_generation_refs_ok: generations.missing_goal_mode_refs.length === 0,
     tmux_lane_manifest: 'agent-tmux-lanes.json',
     tmux_lane_manifest_ok: tmuxLanes?.ok === true,
+    tmux_pane_launch_ledger: 'agent-tmux-pane-launch-ledger.jsonl',
+    tmux_pane_launch_count: tmuxPaneLaunchCount,
     ledger_hash_chain_ok: ledger.ok,
     no_overlap_ok: input.partition?.no_overlap_proof?.ok !== false,
     consensus_ok: input.consensus?.ok === true,
@@ -64,6 +96,15 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
 
 export async function readAgentProofEvidence(root: string, missionId: string) {
   return readJson(path.join(root, '.sneakoscope', 'missions', missionId, 'agents', 'agent-proof-evidence.json'), null)
+}
+
+async function readTextSafe(file: string) {
+  try {
+    const fs = await import('node:fs/promises')
+    return await fs.readFile(file, 'utf8')
+  } catch {
+    return ''
+  }
 }
 
 function agentChangedFileLeaseViolations(results: any[], leases: any[]) {

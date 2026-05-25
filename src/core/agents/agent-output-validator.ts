@@ -71,6 +71,18 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
     artifacts: { type: 'array', items: { type: 'string' } },
     unverified: { type: 'array', items: { type: 'string' } },
     writes: { type: 'array', items: { type: 'string' } },
+    source_intelligence_refs: {
+      anyOf: [
+        { type: 'object', additionalProperties: true },
+        { type: 'null' }
+      ]
+    },
+    goal_mode_ref: {
+      anyOf: [
+        { type: 'object', additionalProperties: true },
+        { type: 'null' }
+      ]
+    },
     worker_scout_evidence: {
       type: 'object',
       required: ['schema', 'ok', 'agent_id', 'artifact_path', 'central_proof_ssot'],

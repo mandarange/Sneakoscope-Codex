@@ -203,6 +203,7 @@ async function walk(dir: string, out: string[] = []): Promise<string[]> {
   for (const entry of entries) {
     const file = path.join(dir, entry.name);
     if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory() && ['.git', 'node_modules', 'target'].includes(entry.name)) continue;
     if (entry.isDirectory()) await walk(file, out);
     else if (entry.isFile()) out.push(file);
   }
