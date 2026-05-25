@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.0 writes the `sks.release-readiness.v1` report for the 1.18.0 parallel P0-P4 closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, agent terminal close proof, tmux right-lane manifests, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.0 closure DAG gaps.
+SKS 1.18.1 writes the `sks.release-readiness.v1` report for the dynamic agent pool closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, generation-aware terminal close proof, tmux right-lane pane evidence, release metadata, docs truthfulness, dynamic pool replenishment, and official-docs compatibility. `ok: true` means there are no remaining 1.18.1 closure DAG gaps.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -24,14 +24,14 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.18.0.json`
-- `.sneakoscope/reports/release-readiness-1.18.0.md`
-- `.sneakoscope/reports/all-feature-completion-1.18.0.json`
-- `.sneakoscope/reports/all-feature-completion-1.18.0.md`
-- `.sneakoscope/reports/official-docs-compat-1.18.0.json`
-- `.sneakoscope/reports/official-docs-compat-1.18.0.md`
+- `.sneakoscope/reports/release-readiness-1.18.1.json`
+- `.sneakoscope/reports/release-readiness-1.18.1.md`
+- `.sneakoscope/reports/all-feature-completion-1.18.1.json`
+- `.sneakoscope/reports/all-feature-completion-1.18.1.md`
+- `.sneakoscope/reports/official-docs-compat-1.18.1.json`
+- `.sneakoscope/reports/official-docs-compat-1.18.1.md`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal closure, tmux right lanes, and remaining 1.18.0 P0-P4 closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal generation closure, tmux right lanes, dynamic backfill metrics, and remaining 1.18.1 P0-P4 closure gaps.
 
 ## Priority Closure
 

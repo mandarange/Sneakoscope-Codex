@@ -10,6 +10,8 @@ export function agentWorkerEnv(agent: any, allowedCommandsFile: string) {
     SKS_DISABLE_ROUTE_RECURSION: '1',
     SKS_AGENT_SESSION_ID: agent.session_id,
     SKS_AGENT_ID: agent.id,
+    SKS_AGENT_SLOT_ID: agent.slot_id || agent.worker_slot_id || agent.id,
+    SKS_AGENT_SESSION_GENERATION_ID: agent.session_generation_id || agent.session_id,
     SKS_AGENT_ALLOWED_COMMANDS_FILE: allowedCommandsFile
   }
 }
@@ -36,6 +38,8 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     handoff_notes: String(result?.handoff_notes || ''),
     unverified: Array.isArray(result?.unverified) ? result.unverified : [],
     writes: Array.isArray(result?.writes) ? result.writes : [],
+    ...(result?.source_intelligence_refs === undefined ? {} : { source_intelligence_refs: result.source_intelligence_refs }),
+    ...(result?.goal_mode_ref === undefined ? {} : { goal_mode_ref: result.goal_mode_ref }),
     recursion_guard: { ok: guard.ok, violations: guard.violations },
     verification: normalizeVerification(result?.verification)
   }

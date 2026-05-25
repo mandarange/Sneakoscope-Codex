@@ -52,28 +52,29 @@ export function validateAgentLedgerWriteScope(input: { actor_agent_id: string; t
   const mode = input.mode || 'write'
   const orchestrator = actor === 'orchestrator' || actor === 'parent_orchestrator'
   const sessionMatch = target.match(/^sessions\/([^/]+)\.json$/)
+  const generationSessionMatch = target.match(/^sessions\/([^/]+)\/gen-\d+\/agent-session-record\.json$/)
   const messageAppend = target === 'agent-messages.jsonl' && mode === 'append'
   const eventAppend = target === 'agent-events.jsonl' && mode === 'append'
   const handoffAppend = target === 'agent-handoffs.jsonl' && mode === 'append'
-  const ownSessionWrite = Boolean(sessionMatch && sessionMatch[1] === actor)
+  const ownSessionWrite = Boolean((sessionMatch && sessionMatch[1] === actor) || (generationSessionMatch && generationSessionMatch[1] === actor))
   const orchestratorOnly = AGENT_ORCHESTRATOR_ONLY_FILES.includes(target as any) || target === 'agent-sessions.json'
 
   if (orchestrator) return { ok: true, reason: 'orchestrator_write_allowed', actor_agent_id: actor, target_path: target, mode }
   if (ownSessionWrite) return { ok: true, reason: 'own_session_record_allowed', actor_agent_id: actor, target_path: target, mode }
   if (messageAppend || eventAppend || handoffAppend) return { ok: true, reason: 'central_append_allowed', actor_agent_id: actor, target_path: target, mode }
-  if (sessionMatch && sessionMatch[1] !== actor) return { ok: false, reason: 'agent_cannot_modify_other_session_record', actor_agent_id: actor, target_path: target, mode }
+  if ((sessionMatch && sessionMatch[1] !== actor) || (generationSessionMatch && generationSessionMatch[1] !== actor)) return { ok: false, reason: 'agent_cannot_modify_other_session_record', actor_agent_id: actor, target_path: target, mode }
   if (orchestratorOnly) return { ok: false, reason: 'agent_cannot_modify_orchestrator_only_file', actor_agent_id: actor, target_path: target, mode }
   return { ok: false, reason: 'agent_ledger_write_scope_unclaimed', actor_agent_id: actor, target_path: target, mode }
 }
 
-export async function initializeAgentCentralLedger(missionDir: string, input: { missionId: string; roster: any; partition?: any; route?: string; prompt?: string }) {
+export async function initializeAgentCentralLedger(missionDir: string, input: { missionId: string; roster: any; partition?: any; route?: string; prompt?: string; dynamicScheduler?: boolean }) {
   const root = agentLedgerRoot(missionDir)
   await ensureDir(root)
   await ensureDir(path.join(root, 'sessions'))
   await writeTextAtomic(path.join(root, 'agent-events.jsonl'), '')
   await writeTextAtomic(path.join(root, 'agent-messages.jsonl'), '')
   await writeTextAtomic(path.join(root, 'agent-handoffs.jsonl'), '')
-  const sessions = Object.fromEntries((input.roster.roster || []).map((agent: any) => [agent.id, {
+  const sessions = input.dynamicScheduler ? {} : Object.fromEntries((input.roster.roster || []).map((agent: any) => [agent.id, {
     agent_id: agent.id,
     session_id: agent.session_id,
     status: 'pending',

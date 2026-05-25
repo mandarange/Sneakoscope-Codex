@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.18.0';
+const RELEASE_VERSION = '1.18.1';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 const releaseParallelCheckSource = readText('scripts/release-parallel-check.mjs', '');
@@ -53,6 +53,15 @@ const checks = {
   agent_worker_scout_limited: scriptContains('release:check:parallel', 'agent:worker-scout-limited'),
   agent_background_terminals: scriptContains('release:check:parallel', 'agent:background-terminals'),
   agent_tmux_right_lanes: scriptContains('release:check:parallel', 'agent:tmux-right-lanes'),
+  agent_dynamic_pool: scriptContains('release:check:parallel', 'agent:dynamic-pool'),
+  agent_backfill_replenishment: scriptContains('release:check:parallel', 'agent:backfill-replenishment'),
+  agent_scheduler_proof: scriptContains('release:check:parallel', 'agent:scheduler-proof'),
+  agent_session_generation: scriptContains('release:check:parallel', 'agent:session-generation'),
+  agent_terminal_generations: scriptContains('release:check:parallel', 'agent:terminal-generations'),
+  agent_tmux_real_right_lanes: scriptContains('release:check:parallel', 'agent:tmux-real-right-lanes'),
+  agent_dynamic_cockpit: scriptContains('release:check:parallel', 'agent:dynamic-cockpit'),
+  agent_source_intelligence_propagation: scriptContains('release:check:parallel', 'agent:source-intelligence-propagation'),
+  agent_goal_mode_propagation: scriptContains('release:check:parallel', 'agent:goal-mode-propagation'),
   agent_visual_consistency: scriptContains('release:check:parallel', 'agent:visual-consistency'),
   release_parallel_full_coverage: scriptContains('release:check:parallel', 'release:parallel-full-coverage'),
   priority_full_closure: scriptContains('release:check:parallel', 'priority:full-closure'),
@@ -152,6 +161,15 @@ for (const [name, ok] of Object.entries({
   agent_worker_scout_limited: checks.agent_worker_scout_limited,
   agent_background_terminals: checks.agent_background_terminals,
   agent_tmux_right_lanes: checks.agent_tmux_right_lanes,
+  agent_dynamic_pool: checks.agent_dynamic_pool,
+  agent_backfill_replenishment: checks.agent_backfill_replenishment,
+  agent_scheduler_proof: checks.agent_scheduler_proof,
+  agent_session_generation: checks.agent_session_generation,
+  agent_terminal_generations: checks.agent_terminal_generations,
+  agent_tmux_real_right_lanes: checks.agent_tmux_real_right_lanes,
+  agent_dynamic_cockpit: checks.agent_dynamic_cockpit,
+  agent_source_intelligence_propagation: checks.agent_source_intelligence_propagation,
+  agent_goal_mode_propagation: checks.agent_goal_mode_propagation,
   agent_visual_consistency: checks.agent_visual_consistency,
   release_parallel_full_coverage: checks.release_parallel_full_coverage,
   priority_full_closure: checks.priority_full_closure
@@ -167,9 +185,9 @@ const report = {
   generated_at: new Date().toISOString(),
   scope: {
     release_version: RELEASE_VERSION,
-    gate: '1.18.0 parallel P0-P4 closure DAG',
-    ok_means: 'no remaining 1.18.0 closure DAG gaps',
-    not_in_1_18_parallel_gate: 'reported for historical, live, or broader gates that are not part of the 1.18.0 closure DAG'
+    gate: '1.18.1 dynamic agent pool closure DAG',
+    ok_means: 'no remaining 1.18.1 dynamic scheduler, generation, tmux, source, or Goal propagation gaps',
+    not_in_1_18_parallel_gate: 'reported for historical, live, or broader gates that are not part of the 1.18.1 closure DAG'
   },
   package: {
     name: pkg.name,
@@ -320,6 +338,26 @@ const report = {
     tmux_right_lanes: checks.agent_tmux_right_lanes,
     codex_app_visual_consistency: checks.agent_visual_consistency
   },
+  dynamic_agent_pool_1_18_1: {
+    status: checks.agent_dynamic_pool
+      && checks.agent_backfill_replenishment
+      && checks.agent_scheduler_proof
+      && checks.agent_session_generation
+      && checks.agent_terminal_generations
+      && checks.agent_tmux_real_right_lanes
+      && checks.agent_dynamic_cockpit
+      && checks.agent_source_intelligence_propagation
+      && checks.agent_goal_mode_propagation ? 'present' : 'missing',
+    dynamic_pool: checks.agent_dynamic_pool,
+    backfill_replenishment: checks.agent_backfill_replenishment,
+    scheduler_proof: checks.agent_scheduler_proof,
+    session_generation: checks.agent_session_generation,
+    terminal_generations: checks.agent_terminal_generations,
+    tmux_real_right_lanes: checks.agent_tmux_real_right_lanes,
+    dynamic_cockpit: checks.agent_dynamic_cockpit,
+    source_intelligence_propagation: checks.agent_source_intelligence_propagation,
+    goal_mode_propagation: checks.agent_goal_mode_propagation
+  },
   goal_mode_1_18: {
     status: checks.goal_mode_official_default ? 'present' : 'missing',
     official_default_gate: checks.goal_mode_official_default
@@ -396,6 +434,7 @@ for (const key of [
   'mad_sks_1_16_0',
   'source_intelligence_1_18',
   'agent_terminal_tmux_1_18',
+  'dynamic_agent_pool_1_18_1',
   'goal_mode_1_18',
   'release_full_coverage_1_18',
   'release_native_agent_backend',
@@ -479,6 +518,7 @@ function renderMarkdown(report) {
 - Hook trust warning-zero: \`${report.hook_trust_warning_zero.status}\`
 - Source Intelligence 1.18: \`${report.source_intelligence_1_18.status}\`
 - Agent terminal/tmux 1.18: \`${report.agent_terminal_tmux_1_18.status}\`
+- Dynamic agent pool 1.18.1: \`${report.dynamic_agent_pool_1_18_1.status}\`
 - Goal mode 1.18: \`${report.goal_mode_1_18.status}\`
 - Release full coverage 1.18: \`${report.release_full_coverage_1_18.status}\`
 - All-feature completion: \`${report.all_feature_completion.status}\`
@@ -490,8 +530,8 @@ function renderMarkdown(report) {
 - Docs truthfulness: \`${report.docs_truthfulness.status}\`
 - Release metadata: \`${report.release_metadata.status}\`
 - Priority closure: P0, P1, P2, P3, and P4 are tracked in the 1.18 readiness surface.
-- Remaining 1.18.0 P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
+- Remaining 1.18.1 P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
 
-\`not_in_1_18_parallel_gate\` is an explicit non-P0 status for historical, live, or broader gates not run by the 1.18.0 parallel DAG. Computer Use live evidence, UX-Review screenshots, and PPT generated review images remain opt-in/local-only. codex-lb process-only setup is reported as \`process_only_ephemeral\`, not durable persistence. UX-Review/PPT cannot pass from text-only critique or mock-as-real fixtures.
+\`not_in_1_18_parallel_gate\` is an explicit non-P0 status for historical, live, or broader gates not run by the 1.18.1 parallel DAG. Computer Use live evidence, UX-Review screenshots, and PPT generated review images remain opt-in/local-only. codex-lb process-only setup is reported as \`process_only_ephemeral\`, not durable persistence. UX-Review/PPT cannot pass from text-only critique or mock-as-real fixtures.
 `;
 }

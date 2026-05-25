@@ -119,6 +119,8 @@ export interface AgentRunnerResult {
   handoff_notes: string
   unverified: string[]
   writes: string[]
+  source_intelligence_refs?: Record<string, unknown> | null
+  goal_mode_ref?: Record<string, unknown> | null
   recursion_guard: { ok: boolean; violations: string[] }
   verification: { status: string; checks: string[] }
 }

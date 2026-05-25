@@ -17,25 +17,25 @@ async function withSessionLock<T>(root: string, fn: () => Promise<T>): Promise<T
 }
 
 export async function openAgentSession(root: string, agent: any) {
-  await updateSession(root, agent.id, { status: 'launching', opened_at: nowIso(), heartbeat_at: nowIso() }, 'session_launching', agent.session_id)
-  return updateSession(root, agent.id, { status: 'running', heartbeat_at: nowIso() }, 'session_opened', agent.session_id)
+  await updateSession(root, agent, { status: 'launching', opened_at: nowIso(), heartbeat_at: nowIso() }, 'session_launching', agent.session_id)
+  return updateSession(root, agent, { status: 'running', heartbeat_at: nowIso() }, 'session_opened', agent.session_id)
 }
 
 export async function heartbeatAgentSession(root: string, agent: any) {
-  return updateSession(root, agent.id, { heartbeat_at: nowIso() }, 'heartbeat', agent.session_id)
+  return updateSession(root, agent, { heartbeat_at: nowIso() }, 'heartbeat', agent.session_id)
 }
 
 export async function collectAgentSession(root: string, agent: any) {
-  return updateSession(root, agent.id, { status: 'collecting', heartbeat_at: nowIso() }, 'session_collecting', agent.session_id)
+  return updateSession(root, agent, { status: 'collecting', heartbeat_at: nowIso() }, 'session_collecting', agent.session_id)
 }
 
 export async function completeAgentSession(root: string, agent: any) {
-  return updateSession(root, agent.id, { status: 'completed', heartbeat_at: nowIso() }, 'session_completed', agent.session_id)
+  return updateSession(root, agent, { status: 'completed', heartbeat_at: nowIso() }, 'session_completed', agent.session_id)
 }
 
 export async function closeAgentSession(root: string, agent: any, status = 'closed') {
-  await updateSession(root, agent.id, { status: status === 'closed' ? 'closing' : status, heartbeat_at: nowIso() }, 'session_closing', agent.session_id)
-  return updateSession(root, agent.id, { status, closed_at: nowIso(), heartbeat_at: nowIso() }, 'session_closed', agent.session_id)
+  await updateSession(root, agent, { status: status === 'closed' ? 'closing' : status, heartbeat_at: nowIso() }, 'session_closing', agent.session_id)
+  return updateSession(root, agent, { status, closed_at: nowIso(), heartbeat_at: nowIso() }, 'session_closed', agent.session_id)
 }
 
 export async function assertAllAgentSessionsClosed(root: string) {
@@ -106,15 +106,15 @@ export async function killTimedOutAgentSessions(root: string, now = Date.now(), 
     const file = path.join(root, 'agent-sessions.json')
     const data = await readJson<any>(file, { schema: 'sks.agent-sessions.v1', sessions: {} })
     const killed: string[] = []
-    for (const [agentId, session] of Object.entries<any>(data.sessions || {})) {
+    for (const [sessionKey, session] of Object.entries<any>(data.sessions || {})) {
       if (['closed', 'blocked', 'failed', 'killed', 'timed_out'].includes(String(session.status))) continue
       const opened = Date.parse(String(session.opened_at || ''))
       const heartbeat = Date.parse(String(session.heartbeat_at || session.opened_at || ''))
       const hardTimedOut = Number.isFinite(opened) && now - opened > hardTimeoutMs
       const heartbeatTimedOut = Number.isFinite(heartbeat) && now - heartbeat > AGENT_HEARTBEAT_TIMEOUT_MS
       if (!hardTimedOut && !heartbeatTimedOut) continue
-      const sessionId = session.session_id || agentId
-      data.sessions[agentId] = {
+      const sessionId = session.session_id || sessionKey
+      data.sessions[sessionKey] = {
         ...session,
         status: 'killed',
         killed_at: new Date(now).toISOString(),
@@ -122,8 +122,8 @@ export async function killTimedOutAgentSessions(root: string, now = Date.now(), 
         heartbeat_at: new Date(now).toISOString(),
         kill_reason: hardTimedOut ? 'hard_timeout' : 'heartbeat_timeout'
       }
-      await writeJsonAtomic(path.join(root, 'sessions', agentId + '.json'), { schema: 'sks.agent-session-record.v1', ...data.sessions[agentId] })
-      await appendAgentLedgerEvent(root, { agent_id: agentId, session_id: sessionId, event_type: 'session_killed_timeout', payload: { kill_reason: data.sessions[agentId].kill_reason } })
+      await writeSessionRecord(root, data.sessions[sessionKey])
+      await appendAgentLedgerEvent(root, { agent_id: String(session.agent_id || sessionKey), session_id: sessionId, event_type: 'session_killed_timeout', payload: { kill_reason: data.sessions[sessionKey].kill_reason } })
       killed.push(sessionId)
     }
     await writeJsonAtomic(file, data)
@@ -140,16 +140,41 @@ export async function killTimedOutAgentSessions(root: string, now = Date.now(), 
   })
 }
 
-async function updateSession(root: string, agentId: string, patch: any, eventType: string, sessionId: string) {
+async function updateSession(root: string, agent: any, patch: any, eventType: string, sessionId: string) {
   return withSessionLock(root, async () => {
   const file = path.join(root, 'agent-sessions.json')
   const data = await readJson<any>(file, { schema: 'sks.agent-sessions.v1', sessions: {} })
   data.sessions = data.sessions || {}
-  data.sessions[agentId] = { ...(data.sessions[agentId] || { agent_id: agentId, session_id: sessionId }), ...patch }
+  const agentId = String(agent.id || agent.agent_id || sessionId)
+  const sessionKey = String(agent.session_generation_id || agent.session_id || agentId)
+  data.sessions[sessionKey] = {
+    ...(data.sessions[sessionKey] || {
+      agent_id: agentId,
+      slot_id: agent.slot_id || agent.worker_slot_id || null,
+      generation_index: Number.isFinite(Number(agent.generation_index)) ? Number(agent.generation_index) : null,
+      session_artifact_dir: agent.session_artifact_dir || null,
+      session_id: sessionId
+    }),
+    agent_id: agentId,
+    slot_id: agent.slot_id || agent.worker_slot_id || data.sessions[sessionKey]?.slot_id || null,
+    generation_index: Number.isFinite(Number(agent.generation_index)) ? Number(agent.generation_index) : data.sessions[sessionKey]?.generation_index ?? null,
+    session_artifact_dir: agent.session_artifact_dir || data.sessions[sessionKey]?.session_artifact_dir || null,
+    session_id: sessionId,
+    ...patch
+  }
   await writeJsonAtomic(file, data)
-  await writeJsonAtomic(path.join(root, 'sessions', agentId + '.json'), { schema: 'sks.agent-session-record.v1', ...data.sessions[agentId] })
+  await writeSessionRecord(root, data.sessions[sessionKey])
   await writeAgentLifecycleAggregate(root)
   await appendAgentLedgerEvent(root, { agent_id: agentId, session_id: sessionId, event_type: eventType, payload: patch })
-  return data.sessions[agentId]
+  return data.sessions[sessionKey]
   })
+}
+
+async function writeSessionRecord(root: string, session: any) {
+  const artifactDir = session.session_artifact_dir
+  if (artifactDir) {
+    await writeJsonAtomic(path.join(root, artifactDir, 'agent-session-record.json'), { schema: 'sks.agent-session-record.v1', ...session })
+    return
+  }
+  await writeJsonAtomic(path.join(root, 'sessions', String(session.agent_id || session.session_id) + '.json'), { schema: 'sks.agent-session-record.v1', ...session })
 }

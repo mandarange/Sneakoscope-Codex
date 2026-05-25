@@ -35,6 +35,15 @@ const tasks = [
   task('agent:worker-scout-limited', 'npm run agent:worker-scout-limited --silent', { dependencies: ['build'] }),
   task('agent:background-terminals', 'npm run agent:background-terminals --silent', { dependencies: ['build'] }),
   task('agent:tmux-right-lanes', 'npm run agent:tmux-right-lanes --silent', { dependencies: ['build'] }),
+  task('agent:dynamic-pool', 'npm run agent:dynamic-pool --silent', { dependencies: ['build'] }),
+  task('agent:backfill-replenishment', 'npm run agent:backfill-replenishment --silent', { dependencies: ['build'] }),
+  task('agent:scheduler-proof', 'npm run agent:scheduler-proof --silent', { dependencies: ['build'] }),
+  task('agent:session-generation', 'npm run agent:session-generation --silent', { dependencies: ['build'] }),
+  task('agent:terminal-generations', 'npm run agent:terminal-generations --silent', { dependencies: ['build'] }),
+  task('agent:tmux-real-right-lanes', 'npm run agent:tmux-real-right-lanes --silent', { dependencies: ['build'] }),
+  task('agent:dynamic-cockpit', 'npm run agent:dynamic-cockpit --silent', { dependencies: ['build'] }),
+  task('agent:source-intelligence-propagation', 'npm run agent:source-intelligence-propagation --silent', { dependencies: ['build'] }),
+  task('agent:goal-mode-propagation', 'npm run agent:goal-mode-propagation --silent', { dependencies: ['build'] }),
   task('agent:visual-consistency', 'npm run agent:visual-consistency --silent', { dependencies: ['build'] }),
   task('release:parallel-full-coverage', 'npm run release:parallel-full-coverage --silent', { dependencies: ['build'] }),
   task('priority:full-closure', 'npm run priority:full-closure --silent', { dependencies: ['build'] }),
@@ -116,7 +125,7 @@ const tasks = [
   task('mad-sks:rollback-apply', 'npm run mad-sks:rollback-apply --silent', { dependencies: ['build'] }),
   task('mad-sks:live-guard-smoke', 'npm run mad-sks:live-guard-smoke --silent', { dependencies: ['build'] }),
   task('mad-sks:executor-proof-graph', 'npm run mad-sks:executor-proof-graph --silent', { dependencies: ['mad-sks:actual-executor', 'mad-sks:file-write-executor', 'mad-sks:shell-executor', 'mad-sks:package-executor', 'mad-sks:service-executor', 'mad-sks:db-executor', 'mad-sks:rollback-apply', 'mad-sks:live-guard-smoke'] }),
-  task('flagship:proof-graph-v4', 'npm run flagship:proof-graph-v4 --silent', { dependencies: ['mad-sks:executor-proof-graph', 'evidence:flagship-coverage', 'release:native-agent-backend'] }),
+  task('flagship:proof-graph-v4', 'npm run flagship:proof-graph-v4 --silent', { dependencies: ['mad-sks:executor-proof-graph', 'evidence:flagship-coverage', 'release:native-agent-backend', 'test:blackbox'] }),
   task('memory-summary:rebuild-check', 'npm run memory-summary:rebuild-check --silent', { dependencies: ['build'] }),
   task('loop-blocker:check', 'npm run loop-blocker:check --silent', { dependencies: ['build'] }),
   task('docs:truthfulness', 'npm run docs:truthfulness --silent', { dependencies: ['build'] }),
@@ -126,7 +135,7 @@ const tasks = [
   task('rust:check', 'npm run rust:check --silent', { dependencies: ['build'] }),
   task('rust:smoke', 'npm run rust:smoke --silent', { dependencies: ['build'] }),
   task('release:dist-freshness', 'npm run release:dist-freshness --silent', { dependencies: ['build'] }),
-  task('perf:gate', 'npm run perf:gate --silent', { dependencies: ['test:blackbox', 'release:dist-freshness'] }),
+  task('perf:gate', 'npm run perf:gate --silent', { dependencies: ['test:blackbox', 'release:dist-freshness'], env: { SKS_PERF_TIER: 'source-ci' } }),
   task('typecheck', 'npm run typecheck --silent', { dependencies: ['build'] }),
   task('schema:check', 'npm run schema:check --silent', { dependencies: ['build'] })
 ];
@@ -150,7 +159,14 @@ console.log(JSON.stringify(result, null, 2));
 if (!result.ok) process.exitCode = 1;
 
 function task(id, command, extra = {}) {
-  return { id, command, dependencies: [], outputs: [], ...extra };
+  return {
+    id,
+    command,
+    dependencies: [],
+    outputs: [],
+    ...extra,
+    env: { SKS_ENSURE_DIST_NO_REBUILD: '1', ...(extra.env || {}) }
+  };
 }
 
 function tasksForMetadata() {

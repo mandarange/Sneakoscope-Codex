@@ -48,7 +48,10 @@ export function currentDistFreshness() {
 
 export function ensureDistFresh({ rebuild = true } = {}) {
   let freshness = currentDistFreshness();
-  if (freshness.ok || !rebuild) return freshness;
+  const rebuildAllowed = rebuild
+    && process.env.SKS_ENSURE_DIST_NO_REBUILD !== '1'
+    && process.env.SKS_RELEASE_DIST_FRESHNESS_NO_REBUILD !== '1';
+  if (freshness.ok || !rebuildAllowed) return freshness;
   const run = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build', '--silent'], {
     cwd: root,
     encoding: 'utf8',

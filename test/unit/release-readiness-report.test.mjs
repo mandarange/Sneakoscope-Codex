@@ -14,7 +14,7 @@ test('release readiness report writes current readiness artifacts', () => {
   const json = JSON.parse(result.stdout);
   assert.equal(json.schema, 'sks.release-readiness.v1');
   assert.equal(json.package.version, pkg.version);
-  assert.equal(json.scope.gate, '1.18.0 parallel P0-P4 closure DAG');
+  assert.equal(json.scope.gate, '1.18.1 dynamic agent pool closure DAG');
   assert.deepEqual(json.remaining_p0_gaps, []);
   assert.equal(json.ok, true);
   assert.equal(json.source_intelligence_1_18.status, 'present');

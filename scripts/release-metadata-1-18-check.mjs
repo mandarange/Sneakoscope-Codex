@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.0';
+const RELEASE_VERSION = '1.18.1';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const parallelCheckPath = path.join(root, 'scripts/release-parallel-check.mjs');
@@ -17,6 +17,9 @@ const requiredDocs = [
   'docs/agent-terminal-lanes.md',
   'docs/tmux-right-lane-cockpit.md',
   'docs/codex-official-goal-mode.md',
+  'docs/dynamic-agent-pool.md',
+  'docs/session-generation.md',
+  'docs/tmux-right-lane-runtime.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
   'docs/release-readiness.md'
@@ -39,6 +42,15 @@ const requiredScripts = [
   'agent:worker-scout-limited',
   'agent:background-terminals',
   'agent:tmux-right-lanes',
+  'agent:dynamic-pool',
+  'agent:backfill-replenishment',
+  'agent:scheduler-proof',
+  'agent:session-generation',
+  'agent:terminal-generations',
+  'agent:tmux-real-right-lanes',
+  'agent:dynamic-cockpit',
+  'agent:source-intelligence-propagation',
+  'agent:goal-mode-propagation',
   'agent:visual-consistency',
   'release:parallel-full-coverage',
   'priority:full-closure',

@@ -7,6 +7,8 @@ const WRONGNESS_MAP = [
   ['session_not_closed', /^session_open:/],
   ['terminal_missing', /^terminal_missing:/],
   ['terminal_not_closed', /^terminal_not_closed:/],
+  ['scheduler_starvation', /scheduler_pending_queue_without_active_sessions|scheduler_backfill_count_below_expected/],
+  ['session_generation_missing', /session_generation_open|terminal_close_report_missing|source_intelligence_missing_for_generation|goal_mode_missing_for_generation/],
   ['schema_invalid_output', /^schema_invalid:/],
   ['xai_available_not_used', /xai_available_not_used/],
   ['codex_web_search_missing', /codex_web_search_missing/],
