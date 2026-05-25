@@ -485,7 +485,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-hooks': ['hooks', 'trust-report', '--json'],
   'cli-agent': ['agent', 'run', 'fixture', '--mock', '--json'],
   'cli-perf': ['perf', 'cold-start', '--json', '--iterations', '1'],
-  'cli-bench': ['bench', 'core', '--tier', 'source-ci', '--json', '--iterations', '1'],
+  'cli-bench': ['bench', 'core', '--tier', 'npx-one-shot', '--json', '--iterations', '1'],
   'cli-code-structure': ['code-structure', 'scan', '--json'],
   'cli-rust': ['rust', 'smoke', '--json'],
   'cli-skill-dream': ['skill-dream', 'status', '--json'],

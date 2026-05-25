@@ -643,7 +643,7 @@ async function mergeGlobalCodexConfigIfAvailable(configText: any = '', configPat
   const baseUrl = globalConfig.match(/(^|\n)\[model_providers\.codex-lb\][\s\S]*?\n\s*base_url\s*=\s*"([^"]+)"/)?.[2] || parseCodexLbEnvBaseUrl(envText);
   if (!parseCodexLbEnvKey(envText) || !baseUrl) return next;
   next = upsertTopLevelTomlString(next, 'model_provider', 'codex-lb');
-  next = upsertTomlTable(next, 'model_providers.codex-lb', `[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "${baseUrl}"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true`);
+  next = upsertTomlTable(next, 'model_providers.codex-lb', `[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "${baseUrl}"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = false`);
   return `${next.trim()}\n`;
 }
 

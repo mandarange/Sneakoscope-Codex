@@ -1,3 +1,5 @@
+import { PACKAGE_VERSION } from './fsx.js';
+
 export const FEATURE_FIXTURE_SCHEMA = 'sks.feature-fixtures.v1';
 export const FEATURE_QUALITY_LEVELS = Object.freeze([
   'runtime_verified',
@@ -46,7 +48,7 @@ const FIXTURES = Object.freeze({
   'cli-agent': fixture('execute_and_validate_artifacts', 'sks agent run fixture --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass'),
   'cli-gx': fixture('mock', 'sks gx validate fixture', ['gx-validation.json'], 'pass'),
   'cli-perf': fixture('execute', 'sks perf cold-start --json --iterations 1', [], 'pass'),
-  'cli-bench': fixture('execute_and_validate_artifacts', 'sks bench core --tier source-ci --json --iterations 1', ['.sneakoscope/reports/performance/core-bench.json'], 'pass'),
+  'cli-bench': fixture('execute_and_validate_artifacts', 'sks bench core --tier npx-one-shot --json --iterations 1', ['.sneakoscope/reports/performance/core-bench.json'], 'pass'),
   'cli-code-structure': fixture('execute', 'sks code-structure scan --json', [], 'pass'),
   'cli-rust': fixture('execute', 'sks rust smoke --json', [], 'pass'),
   'cli-skill-dream': fixture('execute', 'sks skill-dream status --json', [], 'pass'),
@@ -69,7 +71,7 @@ const FIXTURES = Object.freeze({
   'cli-commit': fixture('mock', 'sks commit --dry-run', [], 'pass'),
   'cli-commit-and-push': fixture('mock', 'sks commit-and-push --dry-run', [], 'pass'),
   'cli-context7': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
-  'cli-all-features': fixture('mock', 'sks all-features complete --json', ['.sneakoscope/reports/all-feature-completion-1.16.2.json'], 'pass'),
+  'cli-all-features': fixture('mock', 'sks all-features complete --json', [`.sneakoscope/reports/all-feature-completion-${PACKAGE_VERSION}.json`], 'pass'),
   'cli-init': fixture('mock', 'sks init --local-only --dry-run', [], 'pass'),
   'cli-eval': fixture('mock', 'sks eval run --mock --json', [], 'pass'),
   'cli-harness': fixture('mock', 'sks harness fixture --mock --json', [], 'pass'),

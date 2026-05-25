@@ -1,9 +1,12 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { ensureDir, exists, nowIso, readJson, writeJsonAtomic } from '../fsx.js';
+import { parseShellEnvValue } from '../codex-lb/codex-lb-env.js';
+import { ensureDir, exists, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 import { detectImagegenCapability } from '../imagegen/imagegen-capability.js';
 import { validateGptImage2Request } from '../imagegen/gpt-image-2-request-validator.js';
+
+const DEFAULT_OPENAI_IMAGE_EDITS_ENDPOINT = 'https://api.openai.com/v1/images/edits';
 
 export interface ImageUxReviewImagegenAdapter {
   surface: 'codex_app_imagegen' | 'openai_images_api' | 'fake_imagegen_adapter';
@@ -275,10 +278,11 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
 
 export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImagegenAdapter {
   const apiKey = opts.apiKey || process.env.OPENAI_API_KEY || null;
+  const codexLb = opts.codexLb?.available === true ? opts.codexLb : null;
   return {
     surface: 'openai_images_api',
     model: 'gpt-image-2',
-    available: Boolean(apiKey),
+    available: Boolean(apiKey || codexLb),
     async generateCalloutReview(input: ImageUxReviewImagegenRequest) {
       const started = Date.now();
       await ensureDir(input.output_dir);
@@ -286,9 +290,10 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
       const responseArtifact = path.join(input.output_dir, 'image-ux-gpt-image-2-response.json');
       const sourcePath = path.resolve(input.source_image_path);
       const sourceSha = await sha256File(sourcePath);
+      const auth = await resolveImagesApiAuth({ ...opts, apiKey, codexLb });
       const validation = await validateGptImage2Request({
         provider: 'openai_images_api',
-        endpoint: '/v1/images/edits',
+        endpoint: auth.endpoint,
         model: 'gpt-image-2',
         prompt: input.prompt,
         source_image_path: sourcePath,
@@ -300,7 +305,8 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
         schema: 'sks.image-ux-gpt-image-2-request.v1',
         created_at: nowIso(),
         provider: 'openai_images_api',
-        endpoint: '/v1/images/edits',
+        endpoint: auth.endpoint,
+        auth_source: auth.auth_source,
         model: 'gpt-image-2',
         source_screen_id: input.source_screen_id,
         source_image_path: sourcePath,
@@ -325,7 +331,7 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
         });
         return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: 'gpt_image_2_request_validation_failed', provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
       }
-      if (!apiKey) {
+      if (!auth.apiKey) {
         const blocked = {
           schema: 'sks.image-ux-gpt-image-2-response.v1',
           created_at: nowIso(),
@@ -333,21 +339,23 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           model: 'gpt-image-2',
           ok: false,
           status: 'blocked',
-          blocker: 'openai_api_key_missing',
-          setup_guidance: 'Set OPENAI_API_KEY to enable OpenAI Images API fallback, or attach a real Codex App $imagegen output image.',
+          blocker: auth.blocker,
+          setup_guidance: auth.auth_source === 'CODEX_LB_API_KEY'
+            ? 'Set CODEX_LB_API_KEY for the selected codex-lb provider with requires_openai_auth=false, or attach a real Codex App $imagegen output image.'
+            : 'Set OPENAI_API_KEY to enable OpenAI Images API fallback, or attach a real Codex App $imagegen output image.',
           local_only: true
         };
         await writeJsonAtomic(responseArtifact, blocked);
-        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: 'openai_api_key_missing', provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: auth.blocker, provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
       }
       try {
         const form = new FormData();
         form.append('model', 'gpt-image-2');
         form.append('prompt', input.prompt);
         form.append('image', new Blob([await fsp.readFile(sourcePath)], { type: mimeForPath(sourcePath) }), path.basename(sourcePath));
-        const response = await fetch('https://api.openai.com/v1/images/edits', {
+        const response = await fetch(auth.endpoint, {
           method: 'POST',
-          headers: { authorization: `Bearer ${apiKey}` },
+          headers: { authorization: `Bearer ${auth.apiKey}` },
           body: form
         });
         const payload = await response.json().catch(async () => ({ error: { message: await response.text() } }));
@@ -374,6 +382,7 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           created_at: nowIso(),
           provider: 'openai_images_api',
           model: 'gpt-image-2',
+          auth_source: auth.auth_source,
           ok: true,
           status: 'generated',
           output_image_path: out,
@@ -399,6 +408,7 @@ export async function generateGptImage2CalloutReview(input: ImageUxReviewImagege
     return createFakeImagegenAdapter(opts.fakeAdapter || {}).generateCalloutReview(input);
   }
   const capability = await detectImagegenCapability(opts.capability || {}).catch(() => null);
+  const openaiOptions = { ...(opts.openai || {}), codexLb: opts.openai?.codexLb || capability?.codex_lb || null };
   const codexAdapter = createCodexAppImagegenAdapter({
     ...(opts.codexApp || {}),
     available: opts.codexApp?.available === true || capability?.codex_app?.available === true
@@ -406,11 +416,11 @@ export async function generateGptImage2CalloutReview(input: ImageUxReviewImagege
   if (codexAdapter.available) {
     const result = await codexAdapter.generateCalloutReview(input);
     if (result.ok) return result;
-    const openaiAdapter = createOpenAIImagesApiAdapter(opts.openai || {});
+    const openaiAdapter = createOpenAIImagesApiAdapter(openaiOptions);
     if (!openaiAdapter.available) return result;
     return openaiAdapter.generateCalloutReview(input);
   }
-  return createOpenAIImagesApiAdapter(opts.openai || {}).generateCalloutReview(input);
+  return createOpenAIImagesApiAdapter(openaiOptions).generateCalloutReview(input);
 }
 
 export function imagegenCapabilityBlocker(surface = 'Codex App $imagegen') {
@@ -420,8 +430,44 @@ export function imagegenCapabilityBlocker(surface = 'Codex App $imagegen') {
     blocker: 'imagegen_capability_missing',
     surface,
     model: 'gpt-image-2',
-    guidance: 'Run the request in Codex App with $imagegen/gpt-image-2, or set OPENAI_API_KEY for the optional Images API fallback, then attach the generated annotated review image path; SKS must not fabricate or substitute a text-only review.'
+    guidance: 'Run the request in Codex App with $imagegen/gpt-image-2, or set OPENAI_API_KEY. When codex-lb is the selected provider, CODEX_LB_API_KEY is accepted only with requires_openai_auth=false. Attach the generated annotated review image path; SKS must not fabricate or substitute a text-only review.'
   };
+}
+
+async function resolveImagesApiAuth(opts: any = {}) {
+  const openAiKey = String(opts.apiKey || process.env.OPENAI_API_KEY || '').trim();
+  if (openAiKey) {
+    return {
+      apiKey: openAiKey,
+      auth_source: 'OPENAI_API_KEY',
+      endpoint: imageEditsEndpoint(opts.baseUrl || 'https://api.openai.com/v1'),
+      blocker: null
+    };
+  }
+  const codexLb = opts.codexLb?.available === true ? opts.codexLb : null;
+  if (!codexLb) {
+    return {
+      apiKey: null,
+      auth_source: null,
+      endpoint: imageEditsEndpoint(opts.baseUrl || 'https://api.openai.com/v1'),
+      blocker: 'openai_api_key_missing'
+    };
+  }
+  const envKey = codexLb.env_key || 'CODEX_LB_API_KEY';
+  const envPath = codexLb.env_path || opts.codexLbEnvPath || '';
+  const envText = envPath ? await readText(envPath, '').catch(() => '') : '';
+  const codexLbKey = String(opts.codexLbApiKey || process.env[envKey] || parseShellEnvValue(envText, envKey) || '').trim();
+  return {
+    apiKey: codexLbKey || null,
+    auth_source: envKey,
+    endpoint: imageEditsEndpoint(codexLb.base_url || opts.baseUrl || ''),
+    blocker: codexLbKey ? null : 'codex_lb_api_key_missing'
+  };
+}
+
+function imageEditsEndpoint(baseUrl: any = '') {
+  const base = String(baseUrl || DEFAULT_OPENAI_IMAGE_EDITS_ENDPOINT).trim().replace(/\/+$/, '');
+  return /\/images\/edits$/i.test(base) ? base : `${base}/images/edits`;
 }
 
 export async function generatedImageMetadata(root: string, imagePath: string, opts: any = {}) {

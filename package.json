@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "1.17.0",
+  "version": "1.18.0",
   "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -155,7 +155,7 @@
     "computer-use:live-optional": "node ./scripts/computer-use-live-optional-check.mjs",
     "computer-use:live-evidence": "node ./scripts/computer-use-live-evidence-check.mjs",
     "docs:truthfulness": "node ./scripts/docs-truthfulness-check.mjs",
-    "release:metadata": "node ./scripts/release-metadata-1-17-check.mjs",
+    "release:metadata": "node ./scripts/release-metadata-1-18-check.mjs",
     "release:native-agent-backend": "node ./scripts/release-native-agent-fixture-check.mjs",
     "release:readiness": "node ./scripts/release-readiness-report.mjs",
     "coverage": "node --experimental-test-coverage --test \"test/**/*.test.mjs\"",
@@ -224,7 +224,19 @@
     "research:native-agent-backend": "node ./scripts/agent-native-release-gate.mjs research-native-agent-backend",
     "qa:native-agent-backend": "node ./scripts/agent-native-release-gate.mjs qa-native-agent-backend",
     "agent:non-recursive-pipeline-report": "node ./scripts/non-recursive-pipeline-check.mjs --json",
-    "agent:legacy-multiagent-removed": "node ./scripts/legacy-multiagent-removal-check.mjs"
+    "agent:legacy-multiagent-removed": "node ./scripts/legacy-multiagent-removal-check.mjs",
+    "xai-mcp:capability": "node ./scripts/xai-mcp-capability-check.mjs",
+    "source-intelligence:policy": "node ./scripts/source-intelligence-policy-check.mjs",
+    "source-intelligence:all-modes": "node ./scripts/source-intelligence-all-modes-check.mjs",
+    "codex-web:adapter": "node ./scripts/codex-web-adapter-check.mjs",
+    "goal-mode:official-default": "node ./scripts/goal-mode-official-default-check.mjs",
+    "agent:main-no-scout": "node ./scripts/agent-main-no-scout-check.mjs",
+    "agent:worker-scout-limited": "node ./scripts/agent-worker-scout-limited-check.mjs",
+    "agent:background-terminals": "node ./scripts/agent-background-terminals-check.mjs",
+    "agent:tmux-right-lanes": "node ./scripts/agent-tmux-right-lanes-check.mjs",
+    "agent:visual-consistency": "node ./scripts/agent-visual-consistency-check.mjs",
+    "release:parallel-full-coverage": "node ./scripts/release-parallel-full-coverage-check.mjs",
+    "priority:full-closure": "node ./scripts/priority-full-closure-check.mjs"
   },
   "keywords": [
     "sneakoscope",

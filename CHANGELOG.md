@@ -3,6 +3,32 @@
 ## [Unreleased]
 
 
+## [1.18.0] - 2026-05-25
+
+### Added
+- Add Universal Source Intelligence Layer for every mode: Context7 + Codex Web Search by default, and Context7 + Codex Web Search + X AI MCP Search when X AI MCP is configured and search-capable.
+- Add X AI MCP capability detector, X AI Search adapter, Codex Web Search adapter, and unified source intelligence proof gates.
+- Add main no-Scout policy: main orchestrator and route main sessions must spawn native multi-session agents instead of invoking Scout.
+- Add worker-local Scout-limited policy: agent workers may use Scout only inside their own session as local evidence, never as the main runtime backend or proof SSOT.
+- Add mandatory background terminal/session evidence for every agent.
+- Add tmux right-lane cockpit: main/orchestrator pane on the left and agent lanes stacked on the right.
+- Add Codex official Goal mode detector and default activation.
+- Add release DAG full coverage restoration: parallel release checks preserve all previous gates.
+- Add P0~P4 full closure tracking in release readiness.
+
+### Fixed
+- Prevent X AI MCP availability from being ignored when Context7 is used.
+- Prevent X AI missing from blocking routes that should use Context7 + Codex Web Search only.
+- Prevent main Team/Research/QA orchestrators from calling Scout.
+- Prevent agent proof from passing without terminal close evidence.
+- Prevent tmux agent mode from passing without visible right lanes.
+- Prevent release parallelization from reducing release gate coverage.
+
+### Changed
+- Treat source intelligence as a route-wide service shared by Team, Research, QA, DFix, UX, PPT, Goal, Commit, MAD-SKS, Hooks, codex-lb, and Wiki.
+- Treat worker Scout as optional local evidence, not orchestration backend.
+- Treat P1~P4 completion as part of release readiness, not optional polish.
+
 
 ## [1.17.0] - 2026-05-25
 
@@ -605,7 +631,7 @@
 ### Fixed
 
 - Keep release metadata aligned after an explicit SKS version bump advances the package version.
-- Preserve or restore ChatGPT OAuth in `~/.codex/auth.json` for Codex App when codex-lb uses `requires_openai_auth = true`; the codex-lb proxy key now stays in `CODEX_LB_API_KEY`/`env_key` by default instead of clobbering App auth.
+- Preserve ChatGPT OAuth only as a backup while codex-lb uses `requires_openai_auth = false`; the codex-lb proxy key stays in `CODEX_LB_API_KEY`/`env_key`, and PPT/imagegen bridge checks no longer require OpenAI OAuth for that provider.
 - `sks codex-lb status` now reports the local Codex App auth shape and gives the right recovery path for the App refresh-token error: `sks codex-lb repair` keeps codex-lb selected, while `release` is reserved for switching fully away from codex-lb.
 - Cache the codex-lb response-chain health probe briefly so repeated bare `sks` launches do not keep paying the same preflight/network cost.
 - Raise the npm unpacked-size budget to 1864 KiB for the feature registry and codex-lb auth recovery code while keeping tracked-file, packed-size, file-count, and forbidden-file guards enforced.

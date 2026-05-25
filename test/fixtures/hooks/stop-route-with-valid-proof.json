@@ -35,6 +35,21 @@
         "anchors": 0,
         "anchor_count": 0
       },
+      "agents": {
+        "schema": "sks.agent-proof-evidence.v1",
+        "ok": true,
+        "status": "passed",
+        "mission_id": "M-fixture-valid-proof",
+        "route": "$Team",
+        "backend": "fixture",
+        "agent_count": 5,
+        "all_sessions_closed": true,
+        "no_overlap_ok": true,
+        "ledger_hash_chain_ok": true,
+        "consensus_ok": true,
+        "janitor_ok": true,
+        "blockers": []
+      },
       "triwiki": null
     },
     "claims": [],

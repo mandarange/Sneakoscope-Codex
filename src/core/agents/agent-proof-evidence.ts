@@ -3,12 +3,19 @@ import { AGENT_PROOF_EVIDENCE_SCHEMA } from './agent-schema.js'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { validateAgentLedgerHashChain } from './agent-central-ledger.js'
 import { assertAllAgentSessionsClosed } from './agent-lifecycle.js'
+import { assertAgentTerminalSessionsClosed } from './agent-terminal-session.js'
 
 export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
+  const terminal = await assertAgentTerminalSessionsClosed(root)
   const ledger = await validateAgentLedgerHashChain(root)
+  const tmuxLanes = await readJson<any>(path.join(root, 'agent-tmux-lanes.json'), null)
   const blockers = [
+    ...(lifecycle.ok ? [] : ['agent_lifecycle_not_all_closed']),
     ...(lifecycle.ok ? [] : lifecycle.open_sessions.map((id: string) => 'session_open:' + id)),
+    ...((input.timeoutKill?.killed_sessions || []).map((id: string) => 'session_timeout_killed:' + id)),
+    ...(terminal.ok ? [] : terminal.blockers),
+    ...(input.backend === 'tmux' && tmuxLanes?.ok !== true ? ['tmux_right_lane_manifest_missing'] : []),
     ...(ledger.blockers || []),
     ...(input.partition?.blockers || []),
     ...(input.consensus?.blockers || []),
@@ -30,6 +37,11 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     all_sessions_closed: lifecycle.ok,
     launched_count: lifecycle.launched_count,
     closed_session_count: lifecycle.closed_session_count,
+    terminal_sessions_closed: terminal.ok,
+    terminal_session_count: terminal.total_sessions,
+    terminal_close_report: 'sessions/<agent_id>/agent-terminal-close-report.json',
+    tmux_lane_manifest: 'agent-tmux-lanes.json',
+    tmux_lane_manifest_ok: tmuxLanes?.ok === true,
     ledger_hash_chain_ok: ledger.ok,
     no_overlap_ok: input.partition?.no_overlap_proof?.ok !== false,
     consensus_ok: input.consensus?.ok === true,

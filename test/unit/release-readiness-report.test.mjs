@@ -14,6 +14,11 @@ test('release readiness report writes current readiness artifacts', () => {
   const json = JSON.parse(result.stdout);
   assert.equal(json.schema, 'sks.release-readiness.v1');
   assert.equal(json.package.version, pkg.version);
-  assert.equal(json.scope.gate, '1.17.0 parallel P0 DAG');
+  assert.equal(json.scope.gate, '1.18.0 parallel P0-P4 closure DAG');
   assert.deepEqual(json.remaining_p0_gaps, []);
+  assert.equal(json.ok, true);
+  assert.equal(json.source_intelligence_1_18.status, 'present');
+  assert.equal(json.agent_terminal_tmux_1_18.status, 'present');
+  assert.equal(json.goal_mode_1_18.status, 'present');
+  assert.equal(json.release_full_coverage_1_18.status, 'present');
 });

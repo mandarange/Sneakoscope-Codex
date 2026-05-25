@@ -30,7 +30,7 @@ const requiredModules = [
   'validate-artifacts-command.mjs'
 ];
 for (const name of requiredModules) {
-  if (!fs.existsSync(path.join(root, 'src', 'core', 'commands', name))) failures.push(`missing ${name}`);
+  if (!commandModuleExists(name)) failures.push(`missing ${name}`);
 }
 
 const disallowedImports = {
@@ -40,7 +40,7 @@ const disallowedImports = {
   'wiki-command.mjs': ['team-command', 'research-command', 'qa-loop-command', 'ppt-command']
 };
 for (const [name, needles] of Object.entries(disallowedImports)) {
-  const file = path.join(root, 'src', 'core', 'commands', name);
+  const file = commandModulePath(name);
   if (!fs.existsSync(file)) continue;
   const text = fs.readFileSync(file, 'utf8');
   for (const needle of needles) {
@@ -67,4 +67,15 @@ function listFiles(dir, ext) {
 
 function rel(file) {
   return path.relative(root, file).split(path.sep).join('/');
+}
+
+function commandModulePath(name) {
+  const base = path.join(root, 'src', 'core', 'commands');
+  const mjs = path.join(base, name);
+  const ts = path.join(base, name.replace(/\.mjs$/, '.ts'));
+  return fs.existsSync(mjs) ? mjs : ts;
+}
+
+function commandModuleExists(name) {
+  return fs.existsSync(commandModulePath(name));
 }

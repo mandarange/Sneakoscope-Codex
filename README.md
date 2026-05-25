@@ -10,7 +10,7 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.17.0** makes TypeScript the only runtime source of truth, moves package execution to built `dist/**/*.js`, adds Codex App agent cockpit artifacts, parallelizes release verification with a dependency DAG, and namespaces agent sessions by project hash plus mission id.
+SKS **1.18.0** adds Universal Source Intelligence for Context7 + Codex Web Search, optional X AI MCP search when configured, main no-Scout / worker Scout-limited proof policy, per-agent terminal close evidence, tmux right-lane cockpit manifests, Codex official Goal mode detection, and full P0-P4 release readiness tracking.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -20,6 +20,9 @@ sks mad-sks rollback-apply --rollback-plan <path> --yes --json
 sks features complete --json
 sks agent status latest --json
 sks agent run "release review" --agents 8 --concurrency 4 --mock --json
+npm run source-intelligence:all-modes
+npm run agent:background-terminals
+npm run agent:tmux-right-lanes
 npm run release:readiness
 ```
 
@@ -48,6 +51,14 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release 
 - Core dominance: [docs/core-dominance.md](docs/core-dominance.md)
 - Performance budgets: [docs/performance-budgets.md](docs/performance-budgets.md)
 - Native Agent Kernel: [docs/native-agent-kernel.md](docs/native-agent-kernel.md)
+- Source Intelligence Layer: [docs/source-intelligence-layer.md](docs/source-intelligence-layer.md)
+- X AI / Context7 / Codex Web policy: [docs/xai-context7-codex-web-policy.md](docs/xai-context7-codex-web-policy.md)
+- Main no-Scout / worker Scout policy: [docs/main-no-scout-worker-scout-policy.md](docs/main-no-scout-worker-scout-policy.md)
+- Agent terminal lanes: [docs/agent-terminal-lanes.md](docs/agent-terminal-lanes.md)
+- tmux right-lane cockpit: [docs/tmux-right-lane-cockpit.md](docs/tmux-right-lane-cockpit.md)
+- Codex official Goal mode: [docs/codex-official-goal-mode.md](docs/codex-official-goal-mode.md)
+- Release parallel full coverage: [docs/release-parallel-full-coverage.md](docs/release-parallel-full-coverage.md)
+- Priority closure P0-P4: [docs/priority-closure-p0-p4.md](docs/priority-closure-p0-p4.md)
 - Image Voxel TriWiki: [docs/image-voxel-ledger.md](docs/image-voxel-ledger.md)
 - Image Wrongness: [docs/image-wrongness.md](docs/image-wrongness.md)
 - Route finalization: [docs/route-finalization.md](docs/route-finalization.md)
@@ -250,7 +261,7 @@ sks codex-lb repair
 sks
 ```
 
-Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes the upstream codex-lb Codex CLI / IDE Extension provider block into `~/.codex/config.toml` for Codex App routing, loads the provider env key for tmux launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. If the provider block disappears but the stored env file is still recoverable, bare `sks`, npm postinstall upgrades, `sks doctor --fix`, and `sks codex-lb repair` restore it with `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = true` as documented by codex-lb. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` tmux session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths run a response-chain health check. `previous_response_not_found` is treated as a stateless-LB warning and keeps codex-lb active. Hard failures are surfaced to the user; SKS only bypasses codex-lb when the user chooses OAuth fallback or `SKS_CODEX_LB_AUTOBYPASS=1` is set.
+Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes the codex-lb Codex CLI / IDE Extension provider block into `~/.codex/config.toml` for Codex App routing, loads the provider env key for tmux launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. If the provider block disappears but the stored env file is still recoverable, bare `sks`, npm postinstall upgrades, `sks doctor --fix`, and `sks codex-lb repair` restore it with `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = false`; PPT/imagegen bridge checks treat that env-key provider as configured without requiring OpenAI OAuth. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` tmux session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths run a response-chain health check. `previous_response_not_found` is treated as a stateless-LB warning and keeps codex-lb active. Hard failures are surfaced to the user; SKS only bypasses codex-lb when the user chooses OAuth fallback or `SKS_CODEX_LB_AUTOBYPASS=1` is set.
 
 If codex-lb provider auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
 
@@ -601,7 +612,7 @@ npm run release:check
 npm run publish:dry
 ```
 
-`release:check` runs the 1.17.0 parallel P0 DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG covers build, TS runtime source checks, dist parity, proof artifact structure, Codex App cockpit, janitor, multi-project isolation, parallel verification, typecheck, schema, release metadata, and release readiness. Broader live or historical gates remain explicit scripts such as `release:real-check`. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
+`release:check` runs the 1.18.0 parallel P0-P4 closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.17 baseline gates and adds Source Intelligence, X AI/Codex Web policy, Goal mode, main no-Scout, worker Scout-limited, agent terminal, tmux right-lane, visual consistency, release full-coverage, and priority closure checks. Broader live or historical gates remain explicit scripts such as `release:real-check`. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
 
 Version bumps are manual. Run `sks versioning bump` only when preparing release metadata; SKS will not create `.git/hooks/pre-commit` or auto-bump during ordinary commits.
 

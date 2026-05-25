@@ -61,7 +61,24 @@ test('QA-LOOP fixture requires Computer Use evidence for UI verification', async
     status: 'verified',
     gate,
     artifacts: ['qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'],
-    evidence: { image_voxels: { anchors: 1, anchor_count: 1, images: 1, status: 'fixture' } },
+    evidence: {
+      image_voxels: { anchors: 1, anchor_count: 1, images: 1, status: 'fixture' },
+      agents: {
+        schema: 'sks.agent-proof-evidence.v1',
+        ok: true,
+        status: 'passed',
+        mission_id: missionId,
+        route: '$QA-LOOP',
+        backend: 'fixture',
+        agent_count: 5,
+        all_sessions_closed: true,
+        no_overlap_ok: true,
+        ledger_hash_chain_ok: true,
+        consensus_ok: true,
+        janitor_ok: true,
+        blockers: []
+      }
+    },
     claims: [{ id: 'qa-cu-fixture', status: 'fixture', text: 'QA fixture passed with Codex Computer Use evidence source.' }]
   });
   const proofGate = await validateRouteCompletionProof(root, { missionId, route: '$QA-LOOP' });

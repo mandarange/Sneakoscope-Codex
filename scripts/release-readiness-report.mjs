@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.17.0';
+const RELEASE_VERSION = '1.18.0';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 const releaseParallelCheckSource = readText('scripts/release-parallel-check.mjs', '');
@@ -44,6 +44,18 @@ const checks = {
   computer_use_live_evidence: scriptContains('release:check', 'computer-use:live-evidence'),
   docs_truthfulness: scriptContains('release:check', 'docs:truthfulness'),
   release_readiness: scriptContains('release:check:parallel', 'release:readiness'),
+  xai_mcp_capability: scriptContains('release:check:parallel', 'xai-mcp:capability'),
+  source_intelligence_policy: scriptContains('release:check:parallel', 'source-intelligence:policy'),
+  source_intelligence_all_modes: scriptContains('release:check:parallel', 'source-intelligence:all-modes'),
+  codex_web_adapter: scriptContains('release:check:parallel', 'codex-web:adapter'),
+  goal_mode_official_default: scriptContains('release:check:parallel', 'goal-mode:official-default'),
+  agent_main_no_scout: scriptContains('release:check:parallel', 'agent:main-no-scout'),
+  agent_worker_scout_limited: scriptContains('release:check:parallel', 'agent:worker-scout-limited'),
+  agent_background_terminals: scriptContains('release:check:parallel', 'agent:background-terminals'),
+  agent_tmux_right_lanes: scriptContains('release:check:parallel', 'agent:tmux-right-lanes'),
+  agent_visual_consistency: scriptContains('release:check:parallel', 'agent:visual-consistency'),
+  release_parallel_full_coverage: scriptContains('release:check:parallel', 'release:parallel-full-coverage'),
+  priority_full_closure: scriptContains('release:check:parallel', 'priority:full-closure'),
   release_native_agent_backend: scriptContains('release:check', 'release:native-agent-backend'),
   codex_0133_compat: scriptContains('release:check', 'codex:0.133-compat'),
   codex_output_schema_fixture: scriptContains('release:check', 'codex:output-schema-fixture'),
@@ -104,7 +116,7 @@ const checks = {
 };
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
 const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
-const releaseMetadata = runNodeScript('scripts/release-metadata-1-17-check.mjs');
+const releaseMetadata = runNodeScript('scripts/release-metadata-1-18-check.mjs');
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
   flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null),
@@ -130,7 +142,19 @@ for (const [name, ok] of Object.entries({
   agent_multi_project_isolation: checks.agent_multi_project_isolation,
   verification_parallel_engine: checks.verification_parallel_engine,
   release_metadata: checks.release_metadata,
-  release_readiness: checks.release_readiness
+  release_readiness: checks.release_readiness,
+  xai_mcp_capability: checks.xai_mcp_capability,
+  source_intelligence_policy: checks.source_intelligence_policy,
+  source_intelligence_all_modes: checks.source_intelligence_all_modes,
+  codex_web_adapter: checks.codex_web_adapter,
+  goal_mode_official_default: checks.goal_mode_official_default,
+  agent_main_no_scout: checks.agent_main_no_scout,
+  agent_worker_scout_limited: checks.agent_worker_scout_limited,
+  agent_background_terminals: checks.agent_background_terminals,
+  agent_tmux_right_lanes: checks.agent_tmux_right_lanes,
+  agent_visual_consistency: checks.agent_visual_consistency,
+  release_parallel_full_coverage: checks.release_parallel_full_coverage,
+  priority_full_closure: checks.priority_full_closure
 })) if (!ok) remainingP0.push(`${name}_gate_missing`);
 if (docs.status !== 0) remainingP0.push('docs_truthfulness_failed');
 if (officialDocs.status !== 0) remainingP0.push('official_docs_compat_failed');
@@ -143,9 +167,9 @@ const report = {
   generated_at: new Date().toISOString(),
   scope: {
     release_version: RELEASE_VERSION,
-    gate: '1.17.0 parallel P0 DAG',
-    ok_means: 'no remaining 1.17.0 P0 DAG gaps',
-    not_in_1_17_parallel_gate: 'reported for historical, live, or broader gates that are not part of the 1.17.0 P0 DAG'
+    gate: '1.18.0 parallel P0-P4 closure DAG',
+    ok_means: 'no remaining 1.18.0 closure DAG gaps',
+    not_in_1_18_parallel_gate: 'reported for historical, live, or broader gates that are not part of the 1.18.0 closure DAG'
   },
   package: {
     name: pkg.name,
@@ -274,6 +298,38 @@ const report = {
     flagship_proof_graph_v4: checks.flagship_proof_graph_v4,
     flagship_proof_graph_v4_report_ok: runtimeChecks.flagship_proof_graph_v4
   },
+  source_intelligence_1_18: {
+    status: checks.xai_mcp_capability
+      && checks.source_intelligence_policy
+      && checks.source_intelligence_all_modes
+      && checks.codex_web_adapter ? 'present' : 'missing',
+    mode_default: 'context7_codex_web',
+    xai_when_available: checks.xai_mcp_capability,
+    xai_missing_fallback: checks.source_intelligence_all_modes,
+    codex_web_adapter: checks.codex_web_adapter
+  },
+  agent_terminal_tmux_1_18: {
+    status: checks.agent_main_no_scout
+      && checks.agent_worker_scout_limited
+      && checks.agent_background_terminals
+      && checks.agent_tmux_right_lanes
+      && checks.agent_visual_consistency ? 'present' : 'missing',
+    main_no_scout: checks.agent_main_no_scout,
+    worker_scout_limited: checks.agent_worker_scout_limited,
+    background_terminals: checks.agent_background_terminals,
+    tmux_right_lanes: checks.agent_tmux_right_lanes,
+    codex_app_visual_consistency: checks.agent_visual_consistency
+  },
+  goal_mode_1_18: {
+    status: checks.goal_mode_official_default ? 'present' : 'missing',
+    official_default_gate: checks.goal_mode_official_default
+  },
+  release_full_coverage_1_18: {
+    status: checks.release_parallel_full_coverage && checks.priority_full_closure ? 'present' : 'missing',
+    release_parallel_full_coverage: checks.release_parallel_full_coverage,
+    priority_full_closure: checks.priority_full_closure,
+    priorities: ['P0', 'P1', 'P2', 'P3', 'P4']
+  },
   release_native_agent_backend: {
     status: checks.release_native_agent_backend && checks.legacy_multiagent_removed ? 'present' : 'missing',
     backend: 'native_multi_session_agent_kernel',
@@ -287,7 +343,7 @@ const report = {
     status: checks.json_schema_recursive_check ? 'present' : 'missing'
   },
   official_docs_compatibility: {
-    status: officialDocs.status === 0 ? 'pass' : (checks.official_docs_compat ? 'fail' : 'not_in_1_17_parallel_gate'),
+    status: officialDocs.status === 0 ? 'pass' : (checks.official_docs_compat ? 'fail' : 'not_in_1_18_parallel_gate'),
     report_path: `.sneakoscope/reports/official-docs-compat-${RELEASE_VERSION}.json`,
     stdout: trimOutput(officialDocs.stdout)
   },
@@ -338,13 +394,17 @@ for (const key of [
   'hook_trust_warning_zero',
   'extreme_stabilization_1_14_1',
   'mad_sks_1_16_0',
+  'source_intelligence_1_18',
+  'agent_terminal_tmux_1_18',
+  'goal_mode_1_18',
+  'release_full_coverage_1_18',
   'release_native_agent_backend',
   'all_feature_completion',
   'json_schema_recursive',
   'memory_summary_rebuild',
   'loop_blocker_stop'
 ]) {
-  if (report[key]?.status === 'missing') report[key].status = 'not_in_1_17_parallel_gate';
+  if (report[key]?.status === 'missing') report[key].status = key.endsWith('_1_18') ? 'missing' : 'not_in_1_18_parallel_gate';
 }
 
 fs.mkdirSync(reportDir, { recursive: true });
@@ -364,6 +424,9 @@ function readJson(rel, fallback) {
 
 function scriptContains(name, needle) {
   if (name === 'release:check:parallel') {
+    return String(pkg.scripts?.[name] || '').includes(needle) || releaseParallelCheckSource.includes(needle);
+  }
+  if (name === 'release:check') {
     return String(pkg.scripts?.[name] || '').includes(needle) || releaseParallelCheckSource.includes(needle);
   }
   return String(pkg.scripts?.[name] || '').includes(needle);
@@ -414,6 +477,10 @@ function renderMarkdown(report) {
 - PPT imagegen review gates: \`${report.ppt_imagegen_review.status}\`
 - DFix gates: \`${report.dfix.status}\`
 - Hook trust warning-zero: \`${report.hook_trust_warning_zero.status}\`
+- Source Intelligence 1.18: \`${report.source_intelligence_1_18.status}\`
+- Agent terminal/tmux 1.18: \`${report.agent_terminal_tmux_1_18.status}\`
+- Goal mode 1.18: \`${report.goal_mode_1_18.status}\`
+- Release full coverage 1.18: \`${report.release_full_coverage_1_18.status}\`
 - All-feature completion: \`${report.all_feature_completion.status}\`
 - Recursive JSON schema check: \`${report.json_schema_recursive.status}\`
 - Official docs compatibility: \`${report.official_docs_compatibility.status}\`
@@ -422,8 +489,9 @@ function renderMarkdown(report) {
 - Loop blocker stop: \`${report.loop_blocker_stop.status}\`
 - Docs truthfulness: \`${report.docs_truthfulness.status}\`
 - Release metadata: \`${report.release_metadata.status}\`
-- Remaining 1.17.0 P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
+- Priority closure: P0, P1, P2, P3, and P4 are tracked in the 1.18 readiness surface.
+- Remaining 1.18.0 P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
 
-\`not_in_1_17_parallel_gate\` is an explicit non-P0 status for historical, live, or broader gates not run by the 1.17.0 parallel DAG. Computer Use live evidence, UX-Review screenshots, and PPT generated review images remain opt-in/local-only. codex-lb process-only setup is reported as \`process_only_ephemeral\`, not durable persistence. UX-Review/PPT cannot pass from text-only critique or mock-as-real fixtures.
+\`not_in_1_18_parallel_gate\` is an explicit non-P0 status for historical, live, or broader gates not run by the 1.18.0 parallel DAG. Computer Use live evidence, UX-Review screenshots, and PPT generated review images remain opt-in/local-only. codex-lb process-only setup is reported as \`process_only_ephemeral\`, not durable persistence. UX-Review/PPT cannot pass from text-only critique or mock-as-real fixtures.
 `;
 }

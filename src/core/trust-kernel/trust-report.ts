@@ -93,11 +93,13 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
   const pptReview = pptReviewTrust(proof);
   const dfix = dfixTrust(proof);
   const madSks = madSksTrust(proof);
+  const sourceIntelligence = sourceIntelligenceTrust(proof);
   issues.push(...imageUxReview.issues);
   issues.push(...pptReview.issues);
   issues.push(...dfix.issues);
   issues.push(...madSks.issues);
-  const routeSpecificIssues = imageUxReview.issues.length + pptReview.issues.length + dfix.issues.length + madSks.issues.length;
+  issues.push(...sourceIntelligence.issues);
+  const routeSpecificIssues = imageUxReview.issues.length + pptReview.issues.length + dfix.issues.length + madSks.issues.length + sourceIntelligence.issues.length;
   const finalStatus = routeSpecificIssues && status === 'verified' ? 'verified_partial' : status;
   return {
     schema: TRUST_REPORT_SCHEMA,
@@ -120,14 +122,40 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
       image_ux_review: imageUxReview.summary,
       ppt_review: pptReview.summary,
       dfix: dfix.summary,
-      mad_sks: madSks.summary
+      mad_sks: madSks.summary,
+      source_intelligence: sourceIntelligence.summary
     },
     image_ux_review: imageUxReview.summary,
     ppt_review: pptReview.summary,
     dfix: dfix.summary,
     mad_sks: madSks.summary,
+    source_intelligence: sourceIntelligence.summary,
     wrongness: wrongness.summary,
     blockers: issues.filter((issue: any) => /missing|blocked|stale|secret|not_passed|cannot_verify|text_only|mock_gpt_image_2_fixture/i.test(issue))
+  };
+}
+
+function sourceIntelligenceTrust(proof: any = {}) {
+  const evidence = proof.evidence?.source_intelligence;
+  if (!evidence) return { issues: [], summary: { required: false, status: 'not_required' } };
+  const proofBlockers = evidence.proof?.blockers || evidence.blockers || [];
+  const issues = [...proofBlockers];
+  if (evidence.policy?.xai_mcp?.required === true && evidence.xai_search?.ok !== true) issues.push('xai_available_not_used');
+  if (evidence.policy?.context7?.required === true && evidence.context7?.ok !== true) issues.push('context7_missing');
+  if (evidence.policy?.codex_web_search?.required === true && evidence.codex_web_search?.ok !== true && evidence.mode !== 'context7_only_degraded') issues.push('codex_web_search_missing');
+  return {
+    issues: [...new Set(issues.map(String))],
+    summary: {
+      schema: evidence.schema || 'sks.source-intelligence-evidence.v1',
+      required: true,
+      status: evidence.ok === true ? 'verified' : 'blocked',
+      mode: evidence.mode || evidence.policy?.mode || 'unknown',
+      context7_status: evidence.context7?.status || 'unknown',
+      codex_web_status: evidence.codex_web_search?.status || 'not_required',
+      xai_status: evidence.xai_search?.status || 'not_required',
+      providers_completed: evidence.parallel?.providers_completed || [],
+      blockers: proofBlockers
+    }
   };
 }
 
