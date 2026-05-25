@@ -2,7 +2,9 @@
 
 SKS 1.18.0 separates orchestration proof from worker-local exploration.
 
-SKS 1.18.1 keeps that separation for replenished worker slots: the main scheduler owns queue/backfill proof, while each session generation records only its scoped worker evidence.
+SKS 1.18.2 keeps that separation for replenished worker slots: the main scheduler owns queue/backfill proof, while each session generation records only its scoped worker evidence.
+
+SKS 1.18.2 allows worker-local Scout evidence to justify schema-bound `follow_up_work_items`, but those items still flow through the main scheduler and never become the proof SSOT.
 
 | Scope | Scout Allowed | Proof Role |
 | --- | --- | --- |

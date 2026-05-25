@@ -21,7 +21,9 @@ test('Research prepare/status expose native agent sessions and batches', async (
 
   const status = await runSksInRoot(root, ['research', 'status', prepared.mission_id]);
   assert.equal(status.agent_backend, 'native_multi_session_agent_kernel');
-  assert.equal(status.agent_sessions.research_source_miner.status, 'closed');
+  const sessions = Object.values(status.agent_sessions || {});
+  assert.ok(sessions.length >= 4);
+  assert.ok(sessions.every((session) => session.status === 'closed'));
   assert.ok(status.agent_batches.some((batch) => batch.status === 'completed_mock'));
   assert.equal(status.autoresearch_cycle_policy.uses_agent_batches, true);
 });

@@ -1,7 +1,7 @@
 import { AGENT_RESULT_SCHEMA, AGENT_WORKER_PIPELINE } from './agent-schema.js'
 import type { AgentRunnerResult } from './agent-schema.js'
 import { scanAgentTextForRecursion } from './agent-recursion-guard.js'
-import { validateAgentResultSchema } from './agent-output-validator.js'
+import { validateAgentResultSchema, validateAndNormalizeAgentFollowUps } from './agent-output-validator.js'
 
 export function agentWorkerEnv(agent: any, allowedCommandsFile: string) {
   return {
@@ -18,6 +18,7 @@ export function agentWorkerEnv(agent: any, allowedCommandsFile: string) {
 
 export function validateAgentWorkerResult(result: any): AgentRunnerResult {
   const guard = scanAgentTextForRecursion(JSON.stringify(result || {}))
+  const followUps = validateAndNormalizeAgentFollowUps(result?.follow_up_work_items, result?.session_id)
   const normalized: AgentRunnerResult = {
     schema: AGENT_RESULT_SCHEMA,
     mission_id: String(result?.mission_id || ''),
@@ -40,8 +41,13 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     writes: Array.isArray(result?.writes) ? result.writes : [],
     ...(result?.source_intelligence_refs === undefined ? {} : { source_intelligence_refs: result.source_intelligence_refs }),
     ...(result?.goal_mode_ref === undefined ? {} : { goal_mode_ref: result.goal_mode_ref }),
+    ...(result?.follow_up_work_items === undefined ? {} : { follow_up_work_items: followUps.accepted }),
     recursion_guard: { ok: guard.ok, violations: guard.violations },
     verification: normalizeVerification(result?.verification)
+  }
+  if (followUps.blockers.length) {
+    normalized.status = 'blocked'
+    normalized.blockers.push(...followUps.blockers.map((issue) => 'schema_invalid:' + issue))
   }
   const schemaValidation = validateAgentResultSchema(normalized)
   if (!schemaValidation.ok) {

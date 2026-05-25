@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.1';
+const RELEASE_VERSION = '1.18.2';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const parallelCheckPath = path.join(root, 'scripts/release-parallel-check.mjs');
@@ -18,6 +18,11 @@ const requiredDocs = [
   'docs/tmux-right-lane-cockpit.md',
   'docs/codex-official-goal-mode.md',
   'docs/dynamic-agent-pool.md',
+  'docs/work-queue-expansion.md',
+  'docs/follow-up-work-items.md',
+  'docs/tmux-lane-persistence.md',
+  'docs/scheduler-proof-gates.md',
+  'docs/agent-backfill-blackboxes.md',
   'docs/session-generation.md',
   'docs/tmux-right-lane-runtime.md',
   'docs/release-parallel-full-coverage.md',
@@ -42,6 +47,16 @@ const requiredScripts = [
   'agent:worker-scout-limited',
   'agent:background-terminals',
   'agent:tmux-right-lanes',
+  'agent:task-graph-expansion',
+  'agent:follow-up-work-schema',
+  'agent:dynamic-pool-route-blackbox',
+  'agent:backfill-route-blackbox',
+  'team:backfill-route-blackbox',
+  'research:backfill-route-blackbox',
+  'qa:backfill-route-blackbox',
+  'agent:tmux-lane-persistence',
+  'agent:tmux-lane-no-flicker',
+  'agent:scheduler-proof-hardening',
   'agent:dynamic-pool',
   'agent:backfill-replenishment',
   'agent:scheduler-proof',

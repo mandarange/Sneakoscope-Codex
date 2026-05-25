@@ -1,6 +1,6 @@
 # Session Generation
 
-SKS 1.18.1 separates worker slots from task sessions. A worker slot such as `slot-001` can run multiple immutable session generations:
+SKS 1.18.2 separates worker slots from task sessions. A worker slot such as `slot-001` can run multiple immutable session generations:
 
 - `sessions/slot-001/gen-1/`
 - `sessions/slot-001/gen-2/`

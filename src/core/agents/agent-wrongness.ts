@@ -8,6 +8,8 @@ const WRONGNESS_MAP = [
   ['terminal_missing', /^terminal_missing:/],
   ['terminal_not_closed', /^terminal_not_closed:/],
   ['scheduler_starvation', /scheduler_pending_queue_without_active_sessions|scheduler_backfill_count_below_expected/],
+  ['tmux_lane_flicker', /tmux_lane_(?:unexpected_close|closed_before_drain|no_flicker_not_verified|survival_not_checked)/],
+  ['missing_follow_up_schema', /follow_up_work_item|follow_up_work_items|schema_invalid:.*follow_up/],
   ['session_generation_missing', /session_generation_open|terminal_close_report_missing|source_intelligence_missing_for_generation|goal_mode_missing_for_generation/],
   ['schema_invalid_output', /^schema_invalid:/],
   ['xai_available_not_used', /xai_available_not_used/],

@@ -7,6 +7,10 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const rest = action === first ? args.slice(1) : args
   const json = hasFlag(args, '--json')
   const agents = Number(readOption(args, '--agents', DEFAULT_AGENT_COUNT))
+  const targetActiveSlots = Number(readOption(args, '--target-active-slots', agents))
+  const desiredWorkItemCount = Number(readOption(args, '--work-items', targetActiveSlots))
+  const minimumWorkItems = Number(readOption(args, '--minimum-work-items', targetActiveSlots))
+  const maxQueueExpansion = Number(readOption(args, '--max-queue-expansion', 10))
   const concurrency = Number(readOption(args, '--concurrency', Math.min(agents, 5)))
   const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : 'codex-exec'))
   const route = String(readOption(args, '--route', '$Agent'))
@@ -14,14 +18,14 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const real = hasFlag(args, '--real')
   const readonly = hasFlag(args, '--readonly') || hasFlag(args, '--read-only')
   const codexApp = hasFlag(args, '--codex-app')
-  const positionals = positionalArgs(rest, new Set(['--agents', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane']))
+  const positionals = positionalArgs(rest, new Set(['--agents', '--target-active-slots', '--work-items', '--minimum-work-items', '--max-queue-expansion', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane']))
   const missionDefault = action === 'run' || action === 'spawn' || action === 'plan' ? '' : 'latest'
   const positionalMission = action === 'run' || action === 'spawn' || action === 'plan' ? '' : (positionals[0] || '')
   const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', positionalMission || missionDefault)))
   const lane = String(readOption(args, '--agent', readOption(args, '--lane', '')))
   const promptPositionals = positionalMission ? positionals.slice(1) : positionals
   const prompt = promptPositionals.join(' ').trim() || 'Native agent run'
-  return { command, action, prompt, route, agents, concurrency, backend, mock, real, readonly, json, missionId, lane, codexApp }
+  return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, mock, real, readonly, json, missionId, lane, codexApp }
 }
 
 function hasFlag(args: string[], flag: string) {

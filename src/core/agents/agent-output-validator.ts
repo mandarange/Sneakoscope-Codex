@@ -1,4 +1,5 @@
 import { validateJsonSchemaRecursive } from '../json-schema-validator.js'
+import { normalizeAgentFollowUpWorkItems } from './agent-follow-up-work-items.js'
 
 export const AGENT_RESULT_RUNTIME_SCHEMA = {
   type: 'object',
@@ -71,6 +72,36 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
     artifacts: { type: 'array', items: { type: 'string' } },
     unverified: { type: 'array', items: { type: 'string' } },
     writes: { type: 'array', items: { type: 'string' } },
+    follow_up_work_items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: [
+          'id',
+          'title',
+          'description',
+          'required_persona_category',
+          'priority',
+          'dependencies',
+          'lease_requirements',
+          'max_attempts',
+          'reason'
+        ],
+        properties: {
+          id: { type: 'string', minLength: 1 },
+          title: { type: 'string', minLength: 1 },
+          description: { type: 'string', minLength: 1 },
+          required_persona_category: { type: 'string', minLength: 1 },
+          priority: { type: 'integer', minimum: 0 },
+          dependencies: { type: 'array', items: { type: 'string' } },
+          lease_requirements: { type: 'array' },
+          max_attempts: { type: 'integer', minimum: 1 },
+          reason: { type: 'string', minLength: 1 },
+          source_agent_session_id: { type: 'string' }
+        },
+        additionalProperties: false
+      }
+    },
     source_intelligence_refs: {
       anyOf: [
         { type: 'object', additionalProperties: true },
@@ -107,4 +138,8 @@ export function validateAgentResultSchema(result: unknown) {
     ok: validation.ok,
     issues: validation.issues
   }
+}
+
+export function validateAndNormalizeAgentFollowUps(rawItems: unknown, originSessionId?: string | null) {
+  return normalizeAgentFollowUpWorkItems(rawItems, originSessionId === undefined ? {} : { originSessionId })
 }

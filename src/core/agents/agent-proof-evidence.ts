@@ -5,6 +5,7 @@ import { validateAgentLedgerHashChain } from './agent-central-ledger.js'
 import { assertAllAgentSessionsClosed } from './agent-lifecycle.js'
 import { assertAgentTerminalSessionsClosed } from './agent-terminal-session.js'
 import { assertAgentSessionGenerationsClosed } from './agent-session-generation.js'
+import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
 
 export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
@@ -12,10 +13,17 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const generations = await assertAgentSessionGenerationsClosed(root)
   const ledger = await validateAgentLedgerHashChain(root)
   const tmuxLanes = await readJson<any>(path.join(root, 'agent-tmux-lanes.json'), null)
+  const laneSupervisor = await readTmuxLaneSupervisor(root)
+  const workQueue = await readJson<any>(path.join(root, 'agent-work-queue.json'), null)
   const scheduler = input.scheduler || await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const slots = await readJson<any>(path.join(root, 'agent-worker-slots.json'), null)
+  const generationArtifact = await readJson<any>(path.join(root, 'agent-session-generations.json'), null)
+  const schedulerEvents = await readTextSafe(path.join(root, 'agent-scheduler-events.jsonl'))
   const tmuxLaunchLedger = await readTextSafe(path.join(root, 'agent-tmux-pane-launch-ledger.jsonl'))
   const tmuxPaneLaunchCount = tmuxLaunchLedger.split(/\n/).filter(Boolean).length
+  const terminalCloseReportCount = terminal.total_sessions || 0
+  const generationCount = generations.generation_count || 0
+  const finalWorkItemCount = Number(scheduler?.completed_count || 0) + Number(scheduler?.failed_count || 0) + Number(scheduler?.blocked_count || 0)
   const blockers = [
     ...(lifecycle.ok ? [] : ['agent_lifecycle_not_all_closed']),
     ...(lifecycle.ok ? [] : lifecycle.open_sessions.map((id: string) => 'session_open:' + id)),
@@ -23,11 +31,24 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(terminal.ok ? [] : terminal.blockers),
     ...(generations.ok ? [] : generations.blockers),
     ...(!scheduler ? ['agent_scheduler_state_missing'] : []),
+    ...(!workQueue ? ['agent_work_queue_missing'] : []),
+    ...(!schedulerEvents.trim() ? ['agent_scheduler_events_missing'] : []),
+    ...(!slots ? ['agent_worker_slots_missing'] : []),
+    ...(!generationArtifact ? ['agent_session_generations_missing'] : []),
     ...(Array.isArray(scheduler?.blockers) ? scheduler.blockers : []),
     ...(scheduler && scheduler.pending_count > 0 && scheduler.active_slot_count === 0 ? ['scheduler_pending_queue_without_active_sessions'] : []),
     ...(scheduler && scheduler.pending_queue_drained !== true ? ['scheduler_pending_queue_not_drained'] : []),
+    ...(scheduler && Number(scheduler.active_slot_count || 0) !== 0 ? ['scheduler_active_slots_not_zero_at_finalization'] : []),
     ...(scheduler && Number(scheduler.expected_backfill_count || 0) > Number(scheduler.backfill_count || 0) ? ['scheduler_backfill_count_below_expected'] : []),
+    ...(scheduler && Number(scheduler.total_work_items || 0) >= Number(scheduler.target_active_slots || 0) && Number(scheduler.max_observed_active_slots || 0) !== Number(scheduler.target_active_slots || 0) ? ['scheduler_max_observed_active_slots_mismatch'] : []),
+    ...(generationCount < finalWorkItemCount ? ['session_generation_count_below_finished_work_items'] : []),
+    ...(terminalCloseReportCount < generationCount ? ['terminal_close_report_count_below_generation_count'] : []),
     ...(slots && slots.all_slots_closed_after_drain !== true ? ['agent_worker_slots_not_closed_after_drain'] : []),
+    ...(!laneSupervisor ? ['tmux_lane_supervisor_missing'] : []),
+    ...(laneSupervisor && laneSupervisor.no_flicker_verified !== true ? ['tmux_lane_no_flicker_not_verified'] : []),
+    ...(laneSupervisor && laneSupervisor.pane_survival_checked !== true ? ['tmux_lane_survival_not_checked'] : []),
+    ...(laneSupervisor && Number(laneSupervisor.unexpected_close_count || 0) > 0 ? ['tmux_lane_unexpected_close_before_drain'] : []),
+    ...(laneSupervisor?.blockers || []),
     ...(input.backend === 'tmux' && tmuxLanes?.ok !== true ? ['tmux_right_lane_manifest_missing'] : []),
     ...(input.backend === 'tmux' && tmuxPaneLaunchCount === 0 ? ['tmux_pane_launch_evidence_missing'] : []),
     ...(ledger.blockers || []),
@@ -54,7 +75,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     terminal_sessions_closed: terminal.ok,
     terminal_session_count: terminal.total_sessions,
     terminal_generation_count: generations.generation_count,
-    terminal_close_report_count: terminal.total_sessions,
+    terminal_close_report_count: terminalCloseReportCount,
     terminal_close_report: 'sessions/<slot_id>/gen-<n>/agent-terminal-close-report.json',
     session_generation_count: generations.generation_count,
     all_generations_closed: generations.ok,
@@ -65,13 +86,18 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     backfill_count: scheduler?.backfill_count || 0,
     expected_backfill_count: scheduler?.expected_backfill_count || 0,
     slot_count: slots?.slot_count || 0,
-    generation_count: generations.generation_count,
+    generation_count: generationCount,
     all_slots_closed_after_drain: slots?.all_slots_closed_after_drain === true,
     generated_work_item_count: scheduler?.generated_work_item_count || 0,
     source_intelligence_generation_refs_ok: generations.missing_source_intelligence_refs.length === 0,
     goal_mode_generation_refs_ok: generations.missing_goal_mode_refs.length === 0,
     tmux_lane_manifest: 'agent-tmux-lanes.json',
     tmux_lane_manifest_ok: tmuxLanes?.ok === true,
+    tmux_lane_supervisor: 'agent-tmux-lane-supervisor.json',
+    tmux_lane_no_flicker_verified: laneSupervisor?.no_flicker_verified === true,
+    tmux_lane_survival_checked: laneSupervisor?.pane_survival_checked === true,
+    tmux_lane_unexpected_close_count: laneSupervisor?.unexpected_close_count || 0,
+    tmux_lane_auto_reopen_count: laneSupervisor?.auto_reopen_count || 0,
     tmux_pane_launch_ledger: 'agent-tmux-pane-launch-ledger.jsonl',
     tmux_pane_launch_count: tmuxPaneLaunchCount,
     ledger_hash_chain_ok: ledger.ok,

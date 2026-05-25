@@ -1,15 +1,16 @@
-# Priority Closure P0-P4 1.18.0
+# Priority Closure P0-P5 1.18.2
 
-SKS 1.18.0 tracks P0 through P4 as release readiness scope.
+SKS 1.18.2 tracks P0 through P5 as release readiness scope.
 
-SKS 1.18.1 keeps the same closure priority model and adds dynamic agent pool replenishment, scheduler proof, slot generation closure, and propagation evidence as P0 release checks.
+SKS 1.18.2 keeps the same closure priority model and adds work-item-first task graph expansion, route blackbox replenishment, persistent tmux lane proof, follow-up work item schema, scheduler proof hardening, and P5 regression catalog coverage.
 
 | Priority | Done Definition |
 | --- | --- |
-| P0 | Correctness, safety, release, proof, runtime, source intelligence, Goal mode, no-Scout, terminal, tmux, and release DAG blockers are closed or explicitly blocked. |
-| P1 | Codex App/operator UX shows source intelligence, X AI, Codex Web, Goal mode, terminal, and tmux attach status. |
-| P2 | Source provider queries and release gates are parallelized where safe, with local-only provider caches and worker-pool speed summaries. |
-| P3 | README, policy docs, migration notes, troubleshooting, CLI help, and onboarding explain the 1.18.0 behavior. |
-| P4 | Human summaries cover source intelligence, X AI used/not used, Goal official/fallback, terminal close, tmux attach, janitor cleanup, release DAG speedup, and worker Scout local evidence. |
+| P0 | Correctness, safety, release, proof, runtime, source intelligence, Goal mode, no-Scout, terminal, tmux lane persistence, task graph, follow-up schema, route backfill, and release DAG blockers are closed or explicitly blocked. |
+| P1 | Codex App/operator UX shows target active slots, total work items, queue counts, backfill counts, generation history, source intelligence, X AI, Codex Web, Goal mode, terminal, and tmux attach status. |
+| P2 | Source provider queries, route gates, refill latency, queue metrics, janitor passes, and release DAG groups are parallelized or throttled where safe, with local-only provider caches and worker-pool speed summaries. |
+| P3 | README, policy docs, migration notes, troubleshooting, CLI help, active-slot semantics, `--work-items`, and onboarding explain the 1.18.2 behavior. |
+| P4 | Human summaries cover scheduler health, backfill, lane persistence, generation count, source intelligence, X AI used/not used, Goal official/fallback, terminal close, janitor cleanup, release DAG speedup, and worker Scout local evidence. |
+| P5 | Regression catalog covers no-backfill, backfill, multi-wave, follow-up, invalid follow-up, lane persistence/drain close, and Source Intelligence/Goal ref propagation. |
 
-User-requested 1.18.0 items are not accepted as non-goals.
+User-requested 1.18.2 items are not accepted as non-goals.

@@ -47,6 +47,8 @@ export interface AgentSchedulerState {
   expected_backfill_count: number
   generated_work_item_count: number
   refill_delay_ms: number
+  refill_latency_events_ms: number[]
+  refill_latency_p95_ms: number
   rate_limit_backoff_ms: number
   ticks: number
   active: Record<string, { slot_id: string; work_item_id: string; session_id: string }>
@@ -156,10 +158,13 @@ export async function runAgentScheduler(input: {
     }, input.onSchedulerEvent)
     await refillSlots(pendingAfterClose > 0 ? {
       closed_session_id: settled.session_id,
-      active_count_before: active.size
+      active_count_before: active.size,
+      closed_at_ms: Date.now()
     } : null)
   }
 
+  state.status = 'draining'
+  await writeAll(input.root, state, slots, queue, active, { event_type: 'scheduler_draining' }, input.onSchedulerEvent)
   slots = closeWorkerSlotsAfterDrain(slots)
   state = buildState(input.missionId, targetActiveSlots, queue, slots, active, {
     previous: state,
@@ -181,7 +186,7 @@ export async function runAgentScheduler(input: {
     results
   }
 
-  async function refillSlots(backfill: { closed_session_id: string; active_count_before: number } | null) {
+  async function refillSlots(backfill: { closed_session_id: string; active_count_before: number; closed_at_ms: number } | null) {
     state.status = 'running'
     while (active.size < targetActiveSlots && pendingWorkItems(queue).length > 0) {
       const slotIndex = slots.findIndex((slot) => slot.status === 'idle')
@@ -251,14 +256,18 @@ export async function runAgentScheduler(input: {
       active.set(generation.session_id, { slot_id: slot.slot_id, work_item_id: workItem.id, session_id: generation.session_id, promise })
       await appendAgentWorkQueueEvent(input.root, 'work_item_dispatched', { work_item_id: workItem.id, session_id: generation.session_id, slot_id: slot.slot_id })
       if (backfill) {
+        const refillLatencyMs = Math.max(0, Date.now() - backfill.closed_at_ms)
         state.backfill_count += 1
+        state.refill_latency_events_ms.push(refillLatencyMs)
+        state.refill_latency_p95_ms = percentile95(state.refill_latency_events_ms)
         await writeAll(input.root, state, slots, queue, active, {
           event_type: 'backfill_event',
           closed_session_id: backfill.closed_session_id,
           new_session_id: generation.session_id,
           slot_id: slot.slot_id,
           active_count_before: backfill.active_count_before,
-          active_count_after: active.size
+          active_count_after: active.size,
+          refill_latency_ms: refillLatencyMs
         }, input.onSchedulerEvent)
         backfill = null
       } else {
@@ -312,6 +321,8 @@ function buildState(
     expected_backfill_count: previous?.expected_backfill_count || 0,
     generated_work_item_count: queue.generated_work_item_count,
     refill_delay_ms: opts.refillDelayMs,
+    refill_latency_events_ms: previous?.refill_latency_events_ms || [],
+    refill_latency_p95_ms: previous?.refill_latency_p95_ms || 0,
     rate_limit_backoff_ms: opts.rateLimitBackoffMs,
     ticks: (previous?.ticks || 0) + 1,
     active: Object.fromEntries([...active.entries()].map(([sessionId, entry]) => [sessionId, { slot_id: entry.slot_id, work_item_id: entry.work_item_id, session_id: entry.session_id }])),
@@ -349,6 +360,8 @@ async function writeAll(
   currentState.blocked_count = nextState.blocked_count
   currentState.max_observed_active_slots = nextState.max_observed_active_slots
   currentState.generated_work_item_count = nextState.generated_work_item_count
+  currentState.refill_latency_events_ms = nextState.refill_latency_events_ms
+  currentState.refill_latency_p95_ms = nextState.refill_latency_p95_ms
   currentState.ticks = nextState.ticks
   currentState.active = nextState.active
   currentState.completed = nextState.completed
@@ -387,4 +400,11 @@ function buildAgentForGeneration(slot: AgentWorkerSlot, generation: AgentSession
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function percentile95(values: number[]) {
+  if (!values.length) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)
+  return sorted[index] || 0
 }

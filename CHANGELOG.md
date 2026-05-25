@@ -4,6 +4,35 @@
 
 
 
+
+## [1.18.2] - 2026-05-26
+
+### Added
+
+- Add work-item-first task graph expansion so total work items are independent from target active agent slots.
+- Add route-level dynamic backfill blackboxes for Agent, Team, Research, and QA.
+- Add official `follow_up_work_items` schema support in agent result validation.
+- Add persistent tmux lane supervisor with worker-slot lanes, generation-aware render files, and drain-signal controlled shutdown.
+- Add no-flicker tmux lane regression gates.
+- Add scheduler proof hardening for target active slots, queue drain, backfill counts, session generations, terminal close reports, Source Intelligence refs, and Goal mode refs.
+- Add scheduler-aware janitor reporting for active generation preservation and drained generation cleanup.
+- Add 1.18.2 full priority closure readiness report coverage for P0 through P5.
+
+### Fixed
+
+- Prevent real route runtime from passing dynamic pool checks using standalone scheduler fixtures only.
+- Prevent agent count from being treated as total work item count.
+- Prevent work queue generation from being limited to roster length.
+- Prevent tmux lane panes from disappearing after short-lived worker commands.
+- Prevent generation completion from closing worker slot lanes.
+- Prevent implicit or untyped follow-up work item enqueue.
+- Prevent proof from passing when expected backfill is not observed in real route artifacts.
+
+### Changed
+
+- Treat Native Agent Runtime as work-queue-first and slot/generation-driven.
+- Treat tmux lanes as persistent worker-slot UI, not pane launch evidence.
+- Treat P0 through P5 closure as a release readiness requirement.
 ## [1.18.1] - 2026-05-25
 
 ### Added
