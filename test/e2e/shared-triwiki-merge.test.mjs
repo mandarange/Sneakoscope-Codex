@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 import { createHermeticProjectRoot, runSksInRoot } from './route-real-command-helper.mjs';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('shared TriWiki publish accumulates independent claim shards', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'shared-triwiki-merge', setup: false });

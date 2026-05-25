@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { detectResponseLanguage, localizedFinalizationReason, responseLanguageInstruction } from '../../src/core/language-preference.mjs';
-import { promptPipelineContext, dfixQuickContext } from '../../src/core/pipeline.mjs';
+import { detectResponseLanguage, localizedFinalizationReason, responseLanguageInstruction } from '../../dist/core/language-preference.js';
+import { promptPipelineContext, dfixQuickContext } from '../../dist/core/pipeline.js';
 
 test('language preference detects Korean prompts even with conditional English wording', () => {
   const result = detectResponseLanguage('한국어로 물었으면 한국어로, 영어로 물었으면 영어로 나오게 해줘');

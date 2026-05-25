@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('blackbox Codex hook warning gate reports zero warnings', async () => {
   const result = await runProcess(process.execPath, ['./dist/bin/sks.js', 'hooks', 'warning-check', '--json'], {

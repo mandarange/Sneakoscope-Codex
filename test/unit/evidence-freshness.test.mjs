@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileFreshness, lastJsonlEventTime } from '../../src/core/evidence/evidence-freshness.mjs';
+import { fileFreshness, lastJsonlEventTime } from '../../dist/core/evidence/evidence-freshness.js';
 
 test('evidence freshness marks files older than the last route event as stale', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-evidence-freshness-'));

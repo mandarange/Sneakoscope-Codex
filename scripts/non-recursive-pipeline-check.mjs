@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   nonRecursivePipelineMarkdown,
   scanNonRecursivePipelinePolicy
-} from '../src/core/agents/agent-recursion-guard.mjs';
+} from '../dist/core/agents/agent-recursion-guard.js';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultRoot = path.resolve(scriptDir, '..');
@@ -35,9 +35,7 @@ function readFlag(name) {
 function collectScanRecords(scanRoot) {
   const candidates = [
     ['src/core/agents/agent-worker-pipeline.ts', 'source'],
-    ['src/core/agents/agent-worker-pipeline.mjs', 'source'],
     ['src/core/agents/agent-recursion-guard.ts', 'source'],
-    ['src/core/agents/agent-recursion-guard.mjs', 'source'],
     ['src/core/agents/agent-runner-process.ts', 'source'],
     ['src/core/agents/agent-runner-codex-exec.ts', 'source'],
     ['src/core/agents/agent-runner-tmux.ts', 'source'],

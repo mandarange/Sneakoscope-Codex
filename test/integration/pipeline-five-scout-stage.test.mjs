@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPipelinePlan } from '../../src/core/pipeline.mjs';
-import { routePrompt } from '../../src/core/routes.mjs';
+import { buildPipelinePlan } from '../../dist/core/pipeline.js';
+import { routePrompt } from '../../dist/core/routes.js';
 
 test('serious route pipeline includes native_agent_intake stage', () => {
   const plan = buildPipelinePlan({ route: routePrompt('$Team'), task: 'implement fixture' });

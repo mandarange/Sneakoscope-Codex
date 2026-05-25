@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { writeRouteCompletionProof } from '../../src/core/proof/route-adapter.mjs';
+import { writeRouteCompletionProof } from '../../dist/core/proof/route-adapter.js';
 
 test('route proof adapter writes mission completion proof', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-route-proof-'));

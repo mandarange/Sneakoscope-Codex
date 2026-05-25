@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { ensureGlobalCodexSkillsDuringInstall } from '../../src/cli/install-helpers.mjs';
+import { ensureGlobalCodexSkillsDuringInstall } from '../../dist/cli/install-helpers.js';
 
 test('global Codex App skill install includes commit dollar routes', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-global-skills-'));

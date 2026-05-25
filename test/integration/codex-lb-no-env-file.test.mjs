@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { runProcess, exists } from '../../src/core/fsx.mjs';
+import { runProcess, exists } from '../../dist/core/fsx.js';
 
 test('codex-lb --no-env-file does not create the env loader file', async () => {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-lb-noenv-'));

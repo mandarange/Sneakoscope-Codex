@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateBbox } from '../../src/core/wiki-image/bbox.mjs';
-import { emptyImageVoxelLedger } from '../../src/core/wiki-image/image-voxel-schema.mjs';
-import { validateImageVoxelLedger } from '../../src/core/wiki-image/validation.mjs';
+import { validateBbox } from '../../dist/core/wiki-image/bbox.js';
+import { emptyImageVoxelLedger } from '../../dist/core/wiki-image/image-voxel-schema.js';
+import { validateImageVoxelLedger } from '../../dist/core/wiki-image/validation.js';
 
 test('image voxel ledger validates image refs and bbox bounds', () => {
   const ledger = emptyImageVoxelLedger({

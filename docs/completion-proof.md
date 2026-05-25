@@ -74,6 +74,6 @@ sks trust report latest --json
 sks trust validate latest --json
 ```
 
-Route finalization lives under `src/core/proof/route-finalizer.mjs`, route policy in `route-finalizer-policy.mjs` and `route-proof-policy.mjs`, route writing in `route-adapter.mjs`, and Stop validation in `route-proof-gate.mjs`.
+Route finalization lives under `src/core/proof/route-finalizer.ts`, route policy in `route-finalizer-policy.ts` and `route-proof-policy.ts`, route writing in `route-adapter.ts`, and Stop validation in `route-proof-gate.ts`.
 
 Proof writing and validation redact secret-shaped values, including Codex access tokens, OpenAI API keys, and codex-lb API keys, with the common marker `[redacted]`. Mock and fixture evidence must stay `verified_partial`, `not_verified`, `mock`, or `fixture`; it must not be claimed as a real verified run.

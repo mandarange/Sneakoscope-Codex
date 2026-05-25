@@ -1,6 +1,6 @@
 # Route Finalization
 
-SKS `0.9.18` uses `src/core/proof/route-finalizer.mjs` as the central completion path for serious routes, with `src/core/proof/auto-finalize.mjs` as the command-facing helper. The finalizer accepts a mission id, route, gate/artifact evidence, command/test evidence, claims, unverified items, blockers, and optional visual evidence policy.
+SKS `1.17.0` uses `src/core/proof/route-finalizer.ts` as the central completion path for serious routes, with `src/core/proof/auto-finalize.ts` as the command-facing helper. The finalizer accepts a mission id, route, gate/artifact evidence, command/test evidence, claims, unverified items, blockers, and optional visual evidence policy.
 
 Route fixture commands call `maybeFinalizeRoute` directly. The release-gated set includes Team, QA-LOOP, Research, PPT, Image UX Review, Computer Use, DB, Wiki, and GX. Their E2E tests execute actual route commands and then inspect mission-local `completion-proof.json` rather than using `sks proof finalize latest` as the route test itself.
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPipelinePlan as facadePlan } from '../../src/core/pipeline.mjs';
-import { buildPipelinePlan as splitPlan } from '../../src/core/pipeline/pipeline-plan-writer.mjs';
+import { buildPipelinePlan as facadePlan } from '../../dist/core/pipeline.js';
+import { buildPipelinePlan as splitPlan } from '../../dist/core/pipeline/pipeline-plan-writer.js';
 
 test('pipeline facade and split module exports stay compatible', () => {
   const a = facadePlan({ task: '$Team fixture' });

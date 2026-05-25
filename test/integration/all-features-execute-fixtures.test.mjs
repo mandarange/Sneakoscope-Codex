@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAllFeaturesSelftest, buildFeatureRegistry } from '../../src/core/feature-registry.mjs';
+import { buildAllFeaturesSelftest, buildFeatureRegistry } from '../../dist/core/feature-registry.js';
 
 test('all-features execute-fixtures mode reaches release fixture threshold', async () => {
   const registry = await buildFeatureRegistry({ root: process.cwd() });

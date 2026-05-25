@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { exists } from '../../src/core/fsx.mjs';
-import { rustImageHash, rustVoxelValidate } from '../../src/core/rust-accelerator.mjs';
+import { exists } from '../../dist/core/fsx.js';
+import { rustImageHash, rustVoxelValidate } from '../../dist/core/rust-accelerator.js';
 
 test('rust wrapper normalizes JS fallback parity shape', async () => {
   const previous = process.env.SKS_RS_BIN;

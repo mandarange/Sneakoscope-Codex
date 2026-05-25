@@ -1,7 +1,7 @@
 import { AGENT_INTAKE_STAGE_ID, DEFAULT_AGENT_COUNT } from './agent-schema.js'
 
 const AGENT_REQUIRED_ROUTE_KEYS = new Set([
-  'team', '$team', 'research', '$research', 'autoresearch', '$autoresearch', 'qa-loop', '$qa-loop', 'review', '$review'
+  'team', '$team', 'research', '$research', 'autoresearch', '$autoresearch', 'qa-loop', '$qa-loop', 'review', '$review', 'release-review', '$release-review'
 ])
 
 function routeKey(route: any): string {
@@ -14,7 +14,7 @@ export function routeRequiresAgentIntake(route: any, input: any = {}): boolean {
   const key = routeKey(route)
   if (AGENT_REQUIRED_ROUTE_KEYS.has(key)) return true
   const task = String(input.task || '')
-  return /\$(Team|Research|AutoResearch|QA-LOOP|Review)\b/i.test(task)
+  return /\$(Team|Research|AutoResearch|QA-LOOP|Review|Release-Review)\b/i.test(task)
 }
 
 export function normalizeAgentPolicy(route: any, task: any = '', input: any = {}) {

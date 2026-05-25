@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { latestTrustReport } from '../../src/core/trust-kernel/trust-report.mjs';
+import { latestTrustReport } from '../../dist/core/trust-kernel/trust-report.js';
 
 test('trust report blocks when proof is older than latest route event', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-trust-stale-proof-'));

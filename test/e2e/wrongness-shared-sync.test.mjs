@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 import { createHermeticProjectRoot, runSksInRoot } from './route-real-command-helper.mjs';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('shared wrongness shards are read when the local project ledger is absent', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'wrongness-shared-sync', setup: false });

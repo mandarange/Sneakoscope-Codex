@@ -46,7 +46,6 @@ const agentFiles = [
   'src/core/agents/agent-consensus.ts',
   'src/core/agents/agent-proof-evidence.ts',
   'src/core/agents/agent-recursion-guard.ts',
-  'src/core/agents/agent-recursion-guard.mjs',
   'src/core/agents/agent-output-validator.ts',
   'src/core/agents/agent-cleanup.ts',
   'src/core/agents/agent-trust-report.ts',
@@ -219,8 +218,8 @@ function assertReleaseScripts() {
   ];
   for (const name of required) {
     assertGate(Boolean(pkg.scripts?.[name]), `package script missing ${name}`);
-    assertGate(pkg.scripts['release:check'].includes(`npm run ${name}`), `release:check missing ${name}`);
   }
+  assertGate(String(pkg.scripts?.['release:check'] || '').includes('release:check:parallel'), 'release:check must delegate to the parallel P0 DAG');
 }
 
 

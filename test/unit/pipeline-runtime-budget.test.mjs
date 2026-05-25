@@ -6,37 +6,37 @@ import path from 'node:path';
 const root = process.cwd();
 
 test('pipeline-runtime is a small compatibility facade', () => {
-  const file = path.join(root, 'src/core/pipeline-runtime.mjs');
+  const file = path.join(root, 'src/core/pipeline-runtime.ts');
   const text = fs.readFileSync(file, 'utf8');
   assert.ok(text.split(/\r?\n/).length <= 300);
-  assert.match(text, /pipeline-internals\/runtime-core\.mjs/);
+  assert.match(text, /pipeline-internals\/runtime-core\.js/);
   assert.doesNotMatch(text, /\bfrom ['"].*\b(team|qa|research|ppt|image-ux-review|db|gx)\b/i);
 });
 
 test('pipeline budget required split modules exist', () => {
   for (const file of [
-    'plan-schema.mjs',
-    'stage-policy.mjs',
-    'agent-stage-policy.mjs',
-    'route-prep.mjs',
-    'route-prep-team.mjs',
-    'route-prep-research.mjs',
-    'route-prep-qa.mjs',
-    'route-prep-ppt.mjs',
-    'route-prep-image-ux.mjs',
-    'route-prep-db.mjs',
-    'route-prep-gx.mjs',
-    'stop-gate.mjs',
-    'stop-gate-context7.mjs',
-    'stop-gate-subagents.mjs',
-    'stop-gate-proof.mjs',
-    'active-context.mjs',
-    'prompt-context.mjs',
-    'prompt-context-dfix.mjs',
-    'prompt-context-answer.mjs',
-    'prompt-context-computer-use.mjs',
-    'pipeline-plan-writer.mjs',
-    'validation.mjs'
+    'plan-schema.ts',
+    'stage-policy.ts',
+    'agent-stage-policy.ts',
+    'route-prep.ts',
+    'route-prep-team.ts',
+    'route-prep-research.ts',
+    'route-prep-qa.ts',
+    'route-prep-ppt.ts',
+    'route-prep-image-ux.ts',
+    'route-prep-db.ts',
+    'route-prep-gx.ts',
+    'stop-gate.ts',
+    'stop-gate-context7.ts',
+    'stop-gate-subagents.ts',
+    'stop-gate-proof.ts',
+    'active-context.ts',
+    'prompt-context.ts',
+    'prompt-context-dfix.ts',
+    'prompt-context-answer.ts',
+    'prompt-context-computer-use.ts',
+    'pipeline-plan-writer.ts',
+    'validation.ts'
   ]) {
     assert.equal(fs.existsSync(path.join(root, 'src/core/pipeline', file)), true, file);
   }

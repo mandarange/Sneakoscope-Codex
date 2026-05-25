@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { codexLbMetrics } from '../../src/core/codex-lb-circuit.mjs';
+import { codexLbMetrics } from '../../dist/core/codex-lb-circuit.js';
 
 test('codex-lb circuit opens on auth failure evidence', () => {
   const metrics = codexLbMetrics({

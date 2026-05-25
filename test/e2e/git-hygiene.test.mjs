@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 import { createHermeticProjectRoot, runSksInRoot } from './route-real-command-helper.mjs';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('sks git install and doctor keep shared memory trackable', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'git-hygiene', setup: false });

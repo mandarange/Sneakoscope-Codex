@@ -25,7 +25,7 @@ test('generated callout image ledger blocks claimed real evidence when file evid
 });
 
 test('source mjs generated image ledger matches strict file-evidence semantics', async () => {
-  const imageUx = await import('../../src/core/image-ux-review.mjs');
+  const imageUx = await import('../../dist/core/image-ux-review.js');
   const { root, imagePath } = await tempImageRoot();
   const contract = {
     prompt: 'UX-Review 1.0.8 source mjs fixture',

@@ -10,8 +10,8 @@ npm run official-docs:compat
 
 It writes:
 
-- `.sneakoscope/reports/official-docs-compat-1.14.1.json`
-- `.sneakoscope/reports/official-docs-compat-1.14.1.md`
+- `.sneakoscope/reports/official-docs-compat-1.17.0.json`
+- `.sneakoscope/reports/official-docs-compat-1.17.0.md`
 
 The report records the current baselines used by release readiness:
 

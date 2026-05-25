@@ -2,8 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+const pkg = JSON.parse(fsSync.readFileSync('package.json', 'utf8'));
+const pkgVersion = pkg.version;
 
 test('release registry check ignores inherited publish dist-tag config', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-registry-check-'));
@@ -21,7 +25,7 @@ fs.appendFileSync(process.env.SKS_FAKE_NPM_LOG, JSON.stringify({
 }) + '\\n');
 
 if (args[0] === 'pack') {
-  console.log(JSON.stringify([{ name: 'sneakoscope', version: '1.16.1' }]));
+  console.log(JSON.stringify([{ name: 'sneakoscope', version: '${pkgVersion}' }]));
   process.exit(0);
 }
 
@@ -30,8 +34,8 @@ if (args[0] === 'view' && args[1] === 'sneakoscope@latest') {
   process.exit(0);
 }
 
-if (args[0] === 'view' && args[1] === 'sneakoscope@1.16.1') {
-  console.error('No match found for version 1.16.1');
+if (args[0] === 'view' && args[1] === 'sneakoscope@${pkgVersion}') {
+  console.error('No match found for version ${pkgVersion}');
   process.exit(1);
 }
 
@@ -61,6 +65,6 @@ exec "${process.execPath}" "${fakeNpm}" "$@"
 
   const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
   const viewCalls = calls.filter((call) => call.args[0] === 'view');
-  assert.deepEqual(viewCalls.map((call) => call.args[1]), ['sneakoscope@latest', 'sneakoscope@1.16.1']);
+  assert.deepEqual(viewCalls.map((call) => call.args[1]), ['sneakoscope@latest', `sneakoscope@${pkgVersion}`]);
   assert.deepEqual(viewCalls.map((call) => call.tag), [null, null]);
 });

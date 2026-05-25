@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runFeatureFixture } from '../../src/core/feature-fixture-runner.mjs';
+import { runFeatureFixture } from '../../dist/core/feature-fixture-runner.js';
 
 test('feature fixture runner validates expected artifact schemas', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-feature-runner-test-'));

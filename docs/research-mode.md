@@ -15,3 +15,5 @@ AutoResearch cycles inherit the same policy: no removed legacy multi-agent backe
 ## 1.16.1 Runtime Closure
 
 SKS 1.16.1 routes release-critical Team, Research, QA, and native agent proof checks through the native agent orchestrator, Codex exec output-last-message parsing, central ledger proof, and no-scout runtime gates.
+
+SKS 1.16.2 keeps that closure intact for the prompt-side Team agent budget patch release.

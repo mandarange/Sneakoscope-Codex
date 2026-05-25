@@ -30,7 +30,7 @@ export async function team(args: any = []) {
   const opts = parseTeamCreateArgs(cleanCreateArgs);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   if (!prompt) {
-    console.error('Usage: sks team "task" [executor:5 reviewer:6 user:1] [--agents N] [--no-open-tmux] [--json] [--mock]');
+    console.error('Usage: sks team "task" [20:agents] [executor:5 reviewer:6 user:1] [--agents N] [--no-open-tmux] [--json] [--mock]');
     process.exitCode = 1;
     return;
   }

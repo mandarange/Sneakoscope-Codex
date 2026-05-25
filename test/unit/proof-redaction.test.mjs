@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertProofRedaction } from '../../src/core/proof/proof-redaction.test-helper.mjs';
+import { assertProofRedaction } from '../../dist/core/proof/proof-redaction.test-helper.js';
 
 test('proof redaction normalizes secret markers', () => {
   const result = assertProofRedaction({

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { writeEvidenceIndexForProof } from '../../src/core/evidence/evidence-router.mjs';
+import { writeEvidenceIndexForProof } from '../../dist/core/evidence/evidence-router.js';
 
 test('evidence router blocks missing required artifact paths', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-evidence-router-'));

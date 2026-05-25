@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('pack install black-box contract includes packed sks run --execute', async () => {
   const result = await runProcess(process.execPath, ['scripts/blackbox-pack-install.mjs', '--dry-run', '--json'], {

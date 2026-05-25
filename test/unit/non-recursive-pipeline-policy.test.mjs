@@ -5,7 +5,7 @@ import {
   AGENT_WORKER_ENV_GUARD_TOKENS,
   nonRecursivePipelineMarkdown,
   scanNonRecursivePipelinePolicy
-} from '../../src/core/agents/agent-recursion-guard.mjs';
+} from '../../dist/core/agents/agent-recursion-guard.js';
 
 test('non-recursive pipeline scanner accepts guarded worker records', () => {
   const report = scanNonRecursivePipelinePolicy(baseRecords());

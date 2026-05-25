@@ -2,7 +2,7 @@ import { DEFAULT_AGENT_COUNT } from './agent-schema.js'
 
 export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const first = args[0] && !String(args[0]).startsWith('--') ? String(args[0]) : ''
-  const actions = new Set(['run', 'status', 'plan', 'spawn', 'watch', 'lane', 'board', 'ledger', 'collect', 'consensus', 'close', 'cleanup', 'proof', 'explain'])
+  const actions = new Set(['run', 'status', 'plan', 'spawn', 'watch', 'dashboard', 'cockpit', 'lane', 'board', 'ledger', 'collect', 'consensus', 'close', 'cleanup', 'proof', 'explain'])
   const action = actions.has(first) ? first : 'run'
   const rest = action === first ? args.slice(1) : args
   const json = hasFlag(args, '--json')
@@ -13,11 +13,15 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const mock = hasFlag(args, '--mock') || backend === 'fake'
   const real = hasFlag(args, '--real')
   const readonly = hasFlag(args, '--readonly') || hasFlag(args, '--read-only')
+  const codexApp = hasFlag(args, '--codex-app')
+  const positionals = positionalArgs(rest, new Set(['--agents', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane']))
   const missionDefault = action === 'run' || action === 'spawn' || action === 'plan' ? '' : 'latest'
-  const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', missionDefault)))
+  const positionalMission = action === 'run' || action === 'spawn' || action === 'plan' ? '' : (positionals[0] || '')
+  const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', positionalMission || missionDefault)))
   const lane = String(readOption(args, '--agent', readOption(args, '--lane', '')))
-  const prompt = positionalArgs(rest, new Set(['--agents', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane'])).join(' ').trim() || 'Native agent run'
-  return { command, action, prompt, route, agents, concurrency, backend, mock, real, readonly, json, missionId, lane }
+  const promptPositionals = positionalMission ? positionals.slice(1) : positionals
+  const prompt = promptPositionals.join(' ').trim() || 'Native agent run'
+  return { command, action, prompt, route, agents, concurrency, backend, mock, real, readonly, json, missionId, lane, codexApp }
 }
 
 function hasFlag(args: string[], flag: string) {

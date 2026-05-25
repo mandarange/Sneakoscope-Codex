@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { runProcess, exists, readText } from '../../src/core/fsx.mjs';
+import { runProcess, exists, readText } from '../../dist/core/fsx.js';
 
 test('codex-lb setup applies selected actions and reports drift-free writes', async () => {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-lb-apply-'));

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyImageVoxelLedger } from '../../src/core/wiki-image/image-voxel-schema.mjs';
-import { validateImageVoxelLedger } from '../../src/core/wiki-image/validation.mjs';
+import { emptyImageVoxelLedger } from '../../dist/core/wiki-image/image-voxel-schema.js';
+import { validateImageVoxelLedger } from '../../dist/core/wiki-image/validation.js';
 
 test('image voxel relation validation catches missing before/after anchors', () => {
   const valid = emptyImageVoxelLedger({

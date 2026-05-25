@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateHookPayload, honestModeGapLines } from '../../src/core/hooks-runtime.mjs';
+import { evaluateHookPayload, honestModeGapLines } from '../../dist/core/hooks-runtime.js';
 
 test('shared hook runtime blocks destructive DB pre-tool payload', async () => {
   const result = await evaluateHookPayload('pre-tool', {

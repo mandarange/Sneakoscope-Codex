@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+const pkg = JSON.parse(fsSync.readFileSync('package.json', 'utf8'));
 
 test('release-check stamp can be written and verified without rerunning release:check', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-stamp-'));
@@ -29,6 +32,6 @@ test('release-check stamp can be written and verified without rerunning release:
   const parsed = JSON.parse(await fs.readFile(stamp, 'utf8'));
   assert.equal(parsed.schema, 'sks.release-check-stamp.v1');
   assert.equal(parsed.package_name, 'sneakoscope');
-  assert.equal(parsed.package_version, '1.16.1');
+  assert.equal(parsed.package_version, pkg.version);
   assert.match(parsed.source_digest, /^[a-f0-9]{64}$/);
 });

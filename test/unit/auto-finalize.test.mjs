@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { maybeFinalizeRoute } from '../../src/core/proof/auto-finalize.mjs';
-import { writeJsonAtomic } from '../../src/core/fsx.mjs';
-import { latestTrustReport } from '../../src/core/trust-kernel/trust-report.mjs';
+import { maybeFinalizeRoute } from '../../dist/core/proof/auto-finalize.js';
+import { writeJsonAtomic } from '../../dist/core/fsx.js';
+import { latestTrustReport } from '../../dist/core/trust-kernel/trust-report.js';
 
 test('maybeFinalizeRoute writes a route completion proof when gate passes', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-auto-finalize-'));

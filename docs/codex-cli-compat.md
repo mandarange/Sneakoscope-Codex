@@ -12,7 +12,7 @@ sks codex version --json
 sks codex doctor --json
 sks codex schema --json
 npm run codex:0.133-compat
-npm run codex:exec-syntax-parity
+npm run codex:exec-output-schema-actual-syntax
 npm run codex:output-schema-fixture
 sks hooks codex-validate --json
 sks hooks warning-check --json
@@ -90,7 +90,7 @@ SKS strict-subset examples:
 ```bash
 npm run codex:compat
 npm run codex:0.133-compat
-npm run codex:exec-syntax-parity
+npm run codex:exec-output-schema-actual-syntax
 npm run codex:output-schema-fixture
 npm run hooks:codex-validate
 npm run hooks:warning-check

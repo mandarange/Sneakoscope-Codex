@@ -4,7 +4,7 @@ import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { validateAgentLedgerHashChain } from './agent-central-ledger.js'
 import { assertAllAgentSessionsClosed } from './agent-lifecycle.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const ledger = await validateAgentLedgerHashChain(root)
   const blockers = [
@@ -12,6 +12,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(ledger.blockers || []),
     ...(input.partition?.blockers || []),
     ...(input.consensus?.blockers || []),
+    ...(input.janitor?.ok === false ? input.janitor.blockers || ['agent_janitor_not_ok'] : []),
     ...(input.results || []).flatMap((result: any) => result.blockers || []),
     ...agentChangedFileLeaseViolations(input.results || [], input.partition?.leases || [])
   ]
@@ -37,6 +38,8 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     timeout_kill_report: 'agent-timeout-kill-report.json',
     timeout_killed_sessions: Array.isArray(input.timeoutKill?.killed_sessions) ? input.timeoutKill.killed_sessions : [],
     cleanup_report: 'agent-cleanup.json',
+    janitor_report: 'agent-janitor-report.json',
+    janitor_ok: input.janitor?.ok !== false,
     trust_report: 'agent-trust-report.json',
     wrongness_records: 'agent-wrongness-records.json',
     changed_files_lease_checked: true,

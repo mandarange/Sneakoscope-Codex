@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createResearchPlan, evaluateResearchGate, writeMockResearchResult } from '../../src/core/research.mjs';
-import { writeRouteCompletionProof } from '../../src/core/proof/route-adapter.mjs';
-import { validateRouteCompletionProof } from '../../src/core/proof/route-proof-gate.mjs';
+import { createResearchPlan, evaluateResearchGate, writeMockResearchResult } from '../../dist/core/research.js';
+import { writeRouteCompletionProof } from '../../dist/core/proof/route-adapter.js';
+import { validateRouteCompletionProof } from '../../dist/core/proof/route-proof-gate.js';
 
 test('Research mock route creates required ledgers, gate, and completion proof', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-research-fixture-'));

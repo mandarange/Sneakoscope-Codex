@@ -2,6 +2,7 @@ import path from 'node:path';
 import { appendJsonlBounded, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from './fsx.js';
 import { reasoningProfileName, triwikiContextTracking, triwikiContextTrackingText } from './routes.js';
 import { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_STAGE_AGENT_SESSIONS } from './team-review-policy.js';
+import { MAX_AGENT_COUNT } from './agents/agent-schema.js';
 export { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, MIN_TEAM_REVIEW_STAGE_AGENT_SESSIONS, evaluateTeamReviewPolicyGate, teamReviewPolicy } from './team-review-policy.js';
 
 const MAX_LIVE_BYTES = 192 * 1024;
@@ -35,7 +36,8 @@ const CHAT_COLOR_CODES = {
   gray: '90'
 };
 export const DEFAULT_TEAM_ROLE_COUNTS = { user: 1, planner: 1, reviewer: MIN_TEAM_REVIEWER_LANES, executor: 3 };
-export const DEFAULT_MAX_TEAM_AGENT_SESSIONS = 6;
+export const MAX_TEAM_AGENT_SESSIONS = MAX_AGENT_COUNT;
+export const DEFAULT_MAX_TEAM_AGENT_SESSIONS = MAX_TEAM_AGENT_SESSIONS;
 const ROLE_ALIASES = {
   user: 'user',
   users: 'user',
@@ -215,6 +217,7 @@ ${prompt}
 - Use relevant TriWiki context before every stage, hydrate low-trust claims from source during the stage, refresh after findings/artifact changes, and validate before handoffs or final claims.
 - Native agent intake agents are read-only and split repo, docs, tests, risk, API, and user-flow investigation before the parent refreshes TriWiki for debate.
 - executor:N means build N debate participants and then a separate N-person executor development team.
+- N:agents or N:agent means use up to N native multi-session agents for Team bundles, capped at ${MAX_TEAM_AGENT_SESSIONS}.
 - Debate uses compact Hyperplan-derived adversarial lenses: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative.
 - User personas are intentionally impatient, self-interested, stubborn, low-context, and dislike inconvenience.
 - Executors are capable developers with disjoint ownership.
@@ -292,7 +295,9 @@ export function defaultTeamControl(id: any) {
 
 export function normalizeTeamAgentSessions(value: any, fallback: any = 3) {
   const n = Number(value ?? fallback);
-  return Math.min(12, Math.max(1, Number.isFinite(n) ? Math.floor(n) : fallback));
+  const fallbackNumber = Number(fallback);
+  const fallbackCount = Number.isFinite(fallbackNumber) ? Math.floor(fallbackNumber) : 3;
+  return Math.min(MAX_TEAM_AGENT_SESSIONS, Math.max(1, Number.isFinite(n) ? Math.floor(n) : fallbackCount));
 }
 
 export function parseTeamSpecArgs(args: any = []) {
@@ -302,6 +307,12 @@ export function parseTeamSpecArgs(args: any = []) {
   let explicitExecutor = false;
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]);
+    const agentBudget = parseAgentBudgetToken(arg);
+    if (agentBudget !== null) {
+      explicitSession = agentBudget;
+      if (!explicitExecutor) roleCounts.executor = agentBudget;
+      continue;
+    }
     const rolePair = parseRolePair(arg);
     if (rolePair) {
       roleCounts[rolePair.role] = rolePair.count;
@@ -343,24 +354,24 @@ export function parseTeamSpecArgs(args: any = []) {
       continue;
     }
     if (arg === '--json' || arg === '--open-tmux' || arg === '--tmux-open' || arg === '--no-open-tmux' || arg === '--no-tmux' || arg === '--no-attach' || arg === '--separate-session' || arg === '--new-session' || arg === '--legacy-team-session' || arg === '--no-dynamic-team-tmux') continue;
-    cleanArgs.push(args[i]);
+    const consumed = consumeTeamSpecText(arg, { roleCounts, explicitExecutor, explicitSession });
+    roleCounts = consumed.roleCounts;
+    explicitExecutor = consumed.explicitExecutor;
+    explicitSession = consumed.explicitSession;
+    if (consumed.prompt) cleanArgs.push(consumed.prompt);
   }
   return { cleanArgs, ...normalizeTeamSpec({ roleCounts, agentSessions: explicitSession }) };
 }
 
 export function parseTeamSpecText(text: any = '') {
   let roleCounts: Record<string, number> = { ...DEFAULT_TEAM_ROLE_COUNTS };
-  let explicitExecutor = false;
+  let explicitSession: any = null;
   const wantsMaxAgents = /\b(max|maximum|maximal|available agents?)\b|최대|가용가능/i.test(String(text || ''));
-  const prompt = String(text || '').replace(/\b([A-Za-z][A-Za-z_-]*):(\d+)\b/g, (token: any) => {
-    const parsed = parseRolePair(token);
-    if (!parsed) return token;
-    roleCounts[parsed.role] = parsed.count;
-    if (parsed.role === 'executor') explicitExecutor = true;
-    return '';
-  }).replace(/\s+/g, ' ').trim();
-  if (wantsMaxAgents && !explicitExecutor) roleCounts.executor = DEFAULT_MAX_TEAM_AGENT_SESSIONS;
-  return { prompt, ...normalizeTeamSpec({ roleCounts, agentSessions: wantsMaxAgents ? roleCounts.executor : undefined, prompt }) };
+  const consumed = consumeTeamSpecText(text, { roleCounts, explicitExecutor: false, explicitSession });
+  roleCounts = consumed.roleCounts;
+  explicitSession = consumed.explicitSession;
+  if (wantsMaxAgents && !consumed.explicitExecutor) roleCounts.executor = DEFAULT_MAX_TEAM_AGENT_SESSIONS;
+  return { prompt: consumed.prompt, ...normalizeTeamSpec({ roleCounts, agentSessions: explicitSession ?? (wantsMaxAgents ? roleCounts.executor : undefined), prompt: consumed.prompt }) };
 }
 
 export function normalizeTeamSpec(opts: any = {}) {
@@ -451,6 +462,32 @@ function parseRolePair(token: any) {
   const role = normalizeTeamRole(match[1]);
   if (!role) return null;
   return { role, count: normalizeTeamAgentSessions(match[2], (DEFAULT_TEAM_ROLE_COUNTS as Record<string, number>)[role] || 1) };
+}
+
+function parseAgentBudgetToken(token: any) {
+  const match = String(token || '').match(/^(\d+):(agents?|sessions?|team)$/i);
+  if (!match) return null;
+  return normalizeTeamAgentSessions(match[1], DEFAULT_TEAM_ROLE_COUNTS.executor);
+}
+
+function consumeTeamSpecText(text: any, state: any = {}) {
+  const roleCounts: Record<string, number> = state.roleCounts || { ...DEFAULT_TEAM_ROLE_COUNTS };
+  let explicitExecutor = state.explicitExecutor === true;
+  let explicitSession = state.explicitSession ?? null;
+  const prompt = String(text || '').replace(/\b(\d+):(agents?|sessions?|team)\b/gi, (token: any) => {
+    const agentBudget = parseAgentBudgetToken(token);
+    if (agentBudget === null) return token;
+    explicitSession = agentBudget;
+    if (!explicitExecutor) roleCounts.executor = agentBudget;
+    return '';
+  }).replace(/\b([A-Za-z][A-Za-z_-]*):(\d+)\b/g, (token: any) => {
+    const parsed = parseRolePair(token);
+    if (!parsed) return token;
+    roleCounts[parsed.role] = parsed.count;
+    if (parsed.role === 'executor') explicitExecutor = true;
+    return '';
+  }).replace(/\s+/g, ' ').trim();
+  return { prompt, roleCounts, explicitExecutor, explicitSession };
 }
 
 function normalizeTeamRole(role: any) {

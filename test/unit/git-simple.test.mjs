@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { runProcess } from '../../src/core/fsx.mjs';
-import { simpleGitCommit } from '../../src/core/git-simple.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
+import { simpleGitCommit } from '../../dist/core/git-simple.js';
 
 test('simple git commit stages changes and appends Codex trailer once', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-simple-git-'));

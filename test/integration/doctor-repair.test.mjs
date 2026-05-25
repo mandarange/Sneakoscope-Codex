@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rustInfo } from '../../src/core/rust-accelerator.mjs';
+import { rustInfo } from '../../dist/core/rust-accelerator.js';
 
 test('doctor-adjacent rust capability reports concrete availability', async () => {
   const info = await rustInfo();

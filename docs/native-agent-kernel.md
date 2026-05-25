@@ -40,6 +40,7 @@ Manual fan-out controls:
 - `--agents N` chooses the roster size, from 1 to 20.
 - `--concurrency N` chooses how many sessions run in one batch.
 - Team prompts also accept role counts such as `$Team <task> executor:8 reviewer:5`.
+- Codex App Team prompts can set the Team width with count-first text such as `$Team 20:agents <task>` or `$Team 20:agent <task>`. The budget token is removed from the task prompt, maps to the Team bundle/session budget, and remains capped at 20.
 
 The parent assigns effort per lane: low for narrow read-only/docs work, medium for normal tooling and lease mapping, high for safety/DB/schema/release lanes, and xhigh for frontier or forensic work. A lane can escalate when a blocker, lease conflict, schema failure, DB risk, or release risk appears; unrelated lanes can stay cheaper.
 
@@ -54,3 +55,5 @@ Review, PPT-Collab, UX-Collab, DB-Review, and Release-Review all write the same 
 ## 1.16.1 Runtime Closure
 
 SKS 1.16.1 routes release-critical Team, Research, QA, and native agent proof checks through the native agent orchestrator, Codex exec output-last-message parsing, central ledger proof, and no-scout runtime gates.
+
+SKS 1.16.2 keeps that native-agent runtime closure and adds Codex App prompt-side Team budget tokens such as `$Team 20:agents <task>` and `$Team 20:agent <task>`.

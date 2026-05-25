@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { finalizeRouteWithProof } from '../../src/core/proof/route-finalizer.mjs';
-import { readJson } from '../../src/core/fsx.mjs';
+import { finalizeRouteWithProof } from '../../dist/core/proof/route-finalizer.js';
+import { readJson } from '../../dist/core/fsx.js';
 
 test('route finalizer writes completion proof and visual image anchors', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-route-finalizer-'));

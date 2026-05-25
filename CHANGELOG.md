@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+
+
+## [1.17.0] - 2026-05-25
+
+### Added
+- Add TypeScript Runtime Unification: TS source is the only source of truth, while npm runtime uses generated `dist/**/*.js`; `src/**/*.mjs` runtime shadows are removed.
+- Add TS/dist freshness and runtime parity checks with build manifest source digests.
+- Add Codex App Agent Cockpit artifacts: `agent-codex-dashboard.md`, `agent-codex-dashboard.json`, `agent-session-cards.md`, and event stream summaries.
+- Add Parallel Verification Engine with DAG-based verification groups, dependency-aware scheduling, artifact locks, resource budgets, and per-worker proof.
+- Add project-scoped session namespace using project root hash, mission id, orchestrator id, and agent id for tmux/session/temp/lock/artifact isolation.
+- Add continuous Agent Janitor for stale process/tmux/temp cleanup and proof-bound session closure.
+- Add route native backend gate fixes for Team/Research/QA proof artifact resolution.
+
+### Fixed
+- Prevent TS and runtime MJS drift by removing parallel `src/**/*.mjs` runtime files.
+- Prevent route native backend gates from reading artifacts from the wrong `proof.validation` path.
+- Prevent `agent run` parser from treating `latest` as a mission id for new run actions.
+- Prevent multiple projects from sharing tmux session names, temp directories, lock files, or agent session ids.
+- Prevent slow serial verification when checks can safely run in parallel.
+
+### Changed
+- Treat release verification as a dependency DAG instead of a long shell `&&` chain.
+- Treat Codex App agent visibility as a first-class artifact contract.
+
+## [1.16.2] - 2026-05-25
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [1.16.1] - 2026-05-25
 
 ### Fixed

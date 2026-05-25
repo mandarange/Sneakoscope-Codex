@@ -23,7 +23,7 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     session_id: String(result?.session_id || 'unknown'),
     persona_id: String(result?.persona_id || result?.agent_id || 'unknown'),
     task_slice_id: String(result?.task_slice_id || 'unknown'),
-    status: guard.ok ? (result?.status || 'done') : 'blocked',
+    status: guard.ok ? (result?.status === undefined ? 'done' : String(result.status) as AgentRunnerResult['status']) : 'blocked',
     backend: result?.backend || 'fake',
     summary: String(result?.summary || ''),
     findings: Array.isArray(result?.findings) ? result.findings : [],

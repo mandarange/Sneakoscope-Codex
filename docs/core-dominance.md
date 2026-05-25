@@ -27,7 +27,7 @@ SKS does not copy every external harness role, plugin, runtime, or router idea. 
 
 - Trust Kernel: `src/core/trust-kernel/`
 - Evidence Router: `src/core/evidence/`
-- Route proof integration: `src/core/proof/route-adapter.mjs`
+- Route proof integration: `src/core/proof/route-adapter.ts`
 - Core benchmark artifacts: `.sneakoscope/reports/performance/core-bench.json`
 - Black-box matrix contract: `.sneakoscope/reports/blackbox-matrix.json`
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('mock e2e release-critical fixtures pass strict artifact validation', { timeout: 300000 }, async () => {
   const result = await runProcess(process.execPath, [

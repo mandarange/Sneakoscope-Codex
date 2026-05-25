@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFeatureRegistry, executeFeatureFixtures } from '../../src/core/feature-registry.mjs';
+import { buildFeatureRegistry, executeFeatureFixtures } from '../../dist/core/feature-registry.js';
 
 test('strict executable feature fixtures validate generated artifacts', async () => {
   const registry = await buildFeatureRegistry({ root: process.cwd() });

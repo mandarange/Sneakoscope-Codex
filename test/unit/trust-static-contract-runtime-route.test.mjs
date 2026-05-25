@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRouteCompletionContract } from '../../src/core/trust-kernel/route-contract.mjs';
-import { validateCompletionContract } from '../../src/core/trust-kernel/completion-contract.mjs';
+import { buildRouteCompletionContract } from '../../dist/core/trust-kernel/route-contract.js';
+import { validateCompletionContract } from '../../dist/core/trust-kernel/completion-contract.js';
 
 test('static_contract evidence cannot satisfy a runtime route contract', () => {
   const proof = {

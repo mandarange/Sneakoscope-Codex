@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.16.1';
+const RELEASE_VERSION = '1.16.2';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const requiredDocs = [
@@ -60,7 +60,7 @@ const requiredScripts = [
 assertGate(pkg.version === RELEASE_VERSION, `package.json version must be ${RELEASE_VERSION}`, { version: pkg.version });
 assertGate(lock.version === RELEASE_VERSION, `package-lock version must be ${RELEASE_VERSION}`, { version: lock.version });
 assertGate(lock.packages?.['']?.version === RELEASE_VERSION, `package-lock root version must be ${RELEASE_VERSION}`, { version: lock.packages?.['']?.version });
-assertGate(pkg.scripts?.['release:metadata']?.includes('release-metadata-1-16-check.mjs'), 'release:metadata must point to 1.16.1 check');
+assertGate(pkg.scripts?.['release:metadata']?.includes('release-metadata-1-16-check.mjs'), 'release:metadata must point to the 1.16 release check');
 for (const script of requiredScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
 for (const script of ['release:check', 'release:real-check', 'publish:dry', 'prepublishOnly']) {
   assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);

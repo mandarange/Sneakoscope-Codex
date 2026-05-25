@@ -45,6 +45,8 @@ for (const f of tsFiles) {
 
 const mjs = [];
 walk(distRoot, (n) => n.endsWith('.mjs'), mjs);
+const srcMjs = [];
+walk(srcRoot, (n) => n.endsWith('.mjs'), srcMjs);
 
 const registryText = fs.readFileSync(path.join(srcRoot, 'cli', 'command-registry.ts'), 'utf8');
 const typedEntries = (registryText.match(/\bentry\(/g) || []).length;
@@ -53,13 +55,15 @@ const report = {
   schema: 'sks.typescript-migration.v1',
   version: pkg.version,
   runtime_ts_files: tsFiles.length,
-  runtime_mjs_files: tsFiles.filter((x) => x.endsWith('.mjs')).length,
+  runtime_mjs_files: srcMjs.length,
+  src_mjs_runtime_files: srcMjs.length,
+  src_mjs_removed: srcMjs.length === 0,
   ts_nocheck: nocheck,
   ts_ignore: tsignore,
   ts_expect_error_without_reason: expectErrBad,
   typed_command_entries: typedEntries,
   dist_mjs_files: mjs.length,
-  status: nocheck === 0 && tsignore === 0 && expectErrBad === 0 ? 'verified' : 'blocked',
+  status: nocheck === 0 && tsignore === 0 && expectErrBad === 0 && srcMjs.length === 0 ? 'verified' : 'blocked',
 };
 
 const outDir = path.join(root, '.sneakoscope', 'reports');

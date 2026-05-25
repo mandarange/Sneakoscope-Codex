@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { readJson } from '../../src/core/fsx.mjs';
-import { recordCodexLbHealthEvent, resetCodexLbCircuit } from '../../src/core/codex-lb-circuit.mjs';
+import { readJson } from '../../dist/core/fsx.js';
+import { recordCodexLbHealthEvent, resetCodexLbCircuit } from '../../dist/core/codex-lb-circuit.js';
 
 test('codex-lb fixture events drive circuit state', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-lb-fixture-'));
