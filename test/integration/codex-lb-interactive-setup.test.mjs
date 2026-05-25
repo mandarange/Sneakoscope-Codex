@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('codex-lb setup fixture command configures without leaking the key', async () => {
   const result = await runProcess(process.execPath, ['./scripts/codex-lb-setup-fixture-check.mjs'], {

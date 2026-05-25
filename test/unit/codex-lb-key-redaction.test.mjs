@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('codex-lb setup output redacts API key and writes only metadata fingerprint', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-unit-codex-lb-redaction-'));

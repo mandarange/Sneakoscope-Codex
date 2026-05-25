@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyCommand, classifySql, classifyToolPayload, evaluateDbSafety } from '../../src/core/db-safety.mjs';
+import { classifyCommand, classifySql, classifyToolPayload, evaluateDbSafety } from '../../dist/core/db-safety.js';
 
 const sqlCases = [
   ['DROP TABLE users', 'destructive', 'drop_table'],

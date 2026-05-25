@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rgbaKey, rgbaToWikiCoord } from '../../src/core/wiki-coordinate.mjs';
+import { rgbaKey, rgbaToWikiCoord } from '../../dist/core/wiki-coordinate.js';
 
 test('rgba wiki coordinates are stable and bounded', () => {
   assert.equal(rgbaKey([58, 132, 210, 240]), '3a84d2f0');

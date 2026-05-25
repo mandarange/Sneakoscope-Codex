@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { containsPlaintextSecret, redactSecrets } from '../../src/core/secret-redaction.mjs';
+import { containsPlaintextSecret, redactSecrets } from '../../dist/core/secret-redaction.js';
 
 test('codex access token and API keys are redacted', () => {
   const openAiKey = ['sk', 'proj', 'fixture', 'secret', 'value', 'for', 'redaction', 'only'].join('-');

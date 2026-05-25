@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('Codex compatibility doctor includes schema snapshot and warning gate', async () => {
   const entry = path.join(process.cwd(), 'dist', 'bin', 'sks.js');

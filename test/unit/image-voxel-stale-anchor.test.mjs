@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateImageVoxelLedger } from '../../src/core/wiki-image/validation.mjs';
+import { validateImageVoxelLedger } from '../../dist/core/wiki-image/validation.js';
 
 test('image voxel validation blocks stale anchors from supporting visual confidence', () => {
   const ledger = {

@@ -47,7 +47,9 @@ async function agentMissionAction(parsed: any) {
   const agentRoot = path.join(dir, 'agents')
   const readers: Record<string, string> = {
     status: 'agent-proof-evidence.json',
-    watch: 'agent-events.jsonl',
+    watch: parsed.codexApp ? 'agent-codex-dashboard.md' : 'agent-events.jsonl',
+    dashboard: 'agent-codex-dashboard.json',
+    cockpit: 'agent-codex-dashboard.md',
     lane: parsed.lane ? path.join('sessions', parsed.lane + '.json') : 'agent-sessions.json',
     board: 'agent-task-board.json',
     ledger: 'agent-central-ledger.json',
@@ -64,13 +66,22 @@ async function agentMissionAction(parsed: any) {
     await writeJsonAtomic(cleanupPath, { schema: 'sks.agent-command-cleanup.v1', ok: true, mission_id: id, action: parsed.action, note: 'cleanup command observed existing native agent ledger artifacts' })
   }
   const full = path.join(agentRoot, artifact)
-  const value = artifact.endsWith('.jsonl') ? await readText(full, '') : await readJson(full, null)
+  const value = artifact.endsWith('.json') ? await readJson(full, null) : await readText(full, '')
   const result = { schema: AGENT_ACTION_SCHEMA, ok: value !== null && value !== '', action: parsed.action, mission_id: id, artifact: path.join('agents', artifact), data: value }
   return emit(parsed, result, () => {
     console.log('Native agent mission: ' + id)
     console.log('Action: ' + parsed.action)
     console.log('Artifact: agents/' + artifact)
+    if (artifact.endsWith('.md') || artifact.endsWith('.jsonl')) {
+      console.log('')
+      console.log(String(value || ''))
+      return
+    }
     if (parsed.action === 'proof' || parsed.action === 'status') console.log('Proof: ' + (value?.status || 'missing'))
+    if (parsed.action === 'dashboard') {
+      console.log('Proof: ' + (value?.proof_status || 'missing'))
+      console.log('Agents: ' + (value?.agent_count ?? 'unknown'))
+    }
   })
 }
 

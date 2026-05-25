@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { importComputerUseEvidence } from '../../src/core/wiki-image/computer-use-ledger.mjs';
+import { importComputerUseEvidence } from '../../dist/core/wiki-image/computer-use-ledger.js';
 
 test('Computer Use mock evidence converts to image voxel anchors', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-cu-'));

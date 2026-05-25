@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('npx one-shot black-box script supports dry-run proof shape', async () => {
   const result = await runProcess(process.execPath, ['scripts/blackbox-npx-one-shot.mjs', '--dry-run', '--json'], {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('codex-lb setup flags map no/default and no/env answers into plan fields', async () => {
   const result = await runProcess(process.execPath, ['./dist/bin/sks.js', 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key-stdin', '--plan', '--no-default-provider', '--no-env-file', '--json'], {

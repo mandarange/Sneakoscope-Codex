@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { installSkills } from '../../src/core/init.mjs';
-import { DOLLAR_SKILL_NAMES } from '../../src/core/routes.mjs';
+import { installSkills } from '../../dist/core/init.js';
+import { DOLLAR_SKILL_NAMES } from '../../dist/core/routes.js';
 
 test('generated Codex App skills cover every dollar route skill name', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-dollar-skills-'));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('strict subset release check classifies upstream vs SKS disallowed fields', async () => {
   const result = await runProcess(process.execPath, ['./scripts/codex-hook-strict-subset-check.mjs'], {

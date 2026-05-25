@@ -17,6 +17,9 @@ import { writeAgentCleanupReport } from './agent-cleanup.js'
 import { writeAgentTrustReport } from './agent-trust-report.js'
 import { writeAgentWrongnessRecords } from './agent-wrongness.js'
 import { writeAgentRecursionGuardReport } from './agent-recursion-guard.js'
+import { appendAgentCodexCockpitHookEvent, writeAgentCodexCockpitArtifacts } from './agent-codex-cockpit.js'
+import { runAgentJanitor } from './agent-janitor.js'
+import { buildProjectNamespace, namespacedAgentSessionId, writeProjectNamespaceArtifact } from '../session/project-namespace.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const root = path.resolve(opts.root || process.cwd())
@@ -28,9 +31,22 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     : await createMission(root, { mode: 'agent', prompt })
   const missionId = created.id
   const dir = created.dir
+  const namespace = await buildProjectNamespace({ root, missionId })
+  await writeProjectNamespaceArtifact(dir, namespace)
   const roster = buildProvidedAgentRoster(opts.roster, { concurrency: opts.concurrency, readonly: opts.readonly }) || buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
+  roster.roster = roster.roster.map((agent: any) => ({
+    ...agent,
+    session_id: namespacedAgentSessionId({
+      agentId: agent.id,
+      missionId,
+      rootHash: namespace.root_hash,
+      index: agent.index
+    })
+  }))
   const partition = await buildAgentWorkPartition(root, roster, prompt)
+  await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
   const ledgerRoot = await initializeAgentCentralLedger(dir, { missionId, roster, partition, route, prompt })
+  await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-no-overlap-proof.json'), partition.no_overlap_proof || { schema: 'sks.agent-no-overlap-proof.v1', ok: false, blockers: ['missing_no_overlap_proof'] })
   await writeAgentLifecyclePolicy(ledgerRoot)
   await writeAgentLifecycleAggregate(ledgerRoot)
@@ -54,15 +70,37 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       const slice = slices[start + batchIndex] || { id: 'slice-' + String(start + batchIndex + 1), description: prompt }
       await openAgentSession(ledgerRoot, agent)
       await heartbeatAgentSession(ledgerRoot, agent)
+      await appendAgentCodexCockpitHookEvent(dir, {
+        hook_event_name: 'SubagentStart',
+        agent_id: agent.id,
+        agent_type: agent.role || agent.persona_id || 'agent',
+        session_id: agent.session_id,
+        cwd: root,
+        permission_mode: agent.write_policy || 'read-only',
+      })
+      await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
       await appendAgentLedgerEvent(ledgerRoot, { agent_id: agent.id, session_id: agent.session_id, event_type: 'agent_started', payload: { backend, slice_id: slice.id } })
       const result = await runAgentByBackend(backend, agent, slice, { ...opts, missionId, agentRoot: ledgerRoot, cwd: root, route, prompt })
       await collectAgentSession(ledgerRoot, agent)
       await appendAgentLedgerEvent(ledgerRoot, { agent_id: agent.id, session_id: agent.session_id, event_type: 'agent_result', payload: result })
       if (result.status === 'done') await completeAgentSession(ledgerRoot, agent)
       await closeAgentSession(ledgerRoot, agent, result.status === 'done' ? 'closed' : result.status)
+      await appendAgentCodexCockpitHookEvent(dir, {
+        hook_event_name: 'SubagentStop',
+        agent_id: agent.id,
+        agent_type: agent.role || agent.persona_id || 'agent',
+        session_id: agent.session_id,
+        cwd: root,
+        permission_mode: agent.write_policy || 'read-only',
+        last_assistant_message: result.summary || null,
+      })
+      await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
       return result
     }))
     results.push(...batchResults)
+    const periodicJanitor = await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
+    if (!periodicJanitor.ok) await appendAgentLedgerEvent(ledgerRoot, { agent_id: 'orchestrator', session_id: 'orchestrator', event_type: 'periodic_janitor_blocked', payload: periodicJanitor })
+    await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   }
   const stale = await detectStaleAgentSessions(ledgerRoot)
   if (!stale.ok) await appendAgentLedgerEvent(ledgerRoot, { agent_id: 'orchestrator', session_id: 'orchestrator', event_type: 'stale_sessions_detected', payload: stale })
@@ -74,15 +112,18 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const backendReport = await writeAgentBackendReport(ledgerRoot, { backend, results, outputTails })
   await compactAgentLedger(ledgerRoot)
   const cleanup = await writeAgentCleanupReport(ledgerRoot)
+  const janitor = await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
   const blockers = [
     ...results.flatMap((result: any) => result.blockers || []),
     ...(stale.ok ? [] : stale.stale_sessions.map((id: string) => 'stale_heartbeat:' + id)),
     ...(timeoutKill.killed_sessions || []).map((id: string) => 'timeout_killed:' + id),
-    ...(recursion.ok ? [] : recursion.violations.map((id: string) => 'recursion:' + id))
+    ...(recursion.ok ? [] : recursion.violations.map((id: string) => 'recursion:' + id)),
+    ...(janitor.ok ? [] : janitor.blockers)
   ]
   const trust = await writeAgentTrustReport(ledgerRoot, { backend, roster, partition, cleanup, outputTails, timeoutKill, backendReport, outputValidation, blockers })
   const wrongness = await writeAgentWrongnessRecords(ledgerRoot, blockers)
-  const proof = await writeAgentProofEvidence(ledgerRoot, { missionId, backend, realParallel: backend === 'codex-exec' && opts.mock !== true, roster, partition, consensus, results, cleanup, outputTails, timeoutKill, trust, wrongness })
+  const proof = await writeAgentProofEvidence(ledgerRoot, { missionId, backend, realParallel: backend === 'codex-exec' && opts.mock !== true, roster, partition, consensus, results, cleanup, janitor, outputTails, timeoutKill, trust, wrongness })
+  await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })
   return {
     schema: 'sks.agent-run.v1',

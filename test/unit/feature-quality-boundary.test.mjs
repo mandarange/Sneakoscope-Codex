@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary } from '../../src/core/feature-fixtures.mjs';
-import { buildAllFeaturesSelftest, buildFeatureRegistry, runtimeRoutesNotStaticContract } from '../../src/core/feature-registry.mjs';
+import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary } from '../../dist/core/feature-fixtures.js';
+import { buildAllFeaturesSelftest, buildFeatureRegistry, runtimeRoutesNotStaticContract } from '../../dist/core/feature-registry.js';
 
 test('feature fixtures expose the 0.9.20 quality taxonomy', () => {
   assert.deepEqual(FEATURE_QUALITY_LEVELS, [

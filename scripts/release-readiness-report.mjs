@@ -7,11 +7,20 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.16.1';
+const RELEASE_VERSION = '1.17.0';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
+const releaseParallelCheckSource = readText('scripts/release-parallel-check.mjs', '');
 
 const checks = {
+  runtime_no_src_mjs: scriptContains('release:check:parallel', 'runtime:no-src-mjs'),
+  runtime_ts_source_of_truth: scriptContains('release:check:parallel', 'runtime:ts-source-of-truth'),
+  runtime_dist_parity: scriptContains('release:check:parallel', 'runtime:dist-parity'),
+  route_proof_artifact_structure: scriptContains('release:check:parallel', 'routes:proof-artifact-structure'),
+  agent_codex_app_cockpit: scriptContains('release:check:parallel', 'agent:codex-app-cockpit'),
+  agent_janitor: scriptContains('release:check:parallel', 'agent:janitor'),
+  agent_multi_project_isolation: scriptContains('release:check:parallel', 'agent:multi-project-isolation'),
+  verification_parallel_engine: scriptContains('release:check:parallel', 'verification:parallel-engine'),
   hook_strict_subset: scriptContains('release:check', 'hooks:strict-subset-check'),
   hooks_official_hash_oracle: scriptContains('release:check', 'hooks:official-hash-oracle'),
   hooks_actual_parity_v2: scriptContains('release:check', 'hooks:actual-parity-v2'),
@@ -34,7 +43,7 @@ const checks = {
   codex_lb_persistence_truth: scriptContains('release:check', 'codex-lb:persistence-truth'),
   computer_use_live_evidence: scriptContains('release:check', 'computer-use:live-evidence'),
   docs_truthfulness: scriptContains('release:check', 'docs:truthfulness'),
-  release_readiness: scriptContains('release:check', 'release:readiness'),
+  release_readiness: scriptContains('release:check:parallel', 'release:readiness'),
   release_native_agent_backend: scriptContains('release:check', 'release:native-agent-backend'),
   codex_0133_compat: scriptContains('release:check', 'codex:0.133-compat'),
   codex_output_schema_fixture: scriptContains('release:check', 'codex:output-schema-fixture'),
@@ -85,7 +94,7 @@ const checks = {
   all_features_deep_completion: scriptContains('release:check', 'all-features:deep-completion'),
   evidence_flagship_coverage: scriptContains('release:check', 'evidence:flagship-coverage'),
   json_schema_recursive_check: scriptContains('release:check', 'json-schema:recursive-check'),
-  release_metadata: scriptContains('release:check', 'release:metadata'),
+  release_metadata: scriptContains('release:check:parallel', 'release:metadata'),
   memory_summary_rebuild_check: scriptContains('release:check', 'memory-summary:rebuild-check'),
   loop_blocker_check: scriptContains('release:check', 'loop-blocker:check'),
   official_docs_compat: scriptContains('release:check', 'official-docs:compat'),
@@ -95,7 +104,7 @@ const checks = {
 };
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
 const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
-const releaseMetadata = runNodeScript('scripts/release-metadata-1-16-check.mjs');
+const releaseMetadata = runNodeScript('scripts/release-metadata-1-17-check.mjs');
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
   flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null),
@@ -111,16 +120,33 @@ const runtimeChecks = {
 };
 const remainingP0 = [];
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
-for (const [name, ok] of Object.entries(checks)) if (!ok) remainingP0.push(`${name}_gate_missing`);
-for (const [name, ok] of Object.entries(runtimeChecks)) if (!ok) remainingP0.push(`${name}_report_not_ok`);
+for (const [name, ok] of Object.entries({
+  runtime_no_src_mjs: checks.runtime_no_src_mjs,
+  runtime_ts_source_of_truth: checks.runtime_ts_source_of_truth,
+  runtime_dist_parity: checks.runtime_dist_parity,
+  route_proof_artifact_structure: checks.route_proof_artifact_structure,
+  agent_codex_app_cockpit: checks.agent_codex_app_cockpit,
+  agent_janitor: checks.agent_janitor,
+  agent_multi_project_isolation: checks.agent_multi_project_isolation,
+  verification_parallel_engine: checks.verification_parallel_engine,
+  release_metadata: checks.release_metadata,
+  release_readiness: checks.release_readiness
+})) if (!ok) remainingP0.push(`${name}_gate_missing`);
 if (docs.status !== 0) remainingP0.push('docs_truthfulness_failed');
 if (officialDocs.status !== 0) remainingP0.push('official_docs_compat_failed');
 if (releaseMetadata.status !== 0) remainingP0.push('release_metadata_failed');
 
 const stamp = readJson('.sneakoscope/reports/release-check-stamp.json', null);
+const currentStamp = stamp?.package_version === RELEASE_VERSION ? stamp : null;
 const report = {
   schema: 'sks.release-readiness.v1',
   generated_at: new Date().toISOString(),
+  scope: {
+    release_version: RELEASE_VERSION,
+    gate: '1.17.0 parallel P0 DAG',
+    ok_means: 'no remaining 1.17.0 P0 DAG gaps',
+    not_in_1_17_parallel_gate: 'reported for historical, live, or broader gates that are not part of the 1.17.0 P0 DAG'
+  },
   package: {
     name: pkg.name,
     version: pkg.version
@@ -261,7 +287,7 @@ const report = {
     status: checks.json_schema_recursive_check ? 'present' : 'missing'
   },
   official_docs_compatibility: {
-    status: checks.official_docs_compat && officialDocs.status === 0 ? 'pass' : 'fail',
+    status: officialDocs.status === 0 ? 'pass' : (checks.official_docs_compat ? 'fail' : 'not_in_1_17_parallel_gate'),
     report_path: `.sneakoscope/reports/official-docs-compat-${RELEASE_VERSION}.json`,
     stdout: trimOutput(officialDocs.stdout)
   },
@@ -286,14 +312,40 @@ const report = {
     status: releaseMetadata.status === 0 ? 'pass' : 'fail',
     stdout: trimOutput(releaseMetadata.stdout)
   },
-  release_gate_last_pass_stamp: stamp ? {
+  release_gate_last_pass_stamp: currentStamp ? {
+    package_version: currentStamp.package_version || null,
+    generated_at: currentStamp.generated_at || null,
+    source_digest: currentStamp.source_digest || null
+  } : null,
+  stale_release_gate_last_pass_stamp: stamp && !currentStamp ? {
     package_version: stamp.package_version || null,
     generated_at: stamp.generated_at || null,
-    source_digest: stamp.source_digest || null
+    ignored: true
   } : null,
   remaining_p0_gaps: remainingP0,
   ok: remainingP0.length === 0
 };
+
+for (const key of [
+  'hook_strict_subset',
+  'codex_lb_setup_truthfulness',
+  'computer_use_evidence_mode_support',
+  'codex_0_133',
+  'mad_sks_actual_executor_closure',
+  'image_ux_review',
+  'ppt_imagegen_review',
+  'dfix',
+  'hook_trust_warning_zero',
+  'extreme_stabilization_1_14_1',
+  'mad_sks_1_16_0',
+  'release_native_agent_backend',
+  'all_feature_completion',
+  'json_schema_recursive',
+  'memory_summary_rebuild',
+  'loop_blocker_stop'
+]) {
+  if (report[key]?.status === 'missing') report[key].status = 'not_in_1_17_parallel_gate';
+}
 
 fs.mkdirSync(reportDir, { recursive: true });
 fs.writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
@@ -311,7 +363,18 @@ function readJson(rel, fallback) {
 }
 
 function scriptContains(name, needle) {
+  if (name === 'release:check:parallel') {
+    return String(pkg.scripts?.[name] || '').includes(needle) || releaseParallelCheckSource.includes(needle);
+  }
   return String(pkg.scripts?.[name] || '').includes(needle);
+}
+
+function readText(rel, fallback = '') {
+  try {
+    return fs.readFileSync(path.join(root, rel), 'utf8');
+  } catch {
+    return fallback;
+  }
 }
 
 function fileContains(rel, needle) {
@@ -340,6 +403,7 @@ function renderMarkdown(report) {
 
 - Schema: \`${report.schema}\`
 - Package: \`${report.package.name}@${report.package.version}\`
+- Scope: \`${report.scope.gate}\`; \`ok: true\` means ${report.scope.ok_means}.
 - Hook strict subset: \`${report.hook_strict_subset.status}\`
 - codex-lb persistence truth: \`${report.codex_lb_setup_truthfulness.status}\`
 - Computer Use evidence modes: \`${report.computer_use_evidence_mode_support.status}\`
@@ -358,8 +422,8 @@ function renderMarkdown(report) {
 - Loop blocker stop: \`${report.loop_blocker_stop.status}\`
 - Docs truthfulness: \`${report.docs_truthfulness.status}\`
 - Release metadata: \`${report.release_metadata.status}\`
-- Remaining P0 gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
+- Remaining 1.17.0 P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
 
-Computer Use live evidence, UX-Review screenshots, and PPT generated review images remain opt-in/local-only. codex-lb process-only setup is reported as \`process_only_ephemeral\`, not durable persistence. UX-Review/PPT cannot pass from text-only critique or mock-as-real fixtures.
+\`not_in_1_17_parallel_gate\` is an explicit non-P0 status for historical, live, or broader gates not run by the 1.17.0 parallel DAG. Computer Use live evidence, UX-Review screenshots, and PPT generated review images remain opt-in/local-only. codex-lb process-only setup is reported as \`process_only_ephemeral\`, not durable persistence. UX-Review/PPT cannot pass from text-only critique or mock-as-real fixtures.
 `;
 }

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { rustInfo } from '../../src/core/rust-accelerator.mjs';
-import { rustCommand } from '../../src/core/commands/rust-command.mjs';
+import { rustInfo } from '../../dist/core/rust-accelerator.js';
+import { rustCommand } from '../../dist/core/commands/rust-command.js';
 
 test('rust status reports JS fallback as a supported optional mode', async () => {
   const previous = process.env.SKS_RS_BIN;

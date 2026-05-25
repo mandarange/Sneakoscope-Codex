@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('fresh codex-lb status is structured and never prints raw missing env text', async () => {
   const entry = path.join(process.cwd(), 'dist', 'bin', 'sks.js');

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('codex-lb setup with stdin writes env file without leaking secret', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-bb-codex-lb-stdin-'));

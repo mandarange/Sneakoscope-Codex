@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { runProcess, exists } from '../../src/core/fsx.mjs';
+import { runProcess, exists } from '../../dist/core/fsx.js';
 
 test('codex-lb --shell-profile skip writes no shell profile files', async () => {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-lb-shellskip-'));

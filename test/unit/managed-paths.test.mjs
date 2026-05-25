@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { managedPathManifest, rollbackList } from '../../src/core/managed-paths.mjs';
+import { managedPathManifest, rollbackList } from '../../dist/core/managed-paths.js';
 
 test('managed path manifest records SKS-owned rollback boundaries', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-managed-paths-'));

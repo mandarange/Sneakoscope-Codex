@@ -1,6 +1,6 @@
 # Pipeline Architecture
 
-SKS 0.9.19 keeps `src/core/pipeline.mjs` and `src/core/pipeline-runtime.mjs` as compatibility facades and exposes split module surfaces under `src/core/pipeline/`.
+SKS 1.17.0 keeps `src/core/pipeline.ts` and `src/core/pipeline-runtime.ts` as compatibility facades and exposes split module surfaces under `src/core/pipeline/`.
 
 ## Modules
 
@@ -21,12 +21,12 @@ SKS 0.9.19 keeps `src/core/pipeline.mjs` and `src/core/pipeline-runtime.mjs` as 
 
 `npm run pipeline-budget:check` enforces:
 
-- `src/core/pipeline.mjs` is at most 200 lines.
-- `src/core/pipeline-runtime.mjs` is absent or at most 300 lines and may not directly import route implementation modules.
-- each `src/core/pipeline/*.mjs` file is at most 1000 lines.
-- no direct `src/core/pipeline/*.mjs` module imports more than 35 modules.
+- `src/core/pipeline.ts` is at most 200 lines.
+- `src/core/pipeline-runtime.ts` is absent or at most 300 lines and may not directly import route implementation modules.
+- each `src/core/pipeline/*.ts` file is at most 1000 lines.
+- no direct `src/core/pipeline/*.ts` module imports more than 35 modules.
 - all required split module files exist.
 
 `npm run pipeline-runtime:check` independently checks the compatibility facade. `npm run pipeline-budget:check` includes the runtime facade so a new monolith cannot bypass the release gate.
 
-Existing imports from `src/core/pipeline.mjs` continue to work.
+Existing runtime imports resolve through built `dist/core/pipeline.js`.

@@ -19,9 +19,12 @@ Manual scaling is explicit and bounded:
 
 ```sh
 sks team "wide change" --agents 8
+sks team "wide change" 20:agents
 sks team "wide change" executor:8 reviewer:5
 sks agent run "team slice map" --agents 8 --concurrency 4 --mock --json
 ```
+
+Codex App prompts can request the same Team width without CLI flags by including `N:agents` or `N:agent` in `$Team` text, for example `$Team 20:agents migrate the route`. The Team parser removes the budget token from the task text, sets the Team bundle size and session budget to `N`, and caps it at the native kernel maximum of 20.
 
 The parent orchestrator assigns effort from the slice risk: simple read-only lanes can stay low, orchestration/tooling lanes use medium, safety/DB/schema/release lanes use high, and frontier/forensic work can use xhigh. Blockers, lease conflicts, schema failures, and proof gaps can escalate a lane without raising every other lane.
 
@@ -32,3 +35,5 @@ Team mode must use native agent proof artifacts for analysis, execution handoff,
 ## 1.16.1 Runtime Closure
 
 SKS 1.16.1 routes release-critical Team, Research, QA, and native agent proof checks through the native agent orchestrator, Codex exec output-last-message parsing, central ledger proof, and no-scout runtime gates.
+
+SKS 1.16.2 adds prompt-side `N:agents` / `N:agent` Team width control for Codex App text prompts while preserving the native runtime closure.

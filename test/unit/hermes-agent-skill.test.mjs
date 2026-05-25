@@ -8,8 +8,8 @@ import {
   buildHermesSkillFiles,
   defaultHermesSkillDir,
   installHermesSkill
-} from '../../src/core/hermes.mjs';
-import { shouldAutoApproveInstall } from '../../src/cli/install-helpers.mjs';
+} from '../../dist/core/hermes.js';
+import { shouldAutoApproveInstall } from '../../dist/cli/install-helpers.js';
 
 test('Hermes skill files carry slash-command and safety contract', () => {
   const files = buildHermesSkillFiles({ sksCommand: 'sks-test', version: '0.0.0-test' });

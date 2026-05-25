@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fixtureForFeature } from '../../src/core/feature-fixtures.mjs';
+import { fixtureForFeature } from '../../dist/core/feature-fixtures.js';
 
 test('unknown feature fixtures are missing instead of implicit static pass', () => {
   const missing = fixtureForFeature('unknown-runtime-feature');

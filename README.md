@@ -10,7 +10,7 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.16.1** closes the native multi-session agent kernel: `sks agent` and `sks --agent` create bounded agent rosters, non-overlapping leases, append-only ledgers, session lifecycle proof, recursion guards, dynamic per-agent effort routing, and native agent proof evidence. The old multi-agent command surface has been removed; native agents are the only release-supported route collaboration backend.
+SKS **1.17.0** makes TypeScript the only runtime source of truth, moves package execution to built `dist/**/*.js`, adds Codex App agent cockpit artifacts, parallelizes release verification with a dependency DAG, and namespaces agent sessions by project hash plus mission id.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -352,7 +352,7 @@ sks gx render homepage --format html
 sks validate-artifacts latest --json
 sks pipeline plan latest --proof-field --json
 sks perf run --json
-sks perf workflow --json --intent "small CLI change" --changed src/cli/main.mjs,src/core/routes.mjs
+sks perf workflow --json --intent "small CLI change" --changed src/cli/main.ts,src/core/routes.ts
 sks proof-field scan --json --intent "small CLI change"
 sks skill-dream status
 sks skill-dream run --json
@@ -451,7 +451,7 @@ SKS_OPENCLAW=1 sks root
 SKS_OPENCLAW=1 sks commands
 SKS_OPENCLAW=1 sks dollar-commands
 SKS_OPENCLAW=1 sks deps check
-SKS_OPENCLAW=1 sks proof-field scan --intent "small CLI change" --changed src/cli/main.mjs
+SKS_OPENCLAW=1 sks proof-field scan --intent "small CLI change" --changed src/cli/main.ts
 ```
 
 If OpenClaw runs in a sandbox, grant shell execution only for trusted workspaces. Database, migration, and destructive work still follows SKS safety routes.
@@ -601,7 +601,7 @@ npm run release:check
 npm run publish:dry
 ```
 
-`release:check` runs audit, changelog, syntax, feature-registry coverage, all-features contract selftest, selftest, size, and registry checks, then writes a source digest stamp under `.sneakoscope/reports/`. Generate the human-readable registry with `sks features inventory --write-docs`. `1.0.0` is a stable release, so plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
+`release:check` runs the 1.17.0 parallel P0 DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG covers build, TS runtime source checks, dist parity, proof artifact structure, Codex App cockpit, janitor, multi-project isolation, parallel verification, typecheck, schema, release metadata, and release readiness. Broader live or historical gates remain explicit scripts such as `release:real-check`. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
 
 Version bumps are manual. Run `sks versioning bump` only when preparing release metadata; SKS will not create `.git/hooks/pre-commit` or auto-bump during ordinary commits.
 

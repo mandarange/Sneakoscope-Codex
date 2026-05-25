@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { finalizeRouteWithProof } from '../../src/core/proof/route-finalizer.mjs';
+import { finalizeRouteWithProof } from '../../dist/core/proof/route-finalizer.js';
 
 test('serious route finalizer covers representative route classes', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-route-finalizer-all-'));

@@ -6,6 +6,7 @@ import { exists, nowIso, PACKAGE_VERSION, packageRoot, readJson, runProcess, sha
 import { EMPTY_CODEX_INFO, getCodexInfo } from './codex-adapter.js';
 import { codexAppIntegrationStatus, formatCodexAppStatus } from './codex-app.js';
 import { REQUIRED_CODEX_MODEL, forceGpt55CodexArgs } from './codex-model-guard.js';
+import { buildProjectNamespace, namespacedTmuxSessionName } from './session/project-namespace.js';
 import { MIN_TEAM_REVIEWER_LANES } from './team-review-policy.js';
 import { appendTeamEvent, isTerminalTeamAgentStatus, readTeamControl, readTeamDashboard, teamCleanupRequested } from './team-live.js';
 
@@ -1099,7 +1100,8 @@ export async function sweepCodexLbTmuxSessions({ root, keepSession = null, env =
 }
 
 export async function launchTmuxTeamView({ root, missionId, plan = {}, promptFile = null, json = false, attach = false, args = [] }: any = {}): Promise<any> {
-  const launch = await buildTmuxLaunchPlan({ root, session: `sks-team-${missionId}` });
+  const namespace = await buildProjectNamespace({ root, missionId });
+  const launch = await buildTmuxLaunchPlan({ root, session: namespacedTmuxSessionName(namespace, 'team') });
   const missionDir = path.join(launch.root, '.sneakoscope', 'missions', missionId);
   const dashboard = await readTeamDashboard(missionDir).catch(() => null);
   const control = await readTeamControl(missionDir).catch(() => null);

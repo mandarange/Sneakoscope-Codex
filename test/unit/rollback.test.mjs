@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('rollback apply requires explicit confirmation phrase', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-rollback-'));

@@ -1,10 +1,12 @@
 # Release Readiness
 
-SKS 1.16.1 writes the `sks.release-readiness.v1` final release seal against the Codex `rust-v0.133.0` runtime compatibility matrix plus the OpenAI Codex `latest` 10-event hook schema snapshot, MAD-SKS full-system authority evidence, actual executor blackbox evidence, Immutable Harness Guard evidence, stale-`dist` freshness checks, Codex exec output-schema syntax parity for fresh `exec` and `exec resume`, native agent backend gates, legacy multi-agent removal, proof graph v3/v4, OpenAI Image Generation `gpt-image-2` docs, OpenAI Structured Outputs docs, UX-Review real imagegen smoke, PPT full synthetic deck E2E evidence, DFix evidence loops, recursive JSON schema validation, hook trust warning-zero v2, and the function-only SKS update check contract.
+SKS 1.17.0 writes the `sks.release-readiness.v1` report for the 1.17.0 parallel P0 DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, parallel verification DAG, project-scoped session namespace, continuous agent janitor, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.17.0 P0 DAG gaps.
+
+Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_17_parallel_gate` when not run by this P0 DAG. They are not silently treated as passed.
 
 ```bash
 npm run codex:0.133-compat
-npm run codex:exec-syntax-parity
+npm run codex:exec-output-schema-actual-syntax
 npm run codex:output-schema-fixture
 npm run mad-sks:permission-model
 npm run mad-sks:immutable-harness
@@ -79,14 +81,14 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.16.1.json`
-- `.sneakoscope/reports/release-readiness-1.16.1.md`
-- `.sneakoscope/reports/all-feature-completion-1.16.1.json`
-- `.sneakoscope/reports/all-feature-completion-1.16.1.md`
-- `.sneakoscope/reports/official-docs-compat-1.16.1.json`
-- `.sneakoscope/reports/official-docs-compat-1.16.1.md`
+- `.sneakoscope/reports/release-readiness-1.17.0.json`
+- `.sneakoscope/reports/release-readiness-1.17.0.md`
+- `.sneakoscope/reports/all-feature-completion-1.17.0.json`
+- `.sneakoscope/reports/all-feature-completion-1.17.0.md`
+- `.sneakoscope/reports/official-docs-compat-1.17.0.json`
+- `.sneakoscope/reports/official-docs-compat-1.17.0.md`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, Codex 0.133 structured output for `exec` and `exec resume`, MAD-SKS authorization manifests, allowed/forbidden scope decisions, actual executor blackbox reports, immutable protected-core snapshots, audit ledgers, rollback plans, proof graph v3/v4 links, native agent backend gates, legacy multi-agent removal, goal defaults, remote-control foreground app-server behavior, permission profiles/requirements, plugin discovery/marketplace mapping, latest 10-event hook schema and trust state, source image fidelity metadata, UX-Review command wiring, generated callout ingestion, real extraction reports, PPT real export/imagegen/re-review wiring, DFix evidence, all-feature deep coverage, recursive JSON schema checks, Image Voxel relations, memory summary rebuilds, repeated blocker stops, official docs compatibility, hook strict subset status, Computer Use evidence mode support, codex-lb persistence truth, docs truthfulness, and remaining P0 gaps. A passing report has no remaining P0 gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, and remaining 1.17.0 P0 DAG gaps. Broader live or historical gates remain visible as explicit non-P0 statuses unless they are added to the 1.17.0 DAG.
 
 MAD-SKS readiness is intentionally high-friction: full-system authority requires explicit user authorization, scoped target roots, separate consent for system access, DB writes, package installation, service control, admin operations, network, Computer Use, destructive delete, and generated-asset edits. The SKS harness protected core remains immutable even under MAD-SKS.
 

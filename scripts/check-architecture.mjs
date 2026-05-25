@@ -9,7 +9,6 @@ const waivers = loadWaivers();
 
 runGate('pipeline-budget:check');
 runGate('pipeline-runtime:check');
-checkFacade('src/core/pipeline-runtime.mjs', 300);
 checkFacade('src/core/pipeline-runtime.ts', 300);
 checkLargeFiles();
 checkTsImports();
@@ -57,8 +56,6 @@ function architectureLineLimit(relPath) {
 
 function isRouteDomainAggregator(relPath) {
   return [
-    'src/core/pipeline-internals/runtime-core.mjs',
-    'src/core/pipeline-internals/runtime-gates.mjs',
     'src/core/pipeline-internals/runtime-core.ts',
     'src/core/pipeline-internals/runtime-gates.ts'
   ].includes(relPath);

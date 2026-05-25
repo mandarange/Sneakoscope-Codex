@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { writeEvidenceIndexForProof } from '../../src/core/evidence/evidence-router.mjs';
-import { validateCompletionContract } from '../../src/core/trust-kernel/completion-contract.mjs';
-import { buildRouteCompletionContract } from '../../src/core/trust-kernel/route-contract.mjs';
+import { writeEvidenceIndexForProof } from '../../dist/core/evidence/evidence-router.js';
+import { validateCompletionContract } from '../../dist/core/trust-kernel/completion-contract.js';
+import { buildRouteCompletionContract } from '../../dist/core/trust-kernel/route-contract.js';
 
 test('chaos: corrupted proof does not silently pass', () => {
   const proof = { schema: 'bad', route: '$Team', status: 'verified', evidence: {}, claims: [], unverified: [], blockers: [] };

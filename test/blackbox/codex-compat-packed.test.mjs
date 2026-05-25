@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runProcess } from '../../src/core/fsx.mjs';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('packed Codex compatibility includes schema snapshot and semantic status', async () => {
   const result = await runProcess(process.execPath, ['./dist/bin/sks.js', 'codex', 'compatibility', '--json'], {

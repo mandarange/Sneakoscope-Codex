@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AGENT_INTAKE_STAGE_ID, DEFAULT_AGENT_COUNT } from '../../src/core/agents/agent-schema.mjs';
-import { agentPipelineStage, normalizeAgentPolicy, routeRequiresAgentIntake } from '../../src/core/agents/agent-plan.mjs';
+import { AGENT_INTAKE_STAGE_ID, DEFAULT_AGENT_COUNT } from '../../dist/core/agents/agent-schema.js';
+import { agentPipelineStage, normalizeAgentPolicy, routeRequiresAgentIntake } from '../../dist/core/agents/agent-plan.js';
 
 test('native agent policy is required for serious routes', () => {
   assert.equal(routeRequiresAgentIntake('$Team', { task: 'implement feature' }), true);

@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { evaluateQaGate, qaReportFilename } from '../../src/core/qa-loop.mjs';
-import { writeRouteCompletionProof } from '../../src/core/proof/route-adapter.mjs';
-import { validateRouteCompletionProof } from '../../src/core/proof/route-proof-gate.mjs';
-import { emptyImageVoxelLedger } from '../../src/core/wiki-image/image-voxel-schema.mjs';
-import { addVisualAnchor, writeImageVoxelLedger } from '../../src/core/wiki-image/image-voxel-ledger.mjs';
+import { evaluateQaGate, qaReportFilename } from '../../dist/core/qa-loop.js';
+import { writeRouteCompletionProof } from '../../dist/core/proof/route-adapter.js';
+import { validateRouteCompletionProof } from '../../dist/core/proof/route-proof-gate.js';
+import { emptyImageVoxelLedger } from '../../dist/core/wiki-image/image-voxel-schema.js';
+import { addVisualAnchor, writeImageVoxelLedger } from '../../dist/core/wiki-image/image-voxel-ledger.js';
 
 test('QA-LOOP fixture requires Computer Use evidence for UI verification', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-qa-fixture-'));

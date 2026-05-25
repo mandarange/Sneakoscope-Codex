@@ -23,4 +23,4 @@ sks-rs voxel-validate <ledger.json> --require-anchors
 sks-rs voxel-validate <ledger.json> --require-relations
 ```
 
-`voxel-validate` is semantic: it checks ledger schema, image ids, paths, SHA-256 fields, finite dimensions, anchor image refs, bbox shape/bounds, relation before/after image refs, and changed anchor refs. `src/core/rust-accelerator.mjs` exposes JS fallbacks for image hashing, voxel validation, secret scanning, and JSONL tailing so missing or stale Rust never blocks core SKS operation. `npm run rust:smoke` verifies that parity path.
+`voxel-validate` is semantic: it checks ledger schema, image ids, paths, SHA-256 fields, finite dimensions, anchor image refs, bbox shape/bounds, relation before/after image refs, and changed anchor refs. `src/core/rust-accelerator.ts` exposes JS fallbacks for image hashing, voxel validation, secret scanning, and JSONL tailing so missing or stale Rust never blocks core SKS operation. `npm run rust:smoke` verifies that parity path.

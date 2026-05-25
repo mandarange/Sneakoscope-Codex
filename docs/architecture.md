@@ -1,13 +1,13 @@
 # Architecture
 
-The active 0.9.x architecture keeps user-facing commands lazy-loaded through `src/cli/command-registry.mjs` and keeps `src/core/pipeline-runtime.mjs` as a compatibility facade.
+The active 1.17.0 architecture keeps user-facing commands lazy-loaded through `src/cli/command-registry.ts` and keeps `src/core/pipeline-runtime.ts` as a compatibility facade.
 
 Core trust modules added in 0.9.20:
 
 - `src/core/trust-kernel/`
 - `src/core/evidence/`
-- `src/core/managed-paths.mjs`
-- `src/core/bench.mjs`
+- `src/core/managed-paths.ts`
+- `src/core/bench.ts`
 
 Release architecture gates:
 
@@ -31,4 +31,4 @@ Hard thresholds:
 - command modules above `900` lines fail;
 - files that directly import five or more unrelated route domains fail unless they are explicit route-domain aggregators.
 
-The pipeline runtime compatibility surface stays split: `src/core/pipeline-internals/runtime-core.mjs` remains under the 1200-line pipeline gate, while stop/gate evaluation lives in `src/core/pipeline-internals/runtime-gates.mjs`.
+The pipeline runtime compatibility surface stays split: `src/core/pipeline-internals/runtime-core.ts` remains under the 1200-line pipeline gate, while stop/gate evaluation lives in `src/core/pipeline-internals/runtime-gates.ts`.

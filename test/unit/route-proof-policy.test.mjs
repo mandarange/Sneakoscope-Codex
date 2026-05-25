@@ -4,7 +4,7 @@ import {
   normalizeProofRoute,
   routeRequiresCompletionProof,
   routeRequiresImageVoxelAnchors
-} from '../../src/core/proof/route-proof-policy.mjs';
+} from '../../dist/core/proof/route-proof-policy.js';
 
 test('route proof policy normalizes serious and visual aliases', () => {
   assert.equal(normalizeProofRoute('qa-loop'), '$QA-LOOP');

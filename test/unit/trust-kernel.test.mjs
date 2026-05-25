@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { finalizeRouteWithProof } from '../../src/core/proof/route-finalizer.mjs';
-import { latestTrustReport } from '../../src/core/trust-kernel/trust-report.mjs';
+import { finalizeRouteWithProof } from '../../dist/core/proof/route-finalizer.js';
+import { latestTrustReport } from '../../dist/core/trust-kernel/trust-report.js';
 
 test('trust kernel writes contract, evidence index, and report for a serious route', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-trust-kernel-'));

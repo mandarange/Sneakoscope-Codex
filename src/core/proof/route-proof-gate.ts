@@ -24,13 +24,20 @@ export async function validateRouteCompletionProof(root: any, { missionId = null
     const anchors = proof.evidence?.image_voxels?.anchors ?? proof.evidence?.image_voxels?.anchor_count ?? 0;
     if (Number(anchors) <= 0) issues.push('image_voxel_anchors_missing');
   }
-  if ((state.agents_required === true || proof.evidence?.agents) && routeRequiresAgentIntake(route || proof.route, { task: state.prompt, noAgents: state.agents_required === false })) {
+  if (routeRequiresAgentIntake(route || proof.route, { task: state.prompt, noAgents: state.agents_required === false })) {
     const agents = proof.evidence?.agents;
     if (!agents) issues.push('agent_proof_evidence_missing');
     else {
-      if (agents.status !== 'passed' && agents.ok !== true) issues.push('agent_gate_not_passed');
-      if (Number(agents.agent_count || 0) !== 5) issues.push('agent_count_not_5');
+      if (agents.status !== 'passed' || agents.ok !== true) issues.push('agent_gate_not_passed');
+      const agentCount = Number(agents.agent_count || 0);
+      if (agentCount < 5) issues.push('agent_count_below_5');
+      if (agentCount > 20) issues.push('agent_count_above_20');
       if (agents.all_sessions_closed !== true) issues.push('agent_sessions_not_closed');
+      if (agents.no_overlap_ok !== true) issues.push('agent_no_overlap_not_ok');
+      if (agents.ledger_hash_chain_ok !== true) issues.push('agent_ledger_hash_chain_not_ok');
+      if (agents.consensus_ok !== true) issues.push('agent_consensus_not_ok');
+      if (agents.janitor_ok !== true) issues.push('agent_janitor_missing_or_not_ok');
+      if (Array.isArray(agents.blockers) && agents.blockers.length) issues.push('agent_blockers_present');
     }
   }
   const wrongness = proof.evidence?.wrongness;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifySql } from '../../src/core/db-safety.mjs';
+import { classifySql } from '../../dist/core/db-safety.js';
 
 test('db safety classifies destructive SQL', () => {
   const result = classifySql('DROP TABLE users;');

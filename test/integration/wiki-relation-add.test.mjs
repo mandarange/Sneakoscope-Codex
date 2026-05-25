@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { addImageRelation, addVisualAnchor, writeImageVoxelLedger } from '../../src/core/wiki-image/image-voxel-ledger.mjs';
-import { emptyImageVoxelLedger } from '../../src/core/wiki-image/image-voxel-schema.mjs';
+import { addImageRelation, addVisualAnchor, writeImageVoxelLedger } from '../../dist/core/wiki-image/image-voxel-ledger.js';
+import { emptyImageVoxelLedger } from '../../dist/core/wiki-image/image-voxel-schema.js';
 
 test('wiki relation-add validates before after image refs and changed anchors', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-relation-'));

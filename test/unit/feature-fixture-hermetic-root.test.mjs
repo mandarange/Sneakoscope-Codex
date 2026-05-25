@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runFeatureFixture } from '../../src/core/feature-fixture-runner.mjs';
+import { runFeatureFixture } from '../../dist/core/feature-fixture-runner.js';
 
 test('feature fixture runner uses hermetic temp roots for executable fixtures', () => {
   const result = runFeatureFixture({

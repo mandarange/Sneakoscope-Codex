@@ -60,6 +60,8 @@ const files = [...new Set(candidateFiles())];
 const findings = [];
 
 for (const file of files) {
+  if (/^src\/.*\.mjs$/.test(file)) findings.push({ file, reason: 'high severity runtime MJS shadow copy' });
+
   for (const pattern of riskyPathPatterns) {
     if (pattern.test(file) && !isAllowedRiskyPath(file)) findings.push({ file, reason: 'risky tracked path' });
   }

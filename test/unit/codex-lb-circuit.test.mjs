@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { codexLbMetrics, recordCodexLbHealthEvent, resetCodexLbCircuit } from '../../src/core/codex-lb-circuit.mjs';
+import { codexLbMetrics, recordCodexLbHealthEvent, resetCodexLbCircuit } from '../../dist/core/codex-lb-circuit.js';
 
 test('codex-lb circuit opens on repeated 5xx but not previous_response_not_found', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-lb-'));
