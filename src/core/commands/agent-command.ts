@@ -29,11 +29,18 @@ async function agentRun(parsed: any) {
 async function agentPlan(parsed: any) {
   const root = await sksRoot()
   const roster = buildAgentRoster({ agents: parsed.agents, concurrency: parsed.concurrency, prompt: parsed.prompt, readonly: parsed.readonly })
-  const partition = await buildAgentWorkPartition(root, roster, parsed.prompt)
-  const result = { schema: 'sks.agent-plan.v1', ok: partition.ok, prompt: parsed.prompt, route: parsed.route, backend: parsed.backend, roster, partition: { slice_count: partition.slices.length, lease_count: partition.leases.length, blockers: partition.blockers, no_overlap_proof: partition.no_overlap_proof } }
+  const partition = await buildAgentWorkPartition(root, roster, parsed.prompt, {
+    route: parsed.route,
+    targetActiveSlots: parsed.targetActiveSlots,
+    desiredWorkItemCount: parsed.desiredWorkItemCount,
+    minimumWorkItems: parsed.minimumWorkItems
+  })
+  const result = { schema: 'sks.agent-plan.v1', ok: partition.ok, prompt: parsed.prompt, route: parsed.route, backend: parsed.backend, roster, task_graph: partition.task_graph?.route_work_count_summary, partition: { slice_count: partition.slices.length, lease_count: partition.leases.length, blockers: partition.blockers, no_overlap_proof: partition.no_overlap_proof } }
   return emit(parsed, result, () => {
     console.log('Native agent plan')
     console.log('Agents: ' + roster.agent_count + ' (concurrency ' + roster.concurrency + ')')
+    console.log('Target active slots: ' + (partition.task_graph?.target_active_slots || roster.agent_count))
+    console.log('Work items: ' + (partition.task_graph?.total_work_items || partition.slices.length))
     console.log('Slices: ' + partition.slices.length + ', leases: ' + partition.leases.length)
     if (partition.blockers.length) console.log('Blockers: ' + partition.blockers.join(', '))
   })

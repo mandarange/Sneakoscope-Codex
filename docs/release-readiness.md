@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.1 writes the `sks.release-readiness.v1` report for the dynamic agent pool closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, generation-aware terminal close proof, tmux right-lane pane evidence, release metadata, docs truthfulness, dynamic pool replenishment, and official-docs compatibility. `ok: true` means there are no remaining 1.18.1 closure DAG gaps.
+SKS 1.18.2 writes the `sks.release-readiness.v1` report for the dynamic scheduler closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, work-item-first task graph, schema-bound follow-up work items, route blackbox backfill checks, persistent tmux lane supervisor, scheduler proof hardening, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.2 closure DAG gaps.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -14,6 +14,16 @@ npm run agent:main-no-scout
 npm run agent:worker-scout-limited
 npm run agent:background-terminals
 npm run agent:tmux-right-lanes
+npm run agent:task-graph-expansion
+npm run agent:follow-up-work-schema
+npm run agent:dynamic-pool-route-blackbox
+npm run agent:backfill-route-blackbox
+npm run team:backfill-route-blackbox
+npm run research:backfill-route-blackbox
+npm run qa:backfill-route-blackbox
+npm run agent:tmux-lane-persistence
+npm run agent:tmux-lane-no-flicker
+npm run agent:scheduler-proof-hardening
 npm run agent:visual-consistency
 npm run release:parallel-full-coverage
 npm run priority:full-closure
@@ -24,24 +34,25 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.18.1.json`
-- `.sneakoscope/reports/release-readiness-1.18.1.md`
-- `.sneakoscope/reports/all-feature-completion-1.18.1.json`
-- `.sneakoscope/reports/all-feature-completion-1.18.1.md`
-- `.sneakoscope/reports/official-docs-compat-1.18.1.json`
-- `.sneakoscope/reports/official-docs-compat-1.18.1.md`
+- `.sneakoscope/reports/release-readiness-1.18.2.json`
+- `.sneakoscope/reports/release-readiness-1.18.2.md`
+- `.sneakoscope/reports/all-feature-completion-1.18.2.json`
+- `.sneakoscope/reports/all-feature-completion-1.18.2.md`
+- `.sneakoscope/reports/official-docs-compat-1.18.2.json`
+- `.sneakoscope/reports/official-docs-compat-1.18.2.md`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal generation closure, tmux right lanes, dynamic backfill metrics, and remaining 1.18.1 P0-P4 closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal generation closure, persistent tmux lanes, task graph/work queue expansion, follow-up work item schema, route blackbox backfill metrics, and remaining 1.18.2 P0-P5 closure gaps.
 
 ## Priority Closure
 
 | Priority | Status Surface |
 | --- | --- |
-| P0 | Source Intelligence, safety, release, proof, runtime, no-Scout, terminal, tmux, and Goal blockers |
-| P1 | Codex App dashboard/operator visibility for source, X AI, Codex Web, Goal, terminal, and tmux |
-| P2 | Parallel provider queries, release DAG groups, local-only caches, and speedup summaries |
-| P3 | README, policy docs, migration, troubleshooting, CLI help, and onboarding |
-| P4 | Human-readable summaries for source intelligence, X AI used/not used, Goal fallback, terminal close, tmux attach, janitor, and worker Scout evidence |
+| P0 | Source Intelligence, safety, release, proof, runtime, task graph, follow-up schema, route backfill, no-Scout, terminal, tmux, and Goal blockers |
+| P1 | Codex App dashboard/operator visibility for active slots, total work items, pending/active/completed counts, backfill, generation history, source, X AI, Codex Web, Goal, terminal, and tmux |
+| P2 | Parallel provider queries, release DAG groups, local-only caches, refill latency, queue metrics, janitor throttling, and worker-pool speed summaries |
+| P3 | README, policy docs, migration, troubleshooting, CLI help, `--work-items`, active-slot semantics, and onboarding |
+| P4 | Human-readable summaries for source intelligence, X AI used/not used, Goal fallback, terminal close, tmux persistence, janitor, scheduler health, and worker Scout evidence |
+| P5 | Regression catalog for 5/5, 5/8, 5/25, 20/40, follow-up enqueue/reject, lane persistence, source refs, and Goal refs |
 
 MAD-SKS readiness remains high-friction: full-system authority requires explicit user authorization, scoped target roots, separate consent for system access, DB writes, package installation, service control, admin operations, network, Computer Use, destructive delete, and generated-asset edits. The SKS harness protected core remains immutable even under MAD-SKS.
 

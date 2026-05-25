@@ -15,6 +15,8 @@ export type AgentBackend = typeof AGENT_BACKENDS[number]
 export type AgentStatus = 'pending' | 'running' | 'closed' | 'blocked' | 'failed'
 export type AgentRole = 'architect' | 'implementer' | 'verifier' | 'safety' | 'integrator' | 'research' | 'documentation' | 'schema' | 'release' | 'ux' | 'db'
 
+export type { AgentFollowUpWorkItem } from './agent-follow-up-work-items.js'
+
 export interface AgentPersona {
   id: string
   stable_id: string
@@ -70,6 +72,11 @@ export interface AgentRunOptions {
   route?: string
   agents?: number
   concurrency?: number
+  targetActiveSlots?: number
+  desiredWorkItemCount?: number
+  minimumWorkItems?: number
+  maxQueueExpansion?: number
+  refillDelayMs?: number
   roster?: unknown
   backend?: AgentBackend | string
   json?: boolean
@@ -83,6 +90,15 @@ export interface AgentTaskSlice {
   owner_agent_id: string
   role: AgentRole | string
   domain: string
+  title?: string
+  dependencies?: string[]
+  priority?: number
+  required_persona_category?: string
+  lease_requirements?: unknown[]
+  generated_by?: string
+  route_domain?: string
+  work_item_kind?: string
+  max_attempts?: number
   target_paths: string[]
   readonly_paths: string[]
   write_paths: string[]
@@ -121,6 +137,7 @@ export interface AgentRunnerResult {
   writes: string[]
   source_intelligence_refs?: Record<string, unknown> | null
   goal_mode_ref?: Record<string, unknown> | null
+  follow_up_work_items?: import('./agent-follow-up-work-items.js').AgentFollowUpWorkItem[]
   recursion_guard: { ok: boolean; violations: string[] }
   verification: { status: string; checks: string[] }
 }

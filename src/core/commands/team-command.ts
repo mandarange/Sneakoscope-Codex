@@ -16,7 +16,7 @@ import { PIPELINE_PLAN_ARTIFACT, validatePipelinePlan, writePipelinePlan } from 
 import { cleanupTmuxTeamView, launchTmuxTeamView, reconcileTmuxTeamCockpit } from '../tmux-ui.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
-import { ambientGoalContinuation, flag, readFlagValue } from './command-utils.js';
+import { ambientGoalContinuation, flag, readBoundedIntegerFlag, readFlagValue } from './command-utils.js';
 
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 
@@ -29,8 +29,10 @@ export async function team(args: any = []) {
   const cleanCreateArgs = args.filter((arg: any) => !['--open-tmux', '--tmux-open', '--no-open-tmux', '--no-tmux', '--no-attach', '--mock'].includes(String(arg)));
   const opts = parseTeamCreateArgs(cleanCreateArgs);
   const { prompt, agentSessions, roleCounts, roster } = opts;
+  const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', roster.bundle_size, 1, 20);
+  const desiredWorkItemCount = readBoundedIntegerFlag(args, '--work-items', targetActiveSlots, 1, 200);
   if (!prompt) {
-    console.error('Usage: sks team "task" [20:agents] [executor:5 reviewer:6 user:1] [--agents N] [--no-open-tmux] [--json] [--mock]');
+    console.error('Usage: sks team "task" [20:agents] [executor:5 reviewer:6 user:1] [--agents N] [--work-items N] [--target-active-slots N] [--no-open-tmux] [--json] [--mock]');
     process.exitCode = 1;
     return;
   }
@@ -76,6 +78,8 @@ export async function team(args: any = []) {
     backend: mock ? 'fake' : 'codex-exec',
     mock,
     agents: roster.bundle_size,
+    targetActiveSlots,
+    desiredWorkItemCount,
     concurrency: Math.min(agentSessions, roster.bundle_size),
     readonly: true
   });
@@ -113,6 +117,8 @@ export async function team(args: any = []) {
     context_pack: path.join(root, '.sneakoscope', 'wiki', 'context-pack.json'),
     agent_sessions: agentSessions,
     bundle_size: roster.bundle_size,
+    target_active_slots: targetActiveSlots,
+    desired_work_items: desiredWorkItemCount,
     role_counts: roleCounts,
     questions: path.join(dir, 'questions.md'),
     native_agent_run: nativeAgentRun,

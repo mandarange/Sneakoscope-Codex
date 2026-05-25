@@ -26,7 +26,7 @@ test('Codex App imagegen reports missing generated output separately from missin
     requested_fidelity: 'original',
     privacy: 'local-only'
   }, {
-    capability: { codexAppAvailable: true },
+    capability: { codexAppAvailable: true, env: { HOME: root }, configText: '', codexLbEnvText: '' },
     openai: { apiKey: null }
   }));
 

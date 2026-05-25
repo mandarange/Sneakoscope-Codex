@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = readJson('package.json');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.18.1';
+const RELEASE_VERSION = '1.18.2';
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 const releaseParallelCheckSource = readText('scripts/release-parallel-check.mjs', '');
@@ -53,6 +53,16 @@ const checks = {
   agent_worker_scout_limited: scriptContains('release:check:parallel', 'agent:worker-scout-limited'),
   agent_background_terminals: scriptContains('release:check:parallel', 'agent:background-terminals'),
   agent_tmux_right_lanes: scriptContains('release:check:parallel', 'agent:tmux-right-lanes'),
+  agent_task_graph_expansion: scriptContains('release:check:parallel', 'agent:task-graph-expansion'),
+  agent_follow_up_work_schema: scriptContains('release:check:parallel', 'agent:follow-up-work-schema'),
+  agent_dynamic_pool_route_blackbox: scriptContains('release:check:parallel', 'agent:dynamic-pool-route-blackbox'),
+  agent_backfill_route_blackbox: scriptContains('release:check:parallel', 'agent:backfill-route-blackbox'),
+  team_backfill_route_blackbox: scriptContains('release:check:parallel', 'team:backfill-route-blackbox'),
+  research_backfill_route_blackbox: scriptContains('release:check:parallel', 'research:backfill-route-blackbox'),
+  qa_backfill_route_blackbox: scriptContains('release:check:parallel', 'qa:backfill-route-blackbox'),
+  agent_tmux_lane_persistence: scriptContains('release:check:parallel', 'agent:tmux-lane-persistence'),
+  agent_tmux_lane_no_flicker: scriptContains('release:check:parallel', 'agent:tmux-lane-no-flicker'),
+  agent_scheduler_proof_hardening: scriptContains('release:check:parallel', 'agent:scheduler-proof-hardening'),
   agent_dynamic_pool: scriptContains('release:check:parallel', 'agent:dynamic-pool'),
   agent_backfill_replenishment: scriptContains('release:check:parallel', 'agent:backfill-replenishment'),
   agent_scheduler_proof: scriptContains('release:check:parallel', 'agent:scheduler-proof'),
@@ -161,6 +171,16 @@ for (const [name, ok] of Object.entries({
   agent_worker_scout_limited: checks.agent_worker_scout_limited,
   agent_background_terminals: checks.agent_background_terminals,
   agent_tmux_right_lanes: checks.agent_tmux_right_lanes,
+  agent_task_graph_expansion: checks.agent_task_graph_expansion,
+  agent_follow_up_work_schema: checks.agent_follow_up_work_schema,
+  agent_dynamic_pool_route_blackbox: checks.agent_dynamic_pool_route_blackbox,
+  agent_backfill_route_blackbox: checks.agent_backfill_route_blackbox,
+  team_backfill_route_blackbox: checks.team_backfill_route_blackbox,
+  research_backfill_route_blackbox: checks.research_backfill_route_blackbox,
+  qa_backfill_route_blackbox: checks.qa_backfill_route_blackbox,
+  agent_tmux_lane_persistence: checks.agent_tmux_lane_persistence,
+  agent_tmux_lane_no_flicker: checks.agent_tmux_lane_no_flicker,
+  agent_scheduler_proof_hardening: checks.agent_scheduler_proof_hardening,
   agent_dynamic_pool: checks.agent_dynamic_pool,
   agent_backfill_replenishment: checks.agent_backfill_replenishment,
   agent_scheduler_proof: checks.agent_scheduler_proof,
@@ -185,9 +205,9 @@ const report = {
   generated_at: new Date().toISOString(),
   scope: {
     release_version: RELEASE_VERSION,
-    gate: '1.18.1 dynamic agent pool closure DAG',
-    ok_means: 'no remaining 1.18.1 dynamic scheduler, generation, tmux, source, or Goal propagation gaps',
-    not_in_1_18_parallel_gate: 'reported for historical, live, or broader gates that are not part of the 1.18.1 closure DAG'
+    gate: '1.18.2 extreme full closure dynamic scheduler DAG',
+    ok_means: 'no remaining 1.18.2 dynamic scheduler, task graph, follow-up, tmux lane, route blackbox, source, or Goal propagation gaps',
+    not_in_1_18_parallel_gate: 'reported for historical, live, or broader gates that are not part of the 1.18.2 closure DAG'
   },
   package: {
     name: pkg.name,
@@ -338,8 +358,18 @@ const report = {
     tmux_right_lanes: checks.agent_tmux_right_lanes,
     codex_app_visual_consistency: checks.agent_visual_consistency
   },
-  dynamic_agent_pool_1_18_1: {
+  dynamic_agent_pool_1_18_2: {
     status: checks.agent_dynamic_pool
+      && checks.agent_task_graph_expansion
+      && checks.agent_follow_up_work_schema
+      && checks.agent_dynamic_pool_route_blackbox
+      && checks.agent_backfill_route_blackbox
+      && checks.team_backfill_route_blackbox
+      && checks.research_backfill_route_blackbox
+      && checks.qa_backfill_route_blackbox
+      && checks.agent_tmux_lane_persistence
+      && checks.agent_tmux_lane_no_flicker
+      && checks.agent_scheduler_proof_hardening
       && checks.agent_backfill_replenishment
       && checks.agent_scheduler_proof
       && checks.agent_session_generation
@@ -348,6 +378,16 @@ const report = {
       && checks.agent_dynamic_cockpit
       && checks.agent_source_intelligence_propagation
       && checks.agent_goal_mode_propagation ? 'present' : 'missing',
+    task_graph_expansion: checks.agent_task_graph_expansion,
+    follow_up_work_schema: checks.agent_follow_up_work_schema,
+    dynamic_pool_route_blackbox: checks.agent_dynamic_pool_route_blackbox,
+    backfill_route_blackbox: checks.agent_backfill_route_blackbox,
+    team_backfill_route_blackbox: checks.team_backfill_route_blackbox,
+    research_backfill_route_blackbox: checks.research_backfill_route_blackbox,
+    qa_backfill_route_blackbox: checks.qa_backfill_route_blackbox,
+    tmux_lane_persistence: checks.agent_tmux_lane_persistence,
+    tmux_lane_no_flicker: checks.agent_tmux_lane_no_flicker,
+    scheduler_proof_hardening: checks.agent_scheduler_proof_hardening,
     dynamic_pool: checks.agent_dynamic_pool,
     backfill_replenishment: checks.agent_backfill_replenishment,
     scheduler_proof: checks.agent_scheduler_proof,
@@ -366,7 +406,7 @@ const report = {
     status: checks.release_parallel_full_coverage && checks.priority_full_closure ? 'present' : 'missing',
     release_parallel_full_coverage: checks.release_parallel_full_coverage,
     priority_full_closure: checks.priority_full_closure,
-    priorities: ['P0', 'P1', 'P2', 'P3', 'P4']
+    priorities: ['P0', 'P1', 'P2', 'P3', 'P4', 'P5']
   },
   release_native_agent_backend: {
     status: checks.release_native_agent_backend && checks.legacy_multiagent_removed ? 'present' : 'missing',
@@ -434,7 +474,7 @@ for (const key of [
   'mad_sks_1_16_0',
   'source_intelligence_1_18',
   'agent_terminal_tmux_1_18',
-  'dynamic_agent_pool_1_18_1',
+  'dynamic_agent_pool_1_18_2',
   'goal_mode_1_18',
   'release_full_coverage_1_18',
   'release_native_agent_backend',
@@ -518,7 +558,7 @@ function renderMarkdown(report) {
 - Hook trust warning-zero: \`${report.hook_trust_warning_zero.status}\`
 - Source Intelligence 1.18: \`${report.source_intelligence_1_18.status}\`
 - Agent terminal/tmux 1.18: \`${report.agent_terminal_tmux_1_18.status}\`
-- Dynamic agent pool 1.18.1: \`${report.dynamic_agent_pool_1_18_1.status}\`
+- Dynamic agent pool 1.18.2: \`${report.dynamic_agent_pool_1_18_2.status}\`
 - Goal mode 1.18: \`${report.goal_mode_1_18.status}\`
 - Release full coverage 1.18: \`${report.release_full_coverage_1_18.status}\`
 - All-feature completion: \`${report.all_feature_completion.status}\`
@@ -529,9 +569,9 @@ function renderMarkdown(report) {
 - Loop blocker stop: \`${report.loop_blocker_stop.status}\`
 - Docs truthfulness: \`${report.docs_truthfulness.status}\`
 - Release metadata: \`${report.release_metadata.status}\`
-- Priority closure: P0, P1, P2, P3, and P4 are tracked in the 1.18 readiness surface.
-- Remaining 1.18.1 P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
+- Priority closure: P0, P1, P2, P3, P4, and P5 are tracked in the 1.18.2 readiness surface.
+- Remaining 1.18.2 P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
 
-\`not_in_1_18_parallel_gate\` is an explicit non-P0 status for historical, live, or broader gates not run by the 1.18.1 parallel DAG. Computer Use live evidence, UX-Review screenshots, and PPT generated review images remain opt-in/local-only. codex-lb process-only setup is reported as \`process_only_ephemeral\`, not durable persistence. UX-Review/PPT cannot pass from text-only critique or mock-as-real fixtures.
+\`not_in_1_18_parallel_gate\` is an explicit non-P0 status for historical, live, or broader gates not run by the 1.18.2 parallel DAG. Computer Use live evidence, UX-Review screenshots, and PPT generated review images remain opt-in/local-only. codex-lb process-only setup is reported as \`process_only_ephemeral\`, not durable persistence. UX-Review/PPT cannot pass from text-only critique or mock-as-real fixtures.
 `;
 }

@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { appendJsonl, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { normalizeAgentFollowUpWorkItems } from './agent-follow-up-work-items.js'
 
 export const AGENT_WORK_QUEUE_SCHEMA = 'sks.agent-work-queue.v1'
 export const AGENT_WORK_QUEUE_EVENT_SCHEMA = 'sks.agent-work-queue-event.v1'
@@ -111,15 +112,17 @@ export function enqueueFollowUpWorkItems(queue: AgentWorkQueue, items: any[], in
   goalModeRef?: Record<string, unknown> | null
 }) {
   const accepted: AgentWorkItem[] = []
+  const validation = normalizeAgentFollowUpWorkItems(items, { originSessionId: input.originSessionId })
+  const validItems = validation.accepted
   const remainingCapacity = Math.max(0, queue.max_queue_expansion - queue.generated_work_item_count)
-  for (const [index, raw] of items.slice(0, remainingCapacity).entries()) {
+  for (const [index, raw] of validItems.slice(0, remainingCapacity).entries()) {
     const id = String(raw.id || `follow-up-${queue.generated_work_item_count + index + 1}`)
     if (queue.items.some((item) => item.id === id)) continue
     accepted.push({
       id,
       title: String(raw.title || id),
-      description: String(raw.description || raw.summary || id),
-      required_persona_category: String(raw.required_persona_category || raw.role || 'verifier'),
+      description: String(raw.description || id),
+      required_persona_category: String(raw.required_persona_category || 'verifier'),
       lease_requirements: Array.isArray(raw.lease_requirements) ? raw.lease_requirements : [],
       dependencies: Array.isArray(raw.dependencies) ? raw.dependencies.map(String) : [],
       priority: Number.isFinite(Number(raw.priority)) ? Number(raw.priority) : queue.items.length + accepted.length + 1,
@@ -132,7 +135,7 @@ export function enqueueFollowUpWorkItems(queue: AgentWorkQueue, items: any[], in
       follow_up_origin_session_id: input.originSessionId,
       source_intelligence_refs: input.sourceIntelligenceRefs || null,
       goal_mode_ref: input.goalModeRef || null,
-      slice: raw
+      slice: raw as unknown as Record<string, unknown>
     })
   }
   queue.items.push(...accepted)
@@ -141,8 +144,11 @@ export function enqueueFollowUpWorkItems(queue: AgentWorkQueue, items: any[], in
   queue.updated_at = nowIso()
   return {
     accepted,
-    blocked_count: Math.max(0, items.length - accepted.length),
-    blocked: items.length > accepted.length ? ['follow_up_work_items_exceeded_max_queue_expansion'] : []
+    blocked_count: validation.blockers.length + Math.max(0, validItems.length - accepted.length),
+    blocked: [
+      ...validation.blockers,
+      ...(validItems.length > accepted.length ? ['follow_up_work_items_exceeded_max_queue_expansion'] : [])
+    ]
   }
 }
 

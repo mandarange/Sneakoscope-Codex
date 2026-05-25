@@ -15,5 +15,7 @@ test('QA Loop route runs in a hermetic temp project root', async () => {
   await assertCompletionProofInRoot(root, json.mission_id, '$QA-LOOP');
   const status = await runSksInRoot(root, ['qa-loop', 'status', prepared.mission_id, '--json']);
   assert.equal(status.native_agent_plan.central_ledger, 'agents/agent-events.jsonl');
-  assert.ok(status.agent_sessions.qa_verifier_ui);
+  const sessions = Object.values(status.agent_sessions || {});
+  assert.ok(sessions.length >= 3);
+  assert.ok(sessions.every((session) => session.status === 'closed'));
 });

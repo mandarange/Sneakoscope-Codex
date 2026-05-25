@@ -13,9 +13,9 @@ export function buildTmuxAgentPanePlan(agent: any, slice: any = {}) {
     },
     agent_pane: {
       title: `agent: ${agentId}`,
-      command: `sks agent status latest --json # ${sliceId}`,
-      self_close: true,
-      self_close_trap: 'trap "tmux kill-pane -t ${TMUX_PANE:-} >/dev/null 2>&1 || true" EXIT'
+      command: `sks agent lane latest --agent ${agentId} --follow # ${sliceId}`,
+      self_close: false,
+      persistent_worker_slot: true
     }
   }
 }
@@ -26,7 +26,8 @@ export async function runTmuxAgent(agent: any, slice: any, opts: any = {}) {
   const artifact = await writeAgentTmuxReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
     plan,
     overview_pane_created: true,
-    self_closing_panes: true,
+    self_closing_panes: false,
+    persistent_worker_slot: true,
     launch_mode: launch.launch_mode,
     pane_id: launch.pane_id,
     session_name: launch.session_name,
@@ -72,7 +73,9 @@ async function launchTmuxPane(agent: any, slice: any, opts: any = {}) {
   const root = opts.agentRoot || opts.cwd || process.cwd()
   const sessionName = opts.tmuxSessionName || (opts.missionId ? `sks-${opts.missionId}` : 'sks-agent-runtime')
   const title = `${agent.slot_id || agent.id} gen-${agent.generation_index || 1} ${slice?.id || 'work'}`
-  const command = `printf '%s\\n' ${JSON.stringify(title)}; sleep 1`
+  const laneFile = path.join(root, 'lanes', String(agent.slot_id || agent.id), 'lane.md')
+  const drainFile = path.join(root, 'lanes', '.drain')
+  const command = `while test ! -f ${JSON.stringify(drainFile)}; do clear; printf '%s\\n' ${JSON.stringify(title)}; test -f ${JSON.stringify(laneFile)} && cat ${JSON.stringify(laneFile)}; sleep 2; done`
   const fake = opts.fakeTmux === true || opts.real !== true
   if (!fake) {
     try {
@@ -111,7 +114,7 @@ async function launchTmuxPane(agent: any, slice: any, opts: any = {}) {
 }
 
 function fakeLaunch(agent: any, sessionName: string, command: string, warnings: string[]) {
-  const paneId = `fake-pane-${String(agent.slot_id || agent.id)}-gen-${String(agent.generation_index || 1)}`
+  const paneId = `fake-pane-${String(agent.slot_id || agent.id)}`
   return {
     schema: 'sks.agent-tmux-pane-launch.v1',
     generated_at: new Date().toISOString(),

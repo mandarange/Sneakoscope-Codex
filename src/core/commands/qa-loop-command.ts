@@ -11,7 +11,7 @@ import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, ROUTES, routePrompt, stripVisibleDe
 import { scanDbSafety } from '../db-safety.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
-import { flag, promptOf, readMaxCycles, resolveMissionId, safeReadTextFile } from './command-utils.js';
+import { flag, promptOf, readBoundedIntegerFlag, readMaxCycles, resolveMissionId, safeReadTextFile } from './command-utils.js';
 import fsp from 'node:fs/promises';
 
 export async function qaLoopCommand(sub: any, args: any = []) {
@@ -114,13 +114,15 @@ async function qaLoopRun(args: any) {
   }
   const fallbackCycles = Number.parseInt(contract.answers?.MAX_QA_CYCLES, 10) || 8;
   const maxCycles = readMaxCycles(args, fallbackCycles);
+  const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', 3, 1, 20);
+  const desiredWorkItemCount = readBoundedIntegerFlag(args, '--work-items', targetActiveSlots, 1, 200);
   const mock = flag(args, '--mock');
   const qaGate = await readJson(path.join(dir, 'qa-gate.json'), {});
   const reportFile = qaGate.qa_report_file;
   await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_RUNNING_NO_QUESTIONS', questions_allowed: false, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.run.started', maxCycles, mock });
   const nativeAgentPlan = await readJson(path.join(dir, 'qa-agent-plan.json'), null);
-  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-exec', mock, agents: 3, concurrency: 3, readonly: true, roster: nativeAgentPlan });
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-exec', mock, agents: 3, targetActiveSlots, desiredWorkItemCount, concurrency: 3, readonly: true, roster: nativeAgentPlan });
   await writeJsonAtomic(path.join(dir, 'qa-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (mock) {

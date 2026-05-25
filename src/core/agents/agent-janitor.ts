@@ -13,6 +13,9 @@ export interface AgentJanitorReport {
   zombie_process_sessions: string[]
   stale_tmux_sessions: string[]
   active_generation_sessions: string[]
+  active_generation_count: number
+  cleaned_generation_count: number
+  skipped_active_generations: string[]
   orphan_generation_dirs: string[]
   slot_generation_cleanup: string[]
   orphan_temp_dirs: string[]
@@ -56,7 +59,10 @@ export async function runAgentJanitor(input: {
     if (row.session_id) statusBySession.set(String(row.session_id), status)
   }
   const zombieProcesses = await detectZombieProcessSessions(agentRoot, statusByAgent, statusBySession)
-  const staleTmuxSessions = await detectStaleTmuxSessions(agentRoot, staleMs)
+  const rawStaleTmuxSessions = await detectStaleTmuxSessions(agentRoot, staleMs)
+  const activeGenerationSet = new Set(activeGenerationSessions)
+  const staleTmuxSessions = rawStaleTmuxSessions.filter((id) => !activeGenerationSet.has(id))
+  const skippedActiveGenerations = rawStaleTmuxSessions.filter((id) => activeGenerationSet.has(id))
   const orphanGenerationDirs = await detectOrphanGenerationDirs(agentRoot, new Set(generationRows.map((row) => String(row.artifact_dir || ''))))
   const orphanTempDirs = await scopedExistingPaths(Array.isArray(namespace?.orphan_temp_dirs) ? namespace.orphan_temp_dirs : [], projectHash)
   const staleLocks = await scopedStaleLockPaths(namespace?.lock_dir ? [namespace.lock_dir] : [], projectHash, staleMs)
@@ -87,6 +93,9 @@ export async function runAgentJanitor(input: {
     zombie_process_sessions: zombieProcesses,
     stale_tmux_sessions: staleTmuxSessions,
     active_generation_sessions: activeGenerationSessions,
+    active_generation_count: activeGenerationSessions.length,
+    cleaned_generation_count: cleaned.filter((entry) => entry.includes(`${path.sep}sessions${path.sep}`)).length,
+    skipped_active_generations: skippedActiveGenerations,
     orphan_generation_dirs: orphanGenerationDirs,
     slot_generation_cleanup: cleaned.filter((entry) => entry.includes(`${path.sep}sessions${path.sep}`)),
     orphan_temp_dirs: orphanTempDirs,

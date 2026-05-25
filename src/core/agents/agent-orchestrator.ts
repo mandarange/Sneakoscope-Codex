@@ -23,9 +23,11 @@ import { startAgentTerminalSession, closeAgentTerminalSession } from './agent-te
 import { writeScoutPolicyArtifact } from './scout-policy.js'
 import { writeTmuxRightLaneCockpit } from './tmux-right-lane-cockpit.js'
 import { buildProjectNamespace, namespacedAgentSessionId, writeProjectNamespaceArtifact } from '../session/project-namespace.js'
-import { runAgentScheduler } from './agent-scheduler.js'
+import { normalizeTargetActiveSlots, runAgentScheduler } from './agent-scheduler.js'
 import { runSourceIntelligence } from '../source-intelligence/source-intelligence-runner.js'
 import { detectOfficialGoalMode, writeOfficialGoalModeArtifact } from '../codex/official-goal-mode.js'
+import { writeAgentTaskGraph } from './agent-task-graph.js'
+import { drainTmuxLaneSupervisor, initializeTmuxLaneSupervisor, updateTmuxLaneSupervisorFromSlots, verifyTmuxLaneSurvival } from './tmux-lane-supervisor.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const root = path.resolve(opts.root || process.cwd())
@@ -49,7 +51,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       index: agent.index
     })
   }))
-  const partition = await buildAgentWorkPartition(root, roster, prompt)
+  const targetActiveSlots = normalizeTargetActiveSlots(opts.targetActiveSlots ?? opts.agents ?? roster.agent_count)
+  const desiredWorkItemCount = normalizeDesiredWorkItemCount(opts.desiredWorkItemCount, opts.minimumWorkItems, targetActiveSlots)
   const sourceIntelligence = await runSourceIntelligence({ root, missionDir: dir, route, query: prompt, offline: true, context7Available: true })
   const sourceIntelligenceRef = {
     artifact: 'source-intelligence-evidence.json',
@@ -67,10 +70,20 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     official_goal_available: goalMode.official_goal_available,
     default_enabled: goalMode.default_enabled
   }
+  const partition = await buildAgentWorkPartition(root, roster, prompt, {
+    route,
+    targetActiveSlots,
+    desiredWorkItemCount,
+    ...(opts.minimumWorkItems === undefined ? {} : { minimumWorkItems: opts.minimumWorkItems }),
+    sourceIntelligenceRefs: sourceIntelligenceRef,
+    goalModeRef
+  })
   await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
   const ledgerRoot = await initializeAgentCentralLedger(dir, { missionId, roster, partition, route, prompt, dynamicScheduler: true })
+  await writeAgentTaskGraph(ledgerRoot, partition.task_graph)
   await writeScoutPolicyArtifact(ledgerRoot)
   await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster })
+  await initializeTmuxLaneSupervisor(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, targetActiveSlots })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-no-overlap-proof.json'), partition.no_overlap_proof || { schema: 'sks.agent-no-overlap-proof.v1', ok: false, blockers: ['missing_no_overlap_proof'] })
   await writeAgentLifecyclePolicy(ledgerRoot)
@@ -82,7 +95,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     agents: roster.agent_count,
     concurrency: roster.concurrency,
     batch_count: 0,
-    target_active_slots: roster.agent_count,
+    target_active_slots: targetActiveSlots,
+    desired_work_items: desiredWorkItemCount,
+    total_work_items: partition.task_graph?.total_work_items || partition.slices.length,
     backpressure: 'dynamic scheduler maintains target active slots until the work queue drains',
     rate_limit_delay_ms: backend === 'codex-exec' ? 250 : 0,
     resource_pressure_warnings: roster.agent_count > roster.concurrency ? ['agents_exceed_concurrency_batches'] : []
@@ -95,7 +110,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     roster,
     partition,
     prompt,
-    targetActiveSlots: roster.agent_count,
+    targetActiveSlots,
+    ...(opts.maxQueueExpansion === undefined ? {} : { maxQueueExpansion: opts.maxQueueExpansion }),
+    ...(opts.refillDelayMs === undefined ? {} : { refillDelayMs: opts.refillDelayMs }),
     sourceIntelligenceRefs: sourceIntelligenceRef,
     goalModeRef,
     launchSession: async ({ agent, workItem }) => {
@@ -114,14 +131,20 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       await appendAgentLedgerEvent(ledgerRoot, { agent_id: agent.id, session_id: agent.session_id, event_type: 'agent_started', payload: { backend, slice_id: slice.id } })
       await startAgentTerminalSession(ledgerRoot, agent, {
         backend,
-        real: backend === 'process' || (backend === 'codex-exec' && opts.real === true) || backend === 'tmux'
+        real: backend === 'process' || (backend === 'codex-exec' && opts.real === true) || backend === 'tmux',
+        slotId: agent.slot_id,
+        generationIndex: agent.generation_index,
+        requireGeneration: true
       })
       const result = await runAgentByBackend(backend, agent, slice, { ...opts, missionId, agentRoot: ledgerRoot, cwd: root, route, prompt })
       const terminalClose = await closeAgentTerminalSession(ledgerRoot, agent, {
         exitCode: result.status === 'done' ? 0 : 1,
         status: result.status,
         stdoutTail: result.summary || '',
-        stderrTail: (result.blockers || []).join('\n')
+        stderrTail: (result.blockers || []).join('\n'),
+        slotId: agent.slot_id,
+        generationIndex: agent.generation_index,
+        requireGeneration: true
       })
       result.artifacts = [...(result.artifacts || []), path.join(agent.session_artifact_dir || path.join('sessions', agent.id), 'agent-terminal-session.json'), path.join(agent.session_artifact_dir || path.join('sessions', agent.id), 'agent-terminal-close-report.json')]
       result.source_intelligence_refs = result.source_intelligence_refs || sourceIntelligenceRef
@@ -146,7 +169,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
       return result
     },
-    onSchedulerEvent: async ({ event, slots }) => {
+    onSchedulerEvent: async ({ event, slots, state }) => {
       const paneBySlot = await readTmuxPaneIdsBySlot(ledgerRoot)
       const enrichedSlots = slots.map((slot) => ({ ...slot, pane_id: paneBySlot.get(slot.slot_id) || null, launch_status: paneBySlot.has(slot.slot_id) ? 'launched' : slot.status }))
       await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots: enrichedSlots })
@@ -155,6 +178,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
         const periodicJanitor = await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
         if (!periodicJanitor.ok) await appendAgentLedgerEvent(ledgerRoot, { agent_id: 'orchestrator', session_id: 'orchestrator', event_type: 'periodic_janitor_blocked', payload: periodicJanitor })
       }
+      if (String(event.event_type) === 'scheduler_draining') await verifyTmuxLaneSurvival(ledgerRoot)
+      await updateTmuxLaneSupervisorFromSlots(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots, state, event })
+      if (String(event.event_type) === 'scheduler_drained') await drainTmuxLaneSupervisor(ledgerRoot)
     }
   })
   const results = scheduler.results
@@ -193,6 +219,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     ledger_root: path.relative(root, ledgerRoot),
     roster,
     partition: { ok: partition.ok, slice_count: partition.slices.length, lease_count: partition.leases.length, blockers: partition.blockers },
+    task_graph: partition.task_graph?.route_work_count_summary || null,
     scheduler,
     source_intelligence: sourceIntelligenceRef,
     goal_mode: goalModeRef,
@@ -208,6 +235,14 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     wrongness,
     proof
   }
+}
+
+function normalizeDesiredWorkItemCount(value: unknown, minimumValue: unknown, targetActiveSlots: number) {
+  const parsed = Number(value)
+  const minimum = Number(minimumValue)
+  const fallback = Number.isFinite(minimum) ? minimum : targetActiveSlots
+  if (!Number.isFinite(parsed) || parsed < 1) return Math.max(1, Math.floor(fallback))
+  return Math.max(1, Math.floor(parsed))
 }
 
 function buildProvidedAgentRoster(input: any, opts: any = {}) {

@@ -109,12 +109,14 @@ async function researchRun(args: any) {
     return;
   }
   const maxCycles = readMaxCycles(args, RESEARCH_DEFAULT_MAX_CYCLES);
+  const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', plan.native_agent_plan?.session_count || 5, 1, 20);
+  const desiredWorkItemCount = readBoundedIntegerFlag(args, '--work-items', targetActiveSlots, 1, 200);
   const cycleTimeoutMinutes = readResearchCycleTimeoutMinutes(args);
   const cycleTimeoutMs = cycleTimeoutMinutes * 60 * 1000;
   const mock = flag(args, '--mock');
   await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false, implementation_allowed: false, research_real_run_required: !mock, research_cycle_timeout_minutes: cycleTimeoutMinutes });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock, cycleTimeoutMinutes, real_run_required: !mock });
-  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-exec', mock, agents: plan.native_agent_plan?.session_count || 5, concurrency: Math.min(plan.native_agent_plan?.session_count || 5, 5), readonly: true, roster: plan.native_agent_plan });
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-exec', mock, agents: plan.native_agent_plan?.session_count || 5, targetActiveSlots, desiredWorkItemCount, concurrency: Math.min(plan.native_agent_plan?.session_count || 5, 5), readonly: true, roster: plan.native_agent_plan });
   await writeJsonAtomic(path.join(dir, 'research-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (mock) {

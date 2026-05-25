@@ -26,8 +26,9 @@ export interface AgentTerminalSessionRecord {
 export async function startAgentTerminalSession(
   root: string,
   agent: any,
-  opts: { backend?: string; real?: boolean; slotId?: string; generationIndex?: number } = {}
+  opts: { backend?: string; real?: boolean; slotId?: string; generationIndex?: number; requireGeneration?: boolean } = {}
 ): Promise<AgentTerminalSessionRecord> {
+  assertGenerationAddress(agent, opts)
   const relDir = terminalSessionRelDir(agent, opts)
   const sessionDir = path.join(root, relDir)
   await ensureDir(sessionDir)
@@ -61,8 +62,9 @@ export async function startAgentTerminalSession(
 export async function closeAgentTerminalSession(
   root: string,
   agent: any,
-  opts: { exitCode?: number | null; status?: string; stdoutTail?: string; stderrTail?: string; slotId?: string; generationIndex?: number } = {}
+  opts: { exitCode?: number | null; status?: string; stdoutTail?: string; stderrTail?: string; slotId?: string; generationIndex?: number; requireGeneration?: boolean } = {}
 ) {
+  assertGenerationAddress(agent, opts)
   const relDir = terminalSessionRelDir(agent, opts)
   const sessionDir = path.join(root, relDir)
   const file = path.join(sessionDir, 'agent-terminal-session.json')
@@ -109,6 +111,8 @@ export async function closeAgentTerminalSession(
 }
 
 export async function assertAgentTerminalSessionsClosed(root: string) {
+  const generationAggregate = await readJson<any>(path.join(root, 'agent-session-generations.json'), null)
+  if (generationAggregate?.generations) return assertGenerationTerminalSessionsClosed(root, generationAggregate)
   const sessions = await readJson<any>(path.join(root, 'agent-sessions.json'), { sessions: {} })
   const rows = Object.values<any>(sessions.sessions || {})
   const missing: string[] = []
@@ -141,6 +145,38 @@ export async function assertAgentTerminalSessionsClosed(root: string) {
   }
 }
 
+async function assertGenerationTerminalSessionsClosed(root: string, aggregate: any) {
+  const rows = Object.values<any>(aggregate.generations || {})
+  const missing: string[] = []
+  const open: string[] = []
+  const reports: string[] = []
+  for (const row of rows) {
+    const sessionId = String(row.session_id || '')
+    const relDir = String(row.artifact_dir || terminalSessionRelDir({ session_id: sessionId, slot_id: row.slot_id, generation_index: row.generation_index }, {}))
+    const sessionFile = path.join(root, relDir, 'agent-terminal-session.json')
+    const reportFile = path.join(root, relDir, 'agent-terminal-close-report.json')
+    const terminal = await readJson<any>(sessionFile, null)
+    const report = await readJson<any>(reportFile, null)
+    if (!terminal) missing.push(sessionId)
+    else if (!terminal.terminal_closed_at || terminal.status !== 'closed') open.push(sessionId)
+    if (!report?.ok) reports.push(sessionId)
+  }
+  return {
+    schema: 'sks.agent-terminal-session-closure.v1',
+    ok: rows.length > 0 && missing.length === 0 && open.length === 0 && reports.length === 0,
+    total_sessions: rows.length,
+    generation_terminal_count: rows.length,
+    missing_terminal_sessions: missing,
+    open_terminal_sessions: open,
+    missing_close_reports: reports,
+    blockers: [
+      ...missing.map((id) => `terminal_missing:${id}`),
+      ...open.map((id) => `terminal_not_closed:${id}`),
+      ...reports.map((id) => `terminal_close_report_missing:${id}`)
+    ]
+  }
+}
+
 export function terminalSessionRelDir(agent: any, opts: { slotId?: string; generationIndex?: number } = {}) {
   const explicitDir = agent.session_artifact_dir || agent.artifact_dir
   if (explicitDir) return String(explicitDir)
@@ -150,4 +186,13 @@ export function terminalSessionRelDir(agent: any, opts: { slotId?: string; gener
     return path.join('sessions', String(slotId), `gen-${Number(generationIndex)}`)
   }
   return path.join('sessions', String(agent.id || agent.agent_id || 'agent'))
+}
+
+function assertGenerationAddress(agent: any, opts: { slotId?: string; generationIndex?: number; requireGeneration?: boolean } = {}) {
+  if (!opts.requireGeneration) return
+  const slotId = opts.slotId || agent.slot_id || agent.worker_slot_id
+  const generationIndex = opts.generationIndex ?? agent.generation_index
+  if (!slotId || !Number.isFinite(Number(generationIndex))) {
+    throw new Error('scheduler terminal session requires slotId and generationIndex')
+  }
 }

@@ -339,6 +339,11 @@ export function parseTeamSpecArgs(args: any = []) {
       i++;
       continue;
     }
+    if (/^--(?:work-items|target-active-slots|minimum-work-items|max-queue-expansion)$/.test(arg)) {
+      i++;
+      continue;
+    }
+    if (/^--(?:work-items|target-active-slots|minimum-work-items|max-queue-expansion)=\d+$/.test(arg)) continue;
     const sessionEq = arg.match(/^--(?:agents|sessions|team-size)=(\d+)$/);
     if (sessionEq) {
       explicitSession = normalizeTeamAgentSessions(sessionEq[1]);
