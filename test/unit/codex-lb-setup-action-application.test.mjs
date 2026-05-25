@@ -19,5 +19,7 @@ test('codex-lb setup applies selected actions and reports drift-free writes', as
   assert.equal(json.ok, true);
   assert.equal(await exists(path.join(home, '.codex', 'sks-codex-lb.env')), true);
   assert.match(config, /^\s*model_provider\s*=\s*"codex-lb"/m);
+  assert.match(config, /^\s*env_key\s*=\s*"CODEX_LB_API_KEY"/m);
+  assert.match(config, /^\s*requires_openai_auth\s*=\s*false/m);
   assert.deepEqual(json.drift, []);
 });

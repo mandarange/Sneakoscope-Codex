@@ -33,7 +33,9 @@ export function emptyCompletionProof(overrides: Record<string, unknown> = {}) {
       image_voxels: null,
       agents: null,
       triwiki: null,
-      wrongness: null
+      wrongness: null,
+      source_intelligence: null,
+      goal_mode: null
     },
     claims: [],
     unverified: [],
@@ -55,6 +57,8 @@ export interface ProofEvidence {
   agents?: unknown;
   triwiki?: unknown;
   wrongness?: unknown;
+  source_intelligence?: unknown;
+  goal_mode?: unknown;
   evidence_router?: { records: number };
   evidence_records?: import('../evidence/evidence-schema.js').EvidenceRecord[];
 }

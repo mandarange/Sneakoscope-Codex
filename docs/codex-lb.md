@@ -94,9 +94,14 @@ The fallback env file is `~/.codex/sks-codex-lb.env` with mode `0600`. Metadata 
 
 SKS must never print raw CODEX_LB_API_KEY missing-env text. It reports setup guidance instead and records wrongness if a fixture ever exposes the raw missing-env message or a secret.
 
+Provider auth invariant:
+
+- `[model_providers.codex-lb]` uses `env_key = "CODEX_LB_API_KEY"` with `requires_openai_auth = false`.
+- SKS status, PPT/imagegen review paths, and Codex App launch repair treat that combination plus a present `CODEX_LB_API_KEY` as configured codex-lb auth. ChatGPT/OpenAI OAuth can be preserved as a backup, but it is not required for the selected codex-lb provider.
+
 Exact setup-choice effects:
 
-- `--use-default-provider` writes `[model_providers.codex-lb]` and selects top-level `model_provider = "codex-lb"`.
+- `--use-default-provider` writes `[model_providers.codex-lb]` with `env_key = "CODEX_LB_API_KEY"` and `requires_openai_auth = false`, then selects top-level `model_provider = "codex-lb"`.
 - `--no-default-provider` writes the provider block but does not select top-level `model_provider`.
 - `--write-env-file` writes `~/.codex/sks-codex-lb.env` with mode `0600`.
 - `--no-env-file` does not write the env file; the current process can still verify the supplied key.

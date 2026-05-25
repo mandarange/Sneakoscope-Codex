@@ -19,6 +19,9 @@ import { writeAgentWrongnessRecords } from './agent-wrongness.js'
 import { writeAgentRecursionGuardReport } from './agent-recursion-guard.js'
 import { appendAgentCodexCockpitHookEvent, writeAgentCodexCockpitArtifacts } from './agent-codex-cockpit.js'
 import { runAgentJanitor } from './agent-janitor.js'
+import { startAgentTerminalSession, closeAgentTerminalSession } from './agent-terminal-session.js'
+import { writeScoutPolicyArtifact } from './scout-policy.js'
+import { writeTmuxRightLaneCockpit } from './tmux-right-lane-cockpit.js'
 import { buildProjectNamespace, namespacedAgentSessionId, writeProjectNamespaceArtifact } from '../session/project-namespace.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
@@ -46,6 +49,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const partition = await buildAgentWorkPartition(root, roster, prompt)
   await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
   const ledgerRoot = await initializeAgentCentralLedger(dir, { missionId, roster, partition, route, prompt })
+  await writeScoutPolicyArtifact(ledgerRoot)
+  await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-no-overlap-proof.json'), partition.no_overlap_proof || { schema: 'sks.agent-no-overlap-proof.v1', ok: false, blockers: ['missing_no_overlap_proof'] })
   await writeAgentLifecyclePolicy(ledgerRoot)
@@ -80,7 +85,22 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       })
       await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
       await appendAgentLedgerEvent(ledgerRoot, { agent_id: agent.id, session_id: agent.session_id, event_type: 'agent_started', payload: { backend, slice_id: slice.id } })
+      await startAgentTerminalSession(ledgerRoot, agent, {
+        backend,
+        real: backend === 'process' || (backend === 'codex-exec' && opts.real === true) || backend === 'tmux'
+      })
       const result = await runAgentByBackend(backend, agent, slice, { ...opts, missionId, agentRoot: ledgerRoot, cwd: root, route, prompt })
+      const terminalClose = await closeAgentTerminalSession(ledgerRoot, agent, {
+        exitCode: result.status === 'done' ? 0 : 1,
+        status: result.status,
+        stdoutTail: result.summary || '',
+        stderrTail: (result.blockers || []).join('\n')
+      })
+      result.artifacts = [...(result.artifacts || []), path.join('sessions', agent.id, 'agent-terminal-session.json'), path.join('sessions', agent.id, 'agent-terminal-close-report.json')]
+      result.verification = {
+        status: result.verification?.status || 'not_run',
+        checks: [...(result.verification?.checks || []), terminalClose.ok ? 'agent-terminal-close-report' : 'agent-terminal-close-report-missing']
+      }
       await collectAgentSession(ledgerRoot, agent)
       await appendAgentLedgerEvent(ledgerRoot, { agent_id: agent.id, session_id: agent.session_id, event_type: 'agent_result', payload: result })
       if (result.status === 'done') await completeAgentSession(ledgerRoot, agent)
@@ -110,6 +130,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const outputValidation = await writeAgentOutputValidationReport(ledgerRoot, results)
   const outputTails = await writeAgentOutputTailReport(ledgerRoot, results)
   const backendReport = await writeAgentBackendReport(ledgerRoot, { backend, results, outputTails })
+  await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster.map((agent: any) => ({ ...agent, status: 'closed' })) })
   await compactAgentLedger(ledgerRoot)
   const cleanup = await writeAgentCleanupReport(ledgerRoot)
   const janitor = await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
@@ -120,7 +141,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     ...(recursion.ok ? [] : recursion.violations.map((id: string) => 'recursion:' + id)),
     ...(janitor.ok ? [] : janitor.blockers)
   ]
-  const trust = await writeAgentTrustReport(ledgerRoot, { backend, roster, partition, cleanup, outputTails, timeoutKill, backendReport, outputValidation, blockers })
+  const trust = await writeAgentTrustReport(ledgerRoot, { missionId, backend, roster, partition, cleanup, outputTails, timeoutKill, backendReport, outputValidation, blockers })
   const wrongness = await writeAgentWrongnessRecords(ledgerRoot, blockers)
   const proof = await writeAgentProofEvidence(ledgerRoot, { missionId, backend, realParallel: backend === 'codex-exec' && opts.mock !== true, roster, partition, consensus, results, cleanup, janitor, outputTails, timeoutKill, trust, wrongness })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })

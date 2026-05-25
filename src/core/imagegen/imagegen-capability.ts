@@ -1,9 +1,15 @@
-import { nowIso, runProcess, which } from '../fsx.js';
+import os from 'node:os';
+import path from 'node:path';
+import { codexLbEnvPath, parseShellEnvValue } from '../codex-lb/codex-lb-env.js';
+import { nowIso, readText, runProcess, which } from '../fsx.js';
 
 export async function detectImagegenCapability(opts: any = {}) {
   const codexBin = opts.codexBin || await which('codex').catch(() => null);
   const codexApp = await detectCodexAppImagegen(codexBin, opts);
-  const openaiApiKeyPresent = Boolean(opts.apiKey || process.env.OPENAI_API_KEY);
+  const env = opts.env || process.env;
+  const openaiApiKeyPresent = Boolean(opts.apiKey || env.OPENAI_API_KEY);
+  const codexLb = await detectCodexLbImagegenAuth(opts, env);
+  const imageApiAuthPresent = openaiApiKeyPresent || codexLb.available;
   const fakeAdapterEnabled = opts.fake === true || process.env.SKS_TEST_FAKE_IMAGEGEN === '1';
   return {
     schema: 'sks.imagegen-capability.v1',
@@ -11,14 +17,17 @@ export async function detectImagegenCapability(opts: any = {}) {
     created_at: nowIso(),
     model: 'gpt-image-2',
     codex_app: codexApp,
+    codex_lb: codexLb,
     openai_images_api: {
-      available: openaiApiKeyPresent,
+      available: imageApiAuthPresent,
+      auth_source: openaiApiKeyPresent ? 'OPENAI_API_KEY' : codexLb.available ? 'CODEX_LB_API_KEY' : null,
+      codex_lb_proxy: codexLb.available ? { base_url: codexLb.base_url, env_key: codexLb.env_key } : null,
       endpoints: {
-        images_edits_supported: openaiApiKeyPresent,
-        images_generations_supported: openaiApiKeyPresent,
-        responses_image_generation_supported: openaiApiKeyPresent
+        images_edits_supported: imageApiAuthPresent,
+        images_generations_supported: imageApiAuthPresent,
+        responses_image_generation_supported: imageApiAuthPresent
       },
-      blocker: openaiApiKeyPresent ? null : 'openai_api_key_missing'
+      blocker: imageApiAuthPresent ? null : (codexLb.blocker === 'codex_lb_api_key_missing' ? 'codex_lb_api_key_missing' : 'openai_api_key_missing')
     },
     fake_adapter: {
       available: fakeAdapterEnabled,
@@ -26,16 +35,74 @@ export async function detectImagegenCapability(opts: any = {}) {
       source: 'mock_like_fixture',
       real_generation_claim_allowed: false
     },
-    supports_reference_image: codexApp.available || openaiApiKeyPresent || fakeAdapterEnabled,
+    supports_reference_image: codexApp.available || imageApiAuthPresent || fakeAdapterEnabled,
     gpt_image_2_input_fidelity_automatic: true,
     input_fidelity_must_be_omitted: true,
     supported_workflows: {
-      ux_review_callouts: codexApp.available || openaiApiKeyPresent || fakeAdapterEnabled,
-      ppt_slide_callouts: codexApp.available || openaiApiKeyPresent || fakeAdapterEnabled,
+      ux_review_callouts: codexApp.available || imageApiAuthPresent || fakeAdapterEnabled,
+      ppt_slide_callouts: codexApp.available || imageApiAuthPresent || fakeAdapterEnabled,
       structured_extraction_required_after_generation: true
     },
-    blockers: codexApp.available || openaiApiKeyPresent || fakeAdapterEnabled ? [] : ['imagegen_capability_missing']
+    blockers: codexApp.available || imageApiAuthPresent || fakeAdapterEnabled ? [] : ['imagegen_capability_missing']
   };
+}
+
+async function detectCodexLbImagegenAuth(opts: any = {}, env: any = process.env) {
+  const home = opts.home || env.HOME || process.env.HOME || os.homedir();
+  const configPath = opts.configPath || path.join(home, '.codex', 'config.toml');
+  const configText = typeof opts.configText === 'string'
+    ? opts.configText
+    : await readText(configPath, '').catch(() => '');
+  const block = tomlTableBlock(configText, 'model_providers.codex-lb');
+  const selected = opts.codexLbSelected === true || topLevelTomlString(configText, 'model_provider') === 'codex-lb';
+  const providerConfigured = Boolean(block);
+  const requiresOpenAiAuth = tomlBoolean(block, 'requires_openai_auth');
+  const envKey = tomlString(block, 'env_key');
+  const baseUrl = tomlString(block, 'base_url') || String(env.CODEX_LB_BASE_URL || '').trim();
+  const envPath = opts.codexLbEnvPath || codexLbEnvPath(home);
+  const envText = typeof opts.codexLbEnvText === 'string'
+    ? opts.codexLbEnvText
+    : await readText(envPath, '').catch(() => '');
+  const keyFromEnv = envKey ? String(env[envKey] || '').trim() : '';
+  const keyFromFile = envKey ? parseShellEnvValue(envText, envKey) : '';
+  const apiKeyPresent = Boolean(opts.codexLbApiKey || keyFromEnv || keyFromFile);
+  const apiKeySource = opts.codexLbApiKey ? 'option' : keyFromEnv ? 'process.env' : keyFromFile ? 'env-file' : null;
+  const blocker = codexLbAuthBlocker({
+    selected,
+    providerConfigured,
+    requiresOpenAiAuth,
+    envKey,
+    baseUrl,
+    apiKeyPresent
+  });
+  return {
+    available: blocker === null,
+    selected,
+    provider_configured: providerConfigured,
+    requires_openai_auth: requiresOpenAiAuth,
+    openai_auth_disabled: requiresOpenAiAuth === false,
+    env_key: envKey || null,
+    base_url: baseUrl || null,
+    env_path: envPath,
+    api_key: {
+      present: apiKeyPresent,
+      source: apiKeySource,
+      redacted: true
+    },
+    blocker
+  };
+}
+
+function codexLbAuthBlocker(state: any) {
+  if (!state.selected) return 'codex_lb_not_selected';
+  if (!state.providerConfigured) return 'codex_lb_provider_missing';
+  if (state.requiresOpenAiAuth !== false) {
+    return state.requiresOpenAiAuth === true ? 'codex_lb_requires_openai_auth' : 'codex_lb_requires_openai_auth_not_disabled';
+  }
+  if (state.envKey !== 'CODEX_LB_API_KEY') return 'codex_lb_env_key_missing_or_unsupported';
+  if (!state.baseUrl) return 'codex_lb_base_url_missing';
+  if (!state.apiKeyPresent) return 'codex_lb_api_key_missing';
+  return null;
 }
 
 async function detectCodexAppImagegen(codexBin: string | null, opts: any = {}) {
@@ -58,6 +125,14 @@ async function detectCodexAppImagegen(codexBin: string | null, opts: any = {}) {
       timeoutMs: opts.timeoutMs || 5000,
       maxOutputBytes: 64 * 1024
     }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err) }));
+  }
+  if (!parsed && plainRun?.code !== 0) {
+    return {
+      available: false,
+      detector: 'codex_features_list',
+      blocker: 'codex_app_imagegen_not_detected',
+      raw: String(plainRun?.stderr || plainRun?.stdout || jsonRun.stderr || '').slice(0, 2000)
+    };
   }
   const rawText = String(plainRun?.stdout || plainRun?.stderr || jsonRun.stdout || jsonRun.stderr || '');
   const available = codexFeatureEnabled(parsed, rawText);
@@ -125,4 +200,30 @@ function boolish(value: unknown): boolean | null {
   if (/^(true|enabled|available|on|yes)$/i.test(value.trim())) return true;
   if (/^(false|disabled|missing|off|no)$/i.test(value.trim())) return false;
   return null;
+}
+
+function topLevelTomlString(text: any = '', key: any = '') {
+  const topLevel = String(text || '').split(/\n\s*\[/)[0] || '';
+  return tomlString(topLevel, key);
+}
+
+function tomlTableBlock(text: any = '', table: any = '') {
+  const re = new RegExp(`(^|\\n)\\[${escapeRegExp(table)}\\]([\\s\\S]*?)(?=\\n\\[[^\\]]+\\]|\\s*$)`);
+  return String(text || '').match(re)?.[2] || '';
+}
+
+function tomlString(text: any = '', key: any = '') {
+  const re = new RegExp(`(^|\\n)\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"\\s*(?:#.*)?(?=\\n|$)`);
+  return String(text || '').match(re)?.[2] || '';
+}
+
+function tomlBoolean(text: any = '', key: any = '') {
+  const re = new RegExp(`(^|\\n)\\s*${escapeRegExp(key)}\\s*=\\s*(true|false)\\s*(?:#.*)?(?=\\n|$)`, 'i');
+  const raw = String(text || '').match(re)?.[2];
+  if (!raw) return null;
+  return raw.toLowerCase() === 'true';
+}
+
+function escapeRegExp(value: unknown) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

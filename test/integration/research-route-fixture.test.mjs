@@ -39,6 +39,23 @@ test('Research mock route creates required ledgers, gate, and completion proof',
     status: 'verified',
     gate,
     artifacts: ['research-gate.json', 'source-ledger.json', 'agent-ledger.json', 'debate-ledger.json', 'completion-proof.json'],
+    evidence: {
+      agents: {
+        schema: 'sks.agent-proof-evidence.v1',
+        ok: true,
+        status: 'passed',
+        mission_id: missionId,
+        route: '$Research',
+        backend: 'fixture',
+        agent_count: 5,
+        all_sessions_closed: true,
+        no_overlap_ok: true,
+        ledger_hash_chain_ok: true,
+        consensus_ok: true,
+        janitor_ok: true,
+        blockers: []
+      }
+    },
     claims: [{ id: 'research-fixture-gate', status: 'fixture', text: 'Research fixture gate passed with required ledgers.' }]
   });
   const proofGate = await validateRouteCompletionProof(root, { missionId, route: '$Research' });

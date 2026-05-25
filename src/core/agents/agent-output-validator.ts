@@ -70,7 +70,20 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
     handoff_notes: { type: 'string' },
     artifacts: { type: 'array', items: { type: 'string' } },
     unverified: { type: 'array', items: { type: 'string' } },
-    writes: { type: 'array', items: { type: 'string' } }
+    writes: { type: 'array', items: { type: 'string' } },
+    worker_scout_evidence: {
+      type: 'object',
+      required: ['schema', 'ok', 'agent_id', 'artifact_path', 'central_proof_ssot'],
+      properties: {
+        schema: { const: 'sks.worker-scout-evidence.v1' },
+        ok: { type: 'boolean' },
+        agent_id: { type: 'string' },
+        artifact_path: { type: 'string' },
+        central_proof_ssot: { type: 'boolean' },
+        blockers: { type: 'array', items: { type: 'string' } }
+      },
+      additionalProperties: true
+    }
   },
   additionalProperties: false
 } as const
@@ -83,4 +96,3 @@ export function validateAgentResultSchema(result: unknown) {
     issues: validation.issues
   }
 }
-

@@ -77,7 +77,7 @@ export function buildCodexLbSetupPlan(answers: CodexLbSetupAnswers, opts: {
   if (!baseUrl) blockers.push('missing_host_or_base_url');
   if (answers.install_shell_profile !== 'skip' && !answers.write_env_file) blockers.push('shell_profile_snippet_requires_env_file');
   const actions: CodexLbSetupAction[] = [
-    { type: 'write_config_provider', target: configPath, effect: 'write or update [model_providers.codex-lb] with the normalized base URL' }
+    { type: 'write_config_provider', target: configPath, effect: 'write or update [model_providers.codex-lb] with the normalized base URL, CODEX_LB_API_KEY env_key, and requires_openai_auth=false' }
   ];
   if (answers.use_as_default_provider) {
     actions.push({ type: 'select_default_provider', target: configPath, effect: 'set top-level model_provider = "codex-lb"' });

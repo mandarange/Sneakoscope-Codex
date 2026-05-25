@@ -35,6 +35,12 @@ export interface AgentCodexCockpitState {
   all_sessions_closed: boolean | null
   janitor_ok: boolean | null
   proof_status: string | null
+  source_intelligence_status: string | null
+  xai_status: string | null
+  codex_web_search_status: string | null
+  goal_mode_status: string | null
+  terminal_session_status: string | null
+  tmux_attach_command: string | null
   blockers: string[]
   agents: Array<Record<string, unknown>>
   recent_events: string[]
@@ -79,6 +85,10 @@ export async function buildAgentCodexCockpitState(
   const cleanup = await readJson<any>(path.join(root, 'agent-cleanup.json'), null)
   const janitor = await readJson<any>(path.join(root, 'agent-janitor-report.json'), null)
   const namespace = await readJson<any>(path.join(missionDir, 'project-session-namespace.json'), null)
+  const sourceIntelligence = await readJson<any>(path.join(missionDir, 'source-intelligence-evidence.json'), null)
+  const goalMode = await readJson<any>(path.join(missionDir, 'goal-mode-applied.json'), null)
+  const tmuxLayout = await readJson<any>(path.join(root, 'agent-tmux-layout.json'), null)
+  const terminalClosed = proof?.terminal_sessions_closed === true
   const eventsTail = await readTailLines(path.join(root, 'agent-events.jsonl'), 8)
   const cockpitEventsTail = await readTailLines(path.join(root, AGENT_CODEX_COCKPIT_EVENTS), 8)
   const teamTail = await readTailLines(path.join(missionDir, 'team-transcript.jsonl'), 8)
@@ -103,6 +113,12 @@ export async function buildAgentCodexCockpitState(
     all_sessions_closed: proof?.all_sessions_closed ?? cleanup?.all_sessions_closed ?? null,
     janitor_ok: janitor?.ok ?? null,
     proof_status: proof?.status || (proof?.ok ? 'passed' : proof ? 'blocked' : null),
+    source_intelligence_status: sourceIntelligence?.ok === true ? sourceIntelligence.mode || 'ok' : sourceIntelligence ? 'blocked' : null,
+    xai_status: sourceIntelligence?.xai_search?.status || sourceIntelligence?.policy?.xai_mcp?.status || null,
+    codex_web_search_status: sourceIntelligence?.codex_web_search?.status || sourceIntelligence?.policy?.codex_web_search?.status || null,
+    goal_mode_status: goalMode?.mode || null,
+    terminal_session_status: terminalClosed ? 'closed' : proof ? 'blocked_or_unverified' : null,
+    tmux_attach_command: tmuxLayout?.attach_command || null,
     blockers,
     agents,
     recent_events: [...eventsTail, ...cockpitEventsTail, ...teamTail].slice(-12),
@@ -127,6 +143,12 @@ export function renderAgentCodexDashboard(state: AgentCodexCockpitState): string
     `- Agents: ${state.agent_count}`,
     `- Concurrency: ${state.concurrency ?? 'unknown'}`,
     `- Proof: ${state.proof_status || 'unknown'}`,
+    `- Source intelligence: ${state.source_intelligence_status || 'unknown'}`,
+    `- X AI: ${state.xai_status || 'unknown'}`,
+    `- Codex Web Search: ${state.codex_web_search_status || 'unknown'}`,
+    `- Goal mode: ${state.goal_mode_status || 'unknown'}`,
+    `- Terminal sessions: ${state.terminal_session_status || 'unknown'}`,
+    `- tmux attach: ${state.tmux_attach_command || 'unknown'}`,
     `- All sessions closed: ${state.all_sessions_closed ?? 'unknown'}`,
     '',
     '| Agent | Persona | Task | State | Heartbeat age | Lease | Blockers | Artifact |',
@@ -174,6 +196,12 @@ function summarizeLiveState(state: AgentCodexCockpitState) {
     concurrency: state.concurrency,
     active_agents: state.agents.filter((agent) => !['closed', 'done', 'completed'].includes(String(agent.status || ''))).length,
     proof_status: state.proof_status,
+    source_intelligence_status: state.source_intelligence_status,
+    xai_status: state.xai_status,
+    codex_web_search_status: state.codex_web_search_status,
+    goal_mode_status: state.goal_mode_status,
+    terminal_session_status: state.terminal_session_status,
+    tmux_attach_command: state.tmux_attach_command,
     blockers: state.blockers,
   }
 }

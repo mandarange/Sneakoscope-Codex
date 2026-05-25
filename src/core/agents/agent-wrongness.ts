@@ -5,7 +5,12 @@ const WRONGNESS_MAP = [
   ['recursion_attempt', /^recursion:/],
   ['lease_conflict', /(?:write_overlap|protected_write|lease_conflict)/],
   ['session_not_closed', /^session_open:/],
+  ['terminal_missing', /^terminal_missing:/],
+  ['terminal_not_closed', /^terminal_not_closed:/],
   ['schema_invalid_output', /^schema_invalid:/],
+  ['xai_available_not_used', /xai_available_not_used/],
+  ['codex_web_search_missing', /codex_web_search_missing/],
+  ['context7_missing', /context7_missing|docs_context_missing/],
   ['stale_heartbeat', /stale_heartbeat/],
   ['legacy_multiagent_runtime_usage_attempt', /(?:legacy_multiagent_runtime|removed_multiagent_backend|parallel_analysis_legacy)/]
 ] as const

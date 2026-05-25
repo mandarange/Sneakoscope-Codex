@@ -1,100 +1,53 @@
 # Release Readiness
 
-SKS 1.17.0 writes the `sks.release-readiness.v1` report for the 1.17.0 parallel P0 DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, parallel verification DAG, project-scoped session namespace, continuous agent janitor, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.17.0 P0 DAG gaps.
+SKS 1.18.0 writes the `sks.release-readiness.v1` report for the 1.18.0 parallel P0-P4 closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, agent terminal close proof, tmux right-lane manifests, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.0 closure DAG gaps.
 
-Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_17_parallel_gate` when not run by this P0 DAG. They are not silently treated as passed.
+Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
 ```bash
-npm run codex:0.133-compat
-npm run codex:exec-output-schema-actual-syntax
-npm run codex:output-schema-fixture
-npm run mad-sks:permission-model
-npm run mad-sks:immutable-harness
-npm run mad-sks:actual-executor
-npm run mad-sks:file-write-executor
-npm run mad-sks:shell-executor
-npm run mad-sks:package-executor
-npm run mad-sks:service-executor
-npm run mad-sks:db-executor
-npm run mad-sks:rollback-apply
-npm run mad-sks:live-guard-smoke
-npm run mad-sks:executor-proof-graph
-npm run release:dist-freshness
-npm run image-fidelity:check
-npm run imagegen:capability
-npm run imagegen:gpt-image-2-request-validator
-npm run ux-review:run-wires-imagegen
-npm run ux-review:extract-wires-real-extractor
-npm run ux-review:patch-diff-recheck
-npm run ux-review:imagegen-blackbox
-npm run ux-review:real-loop-fixture
-npm run ux-review:generate-callouts-fixture
-npm run ux-review:extract-real-callouts-fixture
-npm run ux-review:patch-handoff-fixture
-npm run ux-review:recapture-recheck-fixture
-npm run ux-review:no-text-fallback
-npm run ux-review:no-fake-callouts
-npm run ux-review:image-voxel-relations
-npm run ppt:imagegen-review-fixture
-npm run ppt:real-export-adapter
-npm run ppt:real-imagegen-wiring
-npm run ppt:reexport-rereview
-npm run ppt:imagegen-blackbox
-npm run ux-ppt:structured-extraction
-npm run ppt:slide-export-fixture
-npm run ppt:no-text-fallback
-npm run ppt:no-mock-as-real
-npm run ppt:issue-extraction-fixture
-npm run ppt:image-voxel-relations
-npm run ppt:proof-trust-fixture
-npm run dfix:fast-kernel
-npm run dfix:blackbox-fast
-npm run dfix:performance
-npm run dfix:fixture
-npm run dfix:patch-handoff
-npm run dfix:verification-recommendation
-npm run dfix:verification
-npm run all-features:completion
-npm run all-features:deep-completion
-npm run flagship:proof-graph-v4
-npm run agent:legacy-multiagent-removed
-npm run release:native-agent-backend
-npm run json-schema:recursive-check
+npm run xai-mcp:capability
+npm run source-intelligence:policy
+npm run source-intelligence:all-modes
+npm run codex-web:adapter
+npm run goal-mode:official-default
+npm run agent:main-no-scout
+npm run agent:worker-scout-limited
+npm run agent:background-terminals
+npm run agent:tmux-right-lanes
+npm run agent:visual-consistency
+npm run release:parallel-full-coverage
+npm run priority:full-closure
 npm run release:metadata
-npm run memory-summary:rebuild-check
-npm run loop-blocker:check
 npm run official-docs:compat
-npm run hooks:latest-schema-check
-npm run hooks:trust-state-check
-npm run hooks:trust-warning-zero
-npm run hooks:subagent-events-check
-npm run hooks:no-unsupported-handlers
-npm run hooks:actual-parity-check
-npm run hooks:official-hash-parity
-npm run hooks:managed-install-fixture
-npm run hooks:runtime-replay-warning-zero
-npm run computer-use:live-evidence
-npm run codex-lb:persistence-truth
-npm run docs:truthfulness
 npm run release:readiness
 ```
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.17.0.json`
-- `.sneakoscope/reports/release-readiness-1.17.0.md`
-- `.sneakoscope/reports/all-feature-completion-1.17.0.json`
-- `.sneakoscope/reports/all-feature-completion-1.17.0.md`
-- `.sneakoscope/reports/official-docs-compat-1.17.0.json`
-- `.sneakoscope/reports/official-docs-compat-1.17.0.md`
+- `.sneakoscope/reports/release-readiness-1.18.0.json`
+- `.sneakoscope/reports/release-readiness-1.18.0.md`
+- `.sneakoscope/reports/all-feature-completion-1.18.0.json`
+- `.sneakoscope/reports/all-feature-completion-1.18.0.md`
+- `.sneakoscope/reports/official-docs-compat-1.18.0.json`
+- `.sneakoscope/reports/official-docs-compat-1.18.0.md`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, and remaining 1.17.0 P0 DAG gaps. Broader live or historical gates remain visible as explicit non-P0 statuses unless they are added to the 1.17.0 DAG.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal closure, tmux right lanes, and remaining 1.18.0 P0-P4 closure gaps.
 
-MAD-SKS readiness is intentionally high-friction: full-system authority requires explicit user authorization, scoped target roots, separate consent for system access, DB writes, package installation, service control, admin operations, network, Computer Use, destructive delete, and generated-asset edits. The SKS harness protected core remains immutable even under MAD-SKS.
+## Priority Closure
+
+| Priority | Status Surface |
+| --- | --- |
+| P0 | Source Intelligence, safety, release, proof, runtime, no-Scout, terminal, tmux, and Goal blockers |
+| P1 | Codex App dashboard/operator visibility for source, X AI, Codex Web, Goal, terminal, and tmux |
+| P2 | Parallel provider queries, release DAG groups, local-only caches, and speedup summaries |
+| P3 | README, policy docs, migration, troubleshooting, CLI help, and onboarding |
+| P4 | Human-readable summaries for source intelligence, X AI used/not used, Goal fallback, terminal close, tmux attach, janitor, and worker Scout evidence |
+
+MAD-SKS readiness remains high-friction: full-system authority requires explicit user authorization, scoped target roots, separate consent for system access, DB writes, package installation, service control, admin operations, network, Computer Use, destructive delete, and generated-asset edits. The SKS harness protected core remains immutable even under MAD-SKS.
 
 Computer Use truthfulness remains bounded: `probe_only` is a capability probe, `live_capture_success` is local-only captured evidence, and `live_capture_blocked` records Codex App, macOS permission, or official capture-surface blockers. SKS does not fabricate screenshots and does not claim universal Computer Use availability.
 
-UX-Review truthfulness is bounded the same way: a real verified UX claim requires a source screenshot, a generated gpt-image-2 annotated callout image, schema-bound issue extraction from generated image pixels, bounded safe fixes when requested, and recapture/re-review evidence for changed screens. Attached generated images start with `callout_extraction_status: pending`; mock fixtures remain `verified_partial`, and prose-only screenshot critique or generic fake callouts cannot pass the gate. When generated annotated images cannot be created or linked, release readiness may accept only `verified_partial/reference-only` closeout, requiring source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence.
+UX-Review truthfulness is bounded the same way: a real verified UX claim requires a source screenshot, a generated gpt-image-2 annotated callout image, schema-bound issue extraction from generated image pixels, bounded safe fixes when requested, and recapture/re-review evidence for changed screens. Attached generated images start with `callout_extraction_status: pending`; mock fixtures remain `verified_partial`, and prose-only screenshot critique or generic fake callouts cannot pass the gate.
 
 codex-lb truthfulness remains bounded: `durable_env_file`, `durable_keychain`, `durable_launchctl`, and `shell_profile` are durable setup modes, while `process_only_ephemeral` means the supplied key is only effective in the current process. Recovery command:
 
@@ -102,4 +55,4 @@ codex-lb truthfulness remains bounded: `durable_env_file`, `durable_keychain`, `
 sks codex-lb setup --write-env-file --keychain --launchctl
 ```
 
-Privacy statement: secrets are redacted, Computer Use screenshots and generated gpt-image-2 review images are local-only by default, and screenshot binaries are not automatically published into shared TriWiki.
+Privacy statement: secrets are redacted, Computer Use screenshots, X AI raw responses, Codex Web raw responses, and generated gpt-image-2 review images are local-only by default.

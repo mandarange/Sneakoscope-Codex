@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { appendJsonl, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from './fsx.js';
+import { detectOfficialGoalMode, writeOfficialGoalModeArtifact } from './codex/official-goal-mode.js';
 
 export const GOAL_WORKFLOW_ARTIFACT = 'goal-workflow.json';
 export const GOAL_BRIDGE_ARTIFACT = 'goal-bridge.md';
@@ -16,6 +17,8 @@ export function nativeGoalCommand(action: any = 'create', prompt: any = '') {
 export async function writeGoalWorkflow(dir: any, mission: any, opts: any = {}) {
   const action = String(opts.action || 'create').toLowerCase();
   const prompt = String(opts.prompt || mission?.prompt || '').trim();
+  const goalMode = await detectOfficialGoalMode({ runCommand: opts.detectOfficialGoalMode !== false });
+  const goalModeArtifact = await writeOfficialGoalModeArtifact(dir, goalMode);
   const workflow = {
     schema_version: 1,
     mission_id: mission.id,
@@ -30,7 +33,16 @@ export async function writeGoalWorkflow(dir: any, mission: any, opts: any = {}) 
       controls: ['create', 'pause', 'resume', 'clear'],
       runtime_continuation: true,
       app_server_api_backed: true,
-      model_tools_available: true
+      model_tools_available: true,
+      official_goal_available: goalMode.official_goal_available,
+      default_enabled: goalMode.default_enabled,
+      fallback_mode: goalMode.mode === 'sks_goal_fallback'
+    },
+    goal_mode: {
+      artifact: path.basename(goalModeArtifact),
+      official_goal_available: goalMode.official_goal_available,
+      official_goal_applied: goalMode.default_enabled,
+      fallback_used: goalMode.mode === 'sks_goal_fallback'
     },
     pipeline_contract: {
       overlay_only: true,
@@ -58,12 +70,12 @@ export async function writeGoalWorkflow(dir: any, mission: any, opts: any = {}) 
         completed_checkboxes: ['goal bridge artifact written'],
         open_checkboxes: ['continue the selected SKS execution route when implementation is needed'],
         blockers: [],
-        evidence: [GOAL_WORKFLOW_ARTIFACT, GOAL_BRIDGE_ARTIFACT]
+        evidence: [GOAL_WORKFLOW_ARTIFACT, GOAL_BRIDGE_ARTIFACT, path.basename(goalModeArtifact)]
       }
     ],
     resume_context: {
       stable_requirements: prompt ? [prompt] : [],
-      current_files: [GOAL_WORKFLOW_ARTIFACT, GOAL_BRIDGE_ARTIFACT],
+      current_files: [GOAL_WORKFLOW_ARTIFACT, GOAL_BRIDGE_ARTIFACT, path.basename(goalModeArtifact)],
       decisions: ['Codex native /goal is the persisted continuation surface', '$Goal is a lightweight bridge overlay, not an independent implementation pipeline'],
       known_mistakes_to_avoid: ['do not clear noisy context without writing a structured handoff first'],
       active_skills: ['goal'],
@@ -132,6 +144,7 @@ ${workflow.native_goal.slash_command}
 
 - Ralph route is removed from the user-facing SKS surface.
 - This file is a fast SKS overlay for Codex native persisted \`/goal\` workflow semantics.
+- Official Goal mode: ${workflow.goal_mode?.official_goal_available ? 'available/default-enabled' : 'unavailable; SKS fallback bridge used'}.
 - \`$Goal\` is not a heavyweight independent implementation pipeline.
 - SKS still records route evidence in \`${GOAL_WORKFLOW_ARTIFACT}\` and this bridge file.
 - If implementation work is needed, continue through the selected SKS execution route gates for that work and report verification evidence honestly.
