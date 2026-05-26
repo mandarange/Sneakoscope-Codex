@@ -1,0 +1,11 @@
+{
+  "schema": "sks.reflection-gate.v1",
+  "mission_id": "local-route-truth-closeout-20260526",
+  "created_at": "2026-05-26T04:03:55Z",
+  "passed": true,
+  "reflection": "reflection.md",
+  "post_honest_loopback_work_recorded": true,
+  "lessons_recorded": true,
+  "wiki_refreshed": true,
+  "wiki_validated": true
+}

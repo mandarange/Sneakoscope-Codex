@@ -6,6 +6,8 @@ SKS 1.18.2 preserves that provider boundary while requiring dynamic agent pool g
 
 SKS 1.18.2 keeps the same boundary for route blackbox backfill and follow-up work: provider refs are inherited as proof context, not recomputed by worker-local shortcuts.
 
+SKS 1.18.3 keeps actual route-command backfill gates on the same provider boundary: route proof must show inherited Source Intelligence refs from the task graph through each generated worker session.
+
 - Context7 is required for package, SDK, framework, API, MCP, and generated-docs evidence.
 - Codex Web Search is the default live web provider unless a route explicitly runs offline/docs-only.
 - X AI MCP Search is optional until configured and search-capable. Once detected, verified current claims must include X AI evidence or record a blocker.

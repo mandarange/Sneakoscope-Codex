@@ -6,6 +6,8 @@ SKS 1.18.2 makes those terminal lane artifacts generation-aware under stable wor
 
 SKS 1.18.2 requires scheduler-mode terminal calls to carry `slot_id` and `generation_index`, and proof counts terminal close reports by generation.
 
+SKS 1.18.3 adds proof reconciliation that compares terminal close reports with scheduler session generations and the slot-level tmux lane supervisor before route readiness can pass.
+
 Per-agent artifacts live under `agents/sessions/<agent_id>/`:
 
 - `agent-terminal-session.json`

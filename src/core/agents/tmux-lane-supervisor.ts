@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { appendJsonl, ensureDir, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { appendJsonl, ensureDir, nowIso, readJson, runProcess, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import type { AgentSchedulerState } from './agent-scheduler.js'
 import type { AgentWorkerSlot } from './agent-worker-slot.js'
 
@@ -12,6 +12,8 @@ export interface TmuxLaneSupervisorLane {
   lane_md: string
   lane_json: string
   command: string
+  launch_mode: string
+  launch_error: string | null
   opened_at: string
   closed_at: string | null
   unexpected_close_count: number
@@ -43,6 +45,7 @@ export async function initializeTmuxLaneSupervisor(root: string, input: {
   missionId: string
   sessionName?: string
   targetActiveSlots: number
+  launchRealTmux?: boolean
 }) {
   const now = nowIso()
   const sessionName = input.sessionName || `sks-${input.missionId}`
@@ -59,7 +62,7 @@ export async function initializeTmuxLaneSupervisor(root: string, input: {
     auto_reopen_count: 0,
     all_lanes_closed_after_drain: false,
     blockers: [],
-    lanes: Array.from({ length: input.targetActiveSlots }, (_, index) => createLane(input.missionId, sessionName, index + 1, now))
+    lanes: await createSupervisorLanes(root, input.missionId, sessionName, input.targetActiveSlots, now, input.launchRealTmux === true)
   }
   for (const lane of state.lanes) await writeLaneRender(root, lane, null, null)
   await writeSupervisor(root, state, 'lane_supervisor_initialized')
@@ -166,6 +169,8 @@ function createLane(missionId: string, sessionName: string, index: number, opene
     lane_md: path.join(laneDir, 'lane.md'),
     lane_json: path.join(laneDir, 'lane.json'),
     command: buildPersistentLaneCommand(missionId, slotId),
+    launch_mode: 'fake_supervisor_lane',
+    launch_error: null,
     opened_at: openedAt,
     closed_at: null,
     unexpected_close_count: 0,
@@ -178,10 +183,63 @@ function createLane(missionId: string, sessionName: string, index: number, opene
   }
 }
 
+async function createSupervisorLanes(root: string, missionId: string, sessionName: string, targetActiveSlots: number, openedAt: string, launchRealTmux: boolean) {
+  const lanes: TmuxLaneSupervisorLane[] = []
+  if (launchRealTmux) await ensureTmuxSession(sessionName).catch(() => null)
+  for (let index = 1; index <= targetActiveSlots; index += 1) {
+    const lane = createLane(missionId, sessionName, index, openedAt)
+    if (launchRealTmux) lanes.push(await launchPersistentSlotLane(root, lane, sessionName))
+    else lanes.push(lane)
+  }
+  return lanes
+}
+
+async function ensureTmuxSession(sessionName: string) {
+  await runProcess('tmux', ['has-session', '-t', sessionName], { timeoutMs: 1000, maxOutputBytes: 4096 }).catch(async () => {
+    await runProcess('tmux', ['new-session', '-d', '-s', sessionName, '-n', 'orchestrator', 'sleep 3600'], { timeoutMs: 2000, maxOutputBytes: 4096 })
+  })
+}
+
+async function launchPersistentSlotLane(root: string, lane: TmuxLaneSupervisorLane, sessionName: string): Promise<TmuxLaneSupervisorLane> {
+  const command = persistentLaneCommandForRoot(root, lane.slot_id)
+  try {
+    const pane = await runProcess('tmux', ['split-window', '-t', sessionName, '-P', '-F', '#{pane_id}', '-h', command], { timeoutMs: 2000, maxOutputBytes: 4096 })
+    const paneId = pane.stdout.trim() || `%${Date.now()}`
+    await appendJsonl(path.join(root, 'agent-tmux-pane-launch-ledger.jsonl'), {
+      schema: 'sks.agent-tmux-pane-launch.v1',
+      generated_at: nowIso(),
+      launch_mode: 'real_tmux_supervisor_slot_lane',
+      slot_id: lane.slot_id,
+      generation_index: null,
+      session_id: null,
+      session_name: sessionName,
+      pane_id: paneId,
+      command,
+      persistent_slot_lane: true,
+      launched_by: TMUX_LANE_SUPERVISOR_SCHEMA,
+      blockers: []
+    })
+    return { ...lane, pane_id: paneId, command, launch_mode: 'real_tmux_supervisor_slot_lane', launch_error: null }
+  } catch (err: unknown) {
+    return {
+      ...lane,
+      command,
+      launch_mode: 'real_tmux_supervisor_failed',
+      launch_error: err instanceof Error ? err.message : String(err)
+    }
+  }
+}
+
 function buildPersistentLaneCommand(missionId: string, slotId: string) {
   const laneMd = path.join('agents', 'lanes', slotId, 'lane.md')
   const drain = path.join('agents', 'lanes', '.drain')
   return `while test ! -f ${JSON.stringify(drain)}; do clear; printf '%s\\n' ${JSON.stringify(`SKS ${missionId} ${slotId}`)}; test -f ${JSON.stringify(laneMd)} && cat ${JSON.stringify(laneMd)}; sleep 2; done`
+}
+
+function persistentLaneCommandForRoot(root: string, slotId: string) {
+  const laneFile = path.join(root, 'lanes', slotId, 'lane.md')
+  const drainFile = path.join(root, 'lanes', '.drain')
+  return `while test ! -f ${JSON.stringify(drainFile)}; do clear; test -f ${JSON.stringify(laneFile)} && cat ${JSON.stringify(laneFile)}; sleep 2; done`
 }
 
 async function writeLaneRender(root: string, lane: TmuxLaneSupervisorLane, slot: AgentWorkerSlot | null, state: AgentSchedulerState | null) {
@@ -244,6 +302,7 @@ function summarizeSupervisor(state: TmuxLaneSupervisorState): TmuxLaneSupervisor
     all_lanes_closed_after_drain: state.lanes.length > 0 && state.lanes.every((lane) => lane.drained && Boolean(lane.closed_at)),
     blockers: [
       ...(unexpected > 0 ? ['tmux_lane_unexpected_close_before_drain'] : []),
+      ...(state.lanes.some((lane) => lane.launch_mode === 'real_tmux_supervisor_failed') ? ['tmux_lane_real_launch_failed'] : []),
       ...(state.lanes.some((lane) => lane.closed_at && !lane.drained) ? ['tmux_lane_closed_before_drain'] : [])
     ]
   }

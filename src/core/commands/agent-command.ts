@@ -17,7 +17,7 @@ export async function agentCommand(commandOrArgs: string | string[] = 'agent', m
 }
 
 async function agentRun(parsed: any) {
-  const result = await runNativeAgentOrchestrator(parsed)
+  const result = await runNativeAgentOrchestrator({ ...parsed, routeCommand: 'sks agent run', routeBlackboxKind: 'actual_agent_command' })
   return emit(parsed, result, () => {
     console.log('Native agent mission: ' + result.mission_id)
     console.log('Backend: ' + result.backend)

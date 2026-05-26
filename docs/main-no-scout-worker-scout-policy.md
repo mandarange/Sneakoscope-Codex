@@ -6,6 +6,8 @@ SKS 1.18.2 keeps that separation for replenished worker slots: the main schedule
 
 SKS 1.18.2 allows worker-local Scout evidence to justify schema-bound `follow_up_work_items`, but those items still flow through the main scheduler and never become the proof SSOT.
 
+SKS 1.18.3 route-truth backfill gates keep Team, Research, and QA on their actual command surfaces while preserving this split: the main scheduler owns task graph, queue, and proof reconciliation, while worker Scout remains local evidence only.
+
 | Scope | Scout Allowed | Proof Role |
 | --- | --- | --- |
 | Main orchestrator | no | Blocks release if detected |

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { appendJsonl, runProcess, writeJsonAtomic } from '../fsx.js'
+import { appendJsonl, readJson, runProcess, writeJsonAtomic } from '../fsx.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 
 export function buildTmuxAgentPanePlan(agent: any, slice: any = {}) {
@@ -72,6 +72,12 @@ async function writeAgentTmuxReport(root: string, agent: any, report: any) {
 async function launchTmuxPane(agent: any, slice: any, opts: any = {}) {
   const root = opts.agentRoot || opts.cwd || process.cwd()
   const sessionName = opts.tmuxSessionName || (opts.missionId ? `sks-${opts.missionId}` : 'sks-agent-runtime')
+  const supervisorEvidence = await recordSupervisorLaneEvidence(root, agent, slice, sessionName)
+  if (supervisorEvidence) return supervisorEvidence
+  if (opts.real === true) {
+    const blocked = fakeLaunch(agent, sessionName, '', ['tmux_lane_supervisor_missing_for_real_tmux'])
+    return { ...blocked, blockers: ['tmux_lane_supervisor_missing_for_real_tmux'] }
+  }
   const title = `${agent.slot_id || agent.id} gen-${agent.generation_index || 1} ${slice?.id || 'work'}`
   const laneFile = path.join(root, 'lanes', String(agent.slot_id || agent.id), 'lane.md')
   const drainFile = path.join(root, 'lanes', '.drain')
@@ -109,6 +115,33 @@ async function launchTmuxPane(agent: any, slice: any, opts: any = {}) {
     }
   }
   const evidence = fakeLaunch(agent, sessionName, command, [])
+  await appendJsonl(path.join(root, 'agent-tmux-pane-launch-ledger.jsonl'), evidence)
+  return evidence
+}
+
+async function recordSupervisorLaneEvidence(root: string, agent: any, slice: any, sessionName: string) {
+  const supervisor = await readJson<any>(path.join(root, 'agent-tmux-lane-supervisor.json'), null)
+  const slotId = String(agent.slot_id || agent.id)
+  const lane = supervisor?.lanes?.find((row: any) => String(row.slot_id) === slotId)
+  if (!lane?.pane_id) return null
+  const evidence = {
+    schema: 'sks.agent-tmux-pane-launch.v1',
+    generated_at: new Date().toISOString(),
+    launch_mode: lane.launch_mode || 'supervisor_slot_lane',
+    agent_id: agent.id,
+    slot_id: slotId,
+    generation_index: agent.generation_index || 1,
+    session_id: agent.session_id,
+    session_name: supervisor.session_name || sessionName,
+    window_id: null,
+    pane_id: lane.pane_id,
+    command: lane.command,
+    attach_command: `tmux attach -t ${supervisor.session_name || sessionName}`,
+    persistent_slot_lane: true,
+    reused_persistent_slot_lane: true,
+    work_item_id: slice?.id || null,
+    blockers: lane.launch_error ? [`tmux_lane_launch_error:${lane.launch_error}`] : []
+  }
   await appendJsonl(path.join(root, 'agent-tmux-pane-launch-ledger.jsonl'), evidence)
   return evidence
 }

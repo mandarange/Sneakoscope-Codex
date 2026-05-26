@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.2';
+const RELEASE_VERSION = '1.18.3';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const parallelCheckPath = path.join(root, 'scripts/release-parallel-check.mjs');
@@ -51,11 +51,19 @@ const requiredScripts = [
   'agent:follow-up-work-schema',
   'agent:dynamic-pool-route-blackbox',
   'agent:backfill-route-blackbox',
+  'agent:cli-options-to-task-graph',
+  'agent:route-truth-backfill',
   'team:backfill-route-blackbox',
+  'team:actual-route-backfill',
   'research:backfill-route-blackbox',
+  'research:actual-route-backfill',
   'qa:backfill-route-blackbox',
+  'qa:actual-route-backfill',
   'agent:tmux-lane-persistence',
   'agent:tmux-lane-no-flicker',
+  'agent:tmux-supervisor-integrated',
+  'agent:tmux-slot-lane-runtime',
+  'agent:proof-contract-reconciled',
   'agent:scheduler-proof-hardening',
   'agent:dynamic-pool',
   'agent:backfill-replenishment',

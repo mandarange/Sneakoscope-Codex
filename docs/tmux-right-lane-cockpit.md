@@ -6,6 +6,8 @@ SKS 1.18.2 treats each right lane as a worker slot and requires pane launch evid
 
 SKS 1.18.2 backs cockpit rows with the persistent lane supervisor, lane render files, drain signal, and no-flicker proof gates.
 
+SKS 1.18.3 requires the orchestrator to initialize that slot-level supervisor for tmux scheduler runs and blocks proof when generation-level pane launches masquerade as persistent worker-slot lanes.
+
 Artifacts:
 
 - `agents/agent-tmux-layout.json`

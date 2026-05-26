@@ -76,6 +76,8 @@ export interface AgentRunOptions {
   desiredWorkItemCount?: number
   minimumWorkItems?: number
   maxQueueExpansion?: number
+  routeCommand?: string
+  routeBlackboxKind?: string
   refillDelayMs?: number
   roster?: unknown
   backend?: AgentBackend | string
