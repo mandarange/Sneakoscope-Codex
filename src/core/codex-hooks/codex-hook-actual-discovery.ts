@@ -77,6 +77,7 @@ export async function readCodexHookActualState(root: string): Promise<CodexHookA
     const requirementsText = await readText(cfg.requirements_toml, '');
     const configHasInlineHooks = hasInlineHookTables(String(configText || ''));
     const requirementsHasInlineHooks = hasInlineHookTables(String(requirementsText || ''));
+    const managedOnly = hasAllowManagedHooksOnly(String(requirementsText || ''));
 
     sources.push({
       path: cfg.hooks_json,
@@ -103,14 +104,14 @@ export async function readCodexHookActualState(root: string): Promise<CodexHookA
       managed: true
     });
 
-    if (hooksJsonExists) {
+    if (hooksJsonExists && !managedOnly) {
       const hooks = await readJson(cfg.hooks_json, {});
       const trustedHashes = parseTrustedHashes(String(configText || ''));
       entries.push(...tagEntries(entriesFromHooksFile(cfg.hooks_json, cfg.source_kind, hooks, trustedHashes, false), 'hooks_json', false));
       unsupportedHandlers.push(...analyzeHooksJsonUnsupported(cfg.hooks_json, cfg.source_kind, hooks, 'hooks_json'));
     }
 
-    if (configHasInlineHooks) {
+    if (configHasInlineHooks && !managedOnly) {
       const parsed = entriesFromInlineHooksToml(cfg.config_toml, cfg.source_kind, String(configText || ''), parseTrustedHashes(String(configText || '')), false, 'config_toml');
       entries.push(...parsed.entries);
       unsupportedHandlers.push(...parsed.unsupported_handlers);
@@ -196,6 +197,10 @@ export function parseManagedDirs(tomlText: string, sourcePath: string): string[]
 
 export function hasInlineHookTables(tomlText: string): boolean {
   return /^\s*\[\[hooks\.[A-Za-z]+(?:\.hooks)?\]\]\s*$/m.test(String(tomlText || ''));
+}
+
+export function hasAllowManagedHooksOnly(tomlText: string): boolean {
+  return /^\s*allow_managed_hooks_only\s*=\s*true\s*$/m.test(String(tomlText || ''));
 }
 
 async function readManagedDirEntries(managedDir: string, sourceKind: CodexHookActualSourceKind) {

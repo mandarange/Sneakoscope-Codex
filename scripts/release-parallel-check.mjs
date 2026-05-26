@@ -59,6 +59,10 @@ const tasks = [
   task('agent:session-generation', 'npm run agent:session-generation --silent', { dependencies: ['build'] }),
   task('agent:terminal-generations', 'npm run agent:terminal-generations --silent', { dependencies: ['build'] }),
   task('agent:tmux-real-right-lanes', 'npm run agent:tmux-real-right-lanes --silent', { dependencies: ['build'] }),
+  task('agent:cleanup-executor', 'npm run agent:cleanup-executor --silent', { dependencies: ['build'] }),
+  task('agent:intelligent-work-graph', 'npm run agent:intelligent-work-graph --silent', { dependencies: ['build'] }),
+  task('proof:fake-vs-real-policy', 'npm run proof:fake-vs-real-policy --silent', { dependencies: ['build'] }),
+  task('route:blackbox-realism', 'npm run route:blackbox-realism --silent', { dependencies: ['build'] }),
   task('agent:dynamic-cockpit', 'npm run agent:dynamic-cockpit --silent', { dependencies: ['build'] }),
   task('agent:source-intelligence-propagation', 'npm run agent:source-intelligence-propagation --silent', { dependencies: ['build'] }),
   task('agent:goal-mode-propagation', 'npm run agent:goal-mode-propagation --silent', { dependencies: ['build'] }),
@@ -153,7 +157,7 @@ const tasks = [
   task('rust:check', 'npm run rust:check --silent', { dependencies: ['build'] }),
   task('rust:smoke', 'npm run rust:smoke --silent', { dependencies: ['build'] }),
   task('release:dist-freshness', 'npm run release:dist-freshness --silent', { dependencies: ['build'] }),
-  task('perf:gate', 'npm run perf:gate --silent', { dependencies: ['test:blackbox', 'release:dist-freshness'], env: { SKS_PERF_TIER: 'source-ci' } }),
+  task('perf:gate', 'npm run perf:gate --silent', { dependencies: ['test:blackbox', 'release:dist-freshness', 'blackbox:matrix:contract', 'rust:check', 'rust:smoke', 'schema:check', 'flagship:proof-graph-v4'], env: { SKS_PERF_TIER: 'source-ci' } }),
   task('typecheck', 'npm run typecheck --silent', { dependencies: ['build'] }),
   task('schema:check', 'npm run schema:check --silent', { dependencies: ['build'] })
 ];

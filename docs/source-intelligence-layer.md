@@ -2,6 +2,8 @@
 
 SKS 1.18.0 adds a shared Source Intelligence Layer for routes that need current or external source evidence.
 
+SKS 1.18.4 keeps Source Intelligence as inherited route proof while real tmux, Codex dynamic smoke, cleanup, and intelligent work graph checks add stronger fake-vs-real evidence boundaries.
+
 SKS 1.18.2 carries Source Intelligence references into each dynamic agent pool session generation so scheduler, proof, and cockpit artifacts can show the source context that every replenished worker inherited.
 
 SKS 1.18.2 also attaches Source Intelligence refs to task graph work items and schema-valid follow-up work items before each generated session generation is launched.

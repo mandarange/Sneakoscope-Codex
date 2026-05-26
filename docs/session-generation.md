@@ -1,5 +1,7 @@
 # Session Generation
 
+SKS 1.18.4 ties session-generation proof to fake-vs-real policy, real tmux pane checks, and Codex dynamic smoke evidence so completed generations do not overclaim runtime truth.
+
 SKS 1.18.2 separates worker slots from task sessions. A worker slot such as `slot-001` can run multiple immutable session generations:
 
 SKS 1.18.3 ties those generations to the actual route command, requested work item counts, terminal close reports, and persistent slot lane evidence so replacement generations cannot be counted without matching scheduler proof.

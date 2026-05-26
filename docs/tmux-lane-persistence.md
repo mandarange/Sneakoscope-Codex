@@ -1,5 +1,7 @@
 # Tmux Lane Persistence 1.18.3
 
+SKS 1.18.4 adds physical pane reconciliation, lane capture freshness checks, and after-drain closure evidence for persistent tmux lane proof.
+
 SKS 1.18.3 treats tmux lanes as persistent worker-slot UI. In scheduler tmux mode, the supervisor owns slot-level lane panes; worker generations update the slot lane render files and reuse the lane pane instead of launching a fresh pane per generation.
 
 The lane supervisor writes:

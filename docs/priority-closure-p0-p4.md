@@ -1,5 +1,7 @@
 # Priority Closure P0-P5 1.18.3
 
+SKS 1.18.4 treats physical tmux truth, Codex smoke truth, cleanup execution, intelligent work graph coverage, fake-vs-real separation, and route blackbox realism as the current P0-P5 closure scope.
+
 SKS 1.18.2 tracks P0 through P5 as release readiness scope.
 
 SKS 1.18.2 keeps the same closure priority model and adds work-item-first task graph expansion, route blackbox replenishment, persistent tmux lane proof, follow-up work item schema, scheduler proof hardening, and P5 regression catalog coverage.

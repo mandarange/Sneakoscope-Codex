@@ -1,5 +1,7 @@
 # Work Queue Expansion 1.18.3
 
+SKS 1.18.4 uses the intelligent work graph to seed route priorities, task ownership, and serial or parallel bottleneck hints before work queue expansion runs.
+
 SKS 1.18.2 separates route work expansion from active slot count.
 
 SKS 1.18.3 makes the CLI-to-task-graph contract explicit: parsed `--work-items`, `--target-active-slots`, `--minimum-work-items`, and queue expansion limits must propagate into the orchestrator, task graph, queue, scheduler, and final proof.

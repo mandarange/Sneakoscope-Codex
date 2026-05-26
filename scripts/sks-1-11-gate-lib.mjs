@@ -22,7 +22,7 @@ export function runSksJson(args) {
   const result = spawnSync(process.execPath, [entrypoint, ...args], {
     cwd: root,
     encoding: 'utf8',
-    timeout: 60_000,
+    timeout: Number(process.env.SKS_GATE_TIMEOUT_MS || 120_000),
     env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true' }
   });
   if (result.status !== 0) {

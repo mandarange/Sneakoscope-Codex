@@ -1,6 +1,7 @@
 import { readCodexHookTrustEntries } from './codex-hook-trust-state.js';
 import { writeTrustedHashStateForHooksFile } from './codex-hook-state-writer.js';
 import { readCodexHookActualState } from './codex-hook-actual-discovery.js';
+import { installManagedCodexHooks } from './codex-hook-managed-install.js';
 
 export async function codexHookTrustDoctor(root: string, opts: { fix?: boolean; managed?: boolean; actual?: boolean } = {}) {
   if (opts.actual === true) return codexHookActualTrustDoctor(root, opts);
@@ -31,8 +32,15 @@ export async function codexHookTrustDoctor(root: string, opts: { fix?: boolean; 
 }
 
 async function codexHookActualTrustDoctor(root: string, opts: { fix?: boolean; managed?: boolean } = {}) {
+  const fixed = opts.fix === true ? await installManagedCodexHooks(root).catch((err: unknown) => ({
+    ok: false,
+    error: err instanceof Error ? err.message : String(err)
+  })) : null;
   const state = await readCodexHookActualState(root);
-  const entries = state.entries;
+  const entries = state.entries.map((entry) => {
+    if (entry.trust_status === 'Managed' || entry.trust_status === 'Trusted') return entry;
+    return { ...entry, repair_action: 'sks hooks repair --managed --json' };
+  });
   const warnings = [...new Set([...state.warnings, ...entries.flatMap((entry) => entry.warnings || [])])];
   const managedOnlyRecommendation = state.managed_dirs.length === 0 && entries.some((entry) => entry.trust_status !== 'Managed');
   const repairActions = [
@@ -44,7 +52,8 @@ async function codexHookActualTrustDoctor(root: string, opts: { fix?: boolean; m
     ok: state.ok && warnings.length === 0,
     actual: true,
     fix_attempted: opts.fix === true,
-    fix_status: opts.fix === true ? 'managed_install_required' : 'not_requested',
+    fix_status: opts.fix === true ? (fixed && 'ok' in fixed && fixed.ok === true ? 'managed_install_applied' : 'managed_install_failed') : 'not_requested',
+    fixed,
     managed_mode_requested: opts.managed === true,
     current_hash_count: entries.length,
     entries,

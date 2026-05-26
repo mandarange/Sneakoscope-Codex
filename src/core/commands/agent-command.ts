@@ -1,10 +1,11 @@
 import path from 'node:path'
 import { findLatestMission, loadMission } from '../mission.js'
-import { readJson, readText, sksRoot, writeJsonAtomic } from '../fsx.js'
+import { readJson, readText, sksRoot } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
 import { parseAgentCommandArgs } from '../agents/agent-command-surface.js'
 import { buildAgentRoster } from '../agents/agent-roster.js'
 import { buildAgentWorkPartition } from '../agents/agent-work-partition.js'
+import { runAgentCleanupExecutor } from '../agents/agent-cleanup-executor.js'
 
 const AGENT_ACTION_SCHEMA = 'sks.agent-command-result.v1'
 
@@ -62,15 +63,21 @@ async function agentMissionAction(parsed: any) {
     ledger: 'agent-central-ledger.json',
     collect: 'agent-output-validation.json',
     consensus: 'agent-consensus.json',
-    close: 'agent-cleanup.json',
-    cleanup: 'agent-cleanup.json',
+    close: 'agent-cleanup-proof.json',
+    cleanup: 'agent-cleanup-proof.json',
     proof: 'agent-proof-evidence.json',
     explain: 'agent-trust-report.json'
   }
   const artifact = readers[parsed.action] || 'agent-proof-evidence.json'
   if (parsed.action === 'close' || parsed.action === 'cleanup') {
-    const cleanupPath = path.join(agentRoot, 'agent-command-cleanup.json')
-    await writeJsonAtomic(cleanupPath, { schema: 'sks.agent-command-cleanup.v1', ok: true, mission_id: id, action: parsed.action, note: 'cleanup command observed existing native agent ledger artifacts' })
+    await runAgentCleanupExecutor({
+      missionDir: dir,
+      missionId: id,
+      action: parsed.action,
+      apply: parsed.apply === true,
+      dryRun: parsed.dryRun === true,
+      drain: parsed.drain === true
+    })
   }
   const full = path.join(agentRoot, artifact)
   const value = artifact.endsWith('.json') ? await readJson(full, null) : await readText(full, '')

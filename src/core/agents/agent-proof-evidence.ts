@@ -6,6 +6,7 @@ import { assertAllAgentSessionsClosed } from './agent-lifecycle.js'
 import { assertAgentTerminalSessionsClosed } from './agent-terminal-session.js'
 import { assertAgentSessionGenerationsClosed } from './agent-session-generation.js'
 import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
+import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.js'
 
 export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
@@ -17,6 +18,9 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const workQueue = await readJson<any>(path.join(root, 'agent-work-queue.json'), null)
   const scheduler = input.scheduler || await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const taskGraph = input.partition?.task_graph || await readJson<any>(path.join(root, 'agent-task-graph.json'), null)
+  const tmuxPhysicalProof = await readJson<any>(path.join(root, 'agent-tmux-physical-proof.json'), null)
+  const cleanupProof = await readJson<any>(path.join(root, 'agent-cleanup-proof.json'), null)
+  const intelligentWorkGraph = await readJson<any>(path.join(root, 'agent-intelligent-work-graph.json'), null)
   const slots = await readJson<any>(path.join(root, 'agent-worker-slots.json'), null)
   const generationArtifact = await readJson<any>(path.join(root, 'agent-session-generations.json'), null)
   const schedulerEvents = await readTextSafe(path.join(root, 'agent-scheduler-events.jsonl'))
@@ -77,12 +81,15 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(laneSupervisor && laneSupervisor.pane_survival_checked !== true ? ['tmux_lane_survival_not_checked'] : []),
     ...(laneSupervisor && Number(laneSupervisor.unexpected_close_count || 0) > 0 ? ['tmux_lane_unexpected_close_before_drain'] : []),
     ...(laneSupervisor?.blockers || []),
+    ...(input.backend === 'tmux' && tmuxPhysicalProof?.physical_tmux_verified !== true ? ['tmux_physical_pane_proof_missing'] : []),
+    ...(input.backend === 'tmux' && Array.isArray(tmuxPhysicalProof?.blockers) ? tmuxPhysicalProof.blockers : []),
     ...(input.backend === 'tmux' && tmuxLanes?.ok !== true ? ['tmux_right_lane_manifest_missing'] : []),
     ...(input.backend === 'tmux' && tmuxPaneLaunchCount === 0 ? ['tmux_pane_launch_evidence_missing'] : []),
     ...(ledger.blockers || []),
     ...(input.partition?.blockers || []),
     ...(input.consensus?.blockers || []),
     ...(input.janitor?.ok === false ? input.janitor.blockers || ['agent_janitor_not_ok'] : []),
+    ...(cleanupProof?.ok === false ? cleanupProof.blockers || ['agent_cleanup_proof_not_ok'] : []),
     ...(input.results || []).flatMap((result: any) => result.blockers || []),
     ...agentChangedFileLeaseViolations(input.results || [], input.partition?.leases || [])
   ]
@@ -147,6 +154,25 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     tmux_lane_auto_reopen_count: laneSupervisor?.auto_reopen_count || 0,
     tmux_pane_launch_ledger: 'agent-tmux-pane-launch-ledger.jsonl',
     tmux_pane_launch_count: tmuxPaneLaunchCount,
+    physical_tmux_verified: tmuxPhysicalProof?.physical_tmux_verified === true,
+    tmux_physical_proof: 'agent-tmux-physical-proof.json',
+    tmux_list_panes_artifact: tmuxPhysicalProof?.tmux_list_panes_artifact || null,
+    tmux_capture_pane_artifacts: tmuxPhysicalProof?.tmux_capture_pane_artifacts || [],
+    tmux_pane_id_reconciled: tmuxPhysicalProof?.tmux_pane_id_reconciled === true,
+    real_truth_summary: {
+      fake_backend: input.backend === 'fake',
+      physical_tmux_verified: tmuxPhysicalProof?.physical_tmux_verified === true,
+      real_tmux_status: tmuxPhysicalProof?.status || (input.backend === 'tmux' ? 'missing' : 'not_applicable'),
+      cleanup_executor_status: cleanupProof?.ok === true ? 'passed' : cleanupProof ? 'blocked' : 'not_run',
+      work_graph_quality_score: Number(intelligentWorkGraph?.work_graph_quality_score || taskGraph?.work_graph_quality_score || 0),
+      fake_vs_real_policy: 'fake-real-proof-policy.json'
+    },
+    intelligent_work_graph: 'agent-intelligent-work-graph.json',
+    test_ownership_map: 'agent-test-ownership-map.json',
+    critical_path: 'agent-critical-path.json',
+    integration_bottlenecks: 'agent-integration-bottlenecks.json',
+    work_graph_quality_score: Number(intelligentWorkGraph?.work_graph_quality_score || taskGraph?.work_graph_quality_score || 0),
+    work_graph_quality_partial: Number(intelligentWorkGraph?.work_graph_quality_score || taskGraph?.work_graph_quality_score || 0) < 0.55,
     terminal_reports_match_generations: terminalReportsMatchGenerations,
     ledger_hash_chain_ok: ledger.ok,
     no_overlap_ok: input.partition?.no_overlap_proof?.ok !== false,
@@ -165,6 +191,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     blockers
   }
   await writeJsonAtomic(path.join(root, 'agent-proof-evidence.json'), evidence)
+  await writeFakeRealProofPolicyReport(root, evidence)
   return evidence
 }
 

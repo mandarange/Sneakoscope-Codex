@@ -6,6 +6,7 @@ import { planAgentLeases } from './work-partition/lease-planner.js'
 import { detectAgentLeaseConflicts } from './work-partition/conflict-detector.js'
 import { buildNoOverlapProof } from './work-partition/no-overlap-proof.js'
 import { buildAgentTaskGraph } from './agent-task-graph.js'
+import { buildIntelligentWorkGraph, enhanceTaskGraphWithIntelligence } from './intelligent-work-graph.js'
 
 export async function buildAgentWorkPartition(root: string, roster: any, prompt = '', opts: {
   route?: string
@@ -20,7 +21,14 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
   const semantic_domain_graph = buildSemanticDomainGraph(inventory)
   const sessions = Object.fromEntries((roster.roster || []).map((agent: any) => [agent.id, agent.session_id]))
   const targetActiveSlots = Number(opts.targetActiveSlots || roster.agent_count || roster.concurrency || 5)
-  const task_graph = buildAgentTaskGraph({
+  const intelligent_work_graph = await buildIntelligentWorkGraph({
+    root,
+    inventory,
+    dependencyGraph: dependency_graph,
+    route: opts.route || '$Agent',
+    prompt
+  })
+  const task_graph = enhanceTaskGraphWithIntelligence(buildAgentTaskGraph({
     routeType: opts.route || '$Agent',
     prompt,
     targetActiveSlots,
@@ -29,7 +37,7 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
     domains: semantic_domain_graph.domains,
     sourceIntelligenceRefs: opts.sourceIntelligenceRefs || null,
     goalModeRef: opts.goalModeRef || null
-  })
+  }), intelligent_work_graph)
   const slices = createAgentTaskSlices({
     roster: roster.roster || [],
     domains: semantic_domain_graph.domains,
@@ -47,6 +55,7 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
     inventory,
     dependency_graph,
     semantic_domain_graph,
+    intelligent_work_graph,
     task_graph,
     route_work_count_summary: task_graph.route_work_count_summary,
     slices,

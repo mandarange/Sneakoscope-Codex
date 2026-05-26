@@ -2,6 +2,8 @@
 
 SKS 1.18.0 separates orchestration proof from worker-local exploration.
 
+SKS 1.18.4 preserves that boundary by adding runtime proof gates for tmux panes, Codex output schema smoke, cleanup actions, and intelligent work graph planning without letting worker-local stand-ins satisfy route truth.
+
 SKS 1.18.2 keeps that separation for replenished worker slots: the main scheduler owns queue/backfill proof, while each session generation records only its scoped worker evidence.
 
 SKS 1.18.2 allows worker-local Scout evidence to justify schema-bound `follow_up_work_items`, but those items still flow through the main scheduler and never become the proof SSOT.

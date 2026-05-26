@@ -2,6 +2,8 @@
 
 SKS 1.18.0 keeps `$Goal` as a lightweight bridge to native Codex `/goal` continuation.
 
+SKS 1.18.4 carries the active Goal context through route truth closure docs and proof gates while keeping Goal itself a continuation bridge, not a substitute runtime proof.
+
 SKS 1.18.2 propagates the official Goal mode reference into every dynamic agent pool generation so refilled workers remain tied to the same continuation contract.
 
 SKS 1.18.2 also propagates the Goal mode reference into task graph items and schema-valid follow-up work items before each generation launch.
