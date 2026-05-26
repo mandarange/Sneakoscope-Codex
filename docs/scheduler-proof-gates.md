@@ -34,3 +34,7 @@ Useful check:
 npm run agent:scheduler-proof-hardening
 npm run agent:proof-contract-reconciled
 ```
+
+## 1.18.5 Runtime Truth Note
+
+SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

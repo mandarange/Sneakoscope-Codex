@@ -3,10 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.4';
+const RELEASE_VERSION = '1.18.5';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
-const parallelCheckPath = path.join(root, 'scripts/release-parallel-check.mjs');
+const parallelCheckPath = path.join(root, 'src/scripts/release-parallel-check.ts');
 const parallelCheckSource = fs.existsSync(parallelCheckPath) ? fs.readFileSync(parallelCheckPath, 'utf8') : '';
 const requiredDocs = [
   'README.md',
@@ -30,7 +30,7 @@ const requiredDocs = [
   'docs/agent-cleanup-executor.md',
   'docs/intelligent-work-graph.md',
   'docs/fake-vs-real-proof-policy.md',
-  'docs/migration-1.18.3-to-1.18.4.md',
+  'docs/migration-1.18.4-to-1.18.5.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
   'docs/release-readiness.md'
@@ -77,9 +77,16 @@ const requiredScripts = [
   'agent:session-generation',
   'agent:terminal-generations',
   'agent:tmux-real-right-lanes',
+  'agent:tmux-physical-lifecycle-wired',
+  'agent:tmux-physical-proof-v2',
   'agent:cleanup-executor',
+  'agent:cleanup-executor-v2',
+  'agent:cleanup-command-ux',
   'agent:intelligent-work-graph',
+  'agent:ast-aware-work-graph',
   'proof:fake-vs-real-policy',
+  'proof:fake-real-policy-v2',
+  'release:runtime-truth-matrix',
   'route:blackbox-realism',
   'agent:dynamic-cockpit',
   'agent:source-intelligence-propagation',
@@ -109,8 +116,11 @@ const requiredScripts = [
 ];
 const requiredRealScripts = [
   'agent:real-tmux-physical-proof',
+  'agent:tmux-physical-lifecycle-wired',
+  'agent:tmux-physical-proof-v2',
   'agent:tmux-pane-reconciliation',
   'agent:tmux-lane-content-truth',
+  'agent:real-codex-dynamic-smoke-v2',
   'agent:real-codex-dynamic-smoke'
 ];
 

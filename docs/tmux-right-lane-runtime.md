@@ -18,3 +18,7 @@ The tmux runner records pane launch evidence in:
 When real tmux is available and explicitly requested, the runner launches panes and records real pane ids. In hermetic release fixtures, fake tmux pane ids are accepted as fake-runtime evidence; `optional_not_launched` is no longer an accepted tmux runtime state.
 
 Proof requires lane supervisor evidence, pane survival checks, no unexpected close before drain, and no-flicker verification. The cockpit and lane render files are refreshed after scheduler launch, completion, backfill, draining, and drained events.
+
+## 1.18.5 Runtime Truth Note
+
+SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

@@ -10,7 +10,7 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.18.4** closes the runtime-truth gap left after the route-truth Dynamic Worker Pool work: real tmux mode now requires physical pane evidence from `tmux list-panes`, `tmux capture-pane`, pane-id reconciliation, and drain-close checks; real Codex dynamic smoke is opt-in through `SKS_TEST_REAL_DYNAMIC_AGENTS=1`; `sks agent close/cleanup` now writes executor proof for stale process, tmux, temp, and lock cleanup; and the task graph carries an intelligent work graph score, test ownership, critical path, and integration bottleneck artifacts. Fake fixture evidence remains useful for hermetic release gates, but it is explicitly separated from real runtime proof.
+SKS **1.18.5** wires the 1.18.4 real-proof tools into the runtime lifecycle: real tmux mode now writes before-drain, after-drain, and final physical pane proof artifacts; real Codex dynamic smoke validates output-schema/result-file/process cleanup and reports `fixture_instrumented_real` honestly; `sks agent close/cleanup` performs process-tree-aware SIGTERM/SIGKILL cleanup; and the task graph carries AST/import/test ownership, critical path, and runtime truth matrix evidence.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -24,8 +24,12 @@ npm run source-intelligence:all-modes
 npm run agent:background-terminals
 npm run agent:tmux-lane-no-flicker
 npm run agent:cleanup-executor
+npm run agent:cleanup-executor-v2
 npm run agent:intelligent-work-graph
+npm run agent:ast-aware-work-graph
 npm run proof:fake-vs-real-policy
+npm run proof:fake-real-policy-v2
+npm run release:runtime-truth-matrix
 npm run route:blackbox-realism
 npm run release:real-check
 npm run agent:backfill-route-blackbox
@@ -68,7 +72,7 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release 
 - Agent cleanup executor: [docs/agent-cleanup-executor.md](docs/agent-cleanup-executor.md)
 - Intelligent work graph: [docs/intelligent-work-graph.md](docs/intelligent-work-graph.md)
 - Fake vs real proof policy: [docs/fake-vs-real-proof-policy.md](docs/fake-vs-real-proof-policy.md)
-- Migration 1.18.3 to 1.18.4: [docs/migration-1.18.3-to-1.18.4.md](docs/migration-1.18.3-to-1.18.4.md)
+- Migration 1.18.4 to 1.18.5: [docs/migration-1.18.4-to-1.18.5.md](docs/migration-1.18.4-to-1.18.5.md)
 - Codex official Goal mode: [docs/codex-official-goal-mode.md](docs/codex-official-goal-mode.md)
 - Release parallel full coverage: [docs/release-parallel-full-coverage.md](docs/release-parallel-full-coverage.md)
 - Priority closure P0-P4: [docs/priority-closure-p0-p4.md](docs/priority-closure-p0-p4.md)

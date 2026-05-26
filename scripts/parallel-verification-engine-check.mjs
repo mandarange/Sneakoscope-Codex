@@ -12,13 +12,13 @@ for (const rel of [
   'src/core/verification/verification-artifact-lock.ts',
   'src/core/verification/verification-result.ts',
   'src/core/verification/verification-proof.ts',
-  'scripts/release-parallel-check.mjs'
+  'src/scripts/release-parallel-check.ts'
 ]) {
   if (!fs.existsSync(path.join(root, rel))) issues.push(`missing:${rel}`);
 }
 
 await runFixture();
-const releaseSource = read('scripts/release-parallel-check.mjs');
+const releaseSource = read('src/scripts/release-parallel-check.ts');
 for (const token of ['runVerificationDag', 'buildVerificationDag', 'writeParallelVerificationProof']) {
   if (!releaseSource.includes(token)) issues.push(`release_parallel_runner_missing:${token}`);
 }

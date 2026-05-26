@@ -11,3 +11,7 @@ SKS 1.18.2 extends the DAG with task graph expansion, follow-up work schema, rou
 SKS 1.18.3 extends the DAG with CLI option task-graph propagation, actual Team/Research/QA route-command backfill gates, tmux supervisor integration, slot-lane runtime proof, and full proof-contract reconciliation.
 
 The release coverage checker compares a previous gate snapshot against the current DAG and fails on coverage regression. Independent groups are preserved so the release suite can remain parallel without dropping UX/PPT, DFix, MAD-SKS, Hooks, codex-lb, Computer Use, all-feature, blackbox, Rust, perf, and readiness visibility.
+
+## 1.18.5 Runtime Truth Note
+
+SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

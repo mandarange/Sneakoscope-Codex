@@ -24,7 +24,11 @@
     "handoff_notes",
     "artifacts",
     "unverified",
-    "writes"
+    "writes",
+    "follow_up_work_items",
+    "source_intelligence_refs",
+    "goal_mode_ref",
+    "worker_scout_evidence"
   ],
   "properties": {
     "schema": { "type": "string", "const": "sks.agent-result.v1" },
@@ -67,7 +71,8 @@
           "dependencies",
           "lease_requirements",
           "max_attempts",
-          "reason"
+          "reason",
+          "source_agent_session_id"
         ],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
@@ -76,38 +81,69 @@
           "required_persona_category": { "type": "string", "minLength": 1 },
           "priority": { "type": "integer", "minimum": 0 },
           "dependencies": { "type": "array", "items": { "type": "string" } },
-          "lease_requirements": { "type": "array" },
+          "lease_requirements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["kind", "path"],
+              "properties": {
+                "kind": { "type": "string" },
+                "path": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
           "max_attempts": { "type": "integer", "minimum": 1 },
           "reason": { "type": "string", "minLength": 1 },
-          "source_agent_session_id": { "type": "string" }
+          "source_agent_session_id": {
+            "anyOf": [
+              { "type": "string" },
+              { "type": "null" }
+            ]
+          }
         },
         "additionalProperties": false
       }
     },
     "source_intelligence_refs": {
       "anyOf": [
-        { "type": "object", "additionalProperties": true },
+        {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
         { "type": "null" }
       ]
     },
     "goal_mode_ref": {
       "anyOf": [
-        { "type": "object", "additionalProperties": true },
+        {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
         { "type": "null" }
       ]
     },
     "worker_scout_evidence": {
-      "type": "object",
-      "required": ["schema", "ok", "agent_id", "artifact_path", "central_proof_ssot"],
-      "properties": {
-        "schema": { "type": "string", "const": "sks.worker-scout-evidence.v1" },
-        "ok": { "type": "boolean" },
-        "agent_id": { "type": "string" },
-        "artifact_path": { "type": "string" },
-        "central_proof_ssot": { "type": "boolean" },
-        "blockers": { "type": "array", "items": { "type": "string" } }
-      },
-      "additionalProperties": true
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["schema", "ok", "agent_id", "artifact_path", "central_proof_ssot", "blockers"],
+          "properties": {
+            "schema": { "type": "string", "const": "sks.worker-scout-evidence.v1" },
+            "ok": { "type": "boolean" },
+            "agent_id": { "type": "string" },
+            "artifact_path": { "type": "string" },
+            "central_proof_ssot": { "type": "boolean" },
+            "blockers": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        { "type": "null" }
+      ]
     },
     "recursion_guard": {
       "type": "object",

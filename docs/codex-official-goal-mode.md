@@ -13,3 +13,7 @@ SKS 1.18.3 validates that the Goal reference remains present across actual Agent
 When official Goal support is detected from Codex help/config surfaces, SKS records `default_enabled: true` in `goal-mode-applied.json` and passes that context to the Goal workflow artifact. When official support is not detectable, SKS records `sks_goal_fallback` instead of blocking implementation routes.
 
 Goal mode does not replace Team, QA, DB, or other route gates. It persists continuation context while the selected execution route still owns implementation and verification.
+
+## 1.18.5 Runtime Truth Note
+
+SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

@@ -17,3 +17,7 @@ SKS 1.18.3 route-truth backfill gates keep Team, Research, and QA on their actua
 | Agent worker session | yes, local only | Optional local evidence only |
 
 Worker Scout evidence must stay under `agents/sessions/<agent_id>/worker-scout/`. It cannot write a mission-root `scout-ledger.json`, cannot create global Scout consensus, and cannot satisfy the central native-agent backend gate. The central proof SSOT remains `agents/agent-proof-evidence.json`.
+
+## 1.18.5 Runtime Truth Note
+
+SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

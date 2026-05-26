@@ -19,3 +19,7 @@ Per-agent artifacts live under `agents/sessions/<agent_id>/`:
 - `terminal-stderr.log`
 
 Fake backend sessions are recorded as `real: false`. Process, Codex exec, and tmux backends record their terminal backend and close status. Agent proof blocks when terminal sessions are missing, left open, or missing close reports.
+
+## 1.18.5 Runtime Truth Note
+
+SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

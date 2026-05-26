@@ -291,9 +291,11 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
       const sourcePath = path.resolve(input.source_image_path);
       const sourceSha = await sha256File(sourcePath);
       const auth = await resolveImagesApiAuth({ ...opts, apiKey, codexLb });
+      const useResponsesImageTool = auth.auth_source === 'CODEX_LB_API_KEY' && Boolean(auth.responses_endpoint);
+      const effectiveEndpoint = useResponsesImageTool ? auth.responses_endpoint : auth.endpoint;
       const validation = await validateGptImage2Request({
         provider: 'openai_images_api',
-        endpoint: auth.endpoint,
+        endpoint: effectiveEndpoint,
         model: 'gpt-image-2',
         prompt: input.prompt,
         source_image_path: sourcePath,
@@ -304,10 +306,11 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
       await writeJsonAtomic(requestArtifact, {
         schema: 'sks.image-ux-gpt-image-2-request.v1',
         created_at: nowIso(),
-        provider: 'openai_images_api',
-        endpoint: auth.endpoint,
+        provider: useResponsesImageTool ? 'openai_responses_image_generation' : 'openai_images_api',
+        endpoint: effectiveEndpoint,
         auth_source: auth.auth_source,
         model: 'gpt-image-2',
+        responses_model: useResponsesImageTool ? responsesImagegenModel(opts) : null,
         source_screen_id: input.source_screen_id,
         source_image_path: sourcePath,
         source_screenshot_sha256: sourceSha,
@@ -349,16 +352,75 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
         return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: auth.blocker, provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
       }
       try {
+        if (useResponsesImageTool) {
+          const imageDataUrl = `data:${mimeForPath(sourcePath)};base64,${await fsp.readFile(sourcePath, 'base64')}`;
+          const response = await fetchWithTimeout(effectiveEndpoint, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${auth.apiKey}`, 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model: responsesImagegenModel(opts),
+              input: [{
+                role: 'user',
+                content: [
+                  { type: 'input_text', text: input.prompt },
+                  { type: 'input_image', image_url: imageDataUrl }
+                ]
+              }],
+              tools: [{ type: 'image_generation', action: 'edit', size: 'auto' }],
+              tool_choice: { type: 'image_generation' }
+            })
+          }, imagegenFetchTimeoutMs(opts));
+          const payload = await readResponsePayload(response, imagegenFetchTimeoutMs(opts));
+          if (!response.ok) {
+            await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started, 'openai_responses_image_generation'));
+            return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider: 'openai_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+          }
+          if (payload?.error) {
+            await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started, 'openai_responses_image_generation'));
+            return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider: 'openai_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+          }
+          const generated = findResponsesImageGenerationOutput(payload);
+          if (!generated?.b64) {
+            await writeJsonAtomic(responseArtifact, redactedImagegenResponse({ ...payload, blocker: 'missing_b64_image_output' }, false, Date.now() - started, 'openai_responses_image_generation'));
+            return { ok: false, status: 'blocked', generated_image_path: null, output_id: generated?.id || null, blocker: 'missing_b64_image_output', provider: 'openai_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+          }
+          const out = path.join(input.output_dir, `gpt-image-2-callout-${Date.now()}.png`);
+          await fsp.writeFile(out, Buffer.from(String(generated.b64), 'base64'));
+          const meta = await generatedImageMetadata(process.cwd(), out, {
+            source_screen_id: input.source_screen_id,
+            provider_surface: 'openai_responses_image_generation',
+            output_id: generated.id || payload?.id || null,
+            real_generated: true
+          });
+          await writeJsonAtomic(responseArtifact, {
+            schema: 'sks.image-ux-gpt-image-2-response.v1',
+            created_at: nowIso(),
+            provider: 'openai_responses_image_generation',
+            model: 'gpt-image-2',
+            responses_model: responsesImagegenModel(opts),
+            auth_source: auth.auth_source,
+            ok: true,
+            status: 'generated',
+            output_image_path: out,
+            output_image_sha256: meta.sha256,
+            output_id: meta.output_id,
+            dimensions: { width: meta.width, height: meta.height, format: meta.format },
+            latency_ms: Date.now() - started,
+            token_cost_metadata: payload?.usage || null,
+            local_only: true
+          });
+          return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'openai_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+        }
         const form = new FormData();
         form.append('model', 'gpt-image-2');
         form.append('prompt', input.prompt);
         form.append('image', new Blob([await fsp.readFile(sourcePath)], { type: mimeForPath(sourcePath) }), path.basename(sourcePath));
-        const response = await fetch(auth.endpoint, {
+        const response = await fetchWithTimeout(auth.endpoint, {
           method: 'POST',
           headers: { authorization: `Bearer ${auth.apiKey}` },
           body: form
-        });
-        const payload = await response.json().catch(async () => ({ error: { message: await response.text() } }));
+        }, imagegenFetchTimeoutMs(opts));
+        const payload = await readResponsePayload(response, imagegenFetchTimeoutMs(opts));
         if (!response.ok) {
           await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started));
           return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
@@ -395,9 +457,11 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
         });
         return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
       } catch (err: unknown) {
-        const response = redactedImagegenResponse({ error: { message: err instanceof Error ? err.message : String(err) } }, false, Date.now() - started);
+        const provider = useResponsesImageTool ? 'openai_responses_image_generation' : 'openai_images_api';
+        const payload = { error: { message: err instanceof Error ? err.message : String(err) } };
+        const response = redactedImagegenResponse(payload, false, Date.now() - started, provider);
         await writeJsonAtomic(responseArtifact, response);
-        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: 'openai_images_api_error', provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider, request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
       }
     }
   };
@@ -441,6 +505,7 @@ async function resolveImagesApiAuth(opts: any = {}) {
       apiKey: openAiKey,
       auth_source: 'OPENAI_API_KEY',
       endpoint: imageEditsEndpoint(opts.baseUrl || 'https://api.openai.com/v1'),
+      responses_endpoint: responsesEndpoint(opts.baseUrl || 'https://api.openai.com/v1'),
       blocker: null
     };
   }
@@ -450,6 +515,7 @@ async function resolveImagesApiAuth(opts: any = {}) {
       apiKey: null,
       auth_source: null,
       endpoint: imageEditsEndpoint(opts.baseUrl || 'https://api.openai.com/v1'),
+      responses_endpoint: responsesEndpoint(opts.baseUrl || 'https://api.openai.com/v1'),
       blocker: 'openai_api_key_missing'
     };
   }
@@ -461,6 +527,7 @@ async function resolveImagesApiAuth(opts: any = {}) {
     apiKey: codexLbKey || null,
     auth_source: envKey,
     endpoint: imageEditsEndpoint(codexLb.base_url || opts.baseUrl || ''),
+    responses_endpoint: responsesEndpoint(codexLb.base_url || opts.baseUrl || ''),
     blocker: codexLbKey ? null : 'codex_lb_api_key_missing'
   };
 }
@@ -468,6 +535,104 @@ async function resolveImagesApiAuth(opts: any = {}) {
 function imageEditsEndpoint(baseUrl: any = '') {
   const base = String(baseUrl || DEFAULT_OPENAI_IMAGE_EDITS_ENDPOINT).trim().replace(/\/+$/, '');
   return /\/images\/edits$/i.test(base) ? base : `${base}/images/edits`;
+}
+
+function responsesEndpoint(baseUrl: any = '') {
+  const base = String(baseUrl || 'https://api.openai.com/v1').trim().replace(/\/+$/, '');
+  return /\/responses$/i.test(base) ? base : `${base}/responses`;
+}
+
+function responsesImagegenModel(opts: any = {}) {
+  return String(opts.responsesModel || process.env.SKS_IMAGEGEN_RESPONSES_MODEL || process.env.OPENAI_MODEL || 'gpt-5.5');
+}
+
+function imagegenFetchTimeoutMs(opts: any = {}) {
+  const value = Number(opts.fetchTimeoutMs || process.env.SKS_IMAGEGEN_FETCH_TIMEOUT_MS || 90000);
+  return Number.isFinite(value) && value > 0 ? value : 90000;
+}
+
+async function fetchWithTimeout(url: any, init: any, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error(`imagegen_fetch_timeout_${timeoutMs}ms`)), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readResponsePayload(response: Response, timeoutMs = 90000) {
+  const text = await textWithTimeout(response, timeoutMs);
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    const sse = parseSsePayload(text);
+    if (sse) return sse;
+    return { error: { message: text.slice(0, 2000) } };
+  }
+}
+
+async function textWithTimeout(response: Response, timeoutMs: number) {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      response.text(),
+      new Promise<string>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`imagegen_response_read_timeout_${timeoutMs}ms`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function parseSsePayload(text: string) {
+  const events: any[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.startsWith('data:')) continue;
+    const data = line.slice('data:'.length).trim();
+    if (!data || data === '[DONE]') continue;
+    try {
+      events.push(JSON.parse(data));
+    } catch {}
+  }
+  const failed = events.find((event) => event?.type === 'response.failed' || event?.response?.status === 'failed');
+  if (failed) {
+    return {
+      object: 'response.sse',
+      status: 'failed',
+      error: failed?.response?.error || failed?.error || { message: 'responses_sse_failed' },
+      events: events.map((event) => event?.type || null)
+    };
+  }
+  const completed = [...events].reverse().find((event) => event?.type === 'response.completed' && event?.response);
+  if (completed?.response) return completed.response;
+  const imageEvent = [...events].reverse().find((event) => /image_generation_call/.test(String(event?.type || '')) && (event?.result || event?.item?.result || event?.b64_json));
+  if (imageEvent) {
+    return {
+      object: 'response.sse',
+      status: 'completed',
+      output: [{
+        id: imageEvent?.item?.id || imageEvent?.id || null,
+        type: 'image_generation_call',
+        status: imageEvent?.status || imageEvent?.item?.status || 'completed',
+        result: imageEvent?.result || imageEvent?.item?.result || imageEvent?.b64_json || null
+      }],
+      events: events.map((event) => event?.type || null)
+    };
+  }
+  return events.length ? { object: 'response.sse', status: 'unknown', events: events.map((event) => event?.type || null) } : null;
+}
+
+function findResponsesImageGenerationOutput(payload: any): { b64: string | null, id: string | null } | null {
+  for (const output of Array.isArray(payload?.output) ? payload.output : []) {
+    if (String(output?.type || '') === 'image_generation_call') {
+      const b64 = typeof output?.result === 'string' ? output.result : output?.result?.b64_json || output?.b64_json || null;
+      if (b64) return { b64: String(b64), id: output?.id || payload?.id || null };
+    }
+  }
+  return null;
 }
 
 export async function generatedImageMetadata(root: string, imagePath: string, opts: any = {}) {
@@ -502,24 +667,55 @@ function mimeForPath(file: string) {
   return 'image/png';
 }
 
-function redactedImagegenResponse(payload: any, ok: boolean, latencyMs: number) {
+function redactedImagegenResponse(payload: any, ok: boolean, latencyMs: number, provider = 'openai_images_api') {
   return {
     schema: 'sks.image-ux-gpt-image-2-response.v1',
     created_at: nowIso(),
-    provider: 'openai_images_api',
+    provider,
     model: 'gpt-image-2',
     ok,
     status: ok ? 'generated' : 'blocked',
     blocker: ok ? null : imagegenErrorKind(payload),
     redacted_error: payload?.error?.message ? String(payload.error.message).replace(/sk-[A-Za-z0-9_-]{16,}/g, '[REDACTED_OPENAI_KEY]') : null,
+    payload_summary: summarizeImagegenPayload(payload),
     latency_ms: latencyMs,
     local_only: true
+  };
+}
+
+function summarizeImagegenPayload(payload: any) {
+  const outputs = Array.isArray(payload?.output) ? payload.output : [];
+  return {
+    id: payload?.id || null,
+    object: payload?.object || null,
+    status: payload?.status || null,
+    model: payload?.model || null,
+    error_type: payload?.error?.type || null,
+    error_code: payload?.error?.code || null,
+    output_count: outputs.length,
+    output: outputs.slice(0, 8).map((output: any) => ({
+      id: output?.id || null,
+      type: output?.type || null,
+      status: output?.status || null,
+      action: output?.action || null,
+      role: output?.role || null,
+      result_present: typeof output?.result === 'string' || Boolean(output?.result?.b64_json || output?.b64_json),
+      result_kind: typeof output?.result,
+      result_chars: typeof output?.result === 'string' ? output.result.length : null,
+      content_types: Array.isArray(output?.content) ? output.content.map((item: any) => item?.type || null) : []
+    })),
+    output_text: outputs.flatMap((output: any) => Array.isArray(output?.content) ? output.content : [])
+      .filter((item: any) => typeof item?.text === 'string')
+      .map((item: any) => item.text.slice(0, 500))
+      .slice(0, 3)
   };
 }
 
 function imagegenErrorKind(payload: any) {
   const text = JSON.stringify(payload || {});
   if (/moderation|safety|policy/i.test(text)) return 'imagegen_moderation_blocked';
+  if (/rate_limit|overloaded|proxy_overloaded|429/i.test(text)) return 'imagegen_remote_rate_limited';
+  if (/timeout|AbortError|aborted/i.test(text)) return 'imagegen_remote_timeout';
   if (/api[_ -]?key|auth|401/i.test(text)) return 'openai_api_key_missing_or_invalid';
   return payload?.blocker || 'openai_images_api_error';
 }

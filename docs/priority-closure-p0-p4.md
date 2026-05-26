@@ -18,3 +18,7 @@ SKS 1.18.3 adds route-truth closure for Agent, Team, Research, and QA commands, 
 | P5 | Regression catalog covers no-backfill, backfill, multi-wave, follow-up, invalid follow-up, lane persistence/drain close, and Source Intelligence/Goal ref propagation. |
 
 User-requested 1.18.3 items are not accepted as non-goals.
+
+## 1.18.5 Runtime Truth Note
+
+SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

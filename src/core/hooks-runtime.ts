@@ -926,6 +926,11 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
       blocksRouting: true
     });
   }
+  if (pending?.conversation_id === conv && pending?.latest) {
+    return updateCheckResult(copyStableUpdateChoiceText(pending.latest), {
+      blocksRouting: true
+    });
+  }
   if (updateState.skipped?.conversation_id === conv && updateState.skipped?.latest) {
     return updateCheckResult(`SKS update check: update ${updateState.skipped.latest} was skipped for this conversation only. Do not ask again in this conversation; check again next conversation.`);
   }
@@ -953,7 +958,7 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
     pending_offer: { conversation_id: conv, latest: check.latest, offered_at: nowIso() },
     skipped: updateState.skipped?.conversation_id === conv ? null : updateState.skipped || null
   });
-  return updateCheckResult(`SKS update check: installed ${current}, latest ${check.latest}. Before any other work, ask the user to choose: "Update SKS now" or "Skip update for this conversation". If they choose update, run exactly this command and nothing else: ${sksUpdateInstallCommand(check.latest)}. Do not start a pipeline route, run setup, or run doctor for this accepted update command. If they skip, do not ask again in this conversation, but check again next conversation.`, {
+  return updateCheckResult(copyStableUpdateChoiceText(check.latest, current), {
     blocksRouting: true
   });
 }
@@ -968,6 +973,11 @@ function updateCheckResult(text: any, opts: any = {}) {
 
 function sksUpdateInstallCommand(version: any) {
   return `npm i -g sneakoscope@${version} --registry https://registry.npmjs.org/`;
+}
+
+function copyStableUpdateChoiceText(latest: any, current: any = null) {
+  const installed = current ? `installed ${current}, latest ${latest}` : `latest ${latest}`;
+  return `SKS update check: ${installed}. Before any other work, ask the user to choose exactly one copy-stable option: "Update SKS now" or "Skip update for this conversation". If the user sends anything else while this update choice is pending, repeat this same choice and do not start a pipeline route. If they choose update, run exactly this command and nothing else: ${sksUpdateInstallCommand(latest)}. Do not start a pipeline route, run setup, or run doctor for this accepted update command. If they skip, do not ask again in this conversation, but check again next conversation.`;
 }
 
 async function checkLatestVersion() {
@@ -1318,6 +1328,7 @@ function codexHookEventName(name: any) {
 function visibleHookMessage(name: any, text: any = '') {
   const body = String(text || '');
   if (name === 'user-prompt-submit') {
+    if (body.includes('SKS update check:')) return 'SKS: update check control-plane prompt injected; no pipeline route started.';
     if (body.includes('DFix ultralight pipeline active')) return 'SKS: DFix ultralight task list injected.';
     if (body.includes('SKS answer-only pipeline active')) return 'SKS: answer-only research context injected.';
     if (body.includes('SKS wiki pipeline active')) return 'SKS: wiki refresh context injected.';

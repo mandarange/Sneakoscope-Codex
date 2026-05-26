@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "1.18.4",
+  "version": "1.18.5",
   "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -44,7 +44,7 @@
     "agent:janitor": "node ./scripts/agent-janitor-check.mjs",
     "agent:multi-project-isolation": "node ./scripts/agent-multi-project-isolation-check.mjs",
     "verification:parallel-engine": "node ./scripts/parallel-verification-engine-check.mjs",
-    "release:check:parallel": "node ./scripts/release-parallel-check.mjs",
+    "release:check:parallel": "npm run build --silent && node ./dist/scripts/release-parallel-check.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:suppressions": "node ./scripts/check-ts-suppressions.mjs",
     "typescript:migration-report": "node ./scripts/typescript-migration-report.mjs",
@@ -160,7 +160,7 @@
     "release:readiness": "node ./scripts/release-readiness-report.mjs",
     "coverage": "node --experimental-test-coverage --test \"test/**/*.test.mjs\"",
     "release:check": "npm run release:check:parallel && node ./scripts/release-check-stamp.mjs write && npm run release:readiness --silent",
-    "release:real-check": "npm run release:check && npm run agent:real-tmux-physical-proof && npm run agent:tmux-pane-reconciliation && npm run agent:tmux-lane-content-truth && npm run agent:real-codex-dynamic-smoke && npm run imagegen:real-smoke && npm run ux-review:real-imagegen-smoke && npm run ppt:real-imagegen-smoke",
+    "release:real-check": "npm run release:check && npm run agent:tmux-physical-lifecycle-wired && npm run agent:tmux-physical-proof-v2 && npm run agent:real-tmux-physical-proof && npm run agent:tmux-pane-reconciliation && npm run agent:tmux-lane-content-truth && npm run agent:real-codex-dynamic-smoke-v2 && npm run agent:real-codex-dynamic-smoke && npm run imagegen:real-smoke && npm run ux-review:real-imagegen-smoke && npm run ppt:real-imagegen-smoke",
     "release:publish": "npm run publish:npm",
     "publish:dry": "npm run release:metadata && node ./scripts/release-check-stamp.mjs verify && npm run release:dist-freshness && npm --cache /tmp/sks-npm-cache publish --dry-run --registry https://registry.npmjs.org/ --access public",
     "publish:npm": "npm --cache /tmp/sks-npm-cache publish --registry https://registry.npmjs.org/ --access public",
@@ -271,7 +271,15 @@
     "agent:goal-mode-propagation": "node ./scripts/agent-goal-mode-propagation-check.mjs",
     "agent:visual-consistency": "node ./scripts/agent-visual-consistency-check.mjs",
     "release:parallel-full-coverage": "node ./scripts/release-parallel-full-coverage-check.mjs",
-    "priority:full-closure": "node ./scripts/priority-full-closure-check.mjs"
+    "priority:full-closure": "node ./scripts/priority-full-closure-check.mjs",
+    "agent:tmux-physical-lifecycle-wired": "node ./scripts/agent-tmux-physical-lifecycle-wired-check.mjs",
+    "agent:tmux-physical-proof-v2": "node ./scripts/agent-tmux-physical-proof-v2-check.mjs",
+    "agent:real-codex-dynamic-smoke-v2": "node ./scripts/agent-real-codex-dynamic-smoke-v2-check.mjs",
+    "agent:cleanup-executor-v2": "node ./scripts/agent-cleanup-executor-v2-check.mjs",
+    "agent:cleanup-command-ux": "node ./scripts/agent-cleanup-command-ux-check.mjs",
+    "agent:ast-aware-work-graph": "node ./scripts/agent-ast-aware-work-graph-check.mjs",
+    "proof:fake-real-policy-v2": "node ./scripts/fake-real-proof-policy-v2-check.mjs",
+    "release:runtime-truth-matrix": "node ./scripts/release-runtime-truth-matrix-check.mjs"
   },
   "keywords": [
     "sneakoscope",

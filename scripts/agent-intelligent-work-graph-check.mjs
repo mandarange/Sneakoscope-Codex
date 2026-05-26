@@ -9,10 +9,10 @@ const depsMod = await importDist('core/agents/work-partition/dependency-graph.js
 const graphMod = await importDist('core/agents/intelligent-work-graph.js');
 const inventory = await inventoryMod.collectRepoInventory(root, { maxFiles: 2000 });
 const dependencyGraph = depsMod.buildDependencyGraph(inventory);
-const graph = await graphMod.buildIntelligentWorkGraph({ root, inventory, dependencyGraph, route: '$Team', prompt: '1.18.4 intelligent work graph release gate' });
+const graph = await graphMod.buildIntelligentWorkGraph({ root, inventory, dependencyGraph, route: '$Team', prompt: '1.18.5 intelligent work graph release gate' });
 const out = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-work-graph-'));
 await graphMod.writeIntelligentWorkGraphArtifacts(out, graph);
-assertGate(graph.schema === 'sks.intelligent-work-graph.v1', 'intelligent work graph schema mismatch', graph);
+assertGate(graph.schema === 'sks.intelligent-work-graph.v2', 'intelligent work graph schema mismatch', graph);
 assertGate(graph.source_inventory_count > 0, 'source inventory must be populated', graph);
 assertGate(graph.test_inventory_count > 0, 'test inventory must be populated', graph);
 assertGate(graph.critical_path.length > 0, 'critical path must be computed', graph.critical_path);

@@ -2,8 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { repoTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
 
-const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ux-review', 'run', '--image', 'test/fixtures/images/one-by-one.png', '--generate-callouts', '--json'], {
+const sourceImage = repoTempPngFixtureArg('ux-review-imagegen-blackbox-source.png');
+const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ux-review', 'run', '--image', sourceImage, '--generate-callouts', '--json'], {
   cwd: process.cwd(),
   env: { ...process.env, SKS_TEST_FAKE_IMAGEGEN: '1', SKS_TEST_FAKE_EXTRACTOR: '1' },
   encoding: 'utf8',
@@ -23,7 +25,7 @@ const ok = Boolean(parsed?.mission_id)
   && Array.isArray(issues?.issues)
   && issues.issues.length > 0
   && issues.issues.every((issue) => issue.source === 'mock_fixture');
-console.log(JSON.stringify({ schema: 'sks.ux-review-imagegen-blackbox-check.v1', ok, process_status: run.status, mission_id: parsed?.mission_id || null, gate_status: parsed?.status || null, request, response, issue_count: issues?.issues?.length || 0 }, null, 2));
+console.log(JSON.stringify({ schema: 'sks.ux-review-imagegen-blackbox-check.v1', ok, process_status: run.status, mission_id: parsed?.mission_id || null, gate_status: parsed?.status || null, source_image: sourceImage, request, response, issue_count: issues?.issues?.length || 0 }, null, 2));
 if (!ok) process.exitCode = 1;
 
 function parseJson(text) {
