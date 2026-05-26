@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-const IGNORE = new Set(['.git', 'node_modules', 'dist', '.sneakoscope', '.codex', '.agents'])
+const IGNORE = new Set(['.git', 'node_modules', 'dist', 'target', '.sneakoscope', '.codex', '.agents', '.next', '.turbo'])
 
 export async function collectRepoInventory(root: string, opts: { maxFiles?: number } = {}) {
   const files: string[] = []
@@ -34,4 +34,3 @@ async function walk(root: string, dir: string, out: string[], maxFiles: number):
     else if (entry.isFile()) out.push(rel)
   }
 }
-

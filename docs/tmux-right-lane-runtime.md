@@ -1,5 +1,7 @@
 # Tmux Right-Lane Runtime
 
+SKS 1.18.4 adds physical tmux proof files, pane reconciliation, and lane content truth checks to verify that right-lane runtime artifacts match real tmux state when real tmux mode is enabled.
+
 SKS 1.18.2 tmux lanes represent persistent worker slots. A lane title includes the slot and current generation, while lane history records closed generations for the same slot. Generation completion updates the lane render files but does not close the lane before scheduler drain.
 
 SKS 1.18.3 moves real tmux lane ownership into the scheduler supervisor path. The orchestrator initializes slot panes once, generation launches reuse those panes, and proof blocks when real tmux mode has no supervisor-owned lane evidence.

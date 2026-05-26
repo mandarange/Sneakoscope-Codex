@@ -1,5 +1,7 @@
 # Dynamic Agent Pool
 
+SKS 1.18.4 adds physical tmux proof, real Codex dynamic smoke checks, cleanup execution proof, intelligent work graph planning, and fake-vs-real policy gates to the dynamic pool release closure.
+
 SKS 1.18.3 treats `agents` as the target number of active worker slots, not as a fixed total session count. A run with `agents=5 --work-items 8` keeps five active slots running while the route work queue still has pending, dependency-released items.
 
 The orchestrator builds a work-item-first task graph before the scheduler starts. The graph writes `agents/agent-task-graph.json` and separates:

@@ -85,7 +85,7 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-validate-artifacts` | proof-route | labs | sks validate-artifacts [mission-id\|latest] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-wiki` | visual-memory | beta | sks wiki coords\|pack\|refresh\|publish\|rebuild-index\|validate\|validate-shared\|wrongness ... | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-hproof` | proof-route | labs | sks hproof check [mission-id\|latest] | mock:pass | runtime_mock_verified | none recorded |
-| `cli-agent` | core-cli | labs | sks agent run\|status <mission-id\|latest> [--mock] [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
+| `cli-agent` | core-cli | labs | sks agent run\|status\|close\|cleanup <mission-id\|latest> [--mock] [--apply\|--dry-run] [--json] | execute_and_validate_artifacts:pass | runtime_verified | 1.18.4 cleanup executor proof records stale process/tmux/temp/lock actions |
 | `cli-team` | proof-route | beta | sks team "task" [executor:5 reviewer:6 user:1]\|log\|tail\|watch\|lane\|status\|dashboard\|event\|message\|open-tmux\|attach-tmux\|cleanup-tmux ... | mock:pass | runtime_mock_verified | none recorded |
 | `cli-reasoning` | core-cli | labs | sks reasoning ["prompt"] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-gx` | visual-memory | labs | sks gx init\|render\|validate\|drift\|snapshot [name] | mock:pass | runtime_mock_verified | none recorded |
@@ -162,4 +162,3 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 - [x] Exposed the registry through `sks features list --json`.
 - [x] Added a release coverage check through `sks features check --json`.
 - [x] Documented fixture status for every registry feature.
-

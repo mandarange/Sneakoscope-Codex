@@ -148,17 +148,28 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
         return;
       }
     }
-    const report = await installManagedCodexHooks(root);
+    const projectReport = await installManagedCodexHooks(root);
+    const userReport = await installManagedCodexHooks(root, {
+      requirementsPath: path.join(os.homedir(), '.codex', 'requirements.toml'),
+      managedDir: path.join(os.homedir(), '.codex', 'managed-hooks')
+    });
+    const actual = await codexHookTrustDoctor(root, { actual: true });
     const result = {
-      ...report,
       schema: 'sks.codex-hooks-repair.v1',
+      ok: Boolean(projectReport.ok && userReport.ok && actual.ok),
       mode: 'managed',
+      root,
+      project_install: projectReport,
+      user_install: userReport,
+      actual_trust: actual.trust,
+      managed_dirs: (actual as any).managed_dirs || [],
+      blockers: (actual as any).blockers || [],
       next_command: 'sks hooks trust-doctor --actual --json',
-      actions: ['requirements_toml_managed_install_default']
+      actions: ['project_requirements_toml_managed_install', 'user_requirements_toml_managed_install']
     };
     if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-    console.log(`Hooks managed repair: ${report.ok ? 'ok' : 'blocked'}`);
-    if (!report.ok) process.exitCode = 1;
+    console.log(`Hooks managed repair: ${result.ok ? 'ok' : 'blocked'}`);
+    if (!result.ok) process.exitCode = 1;
     return;
   }
   if (action === 'install') {

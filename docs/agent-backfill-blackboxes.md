@@ -1,5 +1,7 @@
 # Agent Backfill Blackboxes 1.18.3
 
+SKS 1.18.4 adds blackbox route realism checks so Agent, Team, Research, and QA helpers cannot satisfy release gates through Agent-only stand-ins.
+
 SKS 1.18.3 release readiness includes route-truth blackboxes for dynamic backfill.
 
 The required route gates are:

@@ -10,7 +10,7 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.18.3** closes the route-truth Dynamic Worker Pool runtime: `agents=5` means five target active worker slots, while `--work-items N` controls the route work queue. Pending work backfills empty slots immediately, tmux lanes persist as worker-slot UI until scheduler drain, follow-up work items are schema-bound, and Agent/Team/Research/QA blackboxes now execute the actual route commands while proving task graph, work queue, scheduler, terminal, Source Intelligence, Goal, and tmux supervisor evidence.
+SKS **1.18.4** closes the runtime-truth gap left after the route-truth Dynamic Worker Pool work: real tmux mode now requires physical pane evidence from `tmux list-panes`, `tmux capture-pane`, pane-id reconciliation, and drain-close checks; real Codex dynamic smoke is opt-in through `SKS_TEST_REAL_DYNAMIC_AGENTS=1`; `sks agent close/cleanup` now writes executor proof for stale process, tmux, temp, and lock cleanup; and the task graph carries an intelligent work graph score, test ownership, critical path, and integration bottleneck artifacts. Fake fixture evidence remains useful for hermetic release gates, but it is explicitly separated from real runtime proof.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -23,6 +23,11 @@ sks agent run "release review" --agents 8 --work-items 16 --concurrency 4 --mock
 npm run source-intelligence:all-modes
 npm run agent:background-terminals
 npm run agent:tmux-lane-no-flicker
+npm run agent:cleanup-executor
+npm run agent:intelligent-work-graph
+npm run proof:fake-vs-real-policy
+npm run route:blackbox-realism
+npm run release:real-check
 npm run agent:backfill-route-blackbox
 npm run team:actual-route-backfill
 npm run release:readiness
@@ -58,6 +63,12 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release 
 - Main no-Scout / worker Scout policy: [docs/main-no-scout-worker-scout-policy.md](docs/main-no-scout-worker-scout-policy.md)
 - Agent terminal lanes: [docs/agent-terminal-lanes.md](docs/agent-terminal-lanes.md)
 - tmux right-lane cockpit: [docs/tmux-right-lane-cockpit.md](docs/tmux-right-lane-cockpit.md)
+- Real tmux pane proof: [docs/real-tmux-pane-proof.md](docs/real-tmux-pane-proof.md)
+- Real Codex dynamic smoke: [docs/real-codex-dynamic-smoke.md](docs/real-codex-dynamic-smoke.md)
+- Agent cleanup executor: [docs/agent-cleanup-executor.md](docs/agent-cleanup-executor.md)
+- Intelligent work graph: [docs/intelligent-work-graph.md](docs/intelligent-work-graph.md)
+- Fake vs real proof policy: [docs/fake-vs-real-proof-policy.md](docs/fake-vs-real-proof-policy.md)
+- Migration 1.18.3 to 1.18.4: [docs/migration-1.18.3-to-1.18.4.md](docs/migration-1.18.3-to-1.18.4.md)
 - Codex official Goal mode: [docs/codex-official-goal-mode.md](docs/codex-official-goal-mode.md)
 - Release parallel full coverage: [docs/release-parallel-full-coverage.md](docs/release-parallel-full-coverage.md)
 - Priority closure P0-P4: [docs/priority-closure-p0-p4.md](docs/priority-closure-p0-p4.md)

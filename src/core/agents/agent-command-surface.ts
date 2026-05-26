@@ -17,6 +17,9 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const mock = hasFlag(args, '--mock') || backend === 'fake'
   const real = hasFlag(args, '--real')
   const readonly = hasFlag(args, '--readonly') || hasFlag(args, '--read-only')
+  const apply = hasFlag(args, '--apply')
+  const dryRun = hasFlag(args, '--dry-run') || hasFlag(args, '--dryrun')
+  const drain = hasFlag(args, '--drain')
   const codexApp = hasFlag(args, '--codex-app')
   const positionals = positionalArgs(rest, new Set(['--agents', '--target-active-slots', '--work-items', '--minimum-work-items', '--max-queue-expansion', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane']))
   const missionDefault = action === 'run' || action === 'spawn' || action === 'plan' ? '' : 'latest'
@@ -25,7 +28,7 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const lane = String(readOption(args, '--agent', readOption(args, '--lane', '')))
   const promptPositionals = positionalMission ? positionals.slice(1) : positionals
   const prompt = promptPositionals.join(' ').trim() || 'Native agent run'
-  return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, mock, real, readonly, json, missionId, lane, codexApp }
+  return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, mock, real, readonly, apply, dryRun, drain, json, missionId, lane, codexApp }
 }
 
 function hasFlag(args: string[], flag: string) {

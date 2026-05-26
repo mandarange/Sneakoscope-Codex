@@ -32,6 +32,11 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
     const command = buildCodexExecAgentArgs(agent, opts.prompt || slice?.description || '', opts)
     const report = await writeCodexProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
       command: [opts.codexBin || 'codex', ...command.args],
+      result_file: command.resultFile,
+      output_schema_used: command.args.includes('--output-schema'),
+      output_last_message_path: command.resultFile,
+      agent_worker_env_injected: false,
+      recursion_guard_env: false,
       pid: null,
       exit_code: null,
       stdout_log: null,
@@ -49,6 +54,11 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
   const result = await runProcess(opts.codexBin || 'codex', command.args, { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...workerEnv }, timeoutMs: opts.timeoutMs || 30 * 60 * 1000, maxOutputBytes: 256 * 1024, stdoutFile, stderrFile })
   const report = await writeCodexProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
     command: [opts.codexBin || 'codex', ...command.args],
+    result_file: command.resultFile,
+    output_schema_used: command.args.includes('--output-schema'),
+    output_last_message_path: command.resultFile,
+    agent_worker_env_injected: Object.keys(workerEnv).length > 0,
+    recursion_guard_env: Boolean(workerEnv.SKS_AGENT_SESSION_ID),
     pid: result.pid || null,
     exit_code: result.code,
     stdout_log: path.relative(opts.agentRoot || opts.cwd || process.cwd(), stdoutFile),

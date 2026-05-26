@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.3';
+const RELEASE_VERSION = '1.18.4';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const parallelCheckPath = path.join(root, 'scripts/release-parallel-check.mjs');
@@ -25,6 +25,12 @@ const requiredDocs = [
   'docs/agent-backfill-blackboxes.md',
   'docs/session-generation.md',
   'docs/tmux-right-lane-runtime.md',
+  'docs/real-tmux-pane-proof.md',
+  'docs/real-codex-dynamic-smoke.md',
+  'docs/agent-cleanup-executor.md',
+  'docs/intelligent-work-graph.md',
+  'docs/fake-vs-real-proof-policy.md',
+  'docs/migration-1.18.3-to-1.18.4.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
   'docs/release-readiness.md'
@@ -71,6 +77,10 @@ const requiredScripts = [
   'agent:session-generation',
   'agent:terminal-generations',
   'agent:tmux-real-right-lanes',
+  'agent:cleanup-executor',
+  'agent:intelligent-work-graph',
+  'proof:fake-vs-real-policy',
+  'route:blackbox-realism',
   'agent:dynamic-cockpit',
   'agent:source-intelligence-propagation',
   'agent:goal-mode-propagation',
@@ -97,6 +107,12 @@ const requiredScripts = [
   'perf:gate',
   'release:check:parallel'
 ];
+const requiredRealScripts = [
+  'agent:real-tmux-physical-proof',
+  'agent:tmux-pane-reconciliation',
+  'agent:tmux-lane-content-truth',
+  'agent:real-codex-dynamic-smoke'
+];
 
 assertGate(pkg.version === RELEASE_VERSION, `package.json version must be ${RELEASE_VERSION}`, { version: pkg.version });
 assertGate(lock.version === RELEASE_VERSION, `package-lock version must be ${RELEASE_VERSION}`, { version: lock.version });
@@ -104,8 +120,12 @@ assertGate(lock.packages?.['']?.version === RELEASE_VERSION, `package-lock root 
 assertGate(pkg.scripts?.['release:metadata']?.includes('release-metadata-1-18-check.mjs'), 'release:metadata must point to the 1.18 release check');
 assertGate(String(pkg.scripts?.['release:check'] || '').startsWith('npm run release:check:parallel'), 'release:check must use release:check:parallel');
 for (const script of requiredScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
+for (const script of requiredRealScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package real script: ${script}`);
 for (const script of requiredScripts.filter((name) => name !== 'release:check:parallel')) {
   assertGate(parallelCheckSource.includes(`npm run ${script}`) || ['release:metadata', 'release:readiness'].includes(script), `release:check:parallel DAG missing ${script}`);
+}
+for (const script of requiredRealScripts) {
+  assertGate(String(pkg.scripts?.['release:real-check'] || '').includes(`npm run ${script}`), `release:real-check missing ${script}`);
 }
 assertGate(pkg.bin?.sks === 'dist/bin/sks.js', 'package runtime must use dist/bin/sks.js');
 assertGate(pkg.bin?.sneakoscope === 'dist/bin/sks.js', 'sneakoscope runtime must use dist/bin/sks.js');
@@ -117,4 +137,4 @@ for (const file of requiredDocs) {
   assertGate(fs.readFileSync(absolute, 'utf8').includes(RELEASE_VERSION), `release doc does not mention ${RELEASE_VERSION}: ${file}`);
 }
 
-emitGate('release:metadata', { version: pkg.version, scripts: requiredScripts.length, docs: requiredDocs.length });
+emitGate('release:metadata', { version: pkg.version, scripts: requiredScripts.length, real_scripts: requiredRealScripts.length, docs: requiredDocs.length });

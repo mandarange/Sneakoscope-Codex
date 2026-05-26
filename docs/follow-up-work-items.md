@@ -1,5 +1,7 @@
 # Follow-up Work Items 1.18.3
 
+SKS 1.18.4 keeps follow-up items behind route truth gates and fake-vs-real proof policy so fixture-only or stand-in outputs cannot be promoted to real runtime closure.
+
 SKS 1.18.2 adds schema-bound `follow_up_work_items` to native agent results.
 
 SKS 1.18.3 keeps follow-up work under the route-truth scheduler contract: accepted items inherit Source Intelligence and Goal refs, use the same work queue proof surface, and cannot satisfy backfill gates through generic Agent-route substitution.

@@ -2,6 +2,8 @@
 
 Every native agent now has terminal/session evidence in SKS 1.18.0.
 
+SKS 1.18.4 adds physical tmux pane reconciliation and lane content truth artifacts so terminal lane claims can be checked against real pane ids and captured lane output.
+
 SKS 1.18.2 makes those terminal lane artifacts generation-aware under stable worker slots, so a refilled slot keeps immutable close proof for each completed generation.
 
 SKS 1.18.2 requires scheduler-mode terminal calls to carry `slot_id` and `generation_index`, and proof counts terminal close reports by generation.

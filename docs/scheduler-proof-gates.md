@@ -1,5 +1,7 @@
 # Scheduler Proof Gates 1.18.3
 
+SKS 1.18.4 requires scheduler proof to separate fixture-only evidence from real runtime evidence, including physical tmux proof, Codex output-schema smoke evidence, cleanup ledgers, and intelligent work graph artifacts.
+
 SKS 1.18.2 proof requires scheduler truth from route artifacts, not standalone fixtures alone.
 
 SKS 1.18.3 reconciles proof across task graph, work queue, scheduler state, terminal close reports, Source Intelligence refs, Goal refs, and tmux lane supervisor artifacts for the actual route command that launched the run.

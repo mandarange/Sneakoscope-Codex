@@ -2,6 +2,8 @@
 
 SKS 1.18.0 records a tmux cockpit manifest where the orchestrator/main pane is on the left and agent lanes are indexed as a right vertical stack.
 
+SKS 1.18.4 requires real tmux cockpit proof to reconcile against `tmux list-panes` and captured lane content before proof can claim physical lane truth.
+
 SKS 1.18.2 treats each right lane as a worker slot and requires pane launch evidence plus generation history when dynamic pool replenishment refills that slot.
 
 SKS 1.18.2 backs cockpit rows with the persistent lane supervisor, lane render files, drain signal, and no-flicker proof gates.

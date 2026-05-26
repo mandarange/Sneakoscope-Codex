@@ -1,9 +1,12 @@
 import path from 'node:path'
-import { nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
 
 export async function writeAgentTrustReport(root: string, input: any = {}) {
   const laneSupervisor = await readTmuxLaneSupervisor(root)
+  const tmuxPhysicalProof = await readJson<any>(path.join(root, 'agent-tmux-physical-proof.json'), null)
+  const cleanupProof = await readJson<any>(path.join(root, 'agent-cleanup-proof.json'), null)
+  const intelligentWorkGraph = await readJson<any>(path.join(root, 'agent-intelligent-work-graph.json'), null)
   const report = {
     schema: 'sks.agent-trust-report.v1',
     generated_at: nowIso(),
@@ -34,7 +37,27 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
         no_flicker_verified: laneSupervisor?.no_flicker_verified === true,
         pane_survival_checked: laneSupervisor?.pane_survival_checked === true,
         unexpected_close_count: laneSupervisor?.unexpected_close_count || 0,
-        lane_count: laneSupervisor?.lane_count || 0
+        lane_count: laneSupervisor?.lane_count || 0,
+        physical_tmux_verified: tmuxPhysicalProof?.physical_tmux_verified === true,
+        physical_proof_status: tmuxPhysicalProof?.status || 'not_run',
+        list_panes_artifact: tmuxPhysicalProof?.tmux_list_panes_artifact || null,
+        capture_pane_artifacts: tmuxPhysicalProof?.tmux_capture_pane_artifacts || []
+      },
+      cleanup_executor: {
+        status: cleanupProof?.ok === true ? 'passed' : cleanupProof ? 'blocked' : 'not_run',
+        proof: cleanupProof ? 'agent-cleanup-proof.json' : null,
+        stale_processes_killed: cleanupProof?.stale_processes_killed || [],
+        stale_tmux_panes_closed: cleanupProof?.stale_tmux_panes_closed || [],
+        orphan_temp_dirs_removed: cleanupProof?.orphan_temp_dirs_removed || [],
+        stale_locks_removed: cleanupProof?.stale_locks_removed || [],
+        skipped_active_sessions: cleanupProof?.skipped_active_sessions || []
+      },
+      intelligent_work_graph: {
+        status: intelligentWorkGraph?.ok === true ? 'passed' : intelligentWorkGraph ? 'partial' : 'not_run',
+        score: intelligentWorkGraph?.work_graph_quality_score ?? null,
+        test_ownership: 'agent-test-ownership-map.json',
+        critical_path: 'agent-critical-path.json',
+        integration_bottlenecks: 'agent-integration-bottlenecks.json'
       },
       output_schema_ok: input.output_schema_ok !== false,
       output_tail_report: 'agent-output-tails.json',
@@ -69,6 +92,9 @@ function renderAgentTrustReportMarkdown(report: any) {
     `- tmux_lane_manifest: ${orchestration.tmux_lane_manifest || 'unknown'}`,
     `- tmux_no_flicker_verified: ${orchestration.tmux_lane_persistence?.no_flicker_verified === true}`,
     `- tmux_pane_survival_checked: ${orchestration.tmux_lane_persistence?.pane_survival_checked === true}`,
+    `- physical_tmux_verified: ${orchestration.tmux_lane_persistence?.physical_tmux_verified === true}`,
+    `- cleanup_executor: ${orchestration.cleanup_executor?.status || 'not_run'}`,
+    `- work_graph_quality_score: ${orchestration.intelligent_work_graph?.score ?? 'unknown'}`,
     `- generation_count: ${orchestration.generation_count ?? 'unknown'}`,
     `- no_overlap_ok: ${orchestration.no_overlap_ok === true}`,
     `- ledger_hash_chain_ok: ${orchestration.ledger_hash_chain_ok === true}`,

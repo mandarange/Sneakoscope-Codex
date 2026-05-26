@@ -3,6 +3,35 @@
 ## [Unreleased]
 
 
+## [1.18.4] - 2026-05-26
+
+### Added
+
+- Add real tmux physical pane proof: list-panes, capture-pane, pane-id reconciliation, lane render verification, and drain-close evidence.
+- Add opt-in real Codex dynamic agent smoke via `SKS_TEST_REAL_DYNAMIC_AGENTS=1`.
+- Add command-level agent cleanup executor for stale processes, stale tmux panes, orphan temp dirs, stale locks, and preserved terminal transcripts.
+- Add intelligent work graph planner with dependency critical path, test ownership, changed-file candidates, domain priority, and integration bottleneck analysis.
+- Add fake-vs-real proof policy that prevents fixture evidence from being promoted to real runtime evidence.
+- Add release:real-check coverage for real tmux and real Codex dynamic smoke.
+- Add P0-P5 release readiness closure matrix for runtime truth.
+
+### Fixed
+
+- Prevent tmux manifest-only proof from passing as real pane proof.
+- Prevent fake pane ids from being treated as physical tmux evidence.
+- Prevent mock dynamic route tests from being used as real Codex dynamic smoke.
+- Prevent cleanup commands from only observing artifacts without performing cleanup.
+- Prevent route template task graphs from being overclaimed as dependency-aware advanced partitioning.
+- Prevent lane drain/close evidence from being missing in tmux mode.
+- Prevent hook trust doctor from recommending SKS-only trusted-hash repair when managed repair is the safe path.
+
+### Changed
+
+- Treat tmux lanes as physical runtime resources in real tmux mode.
+- Treat real dynamic smoke as opt-in but first-class.
+- Treat cleanup as an executable command path, not only a report reader.
+- Treat work graph quality and fake-vs-real separation as release readiness inputs.
+
 ## [1.18.3] - 2026-05-26
 
 ### Added
