@@ -2,8 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { repoTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
 
-const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ppt', 'review', '--manual-slide-images', 'test/fixtures/images/one-by-one.png', '--json'], {
+const sourceImage = repoTempPngFixtureArg('ppt-imagegen-blackbox-source.png');
+const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ppt', 'review', '--manual-slide-images', sourceImage, '--json'], {
   cwd: process.cwd(),
   env: { ...process.env, SKS_TEST_FAKE_IMAGEGEN: '1', SKS_TEST_FAKE_EXTRACTOR: '1' },
   encoding: 'utf8',
@@ -22,7 +24,7 @@ const ok = Boolean(parsed?.mission_id)
   && slideIssues.issues.length > 0
   && deckIssues?.schema === 'sks.ppt-deck-issue-ledger.v1'
   && proofEvidence?.schema === 'sks.ppt-review-proof-evidence.v1';
-console.log(JSON.stringify({ schema: 'sks.ppt-imagegen-blackbox-check.v1', ok, process_status: run.status, mission_id: parsed?.mission_id || null, gate_status: parsed?.status || null, generated_count: callouts?.generated_slide_callout_images_count || 0, issue_count: slideIssues?.issues?.length || 0, proof_status: proofEvidence?.status || null }, null, 2));
+console.log(JSON.stringify({ schema: 'sks.ppt-imagegen-blackbox-check.v1', ok, process_status: run.status, mission_id: parsed?.mission_id || null, gate_status: parsed?.status || null, source_image: sourceImage, generated_count: callouts?.generated_slide_callout_images_count || 0, issue_count: slideIssues?.issues?.length || 0, proof_status: proofEvidence?.status || null }, null, 2));
 if (!ok) process.exitCode = 1;
 
 function parseJson(text) {

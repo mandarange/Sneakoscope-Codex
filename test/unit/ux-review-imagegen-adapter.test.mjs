@@ -43,9 +43,12 @@ test('gpt-image-2 fallback uses codex-lb key when provider disables OpenAI OAuth
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), authorization: init?.headers?.authorization || init?.headers?.Authorization || '' });
     return new Response(JSON.stringify({
-      data: [{
-        id: 'img_lb_1',
-        b64_json: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l/5gVQAAAABJRU5ErkJggg=='
+      id: 'resp_lb_1',
+      output: [{
+        id: 'ig_lb_1',
+        type: 'image_generation_call',
+        status: 'completed',
+        result: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l/5gVQAAAABJRU5ErkJggg=='
       }]
     }), { status: 200, headers: { 'content-type': 'application/json' } });
   };
@@ -69,9 +72,9 @@ test('gpt-image-2 fallback uses codex-lb key when provider disables OpenAI OAuth
     }));
 
     assert.equal(result.ok, true);
-    assert.equal(result.provider, 'openai_images_api');
+    assert.equal(result.provider, 'openai_responses_image_generation');
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, 'https://lb.example.test/backend-api/codex/images/edits');
+    assert.equal(calls[0].url, 'https://lb.example.test/backend-api/codex/responses');
     assert.equal(calls[0].authorization, 'Bearer sk-clb-test');
   } finally {
     globalThis.fetch = previousFetch;

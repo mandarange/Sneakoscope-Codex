@@ -86,6 +86,33 @@ test('Update SKS now acceptance is control-plane only and does not start a route
   });
 });
 
+test('pending SKS update choice repeats copy-stable prompt instead of starting a route', async () => {
+  await withEnv({
+    SKS_INSTALLED_SKS_VERSION: '1.15.1'
+  }, async () => {
+    const root = await makeRoot();
+    await fs.writeFile(path.join(root, '.sneakoscope', 'state', 'update-check.json'), `${JSON.stringify({
+      pending_offer: {
+        conversation_id: 'update-check-control',
+        latest: '9.9.9',
+        offered_at: '2026-05-23T00:00:00.000Z'
+      }
+    }, null, 2)}\n`);
+    const result = await evaluateUpdatePrompt(root, '잠깐 이거 복사 중이야');
+    const context = String(result.additionalContext || '');
+    assert.match(context, /copy-stable option/);
+    assert.match(context, /Update SKS now/);
+    assert.match(context, /Skip update for this conversation/);
+    assert.match(context, /do not start a pipeline route/);
+    assert.doesNotMatch(context, /\$Team route prepared|Pipeline plan:/);
+    assert.deepEqual(await missionEntries(root), []);
+    const state = await readUpdateState(root);
+    assert.equal(state.pending_offer.latest, '9.9.9');
+    assert.equal(state.accepted, undefined);
+    assert.equal(state.skipped, undefined);
+  });
+});
+
 test('accepted SKS update is not re-offered in the same conversation', async () => {
   await withEnv({
     SKS_INSTALLED_SKS_VERSION: '1.15.1',

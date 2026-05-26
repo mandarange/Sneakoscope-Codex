@@ -3,7 +3,7 @@ import { readJson, runProcess, writeJsonAtomic } from '../fsx.js'
 import { agentWorkerEnv, validateAgentWorkerResult } from './agent-worker-pipeline.js'
 
 export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = {}) {
-  const resultFile = opts.resultFile || path.join(opts.cwd || process.cwd(), agent.session_id + '-agent-result.json')
+  const resultFile = opts.resultFile || defaultCodexResultFile(agent, opts)
   const sandbox = opts.workspaceWrite ? 'workspace-write' : 'read-only'
   return {
     resultFile,
@@ -22,6 +22,12 @@ export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = 
       prompt
     ]
   }
+}
+
+function defaultCodexResultFile(agent: any, opts: any = {}) {
+  const root = opts.agentRoot || opts.cwd || process.cwd()
+  const artifactDir = agent.session_artifact_dir || path.join('sessions', agent.id || agent.session_id || 'agent')
+  return path.join(root, artifactDir, 'agent-result.json')
 }
 
 export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) {

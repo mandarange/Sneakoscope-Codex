@@ -17,3 +17,7 @@ SKS 1.18.3 keeps actual route-command backfill gates on the same provider bounda
 - Raw X AI responses are local-only artifacts; proof reports use redacted summaries.
 
 This policy applies to Team, Research, AutoResearch, QA, DFix, UX/PPT review, Goal, Answer, Commit/Git, MAD-SKS, Hooks, codex-lb, Computer Use, and Wiki when those routes need current source evidence.
+
+## 1.18.5 Runtime Truth Note
+
+SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

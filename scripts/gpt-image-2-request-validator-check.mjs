@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { validateGptImage2Request } from '../dist/core/imagegen/gpt-image-2-request-validator.js';
+import { writeValidPngFixture } from './lib/valid-png-fixture.mjs';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-gpt-image-2-validator-'));
 const source = path.join(root, 'source.png');
-fs.copyFileSync(path.join(process.cwd(), 'test', 'fixtures', 'images', 'one-by-one.png'), source);
+writeValidPngFixture(source);
 const good = await validateGptImage2Request({
   provider: 'fake_imagegen_adapter',
   endpoint: 'local hermetic fixture',

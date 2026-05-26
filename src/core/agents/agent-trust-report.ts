@@ -5,8 +5,24 @@ import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
 export async function writeAgentTrustReport(root: string, input: any = {}) {
   const laneSupervisor = await readTmuxLaneSupervisor(root)
   const tmuxPhysicalProof = await readJson<any>(path.join(root, 'agent-tmux-physical-proof.json'), null)
+  const tmuxPhysicalProofSummary = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-summary.json'), null)
   const cleanupProof = await readJson<any>(path.join(root, 'agent-cleanup-proof.json'), null)
   const intelligentWorkGraph = await readJson<any>(path.join(root, 'agent-intelligent-work-graph.json'), null)
+  const runtimeTruthGroups = {
+    Fake: [] as string[],
+    Optional: [] as string[],
+    Proven: [] as string[],
+    Blocked: [] as string[]
+  }
+  const pushTruth = (status: string, label: string) => {
+    if (/fake|fixture/.test(status)) runtimeTruthGroups.Fake.push(label)
+    else if (/optional/.test(status)) runtimeTruthGroups.Optional.push(label)
+    else if (/passed|proven/.test(status)) runtimeTruthGroups.Proven.push(label)
+    else if (/blocked|failed/.test(status)) runtimeTruthGroups.Blocked.push(label)
+  }
+  pushTruth(String(tmuxPhysicalProof?.status || 'not_run'), 'tmux physical')
+  pushTruth(cleanupProof?.ok === true ? 'passed' : cleanupProof ? 'blocked' : 'not_run', 'cleanup executor')
+  pushTruth(intelligentWorkGraph?.ok === true ? 'passed' : intelligentWorkGraph ? 'partial' : 'not_run', 'intelligent work graph')
   const report = {
     schema: 'sks.agent-trust-report.v1',
     generated_at: nowIso(),
@@ -40,6 +56,10 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
         lane_count: laneSupervisor?.lane_count || 0,
         physical_tmux_verified: tmuxPhysicalProof?.physical_tmux_verified === true,
         physical_proof_status: tmuxPhysicalProof?.status || 'not_run',
+        physical_proof_summary: tmuxPhysicalProofSummary ? 'agent-tmux-physical-proof-summary.json' : null,
+        before_drain_proof: tmuxPhysicalProofSummary?.phases?.before_drain ? 'agent-tmux-physical-proof-before-drain.json' : null,
+        after_drain_proof: tmuxPhysicalProofSummary?.phases?.after_drain ? 'agent-tmux-physical-proof-after-drain.json' : null,
+        final_proof: tmuxPhysicalProofSummary?.phases?.final ? 'agent-tmux-physical-proof-final.json' : null,
         list_panes_artifact: tmuxPhysicalProof?.tmux_list_panes_artifact || null,
         capture_pane_artifacts: tmuxPhysicalProof?.tmux_capture_pane_artifacts || []
       },
@@ -66,6 +86,7 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
       killed_timed_out_sessions: Array.isArray(input.timeoutKill?.killed_sessions) ? input.timeoutKill.killed_sessions : [],
       fake_backend_disclaimer: input.backend === 'fake' ? 'fixture only; no real parallel execution claim' : null
     },
+    runtime_truth_groups: runtimeTruthGroups,
     blockers: Array.isArray(input.blockers) ? input.blockers : []
   }
   await writeJsonAtomic(path.join(root, 'agent-trust-report.json'), report)
@@ -93,8 +114,15 @@ function renderAgentTrustReportMarkdown(report: any) {
     `- tmux_no_flicker_verified: ${orchestration.tmux_lane_persistence?.no_flicker_verified === true}`,
     `- tmux_pane_survival_checked: ${orchestration.tmux_lane_persistence?.pane_survival_checked === true}`,
     `- physical_tmux_verified: ${orchestration.tmux_lane_persistence?.physical_tmux_verified === true}`,
+    `- tmux_physical_before_drain: ${orchestration.tmux_lane_persistence?.before_drain_proof || 'not_run'}`,
+    `- tmux_physical_after_drain: ${orchestration.tmux_lane_persistence?.after_drain_proof || 'not_run'}`,
+    `- tmux_physical_final: ${orchestration.tmux_lane_persistence?.final_proof || 'not_run'}`,
     `- cleanup_executor: ${orchestration.cleanup_executor?.status || 'not_run'}`,
     `- work_graph_quality_score: ${orchestration.intelligent_work_graph?.score ?? 'unknown'}`,
+    `- runtime_truth_fake: ${(report.runtime_truth_groups?.Fake || []).join(', ') || 'None'}`,
+    `- runtime_truth_optional: ${(report.runtime_truth_groups?.Optional || []).join(', ') || 'None'}`,
+    `- runtime_truth_proven: ${(report.runtime_truth_groups?.Proven || []).join(', ') || 'None'}`,
+    `- runtime_truth_blocked: ${(report.runtime_truth_groups?.Blocked || []).join(', ') || 'None'}`,
     `- generation_count: ${orchestration.generation_count ?? 'unknown'}`,
     `- no_overlap_ok: ${orchestration.no_overlap_ok === true}`,
     `- ledger_hash_chain_ok: ${orchestration.ledger_hash_chain_ok === true}`,

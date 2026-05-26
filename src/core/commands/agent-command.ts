@@ -76,7 +76,8 @@ async function agentMissionAction(parsed: any) {
       action: parsed.action,
       apply: parsed.apply === true,
       dryRun: parsed.dryRun === true,
-      drain: parsed.drain === true
+      drain: parsed.drain === true,
+      staleMs: parsed.staleMs
     })
   }
   const full = path.join(agentRoot, artifact)
@@ -95,6 +96,13 @@ async function agentMissionAction(parsed: any) {
     if (parsed.action === 'dashboard') {
       console.log('Proof: ' + (value?.proof_status || 'missing'))
       console.log('Agents: ' + (value?.agent_count ?? 'unknown'))
+    }
+    if (parsed.action === 'close' || parsed.action === 'cleanup') {
+      console.log('Actions: ' + (value?.action_count ?? 0))
+      console.log('Applied: ' + (value?.applied_count ?? 0))
+      if (Array.isArray(value?.skipped_active_sessions) && value.skipped_active_sessions.length) console.log('Skipped active: ' + value.skipped_active_sessions.length)
+      if (Array.isArray(value?.skipped_foreign_namespace) && value.skipped_foreign_namespace.length) console.log('Skipped foreign namespace: ' + value.skipped_foreign_namespace.length)
+      if (Array.isArray(value?.blockers) && value.blockers.length) console.log('Blockers: ' + value.blockers.join(', '))
     }
   })
 }

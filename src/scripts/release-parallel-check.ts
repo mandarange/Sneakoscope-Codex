@@ -2,21 +2,31 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { buildVerificationDag, type VerificationDag } from '../core/verification/verification-dag.js';
+import { writeParallelVerificationProof } from '../core/verification/verification-proof.js';
+import { runVerificationDag } from '../core/verification/verification-worker-pool.js';
+import type { ParallelVerificationResult, VerificationTask } from '../core/verification/verification-result.js';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
 const logDir = path.join(reportDir, 'release-parallel-logs');
 fs.mkdirSync(logDir, { recursive: true });
 
-await buildVerificationEngineBootstrap();
+type ReleaseTaskExtra = Partial<Pick<VerificationTask, 'cwd' | 'dependencies' | 'env' | 'inputs' | 'outputs' | 'read_only' | 'timeout_ms'>>;
 
-const dagMod = await import(pathToFileURL(path.join(root, 'dist/core/verification/verification-dag.js')).href);
-const poolMod = await import(pathToFileURL(path.join(root, 'dist/core/verification/verification-worker-pool.js')).href);
-const proofMod = await import(pathToFileURL(path.join(root, 'dist/core/verification/verification-proof.js')).href);
+const deterministicReleaseEnv: Record<string, string> = {
+  SKS_TEST_REAL_TMUX: '0',
+  SKS_REQUIRE_REAL_TMUX: '0',
+  SKS_TEST_REAL_DYNAMIC_AGENTS: '0',
+  SKS_REQUIRE_REAL_DYNAMIC_AGENTS: '0',
+  SKS_TEST_REAL_IMAGEGEN: '0',
+  SKS_REAL_IMAGEGEN: '0',
+  SKS_CODEX_APP_IMAGEGEN: '0',
+  SKS_REQUIRE_REAL_COMPUTER_USE: '0'
+};
 
-const tasks = [
+const tasks: VerificationTask[] = [
   task('build', 'npm run build --silent', { outputs: ['dist'] }),
   task('runtime:no-src-mjs', 'npm run runtime:no-src-mjs --silent', { dependencies: ['build'] }),
   task('runtime:ts-source-of-truth', 'npm run runtime:ts-source-of-truth --silent', { dependencies: ['build'] }),
@@ -59,9 +69,16 @@ const tasks = [
   task('agent:session-generation', 'npm run agent:session-generation --silent', { dependencies: ['build'] }),
   task('agent:terminal-generations', 'npm run agent:terminal-generations --silent', { dependencies: ['build'] }),
   task('agent:tmux-real-right-lanes', 'npm run agent:tmux-real-right-lanes --silent', { dependencies: ['build'] }),
+  task('agent:tmux-physical-lifecycle-wired', 'npm run agent:tmux-physical-lifecycle-wired --silent', { dependencies: ['build'] }),
+  task('agent:tmux-physical-proof-v2', 'npm run agent:tmux-physical-proof-v2 --silent', { dependencies: ['build'] }),
   task('agent:cleanup-executor', 'npm run agent:cleanup-executor --silent', { dependencies: ['build'] }),
+  task('agent:cleanup-executor-v2', 'npm run agent:cleanup-executor-v2 --silent', { dependencies: ['build'] }),
+  task('agent:cleanup-command-ux', 'npm run agent:cleanup-command-ux --silent', { dependencies: ['build'] }),
   task('agent:intelligent-work-graph', 'npm run agent:intelligent-work-graph --silent', { dependencies: ['build'] }),
+  task('agent:ast-aware-work-graph', 'npm run agent:ast-aware-work-graph --silent', { dependencies: ['build'] }),
   task('proof:fake-vs-real-policy', 'npm run proof:fake-vs-real-policy --silent', { dependencies: ['build'] }),
+  task('proof:fake-real-policy-v2', 'npm run proof:fake-real-policy-v2 --silent', { dependencies: ['build'] }),
+  task('release:runtime-truth-matrix', 'npm run release:runtime-truth-matrix --silent', { dependencies: ['agent:tmux-physical-proof-v2', 'agent:cleanup-executor-v2', 'agent:ast-aware-work-graph', 'proof:fake-real-policy-v2'] }),
   task('route:blackbox-realism', 'npm run route:blackbox-realism --silent', { dependencies: ['build'] }),
   task('agent:dynamic-cockpit', 'npm run agent:dynamic-cockpit --silent', { dependencies: ['build'] }),
   task('agent:source-intelligence-propagation', 'npm run agent:source-intelligence-propagation --silent', { dependencies: ['build'] }),
@@ -167,45 +184,32 @@ tasks.push(
   task('release:readiness', 'npm run release:readiness --silent', { dependencies: ['release:metadata', 'typecheck', 'schema:check'] })
 );
 
-const dag = dagMod.buildVerificationDag(tasks);
-const result = await poolMod.runVerificationDag(dag, {
+const dag: VerificationDag = buildVerificationDag(tasks);
+const result: ParallelVerificationResult = await runVerificationDag(dag, {
   cwd: root,
   concurrency: Number(process.env.SKS_VERIFY_CONCURRENCY || os.cpus().length || 2),
   logDir,
   failFast: false
 });
 result.dag_schema = dag.schema;
-result.dependency_count = tasks.reduce((sum, row) => sum + row.dependencies.length, 0);
-await proofMod.writeParallelVerificationProof(reportDir, result);
+result.dependency_count = tasks.reduce((sum, row) => sum + (row.dependencies ?? []).length, 0);
+await writeParallelVerificationProof(reportDir, result);
 console.log(JSON.stringify(result, null, 2));
 if (!result.ok) process.exitCode = 1;
 
-function task(id, command, extra = {}) {
+function task(id: string, command: string, extra: ReleaseTaskExtra = {}): VerificationTask {
   return {
     id,
     command,
-    dependencies: [],
-    outputs: [],
     ...extra,
-    env: { SKS_ENSURE_DIST_NO_REBUILD: '1', ...(extra.env || {}) }
+    dependencies: extra.dependencies ?? [],
+    outputs: extra.outputs ?? [],
+    env: { ...deterministicReleaseEnv, SKS_ENSURE_DIST_NO_REBUILD: '1', ...(extra.env ?? {}) }
   };
 }
 
-function tasksForMetadata() {
+function tasksForMetadata(): string[] {
   return tasks
     .map((row) => row.id)
     .filter((id) => !['build', 'typecheck', 'schema:check', 'release:metadata', 'release:readiness'].includes(id));
-}
-
-async function buildVerificationEngineBootstrap() {
-  const bootstrap = spawnSync('npm', ['run', 'build', '--silent'], {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...process.env, SKS_RELEASE_PARALLEL_BOOTSTRAP: '1' }
-  });
-  if (bootstrap.status !== 0) {
-    process.stdout.write(bootstrap.stdout || '');
-    process.stderr.write(bootstrap.stderr || '');
-    process.exit(bootstrap.status || 1);
-  }
 }

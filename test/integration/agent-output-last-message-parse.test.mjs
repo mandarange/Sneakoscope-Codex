@@ -32,6 +32,8 @@ fs.writeFileSync(out, JSON.stringify({
   assert.equal(result.blockers.includes('codex_exec_output_last_message_missing_or_invalid'), false);
   assert.ok(result.verification.checks.includes('codex-exec-output-last-message'));
   assert.ok(result.verification.checks.includes('agent-result-schema'));
+  assert.ok(result.artifacts.some((file) => String(file).endsWith(path.join('sessions', 'agent_1', 'agent-result.json'))));
+  assert.equal(await fileExists(path.join(root, 'session_1-agent-result.json')), false);
 });
 
 test('codex exec backend marks missing output-last-message as verified_partial', async () => {
@@ -95,4 +97,13 @@ async function writeFakeCodex(source) {
   await fs.writeFile(fakeCodex, source, 'utf8');
   await fs.chmod(fakeCodex, 0o755);
   return { root, fakeCodex };
+}
+
+async function fileExists(file) {
+  try {
+    await fs.access(file);
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -5,7 +5,7 @@ import { assertGate, emitGate, importDist, packageScripts, root } from './sks-1-
 
 const mod = await importDist('core/release-parallel-full-coverage.js');
 const pkgScripts = packageScripts();
-const parallelSource = fs.readFileSync(path.join(root, 'scripts/release-parallel-check.mjs'), 'utf8');
+const parallelSource = fs.readFileSync(path.join(root, 'src/scripts/release-parallel-check.ts'), 'utf8');
 const current = [...new Set(Object.keys(pkgScripts).filter((name) => parallelSource.includes(name)).concat(Object.keys(pkgScripts).filter((name) => /^xai-mcp|^source-intelligence|^codex-web|^goal-mode|^agent:main-no-scout|^agent:worker-scout-limited|^agent:background-terminals|^agent:tmux-right-lanes|^agent:visual-consistency|^release:parallel-full-coverage|^priority:full-closure/.test(name))))];
 const report = mod.evaluateReleaseParallelFullCoverage(current);
 assertGate(report.ok === true, 'release parallel DAG must preserve previous gates and include 1.18 gates', report);

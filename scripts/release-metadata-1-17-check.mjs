@@ -6,7 +6,7 @@ import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 const RELEASE_VERSION = '1.17.0';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
-const parallelCheckPath = path.join(root, 'scripts/release-parallel-check.mjs');
+const parallelCheckPath = path.join(root, 'src/scripts/release-parallel-check.ts');
 const parallelCheckSource = fs.existsSync(parallelCheckPath) ? fs.readFileSync(parallelCheckPath, 'utf8') : '';
 const requiredDocs = [
   'README.md',

@@ -8,7 +8,8 @@ test('intelligent work graph computes ownership, critical path, and score', asyn
     dependencyGraph: { edges: [{ from: 'src/a.ts', imports: ['src/b.ts'] }] },
     changedFiles: ['src/a.ts']
   });
-  assert.equal(graph.schema, 'sks.intelligent-work-graph.v1');
+  assert.equal(graph.schema, 'sks.intelligent-work-graph.v2');
+  assert.ok(graph.file_to_symbols);
   assert.ok(graph.critical_path.length >= 2);
   assert.ok(graph.work_graph_quality_score > 0);
 });

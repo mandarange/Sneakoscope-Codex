@@ -3,6 +3,30 @@
 ## [Unreleased]
 
 
+## [1.18.5] - 2026-05-26
+
+### Added
+
+- Wire real tmux physical proof into the native agent orchestrator lifecycle with initial, before-drain, after-drain, and final phases.
+- Add tmux physical proof phase artifacts: `agent-tmux-physical-proof-before-drain.json`, `agent-tmux-physical-proof-after-drain.json`, `agent-tmux-physical-proof-final.json`, and `agent-tmux-physical-proof-summary.json`.
+- Add v2 release gates for tmux lifecycle wiring, tmux proof v2, real Codex dynamic smoke v2, cleanup executor v2, cleanup command UX, AST-aware work graph, fake-real policy v2, and runtime truth matrix.
+- Add process-tree-aware cleanup proof with SIGTERM, bounded wait, SIGKILL escalation, and verified process exit evidence.
+- Add AST/import/test ownership expansion for intelligent work graph, including file-to-symbol, symbol-to-file, command ownership, route ownership, AST coverage, and proof level.
+- Add runtime truth matrix coverage for `fixture_only`, `fixture_instrumented_real`, `proven`, `integration_optional`, `real_required_missing`, `partial`, and `blocked`.
+
+### Fixed
+
+- Prevent real tmux smoke from depending on lifecycle artifacts that the orchestrator never writes.
+- Prevent cleanup executor from claiming success before process termination is verified.
+- Prevent fixture-instrumented real Codex smoke from being reported as plain proven runtime proof.
+- Prevent AST-aware work graph claims from relying only on basename test ownership.
+
+### Changed
+
+- Treat real-proof modules as part of orchestrator lifecycle, not standalone reports only.
+- Treat cleanup as a safe, verifiable resource cleanup transaction.
+- Treat intelligent work graph quality and fake-real subsystem levels as first-class release readiness inputs.
+
 ## [1.18.4] - 2026-05-26
 
 ### Added

@@ -94,7 +94,18 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
           required_persona_category: { type: 'string', minLength: 1 },
           priority: { type: 'integer', minimum: 0 },
           dependencies: { type: 'array', items: { type: 'string' } },
-          lease_requirements: { type: 'array' },
+          lease_requirements: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['kind', 'path'],
+              properties: {
+                kind: { type: 'string' },
+                path: { type: 'string' }
+              },
+              additionalProperties: false
+            }
+          },
           max_attempts: { type: 'integer', minimum: 1 },
           reason: { type: 'string', minLength: 1 },
           source_agent_session_id: { type: 'string' }

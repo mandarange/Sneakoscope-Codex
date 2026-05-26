@@ -27,6 +27,10 @@ test('agent result schema accepts valid follow-up work and blocks invalid rows',
   };
   const valid = validateAgentWorkerResult({ ...base, follow_up_work_items: [{ id: 'f1', title: 't', description: 'd', required_persona_category: 'verifier', priority: 1, dependencies: [], lease_requirements: [], max_attempts: 1, reason: 'r' }] });
   assert.equal(valid.status, 'done');
+  const validLease = validateAgentWorkerResult({ ...base, follow_up_work_items: [{ id: 'f2', title: 't', description: 'd', required_persona_category: 'verifier', priority: 1, dependencies: [], lease_requirements: [{ kind: 'read', path: 'package.json' }], max_attempts: 1, reason: 'r' }] });
+  assert.equal(validLease.status, 'done');
+  const invalidLease = validateAgentWorkerResult({ ...base, follow_up_work_items: [{ id: 'f3', title: 't', description: 'd', required_persona_category: 'verifier', priority: 1, dependencies: [], lease_requirements: ['package.json'], max_attempts: 1, reason: 'r' }] });
+  assert.equal(invalidLease.status, 'blocked');
   const invalid = validateAgentWorkerResult({ ...base, follow_up_work_items: [{ id: 'bad' }] });
   assert.equal(invalid.status, 'blocked');
 });

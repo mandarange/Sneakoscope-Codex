@@ -1,9 +1,9 @@
 import path from 'node:path'
 import { exists, nowIso, readJson, readText, runProcess, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 
-export const TMUX_PHYSICAL_PROOF_SCHEMA = 'sks.tmux-physical-proof.v1'
-export const TMUX_PANE_RECONCILIATION_SCHEMA = 'sks.tmux-pane-reconciliation.v1'
-export const TMUX_LANE_CONTENT_TRUTH_SCHEMA = 'sks.tmux-lane-content-truth.v1'
+export const TMUX_PHYSICAL_PROOF_SCHEMA = 'sks.tmux-physical-proof.v2'
+export const TMUX_PANE_RECONCILIATION_SCHEMA = 'sks.tmux-pane-reconciliation.v2'
+export const TMUX_LANE_CONTENT_TRUTH_SCHEMA = 'sks.tmux-lane-content-truth.v2'
 
 export interface TmuxListPaneRow {
   session_name: string
@@ -19,7 +19,7 @@ export interface TmuxPhysicalProofOptions {
   missionId?: string | null
   realTmux?: boolean
   required?: boolean
-  phase?: 'snapshot' | 'before_drain' | 'after_drain'
+  phase?: 'initial' | 'snapshot' | 'before_drain' | 'after_drain' | 'final'
   listPanesText?: string | null
   captureByPaneId?: Record<string, string>
   writeArtifacts?: boolean
@@ -41,8 +41,10 @@ export async function writeTmuxPhysicalProof(root: string, opts: TmuxPhysicalPro
   const proof = await buildTmuxPhysicalProof(root, opts)
   if (opts.writeArtifacts !== false) {
     await writeJsonAtomic(path.join(root, 'agent-tmux-physical-proof.json'), proof)
+    await writeJsonAtomic(path.join(root, phaseProofArtifact(proof.phase)), proof)
     await writeJsonAtomic(path.join(root, 'agent-tmux-pane-reconciliation.json'), proof.reconciliation)
     await writeJsonAtomic(path.join(root, 'agent-tmux-lane-content-truth.json'), proof.lane_content_truth)
+    await writeTmuxPhysicalProofSummary(root, proof)
   }
   return proof
 }
@@ -87,6 +89,7 @@ export async function buildTmuxPhysicalProof(root: string, opts: TmuxPhysicalPro
     launchLedger,
     listPanes
   })
+  const captureRequired = realTmux && !['after_drain', 'final'].includes(phase)
   const laneContentTruth = {
     schema: TMUX_LANE_CONTENT_TRUTH_SCHEMA,
     generated_at: generatedAt,
@@ -94,16 +97,16 @@ export async function buildTmuxPhysicalProof(root: string, opts: TmuxPhysicalPro
     mode,
     phase,
     ok: captures.every((row) => row.blockers.length === 0),
-    capture_required: realTmux && phase !== 'after_drain',
+    capture_required: captureRequired,
     captures,
     blockers: captures.flatMap((row) => row.blockers)
   }
   const blockers = [
     ...(!supervisor ? ['tmux_lane_supervisor_missing'] : []),
     ...(realTmux && !listResult.ok && opts.required === true ? ['tmux_list_panes_unavailable'] : []),
-    ...(realTmux && listResult.ok && listPanes.length === 0 && phase !== 'after_drain' ? ['tmux_list_panes_empty'] : []),
+    ...(realTmux && listResult.ok && listPanes.length === 0 && !['after_drain', 'final'].includes(phase) ? ['tmux_list_panes_empty'] : []),
     ...(realTmux ? reconciliation.blockers : []),
-    ...(realTmux && phase !== 'after_drain' ? laneContentTruth.blockers : [])
+    ...(realTmux && captureRequired ? laneContentTruth.blockers : [])
   ]
   const integrationOptional = realTmux && !listResult.ok && opts.required !== true
   const physicalVerified = realTmux && !integrationOptional && blockers.length === 0 && listResult.ok
@@ -113,10 +116,19 @@ export async function buildTmuxPhysicalProof(root: string, opts: TmuxPhysicalPro
     mission_id: opts.missionId || supervisor?.mission_id || null,
     mode,
     phase,
+    required: opts.required === true,
     status: integrationOptional ? 'integration_optional' : blockers.length ? 'blocked' : realTmux ? 'passed' : 'fake_fixture',
     ok: integrationOptional || blockers.length === 0,
     physical_tmux_verified: physicalVerified,
     tmux_list_panes_artifact: 'agent-tmux-list-panes.json',
+    phase_artifact: phaseProofArtifact(phase),
+    phase_specific_artifacts: {
+      initial: 'agent-tmux-physical-proof-initial.json',
+      before_drain: 'agent-tmux-physical-proof-before-drain.json',
+      after_drain: 'agent-tmux-physical-proof-after-drain.json',
+      final: 'agent-tmux-physical-proof-final.json',
+      summary: 'agent-tmux-physical-proof-summary.json'
+    },
     tmux_capture_pane_artifacts: captures.map((row) => row.artifact).filter(Boolean),
     tmux_pane_id_reconciled: reconciliation.ok,
     drain_before_alive_recorded: reconciliation.drain_before_alive_recorded,
@@ -170,19 +182,22 @@ export function buildTmuxPaneReconciliation(input: {
     const launchPane = launchBySlot.get(slotId) || null
     const manifestPane = manifestBySlot.get(slotId) || null
     const listed = listPaneIds.has(paneId)
+    const closedPhase = input.phase === 'after_drain' || input.phase === 'final'
     const closedStateRecorded = lane.drained === true && Boolean(lane.closed_at)
-    const beforeAliveOk = input.phase === 'after_drain' ? true : listed
-    const afterClosedOk = input.phase === 'after_drain' ? (!listed || closedStateRecorded) : true
+    const beforeAliveOk = closedPhase ? true : listed
+    const afterClosedOk = closedPhase ? (!listed || closedStateRecorded) : true
     const blockers = [
       ...(input.realTmux && fakePane ? ['fake_tmux_pane_id_in_real_mode'] : []),
       ...(input.realTmux && paneId && !validTmuxPaneId(paneId) ? ['invalid_real_tmux_pane_id'] : []),
-      ...(input.realTmux && input.phase !== 'after_drain' && !listed ? ['supervisor_pane_missing_from_list_panes'] : []),
+      ...(input.realTmux && !closedPhase && !listed ? ['supervisor_pane_missing_from_list_panes'] : []),
       ...(launchPane && launchPane !== paneId ? ['launch_ledger_supervisor_pane_mismatch'] : []),
       ...(manifestPane && manifestPane !== paneId ? ['lane_manifest_supervisor_pane_mismatch'] : []),
-      ...(input.realTmux && input.phase === 'after_drain' && listed && !closedStateRecorded ? ['drained_pane_still_listed_without_closed_state'] : [])
+      ...(input.realTmux && closedPhase && listed && !closedStateRecorded ? ['drained_pane_still_listed_without_closed_state'] : [])
     ]
+    const status = blockers.length ? 'blocked' : input.realTmux ? 'reconciled' : 'fixture_only'
     return {
       slot_id: slotId,
+      generation_id: lane.current_generation_index === null || lane.current_generation_index === undefined ? null : String(lane.current_generation_index),
       supervisor_pane_id: paneId,
       launch_ledger_pane_id: launchPane,
       lane_manifest_pane_id: manifestPane,
@@ -190,10 +205,13 @@ export function buildTmuxPaneReconciliation(input: {
       fake_pane_id: fakePane,
       before_drain_alive_ok: beforeAliveOk,
       after_drain_closed_ok: afterClosedOk,
+      drain_state: input.phase === 'after_drain' || input.phase === 'final' ? (afterClosedOk ? 'closed_or_drained' : 'still_live') : (beforeAliveOk ? 'alive_before_drain' : 'missing_before_drain'),
+      status,
       blockers
     }
   })
   const blockers = records.flatMap((row) => row.blockers.map((blocker) => `${blocker}:${row.slot_id}`))
+  const genericBlockers = blockers.length ? ['tmux_pane_id_reconciliation_failed'] : []
   return {
     schema: TMUX_PANE_RECONCILIATION_SCHEMA,
     generated_at: generatedAt,
@@ -206,8 +224,12 @@ export function buildTmuxPaneReconciliation(input: {
     list_panes_count: (input.listPanes || []).length,
     drain_before_alive_recorded: records.length > 0 && records.every((row) => row.before_drain_alive_ok),
     drain_after_closed_recorded: records.length > 0 && records.every((row) => row.after_drain_closed_ok),
+    per_slot_status: records.map((row) => ({ slot_id: row.slot_id, status: row.status, drain_state: row.drain_state, blockers: row.blockers })),
+    per_generation_status: records.map((row) => ({ slot_id: row.slot_id, generation_id: row.generation_id, status: row.status })),
+    drain_before_state: records.map((row) => ({ slot_id: row.slot_id, alive: row.before_drain_alive_ok })),
+    drain_after_state: records.map((row) => ({ slot_id: row.slot_id, closed_or_drained: row.after_drain_closed_ok })),
     records,
-    blockers
+    blockers: [...genericBlockers, ...blockers]
   }
 }
 
@@ -239,7 +261,7 @@ async function captureLane(root: string, lane: any, scheduler: any, listPanes: T
   const slotId = String(lane?.slot_id || '')
   const paneId = String(lane?.pane_id || '')
   const listed = listPanes.some((row) => row.pane_id === paneId)
-  const relArtifact = `agent-tmux-capture-${slotId || 'unknown'}.txt`
+  const relArtifact = `agent-tmux-capture-${phase.replace(/_/g, '-')}-${slotId || 'unknown'}.txt`
   const artifact = path.join(root, relArtifact)
   let capture = opts.captureByPaneId?.[paneId] || ''
   if (realTmux && listed && !capture) {
@@ -260,11 +282,12 @@ async function captureLane(root: string, lane: any, scheduler: any, listPanes: T
   const generationPresent = generationRe.test(capture) || /session:\s*(?:idle|drained)/i.test(capture)
   const queuePresent = /queue:|pending|backfill|completed/i.test(capture)
   const staleContent = Boolean(capture && laneMd && !capture.includes(String(lane?.pane_id || '')) && !capture.includes(slotId))
+  const capturePhaseRequired = !['after_drain', 'final'].includes(phase)
   const blockers = [
-    ...(realTmux && phase !== 'after_drain' && !capture ? ['tmux_capture_pane_missing'] : []),
-    ...(realTmux && phase !== 'after_drain' && capture && !slotPresent ? ['tmux_capture_slot_id_missing'] : []),
-    ...(realTmux && phase !== 'after_drain' && capture && !generationPresent ? ['tmux_capture_generation_or_status_missing'] : []),
-    ...(realTmux && phase !== 'after_drain' && capture && !queuePresent ? ['tmux_capture_queue_summary_missing'] : []),
+    ...(realTmux && capturePhaseRequired && !capture ? ['tmux_capture_pane_missing'] : []),
+    ...(realTmux && capturePhaseRequired && capture && !slotPresent ? ['tmux_capture_slot_id_missing'] : []),
+    ...(realTmux && capturePhaseRequired && capture && !generationPresent ? ['tmux_capture_generation_or_status_missing'] : []),
+    ...(realTmux && capturePhaseRequired && capture && !queuePresent ? ['tmux_capture_queue_summary_missing'] : []),
     ...(realTmux && staleContent ? ['tmux_capture_stale_content'] : []),
     ...(scheduler && lane?.current_generation_index !== null && lane?.current_generation_index !== undefined && !String(laneMd).includes(String(lane.current_generation_index)) ? ['lane_md_scheduler_generation_mismatch'] : [])
   ]
@@ -310,8 +333,52 @@ function escapeRegExp(value: string) {
 export async function tmuxPhysicalProofArtifactsExist(root: string) {
   return {
     physical_proof: await exists(path.join(root, 'agent-tmux-physical-proof.json')),
+    before_drain: await exists(path.join(root, 'agent-tmux-physical-proof-before-drain.json')),
+    after_drain: await exists(path.join(root, 'agent-tmux-physical-proof-after-drain.json')),
+    final: await exists(path.join(root, 'agent-tmux-physical-proof-final.json')),
+    summary: await exists(path.join(root, 'agent-tmux-physical-proof-summary.json')),
     list_panes: await exists(path.join(root, 'agent-tmux-list-panes.json')),
     reconciliation: await exists(path.join(root, 'agent-tmux-pane-reconciliation.json')),
     lane_content_truth: await exists(path.join(root, 'agent-tmux-lane-content-truth.json'))
   }
+}
+
+function phaseProofArtifact(phase: string) {
+  if (phase === 'before_drain') return 'agent-tmux-physical-proof-before-drain.json'
+  if (phase === 'after_drain') return 'agent-tmux-physical-proof-after-drain.json'
+  if (phase === 'final') return 'agent-tmux-physical-proof-final.json'
+  if (phase === 'initial') return 'agent-tmux-physical-proof-initial.json'
+  return 'agent-tmux-physical-proof-snapshot.json'
+}
+
+async function writeTmuxPhysicalProofSummary(root: string, latest: any) {
+  const phases = ['initial', 'before_drain', 'after_drain', 'final']
+  const phaseReports: Record<string, any> = {}
+  for (const phase of phases) {
+    phaseReports[phase] = await readJson<any>(path.join(root, phaseProofArtifact(phase)), null)
+  }
+  phaseReports[String(latest.phase || 'snapshot')] = latest
+  const required = latest?.mode === 'real_tmux' && latest?.required === true
+  const missing = phases
+    .filter((phase) => phase !== 'initial')
+    .filter((phase) => !phaseReports[phase])
+  const summary = {
+    schema: 'sks.tmux-physical-proof-summary.v2',
+    generated_at: nowIso(),
+    mission_id: latest?.mission_id || null,
+    mode: latest?.mode || 'unknown',
+    required,
+    phases: Object.fromEntries(phases.map((phase) => [phase, phaseReports[phase] ? {
+      artifact: phaseProofArtifact(phase),
+      status: phaseReports[phase].status,
+      ok: phaseReports[phase].ok,
+      physical_tmux_verified: phaseReports[phase].physical_tmux_verified === true,
+      blockers: phaseReports[phase].blockers || []
+    } : null])),
+    missing_phase_artifacts: missing,
+    ok: missing.length === 0 || latest?.mode !== 'real_tmux',
+    blockers: latest?.mode === 'real_tmux' ? missing.map((phase) => `tmux_physical_${phase}_proof_missing`) : []
+  }
+  await writeJsonAtomic(path.join(root, 'agent-tmux-physical-proof-summary.json'), summary)
+  return summary
 }

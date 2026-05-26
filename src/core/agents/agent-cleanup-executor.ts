@@ -4,7 +4,7 @@ import { appendJsonl, exists, nowIso, readJson, writeJsonAtomic } from '../fsx.j
 import { drainTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
 import { normalizeAgentSessionRows } from './agent-session-rows.js'
 
-export const AGENT_CLEANUP_PROOF_SCHEMA = 'sks.agent-cleanup-proof.v1'
+export const AGENT_CLEANUP_PROOF_SCHEMA = 'sks.agent-cleanup-proof.v2'
 export const AGENT_CLEANUP_ACTION_LEDGER_SCHEMA = 'sks.agent-cleanup-action-ledger.v1'
 
 export interface AgentCleanupExecutorOptions {
@@ -25,6 +25,19 @@ interface CleanupAction {
   status: 'planned' | 'applied' | 'skipped' | 'failed'
   reason: string
   error?: string
+  process_tree?: ProcessTreeEntry[]
+  before?: Record<string, unknown>
+  after?: Record<string, unknown>
+  signal_sequence?: string[]
+  grace_ms?: number
+  verified_exited?: boolean
+  escalated_to_sigkill?: boolean
+}
+
+interface ProcessTreeEntry {
+  pid: number
+  ppid: number
+  command: string
 }
 
 const TERMINAL_STATUSES = new Set(['closed', 'completed', 'done', 'failed', 'blocked', 'killed', 'timed_out'])
@@ -45,27 +58,30 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
   )
   const now = Date.now()
   const staleMs = opts.staleMs ?? 30 * 60 * 1000
+  const projectHash = String(namespace?.root_hash || '')
   const actions: CleanupAction[] = []
+  const graceMs = Number(process.env.SKS_CLEANUP_GRACE_MS || 750)
   const processReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-process-report.json')
   for (const file of processReports) {
     const report = await readJson<any>(file, null)
     const pid = Number(report?.pid || 0)
     const sessionId = String(report?.session_id || '')
     const status = String(sessions.find((row: any) => String(row.session_id || '') === sessionId)?.status || '')
-    const terminal = TERMINAL_STATUSES.has(status) || report?.exit_code !== null
+    const terminal = TERMINAL_STATUSES.has(status) || (report?.exit_code !== null && report?.exit_code !== undefined)
     if (!pid || !processIsAlive(pid)) continue
     if (activeSessionIds.has(sessionId) && !terminal) {
       actions.push({ kind: 'skip_active_session', target: sessionId || String(pid), status: 'skipped', reason: 'session_active' })
       continue
     }
-    actions.push(await applyAction({
-      kind: 'terminate_process',
-      target: String(pid),
+    if (!processReportInNamespace(report, projectHash)) {
+      actions.push({ kind: 'skip_foreign_namespace', target: String(pid), status: 'skipped', reason: 'process_outside_project_namespace' })
+      continue
+    }
+    actions.push(await terminateProcessTreeAction({
+      pid,
       reason: terminal ? 'terminal_session_process_alive' : 'stale_session_process',
       apply,
-      run: async () => {
-        process.kill(pid, 'SIGTERM')
-      }
+      graceMs
     }))
   }
   const tmuxReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-tmux-report.json')
@@ -86,10 +102,11 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
       run: async () => {
         const { runProcess } = await import('../fsx.js')
         await runProcess('tmux', ['kill-pane', '-t', paneId], { timeoutMs: 3000, maxOutputBytes: 4096 })
+        const listed = await runProcess('tmux', ['list-panes', '-a', '-F', '#{pane_id}'], { timeoutMs: 3000, maxOutputBytes: 4096 })
+        if (listed.stdout.split(/\r?\n/).includes(paneId)) throw new Error('tmux_pane_still_listed_after_kill')
       }
     }))
   }
-  const projectHash = String(namespace?.root_hash || '')
   for (const dir of Array.isArray(namespace?.orphan_temp_dirs) ? namespace.orphan_temp_dirs.map(String) : []) {
     if (!namespaceOwnsPath(dir, projectHash)) {
       actions.push({ kind: 'skip_foreign_namespace', target: dir, status: 'skipped', reason: 'path_outside_project_namespace' })
@@ -170,6 +187,11 @@ function buildCleanupProof(input: {
     apply: input.apply,
     stale_processes_found: byKind('terminate_process').map((row) => row.target),
     stale_processes_killed: byKind('terminate_process', 'applied').map((row) => row.target),
+    process_trees: byKind('terminate_process').map((row) => ({ target: row.target, tree: row.process_tree || [] })),
+    sigterm_planned: input.actions.filter((row) => row.status === 'planned' && row.signal_sequence?.includes('SIGTERM')).map((row) => row.target),
+    sigterm_sent: input.actions.filter((row) => row.status === 'applied' && row.signal_sequence?.includes('SIGTERM')).map((row) => row.target),
+    sigkill_escalations: input.actions.filter((row) => row.escalated_to_sigkill === true).map((row) => row.target),
+    process_exit_verified: input.actions.filter((row) => row.kind === 'terminate_process' && row.verified_exited === true).map((row) => row.target),
     stale_tmux_panes_found: byKind('close_tmux_pane').map((row) => row.target),
     stale_tmux_panes_closed: byKind('close_tmux_pane', 'applied').map((row) => row.target),
     orphan_temp_dirs_found: byKind('remove_temp_dir').map((row) => row.target),
@@ -184,6 +206,70 @@ function buildCleanupProof(input: {
     failed_count: failed.length,
     actions: input.actions,
     blockers: failed.map((row) => `cleanup_action_failed:${row.kind}:${row.target}`)
+  }
+}
+
+async function terminateProcessTreeAction(input: { pid: number; reason: string; apply: boolean; graceMs: number }): Promise<CleanupAction> {
+  const processTree = await readProcessTree(input.pid)
+  const targets = processTree.length ? processTree.map((row) => row.pid) : [input.pid]
+  if (!input.apply) {
+    return {
+      kind: 'terminate_process',
+      target: String(input.pid),
+      status: 'planned',
+      reason: input.reason,
+      process_tree: processTree,
+      before: { alive: targets.filter(processIsAlive) },
+      after: { alive: targets.filter(processIsAlive) },
+      signal_sequence: ['SIGTERM', 'SIGKILL_IF_STILL_ALIVE'],
+      grace_ms: input.graceMs,
+      verified_exited: false,
+      escalated_to_sigkill: false
+    }
+  }
+  const signalSequence: string[] = []
+  try {
+    for (const pid of [...targets].reverse()) safeKill(pid, 'SIGTERM')
+    signalSequence.push('SIGTERM')
+    await waitForProcessesExited(targets, input.graceMs)
+    let alive = targets.filter(processIsAlive)
+    let escalated = false
+    if (alive.length) {
+      for (const pid of [...alive].reverse()) safeKill(pid, 'SIGKILL')
+      signalSequence.push('SIGKILL')
+      escalated = true
+      await waitForProcessesExited(targets, 500)
+      alive = targets.filter(processIsAlive)
+    }
+    return {
+      kind: 'terminate_process',
+      target: String(input.pid),
+      status: alive.length ? 'failed' : 'applied',
+      reason: input.reason,
+      process_tree: processTree,
+      before: { alive: targets },
+      after: { alive },
+      signal_sequence: signalSequence,
+      grace_ms: input.graceMs,
+      verified_exited: alive.length === 0,
+      escalated_to_sigkill: escalated,
+      ...(alive.length ? { error: `processes_still_alive:${alive.join(',')}` } : {})
+    }
+  } catch (err: unknown) {
+    return {
+      kind: 'terminate_process',
+      target: String(input.pid),
+      status: 'failed',
+      reason: input.reason,
+      process_tree: processTree,
+      before: { alive: targets },
+      after: { alive: targets.filter(processIsAlive) },
+      signal_sequence: signalSequence,
+      grace_ms: input.graceMs,
+      verified_exited: false,
+      escalated_to_sigkill: signalSequence.includes('SIGKILL'),
+      error: err instanceof Error ? err.message : String(err)
+    }
   }
 }
 
@@ -226,6 +312,19 @@ function namespaceOwnsPath(candidate: string, projectHash: string) {
   return Boolean(candidate && (!projectHash || candidate.includes(projectHash)))
 }
 
+function processReportInNamespace(report: any, projectHash: string) {
+  if (!projectHash) return true
+  const raw = JSON.stringify({
+    project_hash: report?.project_hash,
+    root_hash: report?.root_hash,
+    project_namespace: report?.project_namespace,
+    cwd: report?.cwd,
+    stdout_log: report?.stdout_log,
+    stderr_log: report?.stderr_log
+  })
+  return raw === '{}' || raw.includes(projectHash) || (!report?.project_hash && !report?.root_hash && !report?.project_namespace)
+}
+
 function processIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
@@ -233,6 +332,45 @@ function processIsAlive(pid: number): boolean {
   } catch {
     return false
   }
+}
+
+async function readProcessTree(rootPid: number): Promise<ProcessTreeEntry[]> {
+  try {
+    const { runProcess } = await import('../fsx.js')
+    const result = await runProcess('ps', ['-axo', 'pid=,ppid=,command='], { timeoutMs: 3000, maxOutputBytes: 512 * 1024 })
+    const rows = result.stdout.split(/\r?\n/).map((line) => {
+      const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.+)$/)
+      if (!match) return null
+      return { pid: Number(match[1]), ppid: Number(match[2]), command: match[3] || '' }
+    }).filter(Boolean) as ProcessTreeEntry[]
+    const byParent = new Map<number, ProcessTreeEntry[]>()
+    for (const row of rows) byParent.set(row.ppid, [...(byParent.get(row.ppid) || []), row])
+    const out: ProcessTreeEntry[] = []
+    const visit = (pid: number) => {
+      const current = rows.find((row) => row.pid === pid)
+      if (current && !out.some((row) => row.pid === current.pid)) out.push(current)
+      for (const child of byParent.get(pid) || []) visit(child.pid)
+    }
+    visit(rootPid)
+    return out
+  } catch {
+    return processIsAlive(rootPid) ? [{ pid: rootPid, ppid: 0, command: 'unknown' }] : []
+  }
+}
+
+function safeKill(pid: number, signal: NodeJS.Signals) {
+  try {
+    process.kill(pid, signal)
+  } catch {}
+}
+
+async function waitForProcessesExited(pids: number[], timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!pids.some(processIsAlive)) return true
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  return !pids.some(processIsAlive)
 }
 
 function validTmuxPaneId(value: string) {

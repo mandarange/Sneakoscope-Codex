@@ -10,7 +10,7 @@ const reportDir = path.join(root, '.sneakoscope', 'reports');
 const RELEASE_VERSION = pkg.version;
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
-const releaseParallelCheckSource = readText('scripts/release-parallel-check.mjs', '');
+const releaseParallelCheckSource = readText('src/scripts/release-parallel-check.ts', '');
 
 const checks = {
   runtime_no_src_mjs: scriptContains('release:check:parallel', 'runtime:no-src-mjs'),
@@ -77,11 +77,19 @@ const checks = {
   agent_session_generation: scriptContains('release:check:parallel', 'agent:session-generation'),
   agent_terminal_generations: scriptContains('release:check:parallel', 'agent:terminal-generations'),
   agent_tmux_real_right_lanes: scriptContains('release:check:parallel', 'agent:tmux-real-right-lanes'),
+  agent_tmux_physical_lifecycle_wired: scriptContains('release:check:parallel', 'agent:tmux-physical-lifecycle-wired'),
+  agent_tmux_physical_proof_v2: scriptContains('release:check:parallel', 'agent:tmux-physical-proof-v2'),
   agent_cleanup_executor: scriptContains('release:check:parallel', 'agent:cleanup-executor'),
+  agent_cleanup_executor_v2: scriptContains('release:check:parallel', 'agent:cleanup-executor-v2'),
+  agent_cleanup_command_ux: scriptContains('release:check:parallel', 'agent:cleanup-command-ux'),
   agent_intelligent_work_graph: scriptContains('release:check:parallel', 'agent:intelligent-work-graph'),
+  agent_ast_aware_work_graph: scriptContains('release:check:parallel', 'agent:ast-aware-work-graph'),
   proof_fake_vs_real_policy: scriptContains('release:check:parallel', 'proof:fake-vs-real-policy'),
+  proof_fake_real_policy_v2: scriptContains('release:check:parallel', 'proof:fake-real-policy-v2'),
+  release_runtime_truth_matrix: scriptContains('release:check:parallel', 'release:runtime-truth-matrix'),
   route_blackbox_realism: scriptContains('release:check:parallel', 'route:blackbox-realism'),
   real_tmux_physical_proof: scriptContains('release:real-check', 'agent:real-tmux-physical-proof'),
+  real_codex_dynamic_smoke_v2: scriptContains('release:real-check', 'agent:real-codex-dynamic-smoke-v2'),
   real_codex_dynamic_smoke: scriptContains('release:real-check', 'agent:real-codex-dynamic-smoke'),
   agent_dynamic_cockpit: scriptContains('release:check:parallel', 'agent:dynamic-cockpit'),
   agent_source_intelligence_propagation: scriptContains('release:check:parallel', 'agent:source-intelligence-propagation'),
@@ -153,7 +161,8 @@ const releaseMetadata = runNodeScript('scripts/release-metadata-1-18-check.mjs')
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
   flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null),
-  flagship_proof_graph_v4: readJson('.sneakoscope/reports/flagship-proof-graph-v4.json', null)
+  flagship_proof_graph_v4: readJson('.sneakoscope/reports/flagship-proof-graph-v4.json', null),
+  runtime_truth_matrix: readJson('.sneakoscope/reports/runtime-truth-matrix-1.18.5.json', null)
 };
 const runtimeChecks = {
   ppt_full_e2e_blackbox: runtimeReports.ppt_full_e2e_blackbox?.ok === true
@@ -161,7 +170,8 @@ const runtimeChecks = {
     && runtimeReports.ppt_full_e2e_blackbox?.trust_ok === true
     && !['blocked', 'failed', 'not_verified'].includes(String(runtimeReports.ppt_full_e2e_blackbox?.trust_status || '')),
   flagship_proof_graph_v3: runtimeReports.flagship_proof_graph_v3?.ok === true,
-  flagship_proof_graph_v4: runtimeReports.flagship_proof_graph_v4?.ok === true
+  flagship_proof_graph_v4: runtimeReports.flagship_proof_graph_v4?.ok === true,
+  runtime_truth_matrix: runtimeReports.runtime_truth_matrix?.ok === true
 };
 const remainingP0 = [];
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
@@ -209,9 +219,16 @@ for (const [name, ok] of Object.entries({
   agent_session_generation: checks.agent_session_generation,
   agent_terminal_generations: checks.agent_terminal_generations,
   agent_tmux_real_right_lanes: checks.agent_tmux_real_right_lanes,
+  agent_tmux_physical_lifecycle_wired: checks.agent_tmux_physical_lifecycle_wired,
+  agent_tmux_physical_proof_v2: checks.agent_tmux_physical_proof_v2,
   agent_cleanup_executor: checks.agent_cleanup_executor,
+  agent_cleanup_executor_v2: checks.agent_cleanup_executor_v2,
+  agent_cleanup_command_ux: checks.agent_cleanup_command_ux,
   agent_intelligent_work_graph: checks.agent_intelligent_work_graph,
+  agent_ast_aware_work_graph: checks.agent_ast_aware_work_graph,
   proof_fake_vs_real_policy: checks.proof_fake_vs_real_policy,
+  proof_fake_real_policy_v2: checks.proof_fake_real_policy_v2,
+  release_runtime_truth_matrix: checks.release_runtime_truth_matrix && runtimeChecks.runtime_truth_matrix,
   route_blackbox_realism: checks.route_blackbox_realism,
   agent_dynamic_cockpit: checks.agent_dynamic_cockpit,
   agent_source_intelligence_propagation: checks.agent_source_intelligence_propagation,
@@ -384,6 +401,26 @@ const report = {
     tmux_right_lanes: checks.agent_tmux_right_lanes,
     codex_app_visual_consistency: checks.agent_visual_consistency
   },
+  runtime_truth_1_18_5: {
+    status: checks.agent_tmux_physical_lifecycle_wired
+      && checks.agent_tmux_physical_proof_v2
+      && checks.agent_cleanup_executor_v2
+      && checks.agent_cleanup_command_ux
+      && checks.agent_ast_aware_work_graph
+      && checks.proof_fake_real_policy_v2
+      && checks.release_runtime_truth_matrix
+      && runtimeChecks.runtime_truth_matrix ? 'present' : 'missing',
+    tmux_physical_lifecycle_wired: checks.agent_tmux_physical_lifecycle_wired,
+    tmux_physical_proof_v2: checks.agent_tmux_physical_proof_v2,
+    real_codex_dynamic_smoke_v2: checks.real_codex_dynamic_smoke_v2,
+    cleanup_executor_v2: checks.agent_cleanup_executor_v2,
+    cleanup_command_ux: checks.agent_cleanup_command_ux,
+    ast_aware_work_graph: checks.agent_ast_aware_work_graph,
+    fake_real_policy_v2: checks.proof_fake_real_policy_v2,
+    runtime_truth_matrix: checks.release_runtime_truth_matrix,
+    runtime_truth_matrix_report_ok: runtimeChecks.runtime_truth_matrix,
+    proof_levels: runtimeReports.runtime_truth_matrix?.proof_levels || []
+  },
   dynamic_agent_pool_1_18_3: {
     status: checks.agent_dynamic_pool
       && checks.agent_task_graph_expansion
@@ -517,6 +554,7 @@ for (const key of [
   'mad_sks_1_16_0',
   'source_intelligence_1_18',
   'agent_terminal_tmux_1_18',
+  'runtime_truth_1_18_5',
   'dynamic_agent_pool_1_18_3',
   'goal_mode_1_18',
   'release_full_coverage_1_18',
@@ -603,6 +641,7 @@ function renderMarkdown(report) {
 - Hook trust warning-zero: \`${report.hook_trust_warning_zero.status}\`
 - Source Intelligence 1.18: \`${report.source_intelligence_1_18.status}\`
 - Agent terminal/tmux 1.18: \`${report.agent_terminal_tmux_1_18.status}\`
+- Runtime truth 1.18.5: \`${report.runtime_truth_1_18_5.status}\`
 - Dynamic agent pool ${RELEASE_VERSION}: \`${report.dynamic_agent_pool_1_18_3.status}\`
 - Goal mode 1.18: \`${report.goal_mode_1_18.status}\`
 - Release full coverage 1.18: \`${report.release_full_coverage_1_18.status}\`

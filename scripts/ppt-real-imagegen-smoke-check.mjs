@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import { repoTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
 
 const enabled = process.env.SKS_TEST_REAL_IMAGEGEN === '1' || process.env.SKS_REAL_IMAGEGEN === '1';
 const hasKey = Boolean(process.env.OPENAI_API_KEY || process.env.SKS_CODEX_APP_IMAGEGEN === '1');
@@ -15,10 +16,12 @@ if (!enabled || !hasKey) {
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
-const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ppt', 'review', '--manual-slide-images', 'test/fixtures/images/one-by-one.png', '--json'], {
+const sourceImage = repoTempPngFixtureArg('ppt-real-imagegen-smoke-source.png');
+const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ppt', 'review', '--manual-slide-images', sourceImage, '--json'], {
   cwd: process.cwd(),
   env: process.env,
   encoding: 'utf8',
+  timeout: Number(process.env.SKS_PPT_REAL_IMAGEGEN_SMOKE_TIMEOUT_MS || 180000),
   maxBuffer: 8 * 1024 * 1024
 });
 const result = {
@@ -26,7 +29,10 @@ const result = {
   ok: run.status === 0,
   status: run.status === 0 ? 'passed' : 'blocked',
   fake_adapter: false,
+  source_image: sourceImage,
   real_generated: run.status === 0,
+  process_error: run.error?.message || null,
+  process_signal: run.signal || null,
   stdout_tail: run.stdout.slice(-4000),
   stderr_tail: run.stderr.slice(-4000)
 };

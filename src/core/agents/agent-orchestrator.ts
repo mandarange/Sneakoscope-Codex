@@ -38,6 +38,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const routeCommand = String(opts.routeCommand || defaultRouteCommand(route))
   const routeBlackboxKind = String(opts.routeBlackboxKind || defaultRouteBlackboxKind(route))
   const backend = normalizeAgentBackend(opts.backend || (opts.mock ? 'fake' : 'codex-exec'))
+  const realTmux = backend === 'tmux' && opts.real === true
+  const realTmuxProofRequired = realTmux && process.env.SKS_REQUIRE_REAL_TMUX === '1'
   const created = opts.missionId
     ? { id: opts.missionId, dir: missionDir(root, opts.missionId), mission: { id: opts.missionId, mode: 'agent', prompt } }
     : await createMission(root, { mode: 'agent', prompt })
@@ -89,7 +91,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   await writeIntelligentWorkGraphArtifacts(ledgerRoot, partition.intelligent_work_graph)
   await writeScoutPolicyArtifact(ledgerRoot)
   await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster })
-  await initializeTmuxLaneSupervisor(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, targetActiveSlots, launchRealTmux: backend === 'tmux' && opts.real === true })
+  await initializeTmuxLaneSupervisor(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, targetActiveSlots, launchRealTmux: realTmux })
+  await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux, required: realTmuxProofRequired, phase: 'initial' })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-no-overlap-proof.json'), partition.no_overlap_proof || { schema: 'sks.agent-no-overlap-proof.v1', ok: false, blockers: ['missing_no_overlap_proof'] })
   await writeAgentLifecyclePolicy(ledgerRoot)
@@ -188,12 +191,12 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       }
       if (String(event.event_type) === 'scheduler_draining') {
         await verifyTmuxLaneSurvival(ledgerRoot)
-        await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux: backend === 'tmux' && opts.real === true, phase: 'before_drain' })
+        await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux, required: realTmuxProofRequired, phase: 'before_drain' })
       }
       await updateTmuxLaneSupervisorFromSlots(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots, state, event })
       if (String(event.event_type) === 'scheduler_drained') {
         await drainTmuxLaneSupervisor(ledgerRoot)
-        await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux: backend === 'tmux' && opts.real === true, phase: 'after_drain' })
+        await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux, required: realTmuxProofRequired, phase: 'after_drain' })
       }
     }
   })
@@ -209,7 +212,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const finalPaneBySlot = await readTmuxPaneIdsBySlot(ledgerRoot)
   const finalTmuxSlots = scheduler.slots.map((slot: any) => ({ ...slot, pane_id: finalPaneBySlot.get(slot.slot_id) || null, launch_status: finalPaneBySlot.has(slot.slot_id) ? 'launched' : slot.status }))
   await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots: finalTmuxSlots })
-  await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux: backend === 'tmux' && opts.real === true, phase: 'after_drain' })
+  await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux, required: realTmuxProofRequired, phase: 'final' })
   await compactAgentLedger(ledgerRoot)
   const cleanup = await writeAgentCleanupReport(ledgerRoot)
   const janitor = await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })

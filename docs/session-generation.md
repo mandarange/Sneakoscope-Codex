@@ -15,3 +15,7 @@ Each generation has its own `agent-session-generation.json`, `agent-session-reco
 Generation records include the slot id, generation index, work item id, persona id, terminal session id, started/closed timestamps, result artifact path, terminal close report path, Source Intelligence refs, and Goal mode refs. Final proof requires every generation to close and retain both refs.
 
 The flat `sessions/<agent.id>` path remains compatibility-only for old single-generation callers.
+
+## 1.18.5 Runtime Truth Note
+
+SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

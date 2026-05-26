@@ -19,5 +19,5 @@ test('sks agent cleanup latest emits cleanup executor proof', async () => {
   const result = spawnSync(process.execPath, [path.resolve('dist/bin/sks.js'), 'agent', 'cleanup', 'latest', '--dry-run', '--json'], { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   const json = JSON.parse(result.stdout);
-  assert.equal(json.data.schema, 'sks.agent-cleanup-proof.v1');
+  assert.equal(json.data.schema, 'sks.agent-cleanup-proof.v2');
 });

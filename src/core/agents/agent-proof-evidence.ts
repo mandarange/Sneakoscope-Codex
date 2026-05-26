@@ -19,6 +19,10 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const scheduler = input.scheduler || await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const taskGraph = input.partition?.task_graph || await readJson<any>(path.join(root, 'agent-task-graph.json'), null)
   const tmuxPhysicalProof = await readJson<any>(path.join(root, 'agent-tmux-physical-proof.json'), null)
+  const tmuxPhysicalProofSummary = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-summary.json'), null)
+  const tmuxPhysicalBeforeDrain = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-before-drain.json'), null)
+  const tmuxPhysicalAfterDrain = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-after-drain.json'), null)
+  const tmuxPhysicalFinal = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-final.json'), null)
   const cleanupProof = await readJson<any>(path.join(root, 'agent-cleanup-proof.json'), null)
   const intelligentWorkGraph = await readJson<any>(path.join(root, 'agent-intelligent-work-graph.json'), null)
   const slots = await readJson<any>(path.join(root, 'agent-worker-slots.json'), null)
@@ -82,6 +86,10 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(laneSupervisor && Number(laneSupervisor.unexpected_close_count || 0) > 0 ? ['tmux_lane_unexpected_close_before_drain'] : []),
     ...(laneSupervisor?.blockers || []),
     ...(input.backend === 'tmux' && tmuxPhysicalProof?.physical_tmux_verified !== true ? ['tmux_physical_pane_proof_missing'] : []),
+    ...(input.backend === 'tmux' && !tmuxPhysicalBeforeDrain ? ['tmux_physical_before_drain_proof_missing'] : []),
+    ...(input.backend === 'tmux' && !tmuxPhysicalAfterDrain ? ['tmux_physical_after_drain_proof_missing'] : []),
+    ...(input.backend === 'tmux' && !tmuxPhysicalFinal ? ['tmux_physical_final_proof_missing'] : []),
+    ...(input.backend === 'tmux' && Array.isArray(tmuxPhysicalProofSummary?.blockers) ? tmuxPhysicalProofSummary.blockers : []),
     ...(input.backend === 'tmux' && Array.isArray(tmuxPhysicalProof?.blockers) ? tmuxPhysicalProof.blockers : []),
     ...(input.backend === 'tmux' && tmuxLanes?.ok !== true ? ['tmux_right_lane_manifest_missing'] : []),
     ...(input.backend === 'tmux' && tmuxPaneLaunchCount === 0 ? ['tmux_pane_launch_evidence_missing'] : []),
@@ -156,6 +164,13 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     tmux_pane_launch_count: tmuxPaneLaunchCount,
     physical_tmux_verified: tmuxPhysicalProof?.physical_tmux_verified === true,
     tmux_physical_proof: 'agent-tmux-physical-proof.json',
+    tmux_physical_proof_summary: 'agent-tmux-physical-proof-summary.json',
+    tmux_physical_proof_before_drain: 'agent-tmux-physical-proof-before-drain.json',
+    tmux_physical_proof_after_drain: 'agent-tmux-physical-proof-after-drain.json',
+    tmux_physical_proof_final: 'agent-tmux-physical-proof-final.json',
+    tmux_physical_before_drain_ok: tmuxPhysicalBeforeDrain?.ok === true,
+    tmux_physical_after_drain_ok: tmuxPhysicalAfterDrain?.ok === true,
+    tmux_physical_final_ok: tmuxPhysicalFinal?.ok === true,
     tmux_list_panes_artifact: tmuxPhysicalProof?.tmux_list_panes_artifact || null,
     tmux_capture_pane_artifacts: tmuxPhysicalProof?.tmux_capture_pane_artifacts || [],
     tmux_pane_id_reconciled: tmuxPhysicalProof?.tmux_pane_id_reconciled === true,
