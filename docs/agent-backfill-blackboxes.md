@@ -1,22 +1,27 @@
-# Agent Backfill Blackboxes 1.18.2
+# Agent Backfill Blackboxes 1.18.3
 
-SKS 1.18.2 release readiness includes route-level blackboxes for dynamic backfill.
+SKS 1.18.3 release readiness includes route-truth blackboxes for dynamic backfill.
 
 The required route gates are:
 
 ```bash
 npm run agent:dynamic-pool-route-blackbox
 npm run agent:backfill-route-blackbox
+npm run agent:route-truth-backfill
 npm run team:backfill-route-blackbox
+npm run team:actual-route-backfill
 npm run research:backfill-route-blackbox
+npm run research:actual-route-backfill
 npm run qa:backfill-route-blackbox
+npm run qa:actual-route-backfill
 ```
 
-Each gate runs the native orchestrator through the command surface with `--agents 5 --work-items 8 --target-active-slots 5 --mock --json`. The fixture delays the first two work items so they finish early, keeps three first-wave items slower, and verifies that replacement generations launch from the pending queue before drain.
+Each gate runs the native orchestrator through the actual route command surface with `--agents 5 --work-items 8 --target-active-slots 5 --minimum-work-items 5 --mock --json`. Agent uses `sks agent run`, Team uses `sks team`, Research uses `sks research prepare` plus `sks research run`, and QA uses `sks qa-loop prepare` plus `sks qa-loop run`. The fixture delays the first two work items so they finish early, keeps three first-wave items slower, and verifies that replacement generations launch from the pending queue before drain. A non-Agent route fails if proof shows a generic `sks agent run --route` stand-in.
 
 The blackboxes assert:
 
 - task graph schema is `sks.agent-task-graph.v1`.
+- task graph, work queue, scheduler, and proof all report the requested work count.
 - target active slots are `5`.
 - total work items are `8`.
 - max observed active slots are `5`.
@@ -26,4 +31,5 @@ The blackboxes assert:
 - all generations close.
 - terminal close reports cover generations.
 - Source Intelligence and Goal refs propagate.
+- the proof records `real_route_command_used: true`.
 - tmux lane no-flicker proof is true.

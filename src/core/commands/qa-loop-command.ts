@@ -114,15 +114,19 @@ async function qaLoopRun(args: any) {
   }
   const fallbackCycles = Number.parseInt(contract.answers?.MAX_QA_CYCLES, 10) || 8;
   const maxCycles = readMaxCycles(args, fallbackCycles);
-  const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', 3, 1, 20);
+  const requestedAgents = readBoundedIntegerFlag(args, '--agents', 3, 1, 20);
+  const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', requestedAgents, 1, 20);
   const desiredWorkItemCount = readBoundedIntegerFlag(args, '--work-items', targetActiveSlots, 1, 200);
+  const minimumWorkItems = readBoundedIntegerFlag(args, '--minimum-work-items', targetActiveSlots, 1, 200);
+  const maxQueueExpansion = readBoundedIntegerFlag(args, '--max-queue-expansion', 10, 0, 200);
   const mock = flag(args, '--mock');
   const qaGate = await readJson(path.join(dir, 'qa-gate.json'), {});
   const reportFile = qaGate.qa_report_file;
   await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_RUNNING_NO_QUESTIONS', questions_allowed: false, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.run.started', maxCycles, mock });
   const nativeAgentPlan = await readJson(path.join(dir, 'qa-agent-plan.json'), null);
-  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-exec', mock, agents: 3, targetActiveSlots, desiredWorkItemCount, concurrency: 3, readonly: true, roster: nativeAgentPlan });
+  const nativeRoster = requestedAgents === 3 ? nativeAgentPlan : null;
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-exec', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: true, roster: nativeRoster, routeCommand: 'sks qa-loop run', routeBlackboxKind: 'actual_qa_command' });
   await writeJsonAtomic(path.join(dir, 'qa-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (mock) {
@@ -138,7 +142,7 @@ async function qaLoopRun(args: any) {
     gate = { ...gate, gate: nativeGate, passed: nativeGate.passed };
     const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], visual: needsVisual, mock, command: { cmd: `sks qa-loop run ${id} --mock`, status: 0 } });
     await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: gate.passed ? 'QALOOP_DONE' : 'QALOOP_PAUSED', questions_allowed: true });
-    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation }, null, 2));
+    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation, native_agent_run: nativeAgentRun }, null, 2));
     console.log(`Mock QA-LOOP done: ${id}`);
     console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
     return;

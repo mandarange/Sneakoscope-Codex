@@ -3,6 +3,25 @@
 ## [Unreleased]
 
 
+## [1.18.3] - 2026-05-26
+
+### Added
+
+- Add route-truth dynamic scheduler gates that execute real Agent, Team, Research, and QA commands.
+- Add orchestrator option propagation proof for `--work-items`, `--target-active-slots`, `--minimum-work-items`, and queue expansion.
+- Add task graph source/goal ref propagation checks before scheduler launch and through the work queue.
+- Add slot-level tmux lane supervisor integration into orchestrator lifecycle.
+- Add proof gates for tmux supervisor initialization, update, survival, and drain.
+- Add real route command blackboxes instead of `sks agent run --route` stand-ins.
+
+### Fixed
+
+- Prevent parsed agent work item options from being ignored by `runNativeAgentOrchestrator`.
+- Prevent Team/Research/QA backfill gates from passing through the generic Agent route only.
+- Prevent agent proof from requiring tmux supervisor while the orchestrator never writes it.
+- Prevent generation-level tmux pane launches from masquerading as persistent worker-slot lanes.
+- Prevent route blackboxes from using standalone scheduler or route string substitution as proof.
+
 
 
 ## [1.18.2] - 2026-05-26

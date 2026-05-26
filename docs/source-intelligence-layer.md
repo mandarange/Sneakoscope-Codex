@@ -6,6 +6,8 @@ SKS 1.18.2 carries Source Intelligence references into each dynamic agent pool s
 
 SKS 1.18.2 also attaches Source Intelligence refs to task graph work items and schema-valid follow-up work items before each generated session generation is launched.
 
+SKS 1.18.3 reconciles those refs across task graph, work queue, scheduler proof, and the actual Agent/Team/Research/QA route blackboxes so a generic route stand-in cannot satisfy source propagation proof.
+
 Default mode is `context7_codex_web`: Context7 handles docs/library context and Codex Web Search handles live web sources. When an X AI MCP server such as `xai`, `x-ai`, `x_ai`, or `grok` is configured and search-capable, mode becomes `context7_codex_web_xai` and X AI evidence is required for verified current claims. If X AI is absent, the route remains valid with Context7 plus Codex Web Search.
 
 Artifacts:

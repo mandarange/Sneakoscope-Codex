@@ -1,6 +1,8 @@
-# Work Queue Expansion 1.18.2
+# Work Queue Expansion 1.18.3
 
 SKS 1.18.2 separates route work expansion from active slot count.
+
+SKS 1.18.3 makes the CLI-to-task-graph contract explicit: parsed `--work-items`, `--target-active-slots`, `--minimum-work-items`, and queue expansion limits must propagate into the orchestrator, task graph, queue, scheduler, and final proof.
 
 `agents` is the target active slot count. `--work-items` is the desired work queue length. The orchestrator writes `agents/agent-task-graph.json` before scheduler start, then converts that graph to task slices and `agents/agent-work-queue.json`.
 
@@ -16,5 +18,6 @@ Useful checks:
 
 ```bash
 npm run agent:task-graph-expansion
+npm run agent:cli-options-to-task-graph
 npm run agent:dynamic-pool-route-blackbox
 ```

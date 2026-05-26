@@ -31,6 +31,8 @@ export async function team(args: any = []) {
   const { prompt, agentSessions, roleCounts, roster } = opts;
   const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', roster.bundle_size, 1, 20);
   const desiredWorkItemCount = readBoundedIntegerFlag(args, '--work-items', targetActiveSlots, 1, 200);
+  const minimumWorkItems = readBoundedIntegerFlag(args, '--minimum-work-items', targetActiveSlots, 1, 200);
+  const maxQueueExpansion = readBoundedIntegerFlag(args, '--max-queue-expansion', 10, 0, 200);
   if (!prompt) {
     console.error('Usage: sks team "task" [20:agents] [executor:5 reviewer:6 user:1] [--agents N] [--work-items N] [--target-active-slots N] [--no-open-tmux] [--json] [--mock]');
     process.exitCode = 1;
@@ -80,8 +82,12 @@ export async function team(args: any = []) {
     agents: roster.bundle_size,
     targetActiveSlots,
     desiredWorkItemCount,
+    minimumWorkItems,
+    maxQueueExpansion,
     concurrency: Math.min(agentSessions, roster.bundle_size),
-    readonly: true
+    readonly: true,
+    routeCommand: 'sks team',
+    routeBlackboxKind: 'actual_team_command'
   });
   await appendTeamEvent(dir, {
     agent: 'native_agent_orchestrator',
@@ -119,6 +125,8 @@ export async function team(args: any = []) {
     bundle_size: roster.bundle_size,
     target_active_slots: targetActiveSlots,
     desired_work_items: desiredWorkItemCount,
+    minimum_work_items: minimumWorkItems,
+    max_queue_expansion: maxQueueExpansion,
     role_counts: roleCounts,
     questions: path.join(dir, 'questions.md'),
     native_agent_run: nativeAgentRun,

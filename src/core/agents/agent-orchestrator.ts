@@ -33,6 +33,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const root = path.resolve(opts.root || process.cwd())
   const prompt = String(opts.prompt || 'Native agent run')
   const route = opts.route || '$Agent'
+  const routeCommand = String(opts.routeCommand || defaultRouteCommand(route))
+  const routeBlackboxKind = String(opts.routeBlackboxKind || defaultRouteBlackboxKind(route))
   const backend = normalizeAgentBackend(opts.backend || (opts.mock ? 'fake' : 'codex-exec'))
   const created = opts.missionId
     ? { id: opts.missionId, dir: missionDir(root, opts.missionId), mission: { id: opts.missionId, mode: 'agent', prompt } }
@@ -53,6 +55,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   }))
   const targetActiveSlots = normalizeTargetActiveSlots(opts.targetActiveSlots ?? opts.agents ?? roster.agent_count)
   const desiredWorkItemCount = normalizeDesiredWorkItemCount(opts.desiredWorkItemCount, opts.minimumWorkItems, targetActiveSlots)
+  const minimumWorkItems = normalizeMinimumWorkItems(opts.minimumWorkItems, targetActiveSlots)
   const sourceIntelligence = await runSourceIntelligence({ root, missionDir: dir, route, query: prompt, offline: true, context7Available: true })
   const sourceIntelligenceRef = {
     artifact: 'source-intelligence-evidence.json',
@@ -74,7 +77,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     route,
     targetActiveSlots,
     desiredWorkItemCount,
-    ...(opts.minimumWorkItems === undefined ? {} : { minimumWorkItems: opts.minimumWorkItems }),
+    minimumWorkItems,
     sourceIntelligenceRefs: sourceIntelligenceRef,
     goalModeRef
   })
@@ -83,7 +86,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   await writeAgentTaskGraph(ledgerRoot, partition.task_graph)
   await writeScoutPolicyArtifact(ledgerRoot)
   await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster })
-  await initializeTmuxLaneSupervisor(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, targetActiveSlots })
+  await initializeTmuxLaneSupervisor(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, targetActiveSlots, launchRealTmux: backend === 'tmux' && opts.real === true })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-no-overlap-proof.json'), partition.no_overlap_proof || { schema: 'sks.agent-no-overlap-proof.v1', ok: false, blockers: ['missing_no_overlap_proof'] })
   await writeAgentLifecyclePolicy(ledgerRoot)
@@ -97,12 +100,14 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     batch_count: 0,
     target_active_slots: targetActiveSlots,
     desired_work_items: desiredWorkItemCount,
+    minimum_work_items: minimumWorkItems,
+    requested_work_items: desiredWorkItemCount,
     total_work_items: partition.task_graph?.total_work_items || partition.slices.length,
     backpressure: 'dynamic scheduler maintains target active slots until the work queue drains',
     rate_limit_delay_ms: backend === 'codex-exec' ? 250 : 0,
     resource_pressure_warnings: roster.agent_count > roster.concurrency ? ['agents_exceed_concurrency_batches'] : []
   })
-  await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: 'sks agent', native_agent_backend: backend })
+  await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: routeCommand, native_agent_backend: backend })
   const scheduler = await runAgentScheduler({
     root: ledgerRoot,
     missionId,
@@ -207,7 +212,28 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   ]
   const trust = await writeAgentTrustReport(ledgerRoot, { missionId, backend, roster, partition, cleanup, outputTails, timeoutKill, backendReport, outputValidation, scheduler: scheduler.state, blockers })
   const wrongness = await writeAgentWrongnessRecords(ledgerRoot, blockers)
-  const proof = await writeAgentProofEvidence(ledgerRoot, { missionId, backend, realParallel: backend === 'codex-exec' && opts.mock !== true, roster, partition, consensus, results, cleanup, janitor, outputTails, timeoutKill, trust, wrongness, scheduler: scheduler.state })
+  const proof = await writeAgentProofEvidence(ledgerRoot, {
+    missionId,
+    backend,
+    route,
+    routeCommand,
+    routeBlackboxKind,
+    requestedWorkItems: desiredWorkItemCount,
+    minimumWorkItems,
+    targetActiveSlots,
+    realParallel: backend === 'codex-exec' && opts.mock !== true,
+    roster,
+    partition,
+    consensus,
+    results,
+    cleanup,
+    janitor,
+    outputTails,
+    timeoutKill,
+    trust,
+    wrongness,
+    scheduler: scheduler.state
+  })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })
   return {
@@ -215,11 +241,17 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     ok: proof.ok,
     mission_id: missionId,
     route,
+    route_command: routeCommand,
+    route_blackbox_kind: routeBlackboxKind,
     backend,
     ledger_root: path.relative(root, ledgerRoot),
     roster,
     partition: { ok: partition.ok, slice_count: partition.slices.length, lease_count: partition.leases.length, blockers: partition.blockers },
     task_graph: partition.task_graph?.route_work_count_summary || null,
+    requested_work_items: desiredWorkItemCount,
+    actual_total_work_items: partition.task_graph?.total_work_items || partition.slices.length,
+    target_active_slots: targetActiveSlots,
+    minimum_work_items: minimumWorkItems,
     scheduler,
     source_intelligence: sourceIntelligenceRef,
     goal_mode: goalModeRef,
@@ -243,6 +275,28 @@ function normalizeDesiredWorkItemCount(value: unknown, minimumValue: unknown, ta
   const fallback = Number.isFinite(minimum) ? minimum : targetActiveSlots
   if (!Number.isFinite(parsed) || parsed < 1) return Math.max(1, Math.floor(fallback))
   return Math.max(1, Math.floor(parsed))
+}
+
+function normalizeMinimumWorkItems(value: unknown, targetActiveSlots: number) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 1) return Math.max(1, Math.floor(targetActiveSlots))
+  return Math.max(1, Math.floor(parsed))
+}
+
+function defaultRouteCommand(route: string) {
+  const normalized = String(route || '$Agent')
+  if (/team/i.test(normalized)) return 'sks team'
+  if (/research|autoresearch/i.test(normalized)) return 'sks research run'
+  if (/qa/i.test(normalized)) return 'sks qa-loop run'
+  return 'sks agent run'
+}
+
+function defaultRouteBlackboxKind(route: string) {
+  const normalized = String(route || '$Agent')
+  if (/team/i.test(normalized)) return 'actual_team_command'
+  if (/research|autoresearch/i.test(normalized)) return 'actual_research_command'
+  if (/qa/i.test(normalized)) return 'actual_qa_command'
+  return 'actual_agent_command'
 }
 
 function buildProvidedAgentRoster(input: any, opts: any = {}) {

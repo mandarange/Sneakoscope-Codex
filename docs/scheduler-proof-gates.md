@@ -1,6 +1,8 @@
-# Scheduler Proof Gates 1.18.2
+# Scheduler Proof Gates 1.18.3
 
 SKS 1.18.2 proof requires scheduler truth from route artifacts, not standalone fixtures alone.
+
+SKS 1.18.3 reconciles proof across task graph, work queue, scheduler state, terminal close reports, Source Intelligence refs, Goal refs, and tmux lane supervisor artifacts for the actual route command that launched the run.
 
 Required artifacts:
 
@@ -28,4 +30,5 @@ Useful check:
 
 ```bash
 npm run agent:scheduler-proof-hardening
+npm run agent:proof-contract-reconciled
 ```

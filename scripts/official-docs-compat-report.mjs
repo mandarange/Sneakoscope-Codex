@@ -4,8 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const reportDir = path.join(root, '.sneakoscope', 'reports');
-const RELEASE_VERSION = '1.18.0';
+const RELEASE_VERSION = pkg.version;
 const jsonPath = path.join(reportDir, `official-docs-compat-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `official-docs-compat-${RELEASE_VERSION}.md`);
 

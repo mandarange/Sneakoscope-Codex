@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.2 writes the `sks.release-readiness.v1` report for the dynamic scheduler closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, work-item-first task graph, schema-bound follow-up work items, route blackbox backfill checks, persistent tmux lane supervisor, scheduler proof hardening, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.2 closure DAG gaps.
+SKS 1.18.3 writes the `sks.release-readiness.v1` report for the route-truth dynamic scheduler closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, work-item-first task graph, schema-bound follow-up work items, actual route blackbox backfill checks, persistent tmux lane supervisor, scheduler proof hardening, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.3 closure DAG gaps.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -18,11 +18,19 @@ npm run agent:task-graph-expansion
 npm run agent:follow-up-work-schema
 npm run agent:dynamic-pool-route-blackbox
 npm run agent:backfill-route-blackbox
+npm run agent:cli-options-to-task-graph
+npm run agent:route-truth-backfill
 npm run team:backfill-route-blackbox
+npm run team:actual-route-backfill
 npm run research:backfill-route-blackbox
+npm run research:actual-route-backfill
 npm run qa:backfill-route-blackbox
+npm run qa:actual-route-backfill
 npm run agent:tmux-lane-persistence
 npm run agent:tmux-lane-no-flicker
+npm run agent:tmux-supervisor-integrated
+npm run agent:tmux-slot-lane-runtime
+npm run agent:proof-contract-reconciled
 npm run agent:scheduler-proof-hardening
 npm run agent:visual-consistency
 npm run release:parallel-full-coverage
@@ -34,14 +42,14 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.18.2.json`
-- `.sneakoscope/reports/release-readiness-1.18.2.md`
-- `.sneakoscope/reports/all-feature-completion-1.18.2.json`
-- `.sneakoscope/reports/all-feature-completion-1.18.2.md`
-- `.sneakoscope/reports/official-docs-compat-1.18.2.json`
-- `.sneakoscope/reports/official-docs-compat-1.18.2.md`
+- `.sneakoscope/reports/release-readiness-1.18.3.json`
+- `.sneakoscope/reports/release-readiness-1.18.3.md`
+- `.sneakoscope/reports/all-feature-completion-1.18.3.json`
+- `.sneakoscope/reports/all-feature-completion-1.18.3.md`
+- `.sneakoscope/reports/official-docs-compat-1.18.3.json`
+- `.sneakoscope/reports/official-docs-compat-1.18.3.md`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal generation closure, persistent tmux lanes, task graph/work queue expansion, follow-up work item schema, route blackbox backfill metrics, and remaining 1.18.2 P0-P5 closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal generation closure, persistent tmux lanes, task graph/work queue expansion, follow-up work item schema, actual route blackbox backfill metrics, and remaining 1.18.3 P0-P5 closure gaps.
 
 ## Priority Closure
 
