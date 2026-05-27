@@ -1,6 +1,6 @@
-# Fake vs Real Proof Policy 1.18.5
+# Fake vs Real Proof Policy 1.18.6
 
-SKS 1.18.5 uses `sks.fake-real-proof-policy.v2` to keep fixture evidence, fixture-instrumented real evidence, proven runtime evidence, optional live smoke evidence, and required-real blockers separate.
+SKS 1.18.6 uses `sks.fake-real-proof-policy.v2` to keep fixture evidence, fixture-instrumented real evidence, proven runtime evidence, optional live smoke evidence, and required-real blockers separate.
 
 Proof levels:
 
@@ -12,4 +12,6 @@ Proof levels:
 - `partial`: a subsystem has honest partial evidence, such as work graph quality below the proven threshold.
 - `blocked`: a fake backend claimed real execution, a real tmux proof lacked physical pane evidence, or a route stand-in was used for a non-agent route.
 
-The policy is written as `fake-real-proof-policy.json` next to agent proof. Trust and release readiness summaries surface subsystem proof levels for backend, tmux physical proof, Codex dynamic smoke, cleanup, and work graph independently.
+The policy is written as `fake-real-proof-policy.json` next to agent proof. Trust and release readiness summaries surface subsystem proof levels independently for `agent_backend`, `tmux_physical`, `codex_dynamic`, `cleanup`, `intelligent_work_graph`, `source_intelligence`, `goal_mode`, `route_blackbox`, `dynamic_scheduler`, and `warp_mad_lanes`.
+
+Each subsystem row records `proof_level`, `evidence_artifacts`, `blockers`, `next_action`, and `required_mode`. Backward-compatible aliases remain for `backend` and `work_graph`, but new integrations should read the named subsystem rows.

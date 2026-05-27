@@ -13,6 +13,7 @@ import { createMadSksProofEvidence, writeMadSksProofEvidence } from '../mad-sks/
 import { createMadSksRollbackPlan, writeMadSksRollbackPlan } from '../mad-sks/rollback-plan.js';
 import { runMadSksExecutor } from '../mad-sks/executors/index.js';
 import { applyMadSksRollbackPlan } from '../mad-sks/rollback-apply.js';
+import { writeMadSksTmuxLaneProof } from '../mad-sks/mad-tmux-lane-proof.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
@@ -63,7 +64,10 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   };
   const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
-  return launchMadTmuxUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, codexArgs: profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, missionId: madLaunch.mission_id });
+  const launch = await launchMadTmuxUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, codexArgs: profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, missionId: madLaunch.mission_id });
+  const laneProof = await writeMadSksTmuxLaneProof({ root: madLaunch.root, missionDir: madLaunch.dir, missionId: madLaunch.mission_id, launch, required: true });
+  if (!laneProof.ok) console.log(`MAD lane UI action: ${laneProof.operator_action_hint}`);
+  return launch;
 }
 
 async function activateMadTmuxPermissionState(cwd: any = process.cwd()) {
@@ -127,7 +131,7 @@ async function activateMadTmuxPermissionState(cwd: any = process.cwd()) {
     stop_gate: 'mad-sks-gate.json',
     prompt: gate.activated_by
   });
-  return { mission_id: id, dir, gate };
+  return { mission_id: id, dir, gate, root };
 }
 
 function readOption(args: any, name: any, fallback: any) {

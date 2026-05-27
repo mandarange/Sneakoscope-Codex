@@ -110,6 +110,11 @@ export async function buildTmuxPhysicalProof(root: string, opts: TmuxPhysicalPro
   ]
   const integrationOptional = realTmux && !listResult.ok && opts.required !== true
   const physicalVerified = realTmux && !integrationOptional && blockers.length === 0 && listResult.ok
+  const proofLevel = physicalVerified ? 'proven'
+    : !realTmux ? 'fixture_only'
+    : opts.required === true && (integrationOptional || blockers.length > 0) ? 'real_required_missing'
+    : integrationOptional ? 'integration_optional'
+    : 'blocked'
   return {
     schema: TMUX_PHYSICAL_PROOF_SCHEMA,
     generated_at: generatedAt,
@@ -117,6 +122,8 @@ export async function buildTmuxPhysicalProof(root: string, opts: TmuxPhysicalPro
     mode,
     phase,
     required: opts.required === true,
+    required_mode: opts.required === true,
+    proof_level: proofLevel,
     status: integrationOptional ? 'integration_optional' : blockers.length ? 'blocked' : realTmux ? 'passed' : 'fake_fixture',
     ok: integrationOptional || blockers.length === 0,
     physical_tmux_verified: physicalVerified,

@@ -10,7 +10,7 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 
 ## Current Release
 
-SKS **1.18.5** wires the 1.18.4 real-proof tools into the runtime lifecycle: real tmux mode now writes before-drain, after-drain, and final physical pane proof artifacts; real Codex dynamic smoke validates output-schema/result-file/process cleanup and reports `fixture_instrumented_real` honestly; `sks agent close/cleanup` performs process-tree-aware SIGTERM/SIGKILL cleanup; and the task graph carries AST/import/test ownership, critical path, and runtime truth matrix evidence.
+SKS **1.18.6** closes the zero-gap runtime truth loop: proof policy now reports every runtime subsystem separately, trust reports surface those subsystem proof levels, runtime truth matrix evidence is generated from live release artifacts, cleanup verifies process/tree/tmux/temp/lock after-states, and MAD-SKS writes explicit Warp/tmux lane proof instead of implying UI visibility.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -72,7 +72,9 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release 
 - Agent cleanup executor: [docs/agent-cleanup-executor.md](docs/agent-cleanup-executor.md)
 - Intelligent work graph: [docs/intelligent-work-graph.md](docs/intelligent-work-graph.md)
 - Fake vs real proof policy: [docs/fake-vs-real-proof-policy.md](docs/fake-vs-real-proof-policy.md)
-- Migration 1.18.4 to 1.18.5: [docs/migration-1.18.4-to-1.18.5.md](docs/migration-1.18.4-to-1.18.5.md)
+- Runtime truth matrix: [docs/runtime-truth-matrix.md](docs/runtime-truth-matrix.md)
+- Warp MAD tmux lanes: [docs/warp-mad-tmux-lanes.md](docs/warp-mad-tmux-lanes.md)
+- Migration 1.18.5 to 1.18.6: [docs/migration-1.18.5-to-1.18.6.md](docs/migration-1.18.5-to-1.18.6.md)
 - Codex official Goal mode: [docs/codex-official-goal-mode.md](docs/codex-official-goal-mode.md)
 - Release parallel full coverage: [docs/release-parallel-full-coverage.md](docs/release-parallel-full-coverage.md)
 - Priority closure P0-P4: [docs/priority-closure-p0-p4.md](docs/priority-closure-p0-p4.md)

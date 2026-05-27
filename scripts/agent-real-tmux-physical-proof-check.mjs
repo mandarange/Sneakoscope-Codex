@@ -2,9 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { assertGate, emitGate, root } from './sks-1-18-gate-lib.mjs';
+import { assertGate, emitGate, root, readJson as readRepoJson } from './sks-1-18-gate-lib.mjs';
 
-const reportPath = path.join(root, '.sneakoscope', 'reports', 'agent-real-tmux-physical-proof-1.18.5.json');
+const releaseVersion = readRepoJson('package.json').version;
+const reportPath = path.join(root, '.sneakoscope', 'reports', `agent-real-tmux-physical-proof-${releaseVersion}.json`);
 fs.mkdirSync(path.dirname(reportPath), { recursive: true });
 const required = process.env.SKS_REQUIRE_REAL_TMUX === '1';
 
@@ -45,9 +46,11 @@ const final = readJson(path.join(ledgerRoot, 'agent-tmux-physical-proof-final.js
 const report = {
   ...proof,
   schema: 'sks.real-tmux-physical-proof.v2',
-  release_version: '1.18.5',
+  release_version: releaseVersion,
   mission_id: json.mission_id,
   required,
+  required_mode: required,
+  proof_level: proof.proof_level || 'proven',
   lifecycle_phases: {
     before_drain: { artifact: 'agent-tmux-physical-proof-before-drain.json', ok: before.ok, status: before.status },
     after_drain: { artifact: 'agent-tmux-physical-proof-after-drain.json', ok: after.ok, status: after.status },
@@ -64,9 +67,11 @@ function optionalOrBlocked(reason, code) {
   const report = {
     ok: !required,
     status: required ? 'blocked' : 'integration_optional',
+    proof_level: required ? 'real_required_missing' : 'integration_optional',
     schema: 'sks.real-tmux-physical-proof.v2',
-    release_version: '1.18.5',
+    release_version: releaseVersion,
     required,
+    required_mode: required,
     reason,
     blockers: required ? [code] : []
   };

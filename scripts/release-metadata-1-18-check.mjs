@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.5';
+const RELEASE_VERSION = '1.18.6';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const parallelCheckPath = path.join(root, 'src/scripts/release-parallel-check.ts');
@@ -30,7 +30,9 @@ const requiredDocs = [
   'docs/agent-cleanup-executor.md',
   'docs/intelligent-work-graph.md',
   'docs/fake-vs-real-proof-policy.md',
-  'docs/migration-1.18.4-to-1.18.5.md',
+  'docs/runtime-truth-matrix.md',
+  'docs/warp-mad-tmux-lanes.md',
+  'docs/migration-1.18.5-to-1.18.6.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
   'docs/release-readiness.md'

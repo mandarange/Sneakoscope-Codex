@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "1.18.5",
+  "version": "1.18.6",
   "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -159,13 +159,13 @@
     "release:native-agent-backend": "node ./scripts/release-native-agent-fixture-check.mjs",
     "release:readiness": "node ./scripts/release-readiness-report.mjs",
     "coverage": "node --experimental-test-coverage --test \"test/**/*.test.mjs\"",
-    "release:check": "npm run release:check:parallel && node ./scripts/release-check-stamp.mjs write && npm run release:readiness --silent",
+    "release:check": "npm run release:check:parallel && npm run release:readiness --silent && node ./scripts/release-check-stamp.mjs write",
     "release:real-check": "npm run release:check && npm run agent:tmux-physical-lifecycle-wired && npm run agent:tmux-physical-proof-v2 && npm run agent:real-tmux-physical-proof && npm run agent:tmux-pane-reconciliation && npm run agent:tmux-lane-content-truth && npm run agent:real-codex-dynamic-smoke-v2 && npm run agent:real-codex-dynamic-smoke && npm run imagegen:real-smoke && npm run ux-review:real-imagegen-smoke && npm run ppt:real-imagegen-smoke",
     "release:publish": "npm run publish:npm",
-    "publish:dry": "npm run release:metadata && node ./scripts/release-check-stamp.mjs verify && npm run release:dist-freshness && npm --cache /tmp/sks-npm-cache publish --dry-run --registry https://registry.npmjs.org/ --access public",
+    "publish:dry": "npm run release:metadata && node ./scripts/release-check-stamp.mjs ensure && npm run release:dist-freshness && npm --cache /tmp/sks-npm-cache publish --dry-run --registry https://registry.npmjs.org/ --access public",
     "publish:npm": "npm --cache /tmp/sks-npm-cache publish --registry https://registry.npmjs.org/ --access public",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run release:metadata && npm run release:dist-freshness && node ./scripts/check-publish-tag.mjs && node ./scripts/release-check-stamp.mjs verify && node ./scripts/release-registry-check.mjs --require-unpublished",
+    "prepublishOnly": "npm run release:metadata && npm run release:dist-freshness && node ./scripts/check-publish-tag.mjs && node ./scripts/release-check-stamp.mjs ensure && node ./scripts/release-registry-check.mjs --require-unpublished",
     "dist:check": "node ./scripts/check-dist-runtime.mjs",
     "ux-review:run-wires-imagegen": "node ./scripts/ux-review-run-wires-imagegen-check.mjs",
     "ux-review:extract-wires-real-extractor": "node ./scripts/ux-review-extract-wires-real-extractor-check.mjs",
@@ -332,10 +332,10 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "figlet": "^1.11.0"
+    "figlet": "^1.11.0",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "typescript": "^5.9.3"
+    "@types/node": "^24.0.0"
   }
 }

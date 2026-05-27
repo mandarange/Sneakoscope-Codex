@@ -14,10 +14,12 @@ test('publish lifecycle runs the expensive release gate only once', () => {
   assert.doesNotMatch(scripts['feature-quality:check'], /--rc/);
   assert.equal(scripts.prepack, 'npm run build');
   assert.match(scripts['release:check'], /release-check-stamp\.mjs write/);
-  assert.match(scripts.prepublishOnly, /release-check-stamp\.mjs verify/);
+  assert.match(scripts['release:check'], /release:readiness.*release-check-stamp\.mjs write/);
+  assert.match(scripts.prepublishOnly, /release-check-stamp\.mjs ensure/);
   assert.doesNotMatch(scripts.prepublishOnly, /npm run release:check/);
   assert.match(scripts.prepublishOnly, /--require-unpublished/);
   assert.doesNotMatch(scripts['publish:dry'], /release:check/);
+  assert.match(scripts['publish:dry'], /release-check-stamp\.mjs ensure/);
   assert.match(scripts['publish:dry'], /--dry-run/);
   assert.doesNotMatch(scripts['publish:dry'], /--tag rc/);
   assert.doesNotMatch(scripts['publish:npm'], /--tag rc/);

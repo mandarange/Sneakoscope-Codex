@@ -3,9 +3,10 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.mjs';
+import { assertGate, emitGate, importDist, root as repoRoot, readJson } from './sks-1-18-gate-lib.mjs';
 
 const cleanup = await importDist('core/agents/agent-cleanup-executor.js');
+const releaseVersion = readJson('package.json').version;
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-cleanup-v2-'));
 const missionDir = path.join(root, '.sneakoscope', 'missions', 'M-cleanup-v2');
 const agentRoot = path.join(missionDir, 'agents');
@@ -25,6 +26,8 @@ try {
   assertGate(proof.sigterm_sent.includes(String(child.pid)), 'cleanup must send SIGTERM before escalation', proof);
   assertGate(proof.process_exit_verified.includes(String(child.pid)), 'cleanup must verify process exit', proof);
   assertGate(proof.process_trees.some((row) => row.target === String(child.pid)), 'cleanup must record process tree', proof);
+  await fs.mkdir(path.join(repoRoot, '.sneakoscope', 'reports'), { recursive: true });
+  await fs.writeFile(path.join(repoRoot, '.sneakoscope', 'reports', `agent-cleanup-executor-v2-${releaseVersion}.json`), `${JSON.stringify(proof, null, 2)}\n`);
   emitGate('agent:cleanup-executor-v2', { actions: proof.action_count, sigterm: proof.sigterm_sent.length, sigkill: proof.sigkill_escalations.length });
 } finally {
   try { process.kill(child.pid, 'SIGKILL'); } catch {}

@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import ts from 'typescript'
 import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
 
 export const INTELLIGENT_WORK_GRAPH_SCHEMA = 'sks.intelligent-work-graph.v2'
@@ -18,6 +19,8 @@ export interface IntelligentWorkGraph {
   ast_inventory: any
   file_to_symbols: Record<string, string[]>
   symbol_to_files: Record<string, string[]>
+  exported_symbols: Record<string, string[]>
+  imported_symbols: Record<string, string[]>
   exported_api_ownership: Record<string, string>
   command_to_module_ownership: Record<string, string[]>
   route_to_module_ownership: Record<string, string[]>
@@ -99,6 +102,8 @@ export function buildIntelligentWorkGraphFromData(input: {
     ast_inventory: ast,
     file_to_symbols: ast.file_to_symbols,
     symbol_to_files: ast.symbol_to_files,
+    exported_symbols: ast.exported_symbols,
+    imported_symbols: ast.imported_symbols,
     exported_api_ownership: ast.exported_api_ownership,
     command_to_module_ownership: ast.command_to_module_ownership,
     route_to_module_ownership: ast.route_to_module_ownership,
@@ -157,6 +162,30 @@ export function enhanceTaskGraphWithIntelligence(taskGraph: any, graph: Intellig
 
 export async function writeIntelligentWorkGraphArtifacts(root: string, graph: IntelligentWorkGraph) {
   await writeJsonAtomic(path.join(root, 'agent-intelligent-work-graph.json'), graph)
+  await writeJsonAtomic(path.join(root, 'agent-intelligent-work-graph-v2.json'), graph)
+  await writeJsonAtomic(path.join(root, 'agent-symbol-ownership-map.json'), {
+    schema: 'sks.agent-symbol-ownership-map.v1',
+    generated_at: graph.generated_at,
+    ok: Object.keys(graph.symbol_to_files).length > 0,
+    ast_coverage: graph.ast_coverage,
+    file_to_symbols: graph.file_to_symbols,
+    symbol_to_files: graph.symbol_to_files,
+    exported_symbols: graph.exported_symbols,
+    imported_symbols: graph.imported_symbols,
+    exported_api_ownership: graph.exported_api_ownership
+  })
+  await writeJsonAtomic(path.join(root, 'agent-route-ownership-map.json'), {
+    schema: 'sks.agent-route-ownership-map.v1',
+    generated_at: graph.generated_at,
+    ok: Object.keys(graph.route_to_module_ownership).length > 0,
+    route_to_module_ownership: graph.route_to_module_ownership
+  })
+  await writeJsonAtomic(path.join(root, 'agent-command-ownership-map.json'), {
+    schema: 'sks.agent-command-ownership-map.v1',
+    generated_at: graph.generated_at,
+    ok: Object.keys(graph.command_to_module_ownership).length > 0,
+    command_to_module_ownership: graph.command_to_module_ownership
+  })
   await writeJsonAtomic(path.join(root, 'agent-test-ownership-map.json'), {
     schema: 'sks.agent-test-ownership-map.v1',
     generated_at: graph.generated_at,
@@ -165,14 +194,38 @@ export async function writeIntelligentWorkGraphArtifacts(root: string, graph: In
     test_ownership_confidence: graph.test_ownership_confidence,
     ...graph.test_ownership_map
   })
+  await writeJsonAtomic(path.join(root, 'agent-source-test-ownership-v2.json'), {
+    schema: 'sks.agent-source-test-ownership.v2',
+    generated_at: graph.generated_at,
+    ok: graph.test_ownership_confidence > 0,
+    ast_coverage: graph.ast_coverage,
+    test_ownership_confidence: graph.test_ownership_confidence,
+    source_to_test_relations: graph.source_to_test_relations,
+    ...graph.test_ownership_map
+  })
   await writeJsonAtomic(path.join(root, 'agent-critical-path.json'), {
     schema: 'sks.agent-critical-path.v1',
     generated_at: graph.generated_at,
     ok: graph.critical_path.path.length > 0,
     ...graph.critical_path
   })
+  await writeJsonAtomic(path.join(root, 'agent-critical-path-v2.json'), {
+    schema: 'sks.agent-critical-path.v2',
+    generated_at: graph.generated_at,
+    ok: graph.critical_path.path.length > 0,
+    ast_coverage: graph.ast_coverage,
+    critical_path_confidence: graph.critical_path.confidence || graph.test_ownership_confidence,
+    ...graph.critical_path
+  })
   await writeJsonAtomic(path.join(root, 'agent-integration-bottlenecks.json'), {
     schema: 'sks.agent-integration-bottlenecks.v1',
+    generated_at: graph.generated_at,
+    ok: true,
+    critical_path_confidence: graph.critical_path.confidence || null,
+    ...graph.integration_bottlenecks
+  })
+  await writeJsonAtomic(path.join(root, 'agent-integration-bottlenecks-v2.json'), {
+    schema: 'sks.agent-integration-bottlenecks.v2',
     generated_at: graph.generated_at,
     ok: true,
     critical_path_confidence: graph.critical_path.confidence || null,
@@ -186,16 +239,16 @@ function buildTestOwnershipMap(sourceFiles: string[], testFiles: string[], ast: 
   const dependencyRelations = Array.isArray(dependencyGraph?.test_to_source_relations) ? dependencyGraph.test_to_source_relations : []
   for (const source of sourceFiles) {
     const base = basenameNoExt(source)
-    const sourceSymbols = new Set(ast.file_to_symbols?.[source] || [])
+    const sourceSymbols = new Set((ast.exported_symbols?.[source] || []).length ? ast.exported_symbols[source] : ast.file_to_symbols?.[source] || [])
     const hinted = testFiles.filter((test) => {
       if (test.includes(base) || test.includes(source.replace(/^src\//, '').replace(/\.[^.]+$/, ''))) return true
       if (dependencyRelations.some((row: any) => row.test === test && row.source_hint === source)) return true
-      const testSymbols = new Set(ast.file_to_symbols?.[test] || [])
-      return [...sourceSymbols].some((symbol) => testSymbols.has(symbol))
+      const testImports = new Set(ast.imported_symbols?.[test] || [])
+      return [...sourceSymbols].some((symbol) => testImports.has(symbol))
     })
     ownerBySource[source] = hinted
     for (const test of hinted) {
-      const symbolOverlap = (ast.file_to_symbols?.[test] || []).filter((symbol: string) => sourceSymbols.has(symbol))
+      const symbolOverlap = (ast.imported_symbols?.[test] || []).filter((symbol: string) => sourceSymbols.has(symbol))
       const confidenceScore = test.includes(base) ? 1 : symbolOverlap.length ? 0.8 : 0.55
       relations.push({ source, test, confidence: confidenceScore >= 0.9 ? 'high' : confidenceScore >= 0.75 ? 'medium' : 'low', confidence_score: confidenceScore, symbol_overlap: symbolOverlap })
     }
@@ -216,24 +269,29 @@ function buildAstSymbolInventory(root: string, sourceFiles: string[], testFiles:
   const fileToSymbols: Record<string, string[]> = {}
   const symbolToFiles: Record<string, string[]> = {}
   const exportedApiOwnership: Record<string, string> = {}
+  const exportedSymbols: Record<string, string[]> = {}
+  const importedSymbols: Record<string, string[]> = {}
   const commandToModuleOwnership: Record<string, string[]> = {}
   const routeToModuleOwnership: Record<string, string[]> = {}
   const parsedFiles: string[] = []
   const limitations = [
-    'regex_lightweight_parser_no_type_resolution',
-    'dynamic_imports_and_reexports_best_effort',
+    'typescript_compiler_api_syntax_only_no_type_checker',
+    'dynamic_imports_best_effort',
     ...(candidateFiles.length < sourceFiles.length + testFiles.length + scripts.length ? ['file_budget_truncated'] : [])
   ]
   for (const file of candidateFiles) {
     const text = safeRead(path.join(root, file))
     if (!text) continue
     parsedFiles.push(file)
-    const symbols = parseSymbols(text)
+    const ast = parseAstSymbols(file, text)
+    const symbols = [...new Set([...ast.declared_symbols, ...ast.exported_symbols, ...ast.imported_symbols])].sort()
     fileToSymbols[file] = symbols
+    exportedSymbols[file] = ast.exported_symbols
+    importedSymbols[file] = ast.imported_symbols
     for (const symbol of symbols) {
       symbolToFiles[symbol] = [...(symbolToFiles[symbol] || []), file]
     }
-    for (const symbol of parseExports(text)) exportedApiOwnership[symbol] = file
+    for (const symbol of ast.exported_symbols) exportedApiOwnership[symbol] = file
     if (/src\/core\/commands\/.+-command\.ts$/.test(file) || /src\/cli\/.+-command\.ts$/.test(file)) {
       const command = path.basename(file).replace(/-command\.[^.]+$/, '')
       commandToModuleOwnership[command] = [...(commandToModuleOwnership[command] || []), file]
@@ -249,6 +307,8 @@ function buildAstSymbolInventory(root: string, sourceFiles: string[], testFiles:
     parsed_file_count: parsedFiles.length,
     file_to_symbols: fileToSymbols,
     symbol_to_files: symbolToFiles,
+    exported_symbols: exportedSymbols,
+    imported_symbols: importedSymbols,
     exported_api_ownership: exportedApiOwnership,
     command_to_module_ownership: commandToModuleOwnership,
     route_to_module_ownership: routeToModuleOwnership,
@@ -264,41 +324,60 @@ function safeRead(file: string) {
   }
 }
 
-function parseSymbols(text: string) {
-  const out = new Set<string>()
-  const patterns = [
-    /\b(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g,
-    /\b(?:export\s+)?class\s+([A-Za-z_$][\w$]*)/g,
-    /\b(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g,
-    /\binterface\s+([A-Za-z_$][\w$]*)/g,
-    /\btype\s+([A-Za-z_$][\w$]*)/g,
-    /\bimport\s+\{([^}]+)\}\s+from/g
-  ]
-  for (const re of patterns) {
-    for (const match of text.matchAll(re)) {
-      if (match[1]?.includes(',')) {
-        for (const raw of match[1].split(',')) {
-          const symbol = raw.trim().split(/\s+as\s+/i)[0]?.trim()
-          if (symbol) out.add(symbol)
-        }
-      } else if (match[1]) out.add(match[1])
+function parseAstSymbols(file: string, text: string) {
+  const declared = new Set<string>()
+  const exported = new Set<string>()
+  const imported = new Set<string>()
+  const sourceFile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKindForFile(file))
+  const addName = (node: { name?: ts.PropertyName | ts.BindingName }) => {
+    const name = node.name
+    if (!name) return
+    if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) declared.add(name.text)
+  }
+  const addBinding = (name: ts.BindingName) => {
+    if (ts.isIdentifier(name)) declared.add(name.text)
+    else for (const element of name.elements) {
+      if (!ts.isOmittedExpression(element)) addBinding(element.name)
     }
   }
-  return [...out].sort()
+  const exportedModifier = (node: ts.Node) => ts.canHaveModifiers(node) && Boolean(ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword))
+  const visit = (node: ts.Node) => {
+    if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node)) {
+      addName(node)
+      if (node.name && exportedModifier(node)) exported.add(node.name.text)
+    } else if (ts.isVariableStatement(node)) {
+      const isExported = exportedModifier(node)
+      for (const declaration of node.declarationList.declarations) {
+        addBinding(declaration.name)
+        if (isExported && ts.isIdentifier(declaration.name)) exported.add(declaration.name.text)
+      }
+    } else if (ts.isImportDeclaration(node) && node.importClause) {
+      if (node.importClause.name) imported.add(node.importClause.name.text)
+      const bindings = node.importClause.namedBindings
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const specifier of bindings.elements) imported.add((specifier.propertyName || specifier.name).text)
+      } else if (bindings && ts.isNamespaceImport(bindings)) imported.add(bindings.name.text)
+    } else if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+      for (const specifier of node.exportClause.elements) exported.add(specifier.name.text)
+    } else if (ts.isExportAssignment(node)) {
+      exported.add('default')
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return {
+    declared_symbols: [...declared].sort(),
+    exported_symbols: [...exported].sort(),
+    imported_symbols: [...imported].sort()
+  }
 }
 
-function parseExports(text: string) {
-  const out = new Set<string>()
-  for (const match of text.matchAll(/\bexport\s+(?:async\s+)?(?:function|class|const|let|var|interface|type)\s+([A-Za-z_$][\w$]*)/g)) {
-    if (match[1]) out.add(match[1])
-  }
-  for (const match of text.matchAll(/\bexport\s+\{([^}]+)\}/g)) {
-    for (const raw of String(match[1] || '').split(',')) {
-      const symbol = raw.trim().split(/\s+as\s+/i).pop()?.trim()
-      if (symbol) out.add(symbol)
-    }
-  }
-  return [...out].sort()
+function scriptKindForFile(file: string) {
+  if (/\.tsx$/i.test(file)) return ts.ScriptKind.TSX
+  if (/\.jsx$/i.test(file)) return ts.ScriptKind.JSX
+  if (/\.json$/i.test(file)) return ts.ScriptKind.JSON
+  if (/\.[cm]?js$/i.test(file)) return ts.ScriptKind.JS
+  return ts.ScriptKind.TS
 }
 
 function parseRouteHints(text: string, file: string) {
