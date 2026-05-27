@@ -16,4 +16,14 @@ test('global Codex App skill install includes commit dollar routes', async () =>
     const text = await fs.readFile(skillPath, 'utf8');
     assert.match(text, new RegExp(`name: ${name}`));
   }
+
+  const imagegen = await fs.readFile(path.join(home, '.agents', 'skills', 'imagegen', 'SKILL.md'), 'utf8');
+  assert.match(imagegen, /ChatGPT Images 2\.0 \/ GPT Image 2\.0 with gpt-image-2/);
+  assert.match(imagegen, /Capability detection is not output proof/);
+  assert.match(imagegen, /non-Codex evidence/);
+
+  const scout = await fs.readFile(path.join(home, '.agents', 'skills', 'imagegen-source-scout', 'SKILL.md'), 'utf8');
+  assert.match(scout, /official OpenAI announcement/);
+  assert.match(scout, /X\/social\/community search/);
+  assert.match(scout, /prompt-quality heuristics only/);
 });

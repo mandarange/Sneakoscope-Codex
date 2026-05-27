@@ -1,4 +1,4 @@
-import { flag } from '../cli/args.js';
+import { flag, readOption } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { codexCompatibilityReport, codexDoctorReport } from '../core/codex-compat/codex-compat-report.js';
 import { codexVersionReport } from '../core/codex-compat/codex-version.js';
@@ -7,7 +7,8 @@ import { codexSchemaSnapshotReport } from '../core/codex-compat/codex-schema-sna
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'compatibility';
   if (action === 'compatibility' || action === 'compat') {
-    const result = await codexCompatibilityReport();
+    const requiredBaseline = readOption(args, '--require', null);
+    const result = await codexCompatibilityReport({ requiredBaseline, require: requiredBaseline });
     if (flag(args, '--json')) return printJson(result);
     console.log(`Codex compatibility: ${result.ok ? result.status : 'blocked'} (${result.required_baseline})`);
     for (const warning of result.warnings || []) console.log(`- ${warning}`);

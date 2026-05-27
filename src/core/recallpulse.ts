@@ -1131,7 +1131,7 @@ function preservedRoutePersonality(routeId: any = '', routeName: any = '') {
     QALoop: 'QA-LOOP keeps dogfood, checklist, remediation, and reverification identity',
     PPT: 'PPT keeps restrained information-first HTML/PDF delivery identity',
     ImageUXReview: 'Image UX Review keeps gpt-image-2 annotated raster review identity',
-    ComputerUse: 'Computer Use keeps maximum-speed visual/browser lane identity',
+    ComputerUse: 'Computer Use keeps maximum-speed native Mac/non-web visual lane identity',
     Goal: 'Goal stays a native /goal persistence bridge, not a heavyweight route',
     Research: 'Research keeps named xhigh persona agent council, Eureka, debate, paper, and falsification identity',
     AutoResearch: 'AutoResearch keeps iterative experiment loop identity',

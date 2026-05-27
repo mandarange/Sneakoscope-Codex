@@ -1,26 +1,31 @@
 import path from 'node:path'
 import { readJson, runProcess, writeJsonAtomic } from '../fsx.js'
+import { managedProxyEnvForChild } from '../codex/managed-proxy-env.js'
 import { agentWorkerEnv, validateAgentWorkerResult } from './agent-worker-pipeline.js'
 
 export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = {}) {
   const resultFile = opts.resultFile || defaultCodexResultFile(agent, opts)
   const sandbox = opts.workspaceWrite ? 'workspace-write' : 'read-only'
+  const args = [
+    'exec',
+    '--json',
+    '--output-schema',
+    opts.schemaFile || 'schemas/codex/agent-result.schema.json',
+    '--output-last-message',
+    resultFile,
+    '--ephemeral',
+  ]
+  if (opts.profile) args.push('--profile', String(opts.profile))
+  else args.push('--ignore-user-config')
+  args.push(
+    '--ignore-rules',
+    '--sandbox',
+    sandbox,
+    prompt
+  )
   return {
     resultFile,
-    args: [
-      'exec',
-      '--json',
-      '--output-schema',
-      opts.schemaFile || 'schemas/codex/agent-result.schema.json',
-      '--output-last-message',
-      resultFile,
-      '--ephemeral',
-      '--ignore-user-config',
-      '--ignore-rules',
-      '--sandbox',
-      sandbox,
-      prompt
-    ]
+    args
   }
 }
 
@@ -36,13 +41,16 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
   }
   if (opts.dryRun !== false) {
     const command = buildCodexExecAgentArgs(agent, opts.prompt || slice?.description || '', opts)
+    const proxyEnv = managedProxyEnvForChild({ ...process.env, ...(opts.env || {}) })
     const report = await writeCodexProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
       command: [opts.codexBin || 'codex', ...command.args],
+      profile: opts.profile || null,
       result_file: command.resultFile,
       output_schema_used: command.args.includes('--output-schema'),
       output_last_message_path: command.resultFile,
       agent_worker_env_injected: false,
       recursion_guard_env: false,
+      managed_proxy_env_keys: Object.keys(proxyEnv).sort(),
       pid: null,
       exit_code: null,
       stdout_log: null,
@@ -57,14 +65,17 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
   const stderrFile = path.join(logRoot, 'codex-exec.stderr.log')
   const allowedCommandsFile = path.join(opts.agentRoot || opts.cwd || process.cwd(), 'agent-allowed-commands.json')
   const workerEnv = agentWorkerEnv(agent, allowedCommandsFile)
-  const result = await runProcess(opts.codexBin || 'codex', command.args, { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...workerEnv }, timeoutMs: opts.timeoutMs || 30 * 60 * 1000, maxOutputBytes: 256 * 1024, stdoutFile, stderrFile })
+  const proxyEnv = managedProxyEnvForChild({ ...process.env, ...(opts.env || {}) })
+  const result = await runProcess(opts.codexBin || 'codex', command.args, { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...proxyEnv, ...workerEnv }, timeoutMs: opts.timeoutMs || 30 * 60 * 1000, maxOutputBytes: 256 * 1024, stdoutFile, stderrFile })
   const report = await writeCodexProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
     command: [opts.codexBin || 'codex', ...command.args],
+    profile: opts.profile || null,
     result_file: command.resultFile,
     output_schema_used: command.args.includes('--output-schema'),
     output_last_message_path: command.resultFile,
     agent_worker_env_injected: Object.keys(workerEnv).length > 0,
     recursion_guard_env: Boolean(workerEnv.SKS_AGENT_SESSION_ID),
+    managed_proxy_env_keys: Object.keys(proxyEnv).sort(),
     pid: result.pid || null,
     exit_code: result.code,
     stdout_log: path.relative(opts.agentRoot || opts.cwd || process.cwd(), stdoutFile),

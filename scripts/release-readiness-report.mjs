@@ -28,6 +28,19 @@ const checks = {
   ppt_full_e2e_blackbox: scriptContains('release:check', 'ppt:full-e2e-blackbox'),
   ppt_full_e2e_artifact_graph: scriptContains('release:check', 'ppt:full-e2e-artifact-graph'),
   codex_0133_official_compat: scriptContains('release:check', 'codex:0.133-official-compat'),
+  codex_0134_compat: scriptContains('release:check', 'codex:0.134-compat'),
+  codex_0134_official_compat: scriptContains('release:check', 'codex:0.134-official-compat'),
+  codex_profile_primary: scriptContains('release:check', 'codex:profile-primary'),
+  codex_managed_proxy_env: scriptContains('release:check', 'codex:managed-proxy-env'),
+  mcp_0134_modernization: scriptContains('release:check', 'mcp:0.134-modernization'),
+  source_intelligence_codex_history_search: scriptContains('release:check', 'source-intelligence:codex-history-search'),
+  agent_parallel_write_kernel: scriptContains('release:check', 'agent:parallel-write-kernel'),
+  agent_parallel_write_blackbox: scriptContains('release:check', 'agent:parallel-write-blackbox'),
+  team_parallel_write_blackbox: scriptContains('release:check', 'team:parallel-write-blackbox'),
+  dfix_parallel_write_blackbox: scriptContains('release:check', 'dfix:parallel-write-blackbox'),
+  agent_patch_proof: scriptContains('release:check', 'agent:patch-proof'),
+  agent_patch_rollback: scriptContains('release:check', 'agent:patch-rollback'),
+  release_gate_existence_audit: scriptContains('release:check', 'release:gate-existence-audit'),
   flagship_proof_graph_v3: scriptContains('release:check', 'flagship:proof-graph-v3'),
   flagship_proof_graph_v4: scriptContains('release:check', 'flagship:proof-graph-v4'),
   mad_sks_actual_executor: scriptContains('release:check', 'mad-sks:actual-executor'),
@@ -158,12 +171,21 @@ const checks = {
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
 const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
 const releaseMetadata = runNodeScript('scripts/release-metadata-1-18-check.mjs');
+const imagegenCore = runNodeScript('scripts/imagegen-capability-check.mjs');
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
   flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null),
   flagship_proof_graph_v4: readJson('.sneakoscope/reports/flagship-proof-graph-v4.json', null),
   runtime_truth_matrix: readJson(`.sneakoscope/reports/runtime-truth-matrix-${RELEASE_VERSION}.json`, null),
-  real_codex_dynamic_smoke: readJson(`.sneakoscope/reports/agent-real-codex-dynamic-smoke-${RELEASE_VERSION}.json`, null)
+  real_codex_dynamic_smoke: readJson(`.sneakoscope/reports/agent-real-codex-dynamic-smoke-${RELEASE_VERSION}.json`, null),
+  codex_0_134_official_compat: readJson('.sneakoscope/reports/codex-0-134-official-compat.json', null),
+  mcp_0_134_modernization: readJson('.sneakoscope/reports/mcp-0-134-modernization.json', null),
+  agent_parallel_write_kernel: readJson('.sneakoscope/reports/agent-parallel-write-kernel.json', null),
+  agent_parallel_write_blackbox: readJson('.sneakoscope/reports/agent-parallel-write-blackbox.json', null),
+  team_parallel_write_blackbox: readJson('.sneakoscope/reports/team-parallel-write-blackbox.json', null),
+  dfix_parallel_write_blackbox: readJson('.sneakoscope/reports/dfix-parallel-write-blackbox.json', null),
+  agent_patch_proof: readJson('.sneakoscope/reports/agent-patch-proof.json', null),
+  agent_patch_rollback: readJson('.sneakoscope/reports/agent-patch-rollback.json', null)
 };
 const runtimeChecks = {
   ppt_full_e2e_blackbox: runtimeReports.ppt_full_e2e_blackbox?.ok === true
@@ -234,6 +256,19 @@ for (const [name, ok] of Object.entries({
   proof_fake_vs_real_policy: checks.proof_fake_vs_real_policy,
   proof_fake_real_policy_v2: checks.proof_fake_real_policy_v2,
   release_runtime_truth_matrix: checks.release_runtime_truth_matrix && runtimeChecks.runtime_truth_matrix,
+  codex_0134_compat: checks.codex_0134_compat && runtimeReports.codex_0_134_official_compat?.ok === true,
+  codex_0134_official_compat: checks.codex_0134_official_compat && runtimeReports.codex_0_134_official_compat?.ok === true,
+  codex_profile_primary: checks.codex_profile_primary,
+  codex_managed_proxy_env: checks.codex_managed_proxy_env,
+  mcp_0134_modernization: checks.mcp_0134_modernization && runtimeReports.mcp_0_134_modernization?.ok === true,
+  source_intelligence_codex_history_search: checks.source_intelligence_codex_history_search,
+  agent_parallel_write_kernel: checks.agent_parallel_write_kernel && runtimeReports.agent_parallel_write_kernel?.ok === true,
+  agent_parallel_write_blackbox: checks.agent_parallel_write_blackbox && runtimeReports.agent_parallel_write_blackbox?.ok === true,
+  team_parallel_write_blackbox: checks.team_parallel_write_blackbox && runtimeReports.team_parallel_write_blackbox?.ok === true,
+  dfix_parallel_write_blackbox: checks.dfix_parallel_write_blackbox && runtimeReports.dfix_parallel_write_blackbox?.ok === true,
+  agent_patch_proof: checks.agent_patch_proof && runtimeReports.agent_patch_proof?.ok === true,
+  agent_patch_rollback: checks.agent_patch_rollback && runtimeReports.agent_patch_rollback?.ok === true,
+  release_gate_existence_audit: checks.release_gate_existence_audit,
   route_blackbox_realism: checks.route_blackbox_realism,
   agent_dynamic_cockpit: checks.agent_dynamic_cockpit,
   agent_source_intelligence_propagation: checks.agent_source_intelligence_propagation,
@@ -245,6 +280,7 @@ for (const [name, ok] of Object.entries({
 if (docs.status !== 0) remainingP0.push('docs_truthfulness_failed');
 if (officialDocs.status !== 0) remainingP0.push('official_docs_compat_failed');
 if (releaseMetadata.status !== 0) remainingP0.push('release_metadata_failed');
+if (imagegenCore.status !== 0) remainingP0.push('imagegen_core_capability_failed');
 
 const stamp = readJson('.sneakoscope/reports/release-check-stamp.json', null);
 const currentStamp = stamp?.package_version === RELEASE_VERSION ? stamp : null;
@@ -272,10 +308,67 @@ const report = {
     status: checks.computer_use_live_evidence ? 'present' : 'missing',
     modes: ['probe_only', 'live_capture_attempted', 'live_capture_success', 'live_capture_blocked']
   },
+  imagegen_core: {
+    status: imagegenCore.status === 0 ? 'pass' : 'fail',
+    model: 'gpt-image-2',
+    required_for_full_visual_verification: true,
+    preferred_surface: 'Codex App $imagegen',
+    codex_app_builtin_required: true,
+    real_output_verified_by_capability_check: false,
+    capability_detection_is_not_output_proof: true,
+    fallback_surface: 'Explicit OpenAI Images API gpt-image-2 fallback (non-Codex evidence)',
+    api_fallback_satisfies_codex_app_evidence: false,
+    stdout: trimOutput(imagegenCore.stdout)
+  },
   codex_0_133: {
     status: checks.codex_0133_compat ? 'present' : 'missing',
     baseline: 'rust-v0.133.0',
     output_schema_resume: checks.codex_output_schema_fixture ? 'present' : 'missing'
+  },
+  codex_0_134: {
+    status: checks.codex_0134_compat
+      && checks.codex_0134_official_compat
+      && runtimeReports.codex_0_134_official_compat?.ok === true
+      && checks.codex_profile_primary
+      && checks.codex_managed_proxy_env
+      && checks.source_intelligence_codex_history_search ? 'present' : 'missing',
+    baseline: 'rust-v0.134.0',
+    official_compat: checks.codex_0134_official_compat,
+    official_compat_report_ok: runtimeReports.codex_0_134_official_compat ? runtimeReports.codex_0_134_official_compat.ok === true : null,
+    profile_primary: checks.codex_profile_primary,
+    managed_proxy_env: checks.codex_managed_proxy_env,
+    local_history_search: checks.source_intelligence_codex_history_search
+  },
+  mcp_0_134: {
+    status: checks.mcp_0134_modernization && runtimeReports.mcp_0_134_modernization?.ok === true ? 'present' : 'missing',
+    modernization_gate: checks.mcp_0134_modernization,
+    modernization_report_ok: runtimeReports.mcp_0_134_modernization ? runtimeReports.mcp_0_134_modernization.ok === true : null
+  },
+  parallel_write_kernel_1_18_7: {
+    status: checks.agent_parallel_write_kernel
+      && checks.agent_parallel_write_blackbox
+      && checks.team_parallel_write_blackbox
+      && checks.dfix_parallel_write_blackbox
+      && checks.agent_patch_proof
+      && checks.agent_patch_rollback
+      && runtimeReports.agent_parallel_write_kernel?.ok === true
+      && runtimeReports.agent_parallel_write_blackbox?.ok === true
+      && runtimeReports.team_parallel_write_blackbox?.ok === true
+      && runtimeReports.dfix_parallel_write_blackbox?.ok === true
+      && runtimeReports.agent_patch_proof?.ok === true
+      && runtimeReports.agent_patch_rollback?.ok === true ? 'present' : 'missing',
+    agent_parallel_write_kernel: checks.agent_parallel_write_kernel,
+    agent_parallel_write_blackbox: checks.agent_parallel_write_blackbox,
+    team_parallel_write_blackbox: checks.team_parallel_write_blackbox,
+    dfix_parallel_write_blackbox: checks.dfix_parallel_write_blackbox,
+    agent_patch_proof: checks.agent_patch_proof,
+    agent_patch_rollback: checks.agent_patch_rollback,
+    kernel_report_ok: runtimeReports.agent_parallel_write_kernel ? runtimeReports.agent_parallel_write_kernel.ok === true : null,
+    agent_blackbox_report_ok: runtimeReports.agent_parallel_write_blackbox ? runtimeReports.agent_parallel_write_blackbox.ok === true : null,
+    team_blackbox_report_ok: runtimeReports.team_parallel_write_blackbox ? runtimeReports.team_parallel_write_blackbox.ok === true : null,
+    dfix_blackbox_report_ok: runtimeReports.dfix_parallel_write_blackbox ? runtimeReports.dfix_parallel_write_blackbox.ok === true : null,
+    proof_report_ok: runtimeReports.agent_patch_proof ? runtimeReports.agent_patch_proof.ok === true : null,
+    rollback_report_ok: runtimeReports.agent_patch_rollback ? runtimeReports.agent_patch_rollback.ok === true : null
   },
   mad_sks_actual_executor_closure: {
     status: checks.mad_sks_actual_executor
@@ -406,7 +499,7 @@ const report = {
     tmux_right_lanes: checks.agent_tmux_right_lanes,
     codex_app_visual_consistency: checks.agent_visual_consistency
   },
-  runtime_truth_1_18_6: {
+  runtime_truth_1_18_7: {
     status: checks.agent_tmux_physical_lifecycle_wired
       && checks.agent_tmux_physical_proof_v2
       && checks.real_codex_dynamic_smoke_v2
@@ -494,7 +587,7 @@ const report = {
     status: checks.release_parallel_full_coverage && checks.priority_full_closure ? 'present' : 'missing',
     release_parallel_full_coverage: checks.release_parallel_full_coverage,
     priority_full_closure: checks.priority_full_closure,
-    priorities: ['P0', 'P1', 'P2', 'P3', 'P4', 'P5']
+    priorities: ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6']
   },
   release_native_agent_backend: {
     status: checks.release_native_agent_backend && checks.legacy_multiagent_removed ? 'present' : 'missing',
@@ -552,7 +645,11 @@ for (const key of [
   'hook_strict_subset',
   'codex_lb_setup_truthfulness',
   'computer_use_evidence_mode_support',
+  'imagegen_core',
+  'codex_0_134',
   'codex_0_133',
+  'mcp_0_134',
+  'parallel_write_kernel_1_18_7',
   'mad_sks_actual_executor_closure',
   'image_ux_review',
   'ppt_imagegen_review',
@@ -562,7 +659,7 @@ for (const key of [
   'mad_sks_1_16_0',
   'source_intelligence_1_18',
   'agent_terminal_tmux_1_18',
-  'runtime_truth_1_18_6',
+  'runtime_truth_1_18_7',
   'dynamic_agent_pool_1_18_3',
   'goal_mode_1_18',
   'release_full_coverage_1_18',
@@ -640,7 +737,11 @@ function renderMarkdown(report) {
 - Hook strict subset: \`${report.hook_strict_subset.status}\`
 - codex-lb persistence truth: \`${report.codex_lb_setup_truthfulness.status}\`
 - Computer Use evidence modes: \`${report.computer_use_evidence_mode_support.status}\`
+- Imagegen core gpt-image-2 readiness: \`${report.imagegen_core.status}\` (Codex App $imagegen required; capability detection is not output proof)
+- Codex 0.134 compatibility: \`${report.codex_0_134.status}\`
 - Codex 0.133 compatibility: \`${report.codex_0_133.status}\`
+- MCP 0.134 modernization: \`${report.mcp_0_134.status}\`
+- Parallel write kernel 1.18.7: \`${report.parallel_write_kernel_1_18_7.status}\`
 - MAD-SKS actual executor closure: \`${report.mad_sks_actual_executor_closure.status}\`
 - Release native agent backend: \`${report.release_native_agent_backend.status}\`
 - UX-Review real callout loop gates: \`${report.image_ux_review.status}\`
@@ -649,7 +750,7 @@ function renderMarkdown(report) {
 - Hook trust warning-zero: \`${report.hook_trust_warning_zero.status}\`
 - Source Intelligence 1.18: \`${report.source_intelligence_1_18.status}\`
 - Agent terminal/tmux 1.18: \`${report.agent_terminal_tmux_1_18.status}\`
-- Runtime truth 1.18.6: \`${report.runtime_truth_1_18_6.status}\`
+- Runtime truth 1.18.7: \`${report.runtime_truth_1_18_7.status}\`
 - Dynamic agent pool ${RELEASE_VERSION}: \`${report.dynamic_agent_pool_1_18_3.status}\`
 - Goal mode 1.18: \`${report.goal_mode_1_18.status}\`
 - Release full coverage 1.18: \`${report.release_full_coverage_1_18.status}\`
@@ -661,7 +762,7 @@ function renderMarkdown(report) {
 - Loop blocker stop: \`${report.loop_blocker_stop.status}\`
 - Docs truthfulness: \`${report.docs_truthfulness.status}\`
 - Release metadata: \`${report.release_metadata.status}\`
-- Priority closure: P0, P1, P2, P3, P4, and P5 are tracked in the ${RELEASE_VERSION} readiness surface.
+- Priority closure: P0, P1, P2, P3, P4, P5, and P6 are tracked in the ${RELEASE_VERSION} readiness surface.
 - Remaining ${RELEASE_VERSION} P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
 
 \`not_in_1_18_parallel_gate\` is an explicit non-P0 status for historical, live, or broader gates not run by the ${RELEASE_VERSION} parallel DAG. Computer Use live evidence, UX-Review screenshots, and PPT generated review images remain opt-in/local-only. codex-lb process-only setup is reported as \`process_only_ephemeral\`, not durable persistence. UX-Review/PPT cannot pass from text-only critique or mock-as-real fixtures.

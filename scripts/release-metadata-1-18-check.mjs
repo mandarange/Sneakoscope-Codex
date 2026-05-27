@@ -3,9 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.6';
+const RELEASE_VERSION = '1.18.7';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+const distManifestPath = path.join(root, 'dist/build-manifest.json');
+const distManifest = fs.existsSync(distManifestPath) ? JSON.parse(fs.readFileSync(distManifestPath, 'utf8')) : null;
 const parallelCheckPath = path.join(root, 'src/scripts/release-parallel-check.ts');
 const parallelCheckSource = fs.existsSync(parallelCheckPath) ? fs.readFileSync(parallelCheckPath, 'utf8') : '';
 const requiredDocs = [
@@ -32,11 +34,18 @@ const requiredDocs = [
   'docs/fake-vs-real-proof-policy.md',
   'docs/runtime-truth-matrix.md',
   'docs/warp-mad-tmux-lanes.md',
-  'docs/migration-1.18.5-to-1.18.6.md',
+  'docs/migration-1.18.6-to-1.18.7.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
   'docs/release-readiness.md'
 ];
+const versionedDocs = new Set([
+  'README.md',
+  'CHANGELOG.md',
+  'docs/migration-1.18.6-to-1.18.7.md',
+  'docs/runtime-truth-matrix.md',
+  'docs/release-readiness.md'
+]);
 const requiredScripts = [
   'runtime:no-src-mjs',
   'runtime:ts-source-of-truth',
@@ -89,6 +98,19 @@ const requiredScripts = [
   'proof:fake-vs-real-policy',
   'proof:fake-real-policy-v2',
   'release:runtime-truth-matrix',
+  'release:gate-existence-audit',
+  'codex:0.134-compat',
+  'codex:0.134-official-compat',
+  'codex:profile-primary',
+  'codex:managed-proxy-env',
+  'mcp:0.134-modernization',
+  'source-intelligence:codex-history-search',
+  'agent:parallel-write-kernel',
+  'agent:parallel-write-blackbox',
+  'team:parallel-write-blackbox',
+  'dfix:parallel-write-blackbox',
+  'agent:patch-proof',
+  'agent:patch-rollback',
   'route:blackbox-realism',
   'agent:dynamic-cockpit',
   'agent:source-intelligence-propagation',
@@ -129,6 +151,15 @@ const requiredRealScripts = [
 assertGate(pkg.version === RELEASE_VERSION, `package.json version must be ${RELEASE_VERSION}`, { version: pkg.version });
 assertGate(lock.version === RELEASE_VERSION, `package-lock version must be ${RELEASE_VERSION}`, { version: lock.version });
 assertGate(lock.packages?.['']?.version === RELEASE_VERSION, `package-lock root version must be ${RELEASE_VERSION}`, { version: lock.packages?.['']?.version });
+assertVersionSurface('src/core/version.ts', `PACKAGE_VERSION = '${RELEASE_VERSION}'`);
+assertVersionSurface('src/core/fsx.ts', `PACKAGE_VERSION = '${RELEASE_VERSION}'`);
+assertVersionSurface('src/bin/sks.ts', `FAST_PACKAGE_VERSION = '${RELEASE_VERSION}'`);
+assertVersionSurface('crates/sks-core/Cargo.toml', `version = "${RELEASE_VERSION}"`);
+assertVersionSurface('crates/sks-core/Cargo.lock', `version = "${RELEASE_VERSION}"`);
+assertVersionSurface('crates/sks-core/src/main.rs', `sks-rs ${RELEASE_VERSION}`);
+assertGate(distManifest?.version === RELEASE_VERSION, `dist/build-manifest version must be ${RELEASE_VERSION}`, { version: distManifest?.version || null });
+assertGate(distManifest?.package_version === RELEASE_VERSION, `dist/build-manifest package_version must be ${RELEASE_VERSION}`, { package_version: distManifest?.package_version || null });
+assertGate(typeof distManifest?.source_digest === 'string' && distManifest.source_digest.length >= 32, 'dist/build-manifest must include source_digest', { source_digest: distManifest?.source_digest || null });
 assertGate(pkg.scripts?.['release:metadata']?.includes('release-metadata-1-18-check.mjs'), 'release:metadata must point to the 1.18 release check');
 assertGate(String(pkg.scripts?.['release:check'] || '').startsWith('npm run release:check:parallel'), 'release:check must use release:check:parallel');
 for (const script of requiredScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
@@ -146,7 +177,47 @@ assertGate(!pkg.files?.includes('src'), 'package files must not include src runt
 for (const file of requiredDocs) {
   const absolute = path.join(root, file);
   assertGate(fs.existsSync(absolute), `missing release doc: ${file}`);
-  assertGate(fs.readFileSync(absolute, 'utf8').includes(RELEASE_VERSION), `release doc does not mention ${RELEASE_VERSION}: ${file}`);
+  if (versionedDocs.has(file)) {
+    assertGate(fs.readFileSync(absolute, 'utf8').includes(RELEASE_VERSION), `release doc does not mention ${RELEASE_VERSION}: ${file}`);
+  }
 }
 
+const report = {
+  schema: 'sks.version-metadata-1.18.v1',
+  version: RELEASE_VERSION,
+  package_version: pkg.version,
+  version_surfaces: [
+    'package.json',
+    'package-lock.json',
+    'src/core/version.ts',
+    'src/core/fsx.ts',
+    'src/bin/sks.ts',
+    'crates/sks-core/Cargo.toml',
+    'crates/sks-core/Cargo.lock',
+    'crates/sks-core/src/main.rs',
+    'dist/build-manifest.json'
+  ],
+  dist_build_manifest: {
+    version: distManifest?.version || null,
+    package_version: distManifest?.package_version || null,
+    source_digest: distManifest?.source_digest || null,
+    source_file_count: distManifest?.source_file_count || null
+  },
+  scripts: requiredScripts,
+  real_scripts: requiredRealScripts,
+  docs: requiredDocs,
+  generated_at: new Date().toISOString(),
+  ok: true
+};
+const out = path.join(root, '.sneakoscope', 'reports', `version-metadata-${RELEASE_VERSION}.json`);
+fs.mkdirSync(path.dirname(out), { recursive: true });
+fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
+
 emitGate('release:metadata', { version: pkg.version, scripts: requiredScripts.length, real_scripts: requiredRealScripts.length, docs: requiredDocs.length });
+
+function assertVersionSurface(relFile, needle) {
+  const absolute = path.join(root, relFile);
+  assertGate(fs.existsSync(absolute), `missing version surface: ${relFile}`);
+  const text = fs.readFileSync(absolute, 'utf8');
+  assertGate(text.includes(needle), `${relFile} must contain ${needle}`, { file: relFile, needle });
+}

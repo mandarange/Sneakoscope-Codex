@@ -1,8 +1,8 @@
 # Codex CLI Compatibility
 
-SKS 1.15.1 targets the OpenAI Codex CLI `rust-v0.133.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
+SKS 1.18.7 targets the OpenAI Codex CLI `rust-v0.134.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
 
-Computer Use and codex-lb compatibility notes are bounded: Computer Use live evidence can be `probe_only`, `live_capture_success`, or a structured blocker depending on the local Codex App/macOS capability, and codex-lb can be durable or `process_only_ephemeral` depending on setup choices. Recovery commands are `sks computer-use smoke --json` for a probe-only status and `sks codex-lb setup --write-env-file --keychain --launchctl` for durable persistence. Local screenshots and secrets stay private/redacted by default.
+Computer Use and codex-lb compatibility notes are bounded: native Mac/non-web Computer Use live evidence can be `probe_only`, `live_capture_success`, or a structured blocker depending on the local Codex App/macOS capability, while web/browser/webapp verification uses the Codex Chrome Extension gate first; codex-lb can be durable or `process_only_ephemeral` depending on setup choices. Recovery commands are `sks computer-use smoke --json` for a probe-only native status and `sks codex-lb setup --write-env-file --keychain --launchctl` for durable persistence. Local screenshots and secrets stay private/redacted by default.
 
 ## Checks
 
@@ -11,7 +11,10 @@ sks codex compatibility --json
 sks codex version --json
 sks codex doctor --json
 sks codex schema --json
-npm run codex:0.133-compat
+npm run codex:0.134-compat
+npm run codex:0.134-official-compat
+npm run codex:profile-primary
+npm run codex:managed-proxy-env
 npm run codex:exec-output-schema-actual-syntax
 npm run codex:output-schema-fixture
 sks hooks codex-validate --json
@@ -22,9 +25,20 @@ npm run hooks:strict-subset-check
 
 Version detection checks `codex --version`, `codex exec --help`, `codex exec resume --help`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored snapshot metadata. A missing live Codex binary is `integration_optional`; release hook validation uses the vendored snapshot, not the local binary.
 
-## Codex 0.133 Capabilities
+## Codex 0.134 Capabilities
 
-The 1.15.1 compatibility matrix records these capability ids:
+The 1.18.7 compatibility matrix records these 0.134 capability ids:
+
+- `profile_primary_selector`: Codex `--profile` is the primary selector and SKS native agents pass it without `--ignore-user-config`.
+- `local_conversation_history_search`: Source Intelligence can search bounded local Codex history case-insensitively with previews.
+- `mcp_per_server_environment`: MCP config classification records per-server environment targeting.
+- `mcp_streamable_http_oauth`: streamable HTTP MCP OAuth support is tracked as release-readiness evidence.
+- `connector_schema_refs_defs_compaction`: oversized connector schemas are compacted while preserving `$ref` and `$defs`.
+- `mcp_readonly_parallel_hint`: `readOnlyHint` is treated as advisory and must pass destructive-name/schema checks before parallel execution.
+- `hook_subagent_context`: Subagent hook/cockpit context carries identity, slot, generation, and transcript pointers.
+- `managed_network_proxy_env`: Codex child processes receive managed proxy environment keys with redacted reports.
+
+The inherited 0.133 compatibility matrix records these capability ids:
 
 - `exec_output_schema`: preferred structured output for fresh Codex exec sessions used by native agent backends and route automation.
 - `exec_resume_output_schema`: preferred structured output for resumed Codex sessions used by native agents, UX-Review callout extraction, Completion Proof, and Wrongness artifacts.
@@ -33,14 +47,14 @@ The 1.15.1 compatibility matrix records these capability ids:
 - `memory_summary_version_rebuild`: schema-versioned TriWiki, Wrongness, and shared memory summaries with rebuild commands.
 - `goal_continuation_blocker_stop`: repeated blocker and usage-limit stops for Goal, QA, Research, and UX-Review loops.
 - `tui_probe_batching`: batchable doctor/probe inventory with timeout budgets.
-- `goals_default_enabled`: native `/goal` is treated as the active persisted continuation surface under Codex 0.133.
+- `goals_default_enabled`: native `/goal` is treated as the active persisted continuation surface under Codex 0.133 and later.
 - `remote_control_foreground_app_server`: `codex remote-control` readiness prefers the latest foregrounded app-server.
 - `permission_profiles_requirements`: Codex 0.133 permission/profile/requirements surfaces are first-class policy inputs; `allow_managed_hooks_only = true` remains in `requirements.toml`.
 - `plugin_discovery_marketplaces`: plugin discovery and `marketplaces` are recorded as P1 warning-only unless a route explicitly needs them.
 - `extension_lifecycle_events`: extension lifecycle events for turn/tool/model/item phases are tracked separately from hook schema validation.
 - `remote_executor_standard_auth`, `python_sdk_auth`, and `python_sdk_turn_result`: P1 warning-only review items unless a route explicitly uses those SDK surfaces.
 
-Unknown newer Codex fields are warning-only. Codex versions below 0.133 are degraded but supported, and output-schema fallbacks cannot support claims above `verified_partial`.
+Unknown newer Codex fields are warning-only. Codex versions below 0.134 are degraded but supported for inherited surfaces, and output-schema fallbacks cannot support claims above `verified_partial`.
 
 Fresh `codex exec` and `codex exec resume` are checked independently because a release gate that only inspects resume help can miss syntax drift in new sessions. Native agent output-schema fixtures must record which command form was exercised.
 
@@ -89,6 +103,10 @@ SKS strict-subset examples:
 
 ```bash
 npm run codex:compat
+npm run codex:0.134-compat
+npm run codex:0.134-official-compat
+npm run codex:profile-primary
+npm run codex:managed-proxy-env
 npm run codex:0.133-compat
 npm run codex:exec-output-schema-actual-syntax
 npm run codex:output-schema-fixture

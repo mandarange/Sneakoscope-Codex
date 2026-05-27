@@ -2,7 +2,7 @@
 
 SKS 1.0.8 treats `$UX-Review this screenshot with gpt-image-2 callouts, then fix the issues` as an execution route, not a prose review. A valid run needs:
 
-- A real source screenshot from Codex Computer Use or a user-provided local image.
+- A real source screenshot from Codex Chrome Extension for web/browser/webapp targets, Codex Computer Use for native Mac/non-web targets, or a user-provided local image.
 - A generated gpt-image-2 annotated callout image created through Codex App imagegen/$imagegen.
 - Schema-bound callout extraction into `image-ux-issue-ledger.json`.
 - P0/P1-first fix task planning and a bounded safe fix loop when fixes are requested.

@@ -49,17 +49,18 @@ export async function finalizeRouteWithProof(root: any, {
   const collected = await collectProofEvidence(root);
   const agentEvidence = agents === false ? null : await readAgentProofEvidence(root, missionId).catch(() => null);
   const wrongnessEvidence = await wrongnessProofEvidence(root, missionId, { route: policy.route }).catch(() => null);
-  const computerUse = policy.requires_image_voxel_anchors
+  const requiresNativeComputerUseLiveEvidence = ['$Computer-Use', '$CU'].includes(String(policy.route || ''));
+  const computerUse = requiresNativeComputerUseLiveEvidence
     ? await computerUseStatusReport().catch((err: any) => ({ schema: 'sks.computer-use-status.v1', status: 'unknown', ok: false, guidance: [err.message], evidence: { status: 'unknown' } }))
     : null;
-  const computerUseLive = policy.requires_image_voxel_anchors
+  const computerUseLive = requiresNativeComputerUseLiveEvidence
     ? await readComputerUseLiveEvidence(root, { missionId }).catch(() => ({ ok: false, path: null, evidence: null }))
     : null;
   if (computerUse && computerUse.status !== 'available') {
-    unverified.push(`Computer Use evidence unavailable: ${computerUse.status}. Visual claim remains verified_partial unless explicit screenshot/image evidence covers it.`);
+    unverified.push(`Native Computer Use evidence unavailable: ${computerUse.status}. Native visual claim remains verified_partial unless explicit screenshot/image evidence covers it.`);
   }
   if (computerUse && !computerUseLive?.evidence) {
-    unverified.push('Computer Use live evidence is missing for this visual route; high-confidence visual claims require live evidence or explicit screenshot/image coverage.');
+    unverified.push('Native Computer Use live evidence is missing for this Computer Use route; high-confidence native visual claims require live evidence or explicit screenshot/image coverage.');
     if (strict) localBlockers.push('computer_use_live_evidence_missing');
   }
   if (computerUseLive?.evidence?.mode === 'probe_only') {
@@ -78,7 +79,7 @@ export async function finalizeRouteWithProof(root: any, {
       localBlockers.push('active_high_severity_wrongness');
     }
   }
-  const visualComputerUseDowngrade = Boolean(statusHint === 'verified' && (
+  const visualComputerUseDowngrade = Boolean(requiresNativeComputerUseLiveEvidence && statusHint === 'verified' && (
     (computerUse && computerUse.status !== 'available')
     || !computerUseLive?.evidence
     || computerUseLive.evidence.mode !== 'live_capture_success'

@@ -43,6 +43,9 @@ export interface MadSksPermissionModel {
   schema: typeof MAD_SKS_PERMISSION_MODEL_SCHEMA;
   ok: boolean;
   mode: MadSksMode;
+  authority_concept: 'user_authorized_general_permission_widening';
+  db_is_subscope: true;
+  permission_widening_surface: MadSksScope[];
   generated_at: string;
   target_root: string;
   user_intent: string | null;
@@ -202,6 +205,9 @@ export function buildMadSksPermissionModel({
     schema: MAD_SKS_PERMISSION_MODEL_SCHEMA as typeof MAD_SKS_PERMISSION_MODEL_SCHEMA,
     ok: blockers.length === 0 || mode === 'plan_only',
     mode,
+    authority_concept: 'user_authorized_general_permission_widening' as const,
+    db_is_subscope: true as const,
+    permission_widening_surface: ALL_SCOPES,
     generated_at: nowIso(),
     target_root: resolvedRoot,
     user_intent: userIntent,

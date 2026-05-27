@@ -30,11 +30,17 @@ export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
 export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|git|codex|codex-app|hooks|features|all-features|openclaw|hermes|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
+export const CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE = 'codex_chrome_extension';
 export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
+export const CODEX_CHROME_EXTENSION_DOC_URL = 'https://developers.openai.com/codex/app/chrome-extension';
 export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/codex/app/features#image-generation';
 export const OPENAI_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
-export const CODEX_COMPUTER_USE_ONLY_POLICY = 'Pipeline UI/browser verification and visual inspection must use Codex Computer Use only. Do not use or install Playwright packages, Chrome MCP, Browser Use, Selenium, Puppeteer, or any other browser automation substitute; if Codex Computer Use is unavailable for the target UI, mark the UI/browser evidence unverified instead of substituting another tool. Codex App readiness/config verification is not target-UI evidence: use the Codex-provided control surfaces `codex features list`, `codex mcp list`, `sks codex-app check`, remote-control status, and plugin/tool exposure, not direct OS Accessibility control of the Codex App bundle. In Codex App prompts, invoke @Computer or @AppName in a new thread when live Computer Use tools are needed for the actual target app or screen; SKS hooks and skills can require the policy but cannot attach missing host tools to an already-started turn.';
-export const CODEX_IMAGEGEN_REQUIRED_POLICY = 'Pipeline image generation, raster asset creation/editing, and generated image-review evidence must use real Codex App imagegen/$imagegen with gpt-image-2 when that evidence is required for full verification. Do not substitute placeholder SVG/HTML/CSS, prose-only critique, stock-like stand-ins, manually fabricated files, or missing-output ledgers for requested/generated raster assets or required generated review images. If imagegen/gpt-image-2 is unavailable or generated annotated images cannot be created/linked, record the blocker and cap any closeout at verified_partial/reference-only instead of claiming generated-image evidence or full route verification; that partial closeout requires source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence. In Codex App prompts, invoke $imagegen when live image generation is needed; SKS hooks and skills can require the policy but cannot attach missing host image-generation tools to an already-started turn.';
+export const OPENAI_CHATGPT_IMAGES_2_DOC_URL = 'https://openai.com/index/introducing-chatgpt-images-2-0/';
+export const OPENAI_GPT_IMAGE_2_MODEL_DOC_URL = 'https://developers.openai.com/api/docs/models/gpt-image-2';
+export const CODEX_WEB_VERIFICATION_POLICY = `Web, browser, localhost, website, webapp, and web-based app verification must use the official Codex Chrome Extension path first (${CODEX_CHROME_EXTENSION_DOC_URL}). Before web UX review, QA-LOOP, browser smoke, authenticated browser checks, or web visual verification proceeds, SKS must verify that the Chrome Extension path is installed/enabled through Codex App plugin readiness; if it is missing, rapidly halt the pipeline, tell the user to install/setup the extension, and resume only after the user explicitly says installation is complete. Do not use Codex Computer Use as browser/web-app verification evidence. Do not substitute Playwright, Selenium, Puppeteer, Browser Use, Chrome MCP, generic browser automation, screenshots fabricated from code, or prose-only checks for the Chrome Extension gate.`;
+export const CODEX_COMPUTER_USE_ONLY_POLICY = `Codex Computer Use is reserved for native macOS, desktop-app, OS-settings, and non-web visual tasks such as setting up a Mac app or inspecting a non-browser surface. It must not be used for browser, localhost, website, webapp, or web-based app verification; those routes follow the Chrome Extension policy instead. If live native Computer Use tools are unavailable for a non-web target, mark the native visual evidence unverified instead of fabricating screenshots or substituting browser automation. Codex App readiness/config verification is not target evidence: use Codex-provided control surfaces such as \`codex features list\`, \`codex mcp list\`, \`sks codex-app check\`, remote-control status, and plugin/tool exposure. In Codex App prompts, invoke @Computer or @AppName only for live native Mac/non-web target apps or screens.`;
+export const IMAGEGEN_SOCIAL_SOURCE_POLICY = 'Use public X/social/community reports only as prompt-quality and workflow-sentiment hints after official OpenAI/Codex docs. Social posts are not capability specs, evidence of tool availability, or proof that a generated asset was created.';
+export const CODEX_IMAGEGEN_REQUIRED_POLICY = 'Pipeline image generation, raster asset creation/editing, and generated image-review evidence must use real Codex App imagegen/$imagegen with gpt-image-2 when that evidence is required for full verification. For newest-model image requests, prompt explicitly for "ChatGPT Images 2.0 / GPT Image 2.0 with gpt-image-2" instead of relying on generic image-generation wording. Do not substitute placeholder SVG/HTML/CSS, prose-only critique, stock-like stand-ins, manually fabricated files, or missing-output ledgers for requested/generated raster assets or required generated review images. If imagegen/gpt-image-2 is unavailable or generated annotated images cannot be created/linked, record the blocker and cap any closeout at verified_partial/reference-only instead of claiming generated-image evidence or full route verification; that partial closeout requires source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence. In Codex App prompts, invoke $imagegen when live image generation is needed; SKS hooks and skills can require the policy but cannot attach missing host image-generation tools to an already-started turn. Official OpenAI/Codex docs are authoritative for capabilities, surfaces, limits, and evidence rules; X/social/community reports may inform prompt style only.';
 export const DEFAULT_CODEX_APP_PLUGINS = Object.freeze([
   ['browser', 'openai-bundled'],
   ['chrome', 'openai-bundled'],
@@ -58,6 +64,22 @@ export function evidenceMentionsForbiddenBrowserAutomation(value: any, seen: any
   seen.add(value);
   if (Array.isArray(value)) return value.some((item: any) => evidenceMentionsForbiddenBrowserAutomation(item, seen));
   return Object.values(value).some((item: any) => evidenceMentionsForbiddenBrowserAutomation(item, seen));
+}
+
+export function evidenceMentionsForbiddenWebComputerUseEvidence(value: any, seen: any = new Set()): boolean {
+  if (value == null) return false;
+  if (typeof value === 'string') {
+    const text = String(value || '');
+    const mentionsComputerUse = /\bcomputer\s*use\b|codex[-_\s]*(?:native[-_\s]*)?computer[-_\s]*use/i.test(text);
+    if (!mentionsComputerUse) return false;
+    if (/\b(?:no|not|never)\s+(?:use|using|required|satisfy|satisfies|used)\b.*\bcomputer\s*use\b|\bcomputer\s*use\b.*\b(?:not|required|unverified|blocked|reserved|native|non-web|nonweb)\b|must\s+not\s+use\s+codex\s+computer\s+use|do\s+not\s+use\s+codex\s+computer\s+use|not_required_for_web_verification/i.test(text)) return false;
+    return /\b(?:evidence|screenshot|screen|capture|visual|source|ledger|used|using|from|via|fixture)\b|codex[-_\s]*(?:native[-_\s]*)?computer[-_\s]*use/i.test(text);
+  }
+  if (typeof value !== 'object') return false;
+  if (seen.has(value)) return false;
+  seen.add(value);
+  if (Array.isArray(value)) return value.some((item: any) => evidenceMentionsForbiddenWebComputerUseEvidence(item, seen));
+  return Object.values(value).some((item: any) => evidenceMentionsForbiddenWebComputerUseEvidence(item, seen));
 }
 
 export const RECOMMENDED_MCP_SERVERS = [
@@ -132,7 +154,7 @@ export function getdesignReferencePolicyText() {
 }
 
 export function imageUxReviewPipelinePolicyText() {
-  return `Image UX review pipeline: the core mechanism is not text-only screenshot critique. Capture or receive source UI screenshots, then use Codex App imagegen/$imagegen with gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to create new annotated review images from those screenshots as reference inputs. The generated review image must visibly mark numbered callouts, P0/P1/P2/P3 labels, eye-flow, hierarchy, contrast, alignment, density, affordance problems, and a small corrected mini-comp or before/after strip when useful. Then analyze that generated review image with vision/OCR and convert the visible callouts into image-ux-issue-ledger.json rows. Missing generated review images block full Image UX verification, but the route may close as verified_partial/reference-only when source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence exist and the gate records that no annotated image, callout extraction, or full UX review evidence exists. Never pass this route from a direct API fallback, hand-written text-only substitute, placeholder asset, or fabricated ledger. ${CODEX_IMAGEGEN_REQUIRED_POLICY}`;
+  return `Image UX review pipeline: the core mechanism is not text-only screenshot critique. Capture or receive source UI screenshots; web/browser/webapp capture must pass the Codex Chrome Extension readiness gate first, while Computer Use is only for native Mac/non-web app surfaces. Then use Codex App imagegen/$imagegen with gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to create new annotated review images from those screenshots as reference inputs. The generated review image must visibly mark numbered callouts, P0/P1/P2/P3 labels, eye-flow, hierarchy, contrast, alignment, density, affordance problems, and a small corrected mini-comp or before/after strip when useful. Then analyze that generated review image with vision/OCR and convert the visible callouts into image-ux-issue-ledger.json rows. Missing generated review images block full Image UX verification, but the route may close as verified_partial/reference-only when source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence exist and the gate records that no annotated image, callout extraction, or full UX review evidence exists. Never pass this route from a direct API fallback, hand-written text-only substitute, placeholder asset, or fabricated ledger. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_IMAGEGEN_REQUIRED_POLICY}`;
 }
 
 export const RECOMMENDED_SKILLS = [
@@ -148,6 +170,7 @@ export const RECOMMENDED_SKILLS = [
   'design-ui-editor',
   'getdesign-reference',
   'imagegen',
+  'imagegen-source-scout',
   'image-ux-review',
   'computer-use-fast',
   'db-safety-guard',
@@ -245,7 +268,7 @@ export function triwikiStagePolicyText(commandPrefix: any = 'sks') {
 }
 
 export function chatCaptureIntakeText() {
-  return `From-Chat-IMG intake: explicit signal only. Select forensic visual effort. Treat uploads as chat screenshot plus originals, use Codex Computer Use visual inspection when available, list requirements first in source order, match regions to attachments with confidence, and write ${FROM_CHAT_IMG_WORK_ORDER_ARTIFACT}, ${FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT}, ${FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT}, ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}. ${CODEX_COMPUTER_USE_ONLY_POLICY} Preserve each visible customer request as source-bound text, account for every screenshot image region and separate attachment, map each item to work-order actions, perform the customer-request work, then run a scoped QA-LOOP over that exact work-order range before Team completion. Update checklist checkboxes as work proceeds until all boxes are checked, unresolved_items is empty, scoped_qa_loop_completed=true, QA unresolved findings are zero, and schema validation passes. ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} is temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}, so it can be forgotten by retention after enough later sessions. Do not assume ordinary image prompts are chat captures.`;
+  return `From-Chat-IMG intake: explicit signal only. Select forensic visual effort. Treat uploads as chat screenshot plus originals. For web/browser/webapp targets, use the Codex Chrome Extension path first; for native Mac/non-web app surfaces, use Codex Computer Use visual inspection when available. List requirements first in source order, match regions to attachments with confidence, and write ${FROM_CHAT_IMG_WORK_ORDER_ARTIFACT}, ${FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT}, ${FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT}, ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY} Preserve each visible customer request as source-bound text, account for every screenshot image region and separate attachment, map each item to work-order actions, perform the customer-request work, then run a scoped QA-LOOP over that exact work-order range before Team completion. Update checklist checkboxes as work proceeds until all boxes are checked, unresolved_items is empty, scoped_qa_loop_completed=true, QA unresolved findings are zero, and schema validation passes. ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} is temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}, so it can be forgotten by retention after enough later sessions. Do not assume ordinary image prompts are chat captures.`;
 }
 
 export function noUnrequestedFallbackCodePolicyText() {
@@ -350,7 +373,7 @@ export const ROUTES = [
     command: '$QA-LOOP',
     mode: 'QALOOP',
     route: 'QA loop',
-    description: 'Dogfood UI/API as human proxy with safety gates, Codex Computer Use-only UI evidence, safe fixes, rechecks, Honest Mode.',
+    description: 'Dogfood UI/API as human proxy with safety gates, Codex Chrome Extension-first web UI evidence, safe fixes, rechecks, Honest Mode.',
     requiredSkills: ['qa-loop', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
     lifecycle: ['qa_questions_answered', 'contract_sealed', 'qa_checklist', 'qa_loop_cycles', 'safe_remediation', 'focused_reverification', 'qa_report_md', 'qa_gate', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'optional',
@@ -393,8 +416,8 @@ export const ROUTES = [
     id: 'ComputerUse',
     command: '$Computer-Use',
     mode: 'COMPUTER_USE',
-    route: 'Computer Use fast lane',
-    description: 'Maximum-speed Codex Computer Use lane for UI/browser/visual tasks: skip Team debate and upfront TriWiki loops, run only focused Computer Use steps, then finish with evidence, TriWiki refresh/validate, and Honest Mode.',
+    route: 'native Computer Use fast lane',
+    description: 'Maximum-speed Codex Computer Use lane for native macOS, desktop-app, OS-settings, and non-web visual tasks only. Browser, localhost, website, webapp, and web-based app verification must route through Codex Chrome Extension readiness first.',
     requiredSkills: ['cu', 'honest-mode'],
     dollarAliases: ['$CU'],
     appSkillAliases: ['computer-use-fast', 'cu'],
@@ -403,7 +426,7 @@ export const ROUTES = [
     reasoningPolicy: 'low',
     stopGate: 'none',
     cliEntrypoint: 'Codex App prompt route only: $Computer-Use <target/task>',
-    examples: ['$Computer-Use check the local UI as fast as possible', '$CU localhost screen smoke']
+    examples: ['$Computer-Use inspect this native Mac settings dialog', '$CU set up the local desktop app permission prompt']
   },
   {
     id: 'Goal',
@@ -493,15 +516,15 @@ export const ROUTES = [
     id: 'MadSKS',
     command: '$MAD-SKS',
     mode: 'MADSKS',
-    route: 'explicit scoped database authorization modifier',
-    description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily open live server work, Supabase MCP DB writes, direct execute SQL, schema cleanup, migration application, and normal targeted DB writes for the active invocation, while blocking only catastrophic database-wipe/all-row/project-management operations.',
+    route: 'explicit scoped permission-widening modifier',
+    description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily open approved target-project scopes such as files, shell, package installs, services, network, Computer Use/browser workflows, generated assets, file permissions, migrations, Supabase MCP DB writes, direct execute SQL, schema cleanup, and normal targeted DB writes for the active invocation, while preserving catastrophic wipe/all-row/project-management, credential-exfiltration, persistent security-weakening, and unrequested fallback safeguards.',
     requiredSkills: ['mad-sks', 'db-safety-guard', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
-    lifecycle: ['explicit_invocation', 'auto_sealed_permission_scope', 'scoped_db_cleanup_override', 'catastrophic_db_guard', 'permission_deactivation', 'post_route_reflection', 'honest_mode'],
+    lifecycle: ['explicit_invocation', 'auto_sealed_permission_scope', 'scoped_permission_override', 'catastrophic_guard', 'permission_deactivation', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'required',
     reasoningPolicy: 'high',
     stopGate: 'mad-sks-gate.json',
     cliEntrypoint: 'Codex App prompt route only: $MAD-SKS <task>',
-    examples: ['$MAD-SKS $Team Supabase MCP로 main 대상 DB 컬럼 정리를 수행해', '$DB Supabase 점검 $MAD-SKS']
+    examples: ['$MAD-SKS $Team target project maintenance with package/service/file and DB scopes', '$DB Supabase 점검 $MAD-SKS']
   },
   {
     id: 'GX',
@@ -575,9 +598,9 @@ export const COMMAND_CATALOG = [
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/tmux, and print ready true/false.' },
   { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
   { name: 'deps', usage: 'sks deps check|install [tmux|codex|context7|all] [--yes]', description: 'Check or guided-install Node/npm PATH, Codex CLI/App, Context7, Browser tooling, Computer Use, tmux, and Homebrew on macOS.' },
-  { name: 'codex', usage: 'sks codex compatibility|version|doctor|schema [--json]', description: 'Check Codex CLI rust-v0.133.0 compatibility, installed version, 0.133 capabilities, and vendored hook schema snapshot freshness.' },
-  { name: 'codex-app', usage: 'sks codex-app [check|open|pat status|remote-control]', description: 'Check Codex App install, PAT-safe status, first-party MCP/plugin readiness, and Codex CLI 0.130.0+ remote-control availability.' },
-  { name: 'hooks', usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]', description: 'Explain Codex hook events, validate vendored latest 10-event output schemas, replay fixtures, and enforce warning-zero SKS hook policies under the 0.133 compatibility matrix.' },
+  { name: 'codex', usage: 'sks codex compatibility|version|doctor|schema [--json]', description: 'Check Codex CLI rust-v0.134.0 compatibility, installed version, 0.134 capabilities, inherited 0.133 behavior, and vendored hook schema snapshot freshness.' },
+  { name: 'codex-app', usage: 'sks codex-app [check|chrome-extension|pat status|remote-control]', description: 'Check Codex App install, Codex Chrome Extension web verification readiness, PAT-safe status, first-party MCP/plugin readiness, and Codex CLI 0.130.0+ remote-control availability.' },
+  { name: 'hooks', usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]', description: 'Explain Codex hook events, validate vendored latest 10-event output schemas, replay fixtures, and enforce warning-zero SKS hook policies under the 0.134 compatibility matrix.' },
   { name: 'codex-lb', usage: 'sks codex-lb status|health|metrics|doctor|circuit|repair|setup ...', description: 'Configure, health-check, repair, and record circuit evidence for codex-lb provider auth without confusing ChatGPT OAuth and proxy keys.' },
   { name: 'auth', usage: 'sks auth status|health|repair|setup --host <domain> --api-key <key>', description: 'Shortcut for codex-lb provider auth status, health, repair, and setup commands.' },
   { name: 'openclaw', usage: 'sks openclaw install|path|print [--dir path] [--force] [--json]', description: 'Generate an OpenClaw skill package so OpenClaw agents can discover and use local SKS workflows.' },
@@ -589,7 +612,7 @@ export const COMMAND_CATALOG = [
   { name: 'commit', usage: 'sks commit [--message "msg"] [--json]', description: 'Stage current changes, summarize them, and create a simple git commit without the full SKS pipeline.' },
   { name: 'commit-and-push', usage: 'sks commit-and-push [--message "msg"] [--json]', description: 'Stage current changes, create a simple git commit, and push without the full SKS pipeline.' },
   { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight direct-fix mode.' },
-  { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Dogfood UI/API as human proxy with safety gates, safe fixes, rechecks, Codex Computer Use-only UI evidence, report.' },
+  { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Dogfood UI/API as human proxy with safety gates, safe fixes, rechecks, Codex Chrome Extension-first web UI evidence, report.' },
   { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $PPT HTML/PDF artifacts from a sealed presentation decision contract.' },
   { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: 'Run or inspect $Image-UX-Review gpt-image-2/imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
@@ -795,7 +818,8 @@ export function looksLikeComputerUseFastLane(prompt: any = '') {
   const text = String(prompt || '');
   const computerUseCue = /\b(computer\s*use|codex\s+computer\s+use|computer-use)\b|컴퓨터\s*유즈|컴퓨터\s*사용|컴퓨터유즈/i.test(text);
   if (!computerUseCue) return false;
-  return /\b(ui|browser|visual|screen|screenshot|e2e|qa|dogfood|fast|lane|pipeline|localhost|web|app|page)\b|화면|브라우저|시각|스크린|캡처|검증|빠른|고속|파이프라인|작업|속도/i.test(text);
+  if (/\b(browser|localhost|web(?:site|app)?|page|url|http|https|frontend|site)\b|브라우저|웹앱|웹\s*앱|웹\s*사이트|사이트|페이지|로컬호스트/i.test(text)) return false;
+  return /\b(native|macos|desktop|os\s*settings|system\s*settings|visual|screen|screenshot|fast|lane|pipeline|app)\b|맥|맥OS|데스크톱|네이티브|시스템\s*설정|화면|시각|스크린|캡처|빠른|고속|파이프라인|작업|속도/i.test(text);
 }
 
 export function looksLikeTeamDefaultWork(prompt: any = '') {

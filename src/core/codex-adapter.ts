@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { exists, packageRoot, runProcess, which, type RunProcessResult } from './fsx.js';
 import { forceGpt55CodexArgs } from './codex-model-guard.js';
+import { managedProxyEnvForChild } from './codex/managed-proxy-env.js';
 
 export async function findCodexBinary(): Promise<string | null> {
   const env = process.env.SKS_CODEX_BIN || process.env.DCODEX_CODEX_BIN || process.env.CODEX_BIN;
@@ -66,6 +67,7 @@ export async function runCodexExec({ root, prompt, outputFile, json = true, prof
   const effectiveTimeoutMs = Number(timeoutMs || process.env.SKS_CODEX_TIMEOUT_MS || process.env.DCODEX_CODEX_TIMEOUT_MS || 30 * 60 * 1000);
   return runProcess(bin, args, {
     cwd: root,
+    env: managedProxyEnvForChild(process.env),
     onStdout,
     onStderr,
     timeoutMs: effectiveTimeoutMs,

@@ -1,6 +1,6 @@
-export const CODEX_COMPAT_SCHEMA = 'sks.codex-compat.v1';
-export const CODEX_REQUIRED_BASELINE_TAG = 'rust-v0.133.0';
-export const CODEX_REQUIRED_VERSION = '0.133.0';
+export const CODEX_COMPAT_SCHEMA = 'sks.codex-compat.v2';
+export const CODEX_REQUIRED_BASELINE_TAG = 'rust-v0.134.0';
+export const CODEX_REQUIRED_VERSION = '0.134.0';
 export const CODEX_HOOK_SCHEMA_BASELINE_TAG = 'latest';
 export const CODEX_HOOK_SCHEMA_VERSION = 'main-2026-05-21';
 
@@ -21,22 +21,32 @@ export function parseCodexVersionText(text: unknown): string | null {
   return match?.[1] ?? null;
 }
 
-export function codexVersionPolicy(detected: { available?: boolean; version?: string | null; source?: string | null } = {}) {
+export function requiredCodexVersionFromBaseline(value: unknown): string {
+  return parseCodexVersionText(value) || CODEX_REQUIRED_VERSION;
+}
+
+export function codexVersionPolicy(detected: { available?: boolean; version?: string | null; source?: string | null } = {}, opts: { requiredBaseline?: string | null; explicitRequire?: boolean } = {}) {
+  const requiredBaseline = opts.requiredBaseline || CODEX_REQUIRED_BASELINE_TAG;
+  const requiredVersion = requiredCodexVersionFromBaseline(requiredBaseline);
   if (!detected.available || !detected.version) {
     return {
-      ok: true,
-      status: 'integration_optional',
-      warnings: [`codex binary not detected; release checks use ${CODEX_REQUIRED_BASELINE_TAG} compatibility policy and vendored ${CODEX_HOOK_SCHEMA_BASELINE_TAG} hook snapshots`]
+      ok: opts.explicitRequire === true ? false : true,
+      status: opts.explicitRequire === true ? 'blocked_missing_required_codex' : 'integration_optional',
+      required_baseline: requiredBaseline,
+      required_version: requiredVersion,
+      warnings: [`codex binary not detected; release checks use ${requiredBaseline} compatibility policy and vendored ${CODEX_HOOK_SCHEMA_BASELINE_TAG} hook snapshots`]
     };
   }
-  if (compareSemverLike(detected.version, CODEX_REQUIRED_VERSION) >= 0) {
-    return { ok: true, status: 'ok', warnings: [] as string[] };
+  if (compareSemverLike(detected.version, requiredVersion) >= 0) {
+    return { ok: true, status: 'ok', required_baseline: requiredBaseline, required_version: requiredVersion, warnings: [] as string[] };
   }
   return {
-    ok: true,
-    status: 'compatibility_degraded',
+    ok: false,
+    status: 'blocked_below_required_baseline',
+    required_baseline: requiredBaseline,
+    required_version: requiredVersion,
     warnings: [
-      `detected Codex ${detected.version} from ${detected.source || 'unknown'}; upgrade to ${CODEX_REQUIRED_BASELINE_TAG} or newer`
+      `detected Codex ${detected.version} from ${detected.source || 'unknown'}; upgrade to ${requiredBaseline} or newer`
     ]
   };
 }

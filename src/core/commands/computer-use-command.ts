@@ -6,6 +6,11 @@ import { printJson } from '../../cli/output.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { computerUseLiveSmoke, computerUseStatusReport } from '../computer-use-status.js';
 import { computerUseLiveEvidencePath } from '../computer-use-live-evidence.js';
+import { codexChromeExtensionStatus } from '../codex-app.js';
+
+function routeIsWebVerification(route: any) {
+  return /\$(?:QA-LOOP|Image-UX-Review|UX-Review|Visual-Review|UI-UX-Review|From-Chat-IMG)\b|qa-loop|ux-review|image-ux-review|visual-review|ui-ux-review|from-chat-img/i.test(String(route || ''));
+}
 
 export async function computerUseCommand(command: any, args: any = []) {
   const root = await projectRoot();
@@ -65,11 +70,34 @@ export async function computerUseCommand(command: any, args: any = []) {
   }
   if (action === 'require') {
     const routeArg = args.includes('--route') ? args[args.indexOf('--route') + 1] : null;
+    if (routeIsWebVerification(routeArg) && !flag(args, '--native') && !flag(args, '--non-web')) {
+      const chrome = await codexChromeExtensionStatus();
+      const response = {
+        schema: 'sks.computer-use-require.v1',
+        ok: false,
+        route: routeArg || null,
+        status: 'web_verification_uses_chrome_extension',
+        evidence: { schema: 'sks.computer-use-evidence.v1', status: 'not_required_for_web_verification', source: null, screens: [], actions: [], image_voxel_linked: false },
+        blocker: 'web_verification_requires_codex_chrome_extension',
+        chrome_extension: chrome,
+        guidance: [
+          'This route is web/browser/webapp verification, so SKS must not use Computer Use as the evidence path.',
+          chrome.ok
+            ? 'Codex Chrome Extension is ready; use the web verification gate instead of Computer Use.'
+            : 'Set up the Codex Chrome Extension first, then resume after the user confirms installation is complete.'
+        ]
+      };
+      process.exitCode = 1;
+      if (flag(args, '--json')) return printJson(response);
+      console.log(`Computer Use requirement for ${routeArg || 'route'}: blocked (${response.blocker})`);
+      for (const line of response.guidance) console.log(`- ${line}`);
+      return;
+    }
     const result = await computerUseStatusReport();
     const response = { schema: 'sks.computer-use-require.v1', ok: result.status === 'available', route: routeArg || null, status: result.status, evidence: result.evidence, blocker: result.status === 'available' ? null : result.status };
+    if (!response.ok) process.exitCode = 1;
     if (flag(args, '--json')) return printJson(response);
     console.log(`Computer Use requirement for ${routeArg || 'route'}: ${response.ok ? 'available' : `blocked (${response.blocker})`}`);
-    if (!response.ok) process.exitCode = 1;
     return;
   }
   if (action === 'import-fixture') return importFixture(root, command, args);

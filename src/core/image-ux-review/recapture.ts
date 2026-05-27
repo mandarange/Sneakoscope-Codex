@@ -1,16 +1,22 @@
 export function buildRecapturePlan(fixLoop: any = {}, opts: any = {}) {
   const changedFiles = Array.isArray(fixLoop.changed_files) ? fixLoop.changed_files : [];
   const recaptureRequired = fixLoop.recapture_required === true || changedFiles.length > 0;
+  const chromeExtensionAvailable = opts.chromeExtensionAvailable === true;
   const computerUseAvailable = opts.computerUseAvailable === true;
-  const blockers = recaptureRequired && !computerUseAvailable && !opts.userScreenshot
+  const nativeTarget = opts.native === true || opts.nonWeb === true || opts.targetSurface === 'native' || opts.targetSurface === 'non_web';
+  const computerUseAllowed = computerUseAvailable && nativeTarget;
+  const blockers = recaptureRequired && !chromeExtensionAvailable && !computerUseAllowed && !opts.userScreenshot
     ? ['manual_recapture_required']
     : [];
+  if (recaptureRequired && computerUseAvailable && !computerUseAllowed && !chromeExtensionAvailable && !opts.userScreenshot) {
+    blockers.push('web_recapture_requires_codex_chrome_extension_not_computer_use');
+  }
   return {
     schema: 'sks.image-ux-recapture-plan.v2',
     changed_screens_only: true,
     recapture_required: recaptureRequired,
     recapture_source: recaptureRequired
-      ? computerUseAvailable ? 'codex_computer_use' : opts.userScreenshot ? 'user_provided_screenshot' : 'blocked'
+      ? chromeExtensionAvailable ? 'codex_chrome_extension' : computerUseAllowed ? 'codex_native_computer_use' : opts.userScreenshot ? 'user_provided_screenshot' : 'blocked'
       : 'not_applicable',
     recaptured_screenshot_sha256: opts.recapturedSha256 || null,
     recaptured_screenshot_dimensions: opts.recapturedDimensions || null,
@@ -24,7 +30,7 @@ export function buildRecapturePlan(fixLoop: any = {}, opts: any = {}) {
       dimensions: opts.recapturedDimensions || null,
       privacy: 'local-only'
     } : null,
-    before_after_relation_created: recaptureRequired && Boolean(opts.userScreenshot || opts.computerUseAvailable),
+    before_after_relation_created: recaptureRequired && Boolean(opts.userScreenshot || opts.chromeExtensionAvailable || computerUseAllowed),
     re_review_required: recaptureRequired,
     re_review_issue_ledger_required: recaptureRequired,
     regression_blocker: Number(opts.newP0P1Issues || 0) > 0 ? 'after_recheck_regression' : null,

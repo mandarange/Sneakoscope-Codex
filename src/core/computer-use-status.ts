@@ -24,7 +24,7 @@ export async function computerUseStatusReport(opts: any = {}) {
     return baseReport('not_macos', {
       ok: false,
       platform: process.platform,
-      guidance: ['Computer Use is a macOS Codex App capability; mark UI evidence unverified on this platform.']
+      guidance: ['Computer Use is a macOS Codex App capability for native/non-web targets. Web/browser/webapp verification must use the Codex Chrome Extension path first.']
     });
   }
   const app: any = await codexAppIntegrationStatus(opts).catch((err: any) => ({ ok: false, error: err.message }));
@@ -33,7 +33,7 @@ export async function computerUseStatusReport(opts: any = {}) {
       ok: false,
       platform: process.platform,
       app,
-      guidance: ['Install or open Codex App, then run `sks computer-use status --json` again.']
+      guidance: ['Install or open Codex App for native Computer Use. For web/browser/webapp verification, run `sks codex-app chrome-extension --json` and set up the Codex Chrome Extension first.']
     });
   }
   if (app?.mcp?.has_computer_use || app?.plugins?.computer_use_cache || app?.features?.computer_use) {
@@ -43,7 +43,7 @@ export async function computerUseStatusReport(opts: any = {}) {
       source: app?.mcp?.has_computer_use ? 'codex-app-mcp' : app?.plugins?.computer_use_cache ? 'plugin-cache' : 'codex-feature-flag',
       permission_status: 'unknown',
       app,
-      guidance: ['If the OS prompts during live use, grant Screen Recording/Accessibility to Codex App.']
+      guidance: ['Use this only for native Mac/non-web app surfaces. If the OS prompts during live use, grant Screen Recording/Accessibility to Codex App. Web/browser/webapp verification uses the Codex Chrome Extension gate instead.']
     });
   }
   if (app?.features?.checked || app?.mcp?.checked) {
@@ -51,14 +51,14 @@ export async function computerUseStatusReport(opts: any = {}) {
       ok: false,
       platform: process.platform,
       app,
-      guidance: ['Computer Use capability is not exposed by this Codex App/CLI environment. Do not fabricate UI evidence.']
+      guidance: ['Computer Use capability is not exposed by this Codex App/CLI environment. Do not fabricate native visual evidence. Do not use this blocker to bypass the separate Chrome Extension gate for web verification.']
     });
   }
   return baseReport('unknown', {
     ok: false,
     platform: process.platform,
     app,
-    guidance: ['Could not safely determine Computer Use capability; mark live UI evidence unverified until Codex App exposes it.']
+    guidance: ['Could not safely determine Computer Use capability; mark native non-web visual evidence unverified until Codex App exposes it. Web verification must use Codex Chrome Extension readiness.']
   });
 }
 

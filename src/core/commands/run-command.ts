@@ -326,9 +326,9 @@ async function executeRouteCommand(
       command: null,
       exit_code: 2,
       nested_mission_id: null,
-      blockers: ['visual_source_or_codex_computer_use_evidence_missing'],
-      unverified: ['Visual routes require real source images and Codex Computer Use/image evidence; sks run --execute will not fabricate it.'],
-      next_action: 'provide the source screenshot/image evidence, then run the selected visual route directly',
+      blockers: ['visual_source_or_official_capture_evidence_missing'],
+      unverified: ['Visual routes require real source images plus official capture evidence when live capture is required: Codex Chrome Extension for web/browser/webapp, native Computer Use for Mac/non-web surfaces. sks run --execute will not fabricate it.'],
+      next_action: 'provide the source screenshot/image evidence or complete the required official capture setup, then run the selected visual route directly',
     };
   }
   if (route.command === '$DB' && destructiveDbPrompt(prompt)) {

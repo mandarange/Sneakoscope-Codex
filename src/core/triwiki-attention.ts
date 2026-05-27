@@ -167,7 +167,7 @@ export function positiveRecallText(claim: any = {}) {
   if (!negativePrimingRisk({ ...claim, text })) return text;
   const route = `${claim.id || ''} ${claim.source || ''} ${claim.file || ''} ${text}`.toLowerCase();
   if (/dfix/.test(route)) return 'Keep DFix on the ultralight route with a concise completion summary and cheap verification.';
-  if (/computer[-_\s]?use|playwright|selenium|puppeteer|browser automation|chrome mcp/.test(route)) return 'Use Codex Computer Use as the UI/browser evidence source for visual verification claims.';
+  if (/computer[-_\s]?use|playwright|selenium|puppeteer|browser automation|chrome mcp|chrome extension/.test(route)) return 'Use Codex Chrome Extension first for web/browser verification, and reserve Codex Computer Use for native Mac/non-web visual claims.';
   if (/fallback|substitute|compatibility shim|mock behavior/.test(route)) return 'Implement the requested path directly and block with evidence when that path is impossible.';
   if (/clarification|ambiguity|question|ask|질문|모호/.test(route)) return 'Infer safely from current code, TriWiki, and conservative defaults without surfacing a prequestion sheet.';
   if (/triwiki|wiki|cache|attention|hydrate|memory|메모리/.test(route)) return 'Use positive TriWiki target recall: selected cache-hit anchors first, with source hydration before risky claims.';

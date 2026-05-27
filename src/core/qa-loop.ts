@@ -1,11 +1,11 @@
 import path from 'node:path';
 import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, PACKAGE_VERSION } from './fsx.js';
-import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, evidenceMentionsForbiddenBrowserAutomation } from './routes.js';
+import { CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_POLICY, evidenceMentionsForbiddenBrowserAutomation, evidenceMentionsForbiddenWebComputerUseEvidence } from './routes.js';
 import { appendAgentLedgerEvent, initializeAgentCentralLedger } from './agents/agent-central-ledger.js';
 
 export const QA_LOOP_ROUTE = 'QALoop';
 const QA_REPORT_SUFFIX = 'qa-report.md';
-const UI_COMPUTER_USE_ONLY_ACK = 'use_codex_computer_use_only_no_chrome_mcp_no_browser_use_no_playwright_or_mark_ui_not_verified';
+const UI_CHROME_EXTENSION_FIRST_ACK = 'use_codex_chrome_extension_first_no_computer_use_for_web_ui_or_mark_unverified';
 
 export const QA_NATIVE_AGENT_PERSONAS = Object.freeze([
   {
@@ -168,7 +168,7 @@ export function inferQaLoopAnswers(prompt: any = '') {
     EXTERNAL_SIDE_EFFECT_POLICY: 'block_all_external_side_effects',
     ...login,
     CREDENTIAL_STORAGE_ACK: 'never_store_credentials_in_artifacts_or_wiki',
-    UI_COMPUTER_USE_ACK: UI_COMPUTER_USE_ONLY_ACK,
+    UI_CHROME_EXTENSION_ACK: UI_CHROME_EXTENSION_FIRST_ACK,
     TEAM_MODE_ALLOWED: 'no_parent_only',
     MAX_QA_CYCLES: '1',
     ACCEPTANCE_CRITERIA: [
@@ -181,7 +181,7 @@ export function inferQaLoopAnswers(prompt: any = '') {
     ],
     RISK_BOUNDARY: [
       '실제 사용자 데이터, 인증 권한, 결제, 메시지 발송, 웹훅, 외부 서비스 상태를 생성/수정/삭제하지 않는다.',
-      'Codex Computer Use 증거가 없으면 UI/browser 검증 완료로 주장하지 않는다.',
+      'Codex Chrome Extension readiness/evidence가 없으면 web/browser UI 검증 완료로 주장하지 않는다.',
       '로그인이 필요하지만 임시 테스트 자격증명이 없으면 인증 구간은 차단/미검증으로 기록한다.'
     ],
     MID_RUN_UNKNOWN_POLICY: ['preserve_existing_behavior', 'defer_optional_scope', 'block_only_if_no_safe_path']
@@ -213,7 +213,7 @@ export function buildQaLoopQuestionSchema(prompt: any) {
   return {
     schema_version: 1,
     route: QA_LOOP_ROUTE,
-    description: `QA-LOOP defaults are inferred from the prompt, TriWiki/current-code defaults, and conservative safety policy. Login secrets and browser auth state are runtime-only and must not be saved to mission files or TriWiki. ${CODEX_COMPUTER_USE_ONLY_POLICY}`,
+    description: `QA-LOOP defaults are inferred from the prompt, TriWiki/current-code defaults, and conservative safety policy. Login secrets and browser auth state are runtime-only and must not be saved to mission files or TriWiki. ${CODEX_WEB_VERIFICATION_POLICY}`,
     prompt,
     inferred_answers: inferred,
     inference_notes: {
@@ -242,7 +242,7 @@ export function qaLoopQuestionSlots() {
       { id: 'TEMP_TEST_CREDENTIALS_READY', question: 'If login is required, are test-only credentials ready to provide ephemerally during the run?', required: true, type: 'enum', options: ['not_required', 'yes_temp_only', 'no_block_authenticated_tests'] },
       { id: 'TEST_CREDENTIALS_RUNTIME_SOURCE', question: 'If login is required, how will test-only credentials be provided without saving the values?', required: true, type: 'enum', options: ['not_required', 'ephemeral_chat_only', 'environment_variables', 'secret_manager'] },
       { id: 'CREDENTIAL_STORAGE_ACK', question: 'Acknowledge credential handling policy.', required: true, type: 'enum', options: ['never_store_credentials_in_artifacts_or_wiki'] },
-      { id: 'UI_COMPUTER_USE_ACK', question: 'Acknowledge UI E2E evidence policy: Codex Computer Use only; no Chrome MCP, Browser Use, Playwright, Selenium, Puppeteer, or other browser automation.', required: true, type: 'enum', options: [UI_COMPUTER_USE_ONLY_ACK] },
+      { id: 'UI_CHROME_EXTENSION_ACK', question: 'Acknowledge UI E2E evidence policy: Codex Chrome Extension first for web/browser/webapp verification; no Computer Use or unofficial browser automation substitute.', required: true, type: 'enum', options: [UI_CHROME_EXTENSION_FIRST_ACK] },
       { id: 'TEAM_MODE_ALLOWED', question: 'May QA-LOOP use Team/subagents where useful?', required: true, type: 'enum', options: ['yes_parallel_where_safe', 'no_parent_only'] },
       { id: 'MAX_QA_CYCLES', question: 'How many no-question QA cycles are allowed before pausing?', required: true, type: 'string' },
       { id: 'ACCEPTANCE_CRITERIA', question: 'List the QA completion criteria.', required: true, type: 'array_or_string' },
@@ -262,7 +262,7 @@ export function validateQaLoopAnswers(schema: any, answers: any = {}) {
   if (env !== 'local_dev_server' && mutation === 'seeded_create_change_remove_local_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'destructive_removal_tests_are_local_dev_only' });
   if (env === 'deployed_production_domain' && mutation !== 'read_only_smoke_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'production_deployed_qa_is_read_only_smoke_only' });
   if (answers.DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED !== 'never') errors.push({ slot: 'DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED', error: 'destructive_deployed_tests_never_allowed' });
-  if (isUiScope(answers.QA_SCOPE) && answers.UI_COMPUTER_USE_ACK !== UI_COMPUTER_USE_ONLY_ACK) errors.push({ slot: 'UI_COMPUTER_USE_ACK', error: 'ui_e2e_requires_codex_computer_use_only_ack' });
+  if (isUiScope(answers.QA_SCOPE) && answers.UI_CHROME_EXTENSION_ACK !== UI_CHROME_EXTENSION_FIRST_ACK) errors.push({ slot: 'UI_CHROME_EXTENSION_ACK', error: 'ui_e2e_requires_codex_chrome_extension_first_ack' });
   if (answers.LOGIN_REQUIRED === 'yes' && !['yes_temp_only', 'no_block_authenticated_tests'].includes(answers.TEMP_TEST_CREDENTIALS_READY)) errors.push({ slot: 'TEMP_TEST_CREDENTIALS_READY', error: 'authenticated_tests_require_ephemeral_test_credentials_or_must_be_blocked' });
   if (answers.LOGIN_REQUIRED === 'yes' && answers.TEMP_TEST_CREDENTIALS_READY === 'yes_temp_only' && answers.TEST_CREDENTIALS_RUNTIME_SOURCE === 'not_required') errors.push({ slot: 'TEST_CREDENTIALS_RUNTIME_SOURCE', error: 'credential_runtime_source_required' });
   if (answers.CREDENTIAL_STORAGE_ACK !== 'never_store_credentials_in_artifacts_or_wiki') errors.push({ slot: 'CREDENTIAL_STORAGE_ACK', error: 'credential_temp_only_ack_required' });
@@ -317,7 +317,9 @@ export function defaultQaGate(contract: any = {}, opts: any = {}) {
     deployed_destructive_tests_blocked: a.TARGET_ENVIRONMENT === 'local_dev_server' || a.DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED === 'never',
     credentials_not_persisted: false,
     ui_e2e_required: uiRequired,
-    ui_computer_use_evidence: !uiRequired,
+    chrome_extension_preflight_passed: !uiRequired,
+    ui_chrome_extension_evidence: !uiRequired,
+    ui_computer_use_evidence: false,
     ui_evidence_source: uiRequired ? null : 'not_required',
     api_e2e_required: apiRequired,
     unsafe_external_side_effects: false,
@@ -344,7 +346,7 @@ export async function writeQaLoopArtifacts(dir: any, mission: any, contract: any
     mission_id: mission.id,
     qa_report_file: reportFile,
     target: { scope: a.QA_SCOPE, environment: a.TARGET_ENVIRONMENT, base_url: a.TARGET_BASE_URL, api_base_url: a.API_BASE_URL },
-    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_computer_use_only_required_for_ui_e2e' },
+    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_chrome_extension_first_required_for_web_ui_e2e' },
     checklist
   });
   await writeJsonAtomic(path.join(dir, 'qa-gate.json'), defaultQaGate(contract, { reportFile }));
@@ -356,7 +358,7 @@ export async function evaluateQaGate(dir: any) {
   const gate = await readJson(path.join(dir, 'qa-gate.json'), {});
   const reportFile = qaReportFileFromGate(gate);
   const reasons: any[] = [];
-  for (const key of ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'ui_computer_use_evidence', 'honest_mode_complete']) {
+  for (const key of ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'honest_mode_complete']) {
     if (gate[key] !== true) reasons.push(`${key}_missing`);
   }
   if (gate.corrective_loop_enabled === true) {
@@ -367,8 +369,12 @@ export async function evaluateQaGate(dir: any) {
   }
   if (gate.unsafe_external_side_effects === true) reasons.push('unsafe_external_side_effects');
   if (gate.ui_e2e_required === true) {
-    if (gate.ui_evidence_source !== CODEX_COMPUTER_USE_EVIDENCE_SOURCE) reasons.push('ui_evidence_source_not_codex_computer_use');
+    if (gate.chrome_extension_preflight_passed !== true) reasons.push('chrome_extension_preflight_missing');
+    if (gate.ui_chrome_extension_evidence !== true) reasons.push('ui_chrome_extension_evidence_missing');
+    if (gate.ui_computer_use_evidence === true) reasons.push('ui_computer_use_evidence_forbidden_for_web');
+    if (gate.ui_evidence_source !== CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE) reasons.push('ui_evidence_source_not_codex_chrome_extension');
     if (evidenceMentionsForbiddenBrowserAutomation({ evidence: gate.evidence, notes: gate.notes, ui_evidence_source: gate.ui_evidence_source })) reasons.push('forbidden_browser_automation_evidence');
+    if (evidenceMentionsForbiddenWebComputerUseEvidence({ evidence: gate.evidence, ui_evidence_source: gate.ui_evidence_source })) reasons.push('computer_use_web_evidence_forbidden');
   }
   if (!reportFile) reasons.push('qa_report_file_missing');
   else if (!isQaReportFilename(reportFile)) reasons.push('qa_report_filename_prefix_invalid');
@@ -386,7 +392,7 @@ export async function writeMockQaResult(dir: any, mission: any, contract: any) {
   const reportFile = isQaReportFilename(previousReportFile) ? previousReportFile : qaReportFilename();
   const uiRequired = qaUiRequired(contract.answers || {});
   await writeTextAtomic(path.join(dir, reportFile), `# QA-LOOP Report\n\nMission: ${mission.id}\nMode: mock verification\n\nMock QA-LOOP completed. No live UI/API actions were executed.\n\n## Honest Mode\n\nThis is a mock smoke run for command verification, not production QA evidence.\n`);
-  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), { ...defaultQaGate(contract, { reportFile }), passed: !uiRequired, qa_report_written: true, qa_ledger_complete: true, checklist_completed: true, safety_reviewed: true, credentials_not_persisted: true, ui_computer_use_evidence: !uiRequired, ui_evidence_source: uiRequired ? null : 'not_required', unresolved_findings: 0, unresolved_fixable_findings: 0, unsafe_or_deferred_findings: 0, post_fix_verification_complete: true, honest_mode_complete: true, evidence: ['mock QA-LOOP smoke completed'], notes: ['No live UI/API verification was claimed.'] });
+  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), { ...defaultQaGate(contract, { reportFile }), passed: !uiRequired, qa_report_written: true, qa_ledger_complete: true, checklist_completed: true, safety_reviewed: true, credentials_not_persisted: true, chrome_extension_preflight_passed: !uiRequired, ui_chrome_extension_evidence: !uiRequired, ui_computer_use_evidence: false, ui_evidence_source: uiRequired ? null : 'not_required', unresolved_findings: 0, unresolved_fixable_findings: 0, unsafe_or_deferred_findings: 0, post_fix_verification_complete: true, honest_mode_complete: true, evidence: ['mock QA-LOOP smoke completed'], notes: ['No live UI/API verification was claimed.'] });
   return evaluateQaGate(dir);
 }
 
@@ -398,7 +404,7 @@ TASK: ${mission.prompt}
 CYCLE: ${cycle}
 NO QUESTIONS: use decision-contract.json.
 MODE: dogfood as human proxy; use real flows, fix safe code/test/docs now, then recheck.
-UI: ${CODEX_COMPUTER_USE_ONLY_POLICY} Secrets runtime-only.
+UI: ${CODEX_WEB_VERIFICATION_POLICY} Secrets runtime-only.
 SAFETY: deployed read-only smoke; no destructive, billing, message, webhook, admin, bulk-write, global-config, or live-data edits unless contract allows.
 GATE: passed=false while unresolved_findings or unresolved_fixable_findings > 0, or post_fix_verification_complete is not true.
 ARTIFACTS: update qa-ledger.json, ${report}, qa-gate.json, and qa-loop/cycle-${cycle}/.
@@ -427,7 +433,7 @@ function qaChecklist(a: any) {
     ['preflight.roles', 'Map roles, permissions, protected areas.']
   ];
   if (qaUiRequired(a)) cases.push(
-    ['ui.computer_use_only', CODEX_COMPUTER_USE_ONLY_POLICY],
+    ['ui.chrome_extension_first', CODEX_WEB_VERIFICATION_POLICY],
     ['ui.navigation', 'Check primary navigation, deep links, back/forward, refresh, and protected routes.'],
     ['ui.auth', 'Check login, logout, session expiry, unauthorized access, and role-specific visibility.'],
     ['ui.forms', 'Check required fields, validation, disabled states, success, and failure.'],
@@ -455,7 +461,7 @@ function qaChecklist(a: any) {
 
 function qaReportTemplate(mission: any, contract: any, checklist: any) {
   const a = contract.answers || {};
-  return `# QA-LOOP Report\n\nMission: ${mission.id}\nTarget: ${a.TARGET_BASE_URL || 'unset'}\nScope: ${a.QA_SCOPE || 'unset'}\nEnvironment: ${a.TARGET_ENVIRONMENT || 'unset'}\n\n## Safety\n\n- Deployed destructive tests: never\n- Credentials: temp-only, never saved\n- UI evidence: ${CODEX_COMPUTER_USE_ONLY_POLICY}\n\n## Checklist\n\n${checklist.map((item: any) => `- [ ] ${item.id}: ${item.title}`).join('\n')}\n\n## Findings\n\nTBD\n\n## Corrections And Rechecks\n\nTBD\n\n## Honest Mode\n\nTBD\n`;
+  return `# QA-LOOP Report\n\nMission: ${mission.id}\nTarget: ${a.TARGET_BASE_URL || 'unset'}\nScope: ${a.QA_SCOPE || 'unset'}\nEnvironment: ${a.TARGET_ENVIRONMENT || 'unset'}\n\n## Safety\n\n- Deployed destructive tests: never\n- Credentials: temp-only, never saved\n- UI evidence: ${CODEX_WEB_VERIFICATION_POLICY}\n\n## Checklist\n\n${checklist.map((item: any) => `- [ ] ${item.id}: ${item.title}`).join('\n')}\n\n## Findings\n\nTBD\n\n## Corrections And Rechecks\n\nTBD\n\n## Honest Mode\n\nTBD\n`;
 }
 
 function positiveCount(value: any) {

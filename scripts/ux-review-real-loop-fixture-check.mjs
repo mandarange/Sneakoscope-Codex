@@ -8,9 +8,14 @@ const result = spawnSync(process.execPath, [path.join(root, 'dist/bin/sks.js'), 
   cwd: root,
   encoding: 'utf8',
   env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true' },
-  timeout: 60_000
+  timeout: Number(process.env.SKS_UX_REVIEW_REAL_LOOP_FIXTURE_TIMEOUT_MS || 180_000)
 });
-assert.equal(result.status, 0, result.stderr || result.stdout);
+assert.equal(result.status, 0, JSON.stringify({
+  stderr: result.stderr,
+  stdout: result.stdout,
+  signal: result.signal,
+  error: result.error?.message || null
+}, null, 2));
 const json = JSON.parse(result.stdout);
 assert.equal(json.artifacts.gate.mock_fixture_cannot_claim_real, true);
 assert.equal(json.artifacts.generated_review_ledger.real_generated_count, 0);

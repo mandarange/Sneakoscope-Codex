@@ -9,7 +9,7 @@ import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
 import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.js'
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
@@ -19,6 +19,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const workQueue = await readJson<any>(path.join(root, 'agent-work-queue.json'), null)
   const scheduler = input.scheduler || await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const taskGraph = input.partition?.task_graph || await readJson<any>(path.join(root, 'agent-task-graph.json'), null)
+  const parallelWritePolicy = input.parallelWritePolicy || await readJson<any>(path.join(root, 'agent-parallel-write-policy.json'), null)
   const tmuxPhysicalProof = await readJson<any>(path.join(root, 'agent-tmux-physical-proof.json'), null)
   const tmuxPhysicalProofSummary = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-summary.json'), null)
   const tmuxPhysicalBeforeDrain = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-before-drain.json'), null)
@@ -113,6 +114,12 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     route_command: routeCommand,
     route_blackbox_kind: input.routeBlackboxKind || (realRouteCommandUsed ? 'actual_route_command' : 'generic_agent_route_standin'),
     real_route_command_used: realRouteCommandUsed,
+    parallel_write_policy: 'agent-parallel-write-policy.json',
+    parallel_write_route_flags_wired: parallelWritePolicy?.route_level_flags_wired === true,
+    parallel_write_mode: parallelWritePolicy?.write_mode || 'off',
+    parallel_write_apply_patches: parallelWritePolicy?.apply_patches === true,
+    parallel_write_dry_run_patches: parallelWritePolicy?.dry_run_patches === true,
+    parallel_write_max_write_agents: Number(parallelWritePolicy?.max_write_agents || 0),
     real_parallel_claim: input.realParallel === true && input.backend === 'codex-exec',
     fake_backend_disclaimer: input.backend === 'fake' ? 'fixture only; no real parallel execution claim' : null,
     agent_count: input.roster?.agent_count || input.results?.length || 0,
@@ -259,5 +266,8 @@ function pathWithin(file: string, leasePath: string) {
 }
 
 function repoRootFromAgentRoot(agentRoot: string) {
-  return path.resolve(agentRoot, '..', '..', '..', '..')
+  const normalized = path.resolve(agentRoot)
+  const marker = `${path.sep}.sneakoscope${path.sep}missions${path.sep}`
+  if (!normalized.includes(marker)) return normalized
+  return path.resolve(normalized, '..', '..', '..', '..')
 }

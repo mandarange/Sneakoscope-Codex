@@ -2,7 +2,42 @@
 
 ## [Unreleased]
 
+### Added
 
+- Add a short README LLM init prompt for Hermes/OpenClaw-style agent builders that references `mandarange/Sneakoscope-Codex`, recommends `npm i -g sneakoscope`, and points setup agents at SKS doctor/Codex App/proof checks.
+- Add generated Hermes/OpenClaw LLM init prompts and an `imagegen-source-scout` skill for official ChatGPT Images 2.0 / `gpt-image-2` docs plus clearly labeled X/social prompt-workflow signals.
+
+### Changed
+
+- Clarify that version-facing changes should be recorded in `CHANGELOG.md`, and refresh imagegen skill guidance to prompt explicitly for ChatGPT Images 2.0 / GPT Image 2.0 with `gpt-image-2` while preserving Codex App `$imagegen` evidence rules.
+- Move the imagegen and MAD-SKS policy updates into the source skill templates so future SKS installs regenerate the same guidance instead of reverting to legacy DB-only or generic imagegen wording.
+- Harden MAD-SKS tmux launch so bare `sks --mad` grants only target file/shell scope and requires explicit `--allow-*` flags for packages, services, network, browser/Computer Use, generated assets, file permissions, DB writes, and broader system scopes.
+- Harden README architecture imagegen replacement so only current files under `$CODEX_HOME/generated_images` count as Codex App `$imagegen` provenance; moved or copied files no longer pass via self-attested metadata.
+- Add an explicit opt-in README architecture imagegen auto-pick mode that accepts exactly one generated_images candidate newer than the prompt contract.
+- Preserve the README architecture imagegen prompt mtime across output-free reruns and add an opt-in wait mode for late-arriving Codex App generated_images output.
+- Add a prompt-only README architecture imagegen command plus CLI flags for output, auto-pick, and wait handoff so the Codex App `$imagegen` step can be performed without relying on environment variables.
+- Route web/browser/webapp verification through Codex Chrome Extension readiness first, reserve Computer Use for native Mac/non-web surfaces, and rapidly block QA/UX pipelines when the extension is missing.
+- Treat UX Review `--from-chrome-extension` and `--from-computer-use` as real flags so web review cannot slip past the Chrome Extension gate through option parsing.
+
+## [1.18.7] - 2026-05-27
+
+### Added
+
+- Add Codex 0.134 compatibility reporting for local history search, `--profile` primary selection, MCP environment/OAuth/schema/readOnlyHint changes, hook subagent context, managed proxy propagation, and workspace usage-limit messaging.
+- Add bounded local Codex history search, MCP 0.134 policy helpers, managed proxy environment forwarding, and profile-aware Codex exec native agent runners.
+- Add proof-safe parallel agent patch queue, merge, apply, rollback, and proof helpers with Agent, Team, and DFix blackbox gates.
+- Add P6 runtime truth rows and 1.18.7 gate existence/version metadata reports.
+
+### Fixed
+
+- Prevent profile-based Codex exec runs from combining `--profile` with `--ignore-user-config`.
+- Prevent readOnlyHint MCP tools from being treated as authoritative write-safety proof without destructive-name/schema checks.
+- Prevent 1.18.7 release metadata from passing without Codex 0.134, MCP 0.134, managed proxy, local history, and parallel patch gates.
+
+### Changed
+
+- Treat `rust-v0.134.0` as the recommended Codex compatibility baseline while preserving 0.133 and 0.132 as inherited compatibility baselines.
+- Extend runtime truth from P0-P5 to P0-P6 for Codex 0.134 and parallel write proof closure.
 
 ## [1.18.6] - 2026-05-26
 
@@ -1148,7 +1183,7 @@
 - Keep release metadata aligned after the automatic SKS version guard advances the package version.
 - Treat Codex App Markdown-linked `$research`, `$QA-LOOP`, and related picker skills as explicit SKS routes so Computer Use wording cannot hijack QA/research prompts into the fast lane.
 - Clarify `sks codex-app check` Computer Use readiness by distinguishing installed plugin files from live `@Computer` tool exposure in the current Codex App thread.
-- Extend the Computer Use-only policy text to require `@Computer` or `@AppName` in a fresh Codex App thread when live UI/browser evidence is needed.
+- Extend the native Computer Use policy text to require `@Computer` or `@AppName` in a fresh Codex App thread when live native Mac/non-web evidence is needed.
 - Require real Codex App `$imagegen`/`gpt-image-2` output for generated raster assets and generated image-review evidence, blocking placeholders, prose-only critique, and fabricated image files from satisfying route gates.
 - Report Codex image-generation feature readiness in `sks codex-app check` so missing `$imagegen` exposure is visible before SKS visual/image pipelines run.
 
@@ -1590,7 +1625,7 @@
 
 ### Added
 
-- Add `$Computer-Use` / `$CU` as a maximum-speed Codex Computer Use lane for UI/browser/visual tasks, deferring TriWiki refresh/validate and Honest Mode to final closeout while preserving the Computer Use-only evidence policy.
+- Add `$Computer-Use` / `$CU` as a maximum-speed Codex Computer Use lane for native Mac/non-web visual tasks, deferring TriWiki refresh/validate and Honest Mode to final closeout while preserving the Computer Use evidence policy.
 
 ### Fixed
 
@@ -1658,7 +1693,7 @@
 
 ### Changed
 
-- Require package pipeline UI/browser verification and visual inspection evidence to use Codex Computer Use only, explicitly rejecting Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, and other browser automation as substitutes.
+- Historical package-pipeline UI/browser verification used Codex Computer Use-only evidence; current policy supersedes that with Codex Chrome Extension-first web verification while still rejecting Playwright, Chrome MCP, Browser Use, Selenium, Puppeteer, and other browser automation as substitutes.
 
 ## [0.6.80] - 2026-05-02
 
@@ -1670,7 +1705,7 @@
 
 ### Changed
 
-- Require Codex Computer Use-only evidence for UI-level QA/E2E verification, explicitly rejecting Chrome MCP, Browser Use, Playwright, and other browser automation as UI verification substitutes.
+- Historical UI-level QA/E2E verification used Codex Computer Use-only evidence; current policy supersedes that with Codex Chrome Extension-first web verification while still rejecting Chrome MCP, Browser Use, Playwright, and other browser automation as substitutes.
 
 ## [0.6.78] - 2026-05-02
 

@@ -496,7 +496,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-dfix': ['dfix', 'fixture', '--json'],
   'cli-all-features': ['all-features', 'complete', '--json'],
   'route-team': ['team', 'fixture', '--mock', '--json'],
-  'route-qa-loop': { setup: [['qa-loop', 'prepare', 'fixture UI QA', '--json']], command: ['qa-loop', 'run', 'latest', '--mock', '--json'] },
+  'route-qa-loop': { setup: [['qa-loop', 'prepare', 'fixture API QA', '--json']], command: ['qa-loop', 'run', 'latest', '--mock', '--json'] },
   'route-research': { setup: [['research', 'prepare', 'fixture research topic', '--json']], command: ['research', 'run', 'latest', '--mock', '--json'] },
   'route-ppt': ['ppt', 'fixture', '--mock', '--json'],
   'route-image-ux-review': ['image-ux-review', 'fixture', '--mock', '--json'],
@@ -802,7 +802,15 @@ function skillCoveredByRoute(skillName: any) {
 }
 
 function isExternalPromptCommandMention(mention: any) {
-  return ['$IMAGEGEN'].includes(String(mention || '').toUpperCase());
+  const normalized = String(mention || '').toUpperCase();
+  return [
+    '$CODEX_HOME',
+    '$CODEX_LB_API_KEY',
+    '$SKS_CODEX_APP_IMAGEGEN_OUTPUT',
+    '$SKS_CODEX_APP_IMAGEGEN_OUTPUT_ID',
+    '$SKS_CODEX_APP_IMAGEGEN_CREATED_AT',
+    '$IMAGEGEN'
+  ].includes(normalized);
 }
 
 function canonicalDollar(value: any) {

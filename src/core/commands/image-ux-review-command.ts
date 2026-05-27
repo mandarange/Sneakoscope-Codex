@@ -29,6 +29,7 @@ import { extractRealCallouts } from '../image-ux-review/real-callout-extractor.j
 import { addImageRelation, ingestImage } from '../wiki-image/image-voxel-ledger.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 import { writeRouteCollaborationArtifacts } from '../agents/route-collaboration-ledger.js';
+import { codexChromeExtensionStatus } from '../codex-app.js';
 
 const ONE_BY_ONE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/axX7V8AAAAASUVORK5CYII=';
 const IMAGE_UX_REVIEW_ARTIFACT_PATHS: Record<string, string | Record<string, any>> = {
@@ -79,11 +80,38 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
   const generatedImage = readOption(args, '--generated-image', null);
   const shouldGenerateCallouts = flag(args, '--generate-callouts') || flag(args, '--fix');
   if (missionId) return rebuildExistingMission(root, command, [missionId, ...args], { fixRequested: flag(args, '--fix') });
-  if (!imagePath && !readOption(args, '--from-computer-use', null)) {
+  const fromChromeExtension = flag(args, '--from-chrome-extension') || Boolean(readOption(args, '--from-chrome-extension', null));
+  const fromComputerUse = flag(args, '--from-computer-use') || Boolean(readOption(args, '--from-computer-use', null));
+  const chromePreflight = fromChromeExtension ? await codexChromeExtensionStatus() : null;
+  if (chromePreflight && !chromePreflight.ok) {
+    const result = {
+      schema: 'sks.image-ux-review-run.v1',
+      ok: false,
+      status: 'blocked',
+      blocker: 'codex_chrome_extension_setup_required',
+      chrome_extension: chromePreflight,
+      guidance: [
+        'Install/enable the Codex Chrome Extension first, then tell SKS installation is complete before resuming web UX review.'
+      ]
+    };
+    process.exitCode = 1;
+    if (flag(args, '--json')) return printJson(result);
+    console.error('UX Review blocked: install/enable the Codex Chrome Extension first, then tell SKS installation is complete before resuming.');
+    console.error(chromePreflight.docs_url);
+    return result;
+  }
+  if (fromComputerUse && !flag(args, '--native') && !flag(args, '--non-web')) {
+    const result = { schema: 'sks.image-ux-review-run.v1', ok: false, status: 'blocked', blocker: 'web_ux_review_requires_codex_chrome_extension_not_computer_use' };
+    process.exitCode = 1;
+    if (flag(args, '--json')) return printJson(result);
+    console.error('UX Review blocked: web/browser UX review requires Codex Chrome Extension, not Computer Use. Use --from-chrome-extension after setup, or provide a screenshot with --image.');
+    return result;
+  }
+  if (!imagePath && !fromChromeExtension && !fromComputerUse) {
     const result = { schema: 'sks.image-ux-review-run.v1', ok: false, status: 'blocked', blocker: 'screenshot_required' };
+    process.exitCode = 1;
     if (flag(args, '--json')) return printJson(result);
     console.error('UX Review blocked: screenshot_required');
-    process.exitCode = 1;
     return result;
   }
   const { id, dir, mission } = await createMission(root, { mode: 'image-ux-review', prompt: promptForRun(command, args) });
@@ -93,7 +121,10 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
     sealed_hash: `image-ux-${id}`,
     answers: {
       IMAGE_UX_REVIEW_SOURCE_IMAGES: sourceRel ? [sourceRel] : [],
-      COMPUTER_USE_SCREENSHOT: Boolean(readOption(args, '--from-computer-use', null)),
+      CHROME_EXTENSION_SCREENSHOT: fromChromeExtension,
+      CHROME_EXTENSION_PREFLIGHT_PASSED: chromePreflight?.ok === true,
+      CHROME_EXTENSION_PREFLIGHT: chromePreflight,
+      COMPUTER_USE_SCREENSHOT: fromComputerUse,
       TARGET_SURFACE: readOption(args, '--target', mission.prompt),
       REMEDIATION_REQUESTED: flag(args, '--fix')
     }
@@ -143,9 +174,9 @@ async function calloutsImageUxReview(root: string, command: string, args: any[] 
   const imagePath = readOption(args, '--image', null) || readOption(args, '--screenshot', null);
   if (!imagePath) {
     const result = { schema: 'sks.image-ux-review-callouts.v1', ok: false, status: 'blocked', blocker: 'screenshot_required' };
+    process.exitCode = 1;
     if (flag(args, '--json')) return printJson(result);
     console.error('Usage: sks ux-review callouts --image <path> --json');
-    process.exitCode = 1;
     return result;
   }
   return runImageUxReview(root, command, ['--image', imagePath, '--generate-callouts', '--json', ...(flag(args, '--mock') ? ['--mock'] : [])]);
@@ -156,9 +187,9 @@ async function extractIssuesImageUxReview(root: string, command: string, args: a
   const sourceImage = readOption(args, '--image', null) || readOption(args, '--screenshot', null) || generatedImage;
   if (!generatedImage) {
     const result = { schema: 'sks.image-ux-review-extract-issues.v1', ok: false, status: 'blocked', blocker: 'generated_image_required' };
+    process.exitCode = 1;
     if (flag(args, '--json')) return printJson(result);
     console.error('Usage: sks ux-review extract-issues --generated-image <path> --json');
-    process.exitCode = 1;
     return result;
   }
   const { id, dir, mission } = await createMission(root, { mode: 'image-ux-review', prompt: `Extract UX issues from ${generatedImage}` });
@@ -199,8 +230,8 @@ async function attachGeneratedImageCommand(root: string, command: string, args: 
   const imagePath = readOption(args, '--image', null) || readOption(args, '--generated-image', null);
   if (!missionId || !imagePath) {
     const result = { schema: 'sks.image-ux-review-attach-generated.v1', ok: false, status: 'blocked', blocker: !missionId ? 'mission_required' : 'generated_image_required' };
-    if (flag(args, '--json')) return printJson(result);
     process.exitCode = 1;
+    if (flag(args, '--json')) return printJson(result);
     return result;
   }
   const { dir, mission } = await loadMission(root, missionId);
@@ -219,8 +250,8 @@ async function attachAfterImageCommand(root: string, command: string, args: any[
   const imagePath = readOption(args, '--image', null) || readOption(args, '--screenshot', null);
   if (!missionId || !imagePath) {
     const result = { schema: 'sks.image-ux-review-attach-after.v1', ok: false, status: 'blocked', blocker: !missionId ? 'mission_required' : 'after_image_required' };
-    if (flag(args, '--json')) return printJson(result);
     process.exitCode = 1;
+    if (flag(args, '--json')) return printJson(result);
     return result;
   }
   const { dir, mission } = await loadMission(root, missionId);
@@ -495,7 +526,7 @@ async function stageImage(root: string, dir: string, imagePath: string, subdir: 
 }
 
 function promptForRun(command: string, args: any[]) {
-  const source = readOption(args, '--image', null) || readOption(args, '--screenshot', null) || readOption(args, '--mission', null) || 'latest Computer Use screenshot';
+  const source = readOption(args, '--image', null) || readOption(args, '--screenshot', null) || readOption(args, '--mission', null) || 'latest Codex Chrome Extension or native Computer Use screenshot';
   return `$${routeForCommand(command).replace(/^\$/, '')} ${source} with gpt-image-2 callouts${flag(args, '--fix') ? ', then fix the issues' : ''}`;
 }
 

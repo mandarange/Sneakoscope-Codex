@@ -11,5 +11,8 @@ test('visual route Computer Use requirement returns status plus evidence skeleto
   const json = JSON.parse(result.stdout);
   assert.equal(json.schema, 'sks.computer-use-require.v1');
   assert.equal(json.evidence.schema, 'sks.computer-use-evidence.v1');
-  assert.equal(json.evidence.status, json.status);
+  assert.equal(json.status, 'web_verification_uses_chrome_extension');
+  assert.equal(json.blocker, 'web_verification_requires_codex_chrome_extension');
+  assert.equal(json.evidence.status, 'not_required_for_web_verification');
+  assert.equal(json.chrome_extension.schema, 'sks.codex-chrome-extension-status.v1');
 });

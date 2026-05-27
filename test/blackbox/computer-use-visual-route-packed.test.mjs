@@ -10,6 +10,9 @@ test('packed Computer Use visual-route requirement returns evidence or structure
   });
   const json = JSON.parse(result.stdout);
   assert.equal(json.schema, 'sks.computer-use-require.v1');
-  assert.ok(['available', 'codex_app_missing', 'macos_permission_missing', 'codex_app_capability_missing', 'external_capability_blocked', 'not_macos', 'unknown'].includes(json.status));
+  assert.equal(json.status, 'web_verification_uses_chrome_extension');
+  assert.equal(json.blocker, 'web_verification_requires_codex_chrome_extension');
+  assert.equal(json.evidence.status, 'not_required_for_web_verification');
+  assert.equal(result.code, 1);
   assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /Computer Use blocked by safety policy|MAD-SKS disabled Computer Use/i);
 });

@@ -1,6 +1,6 @@
 # MAD-SKS
 
-MAD-SKS 1.15.1 is user-authorized full-system maintenance mode, not a DB-only unlock. It can operate on a declared target root and approved resource scopes, but every expanded capability is evidence-bound and the SKS harness protected core remains immutable.
+MAD-SKS 1.18.7 is user-authorized general permission widening for high-power maintenance, not a DB-only unlock. It can operate on a declared target root and approved resource scopes, but every expanded capability is evidence-bound and the SKS harness protected core remains immutable. Database write access is one explicit executor scope inside MAD-SKS; it is not the identity of MAD-SKS.
 
 ## Authority Model
 
@@ -14,7 +14,7 @@ sks mad-sks status --json
 sks mad-sks proof --json
 ```
 
-MAD-SKS starts disabled. Write-capable operation requires an authorization manifest with user intent, target root, allowed scopes, forbidden scopes, timestamp, and hash. `run` is dry-run by default; `apply` performs the guarded executor action only with a valid manifest. Separate consent is required for system access, DB writes, package installation, service control, admin operations, network operations, Computer Use, destructive delete, browser automation, and generated asset edits.
+MAD-SKS starts disabled. Write-capable operation requires an authorization manifest with user intent, target root, allowed scopes, forbidden scopes, timestamp, and hash. `run` is dry-run by default; `apply` performs the guarded executor action only with a valid manifest. Separate consent is required for system access, DB writes, package installation, service control, admin operations, network operations, Computer Use, destructive delete, browser automation, generated asset edits, and file permission changes. Broad authority is assembled from those explicit scopes instead of inferred from a single "database mode."
 
 ## Evidence
 
@@ -22,6 +22,6 @@ Every full-system action is recorded in the MAD-SKS audit ledger with action typ
 
 ## Boundaries
 
-MAD-SKS can modify user-authorized target project files, package manager state, build/test/lint/typecheck outputs, local services, DB migrations or data, browser/Computer Use workflows, generated assets, and system configuration only inside the approved scope. It must not store sudo passwords, leak secrets into logs, perform destructive delete without explicit confirmation, or treat third-party systems as authorized targets.
+MAD-SKS can modify user-authorized target project files, package manager state, build/test/lint/typecheck outputs, local services, DB migrations or data, browser/Computer Use workflows, generated assets, file permissions, network operations, and system configuration only inside the approved scope. It must not store sudo passwords, leak secrets into logs, perform destructive delete without explicit confirmation, or treat third-party systems as authorized targets.
 
 Even when the target root is this repository, SKS package root, `dist`, `src/core`, `src/cli`, `src/commands`, `scripts`, `schemas`, `crates/sks-core`, package metadata, release metadata, managed hooks, and protected policy files are read-only protected core.

@@ -4,7 +4,7 @@ import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, sha256, writeJsonAtomic } from './fsx.js';
 import { imageDimensions, sha256File } from './wiki-image/image-hash.js';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY } from './routes.js';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_CHROME_EXTENSION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY } from './routes.js';
 import { codex0133Matrix } from './codex-compat/codex-0-133.js';
 import { detectCodexExecResumeOutputSchema } from './codex-exec-output-schema.js';
 import { buildCalloutPrompt, imagegenCapabilityBlocker } from './image-ux-review/imagegen-adapter.js';
@@ -116,8 +116,10 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
       required: true,
       original_resolution_required: true,
       local_only_default: true,
-      accepted_sources: ['codex_computer_use_screenshot', 'user_provided_screenshot', 'exported_static_artifact_image'],
-      privacy: 'Computer Use screenshots and gpt-image-2 outputs are local-only by default; shared TriWiki publishes metadata only unless explicitly opted in.'
+      accepted_sources: ['codex_chrome_extension_screenshot', 'codex_native_computer_use_screenshot', 'user_provided_screenshot', 'exported_static_artifact_image'],
+      web_capture_doc: CODEX_CHROME_EXTENSION_DOC_URL,
+      web_verification_policy: CODEX_WEB_VERIFICATION_POLICY,
+      privacy: 'Chrome Extension screenshots, native Computer Use screenshots, and gpt-image-2 outputs are local-only by default; shared TriWiki publishes metadata only unless explicitly opted in.'
     },
     image_generation_review: {
       required_for_gate: 'full_verification',
@@ -204,7 +206,7 @@ export function buildImageUxScreenInventory(contract: any = {}) {
       id: `screen-${index + 1}`,
       source,
       source_type: /^https?:\/\//i.test(source) ? 'url_or_remote_image' : 'local_or_named_image',
-      capture_source: contract.answers?.COMPUTER_USE_SCREENSHOT ? 'codex_computer_use_screenshot' : 'user_provided_screenshot',
+      capture_source: contract.answers?.CHROME_EXTENSION_SCREENSHOT ? 'codex_chrome_extension_screenshot' : contract.answers?.COMPUTER_USE_SCREENSHOT ? 'codex_native_computer_use_screenshot' : 'user_provided_screenshot',
       status: 'provided_unverified',
       original_resolution: true,
       width: null,
@@ -213,7 +215,7 @@ export function buildImageUxScreenInventory(contract: any = {}) {
       exif_orientation_normalized: 'not_applicable_or_pending',
       privacy: 'local-only'
     })),
-    capture_policy: 'Capture actual UI screens with Codex Computer Use when live, or user-provided screenshots for static review. Preserve original image resolution metadata.',
+    capture_policy: 'Capture web/browser/webapp screens with Codex Chrome Extension first, native Mac/non-web surfaces with Codex Computer Use when live, or user-provided screenshots for static review. Preserve original image resolution metadata.',
     passed: suppliedImages.length > 0,
     blockers: suppliedImages.length > 0 ? [] : ['screenshot_required']
   };
@@ -415,7 +417,13 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
   const generatedImageUnavailable = Number(generatedReviewLedger.generated_count || 0) === 0
     && Number(generatedReviewLedger.required_count || 0) > 0;
   const realSourceScreenshotPresent = inventory.passed === true;
-  const computerUseOrUserScreenshotSource = (inventory.source_screens || []).some((screen: any) => ['codex_computer_use_screenshot', 'user_provided_screenshot', 'exported_static_artifact_image'].includes(screen.capture_source || screen.source_type));
+  const officialOrUserScreenshotSource = (inventory.source_screens || []).some((screen: any) => [
+    'codex_chrome_extension_screenshot',
+    'codex_native_computer_use_screenshot',
+    'codex_computer_use_screenshot',
+    'user_provided_screenshot',
+    'exported_static_artifact_image'
+  ].includes(screen.capture_source || screen.source_type));
   const calloutExtractionSchemaValid = issueLedger.validation?.ok === true;
   const p0P1ZeroAfterFix = issueLedger.p0_p1_zero === true && (fixLoop.passed === true || fixTaskPlan.tasks?.length === 0);
   const fixLoopExecutedOrNotNeeded = fixLoop.passed === true || fixTaskPlan.tasks?.length === 0;
@@ -426,7 +434,7 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
   const honestModeComplete = parts.honestModeComplete === true && (honestModeEvidence?.ok === true || parts.honestModeEvidenceRequired !== true);
   const referenceCloseoutPassed = generatedImageUnavailable
     && realSourceScreenshotPresent
-    && computerUseOrUserScreenshotSource
+    && officialOrUserScreenshotSource
     && calloutExtractionSchemaValid
     && p0P1ZeroAfterFix
     && fixLoopExecutedOrNotNeeded
@@ -446,7 +454,8 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
     full_review_passed: false,
     reference_only: false,
     real_source_screenshot_present: realSourceScreenshotPresent,
-    computer_use_or_user_screenshot_source: computerUseOrUserScreenshotSource,
+    computer_use_or_user_screenshot_source: officialOrUserScreenshotSource,
+    official_or_user_screenshot_source: officialOrUserScreenshotSource,
     gpt_image_2_callout_generated: generatedReviewLedger.passed === true && Number(generatedReviewLedger.real_generated_count || 0) > 0,
     generated_image_ingested: Number(generatedReviewLedger.generated_count || 0) > 0,
     callout_extraction_schema_valid: calloutExtractionSchemaValid,
@@ -605,7 +614,7 @@ export function imageUxReviewProofEvidence(gate: any = {}, artifacts: any = {}) 
     fixed_p0_p1_count: (issueLedger.issues || []).filter((issue: any) => ['P0', 'P1'].includes(issue.severity) && issue.status === 'fixed').length,
     recapture_re_review_status: artifacts.recapture_plan?.changed_screens_rechecked_or_not_applicable ? 'complete_or_not_applicable' : 'blocked',
     image_voxel_relation_count: generated.generated_review_images?.filter((image: any) => image.image_voxel_relation).length || 0,
-    computer_use_evidence_mode: artifacts.inventory?.source_screens?.some((screen: any) => screen.capture_source === 'codex_computer_use_screenshot') ? 'source_screenshot' : 'user_or_static_screenshot',
+    computer_use_evidence_mode: artifacts.inventory?.source_screens?.some((screen: any) => screen.capture_source === 'codex_native_computer_use_screenshot' || screen.capture_source === 'codex_computer_use_screenshot') ? 'native_computer_use_source_screenshot' : artifacts.inventory?.source_screens?.some((screen: any) => screen.capture_source === 'codex_chrome_extension_screenshot') ? 'chrome_extension_source_screenshot' : 'user_or_static_screenshot',
     claims: {
       ux_review_source_screenshot_verified: artifacts.inventory?.passed === true,
       ux_review_gpt_image_2_callouts_generated: (generated.real_generated_count || 0) > 0,

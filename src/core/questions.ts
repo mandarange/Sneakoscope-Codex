@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { writeJsonAtomic, writeTextAtomic } from './fsx.js';
 import { buildQaLoopQuestionSchema } from './qa-loop.js';
-import { CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, hasFromChatImgSignal } from './routes.js';
+import { CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, hasFromChatImgSignal } from './routes.js';
 
 export function buildQuestionSchemaForRoute(route: any, prompt: any) {
   if (String(route?.id || '') === 'QALoop') return buildQaLoopQuestionSchema(prompt);
@@ -262,7 +262,7 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   };
   const criteria = {
     version: [version ? `version refs are ${version}` : 'version refs advance consistently', 'publish:dry gate passes', 'npm publish is not run'],
-    chat_capture: ['From-Chat-IMG activates chat-image intake only here', 'all visible chat requirements are listed before implementation', `${FROM_CHAT_IMG_COVERAGE_ARTIFACT} maps every customer request, screenshot region, and attachment to work-order item(s)`, `${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} is updated as each request, image match, work item, scoped QA-LOOP, and verification step is completed`, `${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} records temporary TriWiki-backed session context with retention metadata`, `${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} proves QA-LOOP ran over the exact customer-request work-order range after implementation`, 'unresolved_items is empty before Team completion', 'scoped_qa_loop_completed is true with zero unresolved QA findings', 'Codex Computer Use visual inspection strengthens matches when available; no Playwright or browser automation substitute is allowed', CODEX_COMPUTER_USE_ONLY_POLICY, 'client requests follow normal SKS gates and verification'],
+    chat_capture: ['From-Chat-IMG activates chat-image intake only here', 'all visible chat requirements are listed before implementation', `${FROM_CHAT_IMG_COVERAGE_ARTIFACT} maps every customer request, screenshot region, and attachment to work-order item(s)`, `${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} is updated as each request, image match, work item, scoped QA-LOOP, and verification step is completed`, `${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} records temporary TriWiki-backed session context with retention metadata`, `${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} proves QA-LOOP ran over the exact customer-request work-order range after implementation`, 'unresolved_items is empty before Team completion', 'scoped_qa_loop_completed is true with zero unresolved QA findings', 'Web/browser visual inspection uses Codex Chrome Extension readiness first; native Mac/non-web visual inspection uses Codex Computer Use when available', CODEX_WEB_VERIFICATION_POLICY, CODEX_COMPUTER_USE_ONLY_POLICY, 'client requests follow normal SKS gates and verification'],
     triwiki_audit: ['TriWiki ingestion, voxel attention, and contract consumption paths are inspected against current code', 'repeat-mistake prevention gaps are fixed in the relevant code path or blocked with evidence', 'regression coverage proves fresh/high-weight mistake memory can influence future missions', 'final status separates supported behavior from anything still unverified'],
     priority: ['strong feedback raises required_weight', 'request topics are counted in wiki packs', 'future inference uses priority signals'],
     questions: ['predictable answers are inferred', 'partial answers can seal contracts', 'only unresolved changing slots remain visible'],
@@ -546,7 +546,7 @@ export function questionsMarkdown(schema: any) {
   if (isQaLoop) {
     lines.push('QA-LOOP는 prompt, TriWiki/current-code 기본값, 보수적 안전 정책으로 Decision Contract를 자동 봉인합니다.');
     lines.push('로그인이 필요하면 테스트 전용 계정 정보만 임시 런타임 입력으로 제공해야 하며, answers.json/리포트/로그/wiki에는 절대 저장하지 않습니다.');
-    lines.push('UI 수준 E2E와 시각 검증은 Codex Computer Use 증거가 없으면 검증 완료로 주장할 수 없습니다. Chrome MCP, Browser Use, Playwright, Selenium, Puppeteer, 기타 브라우저 자동화는 UI/브라우저 검증 증거로 인정하지 않습니다.');
+    lines.push('웹/브라우저/UI E2E 검증은 Codex Chrome Extension 준비 상태와 증거가 없으면 검증 완료로 주장할 수 없습니다. Codex Computer Use는 네이티브 Mac/비웹 화면에만 쓰며, Chrome MCP, Browser Use, Playwright, Selenium, Puppeteer, 기타 브라우저 자동화는 웹 검증 증거로 인정하지 않습니다.');
     lines.push('개발 서버가 아닌 배포/스테이징 도메인에서는 삭제성 테스트를 절대 실행하지 않습니다.');
   } else {
     lines.push('Decision Contract는 prompt, TriWiki/current-code 기본값, 보수적 안전 정책으로 자동 봉인됩니다.');

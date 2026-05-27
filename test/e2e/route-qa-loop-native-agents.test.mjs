@@ -5,7 +5,7 @@ import path from 'node:path';
 
 test('QA-LOOP route fixture includes native agent proof evidence', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'qa-loop-agents' });
-  const prepared = await runSksInRoot(root, ['qa-loop', 'prepare', 'fixture UI QA', '--json']);
+  const prepared = await runSksInRoot(root, ['qa-loop', 'prepare', 'fixture API QA', '--json']);
   const json = await runSksInRoot(root, ['qa-loop', 'run', prepared.mission_id, '--mock', '--json']);
   const proof = await assertCompletionProofInRoot(root, json.mission_id, '$QA-LOOP');
   await assertAgentProof(json.mission_id, { route: '$QA-LOOP' });

@@ -7,7 +7,7 @@ import { evaluateResearchGate } from '../research.js';
 import { PPT_REQUIRED_GATE_FIELDS } from '../ppt.js';
 import { validateFinalHonestModeReport } from '../artifact-schemas.js';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, IMAGE_UX_REVIEW_REFERENCE_GATE_FIELDS, IMAGE_UX_REVIEW_HONEST_MODE_ARTIFACT, imageUxReviewGateAllowsReferenceCloseout } from '../image-ux-review.js';
-import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, evidenceMentionsForbiddenBrowserAutomation, reflectionRequiredForRoute } from '../routes.js';
+import { CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, evidenceMentionsForbiddenBrowserAutomation, reflectionRequiredForRoute } from '../routes.js';
 import { validateRouteCompletionProof } from '../proof/route-proof-gate.js';
 import { routeFromState, routeRequiresCompletionProof } from '../proof/route-proof-policy.js';
 import { AGENT_INTAKE_STAGE_ID } from '../agents/agent-schema.js';
@@ -356,8 +356,9 @@ function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
       .filter((key: any) => gate[key] !== true);
   }
   if (file === 'qa-gate.json' || mode === 'QALOOP') {
-    return ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'ui_computer_use_evidence', 'honest_mode_complete']
-      .filter((key: any) => gate[key] !== true);
+    const required = ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'honest_mode_complete'];
+    if (gate.ui_e2e_required === true) required.push('chrome_extension_preflight_passed', 'ui_chrome_extension_evidence');
+    return required.filter((key: any) => gate[key] !== true);
   }
   if (file === 'ppt-gate.json' || mode === 'PPT') {
     const required = [...PPT_REQUIRED_GATE_FIELDS];
@@ -518,8 +519,9 @@ async function missingFromChatImgCoverageArtifacts(root: any, state: any = {}) {
     if (Number(qaLoop.unresolved_findings) !== 0) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:unresolved_findings`);
     if (Number(qaLoop.unresolved_fixable_findings) !== 0) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:unresolved_fixable_findings`);
     if (!Array.isArray(qaLoop.evidence) || qaLoop.evidence.length === 0) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:evidence`);
-    if (qaLoop.computer_use_evidence_source !== CODEX_COMPUTER_USE_EVIDENCE_SOURCE) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:computer_use_evidence_source`);
-    if (evidenceMentionsForbiddenBrowserAutomation({ evidence: qaLoop.evidence, notes: qaLoop.notes, tool: qaLoop.tool, evidence_source: qaLoop.computer_use_evidence_source })) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:forbidden_browser_automation_evidence`);
+    const source = qaLoop.web_verification_evidence_source || qaLoop.ui_evidence_source;
+    if (source !== CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:web_verification_evidence_source`);
+    if (evidenceMentionsForbiddenBrowserAutomation({ evidence: qaLoop.evidence, notes: qaLoop.notes, tool: qaLoop.tool, evidence_source: source })) missing.push(`${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}:forbidden_browser_automation_evidence`);
     const coveredWorkItems = new Set(Array.isArray(qaLoop.work_order_item_ids_covered) ? qaLoop.work_order_item_ids_covered.map(String) : []);
     for (const item of Array.isArray(ledger.work_order_items) ? ledger.work_order_items : []) {
       const workId = String(item?.id || '');

@@ -1,11 +1,23 @@
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
-import { codexAccessTokenStatus, codexAppIntegrationStatus, formatCodexAppStatus } from '../core/codex-app.js';
+import { codexAccessTokenStatus, codexAppIntegrationStatus, codexChromeExtensionStatus, formatCodexAppStatus } from '../core/codex-app.js';
 import { codexAppRemoteControlCommand } from '../cli/codex-app-command.js';
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'check';
   if (action === 'remote-control' || action === 'remote') return codexAppRemoteControlCommand(args.slice(1));
+  if (action === 'chrome-extension' || action === 'chrome') {
+    const status = await codexChromeExtensionStatus();
+    if (flag(args, '--json')) {
+      printJson(status);
+      if (!status.ok) process.exitCode = 1;
+      return;
+    }
+    console.log(`Codex Chrome Extension: ${status.ok ? 'available' : status.status}`);
+    for (const line of status.guidance || []) console.log(`- ${line}`);
+    if (!status.ok) process.exitCode = 1;
+    return;
+  }
   if (action === 'pat') {
     const status = codexAccessTokenStatus();
     if (flag(args, '--json')) return printJson(status);
@@ -25,6 +37,6 @@ export async function run(_command: any, args: any = []) {
     if (!status.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks codex-app check|status|pat status|remote-control [--json]');
+  console.error('Usage: sks codex-app check|status|chrome-extension|pat status|remote-control [--json]');
   process.exitCode = 1;
 }

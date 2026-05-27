@@ -175,7 +175,7 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
         blocker: available ? 'codex_app_imagegen_output_missing' : 'imagegen_capability_missing',
         setup_guidance: available
           ? 'Codex App image generation is available, but SKS did not receive an attached generated annotated review image. Re-run with $imagegen/gpt-image-2 and provide SKS_CODEX_APP_IMAGEGEN_OUTPUT or attach the generated image path.'
-          : 'Codex App image generation was not detected. Run in Codex App with $imagegen/gpt-image-2 or set OPENAI_API_KEY for the optional Images API fallback.',
+          : 'Codex App image generation was not detected. Run in Codex App with $imagegen/gpt-image-2. For a separate non-Codex API task, explicitly enable the OpenAI Images API fallback and set OPENAI_API_KEY.',
         local_only: true
       });
       return {
@@ -278,7 +278,8 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
 
 export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImagegenAdapter {
   const apiKey = opts.apiKey || process.env.OPENAI_API_KEY || null;
-  const codexLb = opts.codexLb?.available === true ? opts.codexLb : null;
+  const allowCodexLbApiFallback = opts.allowCodexLbApiFallback === true || process.env.SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK === '1';
+  const codexLb = allowCodexLbApiFallback && opts.codexLb?.available === true ? opts.codexLb : null;
   return {
     surface: 'openai_images_api',
     model: 'gpt-image-2',
@@ -344,8 +345,8 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           status: 'blocked',
           blocker: auth.blocker,
           setup_guidance: auth.auth_source === 'CODEX_LB_API_KEY'
-            ? 'Set CODEX_LB_API_KEY for the selected codex-lb provider with requires_openai_auth=false, or attach a real Codex App $imagegen output image.'
-            : 'Set OPENAI_API_KEY to enable OpenAI Images API fallback, or attach a real Codex App $imagegen output image.',
+            ? 'CODEX_LB_API_KEY is only a non-Codex API fallback when explicitly enabled; it does not satisfy Codex App $imagegen evidence. Attach a real Codex App $imagegen output image for full SKS verification.'
+            : 'Set OPENAI_API_KEY only for an explicit non-Codex Images API fallback, or attach a real Codex App $imagegen output image for full SKS verification.',
           local_only: true
         };
         await writeJsonAtomic(responseArtifact, blocked);
@@ -472,18 +473,19 @@ export async function generateGptImage2CalloutReview(input: ImageUxReviewImagege
     return createFakeImagegenAdapter(opts.fakeAdapter || {}).generateCalloutReview(input);
   }
   const capability = await detectImagegenCapability(opts.capability || {}).catch(() => null);
-  const openaiOptions = { ...(opts.openai || {}), codexLb: opts.openai?.codexLb || capability?.codex_lb || null };
+  const allowApiFallback = opts.allowApiFallback === true || process.env.SKS_IMAGEGEN_ALLOW_API_FALLBACK === '1';
+  const allowCodexLbApiFallback = opts.allowCodexLbApiFallback === true || process.env.SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK === '1';
+  const openaiOptions = {
+    ...(opts.openai || {}),
+    codexLb: allowCodexLbApiFallback ? opts.openai?.codexLb || capability?.codex_lb || null : null,
+    allowCodexLbApiFallback
+  };
   const codexAdapter = createCodexAppImagegenAdapter({
     ...(opts.codexApp || {}),
     available: opts.codexApp?.available === true || capability?.codex_app?.available === true
   });
-  if (codexAdapter.available) {
-    const result = await codexAdapter.generateCalloutReview(input);
-    if (result.ok) return result;
-    const openaiAdapter = createOpenAIImagesApiAdapter(openaiOptions);
-    if (!openaiAdapter.available) return result;
-    return openaiAdapter.generateCalloutReview(input);
-  }
+  const codexResult = await codexAdapter.generateCalloutReview(input);
+  if (codexResult.ok || !allowApiFallback) return codexResult;
   return createOpenAIImagesApiAdapter(openaiOptions).generateCalloutReview(input);
 }
 
@@ -494,7 +496,7 @@ export function imagegenCapabilityBlocker(surface = 'Codex App $imagegen') {
     blocker: 'imagegen_capability_missing',
     surface,
     model: 'gpt-image-2',
-    guidance: 'Run the request in Codex App with $imagegen/gpt-image-2, or set OPENAI_API_KEY. When codex-lb is the selected provider, CODEX_LB_API_KEY is accepted only with requires_openai_auth=false. Attach the generated annotated review image path; SKS must not fabricate or substitute a text-only review.'
+    guidance: 'Run the request in Codex App with $imagegen/gpt-image-2 and attach the generated annotated review image path. OPENAI_API_KEY or CODEX_LB_API_KEY may be used only for an explicitly requested non-Codex API fallback, and that fallback does not satisfy Codex App imagegen evidence. SKS must not fabricate or substitute a text-only review.'
   };
 }
 

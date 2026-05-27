@@ -5,13 +5,14 @@ import { getCodexInfo, runCodexExec } from '../codex-adapter.js';
 import { createMission, loadMission, setCurrent, stateFile } from '../mission.js';
 import { writeQuestions } from '../questions.js';
 import { sealContract } from '../decision-contract.js';
-import { buildQaLoopQuestionSchema, buildQaLoopPrompt, evaluateQaGate, qaStatus, writeMockQaResult, writeQaLoopArtifacts, writeQaNativeAgentLedger } from '../qa-loop.js';
+import { buildQaLoopQuestionSchema, buildQaLoopPrompt, evaluateQaGate, qaStatus, qaUiRequired, writeMockQaResult, writeQaLoopArtifacts, writeQaNativeAgentLedger } from '../qa-loop.js';
 import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.js';
-import { CODEX_COMPUTER_USE_EVIDENCE_SOURCE, ROUTES, routePrompt, stripVisibleDecisionAnswerBlocks } from '../routes.js';
+import { ROUTES, routePrompt, stripVisibleDecisionAnswerBlocks } from '../routes.js';
+import { codexChromeExtensionStatus } from '../codex-app.js';
 import { scanDbSafety } from '../db-safety.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
-import { flag, promptOf, readBoundedIntegerFlag, readMaxCycles, resolveMissionId, safeReadTextFile } from './command-utils.js';
+import { flag, promptOf, readBoundedIntegerFlag, readFlagValue, readMaxCycles, resolveMissionId, safeReadTextFile } from './command-utils.js';
 import fsp from 'node:fs/promises';
 
 export async function qaLoopCommand(sub: any, args: any = []) {
@@ -119,30 +120,92 @@ async function qaLoopRun(args: any) {
   const desiredWorkItemCount = readBoundedIntegerFlag(args, '--work-items', targetActiveSlots, 1, 200);
   const minimumWorkItems = readBoundedIntegerFlag(args, '--minimum-work-items', targetActiveSlots, 1, 200);
   const maxQueueExpansion = readBoundedIntegerFlag(args, '--max-queue-expansion', 10, 0, 200);
+  const profile = readFlagValue(args, '--profile', 'sks-logic-high') || 'sks-logic-high';
+  const writeMode = readFlagValue(args, '--write-mode', flag(args, '--parallel-write') ? 'parallel' : 'off');
+  const applyPatches = flag(args, '--apply-patches');
+  const dryRunPatches = flag(args, '--dry-run-patches') || flag(args, '--dryrun-patches');
+  const maxWriteAgents = readBoundedIntegerFlag(args, '--max-write-agents', Math.min(requestedAgents, 5), 1, 20);
   const mock = flag(args, '--mock');
   const qaGate = await readJson(path.join(dir, 'qa-gate.json'), {});
   const reportFile = qaGate.qa_report_file;
+  const uiRequired = qaUiRequired(contract.answers || {});
+  if (uiRequired && !mock) {
+    const chrome = await codexChromeExtensionStatus();
+    if (!chrome.ok) {
+      const blockedGate = {
+        ...qaGate,
+        passed: false,
+        chrome_extension_preflight_passed: false,
+        ui_chrome_extension_evidence: false,
+        ui_computer_use_evidence: false,
+        ui_evidence_source: 'blocked_chrome_extension_setup_required',
+        blocker: 'codex_chrome_extension_setup_required',
+        blockers: Array.from(new Set([...(qaGate.blockers || []), 'codex_chrome_extension_setup_required', ...(chrome.blockers || [])])),
+        evidence: [...(qaGate.evidence || []), 'Codex Chrome Extension preflight failed before web QA execution.'],
+        notes: [...(qaGate.notes || []), 'Rapid halt: install/enable Codex Chrome Extension, then tell SKS installation is complete before resuming.'],
+        chrome_extension: chrome
+      };
+      await writeJsonAtomic(path.join(dir, 'qa-gate.json'), blockedGate);
+      await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: blockedGate, artifacts: ['qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], statusHint: 'blocked', blockers: blockedGate.blockers, command: { cmd: `sks qa-loop run ${id}`, status: 2 } });
+      await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_BLOCKED_CHROME_EXTENSION_SETUP_REQUIRED', questions_allowed: true });
+      if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: false, status: 'blocked', blocker: 'codex_chrome_extension_setup_required', mission_id: id, chrome_extension: chrome, gate: blockedGate }, null, 2));
+      console.error('QA-LOOP blocked: install/enable the Codex Chrome Extension first, then tell SKS installation is complete before resuming.');
+      console.error(chrome.docs_url);
+      process.exitCode = 2;
+      return;
+    }
+  }
   await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_RUNNING_NO_QUESTIONS', questions_allowed: false, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.run.started', maxCycles, mock });
   const nativeAgentPlan = await readJson(path.join(dir, 'qa-agent-plan.json'), null);
   const nativeRoster = requestedAgents === 3 ? nativeAgentPlan : null;
-  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-exec', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: true, roster: nativeRoster, routeCommand: 'sks qa-loop run', routeBlackboxKind: 'actual_qa_command' });
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-exec', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: !(applyPatches && writeMode !== 'off'), profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: nativeRoster, routeCommand: 'sks qa-loop run', routeBlackboxKind: 'actual_qa_command' });
   await writeJsonAtomic(path.join(dir, 'qa-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (mock) {
     let gate = await writeMockQaResult(dir, mission, contract);
-    const needsVisual = contract.answers?.QA_SCOPE && String(contract.answers.QA_SCOPE).includes('ui');
+    const needsVisual = uiRequired;
     if (needsVisual && gate.gate) {
-      const nextGate = { ...gate.gate, passed: true, ui_computer_use_evidence: true, ui_evidence_source: CODEX_COMPUTER_USE_EVIDENCE_SOURCE, evidence: [...(gate.gate.evidence || []), 'mock Codex Computer Use fixture evidence'], notes: [...(gate.gate.notes || []), 'Mock fixture creates image voxel evidence; it does not claim a live UI run.'] };
+      const nextGate = {
+        ...gate.gate,
+        passed: false,
+        chrome_extension_preflight_passed: false,
+        ui_chrome_extension_evidence: false,
+        ui_computer_use_evidence: false,
+        ui_evidence_source: 'mock_codex_chrome_extension_fixture_not_live',
+        mock_web_ui_evidence: true,
+        evidence: [...(gate.gate.evidence || []), 'mock Codex Chrome Extension fixture marker; not live web UI evidence'],
+        notes: [...(gate.gate.notes || []), 'Mock fixture does not satisfy the Codex Chrome Extension web verification gate or claim a live UI run.']
+      };
       await writeJsonAtomic(path.join(dir, 'qa-gate.json'), nextGate);
       gate = await evaluateQaGate(dir);
     }
     const nativeGate = { ...(gate.gate || gate), native_agent_proof: nativeAgentRun.proof?.ok === true, agent_central_ledger: true };
     await writeJsonAtomic(path.join(dir, 'qa-gate.json'), nativeGate);
     gate = { ...gate, gate: nativeGate, passed: nativeGate.passed };
-    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], visual: needsVisual, mock, command: { cmd: `sks qa-loop run ${id} --mock`, status: 0 } });
+    const proof = await maybeFinalizeRoute(root, {
+      missionId: id,
+      route: '$QA-LOOP',
+      gateFile: 'qa-gate.json',
+      gate: gate.gate || gate,
+      artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'],
+      visual: needsVisual,
+      mock,
+      unverified: needsVisual ? ['Mock QA-LOOP did not run live Codex Chrome Extension web UI verification; web UI evidence remains unverified.'] : [],
+      command: { cmd: `sks qa-loop run ${id} --mock`, status: 0 }
+    });
     await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: gate.passed ? 'QALOOP_DONE' : 'QALOOP_PAUSED', questions_allowed: true });
-    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation, native_agent_run: nativeAgentRun }, null, 2));
+    if (flag(args, '--json')) return console.log(JSON.stringify({
+      schema: 'sks.qa-loop-run.v1',
+      ok: proof.ok && (!needsVisual || gate.passed === true),
+      status: needsVisual && gate.passed !== true ? 'verified_partial_mock_no_live_web_evidence' : (gate.passed ? 'passed' : 'blocked'),
+      mission_id: id,
+      gate,
+      proof: proof.validation,
+      native_agent_run: nativeAgentRun,
+      mock_only: true,
+      live_web_evidence: !needsVisual || gate.passed === true
+    }, null, 2));
     console.log(`Mock QA-LOOP done: ${id}`);
     console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
     return;
@@ -167,7 +230,7 @@ async function qaLoopRun(args: any) {
     const outputFile = path.join(cycleDir, 'final.md');
     const prompt = buildQaLoopPrompt({ id, mission, contract, cycle, previous: last, reportFile });
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.cycle.start', cycle });
-    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-logic-high', logDir: cycleDir });
+    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile, logDir: cycleDir });
     await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
     last = await safeReadTextFile(fsp, outputFile, result.stdout || result.stderr || '');
     if (containsUserQuestion(last)) {
@@ -177,7 +240,7 @@ async function qaLoopRun(args: any) {
     }
     const gate = await evaluateQaGate(dir);
     if (gate.passed) {
-      const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], visual: contract.answers?.QA_SCOPE && String(contract.answers.QA_SCOPE).includes('ui'), command: { cmd: `sks qa-loop run ${id}`, status: 0 } });
+      const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], visual: uiRequired, command: { cmd: `sks qa-loop run ${id}`, status: 0 } });
       await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_DONE', questions_allowed: true });
       await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.done', cycle });
       if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation }, null, 2));

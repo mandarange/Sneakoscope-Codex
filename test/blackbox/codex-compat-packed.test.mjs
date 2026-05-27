@@ -10,11 +10,13 @@ test('packed Codex compatibility includes schema snapshot and semantic status', 
   });
   assert.equal(result.code, 0, result.stderr || result.stdout);
   const json = JSON.parse(result.stdout);
-  assert.equal(json.schema, 'sks.codex-compat.v1');
-  assert.equal(json.required_baseline, 'rust-v0.133.0');
+  assert.equal(json.schema, 'sks.codex-compat.v2');
+  assert.equal(json.required_baseline, 'rust-v0.134.0');
   assert.equal(json.hooks_schema?.ok, true);
   assert.equal(json.hooks_schema?.metadata?.tag, 'latest');
   assert.equal(json.hooks_semantic?.ok, true);
+  assert.equal(json.codex_0_134?.baseline, 'rust-v0.134.0');
   assert.equal(json.codex_0_133?.baseline, 'rust-v0.133.0');
-  assert.equal(json.legacy_baselines?.codex_0_132?.superseded_by, 'rust-v0.133.0');
+  assert.equal(json.legacy_baselines?.codex_0_133?.superseded_by, 'rust-v0.134.0');
+  assert.equal(json.legacy_baselines?.codex_0_132?.superseded_by, 'rust-v0.134.0');
 });

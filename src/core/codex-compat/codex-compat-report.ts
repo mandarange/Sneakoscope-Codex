@@ -5,6 +5,7 @@ import { codexSchemaSnapshotReport } from './codex-schema-snapshot.js';
 import { codexHookWarningCheck } from './codex-hook-warning-detector.js';
 import { codex0133Matrix } from './codex-0-133.js';
 import { detectCodexExecResumeOutputSchema } from '../codex-exec-output-schema.js';
+import { collectCodex0134LocalEvidence, codex0134Matrix } from '../codex/codex-0-134-compat.js';
 
 export async function codexCompatibilityReport(opts: any = {}) {
   const root = opts.root || await projectRoot();
@@ -16,15 +17,34 @@ export async function codexCompatibilityReport(opts: any = {}) {
     output_schema_supported: false,
     warnings: [`codex output-schema detector failed: ${err.message}`]
   }));
-  const matrix = codex0133Matrix({
+  const local0134 = await collectCodex0134LocalEvidence(opts).catch((err: any) => ({
+    available: false,
+    versionText: '',
+    execHelp: '',
+    mcpHelp: '',
+    historyHelp: '',
+    historyCommandAvailable: false,
+    schemaPolicyText: '',
+    warnings: [`codex 0.134 local evidence failed: ${err.message}`]
+  }));
+  const matrix0134 = codex0134Matrix({
+    version: version.detected?.version || local0134.versionText,
+    available: version.detected?.available || local0134.available,
+    execHelp: local0134.execHelp,
+    mcpHelp: local0134.mcpHelp,
+    historyHelp: local0134.historyHelp,
+    historyCommandAvailable: local0134.historyCommandAvailable,
+    schemaPolicyText: local0134.schemaPolicyText
+  });
+  const matrix0133 = codex0133Matrix({
     version: version.detected?.version,
     available: version.detected?.available,
     execResumeHelp: outputSchema.output_schema_supported ? '--output-schema' : ''
   });
-  const ok = Boolean(version.policy.ok && snapshot.ok && hooks.ok);
+  const ok = Boolean(version.policy.ok && snapshot.ok && hooks.ok && matrix0134.ok);
   return {
     schema: CODEX_COMPAT_SCHEMA,
-    required_baseline: CODEX_REQUIRED_BASELINE_TAG,
+    required_baseline: opts.requiredBaseline || opts.require || CODEX_REQUIRED_BASELINE_TAG,
     detected: version.detected,
     hooks_schema: {
       snapshot: CODEX_HOOK_SCHEMA_BASELINE_TAG,
@@ -43,20 +63,31 @@ export async function codexCompatibilityReport(opts: any = {}) {
       issues_by_category: hooks.issues_by_category,
       events: hooks.events
     },
-    capabilities: matrix.capabilities,
-    codex_0_133: matrix,
+    capabilities: matrix0134.capabilities,
+    codex_0_134: matrix0134,
+    codex_0_133: matrix0133,
     legacy_baselines: {
+      codex_0_133: {
+        baseline: 'rust-v0.133.0',
+        status: 'superseded',
+        superseded_by: matrix0134.baseline
+      },
       codex_0_132: {
         baseline: 'rust-v0.132.0',
         status: 'superseded',
-        superseded_by: matrix.baseline
+        superseded_by: matrix0134.baseline
       }
     },
+    local_codex_0_134_evidence: local0134,
     structured_resume_output: outputSchema,
-    ux_review_output_schema_preferred: matrix.ux_review_output_schema_preferred,
+    profile_primary_selector: matrix0134.profile_primary_selector,
+    local_history_search_supported: matrix0134.local_history_search_supported,
+    mcp_0_134_modernization_supported: matrix0134.mcp_0_134_modernization_supported,
+    managed_proxy_env_supported: matrix0134.managed_proxy_env_supported,
+    ux_review_output_schema_preferred: matrix0133.ux_review_output_schema_preferred,
     ok,
     status: ok ? version.policy.status : 'blocked',
-    warnings: [...version.policy.warnings, ...(outputSchema.warnings || []), ...(hooks.ok ? [] : hooks.warnings)],
+    warnings: [...version.policy.warnings, ...(local0134.warnings || []), ...(matrix0134.blockers || []), ...(outputSchema.warnings || []), ...(hooks.ok ? [] : hooks.warnings)],
     root
   };
 }
