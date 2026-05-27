@@ -1,5 +1,6 @@
 import type { CodexWebSearchEvidence } from '../codex/codex-web-search-adapter.js'
 import type { XaiSearchEvidence } from '../mcp/xai-search-adapter.js'
+import type { AppshotsEvidence } from './appshots-evidence.js'
 import type { SourceIntelligencePolicy } from './source-intelligence-policy.js'
 import type { Context7Evidence } from './source-intelligence-runner.js'
 
@@ -17,6 +18,8 @@ export interface SourceIntelligenceProof {
     xai_required: boolean
     xai_ok: boolean
     xai_missing_is_blocker: boolean
+    appshots_required: boolean
+    appshots_ok: boolean
   }
   wrongness_kinds: string[]
   blockers: string[]
@@ -24,7 +27,7 @@ export interface SourceIntelligenceProof {
 
 export function buildSourceIntelligenceProof(
   policy: SourceIntelligencePolicy,
-  evidence: { context7?: Context7Evidence; codex_web_search?: CodexWebSearchEvidence | null; xai_search?: XaiSearchEvidence | null }
+  evidence: { context7?: Context7Evidence; codex_web_search?: CodexWebSearchEvidence | null; xai_search?: XaiSearchEvidence | null; appshots?: AppshotsEvidence | null }
 ): SourceIntelligenceProof {
   const blockers = [...policy.blockers]
   const wrongnessKinds = [...policy.wrongness_kinds]
@@ -32,6 +35,8 @@ export function buildSourceIntelligenceProof(
   const codexWebOk = policy.codex_web_search.required ? evidence.codex_web_search?.ok === true : true
   const xaiOk = policy.xai_mcp.required ? evidence.xai_search?.ok === true : true
   const xaiMissingIsBlocker = policy.xai_mcp.required && !xaiOk
+  const appshotsRequired = evidence.appshots?.capability.visual_required === true
+  const appshotsOk = appshotsRequired ? evidence.appshots?.ok === true : true
   if (policy.context7.required && !context7Ok) {
     blockers.push('context7_missing')
     wrongnessKinds.push('context7_missing')
@@ -44,6 +49,10 @@ export function buildSourceIntelligenceProof(
     blockers.push('xai_available_not_used')
     wrongnessKinds.push('xai_available_not_used')
   }
+  if (appshotsRequired && !appshotsOk) {
+    blockers.push('appshots_operator_action_missing')
+    wrongnessKinds.push('appshots_operator_action_missing')
+  }
   return {
     schema: SOURCE_INTELLIGENCE_PROOF_SCHEMA,
     ok: blockers.length === 0,
@@ -55,7 +64,9 @@ export function buildSourceIntelligenceProof(
       codex_web_ok: codexWebOk,
       xai_required: policy.xai_mcp.required,
       xai_ok: xaiOk,
-      xai_missing_is_blocker: xaiMissingIsBlocker
+      xai_missing_is_blocker: xaiMissingIsBlocker,
+      appshots_required: appshotsRequired,
+      appshots_ok: appshotsOk
     },
     wrongness_kinds: [...new Set(wrongnessKinds)],
     blockers: [...new Set(blockers)]

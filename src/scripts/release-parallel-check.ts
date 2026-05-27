@@ -7,6 +7,7 @@ import { buildVerificationDag, type VerificationDag } from '../core/verification
 import { writeParallelVerificationProof } from '../core/verification/verification-proof.js';
 import { runVerificationDag } from '../core/verification/verification-worker-pool.js';
 import type { ParallelVerificationResult, VerificationTask } from '../core/verification/verification-result.js';
+import { enforceRetention } from '../core/retention.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const reportDir = path.join(root, '.sneakoscope', 'reports');
@@ -74,11 +75,12 @@ const tasks: VerificationTask[] = [
   task('agent:cleanup-executor', 'npm run agent:cleanup-executor --silent', { dependencies: ['build'] }),
   task('agent:cleanup-executor-v2', 'npm run agent:cleanup-executor-v2 --silent', { dependencies: ['build'] }),
   task('agent:cleanup-command-ux', 'npm run agent:cleanup-command-ux --silent', { dependencies: ['build'] }),
+  task('retention:cleanup-safety', 'npm run retention:cleanup-safety --silent', { dependencies: ['build'] }),
   task('agent:intelligent-work-graph', 'npm run agent:intelligent-work-graph --silent', { dependencies: ['build'] }),
   task('agent:ast-aware-work-graph', 'npm run agent:ast-aware-work-graph --silent', { dependencies: ['build'] }),
   task('proof:fake-vs-real-policy', 'npm run proof:fake-vs-real-policy --silent', { dependencies: ['build'] }),
   task('proof:fake-real-policy-v2', 'npm run proof:fake-real-policy-v2 --silent', { dependencies: ['build'] }),
-  task('release:runtime-truth-matrix', 'npm run release:runtime-truth-matrix --silent', { dependencies: ['agent:tmux-physical-proof-v2', 'agent:cleanup-executor-v2', 'agent:ast-aware-work-graph', 'proof:fake-real-policy-v2'] }),
+  task('release:runtime-truth-matrix', 'npm run release:runtime-truth-matrix --silent', { dependencies: ['agent:tmux-physical-proof-v2', 'agent:cleanup-executor-v2', 'agent:ast-aware-work-graph', 'proof:fake-real-policy-v2', 'strategy:adhd-orchestrating-gate', 'strategy:parallel-modification-plan', 'strategy:file-ownership-plan', 'strategy:verification-rollback-dag', 'appshots:evidence', 'appshots:source-intelligence', 'agent:parallel-write-kernel', 'agent:patch-proof'] }),
   task('route:blackbox-realism', 'npm run route:blackbox-realism --silent', { dependencies: ['build'] }),
   task('agent:dynamic-cockpit', 'npm run agent:dynamic-cockpit --silent', { dependencies: ['build'] }),
   task('agent:source-intelligence-propagation', 'npm run agent:source-intelligence-propagation --silent', { dependencies: ['build'] }),
@@ -154,8 +156,20 @@ const tasks: VerificationTask[] = [
   task('codex:0.134-official-compat', 'npm run codex:0.134-official-compat --silent', { dependencies: ['build'] }),
   task('codex:profile-primary', 'npm run codex:profile-primary --silent', { dependencies: ['build'] }),
   task('codex:managed-proxy-env', 'npm run codex:managed-proxy-env --silent', { dependencies: ['build'] }),
+  task('strategy:adhd-orchestrating-gate', 'npm run strategy:adhd-orchestrating-gate --silent', { dependencies: ['build'] }),
+  task('strategy:parallel-modification-plan', 'npm run strategy:parallel-modification-plan --silent', { dependencies: ['build'] }),
+  task('strategy:file-ownership-plan', 'npm run strategy:file-ownership-plan --silent', { dependencies: ['build'] }),
+  task('strategy:verification-rollback-dag', 'npm run strategy:verification-rollback-dag --silent', { dependencies: ['build'] }),
+  task('appshots:capability', 'npm run appshots:capability --silent', { dependencies: ['build'] }),
+  task('appshots:operator-policy', 'npm run appshots:operator-policy --silent', { dependencies: ['build'] }),
+  task('appshots:evidence', 'npm run appshots:evidence --silent', { dependencies: ['build'] }),
+  task('appshots:source-intelligence', 'npm run appshots:source-intelligence --silent', { dependencies: ['build'] }),
+  task('appshots:triwiki-voxel', 'npm run appshots:triwiki-voxel --silent', { dependencies: ['build'] }),
+  task('appshots:privacy-safety', 'npm run appshots:privacy-safety --silent', { dependencies: ['build'] }),
   task('mcp:0.134-modernization', 'npm run mcp:0.134-modernization --silent', { dependencies: ['build'] }),
+  task('mcp:readonly-concurrency', 'npm run mcp:readonly-concurrency --silent', { dependencies: ['build'] }),
   task('source-intelligence:codex-history-search', 'npm run source-intelligence:codex-history-search --silent', { dependencies: ['build'] }),
+  task('hooks:0.134-context-parity', 'npm run hooks:0.134-context-parity --silent', { dependencies: ['build'] }),
   task('agent:parallel-write-kernel', 'npm run agent:parallel-write-kernel --silent', { dependencies: ['build'] }),
   task('agent:parallel-write-blackbox', 'npm run agent:parallel-write-blackbox --silent', { dependencies: ['build'] }),
   task('team:parallel-write-blackbox', 'npm run team:parallel-write-blackbox --silent', { dependencies: ['build'] }),
@@ -206,9 +220,58 @@ const result: ParallelVerificationResult = await runVerificationDag(dag, {
 });
 result.dag_schema = dag.schema;
 result.dependency_count = tasks.reduce((sum, row) => sum + (row.dependencies ?? []).length, 0);
+if (result.ok) summarizeReleaseLogsForCleanup(result, logDir);
 await writeParallelVerificationProof(reportDir, result);
+if (result.ok) {
+  const retention = await enforceRetention(root, {
+    afterReleaseCheck: true,
+    pruneReportLogs: true,
+    policy: { max_tmp_age_hours: 0 }
+  }).catch((err: any) => ({ ok: false, error: err?.message || String(err), actions: [] }));
+  (result as any).retention_cleanup = {
+    ok: (retention as any).ok !== false,
+    action_count: Array.isArray((retention as any).actions) ? (retention as any).actions.length : 0,
+    cleanup_report: '.sneakoscope/reports/retention-cleanup.json'
+  };
+  await writeParallelVerificationProof(reportDir, result);
+}
 console.log(JSON.stringify(result, null, 2));
 if (!result.ok) process.exitCode = 1;
+
+function summarizeReleaseLogsForCleanup(result: ParallelVerificationResult, logDir: string): void {
+  const prefix = `${path.resolve(logDir)}${path.sep}`;
+  for (const row of result.results as any[]) {
+    summarizeLog(row, 'stdout', prefix);
+    summarizeLog(row, 'stderr', prefix);
+  }
+}
+
+function summarizeLog(row: any, stream: 'stdout' | 'stderr', prefix: string): void {
+  const key = `${stream}_log`;
+  const file = row[key];
+  if (!file || !path.resolve(String(file)).startsWith(prefix)) return;
+  let bytes = 0;
+  let tail = '';
+  try {
+    const st = fs.statSync(file);
+    bytes = st.size;
+    const readBytes = Math.min(st.size, 2048);
+    if (readBytes > 0) {
+      const fd = fs.openSync(file, 'r');
+      try {
+        const buf = Buffer.alloc(readBytes);
+        fs.readSync(fd, buf, 0, readBytes, Math.max(0, st.size - readBytes));
+        tail = buf.toString('utf8');
+      } finally {
+        fs.closeSync(fd);
+      }
+    }
+  } catch {}
+  row[`${stream}_log_summary`] = `summarized_inline:${bytes}B`;
+  row[`${stream}_tail`] = tail.slice(-2048);
+  row[`${stream}_log_removed_after_summary`] = true;
+  delete row[key];
+}
 
 function task(id: string, command: string, extra: ReleaseTaskExtra = {}): VerificationTask {
   return {

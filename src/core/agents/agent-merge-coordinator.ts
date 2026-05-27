@@ -12,12 +12,17 @@ export function coordinateAgentPatchMerge(envelopes: AgentPatchEnvelope[]) {
     }
   }
   const conflicts = mergeConflicts(writers)
+  const serialConflictAgents = new Set(conflicts.flatMap((conflict) => conflict.agents))
+  const parallelBatch = envelopes.filter((envelope) => !serialConflictAgents.has(envelope.agent_id)).map((envelope) => envelope.agent_id)
   return {
     schema: AGENT_MERGE_COORDINATOR_SCHEMA,
     ok: conflicts.length === 0,
     merge_order: envelopes.map((envelope) => envelope.agent_id),
     touched_files: [...writers.keys()].sort(),
     conflicts,
+    parallel_batches: parallelBatch.length ? [{ batch_id: 'batch-001', agents: parallelBatch }] : [],
+    serial_conflicts: conflicts,
+    wall_clock_parallel_evidence: parallelBatch.length ? [`batch-001:${parallelBatch.length}_agents_can_apply_without_overlapping_paths`] : [],
     blockers: conflicts.map((conflict) => `parallel_write_conflict:${conflict.file}`)
   }
 }

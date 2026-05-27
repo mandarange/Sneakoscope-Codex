@@ -1,6 +1,6 @@
 # MAD-SKS
 
-MAD-SKS 1.18.7 is user-authorized general permission widening for high-power maintenance, not a DB-only unlock. It can operate on a declared target root and approved resource scopes, but every expanded capability is evidence-bound and the SKS harness protected core remains immutable. Database write access is one explicit executor scope inside MAD-SKS; it is not the identity of MAD-SKS.
+MAD-SKS 1.18.8 is user-authorized general permission widening for high-power maintenance, not a DB-only unlock. It can operate on a declared target root and approved resource scopes, but every expanded capability is evidence-bound and the SKS harness protected core remains immutable. Database write access is one explicit executor scope inside MAD-SKS; it is not the identity of MAD-SKS.
 
 ## Authority Model
 

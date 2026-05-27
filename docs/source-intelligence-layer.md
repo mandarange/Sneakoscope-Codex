@@ -17,6 +17,7 @@ Artifacts:
 - `source-intelligence-policy.json`
 - `source-intelligence-evidence.json`
 - `source-intelligence-evidence.md`
+- `appshots-evidence.json` when visual/app-state proof is requested
 - local-only provider cache under `source-intelligence/`
 
 The proof surface records `xai_available_not_used`, `codex_web_search_missing`, and `context7_missing` as explicit wrongness kinds instead of hiding source gaps.

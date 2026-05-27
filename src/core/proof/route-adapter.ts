@@ -4,6 +4,7 @@ import { writeCompletionProof } from './proof-writer.js';
 import { normalizeProofRoute, routeRequiresImageVoxelAnchors } from './route-proof-policy.js';
 import { linkProofClaimsToEvidence, proofEvidenceSummary } from '../evidence/evidence-proof-linker.js';
 import { writeTrustArtifactsForProof } from '../trust-kernel/trust-report.js';
+import { enforceRetention } from '../retention.js';
 
 export async function writeRouteCompletionProof(root: any, {
   missionId = null,
@@ -76,7 +77,8 @@ export async function writeRouteCompletionProof(root: any, {
     }
   });
   const trust = await writeTrustArtifactsForProof(root, enriched.proof);
-  return { ...enriched, trust };
+  const retention = await runPostRouteRetention(root, missionId);
+  return { ...enriched, trust, retention };
 }
 
 function normalizeRouteProofStatus(status: any, { route, evidence, blockers, unverified }: any) {
@@ -94,4 +96,26 @@ function normalizeArtifacts(root: any, artifacts: any = []) {
     if (typeof artifact !== 'string') return artifact;
     return path.isAbsolute(artifact) ? path.relative(root, artifact).split(path.sep).join('/') : artifact;
   });
+}
+
+async function runPostRouteRetention(root: any, missionId: any) {
+  try {
+    const result = await enforceRetention(root, {
+      afterRoute: true,
+      completedMissionId: missionId,
+      pruneReportLogs: false,
+      policy: { max_tmp_age_hours: 0 }
+    });
+    return {
+      ok: true,
+      action_count: result.actions.length,
+      cleanup_report: '.sneakoscope/reports/retention-cleanup.json',
+      storage_report: '.sneakoscope/reports/storage.json'
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: err?.message || String(err)
+    };
+  }
 }

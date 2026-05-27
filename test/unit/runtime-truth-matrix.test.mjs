@@ -7,10 +7,10 @@ import { spawnSync } from 'node:child_process';
 test('runtime truth matrix gate writes P0-P6 subsystem proof levels', () => {
   const result = spawnSync(process.execPath, ['scripts/release-runtime-truth-matrix-check.mjs'], { cwd: path.resolve('.'), encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  const report = JSON.parse(fs.readFileSync(path.resolve('.sneakoscope/reports/runtime-truth-matrix-1.18.7.json'), 'utf8'));
+  const report = JSON.parse(fs.readFileSync(path.resolve('.sneakoscope/reports/runtime-truth-matrix-1.18.8.json'), 'utf8'));
   assert.equal(report.ok, true);
   assert.equal(report.schema, 'sks.runtime-truth-matrix.v1');
-  assert.equal(report.release_version, '1.18.7');
+  assert.equal(report.release_version, '1.18.8');
   for (const subsystem of ['tmux_physical', 'codex_dynamic', 'cleanup', 'intelligent_work_graph', 'source_intelligence', 'goal_mode', 'route_blackbox', 'dynamic_scheduler', 'warp_mad_lanes', 'codex_0_134', 'mcp_0_134', 'parallel_write', 'patch_proof']) {
     const row = report.rows.find((item) => item.subsystem === subsystem);
     assert.ok(row, `missing subsystem ${subsystem}`);

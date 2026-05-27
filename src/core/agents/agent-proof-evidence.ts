@@ -9,7 +9,7 @@ import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
 import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.js'
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; strategyGate?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
@@ -29,6 +29,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const intelligentWorkGraph = await readJson<any>(path.join(root, 'agent-intelligent-work-graph.json'), null)
   const slots = await readJson<any>(path.join(root, 'agent-worker-slots.json'), null)
   const generationArtifact = await readJson<any>(path.join(root, 'agent-session-generations.json'), null)
+  const strategyGate = input.strategyGate || await readJson<any>(path.join(root, 'strategy-gate.json'), null)
   const schedulerEvents = await readTextSafe(path.join(root, 'agent-scheduler-events.jsonl'))
   const tmuxLaunchLedger = await readTextSafe(path.join(root, 'agent-tmux-pane-launch-ledger.jsonl'))
   const tmuxPaneLaunchCount = tmuxLaunchLedger.split(/\n/).filter(Boolean).length
@@ -47,8 +48,10 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const terminalReportsMatchGenerations = terminalCloseReportCount >= generationCount
   const taskGraphSourceRefsOk = Boolean(taskGraph?.work_items?.length) && taskGraph.work_items.every((item: any) => item.source_intelligence_refs)
   const taskGraphGoalRefsOk = Boolean(taskGraph?.work_items?.length) && taskGraph.work_items.every((item: any) => item.goal_mode_ref)
+  const taskGraphStrategyRefsOk = Boolean(taskGraph?.work_items?.length) && taskGraph.work_items.every((item: any) => item.strategy_refs)
   const workQueueSourceRefsOk = Boolean(workQueue?.items?.length) && workQueue.items.every((item: any) => item.source_intelligence_refs)
   const workQueueGoalRefsOk = Boolean(workQueue?.items?.length) && workQueue.items.every((item: any) => item.goal_mode_ref)
+  const workQueueStrategyRefsOk = Boolean(workQueue?.items?.length) && workQueue.items.every((item: any) => item.slice?.strategy_refs)
   const route = String(input.route || taskGraph?.route_type || '$Agent')
   const routeCommand = String(input.routeCommand || 'sks agent run')
   const genericAgentRouteStandIn = !/\$?agent$/i.test(route) && /\bagent\s+run\b/i.test(routeCommand) && /--route/i.test(routeCommand)
@@ -76,8 +79,11 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(scheduler && workQueue && !schedulerMatchesWorkQueue ? ['scheduler_work_queue_mismatch'] : []),
     ...(taskGraph && !taskGraphSourceRefsOk ? ['task_graph_source_refs_missing'] : []),
     ...(taskGraph && !taskGraphGoalRefsOk ? ['task_graph_goal_refs_missing'] : []),
+    ...(taskGraph && !taskGraphStrategyRefsOk ? ['task_graph_strategy_refs_missing'] : []),
     ...(workQueue && !workQueueSourceRefsOk ? ['work_queue_source_refs_missing'] : []),
     ...(workQueue && !workQueueGoalRefsOk ? ['work_queue_goal_refs_missing'] : []),
+    ...(workQueue && !workQueueStrategyRefsOk ? ['work_queue_strategy_refs_missing'] : []),
+    ...(strategyGate?.ok === false ? strategyGate.blockers || ['strategy_gate_not_ok'] : []),
     ...(genericAgentRouteStandIn ? ['non_agent_route_used_generic_agent_run_route_standin'] : []),
     ...(generationCount < finalWorkItemCount ? ['session_generation_count_below_finished_work_items'] : []),
     ...(terminalCloseReportCount < generationCount ? ['terminal_close_report_count_below_generation_count'] : []),
@@ -115,6 +121,9 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     route_blackbox_kind: input.routeBlackboxKind || (realRouteCommandUsed ? 'actual_route_command' : 'generic_agent_route_standin'),
     real_route_command_used: realRouteCommandUsed,
     parallel_write_policy: 'agent-parallel-write-policy.json',
+    strategy_gate: 'strategy-gate.json',
+    strategy_gate_ok: strategyGate?.ok === true,
+    strategy_scheduler_allowed: strategyGate?.scheduler_allowed === true,
     parallel_write_route_flags_wired: parallelWritePolicy?.route_level_flags_wired === true,
     parallel_write_mode: parallelWritePolicy?.write_mode || 'off',
     parallel_write_apply_patches: parallelWritePolicy?.apply_patches === true,
@@ -160,6 +169,8 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     task_graph_goal_refs_ok: taskGraphGoalRefsOk,
     work_queue_source_refs_ok: workQueueSourceRefsOk,
     work_queue_goal_refs_ok: workQueueGoalRefsOk,
+    task_graph_strategy_refs_ok: taskGraphStrategyRefsOk,
+    work_queue_strategy_refs_ok: workQueueStrategyRefsOk,
     tmux_lane_manifest: 'agent-tmux-lanes.json',
     tmux_lane_manifest_ok: tmuxLanes?.ok === true,
     tmux_lane_supervisor: 'agent-tmux-lane-supervisor.json',
@@ -226,6 +237,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
       'source-intelligence-evidence.json': input.partition?.source_intelligence_refs,
       'goal-mode-applied.json': input.partition?.goal_mode_ref,
       'agent-scheduler-state.json': scheduler
+      , 'strategy-gate.json': strategyGate
     }
   })
   await writeRuntimeTruthMatrix(repoRootFromAgentRoot(root), runtimeTruthMatrix, { agentRoot: root })

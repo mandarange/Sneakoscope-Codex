@@ -2,7 +2,7 @@
 
 SKS uses Codex App as the app-facing control surface for dollar-command skills, managed hooks, image generation, Codex Chrome Extension web verification, and native macOS Computer Use evidence.
 
-## 1.18.7 Compatibility Notes
+## 1.18.8 Compatibility Notes
 
 Codex CLI/App runtime compatibility targets OpenAI Codex CLI `rust-v0.134.0`. Hook output validation uses the vendored OpenAI Codex `latest` generated schemas plus the SKS zero-warning strict subset documented in [codex-cli-compat.md](codex-cli-compat.md). Codex 0.134 profile selection, local history search, MCP modernization, subagent hook context, and managed proxy propagation are represented in the SKS compatibility matrix; Codex 0.133 behavior remains inherited compatibility.
 

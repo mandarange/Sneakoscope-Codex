@@ -15,6 +15,8 @@ export const RUNTIME_TRUTH_SUBSYSTEMS = [
   'warp_mad_lanes',
   'codex_0_134',
   'mcp_0_134',
+  'adhd_orchestration',
+  'appshots',
   'parallel_write',
   'patch_proof',
   'cleanup_v4',
@@ -73,7 +75,7 @@ export async function buildRuntimeTruthMatrix(input: {
     warp_mad_lanes: process.env.SKS_REQUIRE_WARP_MAD_LANES === '1',
     ...(input.required || {})
   } as Partial<Record<RuntimeTruthSubsystem, boolean>>
-  const [tmux, codex, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0134, mcp0134, parallelWrite, patchProof] = await Promise.all([
+  const [tmux, codex, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0134, mcp0134, adhdOrchestration, appshots, parallelWrite, patchProof] = await Promise.all([
     readReport(`agent-real-tmux-physical-proof-${input.releaseVersion}.json`, ['agent-tmux-physical-proof.json', 'agent-real-tmux-physical-proof-1.18.6.json']),
     readReport(`agent-real-codex-dynamic-smoke-${input.releaseVersion}.json`, ['agent-real-codex-dynamic-smoke-1.18.6.json']),
     readReport(`agent-cleanup-executor-v2-${input.releaseVersion}.json`, ['agent-cleanup-proof.json']),
@@ -85,6 +87,8 @@ export async function buildRuntimeTruthMatrix(input: {
     readReport('mad-sks-tmux-lane-ui.json'),
     readReport('codex-0-134-official-compat.json'),
     readReport('mcp-0-134-modernization.json'),
+    readReport('strategy-gate.json', ['strategy-adhd-orchestrating-gate.json', 'adhd-orchestrating-gate.json']),
+    readReport('appshots-evidence.json'),
     readReport('agent-parallel-write-kernel.json'),
     readReport('agent-patch-proof.json')
   ])
@@ -100,6 +104,8 @@ export async function buildRuntimeTruthMatrix(input: {
     row('warp_mad_lanes', levelFromWarp(warpMad, required.warp_mad_lanes === true), ['mad-sks-tmux-lane-ui.json'], required.warp_mad_lanes === true, warpMad, 'run `sks --mad` in Warp/tmux and capture visible lane proof'),
     row('codex_0_134', levelFromOk(codex0134, 'integration_optional'), ['codex-0-134-official-compat.json'], false, codex0134, 'run `npm run codex:0.134-official-compat`'),
     row('mcp_0_134', levelFromOk(mcp0134, 'integration_optional'), ['mcp-0-134-modernization.json'], false, mcp0134, 'run `npm run mcp:0.134-modernization`'),
+    row('adhd_orchestration', levelFromOk(adhdOrchestration, 'integration_optional'), ['strategy-gate.json', 'adhd-orchestrating-gate.json'], false, adhdOrchestration, 'run `npm run strategy:adhd-orchestrating-gate`'),
+    row('appshots', levelFromAppshots(appshots), ['appshots-evidence.json'], false, appshots, 'run `npm run appshots:evidence`'),
     row('parallel_write', levelFromOk(parallelWrite, 'integration_optional'), ['agent-parallel-write-kernel.json'], false, parallelWrite, 'run `npm run agent:parallel-write-kernel`'),
     row('patch_proof', levelFromOk(patchProof, 'integration_optional'), ['agent-patch-proof.json'], false, patchProof, 'run `npm run agent:patch-proof`'),
     row('cleanup_v4', levelFromOk(cleanup, 'integration_optional'), ['agent-cleanup-proof.json'], false, cleanup, 'run `npm run agent:cleanup-executor-v2`'),
@@ -154,6 +160,21 @@ function levelFromOk(report: any, missing: ProofLevel): ProofLevel {
   if (report.proof_level) return report.proof_level
   if (report.ok === true || report.status === 'passed') return 'proven'
   if (report.status === 'integration_optional') return 'integration_optional'
+  return 'blocked'
+}
+
+function levelFromAppshots(report: any): ProofLevel {
+  if (!report) return 'integration_optional'
+  const evidence = report.evidence || report
+  if (Array.isArray(evidence.blockers) && evidence.blockers.length > 0) return 'blocked'
+  if (evidence.ok !== true && report.ok !== true) return 'blocked'
+  if (evidence.proof_level === 'proven') return 'proven'
+  if (evidence.proof_level === 'fixture_instrumented_real') return 'fixture_instrumented_real'
+  if (evidence.status === 'not_required') return 'integration_optional'
+  const sources = Array.isArray(evidence.source_verification) ? evidence.source_verification : []
+  if (sources.length && sources.every((source: any) => source?.accepted === true)) {
+    return sources.some((source: any) => source?.fixture === true) ? 'fixture_instrumented_real' : 'proven'
+  }
   return 'blocked'
 }
 

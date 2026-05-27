@@ -21,6 +21,10 @@ export interface AgentTaskGraphWorkItem {
   delay_ms?: number
   source_intelligence_refs: Record<string, unknown> | null
   goal_mode_ref: Record<string, unknown> | null
+  strategy_refs: Record<string, unknown> | null
+  micro_win_id?: string
+  dopamine_weight?: number
+  appshot_required?: boolean
 }
 
 export interface AgentTaskGraph {
@@ -52,6 +56,8 @@ export function buildAgentTaskGraph(input: {
   dependencies?: Record<string, string[]>
   sourceIntelligenceRefs?: Record<string, unknown> | null
   goalModeRef?: Record<string, unknown> | null
+  strategyRefs?: Record<string, unknown> | null
+  microWins?: Array<{ id: string; title?: string; description?: string; kind?: string; write_paths?: string[]; readonly_paths?: string[]; dependencies?: string[]; dopamine_weight?: number; appshot_required?: boolean }>
 }): AgentTaskGraph {
   const routeType = normalizeRouteType(input.routeType || '$Agent')
   const targetActiveSlots = Math.max(1, Math.floor(Number(input.targetActiveSlots || 5)))
@@ -60,26 +66,32 @@ export function buildAgentTaskGraph(input: {
   const domainTemplates = routeTemplates(routeType)
   const domains = Array.isArray(input.domains) && input.domains.length ? input.domains : domainTemplates
   const workItems = Array.from({ length: desiredWorkItems }, (_, index) => {
+    const microWin = input.microWins?.[index % Math.max(1, input.microWins.length)]
     const fallbackTemplate = domainTemplates[0] || { id: 'general', kind: 'general', role: 'verifier', description: 'general task' }
     const template = domainTemplates[index % domainTemplates.length] || fallbackTemplate
     const domain = domains[index % domains.length] || template
-    const routeDomain = String(domain?.id || template.id || 'general')
-    const workItemKind = String(template.kind || routeDomain || 'general')
+    const routeDomain = String(microWin?.kind || domain?.id || template.id || 'general')
+    const workItemKind = String(microWin?.kind || template.kind || routeDomain || 'general')
     const id = stableWorkItemId({ routeType, prompt: input.prompt || '', index, routeDomain, workItemKind })
-    const targetPaths: string[] = Array.isArray(domain?.files) ? domain.files.slice(0, 20).map(String) : []
-    const writePaths = writeAllowed(template.role)
-      ? targetPaths.map(normalizePath).filter((file) => file && !isProtectedWritePath(file)).slice(0, 3)
+    const explicitWritePaths = (microWin?.write_paths || []).map(String)
+    const explicitReadonlyPaths = (microWin?.readonly_paths || []).map(String)
+    const microWinPaths = [...explicitWritePaths, ...explicitReadonlyPaths]
+    const targetPaths: string[] = microWinPaths.length ? microWinPaths : Array.isArray(domain?.files) ? domain.files.slice(0, 20).map(String) : []
+    const microWinAllowsWrite = microWin?.kind === 'write' || explicitWritePaths.length > 0
+    const writeCandidates = explicitWritePaths.length ? explicitWritePaths : microWin === undefined ? targetPaths : []
+    const writePaths = (microWinAllowsWrite || (microWin === undefined && writeAllowed(template.role)))
+      ? writeCandidates.map(normalizePath).filter((file) => file && !isProtectedWritePath(file)).slice(0, 3)
       : []
     const delayMs = fixtureDelayMs(index, targetActiveSlots)
     return {
       work_item_id: id,
-      title: `${labelForRoute(routeType)} ${workItemKind} ${index + 1}`,
-      description: `${labelForRoute(routeType)} work item ${index + 1}: ${String(template.description || routeDomain)}.`,
+      title: microWin?.title || `${labelForRoute(routeType)} ${workItemKind} ${index + 1}`,
+      description: microWin?.description || `${labelForRoute(routeType)} work item ${index + 1}: ${String(template.description || routeDomain)}.`,
       route_domain: routeDomain,
       work_item_kind: workItemKind,
       required_persona_category: String(template.role || 'verifier'),
       priority: index + 1,
-      dependencies: input.dependencies?.[id] || [],
+      dependencies: microWin?.dependencies || input.dependencies?.[id] || [],
       lease_requirements: [
         ...writePaths.map((file: string) => ({ kind: 'write', path: file })),
         ...targetPaths.map((file: string) => ({ kind: 'read', path: normalizePath(file) })).filter((row: { path: string }) => row.path)
@@ -90,7 +102,11 @@ export function buildAgentTaskGraph(input: {
       max_attempts: 1,
       ...(delayMs === null ? {} : { delay_ms: delayMs }),
       source_intelligence_refs: input.sourceIntelligenceRefs || null,
-      goal_mode_ref: input.goalModeRef || null
+      goal_mode_ref: input.goalModeRef || null,
+      strategy_refs: input.strategyRefs || null,
+      ...(microWin?.id === undefined ? {} : { micro_win_id: microWin.id }),
+      ...(microWin?.dopamine_weight === undefined ? {} : { dopamine_weight: microWin.dopamine_weight }),
+      ...(microWin?.appshot_required === undefined ? {} : { appshot_required: microWin.appshot_required })
     }
   })
   return {
@@ -145,6 +161,10 @@ export function taskGraphToSlices(graph: AgentTaskGraph, roster: any[] = []): Ag
       work_item_kind: item.work_item_kind,
       max_attempts: item.max_attempts,
       ...(item.delay_ms === undefined ? {} : { delay_ms: item.delay_ms }),
+      strategy_refs: item.strategy_refs || null,
+      ...(item.micro_win_id === undefined ? {} : { micro_win_id: item.micro_win_id }),
+      ...(item.dopamine_weight === undefined ? {} : { dopamine_weight: item.dopamine_weight }),
+      ...(item.appshot_required === undefined ? {} : { appshot_required: item.appshot_required }),
       description: item.description
     }
   })

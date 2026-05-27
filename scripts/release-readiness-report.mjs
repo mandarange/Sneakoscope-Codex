@@ -95,6 +95,7 @@ const checks = {
   agent_cleanup_executor: scriptContains('release:check:parallel', 'agent:cleanup-executor'),
   agent_cleanup_executor_v2: scriptContains('release:check:parallel', 'agent:cleanup-executor-v2'),
   agent_cleanup_command_ux: scriptContains('release:check:parallel', 'agent:cleanup-command-ux'),
+  retention_cleanup_safety: scriptContains('release:check:parallel', 'retention:cleanup-safety'),
   agent_intelligent_work_graph: scriptContains('release:check:parallel', 'agent:intelligent-work-graph'),
   agent_ast_aware_work_graph: scriptContains('release:check:parallel', 'agent:ast-aware-work-graph'),
   proof_fake_vs_real_policy: scriptContains('release:check:parallel', 'proof:fake-vs-real-policy'),
@@ -185,7 +186,8 @@ const runtimeReports = {
   team_parallel_write_blackbox: readJson('.sneakoscope/reports/team-parallel-write-blackbox.json', null),
   dfix_parallel_write_blackbox: readJson('.sneakoscope/reports/dfix-parallel-write-blackbox.json', null),
   agent_patch_proof: readJson('.sneakoscope/reports/agent-patch-proof.json', null),
-  agent_patch_rollback: readJson('.sneakoscope/reports/agent-patch-rollback.json', null)
+  agent_patch_rollback: readJson('.sneakoscope/reports/agent-patch-rollback.json', null),
+  retention_cleanup_safety: readJson('.sneakoscope/reports/retention-cleanup-safety.json', null)
 };
 const runtimeChecks = {
   ppt_full_e2e_blackbox: runtimeReports.ppt_full_e2e_blackbox?.ok === true
@@ -199,6 +201,8 @@ const runtimeChecks = {
     && runtimeReports.runtime_truth_matrix.rows.every((row) => row.required_mode !== true || !['blocked', 'real_required_missing', 'integration_optional'].includes(String(row.proof_level || ''))),
   real_codex_dynamic_smoke: !runtimeReports.real_codex_dynamic_smoke
     || ['proven', 'fixture_instrumented_real', 'integration_optional'].includes(String(runtimeReports.real_codex_dynamic_smoke?.proof_level || runtimeReports.real_codex_dynamic_smoke?.status || ''))
+  ,
+  retention_cleanup_safety: runtimeReports.retention_cleanup_safety?.ok === true
 };
 const remainingP0 = [];
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
@@ -251,6 +255,7 @@ for (const [name, ok] of Object.entries({
   agent_cleanup_executor: checks.agent_cleanup_executor,
   agent_cleanup_executor_v2: checks.agent_cleanup_executor_v2,
   agent_cleanup_command_ux: checks.agent_cleanup_command_ux,
+  retention_cleanup_safety: checks.retention_cleanup_safety && runtimeChecks.retention_cleanup_safety,
   agent_intelligent_work_graph: checks.agent_intelligent_work_graph,
   agent_ast_aware_work_graph: checks.agent_ast_aware_work_graph,
   proof_fake_vs_real_policy: checks.proof_fake_vs_real_policy,
@@ -283,7 +288,14 @@ if (releaseMetadata.status !== 0) remainingP0.push('release_metadata_failed');
 if (imagegenCore.status !== 0) remainingP0.push('imagegen_core_capability_failed');
 
 const stamp = readJson('.sneakoscope/reports/release-check-stamp.json', null);
-const currentStamp = stamp?.package_version === RELEASE_VERSION ? stamp : null;
+const stampVerify = spawnSync(process.execPath, ['scripts/release-check-stamp.mjs', 'verify'], {
+  cwd: root,
+  encoding: 'utf8',
+  env: { ...process.env, CI: 'true' },
+  timeout: 30_000
+});
+const currentStamp = stampVerify.status === 0 && stamp?.package_version === RELEASE_VERSION ? stamp : null;
+if (stampVerify.status !== 0) remainingP0.push('release_check_stamp_stale_or_missing');
 const report = {
   schema: 'sks.release-readiness.v1',
   generated_at: new Date().toISOString(),
@@ -344,7 +356,7 @@ const report = {
     modernization_gate: checks.mcp_0134_modernization,
     modernization_report_ok: runtimeReports.mcp_0_134_modernization ? runtimeReports.mcp_0_134_modernization.ok === true : null
   },
-  parallel_write_kernel_1_18_7: {
+  parallel_write_kernel_1_18_8: {
     status: checks.agent_parallel_write_kernel
       && checks.agent_parallel_write_blackbox
       && checks.team_parallel_write_blackbox
@@ -499,12 +511,14 @@ const report = {
     tmux_right_lanes: checks.agent_tmux_right_lanes,
     codex_app_visual_consistency: checks.agent_visual_consistency
   },
-  runtime_truth_1_18_7: {
+  runtime_truth_1_18_8: {
     status: checks.agent_tmux_physical_lifecycle_wired
       && checks.agent_tmux_physical_proof_v2
       && checks.real_codex_dynamic_smoke_v2
       && checks.agent_cleanup_executor_v2
       && checks.agent_cleanup_command_ux
+      && checks.retention_cleanup_safety
+      && runtimeChecks.retention_cleanup_safety
       && checks.agent_ast_aware_work_graph
       && checks.proof_fake_real_policy_v2
       && checks.release_runtime_truth_matrix
@@ -515,6 +529,9 @@ const report = {
     real_codex_dynamic_smoke_report_ok: runtimeChecks.real_codex_dynamic_smoke,
     cleanup_executor_v2: checks.agent_cleanup_executor_v2,
     cleanup_command_ux: checks.agent_cleanup_command_ux,
+    retention_cleanup_safety: checks.retention_cleanup_safety,
+    retention_cleanup_safety_report_ok: runtimeChecks.retention_cleanup_safety,
+    retention_cleanup_safety_report: '.sneakoscope/reports/retention-cleanup-safety.json',
     ast_aware_work_graph: checks.agent_ast_aware_work_graph,
     fake_real_policy_v2: checks.proof_fake_real_policy_v2,
     runtime_truth_matrix: checks.release_runtime_truth_matrix,
@@ -632,6 +649,11 @@ const report = {
     generated_at: currentStamp.generated_at || null,
     source_digest: currentStamp.source_digest || null
   } : null,
+  release_gate_stamp_verification: {
+    status: stampVerify.status === 0 ? 'pass' : 'fail',
+    stdout: trimOutput(stampVerify.stdout),
+    stderr: trimOutput(stampVerify.stderr)
+  },
   stale_release_gate_last_pass_stamp: stamp && !currentStamp ? {
     package_version: stamp.package_version || null,
     generated_at: stamp.generated_at || null,
@@ -649,7 +671,7 @@ for (const key of [
   'codex_0_134',
   'codex_0_133',
   'mcp_0_134',
-  'parallel_write_kernel_1_18_7',
+  'parallel_write_kernel_1_18_8',
   'mad_sks_actual_executor_closure',
   'image_ux_review',
   'ppt_imagegen_review',
@@ -659,7 +681,7 @@ for (const key of [
   'mad_sks_1_16_0',
   'source_intelligence_1_18',
   'agent_terminal_tmux_1_18',
-  'runtime_truth_1_18_7',
+  'runtime_truth_1_18_8',
   'dynamic_agent_pool_1_18_3',
   'goal_mode_1_18',
   'release_full_coverage_1_18',
@@ -741,7 +763,7 @@ function renderMarkdown(report) {
 - Codex 0.134 compatibility: \`${report.codex_0_134.status}\`
 - Codex 0.133 compatibility: \`${report.codex_0_133.status}\`
 - MCP 0.134 modernization: \`${report.mcp_0_134.status}\`
-- Parallel write kernel 1.18.7: \`${report.parallel_write_kernel_1_18_7.status}\`
+- Parallel write kernel 1.18.8: \`${report.parallel_write_kernel_1_18_8.status}\`
 - MAD-SKS actual executor closure: \`${report.mad_sks_actual_executor_closure.status}\`
 - Release native agent backend: \`${report.release_native_agent_backend.status}\`
 - UX-Review real callout loop gates: \`${report.image_ux_review.status}\`
@@ -750,7 +772,7 @@ function renderMarkdown(report) {
 - Hook trust warning-zero: \`${report.hook_trust_warning_zero.status}\`
 - Source Intelligence 1.18: \`${report.source_intelligence_1_18.status}\`
 - Agent terminal/tmux 1.18: \`${report.agent_terminal_tmux_1_18.status}\`
-- Runtime truth 1.18.7: \`${report.runtime_truth_1_18_7.status}\`
+- Runtime truth 1.18.8: \`${report.runtime_truth_1_18_8.status}\`
 - Dynamic agent pool ${RELEASE_VERSION}: \`${report.dynamic_agent_pool_1_18_3.status}\`
 - Goal mode 1.18: \`${report.goal_mode_1_18.status}\`
 - Release full coverage 1.18: \`${report.release_full_coverage_1_18.status}\`

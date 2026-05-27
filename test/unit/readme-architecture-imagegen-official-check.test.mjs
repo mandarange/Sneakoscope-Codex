@@ -147,7 +147,7 @@ test('README architecture imagegen check waits for one current generated_images 
     SKS_CODEX_APP_IMAGEGEN_WAIT_MS: '2000',
     SKS_CODEX_APP_IMAGEGEN_POLL_MS: '50'
   });
-  await waitForFile(path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-prompt-1.18.7.txt'));
+  await waitForFile(path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-prompt-1.18.8.txt'));
   await delay(50);
   await fsp.mkdir(path.dirname(source), { recursive: true });
   await fsp.copyFile(fixtureImage, source);
@@ -192,7 +192,7 @@ function runCheck(root, extraEnv = {}, scriptArgs = []) {
     env,
     encoding: 'utf8'
   });
-  const reportPath = path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-attempt-1.18.7.json');
+  const reportPath = path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-attempt-1.18.8.json');
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
   return { status: result.status, stdout: result.stdout, stderr: result.stderr, report };
 }
@@ -218,7 +218,7 @@ function runCheckAsync(root, extraEnv = {}) {
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('error', reject);
     child.on('close', (status) => {
-      const reportPath = path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-attempt-1.18.7.json');
+      const reportPath = path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-attempt-1.18.8.json');
       const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
       resolve({ status, stdout, stderr, report });
     });

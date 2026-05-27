@@ -47,6 +47,10 @@ export function codexConfigPath(env: any = process.env) {
   return path.join(codexHome(env), 'config.toml');
 }
 
+export function codexProfileConfigPath(profile: any, env: any = process.env) {
+  return path.join(codexHome(env), `${String(profile || '').trim()}.config.toml`);
+}
+
 export function autoReviewProfileName(opts: any = {}) {
   return opts.high ? AUTO_REVIEW_HIGH_PROFILE : AUTO_REVIEW_PROFILE;
 }
@@ -54,9 +58,13 @@ export function autoReviewProfileName(opts: any = {}) {
 export async function autoReviewStatus(opts: any = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
   const text = await readText(configPath, '');
+  const profileText = await readText(path.join(path.dirname(configPath), `${AUTO_REVIEW_PROFILE}.config.toml`), '');
+  const highProfileText = await readText(path.join(path.dirname(configPath), `${AUTO_REVIEW_HIGH_PROFILE}.config.toml`), '');
   const approvalsReviewer = readTomlString(text, 'approvals_reviewer');
-  const profileReviewer = readTableString(text, `profiles.${AUTO_REVIEW_PROFILE}`, 'approvals_reviewer');
-  const highProfileReviewer = readTableString(text, `profiles.${AUTO_REVIEW_HIGH_PROFILE}`, 'approvals_reviewer');
+  const profileReviewer = readTomlString(profileText, 'approvals_reviewer');
+  const highProfileReviewer = readTomlString(highProfileText, 'approvals_reviewer');
+  const legacyReviewProfile = readTableString(text, `profiles.${AUTO_REVIEW_PROFILE}`, 'approvals_reviewer');
+  const legacyHighProfile = readTableString(text, `profiles.${AUTO_REVIEW_HIGH_PROFILE}`, 'approvals_reviewer');
   return {
     config_path: configPath,
     exists: await exists(configPath),
@@ -64,7 +72,7 @@ export async function autoReviewStatus(opts: any = {}) {
     enabled: approvalsReviewer === AUTO_REVIEW_REVIEWER,
     profile: profileReviewer === AUTO_REVIEW_REVIEWER,
     high_profile: highProfileReviewer === AUTO_REVIEW_REVIEWER,
-    legacy_invalid: [approvalsReviewer, profileReviewer, highProfileReviewer].includes(LEGACY_AUTO_REVIEW_REVIEWER),
+    legacy_invalid: [approvalsReviewer, profileReviewer, highProfileReviewer, legacyReviewProfile, legacyHighProfile].includes(LEGACY_AUTO_REVIEW_REVIEWER),
     policy: readTableString(text, 'auto_review', 'policy') || '',
     native_agent_plan: REVIEW_NATIVE_AGENT_PLAN
   };
@@ -77,11 +85,13 @@ export async function enableAutoReview(opts: any = {}) {
   const current = await readText(configPath, '');
   let next = current || '';
   next = upsertTopLevelString(next, 'approvals_reviewer', AUTO_REVIEW_REVIEWER);
-  next = upsertProfile(next, AUTO_REVIEW_PROFILE, 'medium');
-  next = upsertProfile(next, AUTO_REVIEW_HIGH_PROFILE, 'high');
+  next = removeLegacyProfileConfig(next, AUTO_REVIEW_PROFILE);
+  next = removeLegacyProfileConfig(next, AUTO_REVIEW_HIGH_PROFILE);
   next = upsertAutoReviewPolicy(next);
   if (!next.endsWith('\n')) next += '\n';
   await writeTextAtomic(configPath, next);
+  await writeProfileConfig(configPath, AUTO_REVIEW_PROFILE, profileConfigBlock({ effort: 'medium' }));
+  await writeProfileConfig(configPath, AUTO_REVIEW_HIGH_PROFILE, profileConfigBlock({ effort: 'high' }));
   return {
     ...(await autoReviewStatus({ configPath })),
     profile_name: autoReviewProfileName({ high }),
@@ -93,20 +103,18 @@ export async function enableMadHighProfile(opts: any = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
   await ensureDir(path.dirname(configPath));
   const current = await readText(configPath, '');
-  let next = upsertTable(current, `profiles.${MAD_HIGH_PROFILE}`, [
-    `[profiles.${MAD_HIGH_PROFILE}]`,
-    'model = "gpt-5.5"',
-    'service_tier = "fast"',
-    'approval_policy = "never"',
-    `approvals_reviewer = "${AUTO_REVIEW_REVIEWER}"`,
-    'sandbox_mode = "danger-full-access"',
-    'model_reasoning_effort = "high"'
-  ].join('\n'));
+  let next = removeLegacyProfileConfig(current, MAD_HIGH_PROFILE);
   next = upsertAutoReviewPolicy(next);
   if (!next.endsWith('\n')) next += '\n';
   await writeTextAtomic(configPath, next);
+  await writeProfileConfig(configPath, MAD_HIGH_PROFILE, profileConfigBlock({
+    effort: 'high',
+    approvalPolicy: 'never',
+    sandboxMode: 'danger-full-access'
+  }));
   return {
     config_path: configPath,
+    profile_config_path: path.join(path.dirname(configPath), `${MAD_HIGH_PROFILE}.config.toml`),
     profile_name: MAD_HIGH_PROFILE,
     launch_args: ['--profile', MAD_HIGH_PROFILE, '--sandbox', 'danger-full-access', '--ask-for-approval', 'never'],
     sandbox_mode: 'danger-full-access',
@@ -125,10 +133,12 @@ export async function disableAutoReview(opts: any = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
   const current = await readText(configPath, '');
   let next = upsertTopLevelString(current, 'approvals_reviewer', 'user');
-  if (tableBody(next, `profiles.${AUTO_REVIEW_PROFILE}`)) next = upsertProfile(next, AUTO_REVIEW_PROFILE, 'medium', 'user');
-  if (tableBody(next, `profiles.${AUTO_REVIEW_HIGH_PROFILE}`)) next = upsertProfile(next, AUTO_REVIEW_HIGH_PROFILE, 'high', 'user');
+  next = removeLegacyProfileConfig(next, AUTO_REVIEW_PROFILE);
+  next = removeLegacyProfileConfig(next, AUTO_REVIEW_HIGH_PROFILE);
   if (!next.endsWith('\n')) next += '\n';
   await writeTextAtomic(configPath, next);
+  await writeProfileConfig(configPath, AUTO_REVIEW_PROFILE, profileConfigBlock({ effort: 'medium', reviewer: 'user' }));
+  await writeProfileConfig(configPath, AUTO_REVIEW_HIGH_PROFILE, profileConfigBlock({ effort: 'high', reviewer: 'user' }));
   return autoReviewStatus({ configPath });
 }
 
@@ -198,17 +208,30 @@ function upsertTopLevelString(text: any, key: any, value: any) {
   return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
-function upsertProfile(text: any, profile: any, effort: any, reviewer: any = AUTO_REVIEW_REVIEWER) {
-  const block = [
-    `[profiles.${profile}]`,
+function profileConfigBlock(opts: any = {}) {
+  const effort = opts.effort || 'medium';
+  const reviewer = opts.reviewer || AUTO_REVIEW_REVIEWER;
+  const approvalPolicy = opts.approvalPolicy || 'on-request';
+  const sandboxMode = opts.sandboxMode || 'workspace-write';
+  return [
     'model = "gpt-5.5"',
     'service_tier = "fast"',
-    'approval_policy = "on-request"',
+    `approval_policy = "${approvalPolicy}"`,
     `approvals_reviewer = "${reviewer}"`,
-    'sandbox_mode = "workspace-write"',
+    `sandbox_mode = "${sandboxMode}"`,
     `model_reasoning_effort = "${effort}"`
   ].join('\n');
-  return upsertTable(text, `profiles.${profile}`, block);
+}
+
+async function writeProfileConfig(configPath: string, profile: string, text: string) {
+  const file = path.join(path.dirname(configPath), `${profile}.config.toml`);
+  await writeTextAtomic(file, `${String(text || '').replace(/\s+$/, '')}\n`);
+}
+
+function removeLegacyProfileConfig(text: any, profile: any) {
+  let next = removeTable(text, `profiles.${profile}`);
+  next = removeTopLevelStringIfValue(next, 'profile', profile);
+  return next;
 }
 
 function upsertAutoReviewPolicy(text: any) {
@@ -237,6 +260,36 @@ function upsertTable(text: any, table: any, block: any) {
   }
   lines.splice(start, end - start, ...block.split('\n'));
   return `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`;
+}
+
+function removeTable(text: any, table: any) {
+  const lines = String(text || '').replace(/\s+$/, '').split('\n');
+  const header = `[${table}]`;
+  const start = lines.findIndex((x: any) => x.trim() === header);
+  if (start === -1) return String(text || '');
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
+      end = i;
+      break;
+    }
+  }
+  lines.splice(start, end - start);
+  return `${lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '')}\n`;
+}
+
+function removeTopLevelStringIfValue(text: any, key: any, value: any) {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  for (let i = 0; i < end; i++) {
+    const match = String(lines[i] || '').match(new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"\\s*$`));
+    if (match?.[1] === String(value)) {
+      lines.splice(i, 1);
+      break;
+    }
+  }
+  return `${lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '')}\n`;
 }
 
 function escapeRegExp(value: any) {

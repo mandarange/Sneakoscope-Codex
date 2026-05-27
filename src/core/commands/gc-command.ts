@@ -8,11 +8,12 @@ export async function memoryCommand(_sub: any, args: any = []) {
 
 export async function gcCommand(args: any = []) {
   const root = await sksRoot();
-  const res = await enforceRetention(root, { dryRun: flag(args, '--dry-run') });
+  const res = await enforceRetention(root, { dryRun: flag(args, '--dry-run'), pruneReportLogs: true, policy: { max_tmp_age_hours: 0 } });
   if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
   console.log(flag(args, '--dry-run') ? 'ㅅㅋㅅ GC dry run' : 'ㅅㅋㅅ GC completed');
   console.log(`Storage: ${res.report.total_human || '0 B'}`);
   console.log(`Actions: ${res.actions.length}`);
+  console.log(`Protected: ${res.cleanup.protected_durable_context.length} durable context classes`);
   for (const a of res.actions.slice(0, 20)) console.log(`- ${a.action} ${a.path || a.mission || ''} ${a.bytes ? formatBytes(a.bytes) : ''}`);
 }
 

@@ -1,6 +1,6 @@
 # Codex CLI Compatibility
 
-SKS 1.18.7 targets the OpenAI Codex CLI `rust-v0.134.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
+SKS 1.18.8 targets the OpenAI Codex CLI `rust-v0.134.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
 
 Computer Use and codex-lb compatibility notes are bounded: native Mac/non-web Computer Use live evidence can be `probe_only`, `live_capture_success`, or a structured blocker depending on the local Codex App/macOS capability, while web/browser/webapp verification uses the Codex Chrome Extension gate first; codex-lb can be durable or `process_only_ephemeral` depending on setup choices. Recovery commands are `sks computer-use smoke --json` for a probe-only native status and `sks codex-lb setup --write-env-file --keychain --launchctl` for durable persistence. Local screenshots and secrets stay private/redacted by default.
 
@@ -27,7 +27,7 @@ Version detection checks `codex --version`, `codex exec --help`, `codex exec res
 
 ## Codex 0.134 Capabilities
 
-The 1.18.7 compatibility matrix records these 0.134 capability ids:
+The 1.18.8 compatibility matrix records these 0.134 capability ids:
 
 - `profile_primary_selector`: Codex `--profile` is the primary selector and SKS native agents pass it without `--ignore-user-config`.
 - `local_conversation_history_search`: Source Intelligence can search bounded local Codex history case-insensitively with previews.
