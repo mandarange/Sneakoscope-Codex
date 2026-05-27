@@ -15,7 +15,7 @@ export async function writeParallelVerificationProof(
 
 export function renderParallelVerificationReport(result: ParallelVerificationResult): string {
   const rows = result.results.map((task) =>
-    `| ${task.id} | ${task.skipped ? 'skipped' : task.ok ? 'passed' : 'failed'} | ${task.duration_ms} | ${task.exit_code ?? 'null'} | ${task.stdout_log || ''} | ${task.stderr_log || ''} |`
+    `| ${task.id} | ${task.skipped ? 'skipped' : task.ok ? 'passed' : 'failed'} | ${task.duration_ms} | ${task.exit_code ?? 'null'} | ${task.stdout_log || task.stdout_log_summary || ''} | ${task.stderr_log || task.stderr_log_summary || ''} |`
   )
   return [
     '# Parallel Verification Report',

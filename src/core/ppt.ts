@@ -166,7 +166,7 @@ function extractUrls(value: any = '') {
 }
 
 function hasExternalFactCue(text: any = '') {
-  return /(market|competitor|benchmark|statistic|growth|revenue|share|survey|latest|recent|source|citation|fact|research|web|시장|경쟁|벤치마크|통계|성장률|매출|점유율|설문|최신|최근|출처|근거|팩트|사실|자료|웹\s*조사|리서치)/i.test(String(text || ''));
+  return /(market|competitor|benchmark|statistic|growth|revenue|share|survey|latest|recent|external\s+(source|fact|research|web)|current\s+(market|benchmark|statistic)|citation\s+required|verified\s+(source|fact)|시장|경쟁|벤치마크|통계|성장률|매출|점유율|설문|최신|최근|외부\s*(출처|근거|자료)|웹\s*조사|리서치)/i.test(String(text || ''));
 }
 
 function hasVisualReviewCue(text: any = '') {

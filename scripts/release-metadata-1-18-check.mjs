@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.7';
+const RELEASE_VERSION = '1.18.8';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');
@@ -34,7 +34,13 @@ const requiredDocs = [
   'docs/fake-vs-real-proof-policy.md',
   'docs/runtime-truth-matrix.md',
   'docs/warp-mad-tmux-lanes.md',
-  'docs/migration-1.18.6-to-1.18.7.md',
+  'docs/adhd-orchestrating-gate.md',
+  'docs/strategy-first-parallel-write.md',
+  'docs/appshots-pipeline.md',
+  'docs/codex-0.134-compat.md',
+  'docs/parallel-write-agents.md',
+  'docs/agent-patch-queue.md',
+  'docs/migration-1.18.7-to-1.18.8.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
   'docs/release-readiness.md'
@@ -42,7 +48,7 @@ const requiredDocs = [
 const versionedDocs = new Set([
   'README.md',
   'CHANGELOG.md',
-  'docs/migration-1.18.6-to-1.18.7.md',
+  'docs/migration-1.18.7-to-1.18.8.md',
   'docs/runtime-truth-matrix.md',
   'docs/release-readiness.md'
 ]);
@@ -93,6 +99,7 @@ const requiredScripts = [
   'agent:cleanup-executor',
   'agent:cleanup-executor-v2',
   'agent:cleanup-command-ux',
+  'retention:cleanup-safety',
   'agent:intelligent-work-graph',
   'agent:ast-aware-work-graph',
   'proof:fake-vs-real-policy',
@@ -103,7 +110,19 @@ const requiredScripts = [
   'codex:0.134-official-compat',
   'codex:profile-primary',
   'codex:managed-proxy-env',
+  'strategy:adhd-orchestrating-gate',
+  'strategy:parallel-modification-plan',
+  'strategy:file-ownership-plan',
+  'strategy:verification-rollback-dag',
+  'appshots:capability',
+  'appshots:operator-policy',
+  'appshots:evidence',
+  'appshots:source-intelligence',
+  'appshots:triwiki-voxel',
+  'appshots:privacy-safety',
   'mcp:0.134-modernization',
+  'mcp:readonly-concurrency',
+  'hooks:0.134-context-parity',
   'source-intelligence:codex-history-search',
   'agent:parallel-write-kernel',
   'agent:parallel-write-blackbox',

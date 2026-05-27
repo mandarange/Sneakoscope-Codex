@@ -5,6 +5,7 @@ import { runXaiSearch, type XaiSearchFunction, type XaiSearchEvidence } from '..
 import { detectCodexWebSearchCapability, runCodexWebSearch, type CodexWebSearchEvidence, type CodexWebSearchFunction } from '../codex/codex-web-search-adapter.js'
 import { buildSourceIntelligencePolicy, writeSourceIntelligencePolicyArtifact, type SourceIntelligencePolicy } from './source-intelligence-policy.js'
 import { buildSourceIntelligenceProof, type SourceIntelligenceProof } from './source-intelligence-proof.js'
+import { buildAppshotsEvidence, writeAppshotsEvidenceArtifact, type AppshotsEvidence } from './appshots-evidence.js'
 
 export const SOURCE_INTELLIGENCE_EVIDENCE_SCHEMA = 'sks.source-intelligence-evidence.v1'
 
@@ -37,6 +38,7 @@ export interface SourceIntelligenceEvidence {
   context7: Context7Evidence
   codex_web_search: CodexWebSearchEvidence | null
   xai_search: XaiSearchEvidence | null
+  appshots: AppshotsEvidence | null
   proof: SourceIntelligenceProof
   blockers: string[]
   warnings: string[]
@@ -55,6 +57,22 @@ export async function runSourceIntelligence(input: {
   codexWebSearch?: CodexWebSearchFunction
   xaiSearch?: XaiSearchFunction
   xaiDetection?: XaiMcpDetection
+  appshots?: {
+    visualRequired?: boolean
+    sourcePaths?: string[]
+    sourceMetadata?: Array<{
+      path: string
+      source_type?: 'codex_appshot' | 'screenshot' | 'text' | 'unknown'
+      origin?: 'codex_app' | 'fixture' | 'unknown'
+      operator_attached?: boolean
+      frontmost_window?: boolean
+      redacted?: boolean
+      local_only?: boolean
+      fixture?: boolean
+    }>
+    operatorActionRecorded?: boolean
+    appshotsToolAvailable?: boolean
+  }
   env?: NodeJS.ProcessEnv
 }): Promise<SourceIntelligenceEvidence> {
   const root = path.resolve(input.root || process.cwd())
@@ -93,6 +111,15 @@ export async function runSourceIntelligence(input: {
     }) : Promise.resolve(null)
   ] as const
   const [context7, codexWeb, xaiSearch] = await Promise.all(providerTasks)
+  const appshots = buildAppshotsEvidence({
+    root,
+    prompt: input.query,
+    ...(input.appshots?.visualRequired === undefined ? {} : { visualRequired: input.appshots.visualRequired }),
+    ...(input.appshots?.sourcePaths === undefined ? {} : { sourcePaths: input.appshots.sourcePaths }),
+    ...(input.appshots?.sourceMetadata === undefined ? {} : { sourceMetadata: input.appshots.sourceMetadata }),
+    ...(input.appshots?.operatorActionRecorded === undefined ? {} : { operatorActionRecorded: input.appshots.operatorActionRecorded }),
+    ...(input.appshots?.appshotsToolAvailable === undefined ? {} : { appshotsToolAvailable: input.appshots.appshotsToolAvailable })
+  })
   const providersRequested = [
     'context7',
     ...(policy.codex_web_search.required ? ['codex_web_search'] : []),
@@ -103,9 +130,9 @@ export async function runSourceIntelligence(input: {
     ...(codexWeb?.ok ? ['codex_web_search'] : []),
     ...(xaiSearch?.ok ? ['xai_search'] : [])
   ]
-  const proof = buildSourceIntelligenceProof(policy, { context7, codex_web_search: codexWeb, xai_search: xaiSearch })
-  const blockers = [...policy.blockers, ...context7.blockers, ...(codexWeb?.blockers || []), ...(proof.blockers || [])]
-  const warnings = [...policy.warnings, ...(codexWeb?.warnings || []), ...(xaiSearch?.blockers || []).filter((blocker) => !blockers.includes(blocker))]
+  const proof = buildSourceIntelligenceProof(policy, { context7, codex_web_search: codexWeb, xai_search: xaiSearch, appshots })
+  const blockers = [...policy.blockers, ...context7.blockers, ...(codexWeb?.blockers || []), ...appshots.blockers, ...(proof.blockers || [])]
+  const warnings = [...policy.warnings, ...(codexWeb?.warnings || []), ...appshots.warnings, ...(xaiSearch?.blockers || []).filter((blocker) => !blockers.includes(blocker))]
   const evidence: SourceIntelligenceEvidence = {
     schema: SOURCE_INTELLIGENCE_EVIDENCE_SCHEMA,
     generated_at: nowIso(),
@@ -126,11 +153,13 @@ export async function runSourceIntelligence(input: {
     context7,
     codex_web_search: codexWeb,
     xai_search: xaiSearch,
+    appshots,
     proof,
     blockers,
     warnings
   }
   await writeSourceIntelligencePolicyArtifact(missionDir, policy)
+  await writeAppshotsEvidenceArtifact(missionDir, appshots)
   await writeJsonAtomic(path.join(missionDir, 'source-intelligence-evidence.json'), evidence)
   await writeTextAtomic(path.join(missionDir, 'source-intelligence-evidence.md'), renderSourceIntelligenceEvidenceMarkdown(evidence))
   await writeJsonAtomic(path.join(artifactDir, `${cacheKey}.json`), evidence)
@@ -146,6 +175,7 @@ export function renderSourceIntelligenceEvidenceMarkdown(evidence: SourceIntelli
     `- Context7: ${evidence.context7.status}`,
     `- Codex Web Search: ${evidence.codex_web_search?.status || 'not_required'}`,
     `- X AI Search: ${evidence.xai_search?.status || 'not_required'}`,
+    `- Appshots: ${evidence.appshots?.status || 'not_required'}`,
     `- Providers completed: ${evidence.parallel.providers_completed.join(', ') || 'none'}`,
     `- Blockers: ${evidence.blockers.length ? evidence.blockers.join(', ') : 'none'}`,
     ''

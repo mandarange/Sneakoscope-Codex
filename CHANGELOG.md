@@ -19,6 +19,28 @@
 - Route web/browser/webapp verification through Codex Chrome Extension readiness first, reserve Computer Use for native Mac/non-web surfaces, and rapidly block QA/UX pipelines when the extension is missing.
 - Treat UX Review `--from-chrome-extension` and `--from-computer-use` as real flags so web review cannot slip past the Chrome Extension gate through option parsing.
 
+## [1.18.8] - 2026-05-27
+
+### Added
+
+- Add the strategy-first ADHD orchestration gate, dopamine/micro-win board artifacts, file ownership plan, parallel modification plan, and verification/rollback DAG before native agent scheduling.
+- Add Appshots capability, operator policy, privacy-safety, TriWiki/Voxel, and Source Intelligence evidence gates for visual app-state proof.
+- Add release scripts for strategy gates, Appshots gates, MCP readOnlyHint concurrency, and Codex 0.134 hook context parity.
+- Add retention cleanup safety coverage so route cleanup preserves durable TriWiki/reflection/proof context while deleting closed-route scratch.
+
+### Fixed
+
+- Prevent write-capable agent runs from losing strategy references in task graph, work queue, proof, and runtime truth evidence.
+- Preserve proof-safe parallel patch evidence with queue events, ownership ledger rows, after-hashes, rollback digests, parallel batches, serial conflicts, and simple unified-diff envelopes.
+- Prevent completed routes from leaving unnecessary `team-inbox`, `bus`, cycle/arena, agent lane scratch, temp, and raw stdout/stderr log files after the route is safely closed, while retaining blocked-route diagnostics.
+- Bound post-route retention cleanup to the completed mission so large local mission stores cannot push route fixtures past their timeout; full old/excess mission sweeping remains available through `sks gc`.
+
+### Changed
+
+- Bump release metadata from 1.18.7 to 1.18.8 and extend runtime truth with `adhd_orchestration` and `appshots` subsystem rows.
+- Keep Appshots operator actions explicit: nonvisual work is not blocked, while visual proof without an operator-recorded source remains a blocker.
+- Treat retention as a two-plane contract: durable learning/audit artifacts stay, old/excess missions with proof are compacted rather than deleted wholesale, short-lived temp files default to immediate cleanup, and release-parallel raw logs are removed after inline summaries replace file paths in the proof report.
+
 ## [1.18.7] - 2026-05-27
 
 ### Added

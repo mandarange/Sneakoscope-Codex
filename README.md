@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.18.7** closes the Codex 0.134 ultra-stability loop: the release matrix now covers `--profile` as the primary selector, bounded local Codex history search, managed proxy propagation, MCP 0.134 environment/OAuth/schema/readOnlyHint policy, proof-safe parallel agent patches, runtime truth P6 rows, the 1.18.7 release gate audit, MAD-SKS as general scoped permission widening, and gpt-image-2 imagegen as a core evidence capability.
+SKS **1.18.8** closes the Codex 0.134 ultra-stability loop: the release matrix now covers `--profile` as the primary selector, bounded local Codex history search, managed proxy propagation, MCP 0.134 environment/OAuth/schema/readOnlyHint policy, proof-safe parallel agent patches, runtime truth P6 rows, the 1.18.8 release gate audit, MAD-SKS as general scoped permission widening, gpt-image-2 imagegen as a core evidence capability, and retention cleanup that preserves durable learning while removing finished route scratch.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -31,6 +31,7 @@ npm run agent:background-terminals
 npm run agent:tmux-lane-no-flicker
 npm run agent:cleanup-executor
 npm run agent:cleanup-executor-v2
+npm run retention:cleanup-safety
 npm run agent:intelligent-work-graph
 npm run agent:ast-aware-work-graph
 npm run proof:fake-vs-real-policy
@@ -39,7 +40,12 @@ npm run release:runtime-truth-matrix
 npm run codex:0.134-official-compat
 npm run codex:profile-primary
 npm run codex:managed-proxy-env
+npm run strategy:adhd-orchestrating-gate
+npm run strategy:parallel-modification-plan
+npm run appshots:evidence
+npm run appshots:source-intelligence
 npm run mcp:0.134-modernization
+npm run mcp:readonly-concurrency
 npm run source-intelligence:codex-history-search
 npm run agent:parallel-write-kernel
 npm run release:gate-existence-audit
@@ -51,6 +57,21 @@ npm run release:readiness
 ```
 
 Detailed release history lives in [CHANGELOG.md](CHANGELOG.md); every version-facing change should be recorded there before release. Current release gate status lives in [docs/release-readiness.md](docs/release-readiness.md).
+
+## Retention And Cleanup
+
+SKS keeps durable learning context separate from disposable route work files. Durable context includes `.sneakoscope/memory/**`, shared TriWiki records, `.sneakoscope/wiki/context-pack.json`, wrongness memory, image voxels, avoidance rules, route Completion Proof, trust reports, evidence indexes, reflections, and agent proof summaries. These files are treated as the long-term learning and audit chain.
+
+Temporary route files are cleaned after a route is closed enough to preserve its proof chain and by `sks gc`: `.sneakoscope/tmp/*`, closed mission `team-inbox/`, `bus/`, `cycles/`, `arenas/`, agent lane/worktree scratch, mission `*.stdout.log` / `*.stderr.log`, and release-parallel raw logs after their inline summaries are written into the JSON/MD report. Post-route cleanup is bounded to the completed route so large mission stores do not stall normal commands; full old/excess mission sweeping remains an explicit `sks gc` operation. Active missions, blocked-route diagnostics, and terminal transcripts stay in place so live debugging and the current route are not disrupted. Old/excess missions that contain proof or learning artifacts are compacted rather than deleted wholesale.
+
+```bash
+sks gc --dry-run --json
+sks gc --json
+sks stats --json
+npm run retention:cleanup-safety
+```
+
+The cleanup contract is policy-backed in `.sneakoscope/policy.json`, but the default posture is now immediate cleanup for short-lived temp files while preserving long-term SKS learning and proof artifacts.
 
 ## Documentation
 
@@ -87,7 +108,12 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md); every version-fa
 - Fake vs real proof policy: [docs/fake-vs-real-proof-policy.md](docs/fake-vs-real-proof-policy.md)
 - Runtime truth matrix: [docs/runtime-truth-matrix.md](docs/runtime-truth-matrix.md)
 - Warp MAD tmux lanes: [docs/warp-mad-tmux-lanes.md](docs/warp-mad-tmux-lanes.md)
-- Migration 1.18.6 to 1.18.7: [docs/migration-1.18.6-to-1.18.7.md](docs/migration-1.18.6-to-1.18.7.md)
+- ADHD orchestration gate: [docs/adhd-orchestrating-gate.md](docs/adhd-orchestrating-gate.md)
+- Strategy-first parallel write: [docs/strategy-first-parallel-write.md](docs/strategy-first-parallel-write.md)
+- Appshots pipeline: [docs/appshots-pipeline.md](docs/appshots-pipeline.md)
+- Parallel write agents: [docs/parallel-write-agents.md](docs/parallel-write-agents.md)
+- Agent patch queue: [docs/agent-patch-queue.md](docs/agent-patch-queue.md)
+- Migration 1.18.7 to 1.18.8: [docs/migration-1.18.7-to-1.18.8.md](docs/migration-1.18.7-to-1.18.8.md)
 - Codex official Goal mode: [docs/codex-official-goal-mode.md](docs/codex-official-goal-mode.md)
 - Release parallel full coverage: [docs/release-parallel-full-coverage.md](docs/release-parallel-full-coverage.md)
 - Priority closure P0-P4: [docs/priority-closure-p0-p4.md](docs/priority-closure-p0-p4.md)

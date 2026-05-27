@@ -111,6 +111,10 @@ export interface AgentTaskSlice {
   readonly_paths: string[]
   write_paths: string[]
   description: string
+  strategy_refs?: Record<string, unknown> | null
+  micro_win_id?: string | null
+  dopamine_weight?: number
+  appshot_required?: boolean
 }
 
 export interface AgentLease {

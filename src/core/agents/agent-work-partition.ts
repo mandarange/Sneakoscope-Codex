@@ -15,6 +15,8 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
   minimumWorkItems?: number
   sourceIntelligenceRefs?: Record<string, unknown> | null
   goalModeRef?: Record<string, unknown> | null
+  strategyRefs?: Record<string, unknown> | null
+  microWins?: Array<{ id: string; title?: string; description?: string; kind?: string; write_paths?: string[]; readonly_paths?: string[]; dependencies?: string[]; dopamine_weight?: number; appshot_required?: boolean }>
 } = {}) {
   const inventory = await collectRepoInventory(root)
   const dependency_graph = buildDependencyGraph(inventory)
@@ -36,7 +38,9 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
     ...(opts.desiredWorkItemCount === undefined ? {} : { desiredWorkItems: opts.desiredWorkItemCount }),
     domains: semantic_domain_graph.domains,
     sourceIntelligenceRefs: opts.sourceIntelligenceRefs || null,
-    goalModeRef: opts.goalModeRef || null
+    goalModeRef: opts.goalModeRef || null,
+    strategyRefs: opts.strategyRefs || null,
+    ...(opts.microWins === undefined ? {} : { microWins: opts.microWins })
   }), intelligent_work_graph)
   const slices = createAgentTaskSlices({
     roster: roster.roster || [],

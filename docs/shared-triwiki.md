@@ -22,6 +22,8 @@ Generated indexes live under `.sneakoscope/wiki/indexes/` and are intentionally 
 
 Generated memory summaries are schema-versioned in 1.0.8. Rebuild them with `sks wiki rebuild-summary --json`; if a summary is stale, context packs should recommend rebuilding instead of treating the generated summary as fresh recall.
 
+Retention cleanup preserves shared TriWiki claim shards, wrongness/image-voxel/avoidance record directories, and `.sneakoscope/wiki/context-pack.json` as durable learning context. Route-local scratch and summarized raw logs may be removed after completion; shared records are not ordinary cleanup targets, including when optional wiki artifact pruning is enabled.
+
 ## Security
 
 Shared records are schema-checked and secret-scanned. Use `--redact` when publishing from artifacts that may contain local home paths or sensitive strings.

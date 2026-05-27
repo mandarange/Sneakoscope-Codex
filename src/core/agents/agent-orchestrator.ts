@@ -30,6 +30,9 @@ import { writeAgentTaskGraph } from './agent-task-graph.js'
 import { drainTmuxLaneSupervisor, initializeTmuxLaneSupervisor, updateTmuxLaneSupervisorFromSlots, verifyTmuxLaneSurvival } from './tmux-lane-supervisor.js'
 import { writeTmuxPhysicalProof } from './tmux-physical-proof.js'
 import { writeIntelligentWorkGraphArtifacts } from './intelligent-work-graph.js'
+import { writeAdhdOrchestrationArtifacts } from '../strategy/adhd-orchestrating-gate.js'
+import { compileStrategy, writeStrategyCompilerArtifacts } from '../strategy/strategy-compiler.js'
+import { evaluateStrategyGate, writeStrategyGateArtifact } from '../strategy/strategy-gate.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const root = path.resolve(opts.root || process.cwd())
@@ -77,17 +80,95 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     official_goal_available: goalMode.official_goal_available,
     default_enabled: goalMode.default_enabled
   }
+  const writeCapable = isWriteCapableRun(opts)
+  const visualRequired = sourceIntelligence.appshots?.capability.visual_required === true
+  const strategyCompiled = compileStrategy({
+    prompt,
+    route,
+    agentCount: roster.agent_count,
+    visualRequired
+  })
+  await writeAdhdOrchestrationArtifacts(dir, strategyCompiled.gate)
+  await writeStrategyCompilerArtifacts(dir, strategyCompiled)
+  const strategyGate = evaluateStrategyGate({
+    compiled: strategyCompiled,
+    writeCapable,
+    visualRequired,
+    appshotsOk: sourceIntelligence.appshots?.ok === true,
+    sourceIntelligenceOk: sourceIntelligence.ok
+  })
+  await writeStrategyGateArtifact(dir, strategyGate)
+  const strategyRef = {
+    artifact: 'strategy-gate.json',
+    ok: strategyGate.ok,
+    scheduler_allowed: strategyGate.scheduler_allowed,
+    strategy_first_required: strategyGate.strategy_first_required,
+    micro_win_count: strategyGate.micro_win_count,
+    appshots_operator_action_required: strategyGate.appshots_operator_action_required
+  }
+  if (!strategyGate.scheduler_allowed) {
+    await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_STRATEGY_GATE_BLOCKED', route_command: routeCommand, native_agent_backend: backend, updated_at: nowIso() })
+    const blockedLedgerRoot = path.join(dir, 'agents')
+    return {
+      schema: 'sks.agent-run.v1',
+      ok: false,
+      status: 'blocked',
+      mission_id: missionId,
+      route,
+      route_command: routeCommand,
+      route_blackbox_kind: routeBlackboxKind,
+      backend,
+      ledger_root: path.relative(root, blockedLedgerRoot),
+      roster,
+      partition: { ok: false, slice_count: 0, lease_count: 0, blockers: strategyGate.blockers },
+      task_graph: null,
+      requested_work_items: desiredWorkItemCount,
+      actual_total_work_items: 0,
+      target_active_slots: targetActiveSlots,
+      minimum_work_items: minimumWorkItems,
+      source_intelligence: sourceIntelligenceRef,
+      goal_mode: goalModeRef,
+      strategy_gate: strategyGate,
+      scheduler: {
+        ok: false,
+        status: 'blocked_before_scheduler',
+        scheduler_allowed: false,
+        blockers: strategyGate.blockers
+      },
+      results: [],
+      consensus: { ok: false, blockers: strategyGate.blockers },
+      output_validation: { ok: false, blockers: strategyGate.blockers },
+      backend_report: { ok: false, blockers: strategyGate.blockers },
+      recursion: { ok: true, violations: [] },
+      timeout_kill: { killed_sessions: [] },
+      output_tails: { ok: true, records: [] },
+      cleanup: { ok: true, all_sessions_closed: true, blockers: [] },
+      trust: { ok: false, blockers: strategyGate.blockers },
+      wrongness: { ok: false, blockers: strategyGate.blockers },
+      parallel_write_policy: null,
+      proof: {
+        ok: false,
+        status: 'blocked',
+        blockers: strategyGate.blockers
+      }
+    }
+  }
   const partition = await buildAgentWorkPartition(root, roster, prompt, {
     route,
     targetActiveSlots,
     desiredWorkItemCount,
     minimumWorkItems,
     sourceIntelligenceRefs: sourceIntelligenceRef,
-    goalModeRef
+    goalModeRef,
+    strategyRefs: strategyRef,
+    microWins: strategyCompiled.gate.micro_wins
   })
   await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
   const ledgerRoot = await initializeAgentCentralLedger(dir, { missionId, roster, partition, route, prompt, dynamicScheduler: true })
   await writeAgentTaskGraph(ledgerRoot, partition.task_graph)
+  await writeAdhdOrchestrationArtifacts(ledgerRoot, strategyCompiled.gate)
+  await writeStrategyCompilerArtifacts(ledgerRoot, strategyCompiled)
+  await writeStrategyGateArtifact(ledgerRoot, strategyGate)
   await writeIntelligentWorkGraphArtifacts(ledgerRoot, partition.intelligent_work_graph)
   await writeScoutPolicyArtifact(ledgerRoot)
   await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster })
@@ -125,7 +206,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     readonly: opts.readonly === true,
     patch_queue_required: opts.applyPatches === true || opts.dryRunPatches === true,
     patch_apply_mode: opts.applyPatches === true ? opts.dryRunPatches === true ? 'dry_run' : 'apply' : 'not_requested',
-    route_level_flags_wired: true
+    route_level_flags_wired: true,
+    strategy_gate: strategyRef
   }
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-parallel-write-policy.json'), parallelWritePolicy)
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: routeCommand, native_agent_backend: backend })
@@ -269,7 +351,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     trust,
     wrongness,
     scheduler: scheduler.state,
-    parallelWritePolicy
+    parallelWritePolicy,
+    strategyGate
   })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })
@@ -292,6 +375,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     scheduler,
     source_intelligence: sourceIntelligenceRef,
     goal_mode: goalModeRef,
+    strategy_gate: strategyGate,
     results,
     consensus,
     output_validation: outputValidation,
@@ -319,6 +403,10 @@ function normalizeMinimumWorkItems(value: unknown, targetActiveSlots: number) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < 1) return Math.max(1, Math.floor(targetActiveSlots))
   return Math.max(1, Math.floor(parsed))
+}
+
+function isWriteCapableRun(opts: AgentRunOptions) {
+  return opts.applyPatches === true || opts.dryRunPatches === true || (opts.writeMode !== undefined && opts.writeMode !== 'off')
 }
 
 function defaultRouteCommand(route: string) {

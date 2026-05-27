@@ -1,6 +1,6 @@
-# Runtime Truth Matrix 1.18.7
+# Runtime Truth Matrix 1.18.8
 
-SKS 1.18.7 writes `sks.runtime-truth-matrix.v1` to `.sneakoscope/reports/runtime-truth-matrix-1.18.7.json`.
+SKS 1.18.8 writes `sks.runtime-truth-matrix.v1` to `.sneakoscope/reports/runtime-truth-matrix-1.18.8.json`.
 
 The matrix is generated from current proof artifacts, not from a static release table. It records each subsystem with `proof_level`, `evidence_artifacts`, `blockers`, `next_action`, and `required_mode`.
 
@@ -17,6 +17,8 @@ Required rows:
 - `warp_mad_lanes`
 - `codex_0_134`
 - `mcp_0_134`
+- `adhd_orchestration`
+- `appshots`
 - `parallel_write`
 - `patch_proof`
 - `cleanup_v4`
@@ -31,4 +33,4 @@ Run:
 npm run release:runtime-truth-matrix
 ```
 
-The release readiness report reads the same artifact and surfaces the rows under `runtime_truth_1_18_7.subsystem_rows`, with P6 representing Codex 0.134 and parallel write proof closure.
+The release readiness report reads the same artifact and surfaces the rows under `runtime_truth_1_18_8.subsystem_rows`, with P6 representing Codex 0.134, strategy-first orchestration, Appshots, and parallel write proof closure.

@@ -174,11 +174,12 @@ export function tmuxStatusKind(tmux: any = {}) {
   return tmux.ok ? 'ok' : 'missing';
 }
 
-export function codexLaunchCommand(root: any, codexBin: any, codexArgs: any = [], launchEnv: Record<string, unknown> = {}) {
+export function codexLaunchCommand(root: any, codexBin: any, codexArgs: any = [], launchEnv: Record<string, unknown> = {}, opts: any = {}) {
   const extraArgs = forceGpt55CodexArgs(codexArgs);
   const envExports = Object.entries(launchEnv || {})
     .filter(([, value]) => value !== undefined && value !== null && String(value).length > 0)
     .map(([key, value]) => `export ${key}=${shellEscape(value)}`);
+  const codexInvocation = [shellEscape(codexBin), ...extraArgs.map(shellEscape), '--cd', shellEscape(root)].join(' ');
   return [
     ...envExports,
     sksLogoIntroCommand(codexBin),
@@ -187,7 +188,22 @@ export function codexLaunchCommand(root: any, codexBin: any, codexArgs: any = []
     'printf \'Prompt:  use canonical $ commands, for example $Team or $QA-LOOP\\n\\n\'',
     '[ -f "$HOME/.codex/sks-codex-lb.env" ] && . "$HOME/.codex/sks-codex-lb.env"',
     'sleep 1',
-    `exec ${[shellEscape(codexBin), ...extraArgs.map(shellEscape), '--cd', shellEscape(root)].join(' ')}`
+    opts.holdOnFastExit ? codexLaunchHoldOnFastExitCommand(codexInvocation) : `exec ${codexInvocation}`
+  ].join('; ');
+}
+
+function codexLaunchHoldOnFastExitCommand(codexInvocation: string) {
+  return [
+    '__sks_codex_started=$(date +%s)',
+    codexInvocation,
+    '__sks_codex_status=$?',
+    '__sks_codex_elapsed=$(($(date +%s)-__sks_codex_started))',
+    'if [ "$__sks_codex_status" -ne 0 ] || [ "$__sks_codex_elapsed" -lt "${SKS_TMUX_MIN_EXIT_SECONDS:-8}" ]; then ' +
+      'printf \'\\nSKS: Codex CLI exited after %ss with status %s. Keeping this tmux pane open so the error stays visible.\\n\' "$__sks_codex_elapsed" "$__sks_codex_status"; ' +
+      'printf \'Close this pane with exit, or rerun sks --mad after fixing the launch error.\\n\\n\'; ' +
+      'exec "${SHELL:-/bin/sh}" -l; ' +
+    'fi',
+    'exit "$__sks_codex_status"'
   ].join('; ');
 }
 
@@ -748,7 +764,24 @@ export async function createTmuxSession(plan: any = {}, panes: any = [], opts: a
   const layout = tmuxLayoutName(opts.layout || (rightSidePanes ? DYNAMIC_TEAM_TMUX_LAYOUT : 'tiled'));
   const create = await tmuxRun(tmuxBin, ['new-session', '-d', '-x', dimensions.width, '-y', dimensions.height, '-s', session, '-c', path.resolve(first.cwd || root), '-n', 'sks', '-P', '-F', '#{pane_id}', first.command || 'pwd']);
   if (create.code !== 0) return { ok: false, session, panes: [], stderr: create.stderr || create.stdout || 'tmux new-session failed' };
-  const created = [{ pane_id: paneId(create.stdout), role: first.role || 'overview', title: first.title || 'overview' }];
+  const firstPaneId = paneId(create.stdout);
+  const created = [{ pane_id: firstPaneId, role: first.role || 'overview', title: first.title || 'overview' }];
+  if (!(await hasTmuxSession(tmuxBin, session))) {
+    return {
+      ok: false,
+      session,
+      panes: created,
+      stderr: 'tmux session ended immediately after the launch command exited'
+    };
+  }
+  if (firstPaneId && !(await tmuxPaneExists(tmuxBin, firstPaneId))) {
+    return {
+      ok: false,
+      session,
+      panes: created,
+      stderr: `tmux new-session returned pane ${firstPaneId}, but the pane was not present after creation`
+    };
+  }
   let rightStackRootPaneId = null;
   for (const pane of normalizedPanes.slice(1)) {
     const direction = rightSidePanes ? (created.length === 1 ? '-h' : '-v') : (pane.vertical ? '-v' : '-h');
@@ -819,7 +852,7 @@ export async function launchMadTmuxUi(args: any = [], opts: any = {}) {
     ? await sweepCodexLbTmuxSessions({ root: plan.root, keepSession: plan.session }).catch((err: any) => ({ ok: false, skipped: true, reason: err.message || 'codex-lb tmux cleanup failed', closed_session_count: 0 }))
     : null;
   const missionId = opts.missionId || opts.madMissionId || 'latest';
-  const mainCommand = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs, plan.launchEnv || opts.launchEnv || opts.madSksEnv);
+  const mainCommand = codexLaunchCommand(plan.root, plan.codex.bin, plan.codexArgs, plan.launchEnv || opts.launchEnv || opts.madSksEnv, { holdOnFastExit: true });
   const panes = [
     { cwd: plan.root, command: mainCommand, focused: true, role: 'codex', title: 'Codex CLI' }
   ];

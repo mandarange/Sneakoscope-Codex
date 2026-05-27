@@ -23,6 +23,12 @@ export interface VerificationTaskResult {
   exit_code: number | null
   stdout_log?: string
   stderr_log?: string
+  stdout_log_summary?: string
+  stderr_log_summary?: string
+  stdout_tail?: string
+  stderr_tail?: string
+  stdout_log_removed_after_summary?: boolean
+  stderr_log_removed_after_summary?: boolean
   skipped?: boolean
   error?: string
 }
