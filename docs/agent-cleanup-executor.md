@@ -1,6 +1,6 @@
-# Agent Cleanup Executor 1.18.5
+# Agent Cleanup Executor 1.18.6
 
-SKS 1.18.5 makes `sks agent cleanup` and `sks agent close` process-tree-aware cleanup transactions instead of artifact-only readers.
+SKS 1.18.6 makes `sks agent cleanup` and `sks agent close` process-tree-aware cleanup transactions instead of artifact-only readers.
 
 The executor writes:
 

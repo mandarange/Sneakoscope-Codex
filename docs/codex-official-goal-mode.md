@@ -14,6 +14,6 @@ When official Goal support is detected from Codex help/config surfaces, SKS reco
 
 Goal mode does not replace Team, QA, DB, or other route gates. It persists continuation context while the selected execution route still owns implementation and verification.
 
-## 1.18.5 Runtime Truth Note
+## 1.18.6 Runtime Truth Note
 
-SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.
+SKS 1.18.6 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

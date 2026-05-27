@@ -31,6 +31,7 @@ export function buildSourceIntelligenceProof(
   const context7Ok = evidence.context7?.ok === true
   const codexWebOk = policy.codex_web_search.required ? evidence.codex_web_search?.ok === true : true
   const xaiOk = policy.xai_mcp.required ? evidence.xai_search?.ok === true : true
+  const xaiMissingIsBlocker = policy.xai_mcp.required && !xaiOk
   if (policy.context7.required && !context7Ok) {
     blockers.push('context7_missing')
     wrongnessKinds.push('context7_missing')
@@ -54,7 +55,7 @@ export function buildSourceIntelligenceProof(
       codex_web_ok: codexWebOk,
       xai_required: policy.xai_mcp.required,
       xai_ok: xaiOk,
-      xai_missing_is_blocker: false
+      xai_missing_is_blocker: xaiMissingIsBlocker
     },
     wrongness_kinds: [...new Set(wrongnessKinds)],
     blockers: [...new Set(blockers)]

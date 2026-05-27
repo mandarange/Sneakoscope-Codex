@@ -21,15 +21,17 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const dryRun = hasFlag(args, '--dry-run') || hasFlag(args, '--dryrun')
   const drain = hasFlag(args, '--drain')
   const staleMs = Number(readOption(args, '--stale-ms', 30 * 60 * 1000))
+  const graceMs = Number(readOption(args, '--grace-ms', 750))
+  const killEscalation = hasFlag(args, '--kill-escalation') || !hasFlag(args, '--no-kill-escalation')
   const codexApp = hasFlag(args, '--codex-app')
-  const positionals = positionalArgs(rest, new Set(['--agents', '--target-active-slots', '--work-items', '--minimum-work-items', '--max-queue-expansion', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane', '--stale-ms']))
+  const positionals = positionalArgs(rest, new Set(['--agents', '--target-active-slots', '--work-items', '--minimum-work-items', '--max-queue-expansion', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane', '--stale-ms', '--grace-ms']))
   const missionDefault = action === 'run' || action === 'spawn' || action === 'plan' ? '' : 'latest'
   const positionalMission = action === 'run' || action === 'spawn' || action === 'plan' ? '' : (positionals[0] || '')
   const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', positionalMission || missionDefault)))
   const lane = String(readOption(args, '--agent', readOption(args, '--lane', '')))
   const promptPositionals = positionalMission ? positionals.slice(1) : positionals
   const prompt = promptPositionals.join(' ').trim() || 'Native agent run'
-  return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, mock, real, readonly, apply, dryRun, drain, staleMs, json, missionId, lane, codexApp }
+  return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, mock, real, readonly, apply, dryRun, drain, staleMs, graceMs, killEscalation, json, missionId, lane, codexApp }
 }
 
 function hasFlag(args: string[], flag: string) {

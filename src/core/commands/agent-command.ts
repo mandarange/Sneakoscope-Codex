@@ -77,7 +77,9 @@ async function agentMissionAction(parsed: any) {
       apply: parsed.apply === true,
       dryRun: parsed.dryRun === true,
       drain: parsed.drain === true,
-      staleMs: parsed.staleMs
+      staleMs: parsed.staleMs,
+      graceMs: parsed.graceMs,
+      killEscalation: parsed.killEscalation
     })
   }
   const full = path.join(agentRoot, artifact)

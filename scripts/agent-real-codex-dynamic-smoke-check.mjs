@@ -4,7 +4,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.mjs';
 
-const reportPath = path.join(root, '.sneakoscope', 'reports', 'agent-real-codex-dynamic-smoke-1.18.5.json');
+const releaseVersion = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+const reportPath = path.join(root, '.sneakoscope', 'reports', `agent-real-codex-dynamic-smoke-${releaseVersion}.json`);
 fs.mkdirSync(path.dirname(reportPath), { recursive: true });
 const required = process.env.SKS_REQUIRE_REAL_DYNAMIC_AGENTS === '1';
 
@@ -63,9 +64,11 @@ const fixtureInstrumented = childEnv.SKS_AGENT_DYNAMIC_BACKFILL_FIXTURE === '1';
 const result = {
   ok: true,
   status: fixtureInstrumented ? 'fixture_instrumented_real' : 'passed',
+  proof_level: fixtureInstrumented ? 'fixture_instrumented_real' : 'proven',
   schema: 'sks.real-codex-dynamic-smoke.v2',
+  proof_contract: 'sks.real-codex-dynamic-smoke.v3',
   generated_at: new Date().toISOString(),
-  release_version: '1.18.5',
+  release_version: releaseVersion,
   mission_id: json.mission_id,
   active_slots: activeSlots,
   work_items: workItems,
@@ -103,6 +106,7 @@ result.blockers.push(...(result.source_refs_ok ? [] : ['source_intelligence_refs
 result.blockers.push(...(result.goal_refs_ok ? [] : ['goal_mode_refs_missing']));
 result.ok = result.blockers.length === 0;
 result.status = result.ok ? (fixtureInstrumented ? 'fixture_instrumented_real' : 'passed') : 'blocked';
+result.proof_level = result.ok ? (fixtureInstrumented ? 'fixture_instrumented_real' : 'proven') : 'blocked';
 writeReport(result);
 assertGate(result.ok, 'real codex dynamic smoke proof failed', result);
 emitGate('agent:real-codex-dynamic-smoke', { status: result.status, mission_id: result.mission_id, backfill_count: result.backfill_count });
@@ -111,8 +115,10 @@ function optionalOrBlocked(reason, code, extra = {}) {
   const report = {
     ok: !required,
     status: required ? 'blocked' : 'integration_optional',
+    proof_level: required ? 'real_required_missing' : 'integration_optional',
     schema: 'sks.real-codex-dynamic-smoke.v2',
-    release_version: '1.18.5',
+    proof_contract: 'sks.real-codex-dynamic-smoke.v3',
+    release_version: releaseVersion,
     required,
     reason,
     blockers: required ? [code] : [],

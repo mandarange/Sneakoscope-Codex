@@ -1,12 +1,13 @@
 import path from 'node:path'
 import { AGENT_PROOF_EVIDENCE_SCHEMA } from './agent-schema.js'
-import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { nowIso, PACKAGE_VERSION, readJson, writeJsonAtomic } from '../fsx.js'
 import { validateAgentLedgerHashChain } from './agent-central-ledger.js'
 import { assertAllAgentSessionsClosed } from './agent-lifecycle.js'
 import { assertAgentTerminalSessionsClosed } from './agent-terminal-session.js'
 import { assertAgentSessionGenerationsClosed } from './agent-session-generation.js'
 import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
 import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.js'
+import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 
 export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
@@ -207,6 +208,20 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   }
   await writeJsonAtomic(path.join(root, 'agent-proof-evidence.json'), evidence)
   await writeFakeRealProofPolicyReport(root, evidence)
+  const runtimeTruthMatrix = await buildRuntimeTruthMatrix({
+    root: repoRootFromAgentRoot(root),
+    agentRoot: root,
+    releaseVersion: PACKAGE_VERSION,
+    reports: {
+      'agent-tmux-physical-proof.json': tmuxPhysicalProof,
+      'agent-cleanup-proof.json': cleanupProof,
+      'agent-intelligent-work-graph.json': intelligentWorkGraph,
+      'source-intelligence-evidence.json': input.partition?.source_intelligence_refs,
+      'goal-mode-applied.json': input.partition?.goal_mode_ref,
+      'agent-scheduler-state.json': scheduler
+    }
+  })
+  await writeRuntimeTruthMatrix(repoRootFromAgentRoot(root), runtimeTruthMatrix, { agentRoot: root })
   return evidence
 }
 
@@ -241,4 +256,8 @@ function pathWithin(file: string, leasePath: string) {
   const left = String(file || '').replace(/\\/g, '/').replace(/^\.\//, '')
   const right = String(leasePath || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
   return left === right || left.startsWith(right + '/')
+}
+
+function repoRootFromAgentRoot(agentRoot: string) {
+  return path.resolve(agentRoot, '..', '..', '..', '..')
 }

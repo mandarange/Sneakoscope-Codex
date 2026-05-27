@@ -25,6 +25,6 @@ When one session finishes and work remains, the slot becomes idle, the scheduler
 
 The release gates exercise actual Agent, Team, Research, and QA route commands where five active slots start, two early sessions close, and replacement generations launch from the pending queue before drain. The standalone scheduler fixture remains low-level evidence only. Route truth requires `agent-task-graph.json`, `agent-work-queue.json`, `agent-scheduler-state.json`, `agent-proof-evidence.json`, terminal generation close reports, Source Intelligence refs, Goal refs, and the tmux lane supervisor to agree on the same work count and active-slot contract.
 
-## 1.18.5 Runtime Truth Note
+## 1.18.6 Runtime Truth Note
 
-SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.
+SKS 1.18.6 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

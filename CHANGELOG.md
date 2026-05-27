@@ -3,6 +3,26 @@
 ## [Unreleased]
 
 
+
+## [1.18.6] - 2026-05-26
+
+### Added
+
+- Add generated runtime truth matrix rows for tmux physical proof, Codex dynamic smoke, cleanup, AST work graph, Source Intelligence, Goal mode, route blackbox, dynamic scheduler, and Warp MAD lanes.
+- Add trust report subsystem proof levels and runtime truth matrix links.
+- Add MAD-SKS Warp/tmux lane UI proof artifacts.
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+- Prevent static runtime truth tables from hiding missing live proof artifacts.
+- Prevent cleanup from reporting success without verified process, tmux pane, temp dir, and lock after-states.
+
+### Changed
+
+- Treat required real tmux, Codex dynamic, and Warp MAD lane modes as explicit runtime truth blockers.
+- Treat AST-aware work graph ownership and fake-real subsystem levels as first-class release readiness evidence.
+
 ## [1.18.5] - 2026-05-26
 
 ### Added

@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.5 writes the `sks.release-readiness.v1` report for the deep runtime-truth closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, work-item-first task graph, schema-bound follow-up work items, actual route blackbox backfill checks, persistent tmux lane supervisor, lifecycle-wired real tmux pane proof, real Codex dynamic smoke v2, process-tree cleanup executor v2, cleanup command UX, AST-aware intelligent work graph, fake-vs-real proof policy v2, runtime truth matrix, scheduler proof hardening, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.5 runtime-truth closure DAG gaps.
+SKS 1.18.6 writes the `sks.release-readiness.v1` report for the deep runtime-truth closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, work-item-first task graph, schema-bound follow-up work items, actual route blackbox backfill checks, persistent tmux lane supervisor, lifecycle-wired real tmux pane proof, real Codex dynamic smoke v2, process-tree cleanup executor v2, cleanup command UX, AST-aware intelligent work graph, fake-vs-real proof policy v2, runtime truth matrix, scheduler proof hardening, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.6 runtime-truth closure DAG gaps.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -54,17 +54,17 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.18.5.json`
-- `.sneakoscope/reports/release-readiness-1.18.5.md`
-- `.sneakoscope/reports/all-feature-completion-1.18.5.json`
-- `.sneakoscope/reports/all-feature-completion-1.18.5.md`
-- `.sneakoscope/reports/official-docs-compat-1.18.5.json`
-- `.sneakoscope/reports/official-docs-compat-1.18.5.md`
-- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.5.json`
-- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.5.json`
-- `.sneakoscope/reports/runtime-truth-matrix-1.18.5.json`
+- `.sneakoscope/reports/release-readiness-1.18.6.json`
+- `.sneakoscope/reports/release-readiness-1.18.6.md`
+- `.sneakoscope/reports/all-feature-completion-1.18.6.json`
+- `.sneakoscope/reports/all-feature-completion-1.18.6.md`
+- `.sneakoscope/reports/official-docs-compat-1.18.6.json`
+- `.sneakoscope/reports/official-docs-compat-1.18.6.md`
+- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.6.json`
+- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.6.json`
+- `.sneakoscope/reports/runtime-truth-matrix-1.18.6.json`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal generation closure, persistent tmux lanes, real tmux physical pane truth, cleanup executor proof, AST-aware work graph quality, fake-vs-real subsystem levels, runtime truth matrix, task graph/work queue expansion, follow-up work item schema, actual route blackbox backfill metrics, and remaining 1.18.5 P0-P5 closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal generation closure, persistent tmux lanes, real tmux physical pane truth, cleanup executor proof, AST-aware work graph quality, fake-vs-real subsystem levels, runtime truth matrix, task graph/work queue expansion, follow-up work item schema, actual route blackbox backfill metrics, and remaining 1.18.6 P0-P5 closure gaps.
 
 ## Priority Closure
 

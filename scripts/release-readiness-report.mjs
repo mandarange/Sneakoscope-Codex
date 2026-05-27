@@ -162,7 +162,8 @@ const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
   flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null),
   flagship_proof_graph_v4: readJson('.sneakoscope/reports/flagship-proof-graph-v4.json', null),
-  runtime_truth_matrix: readJson('.sneakoscope/reports/runtime-truth-matrix-1.18.5.json', null)
+  runtime_truth_matrix: readJson(`.sneakoscope/reports/runtime-truth-matrix-${RELEASE_VERSION}.json`, null),
+  real_codex_dynamic_smoke: readJson(`.sneakoscope/reports/agent-real-codex-dynamic-smoke-${RELEASE_VERSION}.json`, null)
 };
 const runtimeChecks = {
   ppt_full_e2e_blackbox: runtimeReports.ppt_full_e2e_blackbox?.ok === true
@@ -172,6 +173,10 @@ const runtimeChecks = {
   flagship_proof_graph_v3: runtimeReports.flagship_proof_graph_v3?.ok === true,
   flagship_proof_graph_v4: runtimeReports.flagship_proof_graph_v4?.ok === true,
   runtime_truth_matrix: runtimeReports.runtime_truth_matrix?.ok === true
+    && Array.isArray(runtimeReports.runtime_truth_matrix?.rows)
+    && runtimeReports.runtime_truth_matrix.rows.every((row) => row.required_mode !== true || !['blocked', 'real_required_missing', 'integration_optional'].includes(String(row.proof_level || ''))),
+  real_codex_dynamic_smoke: !runtimeReports.real_codex_dynamic_smoke
+    || ['proven', 'fixture_instrumented_real', 'integration_optional'].includes(String(runtimeReports.real_codex_dynamic_smoke?.proof_level || runtimeReports.real_codex_dynamic_smoke?.status || ''))
 };
 const remainingP0 = [];
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
@@ -401,9 +406,10 @@ const report = {
     tmux_right_lanes: checks.agent_tmux_right_lanes,
     codex_app_visual_consistency: checks.agent_visual_consistency
   },
-  runtime_truth_1_18_5: {
+  runtime_truth_1_18_6: {
     status: checks.agent_tmux_physical_lifecycle_wired
       && checks.agent_tmux_physical_proof_v2
+      && checks.real_codex_dynamic_smoke_v2
       && checks.agent_cleanup_executor_v2
       && checks.agent_cleanup_command_ux
       && checks.agent_ast_aware_work_graph
@@ -413,13 +419,15 @@ const report = {
     tmux_physical_lifecycle_wired: checks.agent_tmux_physical_lifecycle_wired,
     tmux_physical_proof_v2: checks.agent_tmux_physical_proof_v2,
     real_codex_dynamic_smoke_v2: checks.real_codex_dynamic_smoke_v2,
+    real_codex_dynamic_smoke_report_ok: runtimeChecks.real_codex_dynamic_smoke,
     cleanup_executor_v2: checks.agent_cleanup_executor_v2,
     cleanup_command_ux: checks.agent_cleanup_command_ux,
     ast_aware_work_graph: checks.agent_ast_aware_work_graph,
     fake_real_policy_v2: checks.proof_fake_real_policy_v2,
     runtime_truth_matrix: checks.release_runtime_truth_matrix,
     runtime_truth_matrix_report_ok: runtimeChecks.runtime_truth_matrix,
-    proof_levels: runtimeReports.runtime_truth_matrix?.proof_levels || []
+    proof_levels: runtimeReports.runtime_truth_matrix?.proof_levels || [],
+    subsystem_rows: runtimeReports.runtime_truth_matrix?.rows || []
   },
   dynamic_agent_pool_1_18_3: {
     status: checks.agent_dynamic_pool
@@ -554,7 +562,7 @@ for (const key of [
   'mad_sks_1_16_0',
   'source_intelligence_1_18',
   'agent_terminal_tmux_1_18',
-  'runtime_truth_1_18_5',
+  'runtime_truth_1_18_6',
   'dynamic_agent_pool_1_18_3',
   'goal_mode_1_18',
   'release_full_coverage_1_18',
@@ -641,7 +649,7 @@ function renderMarkdown(report) {
 - Hook trust warning-zero: \`${report.hook_trust_warning_zero.status}\`
 - Source Intelligence 1.18: \`${report.source_intelligence_1_18.status}\`
 - Agent terminal/tmux 1.18: \`${report.agent_terminal_tmux_1_18.status}\`
-- Runtime truth 1.18.5: \`${report.runtime_truth_1_18_5.status}\`
+- Runtime truth 1.18.6: \`${report.runtime_truth_1_18_6.status}\`
 - Dynamic agent pool ${RELEASE_VERSION}: \`${report.dynamic_agent_pool_1_18_3.status}\`
 - Goal mode 1.18: \`${report.goal_mode_1_18.status}\`
 - Release full coverage 1.18: \`${report.release_full_coverage_1_18.status}\`

@@ -130,15 +130,23 @@ function writeStamp() {
   console.log(`Release check stamp written: ${path.relative(root, stampPath)} (${payload.source_file_count} files)`);
 }
 
-function verifyStamp() {
+function inspectStamp() {
   if (!fs.existsSync(stampPath)) {
-    fail('missing release:check stamp', 'Run `npm run release:check` once, then rerun the publish command.');
+    return {
+      ok: false,
+      message: 'missing release:check stamp',
+      detail: 'Run `npm run release:check` once, then rerun the publish command.'
+    };
   }
   let stamp;
   try {
     stamp = JSON.parse(fs.readFileSync(stampPath, 'utf8'));
   } catch (err) {
-    fail('unable to read release:check stamp', err.message);
+    return {
+      ok: false,
+      message: 'unable to read release:check stamp',
+      detail: err.message
+    };
   }
   const current = currentStampPayload();
   const mismatches = [];
@@ -146,11 +154,47 @@ function verifyStamp() {
     if (stamp[key] !== current[key]) mismatches.push(`${key}: stamp=${stamp[key] || 'missing'} current=${current[key] || 'missing'}`);
   }
   if (mismatches.length) {
-    fail('release:check stamp is stale', `${mismatches.join('\n')}\nRun \`npm run release:check\` again before publishing.`);
+    return {
+      ok: false,
+      message: 'release:check stamp is stale',
+      detail: `${mismatches.join('\n')}\nRun \`npm run release:check\` again before publishing.`,
+      current
+    };
   }
+  return { ok: true, current };
+}
+
+function verifyStamp() {
+  const result = inspectStamp();
+  if (!result.ok) fail(result.message, result.detail);
+  const current = result.current;
   console.log(`Release check stamp verified: ${path.relative(root, stampPath)} (${current.source_file_count} files)`);
+}
+
+function ensureStamp() {
+  const first = inspectStamp();
+  if (first.ok) {
+    console.log(`Release check stamp verified: ${path.relative(root, stampPath)} (${first.current.source_file_count} files)`);
+    return;
+  }
+  const refreshCommand = process.env.SKS_RELEASE_CHECK_REFRESH_COMMAND || 'npm run release:check';
+  console.error(`Release check stamp is not current; running \`${refreshCommand}\` before publishing.`);
+  if (first.detail) console.error(first.detail.trim());
+  const refresh = spawnSync(refreshCommand, {
+    cwd: root,
+    encoding: 'utf8',
+    env: process.env,
+    shell: true,
+    stdio: 'inherit'
+  });
+  if (refresh.error) fail('unable to refresh release:check stamp', refresh.error.message);
+  if (refresh.status !== 0) {
+    fail('release:check refresh command failed', `command: ${refreshCommand}\nexit_code: ${refresh.status}`);
+  }
+  verifyStamp();
 }
 
 if (command === 'write') writeStamp();
 else if (command === 'verify') verifyStamp();
-else fail(`unknown command ${command}`, 'Usage: node ./scripts/release-check-stamp.mjs <write|verify>');
+else if (command === 'ensure') ensureStamp();
+else fail(`unknown command ${command}`, 'Usage: node ./scripts/release-check-stamp.mjs <write|verify|ensure>');

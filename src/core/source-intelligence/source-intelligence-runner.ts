@@ -77,6 +77,7 @@ export async function runSourceIntelligence(input: {
   const providerTasks = [
     runContext7(input.query, {
       available: policy.context7.available,
+      offline: input.offline === true,
       ...(input.context7 ? { context7: input.context7 } : {})
     }),
     policy.codex_web_search.required ? runCodexWebSearch(input.query, {
@@ -151,12 +152,14 @@ export function renderSourceIntelligenceEvidenceMarkdown(evidence: SourceIntelli
   ].join('\n')
 }
 
-async function runContext7(query: string, opts: { available?: boolean; context7?: Context7SourceFunction }): Promise<Context7Evidence> {
+async function runContext7(query: string, opts: { available?: boolean; offline?: boolean; context7?: Context7SourceFunction }): Promise<Context7Evidence> {
   if (opts.available === false) {
     return { schema: 'sks.context7-source-evidence.v1', ok: false, status: 'missing', query, result_count: 0, blockers: ['docs_context_missing'] }
   }
   if (!opts.context7) {
-    return { schema: 'sks.context7-source-evidence.v1', ok: true, status: 'not_invoked', query, result_count: 0, blockers: [] }
+    return opts.offline === true
+      ? { schema: 'sks.context7-source-evidence.v1', ok: true, status: 'not_invoked', query, result_count: 0, blockers: [] }
+      : { schema: 'sks.context7-source-evidence.v1', ok: false, status: 'missing', query, result_count: 0, blockers: ['context7_not_invoked'] }
   }
   const raw = await opts.context7(query)
   const rows = Array.isArray(raw) ? raw : Array.isArray((raw as any)?.results) ? (raw as any).results : raw ? [raw] : []

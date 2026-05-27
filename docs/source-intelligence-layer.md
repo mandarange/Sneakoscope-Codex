@@ -21,6 +21,6 @@ Artifacts:
 
 The proof surface records `xai_available_not_used`, `codex_web_search_missing`, and `context7_missing` as explicit wrongness kinds instead of hiding source gaps.
 
-## 1.18.5 Runtime Truth Note
+## 1.18.6 Runtime Truth Note
 
-SKS 1.18.5 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.
+SKS 1.18.6 keeps this surface in the runtime-truth release closure and links it to the lifecycle tmux proof, real Codex smoke v2, cleanup executor v2, AST-aware work graph, fake-real policy v2, and runtime truth matrix gates.

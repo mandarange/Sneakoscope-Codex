@@ -8,6 +8,8 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
   const tmuxPhysicalProofSummary = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-summary.json'), null)
   const cleanupProof = await readJson<any>(path.join(root, 'agent-cleanup-proof.json'), null)
   const intelligentWorkGraph = await readJson<any>(path.join(root, 'agent-intelligent-work-graph.json'), null)
+  const fakeRealPolicy = await readJson<any>(path.join(root, 'fake-real-proof-policy.json'), null)
+  const runtimeTruthMatrix = await readJson<any>(path.join(root, 'runtime-truth-matrix.json'), null)
   const runtimeTruthGroups = {
     Fake: [] as string[],
     Optional: [] as string[],
@@ -23,6 +25,13 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
   pushTruth(String(tmuxPhysicalProof?.status || 'not_run'), 'tmux physical')
   pushTruth(cleanupProof?.ok === true ? 'passed' : cleanupProof ? 'blocked' : 'not_run', 'cleanup executor')
   pushTruth(intelligentWorkGraph?.ok === true ? 'passed' : intelligentWorkGraph ? 'partial' : 'not_run', 'intelligent work graph')
+  const subsystemProofLevels = {
+    ...(fakeRealPolicy?.subsystem_levels || {}),
+    ...Object.fromEntries((runtimeTruthMatrix?.rows || runtimeTruthMatrix?.subsystems || []).map((row: any) => [row.subsystem, row.proof_level])),
+    tmux_physical: runtimeTruthMatrix?.rows?.find?.((row: any) => row.subsystem === 'tmux_physical')?.proof_level || fakeRealPolicy?.subsystem_levels?.tmux_physical || (tmuxPhysicalProof?.proof_level || tmuxPhysicalProof?.status || 'not_run'),
+    cleanup: runtimeTruthMatrix?.rows?.find?.((row: any) => row.subsystem === 'cleanup')?.proof_level || fakeRealPolicy?.subsystem_levels?.cleanup || (cleanupProof?.ok === true ? 'proven' : cleanupProof ? 'blocked' : 'not_run'),
+    intelligent_work_graph: runtimeTruthMatrix?.rows?.find?.((row: any) => row.subsystem === 'intelligent_work_graph')?.proof_level || fakeRealPolicy?.subsystem_levels?.intelligent_work_graph || intelligentWorkGraph?.proof_level || (intelligentWorkGraph ? 'partial' : 'not_run')
+  }
   const report = {
     schema: 'sks.agent-trust-report.v1',
     generated_at: nowIso(),
@@ -87,6 +96,9 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
       fake_backend_disclaimer: input.backend === 'fake' ? 'fixture only; no real parallel execution claim' : null
     },
     runtime_truth_groups: runtimeTruthGroups,
+    runtime_truth_matrix: runtimeTruthMatrix ? 'runtime-truth-matrix.json' : null,
+    proof_level_by_subsystem: subsystemProofLevels,
+    fake_real_policy: fakeRealPolicy ? 'fake-real-proof-policy.json' : null,
     blockers: Array.isArray(input.blockers) ? input.blockers : []
   }
   await writeJsonAtomic(path.join(root, 'agent-trust-report.json'), report)
@@ -123,6 +135,8 @@ function renderAgentTrustReportMarkdown(report: any) {
     `- runtime_truth_optional: ${(report.runtime_truth_groups?.Optional || []).join(', ') || 'None'}`,
     `- runtime_truth_proven: ${(report.runtime_truth_groups?.Proven || []).join(', ') || 'None'}`,
     `- runtime_truth_blocked: ${(report.runtime_truth_groups?.Blocked || []).join(', ') || 'None'}`,
+    `- runtime_truth_matrix: ${report.runtime_truth_matrix || 'not_run'}`,
+    ...Object.entries(report.proof_level_by_subsystem || {}).sort(([a], [b]) => a.localeCompare(b)).map(([name, level]) => `- proof_level.${name}: ${level}`),
     `- generation_count: ${orchestration.generation_count ?? 'unknown'}`,
     `- no_overlap_ok: ${orchestration.no_overlap_ok === true}`,
     `- ledger_hash_chain_ok: ${orchestration.ledger_hash_chain_ok === true}`,

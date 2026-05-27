@@ -13,6 +13,13 @@ export interface FakeRealProofPolicyReport {
   fake_claims: string[]
   real_claims: string[]
   integration_optional: string[]
+  subsystems: Record<string, {
+    proof_level: ProofLevel
+    evidence_artifacts: string[]
+    blockers: string[]
+    next_action: string
+    required_mode: boolean
+  }>
   subsystem_levels: Record<string, ProofLevel>
   blockers: string[]
 }
@@ -31,6 +38,22 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     || process.env.SKS_AGENT_DYNAMIC_BACKFILL_FIXTURE === '1'
   const realCodexRequired = input.require_real_dynamic_agents === true || process.env.SKS_REQUIRE_REAL_DYNAMIC_AGENTS === '1'
   const realTmuxRequired = input.require_real_tmux === true || process.env.SKS_REQUIRE_REAL_TMUX === '1'
+  const routeBlackboxKind = String(input.route_blackbox_kind || '')
+  const sourceIntelligenceOk = input.source_intelligence?.ok === true
+    || input.source_intelligence_generation_refs_ok === true
+    || input.task_graph_source_refs_ok === true
+  const goalModeOk = input.goal_mode?.ok === true
+    || input.goal_mode_generation_refs_ok === true
+    || input.task_graph_goal_refs_ok === true
+  const dynamicSchedulerOk = input.scheduler_state === 'agent-scheduler-state.json'
+    || input.scheduler?.pending_queue_drained === true
+    || input.pending_queue_drained === true
+  const warpMadRequired = input.require_warp_mad_lanes === true || process.env.SKS_REQUIRE_WARP_MAD_LANES === '1'
+  const warpMadProof = input.warp_mad_lanes || input.mad_sks_tmux_lane_ui || null
+  const warpMadLevel: ProofLevel = warpMadProof?.ok === true ? 'proven'
+    : warpMadRequired ? 'real_required_missing'
+    : warpMadProof ? 'blocked'
+    : 'integration_optional'
   const cleanupLevel: ProofLevel = input.cleanup_proof?.ok === true || input.real_truth_summary?.cleanup_executor_status === 'passed' ? 'proven'
     : input.cleanup_proof || input.real_truth_summary?.cleanup_executor_status === 'blocked' ? 'blocked'
     : 'integration_optional'
@@ -38,7 +61,7 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
   const workGraphLevel: ProofLevel = graphScore >= 0.7 ? 'proven' : graphScore >= 0.35 ? 'partial' : 'blocked'
   const fakeClaims = [
     ...(backend === 'fake' ? ['fake_backend_evidence'] : []),
-    ...(String(input.route_blackbox_kind || '').includes('fixture') ? ['fixture_route_blackbox'] : [])
+    ...(routeBlackboxKind.includes('fixture') || routeBlackboxKind.includes('mock') ? ['fixture_route_blackbox'] : [])
   ]
   const realClaims = [
     ...(physicalTmux ? ['physical_tmux_pane_evidence'] : []),
@@ -54,6 +77,7 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     ...(realCodex && (!outputSchema || !outputLast) && realUnavailable !== true && realCodexRequired ? ['real_codex_missing_output_schema_or_last_message'] : []),
     ...(realCodexRequired && realUnavailable ? ['real_dynamic_agents_required_missing'] : []),
     ...(realTmuxRequired && backend === 'tmux' && !physicalTmux ? ['real_tmux_required_missing'] : []),
+    ...(warpMadRequired && warpMadLevel !== 'proven' ? ['warp_mad_lanes_required_missing'] : []),
     ...(input.real_route_command_used === false ? ['route_standin_cannot_satisfy_real_route'] : [])
   ]
   const proofLevel: ProofLevel = blockers.some((row) => row.includes('required_missing')) ? 'real_required_missing'
@@ -63,13 +87,21 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     : integrationOptional.length ? 'integration_optional'
     : fakeClaims.length ? 'fixture_only'
     : 'fixture_only'
-  const subsystemLevels: Record<string, ProofLevel> = {
-    backend: backend === 'fake' ? 'fixture_only' : proofLevel,
-    tmux_physical: physicalTmux ? 'proven' : backend === 'tmux' && realTmuxRequired ? 'real_required_missing' : backend === 'tmux' ? 'integration_optional' : 'fixture_only',
-    codex_dynamic: fixtureInstrumented && realCodex ? 'fixture_instrumented_real' : realCodex && outputSchema && outputLast ? 'proven' : realCodexRequired ? 'real_required_missing' : realUnavailable ? 'integration_optional' : 'fixture_only',
-    cleanup: cleanupLevel,
-    work_graph: workGraphLevel
+  const subsystems: FakeRealProofPolicyReport['subsystems'] = {
+    agent_backend: row(backend === 'fake' ? 'fixture_only' : proofLevel, ['agent-proof-evidence.json'], backend === 'fake' ? 'fixture backend cannot satisfy real runtime proof' : 'backend proof recorded', false, backend === 'fake' ? ['fake_backend_evidence'] : []),
+    tmux_physical: row(physicalTmux ? 'proven' : backend === 'tmux' && realTmuxRequired ? 'real_required_missing' : backend === 'tmux' ? 'integration_optional' : 'fixture_only', ['agent-tmux-physical-proof.json'], physicalTmux ? 'tmux list/capture/reconcile proof present' : realTmuxRequired ? 'run with real tmux physical evidence' : 'run SKS_TEST_REAL_TMUX=1 for live proof', realTmuxRequired, backend === 'tmux' && realTmuxRequired && !physicalTmux ? ['real_tmux_required_missing'] : []),
+    codex_dynamic: row(fixtureInstrumented && realCodex ? 'fixture_instrumented_real' : realCodex && outputSchema && outputLast ? 'proven' : realCodexRequired ? 'real_required_missing' : realUnavailable ? 'integration_optional' : 'fixture_only', ['agent-real-codex-dynamic-smoke.json'], realCodex && outputSchema && outputLast ? 'Codex dynamic smoke has schema/result evidence' : realCodexRequired ? 'run real Codex dynamic smoke with output schema/result proof' : 'run SKS_TEST_REAL_DYNAMIC_AGENTS=1 for live proof', realCodexRequired, realCodexRequired && (!outputSchema || !outputLast || realUnavailable) ? ['real_dynamic_agents_required_missing'] : []),
+    cleanup: row(cleanupLevel, ['agent-cleanup-proof.json'], cleanupLevel === 'proven' ? 'cleanup after-state verified' : 'run agent cleanup executor v2', false, cleanupLevel === 'blocked' ? ['cleanup_proof_blocked'] : []),
+    intelligent_work_graph: row(workGraphLevel, ['agent-intelligent-work-graph-v2.json', 'agent-symbol-ownership-map.json'], workGraphLevel === 'proven' ? 'AST work graph quality sufficient' : workGraphLevel === 'partial' ? 'raise AST coverage or ownership confidence' : 'build AST-aware work graph evidence', false, workGraphLevel === 'blocked' ? ['work_graph_quality_too_low'] : []),
+    source_intelligence: row(sourceIntelligenceOk ? 'proven' : 'integration_optional', ['source-intelligence-evidence.json'], sourceIntelligenceOk ? 'source intelligence refs are present' : 'hydrate source intelligence evidence before risky claims', false, []),
+    goal_mode: row(goalModeOk ? 'proven' : 'integration_optional', ['goal-mode-applied.json'], goalModeOk ? 'Goal mode refs are present' : 'record official goal mode evidence', false, []),
+    route_blackbox: row(routeBlackboxKind.includes('fixture') || routeBlackboxKind.includes('mock') ? 'fixture_only' : input.real_route_command_used === false ? 'blocked' : 'proven', ['agent-proof-evidence.json'], input.real_route_command_used === false ? 'use actual route command, not a stand-in' : 'route command truth recorded', false, input.real_route_command_used === false ? ['route_standin_cannot_satisfy_real_route'] : []),
+    dynamic_scheduler: row(dynamicSchedulerOk ? 'proven' : 'partial', ['agent-scheduler-state.json'], dynamicSchedulerOk ? 'scheduler drain/backfill proof present' : 'record scheduler drain and backfill proof', false, []),
+    warp_mad_lanes: row(warpMadLevel, ['mad-sks-tmux-lane-ui.json'], warpMadLevel === 'proven' ? 'Warp MAD lane UI proof present' : warpMadRequired ? 'open visible Warp tmux lane UI or record blocker' : 'run sks --mad in Warp/tmux for live lane proof', warpMadRequired, warpMadLevel === 'blocked' || warpMadLevel === 'real_required_missing' ? ['warp_mad_lane_ui_missing'] : [])
   }
+  const subsystemLevels: Record<string, ProofLevel> = Object.fromEntries(Object.entries(subsystems).map(([key, value]) => [key, value.proof_level]))
+  subsystemLevels.backend = subsystemLevels.agent_backend || proofLevel
+  subsystemLevels.work_graph = subsystemLevels.intelligent_work_graph || workGraphLevel
   return {
     schema: FAKE_REAL_PROOF_POLICY_SCHEMA,
     generated_at: nowIso(),
@@ -78,8 +110,25 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     fake_claims: fakeClaims,
     real_claims: realClaims,
     integration_optional: integrationOptional,
+    subsystems,
     subsystem_levels: subsystemLevels,
     blockers
+  }
+}
+
+function row(
+  proofLevel: ProofLevel,
+  evidenceArtifacts: string[],
+  nextAction: string,
+  requiredMode: boolean,
+  blockers: string[]
+) {
+  return {
+    proof_level: proofLevel,
+    evidence_artifacts: evidenceArtifacts,
+    blockers,
+    next_action: nextAction,
+    required_mode: requiredMode
   }
 }
 

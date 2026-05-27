@@ -17,6 +17,9 @@ test('fake-real proof policy v2 separates fixture-instrumented real and required
     require_real_dynamic_agents: true
   });
   assert.equal(fixtureReal.proof_level, 'fixture_instrumented_real');
+  assert.equal(fixtureReal.subsystem_levels.codex_dynamic, 'fixture_instrumented_real');
+  assert.equal(fixtureReal.subsystems.warp_mad_lanes.proof_level, 'integration_optional');
   assert.equal(requiredMissing.proof_level, 'real_required_missing');
+  assert.equal(requiredMissing.subsystem_levels.codex_dynamic, 'real_required_missing');
   assert.equal(requiredMissing.ok, false);
 });

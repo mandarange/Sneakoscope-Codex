@@ -15,6 +15,8 @@ export interface AgentCleanupExecutorOptions {
   dryRun?: boolean
   drain?: boolean
   staleMs?: number
+  graceMs?: number
+  killEscalation?: boolean
 }
 
 type CleanupActionKind = 'terminate_process' | 'close_tmux_pane' | 'remove_temp_dir' | 'remove_lock' | 'skip_active_session' | 'skip_foreign_namespace' | 'archive_transcript_keep'
@@ -60,7 +62,8 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
   const staleMs = opts.staleMs ?? 30 * 60 * 1000
   const projectHash = String(namespace?.root_hash || '')
   const actions: CleanupAction[] = []
-  const graceMs = Number(process.env.SKS_CLEANUP_GRACE_MS || 750)
+  const graceMs = opts.graceMs ?? Number(process.env.SKS_CLEANUP_GRACE_MS || 750)
+  const killEscalation = opts.killEscalation !== false && process.env.SKS_CLEANUP_KILL_ESCALATION !== '0'
   const processReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-process-report.json')
   for (const file of processReports) {
     const report = await readJson<any>(file, null)
@@ -81,7 +84,8 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
       pid,
       reason: terminal ? 'terminal_session_process_alive' : 'stale_session_process',
       apply,
-      graceMs
+      graceMs,
+      killEscalation
     }))
   }
   const tmuxReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-tmux-report.json')
@@ -90,7 +94,11 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
     const paneId = String(report?.pane_id || '')
     const sessionId = String(report?.session_id || '')
     if (!validTmuxPaneId(paneId)) continue
-    if (activeSessionIds.has(sessionId)) {
+    if (!processReportInNamespace(report, projectHash)) {
+      actions.push({ kind: 'skip_foreign_namespace', target: paneId, status: 'skipped', reason: 'tmux_pane_outside_project_namespace' })
+      continue
+    }
+    if (activeSessionIds.has(sessionId) && opts.drain !== true) {
       actions.push({ kind: 'skip_active_session', target: sessionId || paneId, status: 'skipped', reason: 'tmux_session_active' })
       continue
     }
@@ -99,11 +107,12 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
       target: paneId,
       reason: 'stale_tmux_pane',
       apply,
+      before: async () => ({ listed: await tmuxPaneListed(paneId), pane_id: paneId }),
+      after: async () => ({ listed: await tmuxPaneListed(paneId), pane_id: paneId }),
       run: async () => {
         const { runProcess } = await import('../fsx.js')
         await runProcess('tmux', ['kill-pane', '-t', paneId], { timeoutMs: 3000, maxOutputBytes: 4096 })
-        const listed = await runProcess('tmux', ['list-panes', '-a', '-F', '#{pane_id}'], { timeoutMs: 3000, maxOutputBytes: 4096 })
-        if (listed.stdout.split(/\r?\n/).includes(paneId)) throw new Error('tmux_pane_still_listed_after_kill')
+        if (await tmuxPaneListed(paneId)) throw new Error('tmux_pane_still_listed_after_kill')
       }
     }))
   }
@@ -118,7 +127,12 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
       target: dir,
       reason: 'orphan_temp_dir',
       apply,
-      run: async () => fsp.rm(dir, { recursive: true, force: true })
+      before: async () => ({ exists: await exists(dir) }),
+      after: async () => ({ exists: await exists(dir) }),
+      run: async () => {
+        await fsp.rm(dir, { recursive: true, force: true })
+        if (await exists(dir)) throw new Error('temp_dir_still_exists_after_remove')
+      }
     }))
   }
   for (const lock of await staleLockFiles(String(namespace?.lock_dir || ''), projectHash, now, staleMs)) {
@@ -127,7 +141,12 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
       target: lock,
       reason: 'stale_lock_file',
       apply,
-      run: async () => fsp.rm(lock, { force: true })
+      before: async () => ({ exists: await exists(lock) }),
+      after: async () => ({ exists: await exists(lock) }),
+      run: async () => {
+        await fsp.rm(lock, { force: true })
+        if (await exists(lock)) throw new Error('lock_file_still_exists_after_remove')
+      }
     }))
   }
   for (const transcript of await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-terminal-session.json')) {
@@ -188,12 +207,19 @@ function buildCleanupProof(input: {
     stale_processes_found: byKind('terminate_process').map((row) => row.target),
     stale_processes_killed: byKind('terminate_process', 'applied').map((row) => row.target),
     process_trees: byKind('terminate_process').map((row) => ({ target: row.target, tree: row.process_tree || [] })),
+    process_tree_count: byKind('terminate_process').filter((row) => (row.process_tree || []).length > 0).length,
     sigterm_planned: input.actions.filter((row) => row.status === 'planned' && row.signal_sequence?.includes('SIGTERM')).map((row) => row.target),
     sigterm_sent: input.actions.filter((row) => row.status === 'applied' && row.signal_sequence?.includes('SIGTERM')).map((row) => row.target),
     sigkill_escalations: input.actions.filter((row) => row.escalated_to_sigkill === true).map((row) => row.target),
     process_exit_verified: input.actions.filter((row) => row.kind === 'terminate_process' && row.verified_exited === true).map((row) => row.target),
+    sigterm_count: input.actions.filter((row) => row.signal_sequence?.includes('SIGTERM')).length,
+    sigkill_count: input.actions.filter((row) => row.signal_sequence?.includes('SIGKILL')).length,
+    verified_exited_count: input.actions.filter((row) => row.kind === 'terminate_process' && row.verified_exited === true).length,
+    failed_to_kill_count: input.actions.filter((row) => row.kind === 'terminate_process' && row.status === 'failed').length,
     stale_tmux_panes_found: byKind('close_tmux_pane').map((row) => row.target),
     stale_tmux_panes_closed: byKind('close_tmux_pane', 'applied').map((row) => row.target),
+    tmux_panes_verified_closed: byKind('close_tmux_pane', 'applied').filter((row) => row.after?.listed === false).map((row) => row.target),
+    tmux_close_failures: byKind('close_tmux_pane', 'failed').map((row) => row.target),
     orphan_temp_dirs_found: byKind('remove_temp_dir').map((row) => row.target),
     orphan_temp_dirs_removed: byKind('remove_temp_dir', 'applied').map((row) => row.target),
     stale_locks_found: byKind('remove_lock').map((row) => row.target),
@@ -209,7 +235,7 @@ function buildCleanupProof(input: {
   }
 }
 
-async function terminateProcessTreeAction(input: { pid: number; reason: string; apply: boolean; graceMs: number }): Promise<CleanupAction> {
+async function terminateProcessTreeAction(input: { pid: number; reason: string; apply: boolean; graceMs: number; killEscalation: boolean }): Promise<CleanupAction> {
   const processTree = await readProcessTree(input.pid)
   const targets = processTree.length ? processTree.map((row) => row.pid) : [input.pid]
   if (!input.apply) {
@@ -221,7 +247,7 @@ async function terminateProcessTreeAction(input: { pid: number; reason: string; 
       process_tree: processTree,
       before: { alive: targets.filter(processIsAlive) },
       after: { alive: targets.filter(processIsAlive) },
-      signal_sequence: ['SIGTERM', 'SIGKILL_IF_STILL_ALIVE'],
+      signal_sequence: input.killEscalation ? ['SIGTERM', 'SIGKILL_IF_STILL_ALIVE'] : ['SIGTERM'],
       grace_ms: input.graceMs,
       verified_exited: false,
       escalated_to_sigkill: false
@@ -234,7 +260,7 @@ async function terminateProcessTreeAction(input: { pid: number; reason: string; 
     await waitForProcessesExited(targets, input.graceMs)
     let alive = targets.filter(processIsAlive)
     let escalated = false
-    if (alive.length) {
+    if (alive.length && input.killEscalation) {
       for (const pid of [...alive].reverse()) safeKill(pid, 'SIGKILL')
       signalSequence.push('SIGKILL')
       escalated = true
@@ -273,13 +299,16 @@ async function terminateProcessTreeAction(input: { pid: number; reason: string; 
   }
 }
 
-async function applyAction(input: { kind: CleanupActionKind; target: string; reason: string; apply: boolean; run: () => Promise<void> | void }): Promise<CleanupAction> {
-  if (!input.apply) return { kind: input.kind, target: input.target, status: 'planned', reason: input.reason }
+async function applyAction(input: { kind: CleanupActionKind; target: string; reason: string; apply: boolean; before?: () => Promise<Record<string, unknown>>; after?: () => Promise<Record<string, unknown>>; run: () => Promise<void> | void }): Promise<CleanupAction> {
+  const before = input.before ? await input.before().catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) })) : undefined
+  if (!input.apply) return { kind: input.kind, target: input.target, status: 'planned', reason: input.reason, ...(before ? { before, after: before } : {}) }
   try {
     await input.run()
-    return { kind: input.kind, target: input.target, status: 'applied', reason: input.reason }
+    const after = input.after ? await input.after().catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) })) : undefined
+    return { kind: input.kind, target: input.target, status: 'applied', reason: input.reason, ...(before ? { before } : {}), ...(after ? { after } : {}) }
   } catch (err: unknown) {
-    return { kind: input.kind, target: input.target, status: 'failed', reason: input.reason, error: err instanceof Error ? err.message : String(err) }
+    const after = input.after ? await input.after().catch((afterErr: unknown) => ({ error: afterErr instanceof Error ? afterErr.message : String(afterErr) })) : undefined
+    return { kind: input.kind, target: input.target, status: 'failed', reason: input.reason, error: err instanceof Error ? err.message : String(err), ...(before ? { before } : {}), ...(after ? { after } : {}) }
   }
 }
 
@@ -375,4 +404,14 @@ async function waitForProcessesExited(pids: number[], timeoutMs: number) {
 
 function validTmuxPaneId(value: string) {
   return /^%\d+$/.test(value)
+}
+
+async function tmuxPaneListed(paneId: string) {
+  try {
+    const { runProcess } = await import('../fsx.js')
+    const listed = await runProcess('tmux', ['list-panes', '-a', '-F', '#{pane_id}'], { timeoutMs: 3000, maxOutputBytes: 4096 })
+    return listed.stdout.split(/\r?\n/).includes(paneId)
+  } catch {
+    return false
+  }
 }
