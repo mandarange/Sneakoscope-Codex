@@ -238,7 +238,7 @@ function assertRouteNativeBlackbox(routeName) {
     assertGate(!JSON.stringify(result).includes('scout-ledger'), 'Research runtime artifact leaked scout-ledger as SSOT');
   }
   if (routeName === 'qa') {
-    const prepared = runSksJson(['qa-loop', 'prepare', 'native backend fixture', '--json']);
+    const prepared = runSksJson(['qa-loop', 'prepare', 'native backend API fixture', '--json']);
     const result = runSksJson(['qa-loop', 'run', prepared.mission_id, '--mock', '--json']);
     assertGate(result.ok === true, 'QA mock blackbox did not pass', result);
     assertGate(result.gate?.gate?.native_agent_proof === true || result.gate?.native_agent_proof === true || result.proof?.ok === true, 'QA proof missing native agent evidence artifact', result);

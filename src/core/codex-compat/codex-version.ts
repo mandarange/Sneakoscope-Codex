@@ -28,7 +28,10 @@ export async function detectCodexVersion(opts: any = {}): Promise<CodexDetectedV
 
 export async function codexVersionReport(opts: any = {}) {
   const detected = await detectCodexVersion(opts);
-  const policy = codexVersionPolicy(detected);
+  const policy = codexVersionPolicy(detected, {
+    requiredBaseline: opts.requiredBaseline || opts.require || null,
+    explicitRequire: Boolean(opts.requiredBaseline || opts.require)
+  });
   return {
     detected,
     policy

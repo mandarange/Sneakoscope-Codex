@@ -3,11 +3,12 @@ import os from 'node:os';
 import fsp from 'node:fs/promises';
 import { exists, runProcess } from './fsx.js';
 import { EMPTY_CODEX_INFO, getCodexInfo } from './codex-adapter.js';
-import { DEFAULT_CODEX_APP_PLUGINS as DEFAULT_CODEX_APP_PLUGIN_TUPLES, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes.js';
+import { CODEX_CHROME_EXTENSION_DOC_URL, DEFAULT_CODEX_APP_PLUGINS as DEFAULT_CODEX_APP_PLUGIN_TUPLES, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes.js';
 
 export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/features';
 export const CODEX_CHANGELOG_URL = 'https://developers.openai.com/codex/changelog';
 export const CODEX_ACCESS_TOKENS_DOCS_URL = 'https://developers.openai.com/codex/enterprise/access-tokens';
+export const CODEX_CHROME_EXTENSION_SETUP_DOCS_URL = CODEX_CHROME_EXTENSION_DOC_URL;
 export const CODEX_REMOTE_CONTROL_MIN_VERSION = '0.130.0';
 const REQUIRED_CODEX_APP_FEATURE_FLAGS = [
   'codex_git_commit',
@@ -120,6 +121,7 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
   const mcpText = `${mcpList.stdout}\n${mcpList.stderr}`;
   const featureText = `${featureList.stdout}\n${featureList.stderr}`;
   const browserUsePath = await findPluginCache('browser-use', opts);
+  const chromePath = await findPluginCache('chrome', opts);
   const computerUsePath = await findPluginCache('computer-use', opts);
   const defaultPlugins = await codexDefaultPluginStatus(opts);
   const pluginSkillShadows = await codexPluginSkillShadowStatus(opts);
@@ -135,9 +137,18 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
   const browserUseReady = browserUseMcpListed || Boolean(browserUsePath);
   const browserToolReady = inAppBrowserReady || browserUseFeatureReady || browserUseReady;
   const appInstalled = Boolean(appPath);
+  const chromeExtension = codexChromeExtensionStatusFromApp({
+    appInstalled,
+    codex,
+    featureList,
+    requiredFeatureFlags,
+    defaultPlugins,
+    pluginSkillShadows,
+    chromePath
+  });
   const pluginPickerReady = requiredFeatureFlags.tool_suggest && requiredFeatureFlags.plugins && requiredFeatureFlags.apps && defaultPlugins.ok && pluginSkillShadows.ok && fastModeConfig.ok;
   const gitActions = codexGitActionReadiness({ requiredFeatureFlags, remoteControl });
-  const ready = appInstalled && Boolean(codex.bin) && mcpList.ok && featureList.ok && requiredFeatureFlagsOk && pluginPickerReady && fastModeConfig.ok && imageGenerationReady && gitActions.ok && computerUseReady && browserToolReady;
+  const ready = appInstalled && Boolean(codex.bin) && mcpList.ok && featureList.ok && requiredFeatureFlagsOk && pluginPickerReady && fastModeConfig.ok && imageGenerationReady && gitActions.ok && computerUseReady && browserToolReady && chromeExtension.ok;
   return {
     ok: ready,
     app: {
@@ -174,6 +185,9 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
       in_app_browser: inAppBrowserReady,
       browser_use: browserUseFeatureReady,
       browser_tool_ready: browserToolReady,
+      chrome_extension: chromeExtension.ok,
+      chrome_extension_source: chromeExtension.source,
+      chrome_extension_docs_url: CODEX_CHROME_EXTENSION_SETUP_DOCS_URL,
       browser_tool_source: inAppBrowserReady
         ? 'codex_features_list:in_app_browser'
         : browserUseFeatureReady
@@ -189,6 +203,7 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
     plugins: {
       computer_use_cache: computerUsePath,
       browser_use_cache: browserUsePath,
+      chrome_cache: chromePath,
       default_plugins: defaultPlugins,
       skill_shadows: pluginSkillShadows,
       picker: {
@@ -199,7 +214,77 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
         fast_mode_config_ok: fastModeConfig.ok
       }
     },
-    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags, requiredFeatureFlagsOk, defaultPlugins, pluginSkillShadows, fastModeConfig, gitActions, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, remoteControl })
+    chrome_extension: chromeExtension,
+    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags, requiredFeatureFlagsOk, defaultPlugins, pluginSkillShadows, fastModeConfig, gitActions, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl })
+  };
+}
+
+export async function codexChromeExtensionStatus(opts: any = {}) {
+  if (opts.forceMissing === true || process.env.SKS_TEST_FORCE_CHROME_EXTENSION_MISSING === '1') {
+    return codexChromeExtensionStatusFromApp({
+      app: { installed: true },
+      codex_cli: { ok: true },
+      features: { ok: true, required_flags: { browser_use_external: true, plugins: true, apps: true } },
+      plugins: { default_plugins: { entries: [] }, skill_shadows: { blocking: [] } }
+    });
+  }
+  const status = opts.status || await codexAppIntegrationStatus(opts);
+  return codexChromeExtensionStatusFromApp(status);
+}
+
+export function codexChromeExtensionStatusFromApp(input: any = {}) {
+  const status = input.chrome_extension ? input : null;
+  if (status?.chrome_extension?.schema === 'sks.codex-chrome-extension-status.v1') return status.chrome_extension;
+  const appInstalled = Boolean(input.appInstalled ?? input.app?.installed);
+  const codexOk = Boolean(input.codex?.bin ?? input.codex_cli?.ok);
+  const featureListOk = input.featureList?.ok ?? input.features?.ok ?? false;
+  const flags = input.requiredFeatureFlags || input.features?.required_flags || {};
+  const defaultPlugins = input.defaultPlugins || input.plugins?.default_plugins || {};
+  const pluginSkillShadows = input.pluginSkillShadows || input.plugins?.skill_shadows || {};
+  const chromeEntry = Array.isArray(defaultPlugins.entries)
+    ? defaultPlugins.entries.find((entry: any) => entry?.name === 'chrome' || entry?.id === 'chrome@openai-bundled')
+    : null;
+  const chromePath = input.chromePath || input.plugins?.chrome_cache || chromeEntry?.source || null;
+  const blockers: string[] = [];
+  if (!appInstalled) blockers.push('codex_app_missing');
+  if (!codexOk) blockers.push('codex_cli_missing');
+  if (!featureListOk) blockers.push('codex_feature_list_unverified');
+  if (featureListOk && flags.browser_use_external !== true) blockers.push('browser_use_external_feature_missing');
+  if (featureListOk && flags.plugins !== true) blockers.push('plugins_feature_missing');
+  if (featureListOk && flags.apps !== true) blockers.push('apps_feature_missing');
+  if (!chromeEntry && chromePath) blockers.push('chrome_extension_plugin_cache_only_unverified');
+  if (!chromeEntry && !chromePath) blockers.push('chrome_extension_plugin_missing');
+  if (chromeEntry && chromeEntry.installed !== true) blockers.push('chrome_extension_plugin_not_installed');
+  if (chromeEntry && chromeEntry.enabled !== true) blockers.push('chrome_extension_plugin_not_enabled');
+  const chromeShadow = Array.isArray(pluginSkillShadows.blocking)
+    ? pluginSkillShadows.blocking.find((entry: any) => entry?.name === 'chrome')
+    : null;
+  if (chromeShadow) blockers.push(`chrome_plugin_shadow:${chromeShadow.scope || 'unknown'}`);
+  const ok = blockers.length === 0;
+  return {
+    schema: 'sks.codex-chrome-extension-status.v1',
+    ok,
+    status: ok ? 'available' : 'setup_required',
+    evidence_source: 'codex_chrome_extension',
+    docs_url: CODEX_CHROME_EXTENSION_SETUP_DOCS_URL,
+    source: chromeEntry?.source ? 'default_plugin' : chromePath ? 'plugin_cache_unverified' : 'missing',
+    plugin: {
+      installed: Boolean(chromeEntry?.installed),
+      enabled: chromeEntry ? chromeEntry.enabled === true : false,
+      id: chromeEntry?.id || 'chrome@openai-bundled',
+      source: chromeEntry?.source || null,
+      cache_detected: Boolean(chromePath),
+      cache_source: chromePath || null
+    },
+    required_flags: ['browser_use_external', 'plugins', 'apps'],
+    blockers,
+    guidance: ok
+      ? ['Codex Chrome Extension path is ready for web/browser/webapp verification.']
+      : [
+        `Install and enable the Codex Chrome Extension first: ${CODEX_CHROME_EXTENSION_SETUP_DOCS_URL}`,
+        'After installation is complete, tell SKS that the extension is installed; only then resume web QA/UX/browser verification.',
+        'Do not use Codex Computer Use to bypass this web verification gate.'
+      ]
   };
 }
 
@@ -344,7 +429,7 @@ export function codexAccessTokenStatus(env: any = process.env) {
   };
 }
 
-export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, pluginSkillShadows = { ok: true, blocking: [] }, fastModeConfig = { ok: true, blockers: [] }, gitActions = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, remoteControl }: any) {
+export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, pluginSkillShadows = { ok: true, blocking: [] }, fastModeConfig = { ok: true, blockers: [] }, gitActions = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl }: any) {
   const lines: any[] = [];
   if (!appInstalled) {
     lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS tmux launch can still run with Codex CLI alone, but Codex Computer Use and imagegen/gpt-image-2 evidence will be unavailable until Codex App is ready.');
@@ -399,8 +484,14 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
   }
   if (appInstalled && (!computerUseReady || !browserToolReady)) {
     lines.push('Open Codex App settings and enable recommended MCP/plugin tools. Codex CLI 0.130.0+ remote-control/app-server sessions can pick up config changes live; restart older CLI/TUI sessions.');
-    lines.push('Required for SKS QA-LOOP UI/browser evidence: Codex Computer Use only. Browser tools can support browsing context, but they do not satisfy UI-level E2E verification.');
+    lines.push(`Required for SKS web QA/UX/browser evidence: Codex Chrome Extension first (${CODEX_CHROME_EXTENSION_SETUP_DOCS_URL}). Computer Use is reserved for native Mac/non-web surfaces.`);
     lines.push('Verify with: codex features list; codex mcp list');
+  }
+  if (chromeExtension && !chromeExtension.ok) {
+    lines.push(`Codex Chrome Extension is not ready for web/browser/webapp verification: ${chromeExtension.blockers?.join(', ') || 'setup_required'}.`);
+    lines.push(`Set it up first: ${CODEX_CHROME_EXTENSION_SETUP_DOCS_URL}`);
+  } else if (chromeExtension?.ok) {
+    lines.push('Codex Chrome Extension is ready; SKS web/browser/webapp QA and UX review should use it before any other web surface.');
   }
   if (imageGenerationReady) {
     lines.push('Image generation is enabled; required raster assets and generated image-review evidence must invoke $imagegen/gpt-image-2 and record real output.');
@@ -408,16 +499,16 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
     lines.push('Codex image_generation was not visible from `codex features list`. Required imagegen/gpt-image-2 evidence must stay blocked or unverified until $imagegen is available in Codex App.');
   }
   if (computerUseReady && !computerUseMcpListed) {
-    lines.push('Computer Use plugin files are installed, but this check cannot prove the current thread exposes the live Computer Use tools. Start a new Codex App thread and invoke @Computer or @AppName for the actual target app or screen; Codex App readiness itself should stay on `codex features list`, `codex mcp list`, and `sks codex-app check`.');
+    lines.push('Computer Use plugin files are installed, but this check cannot prove the current thread exposes the live Computer Use tools. Start a new Codex App thread and invoke @Computer or @AppName only for native Mac/non-web target apps or screens; web/browser/webapp verification must use the Chrome Extension gate.');
   }
   if (browserToolReady) {
     const source = inAppBrowserReady ? 'in-app browser feature' : browserUseFeatureReady ? 'browser_use feature' : 'Browser Use plugin';
-    lines.push(`Browser tooling is visible via ${source}; prefer the first-party in-app browser for local web apps, and keep Codex Computer Use as the only accepted UI verification evidence source.`);
+    lines.push(`Browser tooling is visible via ${source}; SKS web verification still gates on the Codex Chrome Extension before proceeding.`);
   }
   if (browserUseReady && !browserUseMcpListed) {
     lines.push('Browser Use plugin files are installed, but `codex mcp list` does not list a browser-use MCP server. Treat Browser Use as plugin-scoped, not as SKS UI verification evidence.');
   }
-  if (!lines.length) lines.push('Codex App, Codex CLI, Computer Use, Browser Use, and image generation checks look ready. UI-level E2E still requires Codex Computer Use evidence; generated image evidence still requires $imagegen/gpt-image-2 output.');
+  if (!lines.length) lines.push('Codex App, Codex CLI, Chrome Extension, native Computer Use, Browser tooling, and image generation checks look ready. Web UI E2E uses the Chrome Extension path; native non-web visual evidence uses Computer Use; generated image evidence still requires $imagegen/gpt-image-2 output.');
   return lines;
 }
 
@@ -433,6 +524,7 @@ export function formatCodexAppStatus(status: any, { includeRaw = false }: any = 
     `Default Plugins:${status.plugins?.default_plugins?.ok ? ' ok' : ` missing ${defaultPluginMissingSummary(status.plugins?.default_plugins) || 'plugin install/config'}`}`,
     `Plugin Picker:${status.plugins?.picker?.ok ? ' ok' : ` blocked ${pluginPickerBlockers(status).join(', ') || 'config'}`}`,
     `Git Actions:${status.features?.git_actions?.ok ? ' ok' : ` blocked ${(status.features?.git_actions?.blockers || []).join(', ') || 'config'}`}`,
+    `Chrome Ext: ${status.chrome_extension?.ok ? 'ok' : `setup ${(status.chrome_extension?.blockers || []).join(', ') || 'required'}`}`,
     `Computer Use:${status.mcp.has_computer_use ? status.mcp.computer_use_source === 'plugin_cache' ? ' installed (verify @Computer in thread)' : ' ok' : ' missing'}`,
     `Browser:     ${status.features?.browser_tool_ready ? `ok (${status.features.browser_tool_source})` : status.mcp.has_browser_use ? status.mcp.browser_use_source === 'plugin_cache' ? 'installed (plugin scoped)' : 'ok' : 'missing'}`,
     `Image Gen:   ${status.features?.image_generation ? 'ok ($imagegen/gpt-image-2)' : status.features?.checked ? 'missing' : 'not checked'}`,

@@ -113,6 +113,21 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     rate_limit_delay_ms: backend === 'codex-exec' ? 250 : 0,
     resource_pressure_warnings: roster.agent_count > roster.concurrency ? ['agents_exceed_concurrency_batches'] : []
   })
+  const parallelWritePolicy = {
+    schema: 'sks.agent-parallel-write-policy.v1',
+    generated_at: nowIso(),
+    route,
+    route_command: routeCommand,
+    write_mode: opts.writeMode || 'off',
+    apply_patches: opts.applyPatches === true,
+    dry_run_patches: opts.dryRunPatches === true,
+    max_write_agents: Number(opts.maxWriteAgents || 0),
+    readonly: opts.readonly === true,
+    patch_queue_required: opts.applyPatches === true || opts.dryRunPatches === true,
+    patch_apply_mode: opts.applyPatches === true ? opts.dryRunPatches === true ? 'dry_run' : 'apply' : 'not_requested',
+    route_level_flags_wired: true
+  }
+  await writeJsonAtomic(path.join(ledgerRoot, 'agent-parallel-write-policy.json'), parallelWritePolicy)
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: routeCommand, native_agent_backend: backend })
   const scheduler = await runAgentScheduler({
     root: ledgerRoot,
@@ -135,6 +150,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
         agent_id: agent.id,
         agent_type: agent.role || agent.persona_id || 'agent',
         session_id: agent.session_id,
+        slot_id: agent.slot_id || null,
+        generation_index: agent.generation_index ?? null,
+        persona_id: agent.persona_id || null,
+        agent_transcript_path: agent.session_artifact_dir ? path.join(agent.session_artifact_dir, 'agent-transcript.jsonl') : null,
         cwd: root,
         permission_mode: agent.write_policy || 'read-only',
       })
@@ -173,6 +192,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
         agent_id: agent.id,
         agent_type: agent.role || agent.persona_id || 'agent',
         session_id: agent.session_id,
+        slot_id: agent.slot_id || null,
+        generation_index: agent.generation_index ?? null,
+        persona_id: agent.persona_id || null,
+        agent_transcript_path: agent.session_artifact_dir ? path.join(agent.session_artifact_dir, 'agent-transcript.jsonl') : null,
         cwd: root,
         permission_mode: agent.write_policy || 'read-only',
         last_assistant_message: result.summary || null,
@@ -245,7 +268,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     timeoutKill,
     trust,
     wrongness,
-    scheduler: scheduler.state
+    scheduler: scheduler.state,
+    parallelWritePolicy
   })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })
@@ -278,6 +302,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     cleanup,
     trust,
     wrongness,
+    parallel_write_policy: parallelWritePolicy,
     proof
   }
 }
@@ -356,7 +381,11 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
 
 async function runAgentByBackend(backend: string, agent: any, slice: any, opts: any) {
   if (backend === 'process') return runProcessAgent(agent, slice, opts)
-  if (backend === 'codex-exec') return runCodexExecAgent(agent, slice, { ...opts, dryRun: opts.real === true ? false : true })
+  if (backend === 'codex-exec') {
+    const writeLeaseRequested = Array.isArray(slice?.write_paths) && slice.write_paths.length > 0
+    const workspaceWrite = opts.workspaceWrite === true || (opts.readonly !== true && opts.writeMode && opts.writeMode !== 'off' && writeLeaseRequested)
+    return runCodexExecAgent(agent, slice, { ...opts, workspaceWrite, dryRun: opts.real === true ? false : true })
+  }
   if (backend === 'tmux') return runTmuxAgent(agent, slice, opts)
   return runFakeAgent(agent, slice, opts)
 }

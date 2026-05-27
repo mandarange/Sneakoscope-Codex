@@ -9,5 +9,5 @@ test('sks run --visual --execute blocks when real visual evidence is missing', a
   assert.equal(result.ok, false);
   assert.equal(result.route, '$Image-UX-Review');
   assert.equal(result.route_execution, 'blocked');
-  assert.ok(result.execution.blockers.includes('visual_source_or_codex_computer_use_evidence_missing'));
+  assert.ok(result.execution.blockers.includes('visual_source_or_official_capture_evidence_missing'));
 });

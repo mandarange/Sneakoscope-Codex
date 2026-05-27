@@ -1,8 +1,8 @@
 # Computer Use Evidence
 
-Computer Use evidence is real-dependency evidence when Codex Computer Use is available and mock evidence when loaded from fixtures. Mock evidence must stay labeled `mock`, `fixture`, or `verified_partial`.
+Computer Use evidence is real-dependency evidence when Codex Computer Use is available for a native macOS/non-web target and mock evidence when loaded from fixtures. Mock evidence must stay labeled `mock`, `fixture`, or `verified_partial`.
 
-In SKS 1.0.8, Computer Use is a macOS Codex App capability check with an optional live evidence surface. It is independent from MAD-SKS, DB safety, and generic SKS safety policy. SKS must not describe Computer Use as blocked by MAD-SKS or by an SKS safety policy. For UX-Review, Computer Use screenshots are one accepted source path into the gpt-image-2 generated callout loop, and original-resolution metadata must be preserved when available.
+Computer Use is a macOS Codex App capability check with an optional live evidence surface. It is independent from MAD-SKS, DB safety, and generic SKS safety policy. SKS must not describe Computer Use as blocked by MAD-SKS or by an SKS safety policy. Web, browser, localhost, website, webapp, and web-based app verification must use the official Codex Chrome Extension path first: https://developers.openai.com/codex/app/chrome-extension. If the extension is not installed/enabled, SKS must halt the web QA/UX pipeline and ask the user to set it up before resuming. Computer Use is only for native Mac, desktop-app, OS-settings, and non-web visual targets.
 
 Status commands:
 
@@ -10,6 +10,7 @@ Status commands:
 sks computer-use status --json
 sks computer-use doctor --json
 sks computer-use enable --macos --json
+sks codex-app chrome-extension --json
 sks computer-use require --route '$Image-UX-Review' --json
 sks computer-use smoke --json
 SKS_TEST_REAL_COMPUTER_USE=1 sks computer-use smoke --real --json
@@ -76,8 +77,8 @@ Expected ledgers:
 - `image-voxel-ledger.json`
 - `completion-proof.json`
 
-UI verification claims require Computer Use evidence. Browser automation evidence can support ordinary browser checks, but it is not accepted as a substitute for UI-level Computer Use verification.
+Native non-web visual verification claims require Computer Use evidence. Web UI/browser verification claims require Codex Chrome Extension readiness/evidence and must not be satisfied by Computer Use, Playwright, Selenium, Puppeteer, Browser Use, Chrome MCP, fabricated screenshots, or prose-only checks.
 
-Visual route fixtures call `sks computer-use require --route ... --json` for `$Image-UX-Review`, `$QA-LOOP`, `$PPT`, `$Computer-Use`, and `$From-Chat-IMG`. If Computer Use is unavailable, Completion Proof records the status and visual claims remain `verified_partial` or lower unless explicit screenshot/image evidence covers the claim. `external_capability_blocked` cannot support a high-confidence visual claim by itself.
+Visual route fixtures call `sks computer-use require --route ... --json` for legacy native checks; web-oriented routes now return a structured `web_verification_uses_chrome_extension` blocker from that command and must use `sks codex-app chrome-extension --json` instead. If Computer Use is unavailable for a native target, Completion Proof records the status and visual claims remain `verified_partial` or lower unless explicit screenshot/image evidence covers the claim. `external_capability_blocked` cannot support a high-confidence visual claim by itself.
 
-Generated gpt-image-2 callout images follow the same local-only default as Computer Use screenshots: SKS may publish metadata, hashes, dimensions, bbox anchors, and Image Voxel relations, but it does not automatically publish screen-content binaries into shared TriWiki.
+Generated gpt-image-2 callout images follow the same local-only default as Chrome Extension or native Computer Use screenshots: SKS may publish metadata, hashes, dimensions, bbox anchors, and Image Voxel relations, but it does not automatically publish screen-content binaries into shared TriWiki.

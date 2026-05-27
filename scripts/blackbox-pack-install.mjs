@@ -114,7 +114,7 @@ if (steps.at(-1)?.ok) run('npx_sks_run_execute_mock', npxBin, ['sks', 'run', 'bl
 if (steps.at(-1)?.ok) run('npx_sks_agent_mock', npxBin, ['sks', 'agent', 'run', 'blackbox native agent fixture', '--mock', '--json'], { cwd: consumer, timeout: 180_000 });
 let qaMissionId = null;
 if (steps.at(-1)?.ok) {
-  const qaPrepare = run('npx_sks_qa_loop_prepare', npxBin, ['sks', 'qa-loop', 'prepare', 'blackbox UI QA', '--json'], { cwd: consumer, timeout: 180_000 });
+  const qaPrepare = run('npx_sks_qa_loop_prepare', npxBin, ['sks', 'qa-loop', 'prepare', 'blackbox API QA', '--json'], { cwd: consumer, timeout: 180_000 });
   try { qaMissionId = JSON.parse(qaPrepare.stdout).mission_id || null; } catch {}
 }
 if (steps.at(-1)?.ok) run('npx_sks_qa_loop_run_mock', npxBin, ['sks', 'qa-loop', 'run', qaMissionId || 'latest', '--mock', '--json'], { cwd: consumer, timeout: 180_000 });

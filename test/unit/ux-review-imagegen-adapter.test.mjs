@@ -35,7 +35,40 @@ test('Codex App imagegen reports missing generated output separately from missin
   assert.equal(result.blocker, 'codex_app_imagegen_output_missing');
 });
 
-test('gpt-image-2 fallback uses codex-lb key when provider disables OpenAI OAuth', async () => {
+test('gpt-image-2 does not silently fall back to codex-lb when Codex App output is missing', async () => {
+  const { root, imagePath } = await tempImageRoot('sks-codex-lb-no-silent-fallback-');
+  const outputDir = path.join(root, 'out');
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error('unexpected fetch fallback');
+  };
+  try {
+    const result = await withoutImagegenOutputEnv(() => generateGptImage2CalloutReview({
+      mission_id: null,
+      source_screen_id: 'screen-1',
+      source_image_path: imagePath,
+      output_dir: outputDir,
+      prompt: buildCalloutPrompt('screen-1'),
+      requested_fidelity: 'original',
+      privacy: 'local-only'
+    }, {
+      capability: {
+        codexBin: path.join(root, 'missing-codex'),
+        timeoutMs: 100,
+        env: { HOME: root, CODEX_LB_API_KEY: 'sk-clb-test' },
+        configText: codexLbConfig()
+      },
+      openai: { codexLbApiKey: 'sk-clb-test' }
+    }));
+    assert.equal(result.ok, false);
+    assert.equal(result.provider, 'codex_app_imagegen');
+    assert.equal(result.blocker, 'imagegen_capability_missing');
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('gpt-image-2 fallback uses codex-lb key only when explicitly enabled', async () => {
   const { root, imagePath } = await tempImageRoot('sks-codex-lb-imagegen-');
   const outputDir = path.join(root, 'out');
   const calls = [];
@@ -68,7 +101,9 @@ test('gpt-image-2 fallback uses codex-lb key when provider disables OpenAI OAuth
         env: { HOME: root, CODEX_LB_API_KEY: 'sk-clb-test' },
         configText: codexLbConfig()
       },
-      openai: { codexLbApiKey: 'sk-clb-test' }
+      openai: { codexLbApiKey: 'sk-clb-test' },
+      allowApiFallback: true,
+      allowCodexLbApiFallback: true
     }));
 
     assert.equal(result.ok, true);

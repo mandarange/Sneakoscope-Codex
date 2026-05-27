@@ -149,6 +149,10 @@ function options(args: any[]) {
     replaceText: readOption(args, '--replace', null),
     apply: flag(args, '--apply'),
     applyCodexPatch: flag(args, '--apply-codex-patch'),
+    writeMode: readOption(args, '--write-mode', flag(args, '--parallel-write') ? 'parallel' : 'off'),
+    applyPatches: flag(args, '--apply-patches'),
+    dryRunPatches: flag(args, '--dry-run-patches') || flag(args, '--dryrun-patches'),
+    maxWriteAgents: Number(readOption(args, '--max-write-agents', '1')),
     fullVerify: flag(args, '--full-verify')
   };
 }

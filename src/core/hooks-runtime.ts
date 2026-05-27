@@ -1333,7 +1333,7 @@ function visibleHookMessage(name: any, text: any = '') {
     if (body.includes('SKS answer-only pipeline active')) return 'SKS: answer-only research context injected.';
     if (body.includes('SKS wiki pipeline active')) return 'SKS: wiki refresh context injected.';
     if (body.includes('$Goal route prepared')) return 'SKS: Goal workflow bridge prepared for native Codex /goal continuation.';
-    if (body.includes('Computer Use fast lane active')) return 'SKS: Computer Use fast lane injected; defer TriWiki/Honest Mode to final closeout.';
+    if (body.includes('Computer Use fast lane active')) return 'SKS: native Computer Use lane injected; defer TriWiki/Honest Mode to final closeout.';
     if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: stale clarification gate detected; continue from inferred route contract.';
     if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team route, live transcript, and subagent plan injected.';
     if (body.includes('$Research route prepared')) return 'SKS: Research route, xhigh Eureka agent council, source/debate ledgers, paper output, and falsification gate injected.';

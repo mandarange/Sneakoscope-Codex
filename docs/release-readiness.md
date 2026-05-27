@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.6 writes the `sks.release-readiness.v1` report for the deep runtime-truth closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, work-item-first task graph, schema-bound follow-up work items, actual route blackbox backfill checks, persistent tmux lane supervisor, lifecycle-wired real tmux pane proof, real Codex dynamic smoke v2, process-tree cleanup executor v2, cleanup command UX, AST-aware intelligent work graph, fake-vs-real proof policy v2, runtime truth matrix, scheduler proof hardening, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.6 runtime-truth closure DAG gaps.
+SKS 1.18.7 writes the `sks.release-readiness.v1` report for the deep Codex 0.134 ultra-stability DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, work-item-first task graph, schema-bound follow-up work items, actual route blackbox backfill checks, persistent tmux lane supervisor, lifecycle-wired real tmux pane proof, real Codex dynamic smoke v2, process-tree cleanup executor v2, cleanup command UX, AST-aware intelligent work graph, fake-vs-real proof policy v2, runtime truth matrix, Codex 0.134 compatibility, managed proxy propagation, local Codex history search, MCP 0.134 policy, proof-safe parallel write kernel, scheduler proof hardening, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.7 runtime-truth closure DAG gaps.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -42,6 +42,20 @@ npm run agent:ast-aware-work-graph
 npm run proof:fake-vs-real-policy
 npm run proof:fake-real-policy-v2
 npm run release:runtime-truth-matrix
+npm run imagegen:capability
+npm run imagegen:gpt-image-2-request-validator
+npm run codex:0.134-official-compat
+npm run codex:profile-primary
+npm run codex:managed-proxy-env
+npm run mcp:0.134-modernization
+npm run source-intelligence:codex-history-search
+npm run agent:parallel-write-kernel
+npm run agent:parallel-write-blackbox
+npm run team:parallel-write-blackbox
+npm run dfix:parallel-write-blackbox
+npm run agent:patch-proof
+npm run agent:patch-rollback
+npm run release:gate-existence-audit
 npm run route:blackbox-realism
 npm run agent:visual-consistency
 npm run release:real-check
@@ -54,17 +68,20 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.18.6.json`
-- `.sneakoscope/reports/release-readiness-1.18.6.md`
-- `.sneakoscope/reports/all-feature-completion-1.18.6.json`
-- `.sneakoscope/reports/all-feature-completion-1.18.6.md`
-- `.sneakoscope/reports/official-docs-compat-1.18.6.json`
-- `.sneakoscope/reports/official-docs-compat-1.18.6.md`
-- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.6.json`
-- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.6.json`
-- `.sneakoscope/reports/runtime-truth-matrix-1.18.6.json`
+- `.sneakoscope/reports/release-readiness-1.18.7.json`
+- `.sneakoscope/reports/release-readiness-1.18.7.md`
+- `.sneakoscope/reports/all-feature-completion-1.18.7.json`
+- `.sneakoscope/reports/all-feature-completion-1.18.7.md`
+- `.sneakoscope/reports/official-docs-compat-1.18.7.json`
+- `.sneakoscope/reports/official-docs-compat-1.18.7.md`
+- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.7.json`
+- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.7.json`
+- `.sneakoscope/reports/runtime-truth-matrix-1.18.7.json`
+- `.sneakoscope/reports/codex-0-134-official-compat.json`
+- `.sneakoscope/reports/mcp-0-134-modernization.json`
+- `.sneakoscope/reports/agent-parallel-write-kernel.json`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal generation closure, persistent tmux lanes, real tmux physical pane truth, cleanup executor proof, AST-aware work graph quality, fake-vs-real subsystem levels, runtime truth matrix, task graph/work queue expansion, follow-up work item schema, actual route blackbox backfill metrics, and remaining 1.18.6 P0-P5 closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal generation closure, persistent tmux lanes, real tmux physical pane truth, cleanup executor proof, AST-aware work graph quality, fake-vs-real subsystem levels, runtime truth matrix, Codex 0.134 deltas, managed proxy propagation, MCP modernization, proof-safe parallel patches, task graph/work queue expansion, follow-up work item schema, actual route blackbox backfill metrics, and remaining 1.18.7 P0-P6 closure gaps.
 
 ## Priority Closure
 
@@ -76,8 +93,13 @@ The report covers version drift, release metadata freshness, stale `dist` preven
 | P3 | README, policy docs, migration, troubleshooting, CLI help, `--work-items`, active-slot semantics, real smoke envs, cleanup commands, and onboarding |
 | P4 | Human-readable summaries for source intelligence, X AI used/not used, Goal fallback, terminal close, tmux persistence, physical pane proof, cleanup, scheduler health, and worker Scout evidence |
 | P5 | Regression catalog for fake pane rejection, missing capture/list-panes, output-last-message absence, cleanup dry-run/apply, work graph partial quality, non-agent route stand-ins, source refs, and Goal refs |
+| P6 | Codex 0.134 compatibility, MCP 0.134 policy, managed proxy propagation, local Codex history search, parallel write kernel proof, and release gate existence audit |
 
 MAD-SKS readiness remains high-friction: full-system authority requires explicit user authorization, scoped target roots, separate consent for system access, DB writes, package installation, service control, admin operations, network, Computer Use, destructive delete, and generated-asset edits. The SKS harness protected core remains immutable even under MAD-SKS.
+
+Imagegen readiness is core: `npm run imagegen:capability` must detect the official Codex App `$imagegen`/`gpt-image-2` surface and explicitly report that capability detection is not output proof. Full visual verification still requires a real generated output file with path, hash, dimensions, and provider/output metadata. OpenAI Images API, Responses image-generation, codex-lb, and `CODEX_LB_API_KEY` routes are non-Codex API fallbacks; they may be used only for explicitly requested API fallback work and do not satisfy Codex App imagegen evidence. `npm run imagegen:gpt-image-2-request-validator` must prove SKS omits unsupported `input_fidelity` while preserving local-only generated-image artifacts. Fake adapters remain fixture-only and cannot satisfy full visual verification.
+
+README architecture image replacement uses the same evidence policy but is a project asset handoff rather than a generic release gate. `npm run imagegen:readme-architecture` writes the official prompt/report, rejects stale or non-Codex output, and replaces the asset only when a real Codex App `$imagegen`/`gpt-image-2` output path and metadata prove the selected file belongs to the current prompt contract.
 
 Computer Use truthfulness remains bounded: `probe_only` is a capability probe, `live_capture_success` is local-only captured evidence, and `live_capture_blocked` records Codex App, macOS permission, or official capture-surface blockers. SKS does not fabricate screenshots and does not claim universal Computer Use availability.
 
@@ -89,4 +111,4 @@ codex-lb truthfulness remains bounded: `durable_env_file`, `durable_keychain`, `
 sks codex-lb setup --write-env-file --keychain --launchctl
 ```
 
-Privacy statement: secrets are redacted, Computer Use screenshots, X AI raw responses, Codex Web raw responses, and generated gpt-image-2 review images are local-only by default.
+Privacy statement: secrets are redacted, Codex Chrome Extension screenshots, native Computer Use screenshots, X AI raw responses, Codex Web raw responses, and generated gpt-image-2 review images are local-only by default.

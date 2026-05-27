@@ -6,11 +6,17 @@ Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex
 
 SKS does not try to clone every other harness. It focuses on one thing: making Codex work auditable, visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
 
+## LLM Init Prompt for Hermes / OpenClaw Agent Builders
+
+```text
+Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-Codex](https://github.com/mandarange/Sneakoscope-Codex)] as the repo reference and [npm i -g sneakoscope] as the recommended global install command, then run the appropriate `sks` setup, doctor, Codex App, and proof checks for this repo. Keep generated SKS state out of source control unless documented, and record every version-facing change in CHANGELOG.md.
+```
+
 ![Sneakoscope Codex Trust Layer](docs/assets/sneakoscope-architecture-pipeline.jpg)
 
 ## Current Release
 
-SKS **1.18.6** closes the zero-gap runtime truth loop: proof policy now reports every runtime subsystem separately, trust reports surface those subsystem proof levels, runtime truth matrix evidence is generated from live release artifacts, cleanup verifies process/tree/tmux/temp/lock after-states, and MAD-SKS writes explicit Warp/tmux lane proof instead of implying UI visibility.
+SKS **1.18.7** closes the Codex 0.134 ultra-stability loop: the release matrix now covers `--profile` as the primary selector, bounded local Codex history search, managed proxy propagation, MCP 0.134 environment/OAuth/schema/readOnlyHint policy, proof-safe parallel agent patches, runtime truth P6 rows, the 1.18.7 release gate audit, MAD-SKS as general scoped permission widening, and gpt-image-2 imagegen as a core evidence capability.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -30,6 +36,13 @@ npm run agent:ast-aware-work-graph
 npm run proof:fake-vs-real-policy
 npm run proof:fake-real-policy-v2
 npm run release:runtime-truth-matrix
+npm run codex:0.134-official-compat
+npm run codex:profile-primary
+npm run codex:managed-proxy-env
+npm run mcp:0.134-modernization
+npm run source-intelligence:codex-history-search
+npm run agent:parallel-write-kernel
+npm run release:gate-existence-audit
 npm run route:blackbox-realism
 npm run release:real-check
 npm run agent:backfill-route-blackbox
@@ -37,7 +50,7 @@ npm run team:actual-route-backfill
 npm run release:readiness
 ```
 
-Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release gate status lives in [docs/release-readiness.md](docs/release-readiness.md).
+Detailed release history lives in [CHANGELOG.md](CHANGELOG.md); every version-facing change should be recorded there before release. Current release gate status lives in [docs/release-readiness.md](docs/release-readiness.md).
 
 ## Documentation
 
@@ -74,7 +87,7 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release 
 - Fake vs real proof policy: [docs/fake-vs-real-proof-policy.md](docs/fake-vs-real-proof-policy.md)
 - Runtime truth matrix: [docs/runtime-truth-matrix.md](docs/runtime-truth-matrix.md)
 - Warp MAD tmux lanes: [docs/warp-mad-tmux-lanes.md](docs/warp-mad-tmux-lanes.md)
-- Migration 1.18.5 to 1.18.6: [docs/migration-1.18.5-to-1.18.6.md](docs/migration-1.18.5-to-1.18.6.md)
+- Migration 1.18.6 to 1.18.7: [docs/migration-1.18.6-to-1.18.7.md](docs/migration-1.18.6-to-1.18.7.md)
 - Codex official Goal mode: [docs/codex-official-goal-mode.md](docs/codex-official-goal-mode.md)
 - Release parallel full coverage: [docs/release-parallel-full-coverage.md](docs/release-parallel-full-coverage.md)
 - Priority closure P0-P4: [docs/priority-closure-p0-p4.md](docs/priority-closure-p0-p4.md)
@@ -93,6 +106,8 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md). Current release 
 - codex-lb: [docs/codex-lb.md](docs/codex-lb.md)
 
 ## 60-second start
+
+Recommended install: use the global npm package so `sks` and the Codex App `$` skills are refreshed together.
 
 ```sh
 npm i -g sneakoscope
@@ -117,7 +132,7 @@ sks rust smoke --json
 
 ## Install Options
 
-Install globally, then run `sks` from either a project or any global shell location:
+Recommended: install globally with `npm i -g sneakoscope`, then run `sks` from either a project or any global shell location:
 
 ```sh
 npm i -g sneakoscope
@@ -125,7 +140,7 @@ sks root
 sks doctor
 ```
 
-`npm i -g sneakoscope` automatically refreshes the `sks` command shim, global Codex App `$` skills, and SKS bootstrap surface. When the install is run from a project, postinstall bootstraps that project. When it is run outside a repo/project marker, postinstall bootstraps the per-user global runtime root instead of writing `.sneakoscope` into a random current directory. `sks root` tells you which root SKS will use.
+`npm i -g sneakoscope` is the recommended install path. It automatically refreshes the `sks` command shim, global Codex App `$` skills, and SKS bootstrap surface. When the install is run from a project, postinstall bootstraps that project. When it is run outside a repo/project marker, postinstall bootstraps the per-user global runtime root instead of writing `.sneakoscope` into a random current directory. `sks root` tells you which root SKS will use.
 
 If you only want a one-shot run without keeping `sks` installed globally:
 
@@ -186,7 +201,7 @@ The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex`
 
 ### Global Install
 
-Use this when you want `sks` available from any repo:
+Use this recommended path when you want `sks` available from any repo:
 
 ```sh
 npm i -g sneakoscope
@@ -280,7 +295,7 @@ sks codex-lb repair
 sks
 ```
 
-Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes the codex-lb Codex CLI / IDE Extension provider block into `~/.codex/config.toml` for Codex App routing, loads the provider env key for tmux launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. If the provider block disappears but the stored env file is still recoverable, bare `sks`, npm postinstall upgrades, `sks doctor --fix`, and `sks codex-lb repair` restore it with `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = false`; PPT/imagegen bridge checks treat that env-key provider as configured without requiring OpenAI OAuth. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` tmux session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths run a response-chain health check. `previous_response_not_found` is treated as a stateless-LB warning and keeps codex-lb active. Hard failures are surfaced to the user; SKS only bypasses codex-lb when the user chooses OAuth fallback or `SKS_CODEX_LB_AUTOBYPASS=1` is set.
+Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes the codex-lb Codex CLI / IDE Extension provider block into `~/.codex/config.toml` for Codex App routing, loads the provider env key for tmux launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. If the provider block disappears but the stored env file is still recoverable, bare `sks`, npm postinstall upgrades, `sks doctor --fix`, and `sks codex-lb repair` restore it with `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = false`; imagegen checks may record this provider as configured codex-lb routing, but it is not accepted as official Codex App `$imagegen` evidence. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` tmux session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths run a response-chain health check. `previous_response_not_found` is treated as a stateless-LB warning and keeps codex-lb active. Hard failures are surfaced to the user; SKS only bypasses codex-lb when the user chooses OAuth fallback or `SKS_CODEX_LB_AUTOBYPASS=1` is set.
 
 If codex-lb provider auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
 
@@ -317,10 +332,10 @@ This flips `model_provider` away from `codex-lb` in the top-level Codex App conf
 
 ```sh
 sks --mad
-sks --mad --yes
+sks --mad --allow-package-install --allow-service-control --allow-network --yes
 ```
 
-This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` full-access profile, opens the MAD-SKS permission gate for that tmux run, and launches a single Codex CLI pane. The session recreates the named session so stale split-pane MAD sessions collapse back to one pane. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
+This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` high-power maintenance profile, opens the MAD-SKS permission gate for that tmux run, and launches a single Codex CLI pane. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock: it is explicit user authorization to widen approved target-project scopes. The session recreates the named session so stale split-pane MAD sessions collapse back to one pane. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
 
 Before launching, SKS checks npm for a newer `sneakoscope`; answer `y` to update or `n` to continue. Use `--yes` to approve missing dependency installs automatically.
 
@@ -364,6 +379,7 @@ Effort is assigned per agent. Simple read-only/docs slices can run low, ordinary
 ```sh
 sks qa-loop prepare "http://localhost:3000"
 sks qa-loop run latest --max-cycles 2
+sks codex-app chrome-extension --json
 sks goal create "persist this migration workflow"
 sks research prepare "evaluate this approach"
 sks research run latest --max-cycles 12 --cycle-timeout-minutes 120
@@ -397,7 +413,7 @@ sks code-structure scan --json
 
 ### Ambiguity Questions
 
-Clarification asks only for ambiguity that changes execution; predictable defaults are inferred and sealed. `sks skill-dream` records cheap counters and periodically writes advisory skill reports. `$Goal` controls native `/goal` persistence without replacing the selected execution route. `$Computer-Use` / `$CU` is the fast Codex Computer Use lane for UI/browser/visual work.
+Clarification asks only for ambiguity that changes execution; predictable defaults are inferred and sealed. `sks skill-dream` records cheap counters and periodically writes advisory skill reports. `$Goal` controls native `/goal` persistence without replacing the selected execution route. Web, browser, localhost, website, webapp, and web-based app verification use the official Codex Chrome Extension path first; if it is not installed/enabled, SKS stops and asks the user to set it up before resuming. `$Computer-Use` / `$CU` is now reserved for native macOS, desktop-app, OS-settings, and non-web visual work.
 
 ### Create A Presentation
 
@@ -419,6 +435,7 @@ After installing, run:
 ```sh
 sks bootstrap
 sks codex-app check
+sks codex-app chrome-extension --json
 sks codex-app remote-control --status
 sks dollar-commands
 ```
@@ -429,9 +446,11 @@ For headless remotely controllable Codex App/server sessions on Codex CLI 0.130.
 sks codex-app remote-control -- --help
 ```
 
-`sks codex-app check` reports whether the installed Codex CLI is new enough, whether the required app flags are visible, whether Fast/speed-selector config is unlocked, whether Codex App Git Actions can use Commit, Push, Commit and Push, and PR flows, and whether installed OpenAI default plugins such as Browser, Chrome, Computer Use, Documents, Presentations, Spreadsheets, and LaTeX are enabled. When codex-lb is configured, SKS keeps it selected as the top-level Codex App provider while still preserving required app flags and plugin settings. Codex CLI 0.130.0+ app-server/remote-control threads can pick up config changes live; older CLI/TUI sessions should still be restarted after `.codex/config.toml` or MCP/plugin changes.
+`sks codex-app check` reports whether the installed Codex CLI is new enough, whether the required app flags are visible, whether Fast/speed-selector config is unlocked, whether Codex App Git Actions can use Commit, Push, Commit and Push, and PR flows, whether the Codex Chrome Extension path is ready for web/browser/webapp verification, and whether installed OpenAI default plugins such as Browser, Chrome, Computer Use, Documents, Presentations, Spreadsheets, and LaTeX are enabled. `sks codex-app chrome-extension --json` is the rapid preflight for web QA/UX/browser routes. When codex-lb is configured, SKS keeps it selected as the top-level Codex App provider while still preserving required app flags and plugin settings. Codex CLI 0.130.0+ app-server/remote-control threads can pick up config changes live; older CLI/TUI sessions should still be restarted after `.codex/config.toml` or MCP/plugin changes.
 
-Image-review routes are intentionally strict. `$Image-UX-Review`, `$UX-Review`, `$Visual-Review`, and `$UI-UX-Review` require real Codex App `$imagegen`/`gpt-image-2` generated annotated review images before `image-ux-review-gate.json` can pass; disabled or missing `image_generation` remains a blocker that `sks codex-app check` and selftest cover.
+For web-related verification, SKS follows the official Codex Chrome Extension setup path first: https://developers.openai.com/codex/app/chrome-extension. `$QA-LOOP`, `$UX-Review`, `$Image-UX-Review`, browser smoke, authenticated web checks, localhost checks, and web visual review must halt quickly if that extension is missing or disabled. Only after the user says the extension setup is complete should the pipeline resume. Codex Computer Use is for native Mac/non-web targets only; it must not be used as browser/web-app verification evidence.
+
+Imagegen is a core SKS capability, not a decorative add-on. `$Image-UX-Review`, `$UX-Review`, `$Visual-Review`, `$UI-UX-Review`, and PPT generated-review paths require real Codex App `$imagegen`/`gpt-image-2` output before full visual verification can pass. For newest-model image requests, prompts should say "Use ChatGPT Images 2.0 / GPT Image 2.0 with gpt-image-2" while still invoking Codex App `$imagegen` when live generation is needed. Use `imagegen-source-scout` when current official docs plus X/social prompt-workflow signals are needed; social sources are prompt heuristics only, not capability or evidence specs. `npm run imagegen:capability` checks that the official Codex App imagegen surface is visible and records that capability detection is not output proof; OpenAI API, Responses image-generation, codex-lb, or `CODEX_LB_API_KEY` fallbacks are non-Codex paths and do not satisfy Codex App generated-image evidence unless a separate API fallback task is explicitly requested. The README architecture asset uses the same rule: run `npm run imagegen:readme-architecture:prompt` to print/write the official prompt, generate the image in Codex App `$imagegen`, then rerun `npm run imagegen:readme-architecture -- --output <path>` after Codex App creates a real gpt-image-2 output. When exactly one current generated_images candidate exists after the prompt, `npm run imagegen:readme-architecture -- --auto-pick-latest` can select it automatically. To let the verifier wait while Codex App writes the file, use `npm run imagegen:readme-architecture -- --wait-ms <milliseconds>`; it still accepts only one current candidate under `$CODEX_HOME/generated_images`. Env forms such as `SKS_CODEX_APP_IMAGEGEN_OUTPUT=<path>` remain supported for automation. Use the selected file directly under `$CODEX_HOME/generated_images`; moved or copied files are not accepted as provenance evidence. Disabled or missing `image_generation` remains a blocker that `sks codex-app check`, `npm run imagegen:capability`, and selftest cover.
 
 Then open Codex App and use prompt commands directly in the chat. Examples:
 
@@ -579,7 +598,7 @@ sks codex-app check
 codex mcp list
 ```
 
-Codex App workflows need the app installed. UI/browser evidence requires first-party Codex Computer Use, and generated raster/image-review evidence requires real `$imagegen`/`gpt-image-2` output. After setup/upgrade, start a fresh thread so Codex reloads plugin tools.
+Codex App workflows need the app installed. Web/browser evidence requires the Codex Chrome Extension path, native Mac/non-web visual evidence requires first-party Codex Computer Use, and generated raster/image-review evidence requires real `$imagegen`/`gpt-image-2` output. After setup/upgrade, start a fresh thread so Codex reloads plugin tools.
 
 ### Codex App commit/push is blocked
 

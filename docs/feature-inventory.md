@@ -100,9 +100,9 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `route-from-chat-img` | route | labs | $From-Chat-IMG | mock:pass | runtime_mock_verified | none recorded |
 | `route-release-review` | route | labs | $Release-Review<br>$release-review | mock:pass | runtime_mock_verified | none recorded |
 | `route-qa-loop` | route | beta | $QA-LOOP<br>$qa-loop | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-ppt` | route | labs | $PPT<br>$ppt | execute_and_validate_artifacts:pass | runtime_verified | live imagegen/CU evidence required |
-| `route-image-ux-review` | route | labs | $Image-UX-Review<br>$image-ux-review<br>$ux-review<br>$visual-review<br>$ui-ux-review | execute_and_validate_artifacts:pass | runtime_verified | live imagegen/CU evidence required |
-| `route-ux-review` | route | labs | $UX-Review | mock:pass | runtime_mock_verified | live imagegen/CU evidence required |
+| `route-ppt` | route | labs | $PPT<br>$ppt | execute_and_validate_artifacts:pass | runtime_verified | live imagegen plus Chrome Extension web or native CU evidence required |
+| `route-image-ux-review` | route | labs | $Image-UX-Review<br>$image-ux-review<br>$ux-review<br>$visual-review<br>$ui-ux-review | execute_and_validate_artifacts:pass | runtime_verified | live imagegen plus Chrome Extension web or native CU evidence required |
+| `route-ux-review` | route | labs | $UX-Review | mock:pass | runtime_mock_verified | live imagegen plus Chrome Extension web or native CU evidence required |
 | `route-computer-use` | route | beta | $Computer-Use<br>$computer-use-fast<br>$cu | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `route-cu` | route | beta | $CU | mock:pass | runtime_mock_verified | none recorded |
 | `route-goal` | route | beta | $Goal<br>$goal | mock:pass | runtime_mock_verified | none recorded |

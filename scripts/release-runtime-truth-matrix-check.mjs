@@ -15,7 +15,14 @@ const requiredRows = [
   'goal_mode',
   'route_blackbox',
   'dynamic_scheduler',
-  'warp_mad_lanes'
+  'warp_mad_lanes',
+  'codex_0_134',
+  'mcp_0_134',
+  'parallel_write',
+  'patch_proof',
+  'cleanup_v4',
+  'ast_type_work_graph',
+  'warp_mad_right_lanes'
 ];
 assertGate(matrix.schema === 'sks.runtime-truth-matrix.v1', 'runtime truth matrix schema mismatch', matrix);
 for (const subsystem of requiredRows) {
@@ -27,7 +34,7 @@ for (const subsystem of requiredRows) {
   assertGate(typeof row.next_action === 'string', `runtime truth row missing next action: ${subsystem}`, row);
   assertGate(typeof row.required_mode === 'boolean', `runtime truth row missing required mode: ${subsystem}`, row);
 }
-for (const priority of ['P0', 'P1', 'P2', 'P3', 'P4', 'P5']) {
+for (const priority of ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6']) {
   assertGate(['closed', 'blocked', 'not_applicable_with_proof'].includes(matrix.priorities[priority]?.status), `runtime truth matrix missing ${priority}`, matrix);
 }
 assertGate(matrix.ok === true, 'runtime truth matrix has required blockers', matrix);

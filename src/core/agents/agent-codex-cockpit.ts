@@ -16,6 +16,9 @@ export type CodexCockpitHookPayload = {
   session_id?: string
   transcript_path?: string | null
   agent_transcript_path?: string | null
+  slot_id?: string | null
+  generation_index?: number | null
+  persona_id?: string | null
   last_assistant_message?: string | null
   stop_hook_active?: boolean
   turn_id?: string

@@ -3,7 +3,7 @@ import { appendJsonlBounded, exists, nowIso, readJson, sksRoot, writeJsonAtomic,
 import { initProject } from '../init.js';
 import { createMission, loadMission, setCurrent } from '../mission.js';
 import { buildQuestionSchema, writeQuestions } from '../questions.js';
-import { CODEX_COMPUTER_USE_ONLY_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, ROUTES, hasFromChatImgSignal, routePrompt, routeReasoning, triwikiContextTracking } from '../routes.js';
+import { CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, ROUTES, hasFromChatImgSignal, routePrompt, routeReasoning, triwikiContextTracking } from '../routes.js';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../team-dag.js';
 import { appendTeamEvent, formatAgentReasoning, formatRoleCounts, initTeamLive, isTerminalTeamAgentStatus, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested, teamReasoningPolicy } from '../team-live.js';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../team-review-policy.js';
@@ -33,8 +33,13 @@ export async function team(args: any = []) {
   const desiredWorkItemCount = readBoundedIntegerFlag(args, '--work-items', targetActiveSlots, 1, 200);
   const minimumWorkItems = readBoundedIntegerFlag(args, '--minimum-work-items', targetActiveSlots, 1, 200);
   const maxQueueExpansion = readBoundedIntegerFlag(args, '--max-queue-expansion', 10, 0, 200);
+  const profile = readFlagValue(args, '--profile', '') || null;
+  const writeMode = readFlagValue(args, '--write-mode', flag(args, '--parallel-write') ? 'parallel' : 'off');
+  const applyPatches = flag(args, '--apply-patches');
+  const dryRunPatches = flag(args, '--dry-run-patches') || flag(args, '--dryrun-patches');
+  const maxWriteAgents = readBoundedIntegerFlag(args, '--max-write-agents', Math.min(roster.bundle_size, 5), 1, 20);
   if (!prompt) {
-    console.error('Usage: sks team "task" [20:agents] [executor:5 reviewer:6 user:1] [--agents N] [--work-items N] [--target-active-slots N] [--no-open-tmux] [--json] [--mock]');
+    console.error('Usage: sks team "task" [20:agents] [executor:5 reviewer:6 user:1] [--agents N] [--work-items N] [--target-active-slots N] [--profile NAME] [--write-mode off|proof-safe|parallel|serial] [--apply-patches] [--no-open-tmux] [--json] [--mock]');
     process.exitCode = 1;
     return;
   }
@@ -85,7 +90,12 @@ export async function team(args: any = []) {
     minimumWorkItems,
     maxQueueExpansion,
     concurrency: Math.min(agentSessions, roster.bundle_size),
-    readonly: true,
+    readonly: !applyPatches && writeMode === 'off',
+    profile,
+    writeMode: writeMode as any,
+    applyPatches,
+    dryRunPatches,
+    maxWriteAgents,
     routeCommand: 'sks team',
     routeBlackboxKind: 'actual_team_command'
   });
@@ -202,7 +212,7 @@ export function buildTeamPlan(id: any, prompt: any, opts: any = {}) {
     context_tracking: triwikiContextTracking(),
     phases: [
       { id: 'team_roster_confirmation', goal: 'Materialize Team roster and write team-roster.json.', agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'native_agent_intake', goal: fromChatImgRequired ? `Complete From-Chat-IMG source inventory and coverage artifacts. ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'Read relevant TriWiki context and run read-only native agent intake agents before debate.', agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only', output: 'team-analysis.md' },
+      { id: 'native_agent_intake', goal: fromChatImgRequired ? `Complete From-Chat-IMG source inventory and coverage artifacts. Web/browser/webapp screenshots require Codex Chrome Extension readiness first; native Mac/non-web surfaces may use Codex Computer Use. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'Read relevant TriWiki context and run read-only native agent intake agents before debate.', agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only', output: 'team-analysis.md' },
       { id: 'triwiki_refresh', goal: 'Refresh and validate TriWiki from agent intake findings.', agents: ['parent_orchestrator'], commands: ['sks wiki refresh', 'sks wiki validate .sneakoscope/wiki/context-pack.json'], output: '.sneakoscope/wiki/context-pack.json' },
       { id: 'planning_debate', goal: 'Debate risks and viable approaches with refreshed context.', agents: roster.debate_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
       { id: 'runtime_task_graph_compile', goal: `Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}.`, agents: ['parent_orchestrator'] },

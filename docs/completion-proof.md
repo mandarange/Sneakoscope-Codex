@@ -52,7 +52,7 @@ Proof status must be one of:
 
 Mock fixture evidence can support selftest coverage, but it must not be promoted to `verified` real-run evidence.
 
-For SKS 1.0.8 UX-Review missions, Completion Proof includes `evidence.image_ux_review` with source screenshot count, generated gpt-image-2 callout image count, callout extraction schema status, open/fixed P0/P1 counts, recapture/re-review status, Image Voxel relation count, and Computer Use evidence mode. Text-only UX reviews and mock generated callouts cannot produce a real `verified` claim.
+For SKS 1.0.8 UX-Review missions, Completion Proof includes `evidence.image_ux_review` with source screenshot count, generated gpt-image-2 callout image count, callout extraction schema status, open/fixed P0/P1 counts, recapture/re-review status, Image Voxel relation count, and official capture evidence mode. Text-only UX reviews and mock generated callouts cannot produce a real `verified` claim.
 
 ## Commands
 

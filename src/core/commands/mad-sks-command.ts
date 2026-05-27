@@ -19,7 +19,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
   if (subcommand) return madSksSubcommand(subcommand, args.filter((arg: any) => String(arg) !== subcommand));
 
-  const cleanArgs = args.filter((arg: any) => !['--mad', '--MAD', '--mad-sks', '--high', '--no-auto-install-tmux'].includes(arg));
+  const cleanArgs = args.filter((arg: any) => !madLaunchOnlyFlags().has(String(arg)));
   if (args.includes('--json')) {
     const profile = await enableMadHighProfile();
     return console.log(JSON.stringify(profile, null, 2));
@@ -53,9 +53,9 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     return;
   }
   const profile = await enableMadHighProfile();
-  const madLaunch = await activateMadTmuxPermissionState(process.cwd());
+  const madLaunch = await activateMadTmuxPermissionState(process.cwd(), args);
   console.log(`SKS MAD ready: ${madHighProfileName()} | gate ${madLaunch.mission_id}`);
-  console.log('Live full-access active; catastrophic DB wipe/all-row/project-management guards remain.');
+  console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, DB writes, or system/admin scopes. Catastrophic guards remain.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
   const madSksEnv = {
     SKS_PROTECTED_CORE_POLICY: madLaunch.gate.protected_core_policy,
@@ -70,10 +70,15 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   return launch;
 }
 
-async function activateMadTmuxPermissionState(cwd: any = process.cwd()) {
+async function activateMadTmuxPermissionState(cwd: any = process.cwd(), args: any[] = []) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
-  const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad tmux live full-access session' });
+  const flags = parseMadSksFlags(['--mad-sks', ...args].filter(Boolean));
+  const permission = buildMadSksPermissionModel({ targetRoot: cwd, userIntent: 'sks --mad tmux scoped high-power maintenance session', flags });
+  const allowedScopes = new Set(permission.allowed_scopes || []);
+  const has = (scope: string) => allowedScopes.has(scope as any);
+  const dbWriteAllowed = has('db_write');
+  const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad tmux scoped high-power maintenance session' });
   const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot: cwd });
   const protectedCoreBefore = await snapshotProtectedCore(packageRoot(), 'mad-live-before');
   const protectedCorePolicyPath = path.join(dir, 'mad-sks-protected-core-policy.json');
@@ -91,13 +96,24 @@ async function activateMadTmuxPermissionState(cwd: any = process.cwd()) {
     passed: false,
     mad_sks_permission_active: true,
     permissions_deactivated: false,
-    live_server_writes_allowed: true,
-    supabase_mcp_schema_cleanup_allowed: true,
-    direct_execute_sql_allowed: true,
-    normal_db_writes_allowed: true,
-    migration_apply_allowed: true,
+    authority_concept: 'user_authorized_general_permission_widening',
+    target_file_writes_allowed: has('target_files'),
+    shell_commands_allowed: has('shell'),
+    package_install_allowed: has('package_install'),
+    service_control_allowed: has('service_control'),
+    network_operations_allowed: has('network'),
+    computer_use_allowed: has('computer_use'),
+    browser_use_allowed: has('browser_use'),
+    generated_asset_edits_allowed: has('generated_assets'),
+    file_permission_changes_allowed: has('file_permissions'),
+    live_server_writes_allowed: has('service_control') || has('system'),
+    supabase_mcp_schema_cleanup_allowed: dbWriteAllowed,
+    direct_execute_sql_allowed: dbWriteAllowed,
+    normal_db_writes_allowed: dbWriteAllowed,
+    migration_apply_allowed: dbWriteAllowed,
     catastrophic_safety_guard_active: true,
     permission_profile: permissionGateSummary(),
+    permission_model: permission,
     protected_core_policy: protectedCorePolicyPath,
     protected_core_before: protectedCoreBeforePath,
     protected_core_digest: protectedCoreBefore.digest,
@@ -105,8 +121,8 @@ async function activateMadTmuxPermissionState(cwd: any = process.cwd()) {
     cwd: path.resolve(cwd || process.cwd())
   };
   await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
-  await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: 'MadSKS', command: '$MAD-SKS', mode: 'MADSKS', task: gate.activated_by, mad_sks_authorization: true, tmux_launch: true, permission_profile: gate.permission_profile });
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.tmux_permission_opened', route: 'MadSKS', live_server_writes_allowed: true, catastrophic_safety_guard_active: true });
+  await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: 'MadSKS', command: '$MAD-SKS', mode: 'MADSKS', task: gate.activated_by, mad_sks_authorization: true, mad_sks_authority_concept: gate.authority_concept, tmux_launch: true, permission_profile: gate.permission_profile, permission_model: permission });
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.tmux_permission_opened', route: 'MadSKS', live_server_writes_allowed: gate.live_server_writes_allowed, allowed_scopes: permission.allowed_scopes, catastrophic_safety_guard_active: true });
   await setCurrent(root, {
     mission_id: id,
     route: 'MadSKS',
@@ -117,21 +133,53 @@ async function activateMadTmuxPermissionState(cwd: any = process.cwd()) {
     implementation_allowed: true,
     mad_sks_active: true,
     mad_sks_modifier: true,
+    mad_sks_authority_concept: gate.authority_concept,
     mad_sks_gate_file: 'mad-sks-gate.json',
     mad_sks_gate_ready: true,
     mad_sks_protected_core_policy: protectedCorePolicyPath,
     mad_sks_protected_core_digest: protectedCoreBefore.digest,
-    live_server_writes_allowed: true,
-    supabase_mcp_schema_cleanup_allowed: true,
-    direct_execute_sql_allowed: true,
-    normal_db_writes_allowed: true,
-    migration_apply_allowed: true,
+    live_server_writes_allowed: gate.live_server_writes_allowed,
+    supabase_mcp_schema_cleanup_allowed: gate.supabase_mcp_schema_cleanup_allowed,
+    direct_execute_sql_allowed: gate.direct_execute_sql_allowed,
+    normal_db_writes_allowed: gate.normal_db_writes_allowed,
+    migration_apply_allowed: gate.migration_apply_allowed,
     catastrophic_safety_guard_active: true,
     permission_profile: gate.permission_profile,
+    permission_model: permission,
     stop_gate: 'mad-sks-gate.json',
     prompt: gate.activated_by
   });
   return { mission_id: id, dir, gate, root };
+}
+
+function madLaunchOnlyFlags() {
+  return new Set([
+    '--mad',
+    '--MAD',
+    '--mad-sks',
+    '--high',
+    '--no-auto-install-tmux',
+    '--allow-system',
+    '--allow-db-write',
+    '--allow-package-install',
+    '--allow-service-control',
+    '--allow-admin',
+    '--allow-sudo',
+    '--allow-network',
+    '--allow-computer-use',
+    '--allow-browser',
+    '--allow-browser-use',
+    '--allow-generated-assets',
+    '--allow-file-permissions',
+    '--allow-chmod',
+    '--allow-delete',
+    '--confirm-delete',
+    '--confirm-destructive-delete',
+    '--yes',
+    '-y',
+    '--dry-run',
+    '--plan-only'
+  ]);
 }
 
 function readOption(args: any, name: any, fallback: any) {
@@ -218,7 +266,7 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
     return emit({
       schema: 'sks.mad-sks-explain.v1',
       ok: true,
-      summary: 'MAD-SKS is a user-authorized high-power maintenance mode. Target project work can be widened by explicit flags, while SKS harness/package/dist/scripts/schemas/release metadata remain immutable protected core.',
+      summary: 'MAD-SKS is a user-authorized general permission widening mode, not a DB-only unlock. Target project work can be widened by explicit flags, while SKS harness/package/dist/scripts/schemas/release metadata remain immutable protected core.',
       command_surface: [...MAD_SKS_COMMAND_SURFACE],
       catastrophic_safeguards: permission.forbidden_scopes,
       immutable_harness_guard: 'always_on'

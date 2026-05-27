@@ -6,12 +6,25 @@ import path from 'node:path';
 import { detectImagegenCapability } from '../../dist/core/imagegen/imagegen-capability.js';
 
 test('imagegen capability records gpt-image-2 fidelity policy', async () => {
-  const capability = await detectImagegenCapability({ fake: true });
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-fake-only-'));
+  const capability = await detectImagegenCapability({
+    fake: true,
+    codexBin: path.join(home, 'missing-codex'),
+    env: { HOME: home },
+    configText: ''
+  });
   assert.equal(capability.ok, true);
   assert.equal(capability.model, 'gpt-image-2');
   assert.equal(capability.input_fidelity_must_be_omitted, true);
   assert.equal(capability.gpt_image_2_input_fidelity_automatic, true);
   assert.equal(capability.fake_adapter.available, true);
+  assert.equal(capability.core_feature, true);
+  assert.equal(capability.core_ready, false);
+  assert.equal(capability.codex_app_builtin_output_required, true);
+  assert.equal(capability.capability_detection_is_not_output_proof, true);
+  assert.deepEqual(capability.core_blockers, ['codex_app_builtin_imagegen_capability_missing']);
+  assert.deepEqual(capability.route_generation_blockers, []);
+  assert.deepEqual(capability.blockers, ['codex_app_builtin_imagegen_capability_missing']);
 });
 
 test('imagegen capability falls back to plain codex features list output', async () => {
@@ -22,23 +35,37 @@ remote_control                      stable             false
 `);
   const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({ codexBin, timeoutMs: 1000 }));
   assert.equal(capability.codex_app.available, true);
+  assert.equal(capability.codex_app.official_surface, '$imagegen');
+  assert.equal(capability.codex_app.generated_output_required_for_full_verification, true);
+  assert.equal(capability.core_ready, true);
+  assert.equal(capability.real_generation_available, true);
+  assert.equal(capability.real_output_verified_by_capability_check, false);
+  assert.equal(capability.openai_images_api.official_codex_app_substitute, false);
+  assert.equal(capability.api_fallback_satisfies_codex_app_evidence, false);
   assert.equal(capability.codex_app.detector, 'codex_features_list');
   assert.match(String(capability.codex_app.raw), /image_generation\s+stable\s+true/);
   assert.equal(capability.supported_workflows.ux_review_callouts, true);
 });
 
 test('imagegen capability plain feature fallback respects disabled value', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-disabled-'));
   const codexBin = await writeFakeCodex(`
 codex_git_commit                    stable             true
 image_generation                    stable             false
 remote_control                      stable             true
 `);
-  const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({ codexBin, timeoutMs: 1000 }));
+  const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({
+    codexBin,
+    timeoutMs: 1000,
+    env: { HOME: home },
+    configText: ''
+  }));
   assert.equal(capability.codex_app.available, false);
+  assert.equal(capability.core_ready, false);
   assert.equal(capability.codex_app.blocker, 'codex_app_imagegen_not_detected');
 });
 
-test('imagegen capability accepts selected codex-lb env_key auth without OpenAI OAuth', async () => {
+test('imagegen capability records codex-lb auth without treating it as Codex App imagegen evidence', async () => {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-codex-lb-'));
   const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({
     codexBin: path.join(home, 'missing-codex'),
@@ -48,10 +75,17 @@ test('imagegen capability accepts selected codex-lb env_key auth without OpenAI 
   }));
   assert.equal(capability.codex_lb.available, true);
   assert.equal(capability.codex_lb.openai_auth_disabled, true);
-  assert.equal(capability.openai_images_api.available, true);
-  assert.equal(capability.openai_images_api.auth_source, 'CODEX_LB_API_KEY');
-  assert.equal(capability.supported_workflows.ppt_slide_callouts, true);
-  assert.deepEqual(capability.blockers, []);
+  assert.equal(capability.codex_lb.satisfies_codex_app_builtin_evidence, false);
+  assert.equal(capability.codex_lb.accepted_for_core_readiness, false);
+  assert.equal(capability.openai_images_api.available, false);
+  assert.equal(capability.openai_images_api.auth_source, null);
+  assert.equal(capability.openai_images_api.codex_lb_proxy.accepted_for_core_readiness, false);
+  assert.equal(capability.core_ready, false);
+  assert.equal(capability.real_generation_available, false);
+  assert.equal(capability.supported_workflows.ppt_slide_callouts, false);
+  assert.deepEqual(capability.core_blockers, ['codex_app_builtin_imagegen_capability_missing']);
+  assert.deepEqual(capability.route_generation_blockers, ['imagegen_capability_missing']);
+  assert.deepEqual(capability.blockers, ['codex_app_builtin_imagegen_capability_missing', 'imagegen_capability_missing']);
 });
 
 test('imagegen capability rejects codex-lb when provider still requires OpenAI OAuth', async () => {
@@ -65,7 +99,29 @@ test('imagegen capability rejects codex-lb when provider still requires OpenAI O
   assert.equal(capability.codex_lb.available, false);
   assert.equal(capability.codex_lb.blocker, 'codex_lb_requires_openai_auth');
   assert.equal(capability.openai_images_api.available, false);
-  assert.deepEqual(capability.blockers, ['imagegen_capability_missing']);
+  assert.equal(capability.core_ready, false);
+  assert.deepEqual(capability.core_blockers, ['codex_app_builtin_imagegen_capability_missing']);
+  assert.deepEqual(capability.route_generation_blockers, ['imagegen_capability_missing']);
+  assert.deepEqual(capability.blockers, ['codex_app_builtin_imagegen_capability_missing', 'imagegen_capability_missing']);
+});
+
+test('imagegen capability records explicit OpenAI API fallback without satisfying core Codex App readiness', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-openai-api-'));
+  const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({
+    codexBin: path.join(home, 'missing-codex'),
+    timeoutMs: 100,
+    env: { HOME: home, OPENAI_API_KEY: 'sk-test' },
+    configText: ''
+  }));
+  assert.equal(capability.openai_images_api.available, true);
+  assert.equal(capability.openai_images_api.auth_source, 'OPENAI_API_KEY');
+  assert.equal(capability.openai_images_api.official_codex_app_substitute, false);
+  assert.equal(capability.core_ready, false);
+  assert.equal(capability.real_generation_available, true);
+  assert.equal(capability.supported_workflows.ux_review_callouts, true);
+  assert.deepEqual(capability.core_blockers, ['codex_app_builtin_imagegen_capability_missing']);
+  assert.deepEqual(capability.route_generation_blockers, []);
+  assert.deepEqual(capability.blockers, ['codex_app_builtin_imagegen_capability_missing']);
 });
 
 async function writeFakeCodex(featuresOutput) {

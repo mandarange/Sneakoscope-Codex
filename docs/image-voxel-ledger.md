@@ -1,6 +1,6 @@
 # Image Voxel Ledger
 
-Image Voxel TriWiki records visual evidence as images, bbox anchors, and relations. Generic image ingest may have zero anchors and remain `not_verified` or `verified_partial`; visual route completion must have anchors. In `0.9.14`, route finalization can automatically convert Computer Use, Image UX Review, PPT, From-Chat-IMG, QA-loop visual claims, and GX visual validation evidence into mission-scoped `image-voxel-ledger.json`, `visual-anchors.json`, and `image-assets.json`.
+Image Voxel TriWiki records visual evidence as images, bbox anchors, and relations. Generic image ingest may have zero anchors and remain `not_verified` or `verified_partial`; visual route completion must have anchors. In `0.9.14`, route finalization can automatically convert official capture evidence, Image UX Review, PPT, From-Chat-IMG, QA-loop visual claims, and GX visual validation evidence into mission-scoped `image-voxel-ledger.json`, `visual-anchors.json`, and `image-assets.json`.
 
 Core commands:
 

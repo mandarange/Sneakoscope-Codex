@@ -116,10 +116,15 @@ async function researchRun(args: any) {
   const maxQueueExpansion = readBoundedIntegerFlag(args, '--max-queue-expansion', 10, 0, 200);
   const cycleTimeoutMinutes = readResearchCycleTimeoutMinutes(args);
   const cycleTimeoutMs = cycleTimeoutMinutes * 60 * 1000;
+  const profile = readFlagValue(args, '--profile', 'sks-research') || 'sks-research';
+  const writeMode = readFlagValue(args, '--write-mode', flag(args, '--parallel-write') ? 'parallel' : 'off');
+  const applyPatches = flag(args, '--apply-patches');
+  const dryRunPatches = flag(args, '--dry-run-patches') || flag(args, '--dryrun-patches');
+  const maxWriteAgents = readBoundedIntegerFlag(args, '--max-write-agents', Math.min(requestedAgents, 5), 1, 20);
   const mock = flag(args, '--mock');
   await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false, implementation_allowed: false, research_real_run_required: !mock, research_cycle_timeout_minutes: cycleTimeoutMinutes });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock, cycleTimeoutMinutes, real_run_required: !mock });
-  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-exec', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: true, roster: plan.native_agent_plan, routeCommand: 'sks research run', routeBlackboxKind: 'actual_research_command' });
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-exec', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: !(applyPatches && writeMode !== 'off'), profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: plan.native_agent_plan, routeCommand: 'sks research run', routeBlackboxKind: 'actual_research_command' });
   await writeJsonAtomic(path.join(dir, 'research-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (mock) {
@@ -165,9 +170,9 @@ async function researchRun(args: any) {
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
     const cycleDir = path.join(dir, 'research', `cycle-${cycle}`);
     const outputFile = path.join(cycleDir, 'final.md');
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.start', cycle, timeoutMinutes: cycleTimeoutMinutes, profile: 'sks-research', enforced_reasoning_effort: 'xhigh' });
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.start', cycle, timeoutMinutes: cycleTimeoutMinutes, profile, enforced_reasoning_effort: 'xhigh' });
     const prompt = buildResearchPrompt({ id, mission, plan, cycle, previous: last });
-    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile: 'sks-research', extraArgs: researchCodexArgs, logDir: cycleDir, timeoutMs: cycleTimeoutMs });
+    const result = await runCodexExec({ root, prompt, outputFile, json: true, profile, extraArgs: researchCodexArgs, logDir: cycleDir, timeoutMs: cycleTimeoutMs });
     await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
     const mutation = await researchCodeMutationDelta(root, sourceMutationBaseline, id);
     if (mutation.blocked) {

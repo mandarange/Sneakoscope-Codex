@@ -97,7 +97,7 @@ SKS must never print raw CODEX_LB_API_KEY missing-env text. It reports setup gui
 Provider auth invariant:
 
 - `[model_providers.codex-lb]` uses `env_key = "CODEX_LB_API_KEY"` with `requires_openai_auth = false`.
-- SKS status, PPT/imagegen review paths, and Codex App launch repair treat that combination plus a present `CODEX_LB_API_KEY` as configured codex-lb auth. ChatGPT/OpenAI OAuth can be preserved as a backup, but it is not required for the selected codex-lb provider.
+- SKS status and Codex App launch repair treat that combination plus a present `CODEX_LB_API_KEY` as configured codex-lb auth. Imagegen capability checks may record codex-lb as configured routing, but codex-lb is not official Codex App `$imagegen` evidence and must not be used for full generated-image verification unless a separate non-Codex API fallback task is explicitly requested. ChatGPT/OpenAI OAuth can be preserved as a backup, but it is not required for the selected codex-lb provider.
 
 Exact setup-choice effects:
 

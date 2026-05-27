@@ -85,6 +85,12 @@ export interface AgentRunOptions {
   mock?: boolean
   readonly?: boolean
   real?: boolean
+  profile?: string | null
+  workspaceWrite?: boolean
+  writeMode?: 'proof-safe' | 'parallel' | 'serial' | 'off'
+  applyPatches?: boolean
+  dryRunPatches?: boolean
+  maxWriteAgents?: number
 }
 
 export interface AgentTaskSlice {
@@ -114,7 +120,7 @@ export interface AgentLease {
   kind: 'write' | 'read'
   path: string
   domain?: string
-  status: 'active' | 'released'
+  status: 'active' | 'released' | 'conflicted'
 }
 
 export interface AgentRunnerResult {

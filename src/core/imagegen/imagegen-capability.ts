@@ -9,25 +9,56 @@ export async function detectImagegenCapability(opts: any = {}) {
   const env = opts.env || process.env;
   const openaiApiKeyPresent = Boolean(opts.apiKey || env.OPENAI_API_KEY);
   const codexLb = await detectCodexLbImagegenAuth(opts, env);
-  const imageApiAuthPresent = openaiApiKeyPresent || codexLb.available;
-  const fakeAdapterEnabled = opts.fake === true || process.env.SKS_TEST_FAKE_IMAGEGEN === '1';
+  const codexAppBuiltInAvailable = codexApp.available === true;
+  const apiFallbackAvailable = openaiApiKeyPresent;
+  const fakeAdapterEnabled = opts.fake === true || env.SKS_TEST_FAKE_IMAGEGEN === '1';
+  const realGenerationAvailable = codexAppBuiltInAvailable || apiFallbackAvailable;
+  const routeGenerationAvailable = realGenerationAvailable || fakeAdapterEnabled;
+  const coreReady = codexAppBuiltInAvailable;
+  const coreBlockers = coreReady ? [] : ['codex_app_builtin_imagegen_capability_missing'];
+  const routeGenerationBlockers = routeGenerationAvailable ? [] : ['imagegen_capability_missing'];
   return {
     schema: 'sks.imagegen-capability.v1',
     ok: true,
     created_at: nowIso(),
     model: 'gpt-image-2',
-    codex_app: codexApp,
-    codex_lb: codexLb,
+    core_feature: true,
+    core_ready: coreReady,
+    real_generation_available: realGenerationAvailable,
+    codex_app_builtin_output_required: true,
+    real_output_verified_by_capability_check: false,
+    capability_detection_is_not_output_proof: true,
+    preferred_surface: 'Codex App $imagegen',
+    fallback_surface: 'Explicit OpenAI Images API gpt-image-2 fallback (non-Codex evidence)',
+    api_fallback_satisfies_codex_app_evidence: false,
+    full_verification_requires_real_generation: true,
+    codex_app: {
+      ...codexApp,
+      official_surface: '$imagegen',
+      generated_output_required_for_full_verification: true
+    },
+    codex_lb: {
+      ...codexLb,
+      satisfies_codex_app_builtin_evidence: false,
+      accepted_for_core_readiness: false
+    },
     openai_images_api: {
-      available: imageApiAuthPresent,
-      auth_source: openaiApiKeyPresent ? 'OPENAI_API_KEY' : codexLb.available ? 'CODEX_LB_API_KEY' : null,
-      codex_lb_proxy: codexLb.available ? { base_url: codexLb.base_url, env_key: codexLb.env_key } : null,
+      available: apiFallbackAvailable,
+      auth_source: openaiApiKeyPresent ? 'OPENAI_API_KEY' : null,
+      codex_lb_proxy: codexLb.available ? {
+        base_url: codexLb.base_url,
+        env_key: codexLb.env_key,
+        satisfies_codex_app_builtin_evidence: false,
+        accepted_for_core_readiness: false
+      } : null,
       endpoints: {
-        images_edits_supported: imageApiAuthPresent,
-        images_generations_supported: imageApiAuthPresent,
-        responses_image_generation_supported: imageApiAuthPresent
+        images_edits_supported: apiFallbackAvailable,
+        images_generations_supported: apiFallbackAvailable,
+        responses_image_generation_supported: apiFallbackAvailable
       },
-      blocker: imageApiAuthPresent ? null : (codexLb.blocker === 'codex_lb_api_key_missing' ? 'codex_lb_api_key_missing' : 'openai_api_key_missing')
+      blocker: apiFallbackAvailable ? null : 'openai_api_key_missing',
+      official_codex_app_substitute: false,
+      requires_explicit_api_fallback: true
     },
     fake_adapter: {
       available: fakeAdapterEnabled,
@@ -35,15 +66,18 @@ export async function detectImagegenCapability(opts: any = {}) {
       source: 'mock_like_fixture',
       real_generation_claim_allowed: false
     },
-    supports_reference_image: codexApp.available || imageApiAuthPresent || fakeAdapterEnabled,
+    supports_reference_image: codexAppBuiltInAvailable || apiFallbackAvailable || fakeAdapterEnabled,
     gpt_image_2_input_fidelity_automatic: true,
     input_fidelity_must_be_omitted: true,
     supported_workflows: {
-      ux_review_callouts: codexApp.available || imageApiAuthPresent || fakeAdapterEnabled,
-      ppt_slide_callouts: codexApp.available || imageApiAuthPresent || fakeAdapterEnabled,
-      structured_extraction_required_after_generation: true
+      ux_review_callouts: codexAppBuiltInAvailable || apiFallbackAvailable || fakeAdapterEnabled,
+      ppt_slide_callouts: codexAppBuiltInAvailable || apiFallbackAvailable || fakeAdapterEnabled,
+      structured_extraction_required_after_generation: true,
+      full_verification_requires_codex_app_output: true
     },
-    blockers: codexApp.available || imageApiAuthPresent || fakeAdapterEnabled ? [] : ['imagegen_capability_missing']
+    core_blockers: coreBlockers,
+    route_generation_blockers: routeGenerationBlockers,
+    blockers: [...coreBlockers, ...routeGenerationBlockers]
   };
 }
 

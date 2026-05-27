@@ -10,6 +10,7 @@ Bounded 1.0.8 claims:
 - Codex 0.133 plugin discovery and marketplace config are P1 warning-only unless a route explicitly depends on those surfaces.
 - Real UX-Review verification requires a real generated gpt-image-2 annotated callout image and post-fix recapture/re-review evidence for changed screens. Fixture, mock, and unavailable/unlinked imagegen loops are `verified_partial`; unavailable/unlinked imagegen may close as `verified_partial/reference-only` only with source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence.
 - If Codex App imagegen or Computer Use is unavailable, SKS records a structured blocker such as `imagegen_capability_missing` or `live_capture_blocked`; it does not fabricate screenshots, generated callouts, or fixed-screen evidence.
+- The README architecture image replacement is a project-bound imagegen handoff, not generic release readiness. It remains blocked until Codex App exposes a real `$imagegen`/`gpt-image-2` output file created after the current prompt contract; `npm run imagegen:readme-architecture` records the blocker and refuses old generated files, API/codex-lb fallbacks, and moved files without Codex output metadata.
 - Codex Python SDK auth and richer TurnResult integration are P1 warning-only review items; no live SDK accuracy or performance claim is made.
 
 P1 future enhancements:
@@ -25,7 +26,7 @@ Bounded 1.0.7 claims:
 
 - Computer Use live evidence is opt-in. `probe_only` is the default and `live_capture_success` requires official Codex App/macOS capture capability; unavailable capture records `live_capture_blocked` with a structured reason instead of fabricated evidence.
 - Computer Use screenshots are local-only by default. Shared TriWiki can record metadata/anchors, but screenshot binaries are not published automatically.
-- Browser Use evidence and manual screenshots are separate evidence sources, not substitutes for Computer Use live evidence.
+- Browser Use evidence and manual screenshots are separate evidence sources, not substitutes for Codex Chrome Extension web evidence or native Computer Use live evidence.
 - codex-lb setup reports `durable_env_file`, `durable_keychain`, `durable_launchctl`, `shell_profile`, `process_only_ephemeral`, or `none` according to actual setup choices and effects. If all durable choices are off, the next shell may require setup or explicit environment variables again.
 - Recovery commands: `sks computer-use smoke --json`, `sks computer-use smoke --real --capture-screenshot --json`, and `sks codex-lb setup --write-env-file --keychain --launchctl`.
 
@@ -41,7 +42,7 @@ No P0 blocker is intentionally left open for latest Codex hook schema validation
 Bounded claims:
 
 - A local Codex CLI older than `0.133.0` reports `compatibility_degraded`; release hook validation still uses the vendored `latest` snapshot and semantic validator.
-- Live Computer Use availability depends on Codex App and macOS permissions. If the official capability is blocked or unavailable, SKS records the status and does not fabricate UI evidence. Real smoke remains opt-in with `SKS_TEST_REAL_COMPUTER_USE=1`.
+- Live Codex Chrome Extension availability depends on Codex App/browser setup. If it is missing, web/browser/webapp QA and UX routes halt until the user completes setup. Live Computer Use availability depends on Codex App and macOS permissions and is only for native Mac/non-web targets. If either official capability is blocked or unavailable, SKS records the status and does not fabricate visual evidence. Real native smoke remains opt-in with `SKS_TEST_REAL_COMPUTER_USE=1`.
 - codex-lb health checks can still report structured network/auth blockers; the fixed invariant is that raw missing `CODEX_LB_API_KEY` messages and secret leaks are release failures.
 - The 1.0.6 black-box fixtures validate warning-zero, strict-subset classification, setup plan/apply truthfulness, codex-lb missing-env prevention, and no forbidden Computer Use wording; broader real-world Codex App/OS capability permutations remain environment-dependent.
 

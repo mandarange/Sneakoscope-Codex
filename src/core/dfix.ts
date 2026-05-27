@@ -232,6 +232,13 @@ export async function writeDfixPatchPlan(dir: string, opts: any = {}) {
     path_decision: pathDecision,
     selected_template: template.selected_template,
     mode: opts.apply ? 'apply_requested' : 'dry_run',
+    route_parallel_write: {
+      write_mode: opts.writeMode || 'off',
+      apply_patches: opts.applyPatches === true,
+      dry_run_patches: opts.dryRunPatches === true,
+      max_write_agents: Number(opts.maxWriteAgents || 1),
+      route_level_flags_wired: true
+    },
     target_file: opts.file || diagnosis.target_file || null,
     find_text_present: Boolean(opts.findText),
     replace_text_present: Boolean(opts.replaceText),
@@ -274,6 +281,13 @@ export async function writeDfixPatchResult(root: string, dir: string, opts: any 
     created_at: nowIso(),
     explicit_apply_opt_in: opts.apply === true,
     apply_opt_in: opts.apply === true,
+    route_parallel_write: {
+      write_mode: opts.writeMode || 'off',
+      apply_patches: opts.applyPatches === true,
+      dry_run_patches: opts.dryRunPatches === true,
+      max_write_agents: Number(opts.maxWriteAgents || 1),
+      route_level_flags_wired: true
+    },
     patch_mode: plan.patch_mode || (opts.findText != null && opts.replaceText != null ? 'exact_find_replace' : 'codex_patch_handoff'),
     patch_result_present: true,
     patch_applied: runner.patch_applied,

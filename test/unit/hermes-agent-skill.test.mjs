@@ -9,6 +9,7 @@ import {
   defaultHermesSkillDir,
   installHermesSkill
 } from '../../dist/core/hermes.js';
+import { buildOpenClawSkillFiles } from '../../dist/core/openclaw.js';
 import { shouldAutoApproveInstall } from '../../dist/cli/install-helpers.js';
 
 test('Hermes skill files carry slash-command and safety contract', () => {
@@ -23,11 +24,32 @@ test('Hermes skill files carry slash-command and safety contract', () => {
   assert.match(files['SKILL.md'], /requires_toolsets: \[terminal\]/);
   assert.match(files['SKILL.md'], new RegExp(`/${HERMES_SKILL_NAME}`));
   assert.match(files['SKILL.md'], /SKS_HERMES=1/);
+  assert.match(files['SKILL.md'], /LLM Init Prompt For Hermes Agent Builders/);
+  assert.match(files['SKILL.md'], /\[\[mandarange\/Sneakoscope-Codex\]\(https:\/\/github\.com\/mandarange\/Sneakoscope-Codex\)\]/);
+  assert.match(files['SKILL.md'], /\[npm i -g sneakoscope\]/);
   assert.match(files['SKILL.md'], /Database, migration, Supabase/);
+  assert.match(files['README.md'], /LLM Init Prompt/);
+  assert.match(files['README.md'], /\[npm i -g sneakoscope\]/);
   assert.match(files['README.md'], /hermes skills list \| grep sneakoscope-codex/);
   assert.doesNotMatch(files['README.md'], /hermes chat --toolsets/);
   assert.match(files['hermes-config.example.yaml'], /skills:\n  external_dirs:/);
   assert.match(files['hermes-config.example.yaml'], /writable external skill directories/);
+});
+
+test('OpenClaw skill files carry concise LLM init prompt and global install hint', () => {
+  const files = buildOpenClawSkillFiles({ sksCommand: 'sks-test', version: '0.0.0-test' });
+  assert.deepEqual(Object.keys(files).sort(), [
+    'README.md',
+    'SKILL.md',
+    'manifest.yaml',
+    'openclaw-agent-config.example.yaml'
+  ]);
+  assert.match(files['SKILL.md'], /LLM Init Prompt For OpenClaw Agent Builders/);
+  assert.match(files['SKILL.md'], /\[\[mandarange\/Sneakoscope-Codex\]\(https:\/\/github\.com\/mandarange\/Sneakoscope-Codex\)\]/);
+  assert.match(files['SKILL.md'], /\[npm i -g sneakoscope\]/);
+  assert.match(files['SKILL.md'], /SKS_OPENCLAW=1 sks-test root/);
+  assert.match(files['README.md'], /LLM Init Prompt/);
+  assert.match(files['README.md'], /\[npm i -g sneakoscope\]/);
 });
 
 test('Hermes skill path respects HERMES_HOME and HOME', () => {

@@ -19,7 +19,7 @@ for (const route of routes) {
     code: result.code,
     schema: parsed.schema || null,
     status: parsed.status || null,
-    ok_or_structured_blocker: parsed.ok === true || ['available', 'codex_app_missing', 'macos_permission_missing', 'codex_app_capability_missing', 'external_capability_blocked', 'not_macos', 'unknown'].includes(parsed.status),
+    ok_or_structured_blocker: parsed.ok === true || ['available', 'codex_app_missing', 'macos_permission_missing', 'codex_app_capability_missing', 'external_capability_blocked', 'not_macos', 'unknown', 'web_verification_uses_chrome_extension'].includes(parsed.status),
     no_forbidden_wording: !/Computer Use blocked by safety policy|MAD-SKS disabled Computer Use|Computer Use access is unsafe/i.test(text),
     evidence_status: parsed.evidence?.status || null
   });
