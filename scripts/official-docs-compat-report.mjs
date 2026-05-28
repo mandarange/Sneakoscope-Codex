@@ -91,7 +91,7 @@ const sourceValidations = [
 const checks = [
   row('codex_0134_release_matrix', 'rust-v0.134.0', 'src/core/codex/codex-0-134-compat.ts', ['rust-v0.134.0', 'profile_primary_selector', 'local_conversation_history_search', 'mcp_readonly_parallel_hint', 'managed_network_proxy_env']),
   row('codex_0134_official_compat_report', 'rust-v0.134.0', 'scripts/codex-0-134-official-compat-report.mjs', ['sks.codex-0-134-official-compat.v1', 'release_source_url', 'source_delta']),
-  row('codex_0134_profile_primary', 'rust-v0.134.0', 'src/core/agents/agent-runner-codex-exec.ts', ['--profile', '--ignore-user-config', 'profile: opts.profile']),
+  row('codex_0134_profile_primary', 'rust-v0.134.0', 'src/core/codex/codex-cli-syntax-builder.ts', ['--profile', '--ignore-user-config', 'cannot combine --profile with --ignore-user-config']),
   row('codex_0134_managed_proxy_env', 'rust-v0.134.0', 'src/core/codex/managed-proxy-env.ts', ['MANAGED_PROXY_ENV_KEYS', 'HTTPS_PROXY', 'redactProxyValue']),
   row('codex_0134_history_search', 'rust-v0.134.0', 'src/core/source-intelligence/codex-history-search.ts', ['CODEX_HISTORY_SEARCH_SCHEMA', 'case_insensitive', 'redactPreview']),
   row('mcp_0134_modernization', 'rust-v0.134.0', 'src/core/mcp/mcp-0-134-policy.ts', ['readOnlyHint', 'candidate_parallel_readonly', '$defs', 'oauth_configured']),

@@ -72,6 +72,7 @@ export async function runCodexExecWorkerAdapter(input: {
     output_schema_file: input.outputSchemaFile || null,
     fast_mode: input.fastModePolicy.fast_mode,
     service_tier: input.fastModePolicy.service_tier,
+    service_tier_passed_to_codex: command.args.includes('-c') && command.args.includes(`service_tier=${input.fastModePolicy.service_tier}`),
     managed_proxy_env_keys: rawReport?.managed_proxy_env_keys || [],
     recursion_guard_env: rawReport?.recursion_guard_env === true,
     dry_run: rawReport?.dry_run !== false,

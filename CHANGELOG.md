@@ -4,6 +4,26 @@
 
 
 
+## [1.18.12] - 2026-05-29
+
+### Added
+
+- Add Codex config readability proof for `.codex/config.toml`, including parent traversal, stat/lstat, owner/mode, macOS ACL/flags/xattrs/quarantine, symlink safety, Node read, spawned-child read, blockers, operator actions, and JSON reports.
+- Add project-local Codex config policy splitting for ignored profile/provider/auth/notification/telemetry keys with backup, user CODEX_HOME migration, selected profile file migration, and deprecated `approval_policy = "on-failure"` rewriting.
+- Add EPERM repair transactions and MAD launch preflight that run config readability, config policy, safe repair, and Fast service-tier CLI proof before tmux launch.
+- Add a standalone `codex-config-load-probe.mjs` script for model-free current-process and spawned-child config read proof.
+- Add official Codex exec argument builder coverage for `-c service_tier=fast`, profile versus ignore-user-config exclusivity, sandbox, output schema, and output-last-message wiring.
+
+### Fixed
+
+- Prevent `sks doctor --fix` from treating setup output as readiness without Codex child readability proof.
+- Prevent MAD/tmux launches from dropping fast-mode inline CLI overrides or launching past config preflight blockers.
+- Prevent Codex exec process reports from claiming Fast mode without verifying the actual Codex CLI args contain the service tier override.
+
+### Changed
+
+- Bump release metadata from 1.18.11 to 1.18.12 across npm, TypeScript, dist, and Rust version surfaces.
+
 ## [1.18.11] - 2026-05-28
 
 ### Fixed

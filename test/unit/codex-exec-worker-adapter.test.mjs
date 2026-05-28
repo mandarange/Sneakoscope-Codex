@@ -21,4 +21,7 @@ test('codex exec worker adapter dry-run records output schema and output-last-me
   assert.ok(adapter.processReport.command.includes('--output-schema'));
   assert.ok(adapter.processReport.command.includes('--output-last-message'));
   assert.ok(adapter.processReport.command.includes('--skip-git-repo-check'));
+  assert.ok(adapter.processReport.command.includes('-c'));
+  assert.ok(adapter.processReport.command.includes('service_tier=fast'));
+  assert.equal(adapter.processReport.service_tier_passed_to_codex, true);
 });

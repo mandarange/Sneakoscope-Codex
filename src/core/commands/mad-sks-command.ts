@@ -14,6 +14,7 @@ import { createMadSksRollbackPlan, writeMadSksRollbackPlan } from '../mad-sks/ro
 import { runMadSksExecutor } from '../mad-sks/executors/index.js';
 import { applyMadSksRollbackPlan } from '../mad-sks/rollback-apply.js';
 import { writeMadSksTmuxLaneProof } from '../mad-sks/mad-tmux-lane-proof.js';
+import { runCodexLaunchPreflight } from '../preflight/parallel-preflight-engine.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
@@ -53,6 +54,16 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     return;
   }
   const profile = await enableMadHighProfile();
+  const launchRoot = process.cwd();
+  if (!(await exists(path.join(launchRoot, '.sneakoscope')))) await initProject(launchRoot, {});
+  const launchPreflight = await runCodexLaunchPreflight(launchRoot, { fix: true, profile: profile.profile_name, sandbox: 'danger-full-access', serviceTier: 'fast' });
+  if (!launchPreflight.ok) {
+    console.error('SKS MAD launch blocked by config preflight.');
+    for (const blocker of launchPreflight.blockers || []) console.error(`- blocker: ${blocker}`);
+    for (const action of launchPreflight.operator_actions || []) console.error(`- action: ${action}`);
+    process.exitCode = 1;
+    return launchPreflight;
+  }
   const madLaunch = await activateMadTmuxPermissionState(process.cwd(), args);
   console.log(`SKS MAD ready: ${madHighProfileName()} | gate ${madLaunch.mission_id}`);
   console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, DB writes, or system/admin scopes. Catastrophic guards remain.');
@@ -64,7 +75,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   };
   const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
-  const launch = await launchMadTmuxUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, codexArgs: profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, missionId: madLaunch.mission_id });
+  const launch = await launchMadTmuxUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, codexArgs: launchOpts.codexArgs || profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, missionId: madLaunch.mission_id });
   const laneProof = await writeMadSksTmuxLaneProof({ root: madLaunch.root, missionDir: madLaunch.dir, missionId: madLaunch.mission_id, launch, required: true });
   if (!laneProof.ok) console.log(`MAD lane UI action: ${laneProof.operator_action_hint}`);
   return launch;

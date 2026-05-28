@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.11 writes the `sks.release-readiness.v1` report for the Patch Swarm hardening, Native CLI Session Swarm, Real Worker Backend Router, real Codex child overlap proof, model-authored patch envelope separation, and Warp/tmux right-lane physical UI closure DAG. `ok: true` means there are no remaining 1.18.11 runtime-truth closure DAG gaps in the release-readiness slice.
+SKS 1.18.12 writes the `sks.release-readiness.v1` report for Codex config EPERM self-heal, doctor real-fix proof, MAD launch preflight, and official Fast mode service-tier propagation. `ok: true` in the 1.18.12 slice means config readability, project config policy splitting, EPERM repair proof, MAD preflight, and `-c service_tier=fast` propagation evidence have no remaining blockers.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -119,17 +119,17 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.18.11.json`
-- `.sneakoscope/reports/release-readiness-1.18.11.md`
-- `.sneakoscope/reports/all-feature-completion-1.18.11.json`
-- `.sneakoscope/reports/all-feature-completion-1.18.11.md`
-- `.sneakoscope/reports/official-docs-compat-1.18.11.json`
-- `.sneakoscope/reports/official-docs-compat-1.18.11.md`
-- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.11.json`
+- `.sneakoscope/reports/release-readiness-1.18.12.json`
+- `.sneakoscope/reports/release-readiness-1.18.12.md`
+- `.sneakoscope/reports/all-feature-completion-1.18.12.json`
+- `.sneakoscope/reports/all-feature-completion-1.18.12.md`
+- `.sneakoscope/reports/official-docs-compat-1.18.12.json`
+- `.sneakoscope/reports/official-docs-compat-1.18.12.md`
+- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.12.json`
 - `.sneakoscope/reports/agent-real-codex-patch-envelope-smoke.json`
 - `.sneakoscope/reports/agent-real-codex-parallel-workers.json`
-- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.11.json`
-- `.sneakoscope/reports/runtime-truth-matrix-1.18.11.json`
+- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.12.json`
+- `.sneakoscope/reports/runtime-truth-matrix-1.18.12.json`
 - `.sneakoscope/reports/codex-0-134-official-compat.json`
 - `.sneakoscope/reports/codex-0-134-runner-truth.json`
 - `.sneakoscope/reports/mcp-0-134-modernization.json`
@@ -162,7 +162,7 @@ npm run release:readiness
 - `.sneakoscope/reports/dfix-patch-swarm-route-blackbox.json`
 - `.sneakoscope/reports/retention-cleanup-safety.json`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, real Codex parallel worker proof, Warp/tmux right-lane physical proof, and remaining 1.18.11 P0-P9 closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, real Codex parallel worker proof, Warp/tmux right-lane physical proof, and remaining 1.18.12 P0-P9 closure gaps.
 
 ## Priority Closure
 
