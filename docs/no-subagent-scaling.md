@@ -1,6 +1,6 @@
 # No-Subagent Scaling
 
-SKS 1.18.10 worker count is native process count, not Codex internal subagent/scout event count.
+SKS 1.18.11 worker count is native process count, not Codex internal subagent/scout event count.
 
 Policy artifact:
 

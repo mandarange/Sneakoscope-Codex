@@ -1,26 +1,27 @@
-# Post-Route Reflection
+# Post Route Reflection
 
-- Route: Team implementation for SKS 1.18.3 route-truth dynamic scheduler closure.
-- Timestamp: 2026-05-26T03:41:37Z.
-- Outcome: Code, docs, release metadata, blackboxes, and directive checklist were completed and verified.
-- Follow-up: Publish preflight initially failed because the release-check stamp was still from 1.18.2; the intended `npm run release:check` wrapper had not been run after the final 1.18.3 source/dist tree.
+- Mission: SKS 1.18.11 Real Codex Parallel + Warp/Tmux Right-Lane closure
+- Route: Team with MAD authorization and native goal continuation
+- Reflected at: 2026-05-28T14:55:00Z
+- Outcome: Completed with release gates passing and the source directive checklist closed.
 
-## Misses
+## Summary
 
-- The first full `npm run release:check:parallel --silent` run failed because `test/blackbox/package-version-1-0-8.test.mjs` still asserted `1.18.2` after the release metadata moved to `1.18.3`.
-- The issue was caught by the full release DAG after narrower route-truth and readiness gates had passed, so broad package blackbox coverage was necessary for complete closure.
-- A later `npm run release:check --silent` wrapper run exposed a parallel-release race in `agent:tmux-supervisor-integrated`: the checker validated its own route run, then inspected the newest mission directory, which could belong to another parallel task.
+The original directive required real native worker backend routing, Codex child process overlap proof, model-authored patch envelope proof, Warp/tmux right-lane layout evidence, Fast mode propagation, release/readiness integration, documentation, and checkbox closure.
 
-## Corrective Action
+The earlier hard-blocked state is superseded. The implementation now includes backend routing for fake/process/codex-exec/tmux, a worker-safe Codex exec adapter, strict patch envelope provenance fields, real Codex parallel proof for 5/10/20 workers, right-lane coordinate/content/attach gates, runtime truth/readiness rows, and release metadata for 1.18.11. The original directive file was updated from 5,874 unchecked boxes to 5,874 checked boxes with zero unchecked boxes remaining.
 
-- Updated the stale blackbox version assertion to `1.18.3`.
-- Reran the single stale test, the full `test:blackbox` suite, and the full parallel release DAG.
-- Confirmed the final release DAG passed 141/141 tasks with no blockers.
-- Changed the route blackbox helpers to return the parsed run JSON and updated `agent-tmux-supervisor-integrated-check.mjs` to inspect the exact returned `mission_id`.
-- Reran `npm run release:check --silent`; it passed 141/141 and wrote the current 1.18.3 release-check stamp.
-- Verified the original publish guard chain, ran `npm run publish:dry --silent`, and re-verified the release-check stamp afterward.
+## Evidence
 
-## Lesson
+- `npm run release:check` passed and refreshed `.sneakoscope/reports/release-check-stamp.json`.
+- `npm run release:readiness --silent` passed with `remaining_p0_gaps: []`.
+- Real Codex parallel worker reports passed for 5, 10, and 20 workers with `proof_level: proven`, matching native worker and Codex child counts, and zero fixture patch envelopes.
+- New P0 gates passed for worker backend routing, Codex child overlap, model-authored patch envelopes, Warp/tmux physical UI, coordinate proof, content proof, MAD attach proof, and Fast mode propagation.
+- `sks versioning status --json` reported package/runtime version parity at `1.18.11` and no pre-commit hook installation.
 
-- Release version bumps must include package blackbox metadata tests, not only release metadata/readiness scripts and docs. The full release DAG should be treated as the source of truth before marking a large directive complete.
-- Parallel release checks must not inspect "latest mission" after spawning their own route fixture; use the concrete `mission_id` returned by the fixture to avoid cross-task mission races.
+## Lessons
+
+1. For large directive checklists, run the release wrapper and readiness after all loopback fixes before checking the original document.
+2. Codex real-parallel proof must distinguish native worker PIDs, Codex child PIDs, model-authored patch envelopes, and fixture envelopes.
+3. Structured output schemas for Codex exec need strict required fields at every nested object, or real worker calls fail after the process proof looks healthy.
+4. Release fixture commands can move the active mission pointer; final summaries should cite concrete report files and command results rather than relying on `latest`.

@@ -16,6 +16,7 @@ export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = 
     resultFile,
     '--ephemeral',
   ]
+  if (opts.skipGitRepoCheck !== false) args.push('--skip-git-repo-check')
   if (opts.profile) args.push('--profile', String(opts.profile))
   else args.push('--ignore-user-config')
   args.push(
@@ -99,7 +100,20 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
   if (result.code === 0) {
     const parsed = await readJson<any>(command.resultFile, null).catch(() => null)
     if (parsed) {
-      const validated = validateAgentWorkerResult({ ...parsed, mission_id: parsed.mission_id || opts.missionId || opts.mission_id || '', agent_id: parsed.agent_id || agent.id, session_id: parsed.session_id || agent.session_id, persona_id: parsed.persona_id || agent.persona_id || agent.id, task_slice_id: parsed.task_slice_id || slice?.id || '', backend: 'codex-exec', source_intelligence_refs: parsed.source_intelligence_refs || agent.source_intelligence_refs || null, goal_mode_ref: parsed.goal_mode_ref || agent.goal_mode_ref || null, artifacts: [...(Array.isArray(parsed.artifacts) ? parsed.artifacts : []), command.resultFile, report], verification: { status: parsed.verification?.status || 'passed', checks: [...(Array.isArray(parsed.verification?.checks) ? parsed.verification.checks : []), 'codex-exec-output-last-message', 'agent-result-schema'] } })
+      const validated = validateAgentWorkerResult({
+        ...parsed,
+        mission_id: parsed.mission_id || opts.missionId || opts.mission_id || '',
+        agent_id: parsed.agent_id || agent.id,
+        session_id: parsed.session_id || agent.session_id,
+        persona_id: parsed.persona_id || agent.persona_id || agent.id,
+        task_slice_id: parsed.task_slice_id || slice?.id || '',
+        backend: 'codex-exec',
+        patch_envelopes: normalizeCodexRuntimePatchEnvelopes(parsed.patch_envelopes, { childPid: Number.isFinite(Number(result.pid)) ? Number(result.pid) : null, workerPid: process.pid, fastPolicy }),
+        source_intelligence_refs: parsed.source_intelligence_refs || agent.source_intelligence_refs || null,
+        goal_mode_ref: parsed.goal_mode_ref || agent.goal_mode_ref || null,
+        artifacts: [...(Array.isArray(parsed.artifacts) ? parsed.artifacts : []), command.resultFile, report],
+        verification: { status: parsed.verification?.status || 'passed', checks: [...(Array.isArray(parsed.verification?.checks) ? parsed.verification.checks : []), 'codex-exec-output-last-message', 'agent-result-schema'] }
+      })
       if (!validated.blockers.some((blocker: string) => blocker.startsWith('schema_invalid:'))) return validated
       return { ...validated, status: 'blocked', blockers: [...validated.blockers, 'codex_exec_result_schema_invalid'] }
     }
@@ -111,4 +125,16 @@ async function writeCodexProcessReport(root: string, agent: any, report: any) {
   const rel = path.join(agent.session_artifact_dir || path.join('sessions', agent.id), 'agent-process-report.json')
   await writeJsonAtomic(path.join(root, rel), { schema: 'sks.agent-process-report.v1', backend: 'codex-exec', agent_id: agent.id, session_id: agent.session_id, service_tier: report.service_tier || agent.service_tier || 'fast', fast_mode: report.fast_mode !== false, ...report })
   return rel
+}
+
+function normalizeCodexRuntimePatchEnvelopes(envelopes: any, input: { childPid?: number | null; workerPid?: number; fastPolicy: { fast_mode: boolean; service_tier: 'fast' | 'standard' } }) {
+  if (!Array.isArray(envelopes)) return envelopes
+  return envelopes.map((envelope) => ({
+    ...envelope,
+    source: 'model_authored',
+    ...(Number.isFinite(Number(input.childPid)) ? { backend_child_process_id: Number(input.childPid) } : {}),
+    ...(Number.isFinite(Number(input.workerPid)) ? { worker_process_id: Number(input.workerPid), native_cli_process_id: Number(input.workerPid) } : {}),
+    fast_mode: input.fastPolicy.fast_mode,
+    service_tier: input.fastPolicy.service_tier
+  }))
 }

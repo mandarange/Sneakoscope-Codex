@@ -1,6 +1,6 @@
 # MCP ReadOnly Runtime Scheduler
 
-SKS 1.18.10 records runtime proof before MCP `readOnlyHint` can support parallel scheduling claims.
+SKS 1.18.11 records runtime proof before MCP `readOnlyHint` can support parallel scheduling claims.
 
 The release gate is `mcp:readonly-runtime-scheduler`. Its proof requires at least three read-only runtime candidates, overlapping start/end windows among only those candidates, serialized write-capable rows, and blocked destructive-name or destructive-schema false positives. Each tool row records `scheduled_mode`, `batch_id`, timestamps, duration, and any serialization reason.
 

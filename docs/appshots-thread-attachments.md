@@ -1,6 +1,6 @@
 # Appshots Thread Attachments
 
-SKS 1.18.10 keeps Codex thread attachment provenance mandatory for Codex Appshot sources without claiming that the CLI can create Appshots.
+SKS 1.18.11 keeps Codex thread attachment provenance mandatory for Codex Appshot sources without claiming that the CLI can create Appshots.
 
 SKS treats Appshots as operator-provided Codex App evidence. The CLI does not claim to create Appshots on its own.
 

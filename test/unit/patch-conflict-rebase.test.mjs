@@ -35,3 +35,44 @@ test('patch conflict rebase blocks unleased groups by policy', async () => {
   assert.deepEqual(rebase.blocked_entry_ids, [entry.id]);
   assert.match(rebase.blockers.join('\n'), /serial_rebase_blocked_by_policy/);
 });
+
+test('patch conflict rebase records unreconcilable and subtree failures as blockers', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-rebase-failures-'));
+  await fs.writeFile(path.join(root, 'same.txt'), 'base\n');
+  const queue = new InMemoryAgentPatchQueue();
+  queue.enqueue({ agent_id: 'agent-a', session_id: 's-a', slot_id: 'slot-a', generation_index: 1, lease_id: 'lease-a', rollback_hint: { node_id: 'rollback-a' }, operations: [{ op: 'replace', path: 'same.txt', search: 'missing', replace: 'a' }] });
+  queue.enqueue({ agent_id: 'agent-b', session_id: 's-b', slot_id: 'slot-b', generation_index: 1, lease_id: 'lease-b', rollback_hint: { node_id: 'rollback-b' }, operations: [{ op: 'write', path: 'tree/child.txt', content: 'child\n' }] });
+  queue.enqueue({ agent_id: 'agent-c', session_id: 's-c', slot_id: 'slot-c', generation_index: 1, lease_id: 'lease-c', rollback_hint: { node_id: 'rollback-c' }, operations: [{ op: 'write', path: 'tree', content: 'parent\n' }] });
+  const entries = queue.queued();
+  const rebase = await executeAgentPatchConflictRebase(root, entries, {
+    serial_merge_groups: [
+      { group_id: 'same-failed', reason: 'parallel_write_conflict:same.txt', file: 'same.txt', entry_ids: [entries[0].id] },
+      { group_id: 'subtree-failed', reason: 'subtree_write_conflict:tree<->tree/child.txt', file: 'tree<->tree/child.txt', entry_ids: [entries[1].id, entries[2].id] }
+    ]
+  });
+  assert.equal(rebase.ok, false);
+  assert.match(rebase.blockers.join('\n'), /search_not_found/);
+  assert.match(rebase.blockers.join('\n'), /serial_rebase_exception/);
+  assert.ok(rebase.failed_entry_ids.includes(entries[0].id));
+  assert.ok(rebase.failed_entry_ids.includes(entries[2].id));
+});
+
+test('patch conflict rebase keeps domain retries policy-controlled and stale contexts retryable', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-rebase-policy-'));
+  await fs.writeFile(path.join(root, 'stale.txt'), 'current\n');
+  const queue = new InMemoryAgentPatchQueue();
+  queue.enqueue({ agent_id: 'agent-a', session_id: 's-a', slot_id: 'slot-a', generation_index: 1, lease_id: 'lease-a', rollback_hint: { node_id: 'rollback-a' }, operations: [{ op: 'write', path: 'domain-a.txt', content: 'a\n' }] });
+  queue.enqueue({ agent_id: 'agent-b', session_id: 's-b', slot_id: 'slot-b', generation_index: 1, lease_id: 'lease-b', rollback_hint: { node_id: 'rollback-b' }, operations: [{ op: 'write', path: 'domain-b.txt', content: 'b\n' }] });
+  queue.enqueue({ agent_id: 'agent-c', session_id: 's-c', slot_id: 'slot-c', generation_index: 1, lease_id: 'lease-c', rollback_hint: { node_id: 'rollback-c' }, operations: [{ op: 'replace', path: 'stale.txt', search: 'current', replace: 'rebased' }] });
+  const entries = queue.queued();
+  const domainBlocked = await executeAgentPatchConflictRebase(root, entries.slice(0, 2), {
+    serial_merge_groups: [{ group_id: 'domain-blocked', reason: 'domain_conflict:shared', file: 'shared', entry_ids: entries.slice(0, 2).map((entry) => entry.id) }]
+  });
+  const stale = await executeAgentPatchConflictRebase(root, [entries[2]], {
+    serial_merge_groups: [{ group_id: 'stale', reason: 'stale_context:stale.txt', file: 'stale.txt', entry_ids: [entries[2].id] }]
+  });
+  assert.equal(domainBlocked.ok, false);
+  assert.equal(domainBlocked.blocked_entry_ids.length, 2);
+  assert.equal(stale.ok, true);
+  assert.deepEqual(stale.succeeded_entry_ids, [entries[2].id]);
+});

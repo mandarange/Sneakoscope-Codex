@@ -79,6 +79,7 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
         required: ['schema', 'agent_id', 'session_id', 'slot_id', 'generation_index', 'operations'],
         properties: {
           schema: { const: 'sks.agent-patch-envelope.v1' },
+          source: { enum: ['fixture', 'model_authored', 'process_generated', 'tmux_generated'] },
           mission_id: { type: 'string' },
           route: { type: 'string' },
           agent_id: { type: 'string', minLength: 1 },
@@ -88,9 +89,16 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
           task_slice_id: { type: 'string' },
           native_cli_worker_session_id: { type: 'string' },
           native_cli_process_id: { type: 'number' },
+          worker_process_id: { type: 'number' },
+          backend_child_process_id: { type: 'number' },
           fast_mode: { type: 'boolean' },
           service_tier: { enum: ['fast', 'standard'] },
           lease_id: { type: 'string' },
+          allowed_paths: { type: 'array', items: { type: 'string' } },
+          strategy_task_id: { type: 'string' },
+          micro_win_id: { type: 'string' },
+          verification_node_id: { type: 'string' },
+          rollback_node_id: { type: 'string' },
           lease_proof: {
             type: 'object',
             properties: {
@@ -134,6 +142,13 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
     patch_queue_refs: { type: 'array', items: { type: 'string' } },
     applied_patch_refs: { type: 'array', items: { type: 'string' } },
     rollback_refs: { type: 'array', items: { type: 'string' } },
+    backend_router_report: { type: 'object', additionalProperties: true },
+    codex_child_report: { type: 'object', additionalProperties: true },
+    process_child_report: { type: 'object', additionalProperties: true },
+    tmux_child_report: { type: 'object', additionalProperties: true },
+    model_authored_patch_envelopes: { type: 'boolean' },
+    fixture_patch_envelopes: { type: 'boolean' },
+    no_patch_reason: { type: 'object', additionalProperties: true },
     follow_up_work_items: {
       type: 'array',
       items: {

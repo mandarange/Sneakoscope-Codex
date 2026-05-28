@@ -54,8 +54,10 @@ fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
 
 assertGate(discovery.attachments.some((row) => row.kind === 'appshot' && row.thread_id && row.attachment_id), 'Appshots discovery must retain thread and attachment ids', report);
+assertGate(discovery.attachments.some((row) => row.kind === 'appshot' && row.source_app && row.source_window && row.local_only === true), 'Appshots discovery must retain source app, source window, and local-only provenance', report);
 assertGate(discovery.attachments.some((row) => row.kind === 'text'), 'Appshots discovery must classify text attachments when metadata exists', report);
 assertGate(evidence.thread_attachment_discovery.appshot_attachment_count === 1, 'Appshots evidence must embed thread attachment discovery', report);
+assertGate(evidence.source_verification.every((row) => row.source_type !== 'codex_appshot' || (row.thread_id && row.attachment_id && row.source_app && row.source_window && row.local_only === true)), 'Appshots codex_appshot evidence must preserve thread, attachment, source, and local-only fields', report);
 assertGate(!JSON.stringify(report).includes('CLI-created'), 'Appshots evidence must not claim CLI-created Appshots', report);
 assertGate(missing.operator_action_required === true, 'Missing required Appshot must request operator action', report);
 emitGate('appshots:thread-attachment-discovery', { appshot_attachment_count: discovery.appshot_attachment_count });

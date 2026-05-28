@@ -282,7 +282,7 @@ function objectiveLadder(prompt: string): string[] {
 
 function inferWriteTargets(prompt: string): string[] {
   const matches = [...String(prompt || '').matchAll(/`([^`]+\.(?:ts|mjs|js|json|md|toml|rs|txt))`/g)].map((match) => match[1] || '')
-  return uniquePaths(matches).filter((file) => !isProtectedPath(file)).slice(0, 12)
+  return uniquePaths(matches).filter((file) => !isProtectedPath(file)).slice(0, 32)
 }
 
 function inferReadonlyTargets(prompt: string): string[] {

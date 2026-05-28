@@ -55,6 +55,13 @@ const checks = {
   agent_native_cli_session_swarm_20: scriptContains('release:check', 'agent:native-cli-session-swarm-20'),
   agent_no_subagent_scaling: scriptContains('release:check', 'agent:no-subagent-scaling'),
   agent_native_cli_session_proof: scriptContains('release:check', 'agent:native-cli-session-proof'),
+  agent_worker_backend_router: scriptContains('release:check', 'agent:worker-backend-router'),
+  agent_codex_child_overlap: scriptContains('release:check', 'agent:codex-child-overlap'),
+  agent_model_authored_patch_envelope: scriptContains('release:check', 'agent:model-authored-patch-envelope'),
+  tmux_warp_right_lane_physical_ui: scriptContains('release:check', 'tmux:warp-right-lane-physical-ui'),
+  tmux_right_lane_coordinate_proof: scriptContains('release:check', 'tmux:right-lane-coordinate-proof'),
+  tmux_right_lane_content_proof: scriptContains('release:check', 'tmux:right-lane-content-proof'),
+  mad_sks_warp_right_lane_attach: scriptContains('release:check', 'mad-sks:warp-right-lane-attach'),
   agent_fast_mode_default: scriptContains('release:check', 'agent:fast-mode-default'),
   agent_fast_mode_worker_propagation: scriptContains('release:check', 'agent:fast-mode-worker-propagation'),
   codex_fast_mode_profile_propagation: scriptContains('release:check', 'codex:fast-mode-profile-propagation'),
@@ -131,6 +138,10 @@ const checks = {
   route_blackbox_realism: scriptContains('release:check:parallel', 'route:blackbox-realism'),
   real_tmux_physical_proof: scriptContains('release:real-check', 'agent:real-tmux-physical-proof'),
   real_codex_patch_envelope_smoke: scriptContains('release:real-check', 'agent:real-codex-patch-envelope-smoke'),
+  real_codex_parallel_workers: scriptContains('release:real-check', 'agent:real-codex-parallel-workers'),
+  real_codex_parallel_workers_5: scriptContains('release:real-check', 'agent:real-codex-parallel-workers-5'),
+  real_codex_parallel_workers_10: scriptContains('release:real-check', 'agent:real-codex-parallel-workers-10'),
+  real_codex_parallel_workers_20: scriptContains('release:real-check', 'agent:real-codex-parallel-workers-20'),
   real_codex_dynamic_smoke_v2: scriptContains('release:real-check', 'agent:real-codex-dynamic-smoke-v2'),
   real_codex_dynamic_smoke: scriptContains('release:real-check', 'agent:real-codex-dynamic-smoke'),
   agent_dynamic_cockpit: scriptContains('release:check:parallel', 'agent:dynamic-cockpit'),
@@ -230,6 +241,14 @@ const runtimeReports = {
   agent_native_cli_session_swarm_20: readJson('.sneakoscope/reports/agent-native-cli-session-swarm-20.json', null),
   agent_no_subagent_scaling: readJson('.sneakoscope/reports/agent-no-subagent-scaling.json', null),
   agent_native_cli_session_proof: readJson('.sneakoscope/reports/agent-native-cli-session-proof.json', null),
+  agent_worker_backend_router: readJson('.sneakoscope/reports/agent-worker-backend-router.json', null),
+  agent_codex_child_overlap: readJson('.sneakoscope/reports/agent-codex-child-overlap.json', null),
+  agent_model_authored_patch_envelope: readJson('.sneakoscope/reports/agent-model-authored-patch-envelope.json', null),
+  tmux_warp_right_lane_physical_ui: readJson('.sneakoscope/reports/tmux-right-lane-physical-layout-proof.json', null),
+  tmux_right_lane_coordinate_proof: readJson('.sneakoscope/reports/tmux-right-lane-coordinate-proof.json', null),
+  tmux_right_lane_content_proof: readJson('.sneakoscope/reports/tmux-right-lane-content-proof.json', null),
+  mad_sks_warp_right_lane_attach: readJson('.sneakoscope/reports/mad-sks-warp-right-lane-attach.json', null),
+  real_codex_parallel_workers: readJson('.sneakoscope/reports/agent-real-codex-parallel-workers.json', null),
   agent_fast_mode_default: readJson('.sneakoscope/reports/agent-fast-mode-default.json', null),
   agent_fast_mode_worker_propagation: readJson('.sneakoscope/reports/agent-fast-mode-worker-propagation.json', null),
   codex_fast_mode_profile_propagation: readJson('.sneakoscope/reports/codex-fast-mode-profile-propagation.json', null),
@@ -260,6 +279,9 @@ const runtimeChecks = {
   ,
   real_codex_patch_envelope_smoke: !runtimeReports.real_codex_patch_envelope_smoke
     || ['proven', 'fixture_instrumented_real', 'integration_optional'].includes(String(runtimeReports.real_codex_patch_envelope_smoke?.proof_level || runtimeReports.real_codex_patch_envelope_smoke?.status || ''))
+  ,
+  real_codex_parallel_workers: !runtimeReports.real_codex_parallel_workers
+    || ['proven', 'fixture_instrumented_real', 'integration_optional'].includes(String(runtimeReports.real_codex_parallel_workers?.proof_level || runtimeReports.real_codex_parallel_workers?.status || ''))
   ,
   retention_cleanup_safety: runtimeReports.retention_cleanup_safety?.ok === true
 };
@@ -348,6 +370,13 @@ for (const [name, ok] of Object.entries({
   agent_native_cli_session_swarm_20: checks.agent_native_cli_session_swarm_20 && runtimeReports.agent_native_cli_session_swarm_20?.ok === true,
   agent_no_subagent_scaling: checks.agent_no_subagent_scaling && runtimeReports.agent_no_subagent_scaling?.ok === true,
   agent_native_cli_session_proof: checks.agent_native_cli_session_proof && runtimeReports.agent_native_cli_session_proof?.ok === true,
+  agent_worker_backend_router: checks.agent_worker_backend_router && runtimeReports.agent_worker_backend_router?.ok === true,
+  agent_codex_child_overlap: checks.agent_codex_child_overlap && runtimeReports.agent_codex_child_overlap?.ok === true,
+  agent_model_authored_patch_envelope: checks.agent_model_authored_patch_envelope && runtimeReports.agent_model_authored_patch_envelope?.ok === true,
+  tmux_warp_right_lane_physical_ui: checks.tmux_warp_right_lane_physical_ui && runtimeReports.tmux_warp_right_lane_physical_ui?.ok === true,
+  tmux_right_lane_coordinate_proof: checks.tmux_right_lane_coordinate_proof && runtimeReports.tmux_right_lane_coordinate_proof?.ok === true,
+  tmux_right_lane_content_proof: checks.tmux_right_lane_content_proof && runtimeReports.tmux_right_lane_content_proof?.ok === true,
+  mad_sks_warp_right_lane_attach: checks.mad_sks_warp_right_lane_attach && runtimeReports.mad_sks_warp_right_lane_attach?.ok === true,
   agent_fast_mode_default: checks.agent_fast_mode_default && runtimeReports.agent_fast_mode_default?.ok === true,
   agent_fast_mode_worker_propagation: checks.agent_fast_mode_worker_propagation && runtimeReports.agent_fast_mode_worker_propagation?.ok === true,
   codex_fast_mode_profile_propagation: checks.codex_fast_mode_profile_propagation && runtimeReports.codex_fast_mode_profile_propagation?.ok === true,
@@ -444,7 +473,7 @@ const report = {
 	    real_patch_envelope_smoke_proof_level: runtimeReports.real_codex_patch_envelope_smoke?.proof_level || null,
 	    local_history_search: checks.source_intelligence_codex_history_search
 	  },
-	  real_codex_patch_envelope_smoke_1_18_10: {
+	  real_codex_patch_envelope_smoke_1_18_11: {
 	    status: checks.real_codex_patch_envelope_smoke && runtimeChecks.real_codex_patch_envelope_smoke ? 'present' : 'missing',
 	    gate: 'agent:real-codex-patch-envelope-smoke',
 	    report: '.sneakoscope/reports/agent-real-codex-patch-envelope-smoke.json',
@@ -554,6 +583,31 @@ const report = {
     native_cli_session_proof_report_ok: runtimeReports.agent_native_cli_session_proof ? runtimeReports.agent_native_cli_session_proof.ok === true : null,
     max_observed_10: runtimeReports.agent_native_cli_session_swarm_10?.native_cli_session_proof?.max_observed_worker_process_count || null,
     max_observed_20: runtimeReports.agent_native_cli_session_swarm_20?.native_cli_session_proof?.max_observed_worker_process_count || null
+  },
+  real_codex_parallel_workers_1_18_11: {
+    status: checks.agent_worker_backend_router
+      && checks.agent_codex_child_overlap
+      && checks.agent_model_authored_patch_envelope
+      && checks.tmux_warp_right_lane_physical_ui
+      && checks.tmux_right_lane_coordinate_proof
+      && checks.tmux_right_lane_content_proof
+      && checks.mad_sks_warp_right_lane_attach
+      && runtimeReports.agent_worker_backend_router?.ok === true
+      && runtimeReports.agent_codex_child_overlap?.ok === true
+      && runtimeReports.agent_model_authored_patch_envelope?.ok === true
+      && runtimeReports.tmux_warp_right_lane_physical_ui?.ok === true
+      && runtimeReports.tmux_right_lane_coordinate_proof?.ok === true
+      && runtimeReports.tmux_right_lane_content_proof?.ok === true
+      && runtimeReports.mad_sks_warp_right_lane_attach?.ok === true ? 'present' : 'missing',
+    worker_backend_router: checks.agent_worker_backend_router,
+    codex_child_overlap: checks.agent_codex_child_overlap,
+    model_authored_patch_envelope: checks.agent_model_authored_patch_envelope,
+    tmux_physical_ui: checks.tmux_warp_right_lane_physical_ui,
+    tmux_coordinate_proof: checks.tmux_right_lane_coordinate_proof,
+    tmux_content_proof: checks.tmux_right_lane_content_proof,
+    mad_warp_attach: checks.mad_sks_warp_right_lane_attach,
+    real_codex_parallel_optional: runtimeReports.real_codex_parallel_workers?.status || null,
+    real_codex_parallel_proof_level: runtimeReports.real_codex_parallel_workers?.proof_level || null
   },
   fast_mode_default_1_18_10: {
     status: checks.agent_fast_mode_default
@@ -861,6 +915,8 @@ for (const key of [
   'parallel_write_kernel_1_18_9',
   'patch_swarm_runtime_1_18_9',
   'native_cli_session_swarm_1_18_10',
+  'real_codex_patch_envelope_smoke_1_18_11',
+  'real_codex_parallel_workers_1_18_11',
   'fast_mode_default_1_18_10',
   'mad_sks_actual_executor_closure',
   'image_ux_review',
@@ -951,7 +1007,8 @@ function renderMarkdown(report) {
 - Computer Use evidence modes: \`${report.computer_use_evidence_mode_support.status}\`
 - Imagegen core gpt-image-2 readiness: \`${report.imagegen_core.status}\` (Codex App $imagegen required; capability detection is not output proof)
 - Codex 0.134 compatibility: \`${report.codex_0_134.status}\`
-- Real Codex patch envelope smoke 1.18.10: \`${report.real_codex_patch_envelope_smoke_1_18_10.status}\` (${report.real_codex_patch_envelope_smoke_1_18_10.proof_level || 'not_reported'})
+- Real Codex patch envelope smoke ${RELEASE_VERSION}: \`${report.real_codex_patch_envelope_smoke_1_18_11.status}\` (${report.real_codex_patch_envelope_smoke_1_18_11.proof_level || 'not_reported'})
+- Real Codex parallel workers ${RELEASE_VERSION}: \`${report.real_codex_parallel_workers_1_18_11.status}\` (${report.real_codex_parallel_workers_1_18_11.real_codex_parallel_proof_level || 'not_reported'})
 - Codex 0.133 compatibility: \`${report.codex_0_133.status}\`
 - MCP 0.134 modernization: \`${report.mcp_0_134.status}\`
 - Parallel write kernel ${RELEASE_VERSION}: \`${report.parallel_write_kernel_1_18_9.status}\`

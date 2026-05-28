@@ -25,6 +25,17 @@
     "artifacts",
     "unverified",
     "writes",
+    "patch_envelopes",
+    "patch_queue_refs",
+    "applied_patch_refs",
+    "rollback_refs",
+    "backend_router_report",
+    "codex_child_report",
+    "process_child_report",
+    "tmux_child_report",
+    "model_authored_patch_envelopes",
+    "fixture_patch_envelopes",
+    "no_patch_reason",
     "follow_up_work_items",
     "source_intelligence_refs",
     "goal_mode_ref",
@@ -62,9 +73,37 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["schema", "agent_id", "session_id", "slot_id", "generation_index", "operations"],
+        "required": [
+          "schema",
+          "source",
+          "mission_id",
+          "route",
+          "agent_id",
+          "session_id",
+          "slot_id",
+          "generation_index",
+          "task_slice_id",
+          "native_cli_worker_session_id",
+          "native_cli_process_id",
+          "worker_process_id",
+          "backend_child_process_id",
+          "fast_mode",
+          "service_tier",
+          "lease_id",
+          "allowed_paths",
+          "strategy_task_id",
+          "micro_win_id",
+          "verification_node_id",
+          "rollback_node_id",
+          "lease_proof",
+          "operations",
+          "rationale",
+          "verification_hint",
+          "rollback_hint"
+        ],
         "properties": {
           "schema": { "type": "string", "const": "sks.agent-patch-envelope.v1" },
+          "source": { "type": "string", "enum": ["fixture", "model_authored", "process_generated", "tmux_generated"] },
           "mission_id": { "type": "string" },
           "route": { "type": "string" },
           "agent_id": { "type": "string", "minLength": 1 },
@@ -74,11 +113,30 @@
           "task_slice_id": { "type": "string" },
           "native_cli_worker_session_id": { "type": "string" },
           "native_cli_process_id": { "type": "number" },
+          "worker_process_id": { "type": "number" },
+          "backend_child_process_id": { "type": "number" },
           "fast_mode": { "type": "boolean" },
           "service_tier": { "type": "string", "enum": ["fast", "standard"] },
           "lease_id": { "type": "string" },
+          "allowed_paths": { "type": "array", "items": { "type": "string" } },
+          "strategy_task_id": { "type": "string" },
+          "micro_win_id": { "type": "string" },
+          "verification_node_id": { "type": "string" },
+          "rollback_node_id": { "type": "string" },
           "lease_proof": {
             "type": "object",
+            "required": [
+              "lease_id",
+              "owner_agent",
+              "owner_persona",
+              "allowed_paths",
+              "strategy_task_id",
+              "micro_win_id",
+              "protected_path_check",
+              "conflict_prediction_id",
+              "verification_node_id",
+              "rollback_node_id"
+            ],
             "properties": {
               "lease_id": { "type": "string" },
               "owner_agent": { "type": "string" },
@@ -98,7 +156,7 @@
             "minItems": 1,
             "items": {
               "type": "object",
-              "required": ["op", "path"],
+              "required": ["op", "path", "search", "replace", "content", "diff"],
               "properties": {
                 "op": { "type": "string", "enum": ["replace", "write", "unified_diff"] },
                 "path": { "type": "string", "minLength": 1 },
@@ -113,11 +171,25 @@
           "rationale": { "type": "string" },
           "verification_hint": {
             "type": "object",
-            "additionalProperties": { "type": "string" }
+            "required": ["command", "node_id", "artifact", "notes"],
+            "properties": {
+              "command": { "type": "string" },
+              "node_id": { "type": "string" },
+              "artifact": { "type": "string" },
+              "notes": { "type": "string" }
+            },
+            "additionalProperties": false
           },
           "rollback_hint": {
             "type": "object",
-            "additionalProperties": { "type": "string" }
+            "required": ["command", "node_id", "artifact", "notes"],
+            "properties": {
+              "command": { "type": "string" },
+              "node_id": { "type": "string" },
+              "artifact": { "type": "string" },
+              "notes": { "type": "string" }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -126,6 +198,13 @@
     "patch_queue_refs": { "type": "array", "items": { "type": "string" } },
     "applied_patch_refs": { "type": "array", "items": { "type": "string" } },
     "rollback_refs": { "type": "array", "items": { "type": "string" } },
+    "backend_router_report": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
+    "codex_child_report": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
+    "process_child_report": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
+    "tmux_child_report": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
+    "model_authored_patch_envelopes": { "type": "boolean" },
+    "fixture_patch_envelopes": { "type": "boolean" },
+    "no_patch_reason": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
     "follow_up_work_items": {
       "type": "array",
       "items": {

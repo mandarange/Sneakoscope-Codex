@@ -20,6 +20,12 @@ const requiredRows = [
   'mcp_0_134',
   'parallel_write',
   'patch_proof',
+  'native_cli_session_swarm',
+  'real_codex_parallel_workers',
+  'native_worker_backend_router',
+  'codex_child_overlap',
+  'model_authored_patch_envelopes',
+  'fast_mode_child_propagation',
   'cleanup_v4',
   'ast_type_work_graph',
   'warp_mad_right_lanes'
