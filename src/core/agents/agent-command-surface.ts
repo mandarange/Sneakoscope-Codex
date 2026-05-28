@@ -2,7 +2,7 @@ import { DEFAULT_AGENT_COUNT } from './agent-schema.js'
 
 export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const first = args[0] && !String(args[0]).startsWith('--') ? String(args[0]) : ''
-  const actions = new Set(['run', 'status', 'plan', 'spawn', 'watch', 'dashboard', 'cockpit', 'lane', 'board', 'ledger', 'collect', 'consensus', 'close', 'cleanup', 'proof', 'explain'])
+  const actions = new Set(['run', 'status', 'plan', 'spawn', 'watch', 'dashboard', 'cockpit', 'lane', 'board', 'ledger', 'collect', 'consensus', 'close', 'cleanup', 'proof', 'explain', 'rollback-patches'])
   const action = actions.has(first) ? first : 'run'
   const rest = action === first ? args.slice(1) : args
   const json = hasFlag(args, '--json')

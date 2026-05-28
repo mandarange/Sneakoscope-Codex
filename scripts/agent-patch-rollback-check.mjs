@@ -12,6 +12,11 @@ fs.writeFileSync(file, 'before\n');
 const envelope = {
   schema: 'sks.agent-patch-envelope.v1',
   agent_id: 'rollback-agent',
+  session_id: 'rollback-session',
+  slot_id: 'rollback-slot',
+  generation_index: 1,
+  lease_id: 'lease:rollback-agent:rollback.txt',
+  rollback_hint: { node_id: 'rollback-fixture' },
   operations: [
     { op: 'replace', path: 'rollback.txt', search: 'before', replace: 'after' },
     { op: 'write', path: 'created.txt', content: 'created\n' }

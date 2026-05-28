@@ -2,6 +2,7 @@ import path from 'node:path'
 import { runProcess, writeJsonAtomic } from '../fsx.js'
 import { scanAgentTextForRecursion } from './agent-recursion-guard.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
+import { buildFixturePatchEnvelopes } from './agent-runner-fake.js'
 
 export async function runProcessAgent(agent: any, slice: any, opts: any = {}) {
   const planned = opts.command ? scanCommandForRecursion(opts.command) : { ok: true, violations: [] }
@@ -24,6 +25,7 @@ export async function runProcessAgent(agent: any, slice: any, opts: any = {}) {
     })
   }
   if (!opts.command) {
+    const patchEnvelopes = buildFixturePatchEnvelopes(agent, slice, opts)
     return validateAgentWorkerResult({
       mission_id: opts.missionId || opts.mission_id || '',
       agent_id: agent.id,
@@ -37,6 +39,7 @@ export async function runProcessAgent(agent: any, slice: any, opts: any = {}) {
       blockers: [],
       unverified: ['no process command supplied'],
       writes: [],
+      ...(patchEnvelopes.length ? { patch_envelopes: patchEnvelopes } : {}),
       source_intelligence_refs: agent.source_intelligence_refs || null,
       goal_mode_ref: agent.goal_mode_ref || null,
       ...(opts.emitFollowUpWorkItems ? { follow_up_work_items: [buildFixtureFollowUp(agent, slice)] } : {})

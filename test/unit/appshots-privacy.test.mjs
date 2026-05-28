@@ -48,7 +48,11 @@ function appshotFixture({ redacted, localOnly }) {
       frontmost_window: true,
       redacted,
       local_only: localOnly,
-      fixture: true
+      fixture: true,
+      thread_id: 'thread-fixture-privacy',
+      attachment_id: 'attachment-fixture-privacy',
+      source_app: 'Codex',
+      source_window: 'Fixture Appshot'
     }
   };
 }

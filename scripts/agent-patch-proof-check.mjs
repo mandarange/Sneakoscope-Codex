@@ -18,8 +18,8 @@ const proof = proofMod.buildAgentPatchProof({
   },
   merge: { ok: true, blockers: [] },
   applyResults: [
-    { ok: true, changed_files: ['a.txt'], rollback_digest: 'digest-a' },
-    { ok: true, changed_files: ['b.txt'], rollback_digest: 'digest-b' }
+    { ok: true, changed_files: ['a.txt'], rollback_digest: 'digest-a', verification: { status: 'unit-fixture' } },
+    { ok: true, changed_files: ['b.txt'], rollback_digest: 'digest-b', verification: { status: 'unit-fixture' } }
   ],
   verification: ['unit-fixture']
 });

@@ -23,7 +23,7 @@ export interface StrategyCompileResult {
   }
   file_ownership_plan: {
     schema: typeof FILE_OWNERSHIP_PLAN_SCHEMA
-    owners: Array<{ path: string; owner_agent: string; task_id: string; access: 'write' | 'read' }>
+    owners: Array<{ path: string; owner_agent: string; owner_persona: string; task_id: string; micro_win_id: string; access: 'write' | 'read'; protected_path_check: { ok: boolean; blockers: string[] }; conflict_prediction_id: string | null; verification_node_id: string | null; rollback_node_id: string | null }>
     protected_write_paths: string[]
     no_overlap: boolean
   }
@@ -86,12 +86,38 @@ export async function writeStrategyCompilerArtifacts(root: string, compiled: Str
 function buildOwnershipPlan(tasks: MicroWinTask[]): StrategyCompileResult['file_ownership_plan'] {
   const owners: StrategyCompileResult['file_ownership_plan']['owners'] = []
   const protectedWritePaths: string[] = []
+  const verificationNodeId = tasks.find((task) => task.kind === 'verification')?.id || null
+  const rollbackNodeId = tasks.find((task) => task.kind === 'rollback')?.id || null
+  const writeConflicts = findWriteConflicts(tasks.filter((task) => task.kind === 'write'))
   for (const task of tasks) {
     for (const file of task.write_paths) {
-      if (isProtectedPath(file)) protectedWritePaths.push(file)
-      owners.push({ path: file, owner_agent: task.owner_agent, task_id: task.id, access: 'write' })
+      const protectedPath = isProtectedPath(file)
+      if (protectedPath) protectedWritePaths.push(file)
+      owners.push({
+        path: file,
+        owner_agent: task.owner_agent,
+        owner_persona: task.owner_persona,
+        task_id: task.id,
+        micro_win_id: task.id,
+        access: 'write',
+        protected_path_check: { ok: !protectedPath, blockers: protectedPath ? [`protected_write:${file}`] : [] },
+        conflict_prediction_id: writeConflicts.find((conflict) => conflict.task_ids.includes(task.id))?.path || null,
+        verification_node_id: verificationNodeId,
+        rollback_node_id: rollbackNodeId
+      })
     }
-    for (const file of task.readonly_paths) owners.push({ path: file, owner_agent: task.owner_agent, task_id: task.id, access: 'read' })
+    for (const file of task.readonly_paths) owners.push({
+      path: file,
+      owner_agent: task.owner_agent,
+      owner_persona: task.owner_persona,
+      task_id: task.id,
+      micro_win_id: task.id,
+      access: 'read',
+      protected_path_check: { ok: true, blockers: [] },
+      conflict_prediction_id: null,
+      verification_node_id: verificationNodeId,
+      rollback_node_id: rollbackNodeId
+    })
   }
   const writeOwners = owners.filter((owner) => owner.access === 'write')
   const noOverlap = protectedWritePaths.length === 0 && writeOwners.every((owner, index) => {

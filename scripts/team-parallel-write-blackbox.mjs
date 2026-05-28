@@ -11,8 +11,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-team-patch-'));
 fs.writeFileSync(path.join(tmp, 'team-a.txt'), 'lane-a\n');
 fs.writeFileSync(path.join(tmp, 'team-b.txt'), 'lane-b\n');
 const envelopes = [
-  { schema: 'sks.agent-patch-envelope.v1', agent_id: 'reviewer-a', operations: [{ op: 'replace', path: 'team-a.txt', search: 'lane-a', replace: 'lane-a-done' }] },
-  { schema: 'sks.agent-patch-envelope.v1', agent_id: 'reviewer-b', operations: [{ op: 'replace', path: 'team-b.txt', search: 'lane-b', replace: 'lane-b-done' }] }
+  { schema: 'sks.agent-patch-envelope.v1', agent_id: 'reviewer-a', session_id: 'team-session-a', slot_id: 'team-slot-a', generation_index: 1, lease_id: 'lease:reviewer-a:team-a.txt', operations: [{ op: 'replace', path: 'team-a.txt', search: 'lane-a', replace: 'lane-a-done' }] },
+  { schema: 'sks.agent-patch-envelope.v1', agent_id: 'reviewer-b', session_id: 'team-session-b', slot_id: 'team-slot-b', generation_index: 1, lease_id: 'lease:reviewer-b:team-b.txt', operations: [{ op: 'replace', path: 'team-b.txt', search: 'lane-b', replace: 'lane-b-done' }] }
 ];
 const merge = mergeMod.coordinateAgentPatchMerge(envelopes);
 const applyResults = [];

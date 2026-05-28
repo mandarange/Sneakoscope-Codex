@@ -13,9 +13,19 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-agent-patch-'));
 fs.writeFileSync(path.join(tmp, 'a.txt'), 'alpha\n');
 fs.writeFileSync(path.join(tmp, 'b.txt'), 'bravo\n');
 const queue = new queueMod.InMemoryAgentPatchQueue();
-const first = queue.enqueue({ agent_id: 'agent-a', operations: [{ op: 'replace', path: 'a.txt', search: 'alpha', replace: 'alpha-1' }] });
-const second = queue.enqueue({ agent_id: 'agent-b', operations: [{ op: 'replace', path: 'b.txt', search: 'bravo', replace: 'bravo-1' }] });
-const merge = mergeMod.coordinateAgentPatchMerge(queue.queued().map((entry) => entry.envelope));
+const envelope = (agent, file, operation) => ({
+  schema: 'sks.agent-patch-envelope.v1',
+  agent_id: agent,
+  session_id: `${agent}-session`,
+  slot_id: `${agent}-slot`,
+  generation_index: 1,
+  lease_id: `lease:${agent}:${file}`,
+  rollback_hint: { node_id: `rollback:${agent}` },
+  operations: [operation]
+});
+const first = queue.enqueue(envelope('agent-a', 'a.txt', { op: 'replace', path: 'a.txt', search: 'alpha', replace: 'alpha-1' }));
+const second = queue.enqueue(envelope('agent-b', 'b.txt', { op: 'replace', path: 'b.txt', search: 'bravo', replace: 'bravo-1' }));
+const merge = mergeMod.coordinateAgentPatchMerge(queue.queued());
 const applyResults = [];
 for (const entry of queue.queued()) {
   const applyResult = await applyMod.applyAgentPatchEnvelope(tmp, entry.envelope);
@@ -28,18 +38,23 @@ fs.writeFileSync(atomicProbeFile, 'before\n');
 const atomicBlocked = await applyMod.applyAgentPatchEnvelope(tmp, {
   schema: 'sks.agent-patch-envelope.v1',
   agent_id: 'atomic-probe',
+  session_id: 'atomic-session',
+  slot_id: 'atomic-slot',
+  generation_index: 1,
+  lease_id: 'lease:atomic-probe:atomic.txt',
+  rollback_hint: { node_id: 'rollback:atomic' },
   operations: [
     { op: 'replace', path: 'atomic.txt', search: 'before', replace: 'after' },
     { op: 'write', path: '.codex/blocked.txt', content: 'blocked' }
   ]
 });
 const normalizedConflict = mergeMod.coordinateAgentPatchMerge([
-  { schema: 'sks.agent-patch-envelope.v1', agent_id: 'agent-a', operations: [{ op: 'write', path: 'same.txt', content: 'a' }] },
-  { schema: 'sks.agent-patch-envelope.v1', agent_id: 'agent-b', operations: [{ op: 'write', path: './same.txt', content: 'b' }] }
+  envelope('agent-a', 'same.txt', { op: 'write', path: 'same.txt', content: 'a' }),
+  envelope('agent-b', 'same.txt', { op: 'write', path: './same.txt', content: 'b' })
 ]);
 const parentChildConflict = mergeMod.coordinateAgentPatchMerge([
-  { schema: 'sks.agent-patch-envelope.v1', agent_id: 'agent-a', operations: [{ op: 'write', path: 'dir', content: 'a' }] },
-  { schema: 'sks.agent-patch-envelope.v1', agent_id: 'agent-b', operations: [{ op: 'write', path: 'dir/file.txt', content: 'b' }] }
+  envelope('agent-a', 'dir', { op: 'write', path: 'dir', content: 'a' }),
+  envelope('agent-b', 'dir/file.txt', { op: 'write', path: 'dir/file.txt', content: 'b' })
 ]);
 const report = { schema: 'sks.agent-parallel-write-kernel-check.v1', ok: proof.ok, first, second, merge, applyResults, proof, atomicBlocked, normalizedConflict, parentChildConflict };
 const out = path.join(root, '.sneakoscope', 'reports', 'agent-parallel-write-kernel.json');

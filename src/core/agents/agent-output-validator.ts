@@ -72,6 +72,64 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
     artifacts: { type: 'array', items: { type: 'string' } },
     unverified: { type: 'array', items: { type: 'string' } },
     writes: { type: 'array', items: { type: 'string' } },
+    patch_envelopes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['schema', 'agent_id', 'session_id', 'slot_id', 'generation_index', 'operations'],
+        properties: {
+          schema: { const: 'sks.agent-patch-envelope.v1' },
+          mission_id: { type: 'string' },
+          route: { type: 'string' },
+          agent_id: { type: 'string', minLength: 1 },
+          session_id: { type: 'string', minLength: 1 },
+          slot_id: { type: 'string', minLength: 1 },
+          generation_index: { type: 'integer', minimum: 0 },
+          task_slice_id: { type: 'string' },
+          lease_id: { type: 'string' },
+          lease_proof: {
+            type: 'object',
+            properties: {
+              lease_id: { type: 'string' },
+              owner_agent: { type: 'string' },
+              owner_persona: { type: 'string' },
+              allowed_paths: { type: 'array', items: { type: 'string' } },
+              strategy_task_id: { type: 'string' },
+              micro_win_id: { type: 'string' },
+              protected_path_check: { enum: ['passed', 'blocked', 'not_checked'] },
+              conflict_prediction_id: { type: 'string' },
+              verification_node_id: { type: 'string' },
+              rollback_node_id: { type: 'string' }
+            },
+            additionalProperties: false
+          },
+          operations: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              required: ['op', 'path'],
+              properties: {
+                op: { enum: ['replace', 'write', 'unified_diff'] },
+                path: { type: 'string', minLength: 1 },
+                search: { type: 'string' },
+                replace: { type: 'string' },
+                content: { type: 'string' },
+                diff: { type: 'string' }
+              },
+              additionalProperties: false
+            }
+          },
+          rationale: { type: 'string' },
+          verification_hint: { type: 'object', additionalProperties: { type: 'string' } },
+          rollback_hint: { type: 'object', additionalProperties: { type: 'string' } }
+        },
+        additionalProperties: false
+      }
+    },
+    patch_queue_refs: { type: 'array', items: { type: 'string' } },
+    applied_patch_refs: { type: 'array', items: { type: 'string' } },
+    rollback_refs: { type: 'array', items: { type: 'string' } },
     follow_up_work_items: {
       type: 'array',
       items: {

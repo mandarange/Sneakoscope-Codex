@@ -2,25 +2,57 @@ import { normalizeAgentPatchEnvelope, validateAgentPatchEnvelope, type AgentPatc
 
 export const AGENT_PATCH_QUEUE_SCHEMA = 'sks.agent-patch-queue.v1'
 
+export type AgentPatchQueueStatus = 'pending' | 'applying' | 'applied' | 'verified' | 'conflicted' | 'rolled_back' | 'rejected'
+
 export interface AgentPatchQueueEntry {
   id: string
+  mission_id?: string
+  route?: string
+  agent_id: string
+  session_id?: string
+  slot_id?: string
+  generation_index?: number
+  lease_id?: string
+  write_paths: string[]
   envelope: AgentPatchEnvelope
-  status: 'pending' | 'applying' | 'applied' | 'verified' | 'conflicted' | 'rolled_back' | 'rejected'
+  status: AgentPatchQueueStatus
   violations: string[]
   created_at: string
   updated_at: string
 }
 
+export interface AgentPatchQueueEvent {
+  ts: string
+  entry_id: string
+  event_type: string
+  status: AgentPatchQueueStatus
+  violations: string[]
+}
+
+export interface AgentPatchQueueEnqueueContext {
+  mission_id?: string
+  route?: string
+}
+
 export class InMemoryAgentPatchQueue {
   readonly entries: AgentPatchQueueEntry[] = []
-  readonly events: Array<{ ts: string; entry_id: string; event_type: string; status: AgentPatchQueueEntry['status']; violations: string[] }> = []
+  readonly events: AgentPatchQueueEvent[] = []
 
-  enqueue(input: any): AgentPatchQueueEntry {
+  enqueue(input: any, context: AgentPatchQueueEnqueueContext = {}): AgentPatchQueueEntry {
     const envelope = normalizeAgentPatchEnvelope(input)
     const validation = validateAgentPatchEnvelope(envelope)
     const now = new Date().toISOString()
+    const leaseId = envelope.lease_id || envelope.lease_proof?.lease_id
     const entry: AgentPatchQueueEntry = {
       id: `${envelope.agent_id}-${String(this.entries.length + 1).padStart(4, '0')}`,
+      ...(context.mission_id ? { mission_id: context.mission_id } : {}),
+      ...(context.route ? { route: context.route } : {}),
+      agent_id: envelope.agent_id,
+      ...(envelope.session_id ? { session_id: envelope.session_id } : {}),
+      ...(envelope.slot_id ? { slot_id: envelope.slot_id } : {}),
+      ...(envelope.generation_index === undefined ? {} : { generation_index: envelope.generation_index }),
+      ...(leaseId ? { lease_id: leaseId } : {}),
+      write_paths: envelope.operations.map((operation) => operation.path),
       envelope,
       status: validation.ok ? 'pending' : 'rejected',
       violations: validation.violations,
@@ -68,16 +100,11 @@ export class InMemoryAgentPatchQueue {
       entries: this.entries,
       queued_count: this.queued().length,
       events: this.events,
-      ownership_ledger: this.entries.map((entry) => ({
-        entry_id: entry.id,
-        agent_id: entry.envelope.agent_id,
-        lease_id: entry.envelope.lease_id || entry.envelope.lease_proof?.lease_id || null,
-        write_paths: entry.envelope.operations.map((operation) => operation.path)
-      }))
+      ownership_ledger: buildAgentPatchOwnershipLedger(this.entries)
     }
   }
 
-  private transition(id: string, status: AgentPatchQueueEntry['status']): void {
+  private transition(id: string, status: AgentPatchQueueStatus): void {
     const entry = this.entries.find((item) => item.id === id)
     if (!entry) return
     entry.status = status
@@ -94,4 +121,22 @@ export class InMemoryAgentPatchQueue {
       violations: [...entry.violations]
     })
   }
+}
+
+export function buildAgentPatchOwnershipLedger(entries: AgentPatchQueueEntry[]) {
+  return entries.map((entry) => ({
+    entry_id: entry.id,
+    mission_id: entry.mission_id || null,
+    route: entry.route || null,
+    agent_id: entry.agent_id,
+    session_id: entry.session_id || null,
+    slot_id: entry.slot_id || null,
+    generation_index: entry.generation_index ?? null,
+    lease_id: entry.lease_id || null,
+    write_paths: [...entry.write_paths],
+    status: entry.status,
+    created_at: entry.created_at,
+    updated_at: entry.updated_at,
+    violations: [...entry.violations]
+  }))
 }

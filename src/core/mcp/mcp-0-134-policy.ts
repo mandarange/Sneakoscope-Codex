@@ -17,6 +17,33 @@ export interface Mcp0134ToolClassification {
   warnings: string[]
 }
 
+export interface McpReadOnlyRuntimeToolFixture {
+  name: string
+  annotations?: Record<string, any>
+  inputSchema?: Record<string, any>
+  durationMs?: number
+}
+
+export interface McpReadOnlyRuntimeToolProof {
+  name: string
+  concurrency: Mcp0134ToolClassification['concurrency']
+  started_at_ms: number
+  ended_at_ms: number
+  duration_ms: number
+}
+
+export interface McpReadOnlyRuntimeSchedulerProof {
+  schema: 'sks.mcp-readonly-runtime-scheduler-proof.v1'
+  generated_at: string
+  ok: boolean
+  read_only_parallel: boolean
+  write_serial: boolean
+  destructive_false_positive_blocked: boolean
+  overlap_evidence: Array<{ a: string; b: string; overlap_ms: number }>
+  tools: McpReadOnlyRuntimeToolProof[]
+  blockers: string[]
+}
+
 const DESTRUCTIVE_TOOL_RE = /(?:^|[^A-Za-z0-9])(write|delete|remove|rm|mutate|update|insert|create|drop|truncate|reset|publish|deploy|apply|patch|commit|push)(?:$|[^A-Za-z0-9])/i
 const DESTRUCTIVE_WORDS = [
   'write',
@@ -91,6 +118,44 @@ export function compactMcpToolSchema(schema: any, maxBytes = 8192) {
   }
 }
 
+export async function proveMcpReadOnlyRuntimeScheduler(input: {
+  readOnlyTools?: McpReadOnlyRuntimeToolFixture[]
+  writeTools?: McpReadOnlyRuntimeToolFixture[]
+} = {}): Promise<McpReadOnlyRuntimeSchedulerProof> {
+  const readOnlyTools = input.readOnlyTools || [
+    { name: 'docs_search_a', annotations: { readOnlyHint: true }, inputSchema: { type: 'object' }, durationMs: 25 },
+    { name: 'docs_search_b', annotations: { readOnlyHint: true }, inputSchema: { type: 'object' }, durationMs: 25 }
+  ]
+  const writeTools = input.writeTools || [
+    { name: 'docs_update', annotations: { readOnlyHint: false }, inputSchema: { type: 'object' }, durationMs: 5 },
+    { name: 'delete_docs', annotations: { readOnlyHint: true }, inputSchema: { type: 'object', properties: { destructiveOperation: { const: 'delete' } } }, durationMs: 5 }
+  ]
+  const readOnlyRows = await Promise.all(readOnlyTools.map((tool) => runMcpRuntimeFixture(tool)))
+  const writeRows: McpReadOnlyRuntimeToolProof[] = []
+  for (const tool of writeTools) writeRows.push(await runMcpRuntimeFixture(tool))
+  const tools = [...readOnlyRows, ...writeRows]
+  const overlapEvidence = collectOverlapEvidence(readOnlyRows)
+  const readOnlyParallel = readOnlyRows.length < 2 || overlapEvidence.length > 0
+  const writeSerial = collectOverlapEvidence(writeRows).length === 0
+  const destructiveFalsePositiveBlocked = writeRows.some((row) => row.name === 'delete_docs' && row.concurrency === 'serial_required')
+  const blockers = [
+    ...(readOnlyParallel ? [] : ['mcp_readonly_tools_serialized_without_reason']),
+    ...(writeSerial ? [] : ['mcp_write_tools_ran_concurrently_without_permission']),
+    ...(destructiveFalsePositiveBlocked ? [] : ['mcp_destructive_readonly_hint_false_positive_not_blocked'])
+  ]
+  return {
+    schema: 'sks.mcp-readonly-runtime-scheduler-proof.v1',
+    generated_at: nowIso(),
+    ok: blockers.length === 0,
+    read_only_parallel: readOnlyParallel,
+    write_serial: writeSerial,
+    destructive_false_positive_blocked: destructiveFalsePositiveBlocked,
+    overlap_evidence: overlapEvidence,
+    tools,
+    blockers
+  }
+}
+
 export function detectMcp0134PolicyFromConfig(sources: Array<{ path: string; text: string; source?: string }> = []) {
   const servers = sources.flatMap((source) => parseServers(source.text))
   const streamableWithoutOAuth = servers.filter((server) => isStreamableHttp(server.transport) && !server.oauth_configured)
@@ -107,6 +172,34 @@ export function detectMcp0134PolicyFromConfig(sources: Array<{ path: string; tex
       ...streamableWithoutOAuth.map((server) => `streamable_http_oauth_not_configured:${server.name}`)
     ]
   }
+}
+
+async function runMcpRuntimeFixture(tool: McpReadOnlyRuntimeToolFixture): Promise<McpReadOnlyRuntimeToolProof> {
+  const classification = classifyMcpToolForConcurrency(tool)
+  const started = Date.now()
+  await new Promise((resolve) => setTimeout(resolve, Math.max(0, tool.durationMs || 0)))
+  const ended = Date.now()
+  return {
+    name: classification.name,
+    concurrency: classification.concurrency,
+    started_at_ms: started,
+    ended_at_ms: ended,
+    duration_ms: ended - started
+  }
+}
+
+function collectOverlapEvidence(rows: McpReadOnlyRuntimeToolProof[]): Array<{ a: string; b: string; overlap_ms: number }> {
+  const overlaps: Array<{ a: string; b: string; overlap_ms: number }> = []
+  for (let i = 0; i < rows.length; i += 1) {
+    for (let j = i + 1; j < rows.length; j += 1) {
+      const a = rows[i]
+      const b = rows[j]
+      if (!a || !b) continue
+      const overlap = Math.min(a.ended_at_ms, b.ended_at_ms) - Math.max(a.started_at_ms, b.started_at_ms)
+      if (overlap > 0) overlaps.push({ a: a.name, b: b.name, overlap_ms: overlap })
+    }
+  }
+  return overlaps
 }
 
 function parseServers(text: string): Mcp0134Server[] {

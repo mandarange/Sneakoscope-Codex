@@ -1,5 +1,6 @@
 import { AGENT_RESULT_SCHEMA, AGENT_WORKER_PIPELINE } from './agent-schema.js'
 import type { AgentRunnerResult } from './agent-schema.js'
+import { normalizeAgentPatchEnvelope, validateAgentPatchEnvelope } from './agent-patch-schema.js'
 import { scanAgentTextForRecursion } from './agent-recursion-guard.js'
 import { validateAgentResultSchema, validateAndNormalizeAgentFollowUps } from './agent-output-validator.js'
 
@@ -19,6 +20,7 @@ export function agentWorkerEnv(agent: any, allowedCommandsFile: string) {
 export function validateAgentWorkerResult(result: any): AgentRunnerResult {
   const guard = scanAgentTextForRecursion(JSON.stringify(result || {}))
   const followUps = validateAndNormalizeAgentFollowUps(result?.follow_up_work_items, result?.session_id)
+  const patchEnvelopeValidation = normalizePatchEnvelopes(result?.patch_envelopes)
   const normalized: AgentRunnerResult = {
     schema: AGENT_RESULT_SCHEMA,
     mission_id: String(result?.mission_id || ''),
@@ -39,6 +41,10 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     handoff_notes: String(result?.handoff_notes || ''),
     unverified: Array.isArray(result?.unverified) ? result.unverified : [],
     writes: Array.isArray(result?.writes) ? result.writes : [],
+    ...(patchEnvelopeValidation.envelopes.length ? { patch_envelopes: patchEnvelopeValidation.envelopes } : {}),
+    ...(Array.isArray(result?.patch_queue_refs) ? { patch_queue_refs: result.patch_queue_refs.map(String) } : {}),
+    ...(Array.isArray(result?.applied_patch_refs) ? { applied_patch_refs: result.applied_patch_refs.map(String) } : {}),
+    ...(Array.isArray(result?.rollback_refs) ? { rollback_refs: result.rollback_refs.map(String) } : {}),
     ...(result?.source_intelligence_refs === undefined ? {} : { source_intelligence_refs: result.source_intelligence_refs }),
     ...(result?.goal_mode_ref === undefined ? {} : { goal_mode_ref: result.goal_mode_ref }),
     ...(result?.follow_up_work_items === undefined ? {} : { follow_up_work_items: followUps.accepted }),
@@ -48,6 +54,16 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
   if (followUps.blockers.length) {
     normalized.status = 'blocked'
     normalized.blockers.push(...followUps.blockers.map((issue) => 'schema_invalid:' + issue))
+  }
+  if (patchEnvelopeValidation.blockers.length) {
+    normalized.status = 'blocked'
+    normalized.blockers.push(...patchEnvelopeValidation.blockers.map((issue) => 'patch_envelope_invalid:' + issue))
+    normalized.verification = { status: 'failed', checks: [...normalized.verification.checks, 'agent-patch-envelope-schema'] }
+  }
+  if (patchEnvelopeValidation.envelopes.length === 0 && (normalized.changed_files.length > 0 || normalized.writes.length > 0)) {
+    normalized.status = 'blocked'
+    normalized.blockers.push('no_patch_generated')
+    normalized.verification = { status: 'failed', checks: [...normalized.verification.checks, 'agent-patch-envelope-required-for-write'] }
   }
   const schemaValidation = validateAgentResultSchema(normalized)
   if (!schemaValidation.ok) {
@@ -66,8 +82,38 @@ export function agentWorkerPipelineContract() {
     route_classifier_allowed: false,
     writes_global_current_json: false,
     route_finalizer_allowed: false,
-    writes_only_agent_session_and_central_ledger: true
+    writes_only_agent_session_and_central_ledger: true,
+    patch_envelope_result_fields: {
+      result_field: 'patch_envelopes',
+      required_for_write_tasks: true,
+      envelope_schema: 'sks.agent-patch-envelope.v1',
+      metadata: ['agent_id', 'session_id', 'slot_id', 'generation_index', 'lease_id_or_lease_proof'],
+      optional_hints: ['rationale', 'verification_hint', 'rollback_hint']
+    }
   }
+}
+
+function normalizePatchEnvelopes(value: any) {
+  const envelopes = Array.isArray(value) ? value.map((raw) => ({
+    ...normalizeAgentPatchEnvelope(raw),
+    ...(raw?.mission_id === undefined ? {} : { mission_id: String(raw.mission_id) }),
+    ...(raw?.route === undefined ? {} : { route: String(raw.route) }),
+    ...(raw?.session_id === undefined ? {} : { session_id: String(raw.session_id) }),
+    ...(raw?.slot_id === undefined ? {} : { slot_id: String(raw.slot_id) }),
+    ...(raw?.generation_index === undefined ? {} : { generation_index: Number(raw.generation_index) }),
+    ...(raw?.task_slice_id === undefined ? {} : { task_slice_id: String(raw.task_slice_id) }),
+    ...(raw?.verification_hint === undefined ? {} : { verification_hint: raw.verification_hint }),
+    ...(raw?.rollback_hint === undefined ? {} : { rollback_hint: raw.rollback_hint })
+  })) : []
+  const blockers = envelopes.flatMap((envelope, index) => {
+    const validation = validateAgentPatchEnvelope(envelope)
+    const leaseOk = Boolean(envelope.lease_id || envelope.lease_proof?.lease_id)
+    return [
+      ...(validation.ok ? [] : validation.violations),
+      ...(leaseOk ? [] : ['lease_id_or_proof_missing'])
+    ].map((violation) => `${index}:${violation}`)
+  })
+  return { envelopes, blockers }
 }
 
 function normalizeLeaseCompliance(value: any) {

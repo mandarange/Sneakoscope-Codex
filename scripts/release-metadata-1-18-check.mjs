@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.8';
+const RELEASE_VERSION = '1.18.9';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');
@@ -40,6 +40,12 @@ const requiredDocs = [
   'docs/codex-0.134-compat.md',
   'docs/parallel-write-agents.md',
   'docs/agent-patch-queue.md',
+  'docs/patch-swarm-runtime.md',
+  'docs/strategy-to-patch-wiring.md',
+  'docs/parallel-write-agent-runtime.md',
+  'docs/patch-proof-and-rollback.md',
+  'docs/appshots-thread-attachments.md',
+  'docs/mcp-readonly-scheduler.md',
   'docs/migration-1.18.7-to-1.18.8.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
@@ -48,9 +54,13 @@ const requiredDocs = [
 const versionedDocs = new Set([
   'README.md',
   'CHANGELOG.md',
-  'docs/migration-1.18.7-to-1.18.8.md',
-  'docs/runtime-truth-matrix.md',
-  'docs/release-readiness.md'
+  'docs/release-readiness.md',
+  'docs/patch-swarm-runtime.md',
+  'docs/strategy-to-patch-wiring.md',
+  'docs/parallel-write-agent-runtime.md',
+  'docs/patch-proof-and-rollback.md',
+  'docs/appshots-thread-attachments.md',
+  'docs/mcp-readonly-scheduler.md'
 ]);
 const requiredScripts = [
   'runtime:no-src-mjs',
@@ -128,8 +138,21 @@ const requiredScripts = [
   'agent:parallel-write-blackbox',
   'team:parallel-write-blackbox',
   'dfix:parallel-write-blackbox',
+  'agent:patch-envelope-extraction',
+  'agent:patch-queue-runtime',
+  'agent:strategy-to-lease-wiring',
+  'agent:patch-swarm-runtime',
+  'agent:patch-verification-dag',
+  'agent:patch-rollback-dag',
+  'agent:patch-proof-runtime',
+  'agent:patch-swarm-route-blackbox',
+  'team:patch-swarm-route-blackbox',
+  'dfix:patch-swarm-route-blackbox',
   'agent:patch-proof',
   'agent:patch-rollback',
+  'appshots:thread-attachment-discovery',
+  'mcp:readonly-runtime-scheduler',
+  'codex:0.134-runner-truth',
   'route:blackbox-realism',
   'agent:dynamic-cockpit',
   'agent:source-intelligence-propagation',

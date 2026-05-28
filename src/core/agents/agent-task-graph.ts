@@ -46,6 +46,8 @@ export interface AgentTaskGraph {
   }
 }
 
+type AgentTaskGraphMicroWin = { id: string; title?: string; description?: string; kind?: string; write_paths?: string[]; readonly_paths?: string[]; dependencies?: string[]; dopamine_weight?: number; appshot_required?: boolean }
+
 export function buildAgentTaskGraph(input: {
   routeType?: string
   prompt?: string
@@ -57,7 +59,7 @@ export function buildAgentTaskGraph(input: {
   sourceIntelligenceRefs?: Record<string, unknown> | null
   goalModeRef?: Record<string, unknown> | null
   strategyRefs?: Record<string, unknown> | null
-  microWins?: Array<{ id: string; title?: string; description?: string; kind?: string; write_paths?: string[]; readonly_paths?: string[]; dependencies?: string[]; dopamine_weight?: number; appshot_required?: boolean }>
+  microWins?: AgentTaskGraphMicroWin[]
 }): AgentTaskGraph {
   const routeType = normalizeRouteType(input.routeType || '$Agent')
   const targetActiveSlots = Math.max(1, Math.floor(Number(input.targetActiveSlots || 5)))
@@ -65,8 +67,9 @@ export function buildAgentTaskGraph(input: {
   const desiredWorkItems = Math.max(minimumWorkItems, Math.floor(Number(input.desiredWorkItems || minimumWorkItems)))
   const domainTemplates = routeTemplates(routeType)
   const domains = Array.isArray(input.domains) && input.domains.length ? input.domains : domainTemplates
+  const scheduledMicroWins = scheduleMicroWins(input.microWins || [], desiredWorkItems)
   const workItems = Array.from({ length: desiredWorkItems }, (_, index) => {
-    const microWin = input.microWins?.[index % Math.max(1, input.microWins.length)]
+    const microWin = scheduledMicroWins[index] || input.microWins?.[index % Math.max(1, input.microWins.length)]
     const fallbackTemplate = domainTemplates[0] || { id: 'general', kind: 'general', role: 'verifier', description: 'general task' }
     const template = domainTemplates[index % domainTemplates.length] || fallbackTemplate
     const domain = domains[index % domains.length] || template
@@ -91,7 +94,7 @@ export function buildAgentTaskGraph(input: {
       work_item_kind: workItemKind,
       required_persona_category: String(template.role || 'verifier'),
       priority: index + 1,
-      dependencies: microWin?.dependencies || input.dependencies?.[id] || [],
+      dependencies: input.dependencies?.[id] || [],
       lease_requirements: [
         ...writePaths.map((file: string) => ({ kind: 'write', path: file })),
         ...targetPaths.map((file: string) => ({ kind: 'read', path: normalizePath(file) })).filter((row: { path: string }) => row.path)
@@ -224,6 +227,14 @@ function routeTemplates(routeType: string) {
     template('verify', 'verifier', 'verification task'),
     template('release-proof', 'release', 'release proof task')
   ]
+}
+
+function scheduleMicroWins(microWins: AgentTaskGraphMicroWin[], desiredWorkItems: number) {
+  if (!microWins.length) return []
+  const writeWins = microWins.filter((item) => item?.kind === 'write' || Boolean(item?.write_paths?.length))
+  const otherWins = microWins.filter((item) => !writeWins.includes(item))
+  if (writeWins.length >= desiredWorkItems) return writeWins.slice(0, desiredWorkItems)
+  return [...writeWins, ...otherWins].slice(0, desiredWorkItems)
 }
 
 function template(id: string, role: AgentRole | string, description: string) {

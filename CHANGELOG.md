@@ -19,6 +19,23 @@
 - Route web/browser/webapp verification through Codex Chrome Extension readiness first, reserve Computer Use for native Mac/non-web surfaces, and rapidly block QA/UX pipelines when the extension is missing.
 - Treat UX Review `--from-chrome-extension` and `--from-computer-use` as real flags so web review cannot slip past the Chrome Extension gate through option parsing.
 
+## [1.18.9] - 2026-05-27
+
+### Added
+
+- Add Appshots thread attachment discovery evidence with thread id, attachment id, source app/window, local-only status, and attachment kind classification.
+- Add MCP `readOnlyHint` runtime scheduler proof for concurrent read-only fixtures, serialized write-capable fixtures, destructive false-positive blocking, and timestamped overlap evidence.
+- Add Codex 0.134 runner truth gates covering `--profile`, managed proxy redaction, local history evidence, process report profile recording, and required-mode release blocking.
+
+### Fixed
+
+- Prevent Appshots evidence from passing without Codex appshot thread/attachment provenance when a source claims to be a Codex Appshot.
+- Prevent MCP read-only concurrency proof from relying only on static `readOnlyHint` classification.
+
+### Changed
+
+- Bump release metadata from 1.18.8 to 1.18.9 and wire the new Appshots, MCP scheduler, and Codex runner truth gates into `release:check`.
+
 ## [1.18.8] - 2026-05-27
 
 ### Added

@@ -16,6 +16,7 @@ export type AgentStatus = 'pending' | 'running' | 'closed' | 'blocked' | 'failed
 export type AgentRole = 'architect' | 'implementer' | 'verifier' | 'safety' | 'integrator' | 'research' | 'documentation' | 'schema' | 'release' | 'ux' | 'db'
 
 export type { AgentFollowUpWorkItem } from './agent-follow-up-work-items.js'
+export type { AgentPatchEnvelope } from './agent-patch-schema.js'
 
 export interface AgentPersona {
   id: string
@@ -125,6 +126,16 @@ export interface AgentLease {
   path: string
   domain?: string
   status: 'active' | 'released' | 'conflicted'
+  strategy_task_id?: string
+  micro_win_id?: string
+  owner_agent?: string
+  owner_persona?: string
+  write_paths?: string[]
+  protected_path_check?: { ok: boolean; blockers: string[] }
+  conflict_prediction_id?: string | null
+  verification_node_id?: string | null
+  rollback_node_id?: string | null
+  strategy_artifact?: string
 }
 
 export interface AgentRunnerResult {
@@ -147,6 +158,10 @@ export interface AgentRunnerResult {
   handoff_notes: string
   unverified: string[]
   writes: string[]
+  patch_envelopes?: import('./agent-patch-schema.js').AgentPatchEnvelope[]
+  patch_queue_refs?: string[]
+  applied_patch_refs?: string[]
+  rollback_refs?: string[]
   source_intelligence_refs?: Record<string, unknown> | null
   goal_mode_ref?: Record<string, unknown> | null
   follow_up_work_items?: import('./agent-follow-up-work-items.js').AgentFollowUpWorkItem[]
