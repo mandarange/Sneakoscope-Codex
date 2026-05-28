@@ -29,6 +29,21 @@ const required = [
   'dfix:parallel-write-blackbox',
   'agent:patch-proof',
   'agent:patch-rollback',
+  'agent:patch-swarm-runtime-truth',
+  'agent:patch-transaction-journal',
+  'agent:patch-conflict-rebase',
+  'agent:strategy-to-patch-strict',
+  'agent:rollback-command',
+  'agent:real-codex-patch-envelope-smoke',
+  'agent:native-cli-session-swarm',
+  'agent:native-cli-session-swarm-10',
+  'agent:native-cli-session-swarm-20',
+  'agent:no-subagent-scaling',
+  'agent:native-cli-session-proof',
+  'agent:fast-mode-default',
+  'agent:fast-mode-worker-propagation',
+  'codex:fast-mode-profile-propagation',
+  'mad-sks:fast-mode-propagation',
   'release:runtime-truth-matrix'
 ];
 

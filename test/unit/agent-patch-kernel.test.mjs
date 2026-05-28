@@ -13,17 +13,25 @@ test('agent patch kernel queues, merges, applies, and proves disjoint patches', 
   await fs.writeFile(path.join(root, 'a.txt'), 'a\n');
   await fs.writeFile(path.join(root, 'b.txt'), 'b\n');
   const queue = new InMemoryAgentPatchQueue();
-  queue.enqueue({ agent_id: 'a', session_id: 's-a', slot_id: 'slot-a', generation_index: 1, lease_id: 'lease-a', operations: [{ op: 'replace', path: 'a.txt', search: 'a', replace: 'aa' }] });
-  queue.enqueue({ agent_id: 'b', session_id: 's-b', slot_id: 'slot-b', generation_index: 1, lease_id: 'lease-b', operations: [{ op: 'replace', path: 'b.txt', search: 'b', replace: 'bb' }] });
+  queue.enqueue({ agent_id: 'a', session_id: 's-a', slot_id: 'slot-a', generation_index: 1, lease_id: 'lease-a', lease_proof: { strategy_task_id: 'task-a', verification_node_id: 'verify-a', rollback_node_id: 'rollback-a', owner_agent: 'a' }, operations: [{ op: 'replace', path: 'a.txt', search: 'a', replace: 'aa' }] });
+  queue.enqueue({ agent_id: 'b', session_id: 's-b', slot_id: 'slot-b', generation_index: 1, lease_id: 'lease-b', lease_proof: { strategy_task_id: 'task-b', verification_node_id: 'verify-b', rollback_node_id: 'rollback-b', owner_agent: 'b' }, operations: [{ op: 'replace', path: 'b.txt', search: 'b', replace: 'bb' }] });
   const merge = coordinateAgentPatchMerge(queue.queued());
   const applyResults = [];
   for (const entry of queue.queued()) {
     queue.markApplying(entry.id);
-    const applied = await applyAgentPatchEnvelope(root, entry.envelope);
+    const applied = await applyAgentPatchEnvelope(root, entry.envelope, { entryId: entry.id });
     if (applied.ok) queue.markApplied(entry.id);
     applyResults.push(applied);
   }
-  const proof = buildAgentPatchProof({ queue: queue.toJSON(), merge, applyResults });
+  const proof = buildAgentPatchProof({
+    queue: queue.toJSON(),
+    merge,
+    applyResults,
+    transactionJournal: { ok: true, blockers: [], event_count: 12 },
+    conflictRebase: { ok: true, blockers: [] },
+    verificationRollbackDag: { nodes: [{ id: 'verify-a', kind: 'verification' }, { id: 'rollback-a', kind: 'rollback' }, { id: 'verify-b', kind: 'verification' }, { id: 'rollback-b', kind: 'rollback' }] },
+    fileOwnershipPlan: { owners: [{ path: 'a.txt', access: 'write', owner_agent: 'a' }, { path: 'b.txt', access: 'write', owner_agent: 'b' }] }
+  });
   assert.equal(merge.ok, true);
   assert.equal(proof.ok, true);
   assert.equal((await fs.readFile(path.join(root, 'a.txt'), 'utf8')), 'aa\n');

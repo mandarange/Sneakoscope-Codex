@@ -12,6 +12,7 @@ export const DEFAULT_AGENT_CONCURRENCY = 5
 export const AGENT_BACKENDS = ['fake', 'process', 'codex-exec', 'tmux'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]
+export type AgentServiceTier = 'fast' | 'standard'
 export type AgentStatus = 'pending' | 'running' | 'closed' | 'blocked' | 'failed'
 export type AgentRole = 'architect' | 'implementer' | 'verifier' | 'safety' | 'integrator' | 'research' | 'documentation' | 'schema' | 'release' | 'ux' | 'db'
 
@@ -58,7 +59,8 @@ export interface AgentRosterEntry {
   reasoning_effort?: 'low' | 'medium' | 'high' | 'xhigh'
   model_reasoning_effort?: 'low' | 'medium' | 'high' | 'xhigh'
   reasoning_profile?: string
-  service_tier?: 'fast'
+  service_tier?: AgentServiceTier
+  fast_mode?: boolean
   reasoning_reason?: string
   dynamic_effort_policy?: {
     escalation_triggers: string[]
@@ -92,6 +94,10 @@ export interface AgentRunOptions {
   applyPatches?: boolean
   dryRunPatches?: boolean
   maxWriteAgents?: number
+  fastMode?: boolean
+  serviceTier?: AgentServiceTier
+  noFast?: boolean
+  nativeCliSwarm?: boolean
 }
 
 export interface AgentTaskSlice {
@@ -114,6 +120,8 @@ export interface AgentTaskSlice {
   description: string
   strategy_refs?: Record<string, unknown> | null
   micro_win_id?: string | null
+  verification_node_id?: string | null
+  rollback_node_id?: string | null
   dopamine_weight?: number
   appshot_required?: boolean
 }

@@ -31,6 +31,8 @@ export interface StrategyCompileResult {
     schema: typeof VERIFICATION_ROLLBACK_DAG_SCHEMA
     nodes: Array<{ id: string; kind: string; depends_on: string[]; proof_artifact: string }>
     rollback_ready: boolean
+    verification_ready: boolean
+    validation: { ok: boolean; blockers: string[] }
   }
   blockers: string[]
 }
@@ -59,7 +61,9 @@ export function compileStrategy(input: {
     ...gate.blockers,
     ...(ownership.no_overlap ? [] : ['file_ownership_overlap']),
     ...parallel.serial_conflicts.map((conflict) => `serial_conflict:${conflict.path}`),
-    ...(dag.rollback_ready ? [] : ['rollback_node_missing'])
+    ...(dag.rollback_ready ? [] : ['rollback_node_missing']),
+    ...(dag.verification_ready ? [] : ['verification_node_missing']),
+    ...dag.validation.blockers
   ]
   return {
     schema: STRATEGY_COMPILER_SCHEMA,
@@ -77,6 +81,7 @@ export function compileStrategy(input: {
 
 export async function writeStrategyCompilerArtifacts(root: string, compiled: StrategyCompileResult) {
   await writeJsonAtomic(path.join(root, 'user-request-strategy.json'), compiled)
+  await writeJsonAtomic(path.join(root, 'strategy-compiler.json'), compiled)
   await writeJsonAtomic(path.join(root, 'parallel-modification-plan.json'), compiled.parallel_modification_plan)
   await writeJsonAtomic(path.join(root, 'file-ownership-plan.json'), compiled.file_ownership_plan)
   await writeJsonAtomic(path.join(root, 'verification-rollback-dag.json'), compiled.verification_rollback_dag)
@@ -86,10 +91,10 @@ export async function writeStrategyCompilerArtifacts(root: string, compiled: Str
 function buildOwnershipPlan(tasks: MicroWinTask[]): StrategyCompileResult['file_ownership_plan'] {
   const owners: StrategyCompileResult['file_ownership_plan']['owners'] = []
   const protectedWritePaths: string[] = []
-  const verificationNodeId = tasks.find((task) => task.kind === 'verification')?.id || null
-  const rollbackNodeId = tasks.find((task) => task.kind === 'rollback')?.id || null
   const writeConflicts = findWriteConflicts(tasks.filter((task) => task.kind === 'write'))
   for (const task of tasks) {
+    const verificationNodeId = verificationNodeForTask(tasks, task.id)
+    const rollbackNodeId = rollbackNodeForTask(tasks, task.id)
     for (const file of task.write_paths) {
       const protectedPath = isProtectedPath(file)
       if (protectedPath) protectedWritePaths.push(file)
@@ -155,11 +160,93 @@ function buildVerificationRollbackDag(tasks: MicroWinTask[]): StrategyCompileRes
     depends_on: task.dependencies,
     proof_artifact: task.proof_artifact
   }))
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  for (const task of tasks.filter((row) => row.kind === 'write')) {
+    const verificationId = verificationNodeForTask(tasks, task.id)
+    const rollbackId = rollbackNodeForTask(tasks, task.id)
+    if (verificationId && !nodeIds.has(verificationId)) {
+      nodes.push({
+        id: verificationId,
+        kind: 'verification',
+        depends_on: [task.id],
+        proof_artifact: 'agent-patch-verification-results.json'
+      })
+      nodeIds.add(verificationId)
+    }
+    if (rollbackId && !nodeIds.has(rollbackId)) {
+      nodes.push({
+        id: rollbackId,
+        kind: 'rollback',
+        depends_on: [task.id, verificationId].filter(Boolean) as string[],
+        proof_artifact: 'agent-patch-rollback-proof.json'
+      })
+      nodeIds.add(rollbackId)
+    }
+  }
   return {
     schema: VERIFICATION_ROLLBACK_DAG_SCHEMA,
     nodes,
-    rollback_ready: nodes.some((node) => node.kind === 'rollback')
+    rollback_ready: tasks.filter((task) => task.kind === 'write').every((task) => Boolean(rollbackNodeForTask(tasks, task.id))),
+    verification_ready: tasks.filter((task) => task.kind === 'write').every((task) => Boolean(verificationNodeForTask(tasks, task.id))),
+    validation: validateStrategyVerificationRollbackDag(nodes)
   }
+}
+
+export function validateStrategyVerificationRollbackDag(nodes: Array<{ id: string; kind: string; depends_on: string[]; proof_artifact: string }>) {
+  const blockers: string[] = []
+  const byId = new Map<string, { id: string; kind: string; depends_on: string[]; proof_artifact: string }>()
+  for (const node of nodes) {
+    if (!node.id) blockers.push('dag_node_id_missing')
+    if (byId.has(node.id)) blockers.push(`dag_duplicate_node:${node.id}`)
+    byId.set(node.id, node)
+    if (!node.proof_artifact) blockers.push(`dag_proof_artifact_missing:${node.id}`)
+    if ((node.kind === 'verification' || node.kind === 'rollback') && !node.proof_artifact) blockers.push(`dag_required_proof_artifact_missing:${node.id}`)
+  }
+  for (const node of nodes) {
+    for (const dep of node.depends_on || []) {
+      if (!byId.has(dep)) blockers.push(`dag_missing_dependency:${node.id}:${dep}`)
+    }
+  }
+  const visiting = new Set<string>()
+  const visited = new Set<string>()
+  const visit = (id: string) => {
+    if (visited.has(id)) return
+    if (visiting.has(id)) {
+      blockers.push(`dag_cycle:${id}`)
+      return
+    }
+    visiting.add(id)
+    for (const dep of byId.get(id)?.depends_on || []) visit(dep)
+    visiting.delete(id)
+    visited.add(id)
+  }
+  for (const node of nodes) visit(node.id)
+  const writeTasks = nodes.filter((node) => node.kind === 'write')
+  for (const task of writeTasks) {
+    if (!verificationNodeForTaskFromNodes(nodes, task.id)) blockers.push(`dag_write_verification_missing:${task.id}`)
+    if (!rollbackNodeForTaskFromNodes(nodes, task.id)) blockers.push(`dag_write_rollback_missing:${task.id}`)
+  }
+  return { ok: blockers.length === 0, blockers: [...new Set(blockers)] }
+}
+
+function verificationNodeForTask(tasks: MicroWinTask[], taskId: string): string | null {
+  return tasks.find((task) => task.kind === 'verification' && task.dependencies.includes(taskId))?.id || (hasWriteTask(tasks, taskId) ? `verify:${taskId}` : null)
+}
+
+function rollbackNodeForTask(tasks: MicroWinTask[], taskId: string): string | null {
+  return tasks.find((task) => task.kind === 'rollback' && task.dependencies.includes(taskId))?.id || (hasWriteTask(tasks, taskId) ? `rollback:${taskId}` : null)
+}
+
+function hasWriteTask(tasks: MicroWinTask[], taskId: string): boolean {
+  return tasks.some((task) => task.id === taskId && task.kind === 'write')
+}
+
+function verificationNodeForTaskFromNodes(nodes: Array<{ id: string; kind: string; depends_on: string[] }>, taskId: string): string | null {
+  return nodes.find((node) => node.kind === 'verification' && (node.depends_on || []).includes(taskId))?.id || null
+}
+
+function rollbackNodeForTaskFromNodes(nodes: Array<{ id: string; kind: string; depends_on: string[] }>, taskId: string): string | null {
+  return nodes.find((node) => node.kind === 'rollback' && (node.depends_on || []).includes(taskId))?.id || null
 }
 
 function findWriteConflicts(tasks: MicroWinTask[]): Array<{ path: string; task_ids: string[] }> {

@@ -23,9 +23,11 @@ test('agent patch proof passes only applied queue entries with rollback digests'
       events: [{ entry_id: 'entry-1', event_type: 'applied' }]
     },
     merge: { ok: true, blockers: [] },
-    applyResults: [{ ok: true, changed_files: ['a.txt'], rollback_digest: 'digest-a', after_hashes: { 'a.txt': 'hash-a' } }],
-    verification: ['unit-fixture']
-  });
+	    applyResults: [{ ok: true, changed_files: ['a.txt'], rollback_digest: 'digest-a', after_hashes: { 'a.txt': 'hash-a' }, verification: { status: 'unit-fixture' } }],
+	    verification: ['unit-fixture'],
+	    transactionJournal: { ok: true, blockers: [], event_count: 8 },
+	    conflictRebase: { ok: true, blockers: [] }
+	  });
   assert.equal(proof.ok, true);
   assert.equal(proof.rollback_ready, true);
 });

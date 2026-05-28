@@ -2,9 +2,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { repoTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
+import { osTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
 
-const sourceImage = repoTempPngFixtureArg('ux-review-imagegen-blackbox-source.png');
+const sourceImage = osTempPngFixtureArg('ux-review-imagegen-blackbox-source.png');
 const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ux-review', 'run', '--image', sourceImage, '--generate-callouts', '--json'], {
   cwd: process.cwd(),
   env: { ...process.env, SKS_TEST_FAKE_IMAGEGEN: '1', SKS_TEST_FAKE_EXTRACTOR: '1' },

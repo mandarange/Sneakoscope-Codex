@@ -188,6 +188,7 @@ export async function runAgentScheduler(input: {
 
   async function refillSlots(backfill: { closed_session_id: string; active_count_before: number; closed_at_ms: number } | null) {
     state.status = 'running'
+    const launchEvents: Record<string, unknown>[] = []
     while (active.size < targetActiveSlots && pendingWorkItems(queue).length > 0) {
       const slotIndex = slots.findIndex((slot) => slot.status === 'idle')
       if (slotIndex < 0) break
@@ -260,7 +261,7 @@ export async function runAgentScheduler(input: {
         state.backfill_count += 1
         state.refill_latency_events_ms.push(refillLatencyMs)
         state.refill_latency_p95_ms = percentile95(state.refill_latency_events_ms)
-        await writeAll(input.root, state, slots, queue, active, {
+        launchEvents.push({
           event_type: 'backfill_event',
           closed_session_id: backfill.closed_session_id,
           new_session_id: generation.session_id,
@@ -268,19 +269,20 @@ export async function runAgentScheduler(input: {
           active_count_before: backfill.active_count_before,
           active_count_after: active.size,
           refill_latency_ms: refillLatencyMs
-        }, input.onSchedulerEvent)
+        })
         backfill = null
       } else {
-        await writeAll(input.root, state, slots, queue, active, {
+        launchEvents.push({
           event_type: 'session_launched',
           session_id: generation.session_id,
           slot_id: slot.slot_id,
           work_item_id: workItem.id,
           active_count_after: active.size
-        }, input.onSchedulerEvent)
+        })
       }
       if (input.refillDelayMs && input.refillDelayMs > 0) await delay(input.refillDelayMs)
     }
+    for (const event of launchEvents) await writeAll(input.root, state, slots, queue, active, event, input.onSchedulerEvent)
   }
 }
 
@@ -393,6 +395,8 @@ function buildAgentForGeneration(slot: AgentWorkerSlot, generation: AgentSession
     write_policy: String(persona.write_policy || 'read-only'),
     reasoning_effort: persona.reasoning_effort || null,
     reasoning_profile: persona.reasoning_profile || null,
+    service_tier: persona.service_tier || 'fast',
+    fast_mode: persona.fast_mode !== false,
     source_intelligence_refs: generation.source_intelligence_refs,
     goal_mode_ref: generation.goal_mode_ref
   }

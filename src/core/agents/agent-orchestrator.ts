@@ -13,6 +13,8 @@ import { PersistentAgentPatchQueueStore } from './agent-patch-queue-store.js'
 import { applyAgentPatchQueueEntry, rollbackAgentPatchApply } from './agent-patch-apply-worker.js'
 import { coordinateAgentPatchMerge, writeAgentMergeCoordinatorArtifacts } from './agent-merge-coordinator.js'
 import { buildAgentPatchProof } from './agent-patch-proof.js'
+import { executeAgentPatchConflictRebase } from './agent-patch-conflict-rebase.js'
+import { AgentPatchTransactionJournal } from './agent-patch-transaction-journal.js'
 import { runFakeAgent } from './agent-runner-fake.js'
 import { runProcessAgent } from './agent-runner-process.js'
 import { runCodexExecAgent } from './agent-runner-codex-exec.js'
@@ -37,6 +39,10 @@ import { writeIntelligentWorkGraphArtifacts } from './intelligent-work-graph.js'
 import { writeAdhdOrchestrationArtifacts } from '../strategy/adhd-orchestrating-gate.js'
 import { compileStrategy, writeStrategyCompilerArtifacts } from '../strategy/strategy-compiler.js'
 import { evaluateStrategyGate, writeStrategyGateArtifact } from '../strategy/strategy-gate.js'
+import { applyFastModeToRoster, resolveFastModePolicy, writeFastModePropagationProof } from './fast-mode-policy.js'
+import { createNativeCliSessionSwarmRecorder } from './native-cli-session-swarm.js'
+import { writeNativeCliSessionProof } from './native-cli-session-proof.js'
+import { writeNoSubagentScalingPolicy } from './no-subagent-scaling-policy.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const root = path.resolve(opts.root || process.cwd())
@@ -44,6 +50,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const route = opts.route || '$Agent'
   const routeCommand = String(opts.routeCommand || defaultRouteCommand(route))
   const routeBlackboxKind = String(opts.routeBlackboxKind || defaultRouteBlackboxKind(route))
+  const fastModePolicy = resolveFastModePolicy(opts)
   const backend = normalizeAgentBackend(opts.backend || (opts.mock ? 'fake' : 'codex-exec'))
   const realTmux = backend === 'tmux' && opts.real === true
   const realTmuxProofRequired = realTmux && process.env.SKS_REQUIRE_REAL_TMUX === '1'
@@ -54,7 +61,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const dir = created.dir
   const namespace = await buildProjectNamespace({ root, missionId })
   await writeProjectNamespaceArtifact(dir, namespace)
-  const roster = buildProvidedAgentRoster(opts.roster, { concurrency: opts.concurrency, readonly: opts.readonly }) || buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
+  let roster = buildProvidedAgentRoster(opts.roster, { concurrency: opts.concurrency, readonly: opts.readonly }) || buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
+  roster = applyFastModeToRoster(roster, fastModePolicy)
   roster.roster = roster.roster.map((agent: any) => ({
     ...agent,
     session_id: namespacedAgentSessionId({
@@ -195,6 +203,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     minimum_work_items: minimumWorkItems,
     requested_work_items: desiredWorkItemCount,
     total_work_items: partition.task_graph?.total_work_items || partition.slices.length,
+    service_tier: fastModePolicy.service_tier,
+    fast_mode: fastModePolicy.fast_mode,
+    fast_mode_default: true,
     backpressure: 'dynamic scheduler maintains target active slots until the work queue drains',
     rate_limit_delay_ms: backend === 'codex-exec' ? 250 : 0,
     resource_pressure_warnings: roster.agent_count > roster.concurrency ? ['agents_exceed_concurrency_batches'] : []
@@ -215,6 +226,15 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     strategy_gate: strategyRef
   }
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-parallel-write-policy.json'), parallelWritePolicy)
+  const nativeCliSwarm = createNativeCliSessionSwarmRecorder(ledgerRoot, {
+    missionId,
+    requestedAgents: Number(opts.agents || roster.agent_count || targetActiveSlots),
+    targetActiveSlots,
+    backend,
+    route,
+    fastModePolicy
+  })
+  await nativeCliSwarm.initialize()
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: routeCommand, native_agent_backend: backend })
   const scheduler = await runAgentScheduler({
     root: ledgerRoot,
@@ -253,7 +273,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
         generationIndex: agent.generation_index,
         requireGeneration: true
       })
-      const result = await runAgentByBackend(backend, agent, slice, { ...opts, missionId, agentRoot: ledgerRoot, cwd: root, route, prompt })
+      const backendOpts = { ...opts, missionId, agentRoot: ledgerRoot, cwd: root, route, prompt, fastMode: fastModePolicy.fast_mode, serviceTier: fastModePolicy.service_tier }
+      const result = opts.nativeCliSwarm === false
+        ? await runAgentByBackend(backend, agent, slice, backendOpts)
+        : await nativeCliSwarm.launchWorker({ agent, slice, opts: backendOpts })
       const terminalClose = await closeAgentTerminalSession(ledgerRoot, agent, {
         exitCode: result.status === 'done' ? 0 : 1,
         status: result.status,
@@ -310,7 +333,15 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       }
     }
   })
+  await nativeCliSwarm.finalize()
   const results = scheduler.results
+  const nativeCliSessionProof = await writeNativeCliSessionProof(ledgerRoot, {
+    requestedAgents: Number(opts.agents || roster.agent_count || targetActiveSlots),
+    targetActiveSlots,
+    totalWorkItems: partition.task_graph?.total_work_items || partition.slices.length
+  })
+  const noSubagentScalingPolicy = await writeNoSubagentScalingPolicy(ledgerRoot, { nativeProof: nativeCliSessionProof })
+  const fastModePropagation = await writeFastModePropagationProof(ledgerRoot, { policy: fastModePolicy, backend, results })
   const patchSwarm = await runAgentPatchSwarmRuntime(root, ledgerRoot, {
     missionId,
     route,
@@ -328,7 +359,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const consensus = await writeAgentConsensus(ledgerRoot, results)
   const outputValidation = await writeAgentOutputValidationReport(ledgerRoot, results)
   const outputTails = await writeAgentOutputTailReport(ledgerRoot, results)
-  const backendReport = await writeAgentBackendReport(ledgerRoot, { backend, results, outputTails })
+  const backendReport = await writeAgentBackendReport(ledgerRoot, { backend, results, outputTails, fastModePolicy })
   const finalPaneBySlot = await readTmuxPaneIdsBySlot(ledgerRoot)
   const finalTmuxSlots = scheduler.slots.map((slot: any) => ({ ...slot, pane_id: finalPaneBySlot.get(slot.slot_id) || null, launch_status: finalPaneBySlot.has(slot.slot_id) ? 'launched' : slot.status }))
   await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots: finalTmuxSlots })
@@ -341,6 +372,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     ...(stale.ok ? [] : stale.stale_sessions.map((id: string) => 'stale_heartbeat:' + id)),
     ...(timeoutKill.killed_sessions || []).map((id: string) => 'timeout_killed:' + id),
     ...(recursion.ok ? [] : recursion.violations.map((id: string) => 'recursion:' + id)),
+    ...(nativeCliSessionProof.ok ? [] : nativeCliSessionProof.blockers),
+    ...(noSubagentScalingPolicy.ok ? [] : noSubagentScalingPolicy.blockers),
+    ...(fastModePropagation.ok ? [] : fastModePropagation.blockers),
     ...(patchSwarm.ok ? [] : patchSwarm.blockers),
     ...(janitor.ok ? [] : janitor.blockers)
   ]
@@ -369,7 +403,11 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     scheduler: scheduler.state,
     parallelWritePolicy,
     patchSwarm,
-    strategyGate
+    strategyGate,
+    nativeCliSessionProof,
+    noSubagentScalingPolicy,
+    fastModePolicy,
+    fastModePropagation
   })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })
@@ -404,6 +442,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     trust,
     wrongness,
     parallel_write_policy: parallelWritePolicy,
+    native_cli_session_proof: nativeCliSessionProof,
+    no_subagent_scaling_policy: noSubagentScalingPolicy,
+    fast_mode_policy: fastModePolicy,
+    fast_mode_propagation: fastModePropagation,
     patch_swarm: patchSwarm,
     proof
   }
@@ -423,15 +465,30 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     }
   }
   const pendingEntries = queueStore.queue.queued()
-  const merge = coordinateAgentPatchMerge(pendingEntries)
+  const merge: any = coordinateAgentPatchMerge(pendingEntries)
   await writeAgentMergeCoordinatorArtifacts(ledgerRoot, merge)
-  const conflictedEntryIds = new Set((merge.blocked_conflicts || merge.serial_conflicts || []).flatMap((conflict: any) => conflict.entry_ids || conflict.entries || []))
+  const conflictRebase = await executeAgentPatchConflictRebase(root, pendingEntries, merge, { dryRun: input.dryRun, artifactsDir: ledgerRoot })
+  merge.conflict_rebase_results = 'agent-patch-conflict-rebase-results.json'
+  merge.rebase_success_count = conflictRebase.succeeded_entry_ids.length
+  merge.rebase_blocker_count = conflictRebase.blockers.length
+  await writeAgentMergeCoordinatorArtifacts(ledgerRoot, merge)
+  const rebaseSucceededEntryIds = new Set(conflictRebase.succeeded_entry_ids || [])
+  const conflictedEntryIds = new Set((merge.blocked_conflicts || merge.serial_conflicts || []).flatMap((conflict: any) => conflict.entry_ids || conflict.entries || []).filter((id: any) => !rebaseSucceededEntryIds.has(String(id))))
+  merge.unresolved_conflict_entry_ids = [...conflictedEntryIds]
+  merge.ok = conflictedEntryIds.size === 0 && (conflictRebase.failed_entry_ids || []).length === 0 && (conflictRebase.blocked_entry_ids || []).length === 0
+  merge.blockers = merge.ok ? [] : merge.blockers || []
   for (const entry of pendingEntries) {
     if (conflictedEntryIds.has(entry.id)) await queueStore.markConflicted(entry.id, merge.blockers || ['patch_conflict'])
   }
   const disjointEntries = pendingEntries.filter((entry) => !conflictedEntryIds.has(entry.id))
   const startedAt = nowIso()
-  const applyResults = await Promise.all(disjointEntries.map(async (entry) => {
+  for (const entryId of rebaseSucceededEntryIds) {
+    await queueStore.markApplying(entryId)
+    await queueStore.markApplied(entryId)
+  }
+  const rebaseApplyEntryIds = new Set((conflictRebase.apply_results || []).map((row: any) => String(row.entry_id || '')))
+  const parallelEntries = disjointEntries.filter((entry) => !rebaseApplyEntryIds.has(entry.id))
+  const parallelApplyResults = await Promise.all(parallelEntries.map(async (entry) => {
     await queueStore.markApplying(entry.id)
     const started_at = nowIso()
     const applyResult = await applyAgentPatchQueueEntry(root, entry, { dryRun: input.dryRun, artifactsDir: ledgerRoot })
@@ -448,6 +505,10 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     }
     return { entry_id: entry.id, started_at, finished_at, ...applyResult }
   }))
+  const applyResults = [
+    ...parallelApplyResults,
+    ...(conflictRebase.apply_results || []).map((row: any) => ({ entry_id: row.entry_id, started_at: row.apply_started_at || nowIso(), finished_at: row.apply_ended_at || nowIso(), ...row }))
+  ]
   const finishedAt = nowIso()
   const entryById = new Map(queueStore.queue.entries.map((entry) => [entry.id, entry]))
   const verificationResults = {
@@ -467,11 +528,68 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     }))
   }
   for (const result of verificationResults.results) {
+    const entry = entryById.get(result.patch_entry_id)
+    await queueStore.journal.append({
+      event_type: 'verification_started',
+      entry_id: result.patch_entry_id,
+      agent_id: result.owner_agent || entry?.agent_id || null,
+      lease_id: entry?.lease_id || entry?.envelope?.lease_id || entry?.envelope?.lease_proof?.lease_id || null,
+      status: 'started',
+      changed_files: result.changed_files || [],
+      rollback_digest: result.rollback_digest || null
+    })
+    await queueStore.journal.append({
+      event_type: 'verification_finished',
+      entry_id: result.patch_entry_id,
+      agent_id: result.owner_agent || entry?.agent_id || null,
+      lease_id: entry?.lease_id || entry?.envelope?.lease_id || entry?.envelope?.lease_proof?.lease_id || null,
+      status: result.status || null,
+      verification_status: result.status || null,
+      changed_files: result.changed_files || [],
+      rollback_digest: result.rollback_digest || null
+    })
     if (result.status === 'verified' || result.status === 'dry_run_verified') await queueStore.markVerified(result.patch_entry_id)
   }
   const rollbackDryRuns = await Promise.all(applyResults.map(async (result) => {
-    if (input.dryRun) return { patch_entry_id: result.entry_id, ok: true, status: 'dry_run_patch_not_applied', violations: [] }
-    return { patch_entry_id: result.entry_id, ...(await rollbackAgentPatchApply(root, result, { dryRun: true })) }
+    if (result.rollback_dry_run) {
+      return { patch_entry_id: result.entry_id, serial_rebase_prevalidated: true, ...result.rollback_dry_run }
+    }
+    const journal = new AgentPatchTransactionJournal(ledgerRoot)
+    await journal.append({
+      event_type: 'rollback_dry_run_started',
+      entry_id: result.entry_id,
+      agent_id: result.agent_id || null,
+      lease_id: result.lease_id || null,
+      status: 'started',
+      changed_files: result.changed_files || [],
+      rollback_digest: result.rollback_digest || null
+    })
+    if (input.dryRun) {
+      const dryRunResult = { patch_entry_id: result.entry_id, ok: true, status: 'dry_run_patch_not_applied', violations: [] }
+      await journal.append({
+        event_type: 'rollback_dry_run_finished',
+        entry_id: result.entry_id,
+        agent_id: result.agent_id || null,
+        lease_id: result.lease_id || null,
+        status: dryRunResult.status,
+        changed_files: result.changed_files || [],
+        rollback_digest: result.rollback_digest || null,
+        violations: []
+      })
+      return dryRunResult
+    }
+    const rollbackResult = { patch_entry_id: result.entry_id, ...(await rollbackAgentPatchApply(root, result, { dryRun: true })) }
+    await journal.append({
+      event_type: 'rollback_dry_run_finished',
+      entry_id: result.entry_id,
+      agent_id: result.agent_id || null,
+      lease_id: result.lease_id || null,
+      status: rollbackResult.status || null,
+      changed_files: result.changed_files || [],
+      rollback_digest: rollbackResult.rollback_digest || result.rollback_digest || null,
+      violations: rollbackResult.violations || []
+    })
+    return rollbackResult
   }))
   const rollbackProof = {
     schema: 'sks.agent-patch-rollback-proof.v1',
@@ -492,15 +610,21 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     })),
     blockers: rollbackDryRuns.flatMap((row: any) => row.ok === false ? row.violations || ['rollback_dry_run_failed'] : [])
   }
-  await queueStore.persistSnapshot()
   const finalQueueJson = queueStore.queue.toJSON()
-  const proof = buildAgentPatchProof({
+  const proofInput = {
     queue: finalQueueJson,
     merge,
     applyResults,
     verification: verificationResults.results.map((result) => result.status),
-    parallelWritePolicy: input.parallelWritePolicy
-  })
+    parallelWritePolicy: input.parallelWritePolicy,
+    conflictRebase,
+    verificationRollbackDag: input.verificationRollbackDag
+  }
+  const initialProof = buildAgentPatchProof(proofInput)
+  await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-proof.json'), initialProof)
+  await queueStore.persistSnapshot()
+  const journalSummary = await queueStore.journal.writeSummary()
+  const proof = buildAgentPatchProof({ ...proofInput, transactionJournal: journalSummary })
   const zeroPatchBlockers = input.writeCapable && input.parallelWritePolicy?.write_mode === 'parallel' && pendingEntries.length === 0 && input.parallelWritePolicy?.dry_run_patches !== true
     ? ['write_mode_parallel_zero_patch_envelopes']
     : []
@@ -523,11 +647,24 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     apply_started_at: startedAt,
     apply_finished_at: finishedAt,
     apply_latency_ms: Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)),
-    parallel_apply_count: disjointEntries.length,
+    parallel_apply_count: parallelEntries.length,
     parallel_apply_groups: merge.parallel_apply_groups || [],
     serial_merge_groups: merge.serial_merge_groups || [],
+    conflict_rebase: {
+      ok: conflictRebase.ok,
+      rebase_attempt_count: conflictRebase.rebase_attempt_count,
+      succeeded_entry_ids: conflictRebase.succeeded_entry_ids,
+      blocked_entry_ids: conflictRebase.blocked_entry_ids,
+      failed_entry_ids: conflictRebase.failed_entry_ids
+    },
+    transaction_journal: {
+      ok: journalSummary.ok,
+      event_count: journalSummary.event_count,
+      artifact: 'agent-patch-transaction-journal.jsonl',
+      summary: 'agent-patch-transaction-journal-summary.json'
+    },
     wall_clock_parallel_evidence: merge.wall_clock_parallel_evidence || [],
-    expected_speedup: Math.max(1, Number(merge.parallel_apply_groups?.[0]?.expected_speedup || disjointEntries.length || 1)),
+    expected_speedup: Math.max(1, Number(merge.parallel_apply_groups?.[0]?.expected_speedup || parallelEntries.length || 1)),
     conflicted_agent_count: new Set((merge.blocked_conflicts || []).flatMap((conflict: any) => conflict.agents || [])).size,
     artifacts: {
       queue: 'agent-patch-queue.json',
@@ -537,7 +674,10 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
       apply_results: 'agent-patch-apply-results.json',
       verification: 'agent-patch-verification-results.json',
       rollback: 'agent-patch-rollback-proof.json',
-      proof: 'agent-patch-proof.json'
+      proof: 'agent-patch-proof.json',
+      transaction_journal: 'agent-patch-transaction-journal.jsonl',
+      transaction_journal_summary: 'agent-patch-transaction-journal-summary.json',
+      conflict_rebase: 'agent-patch-conflict-rebase-results.json'
     },
     blockers
   }
@@ -689,12 +829,16 @@ async function writeAgentBackendReport(root: string, input: any = {}) {
     schema: 'sks.agent-backend-report.v1',
     generated_at: nowIso(),
     backend: input.backend || 'unknown',
+    service_tier: input.fastModePolicy?.service_tier || 'fast',
+    fast_mode: input.fastModePolicy?.fast_mode !== false,
     result_count: (input.results || []).length,
     output_tail_report: 'agent-output-tails.json',
     records: (input.results || []).map((result: any) => ({
       agent_id: result.agent_id || null,
       session_id: result.session_id || null,
       backend: result.backend || input.backend || null,
+      service_tier: input.fastModePolicy?.service_tier || result.service_tier || 'fast',
+      fast_mode: input.fastModePolicy?.fast_mode !== false,
       status: result.status || null,
       artifacts: result.artifacts || [],
       blockers: result.blockers || [],

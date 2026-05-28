@@ -2,6 +2,7 @@ import path from 'node:path'
 import { appendJsonl, readJson, runProcess, writeJsonAtomic } from '../fsx.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { buildFixturePatchEnvelopes } from './agent-runner-fake.js'
+import { fastModeEnv, resolveFastModePolicy } from './fast-mode-policy.js'
 
 export function buildTmuxAgentPanePlan(agent: any, slice: any = {}) {
   const agentId = String(agent?.id || 'agent')
@@ -22,6 +23,7 @@ export function buildTmuxAgentPanePlan(agent: any, slice: any = {}) {
 }
 
 export async function runTmuxAgent(agent: any, slice: any, opts: any = {}) {
+  const fastPolicy = resolveFastModePolicy({ fastMode: opts.fastMode ?? agent.fast_mode, serviceTier: opts.serviceTier ?? agent.service_tier })
   const plan = buildTmuxAgentPanePlan(agent, slice)
   const launch = await launchTmuxPane(agent, slice, opts)
   const patchEnvelopes = buildFixturePatchEnvelopes(agent, slice, opts)
@@ -35,6 +37,9 @@ export async function runTmuxAgent(agent: any, slice: any, opts: any = {}) {
     session_name: launch.session_name,
     window_id: launch.window_id,
     command: launch.command,
+    service_tier: fastPolicy.service_tier,
+    fast_mode: fastPolicy.fast_mode,
+    env: fastModeEnv(fastPolicy),
     attach_command: launch.attach_command,
     blockers: launch.blockers
   })
@@ -68,7 +73,7 @@ export async function runTmuxAgent(agent: any, slice: any, opts: any = {}) {
 
 async function writeAgentTmuxReport(root: string, agent: any, report: any) {
   const rel = path.join(agent.session_artifact_dir || path.join('sessions', agent.id), 'agent-tmux-report.json')
-  await writeJsonAtomic(path.join(root, rel), { schema: 'sks.agent-tmux-report.v1', backend: 'tmux', agent_id: agent.id, session_id: agent.session_id, ...report })
+  await writeJsonAtomic(path.join(root, rel), { schema: 'sks.agent-tmux-report.v1', backend: 'tmux', agent_id: agent.id, session_id: agent.session_id, service_tier: report.service_tier || agent.service_tier || 'fast', fast_mode: report.fast_mode !== false, ...report })
   return rel
 }
 

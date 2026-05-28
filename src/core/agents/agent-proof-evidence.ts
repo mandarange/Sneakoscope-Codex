@@ -9,7 +9,7 @@ import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
 import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.js'
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; patchSwarm?: any; strategyGate?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; fastModePolicy?: any; fastModePropagation?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
@@ -28,6 +28,9 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const patchRollbackProof = await readJson<any>(path.join(root, 'agent-patch-rollback-proof.json'), null)
   const patchProof = await readJson<any>(path.join(root, 'agent-patch-proof.json'), null)
   const patchSwarm = input.patchSwarm || await readJson<any>(path.join(root, 'agent-patch-swarm-runtime.json'), null)
+  const nativeCliSessionProof = input.nativeCliSessionProof || await readJson<any>(path.join(root, 'native-cli-session-proof.json'), null)
+  const noSubagentScalingPolicy = input.noSubagentScalingPolicy || await readJson<any>(path.join(root, 'no-subagent-scaling-policy.json'), null)
+  const fastModePropagation = input.fastModePropagation || await readJson<any>(path.join(root, 'fast-mode-propagation-proof.json'), null)
   const tmuxPhysicalProof = await readJson<any>(path.join(root, 'agent-tmux-physical-proof.json'), null)
   const tmuxPhysicalProofSummary = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-summary.json'), null)
   const tmuxPhysicalBeforeDrain = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-before-drain.json'), null)
@@ -131,6 +134,9 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(input.janitor?.ok === false ? input.janitor.blockers || ['agent_janitor_not_ok'] : []),
     ...(cleanupProof?.ok === false ? cleanupProof.blockers || ['agent_cleanup_proof_not_ok'] : []),
     ...(input.results || []).flatMap((result: any) => result.blockers || []),
+    ...(nativeCliSessionProof?.ok === false ? nativeCliSessionProof.blockers || ['native_cli_session_proof_not_ok'] : []),
+    ...(noSubagentScalingPolicy?.ok === false ? noSubagentScalingPolicy.blockers || ['no_subagent_scaling_policy_not_ok'] : []),
+    ...(fastModePropagation?.ok === false ? fastModePropagation.blockers || ['fast_mode_propagation_not_ok'] : []),
     ...(patchSwarm?.ok === false ? patchSwarm.blockers || ['patch_swarm_not_ok'] : []),
     ...(patchSwarm && !patchQueue ? ['patch_queue_missing'] : []),
     ...(patchSwarm && !patchMerge ? ['patch_merge_report_missing'] : []),
@@ -155,6 +161,17 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     route_command: routeCommand,
     route_blackbox_kind: input.routeBlackboxKind || (realRouteCommandUsed ? 'actual_route_command' : 'generic_agent_route_standin'),
     real_route_command_used: realRouteCommandUsed,
+    native_cli_session_proof: nativeCliSessionProof ? 'native-cli-session-proof.json' : null,
+    native_cli_session_swarm: nativeCliSessionProof ? 'agent-native-cli-session-swarm.json' : null,
+    no_subagent_scaling_policy: noSubagentScalingPolicy ? 'no-subagent-scaling-policy.json' : null,
+    fast_mode_policy: input.fastModePolicy || null,
+    fast_mode_propagation: fastModePropagation ? 'fast-mode-propagation-proof.json' : null,
+    native_cli_worker_process_count: Number(nativeCliSessionProof?.spawned_worker_process_count || 0),
+    native_cli_max_observed_worker_process_count: Number(nativeCliSessionProof?.max_observed_worker_process_count || 0),
+    native_cli_unique_worker_session_count: Number(nativeCliSessionProof?.unique_worker_session_count || 0),
+    native_cli_subagent_scaling_blocked: noSubagentScalingPolicy?.ok === true,
+    service_tier: input.fastModePolicy?.service_tier || fastModePropagation?.service_tier || 'fast',
+    fast_mode: input.fastModePolicy?.fast_mode !== false,
     parallel_write_policy: 'agent-parallel-write-policy.json',
     strategy_gate: 'strategy-gate.json',
     strategy_gate_ok: strategyGate?.ok === true,
@@ -290,6 +307,9 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
       , 'strategy-gate.json': strategyGate
       , 'agent-patch-proof.json': patchProof
       , 'agent-patch-swarm-runtime.json': patchSwarm
+      , 'native-cli-session-proof.json': nativeCliSessionProof
+      , 'no-subagent-scaling-policy.json': noSubagentScalingPolicy
+      , 'fast-mode-propagation-proof.json': fastModePropagation
     }
   })
   await writeRuntimeTruthMatrix(repoRootFromAgentRoot(root), runtimeTruthMatrix, { agentRoot: root })

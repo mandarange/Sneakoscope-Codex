@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.18.9** closes the Patch Swarm runtime surface: Appshots evidence now records Codex thread attachment provenance without claiming CLI-created screenshots, MCP `readOnlyHint` gates require runtime overlap/serialization proof, Codex 0.134 runner truth covers profile, proxy, history, and process reports, and release gates expose these checks alongside the patch queue/apply/proof work.
+SKS **1.18.10** hardens the Patch Swarm runtime closure: patch truth now requires route execution, transaction journal evidence, conflict rebase results, strict strategy-to-patch wiring, verification, rollback proof, and final proof rather than route flags alone. It also closes the Native CLI Session Swarm addendum: `--agents N` now means N real `sks --agent worker` child CLI processes, not Codex internal subagent/scout counts, and Fast mode is the default service tier for agent workers, Codex exec children, tmux workers, and MAD target workers unless explicitly disabled.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -49,8 +49,23 @@ npm run mcp:0.134-modernization
 npm run mcp:readonly-runtime-scheduler
 npm run codex:0.134-runner-truth
 npm run source-intelligence:codex-history-search
-npm run agent:parallel-write-kernel
-npm run release:gate-existence-audit
+    npm run agent:parallel-write-kernel
+    npm run agent:patch-swarm-runtime-truth
+    npm run agent:patch-transaction-journal
+    npm run agent:patch-conflict-rebase
+    npm run agent:strategy-to-patch-strict
+    npm run agent:rollback-command
+    npm run agent:native-cli-session-swarm
+    npm run agent:native-cli-session-swarm-10
+    npm run agent:native-cli-session-swarm-20
+    npm run agent:no-subagent-scaling
+    npm run agent:native-cli-session-proof
+    npm run agent:fast-mode-default
+    npm run agent:fast-mode-worker-propagation
+    npm run codex:fast-mode-profile-propagation
+    npm run mad-sks:fast-mode-propagation
+    SKS_TEST_REAL_CODEX_PATCHES=1 npm run agent:real-codex-patch-envelope-smoke
+    npm run release:gate-existence-audit
 npm run route:blackbox-realism
 npm run release:real-check
 npm run agent:backfill-route-blackbox
@@ -117,6 +132,9 @@ The cleanup contract is policy-backed in `.sneakoscope/policy.json`, but the def
 - MCP readOnly scheduler: [docs/mcp-readonly-scheduler.md](docs/mcp-readonly-scheduler.md)
 - Parallel write agents: [docs/parallel-write-agents.md](docs/parallel-write-agents.md)
 - Agent patch queue: [docs/agent-patch-queue.md](docs/agent-patch-queue.md)
+- Native CLI Session Swarm: [docs/native-cli-session-swarm.md](docs/native-cli-session-swarm.md)
+- No-subagent scaling: [docs/no-subagent-scaling.md](docs/no-subagent-scaling.md)
+- Fast mode default: [docs/fast-mode-default.md](docs/fast-mode-default.md)
 - Migration 1.18.7 to 1.18.8: [docs/migration-1.18.7-to-1.18.8.md](docs/migration-1.18.7-to-1.18.8.md)
 - Codex official Goal mode: [docs/codex-official-goal-mode.md](docs/codex-official-goal-mode.md)
 - Release parallel full coverage: [docs/release-parallel-full-coverage.md](docs/release-parallel-full-coverage.md)
@@ -394,7 +412,9 @@ sks agent run "wide release audit" --route '$Release-Review' --agents 10 --concu
 sks agent run "real one-agent smoke" --backend codex-exec --real --agents 1 --concurrency 1 --json
 ```
 
-Defaults are intentionally bounded: 5 agents, maximum 20, and a separate `--concurrency` cap so a 20-agent run batches without overlapping file ownership. The parent orchestrator writes `agents/agent-roster.json`, `agents/agent-effort-policy.json`, `agents/agent-task-board.json`, `agents/agent-leases.json`, `agents/agent-no-overlap-proof.json`, `agents/agent-cleanup.json`, and `agents/agent-proof-evidence.json` under the mission.
+Defaults are intentionally bounded but not subagent-limited: 5 agents by default, maximum 20 native CLI worker sessions, and a separate `--concurrency` cap. When enough work exists, `--agents 10 --concurrency 10` and `--agents 20 --concurrency 20` must create 10 or 20 independent child processes using `node dist/bin/sks.js --agent worker --intake <worker-intake.json> --json`. The parent orchestrator writes `agents/agent-roster.json`, `agents/agent-effort-policy.json`, `agents/agent-task-board.json`, `agents/agent-leases.json`, `agents/agent-no-overlap-proof.json`, `agents/agent-native-cli-session-swarm.json`, `agents/native-cli-session-proof.json`, `agents/no-subagent-scaling-policy.json`, `agents/fast-mode-propagation-proof.json`, `agents/agent-cleanup.json`, and `agents/agent-proof-evidence.json` under the mission.
+
+Native worker sessions write independent artifact directories under `agents/sessions/<slot>/gen-<n>/worker/`, including heartbeat, process report, close report, patch envelope or no-patch reason, recursion guard, and Fast mode proof. Codex internal subagent/scout events may be cockpit evidence, but they are never counted as SKS worker sessions.
 
 Manual fan-out syntax:
 
@@ -680,7 +700,7 @@ npm run release:check
 npm run publish:dry
 ```
 
-`release:check` runs the 1.18.3 route-truth dynamic scheduler closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.18 baseline gates and adds task graph expansion, schema-bound follow-up work, actual Agent/Team/Research/QA route backfill blackboxes, scheduler proof hardening, persistent tmux lane supervisor integration, no-flicker lane proof, session generation, terminal generation, dynamic cockpit, Source Intelligence propagation, and Goal mode propagation checks. Broader live or historical gates remain explicit scripts such as `release:real-check`. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
+`release:check` runs the 1.18.10 route-truth closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.18 baseline gates and adds patch swarm runtime truth, transaction journaling, serial conflict rebase, strict strategy-to-patch proof, rollback command proof, Native CLI Session Swarm 5/10/20-process proof, no-subagent-scaling proof, Fast mode default/worker/Codex/MAD propagation proof, Appshots attachment provenance, MCP runtime overlap evidence, Codex 0.134 runner truth, task graph expansion, schema-bound follow-up work, actual Agent/Team/Research/QA route blackboxes, scheduler proof hardening, tmux lane proof, Source Intelligence propagation, and Goal mode propagation checks. Broader live gates remain explicit scripts such as `release:real-check`; real Codex patch smoke is optional unless `SKS_REQUIRE_REAL_CODEX_PATCHES=1`. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
 
 Version bumps are manual. Run `sks versioning bump` only when preparing release metadata; SKS will not create `.git/hooks/pre-commit` or auto-bump during ordinary commits.
 

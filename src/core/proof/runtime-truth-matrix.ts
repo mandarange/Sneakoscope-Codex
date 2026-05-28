@@ -6,6 +6,7 @@ export const RUNTIME_TRUTH_MATRIX_SCHEMA = 'sks.runtime-truth-matrix.v1'
 export const RUNTIME_TRUTH_SUBSYSTEMS = [
   'tmux_physical',
   'codex_dynamic',
+  'codex_patch_envelope_smoke',
   'cleanup',
   'intelligent_work_graph',
   'source_intelligence',
@@ -15,10 +16,13 @@ export const RUNTIME_TRUTH_SUBSYSTEMS = [
   'warp_mad_lanes',
   'codex_0_134',
   'mcp_0_134',
+  'mcp_readonly_runtime_scheduler',
   'adhd_orchestration',
   'appshots',
   'parallel_write',
   'patch_proof',
+  'native_cli_session_swarm',
+  'fast_mode_default',
   'cleanup_v4',
   'ast_type_work_graph',
   'warp_mad_right_lanes'
@@ -72,12 +76,14 @@ export async function buildRuntimeTruthMatrix(input: {
   const required = {
     tmux_physical: process.env.SKS_REQUIRE_REAL_TMUX === '1',
     codex_dynamic: process.env.SKS_REQUIRE_REAL_DYNAMIC_AGENTS === '1',
+    codex_patch_envelope_smoke: process.env.SKS_REQUIRE_REAL_CODEX_PATCHES === '1',
     warp_mad_lanes: process.env.SKS_REQUIRE_WARP_MAD_LANES === '1',
     ...(input.required || {})
   } as Partial<Record<RuntimeTruthSubsystem, boolean>>
-  const [tmux, codex, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0134, mcp0134, adhdOrchestration, appshots, parallelWrite, patchProof] = await Promise.all([
+  const [tmux, codex, codexPatch, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0134, mcp0134, mcpReadonlyRuntime, adhdOrchestration, appshots, parallelWrite, patchProof, nativeCliSession, fastModeDefault] = await Promise.all([
     readReport(`agent-real-tmux-physical-proof-${input.releaseVersion}.json`, ['agent-tmux-physical-proof.json', 'agent-real-tmux-physical-proof-1.18.6.json']),
     readReport(`agent-real-codex-dynamic-smoke-${input.releaseVersion}.json`, ['agent-real-codex-dynamic-smoke-1.18.6.json']),
+    readReport('agent-real-codex-patch-envelope-smoke.json'),
     readReport(`agent-cleanup-executor-v2-${input.releaseVersion}.json`, ['agent-cleanup-proof.json']),
     readReport(`agent-intelligent-work-graph-v2-${input.releaseVersion}.json`, ['agent-intelligent-work-graph.json']),
     readReport('fake-real-proof-policy.json'),
@@ -87,14 +93,18 @@ export async function buildRuntimeTruthMatrix(input: {
     readReport('mad-sks-tmux-lane-ui.json'),
     readReport('codex-0-134-official-compat.json'),
     readReport('mcp-0-134-modernization.json'),
+    readReport('mcp-readonly-runtime-scheduler.json'),
     readReport('strategy-gate.json', ['strategy-adhd-orchestrating-gate.json', 'adhd-orchestrating-gate.json']),
     readReport('appshots-evidence.json'),
     readReport('agent-parallel-write-kernel.json'),
-    readReport('agent-patch-proof.json')
+    readReport('agent-patch-proof.json'),
+    readReport('native-cli-session-proof.json', ['agent-native-cli-session-swarm.json']),
+    readReport('fast-mode-propagation-proof.json')
   ])
   const rows: RuntimeTruthRow[] = [
     row('tmux_physical', levelFromTmux(tmux, required.tmux_physical === true), ['agent-real-tmux-physical-proof', 'agent-tmux-physical-proof.json'], required.tmux_physical === true, tmux, 'run `SKS_TEST_REAL_TMUX=1 npm run agent:real-tmux-physical-proof`'),
     row('codex_dynamic', levelFromCodex(codex, required.codex_dynamic === true), ['agent-real-codex-dynamic-smoke'], required.codex_dynamic === true, codex, 'run `SKS_TEST_REAL_DYNAMIC_AGENTS=1 npm run agent:real-codex-dynamic-smoke-v2`'),
+    row('codex_patch_envelope_smoke', levelFromCodex(codexPatch, required.codex_patch_envelope_smoke === true), ['agent-real-codex-patch-envelope-smoke.json'], required.codex_patch_envelope_smoke === true, codexPatch, 'run `SKS_TEST_REAL_CODEX_PATCHES=1 npm run agent:real-codex-patch-envelope-smoke`'),
     row('cleanup', levelFromOk(cleanup, 'integration_optional'), ['agent-cleanup-proof.json'], false, cleanup, 'run `npm run agent:cleanup-executor-v2`'),
     row('intelligent_work_graph', levelFromWorkGraph(workGraph || fakeReal), ['agent-intelligent-work-graph-v2.json', 'agent-symbol-ownership-map.json'], false, workGraph, 'run `npm run agent:ast-aware-work-graph`'),
     row('source_intelligence', sourceIntel?.ok === true ? 'proven' : 'integration_optional', ['source-intelligence-evidence.json'], false, sourceIntel, 'refresh source intelligence evidence'),
@@ -104,10 +114,13 @@ export async function buildRuntimeTruthMatrix(input: {
     row('warp_mad_lanes', levelFromWarp(warpMad, required.warp_mad_lanes === true), ['mad-sks-tmux-lane-ui.json'], required.warp_mad_lanes === true, warpMad, 'run `sks --mad` in Warp/tmux and capture visible lane proof'),
     row('codex_0_134', levelFromOk(codex0134, 'integration_optional'), ['codex-0-134-official-compat.json'], false, codex0134, 'run `npm run codex:0.134-official-compat`'),
     row('mcp_0_134', levelFromOk(mcp0134, 'integration_optional'), ['mcp-0-134-modernization.json'], false, mcp0134, 'run `npm run mcp:0.134-modernization`'),
+    row('mcp_readonly_runtime_scheduler', levelFromOk(mcpReadonlyRuntime, 'integration_optional'), ['mcp-readonly-runtime-scheduler.json'], false, mcpReadonlyRuntime, 'run `npm run mcp:readonly-runtime-scheduler`'),
     row('adhd_orchestration', levelFromOk(adhdOrchestration, 'integration_optional'), ['strategy-gate.json', 'adhd-orchestrating-gate.json'], false, adhdOrchestration, 'run `npm run strategy:adhd-orchestrating-gate`'),
     row('appshots', levelFromAppshots(appshots), ['appshots-evidence.json'], false, appshots, 'run `npm run appshots:evidence`'),
     row('parallel_write', levelFromOk(parallelWrite, 'integration_optional'), ['agent-parallel-write-kernel.json'], false, parallelWrite, 'run `npm run agent:parallel-write-kernel`'),
     row('patch_proof', levelFromOk(patchProof, 'integration_optional'), ['agent-patch-proof.json'], false, patchProof, 'run `npm run agent:patch-proof`'),
+    row('native_cli_session_swarm', levelFromOk(nativeCliSession, 'integration_optional'), ['native-cli-session-proof.json', 'agent-native-cli-session-swarm.json'], false, nativeCliSession, 'run `npm run agent:native-cli-session-swarm-20`'),
+    row('fast_mode_default', levelFromOk(fastModeDefault, 'integration_optional'), ['fast-mode-propagation-proof.json'], false, fastModeDefault, 'run `npm run agent:fast-mode-default`'),
     row('cleanup_v4', levelFromOk(cleanup, 'integration_optional'), ['agent-cleanup-proof.json'], false, cleanup, 'run `npm run agent:cleanup-executor-v2`'),
     row('ast_type_work_graph', levelFromWorkGraph(workGraph || fakeReal), ['agent-intelligent-work-graph-v2.json', 'agent-symbol-ownership-map.json'], false, workGraph, 'run `npm run agent:ast-aware-work-graph`'),
     row('warp_mad_right_lanes', levelFromWarp(warpMad, required.warp_mad_lanes === true), ['mad-sks-tmux-lane-ui.json'], required.warp_mad_lanes === true, warpMad, 'run `sks --mad` in Warp/tmux and capture right-lane proof')
@@ -115,7 +128,7 @@ export async function buildRuntimeTruthMatrix(input: {
   const blockers = rows.flatMap((item) => item.required_mode && ['blocked', 'real_required_missing', 'integration_optional'].includes(item.proof_level)
     ? [`required_runtime_truth_missing:${item.subsystem}`, ...item.blockers]
     : item.blockers)
-  const priorities = Object.fromEntries(['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'].map((priority) => {
+  const priorities = Object.fromEntries(['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'].map((priority) => {
     const priorityBlockers = priority === 'P0' || priority === 'P1' ? blockers : []
     return [priority, {
       status: priorityBlockers.length ? 'blocked' : 'closed',

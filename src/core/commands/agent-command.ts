@@ -7,12 +7,15 @@ import { buildAgentRoster } from '../agents/agent-roster.js'
 import { buildAgentWorkPartition } from '../agents/agent-work-partition.js'
 import { runAgentCleanupExecutor } from '../agents/agent-cleanup-executor.js'
 import { rollbackAgentPatchApply } from '../agents/agent-patch-apply-worker.js'
+import { PersistentAgentPatchQueueStore } from '../agents/agent-patch-queue-store.js'
+import { runNativeCliWorkerFromArgs } from '../agents/native-cli-worker.js'
 
 const AGENT_ACTION_SCHEMA = 'sks.agent-command-result.v1'
 
 export async function agentCommand(commandOrArgs: string | string[] = 'agent', maybeArgs: string[] = []) {
   const args = Array.isArray(commandOrArgs) ? commandOrArgs : maybeArgs
   const parsed = parseAgentCommandArgs('agent', args)
+  if (parsed.action === 'worker') return runNativeCliWorkerFromArgs(args.slice(args[0] === 'worker' ? 1 : 0))
   if (parsed.action === 'run' || parsed.action === 'spawn') return agentRun(parsed)
   if (parsed.action === 'plan') return agentPlan(parsed)
   return agentMissionAction(parsed)
@@ -116,22 +119,52 @@ async function agentMissionAction(parsed: any) {
 
 async function runAgentPatchRollbackCommand(projectRoot: string, agentRoot: string, parsed: any) {
   const applyResults = await readJson<any>(path.join(agentRoot, 'agent-patch-apply-results.json'), null)
-  const rows = Array.isArray(applyResults?.results) ? applyResults.results : []
+  const allRows = Array.isArray(applyResults?.results) ? applyResults.results : []
+  const rows = parsed.patchEntryId ? allRows.filter((row: any) => String(row.entry_id || '') === parsed.patchEntryId) : allRows
   const results = []
   for (const row of rows) {
-    results.push({
+    const rollbackResult = {
       patch_entry_id: row.entry_id || null,
       ...(await rollbackAgentPatchApply(projectRoot, row, { dryRun: parsed.apply !== true }))
+    }
+    results.push(rollbackResult)
+    if (parsed.apply === true && rollbackResult.ok === true && row.entry_id) {
+      const store = await PersistentAgentPatchQueueStore.load(agentRoot)
+      await store.markRolledBack(String(row.entry_id))
+      await store.persistSnapshot()
+    }
+  }
+  const failures = results.filter((row: any) => row.ok !== true)
+  if (failures.length > 0) {
+    await writeJsonAtomic(path.join(agentRoot, 'agent-patch-rollback-wrongness.json'), {
+      schema: 'sks.agent-patch-rollback-wrongness.v1',
+      ok: false,
+      generated_at: new Date().toISOString(),
+      failures,
+      next_action: 'Inspect hash precondition failures before using --apply.'
     })
   }
-  await writeJsonAtomic(path.join(agentRoot, 'agent-patch-rollback-command-result.json'), {
+  const blockers = [
+    ...(allRows.length === 0 ? ['missing_apply_results'] : []),
+    ...(allRows.length > 0 && rows.length === 0 ? ['no_matching_patch_entry'] : []),
+    ...failures.flatMap((row: any) => row.violations || ['rollback_failed'])
+  ].map(String)
+  const commandResult = {
     schema: 'sks.agent-patch-rollback-command-result.v1',
     ok: rows.length > 0 && results.every((row: any) => row.ok === true),
     dry_run: parsed.apply !== true,
     apply: parsed.apply === true,
+    mission_target: parsed.missionId || 'latest',
+    patch_entry_id: parsed.patchEntryId || null,
+    restored_files: [...new Set(results.flatMap((row: any) => row.restored_files || []))],
+    deleted_files: [...new Set(results.flatMap((row: any) => row.deleted_files || []))],
     result_count: results.length,
-    results
-  })
+    results,
+    blockers,
+    wrongness: failures.length ? 'agent-patch-rollback-wrongness.json' : null
+  }
+  if (!commandResult.ok) process.exitCode = 1
+  await writeJsonAtomic(path.join(agentRoot, 'agent-patch-rollback-command-result.json'), commandResult)
 }
 
 async function resolveAgentMission(root: string, requested: string) {

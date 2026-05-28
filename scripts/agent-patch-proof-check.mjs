@@ -21,7 +21,9 @@ const proof = proofMod.buildAgentPatchProof({
     { ok: true, changed_files: ['a.txt'], rollback_digest: 'digest-a', verification: { status: 'unit-fixture' } },
     { ok: true, changed_files: ['b.txt'], rollback_digest: 'digest-b', verification: { status: 'unit-fixture' } }
   ],
-  verification: ['unit-fixture']
+  verification: ['unit-fixture'],
+  transactionJournal: { ok: true, blockers: [], event_count: 10 },
+  conflictRebase: { ok: true, blockers: [] }
 });
 const pendingProof = proofMod.buildAgentPatchProof({
   queue: { queued_count: 1, entries: [{ id: 'entry-pending', status: 'pending', violations: [] }] },

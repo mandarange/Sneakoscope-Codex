@@ -2,22 +2,34 @@
 
 ## [Unreleased]
 
+
+## [1.18.10] - 2026-05-28
+
 ### Added
 
-- Add a short README LLM init prompt for Hermes/OpenClaw-style agent builders that references `mandarange/Sneakoscope-Codex`, recommends `npm i -g sneakoscope`, and points setup agents at SKS doctor/Codex App/proof checks.
-- Add generated Hermes/OpenClaw LLM init prompts and an `imagegen-source-scout` skill for official ChatGPT Images 2.0 / `gpt-image-2` docs plus clearly labeled X/social prompt-workflow signals.
+- Add patch swarm runtime truth coverage that ties route execution, strategy gate evidence, patch queue lifecycle, merge/apply groups, verification, rollback, final patch proof, and non-policy-only proof into `agent:patch-swarm-runtime-truth`.
+- Add an append-only patch transaction journal and summary proof for enqueue, lock, apply, verification, rollback dry-run, hashes, changed files, durations, and final status events.
+- Add a serial conflict rebase executor and release gate for same-file, subtree, stale-context, domain-policy, protected-path, unleased-path, and rollback-aware conflict fixtures.
+- Add an optional real Codex patch envelope smoke gate that uses Codex exec output-schema/output-last-message semantics when `SKS_TEST_REAL_CODEX_PATCHES=1` and reports `integration_optional` unless required mode is enabled.
+- Add Native CLI Session Swarm runtime so `--agents 10` and `--agents 20` spawn real `sks --agent worker` CLI sessions instead of relying on Codex internal subagent/scout scaling.
+- Add no-subagent-scaling release gates proving the main orchestrator does not count Codex internal subagents as SKS worker sessions.
+- Add Fast Mode Default closure so all native agent workers, Codex exec children, tmux workers, and MAD target workers inherit fast service tier and fast runtime profile unless explicitly disabled.
 
 ### Changed
 
-- Clarify that version-facing changes should be recorded in `CHANGELOG.md`, and refresh imagegen skill guidance to prompt explicitly for ChatGPT Images 2.0 / GPT Image 2.0 with `gpt-image-2` while preserving Codex App `$imagegen` evidence rules.
-- Move the imagegen and MAD-SKS policy updates into the source skill templates so future SKS installs regenerate the same guidance instead of reverting to legacy DB-only or generic imagegen wording.
-- Harden MAD-SKS tmux launch so bare `sks --mad` grants only target file/shell scope and requires explicit `--allow-*` flags for packages, services, network, browser/Computer Use, generated assets, file permissions, DB writes, and broader system scopes.
-- Harden README architecture imagegen replacement so only current files under `$CODEX_HOME/generated_images` count as Codex App `$imagegen` provenance; moved or copied files no longer pass via self-attested metadata.
-- Add an explicit opt-in README architecture imagegen auto-pick mode that accepts exactly one generated_images candidate newer than the prompt contract.
-- Preserve the README architecture imagegen prompt mtime across output-free reruns and add an opt-in wait mode for late-arriving Codex App generated_images output.
-- Add a prompt-only README architecture imagegen command plus CLI flags for output, auto-pick, and wait handoff so the Codex App `$imagegen` step can be performed without relying on environment variables.
-- Route web/browser/webapp verification through Codex Chrome Extension readiness first, reserve Computer Use for native Mac/non-web surfaces, and rapidly block QA/UX pipelines when the extension is missing.
-- Treat UX Review `--from-chrome-extension` and `--from-computer-use` as real flags so web review cannot slip past the Chrome Extension gate through option parsing.
+- Wire the new patch swarm truth, transaction journal, conflict rebase, strict strategy-to-patch, rollback command, MCP scheduler, Appshots attachment, Codex runner truth, and optional real Codex patch smoke gates into release readiness and runtime truth reporting.
+- Extend patch proof strictness so applied entries must retain strategy or micro-win references, verification nodes, rollback nodes, lease ids, ownership binding, transaction journal proof, and conflict rebase evidence.
+- Update release metadata from 1.18.9 to 1.18.10 across npm, TypeScript, dist, and Rust version surfaces.
+- Treat `--agents N` as target native CLI worker session count, not subagent count.
+- Treat native CLI worker spawn proof as release-critical for multi-agent routes.
+
+### Fixed
+
+- Harden patch rollback with hash preconditions, user-facing `sks agent rollback-patches` UX, Wrongness output on rollback failure, queue status updates, and symlink/realpath containment checks.
+- Strengthen Appshots and MCP scheduler evidence so Codex appshot sources require thread/attachment/source/local-only metadata and read-only concurrency proof relies on actual overlap rows rather than static hints.
+- Prevent multi-agent runs from silently clamping to Codex internal subagent limits.
+- Prevent worker count proof from passing when only subagent/scout events exist.
+- Prevent Fast mode from being omitted in spawned worker CLI sessions, Codex exec process reports, tmux lanes, or MAD target worker reports.
 
 ## [1.18.9] - 2026-05-27
 

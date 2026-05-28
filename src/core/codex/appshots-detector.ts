@@ -70,7 +70,7 @@ export function detectAppshotsCapability(input: {
     status: visualRequired ? appshotsToolAvailable ? 'available' : 'operator_required' : 'not_required',
     official_doc_url: APPSHOTS_OFFICIAL_DOC_URL,
     visual_required: visualRequired,
-    operator_action_required: visualRequired && !appshotsToolAvailable && !hasThreadAppshot,
+    operator_action_required: visualRequired && !operatorActionRecorded && !appshotsToolAvailable && !hasThreadAppshot,
     capability_signals: [
       ...(visualRequired ? ['visual_context_requested'] : ['visual_context_not_required']),
       ...(operatorActionRecorded ? ['operator_action_recorded'] : []),
@@ -98,14 +98,20 @@ export function discoverAppshotsThreadAttachments(
       mime_type: stringOrNull(attachment.mime_type),
       source_app: stringOrNull(attachment.source_app),
       source_window: stringOrNull(attachment.source_window),
-      local_only: attachment.local_only !== false,
+      local_only: attachment.local_only === true,
       codex_appshot: attachment.codex_appshot === true || kind === 'appshot'
     }
   })
   const appshotAttachmentCount = rows.filter((row) => row.codex_appshot || row.kind === 'appshot').length
   const blockers = [
     ...(opts.visualRequired === true && attachments.length > 0 && appshotAttachmentCount === 0 ? ['appshots_thread_attachment_missing_appshot_kind'] : []),
-    ...rows.filter((row) => (row.codex_appshot || row.kind === 'appshot') && !row.local_only).map((row) => `appshots_thread_attachment_not_local_only:${row.attachment_id || 'unknown'}`)
+    ...rows.filter((row) => row.codex_appshot || row.kind === 'appshot').flatMap((row) => [
+      ...(row.thread_id ? [] : [`appshots_thread_attachment_thread_id_missing:${row.attachment_id || 'unknown'}`]),
+      ...(row.attachment_id ? [] : [`appshots_thread_attachment_attachment_id_missing:${row.thread_id || 'unknown'}`]),
+      ...(row.source_app ? [] : [`appshots_thread_attachment_source_app_missing:${row.attachment_id || 'unknown'}`]),
+      ...(row.source_window ? [] : [`appshots_thread_attachment_source_window_missing:${row.attachment_id || 'unknown'}`]),
+      ...(row.local_only ? [] : [`appshots_thread_attachment_not_local_only:${row.attachment_id || 'unknown'}`])
+    ])
   ]
   return {
     schema: 'sks.appshots-thread-attachment-discovery.v1',

@@ -27,6 +27,8 @@ export interface McpReadOnlyRuntimeToolFixture {
 export interface McpReadOnlyRuntimeToolProof {
   name: string
   concurrency: Mcp0134ToolClassification['concurrency']
+  scheduled_mode: 'parallel_readonly_batch' | 'serial_required'
+  batch_id: string
   started_at_ms: number
   ended_at_ms: number
   duration_ms: number
@@ -124,22 +126,31 @@ export async function proveMcpReadOnlyRuntimeScheduler(input: {
 } = {}): Promise<McpReadOnlyRuntimeSchedulerProof> {
   const readOnlyTools = input.readOnlyTools || [
     { name: 'docs_search_a', annotations: { readOnlyHint: true }, inputSchema: { type: 'object' }, durationMs: 25 },
-    { name: 'docs_search_b', annotations: { readOnlyHint: true }, inputSchema: { type: 'object' }, durationMs: 25 }
+    { name: 'docs_search_b', annotations: { readOnlyHint: true }, inputSchema: { type: 'object' }, durationMs: 25 },
+    { name: 'docs_lookup_c', annotations: { readOnlyHint: true }, inputSchema: { type: 'object' }, durationMs: 25 }
   ]
   const writeTools = input.writeTools || [
     { name: 'docs_update', annotations: { readOnlyHint: false }, inputSchema: { type: 'object' }, durationMs: 5 },
     { name: 'delete_docs', annotations: { readOnlyHint: true }, inputSchema: { type: 'object', properties: { destructiveOperation: { const: 'delete' } } }, durationMs: 5 }
   ]
-  const readOnlyRows = await Promise.all(readOnlyTools.map((tool) => runMcpRuntimeFixture(tool)))
+  const readOnlyCandidates = readOnlyTools.filter((tool) => classifyMcpToolForConcurrency(tool).concurrency === 'candidate_parallel_readonly')
+  const readOnlySerial = readOnlyTools.filter((tool) => classifyMcpToolForConcurrency(tool).concurrency !== 'candidate_parallel_readonly')
+  const readOnlyRows = await Promise.all(readOnlyCandidates.map((tool) => runMcpRuntimeFixture(tool, 'parallel_readonly_batch', 'readonly-parallel-001')))
   const writeRows: McpReadOnlyRuntimeToolProof[] = []
-  for (const tool of writeTools) writeRows.push(await runMcpRuntimeFixture(tool))
+  for (const tool of [...readOnlySerial, ...writeTools]) writeRows.push(await runMcpRuntimeFixture(tool, 'serial_required', `serial-${String(writeRows.length + 1).padStart(3, '0')}`))
   const tools = [...readOnlyRows, ...writeRows]
   const overlapEvidence = collectOverlapEvidence(readOnlyRows)
   const readOnlyParallel = readOnlyRows.length < 2 || overlapEvidence.length > 0
   const writeSerial = collectOverlapEvidence(writeRows).length === 0
   const destructiveFalsePositiveBlocked = writeRows.some((row) => row.name === 'delete_docs' && row.concurrency === 'serial_required')
   const blockers = [
+    ...(readOnlyTools.length >= 3 ? [] : ['mcp_readonly_tool_count_below_3']),
     ...(readOnlyParallel ? [] : ['mcp_readonly_tools_serialized_without_reason']),
+    ...(overlapEvidence.every((edge) => {
+      const a = readOnlyRows.find((row) => row.name === edge.a)
+      const b = readOnlyRows.find((row) => row.name === edge.b)
+      return a?.concurrency === 'candidate_parallel_readonly' && b?.concurrency === 'candidate_parallel_readonly'
+    }) ? [] : ['mcp_overlap_contains_non_readonly_candidate']),
     ...(writeSerial ? [] : ['mcp_write_tools_ran_concurrently_without_permission']),
     ...(destructiveFalsePositiveBlocked ? [] : ['mcp_destructive_readonly_hint_false_positive_not_blocked'])
   ]
@@ -174,7 +185,7 @@ export function detectMcp0134PolicyFromConfig(sources: Array<{ path: string; tex
   }
 }
 
-async function runMcpRuntimeFixture(tool: McpReadOnlyRuntimeToolFixture): Promise<McpReadOnlyRuntimeToolProof> {
+async function runMcpRuntimeFixture(tool: McpReadOnlyRuntimeToolFixture, scheduledMode: McpReadOnlyRuntimeToolProof['scheduled_mode'], batchId: string): Promise<McpReadOnlyRuntimeToolProof> {
   const classification = classifyMcpToolForConcurrency(tool)
   const started = Date.now()
   await new Promise((resolve) => setTimeout(resolve, Math.max(0, tool.durationMs || 0)))
@@ -182,6 +193,8 @@ async function runMcpRuntimeFixture(tool: McpReadOnlyRuntimeToolFixture): Promis
   return {
     name: classification.name,
     concurrency: classification.concurrency,
+    scheduled_mode: scheduledMode,
+    batch_id: batchId,
     started_at_ms: started,
     ended_at_ms: ended,
     duration_ms: ended - started

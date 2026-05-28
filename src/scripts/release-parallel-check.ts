@@ -21,6 +21,8 @@ const deterministicReleaseEnv: Record<string, string> = {
   SKS_REQUIRE_REAL_TMUX: '0',
   SKS_TEST_REAL_DYNAMIC_AGENTS: '0',
   SKS_REQUIRE_REAL_DYNAMIC_AGENTS: '0',
+  SKS_TEST_REAL_CODEX_PATCHES: '0',
+  SKS_REQUIRE_REAL_CODEX_PATCHES: '0',
   SKS_TEST_REAL_IMAGEGEN: '0',
   SKS_REAL_IMAGEGEN: '0',
   SKS_CODEX_APP_IMAGEGEN: '0',
@@ -80,7 +82,7 @@ const tasks: VerificationTask[] = [
   task('agent:ast-aware-work-graph', 'npm run agent:ast-aware-work-graph --silent', { dependencies: ['build'] }),
   task('proof:fake-vs-real-policy', 'npm run proof:fake-vs-real-policy --silent', { dependencies: ['build'] }),
   task('proof:fake-real-policy-v2', 'npm run proof:fake-real-policy-v2 --silent', { dependencies: ['build'] }),
-  task('release:runtime-truth-matrix', 'npm run release:runtime-truth-matrix --silent', { dependencies: ['agent:tmux-physical-proof-v2', 'agent:cleanup-executor-v2', 'agent:ast-aware-work-graph', 'proof:fake-real-policy-v2', 'strategy:adhd-orchestrating-gate', 'strategy:parallel-modification-plan', 'strategy:file-ownership-plan', 'strategy:verification-rollback-dag', 'appshots:evidence', 'appshots:source-intelligence', 'agent:parallel-write-kernel', 'agent:patch-proof', 'agent:patch-swarm-runtime'] }),
+  task('release:runtime-truth-matrix', 'npm run release:runtime-truth-matrix --silent', { dependencies: ['agent:tmux-physical-proof-v2', 'agent:cleanup-executor-v2', 'agent:ast-aware-work-graph', 'proof:fake-real-policy-v2', 'strategy:adhd-orchestrating-gate', 'strategy:parallel-modification-plan', 'strategy:file-ownership-plan', 'strategy:verification-rollback-dag', 'appshots:evidence', 'appshots:source-intelligence', 'agent:parallel-write-kernel', 'agent:patch-proof', 'agent:patch-swarm-runtime', 'agent:patch-swarm-runtime-truth', 'agent:real-codex-patch-envelope-smoke', 'mcp:readonly-runtime-scheduler'] }),
   task('route:blackbox-realism', 'npm run route:blackbox-realism --silent', { dependencies: ['build'] }),
   task('agent:dynamic-cockpit', 'npm run agent:dynamic-cockpit --silent', { dependencies: ['build'] }),
   task('agent:source-intelligence-propagation', 'npm run agent:source-intelligence-propagation --silent', { dependencies: ['build'] }),
@@ -89,6 +91,15 @@ const tasks: VerificationTask[] = [
   task('release:parallel-full-coverage', 'npm run release:parallel-full-coverage --silent', { dependencies: ['build'] }),
   task('priority:full-closure', 'npm run priority:full-closure --silent', { dependencies: ['build'] }),
   task('release:native-agent-backend', 'npm run release:native-agent-backend --silent', { dependencies: ['build'] }),
+  task('agent:native-cli-session-swarm', 'npm run agent:native-cli-session-swarm --silent', { dependencies: ['build'] }),
+  task('agent:native-cli-session-swarm-10', 'npm run agent:native-cli-session-swarm-10 --silent', { dependencies: ['build'] }),
+  task('agent:native-cli-session-swarm-20', 'npm run agent:native-cli-session-swarm-20 --silent', { dependencies: ['build'] }),
+  task('agent:no-subagent-scaling', 'npm run agent:no-subagent-scaling --silent', { dependencies: ['build'] }),
+  task('agent:native-cli-session-proof', 'npm run agent:native-cli-session-proof --silent', { dependencies: ['build'] }),
+  task('agent:fast-mode-default', 'npm run agent:fast-mode-default --silent', { dependencies: ['build'] }),
+  task('agent:fast-mode-worker-propagation', 'npm run agent:fast-mode-worker-propagation --silent', { dependencies: ['build'] }),
+  task('codex:fast-mode-profile-propagation', 'npm run codex:fast-mode-profile-propagation --silent', { dependencies: ['build'] }),
+  task('mad-sks:fast-mode-propagation', 'npm run mad-sks:fast-mode-propagation --silent', { dependencies: ['build'] }),
   task('agent:legacy-multiagent-removed', 'npm run agent:legacy-multiagent-removed --silent', { dependencies: ['build'] }),
   task('all-features:completion', 'npm run all-features:completion --silent', { dependencies: ['build'] }),
   task('all-features:deep-completion', 'npm run all-features:deep-completion --silent', { dependencies: ['build'] }),
@@ -180,6 +191,12 @@ const tasks: VerificationTask[] = [
   task('agent:patch-queue-runtime', 'npm run agent:patch-queue-runtime --silent', { dependencies: ['build'] }),
   task('agent:strategy-to-lease-wiring', 'npm run agent:strategy-to-lease-wiring --silent', { dependencies: ['build'] }),
   task('agent:patch-swarm-runtime', 'npm run agent:patch-swarm-runtime --silent', { dependencies: ['build', 'agent:patch-envelope-extraction', 'agent:patch-queue-runtime', 'agent:strategy-to-lease-wiring'] }),
+  task('agent:patch-transaction-journal', 'npm run agent:patch-transaction-journal --silent', { dependencies: ['build', 'agent:patch-swarm-runtime'] }),
+  task('agent:patch-conflict-rebase', 'npm run agent:patch-conflict-rebase --silent', { dependencies: ['build', 'agent:patch-swarm-runtime'] }),
+  task('agent:strategy-to-patch-strict', 'npm run agent:strategy-to-patch-strict --silent', { dependencies: ['build', 'strategy:verification-rollback-dag', 'strategy:file-ownership-plan'] }),
+  task('agent:patch-swarm-runtime-truth', 'npm run agent:patch-swarm-runtime-truth --silent', { dependencies: ['build', 'agent:patch-transaction-journal', 'agent:patch-conflict-rebase', 'agent:strategy-to-patch-strict'] }),
+  task('agent:rollback-command', 'npm run agent:rollback-command --silent', { dependencies: ['build', 'agent:patch-swarm-runtime'] }),
+  task('agent:real-codex-patch-envelope-smoke', 'npm run agent:real-codex-patch-envelope-smoke --silent', { dependencies: ['build'] }),
   task('agent:patch-verification-dag', 'npm run agent:patch-verification-dag --silent', { dependencies: ['build'] }),
   task('agent:patch-rollback-dag', 'npm run agent:patch-rollback-dag --silent', { dependencies: ['build'] }),
   task('agent:patch-proof-runtime', 'npm run agent:patch-proof-runtime --silent', { dependencies: ['build', 'agent:patch-verification-dag', 'agent:patch-rollback-dag'] }),
@@ -249,7 +266,7 @@ if (result.ok) {
   await writeParallelVerificationProof(reportDir, result);
 }
 console.log(JSON.stringify(result, null, 2));
-if (!result.ok) process.exitCode = 1;
+process.exit(result.ok ? 0 : 1);
 
 function summarizeReleaseLogsForCleanup(result: ParallelVerificationResult, logDir: string): void {
   const prefix = `${path.resolve(logDir)}${path.sep}`;

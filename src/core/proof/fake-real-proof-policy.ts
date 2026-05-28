@@ -32,6 +32,14 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
   const outputSchema = input.output_schema_used === true || input.real_codex_dynamic_smoke?.output_schema_used === true
   const outputLast = Boolean(input.output_last_message_path || input.real_codex_dynamic_smoke?.output_last_message_path)
   const realUnavailable = input.integration_optional === true || input.real_codex_dynamic_smoke?.status === 'integration_optional'
+  const codexPatchSmoke = input.real_codex_patch_smoke || input.codex_patch_envelope_smoke || null
+  const realCodexPatchRequired = input.require_real_codex_patches === true || process.env.SKS_REQUIRE_REAL_CODEX_PATCHES === '1'
+  const codexPatchLevel: ProofLevel = codexPatchSmoke?.proof_level === 'proven' ? 'proven'
+    : codexPatchSmoke?.proof_level === 'fixture_instrumented_real' ? 'fixture_instrumented_real'
+    : codexPatchSmoke?.proof_level === 'real_required_missing' || realCodexPatchRequired ? 'real_required_missing'
+    : codexPatchSmoke?.status === 'integration_optional' || !codexPatchSmoke ? 'integration_optional'
+    : codexPatchSmoke?.ok === false ? 'blocked'
+    : 'integration_optional'
   const fixtureInstrumented = input.fixture_instrumented_real === true
     || input.real_codex_dynamic_smoke?.fixture_instrumented_real === true
     || input.real_codex_dynamic_smoke?.status === 'fixture_instrumented_real'
@@ -76,6 +84,7 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     ...(backend === 'tmux' && !physicalTmux && realUnavailable !== true && realTmuxRequired ? ['real_tmux_missing_physical_pane_evidence'] : []),
     ...(realCodex && (!outputSchema || !outputLast) && realUnavailable !== true && realCodexRequired ? ['real_codex_missing_output_schema_or_last_message'] : []),
     ...(realCodexRequired && realUnavailable ? ['real_dynamic_agents_required_missing'] : []),
+    ...(realCodexPatchRequired && codexPatchLevel !== 'proven' && codexPatchLevel !== 'fixture_instrumented_real' ? ['real_codex_patch_smoke_required_missing'] : []),
     ...(realTmuxRequired && backend === 'tmux' && !physicalTmux ? ['real_tmux_required_missing'] : []),
     ...(warpMadRequired && warpMadLevel !== 'proven' ? ['warp_mad_lanes_required_missing'] : []),
     ...(input.real_route_command_used === false ? ['route_standin_cannot_satisfy_real_route'] : [])
@@ -91,6 +100,7 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     agent_backend: row(backend === 'fake' ? 'fixture_only' : proofLevel, ['agent-proof-evidence.json'], backend === 'fake' ? 'fixture backend cannot satisfy real runtime proof' : 'backend proof recorded', false, backend === 'fake' ? ['fake_backend_evidence'] : []),
     tmux_physical: row(physicalTmux ? 'proven' : backend === 'tmux' && realTmuxRequired ? 'real_required_missing' : backend === 'tmux' ? 'integration_optional' : 'fixture_only', ['agent-tmux-physical-proof.json'], physicalTmux ? 'tmux list/capture/reconcile proof present' : realTmuxRequired ? 'run with real tmux physical evidence' : 'run SKS_TEST_REAL_TMUX=1 for live proof', realTmuxRequired, backend === 'tmux' && realTmuxRequired && !physicalTmux ? ['real_tmux_required_missing'] : []),
     codex_dynamic: row(fixtureInstrumented && realCodex ? 'fixture_instrumented_real' : realCodex && outputSchema && outputLast ? 'proven' : realCodexRequired ? 'real_required_missing' : realUnavailable ? 'integration_optional' : 'fixture_only', ['agent-real-codex-dynamic-smoke.json'], realCodex && outputSchema && outputLast ? 'Codex dynamic smoke has schema/result evidence' : realCodexRequired ? 'run real Codex dynamic smoke with output schema/result proof' : 'run SKS_TEST_REAL_DYNAMIC_AGENTS=1 for live proof', realCodexRequired, realCodexRequired && (!outputSchema || !outputLast || realUnavailable) ? ['real_dynamic_agents_required_missing'] : []),
+    codex_patch_envelope_smoke: row(codexPatchLevel, ['agent-real-codex-patch-envelope-smoke.json'], codexPatchLevel === 'proven' ? 'real Codex patch envelope smoke applied through patch swarm' : realCodexPatchRequired ? 'run SKS_TEST_REAL_CODEX_PATCHES=1 with real Codex patch envelopes' : 'run SKS_TEST_REAL_CODEX_PATCHES=1 for live patch envelope smoke', realCodexPatchRequired, realCodexPatchRequired && codexPatchLevel !== 'proven' && codexPatchLevel !== 'fixture_instrumented_real' ? ['real_codex_patch_smoke_required_missing'] : []),
     cleanup: row(cleanupLevel, ['agent-cleanup-proof.json'], cleanupLevel === 'proven' ? 'cleanup after-state verified' : 'run agent cleanup executor v2', false, cleanupLevel === 'blocked' ? ['cleanup_proof_blocked'] : []),
     intelligent_work_graph: row(workGraphLevel, ['agent-intelligent-work-graph-v2.json', 'agent-symbol-ownership-map.json'], workGraphLevel === 'proven' ? 'AST work graph quality sufficient' : workGraphLevel === 'partial' ? 'raise AST coverage or ownership confidence' : 'build AST-aware work graph evidence', false, workGraphLevel === 'blocked' ? ['work_graph_quality_too_low'] : []),
     source_intelligence: row(sourceIntelligenceOk ? 'proven' : 'integration_optional', ['source-intelligence-evidence.json'], sourceIntelligenceOk ? 'source intelligence refs are present' : 'hydrate source intelligence evidence before risky claims', false, []),

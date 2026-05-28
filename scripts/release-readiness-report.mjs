@@ -45,6 +45,20 @@ const checks = {
   agent_patch_queue_runtime: scriptContains('release:check', 'agent:patch-queue-runtime'),
   agent_strategy_to_lease_wiring: scriptContains('release:check', 'agent:strategy-to-lease-wiring'),
   agent_patch_swarm_runtime: scriptContains('release:check', 'agent:patch-swarm-runtime'),
+  agent_patch_swarm_runtime_truth: scriptContains('release:check', 'agent:patch-swarm-runtime-truth'),
+  agent_patch_transaction_journal: scriptContains('release:check', 'agent:patch-transaction-journal'),
+  agent_patch_conflict_rebase: scriptContains('release:check', 'agent:patch-conflict-rebase'),
+  agent_strategy_to_patch_strict: scriptContains('release:check', 'agent:strategy-to-patch-strict'),
+  agent_rollback_command: scriptContains('release:check', 'agent:rollback-command'),
+  agent_native_cli_session_swarm: scriptContains('release:check', 'agent:native-cli-session-swarm'),
+  agent_native_cli_session_swarm_10: scriptContains('release:check', 'agent:native-cli-session-swarm-10'),
+  agent_native_cli_session_swarm_20: scriptContains('release:check', 'agent:native-cli-session-swarm-20'),
+  agent_no_subagent_scaling: scriptContains('release:check', 'agent:no-subagent-scaling'),
+  agent_native_cli_session_proof: scriptContains('release:check', 'agent:native-cli-session-proof'),
+  agent_fast_mode_default: scriptContains('release:check', 'agent:fast-mode-default'),
+  agent_fast_mode_worker_propagation: scriptContains('release:check', 'agent:fast-mode-worker-propagation'),
+  codex_fast_mode_profile_propagation: scriptContains('release:check', 'codex:fast-mode-profile-propagation'),
+  mad_sks_fast_mode_propagation: scriptContains('release:check', 'mad-sks:fast-mode-propagation'),
   agent_patch_verification_dag: scriptContains('release:check', 'agent:patch-verification-dag'),
   agent_patch_rollback_dag: scriptContains('release:check', 'agent:patch-rollback-dag'),
   agent_patch_proof_runtime: scriptContains('release:check', 'agent:patch-proof-runtime'),
@@ -116,6 +130,7 @@ const checks = {
   release_runtime_truth_matrix: scriptContains('release:check:parallel', 'release:runtime-truth-matrix'),
   route_blackbox_realism: scriptContains('release:check:parallel', 'route:blackbox-realism'),
   real_tmux_physical_proof: scriptContains('release:real-check', 'agent:real-tmux-physical-proof'),
+  real_codex_patch_envelope_smoke: scriptContains('release:real-check', 'agent:real-codex-patch-envelope-smoke'),
   real_codex_dynamic_smoke_v2: scriptContains('release:real-check', 'agent:real-codex-dynamic-smoke-v2'),
   real_codex_dynamic_smoke: scriptContains('release:real-check', 'agent:real-codex-dynamic-smoke'),
   agent_dynamic_cockpit: scriptContains('release:check:parallel', 'agent:dynamic-cockpit'),
@@ -205,6 +220,21 @@ const runtimeReports = {
   agent_patch_queue_runtime: readJson('.sneakoscope/reports/agent-patch-queue-runtime.json', null),
   agent_strategy_to_lease_wiring: readJson('.sneakoscope/reports/agent-strategy-to-lease-wiring.json', null),
   agent_patch_swarm_runtime: readJson('.sneakoscope/reports/agent-patch-swarm-runtime.json', null),
+  agent_patch_swarm_runtime_truth: readJson('.sneakoscope/reports/agent-patch-swarm-runtime-truth.json', null),
+  agent_patch_transaction_journal: readJson('.sneakoscope/reports/agent-patch-transaction-journal.json', null),
+  agent_patch_conflict_rebase: readJson('.sneakoscope/reports/agent-patch-conflict-rebase.json', null),
+  agent_strategy_to_patch_strict: readJson('.sneakoscope/reports/agent-strategy-to-patch-strict.json', null),
+  agent_rollback_command: readJson('.sneakoscope/reports/agent-rollback-command.json', null),
+  agent_native_cli_session_swarm: readJson('.sneakoscope/reports/agent-native-cli-session-swarm.json', null),
+  agent_native_cli_session_swarm_10: readJson('.sneakoscope/reports/agent-native-cli-session-swarm-10.json', null),
+  agent_native_cli_session_swarm_20: readJson('.sneakoscope/reports/agent-native-cli-session-swarm-20.json', null),
+  agent_no_subagent_scaling: readJson('.sneakoscope/reports/agent-no-subagent-scaling.json', null),
+  agent_native_cli_session_proof: readJson('.sneakoscope/reports/agent-native-cli-session-proof.json', null),
+  agent_fast_mode_default: readJson('.sneakoscope/reports/agent-fast-mode-default.json', null),
+  agent_fast_mode_worker_propagation: readJson('.sneakoscope/reports/agent-fast-mode-worker-propagation.json', null),
+  codex_fast_mode_profile_propagation: readJson('.sneakoscope/reports/codex-fast-mode-profile-propagation.json', null),
+  mad_sks_fast_mode_propagation: readJson('.sneakoscope/reports/mad-sks-fast-mode-propagation.json', null),
+  real_codex_patch_envelope_smoke: readJson('.sneakoscope/reports/agent-real-codex-patch-envelope-smoke.json', null),
   agent_patch_verification_dag: readJson('.sneakoscope/reports/agent-patch-verification-dag.json', null),
   agent_patch_rollback_dag: readJson('.sneakoscope/reports/agent-patch-rollback-dag.json', null),
   agent_patch_proof_runtime: readJson('.sneakoscope/reports/agent-patch-proof-runtime.json', null),
@@ -227,6 +257,9 @@ const runtimeChecks = {
     && runtimeReports.runtime_truth_matrix.rows.every((row) => row.required_mode !== true || !['blocked', 'real_required_missing', 'integration_optional'].includes(String(row.proof_level || ''))),
   real_codex_dynamic_smoke: !runtimeReports.real_codex_dynamic_smoke
     || ['proven', 'fixture_instrumented_real', 'integration_optional'].includes(String(runtimeReports.real_codex_dynamic_smoke?.proof_level || runtimeReports.real_codex_dynamic_smoke?.status || ''))
+  ,
+  real_codex_patch_envelope_smoke: !runtimeReports.real_codex_patch_envelope_smoke
+    || ['proven', 'fixture_instrumented_real', 'integration_optional'].includes(String(runtimeReports.real_codex_patch_envelope_smoke?.proof_level || runtimeReports.real_codex_patch_envelope_smoke?.status || ''))
   ,
   retention_cleanup_safety: runtimeReports.retention_cleanup_safety?.ok === true
 };
@@ -292,6 +325,7 @@ for (const [name, ok] of Object.entries({
   codex_profile_primary: checks.codex_profile_primary,
   codex_managed_proxy_env: checks.codex_managed_proxy_env,
   codex_0134_runner_truth: checks.codex_0134_runner_truth && (!runtimeReports.codex_0_134_runner_truth || runtimeReports.codex_0_134_runner_truth.ok === true),
+  real_codex_patch_envelope_smoke: checks.real_codex_patch_envelope_smoke && runtimeChecks.real_codex_patch_envelope_smoke,
   mcp_0134_modernization: checks.mcp_0134_modernization && runtimeReports.mcp_0_134_modernization?.ok === true,
   mcp_readonly_runtime_scheduler: checks.mcp_readonly_runtime_scheduler && (!runtimeReports.mcp_readonly_runtime_scheduler || runtimeReports.mcp_readonly_runtime_scheduler.ok === true),
   appshots_thread_attachment_discovery: checks.appshots_thread_attachment_discovery && (!runtimeReports.appshots_thread_attachment_discovery || runtimeReports.appshots_thread_attachment_discovery.ok === true),
@@ -304,6 +338,20 @@ for (const [name, ok] of Object.entries({
   agent_patch_queue_runtime: checks.agent_patch_queue_runtime && runtimeReports.agent_patch_queue_runtime?.ok === true,
   agent_strategy_to_lease_wiring: checks.agent_strategy_to_lease_wiring && runtimeReports.agent_strategy_to_lease_wiring?.ok === true,
   agent_patch_swarm_runtime: checks.agent_patch_swarm_runtime && runtimeReports.agent_patch_swarm_runtime?.ok === true,
+  agent_patch_swarm_runtime_truth: checks.agent_patch_swarm_runtime_truth && runtimeReports.agent_patch_swarm_runtime_truth?.ok === true,
+  agent_patch_transaction_journal: checks.agent_patch_transaction_journal && runtimeReports.agent_patch_transaction_journal?.ok === true,
+  agent_patch_conflict_rebase: checks.agent_patch_conflict_rebase && runtimeReports.agent_patch_conflict_rebase?.ok === true,
+  agent_strategy_to_patch_strict: checks.agent_strategy_to_patch_strict && runtimeReports.agent_strategy_to_patch_strict?.ok === true,
+  agent_rollback_command: checks.agent_rollback_command && runtimeReports.agent_rollback_command?.ok === true,
+  agent_native_cli_session_swarm: checks.agent_native_cli_session_swarm && runtimeReports.agent_native_cli_session_swarm?.ok === true,
+  agent_native_cli_session_swarm_10: checks.agent_native_cli_session_swarm_10 && runtimeReports.agent_native_cli_session_swarm_10?.ok === true,
+  agent_native_cli_session_swarm_20: checks.agent_native_cli_session_swarm_20 && runtimeReports.agent_native_cli_session_swarm_20?.ok === true,
+  agent_no_subagent_scaling: checks.agent_no_subagent_scaling && runtimeReports.agent_no_subagent_scaling?.ok === true,
+  agent_native_cli_session_proof: checks.agent_native_cli_session_proof && runtimeReports.agent_native_cli_session_proof?.ok === true,
+  agent_fast_mode_default: checks.agent_fast_mode_default && runtimeReports.agent_fast_mode_default?.ok === true,
+  agent_fast_mode_worker_propagation: checks.agent_fast_mode_worker_propagation && runtimeReports.agent_fast_mode_worker_propagation?.ok === true,
+  codex_fast_mode_profile_propagation: checks.codex_fast_mode_profile_propagation && runtimeReports.codex_fast_mode_profile_propagation?.ok === true,
+  mad_sks_fast_mode_propagation: checks.mad_sks_fast_mode_propagation && runtimeReports.mad_sks_fast_mode_propagation?.ok === true,
   agent_patch_verification_dag: checks.agent_patch_verification_dag && runtimeReports.agent_patch_verification_dag?.ok === true,
   agent_patch_rollback_dag: checks.agent_patch_rollback_dag && runtimeReports.agent_patch_rollback_dag?.ok === true,
   agent_patch_proof_runtime: checks.agent_patch_proof_runtime && runtimeReports.agent_patch_proof_runtime?.ok === true,
@@ -389,10 +437,23 @@ const report = {
     official_compat_report_ok: runtimeReports.codex_0_134_official_compat ? runtimeReports.codex_0_134_official_compat.ok === true : null,
     profile_primary: checks.codex_profile_primary,
     managed_proxy_env: checks.codex_managed_proxy_env,
-    runner_truth: checks.codex_0134_runner_truth,
-    runner_truth_report_ok: runtimeReports.codex_0_134_runner_truth ? runtimeReports.codex_0_134_runner_truth.ok === true : null,
-    local_history_search: checks.source_intelligence_codex_history_search
-  },
+	    runner_truth: checks.codex_0134_runner_truth,
+	    runner_truth_report_ok: runtimeReports.codex_0_134_runner_truth ? runtimeReports.codex_0_134_runner_truth.ok === true : null,
+	    real_patch_envelope_smoke: checks.real_codex_patch_envelope_smoke,
+	    real_patch_envelope_smoke_report_ok: runtimeReports.real_codex_patch_envelope_smoke ? runtimeReports.real_codex_patch_envelope_smoke.ok === true : null,
+	    real_patch_envelope_smoke_proof_level: runtimeReports.real_codex_patch_envelope_smoke?.proof_level || null,
+	    local_history_search: checks.source_intelligence_codex_history_search
+	  },
+	  real_codex_patch_envelope_smoke_1_18_10: {
+	    status: checks.real_codex_patch_envelope_smoke && runtimeChecks.real_codex_patch_envelope_smoke ? 'present' : 'missing',
+	    gate: 'agent:real-codex-patch-envelope-smoke',
+	    report: '.sneakoscope/reports/agent-real-codex-patch-envelope-smoke.json',
+	    proof_level: runtimeReports.real_codex_patch_envelope_smoke?.proof_level || null,
+	    required: runtimeReports.real_codex_patch_envelope_smoke?.required === true,
+	    next_action: runtimeReports.real_codex_patch_envelope_smoke?.proof_level === 'integration_optional'
+	      ? 'Run SKS_TEST_REAL_CODEX_PATCHES=1 npm run agent:real-codex-patch-envelope-smoke for live Codex patch evidence; add SKS_REQUIRE_REAL_CODEX_PATCHES=1 when release policy requires it.'
+	      : null
+	  },
   mcp_0_134: {
     status: checks.mcp_0134_modernization
       && runtimeReports.mcp_0_134_modernization?.ok === true
@@ -433,6 +494,11 @@ const report = {
       && checks.agent_patch_queue_runtime
       && checks.agent_strategy_to_lease_wiring
       && checks.agent_patch_swarm_runtime
+      && checks.agent_patch_swarm_runtime_truth
+      && checks.agent_patch_transaction_journal
+      && checks.agent_patch_conflict_rebase
+      && checks.agent_strategy_to_patch_strict
+      && checks.agent_rollback_command
       && checks.agent_patch_verification_dag
       && checks.agent_patch_rollback_dag
       && checks.agent_patch_proof_runtime
@@ -443,6 +509,11 @@ const report = {
       && runtimeReports.agent_patch_queue_runtime?.ok === true
       && runtimeReports.agent_strategy_to_lease_wiring?.ok === true
       && runtimeReports.agent_patch_swarm_runtime?.ok === true
+      && runtimeReports.agent_patch_swarm_runtime_truth?.ok === true
+      && runtimeReports.agent_patch_transaction_journal?.ok === true
+      && runtimeReports.agent_patch_conflict_rebase?.ok === true
+      && runtimeReports.agent_strategy_to_patch_strict?.ok === true
+      && runtimeReports.agent_rollback_command?.ok === true
       && runtimeReports.agent_patch_verification_dag?.ok === true
       && runtimeReports.agent_patch_rollback_dag?.ok === true
       && runtimeReports.agent_patch_proof_runtime?.ok === true
@@ -453,12 +524,50 @@ const report = {
     queue_runtime_report_ok: runtimeReports.agent_patch_queue_runtime ? runtimeReports.agent_patch_queue_runtime.ok === true : null,
     strategy_to_lease_report_ok: runtimeReports.agent_strategy_to_lease_wiring ? runtimeReports.agent_strategy_to_lease_wiring.ok === true : null,
     swarm_runtime_report_ok: runtimeReports.agent_patch_swarm_runtime ? runtimeReports.agent_patch_swarm_runtime.ok === true : null,
+    swarm_runtime_truth_report_ok: runtimeReports.agent_patch_swarm_runtime_truth ? runtimeReports.agent_patch_swarm_runtime_truth.ok === true : null,
+    transaction_journal_report_ok: runtimeReports.agent_patch_transaction_journal ? runtimeReports.agent_patch_transaction_journal.ok === true : null,
+    conflict_rebase_report_ok: runtimeReports.agent_patch_conflict_rebase ? runtimeReports.agent_patch_conflict_rebase.ok === true : null,
+    strategy_to_patch_strict_report_ok: runtimeReports.agent_strategy_to_patch_strict ? runtimeReports.agent_strategy_to_patch_strict.ok === true : null,
+    rollback_command_report_ok: runtimeReports.agent_rollback_command ? runtimeReports.agent_rollback_command.ok === true : null,
     verification_dag_report_ok: runtimeReports.agent_patch_verification_dag ? runtimeReports.agent_patch_verification_dag.ok === true : null,
     rollback_dag_report_ok: runtimeReports.agent_patch_rollback_dag ? runtimeReports.agent_patch_rollback_dag.ok === true : null,
     proof_runtime_report_ok: runtimeReports.agent_patch_proof_runtime ? runtimeReports.agent_patch_proof_runtime.ok === true : null,
     agent_route_blackbox_ok: runtimeReports.agent_patch_swarm_route_blackbox ? runtimeReports.agent_patch_swarm_route_blackbox.ok === true : null,
     team_route_blackbox_ok: runtimeReports.team_patch_swarm_route_blackbox ? runtimeReports.team_patch_swarm_route_blackbox.ok === true : null,
     dfix_route_blackbox_ok: runtimeReports.dfix_patch_swarm_route_blackbox ? runtimeReports.dfix_patch_swarm_route_blackbox.ok === true : null
+  },
+  native_cli_session_swarm_1_18_10: {
+    status: checks.agent_native_cli_session_swarm
+      && checks.agent_native_cli_session_swarm_10
+      && checks.agent_native_cli_session_swarm_20
+      && checks.agent_no_subagent_scaling
+      && checks.agent_native_cli_session_proof
+      && runtimeReports.agent_native_cli_session_swarm?.ok === true
+      && runtimeReports.agent_native_cli_session_swarm_10?.ok === true
+      && runtimeReports.agent_native_cli_session_swarm_20?.ok === true
+      && runtimeReports.agent_no_subagent_scaling?.ok === true
+      && runtimeReports.agent_native_cli_session_proof?.ok === true ? 'present' : 'missing',
+    swarm_5_report_ok: runtimeReports.agent_native_cli_session_swarm ? runtimeReports.agent_native_cli_session_swarm.ok === true : null,
+    swarm_10_report_ok: runtimeReports.agent_native_cli_session_swarm_10 ? runtimeReports.agent_native_cli_session_swarm_10.ok === true : null,
+    swarm_20_report_ok: runtimeReports.agent_native_cli_session_swarm_20 ? runtimeReports.agent_native_cli_session_swarm_20.ok === true : null,
+    no_subagent_scaling_report_ok: runtimeReports.agent_no_subagent_scaling ? runtimeReports.agent_no_subagent_scaling.ok === true : null,
+    native_cli_session_proof_report_ok: runtimeReports.agent_native_cli_session_proof ? runtimeReports.agent_native_cli_session_proof.ok === true : null,
+    max_observed_10: runtimeReports.agent_native_cli_session_swarm_10?.native_cli_session_proof?.max_observed_worker_process_count || null,
+    max_observed_20: runtimeReports.agent_native_cli_session_swarm_20?.native_cli_session_proof?.max_observed_worker_process_count || null
+  },
+  fast_mode_default_1_18_10: {
+    status: checks.agent_fast_mode_default
+      && checks.agent_fast_mode_worker_propagation
+      && checks.codex_fast_mode_profile_propagation
+      && checks.mad_sks_fast_mode_propagation
+      && runtimeReports.agent_fast_mode_default?.ok === true
+      && runtimeReports.agent_fast_mode_worker_propagation?.ok === true
+      && runtimeReports.codex_fast_mode_profile_propagation?.ok === true
+      && runtimeReports.mad_sks_fast_mode_propagation?.ok === true ? 'present' : 'missing',
+    default_report_ok: runtimeReports.agent_fast_mode_default ? runtimeReports.agent_fast_mode_default.ok === true : null,
+    worker_propagation_report_ok: runtimeReports.agent_fast_mode_worker_propagation ? runtimeReports.agent_fast_mode_worker_propagation.ok === true : null,
+    codex_profile_report_ok: runtimeReports.codex_fast_mode_profile_propagation ? runtimeReports.codex_fast_mode_profile_propagation.ok === true : null,
+    mad_sks_report_ok: runtimeReports.mad_sks_fast_mode_propagation ? runtimeReports.mad_sks_fast_mode_propagation.ok === true : null
   },
   mad_sks_actual_executor_closure: {
     status: checks.mad_sks_actual_executor
@@ -751,6 +860,8 @@ for (const key of [
   'mcp_0_134',
   'parallel_write_kernel_1_18_9',
   'patch_swarm_runtime_1_18_9',
+  'native_cli_session_swarm_1_18_10',
+  'fast_mode_default_1_18_10',
   'mad_sks_actual_executor_closure',
   'image_ux_review',
   'ppt_imagegen_review',
@@ -840,10 +951,13 @@ function renderMarkdown(report) {
 - Computer Use evidence modes: \`${report.computer_use_evidence_mode_support.status}\`
 - Imagegen core gpt-image-2 readiness: \`${report.imagegen_core.status}\` (Codex App $imagegen required; capability detection is not output proof)
 - Codex 0.134 compatibility: \`${report.codex_0_134.status}\`
+- Real Codex patch envelope smoke 1.18.10: \`${report.real_codex_patch_envelope_smoke_1_18_10.status}\` (${report.real_codex_patch_envelope_smoke_1_18_10.proof_level || 'not_reported'})
 - Codex 0.133 compatibility: \`${report.codex_0_133.status}\`
 - MCP 0.134 modernization: \`${report.mcp_0_134.status}\`
 - Parallel write kernel ${RELEASE_VERSION}: \`${report.parallel_write_kernel_1_18_9.status}\`
 - Patch swarm runtime ${RELEASE_VERSION}: \`${report.patch_swarm_runtime_1_18_9.status}\`
+- Native CLI Session Swarm ${RELEASE_VERSION}: \`${report.native_cli_session_swarm_1_18_10.status}\`
+- Fast mode default ${RELEASE_VERSION}: \`${report.fast_mode_default_1_18_10.status}\`
 - MAD-SKS actual executor closure: \`${report.mad_sks_actual_executor_closure.status}\`
 - Release native agent backend: \`${report.release_native_agent_backend.status}\`
 - UX-Review real callout loop gates: \`${report.image_ux_review.status}\`
@@ -864,7 +978,7 @@ function renderMarkdown(report) {
 - Loop blocker stop: \`${report.loop_blocker_stop.status}\`
 - Docs truthfulness: \`${report.docs_truthfulness.status}\`
 - Release metadata: \`${report.release_metadata.status}\`
-- Priority closure: P0, P1, P2, P3, P4, P5, and P6 are tracked in the ${RELEASE_VERSION} readiness surface.
+- Priority closure: P0 through P9 are tracked in the ${RELEASE_VERSION} readiness surface.
 - Remaining ${RELEASE_VERSION} P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
 
 \`not_in_1_18_parallel_gate\` is an explicit non-P0 status for historical, live, or broader gates not run by the ${RELEASE_VERSION} parallel DAG. Computer Use live evidence, UX-Review screenshots, and PPT generated review images remain opt-in/local-only. codex-lb process-only setup is reported as \`process_only_ephemeral\`, not durable persistence. UX-Review/PPT cannot pass from text-only critique or mock-as-real fixtures.
