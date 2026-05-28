@@ -170,6 +170,13 @@ export interface AgentRunnerResult {
   patch_queue_refs?: string[]
   applied_patch_refs?: string[]
   rollback_refs?: string[]
+  backend_router_report?: Record<string, unknown>
+  codex_child_report?: Record<string, unknown>
+  process_child_report?: Record<string, unknown>
+  tmux_child_report?: Record<string, unknown>
+  model_authored_patch_envelopes?: boolean
+  fixture_patch_envelopes?: boolean
+  no_patch_reason?: Record<string, unknown>
   source_intelligence_refs?: Record<string, unknown> | null
   goal_mode_ref?: Record<string, unknown> | null
   follow_up_work_items?: import('./agent-follow-up-work-items.js').AgentFollowUpWorkItem[]

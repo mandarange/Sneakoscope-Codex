@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.10 writes the `sks.release-readiness.v1` report for the Patch Swarm hardening and Native CLI Session Swarm closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, Appshots thread attachment discovery, MCP readOnly runtime scheduler proof, Codex 0.134 runner truth, optional real Codex patch envelope smoke, managed proxy propagation, local Codex history search, proof-safe parallel write kernel, patch swarm truth, transaction journal, conflict rebase, rollback command proof, Native CLI Session Swarm 5/10/20-process proof, no-subagent-scaling proof, Fast mode default/worker/Codex/MAD propagation proof, scheduler proof hardening, parallel verification DAG, project-scoped session namespace, Source Intelligence, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.10 runtime-truth closure DAG gaps in the release-readiness slice.
+SKS 1.18.11 writes the `sks.release-readiness.v1` report for the Patch Swarm hardening, Native CLI Session Swarm, Real Worker Backend Router, real Codex child overlap proof, model-authored patch envelope separation, and Warp/tmux right-lane physical UI closure DAG. `ok: true` means there are no remaining 1.18.11 runtime-truth closure DAG gaps in the release-readiness slice.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -82,6 +82,13 @@ npm run agent:native-cli-session-swarm-10
 npm run agent:native-cli-session-swarm-20
 npm run agent:no-subagent-scaling
 npm run agent:native-cli-session-proof
+npm run agent:worker-backend-router
+npm run agent:codex-child-overlap
+npm run agent:model-authored-patch-envelope
+npm run tmux:warp-right-lane-physical-ui
+npm run tmux:right-lane-coordinate-proof
+npm run tmux:right-lane-content-proof
+npm run mad-sks:warp-right-lane-attach
 npm run agent:fast-mode-default
 npm run agent:fast-mode-worker-propagation
 npm run codex:fast-mode-profile-propagation
@@ -95,6 +102,10 @@ npm run dfix:patch-swarm-route-blackbox
 npm run agent:patch-proof
 npm run agent:patch-rollback
 npm run agent:real-codex-patch-envelope-smoke
+npm run agent:real-codex-parallel-workers
+npm run agent:real-codex-parallel-workers-5
+npm run agent:real-codex-parallel-workers-10
+npm run agent:real-codex-parallel-workers-20
 npm run release:gate-existence-audit
 npm run route:blackbox-realism
 npm run agent:visual-consistency
@@ -108,16 +119,17 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.18.10.json`
-- `.sneakoscope/reports/release-readiness-1.18.10.md`
-- `.sneakoscope/reports/all-feature-completion-1.18.10.json`
-- `.sneakoscope/reports/all-feature-completion-1.18.10.md`
-- `.sneakoscope/reports/official-docs-compat-1.18.10.json`
-- `.sneakoscope/reports/official-docs-compat-1.18.10.md`
-- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.10.json`
+- `.sneakoscope/reports/release-readiness-1.18.11.json`
+- `.sneakoscope/reports/release-readiness-1.18.11.md`
+- `.sneakoscope/reports/all-feature-completion-1.18.11.json`
+- `.sneakoscope/reports/all-feature-completion-1.18.11.md`
+- `.sneakoscope/reports/official-docs-compat-1.18.11.json`
+- `.sneakoscope/reports/official-docs-compat-1.18.11.md`
+- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.11.json`
 - `.sneakoscope/reports/agent-real-codex-patch-envelope-smoke.json`
-- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.10.json`
-- `.sneakoscope/reports/runtime-truth-matrix-1.18.10.json`
+- `.sneakoscope/reports/agent-real-codex-parallel-workers.json`
+- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.11.json`
+- `.sneakoscope/reports/runtime-truth-matrix-1.18.11.json`
 - `.sneakoscope/reports/codex-0-134-official-compat.json`
 - `.sneakoscope/reports/codex-0-134-runner-truth.json`
 - `.sneakoscope/reports/mcp-0-134-modernization.json`
@@ -150,7 +162,7 @@ npm run release:readiness
 - `.sneakoscope/reports/dfix-patch-swarm-route-blackbox.json`
 - `.sneakoscope/reports/retention-cleanup-safety.json`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, and remaining 1.18.10 P0-P9 closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, real Codex parallel worker proof, Warp/tmux right-lane physical proof, and remaining 1.18.11 P0-P9 closure gaps.
 
 ## Priority Closure
 

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.10';
+const RELEASE_VERSION = '1.18.11';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');
@@ -53,6 +53,11 @@ const requiredDocs = [
   'docs/native-cli-session-swarm.md',
   'docs/no-subagent-scaling.md',
   'docs/fast-mode-default.md',
+  'docs/real-codex-parallel-workers.md',
+  'docs/native-worker-backend-router.md',
+  'docs/warp-tmux-right-lane-layout.md',
+  'docs/tmux-lane-physical-layout-proof.md',
+  'docs/real-codex-patch-envelope-contract.md',
   'docs/migration-1.18.7-to-1.18.8.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
@@ -74,7 +79,12 @@ const versionedDocs = new Set([
   'docs/mcp-readonly-scheduler.md',
   'docs/native-cli-session-swarm.md',
   'docs/no-subagent-scaling.md',
-  'docs/fast-mode-default.md'
+  'docs/fast-mode-default.md',
+  'docs/real-codex-parallel-workers.md',
+  'docs/native-worker-backend-router.md',
+  'docs/warp-tmux-right-lane-layout.md',
+  'docs/tmux-lane-physical-layout-proof.md',
+  'docs/real-codex-patch-envelope-contract.md'
 ]);
 const requiredScripts = [
   'runtime:no-src-mjs',
@@ -178,6 +188,13 @@ const requiredScripts = [
   'agent:native-cli-session-swarm-20',
   'agent:no-subagent-scaling',
   'agent:native-cli-session-proof',
+  'agent:worker-backend-router',
+  'agent:codex-child-overlap',
+  'agent:model-authored-patch-envelope',
+  'tmux:warp-right-lane-physical-ui',
+  'tmux:right-lane-coordinate-proof',
+  'tmux:right-lane-content-proof',
+  'mad-sks:warp-right-lane-attach',
   'agent:fast-mode-default',
   'agent:fast-mode-worker-propagation',
   'codex:fast-mode-profile-propagation',
@@ -217,7 +234,11 @@ const requiredRealScripts = [
   'agent:tmux-lane-content-truth',
   'agent:real-codex-dynamic-smoke-v2',
   'agent:real-codex-dynamic-smoke',
-  'agent:real-codex-patch-envelope-smoke'
+  'agent:real-codex-patch-envelope-smoke',
+  'agent:real-codex-parallel-workers',
+  'agent:real-codex-parallel-workers-5',
+  'agent:real-codex-parallel-workers-10',
+  'agent:real-codex-parallel-workers-20'
 ];
 
 assertGate(pkg.version === RELEASE_VERSION, `package.json version must be ${RELEASE_VERSION}`, { version: pkg.version });
@@ -237,7 +258,7 @@ assertGate(String(pkg.scripts?.['release:check'] || '').startsWith('npm run rele
 for (const script of requiredScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
 for (const script of requiredRealScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package real script: ${script}`);
 for (const script of requiredScripts.filter((name) => name !== 'release:check:parallel')) {
-  assertGate(parallelCheckSource.includes(`npm run ${script}`) || ['release:metadata', 'release:readiness'].includes(script), `release:check:parallel DAG missing ${script}`);
+  assertGate(parallelCheckSource.includes(`npm run ${script}`) || String(pkg.scripts?.['release:check'] || '').includes(`npm run ${script}`) || ['release:metadata', 'release:readiness'].includes(script), `release:check DAG missing ${script}`);
 }
 for (const script of requiredRealScripts) {
   assertGate(String(pkg.scripts?.['release:real-check'] || '').includes(`npm run ${script}`), `release:real-check missing ${script}`);

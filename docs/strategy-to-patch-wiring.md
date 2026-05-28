@@ -1,6 +1,6 @@
 # Strategy To Patch Wiring
 
-SKS 1.18.10 wires Strategy Compiler output into patch runtime ownership instead of treating strategy artifacts as narrative-only evidence.
+SKS 1.18.11 wires Strategy Compiler output into patch runtime ownership instead of treating strategy artifacts as narrative-only evidence.
 
 The handoff is:
 

@@ -1,6 +1,6 @@
 # Patch Proof And Rollback
 
-SKS 1.18.10 patch proof is built from queue state, merge planning, serial rebase evidence, apply results, transaction journal summary, verification rows, and rollback proof.
+SKS 1.18.11 patch proof is built from queue state, merge planning, serial rebase evidence, apply results, transaction journal summary, verification rows, and rollback proof.
 
 `agent-patch-proof.json` includes:
 

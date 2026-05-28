@@ -60,6 +60,7 @@ export function buildFixturePatchEnvelopes(agent: any, slice: any, opts: any = {
     const rollbackNodeId = String(slice?.rollback_node_id || `rollback:${nodeId}`)
     return {
       schema: 'sks.agent-patch-envelope.v1',
+      source: 'fixture',
       mission_id: String(opts.missionId || opts.mission_id || ''),
       route: String(opts.route || '$Agent'),
       agent_id: String(agent.id),
@@ -68,10 +69,16 @@ export function buildFixturePatchEnvelopes(agent: any, slice: any, opts: any = {
       generation_index: Number(agent.generation_index || 1),
       native_cli_worker_session_id: opts.nativeCliWorkerSessionId || agent.native_cli_worker_session_id || agent.session_id,
       native_cli_process_id: Number(opts.nativeCliProcessId || agent.native_cli_process_id || process.pid),
+      worker_process_id: Number(opts.workerProcessId || opts.nativeCliProcessId || agent.native_cli_process_id || process.pid),
       fast_mode: opts.fastMode !== false,
       service_tier: opts.serviceTier === 'standard' ? 'standard' : 'fast',
       task_slice_id: String(slice?.id || ''),
       lease_id: leaseId,
+      allowed_paths: [file],
+      strategy_task_id: nodeId,
+      ...(slice?.micro_win_id ? { micro_win_id: String(slice.micro_win_id) } : {}),
+      verification_node_id: verificationNodeId,
+      rollback_node_id: rollbackNodeId,
       lease_proof: {
         lease_id: leaseId,
         owner_agent: String(agent.id),

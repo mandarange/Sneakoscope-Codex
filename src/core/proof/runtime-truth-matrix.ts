@@ -22,6 +22,11 @@ export const RUNTIME_TRUTH_SUBSYSTEMS = [
   'parallel_write',
   'patch_proof',
   'native_cli_session_swarm',
+  'real_codex_parallel_workers',
+  'native_worker_backend_router',
+  'codex_child_overlap',
+  'model_authored_patch_envelopes',
+  'fast_mode_child_propagation',
   'fast_mode_default',
   'cleanup_v4',
   'ast_type_work_graph',
@@ -77,13 +82,22 @@ export async function buildRuntimeTruthMatrix(input: {
     tmux_physical: process.env.SKS_REQUIRE_REAL_TMUX === '1',
     codex_dynamic: process.env.SKS_REQUIRE_REAL_DYNAMIC_AGENTS === '1',
     codex_patch_envelope_smoke: process.env.SKS_REQUIRE_REAL_CODEX_PATCHES === '1',
+    real_codex_parallel_workers: process.env.SKS_REQUIRE_REAL_CODEX_PARALLEL === '1',
     warp_mad_lanes: process.env.SKS_REQUIRE_WARP_MAD_LANES === '1',
     ...(input.required || {})
   } as Partial<Record<RuntimeTruthSubsystem, boolean>>
-  const [tmux, codex, codexPatch, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0134, mcp0134, mcpReadonlyRuntime, adhdOrchestration, appshots, parallelWrite, patchProof, nativeCliSession, fastModeDefault] = await Promise.all([
+  const [tmux, codex, codexPatch, realCodexParallel, workerBackendRouter, codexChildOverlap, modelAuthoredPatch, tmuxRightLanePhysical, tmuxRightLaneCoordinate, tmuxRightLaneContent, madWarpRightLaneAttach, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0134, mcp0134, mcpReadonlyRuntime, adhdOrchestration, appshots, parallelWrite, patchProof, nativeCliSession, fastModeDefault] = await Promise.all([
     readReport(`agent-real-tmux-physical-proof-${input.releaseVersion}.json`, ['agent-tmux-physical-proof.json', 'agent-real-tmux-physical-proof-1.18.6.json']),
     readReport(`agent-real-codex-dynamic-smoke-${input.releaseVersion}.json`, ['agent-real-codex-dynamic-smoke-1.18.6.json']),
     readReport('agent-real-codex-patch-envelope-smoke.json'),
+    readReport('agent-real-codex-parallel-workers.json', ['real-codex-parallel-proof.json']),
+    readReport('agent-worker-backend-router.json'),
+    readReport('agent-codex-child-overlap.json'),
+    readReport('agent-model-authored-patch-envelope.json'),
+    readReport('tmux-right-lane-physical-layout-proof.json'),
+    readReport('tmux-right-lane-coordinate-proof.json'),
+    readReport('tmux-right-lane-content-proof.json'),
+    readReport('mad-sks-warp-right-lane-attach.json'),
     readReport(`agent-cleanup-executor-v2-${input.releaseVersion}.json`, ['agent-cleanup-proof.json']),
     readReport(`agent-intelligent-work-graph-v2-${input.releaseVersion}.json`, ['agent-intelligent-work-graph.json']),
     readReport('fake-real-proof-policy.json'),
@@ -111,7 +125,7 @@ export async function buildRuntimeTruthMatrix(input: {
     row('goal_mode', goalMode?.ok === true ? 'proven' : 'integration_optional', ['goal-mode-applied.json'], false, goalMode, 'record official goal mode evidence'),
     row('route_blackbox', fakeReal?.subsystem_levels?.route_blackbox || 'integration_optional', ['fake-real-proof-policy.json', 'agent-proof-evidence.json'], false, fakeReal, 'run actual route blackbox proof'),
     row('dynamic_scheduler', scheduler?.pending_queue_drained === true || scheduler?.ok === true ? 'proven' : 'integration_optional', ['agent-scheduler-state.json'], false, scheduler, 'run dynamic scheduler proof gate'),
-    row('warp_mad_lanes', levelFromWarp(warpMad, required.warp_mad_lanes === true), ['mad-sks-tmux-lane-ui.json'], required.warp_mad_lanes === true, warpMad, 'run `sks --mad` in Warp/tmux and capture visible lane proof'),
+    row('warp_mad_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || tmuxRightLanePhysical, required.warp_mad_lanes === true), ['mad-sks-tmux-lane-ui.json', 'tmux-right-lane-physical-layout-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || tmuxRightLanePhysical, 'run `sks --mad` in Warp/tmux and capture visible lane proof'),
     row('codex_0_134', levelFromOk(codex0134, 'integration_optional'), ['codex-0-134-official-compat.json'], false, codex0134, 'run `npm run codex:0.134-official-compat`'),
     row('mcp_0_134', levelFromOk(mcp0134, 'integration_optional'), ['mcp-0-134-modernization.json'], false, mcp0134, 'run `npm run mcp:0.134-modernization`'),
     row('mcp_readonly_runtime_scheduler', levelFromOk(mcpReadonlyRuntime, 'integration_optional'), ['mcp-readonly-runtime-scheduler.json'], false, mcpReadonlyRuntime, 'run `npm run mcp:readonly-runtime-scheduler`'),
@@ -120,10 +134,15 @@ export async function buildRuntimeTruthMatrix(input: {
     row('parallel_write', levelFromOk(parallelWrite, 'integration_optional'), ['agent-parallel-write-kernel.json'], false, parallelWrite, 'run `npm run agent:parallel-write-kernel`'),
     row('patch_proof', levelFromOk(patchProof, 'integration_optional'), ['agent-patch-proof.json'], false, patchProof, 'run `npm run agent:patch-proof`'),
     row('native_cli_session_swarm', levelFromOk(nativeCliSession, 'integration_optional'), ['native-cli-session-proof.json', 'agent-native-cli-session-swarm.json'], false, nativeCliSession, 'run `npm run agent:native-cli-session-swarm-20`'),
+    row('real_codex_parallel_workers', levelFromCodex(realCodexParallel, required.real_codex_parallel_workers === true), ['real-codex-parallel-proof.json', 'agent-real-codex-parallel-workers.json'], required.real_codex_parallel_workers === true, realCodexParallel, 'run `SKS_TEST_REAL_CODEX_PARALLEL=1 npm run agent:real-codex-parallel-workers`'),
+    row('native_worker_backend_router', levelFromOk(workerBackendRouter, 'integration_optional'), ['agent-worker-backend-router.json', 'worker-backend-router-report.json'], false, workerBackendRouter, 'run `npm run agent:worker-backend-router`'),
+    row('codex_child_overlap', levelFromOk(codexChildOverlap || realCodexParallel, 'integration_optional'), ['agent-codex-child-overlap.json', 'real-codex-parallel-proof.json'], required.real_codex_parallel_workers === true, codexChildOverlap || realCodexParallel, 'run `npm run agent:codex-child-overlap`'),
+    row('model_authored_patch_envelopes', levelFromOk(modelAuthoredPatch || realCodexParallel, 'integration_optional'), ['agent-model-authored-patch-envelope.json', 'real-codex-parallel-proof.json'], required.real_codex_parallel_workers === true, modelAuthoredPatch || realCodexParallel, 'run `npm run agent:model-authored-patch-envelope`'),
+    row('fast_mode_child_propagation', levelFromOk(realCodexParallel || fastModeDefault, 'integration_optional'), ['real-codex-parallel-proof.json', 'fast-mode-propagation-proof.json'], false, realCodexParallel || fastModeDefault, 'run `npm run agent:fast-mode-worker-propagation`'),
     row('fast_mode_default', levelFromOk(fastModeDefault, 'integration_optional'), ['fast-mode-propagation-proof.json'], false, fastModeDefault, 'run `npm run agent:fast-mode-default`'),
     row('cleanup_v4', levelFromOk(cleanup, 'integration_optional'), ['agent-cleanup-proof.json'], false, cleanup, 'run `npm run agent:cleanup-executor-v2`'),
     row('ast_type_work_graph', levelFromWorkGraph(workGraph || fakeReal), ['agent-intelligent-work-graph-v2.json', 'agent-symbol-ownership-map.json'], false, workGraph, 'run `npm run agent:ast-aware-work-graph`'),
-    row('warp_mad_right_lanes', levelFromWarp(warpMad, required.warp_mad_lanes === true), ['mad-sks-tmux-lane-ui.json'], required.warp_mad_lanes === true, warpMad, 'run `sks --mad` in Warp/tmux and capture right-lane proof')
+    row('warp_mad_right_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || tmuxRightLanePhysical || tmuxRightLaneCoordinate || tmuxRightLaneContent, required.warp_mad_lanes === true), ['mad-sks-tmux-lane-ui.json', 'tmux-right-lane-physical-layout-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || tmuxRightLanePhysical || tmuxRightLaneCoordinate || tmuxRightLaneContent, 'run `sks --mad` in Warp/tmux and capture right-lane proof')
   ]
   const blockers = rows.flatMap((item) => item.required_mode && ['blocked', 'real_required_missing', 'integration_optional'].includes(item.proof_level)
     ? [`required_runtime_truth_missing:${item.subsystem}`, ...item.blockers]

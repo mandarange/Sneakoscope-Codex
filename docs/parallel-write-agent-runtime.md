@@ -1,6 +1,6 @@
 # Parallel Write Agent Runtime
 
-SKS 1.18.10 route flags are runtime inputs, not proof by themselves.
+SKS 1.18.11 route flags are runtime inputs, not proof by themselves.
 
 The relevant flags are:
 

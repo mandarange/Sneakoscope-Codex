@@ -1,6 +1,6 @@
 # Patch Swarm Runtime
 
-SKS 1.18.10 treats patch swarm as a first-class native agent mission phase and release truth surface. After the scheduler drains, the orchestrator enters `AGENT_PATCH_SWARM_RUNNING`, extracts every agent `patch_envelopes` field, enqueues each envelope into the persistent queue, coordinates merge/apply/rebase order, records transaction journal evidence, and blocks final proof on patch proof failures.
+SKS 1.18.11 treats patch swarm as a first-class native agent mission phase and release truth surface. After the scheduler drains, the orchestrator enters `AGENT_PATCH_SWARM_RUNNING`, extracts every agent `patch_envelopes` field, enqueues each envelope into the persistent queue, coordinates merge/apply/rebase order, records transaction journal evidence, and blocks final proof on patch proof failures.
 
 The runtime chain is:
 
@@ -14,4 +14,4 @@ The runtime chain is:
 8. Rollback dry-run evidence is written to `agent-patch-rollback-proof.json`, and users can inspect or apply rollback through `sks agent rollback-patches latest --patch-entry-id <id> --dry-run|--apply --json`.
 9. `agent-patch-proof.json` and `agent-proof-evidence.json` must agree before the route can pass.
 
-The route blackboxes for 1.18.10 create ten independent files, run five fake/process-style agents with ten work items, request `--write-mode parallel --apply-patches`, and assert that ten envelopes enter the queue, at least five independent entries appear in the first parallel apply wave, the transaction journal is complete, conflict rebase evidence exists, and the final proof is not policy-only.
+The route blackboxes for 1.18.11 create ten independent files, run five fake/process-style agents with ten work items, request `--write-mode parallel --apply-patches`, and assert that ten envelopes enter the queue, at least five independent entries appear in the first parallel apply wave, the transaction journal is complete, conflict rebase evidence exists, and the final proof is not policy-only.

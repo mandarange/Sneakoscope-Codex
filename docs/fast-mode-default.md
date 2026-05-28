@@ -1,6 +1,6 @@
 # Fast Mode Default
 
-SKS 1.18.10 defaults agent runs to Fast mode. A user must explicitly pass `--no-fast` or `--service-tier standard` to disable it.
+SKS 1.18.11 defaults agent runs to Fast mode. A user must explicitly pass `--no-fast` or `--service-tier standard` to disable it.
 
 Default policy artifact:
 

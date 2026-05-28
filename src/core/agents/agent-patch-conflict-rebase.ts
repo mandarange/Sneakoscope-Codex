@@ -62,7 +62,10 @@ export async function executeAgentPatchConflictRebase(
       let attempt = 0
       for (const entry of groupEntries) {
         attempt += 1
-        const applyResult = await applyAgentPatchQueueEntry(root, entry, { dryRun: opts.dryRun === true, ...(opts.artifactsDir ? { artifactsDir: opts.artifactsDir } : {}) })
+        const applyResult = await safelyApplySerialRebaseEntry(root, entry, {
+          dryRun: opts.dryRun === true,
+          ...(opts.artifactsDir ? { artifactsDir: opts.artifactsDir } : {})
+        })
         const rollbackDryRun = applyResult?.ok === true
           ? await runSerialRebaseRollbackDryRun(root, applyResult, opts.artifactsDir)
           : null
@@ -111,6 +114,34 @@ export async function executeAgentPatchConflictRebase(
   }
   if (opts.artifactsDir) await writeJsonAtomic(path.join(opts.artifactsDir, AGENT_PATCH_CONFLICT_REBASE_ARTIFACT), result)
   return result
+}
+
+async function safelyApplySerialRebaseEntry(
+  root: string,
+  entry: AgentPatchQueueEntry,
+  opts: { dryRun?: boolean; artifactsDir?: string }
+): Promise<any> {
+  try {
+    return await applyAgentPatchQueueEntry(root, entry, opts)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return {
+      schema: 'sks.agent-patch-apply-result.v1',
+      entry_id: entry.id,
+      agent_id: entry.agent_id,
+      lease_id: entry.lease_id || entry.envelope?.lease_id || entry.envelope?.lease_proof?.lease_id || null,
+      ok: false,
+      status: 'blocked',
+      dry_run: opts.dryRun === true,
+      changed_files: [],
+      rollback: [],
+      rollback_digest: null,
+      before_hashes: {},
+      after_hashes: {},
+      verification: { status: 'blocked', checks: ['serial-rebase-exception'] },
+      violations: [`serial_rebase_exception:${message}`]
+    }
+  }
 }
 
 function serialRetryAllowed(reason: string, opts: { allowDomainRetry?: boolean }): boolean {

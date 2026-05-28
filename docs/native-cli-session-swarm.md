@@ -1,6 +1,6 @@
 # Native CLI Session Swarm
 
-SKS 1.18.10 treats `--agents N` as a target native CLI worker session count. The main orchestrator does not scale by counting Codex internal subagents or scout events. It opens child processes with the worker entrypoint:
+SKS 1.18.11 treats `--agents N` as a target native CLI worker session count. The main orchestrator does not scale by counting Codex internal subagents or scout events. It opens child processes with the worker entrypoint:
 
 ```bash
 node dist/bin/sks.js --agent worker --intake <worker-intake.json> --json

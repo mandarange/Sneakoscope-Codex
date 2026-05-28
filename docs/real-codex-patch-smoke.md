@@ -1,6 +1,6 @@
 # Real Codex Patch Smoke
 
-SKS 1.18.10 adds `agent:real-codex-patch-envelope-smoke` for live Codex patch envelope evidence.
+SKS 1.18.11 adds `agent:real-codex-patch-envelope-smoke` for live Codex patch envelope evidence.
 
 By default the gate writes `agent-real-codex-patch-envelope-smoke.json` as `integration_optional` unless `SKS_TEST_REAL_CODEX_PATCHES=1` is set. When enabled, the smoke checks that `codex exec` supports `--output-schema` and `--output-last-message`, runs a small temp project with two real Codex agents and three files, parses actual `patch_envelopes`, enqueues and applies them, then verifies rollback proof, verification proof, protected-path absence, and process report profile/proxy metadata.
 

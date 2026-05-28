@@ -13,6 +13,7 @@ export interface AgentPatchOperation {
 
 export interface AgentPatchEnvelope {
   schema: typeof AGENT_PATCH_SCHEMA
+  source?: 'fixture' | 'model_authored' | 'process_generated' | 'tmux_generated'
   mission_id?: string
   route?: string
   agent_id: string
@@ -22,9 +23,16 @@ export interface AgentPatchEnvelope {
   task_slice_id?: string
   native_cli_worker_session_id?: string
   native_cli_process_id?: number
+  worker_process_id?: number
+  backend_child_process_id?: number
   fast_mode?: boolean
   service_tier?: 'fast' | 'standard'
   lease_id?: string
+  allowed_paths?: string[]
+  strategy_task_id?: string
+  micro_win_id?: string
+  verification_node_id?: string
+  rollback_node_id?: string
   lease_proof?: {
     lease_id?: string
     owner_agent?: string
@@ -54,8 +62,10 @@ export interface AgentPatchHint {
 
 export function normalizeAgentPatchEnvelope(input: any): AgentPatchEnvelope {
   const generationIndex = Number(input?.generation_index ?? input?.generationIndex)
+  const source = normalizeEnvelopeSource(input?.source)
   return {
     schema: AGENT_PATCH_SCHEMA,
+    ...(source ? { source } : {}),
     ...(input?.mission_id ? { mission_id: String(input.mission_id) } : {}),
     ...(input?.route ? { route: String(input.route) } : {}),
     agent_id: String(input?.agent_id || input?.agentId || 'unknown-agent'),
@@ -64,10 +74,17 @@ export function normalizeAgentPatchEnvelope(input: any): AgentPatchEnvelope {
     generation_index: Number.isFinite(generationIndex) ? Math.floor(generationIndex) : -1,
     ...(input?.task_slice_id ? { task_slice_id: String(input.task_slice_id) } : {}),
     ...(input?.native_cli_worker_session_id ? { native_cli_worker_session_id: String(input.native_cli_worker_session_id) } : {}),
-    ...(Number.isFinite(Number(input?.native_cli_process_id)) ? { native_cli_process_id: Number(input.native_cli_process_id) } : {}),
+    ...(hasFiniteNumber(input?.native_cli_process_id) ? { native_cli_process_id: Number(input.native_cli_process_id) } : {}),
+    ...(hasFiniteNumber(input?.worker_process_id) ? { worker_process_id: Number(input.worker_process_id) } : {}),
+    ...(hasFiniteNumber(input?.backend_child_process_id) ? { backend_child_process_id: Number(input.backend_child_process_id) } : {}),
     ...(input?.fast_mode === undefined ? {} : { fast_mode: Boolean(input.fast_mode) }),
     ...(input?.service_tier === 'fast' || input?.service_tier === 'standard' ? { service_tier: input.service_tier } : {}),
     ...(input?.lease_id ? { lease_id: String(input.lease_id) } : {}),
+    ...(Array.isArray(input?.allowed_paths) ? { allowed_paths: input.allowed_paths.map(String) } : {}),
+    ...(input?.strategy_task_id === undefined ? {} : { strategy_task_id: String(input.strategy_task_id) }),
+    ...(input?.micro_win_id === undefined ? {} : { micro_win_id: String(input.micro_win_id) }),
+    ...(input?.verification_node_id === undefined ? {} : { verification_node_id: String(input.verification_node_id) }),
+    ...(input?.rollback_node_id === undefined ? {} : { rollback_node_id: String(input.rollback_node_id) }),
     ...(input?.lease_proof ? { lease_proof: normalizeLeaseProof(input.lease_proof) } : {}),
     ...(input?.rationale ? { rationale: String(input.rationale) } : {}),
     ...(input?.verification_hint ? { verification_hint: normalizeHint(input.verification_hint) } : {}),
@@ -85,6 +102,9 @@ export function validateAgentPatchEnvelope(envelope: AgentPatchEnvelope): { ok: 
   if (!Number.isInteger(envelope.generation_index) || envelope.generation_index < 0) violations.push('generation_index_missing')
   if (!envelope.lease_id && !envelope.lease_proof?.lease_id) violations.push('lease_id_missing')
   if (!envelope.operations.length) violations.push('operations_missing')
+  if (envelope.source && !['fixture', 'model_authored', 'process_generated', 'tmux_generated'].includes(envelope.source)) violations.push('source_invalid')
+  if (envelope.source === 'model_authored' && !hasFiniteNumber(envelope.backend_child_process_id)) violations.push('model_authored_backend_child_process_id_missing')
+  if (envelope.source === 'fixture' && envelope.backend_child_process_id !== undefined) violations.push('fixture_backend_child_process_id_present')
   for (const operation of envelope.operations) {
     if (!operation.path || operation.path.includes('\0') || operation.path.startsWith('/') || operation.path.split(/[\\/]/).includes('..')) {
       violations.push(`invalid_path:${operation.path || 'missing'}`)
@@ -92,11 +112,21 @@ export function validateAgentPatchEnvelope(envelope: AgentPatchEnvelope): { ok: 
     if (operation.op === 'replace' && typeof operation.search !== 'string') violations.push(`replace_search_missing:${operation.path}`)
     if (operation.op === 'write' && typeof operation.content !== 'string') violations.push(`write_content_missing:${operation.path}`)
     if (operation.op === 'unified_diff' && typeof operation.diff !== 'string') violations.push(`unified_diff_missing:${operation.path}`)
-    if (envelope.lease_proof?.allowed_paths?.length && !pathAllowedByLease(operation.path, envelope.lease_proof.allowed_paths)) {
+    const allowedPaths = envelope.allowed_paths?.length ? envelope.allowed_paths : envelope.lease_proof?.allowed_paths
+    if (allowedPaths?.length && !pathAllowedByLease(operation.path, allowedPaths)) {
       violations.push(`lease_path_not_allowed:${operation.path}`)
     }
   }
   return { ok: violations.length === 0, violations }
+}
+
+function normalizeEnvelopeSource(value: any): AgentPatchEnvelope['source'] | null {
+  const text = String(value || '')
+  return text === 'fixture' || text === 'model_authored' || text === 'process_generated' || text === 'tmux_generated' ? text : null
+}
+
+function hasFiniteNumber(value: any): boolean {
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
 }
 
 function normalizeOperation(input: any): AgentPatchOperation {

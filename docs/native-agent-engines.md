@@ -11,7 +11,7 @@ Native agents support four backend modes:
 | `codex-exec` | Prepared Codex exec worker command with JSON schema output | Allowed only when real execution succeeds |
 | `tmux` | Session/lane adapter surface | Requires lane evidence before real claims |
 
-The codex-exec backend prepares workers with `--json`, `--output-schema schemas/codex/agent-result.schema.json`, `--output-last-message`, `--ephemeral`, `--ignore-user-config`, and `--ignore-rules`. It defaults to dry-run preparation unless explicitly allowed to run for real.
+The codex-exec backend prepares workers with `--json`, `--output-schema schemas/codex/agent-result.schema.json`, `--output-last-message`, `--ephemeral`, `--skip-git-repo-check`, `--ignore-user-config`, and `--ignore-rules`. It defaults to dry-run preparation unless explicitly allowed to run for real.
 
 The tmux backend writes an `agent-tmux-report.json` plan with a native-agent overview pane and self-closing worker pane policy. If tmux is not launched, the result remains a structured blocker rather than a real parallel execution claim.
 
