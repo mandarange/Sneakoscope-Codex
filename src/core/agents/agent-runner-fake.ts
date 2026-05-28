@@ -2,6 +2,7 @@ import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 
 export async function runFakeAgent(agent: any, slice: any, opts: any = {}) {
   if (Number(slice?.delay_ms || 0) > 0) await delay(Number(slice.delay_ms))
+  const patchEnvelopes = buildFixturePatchEnvelopes(agent, slice, opts)
   return validateAgentWorkerResult({
     mission_id: opts.missionId || opts.mission_id || '',
     agent_id: agent.id,
@@ -21,6 +22,7 @@ export async function runFakeAgent(agent: any, slice: any, opts: any = {}) {
     handoff_notes: 'No handoff required for fake backend fixture.',
     unverified: ['fake backend does not prove real parallel execution'],
     writes: [],
+    ...(patchEnvelopes.length ? { patch_envelopes: patchEnvelopes } : {}),
     source_intelligence_refs: agent.source_intelligence_refs || null,
     goal_mode_ref: agent.goal_mode_ref || null,
     ...(opts.emitFollowUpWorkItems ? { follow_up_work_items: [buildFixtureFollowUp(agent, slice)] } : {}),
@@ -46,4 +48,44 @@ function buildFixtureFollowUp(agent: any, slice: any) {
     reason: 'exercise follow_up_work_items scheduler enqueue path',
     source_agent_session_id: agent.session_id
   }
+}
+
+export function buildFixturePatchEnvelopes(agent: any, slice: any, opts: any = {}) {
+  const writePaths = Array.isArray(slice?.write_paths) ? slice.write_paths.map(String).filter(Boolean) : []
+  if (!writePaths.length) return []
+  return writePaths.map((file: string, index: number) => {
+    const leaseId = `write:${String(agent.id)}:${file}`
+    const nodeId = String(slice?.micro_win_id || slice?.id || `patch-${index + 1}`)
+    return {
+      schema: 'sks.agent-patch-envelope.v1',
+      mission_id: String(opts.missionId || opts.mission_id || ''),
+      route: String(opts.route || '$Agent'),
+      agent_id: String(agent.id),
+      session_id: String(agent.session_id || ''),
+      slot_id: String(agent.slot_id || agent.worker_slot_id || agent.id),
+      generation_index: Number(agent.generation_index || 1),
+      task_slice_id: String(slice?.id || ''),
+      lease_id: leaseId,
+      lease_proof: {
+        lease_id: leaseId,
+        owner_agent: String(agent.id),
+        owner_persona: String(agent.persona_id || agent.role || 'fixture'),
+        allowed_paths: [file],
+        strategy_task_id: nodeId,
+        micro_win_id: slice?.micro_win_id ? String(slice.micro_win_id) : undefined,
+        protected_path_check: 'passed',
+        conflict_prediction_id: `conflict:${nodeId}`,
+        verification_node_id: `verify:${nodeId}`,
+        rollback_node_id: `rollback:${nodeId}`
+      },
+      operations: [{
+        op: 'write',
+        path: file,
+        content: `patched by ${String(agent.id)} for ${String(slice?.id || 'fixture')}\n`
+      }],
+      rationale: 'Fixture patch envelope emitted by fake backend for a leased write task.',
+      verification_hint: { node_id: `verify:${nodeId}`, expected_status: 'applied_hashes_recorded' },
+      rollback_hint: { node_id: `rollback:${nodeId}`, strategy: 'restore content_before or delete newly created file' }
+    }
+  })
 }

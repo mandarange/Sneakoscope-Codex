@@ -9,7 +9,14 @@ const schemaMod = await importDist('core/agents/agent-patch-schema.js');
 const applyMod = await importDist('core/agents/agent-patch-apply-worker.js');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-agent-blackbox-'));
 fs.writeFileSync(path.join(tmp, 'fixture.txt'), 'before\n');
-const envelope = schemaMod.normalizeAgentPatchEnvelope({ agent_id: 'blackbox-agent', operations: [{ op: 'replace', path: 'fixture.txt', search: 'before', replace: 'after' }] });
+const envelope = schemaMod.normalizeAgentPatchEnvelope({
+  agent_id: 'blackbox-agent',
+  session_id: 'blackbox-session',
+  slot_id: 'blackbox-slot',
+  generation_index: 1,
+  lease_id: 'lease:blackbox-agent:fixture.txt',
+  operations: [{ op: 'replace', path: 'fixture.txt', search: 'before', replace: 'after' }]
+});
 const dry = await applyMod.applyAgentPatchEnvelope(tmp, envelope, { dryRun: true });
 const applied = await applyMod.applyAgentPatchEnvelope(tmp, envelope);
 const agentRun = spawnSync(process.execPath, [

@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.18.8** closes the Codex 0.134 ultra-stability loop: the release matrix now covers `--profile` as the primary selector, bounded local Codex history search, managed proxy propagation, MCP 0.134 environment/OAuth/schema/readOnlyHint policy, proof-safe parallel agent patches, runtime truth P6 rows, the 1.18.8 release gate audit, MAD-SKS as general scoped permission widening, gpt-image-2 imagegen as a core evidence capability, and retention cleanup that preserves durable learning while removing finished route scratch.
+SKS **1.18.9** closes the Patch Swarm runtime surface: Appshots evidence now records Codex thread attachment provenance without claiming CLI-created screenshots, MCP `readOnlyHint` gates require runtime overlap/serialization proof, Codex 0.134 runner truth covers profile, proxy, history, and process reports, and release gates expose these checks alongside the patch queue/apply/proof work.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -44,8 +44,10 @@ npm run strategy:adhd-orchestrating-gate
 npm run strategy:parallel-modification-plan
 npm run appshots:evidence
 npm run appshots:source-intelligence
+npm run appshots:thread-attachment-discovery
 npm run mcp:0.134-modernization
-npm run mcp:readonly-concurrency
+npm run mcp:readonly-runtime-scheduler
+npm run codex:0.134-runner-truth
 npm run source-intelligence:codex-history-search
 npm run agent:parallel-write-kernel
 npm run release:gate-existence-audit
@@ -111,6 +113,8 @@ The cleanup contract is policy-backed in `.sneakoscope/policy.json`, but the def
 - ADHD orchestration gate: [docs/adhd-orchestrating-gate.md](docs/adhd-orchestrating-gate.md)
 - Strategy-first parallel write: [docs/strategy-first-parallel-write.md](docs/strategy-first-parallel-write.md)
 - Appshots pipeline: [docs/appshots-pipeline.md](docs/appshots-pipeline.md)
+- Appshots thread attachments: [docs/appshots-thread-attachments.md](docs/appshots-thread-attachments.md)
+- MCP readOnly scheduler: [docs/mcp-readonly-scheduler.md](docs/mcp-readonly-scheduler.md)
 - Parallel write agents: [docs/parallel-write-agents.md](docs/parallel-write-agents.md)
 - Agent patch queue: [docs/agent-patch-queue.md](docs/agent-patch-queue.md)
 - Migration 1.18.7 to 1.18.8: [docs/migration-1.18.7-to-1.18.8.md](docs/migration-1.18.7-to-1.18.8.md)

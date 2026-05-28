@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { appendJsonl, readJson, runProcess, writeJsonAtomic } from '../fsx.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
+import { buildFixturePatchEnvelopes } from './agent-runner-fake.js'
 
 export function buildTmuxAgentPanePlan(agent: any, slice: any = {}) {
   const agentId = String(agent?.id || 'agent')
@@ -23,6 +24,7 @@ export function buildTmuxAgentPanePlan(agent: any, slice: any = {}) {
 export async function runTmuxAgent(agent: any, slice: any, opts: any = {}) {
   const plan = buildTmuxAgentPanePlan(agent, slice)
   const launch = await launchTmuxPane(agent, slice, opts)
+  const patchEnvelopes = buildFixturePatchEnvelopes(agent, slice, opts)
   const artifact = await writeAgentTmuxReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
     plan,
     overview_pane_created: true,
@@ -56,6 +58,7 @@ export async function runTmuxAgent(agent: any, slice: any, opts: any = {}) {
     handoff_notes: launch.launch_mode === 'real_tmux' ? 'tmux pane was launched.' : 'fake tmux pane id used because real tmux was unavailable or disabled.',
     unverified: [],
     writes: [],
+    ...(patchEnvelopes.length ? { patch_envelopes: patchEnvelopes } : {}),
     source_intelligence_refs: agent.source_intelligence_refs || null,
     goal_mode_ref: agent.goal_mode_ref || null,
     verification: { status: launch.blockers.length ? 'failed' : 'passed', checks: ['tmux-pane-launch-ledger'] },

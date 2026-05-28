@@ -8,7 +8,15 @@ import { assertGate, emitGate, importDist, root } from './sks-1-18-gate-lib.mjs'
 const applyMod = await importDist('core/agents/agent-patch-apply-worker.js');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-dfix-patch-'));
 fs.writeFileSync(path.join(tmp, 'copy.txt'), 'old label\n');
-const envelope = { schema: 'sks.agent-patch-envelope.v1', agent_id: 'dfix-fast-lane', operations: [{ op: 'replace', path: 'copy.txt', search: 'old label', replace: 'new label' }] };
+const envelope = {
+  schema: 'sks.agent-patch-envelope.v1',
+  agent_id: 'dfix-fast-lane',
+  session_id: 'dfix-session',
+  slot_id: 'dfix-slot',
+  generation_index: 1,
+  lease_id: 'lease:dfix-fast-lane:copy.txt',
+  operations: [{ op: 'replace', path: 'copy.txt', search: 'old label', replace: 'new label' }]
+};
 const applied = await applyMod.applyAgentPatchEnvelope(tmp, envelope);
 const dfixFile = path.join(tmp, 'dfix-route.txt');
 fs.writeFileSync(dfixFile, 'old label\n');

@@ -49,6 +49,13 @@ export interface AgentCodexCockpitState {
   pending_queue_count: number | null
   backfill_count: number | null
   scheduler_status: string | null
+  patch_swarm_phase: string | null
+  patch_queue_depth: number | null
+  patch_apply_groups: Array<Record<string, unknown>>
+  patch_changed_files_by_agent: Record<string, unknown>
+  patch_verification_status: Array<Record<string, unknown>>
+  patch_rollback_status: Array<Record<string, unknown>>
+  patch_micro_win_links: Array<Record<string, unknown>>
   worker_slots: Array<Record<string, unknown>>
   session_generations: Array<Record<string, unknown>>
   blockers: string[]
@@ -101,6 +108,12 @@ export async function buildAgentCodexCockpitState(
   const scheduler = await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const workerSlots = await readJson<any>(path.join(root, 'agent-worker-slots.json'), null)
   const generations = await readJson<any>(path.join(root, 'agent-session-generations.json'), null)
+  const patchSwarm = await readJson<any>(path.join(root, 'agent-patch-swarm-runtime.json'), null)
+  const patchQueue = await readJson<any>(path.join(root, 'agent-patch-queue.json'), null)
+  const patchMerge = await readJson<any>(path.join(root, 'agent-merge-coordinator-report.json'), null)
+  const patchVerification = await readJson<any>(path.join(root, 'agent-patch-verification-results.json'), null)
+  const patchRollback = await readJson<any>(path.join(root, 'agent-patch-rollback-proof.json'), null)
+  const patchProof = await readJson<any>(path.join(root, 'agent-patch-proof.json'), null)
   const terminalClosed = proof?.terminal_sessions_closed === true
   const eventsTail = await readTailLines(path.join(root, 'agent-events.jsonl'), 8)
   const cockpitEventsTail = await readTailLines(path.join(root, AGENT_CODEX_COCKPIT_EVENTS), 8)
@@ -137,6 +150,13 @@ export async function buildAgentCodexCockpitState(
     pending_queue_count: scheduler?.pending_count ?? null,
     backfill_count: scheduler?.backfill_count ?? null,
     scheduler_status: scheduler?.status || null,
+    patch_swarm_phase: patchSwarm ? (patchSwarm.ok === true ? 'passed' : 'blocked') : null,
+    patch_queue_depth: patchQueue?.queued_count ?? null,
+    patch_apply_groups: Array.isArray(patchMerge?.parallel_apply_groups) ? patchMerge.parallel_apply_groups : [],
+    patch_changed_files_by_agent: patchProof?.changed_files_by_agent || {},
+    patch_verification_status: Array.isArray(patchVerification?.results) ? patchVerification.results : [],
+    patch_rollback_status: Array.isArray(patchRollback?.entries) ? patchRollback.entries : [],
+    patch_micro_win_links: buildPatchMicroWinLinks(patchQueue),
     worker_slots: Array.isArray(workerSlots?.slots) ? workerSlots.slots : [],
     session_generations: generations?.generations ? Object.values(generations.generations) : [],
     blockers,
@@ -171,6 +191,9 @@ export function renderAgentCodexDashboard(state: AgentCodexCockpitState): string
     `- tmux attach: ${state.tmux_attach_command || 'unknown'}`,
     `- All sessions closed: ${state.all_sessions_closed ?? 'unknown'}`,
     `- Scheduler: ${state.scheduler_status || 'unknown'}`,
+    `- Patch swarm: ${state.patch_swarm_phase || 'unknown'}`,
+    `- Patch queue depth: ${state.patch_queue_depth ?? 'unknown'}`,
+    `- Patch apply groups: ${state.patch_apply_groups.length}`,
     `- Target active slots: ${state.target_active_slots ?? 'unknown'}`,
     `- Active slots: ${state.active_slot_count ?? 'unknown'}`,
     `- Pending queue: ${state.pending_queue_count ?? 'unknown'}`,
@@ -233,6 +256,13 @@ function summarizeLiveState(state: AgentCodexCockpitState) {
     pending_queue_count: state.pending_queue_count,
     backfill_count: state.backfill_count,
     scheduler_status: state.scheduler_status,
+    patch_swarm_phase: state.patch_swarm_phase,
+    patch_queue_depth: state.patch_queue_depth,
+    patch_apply_groups: state.patch_apply_groups,
+    patch_changed_files_by_agent: state.patch_changed_files_by_agent,
+    patch_verification_status: state.patch_verification_status,
+    patch_rollback_status: state.patch_rollback_status,
+    patch_micro_win_links: state.patch_micro_win_links,
     worker_slot_count: state.worker_slots.length,
     session_generation_count: state.session_generations.length,
     proof_status: state.proof_status,
@@ -244,6 +274,17 @@ function summarizeLiveState(state: AgentCodexCockpitState) {
     tmux_attach_command: state.tmux_attach_command,
     blockers: state.blockers,
   }
+}
+
+function buildPatchMicroWinLinks(patchQueue: any): Array<Record<string, unknown>> {
+  const entries = Array.isArray(patchQueue?.entries) ? patchQueue.entries : []
+  return entries.map((entry: any) => ({
+    patch_entry_id: entry.id,
+    agent_id: entry.agent_id,
+    micro_win_id: entry.envelope?.lease_proof?.micro_win_id || null,
+    strategy_task_id: entry.envelope?.lease_proof?.strategy_task_id || null,
+    write_paths: entry.write_paths || []
+  }))
 }
 
 function mergeAgentRows(sessions: any[], roster: any[], leases: any[], events: string[]): Array<Record<string, unknown>> {

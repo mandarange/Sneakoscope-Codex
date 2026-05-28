@@ -1,11 +1,12 @@
 import path from 'node:path'
 import { findLatestMission, loadMission } from '../mission.js'
-import { readJson, readText, sksRoot } from '../fsx.js'
+import { readJson, readText, sksRoot, writeJsonAtomic } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
 import { parseAgentCommandArgs } from '../agents/agent-command-surface.js'
 import { buildAgentRoster } from '../agents/agent-roster.js'
 import { buildAgentWorkPartition } from '../agents/agent-work-partition.js'
 import { runAgentCleanupExecutor } from '../agents/agent-cleanup-executor.js'
+import { rollbackAgentPatchApply } from '../agents/agent-patch-apply-worker.js'
 
 const AGENT_ACTION_SCHEMA = 'sks.agent-command-result.v1'
 
@@ -66,7 +67,8 @@ async function agentMissionAction(parsed: any) {
     close: 'agent-cleanup-proof.json',
     cleanup: 'agent-cleanup-proof.json',
     proof: 'agent-proof-evidence.json',
-    explain: 'agent-trust-report.json'
+    explain: 'agent-trust-report.json',
+    'rollback-patches': 'agent-patch-rollback-command-result.json'
   }
   const artifact = readers[parsed.action] || 'agent-proof-evidence.json'
   if (parsed.action === 'close' || parsed.action === 'cleanup') {
@@ -81,6 +83,9 @@ async function agentMissionAction(parsed: any) {
       graceMs: parsed.graceMs,
       killEscalation: parsed.killEscalation
     })
+  }
+  if (parsed.action === 'rollback-patches') {
+    await runAgentPatchRollbackCommand(root, agentRoot, parsed)
   }
   const full = path.join(agentRoot, artifact)
   const value = artifact.endsWith('.json') ? await readJson(full, null) : await readText(full, '')
@@ -106,6 +111,26 @@ async function agentMissionAction(parsed: any) {
       if (Array.isArray(value?.skipped_foreign_namespace) && value.skipped_foreign_namespace.length) console.log('Skipped foreign namespace: ' + value.skipped_foreign_namespace.length)
       if (Array.isArray(value?.blockers) && value.blockers.length) console.log('Blockers: ' + value.blockers.join(', '))
     }
+  })
+}
+
+async function runAgentPatchRollbackCommand(projectRoot: string, agentRoot: string, parsed: any) {
+  const applyResults = await readJson<any>(path.join(agentRoot, 'agent-patch-apply-results.json'), null)
+  const rows = Array.isArray(applyResults?.results) ? applyResults.results : []
+  const results = []
+  for (const row of rows) {
+    results.push({
+      patch_entry_id: row.entry_id || null,
+      ...(await rollbackAgentPatchApply(projectRoot, row, { dryRun: parsed.apply !== true }))
+    })
+  }
+  await writeJsonAtomic(path.join(agentRoot, 'agent-patch-rollback-command-result.json'), {
+    schema: 'sks.agent-patch-rollback-command-result.v1',
+    ok: rows.length > 0 && results.every((row: any) => row.ok === true),
+    dry_run: parsed.apply !== true,
+    apply: parsed.apply === true,
+    result_count: results.length,
+    results
   })
 }
 

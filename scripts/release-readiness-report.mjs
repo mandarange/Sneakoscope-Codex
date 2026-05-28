@@ -32,12 +32,25 @@ const checks = {
   codex_0134_official_compat: scriptContains('release:check', 'codex:0.134-official-compat'),
   codex_profile_primary: scriptContains('release:check', 'codex:profile-primary'),
   codex_managed_proxy_env: scriptContains('release:check', 'codex:managed-proxy-env'),
+  codex_0134_runner_truth: scriptContains('release:check', 'codex:0.134-runner-truth'),
   mcp_0134_modernization: scriptContains('release:check', 'mcp:0.134-modernization'),
+  mcp_readonly_runtime_scheduler: scriptContains('release:check', 'mcp:readonly-runtime-scheduler'),
+  appshots_thread_attachment_discovery: scriptContains('release:check', 'appshots:thread-attachment-discovery'),
   source_intelligence_codex_history_search: scriptContains('release:check', 'source-intelligence:codex-history-search'),
   agent_parallel_write_kernel: scriptContains('release:check', 'agent:parallel-write-kernel'),
   agent_parallel_write_blackbox: scriptContains('release:check', 'agent:parallel-write-blackbox'),
   team_parallel_write_blackbox: scriptContains('release:check', 'team:parallel-write-blackbox'),
   dfix_parallel_write_blackbox: scriptContains('release:check', 'dfix:parallel-write-blackbox'),
+  agent_patch_envelope_extraction: scriptContains('release:check', 'agent:patch-envelope-extraction'),
+  agent_patch_queue_runtime: scriptContains('release:check', 'agent:patch-queue-runtime'),
+  agent_strategy_to_lease_wiring: scriptContains('release:check', 'agent:strategy-to-lease-wiring'),
+  agent_patch_swarm_runtime: scriptContains('release:check', 'agent:patch-swarm-runtime'),
+  agent_patch_verification_dag: scriptContains('release:check', 'agent:patch-verification-dag'),
+  agent_patch_rollback_dag: scriptContains('release:check', 'agent:patch-rollback-dag'),
+  agent_patch_proof_runtime: scriptContains('release:check', 'agent:patch-proof-runtime'),
+  agent_patch_swarm_route_blackbox: scriptContains('release:check', 'agent:patch-swarm-route-blackbox'),
+  team_patch_swarm_route_blackbox: scriptContains('release:check', 'team:patch-swarm-route-blackbox'),
+  dfix_patch_swarm_route_blackbox: scriptContains('release:check', 'dfix:patch-swarm-route-blackbox'),
   agent_patch_proof: scriptContains('release:check', 'agent:patch-proof'),
   agent_patch_rollback: scriptContains('release:check', 'agent:patch-rollback'),
   release_gate_existence_audit: scriptContains('release:check', 'release:gate-existence-audit'),
@@ -180,11 +193,24 @@ const runtimeReports = {
   runtime_truth_matrix: readJson(`.sneakoscope/reports/runtime-truth-matrix-${RELEASE_VERSION}.json`, null),
   real_codex_dynamic_smoke: readJson(`.sneakoscope/reports/agent-real-codex-dynamic-smoke-${RELEASE_VERSION}.json`, null),
   codex_0_134_official_compat: readJson('.sneakoscope/reports/codex-0-134-official-compat.json', null),
+  codex_0_134_runner_truth: readJson('.sneakoscope/reports/codex-0-134-runner-truth.json', null),
   mcp_0_134_modernization: readJson('.sneakoscope/reports/mcp-0-134-modernization.json', null),
+  mcp_readonly_runtime_scheduler: readJson('.sneakoscope/reports/mcp-readonly-runtime-scheduler.json', null),
+  appshots_thread_attachment_discovery: readJson('.sneakoscope/reports/appshots-thread-attachment-discovery.json', null),
   agent_parallel_write_kernel: readJson('.sneakoscope/reports/agent-parallel-write-kernel.json', null),
   agent_parallel_write_blackbox: readJson('.sneakoscope/reports/agent-parallel-write-blackbox.json', null),
   team_parallel_write_blackbox: readJson('.sneakoscope/reports/team-parallel-write-blackbox.json', null),
   dfix_parallel_write_blackbox: readJson('.sneakoscope/reports/dfix-parallel-write-blackbox.json', null),
+  agent_patch_envelope_extraction: readJson('.sneakoscope/reports/agent-patch-envelope-extraction.json', null),
+  agent_patch_queue_runtime: readJson('.sneakoscope/reports/agent-patch-queue-runtime.json', null),
+  agent_strategy_to_lease_wiring: readJson('.sneakoscope/reports/agent-strategy-to-lease-wiring.json', null),
+  agent_patch_swarm_runtime: readJson('.sneakoscope/reports/agent-patch-swarm-runtime.json', null),
+  agent_patch_verification_dag: readJson('.sneakoscope/reports/agent-patch-verification-dag.json', null),
+  agent_patch_rollback_dag: readJson('.sneakoscope/reports/agent-patch-rollback-dag.json', null),
+  agent_patch_proof_runtime: readJson('.sneakoscope/reports/agent-patch-proof-runtime.json', null),
+  agent_patch_swarm_route_blackbox: readJson('.sneakoscope/reports/agent-patch-swarm-route-blackbox.json', null),
+  team_patch_swarm_route_blackbox: readJson('.sneakoscope/reports/team-patch-swarm-route-blackbox.json', null),
+  dfix_patch_swarm_route_blackbox: readJson('.sneakoscope/reports/dfix-patch-swarm-route-blackbox.json', null),
   agent_patch_proof: readJson('.sneakoscope/reports/agent-patch-proof.json', null),
   agent_patch_rollback: readJson('.sneakoscope/reports/agent-patch-rollback.json', null),
   retention_cleanup_safety: readJson('.sneakoscope/reports/retention-cleanup-safety.json', null)
@@ -265,12 +291,25 @@ for (const [name, ok] of Object.entries({
   codex_0134_official_compat: checks.codex_0134_official_compat && runtimeReports.codex_0_134_official_compat?.ok === true,
   codex_profile_primary: checks.codex_profile_primary,
   codex_managed_proxy_env: checks.codex_managed_proxy_env,
+  codex_0134_runner_truth: checks.codex_0134_runner_truth && (!runtimeReports.codex_0_134_runner_truth || runtimeReports.codex_0_134_runner_truth.ok === true),
   mcp_0134_modernization: checks.mcp_0134_modernization && runtimeReports.mcp_0_134_modernization?.ok === true,
+  mcp_readonly_runtime_scheduler: checks.mcp_readonly_runtime_scheduler && (!runtimeReports.mcp_readonly_runtime_scheduler || runtimeReports.mcp_readonly_runtime_scheduler.ok === true),
+  appshots_thread_attachment_discovery: checks.appshots_thread_attachment_discovery && (!runtimeReports.appshots_thread_attachment_discovery || runtimeReports.appshots_thread_attachment_discovery.ok === true),
   source_intelligence_codex_history_search: checks.source_intelligence_codex_history_search,
   agent_parallel_write_kernel: checks.agent_parallel_write_kernel && runtimeReports.agent_parallel_write_kernel?.ok === true,
   agent_parallel_write_blackbox: checks.agent_parallel_write_blackbox && runtimeReports.agent_parallel_write_blackbox?.ok === true,
   team_parallel_write_blackbox: checks.team_parallel_write_blackbox && runtimeReports.team_parallel_write_blackbox?.ok === true,
   dfix_parallel_write_blackbox: checks.dfix_parallel_write_blackbox && runtimeReports.dfix_parallel_write_blackbox?.ok === true,
+  agent_patch_envelope_extraction: checks.agent_patch_envelope_extraction && runtimeReports.agent_patch_envelope_extraction?.ok === true,
+  agent_patch_queue_runtime: checks.agent_patch_queue_runtime && runtimeReports.agent_patch_queue_runtime?.ok === true,
+  agent_strategy_to_lease_wiring: checks.agent_strategy_to_lease_wiring && runtimeReports.agent_strategy_to_lease_wiring?.ok === true,
+  agent_patch_swarm_runtime: checks.agent_patch_swarm_runtime && runtimeReports.agent_patch_swarm_runtime?.ok === true,
+  agent_patch_verification_dag: checks.agent_patch_verification_dag && runtimeReports.agent_patch_verification_dag?.ok === true,
+  agent_patch_rollback_dag: checks.agent_patch_rollback_dag && runtimeReports.agent_patch_rollback_dag?.ok === true,
+  agent_patch_proof_runtime: checks.agent_patch_proof_runtime && runtimeReports.agent_patch_proof_runtime?.ok === true,
+  agent_patch_swarm_route_blackbox: checks.agent_patch_swarm_route_blackbox && runtimeReports.agent_patch_swarm_route_blackbox?.ok === true,
+  team_patch_swarm_route_blackbox: checks.team_patch_swarm_route_blackbox && runtimeReports.team_patch_swarm_route_blackbox?.ok === true,
+  dfix_patch_swarm_route_blackbox: checks.dfix_patch_swarm_route_blackbox && runtimeReports.dfix_patch_swarm_route_blackbox?.ok === true,
   agent_patch_proof: checks.agent_patch_proof && runtimeReports.agent_patch_proof?.ok === true,
   agent_patch_rollback: checks.agent_patch_rollback && runtimeReports.agent_patch_rollback?.ok === true,
   release_gate_existence_audit: checks.release_gate_existence_audit,
@@ -343,20 +382,27 @@ const report = {
       && runtimeReports.codex_0_134_official_compat?.ok === true
       && checks.codex_profile_primary
       && checks.codex_managed_proxy_env
+      && checks.codex_0134_runner_truth
       && checks.source_intelligence_codex_history_search ? 'present' : 'missing',
     baseline: 'rust-v0.134.0',
     official_compat: checks.codex_0134_official_compat,
     official_compat_report_ok: runtimeReports.codex_0_134_official_compat ? runtimeReports.codex_0_134_official_compat.ok === true : null,
     profile_primary: checks.codex_profile_primary,
     managed_proxy_env: checks.codex_managed_proxy_env,
+    runner_truth: checks.codex_0134_runner_truth,
+    runner_truth_report_ok: runtimeReports.codex_0_134_runner_truth ? runtimeReports.codex_0_134_runner_truth.ok === true : null,
     local_history_search: checks.source_intelligence_codex_history_search
   },
   mcp_0_134: {
-    status: checks.mcp_0134_modernization && runtimeReports.mcp_0_134_modernization?.ok === true ? 'present' : 'missing',
+    status: checks.mcp_0134_modernization
+      && runtimeReports.mcp_0_134_modernization?.ok === true
+      && checks.mcp_readonly_runtime_scheduler ? 'present' : 'missing',
     modernization_gate: checks.mcp_0134_modernization,
-    modernization_report_ok: runtimeReports.mcp_0_134_modernization ? runtimeReports.mcp_0_134_modernization.ok === true : null
+    modernization_report_ok: runtimeReports.mcp_0_134_modernization ? runtimeReports.mcp_0_134_modernization.ok === true : null,
+    readonly_runtime_scheduler: checks.mcp_readonly_runtime_scheduler,
+    readonly_runtime_scheduler_report_ok: runtimeReports.mcp_readonly_runtime_scheduler ? runtimeReports.mcp_readonly_runtime_scheduler.ok === true : null
   },
-  parallel_write_kernel_1_18_8: {
+  parallel_write_kernel_1_18_9: {
     status: checks.agent_parallel_write_kernel
       && checks.agent_parallel_write_blackbox
       && checks.team_parallel_write_blackbox
@@ -381,6 +427,38 @@ const report = {
     dfix_blackbox_report_ok: runtimeReports.dfix_parallel_write_blackbox ? runtimeReports.dfix_parallel_write_blackbox.ok === true : null,
     proof_report_ok: runtimeReports.agent_patch_proof ? runtimeReports.agent_patch_proof.ok === true : null,
     rollback_report_ok: runtimeReports.agent_patch_rollback ? runtimeReports.agent_patch_rollback.ok === true : null
+  },
+  patch_swarm_runtime_1_18_9: {
+    status: checks.agent_patch_envelope_extraction
+      && checks.agent_patch_queue_runtime
+      && checks.agent_strategy_to_lease_wiring
+      && checks.agent_patch_swarm_runtime
+      && checks.agent_patch_verification_dag
+      && checks.agent_patch_rollback_dag
+      && checks.agent_patch_proof_runtime
+      && checks.agent_patch_swarm_route_blackbox
+      && checks.team_patch_swarm_route_blackbox
+      && checks.dfix_patch_swarm_route_blackbox
+      && runtimeReports.agent_patch_envelope_extraction?.ok === true
+      && runtimeReports.agent_patch_queue_runtime?.ok === true
+      && runtimeReports.agent_strategy_to_lease_wiring?.ok === true
+      && runtimeReports.agent_patch_swarm_runtime?.ok === true
+      && runtimeReports.agent_patch_verification_dag?.ok === true
+      && runtimeReports.agent_patch_rollback_dag?.ok === true
+      && runtimeReports.agent_patch_proof_runtime?.ok === true
+      && runtimeReports.agent_patch_swarm_route_blackbox?.ok === true
+      && runtimeReports.team_patch_swarm_route_blackbox?.ok === true
+      && runtimeReports.dfix_patch_swarm_route_blackbox?.ok === true ? 'present' : 'missing',
+    envelope_extraction_report_ok: runtimeReports.agent_patch_envelope_extraction ? runtimeReports.agent_patch_envelope_extraction.ok === true : null,
+    queue_runtime_report_ok: runtimeReports.agent_patch_queue_runtime ? runtimeReports.agent_patch_queue_runtime.ok === true : null,
+    strategy_to_lease_report_ok: runtimeReports.agent_strategy_to_lease_wiring ? runtimeReports.agent_strategy_to_lease_wiring.ok === true : null,
+    swarm_runtime_report_ok: runtimeReports.agent_patch_swarm_runtime ? runtimeReports.agent_patch_swarm_runtime.ok === true : null,
+    verification_dag_report_ok: runtimeReports.agent_patch_verification_dag ? runtimeReports.agent_patch_verification_dag.ok === true : null,
+    rollback_dag_report_ok: runtimeReports.agent_patch_rollback_dag ? runtimeReports.agent_patch_rollback_dag.ok === true : null,
+    proof_runtime_report_ok: runtimeReports.agent_patch_proof_runtime ? runtimeReports.agent_patch_proof_runtime.ok === true : null,
+    agent_route_blackbox_ok: runtimeReports.agent_patch_swarm_route_blackbox ? runtimeReports.agent_patch_swarm_route_blackbox.ok === true : null,
+    team_route_blackbox_ok: runtimeReports.team_patch_swarm_route_blackbox ? runtimeReports.team_patch_swarm_route_blackbox.ok === true : null,
+    dfix_route_blackbox_ok: runtimeReports.dfix_patch_swarm_route_blackbox ? runtimeReports.dfix_patch_swarm_route_blackbox.ok === true : null
   },
   mad_sks_actual_executor_closure: {
     status: checks.mad_sks_actual_executor
@@ -671,7 +749,8 @@ for (const key of [
   'codex_0_134',
   'codex_0_133',
   'mcp_0_134',
-  'parallel_write_kernel_1_18_8',
+  'parallel_write_kernel_1_18_9',
+  'patch_swarm_runtime_1_18_9',
   'mad_sks_actual_executor_closure',
   'image_ux_review',
   'ppt_imagegen_review',
@@ -763,7 +842,8 @@ function renderMarkdown(report) {
 - Codex 0.134 compatibility: \`${report.codex_0_134.status}\`
 - Codex 0.133 compatibility: \`${report.codex_0_133.status}\`
 - MCP 0.134 modernization: \`${report.mcp_0_134.status}\`
-- Parallel write kernel 1.18.8: \`${report.parallel_write_kernel_1_18_8.status}\`
+- Parallel write kernel ${RELEASE_VERSION}: \`${report.parallel_write_kernel_1_18_9.status}\`
+- Patch swarm runtime ${RELEASE_VERSION}: \`${report.patch_swarm_runtime_1_18_9.status}\`
 - MAD-SKS actual executor closure: \`${report.mad_sks_actual_executor_closure.status}\`
 - Release native agent backend: \`${report.release_native_agent_backend.status}\`
 - UX-Review real callout loop gates: \`${report.image_ux_review.status}\`
@@ -772,7 +852,7 @@ function renderMarkdown(report) {
 - Hook trust warning-zero: \`${report.hook_trust_warning_zero.status}\`
 - Source Intelligence 1.18: \`${report.source_intelligence_1_18.status}\`
 - Agent terminal/tmux 1.18: \`${report.agent_terminal_tmux_1_18.status}\`
-- Runtime truth 1.18.8: \`${report.runtime_truth_1_18_8.status}\`
+- Runtime truth ${RELEASE_VERSION}: \`${report.runtime_truth_1_18_8.status}\`
 - Dynamic agent pool ${RELEASE_VERSION}: \`${report.dynamic_agent_pool_1_18_3.status}\`
 - Goal mode 1.18: \`${report.goal_mode_1_18.status}\`
 - Release full coverage 1.18: \`${report.release_full_coverage_1_18.status}\`

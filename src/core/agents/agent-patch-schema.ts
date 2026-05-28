@@ -13,28 +13,57 @@ export interface AgentPatchOperation {
 
 export interface AgentPatchEnvelope {
   schema: typeof AGENT_PATCH_SCHEMA
+  mission_id?: string
+  route?: string
   agent_id: string
-  session_id?: string
+  session_id: string
+  slot_id: string
+  generation_index: number
+  task_slice_id?: string
   lease_id?: string
   lease_proof?: {
     lease_id?: string
     owner_agent?: string
+    owner_persona?: string
     allowed_paths?: string[]
+    strategy_task_id?: string
+    micro_win_id?: string
+    protected_path_check?: 'passed' | 'blocked' | 'not_checked'
+    conflict_prediction_id?: string
+    verification_node_id?: string
+    rollback_node_id?: string
   }
   operations: AgentPatchOperation[]
   rationale?: string
+  verification_hint?: AgentPatchHint
+  rollback_hint?: AgentPatchHint
 }
 
 type AgentPatchLeaseProof = NonNullable<AgentPatchEnvelope['lease_proof']>
 
+export interface AgentPatchHint {
+  command?: string
+  node_id?: string
+  artifact?: string
+  notes?: string
+}
+
 export function normalizeAgentPatchEnvelope(input: any): AgentPatchEnvelope {
+  const generationIndex = Number(input?.generation_index ?? input?.generationIndex)
   return {
     schema: AGENT_PATCH_SCHEMA,
+    ...(input?.mission_id ? { mission_id: String(input.mission_id) } : {}),
+    ...(input?.route ? { route: String(input.route) } : {}),
     agent_id: String(input?.agent_id || input?.agentId || 'unknown-agent'),
-    ...(input?.session_id ? { session_id: String(input.session_id) } : {}),
+    session_id: String(input?.session_id || input?.sessionId || ''),
+    slot_id: String(input?.slot_id || input?.slotId || ''),
+    generation_index: Number.isFinite(generationIndex) ? Math.floor(generationIndex) : -1,
+    ...(input?.task_slice_id ? { task_slice_id: String(input.task_slice_id) } : {}),
     ...(input?.lease_id ? { lease_id: String(input.lease_id) } : {}),
     ...(input?.lease_proof ? { lease_proof: normalizeLeaseProof(input.lease_proof) } : {}),
     ...(input?.rationale ? { rationale: String(input.rationale) } : {}),
+    ...(input?.verification_hint ? { verification_hint: normalizeHint(input.verification_hint) } : {}),
+    ...(input?.rollback_hint ? { rollback_hint: normalizeHint(input.rollback_hint) } : {}),
     operations: Array.isArray(input?.operations) ? input.operations.map(normalizeOperation) : []
   }
 }
@@ -43,6 +72,10 @@ export function validateAgentPatchEnvelope(envelope: AgentPatchEnvelope): { ok: 
   const violations: string[] = []
   if (envelope.schema !== AGENT_PATCH_SCHEMA) violations.push('schema_mismatch')
   if (!envelope.agent_id) violations.push('agent_id_missing')
+  if (!envelope.session_id) violations.push('session_id_missing')
+  if (!envelope.slot_id) violations.push('slot_id_missing')
+  if (!Number.isInteger(envelope.generation_index) || envelope.generation_index < 0) violations.push('generation_index_missing')
+  if (!envelope.lease_id && !envelope.lease_proof?.lease_id) violations.push('lease_id_missing')
   if (!envelope.operations.length) violations.push('operations_missing')
   for (const operation of envelope.operations) {
     if (!operation.path || operation.path.includes('\0') || operation.path.startsWith('/') || operation.path.split(/[\\/]/).includes('..')) {
@@ -51,6 +84,9 @@ export function validateAgentPatchEnvelope(envelope: AgentPatchEnvelope): { ok: 
     if (operation.op === 'replace' && typeof operation.search !== 'string') violations.push(`replace_search_missing:${operation.path}`)
     if (operation.op === 'write' && typeof operation.content !== 'string') violations.push(`write_content_missing:${operation.path}`)
     if (operation.op === 'unified_diff' && typeof operation.diff !== 'string') violations.push(`unified_diff_missing:${operation.path}`)
+    if (envelope.lease_proof?.allowed_paths?.length && !pathAllowedByLease(operation.path, envelope.lease_proof.allowed_paths)) {
+      violations.push(`lease_path_not_allowed:${operation.path}`)
+    }
   }
   return { ok: violations.length === 0, violations }
 }
@@ -71,6 +107,36 @@ function normalizeLeaseProof(input: any): AgentPatchLeaseProof {
   return {
     ...(input?.lease_id === undefined ? {} : { lease_id: String(input.lease_id) }),
     ...(input?.owner_agent === undefined ? {} : { owner_agent: String(input.owner_agent) }),
-    ...(Array.isArray(input?.allowed_paths) ? { allowed_paths: input.allowed_paths.map(String) } : {})
+    ...(input?.owner_persona === undefined ? {} : { owner_persona: String(input.owner_persona) }),
+    ...(Array.isArray(input?.allowed_paths) ? { allowed_paths: input.allowed_paths.map(String) } : {}),
+    ...(input?.strategy_task_id === undefined ? {} : { strategy_task_id: String(input.strategy_task_id) }),
+    ...(input?.micro_win_id === undefined ? {} : { micro_win_id: String(input.micro_win_id) }),
+    ...(input?.protected_path_check === undefined ? {} : { protected_path_check: normalizeProtectedPathCheck(input.protected_path_check) }),
+    ...(input?.conflict_prediction_id === undefined ? {} : { conflict_prediction_id: String(input.conflict_prediction_id) }),
+    ...(input?.verification_node_id === undefined ? {} : { verification_node_id: String(input.verification_node_id) }),
+    ...(input?.rollback_node_id === undefined ? {} : { rollback_node_id: String(input.rollback_node_id) })
   }
+}
+
+function normalizeHint(input: any): AgentPatchHint {
+  return {
+    ...(input?.command === undefined ? {} : { command: String(input.command) }),
+    ...(input?.node_id === undefined ? {} : { node_id: String(input.node_id) }),
+    ...(input?.artifact === undefined ? {} : { artifact: String(input.artifact) }),
+    ...(input?.notes === undefined ? {} : { notes: String(input.notes) })
+  }
+}
+
+function pathAllowedByLease(operationPath: string, allowedPaths: string[]): boolean {
+  const rel = normalizePatchPath(operationPath)
+  return allowedPaths.map(normalizePatchPath).some((allowed) => rel === allowed || rel.startsWith(`${allowed}/`))
+}
+
+function normalizePatchPath(value: string): string {
+  return String(value || '').replace(/\\/g, '/').replace(/^\.\/+/, '').split('/').filter((part) => part && part !== '.').join('/')
+}
+
+function normalizeProtectedPathCheck(value: any): 'passed' | 'blocked' | 'not_checked' {
+  const text = String(value || '')
+  return text === 'passed' || text === 'blocked' || text === 'not_checked' ? text : 'not_checked'
 }

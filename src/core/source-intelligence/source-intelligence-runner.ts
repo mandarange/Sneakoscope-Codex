@@ -69,6 +69,20 @@ export async function runSourceIntelligence(input: {
       redacted?: boolean
       local_only?: boolean
       fixture?: boolean
+      thread_id?: string | null
+      attachment_id?: string | null
+      source_app?: string | null
+      source_window?: string | null
+    }>
+    threadAttachments?: Array<{
+      thread_id?: string | null
+      attachment_id?: string | null
+      kind?: string | null
+      mime_type?: string | null
+      source_app?: string | null
+      source_window?: string | null
+      local_only?: boolean
+      codex_appshot?: boolean
     }>
     operatorActionRecorded?: boolean
     appshotsToolAvailable?: boolean
@@ -117,6 +131,7 @@ export async function runSourceIntelligence(input: {
     ...(input.appshots?.visualRequired === undefined ? {} : { visualRequired: input.appshots.visualRequired }),
     ...(input.appshots?.sourcePaths === undefined ? {} : { sourcePaths: input.appshots.sourcePaths }),
     ...(input.appshots?.sourceMetadata === undefined ? {} : { sourceMetadata: input.appshots.sourceMetadata }),
+    ...(input.appshots?.threadAttachments === undefined ? {} : { threadAttachments: input.appshots.threadAttachments }),
     ...(input.appshots?.operatorActionRecorded === undefined ? {} : { operatorActionRecorded: input.appshots.operatorActionRecorded }),
     ...(input.appshots?.appshotsToolAvailable === undefined ? {} : { appshotsToolAvailable: input.appshots.appshotsToolAvailable })
   })

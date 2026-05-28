@@ -37,7 +37,11 @@ function writeAppshotFixture(name) {
       frontmost_window: true,
       redacted: true,
       local_only: true,
-      fixture: true
+      fixture: true,
+      thread_id: 'thread-fixture-voxel',
+      attachment_id: 'attachment-fixture-voxel',
+      source_app: 'Codex',
+      source_window: 'Fixture Appshot'
     }
   };
 }

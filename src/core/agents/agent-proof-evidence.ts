@@ -9,7 +9,7 @@ import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
 import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.js'
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; strategyGate?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; patchSwarm?: any; strategyGate?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
@@ -20,6 +20,14 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const scheduler = input.scheduler || await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const taskGraph = input.partition?.task_graph || await readJson<any>(path.join(root, 'agent-task-graph.json'), null)
   const parallelWritePolicy = input.parallelWritePolicy || await readJson<any>(path.join(root, 'agent-parallel-write-policy.json'), null)
+  const patchQueue = await readJson<any>(path.join(root, 'agent-patch-queue.json'), null)
+  const patchQueueEvents = await readTextSafe(path.join(root, 'agent-patch-queue-events.jsonl'))
+  const patchMerge = await readJson<any>(path.join(root, 'agent-merge-coordinator-report.json'), null)
+  const patchApplyResults = await readJson<any>(path.join(root, 'agent-patch-apply-results.json'), null)
+  const patchVerificationResults = await readJson<any>(path.join(root, 'agent-patch-verification-results.json'), null)
+  const patchRollbackProof = await readJson<any>(path.join(root, 'agent-patch-rollback-proof.json'), null)
+  const patchProof = await readJson<any>(path.join(root, 'agent-patch-proof.json'), null)
+  const patchSwarm = input.patchSwarm || await readJson<any>(path.join(root, 'agent-patch-swarm-runtime.json'), null)
   const tmuxPhysicalProof = await readJson<any>(path.join(root, 'agent-tmux-physical-proof.json'), null)
   const tmuxPhysicalProofSummary = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-summary.json'), null)
   const tmuxPhysicalBeforeDrain = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-before-drain.json'), null)
@@ -57,6 +65,22 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const genericAgentRouteStandIn = !/\$?agent$/i.test(route) && /\bagent\s+run\b/i.test(routeCommand) && /--route/i.test(routeCommand)
   const realRouteCommandUsed = !genericAgentRouteStandIn
   const laneSupervisorIntegrated = Boolean(laneSupervisor)
+  const patchEntries = Array.isArray(patchQueue?.entries) ? patchQueue.entries : []
+  const patchApplyRows = Array.isArray(patchApplyResults?.results) ? patchApplyResults.results : []
+  const patchQueuePendingCount = Number(patchQueue?.queued_count || patchEntries.filter((entry: any) => entry.status === 'pending').length || 0)
+  const patchConflictCount = Number(patchMerge?.conflicts?.length || patchMerge?.serial_conflicts?.length || 0)
+  const serialBottleneckCount = Number(patchMerge?.serial_conflicts?.length || 0)
+  const patchQueueOk = patchSwarm ? Boolean(patchQueue) && patchQueuePendingCount === 0 : true
+  const patchApplyOk = patchSwarm ? patchApplyRows.every((row: any) => row.ok !== false) : true
+  const patchVerificationOk = patchSwarm ? patchVerificationResults?.ok !== false && patchApplyRows.every((row: any) => {
+    const changed = Array.isArray(row.changed_files) && row.changed_files.length > 0
+    return !changed || (row.verification?.status && row.verification.status !== 'failed')
+  }) : true
+  const patchRollbackOk = patchSwarm ? patchRollbackProof?.ok !== false && patchApplyRows.every((row: any) => {
+    const changed = Array.isArray(row.changed_files) && row.changed_files.length > 0
+    return !changed || Boolean(row.rollback_digest)
+  }) : true
+  const parallelPatchApplyVerified = patchSwarm ? Array.isArray(patchProof?.wall_clock_parallel_evidence) && patchProof.wall_clock_parallel_evidence.length > 0 || Number(patchSwarm?.parallel_apply_count || 0) > 1 : false
   const blockers = [
     ...(lifecycle.ok ? [] : ['agent_lifecycle_not_all_closed']),
     ...(lifecycle.ok ? [] : lifecycle.open_sessions.map((id: string) => 'session_open:' + id)),
@@ -107,6 +131,17 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(input.janitor?.ok === false ? input.janitor.blockers || ['agent_janitor_not_ok'] : []),
     ...(cleanupProof?.ok === false ? cleanupProof.blockers || ['agent_cleanup_proof_not_ok'] : []),
     ...(input.results || []).flatMap((result: any) => result.blockers || []),
+    ...(patchSwarm?.ok === false ? patchSwarm.blockers || ['patch_swarm_not_ok'] : []),
+    ...(patchSwarm && !patchQueue ? ['patch_queue_missing'] : []),
+    ...(patchSwarm && !patchMerge ? ['patch_merge_report_missing'] : []),
+    ...(patchSwarm && !patchApplyResults ? ['patch_apply_results_missing'] : []),
+    ...(patchSwarm && !patchVerificationResults ? ['patch_verification_results_missing'] : []),
+    ...(patchSwarm && !patchRollbackProof ? ['patch_rollback_proof_missing'] : []),
+    ...(patchSwarm && patchProof?.ok === false ? patchProof.blockers || ['patch_proof_not_ok'] : []),
+    ...(patchSwarm && !patchQueueOk ? ['patch_queue_not_ok'] : []),
+    ...(patchSwarm && !patchApplyOk ? ['patch_apply_not_ok'] : []),
+    ...(patchSwarm && !patchVerificationOk ? ['patch_verification_not_ok'] : []),
+    ...(patchSwarm && !patchRollbackOk ? ['patch_rollback_not_ok'] : []),
     ...agentChangedFileLeaseViolations(input.results || [], input.partition?.leases || [])
   ]
   const evidence = {
@@ -129,6 +164,21 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     parallel_write_apply_patches: parallelWritePolicy?.apply_patches === true,
     parallel_write_dry_run_patches: parallelWritePolicy?.dry_run_patches === true,
     parallel_write_max_write_agents: Number(parallelWritePolicy?.max_write_agents || 0),
+    patch_swarm_runtime: patchSwarm ? 'agent-patch-swarm-runtime.json' : null,
+    patch_queue: patchSwarm ? 'agent-patch-queue.json' : null,
+    patch_queue_events: patchSwarm ? 'agent-patch-queue-events.jsonl' : null,
+    patch_queue_event_count: patchQueueEvents.split(/\n/).filter(Boolean).length,
+    patch_proof: patchSwarm ? 'agent-patch-proof.json' : null,
+    patch_queue_ok: patchQueueOk,
+    patch_apply_ok: patchApplyOk,
+    patch_verification_ok: patchVerificationOk,
+    patch_rollback_ok: patchRollbackOk,
+    parallel_patch_apply_verified: parallelPatchApplyVerified,
+    patch_conflict_count: patchConflictCount,
+    serial_bottleneck_count: serialBottleneckCount,
+    changed_files_by_agent: changedFilesByAgent(patchApplyRows, patchEntries),
+    lease_compliance_by_patch: leaseComplianceByPatch(patchEntries, input.partition?.leases || []),
+    rollback_digest_count: patchApplyRows.filter((row: any) => row.rollback_digest).length,
     real_parallel_claim: input.realParallel === true && input.backend === 'codex-exec',
     fake_backend_disclaimer: input.backend === 'fake' ? 'fixture only; no real parallel execution claim' : null,
     agent_count: input.roster?.agent_count || input.results?.length || 0,
@@ -238,10 +288,38 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
       'goal-mode-applied.json': input.partition?.goal_mode_ref,
       'agent-scheduler-state.json': scheduler
       , 'strategy-gate.json': strategyGate
+      , 'agent-patch-proof.json': patchProof
+      , 'agent-patch-swarm-runtime.json': patchSwarm
     }
   })
   await writeRuntimeTruthMatrix(repoRootFromAgentRoot(root), runtimeTruthMatrix, { agentRoot: root })
   return evidence
+}
+
+function changedFilesByAgent(applyRows: any[], queueEntries: any[]) {
+  const entryAgents = new Map(queueEntries.map((entry) => [String(entry.id), String(entry.envelope?.agent_id || 'unknown')]))
+  const out: Record<string, string[]> = {}
+  for (const row of applyRows) {
+    const agent = entryAgents.get(String(row.entry_id || '')) || 'unknown'
+    out[agent] = [...new Set([...(out[agent] || []), ...((row.changed_files || []).map(String))])]
+  }
+  return out
+}
+
+function leaseComplianceByPatch(queueEntries: any[], leases: any[]) {
+  return queueEntries.map((entry) => {
+    const leaseId = entry.envelope?.lease_id || entry.envelope?.lease_proof?.lease_id || null
+    const agentId = entry.envelope?.agent_id || null
+    const paths = (entry.envelope?.operations || []).map((operation: any) => String(operation.path || ''))
+    const lease = leases.find((candidate: any) => candidate.id === leaseId || (candidate.agent_id === agentId && paths.some((file: string) => pathWithin(file, candidate.path))))
+    return {
+      patch_entry_id: entry.id,
+      agent_id: agentId,
+      lease_id: leaseId,
+      ok: Boolean(lease),
+      write_paths: paths
+    }
+  })
 }
 
 export async function readAgentProofEvidence(root: string, missionId: string) {

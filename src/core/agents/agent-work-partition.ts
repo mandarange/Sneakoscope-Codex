@@ -16,6 +16,7 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
   sourceIntelligenceRefs?: Record<string, unknown> | null
   goalModeRef?: Record<string, unknown> | null
   strategyRefs?: Record<string, unknown> | null
+  strategyOwnershipPlan?: { owners?: any[] } | null
   microWins?: Array<{ id: string; title?: string; description?: string; kind?: string; write_paths?: string[]; readonly_paths?: string[]; dependencies?: string[]; dopamine_weight?: number; appshot_required?: boolean }>
 } = {}) {
   const inventory = await collectRepoInventory(root)
@@ -50,7 +51,7 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
     ...(opts.desiredWorkItemCount === undefined ? {} : { desiredWorkItemCount: opts.desiredWorkItemCount }),
     ...(opts.minimumWorkItems === undefined ? {} : { minimumWorkItems: opts.minimumWorkItems })
   })
-  const leases = planAgentLeases(slices, sessions)
+  const leases = planAgentLeases(slices, sessions, opts.strategyOwnershipPlan || null)
   const conflict_report = detectAgentLeaseConflicts(leases)
   const no_overlap_proof = buildNoOverlapProof(leases)
   return {

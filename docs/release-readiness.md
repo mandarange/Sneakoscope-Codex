@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.8 writes the `sks.release-readiness.v1` report for the deep Codex 0.134 ultra-stability DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, work-item-first task graph, schema-bound follow-up work items, actual route blackbox backfill checks, persistent tmux lane supervisor, lifecycle-wired real tmux pane proof, real Codex dynamic smoke v2, process-tree cleanup executor v2, cleanup command UX, retention cleanup safety, AST-aware intelligent work graph, fake-vs-real proof policy v2, runtime truth matrix, Codex 0.134 compatibility, managed proxy propagation, local Codex history search, MCP 0.134 policy, proof-safe parallel write kernel, scheduler proof hardening, parallel verification DAG, project-scoped session namespace, continuous agent janitor, Source Intelligence, X AI/Codex Web policy, Codex official Goal mode, main no-Scout, worker Scout-limited, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.8 runtime-truth closure DAG gaps.
+SKS 1.18.9 writes the `sks.release-readiness.v1` report for the Patch Swarm runtime closure DAG: TypeScript-only runtime, `dist` freshness/parity manifest, native route proof artifact structure, Codex App agent cockpit, Appshots thread attachment discovery, MCP readOnly runtime scheduler proof, Codex 0.134 runner truth, managed proxy propagation, local Codex history search, proof-safe parallel write kernel, scheduler proof hardening, parallel verification DAG, project-scoped session namespace, Source Intelligence, release metadata, docs truthfulness, and official-docs compatibility. `ok: true` means there are no remaining 1.18.9 runtime-truth closure DAG gaps in the release-readiness slice.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -56,16 +56,28 @@ npm run appshots:capability
 npm run appshots:operator-policy
 npm run appshots:evidence
 npm run appshots:source-intelligence
+npm run appshots:thread-attachment-discovery
 npm run appshots:triwiki-voxel
 npm run appshots:privacy-safety
 npm run mcp:0.134-modernization
-npm run mcp:readonly-concurrency
+npm run mcp:readonly-runtime-scheduler
+npm run codex:0.134-runner-truth
 npm run source-intelligence:codex-history-search
 npm run hooks:0.134-context-parity
 npm run agent:parallel-write-kernel
 npm run agent:parallel-write-blackbox
 npm run team:parallel-write-blackbox
 npm run dfix:parallel-write-blackbox
+npm run agent:patch-envelope-extraction
+npm run agent:patch-queue-runtime
+npm run agent:strategy-to-lease-wiring
+npm run agent:patch-swarm-runtime
+npm run agent:patch-verification-dag
+npm run agent:patch-rollback-dag
+npm run agent:patch-proof-runtime
+npm run agent:patch-swarm-route-blackbox
+npm run team:patch-swarm-route-blackbox
+npm run dfix:patch-swarm-route-blackbox
 npm run agent:patch-proof
 npm run agent:patch-rollback
 npm run release:gate-existence-audit
@@ -81,23 +93,34 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.18.8.json`
-- `.sneakoscope/reports/release-readiness-1.18.8.md`
-- `.sneakoscope/reports/all-feature-completion-1.18.8.json`
-- `.sneakoscope/reports/all-feature-completion-1.18.8.md`
-- `.sneakoscope/reports/official-docs-compat-1.18.8.json`
-- `.sneakoscope/reports/official-docs-compat-1.18.8.md`
-- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.8.json`
-- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.8.json`
-- `.sneakoscope/reports/runtime-truth-matrix-1.18.8.json`
+- `.sneakoscope/reports/release-readiness-1.18.9.json`
+- `.sneakoscope/reports/release-readiness-1.18.9.md`
+- `.sneakoscope/reports/all-feature-completion-1.18.9.json`
+- `.sneakoscope/reports/all-feature-completion-1.18.9.md`
+- `.sneakoscope/reports/official-docs-compat-1.18.9.json`
+- `.sneakoscope/reports/official-docs-compat-1.18.9.md`
+- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.9.json`
+- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.9.json`
+- `.sneakoscope/reports/runtime-truth-matrix-1.18.9.json`
 - `.sneakoscope/reports/codex-0-134-official-compat.json`
+- `.sneakoscope/reports/codex-0-134-runner-truth.json`
 - `.sneakoscope/reports/mcp-0-134-modernization.json`
+- `.sneakoscope/reports/mcp-readonly-runtime-scheduler.json`
 - `.sneakoscope/reports/strategy-adhd-orchestrating-gate.json`
 - `.sneakoscope/reports/appshots-evidence.json`
+- `.sneakoscope/reports/appshots-thread-attachment-discovery.json`
 - `.sneakoscope/reports/agent-parallel-write-kernel.json`
+- `.sneakoscope/reports/agent-patch-envelope-extraction.json`
+- `.sneakoscope/reports/agent-patch-queue-runtime.json`
+- `.sneakoscope/reports/agent-strategy-to-lease-wiring.json`
+- `.sneakoscope/reports/agent-patch-swarm-runtime.json`
+- `.sneakoscope/reports/agent-patch-proof-runtime.json`
+- `.sneakoscope/reports/agent-patch-swarm-route-blackbox.json`
+- `.sneakoscope/reports/team-patch-swarm-route-blackbox.json`
+- `.sneakoscope/reports/dfix-patch-swarm-route-blackbox.json`
 - `.sneakoscope/reports/retention-cleanup-safety.json`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, janitor/session isolation, parallel verification proof with inline log summaries for successful DAG cleanup, official docs compatibility, docs truthfulness, Source Intelligence proof, Goal mode status, agent terminal generation closure, persistent tmux lanes, real tmux physical pane truth, cleanup executor proof, retention cleanup safety, AST-aware work graph quality, fake-vs-real subsystem levels, runtime truth matrix, Codex 0.134 deltas, managed proxy propagation, MCP modernization, proof-safe parallel patches, task graph/work queue expansion, follow-up work item schema, actual route blackbox backfill metrics, and remaining 1.18.8 P0-P6 closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.134 runner deltas, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, and remaining 1.18.9 P0-P6 closure gaps.
 
 ## Priority Closure
 

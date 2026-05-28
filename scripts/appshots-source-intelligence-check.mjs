@@ -44,7 +44,11 @@ function writeAppshotFixture(dir) {
       frontmost_window: true,
       redacted: true,
       local_only: true,
-      fixture: true
+      fixture: true,
+      thread_id: 'thread-fixture-source-intelligence',
+      attachment_id: 'attachment-fixture-source-intelligence',
+      source_app: 'Codex',
+      source_window: 'Fixture Appshot'
     }
   };
 }

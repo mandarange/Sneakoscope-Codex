@@ -7,6 +7,7 @@ export function buildAgentPatchProof(input: {
   merge?: any
   applyResults?: any[]
   verification?: string[]
+  parallelWritePolicy?: any
 } = {}) {
   const applyResults = input.applyResults || []
   const queueEntries = Array.isArray(input.queue?.entries) ? input.queue.entries : []
@@ -25,23 +26,55 @@ export function buildAgentPatchProof(input: {
     const changed = Array.isArray(applyResult?.changed_files) && applyResult.changed_files.length > 0
     return applyResult?.ok && changed && !applyResult.rollback_digest ? [`missing_rollback_digest:${index}`] : []
   })
+  const verificationBlockers = applyResults.flatMap((applyResult, index) => {
+    const changed = Array.isArray(applyResult?.changed_files) && applyResult.changed_files.length > 0
+    return applyResult?.ok && changed && !applyResult.verification?.status ? [`missing_verification:${index}`] : []
+  })
+  const hasParallelGroup = Array.isArray(input.merge?.parallel_apply_groups)
+    ? input.merge.parallel_apply_groups.some((group: any) => Array.isArray(group.entry_ids) && group.entry_ids.length > 1)
+    : false
+  const parallelGroupBlockers = input.parallelWritePolicy?.write_mode === 'parallel'
+    && queueEntries.length > 1
+    && input.merge?.ok !== false
+    && !hasParallelGroup
+    ? ['parallel_write_without_parallel_apply_group']
+    : []
   const blockers = [
     ...(input.merge && input.merge.ok === false ? ['merge_not_ok'] : []),
     ...(input.merge?.blockers || []),
     ...queueBlockers,
     ...rollbackBlockers,
+    ...verificationBlockers,
+    ...parallelGroupBlockers,
     ...applyResults.flatMap((applyResult) => applyResult.ok ? [] : (applyResult.violations || ['patch_apply_failed']))
   ].map(String)
+  const changedFilesByAgent = changedFilesGroupedByAgent(applyResults)
+  const rollbackReady = applyResults.length === 0 ? true : applyResults.every((applyResult) => !Array.isArray(applyResult.changed_files) || applyResult.changed_files.length === 0 || applyResult.rollback_digest)
   return {
     schema: AGENT_PATCH_PROOF_SCHEMA,
     generated_at: nowIso(),
     ok: blockers.length === 0,
     queued_count: queuedCount,
     queue_event_count: input.queue?.events?.length || 0,
+    patch_queue_ok: queuedCount === 0 && queueBlockers.length === 0,
+    patch_apply_ok: applyResults.every((applyResult) => applyResult.ok !== false),
+    patch_verification_ok: verificationBlockers.length === 0,
+    patch_rollback_ok: rollbackBlockers.length === 0,
+    parallel_patch_apply_verified: hasParallelGroup,
+    patch_conflict_count: Number(input.merge?.conflicts?.length || 0),
+    serial_bottleneck_count: Number(input.merge?.serial_conflicts?.length || 0),
+    changed_files_by_agent: changedFilesByAgent,
+    lease_compliance_by_patch: (input.queue?.ownership_ledger || []).map((row: any) => ({
+      entry_id: row.entry_id,
+      lease_id: row.lease_id,
+      ok: Boolean(row.lease_id) && Array.isArray(row.write_paths),
+      write_paths: row.write_paths || []
+    })),
+    rollback_digest_count: applyResults.map((applyResult) => applyResult.rollback_digest).filter(Boolean).length,
     ownership_ledger: input.queue?.ownership_ledger || [],
     changed_files: [...new Set(applyResults.flatMap((applyResult) => applyResult.changed_files || []))],
     rollback_digests: applyResults.map((applyResult) => applyResult.rollback_digest).filter(Boolean),
-    rollback_ready: applyResults.length > 0 && applyResults.every((applyResult) => !Array.isArray(applyResult.changed_files) || applyResult.changed_files.length === 0 || applyResult.rollback_digest),
+    rollback_ready: rollbackReady,
     after_hashes: Object.assign({}, ...applyResults.map((applyResult) => applyResult.after_hashes || {})),
     merge: input.merge || null,
     verification: input.verification || applyResults.map((applyResult) => applyResult.verification?.status).filter(Boolean),
@@ -50,4 +83,14 @@ export function buildAgentPatchProof(input: {
     wall_clock_parallel_evidence: input.merge?.wall_clock_parallel_evidence || [],
     blockers
   }
+}
+
+function changedFilesGroupedByAgent(applyResults: any[]) {
+  const grouped = new Map<string, Set<string>>()
+  for (const result of applyResults) {
+    const agent = String(result?.agent_id || 'unknown')
+    if (!grouped.has(agent)) grouped.set(agent, new Set())
+    for (const file of result?.changed_files || []) grouped.get(agent)?.add(String(file))
+  }
+  return Object.fromEntries([...grouped.entries()].map(([agent, files]) => [agent, [...files].sort()]))
 }

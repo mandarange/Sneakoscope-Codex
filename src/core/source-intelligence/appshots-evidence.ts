@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { nowIso, sha256, writeJsonAtomic } from '../fsx.js'
-import { detectAppshotsCapability, type AppshotsCapability } from '../codex/appshots-detector.js'
+import { detectAppshotsCapability, type AppshotsCapability, type AppshotsThreadAttachmentMetadata } from '../codex/appshots-detector.js'
 import { buildAppshotsOperatorPolicy, type AppshotsOperatorPolicy } from '../codex/appshots-operator-policy.js'
 
 export const APPSHOTS_EVIDENCE_SCHEMA = 'sks.appshots-source-intelligence-evidence.v1'
@@ -17,6 +17,7 @@ export interface AppshotsEvidence {
   source_paths: string[]
   accepted_source_paths: string[]
   source_verification: AppshotsSourceVerification[]
+  thread_attachment_discovery: AppshotsCapability['thread_attachment_discovery']
   source_count: number
   privacy_safety_ok: boolean
   triwiki_voxel_ready: boolean
@@ -33,6 +34,10 @@ export interface AppshotsSourceMetadata {
   redacted?: boolean
   local_only?: boolean
   fixture?: boolean
+  thread_id?: string | null
+  attachment_id?: string | null
+  source_app?: string | null
+  source_window?: string | null
 }
 
 export interface AppshotsSourceVerification {
@@ -44,6 +49,10 @@ export interface AppshotsSourceVerification {
   redacted: boolean
   local_only: boolean
   fixture: boolean
+  thread_id: string | null
+  attachment_id: string | null
+  source_app: string | null
+  source_window: string | null
   sha256: string | null
   accepted: boolean
   blockers: string[]
@@ -55,6 +64,7 @@ export function buildAppshotsEvidence(input: {
   visualRequired?: boolean
   sourcePaths?: string[]
   sourceMetadata?: AppshotsSourceMetadata[]
+  threadAttachments?: AppshotsThreadAttachmentMetadata[]
   operatorActionRecorded?: boolean
   appshotsToolAvailable?: boolean
 } = {}): AppshotsEvidence {
@@ -67,7 +77,8 @@ export function buildAppshotsEvidence(input: {
     prompt: input.prompt || '',
     ...(input.visualRequired === undefined ? {} : { visualRequired: input.visualRequired }),
     operatorActionRecorded,
-    ...(input.appshotsToolAvailable === undefined ? {} : { appshotsToolAvailable: input.appshotsToolAvailable })
+    ...(input.appshotsToolAvailable === undefined ? {} : { appshotsToolAvailable: input.appshotsToolAvailable }),
+    ...(input.threadAttachments === undefined ? {} : { threadAttachments: input.threadAttachments })
   })
   const operatorPolicy = buildAppshotsOperatorPolicy(capability, { operatorActionRecorded, sourcePaths: acceptedSourcePaths })
   const visualRequired = capability.visual_required
@@ -93,6 +104,7 @@ export function buildAppshotsEvidence(input: {
     source_paths: sourcePaths,
     accepted_source_paths: acceptedSourcePaths,
     source_verification: sourceVerification,
+    thread_attachment_discovery: capability.thread_attachment_discovery,
     source_count: acceptedSourcePaths.length,
     privacy_safety_ok: privacySafetyOk && operatorPolicy.privacy_safety.redact_sensitive_text && operatorPolicy.privacy_safety.avoid_secrets_and_credentials,
     triwiki_voxel_ready: triwikiReady,
@@ -118,6 +130,7 @@ export async function writeAppshotsEvidenceArtifact(root: string, evidence: Apps
     ok: evidence.triwiki_voxel_ready,
     source_paths: evidence.accepted_source_paths,
     source_verification: evidence.source_verification,
+    thread_attachment_discovery: evidence.thread_attachment_discovery,
     status: evidence.triwiki_voxel_ready ? 'ready' : 'operator_required',
     blockers: evidence.triwiki_voxel_ready ? [] : ['appshots_source_missing_for_visual_voxel']
   })
@@ -135,13 +148,19 @@ function verifySource(root: string, sourcePath: string, metadata: AppshotsSource
   const redacted = meta?.redacted === true
   const localOnly = meta?.local_only === true
   const fixture = meta?.fixture === true || meta?.origin === 'fixture'
+  const threadId = stringOrNull(meta?.thread_id)
+  const attachmentId = stringOrNull(meta?.attachment_id)
+  const sourceApp = stringOrNull(meta?.source_app)
+  const sourceWindow = stringOrNull(meta?.source_window)
   const blockers = [
     ...(exists ? [] : [`appshots_source_missing:${normalizedPath}`]),
     ...(sourceType === 'codex_appshot' ? [] : [`appshots_source_type_unverified:${normalizedPath}`]),
     ...(operatorAttached ? [] : [`appshots_operator_attachment_unverified:${normalizedPath}`]),
     ...(frontmostWindow ? [] : [`appshots_frontmost_window_unverified:${normalizedPath}`]),
     ...(redacted ? [] : [`appshots_redaction_unverified:${normalizedPath}`]),
-    ...(localOnly ? [] : [`appshots_local_only_unverified:${normalizedPath}`])
+    ...(localOnly ? [] : [`appshots_local_only_unverified:${normalizedPath}`]),
+    ...(sourceType === 'codex_appshot' && !threadId ? [`appshots_thread_id_missing:${normalizedPath}`] : []),
+    ...(sourceType === 'codex_appshot' && !attachmentId ? [`appshots_attachment_id_missing:${normalizedPath}`] : [])
   ]
   return {
     path: normalizedPath,
@@ -152,6 +171,10 @@ function verifySource(root: string, sourcePath: string, metadata: AppshotsSource
     redacted,
     local_only: localOnly,
     fixture,
+    thread_id: threadId,
+    attachment_id: attachmentId,
+    source_app: sourceApp,
+    source_window: sourceWindow,
     sha256: exists ? sha256(fs.readFileSync(absolute)) : null,
     accepted: blockers.length === 0,
     blockers
@@ -160,4 +183,9 @@ function verifySource(root: string, sourcePath: string, metadata: AppshotsSource
 
 function normalizeSourcePath(sourcePath: string) {
   return String(sourcePath || '').replace(/\\/g, '/').replace(/^\.\/+/, '')
+}
+
+function stringOrNull(value?: string | null): string | null {
+  const text = String(value || '').trim()
+  return text || null
 }

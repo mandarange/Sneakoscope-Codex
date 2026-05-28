@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { createMission, missionDir, setCurrent } from '../mission.js'
-import { nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
+import { nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { buildAgentRoster, normalizeAgentConcurrency } from './agent-roster.js'
 import { buildAgentWorkPartition } from './agent-work-partition.js'
 import { initializeAgentCentralLedger, appendAgentLedgerEvent, compactAgentLedger } from './agent-central-ledger.js'
@@ -9,6 +9,10 @@ import { writeAgentConsensus } from './agent-consensus.js'
 import { writeAgentProofEvidence } from './agent-proof-evidence.js'
 import { normalizeAgentBackend } from './agent-schema.js'
 import type { AgentRunOptions } from './agent-schema.js'
+import { PersistentAgentPatchQueueStore } from './agent-patch-queue-store.js'
+import { applyAgentPatchQueueEntry, rollbackAgentPatchApply } from './agent-patch-apply-worker.js'
+import { coordinateAgentPatchMerge, writeAgentMergeCoordinatorArtifacts } from './agent-merge-coordinator.js'
+import { buildAgentPatchProof } from './agent-patch-proof.js'
 import { runFakeAgent } from './agent-runner-fake.js'
 import { runProcessAgent } from './agent-runner-process.js'
 import { runCodexExecAgent } from './agent-runner-codex-exec.js'
@@ -161,6 +165,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     sourceIntelligenceRefs: sourceIntelligenceRef,
     goalModeRef,
     strategyRefs: strategyRef,
+    strategyOwnershipPlan: strategyCompiled.file_ownership_plan,
     microWins: strategyCompiled.gate.micro_wins
   })
   await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
@@ -306,6 +311,16 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     }
   })
   const results = scheduler.results
+  const patchSwarm = await runAgentPatchSwarmRuntime(root, ledgerRoot, {
+    missionId,
+    route,
+    routeCommand,
+    writeCapable,
+    results,
+    parallelWritePolicy,
+    verificationRollbackDag: strategyCompiled.verification_rollback_dag,
+    dryRun: opts.dryRunPatches === true || opts.applyPatches !== true
+  })
   const stale = await detectStaleAgentSessions(ledgerRoot)
   if (!stale.ok) await appendAgentLedgerEvent(ledgerRoot, { agent_id: 'orchestrator', session_id: 'orchestrator', event_type: 'stale_sessions_detected', payload: stale })
   const timeoutKill = await killTimedOutAgentSessions(ledgerRoot)
@@ -326,6 +341,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     ...(stale.ok ? [] : stale.stale_sessions.map((id: string) => 'stale_heartbeat:' + id)),
     ...(timeoutKill.killed_sessions || []).map((id: string) => 'timeout_killed:' + id),
     ...(recursion.ok ? [] : recursion.violations.map((id: string) => 'recursion:' + id)),
+    ...(patchSwarm.ok ? [] : patchSwarm.blockers),
     ...(janitor.ok ? [] : janitor.blockers)
   ]
   const trust = await writeAgentTrustReport(ledgerRoot, { missionId, backend, roster, partition, cleanup, outputTails, timeoutKill, backendReport, outputValidation, scheduler: scheduler.state, blockers })
@@ -352,6 +368,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     wrongness,
     scheduler: scheduler.state,
     parallelWritePolicy,
+    patchSwarm,
     strategyGate
   })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
@@ -387,8 +404,152 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     trust,
     wrongness,
     parallel_write_policy: parallelWritePolicy,
+    patch_swarm: patchSwarm,
     proof
   }
+}
+
+async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input: { missionId: string; route: string; routeCommand: string; writeCapable: boolean; results: any[]; parallelWritePolicy: any; verificationRollbackDag?: any; dryRun: boolean }) {
+  await setCurrent(root, { mission_id: input.missionId, mode: 'AGENT', phase: 'AGENT_PATCH_SWARM_RUNNING', route_command: input.routeCommand, updated_at: nowIso() })
+  const queueStore = new PersistentAgentPatchQueueStore(ledgerRoot)
+  for (const result of input.results || []) {
+    for (const envelope of result.patch_envelopes || []) {
+      const entry = await queueStore.enqueue({
+        ...envelope,
+        agent_id: envelope.agent_id || result.agent_id,
+        session_id: envelope.session_id || result.session_id
+      }, { mission_id: input.missionId, route: input.route })
+      result.patch_queue_refs = [...(result.patch_queue_refs || []), entry.id]
+    }
+  }
+  const pendingEntries = queueStore.queue.queued()
+  const merge = coordinateAgentPatchMerge(pendingEntries)
+  await writeAgentMergeCoordinatorArtifacts(ledgerRoot, merge)
+  const conflictedEntryIds = new Set((merge.blocked_conflicts || merge.serial_conflicts || []).flatMap((conflict: any) => conflict.entry_ids || conflict.entries || []))
+  for (const entry of pendingEntries) {
+    if (conflictedEntryIds.has(entry.id)) await queueStore.markConflicted(entry.id, merge.blockers || ['patch_conflict'])
+  }
+  const disjointEntries = pendingEntries.filter((entry) => !conflictedEntryIds.has(entry.id))
+  const startedAt = nowIso()
+  const applyResults = await Promise.all(disjointEntries.map(async (entry) => {
+    await queueStore.markApplying(entry.id)
+    const started_at = nowIso()
+    const applyResult = await applyAgentPatchQueueEntry(root, entry, { dryRun: input.dryRun, artifactsDir: ledgerRoot })
+    const finished_at = nowIso()
+    if (applyResult.ok) {
+      await queueStore.markApplied(entry.id)
+      const owner = (input.results || []).find((result) => result.agent_id === entry.envelope.agent_id)
+      if (owner) {
+        owner.applied_patch_refs = [...(owner.applied_patch_refs || []), entry.id]
+        if (applyResult.rollback_digest) owner.rollback_refs = [...(owner.rollback_refs || []), applyResult.rollback_digest]
+      }
+    } else {
+      await queueStore.markConflicted(entry.id, applyResult.violations || ['patch_apply_failed'])
+    }
+    return { entry_id: entry.id, started_at, finished_at, ...applyResult }
+  }))
+  const finishedAt = nowIso()
+  const entryById = new Map(queueStore.queue.entries.map((entry) => [entry.id, entry]))
+  const verificationResults = {
+    schema: 'sks.agent-patch-verification-results.v1',
+    generated_at: nowIso(),
+    ok: applyResults.every((result) => result.ok),
+    dag_schema: input.verificationRollbackDag?.schema || null,
+    results: applyResults.map((result) => ({
+      patch_entry_id: result.entry_id,
+      owner_agent: entryById.get(result.entry_id)?.agent_id || null,
+      status: result.ok ? (input.dryRun ? 'dry_run_verified' : 'verified') : 'failed',
+      changed_files: result.changed_files || [],
+      rollback_digest: result.rollback_digest || null,
+      verification_node_id: entryById.get(result.entry_id)?.envelope.lease_proof?.verification_node_id || null,
+      rollback_node_id: entryById.get(result.entry_id)?.envelope.lease_proof?.rollback_node_id || null,
+      checks: result.verification?.checks || []
+    }))
+  }
+  for (const result of verificationResults.results) {
+    if (result.status === 'verified' || result.status === 'dry_run_verified') await queueStore.markVerified(result.patch_entry_id)
+  }
+  const rollbackDryRuns = await Promise.all(applyResults.map(async (result) => {
+    if (input.dryRun) return { patch_entry_id: result.entry_id, ok: true, status: 'dry_run_patch_not_applied', violations: [] }
+    return { patch_entry_id: result.entry_id, ...(await rollbackAgentPatchApply(root, result, { dryRun: true })) }
+  }))
+  const rollbackProof = {
+    schema: 'sks.agent-patch-rollback-proof.v1',
+    generated_at: nowIso(),
+    ok: rollbackDryRuns.every((row) => row.ok !== false) && applyResults.every((result) => !Array.isArray(result.changed_files) || result.changed_files.length === 0 || Boolean(result.rollback_digest)),
+    dry_run: input.dryRun,
+    rollback_digest_count: applyResults.filter((result) => result.rollback_digest).length,
+    entries: applyResults.map((result) => ({
+      patch_entry_id: result.entry_id,
+      verification_node_id: entryById.get(result.entry_id)?.envelope.lease_proof?.verification_node_id || null,
+      rollback_node_id: entryById.get(result.entry_id)?.envelope.lease_proof?.rollback_node_id || null,
+      changed_files: result.changed_files || [],
+      rollback_digest: result.rollback_digest || null,
+      rollback_ready: !Array.isArray(result.changed_files) || result.changed_files.length === 0 || Boolean(result.rollback_digest),
+      restore_plan: (result.rollback || []).filter((row: any) => row.existed).map((row: any) => ({ path: row.path, after_hash_precondition: row.sha256_after })),
+      delete_plan: (result.rollback || []).filter((row: any) => !row.existed).map((row: any) => ({ path: row.path, after_hash_precondition: row.sha256_after })),
+      dry_run_validation: rollbackDryRuns.find((row) => row.patch_entry_id === result.entry_id) || null
+    })),
+    blockers: rollbackDryRuns.flatMap((row: any) => row.ok === false ? row.violations || ['rollback_dry_run_failed'] : [])
+  }
+  await queueStore.persistSnapshot()
+  const finalQueueJson = queueStore.queue.toJSON()
+  const proof = buildAgentPatchProof({
+    queue: finalQueueJson,
+    merge,
+    applyResults,
+    verification: verificationResults.results.map((result) => result.status),
+    parallelWritePolicy: input.parallelWritePolicy
+  })
+  const zeroPatchBlockers = input.writeCapable && input.parallelWritePolicy?.write_mode === 'parallel' && pendingEntries.length === 0 && input.parallelWritePolicy?.dry_run_patches !== true
+    ? ['write_mode_parallel_zero_patch_envelopes']
+    : []
+  const blockers = [
+    ...zeroPatchBlockers,
+    ...(proof.ok ? [] : proof.blockers || []),
+    ...(rollbackProof.ok ? [] : ['patch_rollback_not_ready']),
+    ...(verificationResults.ok ? [] : ['patch_verification_failed'])
+  ].map(String)
+  const report = {
+    schema: 'sks.agent-patch-swarm-runtime.v1',
+    generated_at: nowIso(),
+    ok: blockers.length === 0,
+    mission_id: input.missionId,
+    route: input.route,
+    route_command: input.routeCommand,
+    write_capable: input.writeCapable,
+    dry_run: input.dryRun,
+    patch_envelope_count: pendingEntries.length,
+    apply_started_at: startedAt,
+    apply_finished_at: finishedAt,
+    apply_latency_ms: Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)),
+    parallel_apply_count: disjointEntries.length,
+    parallel_apply_groups: merge.parallel_apply_groups || [],
+    serial_merge_groups: merge.serial_merge_groups || [],
+    wall_clock_parallel_evidence: merge.wall_clock_parallel_evidence || [],
+    expected_speedup: Math.max(1, Number(merge.parallel_apply_groups?.[0]?.expected_speedup || disjointEntries.length || 1)),
+    conflicted_agent_count: new Set((merge.blocked_conflicts || []).flatMap((conflict: any) => conflict.agents || [])).size,
+    artifacts: {
+      queue: 'agent-patch-queue.json',
+      events: 'agent-patch-queue-events.jsonl',
+      ownership: 'agent-patch-ownership-ledger.json',
+      merge: 'agent-merge-coordinator-report.json',
+      apply_results: 'agent-patch-apply-results.json',
+      verification: 'agent-patch-verification-results.json',
+      rollback: 'agent-patch-rollback-proof.json',
+      proof: 'agent-patch-proof.json'
+    },
+    blockers
+  }
+  await queueStore.persistSnapshot()
+  await writeTextAtomic(path.join(ledgerRoot, 'agent-patch-queue-events.jsonl'), finalQueueJson.events.map((event: any) => JSON.stringify(event)).join('\n') + (finalQueueJson.events.length ? '\n' : ''))
+  await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-ownership-ledger.json'), { schema: 'sks.agent-patch-ownership-ledger.v1', generated_at: nowIso(), entries: finalQueueJson.ownership_ledger })
+  await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-apply-results.json'), { schema: 'sks.agent-patch-apply-results.v1', generated_at: nowIso(), results: applyResults })
+  await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-verification-results.json'), verificationResults)
+  await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-rollback-proof.json'), rollbackProof)
+  await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-proof.json'), proof)
+  await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-swarm-runtime.json'), report)
+  return report
 }
 
 function normalizeDesiredWorkItemCount(value: unknown, minimumValue: unknown, targetActiveSlots: number) {

@@ -1,76 +1,107 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { ensureDir, exists, sha256 } from '../fsx.js'
+import { ensureDir, exists, nowIso, sha256, writeJsonAtomic } from '../fsx.js'
 import { validateAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-patch-schema.js'
+import type { AgentPatchQueueEntry } from './agent-patch-queue.js'
 
 export const AGENT_PATCH_APPLY_SCHEMA = 'sks.agent-patch-apply-result.v1'
 export const AGENT_PATCH_ROLLBACK_SCHEMA = 'sks.agent-patch-rollback-result.v1'
 
 const PROTECTED_PATH_RE = /^(?:\.codex\/|\.agents\/skills\/|\.codex\/agents\/|AGENTS\.md$|node_modules\/sneakoscope\/|\.sneakoscope\/.*policy.*\.json$)/
+const activeFileLocks = new Set<string>()
 
-export async function applyAgentPatchEnvelope(root: string, envelope: AgentPatchEnvelope, opts: { dryRun?: boolean } = {}) {
+export async function applyAgentPatchEnvelope(root: string, envelope: AgentPatchEnvelope, opts: { dryRun?: boolean; entryId?: string; artifactsDir?: string; expectedBeforeHashes?: Record<string, string> } = {}) {
+  const startedAt = nowIso()
+  const startedMs = Date.now()
   const validation = validateAgentPatchEnvelope(envelope)
   const violations = [...validation.violations]
   if (!validation.ok) {
-    return result(false, [], [], violations, opts.dryRun === true)
+    return writeResultArtifact(result(false, [], [], violations, opts.dryRun === true, startedAt, startedMs, envelope, {}, opts.entryId), opts)
   }
   const rootResolved = path.resolve(root)
   const buffers = new Map<string, { absolute: string; beforeExists: boolean; before: string; after: string }>()
+  const lockedPaths: string[] = []
 
-  for (const operation of envelope.operations) {
-    const rel = normalizeRelPath(operation.path)
-    if (PROTECTED_PATH_RE.test(rel)) {
-      violations.push(`protected_path:${rel}`)
-      continue
-    }
-    const absolute = path.resolve(root, rel)
-    if (!absolute.startsWith(rootResolved + path.sep)) {
-      violations.push(`path_outside_root:${rel}`)
-      continue
-    }
-    if (!buffers.has(rel)) {
-      const beforeExists = await exists(absolute)
-      const before = beforeExists ? await fs.readFile(absolute, 'utf8') : ''
-      buffers.set(rel, { absolute, beforeExists, before, after: before })
-    }
-    const state = buffers.get(rel)!
-    if (operation.op === 'replace') {
-      const search = String(operation.search || '')
-      if (!state.after.includes(search)) {
-        violations.push(`search_not_found:${rel}`)
+  try {
+    for (const operation of envelope.operations) {
+      const rel = normalizeRelPath(operation.path)
+      if (PROTECTED_PATH_RE.test(rel)) {
+        violations.push(`protected_path:${rel}`)
         continue
       }
-      state.after = state.after.replace(search, String(operation.replace || ''))
-    } else if (operation.op === 'write') {
-      state.after = String(operation.content || '')
-    } else {
-      const patchResult = applyUnifiedDiffPatch(state.after, String(operation.diff || ''))
-      if (!patchResult.ok) {
-        violations.push(`unified_diff_apply_failed:${rel}`)
+      if (!pathAllowedByLease(rel, envelope)) {
+        violations.push(`lease_path_not_allowed:${rel}`)
         continue
       }
-      state.after = patchResult.text
+      const absolute = path.resolve(root, rel)
+      if (!absolute.startsWith(rootResolved + path.sep)) {
+        violations.push(`path_outside_root:${rel}`)
+        continue
+      }
+      if (!acquireFileLock(absolute)) {
+        violations.push(`file_lock_busy:${rel}`)
+        continue
+      }
+      lockedPaths.push(absolute)
+      if (!buffers.has(rel)) {
+        const beforeExists = await exists(absolute)
+        const before = beforeExists ? await fs.readFile(absolute, 'utf8') : ''
+        const expectedHash = opts.expectedBeforeHashes?.[rel]
+        if (expectedHash && sha256(before) !== expectedHash) {
+          violations.push(`dirty_unrelated_change:${rel}`)
+          continue
+        }
+        buffers.set(rel, { absolute, beforeExists, before, after: before })
+      }
+      const state = buffers.get(rel)!
+      if (operation.op === 'replace') {
+        const search = String(operation.search || '')
+        if (!state.after.includes(search)) {
+          violations.push(`search_not_found:${rel}`)
+          continue
+        }
+        state.after = state.after.replace(search, String(operation.replace || ''))
+      } else if (operation.op === 'write') {
+        if (!envelope.rollback_hint && !envelope.lease_proof?.rollback_node_id) {
+          violations.push(`direct_write_without_rollback_hint:${rel}`)
+          continue
+        }
+        state.after = String(operation.content || '')
+      } else {
+        const patchResult = applyUnifiedDiffPatch(state.after, String(operation.diff || ''))
+        if (!patchResult.ok) {
+          violations.push(`unified_diff_apply_failed:${rel}`)
+          continue
+        }
+        state.after = patchResult.text
+      }
     }
-  }
-  if (violations.length > 0) {
-    return result(false, [], [], violations, opts.dryRun === true)
-  }
-  const plans = [...buffers.entries()].filter(([, state]) => state.before !== state.after || !state.beforeExists)
-  const changedFiles = plans.map(([rel]) => rel)
-  const rollback = plans.map(([rel, state]) => ({
-    path: rel,
-    existed: state.beforeExists,
-    sha256_before: state.beforeExists ? sha256(state.before) : null,
-    sha256_after: sha256(state.after),
-    content_before: state.beforeExists ? state.before : null
-  }))
-  if (!opts.dryRun) {
-    for (const [, state] of plans) {
-      await ensureDir(path.dirname(state.absolute))
-      await fs.writeFile(state.absolute, state.after, 'utf8')
+    if (violations.length > 0) {
+      return writeResultArtifact(result(false, [], [], violations, opts.dryRun === true, startedAt, startedMs, envelope, beforeHashes(buffers), opts.entryId), opts)
     }
+    const plans = [...buffers.entries()].filter(([, state]) => state.before !== state.after || !state.beforeExists)
+    const changedFiles = plans.map(([rel]) => rel)
+    const rollback = plans.map(([rel, state]) => ({
+      path: rel,
+      existed: state.beforeExists,
+      sha256_before: state.beforeExists ? sha256(state.before) : null,
+      sha256_after: sha256(state.after),
+      content_before: state.beforeExists ? state.before : null
+    }))
+    if (!opts.dryRun) {
+      for (const [, state] of plans) {
+        await ensureDir(path.dirname(state.absolute))
+        await fs.writeFile(state.absolute, state.after, 'utf8')
+      }
+    }
+    return writeResultArtifact(result(true, changedFiles, rollback, violations, opts.dryRun === true, startedAt, startedMs, envelope, beforeHashes(buffers), opts.entryId), opts)
+  } finally {
+    for (const absolute of lockedPaths) releaseFileLock(absolute)
   }
-  return result(true, changedFiles, rollback, violations, opts.dryRun === true)
+}
+
+export async function applyAgentPatchQueueEntry(root: string, entry: AgentPatchQueueEntry, opts: { dryRun?: boolean; artifactsDir?: string; expectedBeforeHashes?: Record<string, string> } = {}) {
+  return applyAgentPatchEnvelope(root, entry.envelope, { ...opts, entryId: entry.id })
 }
 
 export async function rollbackAgentPatchApply(root: string, applyResult: any, opts: { dryRun?: boolean } = {}) {
@@ -132,26 +163,66 @@ export async function rollbackAgentPatchApply(root: string, applyResult: any, op
   }
 }
 
-function result(ok: boolean, changedFiles: string[], rollback: any[], violations: string[], dryRun: boolean) {
+function result(ok: boolean, changedFiles: string[], rollback: any[], violations: string[], dryRun: boolean, startedAt: string, startedMs: number, envelope: AgentPatchEnvelope, beforeHashesByPath: Record<string, string>, entryId?: string) {
+  const endedAt = nowIso()
   return {
     schema: AGENT_PATCH_APPLY_SCHEMA,
+    ...(entryId ? { entry_id: entryId } : {}),
+    agent_id: envelope.agent_id,
+    lease_id: envelope.lease_id || envelope.lease_proof?.lease_id || null,
     ok,
     status: ok ? dryRun ? 'dry_run' : 'applied' : 'blocked',
+    dry_run: dryRun,
+    apply_started_at: startedAt,
+    apply_ended_at: endedAt,
+    latency_ms: Math.max(0, Date.now() - startedMs),
     changed_files: [...new Set(changedFiles)],
     rollback,
     rollback_digest: sha256(JSON.stringify(rollback.map((entry) => ({ path: entry.path, existed: entry.existed, sha256_before: entry.sha256_before })))),
+    before_hashes: beforeHashesByPath,
     after_hashes: Object.fromEntries(rollback.map((entry) => [entry.path, entry.sha256_after])),
     verification: {
       status: ok ? dryRun ? 'dry_run_verified' : 'applied_hashes_recorded' : 'blocked',
-      changed_file_count: changedFiles.length
+      changed_file_count: changedFiles.length,
+      hint: envelope.verification_hint || null,
+      checks: [dryRun ? 'patch-dry-run' : 'patch-apply', 'hashes-recorded']
     },
+    rollback_hint: envelope.rollback_hint || null,
     violations
   }
+}
+
+async function writeResultArtifact(resultValue: ReturnType<typeof result>, opts: { artifactsDir?: string; entryId?: string }) {
+  if (opts.artifactsDir && opts.entryId) {
+    await writeJsonAtomic(path.join(opts.artifactsDir, `agent-patch-apply-result-${opts.entryId}.json`), resultValue)
+  }
+  return resultValue
 }
 
 function normalizeRelPath(value: string): string {
   const normalized = path.posix.normalize(String(value || '').replace(/\\/g, '/').replace(/^\.\/+/, ''))
   return normalized === '.' ? '' : normalized
+}
+
+function beforeHashes(buffers: Map<string, { beforeExists: boolean; before: string }>): Record<string, string> {
+  return Object.fromEntries([...buffers.entries()].map(([rel, state]) => [rel, state.beforeExists ? sha256(state.before) : 'missing']))
+}
+
+function pathAllowedByLease(operationPath: string, envelope: AgentPatchEnvelope): boolean {
+  const allowedPaths = envelope.lease_proof?.allowed_paths
+  if (!allowedPaths?.length) return true
+  const rel = normalizeRelPath(operationPath)
+  return allowedPaths.map(normalizeRelPath).some((allowed) => rel === allowed || rel.startsWith(`${allowed}/`))
+}
+
+function acquireFileLock(absolute: string): boolean {
+  if (activeFileLocks.has(absolute)) return false
+  activeFileLocks.add(absolute)
+  return true
+}
+
+function releaseFileLock(absolute: string): void {
+  activeFileLocks.delete(absolute)
 }
 
 function applyUnifiedDiffPatch(text: string, diff: string): { ok: boolean; text: string } {

@@ -11,11 +11,17 @@ test('agent patch apply worker applies simple unified diff and records hashes', 
   const result = await applyAgentPatchEnvelope(root, {
     schema: 'sks.agent-patch-envelope.v1',
     agent_id: 'agent-a',
+    session_id: 'session-a',
+    slot_id: 'slot-a',
+    generation_index: 1,
+    lease_id: 'lease-a',
     operations: [{ op: 'unified_diff', path: 'a.txt', diff: '--- a.txt\n+++ a.txt\n@@\n-old\n+new\n' }]
   });
   assert.equal(result.ok, true);
   assert.equal(await fs.readFile(path.join(root, 'a.txt'), 'utf8'), 'new\n');
   assert.ok(result.after_hashes['a.txt']);
+  assert.ok(result.before_hashes['a.txt']);
+  assert.ok(result.latency_ms >= 0);
 });
 
 test('agent patch apply worker applies multi-hunk unified diff with context', async () => {
@@ -24,6 +30,10 @@ test('agent patch apply worker applies multi-hunk unified diff with context', as
   const result = await applyAgentPatchEnvelope(root, {
     schema: 'sks.agent-patch-envelope.v1',
     agent_id: 'agent-a',
+    session_id: 'session-a',
+    slot_id: 'slot-a',
+    generation_index: 1,
+    lease_id: 'lease-a',
     operations: [{
       op: 'unified_diff',
       path: 'a.txt',
@@ -41,6 +51,10 @@ test('agent patch rollback blocks when the file changed after apply', async () =
   const apply = await applyAgentPatchEnvelope(root, {
     schema: 'sks.agent-patch-envelope.v1',
     agent_id: 'agent-a',
+    session_id: 'session-a',
+    slot_id: 'slot-a',
+    generation_index: 1,
+    lease_id: 'lease-a',
     operations: [{ op: 'replace', path: 'a.txt', search: 'old\n', replace: 'new\n' }]
   });
   assert.equal(apply.ok, true);
@@ -49,4 +63,26 @@ test('agent patch rollback blocks when the file changed after apply', async () =
   assert.equal(rollback.ok, false);
   assert.match(rollback.violations.join('\n'), /rollback_hash_mismatch/);
   assert.equal(await fs.readFile(file, 'utf8'), 'user edit\n');
+});
+
+test('agent patch apply worker validates lease scope and writes per-entry dry-run evidence', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-apply-entry-'));
+  const artifacts = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-apply-artifacts-'));
+  await fs.writeFile(path.join(root, 'a.txt'), 'old\n');
+  const result = await applyAgentPatchEnvelope(root, {
+    schema: 'sks.agent-patch-envelope.v1',
+    agent_id: 'agent-a',
+    session_id: 'session-a',
+    slot_id: 'slot-a',
+    generation_index: 1,
+    lease_proof: { lease_id: 'lease-a', allowed_paths: ['a.txt'] },
+    verification_hint: { command: 'npm test' },
+    operations: [{ op: 'replace', path: 'a.txt', search: 'old', replace: 'new' }]
+  }, { dryRun: true, entryId: 'entry-a', artifactsDir: artifacts });
+  const artifact = JSON.parse(await fs.readFile(path.join(artifacts, 'agent-patch-apply-result-entry-a.json'), 'utf8'));
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'dry_run');
+  assert.equal(artifact.entry_id, 'entry-a');
+  assert.equal(artifact.verification.hint.command, 'npm test');
+  assert.equal(await fs.readFile(path.join(root, 'a.txt'), 'utf8'), 'old\n');
 });
