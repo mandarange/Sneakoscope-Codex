@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.9';
+const RELEASE_VERSION = '1.18.10';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');
@@ -41,11 +41,18 @@ const requiredDocs = [
   'docs/parallel-write-agents.md',
   'docs/agent-patch-queue.md',
   'docs/patch-swarm-runtime.md',
+  'docs/patch-conflict-rebase.md',
+  'docs/real-codex-patch-smoke.md',
+  'docs/patch-transaction-journal.md',
   'docs/strategy-to-patch-wiring.md',
   'docs/parallel-write-agent-runtime.md',
   'docs/patch-proof-and-rollback.md',
   'docs/appshots-thread-attachments.md',
+  'docs/mcp-readonly-runtime-scheduler.md',
   'docs/mcp-readonly-scheduler.md',
+  'docs/native-cli-session-swarm.md',
+  'docs/no-subagent-scaling.md',
+  'docs/fast-mode-default.md',
   'docs/migration-1.18.7-to-1.18.8.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
@@ -56,11 +63,18 @@ const versionedDocs = new Set([
   'CHANGELOG.md',
   'docs/release-readiness.md',
   'docs/patch-swarm-runtime.md',
+  'docs/patch-conflict-rebase.md',
+  'docs/real-codex-patch-smoke.md',
+  'docs/patch-transaction-journal.md',
   'docs/strategy-to-patch-wiring.md',
   'docs/parallel-write-agent-runtime.md',
   'docs/patch-proof-and-rollback.md',
   'docs/appshots-thread-attachments.md',
-  'docs/mcp-readonly-scheduler.md'
+  'docs/mcp-readonly-runtime-scheduler.md',
+  'docs/mcp-readonly-scheduler.md',
+  'docs/native-cli-session-swarm.md',
+  'docs/no-subagent-scaling.md',
+  'docs/fast-mode-default.md'
 ]);
 const requiredScripts = [
   'runtime:no-src-mjs',
@@ -142,6 +156,11 @@ const requiredScripts = [
   'agent:patch-queue-runtime',
   'agent:strategy-to-lease-wiring',
   'agent:patch-swarm-runtime',
+  'agent:patch-swarm-runtime-truth',
+  'agent:patch-transaction-journal',
+  'agent:patch-conflict-rebase',
+  'agent:strategy-to-patch-strict',
+  'agent:rollback-command',
   'agent:patch-verification-dag',
   'agent:patch-rollback-dag',
   'agent:patch-proof-runtime',
@@ -152,7 +171,17 @@ const requiredScripts = [
   'agent:patch-rollback',
   'appshots:thread-attachment-discovery',
   'mcp:readonly-runtime-scheduler',
+  'agent:real-codex-patch-envelope-smoke',
   'codex:0.134-runner-truth',
+  'agent:native-cli-session-swarm',
+  'agent:native-cli-session-swarm-10',
+  'agent:native-cli-session-swarm-20',
+  'agent:no-subagent-scaling',
+  'agent:native-cli-session-proof',
+  'agent:fast-mode-default',
+  'agent:fast-mode-worker-propagation',
+  'codex:fast-mode-profile-propagation',
+  'mad-sks:fast-mode-propagation',
   'route:blackbox-realism',
   'agent:dynamic-cockpit',
   'agent:source-intelligence-propagation',
@@ -187,7 +216,8 @@ const requiredRealScripts = [
   'agent:tmux-pane-reconciliation',
   'agent:tmux-lane-content-truth',
   'agent:real-codex-dynamic-smoke-v2',
-  'agent:real-codex-dynamic-smoke'
+  'agent:real-codex-dynamic-smoke',
+  'agent:real-codex-patch-envelope-smoke'
 ];
 
 assertGate(pkg.version === RELEASE_VERSION, `package.json version must be ${RELEASE_VERSION}`, { version: pkg.version });

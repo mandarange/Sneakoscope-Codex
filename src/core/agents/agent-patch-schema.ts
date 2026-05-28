@@ -20,6 +20,10 @@ export interface AgentPatchEnvelope {
   slot_id: string
   generation_index: number
   task_slice_id?: string
+  native_cli_worker_session_id?: string
+  native_cli_process_id?: number
+  fast_mode?: boolean
+  service_tier?: 'fast' | 'standard'
   lease_id?: string
   lease_proof?: {
     lease_id?: string
@@ -59,6 +63,10 @@ export function normalizeAgentPatchEnvelope(input: any): AgentPatchEnvelope {
     slot_id: String(input?.slot_id || input?.slotId || ''),
     generation_index: Number.isFinite(generationIndex) ? Math.floor(generationIndex) : -1,
     ...(input?.task_slice_id ? { task_slice_id: String(input.task_slice_id) } : {}),
+    ...(input?.native_cli_worker_session_id ? { native_cli_worker_session_id: String(input.native_cli_worker_session_id) } : {}),
+    ...(Number.isFinite(Number(input?.native_cli_process_id)) ? { native_cli_process_id: Number(input.native_cli_process_id) } : {}),
+    ...(input?.fast_mode === undefined ? {} : { fast_mode: Boolean(input.fast_mode) }),
+    ...(input?.service_tier === 'fast' || input?.service_tier === 'standard' ? { service_tier: input.service_tier } : {}),
     ...(input?.lease_id ? { lease_id: String(input.lease_id) } : {}),
     ...(input?.lease_proof ? { lease_proof: normalizeLeaseProof(input.lease_proof) } : {}),
     ...(input?.rationale ? { rationale: String(input.rationale) } : {}),

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { repoTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
+import { osTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
 
 const enabled = process.env.SKS_TEST_REAL_IMAGEGEN === '1' || process.env.SKS_REAL_IMAGEGEN === '1';
 const hasKey = Boolean(process.env.OPENAI_API_KEY || process.env.SKS_CODEX_APP_IMAGEGEN === '1');
@@ -16,7 +16,7 @@ if (!enabled || !hasKey) {
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
-const sourceImage = repoTempPngFixtureArg('ppt-real-imagegen-smoke-source.png');
+const sourceImage = osTempPngFixtureArg('ppt-real-imagegen-smoke-source.png');
 const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ppt', 'review', '--manual-slide-images', sourceImage, '--json'], {
   cwd: process.cwd(),
   env: process.env,

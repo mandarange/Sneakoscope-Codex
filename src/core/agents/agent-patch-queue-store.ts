@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { appendJsonl, readJson, writeJsonAtomic } from '../fsx.js'
 import { AGENT_PATCH_QUEUE_SCHEMA, InMemoryAgentPatchQueue, buildAgentPatchOwnershipLedger, type AgentPatchQueueEntry, type AgentPatchQueueEvent } from './agent-patch-queue.js'
+import { AgentPatchTransactionJournal } from './agent-patch-transaction-journal.js'
 
 export const AGENT_PATCH_QUEUE_ARTIFACT = 'agent-patch-queue.json'
 export const AGENT_PATCH_QUEUE_EVENTS_ARTIFACT = 'agent-patch-queue-events.jsonl'
@@ -9,16 +10,27 @@ export const AGENT_PATCH_OWNERSHIP_LEDGER_ARTIFACT = 'agent-patch-ownership-ledg
 export class PersistentAgentPatchQueueStore {
   readonly artifactDir: string
   readonly queue: InMemoryAgentPatchQueue
+  readonly journal: AgentPatchTransactionJournal
 
   constructor(artifactDir: string, queue = new InMemoryAgentPatchQueue()) {
     this.artifactDir = artifactDir
     this.queue = queue
+    this.journal = new AgentPatchTransactionJournal(artifactDir)
   }
 
   async enqueue(input: any, context: { mission_id?: string; route?: string } = {}): Promise<AgentPatchQueueEntry> {
     const entry = this.queue.enqueue(input, context)
     await this.persistSnapshot()
     await this.appendEvent(this.queue.events.at(-1))
+    await this.journal.append({
+      event_type: 'enqueue',
+      entry_id: entry.id,
+      agent_id: entry.agent_id,
+      lease_id: entry.lease_id || null,
+      status: entry.status,
+      changed_files: entry.write_paths,
+      violations: entry.violations
+    })
     return entry
   }
 
@@ -65,6 +77,18 @@ export class PersistentAgentPatchQueueStore {
     mutate()
     await this.persistSnapshot()
     for (const event of this.queue.events.slice(beforeEventCount)) await this.appendEvent(event)
+    const entry = this.queue.entries.find((item) => item.id === id)
+    if (entry && ['verified', 'conflicted', 'rolled_back', 'rejected'].includes(entry.status)) {
+      await this.journal.append({
+        event_type: 'final_status',
+        entry_id: entry.id,
+        agent_id: entry.agent_id,
+        lease_id: entry.lease_id || null,
+        status: entry.status,
+        changed_files: entry.write_paths,
+        violations: entry.violations
+      })
+    }
   }
 
   private async appendEvent(event: AgentPatchQueueEvent | undefined): Promise<void> {

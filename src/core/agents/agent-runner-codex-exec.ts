@@ -1,7 +1,8 @@
 import path from 'node:path'
-import { readJson, runProcess, writeJsonAtomic } from '../fsx.js'
+import { packageRoot, readJson, runProcess, writeJsonAtomic } from '../fsx.js'
 import { managedProxyEnvForChild } from '../codex/managed-proxy-env.js'
 import { agentWorkerEnv, validateAgentWorkerResult } from './agent-worker-pipeline.js'
+import { fastModeEnv, resolveFastModePolicy } from './fast-mode-policy.js'
 
 export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = {}) {
   const resultFile = opts.resultFile || defaultCodexResultFile(agent, opts)
@@ -10,7 +11,7 @@ export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = 
     'exec',
     '--json',
     '--output-schema',
-    opts.schemaFile || 'schemas/codex/agent-result.schema.json',
+    opts.schemaFile || path.join(packageRoot(), 'schemas/codex/agent-result.schema.json'),
     '--output-last-message',
     resultFile,
     '--ephemeral',
@@ -36,6 +37,7 @@ function defaultCodexResultFile(agent: any, opts: any = {}) {
 }
 
 export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) {
+  const fastPolicy = resolveFastModePolicy({ fastMode: opts.fastMode ?? agent.fast_mode, serviceTier: opts.serviceTier ?? agent.service_tier })
   if (opts.outputSchemaSupported === false) {
     return validateAgentWorkerResult({ mission_id: opts.missionId || opts.mission_id || '', agent_id: agent.id, session_id: agent.session_id, persona_id: agent.persona_id || agent.id, task_slice_id: slice?.id || '', status: 'blocked', backend: 'codex-exec', summary: 'Codex exec output schema support was not verified.', artifacts: [], blockers: ['codex_exec_output_schema_unsupported'], unverified: [], writes: [], source_intelligence_refs: agent.source_intelligence_refs || null, goal_mode_ref: agent.goal_mode_ref || null })
   }
@@ -46,6 +48,9 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
       command: [opts.codexBin || 'codex', ...command.args],
       profile: opts.profile || null,
       result_file: command.resultFile,
+      service_tier: fastPolicy.service_tier,
+      fast_mode: fastPolicy.fast_mode,
+      service_tier_passed_to_codex: false,
       output_schema_used: command.args.includes('--output-schema'),
       output_last_message_path: command.resultFile,
       agent_worker_env_injected: false,
@@ -66,11 +71,14 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
   const allowedCommandsFile = path.join(opts.agentRoot || opts.cwd || process.cwd(), 'agent-allowed-commands.json')
   const workerEnv = agentWorkerEnv(agent, allowedCommandsFile)
   const proxyEnv = managedProxyEnvForChild({ ...process.env, ...(opts.env || {}) })
-  const result = await runProcess(opts.codexBin || 'codex', command.args, { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...proxyEnv, ...workerEnv }, timeoutMs: opts.timeoutMs || 30 * 60 * 1000, maxOutputBytes: 256 * 1024, stdoutFile, stderrFile })
+  const result = await runProcess(opts.codexBin || 'codex', command.args, { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...proxyEnv, ...fastModeEnv(fastPolicy), ...workerEnv }, timeoutMs: opts.timeoutMs || 30 * 60 * 1000, maxOutputBytes: 256 * 1024, stdoutFile, stderrFile })
   const report = await writeCodexProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
     command: [opts.codexBin || 'codex', ...command.args],
     profile: opts.profile || null,
     result_file: command.resultFile,
+    service_tier: fastPolicy.service_tier,
+    fast_mode: fastPolicy.fast_mode,
+    service_tier_passed_to_codex: false,
     output_schema_used: command.args.includes('--output-schema'),
     output_last_message_path: command.resultFile,
     agent_worker_env_injected: Object.keys(workerEnv).length > 0,
@@ -101,6 +109,6 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
 
 async function writeCodexProcessReport(root: string, agent: any, report: any) {
   const rel = path.join(agent.session_artifact_dir || path.join('sessions', agent.id), 'agent-process-report.json')
-  await writeJsonAtomic(path.join(root, rel), { schema: 'sks.agent-process-report.v1', backend: 'codex-exec', agent_id: agent.id, session_id: agent.session_id, ...report })
+  await writeJsonAtomic(path.join(root, rel), { schema: 'sks.agent-process-report.v1', backend: 'codex-exec', agent_id: agent.id, session_id: agent.session_id, service_tier: report.service_tier || agent.service_tier || 'fast', fast_mode: report.fast_mode !== false, ...report })
   return rel
 }

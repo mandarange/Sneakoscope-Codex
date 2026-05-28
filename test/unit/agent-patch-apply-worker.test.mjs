@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -86,3 +87,20 @@ test('agent patch apply worker validates lease scope and writes per-entry dry-ru
   assert.equal(artifact.verification.hint.command, 'npm test');
   assert.equal(await fs.readFile(path.join(root, 'a.txt'), 'utf8'), 'old\n');
 });
+
+test('agent patch rollback blocks symlink targets outside the project root', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-rollback-symlink-root-'));
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-rollback-symlink-outside-'));
+  await fs.writeFile(path.join(outside, 'target.txt'), 'after\n');
+  await fs.symlink(path.join(outside, 'target.txt'), path.join(root, 'link.txt'));
+  const rollback = await rollbackAgentPatchApply(root, {
+    rollback: [{ path: 'link.txt', existed: true, sha256_after: sha256Text('after\n'), sha256_before: sha256Text('before\n'), content_before: 'before\n' }]
+  });
+  assert.equal(rollback.ok, false);
+  assert.match(rollback.violations.join('\n'), /rollback_target_symlink_outside_root/);
+  assert.equal(await fs.readFile(path.join(outside, 'target.txt'), 'utf8'), 'after\n');
+});
+
+function sha256Text(text) {
+  return crypto.createHash('sha256').update(text).digest('hex');
+}

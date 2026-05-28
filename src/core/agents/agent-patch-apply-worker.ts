@@ -3,6 +3,7 @@ import path from 'node:path'
 import { ensureDir, exists, nowIso, sha256, writeJsonAtomic } from '../fsx.js'
 import { validateAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-patch-schema.js'
 import type { AgentPatchQueueEntry } from './agent-patch-queue.js'
+import { AgentPatchTransactionJournal } from './agent-patch-transaction-journal.js'
 
 export const AGENT_PATCH_APPLY_SCHEMA = 'sks.agent-patch-apply-result.v1'
 export const AGENT_PATCH_ROLLBACK_SCHEMA = 'sks.agent-patch-rollback-result.v1'
@@ -13,14 +14,25 @@ const activeFileLocks = new Set<string>()
 export async function applyAgentPatchEnvelope(root: string, envelope: AgentPatchEnvelope, opts: { dryRun?: boolean; entryId?: string; artifactsDir?: string; expectedBeforeHashes?: Record<string, string> } = {}) {
   const startedAt = nowIso()
   const startedMs = Date.now()
+  const journal = opts.artifactsDir ? new AgentPatchTransactionJournal(opts.artifactsDir) : null
+  const entryId = opts.entryId || `${envelope.agent_id || 'unknown-agent'}:direct`
+  await journal?.append({
+    event_type: 'apply_started',
+    entry_id: entryId,
+    agent_id: envelope.agent_id || null,
+    lease_id: envelope.lease_id || envelope.lease_proof?.lease_id || null,
+    status: 'started'
+  })
   const validation = validateAgentPatchEnvelope(envelope)
   const violations = [...validation.violations]
   if (!validation.ok) {
-    return writeResultArtifact(result(false, [], [], violations, opts.dryRun === true, startedAt, startedMs, envelope, {}, opts.entryId), opts)
+    const blocked = result(false, [], [], violations, opts.dryRun === true, startedAt, startedMs, envelope, {}, opts.entryId)
+    await journalApplyFinished(journal, entryId, blocked)
+    return writeResultArtifact(blocked, opts)
   }
   const rootResolved = path.resolve(root)
   const buffers = new Map<string, { absolute: string; beforeExists: boolean; before: string; after: string }>()
-  const lockedPaths: string[] = []
+  const locks: Array<{ absolute: string; lockFile?: string }> = []
 
   try {
     for (const operation of envelope.operations) {
@@ -38,12 +50,22 @@ export async function applyAgentPatchEnvelope(root: string, envelope: AgentPatch
         violations.push(`path_outside_root:${rel}`)
         continue
       }
-      if (!acquireFileLock(absolute)) {
-        violations.push(`file_lock_busy:${rel}`)
-        continue
-      }
-      lockedPaths.push(absolute)
       if (!buffers.has(rel)) {
+        const lock = await acquireFileLock(absolute, opts.artifactsDir)
+        if (!lock.ok) {
+          violations.push(`file_lock_busy:${rel}`)
+          continue
+        }
+        locks.push({ absolute, ...(lock.lockFile ? { lockFile: lock.lockFile } : {}) })
+        await journal?.append({
+          event_type: 'lock_acquired',
+          entry_id: entryId,
+          agent_id: envelope.agent_id || null,
+          lease_id: envelope.lease_id || envelope.lease_proof?.lease_id || null,
+          status: 'locked',
+          lock_path: lock.lockFile || rel,
+          lock_acquired: true
+        })
         const beforeExists = await exists(absolute)
         const before = beforeExists ? await fs.readFile(absolute, 'utf8') : ''
         const expectedHash = opts.expectedBeforeHashes?.[rel]
@@ -77,7 +99,9 @@ export async function applyAgentPatchEnvelope(root: string, envelope: AgentPatch
       }
     }
     if (violations.length > 0) {
-      return writeResultArtifact(result(false, [], [], violations, opts.dryRun === true, startedAt, startedMs, envelope, beforeHashes(buffers), opts.entryId), opts)
+      const blocked = result(false, [], [], violations, opts.dryRun === true, startedAt, startedMs, envelope, beforeHashes(buffers), opts.entryId)
+      await journalApplyFinished(journal, entryId, blocked)
+      return writeResultArtifact(blocked, opts)
     }
     const plans = [...buffers.entries()].filter(([, state]) => state.before !== state.after || !state.beforeExists)
     const changedFiles = plans.map(([rel]) => rel)
@@ -94,9 +118,22 @@ export async function applyAgentPatchEnvelope(root: string, envelope: AgentPatch
         await fs.writeFile(state.absolute, state.after, 'utf8')
       }
     }
-    return writeResultArtifact(result(true, changedFiles, rollback, violations, opts.dryRun === true, startedAt, startedMs, envelope, beforeHashes(buffers), opts.entryId), opts)
+    const applied = result(true, changedFiles, rollback, violations, opts.dryRun === true, startedAt, startedMs, envelope, beforeHashes(buffers), opts.entryId)
+    await journalApplyFinished(journal, entryId, applied)
+    return writeResultArtifact(applied, opts)
   } finally {
-    for (const absolute of lockedPaths) releaseFileLock(absolute)
+    for (const lock of locks) {
+      await releaseFileLock(lock.absolute, lock.lockFile)
+      await journal?.append({
+        event_type: 'lock_released',
+        entry_id: entryId,
+        agent_id: envelope.agent_id || null,
+        lease_id: envelope.lease_id || envelope.lease_proof?.lease_id || null,
+        status: 'unlocked',
+        lock_path: lock.lockFile || lock.absolute,
+        lock_acquired: false
+      })
+    }
   }
 }
 
@@ -106,6 +143,8 @@ export async function applyAgentPatchQueueEntry(root: string, entry: AgentPatchQ
 
 export async function rollbackAgentPatchApply(root: string, applyResult: any, opts: { dryRun?: boolean } = {}) {
   const rootResolved = path.resolve(root)
+  const rootReal = await realpathOrNull(rootResolved) || rootResolved
+  const allowedRoots = [...new Set([rootResolved, rootReal])]
   const restorePlan: Array<{ rel: string; absolute: string; content: string }> = []
   const deletePlan: Array<{ rel: string; absolute: string }> = []
   const violations: string[] = []
@@ -121,7 +160,18 @@ export async function rollbackAgentPatchApply(root: string, applyResult: any, op
       violations.push(`rollback_path_outside_root:${rel}`)
       continue
     }
+    const parent = path.dirname(absolute)
+    const parentReal = await realpathOrNull(parent)
+    if (parentReal && !isInsideAnyRoot(parentReal, allowedRoots)) {
+      violations.push(`rollback_parent_symlink_outside_root:${rel}`)
+      continue
+    }
     const currentExists = await exists(absolute)
+    const currentReal = currentExists ? await realpathOrNull(absolute) : null
+    if (currentReal && !isInsideAnyRoot(currentReal, allowedRoots)) {
+      violations.push(`rollback_target_symlink_outside_root:${rel}`)
+      continue
+    }
     if (entry?.sha256_after) {
       if (currentExists) {
         const currentHash = sha256(await fs.readFile(absolute, 'utf8'))
@@ -161,6 +211,24 @@ export async function rollbackAgentPatchApply(root: string, applyResult: any, op
     rollback_digest: sha256(JSON.stringify(rollbackEntries.map((entry) => ({ path: normalizeRelPath(entry?.path || ''), existed: Boolean(entry?.existed), sha256_before: entry?.sha256_before || null })))),
     violations
   }
+}
+
+async function journalApplyFinished(journal: AgentPatchTransactionJournal | null, entryId: string, applyResult: any): Promise<void> {
+  if (!journal) return
+  await journal.append({
+    event_type: 'apply_finished',
+    entry_id: entryId,
+    agent_id: applyResult.agent_id || null,
+    lease_id: applyResult.lease_id || null,
+    status: applyResult.status || null,
+    before_hashes: applyResult.before_hashes || {},
+    after_hashes: applyResult.after_hashes || {},
+    changed_files: applyResult.changed_files || [],
+    rollback_digest: applyResult.rollback_digest || null,
+    verification_status: applyResult.verification?.status || null,
+    duration_ms: applyResult.latency_ms || 0,
+    violations: applyResult.violations || []
+  })
 }
 
 function result(ok: boolean, changedFiles: string[], rollback: any[], violations: string[], dryRun: boolean, startedAt: string, startedMs: number, envelope: AgentPatchEnvelope, beforeHashesByPath: Record<string, string>, entryId?: string) {
@@ -204,6 +272,19 @@ function normalizeRelPath(value: string): string {
   return normalized === '.' ? '' : normalized
 }
 
+async function realpathOrNull(file: string): Promise<string | null> {
+  try {
+    return await fs.realpath(file)
+  } catch {
+    return null
+  }
+}
+
+function isInsideAnyRoot(file: string, roots: string[]): boolean {
+  const resolved = path.resolve(file)
+  return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`))
+}
+
 function beforeHashes(buffers: Map<string, { beforeExists: boolean; before: string }>): Record<string, string> {
   return Object.fromEntries([...buffers.entries()].map(([rel, state]) => [rel, state.beforeExists ? sha256(state.before) : 'missing']))
 }
@@ -215,14 +296,30 @@ function pathAllowedByLease(operationPath: string, envelope: AgentPatchEnvelope)
   return allowedPaths.map(normalizeRelPath).some((allowed) => rel === allowed || rel.startsWith(`${allowed}/`))
 }
 
-function acquireFileLock(absolute: string): boolean {
-  if (activeFileLocks.has(absolute)) return false
+async function acquireFileLock(absolute: string, artifactsDir?: string): Promise<{ ok: boolean; lockFile?: string }> {
+  if (activeFileLocks.has(absolute)) return { ok: false }
   activeFileLocks.add(absolute)
-  return true
+  if (!artifactsDir) return { ok: true }
+  const lockDir = path.join(artifactsDir, 'agent-patch-locks')
+  const lockFile = path.join(lockDir, `${sha256(absolute)}.lock`)
+  try {
+    await ensureDir(lockDir)
+    const handle = await fs.open(lockFile, 'wx')
+    try {
+      await handle.writeFile(`${process.pid} ${absolute}\n`, 'utf8')
+    } finally {
+      await handle.close().catch(() => {})
+    }
+    return { ok: true, lockFile }
+  } catch {
+    activeFileLocks.delete(absolute)
+    return { ok: false, lockFile }
+  }
 }
 
-function releaseFileLock(absolute: string): void {
+async function releaseFileLock(absolute: string, lockFile?: string): Promise<void> {
   activeFileLocks.delete(absolute)
+  if (lockFile) await fs.rm(lockFile, { force: true }).catch(() => {})
 }
 
 function applyUnifiedDiffPatch(text: string, diff: string): { ok: boolean; text: string } {

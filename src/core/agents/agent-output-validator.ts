@@ -86,6 +86,10 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
           slot_id: { type: 'string', minLength: 1 },
           generation_index: { type: 'integer', minimum: 0 },
           task_slice_id: { type: 'string' },
+          native_cli_worker_session_id: { type: 'string' },
+          native_cli_process_id: { type: 'number' },
+          fast_mode: { type: 'boolean' },
+          service_tier: { enum: ['fast', 'standard'] },
           lease_id: { type: 'string' },
           lease_proof: {
             type: 'object',

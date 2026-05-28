@@ -13,7 +13,9 @@ export function agentWorkerEnv(agent: any, allowedCommandsFile: string) {
     SKS_AGENT_ID: agent.id,
     SKS_AGENT_SLOT_ID: agent.slot_id || agent.worker_slot_id || agent.id,
     SKS_AGENT_SESSION_GENERATION_ID: agent.session_generation_id || agent.session_id,
-    SKS_AGENT_ALLOWED_COMMANDS_FILE: allowedCommandsFile
+    SKS_AGENT_ALLOWED_COMMANDS_FILE: allowedCommandsFile,
+    SKS_FAST_MODE: agent.fast_mode === false ? '0' : '1',
+    SKS_SERVICE_TIER: agent.service_tier || 'fast'
   }
 }
 

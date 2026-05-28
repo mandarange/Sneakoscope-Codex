@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { repoTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
+import { osTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
 
 const enabled = process.env.SKS_TEST_REAL_IMAGEGEN === '1' || process.env.SKS_REAL_IMAGEGEN === '1';
 const reportDir = path.join(process.cwd(), '.sneakoscope', 'reports');
@@ -78,7 +78,7 @@ if (!enabled) {
   process.exit(0);
 }
 const started = Date.now();
-const sourceImage = repoTempPngFixtureArg('imagegen-real-smoke-source.png');
+const sourceImage = osTempPngFixtureArg('imagegen-real-smoke-source.png');
 const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ux-review', 'run', '--image', sourceImage, '--generate-callouts', '--fix', '--json'], {
   cwd: process.cwd(),
   env: process.env,

@@ -25,3 +25,20 @@ test('agent command parser forwards real backend flags without leaking option va
   assert.equal(parsed.mock, false);
   assert.equal(parsed.json, true);
 });
+
+test('agent command parser keeps patch entry id out of rollback prompt positionals', () => {
+  const parsed = parseAgentCommandArgs('agent', [
+    'rollback-patches',
+    'latest',
+    '--patch-entry-id',
+    'entry-a',
+    '--apply',
+    '--json'
+  ]);
+
+  assert.equal(parsed.action, 'rollback-patches');
+  assert.equal(parsed.missionId, 'latest');
+  assert.equal(parsed.patchEntryId, 'entry-a');
+  assert.equal(parsed.apply, true);
+  assert.equal(parsed.prompt, 'Native agent run');
+});

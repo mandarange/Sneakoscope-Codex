@@ -3,8 +3,10 @@ import { runProcess, writeJsonAtomic } from '../fsx.js'
 import { scanAgentTextForRecursion } from './agent-recursion-guard.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { buildFixturePatchEnvelopes } from './agent-runner-fake.js'
+import { fastModeEnv, resolveFastModePolicy } from './fast-mode-policy.js'
 
 export async function runProcessAgent(agent: any, slice: any, opts: any = {}) {
+  const fastPolicy = resolveFastModePolicy({ fastMode: opts.fastMode ?? agent.fast_mode, serviceTier: opts.serviceTier ?? agent.service_tier })
   const planned = opts.command ? scanCommandForRecursion(opts.command) : { ok: true, violations: [] }
   if (!planned.ok) {
     return validateAgentWorkerResult({
@@ -45,9 +47,12 @@ export async function runProcessAgent(agent: any, slice: any, opts: any = {}) {
       ...(opts.emitFollowUpWorkItems ? { follow_up_work_items: [buildFixtureFollowUp(agent, slice)] } : {})
     })
   }
-  const result = await runProcess(opts.command[0], opts.command.slice(1), { cwd: opts.cwd || process.cwd(), env: opts.env, timeoutMs: opts.timeoutMs || 30000, maxOutputBytes: 128 * 1024 })
+  const result = await runProcess(opts.command[0], opts.command.slice(1), { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...fastModeEnv(fastPolicy) }, timeoutMs: opts.timeoutMs || 30000, maxOutputBytes: 128 * 1024 })
   const report = await writeAgentProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, 'process', {
     command: opts.command,
+    service_tier: fastPolicy.service_tier,
+    fast_mode: fastPolicy.fast_mode,
+    env: fastModeEnv(fastPolicy),
     pid: result.pid || null,
     exit_code: result.code,
     stdout_tail: result.stdout,
@@ -92,7 +97,7 @@ function buildFixtureFollowUp(agent: any, slice: any) {
 
 async function writeAgentProcessReport(root: string, agent: any, backend: string, report: any) {
   const rel = path.join(agent.session_artifact_dir || path.join('sessions', agent.id), 'agent-process-report.json')
-  await writeJsonAtomic(path.join(root, rel), { schema: 'sks.agent-process-report.v1', backend, agent_id: agent.id, session_id: agent.session_id, ...report })
+  await writeJsonAtomic(path.join(root, rel), { schema: 'sks.agent-process-report.v1', backend, agent_id: agent.id, session_id: agent.session_id, service_tier: report.service_tier || agent.service_tier || 'fast', fast_mode: report.fast_mode !== false, ...report })
   return rel
 }
 

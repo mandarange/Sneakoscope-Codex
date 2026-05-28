@@ -2,9 +2,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { repoTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
+import { osTempPngFixtureArg } from './lib/valid-png-fixture.mjs';
 
-const sourceImage = repoTempPngFixtureArg('ppt-imagegen-blackbox-source.png');
+const sourceImage = osTempPngFixtureArg('ppt-imagegen-blackbox-source.png');
 const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ppt', 'review', '--manual-slide-images', sourceImage, '--json'], {
   cwd: process.cwd(),
   env: { ...process.env, SKS_TEST_FAKE_IMAGEGEN: '1', SKS_TEST_FAKE_EXTRACTOR: '1' },

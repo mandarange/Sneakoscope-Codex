@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
-const FAST_PACKAGE_VERSION = '1.18.9';
+const FAST_PACKAGE_VERSION = '1.18.10';
 const args = process.argv.slice(2);
 
 try {
-  if (args[0] === '--version' || args[0] === '-v' || args[0] === 'version') {
+  if (args[0] === '--agent' && args[1] === 'worker') {
+    const { runNativeCliWorkerFromArgs } = await import('../core/agents/native-cli-worker.js');
+    await runNativeCliWorkerFromArgs(args.slice(2));
+  } else if (args[0] === '--version' || args[0] === '-v' || args[0] === 'version') {
     console.log(`sneakoscope ${FAST_PACKAGE_VERSION}`);
   } else if (args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
     if (args.length > 1) {

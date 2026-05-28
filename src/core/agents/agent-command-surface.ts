@@ -2,7 +2,7 @@ import { DEFAULT_AGENT_COUNT } from './agent-schema.js'
 
 export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const first = args[0] && !String(args[0]).startsWith('--') ? String(args[0]) : ''
-  const actions = new Set(['run', 'status', 'plan', 'spawn', 'watch', 'dashboard', 'cockpit', 'lane', 'board', 'ledger', 'collect', 'consensus', 'close', 'cleanup', 'proof', 'explain', 'rollback-patches'])
+  const actions = new Set(['run', 'worker', 'status', 'plan', 'spawn', 'watch', 'dashboard', 'cockpit', 'lane', 'board', 'ledger', 'collect', 'consensus', 'close', 'cleanup', 'proof', 'explain', 'rollback-patches'])
   const action = actions.has(first) ? first : 'run'
   const rest = action === first ? args.slice(1) : args
   const json = hasFlag(args, '--json')
@@ -22,6 +22,10 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const applyPatches = hasFlag(args, '--apply-patches')
   const dryRunPatches = hasFlag(args, '--dry-run-patches') || hasFlag(args, '--dryrun-patches')
   const maxWriteAgents = Number(readOption(args, '--max-write-agents', Math.max(1, Math.min(concurrency, agents))))
+  const explicitServiceTier = String(readOption(args, '--service-tier', '') || '')
+  const serviceTier = explicitServiceTier === 'standard' || explicitServiceTier === 'fast' ? explicitServiceTier : undefined
+  const fastMode = hasFlag(args, '--no-fast') || serviceTier === 'standard' ? false : hasFlag(args, '--fast') ? true : undefined
+  const noFast = hasFlag(args, '--no-fast')
   const apply = hasFlag(args, '--apply')
   const dryRun = hasFlag(args, '--dry-run') || hasFlag(args, '--dryrun')
   const drain = hasFlag(args, '--drain')
@@ -29,14 +33,15 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const graceMs = Number(readOption(args, '--grace-ms', 750))
   const killEscalation = hasFlag(args, '--kill-escalation') || !hasFlag(args, '--no-kill-escalation')
   const codexApp = hasFlag(args, '--codex-app')
-  const positionals = positionalArgs(rest, new Set(['--agents', '--target-active-slots', '--work-items', '--minimum-work-items', '--max-queue-expansion', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane', '--stale-ms', '--grace-ms', '--profile', '--write-mode', '--max-write-agents']))
+  const positionals = positionalArgs(rest, new Set(['--agents', '--target-active-slots', '--work-items', '--minimum-work-items', '--max-queue-expansion', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane', '--stale-ms', '--grace-ms', '--profile', '--write-mode', '--max-write-agents', '--patch-entry-id', '--patch-entry', '--service-tier', '--intake', '--agent-root', '--artifact-dir', '--result-path', '--heartbeat-path', '--patch-envelope-path']))
   const missionDefault = action === 'run' || action === 'spawn' || action === 'plan' ? '' : 'latest'
   const positionalMission = action === 'run' || action === 'spawn' || action === 'plan' ? '' : (positionals[0] || '')
   const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', positionalMission || missionDefault)))
   const lane = String(readOption(args, '--agent', readOption(args, '--lane', '')))
+  const patchEntryId = String(readOption(args, '--patch-entry-id', readOption(args, '--patch-entry', '')))
   const promptPositionals = positionalMission ? positionals.slice(1) : positionals
   const prompt = promptPositionals.join(' ').trim() || 'Native agent run'
-  return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, mock, real, readonly, profile, writeMode, applyPatches, dryRunPatches, maxWriteAgents, apply, dryRun, drain, staleMs, graceMs, killEscalation, json, missionId, lane, codexApp }
+  return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, mock, real, readonly, profile, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, apply, dryRun, drain, staleMs, graceMs, killEscalation, json, missionId, lane, codexApp, patchEntryId }
 }
 
 function hasFlag(args: string[], flag: string) {

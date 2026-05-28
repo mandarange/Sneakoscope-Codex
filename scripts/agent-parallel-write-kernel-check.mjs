@@ -20,7 +20,19 @@ const envelope = (agent, file, operation) => ({
   slot_id: `${agent}-slot`,
   generation_index: 1,
   lease_id: `lease:${agent}:${file}`,
+  task_slice_id: `task:${agent}:${file}`,
+  verification_hint: { node_id: `verify:${agent}` },
   rollback_hint: { node_id: `rollback:${agent}` },
+  lease_proof: {
+    lease_id: `lease:${agent}:${file}`,
+    owner_agent: agent,
+    strategy_task_id: `strategy:${agent}`,
+    micro_win_id: `micro:${agent}:${file}`,
+    verification_node_id: `verify:${agent}`,
+    rollback_node_id: `rollback:${agent}`,
+    allowed_paths: [file],
+    protected_path_check: 'passed'
+  },
   operations: [operation]
 });
 const first = queue.enqueue(envelope('agent-a', 'a.txt', { op: 'replace', path: 'a.txt', search: 'alpha', replace: 'alpha-1' }));
@@ -29,10 +41,29 @@ const merge = mergeMod.coordinateAgentPatchMerge(queue.queued());
 const applyResults = [];
 for (const entry of queue.queued()) {
   const applyResult = await applyMod.applyAgentPatchEnvelope(tmp, entry.envelope);
-  applyResults.push(applyResult);
+  applyResults.push({ ...applyResult, entry_id: entry.id });
   if (applyResult.ok) queue.markApplied(entry.id);
 }
-const proof = proofMod.buildAgentPatchProof({ queue: queue.toJSON(), merge, applyResults, verification: ['fixture-files-mutated'] });
+const proof = proofMod.buildAgentPatchProof({
+  queue: queue.toJSON(),
+  merge,
+  applyResults,
+  verification: ['fixture-files-mutated'],
+  transactionJournal: {
+    schema: 'sks.agent-patch-transaction-journal-summary.v1',
+    ok: true,
+    event_count: 8,
+    blockers: []
+  },
+  verificationRollbackDag: {
+    nodes: [
+      { id: 'verify:agent-a', kind: 'verification' },
+      { id: 'rollback:agent-a', kind: 'rollback' },
+      { id: 'verify:agent-b', kind: 'verification' },
+      { id: 'rollback:agent-b', kind: 'rollback' }
+    ]
+  }
+});
 const atomicProbeFile = path.join(tmp, 'atomic.txt');
 fs.writeFileSync(atomicProbeFile, 'before\n');
 const atomicBlocked = await applyMod.applyAgentPatchEnvelope(tmp, {

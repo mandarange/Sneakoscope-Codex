@@ -43,14 +43,14 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
     strategyRefs: opts.strategyRefs || null,
     ...(opts.microWins === undefined ? {} : { microWins: opts.microWins })
   }), intelligent_work_graph)
-  const slices = createAgentTaskSlices({
+  const slices = enrichSlicesWithStrategyOwnership(createAgentTaskSlices({
     roster: roster.roster || [],
     domains: semantic_domain_graph.domains,
     prompt,
     routeWorkGraph: task_graph,
     ...(opts.desiredWorkItemCount === undefined ? {} : { desiredWorkItemCount: opts.desiredWorkItemCount }),
     ...(opts.minimumWorkItems === undefined ? {} : { minimumWorkItems: opts.minimumWorkItems })
-  })
+  }), opts.strategyOwnershipPlan || null)
   const leases = planAgentLeases(slices, sessions, opts.strategyOwnershipPlan || null)
   const conflict_report = detectAgentLeaseConflicts(leases)
   const no_overlap_proof = buildNoOverlapProof(leases)
@@ -69,4 +69,29 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
     no_overlap_proof,
     blockers: [...conflict_report.blockers, ...no_overlap_proof.blockers]
   }
+}
+
+function enrichSlicesWithStrategyOwnership(slices: any[], strategyOwnershipPlan: { owners?: any[] } | null) {
+  if (!strategyOwnershipPlan?.owners?.length) return slices
+  const byWritePath = new Map<string, any>()
+  const byWriteTask = new Map<string, any>()
+  for (const owner of strategyOwnershipPlan.owners) {
+    if (owner?.access !== 'write') continue
+    byWritePath.set(normalizePath(owner.path), owner)
+    byWriteTask.set(String(owner.micro_win_id || owner.task_id || ''), owner)
+  }
+  return slices.map((slice) => {
+    const owner = (slice.write_paths || []).map((file: string) => byWritePath.get(normalizePath(file))).find(Boolean)
+      || byWriteTask.get(String(slice.micro_win_id || ''))
+    if (!owner) return slice
+    return {
+      ...slice,
+      verification_node_id: owner.verification_node_id || slice.verification_node_id || null,
+      rollback_node_id: owner.rollback_node_id || slice.rollback_node_id || null
+    }
+  })
+}
+
+function normalizePath(file: string) {
+  return String(file || '').replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/\/+$/, '')
 }

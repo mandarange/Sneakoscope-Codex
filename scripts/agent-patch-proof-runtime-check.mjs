@@ -15,13 +15,13 @@ for (let index = 1; index <= 5; index += 1) {
     schema: 'sks.agent-patch-envelope.v1',
     agent_id: `agent-${index}`,
     session_id: `session-${index}`,
-    slot_id: `slot-${index}`,
-    generation_index: 1,
-    lease_id: `lease-${index}`,
-    lease_proof: { lease_id: `lease-${index}`, allowed_paths: [`file-${index}.txt`], verification_node_id: `verify-${index}`, rollback_node_id: `rollback-${index}` },
-    rollback_hint: { node_id: `rollback-${index}` },
-    operations: [{ op: 'write', path: `file-${index}.txt`, content: `after-${index}\n` }]
-  });
+	    slot_id: `slot-${index}`,
+	    generation_index: 1,
+	    lease_id: `lease-${index}`,
+	    lease_proof: { lease_id: `lease-${index}`, allowed_paths: [`file-${index}.txt`], strategy_task_id: `task-${index}`, owner_agent: `agent-${index}`, verification_node_id: `verify-${index}`, rollback_node_id: `rollback-${index}` },
+	    rollback_hint: { node_id: `rollback-${index}` },
+	    operations: [{ op: 'write', path: `file-${index}.txt`, content: `after-${index}\n` }]
+	  });
 }
 const merge = mergeMod.coordinateAgentPatchMerge(queue.queued());
 const applyResults = [];
@@ -31,7 +31,26 @@ for (const entry of queue.queued()) {
   if (applied.ok) queue.markApplied(entry.id);
 }
 for (const entry of queue.entries) queue.markVerified(entry.id);
-const proof = proofMod.buildAgentPatchProof({ queue: queue.toJSON(), merge, applyResults, verification: applyResults.map((row) => row.verification.status), parallelWritePolicy: { write_mode: 'parallel' } });
+	const verificationRollbackDag = {
+	  nodes: queue.entries.flatMap((entry, index) => [
+	    { id: `verify-${index + 1}`, kind: 'verification' },
+	    { id: `rollback-${index + 1}`, kind: 'rollback' }
+	  ])
+	};
+	const fileOwnershipPlan = {
+	  owners: queue.entries.flatMap((entry, index) => (entry.write_paths || []).map((file) => ({ path: file, access: 'write', owner_agent: `agent-${index + 1}` })))
+	};
+	const proof = proofMod.buildAgentPatchProof({
+	  queue: queue.toJSON(),
+	  merge,
+	  applyResults,
+	  verification: applyResults.map((row) => row.verification.status),
+	  parallelWritePolicy: { write_mode: 'parallel' },
+	  verificationRollbackDag,
+	  fileOwnershipPlan,
+	  transactionJournal: { ok: true, blockers: [], event_count: 25 },
+	  conflictRebase: { ok: true, blockers: [] }
+	});
 const report = { schema: 'sks.agent-patch-proof-runtime-check.v1', ok: proof.ok, tmp, queue: queue.toJSON(), merge, applyResults, proof };
 writeReport('agent-patch-proof-runtime', report);
 assertGate(proof.ok === true, 'patch proof runtime must pass for verified disjoint patches', report);

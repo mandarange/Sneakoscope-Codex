@@ -56,6 +56,8 @@ export function buildFixturePatchEnvelopes(agent: any, slice: any, opts: any = {
   return writePaths.map((file: string, index: number) => {
     const leaseId = `write:${String(agent.id)}:${file}`
     const nodeId = String(slice?.micro_win_id || slice?.id || `patch-${index + 1}`)
+    const verificationNodeId = String(slice?.verification_node_id || `verify:${nodeId}`)
+    const rollbackNodeId = String(slice?.rollback_node_id || `rollback:${nodeId}`)
     return {
       schema: 'sks.agent-patch-envelope.v1',
       mission_id: String(opts.missionId || opts.mission_id || ''),
@@ -64,6 +66,10 @@ export function buildFixturePatchEnvelopes(agent: any, slice: any, opts: any = {
       session_id: String(agent.session_id || ''),
       slot_id: String(agent.slot_id || agent.worker_slot_id || agent.id),
       generation_index: Number(agent.generation_index || 1),
+      native_cli_worker_session_id: opts.nativeCliWorkerSessionId || agent.native_cli_worker_session_id || agent.session_id,
+      native_cli_process_id: Number(opts.nativeCliProcessId || agent.native_cli_process_id || process.pid),
+      fast_mode: opts.fastMode !== false,
+      service_tier: opts.serviceTier === 'standard' ? 'standard' : 'fast',
       task_slice_id: String(slice?.id || ''),
       lease_id: leaseId,
       lease_proof: {
@@ -75,8 +81,8 @@ export function buildFixturePatchEnvelopes(agent: any, slice: any, opts: any = {
         micro_win_id: slice?.micro_win_id ? String(slice.micro_win_id) : undefined,
         protected_path_check: 'passed',
         conflict_prediction_id: `conflict:${nodeId}`,
-        verification_node_id: `verify:${nodeId}`,
-        rollback_node_id: `rollback:${nodeId}`
+        verification_node_id: verificationNodeId,
+        rollback_node_id: rollbackNodeId
       },
       operations: [{
         op: 'write',
@@ -84,8 +90,8 @@ export function buildFixturePatchEnvelopes(agent: any, slice: any, opts: any = {
         content: `patched by ${String(agent.id)} for ${String(slice?.id || 'fixture')}\n`
       }],
       rationale: 'Fixture patch envelope emitted by fake backend for a leased write task.',
-      verification_hint: { node_id: `verify:${nodeId}`, expected_status: 'applied_hashes_recorded' },
-      rollback_hint: { node_id: `rollback:${nodeId}`, strategy: 'restore content_before or delete newly created file' }
+      verification_hint: { node_id: verificationNodeId, expected_status: 'applied_hashes_recorded' },
+      rollback_hint: { node_id: rollbackNodeId, strategy: 'restore content_before or delete newly created file' }
     }
   })
 }

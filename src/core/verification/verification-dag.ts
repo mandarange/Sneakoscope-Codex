@@ -59,8 +59,8 @@ function assertNoParallelOutputConflicts(tasks: VerificationTask[]): void {
         outputOwners.set(normalized, task.id)
         continue
       }
-      const taskDepends = (task.dependencies || []).includes(owner)
-      const ownerDepends = (tasks.find((row) => row.id === owner)?.dependencies || []).includes(task.id)
+      const taskDepends = dependsTransitively(task.id, owner, tasks)
+      const ownerDepends = dependsTransitively(owner, task.id, tasks)
       if (!taskDepends && !ownerDepends) {
         throw new Error(`parallel output conflict: ${normalized} written by ${owner} and ${task.id}`)
       }
@@ -69,5 +69,23 @@ function assertNoParallelOutputConflicts(tasks: VerificationTask[]): void {
 }
 
 export function normalizeVerificationOutput(output: string, cwd: string = process.cwd()): string {
-  return path.resolve(cwd, output)
+  const resolved = path.resolve(cwd, output)
+  const root = path.resolve(cwd)
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) throw new Error(`verification output escapes cwd: ${output}`)
+  return resolved
+}
+
+function dependsTransitively(taskId: string, dependencyId: string, tasks: VerificationTask[]): boolean {
+  const byId = new Map(tasks.map((task) => [task.id, task]))
+  const seen = new Set<string>()
+  const visit = (id: string): boolean => {
+    if (seen.has(id)) return false
+    seen.add(id)
+    const task = byId.get(id)
+    for (const dep of task?.dependencies || []) {
+      if (dep === dependencyId || visit(dep)) return true
+    }
+    return false
+  }
+  return visit(taskId)
 }
