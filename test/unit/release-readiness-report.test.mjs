@@ -6,6 +6,11 @@ import fs from 'node:fs';
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 
 test('release readiness report writes current readiness artifacts', () => {
+  const stamp = spawnSync(process.execPath, ['scripts/release-check-stamp.mjs', 'write'], {
+    cwd: process.cwd(),
+    encoding: 'utf8'
+  });
+  assert.equal(stamp.status, 0, `${stamp.stdout}\n${stamp.stderr}`);
   const result = spawnSync(process.execPath, ['scripts/release-readiness-report.mjs'], {
     cwd: process.cwd(),
     encoding: 'utf8'

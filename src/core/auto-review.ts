@@ -116,7 +116,7 @@ export async function enableMadHighProfile(opts: any = {}) {
     config_path: configPath,
     profile_config_path: path.join(path.dirname(configPath), `${MAD_HIGH_PROFILE}.config.toml`),
     profile_name: MAD_HIGH_PROFILE,
-    launch_args: ['--profile', MAD_HIGH_PROFILE, '--sandbox', 'danger-full-access', '--ask-for-approval', 'never'],
+    launch_args: ['--profile', MAD_HIGH_PROFILE, '--sandbox', 'danger-full-access', '--ask-for-approval', 'never', '-c', 'service_tier=fast'],
     sandbox_mode: 'danger-full-access',
     approval_policy: 'never',
     approvals_reviewer: AUTO_REVIEW_REVIEWER,

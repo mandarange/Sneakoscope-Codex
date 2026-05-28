@@ -33,6 +33,8 @@ test('enableMadHighProfile migrates legacy profile table to Codex 0.134 profile 
   assert.match(profile, /^sandbox_mode\s*=\s*"danger-full-access"/m);
   assert.match(profile, /^approval_policy\s*=\s*"never"/m);
   assert.match(profile, /^approvals_reviewer\s*=\s*"auto_review"/m);
+  assert.ok(result.launch_args.includes('-c'));
+  assert.ok(result.launch_args.includes('service_tier=fast'));
 });
 
 test('enableAutoReview writes profile files instead of legacy profile tables', async () => {

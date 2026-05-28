@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.18.11';
+const RELEASE_VERSION = '1.18.12';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');
@@ -58,6 +58,12 @@ const requiredDocs = [
   'docs/warp-tmux-right-lane-layout.md',
   'docs/tmux-lane-physical-layout-proof.md',
   'docs/real-codex-patch-envelope-contract.md',
+  'docs/codex-config-eperm-self-heal.md',
+  'docs/doctor-real-fix.md',
+  'docs/mad-launch-preflight.md',
+  'docs/fast-mode-official-service-tier.md',
+  'docs/codex-project-config-policy.md',
+  'docs/macos-tcc-operator-actions.md',
   'docs/migration-1.18.7-to-1.18.8.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
@@ -67,24 +73,12 @@ const versionedDocs = new Set([
   'README.md',
   'CHANGELOG.md',
   'docs/release-readiness.md',
-  'docs/patch-swarm-runtime.md',
-  'docs/patch-conflict-rebase.md',
-  'docs/real-codex-patch-smoke.md',
-  'docs/patch-transaction-journal.md',
-  'docs/strategy-to-patch-wiring.md',
-  'docs/parallel-write-agent-runtime.md',
-  'docs/patch-proof-and-rollback.md',
-  'docs/appshots-thread-attachments.md',
-  'docs/mcp-readonly-runtime-scheduler.md',
-  'docs/mcp-readonly-scheduler.md',
-  'docs/native-cli-session-swarm.md',
-  'docs/no-subagent-scaling.md',
-  'docs/fast-mode-default.md',
-  'docs/real-codex-parallel-workers.md',
-  'docs/native-worker-backend-router.md',
-  'docs/warp-tmux-right-lane-layout.md',
-  'docs/tmux-lane-physical-layout-proof.md',
-  'docs/real-codex-patch-envelope-contract.md'
+  'docs/codex-config-eperm-self-heal.md',
+  'docs/doctor-real-fix.md',
+  'docs/mad-launch-preflight.md',
+  'docs/fast-mode-official-service-tier.md',
+  'docs/codex-project-config-policy.md',
+  'docs/macos-tcc-operator-actions.md'
 ]);
 const requiredScripts = [
   'runtime:no-src-mjs',

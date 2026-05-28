@@ -3,32 +3,32 @@ import { packageRoot, readJson, runProcess, writeJsonAtomic } from '../fsx.js'
 import { managedProxyEnvForChild } from '../codex/managed-proxy-env.js'
 import { agentWorkerEnv, validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { fastModeEnv, resolveFastModePolicy } from './fast-mode-policy.js'
+import { buildCodexExecArgs } from '../codex/codex-cli-syntax-builder.js'
 
 export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = {}) {
   const resultFile = opts.resultFile || defaultCodexResultFile(agent, opts)
   const sandbox = opts.workspaceWrite ? 'workspace-write' : 'read-only'
-  const args = [
-    'exec',
-    '--json',
-    '--output-schema',
-    opts.schemaFile || path.join(packageRoot(), 'schemas/codex/agent-result.schema.json'),
-    '--output-last-message',
-    resultFile,
-    '--ephemeral',
-  ]
-  if (opts.skipGitRepoCheck !== false) args.push('--skip-git-repo-check')
-  if (opts.profile) args.push('--profile', String(opts.profile))
-  else args.push('--ignore-user-config')
-  args.push(
-    '--ignore-rules',
-    '--sandbox',
+  const args = buildCodexExecArgs({
+    json: true,
+    outputSchema: opts.schemaFile || path.join(packageRoot(), 'schemas/codex/agent-result.schema.json'),
+    outputLastMessage: resultFile,
+    ephemeral: true,
+    skipGitRepoCheck: opts.skipGitRepoCheck !== false,
+    profile: opts.profile ? String(opts.profile) : null,
+    ignoreUserConfig: !opts.profile,
+    ignoreRules: true,
     sandbox,
+    serviceTier: opts.serviceTier || (opts.fastMode === false ? 'standard' : 'fast'),
     prompt
-  )
+  })
   return {
     resultFile,
     args
   }
+}
+
+function codexArgsIncludeServiceTier(args: string[], serviceTier: string) {
+  return args.includes('-c') && args.includes(`service_tier=${serviceTier}`)
 }
 
 function defaultCodexResultFile(agent: any, opts: any = {}) {
@@ -51,7 +51,7 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
       result_file: command.resultFile,
       service_tier: fastPolicy.service_tier,
       fast_mode: fastPolicy.fast_mode,
-      service_tier_passed_to_codex: false,
+      service_tier_passed_to_codex: codexArgsIncludeServiceTier(command.args, fastPolicy.service_tier),
       output_schema_used: command.args.includes('--output-schema'),
       output_last_message_path: command.resultFile,
       agent_worker_env_injected: false,
@@ -79,7 +79,7 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
     result_file: command.resultFile,
     service_tier: fastPolicy.service_tier,
     fast_mode: fastPolicy.fast_mode,
-    service_tier_passed_to_codex: false,
+    service_tier_passed_to_codex: codexArgsIncludeServiceTier(command.args, fastPolicy.service_tier),
     output_schema_used: command.args.includes('--output-schema'),
     output_last_message_path: command.resultFile,
     agent_worker_env_injected: Object.keys(workerEnv).length > 0,
