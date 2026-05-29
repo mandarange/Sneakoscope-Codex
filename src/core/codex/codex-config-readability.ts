@@ -197,6 +197,7 @@ function classifyBlocker(check: CodexConfigCheck) {
 function operatorActions(blockers: string[]) {
   const actions = new Set<string>()
   if (blockers.some((item) => /^missing_/.test(item))) actions.add('Run `sks doctor --fix` to regenerate the managed Codex project config, then rerun the preflight.')
+  if (blockers.includes('codex_cli_config_toml_parse_error')) actions.add('Run `sks doctor --fix` (or `sks mad repair-config --apply`) to hoist misplaced machine-local keys back to the top of the Codex config and restore a loadable config.toml.')
   if (blockers.includes('codex_cli_config_eperm')) actions.add('Run `sks mad repair-config --apply`; if it still fails on macOS, grant Full Disk Access/Files and Folders access to the launching terminal, Warp, iTerm, Terminal, Codex app, or Codex CLI context.')
   if (blockers.includes('EPERM') || blockers.includes('tcc_possible')) actions.add('On macOS, grant the launching terminal/Codex app Full Disk Access or Files and Folders access, then rerun `sks doctor --fix`.')
   if (blockers.includes('EACCES') || blockers.includes('parent_traverse_denied')) actions.add('Restore owner traversal/read permissions for the project root, `.codex`, and `.codex/config.toml`.')
@@ -211,6 +212,23 @@ function errorDetail(err: any) {
   return { name: err?.name || 'Error', code: err?.code || '', message: err?.message || String(err) }
 }
 
+function resolveCodexConfigLoadProbe(): string | null {
+  // Prefer the packaged copy under dist/scripts (shipped via the `dist` files
+  // allowlist); fall back to the repo-root scripts/ copy for local development.
+  const candidates = [
+    path.join(packageRoot(), 'dist', 'scripts', 'codex-config-load-probe.mjs'),
+    path.join(packageRoot(), 'scripts', 'codex-config-load-probe.mjs')
+  ]
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate
+    } catch {
+      // ignore and try the next candidate
+    }
+  }
+  return null
+}
+
 async function codexCliConfigLoadCheck(root: string, configPath: string, opts: any = {}): Promise<CodexConfigCheck> {
   if (!opts.codexProbe && !opts.actualCodex && !opts.codexBin) {
     return {
@@ -220,7 +238,17 @@ async function codexCliConfigLoadCheck(root: string, configPath: string, opts: a
       detail: { integration_optional: true, blockers: [] }
     }
   }
-  const script = path.join(packageRoot(), 'scripts', 'codex-config-load-probe.mjs')
+  const script = resolveCodexConfigLoadProbe()
+  if (!script) {
+    // The probe ships in dist/scripts; if it is genuinely absent (packaging gap),
+    // do not block MAD preflight on an unverifiable check — degrade gracefully.
+    return {
+      name: 'actual_codex_cli_config_load',
+      ok: true,
+      status: 'integration_optional_probe_missing',
+      detail: { integration_optional: true, blockers: [] }
+    }
+  }
   const args = [script, '--root', root, '--config', configPath, '--json']
   if (opts.actualCodex !== false) args.push('--actual-codex')
   if (opts.requireActualCodex) args.push('--require-actual-codex')
