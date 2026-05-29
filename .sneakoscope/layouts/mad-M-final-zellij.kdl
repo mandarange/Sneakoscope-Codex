@@ -1,0 +1,21 @@
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+    tab name="SKS mad M-final-zellij" cwd="/Users/weklem/Desktop/devs/Sneakoscope-Codex" split_direction="vertical" {
+        pane name="orchestrator" command="sh" {
+            args "-lc" "'/Users/weklem/.nvm/versions/node/v24.0.2/bin/node' '/Users/weklem/Desktop/devs/Sneakoscope-Codex/dist/bin/sks.js' status --json || true; exec /bin/zsh"
+        }
+        pane split_direction="horizontal" size="38%" {
+            pane name="slot-001" command="sh" {
+                args "-lc" "'/Users/weklem/.nvm/versions/node/v24.0.2/bin/node' '/Users/weklem/Desktop/devs/Sneakoscope-Codex/dist/bin/sks.js' zellij-lane --mission 'M-final-zellij' --slot 'slot-001' --ledger-root '/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/missions/M-final-zellij/agents' --follow 2>> '/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/missions/M-final-zellij/agents/zellij-lane-renderer.stderr.log'"
+            }
+        }
+    }
+}
