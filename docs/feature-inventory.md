@@ -33,7 +33,7 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-quickstart` | core-cli | stable | sks quickstart | execute:pass | runtime_verified | none recorded |
 | `cli-bootstrap` | install | labs | sks bootstrap [--install-scope global\|project] [--local-only] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-root` | core-cli | stable | sks root [--json] | execute:pass | runtime_verified | none recorded |
-| `cli-deps` | install | labs | sks deps check\|install [tmux\|codex\|context7\|all] [--yes] | mock:pass | runtime_mock_verified | none recorded |
+| `cli-deps` | install | labs | sks deps check [--json] [--yes] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-codex` | integration | beta | sks codex compatibility\|version\|doctor\|schema [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-codex-app` | integration | beta | sks codex-app [check\|open\|pat status\|remote-control] | real_optional:pass | integration_optional | mobile/event payload details remain unknown |
 | `cli-hooks` | integration | beta | sks hooks explain\|status\|trust-report\|replay\|codex-validate\|warning-check ... [--json] | mock:pass | runtime_mock_verified | mobile/event payload details remain unknown |

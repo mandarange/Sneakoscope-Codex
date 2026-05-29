@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.18.14** is the Zellij-only interactive runtime release: actual Codex CLI config-load truth, fake Codex EPERM fixtures, doctor readiness matrix proof, `sks mad repair-config`, safer project-local config splitting, Codex 0.135 compatibility gates, and official Fast mode CLI override proof are wired into release checks. Doctor now refuses Ready yes without Codex config-load evidence, MAD blocks launch before unreadable config can crash Codex, and interactive MAD/lane UI requires Zellij with no removed-runtime fallback.
+SKS **1.19.0** is the MAD Zellij dependency repair release: bootstrap/deps repair and `sks --mad --yes` now install or repair required CLI tooling, including Zellij on macOS/Homebrew, before opening the interactive runtime. npm postinstall still bootstraps and reports missing tools, but it does not silently mutate Homebrew/npm global tools unless `SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS=1` is set. MAD and Team layouts now use Zellij's documented background-layout launch form, and launch failures surface labeled Zellij stderr/stdout tails instead of only `zellij_command_failed`.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -243,7 +243,7 @@ Install Zellij from [zellij.dev](https://zellij.dev/documentation/installation.h
 brew install zellij
 ```
 
-The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex` versions before opening the interactive runtime. `sks --mad` also checks dependencies, requires Zellij for interactive MAD/lane UI, and prints only the session, gate, attach, and blocker details needed to act.
+The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex` versions before opening the interactive runtime. `npm i -g sneakoscope` runs a safe bootstrap/readiness pass; use `sks bootstrap --yes`, `sks deps check --yes`, or `sks --mad --yes` to install or repair Codex CLI/Zellij when Homebrew is available. `sks --mad` requires Zellij for interactive MAD/lane UI and prints the session, gate, attach command, blockers, and labeled Zellij stderr/stdout details needed to act.
 
 ## Installation
 
@@ -314,7 +314,7 @@ sks --version
 
 ```sh
 sks bootstrap
-sks deps check
+sks deps check --yes
 sks codex-app check
 sks doctor --fix
 sks fix-path
@@ -584,7 +584,7 @@ First install:
 ```sh
 npm i -g sneakoscope
 sks bootstrap
-sks deps check
+sks deps check --yes
 sks codex-app check
 sks selftest --mock
 ```
@@ -699,7 +699,7 @@ npm run release:check
 npm run publish:dry
 ```
 
-`release:check` runs the 1.18.14 Zellij-only closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.18 baseline gates and adds patch swarm runtime truth, transaction journaling, serial conflict rebase, strict strategy-to-patch proof, rollback command proof, Native CLI Session Swarm 5/10/20-process proof, Real Worker Backend Router proof, Codex child overlap proof, model-authored patch-envelope separation, Zellij layout/pane/screen proof, no-subagent-scaling proof, Fast mode default/worker/Codex/MAD propagation proof, Appshots attachment provenance, MCP runtime overlap evidence, Codex 0.134/0.135 runner truth, task graph expansion, schema-bound follow-up work, actual Agent/Team/Research/QA route blackboxes, scheduler proof hardening, Source Intelligence propagation, and Goal mode propagation checks. Broader live gates remain explicit scripts such as `release:real-check`; real Codex patch smoke, real Codex parallel worker proof, and real Zellij proof are optional unless their `SKS_REQUIRE_REAL_*` or `SKS_REQUIRE_ZELLIJ=1` environment variables are set. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
+`release:check` runs the 1.19.0 Zellij dependency-repair closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.18 baseline gates and adds patch swarm runtime truth, transaction journaling, serial conflict rebase, strict strategy-to-patch proof, rollback command proof, Native CLI Session Swarm 5/10/20-process proof, Real Worker Backend Router proof, Codex child overlap proof, model-authored patch-envelope separation, Zellij layout/pane/screen proof, no-subagent-scaling proof, Fast mode default/worker/Codex/MAD propagation proof, Appshots attachment provenance, MCP runtime overlap evidence, Codex 0.134/0.135 runner truth, task graph expansion, schema-bound follow-up work, actual Agent/Team/Research/QA route blackboxes, scheduler proof hardening, Source Intelligence propagation, and Goal mode propagation checks. Broader live gates remain explicit scripts such as `release:real-check`; real Codex patch smoke, real Codex parallel worker proof, and real Zellij proof are optional unless their `SKS_REQUIRE_REAL_*` or `SKS_REQUIRE_ZELLIJ=1` environment variables are set. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
 
 Version bumps are manual. Run `sks versioning bump` only when preparing release metadata; SKS will not create `.git/hooks/pre-commit` or auto-bump during ordinary commits.
 

@@ -52,7 +52,10 @@ test('Team route preserves compatibility artifacts and exposes Zellij cockpit la
   assert.equal(zellij.dry_run, true);
   assert.ok(Array.isArray(zellij.command));
   assert.ok(zellij.command.includes('zellij'));
-  assert.ok(zellij.launch_command.includes('--layout'));
+  assert.deepEqual(zellij.launch_command.slice(0, 4), ['zellij', 'attach', '--create-background', zellij.session_name]);
+  assert.ok(zellij.launch_command.includes('options'));
+  assert.ok(zellij.launch_command.includes('--default-layout'));
+  assert.equal(zellij.launch_command.includes('--layout'), false);
   assert.match(zellij.attach_command, /^zellij attach /);
   assert.match(zellij.layout_artifact, /\.kdl$/);
 });

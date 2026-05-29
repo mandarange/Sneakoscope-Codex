@@ -21,15 +21,14 @@ const sessionName = 'sks-layout-check';
 if (capability.status === 'ok') await commandMod.runZellij(['kill-session', sessionName], { cwd: root, timeoutMs: 2500, optional: true });
 const realRun = capability.status === 'ok'
   ? {
-      create_background: await commandMod.runZellij(['attach', '--create-background', sessionName], { cwd: root, timeoutMs: 5000, optional: !requireReal }),
+      create_background: await commandMod.runZellij(['attach', '--create-background', sessionName, 'options', '--default-layout', layoutPath], { cwd: root, timeoutMs: 5000, optional: !requireReal }),
       apply_layout: null,
       cleanup: null
     }
   : null;
 if (realRun) {
-  realRun.apply_layout = await commandMod.runZellij(['--session', sessionName, '--layout', layoutPath], { cwd: root, timeoutMs: 5000, optional: !requireReal });
   realRun.cleanup = await commandMod.runZellij(['kill-session', sessionName], { cwd: root, timeoutMs: 5000, optional: true });
-  realRun.ok = realRun.create_background.ok === true && realRun.apply_layout.ok === true;
+  realRun.ok = realRun.create_background.ok === true;
 }
 const ok = staticValidation.ok
   && invalidValidation.ok === false

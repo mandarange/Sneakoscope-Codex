@@ -108,7 +108,7 @@ export async function runVersionPreCommit(root: any, opts: any = {}) {
 }
 
 export async function bumpProjectVersion(root: any, opts: any = {}) {
-  const policy = opts.policy || await versionPolicy(root);
+  const policy = { ...(opts.policy || await versionPolicy(root)), ...(opts.bump ? { bump: opts.bump } : {}) };
   const git = opts.git || await gitPaths(root);
   const pkgPath = path.join(root, 'package.json');
   const pkg = await readJson(pkgPath, {});

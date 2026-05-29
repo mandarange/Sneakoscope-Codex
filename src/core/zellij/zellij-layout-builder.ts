@@ -76,7 +76,7 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     cwd,
     slot_count: slotCount,
     layout_kdl: layout,
-    launch_command: ['zellij', '--session', sessionName, '--layout', '<layout-path>'],
+    launch_command: ['zellij', 'attach', '--create-background', sessionName, 'options', '--default-layout', '<layout-path>'],
     attach_command: `zellij attach ${shellQuote(sessionName)}`
   }
 }

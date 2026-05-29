@@ -70,6 +70,50 @@ export function decideAgentEffort(input: { persona?: Partial<AgentPersona>; prom
   }
 }
 
+// Any action-tool signal (write/run/search/mcp/db/etc.) lifts a clone to medium.
+// Passive reading alone does not count — "really simple" no-tool work stays at low.
+const NARUTO_ACTION_TOOL_RE = /(write|edit|create|modif|delete|remove|run\b|exec|command|bash|shell|script|install|build|test|migrat|patch|apply|fetch|curl|http|mcp|sql|database|\bdb\b|deploy|commit|push|rename|refactor|generate|scaffold|작성|수정|생성|삭제|실행|명령|빌드|테스트|설치|배포|패치|커밋|마이그레이션)/i
+
+// $Naruto shadow-clone effort policy: dynamic like team mode, but capped.
+//   - truly simple / no tool use  -> low
+//   - any tool use (one is enough) -> medium
+//   - NEVER escalates to high/xhigh
+//   - ALWAYS fast service tier
+export function decideNarutoCloneEffort(input: { persona?: Partial<AgentPersona>; prompt?: string; agentId?: string; readonly?: boolean } = {}): AgentEffortDecision {
+  const persona = input.persona || {}
+  const prompt = String(input.prompt || '')
+  const role = String(persona.role || '')
+  const agentId = String(input.agentId || persona.id || 'naruto_clone')
+  const readonly = input.readonly === true || persona.read_only === true
+  const allowedTools = Array.isArray(persona.allowed_tools) ? persona.allowed_tools : []
+  const writePolicy = String(persona.write_policy || '')
+  // Tool use is driven by (a) write capability, (b) the persona's actual action tools, or
+  // (c) the work prompt itself — NOT by incidental persona prose (role/risk_focus), so a
+  // read-only analysis clone on a no-tool prompt stays at low. Passive Read/Grep ≠ tool use.
+  const hasActionTool = allowedTools.some((tool) => /write|edit|create|bash|shell|command|exec|run|mcp|patch|apply|multiedit|notebook/i.test(String(tool)))
+  const writes = !readonly || /write|edit|route-local|workspace|patch|integrat/i.test(writePolicy) || hasActionTool
+  const toolUse = writes || NARUTO_ACTION_TOOL_RE.test(prompt)
+  const effort: AgentReasoningEffort = toolUse ? 'medium' : 'low'
+  return {
+    schema: 'sks.agent-effort-decision.v1',
+    policy_version: 1,
+    agent_id: agentId,
+    role,
+    reasoning_effort: effort,
+    model_reasoning_effort: effort,
+    reasoning_profile: reasoningProfileName(effort),
+    service_tier: 'fast',
+    reason: toolUse ? 'naruto_tool_use_medium' : 'naruto_simple_no_tool_low',
+    dynamic: true,
+    escalation_triggers: [
+      'any tool use (write/edit/run/search/build/mcp/db) lifts the clone from low to medium'
+    ],
+    downshift_triggers: [
+      'truly simple, no-tool, read-only reasoning stays at low'
+    ]
+  }
+}
+
 export function buildAgentEffortPolicy(roster: any = {}) {
   const decisions = Array.isArray(roster.roster) ? roster.roster.map((agent: any) => ({
     agent_id: agent.id,

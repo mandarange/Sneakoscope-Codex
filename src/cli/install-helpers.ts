@@ -116,7 +116,7 @@ function packagedSksEntrypoint() {
   return path.join(packageRoot(), 'dist', 'bin', 'sks.js');
 }
 
-export async function postinstall({ bootstrap }: any) {
+export async function postinstall({ bootstrap, args = [] }: any) {
   const installRoot = path.resolve(process.env.INIT_CWD || process.cwd());
   const conflictScan = await scanHarnessConflicts(installRoot);
   if (conflictScan.hard_block) {
@@ -124,6 +124,9 @@ export async function postinstall({ bootstrap }: any) {
     return;
   }
   const codexLbConfigSnapshot = await capturePostinstallCodexLbConfigSnapshot();
+  // A failed setup side-effect must never fail `npm i`. Wrap the whole flow; always
+  // restore the codex-lb snapshot in finally (even on the early bootstrap return / on throw).
+  try {
   console.log('\nSKS installed.');
   const shim = await ensureSksCommandDuringInstall();
   if (shim.status === 'present') console.log(`SKS command: available (${shim.command ?? 'unknown'}).`);
@@ -139,13 +142,19 @@ export async function postinstall({ bootstrap }: any) {
   else if (context7Install.status === 'skipped') console.log(`Context7 MCP: skipped (${context7Install.reason}).`);
   else if (context7Install.status === 'failed') console.log(`Context7 MCP: auto setup failed. Run \`sks context7 setup --scope global\` or \`sks setup\`. ${context7Install.error || ''}`.trim());
   const fastModeRepair = await ensureGlobalCodexFastModeDuringInstall();
-  if (fastModeRepair.status === 'updated') console.log(`Codex App Fast mode: restored in ${fastModeRepair.config_path}.`);
+  if (fastModeRepair.status === 'updated') console.log(`Codex App Fast mode: updated ${fastModeRepair.config_path}${fastModeRepair.backup_path ? ` (backup ${fastModeRepair.backup_path})` : ''}.`);
   else if (fastModeRepair.status === 'present') console.log('Codex App Fast mode: config already compatible.');
+  else if (fastModeRepair.status === 'unparseable_config_preserved') console.log(`Codex App Fast mode: existing ${fastModeRepair.config_path} is not valid TOML — left untouched, backed up to ${fastModeRepair.backup_path}. Run \`sks doctor --fix\` to recover it.`);
+  else if (fastModeRepair.status === 'skipped_unsafe_rewrite') console.log(`Codex App Fast mode: skipped (managed rewrite would not parse; ${fastModeRepair.config_path} left untouched).`);
   else if (fastModeRepair.status === 'skipped') console.log(`Codex App Fast mode: skipped (${fastModeRepair.reason}).`);
   else if (fastModeRepair.status === 'failed') console.log(`Codex App Fast mode: auto repair failed. Run \`sks setup\`. ${fastModeRepair.error || ''}`.trim());
-  const appProcessRepair = await reconcileCodexAppUpgradeProcesses();
+  // Terminating a third-party app's processes during `npm i` is unsafe by default; opt-in only.
+  const appProcessRepair: any = process.env.SKS_POSTINSTALL_RECONCILE_APP_PROCESSES === '1'
+    ? await reconcileCodexAppUpgradeProcesses()
+    : { status: 'skipped', reason: 'opt_in_required', killed: [] };
   if (appProcessRepair.status === 'repaired') console.log(`Codex App reconnect repair: stopped ${appProcessRepair.killed.length} stale orphan app-server process(es). Restart Codex App to reconnect cleanly.`);
   else if (appProcessRepair.status === 'partial') console.log(`Codex App reconnect repair: stopped ${appProcessRepair.killed.length} stale orphan app-server process(es); ${(appProcessRepair.failed ?? []).length} could not be stopped. Restart Codex App if reconnecting continues.`);
+  else if (appProcessRepair.status === 'skipped' && appProcessRepair.reason === 'opt_in_required') console.log('Codex App reconnect repair: not run (set SKS_POSTINSTALL_RECONCILE_APP_PROCESSES=1 to allow postinstall to stop stale orphan app-server processes; otherwise run `sks doctor --fix`).');
   else if (appProcessRepair.status === 'skipped' && appProcessRepair.reason !== 'platform') console.log(`Codex App reconnect repair: skipped (${appProcessRepair.reason}).`);
   else if (appProcessRepair.status === 'failed') console.log(`Codex App reconnect repair: skipped (${appProcessRepair.error || appProcessRepair.reason || 'process check failed'}).`);
   const globalSkills = await ensureGlobalCodexSkillsDuringInstall();
@@ -167,18 +176,20 @@ export async function postinstall({ bootstrap }: any) {
   if (bootstrapDecision.run) {
     console.log(`SKS bootstrap: ${bootstrapDecision.reason}.`);
     await runPostinstallBootstrap(installRoot, bootstrap);
-    await restorePostinstallCodexLbConfigSnapshot(codexLbConfigSnapshot);
-    await reportPostinstallCodexLbAuth();
     return;
   }
-  await restorePostinstallCodexLbConfigSnapshot(codexLbConfigSnapshot);
-  await reportPostinstallCodexLbAuth();
   console.log('\nNext:');
   console.log('  sks bootstrap');
   console.log(`\nSKS bootstrap was not run automatically: ${bootstrapDecision.reason}.`);
   console.log('This initializes the current project, installs SKS Codex App skills, verifies Codex App/Context7 readiness, and checks Zellij runtime dependencies.');
-  console.log('Dependency repair: sks deps check; install Zellij with brew install zellij when needed.');
+  console.log('Dependency repair: sks bootstrap --yes, sks deps check --yes, or sks --mad --yes. Postinstall reports missing CLI tools but does not mutate Homebrew/npm globals unless SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS=1 is set.');
   console.log('Open runtime after readiness is green: sks\n');
+  } catch (err: any) {
+    console.log(`\nSKS postinstall: a setup step did not complete; installation continues. Run \`sks doctor --fix\` afterward. (${err?.message || err})`);
+  } finally {
+    await restorePostinstallCodexLbConfigSnapshot(codexLbConfigSnapshot).catch(() => {});
+    await reportPostinstallCodexLbAuth().catch(() => {});
+  }
 }
 
 async function reportPostinstallCodexLbAuth() {
@@ -247,6 +258,12 @@ export async function postinstallBootstrapDecision(root: any) {
   const candidate = await isProjectSetupCandidate(installRoot);
   const target = candidate ? installRoot : globalSksRoot();
   if (process.env.SKS_POSTINSTALL_BOOTSTRAP === '1') return { run: true, target, reason: 'forced by SKS_POSTINSTALL_BOOTSTRAP=1' };
+  // A global `npm i -g sneakoscope` must NOT initialize whatever project the user's shell
+  // happened to be in (that would scribble AGENTS.md/.codex/.agents into an unrelated repo).
+  // Only bootstrap the global runtime root; the user runs `sks setup` inside a project explicitly.
+  if (process.env.npm_config_global === 'true' && candidate) {
+    return { run: true, target: globalSksRoot(), reason: 'global install: bootstrapping global SKS runtime only (run `sks setup` inside a project to initialize it)' };
+  }
   if (candidate) return { run: true, target, reason: 'auto-running sks setup --bootstrap --install-scope global --force' };
   return { run: true, target, reason: 'no project marker found; auto-running global SKS runtime bootstrap' };
 }
@@ -1422,21 +1439,45 @@ export async function ensureGlobalCodexFastModeDuringInstall(opts: any = {}) {
   try {
     await ensureDir(path.dirname(configPath));
     const current = await readText(configPath, '');
+    // Safety gate 1: never blind-overwrite an unparseable user config — that would
+    // entrench corruption on the file Codex actually loads. Back it up and bail.
+    if (current.trim()) {
+      const currentSmoke = codexConfigParseSmoke(current);
+      if (!currentSmoke.ok) {
+        const backupPath = await backupCodexConfig(configPath, current, 'unparseable');
+        return { status: 'unparseable_config_preserved', config_path: configPath, backup_path: backupPath, parse_smoke: currentSmoke };
+      }
+    }
     const next = normalizeCodexFastModeUiConfig(current);
     if (next === ensureTrailingNewline(current)) return { status: 'present', config_path: configPath };
+    // Safety gate 2: never WRITE a config that would not parse.
+    const nextSmoke = codexConfigParseSmoke(next);
+    if (!nextSmoke.ok) return { status: 'skipped_unsafe_rewrite', config_path: configPath, parse_smoke: nextSmoke };
+    // Safety gate 3: back up the user's good config before mutating it.
+    const backupPath = current.trim() ? await backupCodexConfig(configPath, current, 'pre-update') : null;
     await writeTextAtomic(configPath, next);
-    return { status: 'updated', config_path: configPath };
+    return { status: 'updated', config_path: configPath, backup_path: backupPath };
   } catch (err: any) {
     return { status: 'failed', config_path: configPath, error: err.message };
   }
 }
 
 export function normalizeCodexFastModeUiConfig(text: any = '') {
-  let next = removeLegacyTopLevelCodexModeLocks(text);
+  // Run to a fixed point so a second install is a true no-op (idempotent). The per-pass
+  // table/whitespace normalization converges within one extra pass.
+  return normalizeCodexFastModeUiConfigOnce(normalizeCodexFastModeUiConfigOnce(text));
+}
+
+function normalizeCodexFastModeUiConfigOnce(text: any = '') {
+  // Preserve user-owned top-level scalars (model / service_tier / model_reasoning_effort):
+  // SKS only supplies a default when the user has not chosen one, and never strips the
+  // user's own reasoning effort. SKS continues to manage its own namespaced tables below
+  // ([features], [profiles.sks-*], [user.fast_mode], [plugins]).
+  let next = String(text || '');
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
-  next = upsertTopLevelTomlString(next, 'model', 'gpt-5.5');
-  next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
+  next = upsertTopLevelTomlStringIfAbsent(next, 'model', 'gpt-5.5');
+  next = upsertTopLevelTomlStringIfAbsent(next, 'service_tier', 'fast');
   next = upsertTopLevelTomlBoolean(next, 'suppress_unstable_features_warning', true);
   next = upsertTomlTableKey(next, 'features', 'hooks = true');
   next = upsertTomlTableKey(next, 'features', 'remote_control = true');
@@ -1564,6 +1605,45 @@ function upsertTopLevelTomlString(text: any, key: any, value: any) {
   }
   lines.splice(end, 0, line);
   return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function hasTopLevelTomlKey(text: any, key: any) {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
+  for (let i = 0; i < end; i += 1) {
+    if (typeof lines[i] === 'string' && pattern.test(lines[i] as string)) return true;
+  }
+  return false;
+}
+
+// Preserve a user's deliberate top-level scalar (model/service_tier/reasoning); only set
+// the SKS default when the key is ABSENT. This is what stops `npm i -g` from clobbering
+// a user's global Codex config on every update.
+function upsertTopLevelTomlStringIfAbsent(text: any, key: any, value: any) {
+  return hasTopLevelTomlKey(text, key) ? String(text || '') : upsertTopLevelTomlString(text, key, value);
+}
+
+// Lightweight safety gate: detect clearly-broken TOML so we never overwrite (or produce)
+// an unparseable config that Codex itself would reject. Mirrors the project-config smoke.
+function codexConfigParseSmoke(text: any = '') {
+  const str = String(text || '');
+  const tripleTokens = (str.match(/"""|'''/g) || []).length;
+  const unterminatedTriple = tripleTokens % 2 !== 0;
+  const invalidHeader = str.split('\n').find((line) => /^\s*\[/.test(line) && !/^\s*\[\[?[^\]]+\]\]?\s*(?:#.*)?$/.test(line)) || null;
+  return { ok: !unterminatedTriple && !invalidHeader, unterminated_multiline_string: unterminatedTriple, invalid_table_header: invalidHeader };
+}
+
+async function backupCodexConfig(configPath: string, text: string, tag: string) {
+  try {
+    const stamp = `${PACKAGE_VERSION}-${Date.now().toString(36)}`;
+    const backupPath = `${configPath}.sks-${tag}-${stamp}.bak`;
+    await writeTextAtomic(backupPath, text);
+    return backupPath;
+  } catch {
+    return null;
+  }
 }
 
 function upsertTopLevelTomlBoolean(text: any, key: any, value: any) {
@@ -1863,7 +1943,7 @@ async function ensureGlobalGetdesignSkillDuringInstall() {
 
 export async function ensureRelatedCliTools(args: any = []) {
   const skip = args.includes('--skip-cli-tools') || process.env.SKS_SKIP_CLI_TOOLS === '1';
-  const codex = await ensureCodexCliTool({ skip });
+  const codex = await ensureCodexCliTool({ skip, args });
   const zellijRepair = skip ? { status: 'skipped', reason: 'SKS_SKIP_CLI_TOOLS=1 or --skip-cli-tools' } : await ensureZellijCliTool(args);
   const zellij = await checkZellijCapability({ require: false, writeReport: false });
   return {
@@ -1876,17 +1956,55 @@ export async function ensureRelatedCliTools(args: any = []) {
       current_session: false,
       repair: zellijRepair,
       install_hint: zellij.status === 'ok' ? null : zellijInstallHint(),
-      error: zellij.blockers[0] || zellij.warnings[0] || null
+      error: (zellijRepair as any).error || zellij.blockers[0] || zellij.warnings[0] || null
     }
   };
 }
 
-export async function ensureCodexCliTool({ skip = false }: any = {}) {
+export async function ensureMadLaunchDependencies(args: any = []) {
+  const skip = args.includes('--skip-cli-tools') || process.env.SKS_SKIP_CLI_TOOLS === '1';
+  const zellijRepair = skip ? { target: 'zellij', status: 'skipped', reason: 'SKS_SKIP_CLI_TOOLS=1 or --skip-cli-tools' } : await ensureZellijCliTool(args);
+  const zellij = await checkZellijCapability({ require: false, writeReport: false });
+  const ready = zellij.status === 'ok';
+  return {
+    ready,
+    actions: ready ? [] : [{
+      target: 'zellij',
+      status: zellijRepair.status,
+      command: (zellijRepair as any).command || zellijInstallHint(),
+      error: (zellijRepair as any).error || zellij.blockers[0] || zellij.warnings[0] || null,
+      repair: zellijRepair
+    }],
+    status: {
+      zellij: {
+        ok: ready,
+        status: zellij.status,
+        version: zellij.version,
+        min_version: zellij.min_version,
+        repair: zellijRepair,
+        install_hint: ready ? null : zellijInstallHint()
+      }
+    }
+  };
+}
+
+export function formatMadLaunchDependencyAction(action: any = {}) {
+  const command = action.command ? ` Run: ${action.command}.` : '';
+  const error = action.error ? ` ${action.error}` : '';
+  return `${action.target || 'dependency'} ${action.status || 'blocked'}.${command}${error}`.trim();
+}
+
+export async function ensureCodexCliTool({ skip = false, args = [] }: any = {}) {
   if (skip) return { status: 'skipped', reason: 'SKS_SKIP_CLI_TOOLS=1 or --skip-cli-tools' };
   const before = await getCodexInfo().catch(() => EMPTY_CODEX_INFO);
   if (before.bin) return { status: 'present', bin: before.bin, version: before.version || null };
   const npmBin = await which('npm');
   if (!npmBin) return { status: 'failed', error: 'npm not found on PATH; install Codex CLI manually with npm i -g @openai/codex@latest.' };
+  const command = 'npm i -g @openai/codex@latest';
+  if (args.includes('--dry-run')) return { status: 'dry_run', command, error: 'Codex CLI not found on PATH.' };
+  if (!await confirmInstallYesDefault(`Codex CLI is missing. Install latest Codex CLI with ${command}?`, args)) {
+    return { status: 'needs_approval', command, error: 'Codex CLI not found on PATH.' };
+  }
   const install = await runProcess(npmBin, ['i', '-g', '@openai/codex@latest'], {
     timeoutMs: 120000,
     maxOutputBytes: 128 * 1024
@@ -1912,16 +2030,17 @@ export async function ensureZellijCliTool(args: any = [], opts: any = {}) {
   if (!brew) return { target: 'zellij', status: 'manual_required', command: 'Install Homebrew, then run: brew install zellij', error: before.blockers[0] || before.warnings[0] || 'zellij not found' };
   const repairCommand = command;
   if (args.includes('--dry-run') || opts.dryRun) return { target: 'zellij', status: 'dry_run', command: repairCommand, error: before.blockers[0] || before.warnings[0] || null };
-  const question = before.bin
+  const hasInstalledZellij = Boolean(before.version);
+  const question = hasInstalledZellij
     ? `Homebrew Zellij ${before.version || 'unknown'} is not ready. Upgrade to latest Zellij with ${repairCommand}?`
     : `Zellij is missing. Install latest Zellij with ${repairCommand}?`;
   if (!await confirmInstallYesDefault(question, args)) return { target: 'zellij', status: 'needs_approval', command: repairCommand, error: before.blockers[0] || before.warnings[0] || null };
-  const brewArgs = before.bin ? ['upgrade', 'zellij'] : ['install', 'zellij'];
+  const brewArgs = hasInstalledZellij ? ['upgrade', 'zellij'] : ['install', 'zellij'];
   const install = await runProcess(brew, brewArgs, { timeoutMs: 180000, maxOutputBytes: 128 * 1024 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   if (install.code !== 0) return { target: 'zellij', status: 'failed', command: repairCommand, error: `${install.stderr || install.stdout || repairCommand + ' failed'}`.trim() };
   const after = await checkZellijCapability({ require: false, writeReport: false });
   if (after.status !== 'ok') return { target: 'zellij', status: 'installed_not_ready', command: repairCommand, error: after.blockers[0] || after.warnings[0] || 'zellij installed but not ready' };
-  return { target: 'zellij', status: before.version ? 'upgraded' : 'installed', command: repairCommand, bin: after.bin, version: after.version || null };
+  return { target: 'zellij', status: hasInstalledZellij ? 'upgraded' : 'installed', command: repairCommand, bin: after.bin, version: after.version || null };
 }
 
 function zellijInstallHint() {
@@ -1929,6 +2048,7 @@ function zellijInstallHint() {
 }
 
 async function confirmInstallYesDefault(question: any, args: any = []) {
+  if (hasFlag(args, '--from-postinstall') && process.env.SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS !== '1') return false;
   if (shouldAutoApproveInstall(args)) return true;
   if (!canAskYesNo()) return false;
   const answer = (await askPostinstallQuestion(`${question} [Y/n] `)).trim();
@@ -1961,6 +2081,8 @@ export async function maybePromptCodexUpdateForLaunch(args: any = [], opts: any 
 }
 
 export function shouldAutoApproveInstall(args: any = [], env: any = process.env) {
+  if (hasFlag(args, '--from-postinstall') && env.SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS !== '1') return false;
+  if (hasFlag(args, '--from-postinstall') && env.SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS === '1') return true;
   return hasFlag(args, '--yes') || hasFlag(args, '-y') || isAgentRuntime(env);
 }
 

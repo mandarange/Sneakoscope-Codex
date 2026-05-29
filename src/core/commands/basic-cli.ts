@@ -128,6 +128,8 @@ export async function setupCommand(args: any = []) {
     localOnly: flag(args, '--local-only'),
     globalCommand: 'sks'
   });
+  const { ensureRelatedCliTools } = await import('../../cli/install-helpers.js');
+  const cliTools = await ensureRelatedCliTools(args);
   const result = {
     schema: 'sks.setup.v1',
     ok: true,
@@ -135,11 +137,14 @@ export async function setupCommand(args: any = []) {
     install_scope: installScope,
     command_prefix: sksCommandPrefix(installScope, { globalCommand: 'sks' }),
     created: res.created || [],
-    local_only: flag(args, '--local-only')
+    local_only: flag(args, '--local-only'),
+    cli_tools: cliTools
   };
   if (flag(args, '--json')) return printJson(result);
   console.log(`Setup complete: ${root}`);
   console.log(`Install scope: ${installScope}`);
+  console.log(`Codex CLI: ${cliTools.codex.status}${cliTools.codex.version ? ` ${cliTools.codex.version}` : ''}`);
+  console.log(`Zellij: ${cliTools.zellij.ok ? 'ok' : cliTools.zellij.repair.status}${cliTools.zellij.version ? ` ${cliTools.zellij.version}` : ''}`);
   for (const file of result.created) console.log(`- ${file}`);
 }
 
@@ -170,34 +175,45 @@ export async function fixPathCommand(args: any = []) {
 export async function depsCommand(sub: any = 'check', args: any = []) {
   const action = sub || 'check';
   if (action !== 'check' && action !== 'status') {
-    console.error('Usage: sks deps check [--json]');
+    console.error('Usage: sks deps check [--json] [--yes]');
     process.exitCode = 1;
     return;
   }
   const npm = whichSync('npm');
   const nodeOk = Number(process.versions.node.split('.')[0]) >= 20;
   const root = await sksRoot();
+  const { ensureRelatedCliTools } = await import('../../cli/install-helpers.js');
+  const repairRequested = flag(args, '--yes') || flag(args, '-y');
+  const cliTools = await ensureRelatedCliTools(repairRequested ? args : [...args, '--dry-run']);
+  const zellijReady = cliTools.zellij.ok === true;
+  const codexReady = cliTools.codex.status === 'present' || cliTools.codex.status === 'installed';
   const result = {
     schema: 'sks.deps-status.v1',
     root,
-    ready: Boolean(nodeOk && npm),
+    ready: Boolean(nodeOk && npm && codexReady && zellijReady),
     node: { ok: nodeOk, version: process.version },
     npm: { ok: Boolean(npm), bin: npm },
+    cli_tools: cliTools,
     next_actions: [
       ...(!nodeOk ? ['Install Node.js 20.11+.'] : []),
-      ...(!npm ? ['Install npm or a Node.js distribution that includes npm.'] : [])
+      ...(!npm ? ['Install npm or a Node.js distribution that includes npm.'] : []),
+      ...(!codexReady ? [`Run sks deps check --yes or npm i -g @openai/codex@latest.`] : []),
+      ...(!zellijReady ? [`Run sks deps check --yes or ${cliTools.zellij.install_hint || 'install Zellij'}.`] : [])
     ]
   };
   if (flag(args, '--json')) return printJson(result);
   console.log('SKS Dependencies');
   console.log(`Node: ${result.node.ok ? 'ok' : 'missing'} ${result.node.version}`);
   console.log(`npm:  ${result.npm.ok ? 'ok' : 'missing'} ${result.npm.bin || ''}`.trim());
+  console.log(`Codex CLI: ${cliTools.codex.status}${cliTools.codex.version ? ` ${cliTools.codex.version}` : ''}`);
+  console.log(`Zellij: ${zellijReady ? 'ok' : cliTools.zellij.repair.status}${cliTools.zellij.version ? ` ${cliTools.zellij.version}` : ''}`);
+  for (const action of result.next_actions) console.log(`Next: ${action}`);
   if (!result.ready) process.exitCode = 1;
 }
 
 export async function postinstallCommand(args: any = []) {
   const { postinstall } = await import('../../cli/install-helpers.js');
-  return postinstall({ bootstrap: bootstrapCommand });
+  return postinstall({ bootstrap: bootstrapCommand, args });
 }
 
 export async function selftestCommand(args: any = []) {

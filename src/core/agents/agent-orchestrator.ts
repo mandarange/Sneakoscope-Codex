@@ -7,7 +7,7 @@ import { initializeAgentCentralLedger, appendAgentLedgerEvent, compactAgentLedge
 import { detectStaleAgentSessions, killTimedOutAgentSessions, openAgentSession, heartbeatAgentSession, collectAgentSession, completeAgentSession, closeAgentSession, writeAgentLifecycleAggregate, writeAgentLifecyclePolicy } from './agent-lifecycle.js'
 import { writeAgentConsensus } from './agent-consensus.js'
 import { writeAgentProofEvidence } from './agent-proof-evidence.js'
-import { normalizeAgentBackend } from './agent-schema.js'
+import { MAX_AGENT_COUNT, normalizeAgentBackend } from './agent-schema.js'
 import type { AgentRunOptions } from './agent-schema.js'
 import { PersistentAgentPatchQueueStore } from './agent-patch-queue-store.js'
 import { applyAgentPatchQueueEntry, rollbackAgentPatchApply } from './agent-patch-apply-worker.js'
@@ -52,6 +52,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const routeBlackboxKind = String(opts.routeBlackboxKind || defaultRouteBlackboxKind(route))
   const fastModePolicy = resolveFastModePolicy(opts)
   const backend = normalizeAgentBackend(opts.backend || (opts.mock ? 'fake' : 'codex-exec'))
+  const maxAgentCount = Number.isFinite(Number(opts.maxAgentCount)) && Number(opts.maxAgentCount) >= 1 ? Math.floor(Number(opts.maxAgentCount)) : MAX_AGENT_COUNT
   const realZellij = backend === 'zellij' && opts.real === true
   const realZellijProofRequired = realZellij && process.env.SKS_REQUIRE_ZELLIJ === '1'
   const created = opts.missionId
@@ -61,7 +62,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const dir = created.dir
   const namespace = await buildProjectNamespace({ root, missionId })
   await writeProjectNamespaceArtifact(dir, namespace)
-  let roster = buildProvidedAgentRoster(opts.roster, { concurrency: opts.concurrency, readonly: opts.readonly }) || buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
+  let roster = buildProvidedAgentRoster(opts.roster, { concurrency: opts.concurrency, readonly: opts.readonly, maxAgentCount }) || buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, maxAgentCount, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
   roster = applyFastModeToRoster(roster, fastModePolicy)
   roster.roster = roster.roster.map((agent: any) => ({
     ...agent,
@@ -72,7 +73,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       index: agent.index
     })
   }))
-  const targetActiveSlots = normalizeTargetActiveSlots(opts.targetActiveSlots ?? opts.agents ?? roster.agent_count)
+  const targetActiveSlots = normalizeTargetActiveSlots(opts.targetActiveSlots ?? opts.agents ?? roster.agent_count, maxAgentCount)
   const desiredWorkItemCount = normalizeDesiredWorkItemCount(opts.desiredWorkItemCount, opts.minimumWorkItems, targetActiveSlots)
   const minimumWorkItems = normalizeMinimumWorkItems(opts.minimumWorkItems, targetActiveSlots)
   const sourceIntelligence = await runSourceIntelligence({ root, missionDir: dir, route, query: prompt, offline: true, context7Available: true })
@@ -244,6 +245,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     partition,
     prompt,
     targetActiveSlots,
+    maxActiveSlots: maxAgentCount,
     ...(opts.maxQueueExpansion === undefined ? {} : { maxQueueExpansion: opts.maxQueueExpansion }),
     ...(opts.refillDelayMs === undefined ? {} : { refillDelayMs: opts.refillDelayMs }),
     sourceIntelligenceRefs: sourceIntelligenceRef,
@@ -730,7 +732,9 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
   const sourceRows = Array.isArray(input?.roster) ? input.roster : Array.isArray(input?.personas) ? input.personas : []
   if (!sourceRows.length) return null
   const agentCount = sourceRows.length
-  const concurrency = normalizeAgentConcurrency(opts.concurrency ?? input?.concurrency ?? agentCount, agentCount)
+  const providedMax = Number(opts.maxAgentCount ?? input?.max_agents)
+  const maxAgentCount = Number.isFinite(providedMax) && providedMax >= 1 ? Math.floor(providedMax) : Math.max(agentCount, MAX_AGENT_COUNT)
+  const concurrency = normalizeAgentConcurrency(opts.concurrency ?? input?.concurrency ?? agentCount, agentCount, Math.max(maxAgentCount, agentCount))
   const personas = Array.isArray(input?.personas) ? input.personas : sourceRows
   const roster = sourceRows.map((entry: any, index: number) => {
     const readOnly = opts.readonly === true || entry.read_only === true
@@ -757,7 +761,7 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
   return {
     schema: 'sks.agent-roster.v1',
     default_agents: agentCount,
-    max_agents: Math.max(agentCount, 20),
+    max_agents: Math.max(agentCount, maxAgentCount),
     agent_count: agentCount,
     concurrency,
     batch_count: Math.ceil(agentCount / concurrency),

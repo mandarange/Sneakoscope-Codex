@@ -85,6 +85,7 @@ export async function runAgentScheduler(input: {
   partition?: any
   prompt?: string
   targetActiveSlots?: number
+  maxActiveSlots?: number
   refillDelayMs?: number
   rateLimitBackoffMs?: number
   maxQueueExpansion?: number
@@ -93,7 +94,8 @@ export async function runAgentScheduler(input: {
   launchSession: (ctx: AgentSchedulerLaunchContext) => Promise<any>
   onSchedulerEvent?: (ctx: AgentSchedulerEventContext) => Promise<void>
 }) {
-  const targetActiveSlots = normalizeTargetActiveSlots(input.targetActiveSlots ?? input.roster?.agent_count ?? input.roster?.concurrency ?? 5)
+  const maxActiveSlots = Number.isFinite(Number(input.maxActiveSlots)) && Number(input.maxActiveSlots) >= 1 ? Math.floor(Number(input.maxActiveSlots)) : MAX_AGENT_COUNT
+  const targetActiveSlots = normalizeTargetActiveSlots(input.targetActiveSlots ?? input.roster?.agent_count ?? input.roster?.concurrency ?? 5, maxActiveSlots)
   let slots = createAgentWorkerSlots(input.roster, targetActiveSlots)
   const queue = createAgentWorkQueue({
     slices: input.partition?.slices || [],
@@ -286,10 +288,11 @@ export async function runAgentScheduler(input: {
   }
 }
 
-export function normalizeTargetActiveSlots(value: unknown) {
+export function normalizeTargetActiveSlots(value: unknown, maxActiveSlots: number = MAX_AGENT_COUNT) {
+  const cap = Number.isFinite(Number(maxActiveSlots)) && Number(maxActiveSlots) >= 1 ? Math.floor(Number(maxActiveSlots)) : MAX_AGENT_COUNT
   const parsed = Number(value ?? 5)
-  if (!Number.isFinite(parsed) || parsed < 1) return 5
-  return Math.min(MAX_AGENT_COUNT, Math.floor(parsed))
+  if (!Number.isFinite(parsed) || parsed < 1) return Math.min(cap, 5)
+  return Math.min(cap, Math.floor(parsed))
 }
 
 function buildState(
@@ -311,7 +314,7 @@ function buildState(
     mission_id: missionId,
     status: opts.status,
     target_active_slots: targetActiveSlots,
-    max_active_slots: MAX_AGENT_COUNT,
+    max_active_slots: Math.max(MAX_AGENT_COUNT, targetActiveSlots),
     total_work_items: queue.items.length,
     active_slot_count: active.size,
     pending_count: pendingCount,

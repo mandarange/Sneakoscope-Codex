@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.14 writes the `sks.release-readiness.v1` report for actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, Zellij readiness/proof, and official Fast mode service-tier propagation. `ok: true` in the 1.18.14 slice means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, Zellij-only runtime checks, and `-c service_tier=fast` propagation evidence have no remaining blockers.
+SKS 1.19.0 writes the `sks.release-readiness.v1` report for actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, Zellij readiness/proof, install-time Zellij dependency repair, and official Fast mode service-tier propagation. `ok: true` in the 1.19.0 slice means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, Zellij-only runtime checks, background-layout launch wiring, and `-c service_tier=fast` propagation evidence have no remaining blockers.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -119,17 +119,17 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.18.12.json`
-- `.sneakoscope/reports/release-readiness-1.18.12.md`
-- `.sneakoscope/reports/all-feature-completion-1.18.12.json`
-- `.sneakoscope/reports/all-feature-completion-1.18.12.md`
-- `.sneakoscope/reports/official-docs-compat-1.18.12.json`
-- `.sneakoscope/reports/official-docs-compat-1.18.12.md`
-- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.18.12.json`
+- `.sneakoscope/reports/release-readiness-1.19.0.json`
+- `.sneakoscope/reports/release-readiness-1.19.0.md`
+- `.sneakoscope/reports/all-feature-completion-1.19.0.json`
+- `.sneakoscope/reports/all-feature-completion-1.19.0.md`
+- `.sneakoscope/reports/official-docs-compat-1.19.0.json`
+- `.sneakoscope/reports/official-docs-compat-1.19.0.md`
+- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.19.0.json`
 - `.sneakoscope/reports/agent-real-codex-patch-envelope-smoke.json`
 - `.sneakoscope/reports/agent-real-codex-parallel-workers.json`
-- `.sneakoscope/reports/agent-real-tmux-physical-proof-1.18.12.json`
-- `.sneakoscope/reports/runtime-truth-matrix-1.18.12.json`
+- `.sneakoscope/reports/zellij-real-session-launch.json`
+- `.sneakoscope/reports/runtime-truth-matrix-1.19.0.json`
 - `.sneakoscope/reports/codex-0-134-official-compat.json`
 - `.sneakoscope/reports/codex-0-134-runner-truth.json`
 - `.sneakoscope/reports/mcp-0-134-modernization.json`
@@ -162,22 +162,22 @@ npm run release:readiness
 - `.sneakoscope/reports/dfix-patch-swarm-route-blackbox.json`
 - `.sneakoscope/reports/retention-cleanup-safety.json`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, real Codex parallel worker proof, Warp/tmux right-lane physical proof, and remaining 1.18.12 P0-P9 closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, real Codex parallel worker proof, Zellij lane/session proof, and remaining 1.19.0 P0-P9 closure gaps.
 
 ## Priority Closure
 
 | Priority | Status Surface |
 | --- | --- |
-| P0 | Source Intelligence, safety, release, proof, runtime, task graph, follow-up schema, route backfill, no-Scout, terminal, real tmux proof, cleanup executor, retention cleanup, fake-vs-real policy, and Goal blockers |
-| P1 | Codex App dashboard/operator visibility for active slots, total work items, pending/active/completed counts, backfill, generation history, source, X AI, Codex Web, Goal, terminal, tmux physical proof, cleanup status, and work graph score |
+| P0 | Source Intelligence, safety, release, proof, runtime, task graph, follow-up schema, route backfill, no-Scout, terminal, real Zellij proof, cleanup executor, retention cleanup, fake-vs-real policy, and Goal blockers |
+| P1 | Codex App dashboard/operator visibility for active slots, total work items, pending/active/completed counts, backfill, generation history, source, X AI, Codex Web, Goal, terminal, Zellij physical proof, cleanup status, and work graph score |
 | P2 | Parallel provider queries, release DAG groups, local-only caches, refill latency, queue metrics, janitor throttling, capture-pane caps, bounded work graph scans, and worker-pool speed summaries |
 | P3 | README, policy docs, migration, troubleshooting, CLI help, `--work-items`, active-slot semantics, real smoke envs, cleanup commands, retention cleanup wording, and onboarding |
-| P4 | Human-readable summaries for source intelligence, X AI used/not used, Goal fallback, terminal close, tmux persistence, physical pane proof, cleanup, scheduler health, and worker Scout evidence |
+| P4 | Human-readable summaries for source intelligence, X AI used/not used, Goal fallback, terminal close, Zellij persistence, physical pane proof, cleanup, scheduler health, and worker Scout evidence |
 | P5 | Regression catalog for fake pane rejection, missing capture/list-panes, output-last-message absence, cleanup dry-run/apply, retention preserve/remove safety, work graph partial quality, non-agent route stand-ins, source refs, and Goal refs |
 | P6 | Codex 0.134 compatibility, MCP 0.134 policy, managed proxy propagation, local Codex history search, strategy-first orchestration, Appshots evidence, parallel write kernel proof, and release gate existence audit |
 | P7 | Patch swarm runtime truth, transaction journal, conflict rebase, strict strategy-to-patch coverage, rollback command proof, and real Codex patch smoke optional/required state |
 | P8 | Dashboard, Trust Report, runtime truth, and human summary surfaces for patch swarm status, rollback command, changed files by agent, MCP scheduler status, and real Codex patch smoke next action |
-| P9 | Native CLI Session Swarm proof, no-subagent scaling proof, and Fast mode default propagation across worker CLI, Codex exec, tmux, and MAD paths |
+| P9 | Native CLI Session Swarm proof, no-subagent scaling proof, and Fast mode default propagation across worker CLI, Codex exec, Zellij, and MAD paths |
 
 MAD-SKS readiness remains high-friction: full-system authority requires explicit user authorization, scoped target roots, separate consent for system access, DB writes, package installation, service control, admin operations, network, Computer Use, destructive delete, and generated-asset edits. The SKS harness protected core remains immutable even under MAD-SKS.
 

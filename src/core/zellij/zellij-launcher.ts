@@ -36,17 +36,15 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   }
   const layout = await writeZellijLayout(root, layoutInput)
   const capability = await checkZellijCapability({ root, require: opts.requireZellij === true })
-  const createCommand = ['--session', sessionName, '--layout', layout.layout_path]
+  const createCommand = ['attach', '--create-background', sessionName, 'options', '--default-layout', layout.layout_path]
   const attachCommand = ['attach', sessionName]
-  const backgroundCommand = ['attach', '--create-background', sessionName]
   const command = opts.attach === true ? attachCommand : createCommand
   const launch: any = opts.dryRun === true || capability.status !== 'ok'
     ? null
     : opts.attach === true
       ? await runZellij(attachCommand, { cwd: opts.cwd || root, timeoutMs: 30000, optional: opts.requireZellij !== true })
       : {
-          create_background: await runZellij(backgroundCommand, { cwd: opts.cwd || root, timeoutMs: 5000, optional: opts.requireZellij !== true }),
-          apply_layout: await runZellij(createCommand, { cwd: opts.cwd || root, timeoutMs: 5000, optional: opts.requireZellij !== true })
+          create_background: await runZellij(createCommand, { cwd: opts.cwd || root, timeoutMs: 5000, optional: opts.requireZellij !== true })
         }
   const paneProof = await writeZellijPaneProof(root, {
     missionId,
@@ -60,13 +58,12 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     ok: false,
     blockers: [`zellij_pane_proof_exception:${err?.message || String(err)}`]
   }))
-  const launchOk = opts.attach === true ? launch?.ok === true : launch?.create_background?.ok === true && launch?.apply_layout?.ok === true
+  const launchOk = opts.attach === true ? launch?.ok === true : launch?.create_background?.ok === true
   const ok = capability.ok && (opts.dryRun === true || capability.status !== 'ok' || launchOk) && (opts.requireZellij === true ? paneProof.ok === true : true)
   const blockers = [
     ...capability.blockers,
     ...(launch && opts.attach === true && !launch.ok ? launch.blockers.map((blocker: string) => `zellij_launch_${blocker}`) : []),
     ...(launch && opts.attach !== true && !launch.create_background?.ok ? (launch.create_background?.blockers || ['zellij_background_session_failed']).map((blocker: string) => `zellij_launch_${blocker}`) : []),
-    ...(launch && opts.attach !== true && !launch.apply_layout?.ok ? (launch.apply_layout?.blockers || ['zellij_layout_apply_failed']).map((blocker: string) => `zellij_launch_${blocker}`) : []),
     ...(opts.requireZellij === true && paneProof.ok !== true ? (paneProof.blockers || ['zellij_pane_proof_failed']).map((blocker: string) => `zellij_launch_${blocker}`) : [])
   ]
   const report = {
@@ -83,7 +80,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     layout_artifact: path.relative(root, layout.layout_path),
     command: ['zellij', ...command],
     launch_command: ['zellij', ...createCommand],
-    background_command: ['zellij', ...backgroundCommand],
+    background_command: ['zellij', ...createCommand],
     attach_command: `zellij attach ${sessionName}`,
     pane_proof_path: path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-pane-proof.json'),
     pane_proof: paneProof,

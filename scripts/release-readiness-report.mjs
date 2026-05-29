@@ -211,7 +211,7 @@ const checks = {
 };
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
 const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
-const releaseMetadata = runNodeScript('scripts/release-metadata-1-18-check.mjs');
+const releaseMetadata = runNodeScript('scripts/release-metadata-1-19-check.mjs');
 const imagegenCore = runNodeScript('scripts/imagegen-capability-check.mjs');
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),

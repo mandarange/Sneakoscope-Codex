@@ -76,8 +76,25 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`));
   const launch = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
-  if (!launch.ok) console.log(`MAD Zellij action: ${launch.blockers.join(', ') || launch.warnings.join(', ') || 'check Zellij installation'}`);
+  if (!launch.ok) console.log(`MAD Zellij action: ${formatMadZellijAction(launch)}`);
   return launch;
+}
+
+function formatMadZellijAction(launch: any) {
+  const blockers = launch.blockers?.join(', ') || launch.warnings?.join(', ') || 'check Zellij installation';
+  const details = [
+    ['stderr_tail', launch.launch?.stderr_tail],
+    ['stdout_tail', launch.launch?.stdout_tail],
+    ['create_background.stderr_tail', launch.launch?.create_background?.stderr_tail],
+    ['create_background.stdout_tail', launch.launch?.create_background?.stdout_tail]
+  ]
+    .map(([label, value]: any[]) => [label, String(value || '').trim()])
+    .filter(([, value]: any[]) => Boolean(value))
+    .slice(0, 2)
+    .map(([label, value]: any[]) => `${label}: ${value.replace(/\s+/g, ' ').slice(0, 360)}`);
+  const detail = details.length ? ` | ${details.join(' | ')}` : '';
+  const report = launch.report_path ? ` | report: ${launch.report_path}` : '';
+  return `${blockers}${detail}${report}`;
 }
 
 async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: any[] = []) {
