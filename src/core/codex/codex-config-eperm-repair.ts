@@ -1,8 +1,9 @@
 import fsp from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { nowIso, readText, runProcess, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { inspectCodexConfigReadability } from './codex-config-readability.js'
-import { splitCodexProjectConfigPolicy } from './codex-project-config-policy.js'
+import { repairCodexConfigStructure, splitCodexProjectConfigPolicy } from './codex-project-config-policy.js'
 
 export const CODEX_CONFIG_EPERM_REPAIR_SCHEMA = 'sks.codex-config-eperm-repair.v1'
 
@@ -10,8 +11,21 @@ export async function repairCodexConfigEperm(rootInput: string = process.cwd(), 
   const root = path.resolve(rootInput || process.cwd())
   const reportPath = opts.reportPath || path.join(root, '.sneakoscope', 'reports', 'codex-config-eperm-repair.json')
   const configPath = path.resolve(opts.configPath || path.join(root, '.codex', 'config.toml'))
+  const codexHome = path.resolve(opts.codexHome || process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), '.codex'))
+  const codexHomeConfigPath = path.join(codexHome, 'config.toml')
   const before = await inspectCodexConfigReadability(root, { ...opts, configPath, writeReport: false })
-  const policy = await splitCodexProjectConfigPolicy(root, { ...opts, configPath, apply: opts.fix === true, writeReport: false })
+  // Structural recovery FIRST: hoist machine-local keys that a prior buggy move
+  // absorbed into a table back to the root, on both the project config and the
+  // global CODEX_HOME config (the file Codex actually loads). Runs before the
+  // splitter so recovered keys can then be migrated cleanly.
+  const structureRepairs: any[] = []
+  if (opts.fix === true) {
+    structureRepairs.push({ scope: 'project', ...(await repairCodexConfigStructure(configPath, { apply: true })) })
+    if (path.resolve(codexHomeConfigPath) !== path.resolve(configPath)) {
+      structureRepairs.push({ scope: 'codex_home', ...(await repairCodexConfigStructure(codexHomeConfigPath, { apply: true })) })
+    }
+  }
+  const policy = await splitCodexProjectConfigPolicy(root, { ...opts, configPath, codexHome, apply: opts.fix === true, writeReport: false })
   const repairActions = opts.fix === true ? await runScopedRepairs(configPath, before.blockers) : []
   const after = await inspectCodexConfigReadability(root, { ...opts, configPath, writeReport: false })
   const blockers = [...new Set([...(policy.blockers || []), ...after.blockers])]
@@ -27,6 +41,7 @@ export async function repairCodexConfigEperm(rootInput: string = process.cwd(), 
     fix: opts.fix === true,
     before,
     policy,
+    structure_repairs: structureRepairs,
     repair_actions: repairActions,
     after,
     tcc_risk: tccRisk(root),
@@ -34,6 +49,9 @@ export async function repairCodexConfigEperm(rootInput: string = process.cwd(), 
     blockers,
     operator_actions: [
       ...(after.operator_actions || []),
+      ...structureRepairs
+        .filter((repair) => repair.applied && repair.hoisted_keys?.length)
+        .map((repair) => `Recovered misplaced machine-local keys (${repair.hoisted_keys.join(', ')}) back to the top of ${repair.scope === 'codex_home' ? 'CODEX_HOME' : 'project'} config; backup at ${repair.backup_path}.`),
       ...(tccProbable ? ['macOS probable TCC block: grant Full Disk Access and Files and Folders permissions to Warp/Terminal/iTerm, Codex app, and the Codex CLI launch context, then rerun `sks mad repair-config --apply`.'] : [])
     ]
   }

@@ -3,6 +3,22 @@
 ## [Unreleased]
 
 
+## [1.18.14] - 2026-05-29
+
+### Fixed
+
+- Make `sks doctor --fix` actually recover an already-corrupted Codex config (its whole reason to exist). Previously the splitter could not help once machine-local keys were physically nested inside a table — it saw them as table members, not top-level keys — and `doctor --fix` only ever touched the project `.codex/config.toml`, never the global `CODEX_HOME/config.toml` that Codex actually loads. Added a structural recovery pass (`repairCodexConfigStructure`) that hoists misplaced machine-local keys (e.g. `model_provider`, `notify`) out of `mcp_servers`/`env` tables (and anything trailing an absorbed `# SKS moved …` comment) back above the first table, with backup + atomic write, and wired it into `doctor --fix` / `mad repair-config` for **both** the project and global configs. Legitimate keys inside `[profiles.*]` are preserved.
+- Detect structurally-broken configs: the config-load probe now classifies serde/TOML deserialize failures (`invalid type: …`, `expected a string`, `Error loading config.toml` without an EPERM cause) as `codex_cli_config_toml_parse_error` instead of silently falling back to `codex_cli_config_load_unverified`, and surfaces a `sks doctor --fix` operator action for it.
+- Stop the machine-local config mover from corrupting `~/.codex/config.toml`: moved top-level keys (e.g. `model_provider`, and array-valued `notify`) are now merged structurally **before** any `[table]` header instead of being appended at end-of-file, where TOML parsed them as members of the trailing table (producing `invalid type: sequence, expected a string` and a config Codex refused to load). Restores `sks --mad` gating and codex-lb when a machine-local `model_provider`/`notify` is present.
+- Make `splitCodexProjectConfigPolicy` a no-op when the project config resolves to the global `CODEX_HOME/config.toml` (e.g. running `sks` from the home directory), so the global config is no longer split against itself and re-corrupted on every `sks doctor --fix` / `sks --mad`.
+- Ship `codex-config-load-probe.mjs` inside the published package (`dist/scripts/`) and resolve it from there at runtime. The probe was previously excluded by the npm `files` allowlist + `.npmignore`, so installs could not run it and MAD preflight always fell back to the `codex_cli_config_load_unverified` blocker. The runtime now degrades gracefully (integration-optional) if the probe is ever absent rather than hard-blocking.
+
+### Added
+
+- Add `codex-project-config-policy-merge-regression.mjs` covering moved-keys-before-tables ordering and the CODEX_HOME self-split no-op guard.
+- Add `doctor-fix-recovers-corrupted-config-check.mjs` proving `doctor --fix` recovers a corrupted project and global config (key hoisting), and is a no-op on a healthy config (profile keys preserved).
+
+
 ## [1.18.13] - 2026-05-29
 
 ### Breaking

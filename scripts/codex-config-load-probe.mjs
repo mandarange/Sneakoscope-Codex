@@ -168,6 +168,10 @@ function classifyText(textInput, opts = {}) {
     operation_not_permitted: /Operation not permitted|os error 1|EPERM/i.test(text),
     permission_denied: /Permission denied|EACCES/i.test(text),
     toml_parse: /TOML parse|toml.*parse|parse.*toml|invalid.*toml|duplicate key/i.test(text),
+    // serde/toml deserialize failures from a structurally-broken config, e.g.
+    // `invalid type: sequence, expected a string` when `notify` was absorbed into
+    // an env table. These carry no literal "toml" token so the patterns above miss them.
+    toml_type_error: /invalid type:|invalid value:|expected (a |an )?(string|sequence|array|table|map|integer|boolean|float)|missing field|unknown field|unknown variant/i.test(text),
     untrusted_project: /untrusted project/i.test(text),
     ignored_project_local_config_key: /ignored project-local config key|ignored.*project.*config/i.test(text)
   };
@@ -175,7 +179,11 @@ function classifyText(textInput, opts = {}) {
   const warnings = [];
   if (flags.operation_not_permitted || (flags.error_loading_config_toml && /os error 1/i.test(text))) blockers.push('codex_cli_config_eperm');
   else if (flags.permission_denied) blockers.push('codex_cli_config_permission_denied');
-  if (flags.toml_parse) blockers.push('codex_cli_config_toml_parse_error');
+  // A config-load failure that is not a permission problem is a parse/structure error.
+  const tomlLoadFailure = flags.toml_parse
+    || (!opts.configLoaded && flags.toml_type_error)
+    || (!opts.configLoaded && flags.error_loading_config_toml && !flags.operation_not_permitted && !flags.permission_denied);
+  if (tomlLoadFailure) blockers.push('codex_cli_config_toml_parse_error');
   if (flags.untrusted_project) blockers.push('codex_cli_untrusted_project');
   if (flags.ignored_project_local_config_key) {
     if (opts.configLoaded) warnings.push('codex_cli_ignored_project_local_config_key');

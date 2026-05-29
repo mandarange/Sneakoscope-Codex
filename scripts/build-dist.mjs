@@ -11,6 +11,7 @@ const distRoot = path.join(root, 'dist');
 await fsp.mkdir(distRoot, { recursive: true });
 await removeDistMjs(distRoot);
 await copyRuntimeConfigFiles();
+await copyRuntimeScripts();
 await removeDistSourceMaps(distRoot);
 await import('./write-build-manifest.mjs');
 
@@ -31,6 +32,24 @@ async function removeDistSourceMaps(dir) {
     else if (entry.isFile() && (entry.name.endsWith('.js.map') || entry.name.endsWith('.d.ts.map'))) {
       await fsp.rm(file, { force: true });
     }
+  }
+}
+
+// Runtime helper scripts that ship inside the published package. The `scripts/`
+// directory is excluded from the npm package (files allowlist + .npmignore), so
+// any script the runtime spawns must be copied into `dist/` (which is published).
+// The Codex config-load probe is resolved by the runtime at
+// `<packageRoot>/dist/scripts/codex-config-load-probe.mjs`; without this copy the
+// probe is missing in installs and MAD preflight falls back to the
+// `codex_cli_config_load_unverified` blocker.
+async function copyRuntimeScripts() {
+  const runtimeScripts = ['codex-config-load-probe.mjs'];
+  for (const rel of runtimeScripts) {
+    const from = path.join(root, 'scripts', rel);
+    const to = path.join(distRoot, 'scripts', rel);
+    if (!fs.existsSync(from)) continue;
+    await fsp.mkdir(path.dirname(to), { recursive: true });
+    await fsp.copyFile(from, to);
   }
 }
 
