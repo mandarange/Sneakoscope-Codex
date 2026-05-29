@@ -13,7 +13,7 @@ export function macosTccDiagnostic(rootInput: string = process.cwd(), blockers: 
     operator_actions: tccRisk && eperm ? [
       'System Settings -> Privacy & Security -> Full Disk Access: grant access to Warp, Terminal, iTerm, Codex app, and the app that launches Codex CLI.',
       'System Settings -> Privacy & Security -> Files and Folders: allow Desktop/Documents/iCloud access when the project is under those locations.',
-      'After granting access, fully restart the terminal/Codex app and run `sks mad repair-config --apply --tmux-smoke`.'
+      'After granting access, fully restart the terminal/Codex app and run `sks mad repair-config --apply`.'
     ] : []
   }
 }

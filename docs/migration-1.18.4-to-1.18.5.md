@@ -14,8 +14,8 @@ Recommended verification:
 
 ```bash
 npm run build
-npm run agent:tmux-physical-lifecycle-wired
-npm run agent:tmux-physical-proof-v2
+npm run zellij:pane-proof
+npm run zellij:screen-proof
 npm run agent:cleanup-executor-v2
 npm run agent:cleanup-command-ux
 npm run agent:ast-aware-work-graph

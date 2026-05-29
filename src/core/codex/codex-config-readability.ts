@@ -197,7 +197,7 @@ function classifyBlocker(check: CodexConfigCheck) {
 function operatorActions(blockers: string[]) {
   const actions = new Set<string>()
   if (blockers.some((item) => /^missing_/.test(item))) actions.add('Run `sks doctor --fix` to regenerate the managed Codex project config, then rerun the preflight.')
-  if (blockers.includes('codex_cli_config_eperm')) actions.add('Run `sks mad repair-config --apply --tmux-smoke`; if it still fails on macOS, grant Full Disk Access/Files and Folders access to the launching terminal, Warp, iTerm, Terminal, Codex app, or Codex CLI context.')
+  if (blockers.includes('codex_cli_config_eperm')) actions.add('Run `sks mad repair-config --apply`; if it still fails on macOS, grant Full Disk Access/Files and Folders access to the launching terminal, Warp, iTerm, Terminal, Codex app, or Codex CLI context.')
   if (blockers.includes('EPERM') || blockers.includes('tcc_possible')) actions.add('On macOS, grant the launching terminal/Codex app Full Disk Access or Files and Folders access, then rerun `sks doctor --fix`.')
   if (blockers.includes('EACCES') || blockers.includes('parent_traverse_denied')) actions.add('Restore owner traversal/read permissions for the project root, `.codex`, and `.codex/config.toml`.')
   if (blockers.includes('quarantine')) actions.add('Remove quarantine from the config with `xattr -d com.apple.quarantine .codex/config.toml` after verifying the file is trusted.')

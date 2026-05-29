@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { ensureDir, nowIso, writeTextAtomic } from '../fsx.js'
+import { ensureDir, nowIso, packageRoot, writeTextAtomic } from '../fsx.js'
 
 export const ZELLIJ_LAYOUT_SCHEMA = 'sks.zellij-layout.v1'
 
@@ -33,11 +33,14 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
   const cwd = path.resolve(input.cwd || process.cwd())
   const ledgerRoot = path.resolve(input.ledgerRoot)
   const title = input.title || `SKS ${input.kind || 'agent'} ${input.missionId}`
+  const sksCommand = `${shellQuote(process.execPath)} ${shellQuote(path.join(packageRoot(), 'dist', 'bin', 'sks.js'))}`
   const panes = Array.from({ length: slotCount }, (_, index) => {
     const slot = `slot-${String(index + 1).padStart(3, '0')}`
+    const stderrLog = shellQuote(path.join(ledgerRoot, 'zellij-lane-renderer.stderr.log'))
+    const command = `${sksCommand} zellij-lane --mission ${shellQuote(input.missionId)} --slot ${shellQuote(slot)} --ledger-root ${shellQuote(ledgerRoot)} --follow 2>> ${stderrLog}`
     return [
-      `            pane name=${kdlString(slot)} command="sks" {`,
-      `                args "zellij-lane" "--mission" ${kdlString(input.missionId)} "--slot" ${kdlString(slot)} "--ledger-root" ${kdlString(ledgerRoot)} "--follow"`,
+      `            pane name=${kdlString(slot)} command="sh" {`,
+      `                args "-lc" ${kdlString(command)}`,
       '            }'
     ].join('\n')
   }).join('\n')
@@ -54,7 +57,7 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     '    }',
     `    tab name=${kdlString(title)} cwd=${kdlString(cwd)} split_direction="vertical" {`,
     '        pane name="orchestrator" command="sh" {',
-    `            args "-lc" ${kdlString(`sks status --json; exec ${process.env.SHELL || '/bin/zsh'}`)}`,
+    `            args "-lc" ${kdlString(`${sksCommand} status --json || true; exec ${process.env.SHELL || '/bin/zsh'}`)}`,
     '        }',
     '        pane split_direction="horizontal" size="38%" {',
     panes,
@@ -73,13 +76,24 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     cwd,
     slot_count: slotCount,
     layout_kdl: layout,
-    launch_command: ['zellij', 'attach', '--create-background', sessionName, 'options', '--default-layout'],
+    launch_command: ['zellij', '--session', sessionName, '--layout', '<layout-path>'],
     attach_command: `zellij attach ${shellQuote(sessionName)}`
   }
 }
 
+export function validateZellijLayoutKdl(text: string) {
+  const blockers = [
+    ...(!/\blayout\s*\{/.test(text) ? ['zellij_layout_root_missing'] : []),
+    ...(!/\bzellij-lane\b/.test(text) ? ['zellij_layout_lane_command_missing'] : []),
+    ...(/\btmux\b/i.test(text) ? ['zellij_layout_references_removed_tmux'] : []),
+    ...(braceBalance(text) !== 0 ? ['zellij_layout_unbalanced_braces'] : [])
+  ]
+  return { ok: blockers.length === 0, blockers }
+}
+
 export async function writeZellijLayout(root: string, input: ZellijLayoutInput): Promise<ZellijLayoutBuild & { layout_path: string }> {
   const built = buildZellijLayoutKdl(input)
+  await ensureDir(path.resolve(input.ledgerRoot))
   const dir = path.join(root, '.sneakoscope', 'layouts')
   await ensureDir(dir)
   const fileName = `${input.kind || 'agent'}-${input.missionId}.kdl`
@@ -94,4 +108,14 @@ function kdlString(value: unknown): string {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function braceBalance(text: string): number {
+  let balance = 0
+  for (const char of text) {
+    if (char === '{') balance += 1
+    else if (char === '}') balance -= 1
+    if (balance < 0) return balance
+  }
+  return balance
 }

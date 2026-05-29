@@ -19,7 +19,7 @@ test('Team route exposes native agent backend only', async () => {
   assert.equal(proof.ok, true);
 });
 
-test('Team route preserves compatibility artifacts and exposes tmux cockpit lanes', async () => {
+test('Team route preserves compatibility artifacts and exposes Zellij cockpit lanes', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'team-compat-artifacts' });
   const json = await runSksInRoot(root, ['team', 'fixture', '--mock', '--json']);
   const missionDir = path.join(root, '.sneakoscope', 'missions', json.mission_id);
@@ -45,10 +45,14 @@ test('Team route preserves compatibility artifacts and exposes tmux cockpit lane
   assert.ok(plan.required_artifacts.includes('team-transcript.jsonl'));
   assert.ok(plan.required_artifacts.includes('team-dashboard.json'));
 
-  const tmux = await runSksInRoot(root, ['team', 'open-tmux', json.mission_id, '--json', '--no-attach']);
-  assert.equal(tmux.split_ui.mode, 'single_window_split_panes');
-  assert.equal(tmux.overview.agent, 'mission_overview');
-  assert.ok(tmux.lanes.some((lane) => lane.agent === 'mission_overview'));
-  assert.ok(tmux.lanes.some((lane) => /^native_agent_/.test(lane.agent)));
-  assert.match(tmux.cleanup_policy, /main Codex pane remains user controlled/);
+  const zellij = await runSksInRoot(root, ['team', 'open-zellij', json.mission_id, '--json', '--no-attach']);
+  assert.equal(zellij.schema, 'sks.zellij-session.v1');
+  assert.equal(zellij.kind, 'team');
+  assert.equal(zellij.mission_id, json.mission_id);
+  assert.equal(zellij.dry_run, true);
+  assert.ok(Array.isArray(zellij.command));
+  assert.ok(zellij.command.includes('zellij'));
+  assert.ok(zellij.launch_command.includes('--layout'));
+  assert.match(zellij.attach_command, /^zellij attach /);
+  assert.match(zellij.layout_artifact, /\.kdl$/);
 });

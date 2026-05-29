@@ -20,6 +20,10 @@ if (process.env.SKS_FAKE_CODEX_CONFIG_TOML_ERROR === '1') {
   emitConfigError(`TOML parse error in project config file ${configPath}: invalid string`);
 }
 
+if (process.env.SKS_FAKE_CODEX_CONFIG_IGNORED_PROJECT_KEY === '1') {
+  process.stderr.write(`warning: Ignored unsupported project-local config keys in ${configPath}: model_provider, model_providers, profiles. If you want these settings to apply, manually set them in your user-level config.toml.\n`);
+}
+
 if (outputLastMessage) {
   fs.mkdirSync(path.dirname(outputLastMessage), { recursive: true });
   fs.writeFileSync(outputLastMessage, `${JSON.stringify({

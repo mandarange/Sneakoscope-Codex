@@ -1,6 +1,6 @@
 # Priority Closure P0-P5 1.18.3
 
-SKS 1.18.4 treats physical tmux truth, Codex smoke truth, cleanup execution, intelligent work graph coverage, fake-vs-real separation, and route blackbox realism as the current P0-P5 closure scope.
+SKS 1.18.13 treats physical Zellij truth, Codex smoke truth, cleanup execution, intelligent work graph coverage, fake-vs-real separation, and route blackbox realism as the current P0-P5 closure scope.
 
 SKS 1.18.2 tracks P0 through P5 as release readiness scope.
 
@@ -10,8 +10,8 @@ SKS 1.18.3 adds route-truth closure for Agent, Team, Research, and QA commands, 
 
 | Priority | Done Definition |
 | --- | --- |
-| P0 | Correctness, safety, release, proof, runtime, source intelligence, Goal mode, no-Scout, terminal, tmux lane persistence, task graph, follow-up schema, route backfill, and release DAG blockers are closed or explicitly blocked. |
-| P1 | Codex App/operator UX shows target active slots, total work items, queue counts, backfill counts, generation history, source intelligence, X AI, Codex Web, Goal mode, terminal, and tmux attach status. |
+| P0 | Correctness, safety, release, proof, runtime, source intelligence, Goal mode, no-Scout, terminal, Zellij lane persistence, task graph, follow-up schema, route backfill, and release DAG blockers are closed or explicitly blocked. |
+| P1 | Codex App/operator UX shows target active slots, total work items, queue counts, backfill counts, generation history, source intelligence, X AI, Codex Web, Goal mode, terminal, and Zellij attach status. |
 | P2 | Source provider queries, route gates, refill latency, queue metrics, janitor passes, and release DAG groups are parallelized or throttled where safe, with local-only provider caches and worker-pool speed summaries. |
 | P3 | README, policy docs, migration notes, troubleshooting, CLI help, active-slot semantics, `--work-items`, actual route commands, and onboarding explain the 1.18.3 behavior. |
 | P4 | Human summaries cover scheduler health, backfill, lane persistence, generation count, source intelligence, X AI used/not used, Goal official/fallback, terminal close, janitor cleanup, release DAG speedup, and worker Scout local evidence. |

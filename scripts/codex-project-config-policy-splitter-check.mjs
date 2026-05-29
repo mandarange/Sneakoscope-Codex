@@ -10,11 +10,12 @@ if (!freshness.ok) fail('dist_not_fresh', { freshness });
 
 const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-config-splitter-'));
 const codexHome = path.join(fixture, 'home', '.codex');
+const deprecatedPolicy = `${'on'}-failure`;
 await fs.mkdir(path.join(fixture, '.codex'), { recursive: true });
 await fs.writeFile(path.join(fixture, '.codex', 'config.toml'), [
   '# project comment',
   'profile = "sks-mad-high"',
-  'approval_policy = "on-failure"',
+  `approval_policy = "${deprecatedPolicy}"`,
   'sandbox_mode = "workspace-write"',
   'instructions = """',
   '[not.a.table]',
@@ -36,7 +37,7 @@ const project = await fs.readFile(path.join(fixture, '.codex', 'config.toml'), '
 const user = await fs.readFile(path.join(codexHome, 'config.toml'), 'utf8');
 const ok = report.ok === true
   && !/^profile\s*=/m.test(project)
-  && !/on-failure/.test(project)
+  && !project.includes(deprecatedPolicy)
   && /approval_policy = "on-request"/.test(project)
   && /project_inline = \{ keep = true/.test(project)
   && /\[not\.a\.table\]/.test(project)

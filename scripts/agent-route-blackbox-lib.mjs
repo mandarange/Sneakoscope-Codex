@@ -20,7 +20,7 @@ export function runActualAgentBackfillBlackbox(gate = 'agent:backfill-route-blac
 }
 
 export function runActualTeamBackfillBlackbox(gate = 'team:backfill-route-blackbox') {
-  const json = runSks(['team', PROMPT, ...ROUTE_ARGS, '--no-tmux'], gate);
+  const json = runSks(['team', PROMPT, ...ROUTE_ARGS, '--no-open-zellij'], gate);
   validateNativeRun(json.native_agent_run, gate, { route: '$Team', command: 'sks team', kind: 'actual_team_command' });
   return json;
 }

@@ -34,7 +34,7 @@ export async function repairCodexConfigEperm(rootInput: string = process.cwd(), 
     blockers,
     operator_actions: [
       ...(after.operator_actions || []),
-      ...(tccProbable ? ['macOS probable TCC block: grant Full Disk Access and Files and Folders permissions to Warp/Terminal/iTerm, Codex app, and the Codex CLI launch context, then rerun `sks mad repair-config --apply --tmux-smoke`.'] : [])
+      ...(tccProbable ? ['macOS probable TCC block: grant Full Disk Access and Files and Folders permissions to Warp/Terminal/iTerm, Codex app, and the Codex CLI launch context, then rerun `sks mad repair-config --apply`.'] : [])
     ]
   }
   if (opts.writeReport !== false) await writeJsonAtomic(reportPath, { ...report, report_path: reportPath })

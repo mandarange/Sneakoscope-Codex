@@ -63,7 +63,7 @@ export async function run(_command: any, args: any = []) {
     codex_app: codexApp,
     codex_lb: codexLb,
     codex_doctor: codexDoctor,
-    require_codex_doctor: flag(args, '--require-actual-codex'),
+    require_codex_doctor: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     zellij,
     repair: configRepair,
     require_codex_cli_config_load: flag(args, '--fix') || flag(args, '--require-actual-codex'),

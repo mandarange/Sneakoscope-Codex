@@ -1,10 +1,9 @@
-# Troubleshooting tmux Lanes 1.18.0
+# Legacy Troubleshooting: tmux Lanes 1.18.0
 
-If tmux lanes are missing, check:
+For SKS 1.18.13+, use Zellij lane troubleshooting in [Runtime Migration: tmux To Zellij](migration/tmux-to-zellij.md). Historical tmux lane artifacts were:
 
 - `agents/agent-tmux-layout.json`
 - `agents/agent-tmux-lanes.json`
-- `sks team open-tmux <mission-id>`
-- `sks team cleanup-tmux <mission-id>`
+- Team open/cleanup commands now use Zellij equivalents.
 
-tmux mode proof requires a lane manifest. Non-tmux runs can still write the manifest as an operator read model.
+The removed runtime proof required a lane manifest. Zellij proof now uses layout, pane, and screen artifacts.

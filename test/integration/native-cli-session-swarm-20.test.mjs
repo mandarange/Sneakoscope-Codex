@@ -9,5 +9,5 @@ test('native CLI session swarm creates at least 20 worker processes', () => {
     reportName: 'test-native-cli-session-swarm-20.json'
   });
   assert.equal(report.ok, true);
-  assert.equal(report.native_cli_session_proof.max_observed_worker_process_count >= 20, true);
+  assert.equal(report.native_cli_session_proof.spawned_worker_process_count >= 20, true);
 });

@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.13 writes the `sks.release-readiness.v1` report for actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, tmux config smoke, and official Fast mode service-tier propagation. `ok: true` in the 1.18.13 slice means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, and `-c service_tier=fast` propagation evidence have no remaining blockers.
+SKS 1.18.13 writes the `sks.release-readiness.v1` report for actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, Zellij readiness/proof, and official Fast mode service-tier propagation. `ok: true` in the 1.18.13 slice means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, Zellij-only runtime checks, and `-c service_tier=fast` propagation evidence have no remaining blockers.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -13,7 +13,7 @@ npm run goal-mode:official-default
 npm run agent:main-no-scout
 npm run agent:worker-scout-limited
 npm run agent:background-terminals
-npm run agent:tmux-right-lanes
+npm run zellij:layout-valid
 npm run agent:task-graph-expansion
 npm run agent:follow-up-work-schema
 npm run agent:dynamic-pool-route-blackbox
@@ -26,14 +26,14 @@ npm run research:backfill-route-blackbox
 npm run research:actual-route-backfill
 npm run qa:backfill-route-blackbox
 npm run qa:actual-route-backfill
-npm run agent:tmux-lane-persistence
-npm run agent:tmux-lane-no-flicker
-npm run agent:tmux-supervisor-integrated
-npm run agent:tmux-slot-lane-runtime
+npm run zellij:lane-renderer
+npm run zellij:pane-proof
+npm run zellij:screen-proof
+npm run agent:zellij-runtime
 npm run agent:proof-contract-reconciled
 npm run agent:scheduler-proof-hardening
-npm run agent:tmux-physical-lifecycle-wired
-npm run agent:tmux-physical-proof-v2
+npm run zellij:pane-proof
+npm run zellij:screen-proof
 npm run agent:cleanup-executor
 npm run agent:cleanup-executor-v2
 npm run agent:cleanup-command-ux
@@ -85,10 +85,10 @@ npm run agent:native-cli-session-proof
 npm run agent:worker-backend-router
 npm run agent:codex-child-overlap
 npm run agent:model-authored-patch-envelope
-npm run tmux:warp-right-lane-physical-ui
-npm run tmux:right-lane-coordinate-proof
-npm run tmux:right-lane-content-proof
-npm run mad-sks:warp-right-lane-attach
+npm run zellij:layout-valid
+npm run zellij:pane-proof
+npm run zellij:screen-proof
+npm run mad-sks:zellij-launch
 npm run agent:fast-mode-default
 npm run agent:fast-mode-worker-propagation
 npm run codex:fast-mode-profile-propagation

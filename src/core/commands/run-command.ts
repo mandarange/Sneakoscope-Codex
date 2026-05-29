@@ -487,7 +487,7 @@ function runNextAction(route: RouteSelection, id: string, args: readonly string[
 function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = false }: { auto?: boolean } = {}): string[] {
   if (route.command === '$DB') return ['db', 'check', '--sql', 'SELECT 1', '--json'];
   if (route.command === '$Wiki') return ['wiki', 'refresh', '--json'];
-  return ['team', prompt, '--mock', '--json', ...(auto ? ['--no-tmux'] : [])];
+  return ['team', prompt, '--mock', '--json', ...(auto ? ['--no-open-zellij'] : [])];
 }
 
 function destructiveDbPrompt(prompt = ''): boolean {

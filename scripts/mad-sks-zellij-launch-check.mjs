@@ -7,7 +7,13 @@ const freshness = ensureDistFresh({ rebuild: true });
 if (!freshness.ok) fail('dist_not_fresh', { freshness });
 const mod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-launcher.js')).href);
 const report = await mod.launchMadZellijUi(['--workspace', 'sks-mad-check'], { root, missionId: 'M-zellij-launch-check', ledgerRoot: path.join(root, '.sneakoscope', 'missions', 'M-zellij-launch-check', 'agents'), dryRun: true });
-const ok = report.kind === 'mad' && report.layout_artifact && !JSON.stringify(report).includes('tmux attach');
+const paneProofExists = await fs.access(path.join(root, '.sneakoscope', 'missions', 'M-zellij-launch-check', 'zellij-pane-proof.json')).then(() => true).catch(() => false);
+const ok = report.kind === 'mad'
+  && report.layout_artifact
+  && report.layout_path
+  && report.pane_proof_path
+  && paneProofExists
+  && !JSON.stringify(report).includes('tmux attach');
 const gate = { schema: 'sks.mad-sks-zellij-launch-check.v1', ok, report };
 await fs.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
 await fs.writeFile(path.join(root, '.sneakoscope', 'reports', 'mad-sks-zellij-launch.json'), `${JSON.stringify(gate, null, 2)}\n`);

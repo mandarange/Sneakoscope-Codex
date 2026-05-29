@@ -219,7 +219,8 @@ async function launchPersistentSlotLane(root: string, lane: ZellijLaneSupervisor
 }
 
 function buildPersistentLaneCommand(missionId: string, slotId: string, ledgerRoot: string) {
-  return `sks zellij-lane --mission ${shellQuote(missionId)} --slot ${shellQuote(slotId)} --ledger-root ${shellQuote(ledgerRoot)} --follow`
+  const stderrLog = path.join(ledgerRoot, 'zellij-lane-renderer.stderr.log')
+  return `sks zellij-lane --mission ${shellQuote(missionId)} --slot ${shellQuote(slotId)} --ledger-root ${shellQuote(ledgerRoot)} --follow 2>> ${shellQuote(stderrLog)}`
 }
 
 function persistentLaneCommandForRoot(root: string, missionId: string, slotId: string) {

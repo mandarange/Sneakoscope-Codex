@@ -11,6 +11,7 @@ const RELEASE_VERSION = pkg.version;
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
 const releaseParallelCheckSource = readText('src/scripts/release-parallel-check.ts', '');
+const releaseRealCheckSource = readText('scripts/release-real-check.mjs', '');
 
 const checks = {
   runtime_no_src_mjs: scriptContains('release:check:parallel', 'runtime:no-src-mjs'),
@@ -964,6 +965,9 @@ function scriptContains(name, needle) {
   }
   if (name === 'release:check') {
     return String(pkg.scripts?.[name] || '').includes(needle) || releaseParallelCheckSource.includes(needle);
+  }
+  if (name === 'release:real-check') {
+    return String(pkg.scripts?.[name] || '').includes(needle) || releaseRealCheckSource.includes(needle);
   }
   return String(pkg.scripts?.[name] || '').includes(needle);
 }

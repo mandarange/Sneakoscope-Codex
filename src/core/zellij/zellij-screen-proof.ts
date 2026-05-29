@@ -1,17 +1,59 @@
 import path from 'node:path'
-import { nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
+import { ensureDir, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { checkZellijCapability } from './zellij-capability.js'
+import { runZellij } from './zellij-command.js'
 
 export const ZELLIJ_SCREEN_PROOF_SCHEMA = 'sks.zellij-screen-proof.v1'
+const REQUIRED_LANE_TEXT = ['SKS Lane', 'Mission', 'Workers', 'Patch queue', 'Current file', 'Blockers']
 
 export async function writeZellijScreenProof(root: string, opts: { missionId?: string; require?: boolean; ledgerRoot?: string } = {}) {
   const proofRoot = path.resolve(opts.ledgerRoot || (opts.missionId ? path.join(root, '.sneakoscope', 'missions', opts.missionId) : path.join(root, '.sneakoscope', 'reports')))
   const paneProof = await readJson<any>(path.join(proofRoot, 'zellij-pane-proof.json'), null)
-  const heartbeat = await readText(path.join(proofRoot, 'zellij-lane-renderer-heartbeat.jsonl'), '')
+  const heartbeat = await readFirstText([
+    path.join(proofRoot, 'zellij-lane-renderer-heartbeat.jsonl'),
+    path.join(proofRoot, 'agents', 'zellij-lane-renderer-heartbeat.jsonl')
+  ])
   const session = await readJson<any>(path.join(proofRoot, 'zellij-session.json'), null)
   const hasHeartbeat = String(heartbeat || '').trim().length > 0
+  const capability = await checkZellijCapability({ root, require: opts.require === true, writeReport: true })
+  const lanePanes = Array.isArray(paneProof?.lane_panes) ? paneProof.lane_panes : []
+  const dumpDir = path.join(proofRoot, 'zellij-screen-dumps')
+  await ensureDir(dumpDir)
+  const dumps = []
+  if (capability.status === 'ok') {
+    for (const pane of lanePanes) {
+      const paneId = String(pane?.pane_id || '')
+      if (!paneId) continue
+      const safePaneId = paneId.replace(/[^A-Za-z0-9_.:-]+/g, '_')
+      const rawPath = path.join(dumpDir, `lane-${safePaneId}.ansi.txt`)
+      const humanPath = path.join(dumpDir, `lane-${safePaneId}.txt`)
+      const command = session?.session_name
+        ? ['--session', String(session.session_name), 'action', 'dump-screen', '--path', rawPath, '--pane-id', paneId, '--full']
+        : ['action', 'dump-screen', '--path', rawPath, '--pane-id', paneId, '--full']
+      const result = await runZellij(command, { cwd: root, timeoutMs: 5000, optional: opts.require !== true })
+      const raw = await readText(rawPath, result.stdout_tail || '')
+      const human = stripAnsi(String(raw || result.stdout_tail || ''))
+      await writeTextAtomic(humanPath, human)
+      const missingText = REQUIRED_LANE_TEXT.filter((label) => !human.includes(label))
+      dumps.push({
+        pane_id: paneId,
+        command: ['zellij', ...command],
+        raw_path: rawPath,
+        human_path: humanPath,
+        result,
+        required_text_present: missingText.length === 0,
+        missing_text: missingText
+      })
+    }
+  }
   const blockers = [
     ...(opts.require === true && paneProof?.ok !== true ? ['zellij_pane_proof_missing_or_failed'] : []),
-    ...(opts.require === true && !hasHeartbeat ? ['zellij_lane_renderer_heartbeat_missing'] : [])
+    ...(opts.require === true && !hasHeartbeat ? ['zellij_lane_renderer_heartbeat_missing'] : []),
+    ...capability.blockers,
+    ...(opts.require === true && lanePanes.length === 0 ? ['zellij_screen_lane_panes_missing'] : []),
+    ...(opts.require === true && capability.status === 'ok' && dumps.length === 0 ? ['zellij_screen_dump_missing'] : []),
+    ...(opts.require === true ? dumps.flatMap((dump) => dump.result.ok ? [] : dump.result.blockers.map((blocker: string) => `zellij_screen_${blocker}`)) : []),
+    ...(opts.require === true ? dumps.flatMap((dump) => dump.missing_text.map((label: string) => `zellij_screen_missing_text:${dump.pane_id}:${label}`)) : [])
   ]
   const report = {
     schema: ZELLIJ_SCREEN_PROOF_SCHEMA,
@@ -22,13 +64,31 @@ export async function writeZellijScreenProof(root: string, opts: { missionId?: s
     session_present: Boolean(session),
     pane_proof_ok: paneProof?.ok === true,
     lane_renderer_heartbeat_present: hasHeartbeat,
+    capability_status: capability.status,
+    required_text: REQUIRED_LANE_TEXT,
+    lane_pane_count: lanePanes.length,
+    dumps,
     stdout_stderr_overlap_policy: 'lane renderer writes frames to stdout and reserves stderr for errors',
     blockers,
     warnings: [
+      ...capability.warnings,
       ...(!session ? ['zellij_session_artifact_missing'] : []),
-      ...(!hasHeartbeat && opts.require !== true ? ['zellij_lane_renderer_heartbeat_not_required'] : [])
+      ...(!hasHeartbeat && opts.require !== true ? ['zellij_lane_renderer_heartbeat_not_required'] : []),
+      ...(capability.status !== 'ok' && opts.require !== true ? ['zellij_screen_dump_skipped_optional'] : [])
     ]
   }
   await writeJsonAtomic(path.join(proofRoot, 'zellij-screen-proof.json'), report)
   return report
+}
+
+function stripAnsi(text: string): string {
+  return text.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+}
+
+async function readFirstText(files: string[]) {
+  for (const file of files) {
+    const text = await readText(file, '')
+    if (String(text || '').trim()) return text
+  }
+  return ''
 }

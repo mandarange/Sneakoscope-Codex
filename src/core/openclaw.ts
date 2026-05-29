@@ -91,7 +91,7 @@ Use this skill when the user asks an OpenClaw agent to work in a codebase that u
 
 The OpenClaw agent must have the built-in \`shell\` tool enabled. Prefer running commands in the target repository root.
 
-Set \`SKS_OPENCLAW=1\` for SKS shell commands. In OpenClaw mode, SKS treats update/install prompts as automatically approved so \`sks\` can update \`sneakoscope\` or \`@openai/codex\` before launching tmux without pausing for a human \`Y/n\` answer.
+Set \`SKS_OPENCLAW=1\` for SKS shell commands. In OpenClaw mode, SKS treats update/install prompts as automatically approved so \`sks\` can update \`sneakoscope\` or \`@openai/codex\` before launching Zellij without pausing for a human \`Y/n\` answer.
 
 ## Core Commands
 
@@ -99,7 +99,7 @@ Set \`SKS_OPENCLAW=1\` for SKS shell commands. In OpenClaw mode, SKS treats upda
 - \`${sksCommand} bootstrap\` installs or repairs SKS project files, Codex App skills, hooks, and runtime state.
 - \`${sksCommand} commands\` lists terminal commands the agent can call.
 - \`${sksCommand} dollar-commands\` lists prompt routes such as \`$Team\`, \`$DFix\`, \`$QA-LOOP\`, \`$PPT\`, \`$Goal\`, \`$DB\`, \`$Wiki\`, and \`$Help\`.
-- \`${sksCommand} deps check\` checks Codex, Context7, tmux, and related local readiness.
+- \`${sksCommand} deps check\` checks Node/npm path readiness; \`${sksCommand} doctor\` checks Codex, Context7, Zellij, and related local readiness.
 - \`${sksCommand} proof-field scan --intent "<task>" --changed file1,file2\` checks whether a narrow change can stay on a lightweight proof path.
 - \`${sksCommand} release:check\` is not a terminal command; use \`npm run release:check\` inside the Sneakoscope package repository.
 
@@ -126,7 +126,7 @@ Version: ${version}
 
 This OpenClaw skill lets an OpenClaw agent discover and use Sneakoscope Codex through the local \`${sksCommand}\` command.
 
-OpenClaw agents should set \`SKS_OPENCLAW=1\` when running SKS commands. That mode auto-approves SKS dependency/update prompts, including the Codex CLI update preflight before tmux launch.
+OpenClaw agents should set \`SKS_OPENCLAW=1\` when running SKS commands. That mode auto-approves SKS dependency/update prompts, including the Codex CLI update preflight before Zellij launch.
 
 ## LLM Init Prompt
 

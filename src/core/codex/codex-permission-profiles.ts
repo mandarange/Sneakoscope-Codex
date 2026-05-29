@@ -13,7 +13,7 @@ export type SksPermissionProfileName =
 export interface CodexPermissionProfile {
   name: SksPermissionProfileName
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
-  approval_policy: 'on-request' | 'on-failure' | 'never'
+  approval_policy: 'on-request' | 'never'
   allowed_tool_scope: string[]
   file_write_scope: 'none' | 'workspace' | 'target-project' | 'system'
   high_risk: boolean
@@ -31,7 +31,7 @@ export const SKS_CODEX_PERMISSION_PROFILES: Record<SksPermissionProfileName, Cod
   'sks-fast': {
     name: 'sks-fast',
     sandbox: 'workspace-write',
-    approval_policy: 'on-failure',
+    approval_policy: 'on-request',
     allowed_tool_scope: ['read', 'search', 'diagnostic', 'workspace-write'],
     file_write_scope: 'workspace',
     high_risk: false
