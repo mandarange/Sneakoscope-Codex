@@ -9,7 +9,7 @@ export const AGENT_COUNT = DEFAULT_AGENT_COUNT
 export const AGENT_INTAKE_STAGE_ID = 'native_agent_intake'
 export const MAX_AGENT_COUNT = 20
 export const DEFAULT_AGENT_CONCURRENCY = 5
-export const AGENT_BACKENDS = ['fake', 'process', 'codex-exec', 'tmux'] as const
+export const AGENT_BACKENDS = ['fake', 'process', 'codex-exec', 'zellij'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]
 export type AgentServiceTier = 'fast' | 'standard'
@@ -173,7 +173,7 @@ export interface AgentRunnerResult {
   backend_router_report?: Record<string, unknown>
   codex_child_report?: Record<string, unknown>
   process_child_report?: Record<string, unknown>
-  tmux_child_report?: Record<string, unknown>
+  zellij_child_report?: Record<string, unknown>
   model_authored_patch_envelopes?: boolean
   fixture_patch_envelopes?: boolean
   no_patch_reason?: Record<string, unknown>

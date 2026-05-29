@@ -50,7 +50,7 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     ...(result?.backend_router_report === undefined ? {} : { backend_router_report: result.backend_router_report }),
     ...(result?.codex_child_report === undefined ? {} : { codex_child_report: result.codex_child_report }),
     ...(result?.process_child_report === undefined ? {} : { process_child_report: result.process_child_report }),
-    ...(result?.tmux_child_report === undefined ? {} : { tmux_child_report: result.tmux_child_report }),
+    ...(result?.zellij_child_report === undefined ? {} : { zellij_child_report: result.zellij_child_report }),
     ...(result?.model_authored_patch_envelopes === undefined ? {} : { model_authored_patch_envelopes: Boolean(result.model_authored_patch_envelopes) }),
     ...(result?.fixture_patch_envelopes === undefined ? {} : { fixture_patch_envelopes: Boolean(result.fixture_patch_envelopes) }),
     ...(result?.no_patch_reason === undefined ? {} : { no_patch_reason: result.no_patch_reason }),

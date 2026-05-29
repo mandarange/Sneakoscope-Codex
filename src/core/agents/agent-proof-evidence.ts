@@ -5,7 +5,7 @@ import { validateAgentLedgerHashChain } from './agent-central-ledger.js'
 import { assertAllAgentSessionsClosed } from './agent-lifecycle.js'
 import { assertAgentTerminalSessionsClosed } from './agent-terminal-session.js'
 import { assertAgentSessionGenerationsClosed } from './agent-session-generation.js'
-import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
+import { readZellijLaneSupervisor } from './zellij-lane-supervisor.js'
 import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.js'
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 
@@ -14,8 +14,8 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
   const ledger = await validateAgentLedgerHashChain(root)
-  const tmuxLanes = await readJson<any>(path.join(root, 'agent-tmux-lanes.json'), null)
-  const laneSupervisor = await readTmuxLaneSupervisor(root)
+  const zellijLanes = await readJson<any>(path.join(root, 'agent-zellij-lanes.json'), null)
+  const laneSupervisor = await readZellijLaneSupervisor(root)
   const workQueue = await readJson<any>(path.join(root, 'agent-work-queue.json'), null)
   const scheduler = input.scheduler || await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const taskGraph = input.partition?.task_graph || await readJson<any>(path.join(root, 'agent-task-graph.json'), null)
@@ -31,19 +31,15 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const nativeCliSessionProof = input.nativeCliSessionProof || await readJson<any>(path.join(root, 'native-cli-session-proof.json'), null)
   const noSubagentScalingPolicy = input.noSubagentScalingPolicy || await readJson<any>(path.join(root, 'no-subagent-scaling-policy.json'), null)
   const fastModePropagation = input.fastModePropagation || await readJson<any>(path.join(root, 'fast-mode-propagation-proof.json'), null)
-  const tmuxPhysicalProof = await readJson<any>(path.join(root, 'agent-tmux-physical-proof.json'), null)
-  const tmuxPhysicalProofSummary = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-summary.json'), null)
-  const tmuxPhysicalBeforeDrain = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-before-drain.json'), null)
-  const tmuxPhysicalAfterDrain = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-after-drain.json'), null)
-  const tmuxPhysicalFinal = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-final.json'), null)
+  const zellijPaneProof = await readJson<any>(path.join(root, 'zellij-pane-proof.json'), null)
   const cleanupProof = await readJson<any>(path.join(root, 'agent-cleanup-proof.json'), null)
   const intelligentWorkGraph = await readJson<any>(path.join(root, 'agent-intelligent-work-graph.json'), null)
   const slots = await readJson<any>(path.join(root, 'agent-worker-slots.json'), null)
   const generationArtifact = await readJson<any>(path.join(root, 'agent-session-generations.json'), null)
   const strategyGate = input.strategyGate || await readJson<any>(path.join(root, 'strategy-gate.json'), null)
   const schedulerEvents = await readTextSafe(path.join(root, 'agent-scheduler-events.jsonl'))
-  const tmuxLaunchLedger = await readTextSafe(path.join(root, 'agent-tmux-pane-launch-ledger.jsonl'))
-  const tmuxPaneLaunchCount = tmuxLaunchLedger.split(/\n/).filter(Boolean).length
+  const zellijLaunchLedger = await readTextSafe(path.join(root, 'agent-zellij-pane-launch-ledger.jsonl'))
+  const zellijPaneLaunchCount = zellijLaunchLedger.split(/\n/).filter(Boolean).length
   const terminalCloseReportCount = terminal.total_sessions || 0
   const generationCount = generations.generation_count || 0
   const finalWorkItemCount = Number(scheduler?.completed_count || 0) + Number(scheduler?.failed_count || 0) + Number(scheduler?.blocked_count || 0)
@@ -115,19 +111,15 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(generationCount < finalWorkItemCount ? ['session_generation_count_below_finished_work_items'] : []),
     ...(terminalCloseReportCount < generationCount ? ['terminal_close_report_count_below_generation_count'] : []),
     ...(slots && slots.all_slots_closed_after_drain !== true ? ['agent_worker_slots_not_closed_after_drain'] : []),
-    ...(!laneSupervisor ? ['tmux_lane_supervisor_missing'] : []),
-    ...(laneSupervisor && laneSupervisor.no_flicker_verified !== true ? ['tmux_lane_no_flicker_not_verified'] : []),
-    ...(laneSupervisor && laneSupervisor.pane_survival_checked !== true ? ['tmux_lane_survival_not_checked'] : []),
-    ...(laneSupervisor && Number(laneSupervisor.unexpected_close_count || 0) > 0 ? ['tmux_lane_unexpected_close_before_drain'] : []),
+    ...(!laneSupervisor ? ['zellij_lane_supervisor_missing'] : []),
+    ...(laneSupervisor && laneSupervisor.no_flicker_verified !== true ? ['zellij_lane_no_flicker_not_verified'] : []),
+    ...(laneSupervisor && laneSupervisor.pane_survival_checked !== true ? ['zellij_lane_survival_not_checked'] : []),
+    ...(laneSupervisor && Number(laneSupervisor.unexpected_close_count || 0) > 0 ? ['zellij_lane_unexpected_close_before_drain'] : []),
     ...(laneSupervisor?.blockers || []),
-    ...(input.backend === 'tmux' && tmuxPhysicalProof?.physical_tmux_verified !== true ? ['tmux_physical_pane_proof_missing'] : []),
-    ...(input.backend === 'tmux' && !tmuxPhysicalBeforeDrain ? ['tmux_physical_before_drain_proof_missing'] : []),
-    ...(input.backend === 'tmux' && !tmuxPhysicalAfterDrain ? ['tmux_physical_after_drain_proof_missing'] : []),
-    ...(input.backend === 'tmux' && !tmuxPhysicalFinal ? ['tmux_physical_final_proof_missing'] : []),
-    ...(input.backend === 'tmux' && Array.isArray(tmuxPhysicalProofSummary?.blockers) ? tmuxPhysicalProofSummary.blockers : []),
-    ...(input.backend === 'tmux' && Array.isArray(tmuxPhysicalProof?.blockers) ? tmuxPhysicalProof.blockers : []),
-    ...(input.backend === 'tmux' && tmuxLanes?.ok !== true ? ['tmux_right_lane_manifest_missing'] : []),
-    ...(input.backend === 'tmux' && tmuxPaneLaunchCount === 0 ? ['tmux_pane_launch_evidence_missing'] : []),
+    ...(input.backend === 'zellij' && zellijPaneProof?.ok !== true ? ['zellij_pane_proof_missing'] : []),
+    ...(input.backend === 'zellij' && Array.isArray(zellijPaneProof?.blockers) ? zellijPaneProof.blockers : []),
+    ...(input.backend === 'zellij' && zellijLanes?.ok !== true ? ['zellij_right_lane_manifest_missing'] : []),
+    ...(input.backend === 'zellij' && zellijPaneLaunchCount === 0 ? ['zellij_pane_launch_evidence_missing'] : []),
     ...(ledger.blockers || []),
     ...(input.partition?.blockers || []),
     ...(input.consensus?.blockers || []),
@@ -238,32 +230,23 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     work_queue_goal_refs_ok: workQueueGoalRefsOk,
     task_graph_strategy_refs_ok: taskGraphStrategyRefsOk,
     work_queue_strategy_refs_ok: workQueueStrategyRefsOk,
-    tmux_lane_manifest: 'agent-tmux-lanes.json',
-    tmux_lane_manifest_ok: tmuxLanes?.ok === true,
-    tmux_lane_supervisor: 'agent-tmux-lane-supervisor.json',
+    zellij_lane_manifest: 'agent-zellij-lanes.json',
+    zellij_lane_manifest_ok: zellijLanes?.ok === true,
+    zellij_lane_supervisor: 'agent-zellij-lane-supervisor.json',
     lane_supervisor_integrated: laneSupervisorIntegrated,
-    tmux_lane_no_flicker_verified: laneSupervisor?.no_flicker_verified === true,
-    tmux_lane_survival_checked: laneSupervisor?.pane_survival_checked === true,
-    tmux_lane_unexpected_close_count: laneSupervisor?.unexpected_close_count || 0,
-    tmux_lane_auto_reopen_count: laneSupervisor?.auto_reopen_count || 0,
-    tmux_pane_launch_ledger: 'agent-tmux-pane-launch-ledger.jsonl',
-    tmux_pane_launch_count: tmuxPaneLaunchCount,
-    physical_tmux_verified: tmuxPhysicalProof?.physical_tmux_verified === true,
-    tmux_physical_proof: 'agent-tmux-physical-proof.json',
-    tmux_physical_proof_summary: 'agent-tmux-physical-proof-summary.json',
-    tmux_physical_proof_before_drain: 'agent-tmux-physical-proof-before-drain.json',
-    tmux_physical_proof_after_drain: 'agent-tmux-physical-proof-after-drain.json',
-    tmux_physical_proof_final: 'agent-tmux-physical-proof-final.json',
-    tmux_physical_before_drain_ok: tmuxPhysicalBeforeDrain?.ok === true,
-    tmux_physical_after_drain_ok: tmuxPhysicalAfterDrain?.ok === true,
-    tmux_physical_final_ok: tmuxPhysicalFinal?.ok === true,
-    tmux_list_panes_artifact: tmuxPhysicalProof?.tmux_list_panes_artifact || null,
-    tmux_capture_pane_artifacts: tmuxPhysicalProof?.tmux_capture_pane_artifacts || [],
-    tmux_pane_id_reconciled: tmuxPhysicalProof?.tmux_pane_id_reconciled === true,
+    zellij_lane_no_flicker_verified: laneSupervisor?.no_flicker_verified === true,
+    zellij_lane_survival_checked: laneSupervisor?.pane_survival_checked === true,
+    zellij_lane_unexpected_close_count: laneSupervisor?.unexpected_close_count || 0,
+    zellij_lane_auto_reopen_count: laneSupervisor?.auto_reopen_count || 0,
+    zellij_pane_launch_ledger: 'agent-zellij-pane-launch-ledger.jsonl',
+    zellij_pane_launch_count: zellijPaneLaunchCount,
+    zellij_pane_verified: zellijPaneProof?.ok === true,
+    zellij_pane_proof: 'zellij-pane-proof.json',
+    zellij_pane_count: zellijPaneProof?.pane_count ?? null,
     real_truth_summary: {
       fake_backend: input.backend === 'fake',
-      physical_tmux_verified: tmuxPhysicalProof?.physical_tmux_verified === true,
-      real_tmux_status: tmuxPhysicalProof?.status || (input.backend === 'tmux' ? 'missing' : 'not_applicable'),
+      zellij_pane_verified: zellijPaneProof?.ok === true,
+      real_zellij_status: zellijPaneProof ? (zellijPaneProof.ok === true ? 'passed' : 'blocked') : (input.backend === 'zellij' ? 'missing' : 'not_applicable'),
       cleanup_executor_status: cleanupProof?.ok === true ? 'passed' : cleanupProof ? 'blocked' : 'not_run',
       work_graph_quality_score: Number(intelligentWorkGraph?.work_graph_quality_score || taskGraph?.work_graph_quality_score || 0),
       fake_vs_real_policy: 'fake-real-proof-policy.json'
@@ -298,7 +281,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     agentRoot: root,
     releaseVersion: PACKAGE_VERSION,
     reports: {
-      'agent-tmux-physical-proof.json': tmuxPhysicalProof,
+      'zellij-pane-proof.json': zellijPaneProof,
       'agent-cleanup-proof.json': cleanupProof,
       'agent-intelligent-work-graph.json': intelligentWorkGraph,
       'source-intelligence-evidence.json': input.partition?.source_intelligence_refs,

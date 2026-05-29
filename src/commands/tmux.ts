@@ -1,5 +1,18 @@
-import { tmuxCommand } from '../core/commands/basic-cli.js';
 export async function run(_command: any, args: any = []) {
-  const [sub = 'check', ...rest] = args;
-  return tmuxCommand(sub, rest);
+  const json = args.includes('--json');
+  const result = {
+    schema: 'sks.removed-runtime.v1',
+    ok: false,
+    runtime: 'tmux',
+    status: 'removed_runtime',
+    replacement: 'zellij',
+    operator_actions: ['Use `sks --mad`, `sks team open-zellij`, or `npm run zellij:capability`.']
+  };
+  if (json) console.log(JSON.stringify(result, null, 2));
+  else {
+    console.error('tmux runtime has been removed from SKS. Use the Zellij runtime instead.');
+    for (const action of result.operator_actions) console.error(`- ${action}`);
+  }
+  process.exitCode = 2;
+  return result;
 }

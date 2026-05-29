@@ -24,4 +24,5 @@ test('codex exec worker adapter dry-run records output schema and output-last-me
   assert.ok(adapter.processReport.command.includes('-c'));
   assert.ok(adapter.processReport.command.includes('service_tier=fast'));
   assert.equal(adapter.processReport.service_tier_passed_to_codex, true);
+  assert.equal(adapter.processReport.service_tier_cli_override_present, true);
 });

@@ -18,6 +18,7 @@ test('packed package exposes MAD-SKS full-system command surface without protect
   assert.equal(parsed.command_surface.includes('audit'), true);
   assert.equal(parsed.permission_flags.includes('--allow-system'), true);
   assert.equal(parsed.permission_flags.includes('--allow-computer-use'), true);
-  assert.equal(parsed.protected_core_immutable, true);
-  assert.equal(parsed.protected_core_write_allowed, false);
+  assert.equal(parsed.protected_core.engine_source_exception, true);
+  assert.equal(parsed.protected_core_immutable, false);
+  assert.equal(parsed.protected_core_write_allowed, true);
 });

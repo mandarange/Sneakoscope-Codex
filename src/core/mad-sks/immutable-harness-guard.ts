@@ -1,4 +1,5 @@
 import fsp from 'node:fs/promises';
+import fs from 'node:fs';
 import path from 'node:path';
 import { exists, nowIso, packageRoot, readText, sha256 } from '../fsx.js';
 
@@ -19,6 +20,8 @@ export interface ProtectedCoreResolution {
   schema: typeof MAD_SKS_PROTECTED_CORE_SCHEMA;
   package_root: string;
   target_root: string;
+  engine_source_exception: boolean;
+  protection_mode: 'active' | 'engine_source_exception';
   generated_at: string;
   protected_paths: ProtectedCoreEntry[];
 }
@@ -44,15 +47,25 @@ const PROTECTED_CORE_PATHS: Array<Omit<ProtectedCoreEntry, 'absolute_path'>> = [
   { id: 'agents_policy', path: 'AGENTS.md', match: 'exact', required: false }
 ];
 
+export function isMadSksEngineSourceException(packageRootInput: string, targetRootInput: string = packageRootInput): boolean {
+  const base = path.resolve(packageRootInput);
+  const target = path.resolve(targetRootInput || base);
+  if (!isInside(target, base)) return false;
+  return isSneakoscopeEngineSourceRootSync(base);
+}
+
 export function resolveProtectedCore(input: string | { packageRoot?: string; targetRoot?: string } = packageRoot()): ProtectedCoreResolution {
   const base = path.resolve(typeof input === 'string' ? input : input.packageRoot || packageRoot());
   const targetRoot = path.resolve(typeof input === 'string' ? input : input.targetRoot || base);
+  const engineSourceException = isMadSksEngineSourceException(base, targetRoot);
   return {
     schema: MAD_SKS_PROTECTED_CORE_SCHEMA,
     package_root: base,
     target_root: targetRoot,
+    engine_source_exception: engineSourceException,
+    protection_mode: engineSourceException ? 'engine_source_exception' : 'active',
     generated_at: nowIso(),
-    protected_paths: PROTECTED_CORE_PATHS.map((entry) => ({
+    protected_paths: engineSourceException ? [] : PROTECTED_CORE_PATHS.map((entry) => ({
       ...entry,
       relative_path: entry.path === '.' ? '.' : entry.path,
       absolute_path: path.resolve(base, entry.path)
@@ -60,11 +73,27 @@ export function resolveProtectedCore(input: string | { packageRoot?: string; tar
   };
 }
 
-export async function evaluateProtectedCorePath(candidate: string, opts: { root?: string; operation?: string } = {}) {
+export async function evaluateProtectedCorePath(candidate: string, opts: { root?: string; targetRoot?: string; operation?: string } = {}) {
   const root = path.resolve(opts.root || packageRoot());
   const absolute = path.resolve(root, candidate);
-  const resolution = resolveProtectedCore(root);
+  const resolution = resolveProtectedCore({ packageRoot: root, targetRoot: opts.targetRoot || root });
   const realCandidate = await realPathForCheck(absolute);
+  if (resolution.engine_source_exception) {
+    return {
+      schema: MAD_SKS_IMMUTABLE_GUARD_SCHEMA,
+      ok: true,
+      action: 'allow',
+      operation: opts.operation || 'write',
+      candidate: absolute,
+      real_candidate: realCandidate,
+      protected_matches: [],
+      symlink_escape_attempt: false,
+      wrongness_kind: null,
+      engine_source_exception: true,
+      protection_mode: resolution.protection_mode,
+      generated_at: nowIso()
+    };
+  }
   const matches = [];
   for (const entry of resolution.protected_paths) {
     const entryReal = await realPathForCheck(entry.absolute_path);
@@ -92,6 +121,8 @@ export async function evaluateProtectedCorePath(candidate: string, opts: { root?
     protected_matches: matches,
     symlink_escape_attempt: symlinkEscape,
     wrongness_kind: symlinkEscape ? 'mad_sks_symlink_escape_attempt' : matches.length ? 'mad_sks_protected_core_write_attempt' : null,
+    engine_source_exception: false,
+    protection_mode: resolution.protection_mode,
     generated_at: nowIso()
   };
 }
@@ -110,7 +141,7 @@ export async function evaluateMadSksWrite({
   const root = path.resolve(packageRootInput);
   const target = path.resolve(targetRoot || root);
   const absolute = path.resolve(targetPath);
-  const decision = await evaluateProtectedCorePath(absolute, { root, operation });
+  const decision = await evaluateProtectedCorePath(absolute, { root, targetRoot: target, operation });
   const inTarget = isInside(absolute, target);
   return {
     schema: MAD_SKS_IMMUTABLE_GUARD_SCHEMA,
@@ -138,6 +169,8 @@ export async function snapshotProtectedCore(root: string = packageRoot(), label 
     label,
     generated_at: nowIso(),
     package_root: resolution.package_root,
+    engine_source_exception: resolution.engine_source_exception,
+    protection_mode: resolution.protection_mode,
     digest,
     snapshot_hash: digest,
     entries
@@ -219,6 +252,18 @@ function pathMatches(candidate: string, protectedPath: string, match: 'exact' | 
 function isInside(candidate: string, root: string) {
   const rel = path.relative(root, candidate);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+function isSneakoscopeEngineSourceRootSync(root: string) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    return pkg?.name === 'sneakoscope'
+      && fs.existsSync(path.join(root, 'src', 'bin', 'sks.ts'))
+      && fs.existsSync(path.join(root, 'src', 'core', 'init.ts'))
+      && fs.existsSync(path.join(root, 'src', 'core', 'hooks-runtime.ts'));
+  } catch {
+    return false;
+  }
 }
 
 async function realPathForCheck(candidate: string) {

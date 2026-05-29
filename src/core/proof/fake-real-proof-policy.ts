@@ -26,7 +26,7 @@ export interface FakeRealProofPolicyReport {
 
 export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolicyReport {
   const backend = String(input.backend || input.agent_orchestration?.backend || '')
-  const physicalTmux = input.physical_tmux_verified === true || input.real_truth_summary?.physical_tmux_verified === true
+  const zellijPane = input.zellij_pane_verified === true || input.real_truth_summary?.zellij_pane_verified === true
   const realParallel = input.real_parallel_claim === true
   const realCodex = backend === 'codex-exec' && realParallel
   const outputSchema = input.output_schema_used === true || input.real_codex_dynamic_smoke?.output_schema_used === true
@@ -45,7 +45,7 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     || input.real_codex_dynamic_smoke?.status === 'fixture_instrumented_real'
     || process.env.SKS_AGENT_DYNAMIC_BACKFILL_FIXTURE === '1'
   const realCodexRequired = input.require_real_dynamic_agents === true || process.env.SKS_REQUIRE_REAL_DYNAMIC_AGENTS === '1'
-  const realTmuxRequired = input.require_real_tmux === true || process.env.SKS_REQUIRE_REAL_TMUX === '1'
+  const realZellijRequired = input.require_real_zellij === true || process.env.SKS_REQUIRE_ZELLIJ === '1'
   const routeBlackboxKind = String(input.route_blackbox_kind || '')
   const sourceIntelligenceOk = input.source_intelligence?.ok === true
     || input.source_intelligence_generation_refs_ok === true
@@ -57,7 +57,7 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     || input.scheduler?.pending_queue_drained === true
     || input.pending_queue_drained === true
   const warpMadRequired = input.require_warp_mad_lanes === true || process.env.SKS_REQUIRE_WARP_MAD_LANES === '1'
-  const warpMadProof = input.warp_mad_lanes || input.mad_sks_tmux_lane_ui || null
+  const warpMadProof = input.warp_mad_lanes || input.mad_sks_zellij_lane_ui || null
   const warpMadLevel: ProofLevel = warpMadProof?.ok === true ? 'proven'
     : warpMadRequired ? 'real_required_missing'
     : warpMadProof ? 'blocked'
@@ -72,20 +72,20 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     ...(routeBlackboxKind.includes('fixture') || routeBlackboxKind.includes('mock') ? ['fixture_route_blackbox'] : [])
   ]
   const realClaims = [
-    ...(physicalTmux ? ['physical_tmux_pane_evidence'] : []),
+    ...(zellijPane ? ['zellij_pane_evidence'] : []),
     ...(realCodex && outputSchema && outputLast ? ['real_codex_output_schema_evidence'] : [])
   ]
   const integrationOptional = [
     ...(realUnavailable ? ['real_runtime_smoke_unavailable'] : []),
-    ...(backend === 'tmux' && !physicalTmux ? ['real_tmux_requires_physical_pane_evidence'] : [])
+    ...(backend === 'zellij' && !zellijPane ? ['real_zellij_requires_pane_evidence'] : [])
   ]
   const blockers = [
     ...(backend === 'fake' && input.real_parallel_claim === true ? ['fake_backend_claimed_real_parallel'] : []),
-    ...(backend === 'tmux' && !physicalTmux && realUnavailable !== true && realTmuxRequired ? ['real_tmux_missing_physical_pane_evidence'] : []),
+    ...(backend === 'zellij' && !zellijPane && realUnavailable !== true && realZellijRequired ? ['real_zellij_missing_pane_evidence'] : []),
     ...(realCodex && (!outputSchema || !outputLast) && realUnavailable !== true && realCodexRequired ? ['real_codex_missing_output_schema_or_last_message'] : []),
     ...(realCodexRequired && realUnavailable ? ['real_dynamic_agents_required_missing'] : []),
     ...(realCodexPatchRequired && codexPatchLevel !== 'proven' && codexPatchLevel !== 'fixture_instrumented_real' ? ['real_codex_patch_smoke_required_missing'] : []),
-    ...(realTmuxRequired && backend === 'tmux' && !physicalTmux ? ['real_tmux_required_missing'] : []),
+    ...(realZellijRequired && backend === 'zellij' && !zellijPane ? ['real_zellij_required_missing'] : []),
     ...(warpMadRequired && warpMadLevel !== 'proven' ? ['warp_mad_lanes_required_missing'] : []),
     ...(input.real_route_command_used === false ? ['route_standin_cannot_satisfy_real_route'] : [])
   ]
@@ -98,7 +98,7 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     : 'fixture_only'
   const subsystems: FakeRealProofPolicyReport['subsystems'] = {
     agent_backend: row(backend === 'fake' ? 'fixture_only' : proofLevel, ['agent-proof-evidence.json'], backend === 'fake' ? 'fixture backend cannot satisfy real runtime proof' : 'backend proof recorded', false, backend === 'fake' ? ['fake_backend_evidence'] : []),
-    tmux_physical: row(physicalTmux ? 'proven' : backend === 'tmux' && realTmuxRequired ? 'real_required_missing' : backend === 'tmux' ? 'integration_optional' : 'fixture_only', ['agent-tmux-physical-proof.json'], physicalTmux ? 'tmux list/capture/reconcile proof present' : realTmuxRequired ? 'run with real tmux physical evidence' : 'run SKS_TEST_REAL_TMUX=1 for live proof', realTmuxRequired, backend === 'tmux' && realTmuxRequired && !physicalTmux ? ['real_tmux_required_missing'] : []),
+    zellij_pane: row(zellijPane ? 'proven' : backend === 'zellij' && realZellijRequired ? 'real_required_missing' : backend === 'zellij' ? 'integration_optional' : 'fixture_only', ['zellij-pane-proof.json'], zellijPane ? 'Zellij pane proof present' : realZellijRequired ? 'run with real Zellij pane evidence' : 'run SKS_REQUIRE_ZELLIJ=1 for live proof', realZellijRequired, backend === 'zellij' && realZellijRequired && !zellijPane ? ['real_zellij_required_missing'] : []),
     codex_dynamic: row(fixtureInstrumented && realCodex ? 'fixture_instrumented_real' : realCodex && outputSchema && outputLast ? 'proven' : realCodexRequired ? 'real_required_missing' : realUnavailable ? 'integration_optional' : 'fixture_only', ['agent-real-codex-dynamic-smoke.json'], realCodex && outputSchema && outputLast ? 'Codex dynamic smoke has schema/result evidence' : realCodexRequired ? 'run real Codex dynamic smoke with output schema/result proof' : 'run SKS_TEST_REAL_DYNAMIC_AGENTS=1 for live proof', realCodexRequired, realCodexRequired && (!outputSchema || !outputLast || realUnavailable) ? ['real_dynamic_agents_required_missing'] : []),
     codex_patch_envelope_smoke: row(codexPatchLevel, ['agent-real-codex-patch-envelope-smoke.json'], codexPatchLevel === 'proven' ? 'real Codex patch envelope smoke applied through patch swarm' : realCodexPatchRequired ? 'run SKS_TEST_REAL_CODEX_PATCHES=1 with real Codex patch envelopes' : 'run SKS_TEST_REAL_CODEX_PATCHES=1 for live patch envelope smoke', realCodexPatchRequired, realCodexPatchRequired && codexPatchLevel !== 'proven' && codexPatchLevel !== 'fixture_instrumented_real' ? ['real_codex_patch_smoke_required_missing'] : []),
     cleanup: row(cleanupLevel, ['agent-cleanup-proof.json'], cleanupLevel === 'proven' ? 'cleanup after-state verified' : 'run agent cleanup executor v2', false, cleanupLevel === 'blocked' ? ['cleanup_proof_blocked'] : []),
@@ -107,7 +107,7 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
     goal_mode: row(goalModeOk ? 'proven' : 'integration_optional', ['goal-mode-applied.json'], goalModeOk ? 'Goal mode refs are present' : 'record official goal mode evidence', false, []),
     route_blackbox: row(routeBlackboxKind.includes('fixture') || routeBlackboxKind.includes('mock') ? 'fixture_only' : input.real_route_command_used === false ? 'blocked' : 'proven', ['agent-proof-evidence.json'], input.real_route_command_used === false ? 'use actual route command, not a stand-in' : 'route command truth recorded', false, input.real_route_command_used === false ? ['route_standin_cannot_satisfy_real_route'] : []),
     dynamic_scheduler: row(dynamicSchedulerOk ? 'proven' : 'partial', ['agent-scheduler-state.json'], dynamicSchedulerOk ? 'scheduler drain/backfill proof present' : 'record scheduler drain and backfill proof', false, []),
-    warp_mad_lanes: row(warpMadLevel, ['mad-sks-tmux-lane-ui.json'], warpMadLevel === 'proven' ? 'Warp MAD lane UI proof present' : warpMadRequired ? 'open visible Warp tmux lane UI or record blocker' : 'run sks --mad in Warp/tmux for live lane proof', warpMadRequired, warpMadLevel === 'blocked' || warpMadLevel === 'real_required_missing' ? ['warp_mad_lane_ui_missing'] : [])
+    warp_mad_lanes: row(warpMadLevel, ['zellij-pane-proof.json'], warpMadLevel === 'proven' ? 'MAD Zellij lane UI proof present' : warpMadRequired ? 'open visible Zellij lane UI or record blocker' : 'run sks --mad with Zellij for live lane proof', warpMadRequired, warpMadLevel === 'blocked' || warpMadLevel === 'real_required_missing' ? ['warp_mad_lane_ui_missing'] : [])
   }
   const subsystemLevels: Record<string, ProofLevel> = Object.fromEntries(Object.entries(subsystems).map(([key, value]) => [key, value.proof_level]))
   subsystemLevels.backend = subsystemLevels.agent_backend || proofLevel

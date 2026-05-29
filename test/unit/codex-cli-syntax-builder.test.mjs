@@ -36,7 +36,18 @@ test('codex exec args reject unsupported mode combinations', () => {
     /allowDanger=true/
   );
   assert.throws(
-    () => buildCodexExecArgs({ prompt: 'x', fullAuto: true, danger: true, allowDanger: true }),
+    () => buildCodexExecArgs({ prompt: 'x', fullAuto: true }),
+    /allowFullAuto=true/
+  );
+  assert.throws(
+    () => buildCodexExecArgs({ prompt: 'x', fullAuto: true, danger: true, allowDanger: true, allowFullAuto: true }),
     /cannot combine full auto/
   );
+});
+
+test('codex exec args keep default path away from unsafe automation flags', () => {
+  const args = buildCodexExecArgs({ prompt: 'x', sandbox: 'workspace-write', serviceTier: 'fast' });
+  assert.equal(args.includes('--full-auto'), false);
+  assert.equal(args.includes('--dangerously-bypass-approvals-and-sandbox'), false);
+  assert.equal(args[args.indexOf('--sandbox') + 1], 'workspace-write');
 });

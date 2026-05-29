@@ -31,13 +31,15 @@ const SECRET_PATTERNS = [
 export async function guardMadSksFileOperation({
   targetPath,
   operation = 'file_write',
-  root = packageRoot()
+  root = packageRoot(),
+  targetRoot = root
 }: {
   targetPath: string;
   operation?: MadSksActionType;
   root?: string;
+  targetRoot?: string;
 }) {
-  const protectedDecision = await evaluateProtectedCorePath(targetPath, { root, operation });
+  const protectedDecision = await evaluateProtectedCorePath(targetPath, { root, targetRoot, operation });
   return {
     schema: MAD_SKS_WRITE_GUARD_SCHEMA,
     ok: protectedDecision.ok,

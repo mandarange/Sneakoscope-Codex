@@ -14,7 +14,7 @@ export interface ProjectNamespace {
   mission_id: string | null
   mission_namespace_id: string | null
   orchestrator_id: string
-  tmux_prefix: string
+  zellij_prefix: string
   temp_dir: string
   lock_dir: string
   artifact_dir: string
@@ -51,7 +51,7 @@ export async function buildProjectNamespace(input: {
     mission_id: missionId,
     mission_namespace_id: missionNamespaceId,
     orchestrator_id: orchestratorId,
-    tmux_prefix: namespaceForPaths,
+    zellij_prefix: namespaceForPaths,
     temp_dir: path.join(os.tmpdir(), namespaceForPaths),
     lock_dir: path.join(projectRoot, '.sneakoscope', 'locks', rootHash),
     artifact_dir: missionId
@@ -70,8 +70,8 @@ export function namespacedAgentSessionId(input: {
   return `${input.agentId}-${input.missionId}-${input.rootHash}${suffix}`
 }
 
-export function namespacedTmuxSessionName(namespace: ProjectNamespace, label = 'team'): string {
-  const raw = `${namespace.tmux_prefix}-${label}`
+export function namespacedZellijSessionName(namespace: ProjectNamespace, label = 'team'): string {
+  const raw = `${namespace.zellij_prefix}-${label}`
   return raw.replace(/[^A-Za-z0-9_.:-]+/g, '-').slice(0, 80)
 }
 

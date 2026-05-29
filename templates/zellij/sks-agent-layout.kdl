@@ -1,0 +1,15 @@
+layout {
+    tab name="SKS Agents" split_direction="vertical" {
+        pane name="orchestrator" command="sh" {
+            args "-lc" "sks agent status latest --json; exec ${SHELL:-/bin/zsh}"
+        }
+        pane split_direction="horizontal" size="38%" {
+            pane name="slot-001" command="sks" {
+                args "zellij-lane" "--mission" "latest" "--slot" "slot-001" "--ledger-root" ".sneakoscope/missions/latest/agents" "--follow"
+            }
+            pane name="slot-002" command="sks" {
+                args "zellij-lane" "--mission" "latest" "--slot" "slot-002" "--ledger-root" ".sneakoscope/missions/latest/agents" "--follow"
+            }
+        }
+    }
+}

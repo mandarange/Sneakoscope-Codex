@@ -1,11 +1,12 @@
 import path from 'node:path'
-import { appendJsonl, ensureDir, nowIso, readJson, runProcess, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { appendJsonl, ensureDir, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import type { AgentSchedulerState } from './agent-scheduler.js'
 import type { AgentWorkerSlot } from './agent-worker-slot.js'
+import { runZellij } from '../zellij/zellij-command.js'
 
-export const TMUX_LANE_SUPERVISOR_SCHEMA = 'sks.tmux-lane-supervisor.v1'
+export const ZELLIJ_LANE_SUPERVISOR_SCHEMA = 'sks.zellij-lane-supervisor.v1'
 
-export interface TmuxLaneSupervisorLane {
+export interface ZellijLaneSupervisorLane {
   slot_id: string
   pane_id: string
   lane_dir: string
@@ -25,8 +26,8 @@ export interface TmuxLaneSupervisorLane {
   drained: boolean
 }
 
-export interface TmuxLaneSupervisorState {
-  schema: typeof TMUX_LANE_SUPERVISOR_SCHEMA
+export interface ZellijLaneSupervisorState {
+  schema: typeof ZELLIJ_LANE_SUPERVISOR_SCHEMA
   updated_at: string
   mission_id: string
   session_name: string
@@ -38,19 +39,19 @@ export interface TmuxLaneSupervisorState {
   auto_reopen_count: number
   all_lanes_closed_after_drain: boolean
   blockers: string[]
-  lanes: TmuxLaneSupervisorLane[]
+  lanes: ZellijLaneSupervisorLane[]
 }
 
-export async function initializeTmuxLaneSupervisor(root: string, input: {
+export async function initializeZellijLaneSupervisor(root: string, input: {
   missionId: string
   sessionName?: string
   targetActiveSlots: number
-  launchRealTmux?: boolean
+  launchRealZellij?: boolean
 }) {
   const now = nowIso()
   const sessionName = input.sessionName || `sks-${input.missionId}`
-  const state: TmuxLaneSupervisorState = {
-    schema: TMUX_LANE_SUPERVISOR_SCHEMA,
+  const state: ZellijLaneSupervisorState = {
+    schema: ZELLIJ_LANE_SUPERVISOR_SCHEMA,
     updated_at: now,
     mission_id: input.missionId,
     session_name: sessionName,
@@ -62,14 +63,14 @@ export async function initializeTmuxLaneSupervisor(root: string, input: {
     auto_reopen_count: 0,
     all_lanes_closed_after_drain: false,
     blockers: [],
-    lanes: await createSupervisorLanes(root, input.missionId, sessionName, input.targetActiveSlots, now, input.launchRealTmux === true)
+    lanes: await createSupervisorLanes(root, input.missionId, sessionName, input.targetActiveSlots, now, input.launchRealZellij === true)
   }
   for (const lane of state.lanes) await writeLaneRender(root, lane, null, null)
   await writeSupervisor(root, state, 'lane_supervisor_initialized')
   return state
 }
 
-export async function updateTmuxLaneSupervisorFromSlots(root: string, input: {
+export async function updateZellijLaneSupervisorFromSlots(root: string, input: {
   missionId: string
   sessionName?: string
   slots: AgentWorkerSlot[]
@@ -78,7 +79,7 @@ export async function updateTmuxLaneSupervisorFromSlots(root: string, input: {
 }) {
   let supervisor = await readSupervisor(root)
   if (!supervisor) {
-    supervisor = await initializeTmuxLaneSupervisor(root, {
+    supervisor = await initializeZellijLaneSupervisor(root, {
       missionId: input.missionId,
       ...(input.sessionName === undefined ? {} : { sessionName: input.sessionName }),
       targetActiveSlots: Math.max(1, input.slots.length || input.state?.target_active_slots || 1)
@@ -110,7 +111,7 @@ export async function updateTmuxLaneSupervisorFromSlots(root: string, input: {
   return supervisor
 }
 
-export async function verifyTmuxLaneSurvival(root: string) {
+export async function verifyZellijLaneSurvival(root: string) {
   const supervisor = await readSupervisor(root)
   if (!supervisor) return null
   const lanes = supervisor.lanes.map((lane) => ({
@@ -130,7 +131,7 @@ export async function verifyTmuxLaneSurvival(root: string) {
   return next
 }
 
-export async function drainTmuxLaneSupervisor(root: string) {
+export async function drainZellijLaneSupervisor(root: string) {
   const supervisor = await readSupervisor(root)
   if (!supervisor) return null
   await ensureDir(path.join(root, 'lanes'))
@@ -155,21 +156,21 @@ export async function drainTmuxLaneSupervisor(root: string) {
   return next
 }
 
-export async function readTmuxLaneSupervisor(root: string) {
+export async function readZellijLaneSupervisor(root: string) {
   return readSupervisor(root)
 }
 
-function createLane(missionId: string, sessionName: string, index: number, openedAt: string): TmuxLaneSupervisorLane {
+function createLane(missionId: string, sessionName: string, index: number, openedAt: string): ZellijLaneSupervisorLane {
   const slotId = `slot-${String(index).padStart(3, '0')}`
   const laneDir = path.join('lanes', slotId)
   return {
     slot_id: slotId,
-    pane_id: `fake-pane-${slotId}`,
+    pane_id: `zellij-pane-${slotId}`,
     lane_dir: laneDir,
     lane_md: path.join(laneDir, 'lane.md'),
     lane_json: path.join(laneDir, 'lane.json'),
-    command: buildPersistentLaneCommand(missionId, slotId),
-    launch_mode: 'fake_supervisor_lane',
+    command: buildPersistentLaneCommand(missionId, slotId, '.'),
+    launch_mode: 'zellij_layout_lane',
     launch_error: null,
     opened_at: openedAt,
     closed_at: null,
@@ -183,68 +184,51 @@ function createLane(missionId: string, sessionName: string, index: number, opene
   }
 }
 
-async function createSupervisorLanes(root: string, missionId: string, sessionName: string, targetActiveSlots: number, openedAt: string, launchRealTmux: boolean) {
-  const lanes: TmuxLaneSupervisorLane[] = []
-  if (launchRealTmux) await ensureTmuxSession(sessionName).catch(() => null)
+async function createSupervisorLanes(root: string, missionId: string, sessionName: string, targetActiveSlots: number, openedAt: string, launchRealZellij: boolean) {
+  const lanes: ZellijLaneSupervisorLane[] = []
   for (let index = 1; index <= targetActiveSlots; index += 1) {
     const lane = createLane(missionId, sessionName, index, openedAt)
-    if (launchRealTmux) lanes.push(await launchPersistentSlotLane(root, lane, sessionName))
+    if (launchRealZellij) lanes.push(await launchPersistentSlotLane(root, lane, missionId))
     else lanes.push(lane)
   }
   return lanes
 }
 
-async function ensureTmuxSession(sessionName: string) {
-  await runProcess('tmux', ['has-session', '-t', sessionName], { timeoutMs: 1000, maxOutputBytes: 4096 }).catch(async () => {
-    await runProcess('tmux', ['new-session', '-d', '-s', sessionName, '-n', 'orchestrator', 'sleep 3600'], { timeoutMs: 2000, maxOutputBytes: 4096 })
+async function launchPersistentSlotLane(root: string, lane: ZellijLaneSupervisorLane, missionId: string): Promise<ZellijLaneSupervisorLane> {
+  const command = persistentLaneCommandForRoot(root, missionId, lane.slot_id)
+  const launch = await runZellij(['action', 'new-pane', '--name', lane.slot_id, '--', 'sh', '-lc', command], { cwd: root, timeoutMs: 5000, optional: true })
+  await appendJsonl(path.join(root, 'agent-zellij-pane-launch-ledger.jsonl'), {
+    schema: 'sks.agent-zellij-pane-launch.v1',
+    generated_at: nowIso(),
+    launch_mode: launch.ok ? 'real_zellij_supervisor_slot_lane' : 'real_zellij_supervisor_failed',
+    slot_id: lane.slot_id,
+    generation_index: null,
+    session_id: null,
+    pane_id: lane.pane_id,
+    command,
+    persistent_slot_lane: true,
+    launched_by: ZELLIJ_LANE_SUPERVISOR_SCHEMA,
+    blockers: launch.ok ? [] : launch.blockers
   })
-}
-
-async function launchPersistentSlotLane(root: string, lane: TmuxLaneSupervisorLane, sessionName: string): Promise<TmuxLaneSupervisorLane> {
-  const command = persistentLaneCommandForRoot(root, lane.slot_id)
-  try {
-    const pane = await runProcess('tmux', ['split-window', '-t', sessionName, '-P', '-F', '#{pane_id}', '-h', command], { timeoutMs: 2000, maxOutputBytes: 4096 })
-    const paneId = pane.stdout.trim() || `%${Date.now()}`
-    await appendJsonl(path.join(root, 'agent-tmux-pane-launch-ledger.jsonl'), {
-      schema: 'sks.agent-tmux-pane-launch.v1',
-      generated_at: nowIso(),
-      launch_mode: 'real_tmux_supervisor_slot_lane',
-      slot_id: lane.slot_id,
-      generation_index: null,
-      session_id: null,
-      session_name: sessionName,
-      pane_id: paneId,
-      command,
-      persistent_slot_lane: true,
-      launched_by: TMUX_LANE_SUPERVISOR_SCHEMA,
-      blockers: []
-    })
-    return { ...lane, pane_id: paneId, command, launch_mode: 'real_tmux_supervisor_slot_lane', launch_error: null }
-  } catch (err: unknown) {
-    return {
-      ...lane,
-      command,
-      launch_mode: 'real_tmux_supervisor_failed',
-      launch_error: err instanceof Error ? err.message : String(err)
-    }
+  return {
+    ...lane,
+    command,
+    launch_mode: launch.ok ? 'real_zellij_supervisor_slot_lane' : 'real_zellij_supervisor_failed',
+    launch_error: launch.ok ? null : launch.blockers.join(', ')
   }
 }
 
-function buildPersistentLaneCommand(missionId: string, slotId: string) {
-  const laneMd = path.join('agents', 'lanes', slotId, 'lane.md')
-  const drain = path.join('agents', 'lanes', '.drain')
-  return `while test ! -f ${JSON.stringify(drain)}; do clear; printf '%s\\n' ${JSON.stringify(`SKS ${missionId} ${slotId}`)}; test -f ${JSON.stringify(laneMd)} && cat ${JSON.stringify(laneMd)}; sleep 2; done`
+function buildPersistentLaneCommand(missionId: string, slotId: string, ledgerRoot: string) {
+  return `sks zellij-lane --mission ${shellQuote(missionId)} --slot ${shellQuote(slotId)} --ledger-root ${shellQuote(ledgerRoot)} --follow`
 }
 
-function persistentLaneCommandForRoot(root: string, slotId: string) {
-  const laneFile = path.join(root, 'lanes', slotId, 'lane.md')
-  const drainFile = path.join(root, 'lanes', '.drain')
-  return `while test ! -f ${JSON.stringify(drainFile)}; do clear; test -f ${JSON.stringify(laneFile)} && cat ${JSON.stringify(laneFile)}; sleep 2; done`
+function persistentLaneCommandForRoot(root: string, missionId: string, slotId: string) {
+  return buildPersistentLaneCommand(missionId, slotId, root)
 }
 
-async function writeLaneRender(root: string, lane: TmuxLaneSupervisorLane, slot: AgentWorkerSlot | null, state: AgentSchedulerState | null) {
+async function writeLaneRender(root: string, lane: ZellijLaneSupervisorLane, slot: AgentWorkerSlot | null, state: AgentSchedulerState | null) {
   const laneJson = {
-    schema: 'sks.tmux-lane-render.v1',
+    schema: 'sks.zellij-lane-render.v1',
     updated_at: nowIso(),
     slot_id: lane.slot_id,
     pane_id: lane.pane_id,
@@ -278,20 +262,20 @@ async function writeLaneRender(root: string, lane: TmuxLaneSupervisorLane, slot:
 }
 
 async function readSupervisor(root: string) {
-  return readJson<TmuxLaneSupervisorState>(path.join(root, 'agent-tmux-lane-supervisor.json'), null as any)
+  return readJson<ZellijLaneSupervisorState>(path.join(root, 'agent-zellij-lane-supervisor.json'), null as any)
 }
 
-async function writeSupervisor(root: string, state: TmuxLaneSupervisorState, eventType: string, payload: Record<string, unknown> = {}) {
-  await writeJsonAtomic(path.join(root, 'agent-tmux-lane-supervisor.json'), state)
-  await appendJsonl(path.join(root, 'agent-tmux-lane-supervisor-events.jsonl'), {
-    schema: 'sks.tmux-lane-supervisor-event.v1',
+async function writeSupervisor(root: string, state: ZellijLaneSupervisorState, eventType: string, payload: Record<string, unknown> = {}) {
+  await writeJsonAtomic(path.join(root, 'agent-zellij-lane-supervisor.json'), state)
+  await appendJsonl(path.join(root, 'agent-zellij-lane-supervisor-events.jsonl'), {
+    schema: 'sks.zellij-lane-supervisor-event.v1',
     ts: nowIso(),
     event_type: eventType,
     payload
   })
 }
 
-function summarizeSupervisor(state: TmuxLaneSupervisorState): TmuxLaneSupervisorState {
+function summarizeSupervisor(state: ZellijLaneSupervisorState): ZellijLaneSupervisorState {
   const unexpected = state.lanes.reduce((sum, lane) => sum + lane.unexpected_close_count, 0)
   const reopened = state.lanes.reduce((sum, lane) => sum + lane.auto_reopen_count, 0)
   return {
@@ -301,9 +285,13 @@ function summarizeSupervisor(state: TmuxLaneSupervisorState): TmuxLaneSupervisor
     pane_survival_checked: state.pane_survival_checked || state.lanes.every((lane) => lane.pane_survival_checked),
     all_lanes_closed_after_drain: state.lanes.length > 0 && state.lanes.every((lane) => lane.drained && Boolean(lane.closed_at)),
     blockers: [
-      ...(unexpected > 0 ? ['tmux_lane_unexpected_close_before_drain'] : []),
-      ...(state.lanes.some((lane) => lane.launch_mode === 'real_tmux_supervisor_failed') ? ['tmux_lane_real_launch_failed'] : []),
-      ...(state.lanes.some((lane) => lane.closed_at && !lane.drained) ? ['tmux_lane_closed_before_drain'] : [])
+      ...(unexpected > 0 ? ['zellij_lane_unexpected_close_before_drain'] : []),
+      ...(state.lanes.some((lane) => lane.launch_mode === 'real_zellij_supervisor_failed') ? ['zellij_lane_real_launch_failed'] : []),
+      ...(state.lanes.some((lane) => lane.closed_at && !lane.drained) ? ['zellij_lane_closed_before_drain'] : [])
     ]
   }
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }

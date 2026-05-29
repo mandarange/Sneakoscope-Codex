@@ -246,13 +246,19 @@ export async function reasoningCommand(args: any = []) {
 }
 
 export async function tmuxCommand(sub: any = 'check', args: any = []) {
-  const { runTmuxStatus, tmuxReadiness } = await import('../tmux-ui.js');
-  const action = sub || 'check';
-  if (action === 'status' || action === 'banner') return runTmuxStatus(action === 'banner' ? ['--once', ...args] : args);
-  const status: any = await tmuxReadiness().catch((err: any) => ({ ok: false, error: err.message }));
-  if (flag(args, '--json')) return printJson({ schema: 'sks.tmux-status.v1', ...status });
-  console.log(`tmux: ${status.ok ? 'ok' : 'missing'} ${status.version || status.error || ''}`.trim());
-  if (!status.ok) process.exitCode = 1;
+  const result = {
+    schema: 'sks.removed-runtime.v1',
+    ok: false,
+    runtime: 'tmux',
+    status: 'removed_runtime',
+    replacement: 'zellij',
+    subcommand: sub || 'check',
+    operator_actions: ['Use `npm run zellij:capability` or `sks --mad` for the Zellij runtime.']
+  };
+  if (flag(args, '--json')) return printJson(result);
+  console.error('tmux runtime has been removed from SKS. Use Zellij instead.');
+  for (const action of result.operator_actions) console.error(`- ${action}`);
+  process.exitCode = 2;
 }
 
 export async function autoReviewCommand(sub: any = 'status', args: any = []) {

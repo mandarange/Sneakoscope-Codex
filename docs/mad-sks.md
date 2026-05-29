@@ -24,4 +24,4 @@ Every full-system action is recorded in the MAD-SKS audit ledger with action typ
 
 MAD-SKS can modify user-authorized target project files, package manager state, build/test/lint/typecheck outputs, local services, DB migrations or data, browser/Computer Use workflows, generated assets, file permissions, network operations, and system configuration only inside the approved scope. It must not store sudo passwords, leak secrets into logs, perform destructive delete without explicit confirmation, or treat third-party systems as authorized targets.
 
-Even when the target root is this repository, SKS package root, `dist`, `src/core`, `src/cli`, `src/commands`, `scripts`, `schemas`, `crates/sks-core`, package metadata, release metadata, managed hooks, and protected policy files are read-only protected core.
+Installed SKS package roots remain protected core. The Sneakoscope engine source repository is the explicit exception: when the target root is the engine source itself, release engineering may edit `src/core`, `src/cli`, `src/commands`, `scripts`, package metadata, docs, and tests through the normal verified route instead of being blocked by protected-core.

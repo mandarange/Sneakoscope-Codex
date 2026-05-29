@@ -37,8 +37,8 @@ export async function dispatch(args?: readonly string[]): Promise<unknown> {
   const { command, args: rest } = normalizeCommand(argv);
   if (!command) {
     if (!argv.length) {
-      const mod = await import('../commands/tmux.js');
-      return mod.run('tmux', ['check']);
+      const mod = await import('../commands/doctor.js');
+      return mod.run('doctor', []);
     }
     const raw = argv[0] ?? '';
     console.error(`Unknown command: ${raw}`);

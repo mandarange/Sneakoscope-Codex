@@ -60,7 +60,7 @@ test('MAD launch preflight records fast service tier CLI proof', async () => {
   await fs.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
   await fs.writeFile(path.join(root, '.codex', 'config.toml'), 'model = "gpt-5.5"\nservice_tier = "fast"\n');
 
-  const report = await mod.runCodexLaunchPreflight(root, { codexHome, profile: 'sks-mad-high', sandbox: 'danger-full-access', serviceTier: 'fast', fix: false });
+  const report = await mod.runCodexLaunchPreflight(root, { codexHome, profile: 'sks-mad-high', sandbox: 'danger-full-access', serviceTier: 'fast', fix: false, actualCodex: false, tmuxSmoke: false });
   assert.equal(report.ok, true);
   assert.equal(report.fast_tier_proof.ok, true);
   assert.ok(report.fast_tier_proof.codex_args.includes('-c'));

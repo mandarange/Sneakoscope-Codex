@@ -1,5 +1,11 @@
 # macOS TCC Operator Actions
 
-In SKS 1.18.12, EPERM can come from macOS privacy/TCC, ACLs, immutable flags, quarantine xattrs, symlink targets, or missing parent-directory traversal.
+In SKS 1.18.13, when Codex reports `Operation not permitted (os error 1)` while Node can read `.codex/config.toml`, SKS treats macOS TCC as a probable diagnosis, not a certain one.
 
-SKS reports automatic repairs separately from actions that may require the operator. When TCC is possible, grant the launching terminal or Codex app Full Disk Access or Files and Folders access, then rerun `sks doctor --fix`.
+Check:
+
+- System Settings -> Privacy & Security -> Full Disk Access.
+- Grant access to the launching app: Warp, Terminal, iTerm, Codex app, or the app that starts Codex CLI.
+- If the project is under Desktop, Documents, iCloud Drive, or an external volume, also check Files and Folders.
+- Fully restart the terminal/Codex app after changing permissions.
+- Rerun `sks mad repair-config --apply --tmux-smoke`.

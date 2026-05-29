@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { nowIso, sha256 } from '../fsx.js';
+import { selectSksCodexPermissionProfile } from '../codex/codex-permission-profiles.js';
 
 export const MAD_SKS_PERMISSION_MODEL_SCHEMA = 'sks.mad-sks-permission-model.v1';
 export const MAD_SKS_AUTHORIZATION_SCHEMA = 'sks.mad-sks-authorization.v1';
@@ -55,6 +56,8 @@ export interface MadSksPermissionModel {
   required_flags: Record<string, string>;
   forbidden_scopes: string[];
   immutable_harness_guard: 'always_on';
+  codex_config_profile: string;
+  codex_permission_profile: string;
   secret_redaction_required: true;
   rollback_required_for: MadSksScope[];
   audit_required_for: MadSksScope[];
@@ -200,6 +203,12 @@ export function buildMadSksPermissionModel({
         : fullSystem
           ? 'full_system_authority'
           : 'authorized';
+  const codexPermissionProfile = selectSksCodexPermissionProfile({
+    mad: flags.madSks,
+    system: flags.allowSystem || flags.allowAdmin,
+    targetWrite: flags.madSks,
+    fast: true
+  });
 
   const payload = {
     schema: MAD_SKS_PERMISSION_MODEL_SCHEMA as typeof MAD_SKS_PERMISSION_MODEL_SCHEMA,
@@ -217,6 +226,8 @@ export function buildMadSksPermissionModel({
     required_flags: requiredFlags,
     forbidden_scopes: [...forbiddenScopes],
     immutable_harness_guard: 'always_on' as const,
+    codex_config_profile: 'sks-fast',
+    codex_permission_profile: codexPermissionProfile.name,
     secret_redaction_required: true as const,
     rollback_required_for: [...allowed].filter((scope) => scope !== 'shell' && scope !== 'network'),
     audit_required_for: [...allowed],

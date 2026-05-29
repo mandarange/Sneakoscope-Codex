@@ -18,7 +18,7 @@ import { AgentPatchTransactionJournal } from './agent-patch-transaction-journal.
 import { runFakeAgent } from './agent-runner-fake.js'
 import { runProcessAgent } from './agent-runner-process.js'
 import { runCodexExecAgent } from './agent-runner-codex-exec.js'
-import { runTmuxAgent } from './agent-runner-tmux.js'
+import { runZellijAgent } from './agent-runner-zellij.js'
 import { writeAgentCleanupReport } from './agent-cleanup.js'
 import { writeAgentTrustReport } from './agent-trust-report.js'
 import { writeAgentWrongnessRecords } from './agent-wrongness.js'
@@ -27,14 +27,14 @@ import { appendAgentCodexCockpitHookEvent, writeAgentCodexCockpitArtifacts } fro
 import { runAgentJanitor } from './agent-janitor.js'
 import { startAgentTerminalSession, closeAgentTerminalSession } from './agent-terminal-session.js'
 import { writeScoutPolicyArtifact } from './scout-policy.js'
-import { writeTmuxRightLaneCockpit } from './tmux-right-lane-cockpit.js'
+import { writeZellijRightLaneCockpit } from './zellij-right-lane-cockpit.js'
 import { buildProjectNamespace, namespacedAgentSessionId, writeProjectNamespaceArtifact } from '../session/project-namespace.js'
 import { normalizeTargetActiveSlots, runAgentScheduler } from './agent-scheduler.js'
 import { runSourceIntelligence } from '../source-intelligence/source-intelligence-runner.js'
 import { detectOfficialGoalMode, writeOfficialGoalModeArtifact } from '../codex/official-goal-mode.js'
 import { writeAgentTaskGraph } from './agent-task-graph.js'
-import { drainTmuxLaneSupervisor, initializeTmuxLaneSupervisor, updateTmuxLaneSupervisorFromSlots, verifyTmuxLaneSurvival } from './tmux-lane-supervisor.js'
-import { writeTmuxPhysicalProof } from './tmux-physical-proof.js'
+import { drainZellijLaneSupervisor, initializeZellijLaneSupervisor, updateZellijLaneSupervisorFromSlots, verifyZellijLaneSurvival } from './zellij-lane-supervisor.js'
+import { writeZellijPaneProof } from '../zellij/zellij-pane-proof.js'
 import { writeIntelligentWorkGraphArtifacts } from './intelligent-work-graph.js'
 import { writeAdhdOrchestrationArtifacts } from '../strategy/adhd-orchestrating-gate.js'
 import { compileStrategy, writeStrategyCompilerArtifacts } from '../strategy/strategy-compiler.js'
@@ -52,8 +52,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const routeBlackboxKind = String(opts.routeBlackboxKind || defaultRouteBlackboxKind(route))
   const fastModePolicy = resolveFastModePolicy(opts)
   const backend = normalizeAgentBackend(opts.backend || (opts.mock ? 'fake' : 'codex-exec'))
-  const realTmux = backend === 'tmux' && opts.real === true
-  const realTmuxProofRequired = realTmux && process.env.SKS_REQUIRE_REAL_TMUX === '1'
+  const realZellij = backend === 'zellij' && opts.real === true
+  const realZellijProofRequired = realZellij && process.env.SKS_REQUIRE_ZELLIJ === '1'
   const created = opts.missionId
     ? { id: opts.missionId, dir: missionDir(root, opts.missionId), mission: { id: opts.missionId, mode: 'agent', prompt } }
     : await createMission(root, { mode: 'agent', prompt })
@@ -184,9 +184,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   await writeStrategyGateArtifact(ledgerRoot, strategyGate)
   await writeIntelligentWorkGraphArtifacts(ledgerRoot, partition.intelligent_work_graph)
   await writeScoutPolicyArtifact(ledgerRoot)
-  await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster })
-  await initializeTmuxLaneSupervisor(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, targetActiveSlots, launchRealTmux: realTmux })
-  await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux, required: realTmuxProofRequired, phase: 'initial' })
+  await writeZellijRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster })
+  await initializeZellijLaneSupervisor(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, targetActiveSlots, launchRealZellij: realZellij })
+  await writeZellijPaneProof(root, { missionId, require: realZellijProofRequired, phase: 'initial', ledgerRoot })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-no-overlap-proof.json'), partition.no_overlap_proof || { schema: 'sks.agent-no-overlap-proof.v1', ok: false, blockers: ['missing_no_overlap_proof'] })
   await writeAgentLifecyclePolicy(ledgerRoot)
@@ -268,7 +268,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       await appendAgentLedgerEvent(ledgerRoot, { agent_id: agent.id, session_id: agent.session_id, event_type: 'agent_started', payload: { backend, slice_id: slice.id } })
       await startAgentTerminalSession(ledgerRoot, agent, {
         backend,
-        real: backend === 'process' || (backend === 'codex-exec' && opts.real === true) || backend === 'tmux',
+        real: backend === 'process' || (backend === 'codex-exec' && opts.real === true) || backend === 'zellij',
         slotId: agent.slot_id,
         generationIndex: agent.generation_index,
         requireGeneration: true
@@ -314,22 +314,22 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       return result
     },
     onSchedulerEvent: async ({ event, slots, state }) => {
-      const paneBySlot = await readTmuxPaneIdsBySlot(ledgerRoot)
+      const paneBySlot = await readZellijPaneIdsBySlot(ledgerRoot)
       const enrichedSlots = slots.map((slot) => ({ ...slot, pane_id: paneBySlot.get(slot.slot_id) || null, launch_status: paneBySlot.has(slot.slot_id) ? 'launched' : slot.status }))
-      await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots: enrichedSlots })
+      await writeZellijRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots: enrichedSlots })
       await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
       if (['session_completed', 'backfill_event', 'scheduler_drained'].includes(String(event.event_type))) {
         const periodicJanitor = await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
         if (!periodicJanitor.ok) await appendAgentLedgerEvent(ledgerRoot, { agent_id: 'orchestrator', session_id: 'orchestrator', event_type: 'periodic_janitor_blocked', payload: periodicJanitor })
       }
       if (String(event.event_type) === 'scheduler_draining') {
-        await verifyTmuxLaneSurvival(ledgerRoot)
-        await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux, required: realTmuxProofRequired, phase: 'before_drain' })
+        await verifyZellijLaneSurvival(ledgerRoot)
+        await writeZellijPaneProof(root, { missionId, require: realZellijProofRequired, phase: 'before_drain', ledgerRoot })
       }
-      await updateTmuxLaneSupervisorFromSlots(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots, state, event })
+      await updateZellijLaneSupervisorFromSlots(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots, state, event })
       if (String(event.event_type) === 'scheduler_drained') {
-        await drainTmuxLaneSupervisor(ledgerRoot)
-        await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux, required: realTmuxProofRequired, phase: 'after_drain' })
+        await drainZellijLaneSupervisor(ledgerRoot)
+        await writeZellijPaneProof(root, { missionId, require: realZellijProofRequired, phase: 'after_drain', ledgerRoot })
       }
     }
   })
@@ -360,10 +360,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const outputValidation = await writeAgentOutputValidationReport(ledgerRoot, results)
   const outputTails = await writeAgentOutputTailReport(ledgerRoot, results)
   const backendReport = await writeAgentBackendReport(ledgerRoot, { backend, results, outputTails, fastModePolicy })
-  const finalPaneBySlot = await readTmuxPaneIdsBySlot(ledgerRoot)
-  const finalTmuxSlots = scheduler.slots.map((slot: any) => ({ ...slot, pane_id: finalPaneBySlot.get(slot.slot_id) || null, launch_status: finalPaneBySlot.has(slot.slot_id) ? 'launched' : slot.status }))
-  await writeTmuxRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots: finalTmuxSlots })
-  await writeTmuxPhysicalProof(ledgerRoot, { missionId, realTmux, required: realTmuxProofRequired, phase: 'final' })
+  const finalPaneBySlot = await readZellijPaneIdsBySlot(ledgerRoot)
+  const finalZellijSlots = scheduler.slots.map((slot: any) => ({ ...slot, pane_id: finalPaneBySlot.get(slot.slot_id) || null, launch_status: finalPaneBySlot.has(slot.slot_id) ? 'launched' : slot.status }))
+  await writeZellijRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots: finalZellijSlots })
+  await writeZellijPaneProof(root, { missionId, require: realZellijProofRequired, phase: 'final', ledgerRoot })
   await compactAgentLedger(ledgerRoot)
   const cleanup = await writeAgentCleanupReport(ledgerRoot)
   const janitor = await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
@@ -775,13 +775,13 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
     const workspaceWrite = opts.workspaceWrite === true || (opts.readonly !== true && opts.writeMode && opts.writeMode !== 'off' && writeLeaseRequested)
     return runCodexExecAgent(agent, slice, { ...opts, workspaceWrite, dryRun: opts.real === true ? false : true })
   }
-  if (backend === 'tmux') return runTmuxAgent(agent, slice, opts)
+  if (backend === 'zellij') return runZellijAgent(agent, slice, opts)
   return runFakeAgent(agent, slice, opts)
 }
 
-async function readTmuxPaneIdsBySlot(root: string) {
+async function readZellijPaneIdsBySlot(root: string) {
   const out = new Map<string, string>()
-  const text = await readText(path.join(root, 'agent-tmux-pane-launch-ledger.jsonl'), '')
+  const text = await readText(path.join(root, 'agent-zellij-pane-launch-ledger.jsonl'), '')
   for (const line of String(text).split(/\n/).filter(Boolean)) {
     try {
       const entry = JSON.parse(line)

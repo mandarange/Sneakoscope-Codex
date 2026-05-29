@@ -3,7 +3,7 @@ import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdi
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.js';
 import { missionDir, setCurrent, stateFile } from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
-import { checkHarnessModification, harnessGuardBlockReason } from './harness-guard.js';
+import { checkHarnessModification, harnessGuardBlockReason, isHarnessSourceProject } from './harness-guard.js';
 import { isMadSksRouteState } from './permission-gates.js';
 import { classifyMadSksShellCommand } from './mad-sks/write-guard.js';
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.js';
@@ -479,6 +479,9 @@ async function hookPermission(root: any, state: any, payload: any, noQuestion: a
 
 async function checkMadSksImmutableModification(root: any, state: any = {}, payload: any = {}) {
   if (!isMadSksRouteState(state)) return { action: 'allow' };
+  if (await isHarnessSourceProject(root).catch(() => false)) {
+    return { action: 'allow', reason: 'harness_source_exception_or_unlocked' };
+  }
   const command = extractCommand(payload);
   const classified: any = await classifyMadSksShellCommand({ command: command || JSON.stringify(payload || {}), cwd: payload.cwd || process.cwd(), root: packageRoot() }).catch((err: any) => ({ action: 'allow', error: err.message }));
   if (classified.action === 'block' && (classified.protected_core_matches?.length || classified.reasons?.includes('cwd_is_protected_core'))) {

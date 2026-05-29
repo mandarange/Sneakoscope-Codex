@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.18.12** adds Codex config EPERM self-heal, doctor real-fix proof, MAD launch preflight, and official Fast mode closure: doctor now proves `.codex/config.toml` is readable by a spawned child, project-local config is split away from ignored provider/profile/telemetry keys, MAD blocks tmux launch before unreadable config can crash Codex, and Codex children receive `-c service_tier=fast` with process-report evidence.
+SKS **1.18.13** adds actual Codex CLI config-load truth, fake Codex EPERM fixtures, doctor readiness matrix proof, `sks mad repair-config`, tmux config smoke, safer project-local config splitting, and official Fast mode CLI override proof: doctor now refuses Ready yes without Codex config-load evidence, MAD blocks launch before unreadable config can crash Codex, and Codex children must show `-c service_tier=fast` in process-report evidence.
 
 ```bash
 sks mad-sks plan --target-root <path> --json

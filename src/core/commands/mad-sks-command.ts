@@ -4,7 +4,7 @@ import { initProject } from '../init.js';
 import { createMission, setCurrent } from '../mission.js';
 import { enableMadHighProfile, madHighProfileName } from '../auto-review.js';
 import { permissionGateSummary } from '../permission-gates.js';
-import { defaultTmuxSessionName, launchMadTmuxUi, sanitizeTmuxSessionName } from '../tmux-ui.js';
+import { launchMadZellijUi, sanitizeZellijSessionName } from '../zellij/zellij-launcher.js';
 import { createMadSksAuthorizationManifest, validateMadSksAuthorizationManifest } from '../mad-sks/authorization-manifest.js';
 import { createMadSksAuditLedger, madSksAuditAction, writeMadSksAuditLedger } from '../mad-sks/audit-ledger.js';
 import { compareProtectedCoreSnapshots, evaluateMadSksWrite, resolveProtectedCore, snapshotProtectedCore } from '../mad-sks/immutable-harness-guard.js';
@@ -13,7 +13,7 @@ import { createMadSksProofEvidence, writeMadSksProofEvidence } from '../mad-sks/
 import { createMadSksRollbackPlan, writeMadSksRollbackPlan } from '../mad-sks/rollback-plan.js';
 import { runMadSksExecutor } from '../mad-sks/executors/index.js';
 import { applyMadSksRollbackPlan } from '../mad-sks/rollback-apply.js';
-import { writeMadSksTmuxLaneProof } from '../mad-sks/mad-tmux-lane-proof.js';
+import { repairCodexConfigEperm } from '../codex/codex-config-eperm-repair.js';
 import { runCodexLaunchPreflight } from '../preflight/parallel-preflight-engine.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
@@ -64,7 +64,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     process.exitCode = 1;
     return launchPreflight;
   }
-  const madLaunch = await activateMadTmuxPermissionState(process.cwd(), args);
+  const madLaunch = await activateMadZellijPermissionState(process.cwd(), args);
   console.log(`SKS MAD ready: ${madHighProfileName()} | gate ${madLaunch.mission_id}`);
   console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, DB writes, or system/admin scopes. Catastrophic guards remain.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
@@ -73,23 +73,22 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     SKS_MAD_SKS_TARGET_ROOT: madLaunch.gate.cwd,
     SKS_MAD_SKS_PROTECTED_CORE_DIGEST: madLaunch.gate.protected_core_digest
   };
-  const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
-  const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${defaultTmuxSessionName(process.cwd())}`));
-  const launch = await launchMadTmuxUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, codexArgs: launchOpts.codexArgs || profile.launch_args, autoInstallTmux: !args.includes('--no-auto-install-tmux'), conciseBlockers: true, missionId: madLaunch.mission_id });
-  const laneProof = await writeMadSksTmuxLaneProof({ root: madLaunch.root, missionDir: madLaunch.dir, missionId: madLaunch.mission_id, launch, required: true });
-  if (!laneProof.ok) console.log(`MAD lane UI action: ${laneProof.operator_action_hint}`);
+  const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
+  const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`));
+  const launch = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
+  if (!launch.ok) console.log(`MAD Zellij action: ${launch.blockers.join(', ') || launch.warnings.join(', ') || 'check Zellij installation'}`);
   return launch;
 }
 
-async function activateMadTmuxPermissionState(cwd: any = process.cwd(), args: any[] = []) {
+async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: any[] = []) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
   const flags = parseMadSksFlags(['--mad-sks', ...args].filter(Boolean));
-  const permission = buildMadSksPermissionModel({ targetRoot: cwd, userIntent: 'sks --mad tmux scoped high-power maintenance session', flags });
+  const permission = buildMadSksPermissionModel({ targetRoot: cwd, userIntent: 'sks --mad Zellij scoped high-power maintenance session', flags });
   const allowedScopes = new Set(permission.allowed_scopes || []);
   const has = (scope: string) => allowedScopes.has(scope as any);
   const dbWriteAllowed = has('db_write');
-  const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad tmux scoped high-power maintenance session' });
+  const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad Zellij scoped high-power maintenance session' });
   const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot: cwd });
   const protectedCoreBefore = await snapshotProtectedCore(packageRoot(), 'mad-live-before');
   const protectedCorePolicyPath = path.join(dir, 'mad-sks-protected-core-policy.json');
@@ -132,14 +131,14 @@ async function activateMadTmuxPermissionState(cwd: any = process.cwd(), args: an
     cwd: path.resolve(cwd || process.cwd())
   };
   await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
-  await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: 'MadSKS', command: '$MAD-SKS', mode: 'MADSKS', task: gate.activated_by, mad_sks_authorization: true, mad_sks_authority_concept: gate.authority_concept, tmux_launch: true, permission_profile: gate.permission_profile, permission_model: permission });
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.tmux_permission_opened', route: 'MadSKS', live_server_writes_allowed: gate.live_server_writes_allowed, allowed_scopes: permission.allowed_scopes, catastrophic_safety_guard_active: true });
+  await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: 'MadSKS', command: '$MAD-SKS', mode: 'MADSKS', task: gate.activated_by, mad_sks_authorization: true, mad_sks_authority_concept: gate.authority_concept, zellij_launch: true, permission_profile: gate.permission_profile, permission_model: permission });
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.zellij_permission_opened', route: 'MadSKS', live_server_writes_allowed: gate.live_server_writes_allowed, allowed_scopes: permission.allowed_scopes, catastrophic_safety_guard_active: true });
   await setCurrent(root, {
     mission_id: id,
     route: 'MadSKS',
     route_command: '$MAD-SKS',
     mode: 'MADSKS',
-    phase: 'MADSKS_TMUX_PERMISSION_ACTIVE',
+    phase: 'MADSKS_ZELLIJ_PERMISSION_ACTIVE',
     questions_allowed: false,
     implementation_allowed: true,
     mad_sks_active: true,
@@ -169,7 +168,7 @@ function madLaunchOnlyFlags() {
     '--MAD',
     '--mad-sks',
     '--high',
-    '--no-auto-install-tmux',
+    '--no-auto-install-zellij',
     '--allow-system',
     '--allow-db-write',
     '--allow-package-install',
@@ -202,18 +201,18 @@ function codexLbImmediateLaunchOpts(args: any = [], lb: any = {}, opts: any = {}
   const root = readOption(args, '--root', process.cwd());
   const explicitSession = readOption(args, '--session', null) || readOption(args, '--workspace', null);
   if (lb?.bypass_codex_lb) {
-    const session = explicitSession || sanitizeTmuxSessionName(`sks-openai-fallback-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
+    const session = explicitSession || sanitizeZellijSessionName(`sks-openai-fallback-${Date.now().toString(36)}-${path.basename(root) || 'project'}`);
     console.log(`codex-lb bypass active for this launch: ${lb.chain_health?.status || lb.status}`);
-    console.log(`Using fresh OpenAI fallback tmux session: ${session}`);
+    console.log(`Using fresh OpenAI fallback Zellij session: ${session}`);
     return { ...opts, session, codexArgs: [...(opts.codexArgs || []), '-c', 'model_provider="openai"'], codexLbBypassed: true };
   }
   if (!lb?.ok) return opts;
   const codexArgs = [...(opts.codexArgs || [])];
   if (!codexArgs.some((arg: any) => /model_provider\s*=/.test(String(arg || '')))) codexArgs.push('-c', 'model_provider="codex-lb"');
   if (explicitSession) return { ...opts, codexArgs };
-  const session = sanitizeTmuxSessionName(`sks-codex-lb-${Date.now().toString(36)}-${defaultTmuxSessionName(root)}`);
+  const session = sanitizeZellijSessionName(`sks-codex-lb-${Date.now().toString(36)}-${path.basename(root) || 'project'}`);
   console.log(`codex-lb active for this launch: ${lb.env_path || lb.base_url || 'configured'}`);
-  console.log(`Using fresh tmux session: ${session}`);
+  console.log(`Using fresh Zellij session: ${session}`);
   return { ...opts, codexArgs, session, codexLbFreshSession: true };
 }
 
@@ -232,6 +231,7 @@ const MAD_SKS_COMMAND_SURFACE = Object.freeze([
   'status',
   'permissions',
   'proof',
+  'repair-config',
   'rollback-plan',
   'rollback-apply',
   'audit',
@@ -247,6 +247,7 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
   const root = await sksRoot();
 
   if (subcommand === 'permissions') {
+    const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot });
     return emit({
       schema: 'sks.mad-sks-permissions.v1',
       ok: true,
@@ -267,9 +268,9 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
         '--confirm-delete'
       ],
       permission_model: permission,
-      protected_core: resolveProtectedCore({ packageRoot: packageRoot(), targetRoot }),
-      protected_core_immutable: true,
-      protected_core_write_allowed: false
+      protected_core: protectedCore,
+      protected_core_immutable: !protectedCore.engine_source_exception,
+      protected_core_write_allowed: protectedCore.engine_source_exception
     }, json);
   }
 
@@ -280,7 +281,7 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
       summary: 'MAD-SKS is a user-authorized general permission widening mode, not a DB-only unlock. Target project work can be widened by explicit flags, while SKS harness/package/dist/scripts/schemas/release metadata remain immutable protected core.',
       command_surface: [...MAD_SKS_COMMAND_SURFACE],
       catastrophic_safeguards: permission.forbidden_scopes,
-      immutable_harness_guard: 'always_on'
+      immutable_harness_guard: 'installed_harness_only_with_engine_source_exception'
     }, json);
   }
 
@@ -294,9 +295,39 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
       permission_model: permission,
       protected_core: protectedCore,
       protected_core_snapshot: before,
-      protected_core_immutable: true,
+      protected_core_immutable: !protectedCore.engine_source_exception,
+      protected_core_write_allowed: protectedCore.engine_source_exception,
       permission_active: false
     }, json);
+  }
+
+  if (subcommand === 'repair-config') {
+    const apply = args.includes('--apply') || args.includes('--yes');
+    const dryRun = args.includes('--dry-run') || !apply;
+    const codexBin = readOption(args, '--codex-bin', process.env.SKS_DOCTOR_CODEX_BIN || '');
+    const repair = await repairCodexConfigEperm(targetRoot, {
+      fix: apply,
+      codexProbe: true,
+      actualCodex: true,
+      requireActualCodex: args.includes('--require-actual-codex'),
+      codexBin: codexBin || undefined
+    });
+    const legacyFlag = args.includes('--tmux-smoke') || args.includes('--require-tmux-smoke');
+    const blockers = [...new Set([...(repair.blockers || []), ...(legacyFlag ? ['tmux_runtime_removed_use_zellij'] : [])])];
+    const result = {
+      schema: 'sks.mad-repair-config.v1',
+      ok: blockers.length === 0,
+      status: blockers.length ? 'blocked' : dryRun ? 'dry_run' : 'applied',
+      dry_run: dryRun,
+      applied: apply,
+      target_root: targetRoot,
+      repair,
+      zellij_migration: legacyFlag ? { ok: false, reason: 'tmux runtime removed; use Zellij gates' } : { ok: true },
+      blockers,
+      operator_actions: [...new Set([...(repair.operator_actions || []), ...(legacyFlag ? ['Use `npm run zellij:capability` and `sks --mad` for the Zellij runtime.'] : [])])]
+    };
+    if (!result.ok) process.exitCode = 1;
+    return emit(result, json);
   }
 
   if (subcommand === 'plan') {

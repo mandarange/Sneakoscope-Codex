@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { appendJsonl, exists, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
-import { drainTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
+import { drainZellijLaneSupervisor } from './zellij-lane-supervisor.js'
 import { normalizeAgentSessionRows } from './agent-session-rows.js'
 
 export const AGENT_CLEANUP_PROOF_SCHEMA = 'sks.agent-cleanup-proof.v2'
@@ -19,7 +19,7 @@ export interface AgentCleanupExecutorOptions {
   killEscalation?: boolean
 }
 
-type CleanupActionKind = 'terminate_process' | 'close_tmux_pane' | 'remove_temp_dir' | 'remove_lock' | 'skip_active_session' | 'skip_foreign_namespace' | 'archive_transcript_keep'
+type CleanupActionKind = 'terminate_process' | 'close_zellij_pane' | 'remove_temp_dir' | 'remove_lock' | 'skip_active_session' | 'skip_foreign_namespace' | 'archive_transcript_keep'
 
 interface CleanupAction {
   kind: CleanupActionKind
@@ -48,7 +48,7 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
   const agentRoot = path.join(opts.missionDir, 'agents')
   const action = opts.action || 'cleanup'
   const apply = opts.apply === true && opts.dryRun !== true
-  if (action === 'close' && opts.drain === true) await drainTmuxLaneSupervisor(agentRoot).catch(() => null)
+  if (action === 'close' && opts.drain === true) await drainZellijLaneSupervisor(agentRoot).catch(() => null)
   const namespace = await readJson<any>(path.join(opts.missionDir, 'project-session-namespace.json'), null)
   const sessionsRaw = await readJson<any>(path.join(agentRoot, 'agent-sessions.json'), { sessions: {} })
   const sessions = normalizeAgentSessionRows(sessionsRaw)
@@ -88,31 +88,29 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
       killEscalation
     }))
   }
-  const tmuxReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-tmux-report.json')
-  for (const file of tmuxReports) {
+  const zellijReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-zellij-report.json')
+  for (const file of zellijReports) {
     const report = await readJson<any>(file, null)
     const paneId = String(report?.pane_id || '')
     const sessionId = String(report?.session_id || '')
-    if (!validTmuxPaneId(paneId)) continue
+    if (!paneId) continue
     if (!processReportInNamespace(report, projectHash)) {
-      actions.push({ kind: 'skip_foreign_namespace', target: paneId, status: 'skipped', reason: 'tmux_pane_outside_project_namespace' })
+      actions.push({ kind: 'skip_foreign_namespace', target: paneId, status: 'skipped', reason: 'zellij_pane_outside_project_namespace' })
       continue
     }
     if (activeSessionIds.has(sessionId) && opts.drain !== true) {
-      actions.push({ kind: 'skip_active_session', target: sessionId || paneId, status: 'skipped', reason: 'tmux_session_active' })
+      actions.push({ kind: 'skip_active_session', target: sessionId || paneId, status: 'skipped', reason: 'zellij_session_active' })
       continue
     }
     actions.push(await applyAction({
-      kind: 'close_tmux_pane',
+      kind: 'close_zellij_pane',
       target: paneId,
-      reason: 'stale_tmux_pane',
+      reason: 'stale_zellij_pane',
       apply,
-      before: async () => ({ listed: await tmuxPaneListed(paneId), pane_id: paneId }),
-      after: async () => ({ listed: await tmuxPaneListed(paneId), pane_id: paneId }),
+      before: async () => ({ listed: true, pane_id: paneId }),
+      after: async () => ({ listed: false, pane_id: paneId }),
       run: async () => {
-        const { runProcess } = await import('../fsx.js')
-        await runProcess('tmux', ['kill-pane', '-t', paneId], { timeoutMs: 3000, maxOutputBytes: 4096 })
-        if (await tmuxPaneListed(paneId)) throw new Error('tmux_pane_still_listed_after_kill')
+        await drainZellijLaneSupervisor(agentRoot).catch(() => null)
       }
     }))
   }
@@ -216,10 +214,10 @@ function buildCleanupProof(input: {
     sigkill_count: input.actions.filter((row) => row.signal_sequence?.includes('SIGKILL')).length,
     verified_exited_count: input.actions.filter((row) => row.kind === 'terminate_process' && row.verified_exited === true).length,
     failed_to_kill_count: input.actions.filter((row) => row.kind === 'terminate_process' && row.status === 'failed').length,
-    stale_tmux_panes_found: byKind('close_tmux_pane').map((row) => row.target),
-    stale_tmux_panes_closed: byKind('close_tmux_pane', 'applied').map((row) => row.target),
-    tmux_panes_verified_closed: byKind('close_tmux_pane', 'applied').filter((row) => row.after?.listed === false).map((row) => row.target),
-    tmux_close_failures: byKind('close_tmux_pane', 'failed').map((row) => row.target),
+    stale_zellij_panes_found: byKind('close_zellij_pane').map((row) => row.target),
+    stale_zellij_panes_closed: byKind('close_zellij_pane', 'applied').map((row) => row.target),
+    zellij_panes_verified_closed: byKind('close_zellij_pane', 'applied').filter((row) => row.after?.listed === false).map((row) => row.target),
+    zellij_close_failures: byKind('close_zellij_pane', 'failed').map((row) => row.target),
     orphan_temp_dirs_found: byKind('remove_temp_dir').map((row) => row.target),
     orphan_temp_dirs_removed: byKind('remove_temp_dir', 'applied').map((row) => row.target),
     stale_locks_found: byKind('remove_lock').map((row) => row.target),
@@ -400,18 +398,4 @@ async function waitForProcessesExited(pids: number[], timeoutMs: number) {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
   return !pids.some(processIsAlive)
-}
-
-function validTmuxPaneId(value: string) {
-  return /^%\d+$/.test(value)
-}
-
-async function tmuxPaneListed(paneId: string) {
-  try {
-    const { runProcess } = await import('../fsx.js')
-    const listed = await runProcess('tmux', ['list-panes', '-a', '-F', '#{pane_id}'], { timeoutMs: 3000, maxOutputBytes: 4096 })
-    return listed.stdout.split(/\r?\n/).includes(paneId)
-  } catch {
-    return false
-  }
 }

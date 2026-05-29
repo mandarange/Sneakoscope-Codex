@@ -4,6 +4,7 @@ import { buildCodexExecArgs } from '../codex/codex-cli-syntax-builder.js'
 import { inspectCodexConfigReadability } from '../codex/codex-config-readability.js'
 import { repairCodexConfigEperm } from '../codex/codex-config-eperm-repair.js'
 import { splitCodexProjectConfigPolicy } from '../codex/codex-project-config-policy.js'
+import { checkZellijCapability } from '../zellij/zellij-capability.js'
 
 export const PARALLEL_PREFLIGHT_SCHEMA = 'sks.parallel-preflight.v1'
 
@@ -32,12 +33,15 @@ export async function runCodexLaunchPreflight(rootInput: string = process.cwd(),
   const root = path.resolve(rootInput || process.cwd())
   const reportPath = opts.reportPath || path.join(root, '.sneakoscope', 'reports', 'mad-launch-preflight.json')
   const readonly = await runParallelPreflight([
-    { id: 'codex_config_readability', run: () => inspectCodexConfigReadability(root, { ...opts, writeReport: false }) },
+    { id: 'codex_config_readability', run: () => inspectCodexConfigReadability(root, { ...opts, codexProbe: true, actualCodex: opts.actualCodex !== false, writeReport: false }) },
     { id: 'codex_project_config_policy', run: () => splitCodexProjectConfigPolicy(root, { ...opts, writeReport: false }) }
   ])
   const repair = opts.fix === true || readonly.ok === false
-    ? await repairCodexConfigEperm(root, { ...opts, fix: opts.fix !== false, writeReport: false })
+    ? await repairCodexConfigEperm(root, { ...opts, codexProbe: true, actualCodex: opts.actualCodex !== false, fix: opts.fix !== false, writeReport: false })
     : null
+  const zellijCapability = opts.zellijCapability === false
+    ? null
+    : await checkZellijCapability({ root, require: opts.requireZellij === true, writeReport: false })
   const codexArgs = buildCodexExecArgs({
     json: true,
     outputLastMessage: path.join(root, '.sneakoscope', 'reports', 'codex-preflight-output.json'),
@@ -56,8 +60,8 @@ export async function runCodexLaunchPreflight(rootInput: string = process.cwd(),
     service_tier: opts.serviceTier || 'fast',
     codex_args: codexArgs
   }
-  const blockers = [...new Set([...(readonly.blockers || []), ...(repair?.blockers || []), ...(fastTierProof.ok ? [] : ['service_tier_not_passed_to_codex'])])]
-  const operatorActions = [...new Set([...(readonly.operator_actions || []), ...(repair?.operator_actions || [])])]
+  const blockers = [...new Set([...(readonly.blockers || []), ...(repair?.blockers || []), ...(zellijCapability?.blockers || []), ...(fastTierProof.ok ? [] : ['service_tier_not_passed_to_codex'])])]
+  const operatorActions = [...new Set([...(readonly.operator_actions || []), ...(repair?.operator_actions || []), ...(zellijCapability?.operator_actions || [])])]
   const report = {
     schema: 'sks.mad-launch-preflight.v1',
     generated_at: nowIso(),
@@ -65,6 +69,7 @@ export async function runCodexLaunchPreflight(rootInput: string = process.cwd(),
     ok: blockers.length === 0,
     readonly,
     repair,
+    zellij_capability: zellijCapability,
     fast_tier_proof: fastTierProof,
     blockers,
     operator_actions: operatorActions

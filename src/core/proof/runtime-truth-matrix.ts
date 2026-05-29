@@ -4,7 +4,7 @@ import type { ProofLevel } from './fake-real-proof-policy.js'
 
 export const RUNTIME_TRUTH_MATRIX_SCHEMA = 'sks.runtime-truth-matrix.v1'
 export const RUNTIME_TRUTH_SUBSYSTEMS = [
-  'tmux_physical',
+  'zellij_pane',
   'codex_dynamic',
   'codex_patch_envelope_smoke',
   'cleanup',
@@ -79,32 +79,32 @@ export async function buildRuntimeTruthMatrix(input: {
     return null
   }
   const required = {
-    tmux_physical: process.env.SKS_REQUIRE_REAL_TMUX === '1',
+    zellij_pane: process.env.SKS_REQUIRE_ZELLIJ === '1',
     codex_dynamic: process.env.SKS_REQUIRE_REAL_DYNAMIC_AGENTS === '1',
     codex_patch_envelope_smoke: process.env.SKS_REQUIRE_REAL_CODEX_PATCHES === '1',
     real_codex_parallel_workers: process.env.SKS_REQUIRE_REAL_CODEX_PARALLEL === '1',
     warp_mad_lanes: process.env.SKS_REQUIRE_WARP_MAD_LANES === '1',
     ...(input.required || {})
   } as Partial<Record<RuntimeTruthSubsystem, boolean>>
-  const [tmux, codex, codexPatch, realCodexParallel, workerBackendRouter, codexChildOverlap, modelAuthoredPatch, tmuxRightLanePhysical, tmuxRightLaneCoordinate, tmuxRightLaneContent, madWarpRightLaneAttach, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0134, mcp0134, mcpReadonlyRuntime, adhdOrchestration, appshots, parallelWrite, patchProof, nativeCliSession, fastModeDefault] = await Promise.all([
-    readReport(`agent-real-tmux-physical-proof-${input.releaseVersion}.json`, ['agent-tmux-physical-proof.json', 'agent-real-tmux-physical-proof-1.18.6.json']),
+  const [zellijPane, codex, codexPatch, realCodexParallel, workerBackendRouter, codexChildOverlap, modelAuthoredPatch, zellijRightLanePhysical, zellijRightLaneCoordinate, zellijRightLaneContent, madWarpRightLaneAttach, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0134, mcp0134, mcpReadonlyRuntime, adhdOrchestration, appshots, parallelWrite, patchProof, nativeCliSession, fastModeDefault] = await Promise.all([
+    readReport('zellij-pane-proof.json'),
     readReport(`agent-real-codex-dynamic-smoke-${input.releaseVersion}.json`, ['agent-real-codex-dynamic-smoke-1.18.6.json']),
     readReport('agent-real-codex-patch-envelope-smoke.json'),
     readReport('agent-real-codex-parallel-workers.json', ['real-codex-parallel-proof.json']),
     readReport('agent-worker-backend-router.json'),
     readReport('agent-codex-child-overlap.json'),
     readReport('agent-model-authored-patch-envelope.json'),
-    readReport('tmux-right-lane-physical-layout-proof.json'),
-    readReport('tmux-right-lane-coordinate-proof.json'),
-    readReport('tmux-right-lane-content-proof.json'),
-    readReport('mad-sks-warp-right-lane-attach.json'),
+    readReport('zellij-layout-proof.json'),
+    readReport('zellij-coordinate-proof.json'),
+    readReport('zellij-content-proof.json'),
+    readReport('mad-sks-zellij-launch.json'),
     readReport(`agent-cleanup-executor-v2-${input.releaseVersion}.json`, ['agent-cleanup-proof.json']),
     readReport(`agent-intelligent-work-graph-v2-${input.releaseVersion}.json`, ['agent-intelligent-work-graph.json']),
     readReport('fake-real-proof-policy.json'),
     readReport('source-intelligence-evidence.json'),
     readReport('goal-mode-applied.json'),
     readReport('agent-scheduler-state.json'),
-    readReport('mad-sks-tmux-lane-ui.json'),
+    readReport('zellij-session.json'),
     readReport('codex-0-134-official-compat.json'),
     readReport('mcp-0-134-modernization.json'),
     readReport('mcp-readonly-runtime-scheduler.json'),
@@ -116,7 +116,7 @@ export async function buildRuntimeTruthMatrix(input: {
     readReport('fast-mode-propagation-proof.json')
   ])
   const rows: RuntimeTruthRow[] = [
-    row('tmux_physical', levelFromTmux(tmux, required.tmux_physical === true), ['agent-real-tmux-physical-proof', 'agent-tmux-physical-proof.json'], required.tmux_physical === true, tmux, 'run `SKS_TEST_REAL_TMUX=1 npm run agent:real-tmux-physical-proof`'),
+    row('zellij_pane', levelFromOk(zellijPane, required.zellij_pane === true ? 'real_required_missing' : 'integration_optional'), ['zellij-pane-proof.json'], required.zellij_pane === true, zellijPane, 'run `SKS_REQUIRE_ZELLIJ=1 npm run zellij:pane-proof`'),
     row('codex_dynamic', levelFromCodex(codex, required.codex_dynamic === true), ['agent-real-codex-dynamic-smoke'], required.codex_dynamic === true, codex, 'run `SKS_TEST_REAL_DYNAMIC_AGENTS=1 npm run agent:real-codex-dynamic-smoke-v2`'),
     row('codex_patch_envelope_smoke', levelFromCodex(codexPatch, required.codex_patch_envelope_smoke === true), ['agent-real-codex-patch-envelope-smoke.json'], required.codex_patch_envelope_smoke === true, codexPatch, 'run `SKS_TEST_REAL_CODEX_PATCHES=1 npm run agent:real-codex-patch-envelope-smoke`'),
     row('cleanup', levelFromOk(cleanup, 'integration_optional'), ['agent-cleanup-proof.json'], false, cleanup, 'run `npm run agent:cleanup-executor-v2`'),
@@ -125,7 +125,7 @@ export async function buildRuntimeTruthMatrix(input: {
     row('goal_mode', goalMode?.ok === true ? 'proven' : 'integration_optional', ['goal-mode-applied.json'], false, goalMode, 'record official goal mode evidence'),
     row('route_blackbox', fakeReal?.subsystem_levels?.route_blackbox || 'integration_optional', ['fake-real-proof-policy.json', 'agent-proof-evidence.json'], false, fakeReal, 'run actual route blackbox proof'),
     row('dynamic_scheduler', scheduler?.pending_queue_drained === true || scheduler?.ok === true ? 'proven' : 'integration_optional', ['agent-scheduler-state.json'], false, scheduler, 'run dynamic scheduler proof gate'),
-    row('warp_mad_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || tmuxRightLanePhysical, required.warp_mad_lanes === true), ['mad-sks-tmux-lane-ui.json', 'tmux-right-lane-physical-layout-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || tmuxRightLanePhysical, 'run `sks --mad` in Warp/tmux and capture visible lane proof'),
+    row('warp_mad_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || zellijRightLanePhysical, required.warp_mad_lanes === true), ['zellij-session.json', 'zellij-pane-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || zellijRightLanePhysical, 'run `sks --mad` with Zellij and capture visible lane proof'),
     row('codex_0_134', levelFromOk(codex0134, 'integration_optional'), ['codex-0-134-official-compat.json'], false, codex0134, 'run `npm run codex:0.134-official-compat`'),
     row('mcp_0_134', levelFromOk(mcp0134, 'integration_optional'), ['mcp-0-134-modernization.json'], false, mcp0134, 'run `npm run mcp:0.134-modernization`'),
     row('mcp_readonly_runtime_scheduler', levelFromOk(mcpReadonlyRuntime, 'integration_optional'), ['mcp-readonly-runtime-scheduler.json'], false, mcpReadonlyRuntime, 'run `npm run mcp:readonly-runtime-scheduler`'),
@@ -142,7 +142,7 @@ export async function buildRuntimeTruthMatrix(input: {
     row('fast_mode_default', levelFromOk(fastModeDefault, 'integration_optional'), ['fast-mode-propagation-proof.json'], false, fastModeDefault, 'run `npm run agent:fast-mode-default`'),
     row('cleanup_v4', levelFromOk(cleanup, 'integration_optional'), ['agent-cleanup-proof.json'], false, cleanup, 'run `npm run agent:cleanup-executor-v2`'),
     row('ast_type_work_graph', levelFromWorkGraph(workGraph || fakeReal), ['agent-intelligent-work-graph-v2.json', 'agent-symbol-ownership-map.json'], false, workGraph, 'run `npm run agent:ast-aware-work-graph`'),
-    row('warp_mad_right_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || tmuxRightLanePhysical || tmuxRightLaneCoordinate || tmuxRightLaneContent, required.warp_mad_lanes === true), ['mad-sks-tmux-lane-ui.json', 'tmux-right-lane-physical-layout-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || tmuxRightLanePhysical || tmuxRightLaneCoordinate || tmuxRightLaneContent, 'run `sks --mad` in Warp/tmux and capture right-lane proof')
+    row('warp_mad_right_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || zellijRightLanePhysical || zellijRightLaneCoordinate || zellijRightLaneContent, required.warp_mad_lanes === true), ['zellij-session.json', 'zellij-pane-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || zellijRightLanePhysical || zellijRightLaneCoordinate || zellijRightLaneContent, 'run `sks --mad` with Zellij and capture right-lane proof')
   ]
   const blockers = rows.flatMap((item) => item.required_mode && ['blocked', 'real_required_missing', 'integration_optional'].includes(item.proof_level)
     ? [`required_runtime_truth_missing:${item.subsystem}`, ...item.blockers]
@@ -208,14 +208,6 @@ function levelFromAppshots(report: any): ProofLevel {
     return sources.some((source: any) => source?.fixture === true) ? 'fixture_instrumented_real' : 'proven'
   }
   return 'blocked'
-}
-
-function levelFromTmux(report: any, required: boolean): ProofLevel {
-  if (!report) return required ? 'real_required_missing' : 'integration_optional'
-  if (report.proof_level) return report.proof_level
-  if (report.physical_tmux_verified === true || report.status === 'passed') return 'proven'
-  if (report.status === 'integration_optional') return required ? 'real_required_missing' : 'integration_optional'
-  return required ? 'real_required_missing' : 'blocked'
 }
 
 function levelFromCodex(report: any, required: boolean): ProofLevel {

@@ -57,6 +57,7 @@ export const SOURCE_INTELLIGENCE_FILES = [
 export const AGENT_118_FILES = [
   'src/core/agents/scout-policy.ts',
   'src/core/agents/agent-terminal-session.ts',
-  'src/core/agents/tmux-right-lane-cockpit.ts',
+  'src/core/agents/zellij-right-lane-cockpit.ts',
+  'src/core/agents/agent-runner-zellij.ts',
   'src/core/codex/official-goal-mode.ts'
 ];

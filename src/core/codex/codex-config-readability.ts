@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
+import { nowIso, packageRoot, runProcess, writeJsonAtomic } from '../fsx.js'
 
 export const CODEX_CONFIG_READABILITY_SCHEMA = 'sks.codex-config-readability.v1'
 
@@ -69,6 +69,8 @@ export async function inspectCodexConfigReadability(rootInput: string = process.
 
   if (process.platform === 'darwin') {
     add(await commandCheck('macos_acl_ls_le', 'ls', ['-le', configPath], root))
+    const acl = checks.find((check) => check.name === 'macos_acl_ls_le')
+    if (/\bdeny\b.*\b(read|readattr|readextattr|readsecurity|search)\b/i.test(String(acl?.detail?.stdout || ''))) blockers.add('acl_denied')
     const flags = await commandCheck('macos_flags_ls_lO', 'ls', ['-lO', configPath], root)
     add(flags)
     if (/\b(uchg|schg|restricted)\b/.test(String(flags.detail?.stdout || ''))) blockers.add('flags_locked')
@@ -82,7 +84,7 @@ export async function inspectCodexConfigReadability(rootInput: string = process.
 
   add(await nodeReadCheck(configPath))
   add(await childReadCheck(configPath, root))
-  add({ name: 'codex_exec_config_load_probe', ok: true, status: opts.codexProbe ? 'deferred_to_script_probe' : 'skipped_no_model_free_probe' })
+  add(await codexCliConfigLoadCheck(root, configPath, opts))
 
   const report: CodexConfigReadabilityReport = {
     schema: CODEX_CONFIG_READABILITY_SCHEMA,
@@ -182,6 +184,12 @@ function classifyBlocker(check: CodexConfigCheck) {
   if (code === 'EACCES') return [check.name === 'parent_traverse' ? 'parent_traverse_denied' : 'EACCES']
   if (check.name === 'macos_quarantine_xattr') return ['quarantine']
   if (check.name === 'config_symlink') return ['symlink_escape']
+  if (check.name === 'actual_codex_cli_config_load') {
+    const blockers = check.detail?.blockers || check.detail?.signals?.blockers || []
+    if (Array.isArray(blockers) && blockers.length) return blockers
+    if (check.detail?.integration_optional === true) return []
+    return ['codex_cli_config_load_unverified']
+  }
   if (check.detail?.exit_code !== undefined && check.detail.exit_code !== 0) return [`${check.name}_failed`]
   return [`${check.name}_failed`]
 }
@@ -189,9 +197,11 @@ function classifyBlocker(check: CodexConfigCheck) {
 function operatorActions(blockers: string[]) {
   const actions = new Set<string>()
   if (blockers.some((item) => /^missing_/.test(item))) actions.add('Run `sks doctor --fix` to regenerate the managed Codex project config, then rerun the preflight.')
+  if (blockers.includes('codex_cli_config_eperm')) actions.add('Run `sks mad repair-config --apply --tmux-smoke`; if it still fails on macOS, grant Full Disk Access/Files and Folders access to the launching terminal, Warp, iTerm, Terminal, Codex app, or Codex CLI context.')
   if (blockers.includes('EPERM') || blockers.includes('tcc_possible')) actions.add('On macOS, grant the launching terminal/Codex app Full Disk Access or Files and Folders access, then rerun `sks doctor --fix`.')
   if (blockers.includes('EACCES') || blockers.includes('parent_traverse_denied')) actions.add('Restore owner traversal/read permissions for the project root, `.codex`, and `.codex/config.toml`.')
   if (blockers.includes('quarantine')) actions.add('Remove quarantine from the config with `xattr -d com.apple.quarantine .codex/config.toml` after verifying the file is trusted.')
+  if (blockers.includes('acl_denied')) actions.add('Review ACL deny entries with `ls -le .codex/config.toml`; remove only intentional, user-approved deny ACLs or move the project to a location readable by the launching app.')
   if (blockers.includes('flags_locked')) actions.add('Remove immutable/restricted file flags with `chflags nouchg .codex/config.toml` if the flag was intentional and safe to clear.')
   if (blockers.includes('symlink_escape')) actions.add('Replace `.codex/config.toml` with a regular file or a symlink target inside the project or CODEX_HOME.')
   return [...actions]
@@ -199,4 +209,48 @@ function operatorActions(blockers: string[]) {
 
 function errorDetail(err: any) {
   return { name: err?.name || 'Error', code: err?.code || '', message: err?.message || String(err) }
+}
+
+async function codexCliConfigLoadCheck(root: string, configPath: string, opts: any = {}): Promise<CodexConfigCheck> {
+  if (!opts.codexProbe && !opts.actualCodex && !opts.codexBin) {
+    return {
+      name: 'actual_codex_cli_config_load',
+      ok: true,
+      status: 'integration_optional_not_requested',
+      detail: { integration_optional: true, blockers: [] }
+    }
+  }
+  const script = path.join(packageRoot(), 'scripts', 'codex-config-load-probe.mjs')
+  const args = [script, '--root', root, '--config', configPath, '--json']
+  if (opts.actualCodex !== false) args.push('--actual-codex')
+  if (opts.requireActualCodex) args.push('--require-actual-codex')
+  if (opts.codexBin) args.push('--codex-bin', String(opts.codexBin))
+  const result = await runProcess(process.execPath, args, {
+    cwd: root,
+    env: opts.env || process.env,
+    timeoutMs: opts.timeoutMs || 30000,
+    maxOutputBytes: 512 * 1024
+  })
+  const parsed = parseJson(result.stdout)
+  const actual = parsed?.checks?.find((check: any) => check.name === 'actual_codex_cli_config_load')
+  const blockers = parsed?.blockers || actual?.signals?.blockers || []
+  const optional = actual?.integration_optional === true
+  return {
+    name: 'actual_codex_cli_config_load',
+    ok: result.code === 0 || optional,
+    status: actual?.status || (result.code === 0 ? 'passed' : 'failed'),
+    detail: {
+      exit_code: result.code,
+      timed_out: result.timedOut,
+      stdout_tail: result.stdout.slice(-4000),
+      stderr_tail: result.stderr.slice(-4000),
+      report: parsed,
+      blockers,
+      integration_optional: optional
+    }
+  }
+}
+
+function parseJson(text: string) {
+  try { return JSON.parse(text) } catch { return null }
 }

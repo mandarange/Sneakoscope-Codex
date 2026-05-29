@@ -1,11 +1,10 @@
 import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
-import { readTmuxLaneSupervisor } from './tmux-lane-supervisor.js'
+import { readZellijLaneSupervisor } from './zellij-lane-supervisor.js'
 
 export async function writeAgentTrustReport(root: string, input: any = {}) {
-  const laneSupervisor = await readTmuxLaneSupervisor(root)
-  const tmuxPhysicalProof = await readJson<any>(path.join(root, 'agent-tmux-physical-proof.json'), null)
-  const tmuxPhysicalProofSummary = await readJson<any>(path.join(root, 'agent-tmux-physical-proof-summary.json'), null)
+  const laneSupervisor = await readZellijLaneSupervisor(root)
+  const zellijPaneProof = await readJson<any>(path.join(root, 'zellij-pane-proof.json'), null)
   const cleanupProof = await readJson<any>(path.join(root, 'agent-cleanup-proof.json'), null)
   const intelligentWorkGraph = await readJson<any>(path.join(root, 'agent-intelligent-work-graph.json'), null)
   const fakeRealPolicy = await readJson<any>(path.join(root, 'fake-real-proof-policy.json'), null)
@@ -26,13 +25,13 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
     else if (/passed|proven/.test(status)) runtimeTruthGroups.Proven.push(label)
     else if (/blocked|failed/.test(status)) runtimeTruthGroups.Blocked.push(label)
   }
-  pushTruth(String(tmuxPhysicalProof?.status || 'not_run'), 'tmux physical')
+  pushTruth(zellijPaneProof?.ok === true ? 'passed' : zellijPaneProof ? 'blocked' : 'not_run', 'Zellij pane proof')
   pushTruth(cleanupProof?.ok === true ? 'passed' : cleanupProof ? 'blocked' : 'not_run', 'cleanup executor')
   pushTruth(intelligentWorkGraph?.ok === true ? 'passed' : intelligentWorkGraph ? 'partial' : 'not_run', 'intelligent work graph')
   const subsystemProofLevels = {
     ...(fakeRealPolicy?.subsystem_levels || {}),
     ...Object.fromEntries((runtimeTruthMatrix?.rows || runtimeTruthMatrix?.subsystems || []).map((row: any) => [row.subsystem, row.proof_level])),
-    tmux_physical: runtimeTruthMatrix?.rows?.find?.((row: any) => row.subsystem === 'tmux_physical')?.proof_level || fakeRealPolicy?.subsystem_levels?.tmux_physical || (tmuxPhysicalProof?.proof_level || tmuxPhysicalProof?.status || 'not_run'),
+    zellij_pane: runtimeTruthMatrix?.rows?.find?.((row: any) => row.subsystem === 'zellij_pane')?.proof_level || fakeRealPolicy?.subsystem_levels?.zellij_pane || (zellijPaneProof?.ok === true ? 'proven' : zellijPaneProof ? 'blocked' : 'not_run'),
     cleanup: runtimeTruthMatrix?.rows?.find?.((row: any) => row.subsystem === 'cleanup')?.proof_level || fakeRealPolicy?.subsystem_levels?.cleanup || (cleanupProof?.ok === true ? 'proven' : cleanupProof ? 'blocked' : 'not_run'),
     intelligent_work_graph: runtimeTruthMatrix?.rows?.find?.((row: any) => row.subsystem === 'intelligent_work_graph')?.proof_level || fakeRealPolicy?.subsystem_levels?.intelligent_work_graph || intelligentWorkGraph?.proof_level || (intelligentWorkGraph ? 'partial' : 'not_run')
   }
@@ -59,28 +58,24 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
       expected_backfill_count: input.proof?.expected_backfill_count ?? input.scheduler?.expected_backfill_count ?? null,
       pending_queue_drained: input.proof?.pending_queue_drained ?? input.scheduler?.pending_queue_drained ?? null,
       generation_count: input.proof?.generation_count ?? null,
-      tmux_attach_command: input.missionId ? `tmux attach -t sks-${input.missionId}` : null,
-      tmux_lane_manifest: 'agent-tmux-lanes.json',
-      tmux_lane_persistence: {
-        supervisor: 'agent-tmux-lane-supervisor.json',
+      zellij_attach_command: input.missionId ? `zellij attach sks-${input.missionId}` : null,
+      zellij_lane_manifest: 'agent-zellij-lanes.json',
+      zellij_lane_persistence: {
+        supervisor: 'agent-zellij-lane-supervisor.json',
         no_flicker_verified: laneSupervisor?.no_flicker_verified === true,
         pane_survival_checked: laneSupervisor?.pane_survival_checked === true,
         unexpected_close_count: laneSupervisor?.unexpected_close_count || 0,
         lane_count: laneSupervisor?.lane_count || 0,
-        physical_tmux_verified: tmuxPhysicalProof?.physical_tmux_verified === true,
-        physical_proof_status: tmuxPhysicalProof?.status || 'not_run',
-        physical_proof_summary: tmuxPhysicalProofSummary ? 'agent-tmux-physical-proof-summary.json' : null,
-        before_drain_proof: tmuxPhysicalProofSummary?.phases?.before_drain ? 'agent-tmux-physical-proof-before-drain.json' : null,
-        after_drain_proof: tmuxPhysicalProofSummary?.phases?.after_drain ? 'agent-tmux-physical-proof-after-drain.json' : null,
-        final_proof: tmuxPhysicalProofSummary?.phases?.final ? 'agent-tmux-physical-proof-final.json' : null,
-        list_panes_artifact: tmuxPhysicalProof?.tmux_list_panes_artifact || null,
-        capture_pane_artifacts: tmuxPhysicalProof?.tmux_capture_pane_artifacts || []
+        pane_proof_ok: zellijPaneProof?.ok === true,
+        pane_proof_status: zellijPaneProof ? (zellijPaneProof.ok === true ? 'passed' : 'blocked') : 'not_run',
+        pane_proof: zellijPaneProof ? 'zellij-pane-proof.json' : null,
+        pane_count: zellijPaneProof?.pane_count ?? null
       },
       cleanup_executor: {
         status: cleanupProof?.ok === true ? 'passed' : cleanupProof ? 'blocked' : 'not_run',
         proof: cleanupProof ? 'agent-cleanup-proof.json' : null,
         stale_processes_killed: cleanupProof?.stale_processes_killed || [],
-        stale_tmux_panes_closed: cleanupProof?.stale_tmux_panes_closed || [],
+        stale_zellij_panes_closed: cleanupProof?.stale_zellij_panes_closed || [],
         orphan_temp_dirs_removed: cleanupProof?.orphan_temp_dirs_removed || [],
         stale_locks_removed: cleanupProof?.stale_locks_removed || [],
         skipped_active_sessions: cleanupProof?.skipped_active_sessions || []
@@ -140,13 +135,11 @@ function renderAgentTrustReportMarkdown(report: any) {
     `- backfill_count: ${orchestration.backfill_count ?? 'unknown'}`,
     `- expected_backfill_count: ${orchestration.expected_backfill_count ?? 'unknown'}`,
     `- pending_queue_drained: ${orchestration.pending_queue_drained === true}`,
-    `- tmux_lane_manifest: ${orchestration.tmux_lane_manifest || 'unknown'}`,
-    `- tmux_no_flicker_verified: ${orchestration.tmux_lane_persistence?.no_flicker_verified === true}`,
-    `- tmux_pane_survival_checked: ${orchestration.tmux_lane_persistence?.pane_survival_checked === true}`,
-    `- physical_tmux_verified: ${orchestration.tmux_lane_persistence?.physical_tmux_verified === true}`,
-    `- tmux_physical_before_drain: ${orchestration.tmux_lane_persistence?.before_drain_proof || 'not_run'}`,
-    `- tmux_physical_after_drain: ${orchestration.tmux_lane_persistence?.after_drain_proof || 'not_run'}`,
-    `- tmux_physical_final: ${orchestration.tmux_lane_persistence?.final_proof || 'not_run'}`,
+    `- zellij_lane_manifest: ${orchestration.zellij_lane_manifest || 'unknown'}`,
+    `- zellij_no_flicker_verified: ${orchestration.zellij_lane_persistence?.no_flicker_verified === true}`,
+    `- zellij_pane_survival_checked: ${orchestration.zellij_lane_persistence?.pane_survival_checked === true}`,
+    `- zellij_pane_proof_ok: ${orchestration.zellij_lane_persistence?.pane_proof_ok === true}`,
+    `- zellij_pane_count: ${orchestration.zellij_lane_persistence?.pane_count ?? 'unknown'}`,
     `- cleanup_executor: ${orchestration.cleanup_executor?.status || 'not_run'}`,
     `- work_graph_quality_score: ${orchestration.intelligent_work_graph?.score ?? 'unknown'}`,
     `- runtime_truth_fake: ${(report.runtime_truth_groups?.Fake || []).join(', ') || 'None'}`,

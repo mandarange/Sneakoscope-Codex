@@ -2,14 +2,14 @@ import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { buildFixturePatchEnvelopes } from './agent-runner-fake.js'
 import { runProcessAgent } from './agent-runner-process.js'
-import { runTmuxAgent } from './agent-runner-tmux.js'
+import { runZellijAgent } from './agent-runner-zellij.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-patch-schema.js'
 import { runCodexExecWorkerAdapter } from './codex-exec-worker-adapter.js'
 
 export const NATIVE_WORKER_BACKEND_ROUTER_SCHEMA = 'sks.native-worker-backend-router.v1'
 
-type BackendSource = 'fixture' | 'process_generated' | 'model_authored' | 'tmux_generated'
+type BackendSource = 'fixture' | 'process_generated' | 'model_authored' | 'zellij_generated'
 
 export async function runNativeWorkerBackendRouter(input: {
   agentRoot: string
@@ -86,26 +86,26 @@ export async function runNativeWorkerBackendRouter(input: {
     proofLevel = adapter.processReport.dry_run ? 'prepared_only' : patchEnvelopes.length ? 'model_authored' : 'blocked'
     result = validateAgentWorkerResult(adapter.result)
   } else {
-    const tmuxRun = await runTmuxAgent(input.agent, input.slice, {
+    const zellijRun = await runZellijAgent(input.agent, input.slice, {
       missionId: input.intake.mission_id || input.intake.parent_mission_id || '',
       agentRoot: root,
       cwd: input.intake.cwd || root,
-      real: input.intake.real_tmux === true || input.intake.real === true,
+      real: input.intake.real_zellij === true || input.intake.real === true,
       fastMode: input.fastModePolicy.fast_mode,
       serviceTier: input.fastModePolicy.service_tier
     })
-    const tmuxReportRel = tmuxRun.artifacts.find((artifact: string) => artifact.endsWith('agent-tmux-report.json')) || null
-    const tmuxReport = tmuxReportRel ? await readJson<any>(path.join(root, tmuxReportRel), null) : null
-    childReports = tmuxReport ? [tmuxReport] : []
-    patchEnvelopes = buildGeneratedPatchEnvelopes(input, 'tmux_generated')
-    proofLevel = tmuxReport?.launch_mode === 'real_tmux' ? 'tmux_child_proven' : 'fixture_only'
+    const zellijReportRel = zellijRun.artifacts.find((artifact: string) => artifact.endsWith('agent-zellij-report.json')) || null
+    const zellijReport = zellijReportRel ? await readJson<any>(path.join(root, zellijReportRel), null) : null
+    childReports = zellijReport ? [zellijReport] : []
+    patchEnvelopes = buildGeneratedPatchEnvelopes(input, 'zellij_generated')
+    proofLevel = zellijReport?.launch_mode === 'real_zellij' ? 'zellij_child_proven' : 'fixture_only'
     result = validateAgentWorkerResult({
-      ...tmuxRun,
+      ...zellijRun,
       patch_envelopes: patchEnvelopes,
-      tmux_child_report: tmuxReport,
+      zellij_child_report: zellijReport,
       model_authored_patch_envelopes: false,
       fixture_patch_envelopes: false,
-      verification: { status: tmuxRun.status === 'done' ? 'passed' : 'failed', checks: [...(tmuxRun.verification?.checks || []), 'native-worker-backend-router', 'tmux-child-execution'] }
+      verification: { status: zellijRun.status === 'done' ? 'passed' : 'failed', checks: [...(zellijRun.verification?.checks || []), 'native-worker-backend-router', 'zellij-child-execution'] }
     })
   }
 
@@ -127,6 +127,7 @@ export async function runNativeWorkerBackendRouter(input: {
     proof_level: proofLevel,
     fast_mode: input.fastModePolicy.fast_mode,
     service_tier: input.fastModePolicy.service_tier,
+    ...(backend === 'codex-exec' ? { service_tier_cli_override_present: childReports.some((report) => report?.service_tier_cli_override_present === true) } : {}),
     blockers: result.blockers || []
   }
   await writeJsonAtomic(path.join(root, reportRel), report)
@@ -142,8 +143,8 @@ export async function runNativeWorkerBackendRouter(input: {
   }
 }
 
-function normalizeBackend(value: string): 'fake' | 'process' | 'codex-exec' | 'tmux' | null {
-  return value === 'fake' || value === 'process' || value === 'codex-exec' || value === 'tmux' ? value : null
+function normalizeBackend(value: string): 'fake' | 'process' | 'codex-exec' | 'zellij' | null {
+  return value === 'fake' || value === 'process' || value === 'codex-exec' || value === 'zellij' ? value : null
 }
 
 function envelopeOpts(input: any, source: BackendSource, childPid?: number) {

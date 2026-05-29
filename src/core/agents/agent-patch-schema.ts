@@ -13,7 +13,7 @@ export interface AgentPatchOperation {
 
 export interface AgentPatchEnvelope {
   schema: typeof AGENT_PATCH_SCHEMA
-  source?: 'fixture' | 'model_authored' | 'process_generated' | 'tmux_generated'
+  source?: 'fixture' | 'model_authored' | 'process_generated' | 'zellij_generated'
   mission_id?: string
   route?: string
   agent_id: string
@@ -102,7 +102,7 @@ export function validateAgentPatchEnvelope(envelope: AgentPatchEnvelope): { ok: 
   if (!Number.isInteger(envelope.generation_index) || envelope.generation_index < 0) violations.push('generation_index_missing')
   if (!envelope.lease_id && !envelope.lease_proof?.lease_id) violations.push('lease_id_missing')
   if (!envelope.operations.length) violations.push('operations_missing')
-  if (envelope.source && !['fixture', 'model_authored', 'process_generated', 'tmux_generated'].includes(envelope.source)) violations.push('source_invalid')
+  if (envelope.source && !['fixture', 'model_authored', 'process_generated', 'zellij_generated'].includes(envelope.source)) violations.push('source_invalid')
   if (envelope.source === 'model_authored' && !hasFiniteNumber(envelope.backend_child_process_id)) violations.push('model_authored_backend_child_process_id_missing')
   if (envelope.source === 'fixture' && envelope.backend_child_process_id !== undefined) violations.push('fixture_backend_child_process_id_present')
   for (const operation of envelope.operations) {
@@ -122,7 +122,7 @@ export function validateAgentPatchEnvelope(envelope: AgentPatchEnvelope): { ok: 
 
 function normalizeEnvelopeSource(value: any): AgentPatchEnvelope['source'] | null {
   const text = String(value || '')
-  return text === 'fixture' || text === 'model_authored' || text === 'process_generated' || text === 'tmux_generated' ? text : null
+  return text === 'fixture' || text === 'model_authored' || text === 'process_generated' || text === 'zellij_generated' ? text : null
 }
 
 function hasFiniteNumber(value: any): boolean {
