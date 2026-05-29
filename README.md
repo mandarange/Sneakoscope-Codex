@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.18.13** adds actual Codex CLI config-load truth, fake Codex EPERM fixtures, doctor readiness matrix proof, `sks mad repair-config`, tmux config smoke, safer project-local config splitting, and official Fast mode CLI override proof: doctor now refuses Ready yes without Codex config-load evidence, MAD blocks launch before unreadable config can crash Codex, and Codex children must show `-c service_tier=fast` in process-report evidence.
+SKS **1.18.13** is the Zellij-only interactive runtime release: actual Codex CLI config-load truth, fake Codex EPERM fixtures, doctor readiness matrix proof, `sks mad repair-config`, safer project-local config splitting, Codex 0.135 compatibility gates, and official Fast mode CLI override proof are wired into release checks. Doctor now refuses Ready yes without Codex config-load evidence, MAD blocks launch before unreadable config can crash Codex, and interactive MAD/lane UI requires Zellij with no removed-runtime fallback.
 
 ```bash
 sks mad-sks plan --target-root <path> --json
@@ -28,7 +28,9 @@ sks agent status latest --json
 sks agent run "release review" --agents 8 --work-items 16 --concurrency 4 --mock --json
 npm run source-intelligence:all-modes
 npm run agent:background-terminals
-npm run agent:tmux-lane-no-flicker
+npm run zellij:lane-renderer
+npm run zellij:pane-proof
+npm run zellij:screen-proof
 npm run agent:cleanup-executor
 npm run agent:cleanup-executor-v2
 npm run retention:cleanup-safety
@@ -117,14 +119,12 @@ The cleanup contract is policy-backed in `.sneakoscope/policy.json`, but the def
 - X AI / Context7 / Codex Web policy: [docs/xai-context7-codex-web-policy.md](docs/xai-context7-codex-web-policy.md)
 - Main no-Scout / worker Scout policy: [docs/main-no-scout-worker-scout-policy.md](docs/main-no-scout-worker-scout-policy.md)
 - Agent terminal lanes: [docs/agent-terminal-lanes.md](docs/agent-terminal-lanes.md)
-- tmux right-lane cockpit: [docs/tmux-right-lane-cockpit.md](docs/tmux-right-lane-cockpit.md)
-- Real tmux pane proof: [docs/real-tmux-pane-proof.md](docs/real-tmux-pane-proof.md)
+- Zellij migration: [docs/migration/tmux-to-zellij.md](docs/migration/tmux-to-zellij.md)
 - Real Codex dynamic smoke: [docs/real-codex-dynamic-smoke.md](docs/real-codex-dynamic-smoke.md)
 - Agent cleanup executor: [docs/agent-cleanup-executor.md](docs/agent-cleanup-executor.md)
 - Intelligent work graph: [docs/intelligent-work-graph.md](docs/intelligent-work-graph.md)
 - Fake vs real proof policy: [docs/fake-vs-real-proof-policy.md](docs/fake-vs-real-proof-policy.md)
 - Runtime truth matrix: [docs/runtime-truth-matrix.md](docs/runtime-truth-matrix.md)
-- Warp MAD tmux lanes: [docs/warp-mad-tmux-lanes.md](docs/warp-mad-tmux-lanes.md)
 - ADHD orchestration gate: [docs/adhd-orchestrating-gate.md](docs/adhd-orchestrating-gate.md)
 - Strategy-first parallel write: [docs/strategy-first-parallel-write.md](docs/strategy-first-parallel-write.md)
 - Appshots pipeline: [docs/appshots-pipeline.md](docs/appshots-pipeline.md)
@@ -215,7 +215,7 @@ sks selftest --mock
 
 ## What Sneakoscope Adds
 
-`sks` adds a tmux Codex CLI runtime, Codex App `$` commands, Team/QA/PPT/Research/DB/GX/Wiki routes, OpenClaw and Hermes skill generation, Context7-gated current docs, TriWiki context packs, DB safety, design SSOT policy, skill dreaming, release checks, and Honest Mode.
+`sks` adds a Zellij-backed Codex CLI runtime, Codex App `$` commands, Team/QA/PPT/Research/DB/GX/Wiki routes, OpenClaw and Hermes skill generation, Context7-gated current docs, TriWiki context packs, DB safety, design SSOT policy, skill dreaming, release checks, and Honest Mode.
 
 ## Report-Only Planning Surfaces
 
@@ -234,16 +234,16 @@ sks pipeline plan latest --proof-field --json
 - npm
 - Codex CLI for terminal workflows
 - Codex App for app-facing workflows, including Codex Computer Use and `$imagegen`/`gpt-image-2` evidence when required
-- tmux for the CLI-first runtime
+- Zellij for `sks --mad` and interactive lane UI
 - Context7 MCP for current-docs-gated routes
 
-Install tmux from [tmux.dev/download](https://www.tmux.dev/download). On macOS, Homebrew users can also install it with:
+Install Zellij from [zellij.dev](https://zellij.dev/documentation/installation.html). On macOS, Homebrew users can also install it with:
 
 ```sh
-brew install tmux
+brew install zellij
 ```
 
-The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex` versions before opening tmux. `sks --mad` also checks dependencies, requires tmux 3.x, and prints only the session, gate, attach, and blocker details needed to act.
+The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex` versions before opening the interactive runtime. `sks --mad` also checks dependencies, requires Zellij for interactive MAD/lane UI, and prints only the session, gate, attach, and blocker details needed to act.
 
 ## Installation
 
@@ -315,24 +315,23 @@ sks --version
 ```sh
 sks bootstrap
 sks deps check
-sks deps install tmux
 sks codex-app check
 sks doctor --fix
 sks fix-path
 ```
 
-### Open Codex CLI With tmux
+### Open Codex CLI With Zellij
 
 ```sh
 sks
-sks tmux open
-sks tmux check
-sks tmux status --once
+sks --mad
+sks team open-zellij latest
+sks team attach-zellij latest
 ```
 
-Bare `sks` creates or reuses the default named tmux session for Codex CLI and attaches to it in an interactive terminal. By default it launches Codex in Fast service tier with `--model gpt-5.5`, `-c service_tier="fast"`, and the selected `model_reasoning_effort` with a static SKS 3D ASCII intro inside tmux; the animated intro is reserved for non-tmux unauthenticated Codex launches and can be disabled with `SKS_TMUX_LOGO_ANIMATION=0`. SKS always forces the model to `gpt-5.5`; `SKS_CODEX_MODEL` and `SKS_CODEX_FAST_HIGH=0` cannot downgrade or remove that model pin. You can still set `SKS_CODEX_REASONING` to change reasoning effort. Use `sks tmux open` when you need explicit `--workspace` / `--session` flags, `sks tmux check` for readiness without launching, and `sks help` for CLI help. Use `--no-attach` or `SKS_TMUX_NO_AUTO_ATTACH=1` when you only want SKS to create/reuse the session and print the manual attach command.
+Interactive SKS sessions use Zellij layouts. By default SKS launches Codex in Fast service tier with `--model gpt-5.5`, `-c service_tier="fast"`, and the selected `model_reasoning_effort`. SKS always forces the model to `gpt-5.5`; `SKS_CODEX_MODEL` and `SKS_CODEX_FAST_HIGH=0` cannot downgrade or remove that model pin. You can still set `SKS_CODEX_REASONING` to change reasoning effort. Use `sks --mad --workspace <name>` for an explicit MAD session and `sks help` for CLI help.
 
-Before opening tmux, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens tmux with the updated Codex CLI.
+Before opening the interactive runtime, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens the runtime with the updated Codex CLI.
 
 For [codex-lb](https://github.com/Soju06/codex-lb), start the server, create a dashboard API key, then run:
 
@@ -343,7 +342,7 @@ sks codex-lb repair
 sks
 ```
 
-Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes the codex-lb Codex CLI / IDE Extension provider block into `~/.codex/config.toml` for Codex App routing, loads the provider env key for tmux launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. If the provider block disappears but the stored env file is still recoverable, bare `sks`, npm postinstall upgrades, `sks doctor --fix`, and `sks codex-lb repair` restore it with `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = false`; imagegen checks may record this provider as configured codex-lb routing, but it is not accepted as official Codex App `$imagegen` evidence. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` tmux session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths run a response-chain health check. `previous_response_not_found` is treated as a stateless-LB warning and keeps codex-lb active. Hard failures are surfaced to the user; SKS only bypasses codex-lb when the user chooses OAuth fallback or `SKS_CODEX_LB_AUTOBYPASS=1` is set.
+Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes the codex-lb Codex CLI / IDE Extension provider block into `~/.codex/config.toml` for Codex App routing, loads the provider env key for interactive launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. If the provider block disappears but the stored env file is still recoverable, bare `sks`, npm postinstall upgrades, `sks doctor --fix`, and `sks codex-lb repair` restore it with `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = false`; imagegen checks may record this provider as configured codex-lb routing, but it is not accepted as official Codex App `$imagegen` evidence. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` Zellij session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths run a response-chain health check. `previous_response_not_found` is treated as a stateless-LB warning and keeps codex-lb active. Hard failures are surfaced to the user; SKS only bypasses codex-lb when the user chooses OAuth fallback or `SKS_CODEX_LB_AUTOBYPASS=1` is set.
 
 If codex-lb provider auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
 
@@ -376,14 +375,14 @@ sks codex-lb unselect
 
 This flips `model_provider` away from `codex-lb` in the top-level Codex App config while leaving your `sks-codex-lb.env` and `auth.json` untouched, so you can re-engage codex-lb later with `sks codex-lb repair` without re-running setup.
 
-### MAD tmux Launch
+### MAD Zellij Launch
 
 ```sh
 sks --mad
 sks --mad --allow-package-install --allow-service-control --allow-network --yes
 ```
 
-This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` high-power maintenance profile, opens the MAD-SKS permission gate for that tmux run, and launches a single Codex CLI pane. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock: it is explicit user authorization to widen approved target-project scopes. The session recreates the named session so stale split-pane MAD sessions collapse back to one pane. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
+This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` high-power maintenance profile, opens the MAD-SKS permission gate for that Zellij run, and launches a Codex CLI layout. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock: it is explicit user authorization to widen approved target-project scopes. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
 
 Before launching, SKS checks npm for a newer `sneakoscope`; answer `y` to update or `n` to continue. Use `--yes` to approve missing dependency installs automatically.
 
@@ -396,13 +395,13 @@ sks team "max native fan-out" --agents 12
 sks team watch latest
 sks team lane latest --agent native_agent_1 --follow
 sks team message latest --from native_agent_1 --to executor_1 --message "handoff note"
-sks team cleanup-tmux latest
+sks team cleanup-zellij latest
 sks team status latest
 sks team dashboard latest
 sks team log latest
 ```
 
-Team missions keep at least five QA/reviewer lanes active, record live events, compile runtime tasks and worker inboxes, write schema-backed effort/work-order/dashboard artifacts, and reconcile split live lanes in tmux when available. Native analysis lanes use the agent kernel exclusively. Use `sks team watch`, `sks team lane`, `sks team message`, and `sks team cleanup-tmux` to inspect or close the live view.
+Team missions keep at least five QA/reviewer lanes active, record live events, compile runtime tasks and worker inboxes, write schema-backed effort/work-order/dashboard artifacts, and reconcile split live lanes in Zellij when available. Native analysis lanes use the agent kernel exclusively. Use `sks team watch`, `sks team lane`, `sks team message`, and `sks team cleanup-zellij` to inspect or close the live view.
 
 ### Native Multi-Session Agents
 
@@ -593,7 +592,7 @@ sks selftest --mock
 Start a CLI workspace:
 
 ```sh
-sks tmux check
+sks --mad
 sks
 # or: sks --mad
 ```
@@ -632,14 +631,14 @@ npm install -g .
 
 If stale, reinstall globally from the repo or npm.
 
-### tmux is missing
+### Zellij is missing
 
 ```sh
-sks deps install tmux
-sks tmux check
+brew install zellij
+npm run zellij:capability
 ```
 
-Install tmux from [tmux.dev/download](https://www.tmux.dev/download) or `brew install tmux` on macOS, then re-run the check.
+Install Zellij from [zellij.dev](https://zellij.dev/documentation/installation.html), then run `npm run zellij:capability` or `sks doctor --json`. Without Zellij, non-interactive checks can continue, but `sks --mad` and interactive lane UI report `mad_ready: false`.
 
 ### Codex App tools are missing
 
@@ -700,7 +699,7 @@ npm run release:check
 npm run publish:dry
 ```
 
-`release:check` runs the 1.18.12 route-truth closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.18 baseline gates and adds patch swarm runtime truth, transaction journaling, serial conflict rebase, strict strategy-to-patch proof, rollback command proof, Native CLI Session Swarm 5/10/20-process proof, Real Worker Backend Router proof, Codex child overlap proof, model-authored patch-envelope separation, Warp/tmux right-lane physical UI proof, no-subagent-scaling proof, Fast mode default/worker/Codex/MAD propagation proof, Appshots attachment provenance, MCP runtime overlap evidence, Codex 0.134 runner truth, task graph expansion, schema-bound follow-up work, actual Agent/Team/Research/QA route blackboxes, scheduler proof hardening, tmux lane proof, Source Intelligence propagation, and Goal mode propagation checks. Broader live gates remain explicit scripts such as `release:real-check`; real Codex patch smoke and real Codex parallel worker proof are optional unless their `SKS_REQUIRE_REAL_*` environment variables are set. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
+`release:check` runs the 1.18.13 Zellij-only closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.18 baseline gates and adds patch swarm runtime truth, transaction journaling, serial conflict rebase, strict strategy-to-patch proof, rollback command proof, Native CLI Session Swarm 5/10/20-process proof, Real Worker Backend Router proof, Codex child overlap proof, model-authored patch-envelope separation, Zellij layout/pane/screen proof, no-subagent-scaling proof, Fast mode default/worker/Codex/MAD propagation proof, Appshots attachment provenance, MCP runtime overlap evidence, Codex 0.134/0.135 runner truth, task graph expansion, schema-bound follow-up work, actual Agent/Team/Research/QA route blackboxes, scheduler proof hardening, Source Intelligence propagation, and Goal mode propagation checks. Broader live gates remain explicit scripts such as `release:real-check`; real Codex patch smoke, real Codex parallel worker proof, and real Zellij proof are optional unless their `SKS_REQUIRE_REAL_*` or `SKS_REQUIRE_ZELLIJ=1` environment variables are set. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
 
 Version bumps are manual. Run `sks versioning bump` only when preparing release metadata; SKS will not create `.git/hooks/pre-commit` or auto-bump during ordinary commits.
 

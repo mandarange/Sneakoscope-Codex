@@ -10,6 +10,8 @@ const distManifestPath = path.join(root, 'dist/build-manifest.json');
 const distManifest = fs.existsSync(distManifestPath) ? JSON.parse(fs.readFileSync(distManifestPath, 'utf8')) : null;
 const parallelCheckPath = path.join(root, 'src/scripts/release-parallel-check.ts');
 const parallelCheckSource = fs.existsSync(parallelCheckPath) ? fs.readFileSync(parallelCheckPath, 'utf8') : '';
+const releaseRealCheckPath = path.join(root, 'scripts/release-real-check.mjs');
+const releaseRealCheckSource = fs.existsSync(releaseRealCheckPath) ? fs.readFileSync(releaseRealCheckPath, 'utf8') : '';
 const requiredDocs = [
   'README.md',
   'CHANGELOG.md',
@@ -134,8 +136,8 @@ const requiredScripts = [
   'doctor:codex-doctor-parity',
   'codex:permission-profiles',
   'codex:legacy-profile-consumers-removed',
-  'tmux:keyboard-enhancement-safety',
-  'tmux:tui-output-stability',
+  'terminal:keyboard-enhancement-safety',
+  'terminal:tui-output-stability',
   'codex:resume-cwd-truth',
   'mcp:tool-naming-parity',
   'responses:retry-policy-centralized',
@@ -259,7 +261,10 @@ for (const script of requiredScripts.filter((name) => name !== 'release:check:pa
   assertGate(parallelCheckSource.includes(`npm run ${script}`) || String(pkg.scripts?.['release:check'] || '').includes(`npm run ${script}`) || ['release:metadata', 'release:readiness'].includes(script), `release:check DAG missing ${script}`);
 }
 for (const script of requiredRealScripts) {
-  assertGate(String(pkg.scripts?.['release:real-check'] || '').includes(`npm run ${script}`), `release:real-check missing ${script}`);
+  assertGate(
+    String(pkg.scripts?.['release:real-check'] || '').includes(`npm run ${script}`) || releaseRealCheckSource.includes(`'${script}'`) || releaseRealCheckSource.includes(`"${script}"`),
+    `release:real-check missing ${script}`
+  );
 }
 assertGate(pkg.bin?.sks === 'dist/bin/sks.js', 'package runtime must use dist/bin/sks.js');
 assertGate(pkg.bin?.sneakoscope === 'dist/bin/sks.js', 'sneakoscope runtime must use dist/bin/sks.js');

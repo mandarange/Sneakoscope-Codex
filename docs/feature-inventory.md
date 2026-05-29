@@ -41,7 +41,7 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-auth` | integration | labs | sks auth status\|health\|repair\|setup --host <domain> --api-key <key> | mock:pass | runtime_mock_verified | none recorded |
 | `cli-openclaw` | integration | labs | sks openclaw install\|path\|print [--dir path] [--force] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-hermes` | integration | labs | sks hermes install\|status\|path\|print [--dir path] [--force] [--json] | mock:pass | runtime_mock_verified | none recorded |
-| `cli-tmux` | core-cli | labs | sks \| sks tmux open\|check\|status [--workspace name] | mock:pass | runtime_mock_verified | none recorded |
+| `cli-zellij` | core-cli | labs | sks \| sks --mad \| sks team open-zellij\|attach-zellij\|cleanup-zellij [mission] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-mad` | core-cli | labs | sks --mad [--high] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-auto-review` | core-cli | labs | sks auto-review status\|enable\|start [--high] \| sks --Auto-review --high | mock:pass | runtime_mock_verified | none recorded |
 | `cli-dollar-commands` | core-cli | labs | sks dollar-commands [--json] | execute:pass | runtime_verified | none recorded |
@@ -85,8 +85,8 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-validate-artifacts` | proof-route | labs | sks validate-artifacts [mission-id\|latest] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-wiki` | visual-memory | beta | sks wiki coords\|pack\|refresh\|publish\|rebuild-index\|validate\|validate-shared\|wrongness ... | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-hproof` | proof-route | labs | sks hproof check [mission-id\|latest] | mock:pass | runtime_mock_verified | none recorded |
-| `cli-agent` | core-cli | labs | sks agent run\|status\|close\|cleanup <mission-id\|latest> [--mock] [--apply\|--dry-run] [--json] | execute_and_validate_artifacts:pass | runtime_verified | 1.18.4 cleanup executor proof records stale process/tmux/temp/lock actions |
-| `cli-team` | proof-route | beta | sks team "task" [executor:5 reviewer:6 user:1]\|log\|tail\|watch\|lane\|status\|dashboard\|event\|message\|open-tmux\|attach-tmux\|cleanup-tmux ... | mock:pass | runtime_mock_verified | none recorded |
+| `cli-agent` | core-cli | labs | sks agent run\|status\|close\|cleanup <mission-id\|latest> [--mock] [--apply\|--dry-run] [--json] | execute_and_validate_artifacts:pass | runtime_verified | 1.18.13 cleanup executor proof records stale process/temp/lock actions and Zellij lane status |
+| `cli-team` | proof-route | beta | sks team "task" [executor:5 reviewer:6 user:1]\|log\|tail\|watch\|lane\|status\|dashboard\|event\|message\|open-zellij\|attach-zellij\|cleanup-zellij ... | mock:pass | runtime_mock_verified | none recorded |
 | `cli-reasoning` | core-cli | labs | sks reasoning ["prompt"] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-gx` | visual-memory | labs | sks gx init\|render\|validate\|drift\|snapshot [name] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-profile` | core-cli | labs | sks profile show\|set <model> | mock:pass | runtime_mock_verified | none recorded |

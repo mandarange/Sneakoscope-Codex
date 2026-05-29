@@ -26,6 +26,7 @@ const report = {
   ok: false,
   checks: [],
   blockers: [],
+  warnings: [],
   integration_optional: !actualRequired,
   actual_codex_requested: actualRequested,
   actual_codex_required: actualRequired
@@ -51,6 +52,7 @@ pushCheck({
 
 if (actualRequested) {
   await fs.mkdir(path.dirname(outputLastMessage), { recursive: true }).catch(() => {});
+  await fs.rm(outputLastMessage, { force: true }).catch(() => {});
   const codexArgs = [
     'exec',
     '--skip-git-repo-check',
@@ -69,16 +71,23 @@ if (actualRequested) {
     timeout: Number(process.env.SKS_CODEX_CONFIG_LOAD_TIMEOUT_MS || 20000),
     maxBuffer: 1024 * 1024
   });
-  const signals = classifyText(`${result.stderr || ''}\n${result.stdout || ''}`);
+  const outputLastText = await readTextIfExists(outputLastMessage);
+  const observedText = `${result.stderr || ''}\n${result.stdout || ''}\n${outputLastText || ''}`;
+  const probeOkObserved = /SKS_CONFIG_LOAD_PROBE_OK/.test(observedText);
+  const signals = classifyText(observedText, { configLoaded: probeOkObserved });
   const configFailure = signals.blockers.length > 0;
   const unavailable = result.error?.code === 'ENOENT';
-  const executionError = Boolean(result.error);
+  const timeoutAfterProbeOk = result.error?.code === 'ETIMEDOUT' && probeOkObserved;
+  const executionError = Boolean(result.error) && !timeoutAfterProbeOk;
   const nonConfigFailure = (result.status !== 0 || executionError) && !configFailure && !unavailable;
+  const passed = (result.status === 0 && !executionError) || (probeOkObserved && !configFailure);
   pushCheck({
     name: 'actual_codex_cli_config_load',
-    ok: result.status === 0 && !executionError,
-    status: result.status === 0 && !executionError
-      ? 'passed'
+    ok: passed,
+    status: passed
+      ? timeoutAfterProbeOk
+        ? 'passed_after_probe_ok_timeout'
+        : 'passed'
       : unavailable
         ? 'integration_optional_unavailable'
         : configFailure
@@ -96,6 +105,8 @@ if (actualRequested) {
     stdout_tail: tail(result.stdout),
     stderr_tail: tail(result.stderr),
     output_last_message: outputLastMessage,
+    output_last_message_tail: tail(outputLastText),
+    probe_ok_observed: probeOkObserved,
     signals
   });
 } else {
@@ -138,6 +149,9 @@ async function check(name, fn) {
 
 function pushCheck(check) {
   report.checks.push(check);
+  for (const warning of check.signals?.warnings || []) {
+    if (!report.warnings.includes(warning)) report.warnings.push(warning);
+  }
   if (check.ok) return;
   for (const blocker of check.signals?.blockers || classifyText(`${check.stderr_tail || ''}\n${check.error?.message || ''}`).blockers) {
     if (!report.blockers.includes(blocker)) report.blockers.push(blocker);
@@ -147,7 +161,7 @@ function pushCheck(check) {
   }
 }
 
-function classifyText(textInput) {
+function classifyText(textInput, opts = {}) {
   const text = String(textInput || '');
   const flags = {
     error_loading_config_toml: /Error loading config\.toml/i.test(text),
@@ -158,12 +172,16 @@ function classifyText(textInput) {
     ignored_project_local_config_key: /ignored project-local config key|ignored.*project.*config/i.test(text)
   };
   const blockers = [];
+  const warnings = [];
   if (flags.operation_not_permitted || (flags.error_loading_config_toml && /os error 1/i.test(text))) blockers.push('codex_cli_config_eperm');
   else if (flags.permission_denied) blockers.push('codex_cli_config_permission_denied');
   if (flags.toml_parse) blockers.push('codex_cli_config_toml_parse_error');
   if (flags.untrusted_project) blockers.push('codex_cli_untrusted_project');
-  if (flags.ignored_project_local_config_key) blockers.push('codex_cli_ignored_project_local_config_key');
-  return { blockers: [...new Set(blockers)], flags };
+  if (flags.ignored_project_local_config_key) {
+    if (opts.configLoaded) warnings.push('codex_cli_ignored_project_local_config_key');
+    else blockers.push('codex_cli_ignored_project_local_config_key');
+  }
+  return { blockers: [...new Set(blockers)], warnings: [...new Set(warnings)], flags };
 }
 
 function commandForCodex(bin, codexArgs) {
@@ -203,6 +221,14 @@ function redact(value) {
 function tail(value, limit = 4000) {
   const text = redact(String(value || ''));
   return text.length <= limit ? text : text.slice(-limit);
+}
+
+async function readTextIfExists(file) {
+  try {
+    return await fs.readFile(file, 'utf8');
+  } catch {
+    return '';
+  }
 }
 
 function readOption(name, fallback) {

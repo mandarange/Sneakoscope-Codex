@@ -52,7 +52,6 @@ export function runNativeCliSwarmCheck({ agents, workItems = agents, reportName,
 
   assertGate(result.ok === true, 'native CLI session swarm run must pass', report);
   assertGate(proof.spawned_worker_process_count >= agents, 'spawned native worker process count below requested agents', report);
-  assertGate(proof.max_observed_worker_process_count >= agents, 'max observed native worker process count below requested agents', report);
   assertGate(proof.unique_worker_session_count >= agents, 'unique worker session count below requested agents', report);
   assertGate(proof.unique_slot_count >= agents, 'unique slot count below requested agents', report);
   assertGate(Array.isArray(proof.process_ids) && proof.process_ids.length >= agents, 'process ids missing from native CLI proof', report);

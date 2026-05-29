@@ -28,7 +28,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|git|codex|codex-app|hooks|features|all-features|openclaw|hermes|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|git|codex|codex-app|hooks|features|all-features|openclaw|hermes|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE = 'codex_chrome_extension';
 export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
@@ -351,7 +351,7 @@ export const ROUTES = [
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'team-gate.json',
-    cliEntrypoint: 'sks team "task" [executor:5 reviewer:6 user:1] | sks team log|tail|watch|lane|status|event|message|open-tmux|attach-tmux|cleanup-tmux',
+    cliEntrypoint: 'sks team "task" [executor:5 reviewer:6 user:1] | sks team log|tail|watch|lane|status|event|message|open-zellij|attach-zellij|cleanup-zellij',
     examples: ['$Team executor:5 agree on the best plan and implement it', '$From-Chat-IMG 채팅+첨부 이미지 작업 지시서']
   },
   {
@@ -595,9 +595,9 @@ export const COMMAND_CATALOG = [
   { name: 'status', usage: 'sks status [--json]', description: 'Show the active mission, route, phase, proof, trust, native agent, image voxel, DB safety, and next action.' },
   { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
-  { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/tmux, and print ready true/false.' },
+  { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/Zellij, and print ready true/false.' },
   { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
-  { name: 'deps', usage: 'sks deps check|install [tmux|codex|context7|all] [--yes]', description: 'Check or guided-install Node/npm PATH, Codex CLI/App, Context7, Browser tooling, Computer Use, tmux, and Homebrew on macOS.' },
+  { name: 'deps', usage: 'sks deps check [--json]', description: 'Check Node/npm PATH readiness before doctor verifies Codex CLI/App, Context7, Browser tooling, Computer Use, Zellij, and Homebrew on macOS.' },
   { name: 'codex', usage: 'sks codex compatibility|version|doctor|schema [--json]', description: 'Check Codex CLI rust-v0.134.0 compatibility, installed version, 0.134 capabilities, inherited 0.133 behavior, and vendored hook schema snapshot freshness.' },
   { name: 'codex-app', usage: 'sks codex-app [check|chrome-extension|pat status|remote-control]', description: 'Check Codex App install, Codex Chrome Extension web verification readiness, PAT-safe status, first-party MCP/plugin readiness, and Codex CLI 0.130.0+ remote-control availability.' },
   { name: 'hooks', usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]', description: 'Explain Codex hook events, validate vendored latest 10-event output schemas, replay fixtures, and enforce warning-zero SKS hook policies under the 0.134 compatibility matrix.' },
@@ -605,9 +605,10 @@ export const COMMAND_CATALOG = [
   { name: 'auth', usage: 'sks auth status|health|repair|setup --host <domain> --api-key <key>', description: 'Shortcut for codex-lb provider auth status, health, repair, and setup commands.' },
   { name: 'openclaw', usage: 'sks openclaw install|path|print [--dir path] [--force] [--json]', description: 'Generate an OpenClaw skill package so OpenClaw agents can discover and use local SKS workflows.' },
   { name: 'hermes', usage: 'sks hermes install|status|path|print [--dir path] [--force] [--json]', description: 'Generate a Hermes Agent skill package so Hermes agents can discover and use local SKS workflows.' },
-  { name: 'tmux', usage: 'sks | sks tmux open|check|status [--workspace name]', description: 'Open the default SKS tmux runtime with bare sks, or use tmux subcommands for explicit launch/check/status.' },
-  { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot tmux Codex CLI workspace with the SKS MAD full-access auto-review profile.' },
-  { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS tmux with the auto-review profile.' },
+  { name: 'zellij', usage: 'npm run zellij:capability | sks team open-zellij latest | sks --mad', description: 'Verify and open the SKS Zellij runtime used by MAD and Team lane UI.' },
+  { name: 'tmux', usage: 'sks tmux [--json]', description: 'Show the removed-runtime migration notice and point operators to Zellij.' },
+  { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot Zellij Codex CLI workspace with the SKS MAD full-access auto-review profile.' },
+  { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS Zellij with the auto-review profile.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Team.' },
   { name: 'commit', usage: 'sks commit [--message "msg"] [--json]', description: 'Stage current changes, summarize them, and create a simple git commit without the full SKS pipeline.' },
   { name: 'commit-and-push', usage: 'sks commit-and-push [--message "msg"] [--json]', description: 'Stage current changes, create a simple git commit, and push without the full SKS pipeline.' },
@@ -636,7 +637,7 @@ export const COMMAND_CATALOG = [
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run long-form real research missions with xhigh agent Eureka ideas, debate, layered sources, paper, novelty, and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
-  { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and tmux views.' },
+  { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and Zellij views.' },
   { name: 'perf', usage: 'sks perf run|workflow|cold-start [--json] [--iterations N]', description: 'Measure structured GPT-5.5/SKS performance budgets, including cold-start, Proof Field workflow decisions, and fast-lane evidence.' },
   { name: 'bench', usage: 'sks bench core|route-fixtures|blackbox|trust-kernel [--json]', description: 'Measure core trust-kernel hot paths and write performance budget artifacts.' },
   { name: 'proof', usage: 'sks proof show|latest|validate|export|smoke [--json|--md]', description: 'Show, validate, export, or smoke-write the unified Completion Proof Engine surface.' },
@@ -650,7 +651,7 @@ export const COMMAND_CATALOG = [
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...', description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
   { name: 'agent', usage: 'sks agent run|status|close|cleanup <mission-id|latest> [--agents N] [--work-items N] [--target-active-slots N] [--mock] [--apply|--dry-run] [--drain] [--stale-ms N] [--json] | sks agent rollback-patches [mission-id|latest] [--patch-entry-id id] [--dry-run|--apply] [--json]', description: 'Run, inspect, close, clean, or rollback native multi-session agent missions with agents as target active slots, work items as the route queue size, cleanup executor proof for stale runtime resources, and patch rollback proof for applied patch entries.' },
-  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:6 user:1] [--work-items N] [--target-active-slots N]|log|tail|watch|lane|status|dashboard|event|message|open-tmux|attach-tmux|cleanup-tmux ...', description: 'Create and observe a native-agent-first Team mission with at least five reviewer/QA validation lanes, current-session managed tmux lanes when available, transcript messages, and cleanup-aware follow panes.' },
+  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:6 user:1] [--work-items N] [--target-active-slots N]|log|tail|watch|lane|status|dashboard|event|message|open-zellij|attach-zellij|cleanup-zellij ...', description: 'Create and observe a native-agent-first Team mission with at least five reviewer/QA validation lanes, current-session managed Zellij lanes when available, transcript messages, and cleanup-aware follow panes.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },

@@ -28,6 +28,17 @@ test('codex config load probe passes with fake Codex success', async () => {
   assert.equal(json.checks.find((row) => row.name === 'actual_codex_cli_config_load')?.status, 'passed');
 });
 
+test('codex config load probe treats ignored project config keys as warning after OK response', async () => {
+  const fixture = await makeFixture();
+  const result = runProbe(fixture, { SKS_FAKE_CODEX_CONFIG_IGNORED_PROJECT_KEY: '1' });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const json = JSON.parse(result.stdout);
+  assert.equal(json.ok, true);
+  assert.equal(json.blockers.includes('codex_cli_ignored_project_local_config_key'), false);
+  assert.ok(json.warnings.includes('codex_cli_ignored_project_local_config_key'));
+  assert.equal(json.checks.find((row) => row.name === 'actual_codex_cli_config_load')?.probe_ok_observed, true);
+});
+
 test('codex config load probe classifies fake Codex TOML errors', async () => {
   const fixture = await makeFixture();
   const result = runProbe(fixture, { SKS_FAKE_CODEX_CONFIG_TOML_ERROR: '1' });

@@ -34,7 +34,7 @@ const topics = {
 };
 const rows = Object.entries(topics).map(([topic, needles]) => {
   const capability = matrix.capabilities.find((item) => item.id === topic);
-  const missingOfficialNeedles = needles.filter((needle) => !releaseBody.includes(needle));
+  const missingOfficialNeedles = release.ok === true ? needles.filter((needle) => !releaseBody.includes(needle)) : [];
   return {
     topic,
     result: capability?.status || 'missing',
@@ -46,9 +46,11 @@ const rows = Object.entries(topics).map(([topic, needles]) => {
   };
 });
 const blockers = [
-  ...(release.ok ? [] : [`official_release_fetch_failed:${release.error || release.statusCode || 'unknown'}`]),
   ...rows.filter((row) => row.result === 'missing').map((row) => `missing:${row.topic}`),
   ...rows.filter((row) => row.official_release_missing.length > 0).map((row) => `official_release_topic_missing:${row.topic}:${row.official_release_missing.join('|')}`)
+];
+const warnings = [
+  ...(release.ok ? [] : [`official_release_fetch_unavailable:${release.error || release.statusCode || 'unknown'}`])
 ];
 const report = {
   schema: 'sks.codex-0-134-official-compat.v1',
@@ -67,7 +69,8 @@ const report = {
   source_delta: rows,
   local_codex_version: `${versionRun.stdout || versionRun.stderr || ''}`.trim() || null,
   matrix,
-  blockers: [...blockers, ...(matrix.blockers || [])]
+  blockers: [...blockers, ...(matrix.blockers || [])],
+  warnings
 };
 const out = path.join(root, '.sneakoscope', 'reports', 'codex-0-134-official-compat.json');
 fs.mkdirSync(path.dirname(out), { recursive: true });

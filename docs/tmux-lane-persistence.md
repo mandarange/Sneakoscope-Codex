@@ -17,10 +17,10 @@ Generation completion updates the lane render files and slot history. It does no
 Useful checks:
 
 ```bash
-npm run agent:tmux-lane-persistence
-npm run agent:tmux-lane-no-flicker
-npm run agent:tmux-supervisor-integrated
-npm run agent:tmux-slot-lane-runtime
+npm run zellij:lane-renderer
+npm run zellij:pane-proof
+npm run zellij:screen-proof
+npm run agent:zellij-runtime
 ```
 
 ## 1.18.6 Runtime Truth Note

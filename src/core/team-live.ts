@@ -24,7 +24,7 @@ const TERMINAL_TEAM_AGENT_STATUSES = new Set([
   'failed',
   'stopped',
   'terminal',
-  'tmux_lane_closed'
+  'zellij_lane_closed'
 ]);
 const CHAT_COLOR_CODES = {
   blue: '34',
@@ -180,12 +180,12 @@ export function defaultTeamDashboard(id: any, prompt: any, opts: any = {}) {
       status: `sks team status ${id}`,
       log: `sks team log ${id}`,
       tail: `sks team tail ${id}`,
-      open_tmux: `sks team open-tmux ${id}`,
+      open_zellij: `sks team open-zellij ${id}`,
       watch: `sks team watch ${id}`,
       lane: `sks team lane ${id} --agent <agent> --follow`,
       event: `sks team event ${id} --agent <agent> --phase <phase> --message "..."`,
       message: `sks team message ${id} --from <agent> --to <agent|all> --message "..."`,
-      cleanup: `sks team cleanup-tmux ${id}`
+      cleanup: `sks team cleanup-zellij ${id}`
     },
     agents: Object.fromEntries([...new Set([...DEFAULT_AGENTS, ...spec.roster.all_agents.map((agent: any) => agent.id)])].map((name: any) => [name, { status: 'pending', phase: null, last_seen: null }])),
     phases: ['native_agent_intake', 'triwiki_refresh', 'debate_team', 'triwiki_refresh_after_consensus', 'parallel_development_team', 'triwiki_refresh_after_implementation', 'strict_review_and_user_acceptance', 'session_cleanup'],
@@ -211,7 +211,7 @@ ${prompt}
 
 ## How to Read
 
-- This file is the Codex App-visible replacement for tmux-style team panes.
+- This file is the Codex App-visible replacement for Zellij-style team panes.
 - Use at most ${spec.agentSessions} subagent sessions at a time unless the mission is recreated with a different budget.
 - Team mode has three bundles: parallel native agent intake agents first, debate team second, then fresh parallel development team.
 - Use relevant TriWiki context before every stage, hydrate low-trust claims from source during the stage, refresh after findings/artifact changes, and validate before handoffs or final claims.
@@ -235,12 +235,12 @@ ${prompt}
 sks team status ${id}
 sks team log ${id}
 sks team tail ${id}
-sks team open-tmux ${id}
+sks team open-zellij ${id}
 sks team watch ${id}
 sks team lane ${id} --agent native_agent_1 --follow
 sks team event ${id} --agent native_agent_1 --phase native_agent_intake --message "mapped repo slice"
 sks team message ${id} --from native_agent_1 --to executor_1 --message "handoff note"
-sks team cleanup-tmux ${id}
+sks team cleanup-zellij ${id}
 \`\`\`
 
 ## Roster
@@ -358,7 +358,7 @@ export function parseTeamSpecArgs(args: any = []) {
       i++;
       continue;
     }
-    if (arg === '--json' || arg === '--open-tmux' || arg === '--tmux-open' || arg === '--no-open-tmux' || arg === '--no-tmux' || arg === '--no-attach' || arg === '--separate-session' || arg === '--new-session' || arg === '--legacy-team-session' || arg === '--no-dynamic-team-tmux') continue;
+    if (arg === '--json' || arg === '--open-zellij' || arg === '--zellij-open' || arg === '--no-open-zellij' || arg === '--no-zellij' || arg === '--no-attach' || arg === '--separate-session' || arg === '--new-session' || arg === '--legacy-team-session') continue;
     const consumed = consumeTeamSpecText(arg, { roleCounts, explicitExecutor, explicitSession });
     roleCounts = consumed.roleCounts;
     explicitExecutor = consumed.explicitExecutor;
@@ -536,7 +536,7 @@ export async function readTeamControl(dir: any) {
     cleanup_requested_at: cleanup.updated_at || cleanup.completed_at || cleanup.closed_at || control.cleanup_requested_at || 'artifact',
     cleanup_requested_by: cleanup.agent || control.cleanup_requested_by || 'parent_orchestrator',
     cleanup_reason: cleanup.reason || control.cleanup_reason || `${TEAM_SESSION_CLEANUP_ARTIFACT} passed.`,
-    final_message: cleanup.final_message || control.final_message || 'Team session ended. Lane follow loops stop and managed tmux Team panes should close.'
+    final_message: cleanup.final_message || control.final_message || 'Team session ended. Lane follow loops stop and managed Zellij Team panes should close.'
   };
 }
 
@@ -551,7 +551,7 @@ export async function requestTeamSessionCleanup(dir: any, opts: any = {}) {
     cleanup_requested_at: opts.ts || nowIso(),
     cleanup_requested_by: opts.agent || 'parent_orchestrator',
     cleanup_reason: opts.reason || 'Team session cleanup requested.',
-    final_message: opts.finalMessage || 'Team session ended. Lane/watch follow loops stop after this summary; managed tmux Team panes are closed when reachable.'
+    final_message: opts.finalMessage || 'Team session ended. Lane/watch follow loops stop after this summary; managed Zellij Team panes are closed when reachable.'
   };
   await writeJsonAtomic(files.control, next);
   return next;
@@ -587,7 +587,7 @@ export function renderTeamCleanupSummary(control: any = {}) {
     `Requested by: ${control.cleanup_requested_by || 'unknown'}`,
     `Reason: ${control.cleanup_reason || 'Team session cleanup requested.'}`,
     '',
-    control.final_message || 'Team session ended. managed tmux Team panes are closed when reachable.'
+    control.final_message || 'Team session ended. managed Zellij Team panes are closed when reachable.'
   ].join('\n');
 }
 
@@ -677,12 +677,12 @@ export async function renderTeamWatch(dir: any, opts: any = {}) {
     '',
     '## Split-Screen Map',
     '- This overview pane follows the whole mission transcript.',
-    '- Run `sks team open-tmux ...` to materialize or reopen the split-pane Team tmux view for an existing mission.',
-    '- Inside an SKS-owned tmux session, Team panes are reconciled in the current window with the Codex pane on the left and Team lanes stacked on the right.',
-    '- Neighbor tmux panes follow individual `sks team lane ... --agent <name>` chat-style views.',
+    '- Run `sks team open-zellij ...` to materialize or reopen the split-pane Team Zellij view for an existing mission.',
+    '- Inside an SKS-owned Zellij session, Team panes are reconciled with the Codex pane on the left and Team lanes stacked on the right.',
+    '- Neighbor Zellij panes follow individual `sks team lane ... --agent <name>` chat-style views.',
     '- Use `sks team event ...` to mirror native analysis, debate, executor, review, and verification status into the live panes.',
     '- Use `sks team message ... --from <agent> --to <agent|all>` for bounded inter-agent communication in transcript/lane views.',
-    '- Use `sks team cleanup-tmux ...` at session end; follow loops show cleanup and managed Team panes close when reachable.',
+    '- Use `sks team cleanup-zellij ...` at session end; follow loops show cleanup and managed Team panes close when reachable.',
     '',
     '## Cockpit Views',
     '- Mission / Goal | Agents | MultiAgentV2 | Work Orders | Skills | Memory Health | Forget Queue',

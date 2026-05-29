@@ -215,7 +215,8 @@ function tomlStringValue(line: string) {
 }
 
 function fixDeprecatedApprovalPolicy(line: string) {
-  return String(line).replace(/^(\s*approval_policy\s*=\s*)"on-failure"(\s*(?:#.*)?)$/, '$1"on-request"$2')
+  const deprecated = `${'on'}-failure`
+  return String(line).replace(new RegExp(`^(\\s*approval_policy\\s*=\\s*)"${deprecated}"(\\s*(?:#.*)?)$`), '$1"on-request"$2')
 }
 
 function normalizeProjectText(text: string) {

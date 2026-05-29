@@ -33,7 +33,9 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     for (const blocker of configBlockers) blockers.add(blocker)
     if (!configBlockers.length) blockers.add('codex_cli_config_load_unverified')
   }
-  if (zellij && zellij.ok === false && zellij.integration_optional !== true) blockers.add('zellij_required_missing_or_blocked')
+  const zellijStatus = zellij?.status || 'missing'
+  const zellijReadyForInteractive = zellij?.ok === true && zellijStatus === 'ok'
+  if (!zellijReadyForInteractive) warnings.add(`zellij_${zellijStatus}`)
   if (codexDoctor && codexDoctor.available && codexDoctor.exit_code !== 0 && input.require_codex_doctor === true) blockers.add('codex_doctor_failed')
   if (codexDoctor?.warnings?.length) for (const warning of codexDoctor.warnings) warnings.add(String(warning))
   if (input.codex_app?.ok === false) warnings.add('codex_app_needs_setup_optional_for_cli')
@@ -42,9 +44,10 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   const codexConfigNode = nodeRead.ok !== false && codexConfig.ok !== false
   const codexConfigChild = childRead.ok !== false && codexConfig.ok !== false
   const cliReady = codexBinOk && codexConfigNode && codexConfigChild && cliConfigOk
-  const madReady = cliReady && (!zellij || zellij.ok !== false || zellij.integration_optional === true)
+  const madReady = cliReady && zellijReadyForInteractive
   const nextActions = normalizeList(input.operator_actions || codexConfig.operator_actions)
-  if (!nextActions.length && blockers.size) nextActions.push('Run `sks doctor --fix`, then run `sks mad repair-config --apply --tmux-smoke` if config-load still fails.')
+  if (!nextActions.length && blockers.size) nextActions.push('Run `sks doctor --fix`, then run `sks mad repair-config --apply` if config-load still fails.')
+  if (!zellijReadyForInteractive) nextActions.push('Install Zellij for `sks --mad` and interactive lane UI. On macOS: `brew install zellij`.')
 
   return {
     schema: DOCTOR_READINESS_MATRIX_SCHEMA,
@@ -53,9 +56,21 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     mad_ready: madReady,
     codex_config_readable_by_node: codexConfigNode,
     codex_config_readable_by_codex_cli: actualOk,
-    codex_config_readable_in_zellij_context: zellij ? zellij.ok === true : false,
+    codex_config_readable_in_zellij_context: zellijReadyForInteractive,
     tmux_removed_runtime: true,
-    zellij: zellij || null,
+    zellij: zellij ? {
+      ...zellij,
+      required_for: ['sks --mad', 'interactive lane UI'],
+      ready_for_interactive_runtime: zellijReadyForInteractive
+    } : {
+      status: 'missing',
+      required_for: ['sks --mad', 'interactive lane UI'],
+      ready_for_interactive_runtime: false
+    },
+    tmux: {
+      status: 'removed_runtime',
+      replacement: 'zellij'
+    },
     codex_doctor: codexDoctor || null,
     fast_mode_ready: input.fast_mode_ready !== false,
     hooks_ready: input.hooks_ready !== false,

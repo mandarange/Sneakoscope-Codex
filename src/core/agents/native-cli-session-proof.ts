@@ -14,21 +14,23 @@ export async function writeNativeCliSessionProof(root: string, input: { requeste
   const targetActiveSlots = Number(input.targetActiveSlots || swarm?.target_active_slots || scheduler?.target_active_slots || requestedAgents)
   const totalWorkItems = Number(input.totalWorkItems || scheduler?.total_work_items || 0)
   const enoughWork = totalWorkItems >= requestedAgents && requestedAgents > 0
+  const spawnedWorkerProcessCount = Number(swarm?.spawned_worker_process_count || 0)
+  const maxObservedWorkerProcessCount = Number(swarm?.max_observed_worker_process_count || 0)
   const processIds = Array.isArray(swarm?.process_ids) ? swarm.process_ids.filter((pid: any) => Number.isFinite(Number(pid))) : []
   const blockers = [
     ...(!swarm ? ['native_cli_session_swarm_missing'] : []),
     ...(swarm && swarm.scaling_primitive !== 'native_cli_process' ? ['scaling_primitive_not_native_cli_process'] : []),
-    ...(swarm && processIds.length < Number(swarm.spawned_worker_process_count || 0) ? ['worker_process_ids_missing'] : []),
-    ...(swarm && Number(swarm.spawned_worker_process_count || 0) === 0 ? ['native_worker_process_count_zero'] : []),
-    ...(enoughWork && requestedAgents >= 10 && Number(swarm?.max_observed_worker_process_count || 0) < requestedAgents ? [`native_worker_process_count_below_requested:${requestedAgents}`] : []),
-    ...(enoughWork && targetActiveSlots >= 10 && Number(swarm?.max_observed_worker_process_count || 0) < targetActiveSlots ? [`native_worker_process_count_below_target:${targetActiveSlots}`] : []),
-    ...(workerProcessReports.length < Number(swarm?.spawned_worker_process_count || 0) ? ['worker_process_report_count_below_spawned'] : []),
-    ...(workerCloseReports.length < Number(swarm?.spawned_worker_process_count || 0) ? ['worker_close_report_count_below_spawned'] : []),
-    ...(workerHeartbeats.total_worker_heartbeat_files < Number(swarm?.spawned_worker_process_count || 0) ? ['worker_heartbeat_count_below_spawned'] : []),
-    ...(swarm && Number(swarm.unique_worker_session_count || 0) < Number(swarm.spawned_worker_process_count || 0) ? ['worker_session_ids_not_unique'] : []),
-    ...(swarm && Number(swarm.unique_slot_count || 0) < Math.min(Number(swarm.spawned_worker_process_count || 0), targetActiveSlots || 0) ? ['worker_slot_ids_not_unique_for_target'] : []),
-    ...(swarm && Number(swarm.closed_worker_process_count || 0) < Number(swarm.spawned_worker_process_count || 0) ? ['worker_close_reports_missing_or_failed'] : []),
-    ...(swarm && Number(swarm.spawned_worker_process_count || 0) === 0 && hasSubagentEvidenceOnly(root) ? ['worker_proof_only_subagent_events'] : [])
+    ...(swarm && processIds.length < spawnedWorkerProcessCount ? ['worker_process_ids_missing'] : []),
+    ...(swarm && spawnedWorkerProcessCount === 0 ? ['native_worker_process_count_zero'] : []),
+    ...(enoughWork && requestedAgents >= 10 && spawnedWorkerProcessCount < requestedAgents ? [`native_worker_process_count_below_requested:${requestedAgents}`] : []),
+    ...(enoughWork && targetActiveSlots >= 10 && spawnedWorkerProcessCount < targetActiveSlots ? [`native_worker_process_count_below_target:${targetActiveSlots}`] : []),
+    ...(workerProcessReports.length < spawnedWorkerProcessCount ? ['worker_process_report_count_below_spawned'] : []),
+    ...(workerCloseReports.length < spawnedWorkerProcessCount ? ['worker_close_report_count_below_spawned'] : []),
+    ...(workerHeartbeats.total_worker_heartbeat_files < spawnedWorkerProcessCount ? ['worker_heartbeat_count_below_spawned'] : []),
+    ...(swarm && Number(swarm.unique_worker_session_count || 0) < spawnedWorkerProcessCount ? ['worker_session_ids_not_unique'] : []),
+    ...(swarm && Number(swarm.unique_slot_count || 0) < Math.min(spawnedWorkerProcessCount, targetActiveSlots || 0) ? ['worker_slot_ids_not_unique_for_target'] : []),
+    ...(swarm && Number(swarm.closed_worker_process_count || 0) < spawnedWorkerProcessCount ? ['worker_close_reports_missing_or_failed'] : []),
+    ...(swarm && spawnedWorkerProcessCount === 0 && hasSubagentEvidenceOnly(root) ? ['worker_proof_only_subagent_events'] : [])
   ]
   const proof = {
     schema: NATIVE_CLI_SESSION_PROOF_SCHEMA,
@@ -38,8 +40,8 @@ export async function writeNativeCliSessionProof(root: string, input: { requeste
     target_active_slots: targetActiveSlots,
     enough_work_for_requested_agents: enoughWork,
     total_work_items: totalWorkItems,
-    spawned_worker_process_count: Number(swarm?.spawned_worker_process_count || 0),
-    max_observed_worker_process_count: Number(swarm?.max_observed_worker_process_count || 0),
+    spawned_worker_process_count: spawnedWorkerProcessCount,
+    max_observed_worker_process_count: maxObservedWorkerProcessCount,
     unique_worker_session_count: Number(swarm?.unique_worker_session_count || 0),
     unique_slot_count: Number(swarm?.unique_slot_count || 0),
     unique_generation_count: Number(swarm?.unique_generation_count || 0),

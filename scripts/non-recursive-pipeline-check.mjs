@@ -38,7 +38,6 @@ function collectScanRecords(scanRoot) {
     ['src/core/agents/agent-recursion-guard.ts', 'source'],
     ['src/core/agents/agent-runner-process.ts', 'source'],
     ['src/core/agents/agent-runner-codex-exec.ts', 'source'],
-    ['src/core/agents/agent-runner-tmux.ts', 'source'],
     ['docs/agent-non-recursive-pipeline.md', 'docs'],
     ['docs/native-agent-kernel.md', 'docs']
   ];

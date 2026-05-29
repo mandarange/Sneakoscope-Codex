@@ -854,8 +854,8 @@ async function materializeAutoSealedTeam(root: any, id: any, dir: any, route: an
       markdown: 'team-live.md',
       transcript: 'team-transcript.jsonl',
       dashboard: 'team-dashboard.json',
-      tmux: 'CLI Team entrypoints open tmux live lanes for the visible Team agent budget when tmux is available.',
-      commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team open-tmux latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow']
+      zellij: 'CLI Team entrypoints open Zellij live lanes for the visible Team agent budget when Zellij is available.',
+      commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team open-zellij latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow']
     },
     required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
   };
@@ -945,8 +945,8 @@ async function prepareTeam(root: any, route: any, task: any, required: any, opts
       markdown: 'team-live.md',
       transcript: 'team-transcript.jsonl',
       dashboard: 'team-dashboard.json',
-      tmux: 'CLI Team entrypoints open tmux live lanes for the visible Team agent budget when tmux is available.',
-      commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team open-tmux latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow', 'sks team event latest --agent <name> --phase <phase> --message "..."']
+      zellij: 'CLI Team entrypoints open Zellij live lanes for the visible Team agent budget when Zellij is available.',
+      commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team open-zellij latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow', 'sks team event latest --agent <name> --phase <phase> --message "..."']
     },
     required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
   };
