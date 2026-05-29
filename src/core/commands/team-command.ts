@@ -13,7 +13,7 @@ import { createWorkOrderLedger, writeWorkOrderLedger } from '../work-order-ledge
 import { writeFromChatImgArtifacts } from '../from-chat-img-forensics.js';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../team-dashboard-renderer.js';
 import { PIPELINE_PLAN_ARTIFACT, validatePipelinePlan, writePipelinePlan } from '../pipeline.js';
-import { cleanupTmuxTeamView, launchTmuxTeamView, reconcileTmuxTeamCockpit } from '../tmux-ui.js';
+import { launchTeamZellijView } from '../zellij/zellij-launcher.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
 import { ambientGoalContinuation, flag, readBoundedIntegerFlag, readFlagValue } from './command-utils.js';
@@ -21,12 +21,12 @@ import { ambientGoalContinuation, flag, readBoundedIntegerFlag, readFlagValue } 
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 
 export async function team(args: any = []) {
-  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'open-tmux', 'attach-tmux', 'cleanup-tmux']);
+  const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'open-zellij', 'attach-zellij', 'cleanup-zellij', 'open-tmux', 'attach-tmux', 'cleanup-tmux']);
   if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
   const jsonOutput = flag(args, '--json');
   const mock = flag(args, '--mock');
-  const openTmux = !mock && !jsonOutput && !flag(args, '--no-open-tmux') && !flag(args, '--no-tmux');
-  const cleanCreateArgs = args.filter((arg: any) => !['--open-tmux', '--tmux-open', '--no-open-tmux', '--no-tmux', '--no-attach', '--mock'].includes(String(arg)));
+  const openZellij = !mock && !jsonOutput && !flag(args, '--no-open-zellij') && !flag(args, '--no-zellij');
+  const cleanCreateArgs = args.filter((arg: any) => !['--open-zellij', '--zellij-open', '--no-open-zellij', '--no-zellij', '--no-attach', '--mock'].includes(String(arg)));
   const opts = parseTeamCreateArgs(cleanCreateArgs);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', roster.bundle_size, 1, 20);
@@ -39,7 +39,7 @@ export async function team(args: any = []) {
   const dryRunPatches = flag(args, '--dry-run-patches') || flag(args, '--dryrun-patches');
   const maxWriteAgents = readBoundedIntegerFlag(args, '--max-write-agents', Math.min(roster.bundle_size, 5), 1, 20);
   if (!prompt) {
-    console.error('Usage: sks team "task" [20:agents] [executor:5 reviewer:6 user:1] [--agents N] [--work-items N] [--target-active-slots N] [--profile NAME] [--write-mode off|proof-safe|parallel|serial] [--apply-patches] [--no-open-tmux] [--json] [--mock]');
+    console.error('Usage: sks team "task" [20:agents] [executor:5 reviewer:6 user:1] [--agents N] [--work-items N] [--target-active-slots N] [--profile NAME] [--write-mode off|proof-safe|parallel|serial] [--apply-patches] [--no-open-zellij] [--json] [--mock]');
     process.exitCode = 1;
     return;
   }
@@ -155,15 +155,15 @@ export async function team(args: any = []) {
     result.mock = true;
     result.proof = proof.validation;
   } else {
-    result.tmux = await launchTmuxTeamView({ root, missionId: id, plan, promptFile: result.workflow, json: jsonOutput || !openTmux, attach: openTmux, args });
+    result.zellij = await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: targetActiveSlots, dryRun: jsonOutput || !openZellij, attach: openZellij });
   }
   if (jsonOutput) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
   console.log(`Agent sessions: ${agentSessions}`);
   console.log(`Role counts: ${formatRoleCounts(roleCounts)}`);
   console.log(`Review policy: minimum ${MIN_TEAM_REVIEWER_LANES} reviewer/QA validation lanes`);
-  if (result.tmux?.ready) console.log(`tmux: opened ${result.tmux.opened_lane_count || result.tmux.agents.length} agent lane(s) in ${result.tmux.session || result.tmux.workspace}`);
-  else if (!mock) console.log(`tmux: blocked (${Array.from(new Set(result.tmux?.blockers || [])).join('; ')})`);
+  if (result.zellij?.ok) console.log(`Zellij: prepared ${targetActiveSlots} agent lane(s) in ${result.zellij.session_name}`);
+  else if (!mock) console.log(`Zellij: blocked (${Array.from(new Set(result.zellij?.blockers || [])).join('; ')})`);
   console.log(`Watch: sks team watch ${id}`);
   console.log(`Artifacts: .sneakoscope/missions/${id}`);
 }
@@ -288,21 +288,28 @@ async function teamCommand(sub: any, args: any) {
     return;
   }
   const { dir } = await loadMission(root, id);
-  if (sub === 'open-tmux' || sub === 'attach-tmux') {
+  if (sub === 'open-tmux' || sub === 'attach-tmux' || sub === 'cleanup-tmux') {
+    const result = { ok: false, status: 'removed_runtime', runtime: 'tmux', replacement: 'zellij', operator_actions: ['Use `sks team open-zellij`, `attach-zellij`, or `cleanup-zellij`.'] };
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.error('tmux runtime has been removed from SKS Team. Use Zellij commands instead.');
+    process.exitCode = 2;
+    return;
+  }
+  if (sub === 'open-zellij' || sub === 'attach-zellij') {
     const plan = await readJson(path.join(dir, 'team-plan.json'), null);
     if (!plan) {
-      console.error(`Team plan missing for ${id}; cannot open tmux Team view.`);
+      console.error(`Team plan missing for ${id}; cannot open Zellij Team view.`);
       process.exitCode = 2;
       return;
     }
-    const tmux = await launchTmuxTeamView({ root, missionId: id, plan, promptFile: path.join(dir, 'team-workflow.md'), json: flag(args, '--json'), attach: sub === 'attach-tmux' || !flag(args, '--no-attach'), args });
-    if (flag(args, '--json')) return console.log(JSON.stringify(tmux, null, 2));
-    if (!tmux.ready) {
-      console.error(`tmux Team view blocked for ${id}: ${(tmux.blockers || []).join('; ') || 'tmux creation failed'}`);
+    const zellij = await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: Number(plan.agent_session_count || 5), dryRun: flag(args, '--json'), attach: sub === 'attach-zellij' || !flag(args, '--no-attach') });
+    if (flag(args, '--json')) return console.log(JSON.stringify(zellij, null, 2));
+    if (!zellij.ok) {
+      console.error(`Zellij Team view blocked for ${id}: ${(zellij.blockers || []).join('; ') || 'Zellij launch failed'}`);
       process.exitCode = 2;
       return;
     }
-    console.log(`tmux: opened ${tmux.opened_lane_count || tmux.lanes?.length || 0} Team lane(s) in ${tmux.session}`);
+    console.log(`Zellij: prepared Team lane(s) in ${zellij.session_name}`);
     return;
   }
   if (sub === 'event') {
@@ -315,7 +322,6 @@ async function teamCommand(sub: any, args: any) {
     const phase = readFlagValue(args, '--phase', 'general');
     const plan = await readJson(path.join(dir, 'team-plan.json'), null).catch(() => null);
     const record = await appendTeamEvent(dir, { agent: readFlagValue(args, '--agent', 'parent_orchestrator'), phase, type: readFlagValue(args, '--type', 'status'), artifact: readFlagValue(args, '--artifact', ''), message });
-    if (plan) await reconcileTmuxTeamCockpit({ root, missionId: id, plan, promptFile: path.join(dir, 'team-workflow.md'), close: /^session_cleanup$|^team_cleanup$|^cleanup$/i.test(String(phase || '')), plannedFallback: false }).catch(() => null);
     if (flag(args, '--json')) return console.log(JSON.stringify(record, null, 2));
     console.log(`${record.ts} [${record.phase}] ${record.agent}: ${record.message}`);
     return;
@@ -332,13 +338,13 @@ async function teamCommand(sub: any, args: any) {
     console.log(`${record.ts} [${record.phase}] ${record.agent} -> ${record.to}: ${record.message}`);
     return;
   }
-  if (sub === 'cleanup-tmux') {
+  if (sub === 'cleanup-zellij') {
     const control = await requestTeamSessionCleanup(dir, { missionId: id, agent: readFlagValue(args, '--agent', 'parent_orchestrator'), reason: readFlagValue(args, '--reason', 'Team session ended; clean up live follow panes.'), finalMessage: 'Team session ended.' });
     await appendTeamEvent(dir, { agent: readFlagValue(args, '--agent', 'parent_orchestrator'), phase: 'session_cleanup', type: 'cleanup', message: control.cleanup_reason || 'Team session cleanup requested.' });
-    const cleanup = await cleanupTmuxTeamView({ root, missionId: id, closeSession: flag(args, '--close-session') || flag(args, '--close') });
-    cleanup.control = control;
+    const cleanup = { ok: true, runtime: 'zellij', mission_id: id, control, close_requested: flag(args, '--close-session') || flag(args, '--close') };
+    await writeJsonAtomic(path.join(dir, 'zellij-session-cleanup.json'), cleanup);
     if (flag(args, '--json')) return console.log(JSON.stringify(cleanup, null, 2));
-    console.log(cleanup.ok ? `tmux cleanup: marked complete (${cleanup.reason || 'record updated'})` : `tmux cleanup skipped: ${cleanup.reason || 'not available'}`);
+    console.log('Zellij cleanup: marked complete.');
     console.log(renderTeamCleanupSummary(control));
     return;
   }
@@ -372,7 +378,7 @@ async function teamCommand(sub: any, args: any) {
     if (flag(args, '--json')) return console.log(JSON.stringify({ mission_id: id, agent, phase, lane: text }, null, 2));
     console.log(text);
     if (flag(args, '--follow') && !teamCleanupRequested(await readTeamControl(dir)) && !isTerminalTeamAgentStatus((await readTeamDashboard(dir).catch(() => null))?.agents?.[agent]?.status || '')) {
-      // Follow mode intentionally falls through only for interactive terminals in the full tmux lane.
+      // Follow mode intentionally falls through only for interactive terminals in the full Zellij lane.
     }
     return;
   }

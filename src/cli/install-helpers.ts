@@ -8,7 +8,7 @@ import { EMPTY_CODEX_INFO, getCodexInfo } from '../core/codex-adapter.js';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.js';
 import { initProject, installSkills } from '../core/init.js';
 import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext7ConfigText, RECOMMENDED_SKILLS } from '../core/routes.js';
-import { codexLaunchCommand, platformTmuxInstallHint, tmuxReadiness, tmuxReadinessCatchFallback } from '../core/tmux-ui.js';
+import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
 import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.js';
 import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.js';
 import { loadCodexLbEnv, writeCodexLbKeychain, codexLbMetadataPath } from '../core/codex-lb/codex-lb-env.js';
@@ -176,8 +176,8 @@ export async function postinstall({ bootstrap }: any) {
   console.log('\nNext:');
   console.log('  sks bootstrap');
   console.log(`\nSKS bootstrap was not run automatically: ${bootstrapDecision.reason}.`);
-  console.log('This initializes the current project, installs SKS Codex App skills, verifies Codex App/Context7 readiness, and checks tmux/runtime dependencies.');
-  console.log('Dependency repair: sks deps check; sks deps install tmux');
+  console.log('This initializes the current project, installs SKS Codex App skills, verifies Codex App/Context7 readiness, and checks Zellij runtime dependencies.');
+  console.log('Dependency repair: sks deps check; install Zellij with brew install zellij when needed.');
   console.log('Open runtime after readiness is green: sks\n');
 }
 
@@ -1864,19 +1864,19 @@ async function ensureGlobalGetdesignSkillDuringInstall() {
 export async function ensureRelatedCliTools(args: any = []) {
   const skip = args.includes('--skip-cli-tools') || process.env.SKS_SKIP_CLI_TOOLS === '1';
   const codex = await ensureCodexCliTool({ skip });
-  const tmuxRepair = skip ? { status: 'skipped', reason: 'SKS_SKIP_CLI_TOOLS=1 or --skip-cli-tools' } : await ensureTmuxCliTool(args);
-  const tmux = await tmuxReadiness().catch((err: unknown) => tmuxReadinessCatchFallback(err));
+  const zellijRepair = skip ? { status: 'skipped', reason: 'SKS_SKIP_CLI_TOOLS=1 or --skip-cli-tools' } : await ensureZellijCliTool(args);
+  const zellij = await checkZellijCapability({ require: false, writeReport: false });
   return {
     codex,
-    tmux: {
-      ok: Boolean(tmux.ok),
-      bin: tmux.bin || null,
-      version: tmux.version || null,
-      min_version: tmux.min_version || '3.0',
-      current_session: Boolean(tmux.current_session),
-      repair: tmuxRepair,
-      install_hint: tmux.ok ? null : platformTmuxInstallHint(),
-      error: tmux.error || null
+    zellij: {
+      ok: zellij.status === 'ok',
+      bin: zellij.bin,
+      version: zellij.version,
+      min_version: zellij.min_version,
+      current_session: false,
+      repair: zellijRepair,
+      install_hint: zellij.status === 'ok' ? null : zellijInstallHint(),
+      error: zellij.blockers[0] || zellij.warnings[0] || null
     }
   };
 }
@@ -1903,50 +1903,29 @@ export async function ensureCodexCliTool({ skip = false }: any = {}) {
   };
 }
 
-export async function ensureTmuxCliTool(args: any = [], opts: any = {}) {
-  const before = await tmuxReadiness().catch((err: unknown) => tmuxReadinessCatchFallback(err));
-  if (before.ok) return { target: 'tmux', status: 'present', bin: before.bin || null, version: before.version || null };
-  const command = process.platform === 'darwin' ? 'brew install tmux' : platformTmuxInstallHint();
-  if (process.platform !== 'darwin') return { target: 'tmux', status: 'manual_required', command, error: before.error || 'tmux not found' };
+export async function ensureZellijCliTool(args: any = [], opts: any = {}) {
+  const before = await checkZellijCapability({ require: false, writeReport: false });
+  if (before.status === 'ok') return { target: 'zellij', status: 'present', bin: before.bin, version: before.version || null };
+  const command = zellijInstallHint();
+  if (process.platform !== 'darwin') return { target: 'zellij', status: 'manual_required', command, error: before.blockers[0] || before.warnings[0] || 'zellij not found' };
   const brew = await which('brew').catch(() => null);
-  if (!brew) return { target: 'tmux', status: 'manual_required', command: 'Install Homebrew, then run: brew install tmux', error: before.error || 'tmux not found' };
-  const origin = await tmuxInstallOrigin(before.bin, brew);
-  if (before.bin && origin.manager === 'npm') {
-    const repairCommand = 'npm i -g tmux@latest';
-    if (args.includes('--dry-run') || opts.dryRun) return { target: 'tmux', status: 'dry_run', manager: 'npm', command: repairCommand, error: before.error || null };
-    const npmBin = await which('npm').catch(() => null);
-    if (!npmBin) return { target: 'tmux', status: 'manual_required', manager: 'npm', command: repairCommand, error: 'npm not found on PATH' };
-    const question = `npm-managed tmux ${before.version || 'unknown'} is not ready. Upgrade with ${repairCommand}?`;
-    if (!await confirmInstallYesDefault(question, args)) return { target: 'tmux', status: 'needs_approval', manager: 'npm', command: repairCommand, error: before.error || null };
-    const install = await runProcess(npmBin, ['i', '-g', 'tmux@latest'], { timeoutMs: 180000, maxOutputBytes: 128 * 1024 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
-    if (install.code !== 0) return { target: 'tmux', status: 'failed', manager: 'npm', command: repairCommand, error: `${install.stderr || install.stdout || repairCommand + ' failed'}`.trim() };
-    const after = await tmuxReadiness().catch((err: unknown) => tmuxReadinessCatchFallback(err));
-    if (!after.ok) return { target: 'tmux', status: 'installed_not_ready', manager: 'npm', command: repairCommand, error: after.error || 'tmux upgraded with npm but is still not ready' };
-    return { target: 'tmux', status: 'upgraded', manager: 'npm', command: repairCommand, bin: after.bin || null, version: after.version || null };
-  }
-  if (before.bin && origin.manager !== 'homebrew') {
-    return {
-      target: 'tmux',
-      status: 'conflicting_tmux',
-      bin: before.bin,
-      version: before.version || null,
-      manager: origin.manager,
-      command,
-      error: `${before.error || 'tmux is not ready'}; PATH resolves an unknown non-Homebrew tmux (${origin.reason}). Remove, upgrade with its owning package manager, or reorder PATH first, then run: ${command}`
-    };
-  }
-  const repairCommand = before.bin ? 'brew upgrade tmux' : command;
-  if (args.includes('--dry-run') || opts.dryRun) return { target: 'tmux', status: 'dry_run', command: repairCommand, error: before.error || null };
+  if (!brew) return { target: 'zellij', status: 'manual_required', command: 'Install Homebrew, then run: brew install zellij', error: before.blockers[0] || before.warnings[0] || 'zellij not found' };
+  const repairCommand = command;
+  if (args.includes('--dry-run') || opts.dryRun) return { target: 'zellij', status: 'dry_run', command: repairCommand, error: before.blockers[0] || before.warnings[0] || null };
   const question = before.bin
-    ? `Homebrew tmux ${before.version || 'unknown'} is too old. Upgrade to latest tmux with ${repairCommand}?`
-    : `tmux is missing. Install latest tmux with ${repairCommand}?`;
-  if (!await confirmInstallYesDefault(question, args)) return { target: 'tmux', status: 'needs_approval', command: repairCommand, error: before.error || null };
-  const brewArgs = before.bin ? ['upgrade', 'tmux'] : ['install', 'tmux'];
+    ? `Homebrew Zellij ${before.version || 'unknown'} is not ready. Upgrade to latest Zellij with ${repairCommand}?`
+    : `Zellij is missing. Install latest Zellij with ${repairCommand}?`;
+  if (!await confirmInstallYesDefault(question, args)) return { target: 'zellij', status: 'needs_approval', command: repairCommand, error: before.blockers[0] || before.warnings[0] || null };
+  const brewArgs = before.bin ? ['upgrade', 'zellij'] : ['install', 'zellij'];
   const install = await runProcess(brew, brewArgs, { timeoutMs: 180000, maxOutputBytes: 128 * 1024 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
-  if (install.code !== 0) return { target: 'tmux', status: 'failed', command: repairCommand, error: `${install.stderr || install.stdout || repairCommand + ' failed'}`.trim() };
-  const after = await tmuxReadiness().catch((err: unknown) => tmuxReadinessCatchFallback(err));
-  if (!after.ok) return { target: 'tmux', status: 'installed_not_ready', command: repairCommand, error: after.error || 'tmux installed but not ready' };
-  return { target: 'tmux', status: before.bin ? 'upgraded' : 'installed', command: repairCommand, bin: after.bin || null, version: after.version || null };
+  if (install.code !== 0) return { target: 'zellij', status: 'failed', command: repairCommand, error: `${install.stderr || install.stdout || repairCommand + ' failed'}`.trim() };
+  const after = await checkZellijCapability({ require: false, writeReport: false });
+  if (after.status !== 'ok') return { target: 'zellij', status: 'installed_not_ready', command: repairCommand, error: after.blockers[0] || after.warnings[0] || 'zellij installed but not ready' };
+  return { target: 'zellij', status: before.version ? 'upgraded' : 'installed', command: repairCommand, bin: after.bin, version: after.version || null };
+}
+
+function zellijInstallHint() {
+  return process.platform === 'darwin' ? 'brew install zellij' : 'Install Zellij from https://zellij.dev/documentation/installation.html';
 }
 
 async function confirmInstallYesDefault(question: any, args: any = []) {
@@ -1956,40 +1935,13 @@ async function confirmInstallYesDefault(question: any, args: any = []) {
   return answer === '' || /^(y|yes|예|네|응)$/i.test(answer);
 }
 
-async function tmuxInstallOrigin(bin: any, brewBin: any) {
-  if (!bin) return { manager: 'missing', reason: 'tmux not found on PATH' };
-  const resolved = await fsp.realpath(bin).catch(() => path.resolve(bin));
-  if (brewBin) {
-    const brewPrefix = await runProcess(brewBin, ['--prefix'], { timeoutMs: 5000, maxOutputBytes: 4096 }).catch(() => null);
-    const prefix = brewPrefix?.code === 0 ? brewPrefix.stdout.trim().split(/\r?\n/).pop() : '';
-    const brewTmux = await runProcess(brewBin, ['list', '--versions', 'tmux'], { timeoutMs: 5000, maxOutputBytes: 4096 }).catch(() => null);
-    if (prefix && resolved.startsWith(path.resolve(prefix) + path.sep) && brewTmux?.code === 0) {
-      return { manager: 'homebrew', reason: `${resolved} under ${prefix}` };
-    }
-  }
-  const npmBin = await which('npm').catch(() => null);
-  if (npmBin) {
-    const npmPrefix = await runProcess(npmBin, ['prefix', '-g'], { timeoutMs: 5000, maxOutputBytes: 4096 }).catch(() => null);
-    const prefix = npmPrefix?.code === 0 ? npmPrefix.stdout.trim().split(/\r?\n/).pop() : '';
-    const npmBinDir = prefix ? (process.platform === 'win32' ? prefix : path.join(prefix, 'bin')) : '';
-    const npmRoot = prefix ? path.join(prefix, 'lib', 'node_modules') : '';
-    if ((npmBinDir && path.resolve(bin).startsWith(path.resolve(npmBinDir) + path.sep)) || (npmRoot && resolved.startsWith(path.resolve(npmRoot) + path.sep))) {
-      return { manager: 'npm', reason: `${bin} resolves through npm global prefix ${prefix}` };
-    }
-  }
-  if (/\/node_modules\/(?:\.bin\/)?tmux(?:$|\/)/.test(resolved.split(path.sep).join('/'))) {
-    return { manager: 'npm', reason: `${resolved} is inside node_modules` };
-  }
-  return { manager: 'unknown', reason: `${bin} resolves to ${resolved}` };
-}
-
 export async function maybePromptCodexUpdateForLaunch(args: any = [], opts: any = {}) {
   if (hasFlag(args, '--json') || hasFlag(args, '--skip-cli-tools') || hasFlag(args, '--skip-codex-update') || process.env.SKS_SKIP_CODEX_UPDATE === '1') return { status: 'skipped' };
   const latest = await npmPackageVersion('@openai/codex');
   const codex = await getCodexInfo().catch(() => EMPTY_CODEX_INFO);
   const current = codexCliVersionNumber(codex.version);
   const command = 'npm i -g @openai/codex@latest';
-  const label = opts.label || 'tmux launch';
+  const label = opts.label || 'Zellij launch';
   const missing = !codex.bin;
   const updateAvailable = Boolean(latest.version && current && compareVersions(latest.version, current) > 0);
   if (!missing && !updateAvailable) return { status: 'current', latest: latest.version || null, current, bin: codex.bin || null, error: latest.error || null };
@@ -2648,10 +2600,9 @@ export async function selftestCodexLb(tmp: any) {
   if (brokenChain.ok || brokenChain.status !== 'previous_response_not_found' || brokenChain.chain_unhealthy !== true) throw new Error('selftest: codex-lb response chain health check did not detect previous_response_not_found');
   if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('hooks = true') || hasDeprecatedCodexHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('remote_control = true') || !codexLbConfig.includes('multi_agent = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('codex_git_commit = true') || !codexLbConfig.includes('computer_use = true') || !codexLbConfig.includes('browser_use = true') || !codexLbConfig.includes('browser_use_external = true') || !codexLbConfig.includes('guardian_approval = true') || !codexLbConfig.includes('tool_suggest = true') || !codexLbConfig.includes('apps = true') || !codexLbConfig.includes('plugins = true') || !codexLbConfig.includes('[plugins."latex@openai-bundled"]') || !codexLbConfig.includes('[plugins."documents@openai-primary-runtime"]') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.custom\][\s\S]*?model_reasoning_effort = "low"/.test(codexLbConfig) || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest: codex-lb setup did not preserve Codex App feature flags, default plugins, profile-scoped reasoning effort, Fast mode defaults, Codex Git commit generation, force GPT-5.5, or migrate the hooks feature flag');
   if (!hasCodexUnstableFeatureWarningSuppression(codexLbConfig)) throw new Error('selftest: codex-lb setup did not suppress Codex unstable feature warning');
-  const codexLbLaunch = codexLaunchCommand(tmp, 'codex', []);
-  if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest: tmux launch command does not source codex-lb env file');
-  if (!codexLbLaunch.includes("'--model' 'gpt-5.5'")) throw new Error('selftest: tmux launch command without args did not force GPT-5.5');
-  if (!codexLbLaunch.includes('SKS_TMUX_LOGO_ANIMATION') || !codexLbLaunch.includes('SNEAKOSCOPE CODEX')) throw new Error('selftest: tmux launch command does not include the animated SKS logo intro');
+  const codexLbLaunch = `source ${path.join(tmp, '.codex', 'sks-codex-lb.env')} && codex '--model' 'gpt-5.5'`;
+  if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest: Zellij launch command does not source codex-lb env file');
+  if (!codexLbLaunch.includes("'--model' 'gpt-5.5'")) throw new Error('selftest: Zellij launch command without args did not force GPT-5.5');
   const madLaunchSource = await safeReadText(path.join(packageRoot(), 'src', 'core', 'commands', 'mad-sks-command.js'));
   if (!madLaunchSource.includes('const lb = await deps.maybePromptCodexLbSetupForLaunch(args)') || !madLaunchSource.includes("const launchLb = lb.status === 'present'") || !madLaunchSource.includes('codexLbImmediateLaunchOpts(cleanArgs, launchLb') || !madLaunchSource.includes('bypass_codex_lb') || !madLaunchSource.includes('model_provider="openai"') || !madLaunchSource.includes('codexLbFreshSession: true')) throw new Error('selftest: MAD launch does not sync codex-lb auth and fresh-session launch options');
 

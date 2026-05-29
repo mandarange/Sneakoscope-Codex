@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.18.12 writes the `sks.release-readiness.v1` report for Codex config EPERM self-heal, doctor real-fix proof, MAD launch preflight, and official Fast mode service-tier propagation. `ok: true` in the 1.18.12 slice means config readability, project config policy splitting, EPERM repair proof, MAD preflight, and `-c service_tier=fast` propagation evidence have no remaining blockers.
+SKS 1.18.13 writes the `sks.release-readiness.v1` report for actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, tmux config smoke, and official Fast mode service-tier propagation. `ok: true` in the 1.18.13 slice means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, and `-c service_tier=fast` propagation evidence have no remaining blockers.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 

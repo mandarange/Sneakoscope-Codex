@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 
+## [1.18.13] - 2026-05-29
+
+- Add actual Codex CLI config-load probing with structured EPERM/TOML/untrusted-project classification, fake Codex hermetic fixtures, and release gates for Node-read-success plus Codex-read-failure regressions.
+- Make `sks doctor --fix` write a readiness matrix with primary blockers and next actions, and require actual Codex config-load evidence before reporting Ready yes.
+- Strengthen MAD launch preflight, add `sks mad repair-config`, add tmux config-read smoke, and prevent config preflight failures from launching a Codex pane.
+- Harden project config splitting, deprecated `approval_policy = "on-failure"` normalization, macOS EPERM/TCC/symlink/ACL repair reporting, and official `service_tier=fast` CLI proof.
+- Fix the MAD-SKS source-project exception so the Sneakoscope source repo is not misclassified as protected core while installed harness core remains immutable.
+
 
 ## [1.18.12] - 2026-05-29
 

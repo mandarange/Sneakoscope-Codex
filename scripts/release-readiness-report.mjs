@@ -58,10 +58,10 @@ const checks = {
   agent_worker_backend_router: scriptContains('release:check', 'agent:worker-backend-router'),
   agent_codex_child_overlap: scriptContains('release:check', 'agent:codex-child-overlap'),
   agent_model_authored_patch_envelope: scriptContains('release:check', 'agent:model-authored-patch-envelope'),
-  tmux_warp_right_lane_physical_ui: scriptContains('release:check', 'tmux:warp-right-lane-physical-ui'),
-  tmux_right_lane_coordinate_proof: scriptContains('release:check', 'tmux:right-lane-coordinate-proof'),
-  tmux_right_lane_content_proof: scriptContains('release:check', 'tmux:right-lane-content-proof'),
-  mad_sks_warp_right_lane_attach: scriptContains('release:check', 'mad-sks:warp-right-lane-attach'),
+  zellij_pane_proof: scriptContains('release:check', 'zellij:pane-proof'),
+  zellij_screen_proof: scriptContains('release:check', 'zellij:screen-proof'),
+  zellij_lane_renderer: scriptContains('release:check', 'zellij:lane-renderer'),
+  mad_sks_zellij_launch: scriptContains('release:check', 'mad-sks:zellij-launch'),
   agent_fast_mode_default: scriptContains('release:check', 'agent:fast-mode-default'),
   agent_fast_mode_worker_propagation: scriptContains('release:check', 'agent:fast-mode-worker-propagation'),
   codex_fast_mode_profile_propagation: scriptContains('release:check', 'codex:fast-mode-profile-propagation'),
@@ -99,7 +99,7 @@ const checks = {
   agent_main_no_scout: scriptContains('release:check:parallel', 'agent:main-no-scout'),
   agent_worker_scout_limited: scriptContains('release:check:parallel', 'agent:worker-scout-limited'),
   agent_background_terminals: scriptContains('release:check:parallel', 'agent:background-terminals'),
-  agent_tmux_right_lanes: scriptContains('release:check:parallel', 'agent:tmux-right-lanes'),
+  agent_zellij_runtime: scriptContains('release:check:parallel', 'agent:zellij-runtime'),
   agent_task_graph_expansion: scriptContains('release:check:parallel', 'agent:task-graph-expansion'),
   agent_follow_up_work_schema: scriptContains('release:check:parallel', 'agent:follow-up-work-schema'),
   agent_dynamic_pool_route_blackbox: scriptContains('release:check:parallel', 'agent:dynamic-pool-route-blackbox'),
@@ -112,10 +112,10 @@ const checks = {
   research_actual_route_backfill: scriptContains('release:check:parallel', 'research:actual-route-backfill'),
   qa_backfill_route_blackbox: scriptContains('release:check:parallel', 'qa:backfill-route-blackbox'),
   qa_actual_route_backfill: scriptContains('release:check:parallel', 'qa:actual-route-backfill'),
-  agent_tmux_lane_persistence: scriptContains('release:check:parallel', 'agent:tmux-lane-persistence'),
-  agent_tmux_lane_no_flicker: scriptContains('release:check:parallel', 'agent:tmux-lane-no-flicker'),
-  agent_tmux_supervisor_integrated: scriptContains('release:check:parallel', 'agent:tmux-supervisor-integrated'),
-  agent_tmux_slot_lane_runtime: scriptContains('release:check:parallel', 'agent:tmux-slot-lane-runtime'),
+  zellij_layout_valid: scriptContains('release:check:parallel', 'zellij:layout-valid'),
+  zellij_lane_renderer_parallel: scriptContains('release:check:parallel', 'zellij:lane-renderer'),
+  zellij_pane_proof_parallel: scriptContains('release:check:parallel', 'zellij:pane-proof'),
+  zellij_screen_proof_parallel: scriptContains('release:check:parallel', 'zellij:screen-proof'),
   agent_proof_contract_reconciled: scriptContains('release:check:parallel', 'agent:proof-contract-reconciled'),
   agent_scheduler_proof_hardening: scriptContains('release:check:parallel', 'agent:scheduler-proof-hardening'),
   agent_dynamic_pool: scriptContains('release:check:parallel', 'agent:dynamic-pool'),
@@ -123,9 +123,9 @@ const checks = {
   agent_scheduler_proof: scriptContains('release:check:parallel', 'agent:scheduler-proof'),
   agent_session_generation: scriptContains('release:check:parallel', 'agent:session-generation'),
   agent_terminal_generations: scriptContains('release:check:parallel', 'agent:terminal-generations'),
-  agent_tmux_real_right_lanes: scriptContains('release:check:parallel', 'agent:tmux-real-right-lanes'),
-  agent_tmux_physical_lifecycle_wired: scriptContains('release:check:parallel', 'agent:tmux-physical-lifecycle-wired'),
-  agent_tmux_physical_proof_v2: scriptContains('release:check:parallel', 'agent:tmux-physical-proof-v2'),
+  agent_zellij_runtime_parallel: scriptContains('release:check:parallel', 'agent:zellij-runtime'),
+  zellij_pane_lifecycle: scriptContains('release:check:parallel', 'zellij:pane-proof'),
+  zellij_physical_proof: scriptContains('release:check:parallel', 'zellij:screen-proof'),
   agent_cleanup_executor: scriptContains('release:check:parallel', 'agent:cleanup-executor'),
   agent_cleanup_executor_v2: scriptContains('release:check:parallel', 'agent:cleanup-executor-v2'),
   agent_cleanup_command_ux: scriptContains('release:check:parallel', 'agent:cleanup-command-ux'),
@@ -136,7 +136,7 @@ const checks = {
   proof_fake_real_policy_v2: scriptContains('release:check:parallel', 'proof:fake-real-policy-v2'),
   release_runtime_truth_matrix: scriptContains('release:check:parallel', 'release:runtime-truth-matrix'),
   route_blackbox_realism: scriptContains('release:check:parallel', 'route:blackbox-realism'),
-  real_tmux_physical_proof: scriptContains('release:real-check', 'agent:real-tmux-physical-proof'),
+  real_zellij_pane_proof: scriptContains('release:real-check', 'zellij:pane-proof'),
   real_codex_patch_envelope_smoke: scriptContains('release:real-check', 'agent:real-codex-patch-envelope-smoke'),
   real_codex_parallel_workers: scriptContains('release:real-check', 'agent:real-codex-parallel-workers'),
   real_codex_parallel_workers_5: scriptContains('release:real-check', 'agent:real-codex-parallel-workers-5'),
@@ -244,10 +244,11 @@ const runtimeReports = {
   agent_worker_backend_router: readJson('.sneakoscope/reports/agent-worker-backend-router.json', null),
   agent_codex_child_overlap: readJson('.sneakoscope/reports/agent-codex-child-overlap.json', null),
   agent_model_authored_patch_envelope: readJson('.sneakoscope/reports/agent-model-authored-patch-envelope.json', null),
-  tmux_warp_right_lane_physical_ui: readJson('.sneakoscope/reports/tmux-right-lane-physical-layout-proof.json', null),
-  tmux_right_lane_coordinate_proof: readJson('.sneakoscope/reports/tmux-right-lane-coordinate-proof.json', null),
-  tmux_right_lane_content_proof: readJson('.sneakoscope/reports/tmux-right-lane-content-proof.json', null),
-  mad_sks_warp_right_lane_attach: readJson('.sneakoscope/reports/mad-sks-warp-right-lane-attach.json', null),
+  zellij_pane_proof: readJson('.sneakoscope/reports/zellij-pane-proof.json', null),
+  zellij_screen_proof: readJson('.sneakoscope/reports/zellij-screen-proof.json', null),
+  zellij_lane_renderer: readJson('.sneakoscope/reports/zellij-lane-renderer.json', null),
+  mad_sks_zellij_launch: readJson('.sneakoscope/reports/mad-sks-zellij-launch.json', null),
+  agent_zellij_runtime: readJson('.sneakoscope/reports/agent-zellij-runtime.json', null),
   real_codex_parallel_workers: readJson('.sneakoscope/reports/agent-real-codex-parallel-workers.json', null),
   agent_fast_mode_default: readJson('.sneakoscope/reports/agent-fast-mode-default.json', null),
   agent_fast_mode_worker_propagation: readJson('.sneakoscope/reports/agent-fast-mode-worker-propagation.json', null),
@@ -306,7 +307,7 @@ for (const [name, ok] of Object.entries({
   agent_main_no_scout: checks.agent_main_no_scout,
   agent_worker_scout_limited: checks.agent_worker_scout_limited,
   agent_background_terminals: checks.agent_background_terminals,
-  agent_tmux_right_lanes: checks.agent_tmux_right_lanes,
+  agent_zellij_runtime: checks.agent_zellij_runtime,
   agent_task_graph_expansion: checks.agent_task_graph_expansion,
   agent_follow_up_work_schema: checks.agent_follow_up_work_schema,
   agent_dynamic_pool_route_blackbox: checks.agent_dynamic_pool_route_blackbox,
@@ -319,10 +320,10 @@ for (const [name, ok] of Object.entries({
   research_actual_route_backfill: checks.research_actual_route_backfill,
   qa_backfill_route_blackbox: checks.qa_backfill_route_blackbox,
   qa_actual_route_backfill: checks.qa_actual_route_backfill,
-  agent_tmux_lane_persistence: checks.agent_tmux_lane_persistence,
-  agent_tmux_lane_no_flicker: checks.agent_tmux_lane_no_flicker,
-  agent_tmux_supervisor_integrated: checks.agent_tmux_supervisor_integrated,
-  agent_tmux_slot_lane_runtime: checks.agent_tmux_slot_lane_runtime,
+  zellij_layout_valid: checks.zellij_layout_valid,
+  zellij_lane_renderer_parallel: checks.zellij_lane_renderer_parallel,
+  zellij_pane_proof_parallel: checks.zellij_pane_proof_parallel,
+  zellij_screen_proof_parallel: checks.zellij_screen_proof_parallel,
   agent_proof_contract_reconciled: checks.agent_proof_contract_reconciled,
   agent_scheduler_proof_hardening: checks.agent_scheduler_proof_hardening,
   agent_dynamic_pool: checks.agent_dynamic_pool,
@@ -330,9 +331,9 @@ for (const [name, ok] of Object.entries({
   agent_scheduler_proof: checks.agent_scheduler_proof,
   agent_session_generation: checks.agent_session_generation,
   agent_terminal_generations: checks.agent_terminal_generations,
-  agent_tmux_real_right_lanes: checks.agent_tmux_real_right_lanes,
-  agent_tmux_physical_lifecycle_wired: checks.agent_tmux_physical_lifecycle_wired,
-  agent_tmux_physical_proof_v2: checks.agent_tmux_physical_proof_v2,
+  agent_zellij_runtime_parallel: checks.agent_zellij_runtime_parallel,
+  zellij_pane_lifecycle: checks.zellij_pane_lifecycle,
+  zellij_physical_proof: checks.zellij_physical_proof,
   agent_cleanup_executor: checks.agent_cleanup_executor,
   agent_cleanup_executor_v2: checks.agent_cleanup_executor_v2,
   agent_cleanup_command_ux: checks.agent_cleanup_command_ux,
@@ -373,10 +374,10 @@ for (const [name, ok] of Object.entries({
   agent_worker_backend_router: checks.agent_worker_backend_router && runtimeReports.agent_worker_backend_router?.ok === true,
   agent_codex_child_overlap: checks.agent_codex_child_overlap && runtimeReports.agent_codex_child_overlap?.ok === true,
   agent_model_authored_patch_envelope: checks.agent_model_authored_patch_envelope && runtimeReports.agent_model_authored_patch_envelope?.ok === true,
-  tmux_warp_right_lane_physical_ui: checks.tmux_warp_right_lane_physical_ui && runtimeReports.tmux_warp_right_lane_physical_ui?.ok === true,
-  tmux_right_lane_coordinate_proof: checks.tmux_right_lane_coordinate_proof && runtimeReports.tmux_right_lane_coordinate_proof?.ok === true,
-  tmux_right_lane_content_proof: checks.tmux_right_lane_content_proof && runtimeReports.tmux_right_lane_content_proof?.ok === true,
-  mad_sks_warp_right_lane_attach: checks.mad_sks_warp_right_lane_attach && runtimeReports.mad_sks_warp_right_lane_attach?.ok === true,
+  zellij_pane_proof: checks.zellij_pane_proof && runtimeReports.zellij_pane_proof?.ok === true,
+  zellij_screen_proof: checks.zellij_screen_proof && runtimeReports.zellij_screen_proof?.ok === true,
+  zellij_lane_renderer: checks.zellij_lane_renderer && runtimeReports.zellij_lane_renderer?.ok === true,
+  mad_sks_zellij_launch: checks.mad_sks_zellij_launch && runtimeReports.mad_sks_zellij_launch?.ok === true,
   agent_fast_mode_default: checks.agent_fast_mode_default && runtimeReports.agent_fast_mode_default?.ok === true,
   agent_fast_mode_worker_propagation: checks.agent_fast_mode_worker_propagation && runtimeReports.agent_fast_mode_worker_propagation?.ok === true,
   codex_fast_mode_profile_propagation: checks.codex_fast_mode_profile_propagation && runtimeReports.codex_fast_mode_profile_propagation?.ok === true,
@@ -418,7 +419,7 @@ const report = {
   scope: {
     release_version: RELEASE_VERSION,
     gate: `${RELEASE_VERSION} route-truth dynamic scheduler closure DAG`,
-    ok_means: `no remaining ${RELEASE_VERSION} dynamic scheduler, task graph, follow-up, tmux lane, route blackbox, source, or Goal propagation gaps`,
+    ok_means: `no remaining ${RELEASE_VERSION} dynamic scheduler, task graph, follow-up, Zellij lane, route blackbox, source, or Goal propagation gaps`,
     not_in_1_18_parallel_gate: `reported for historical, live, or broader gates that are not part of the ${RELEASE_VERSION} closure DAG`
   },
   package: {
@@ -588,24 +589,24 @@ const report = {
     status: checks.agent_worker_backend_router
       && checks.agent_codex_child_overlap
       && checks.agent_model_authored_patch_envelope
-      && checks.tmux_warp_right_lane_physical_ui
-      && checks.tmux_right_lane_coordinate_proof
-      && checks.tmux_right_lane_content_proof
-      && checks.mad_sks_warp_right_lane_attach
+      && checks.zellij_pane_proof
+      && checks.zellij_screen_proof
+      && checks.zellij_lane_renderer
+      && checks.mad_sks_zellij_launch
       && runtimeReports.agent_worker_backend_router?.ok === true
       && runtimeReports.agent_codex_child_overlap?.ok === true
       && runtimeReports.agent_model_authored_patch_envelope?.ok === true
-      && runtimeReports.tmux_warp_right_lane_physical_ui?.ok === true
-      && runtimeReports.tmux_right_lane_coordinate_proof?.ok === true
-      && runtimeReports.tmux_right_lane_content_proof?.ok === true
-      && runtimeReports.mad_sks_warp_right_lane_attach?.ok === true ? 'present' : 'missing',
+      && runtimeReports.zellij_pane_proof?.ok === true
+      && runtimeReports.zellij_screen_proof?.ok === true
+      && runtimeReports.zellij_lane_renderer?.ok === true
+      && runtimeReports.mad_sks_zellij_launch?.ok === true ? 'present' : 'missing',
     worker_backend_router: checks.agent_worker_backend_router,
     codex_child_overlap: checks.agent_codex_child_overlap,
     model_authored_patch_envelope: checks.agent_model_authored_patch_envelope,
-    tmux_physical_ui: checks.tmux_warp_right_lane_physical_ui,
-    tmux_coordinate_proof: checks.tmux_right_lane_coordinate_proof,
-    tmux_content_proof: checks.tmux_right_lane_content_proof,
-    mad_warp_attach: checks.mad_sks_warp_right_lane_attach,
+    zellij_pane_proof: checks.zellij_pane_proof,
+    zellij_screen_proof: checks.zellij_screen_proof,
+    zellij_lane_renderer: checks.zellij_lane_renderer,
+    mad_zellij_launch: checks.mad_sks_zellij_launch,
     real_codex_parallel_optional: runtimeReports.real_codex_parallel_workers?.status || null,
     real_codex_parallel_proof_level: runtimeReports.real_codex_parallel_workers?.proof_level || null
   },
@@ -740,21 +741,21 @@ const report = {
     xai_missing_fallback: checks.source_intelligence_all_modes,
     codex_web_adapter: checks.codex_web_adapter
   },
-  agent_terminal_tmux_1_18: {
+  agent_terminal_zellij_1_18: {
     status: checks.agent_main_no_scout
       && checks.agent_worker_scout_limited
       && checks.agent_background_terminals
-      && checks.agent_tmux_right_lanes
+      && checks.agent_zellij_runtime
       && checks.agent_visual_consistency ? 'present' : 'missing',
     main_no_scout: checks.agent_main_no_scout,
     worker_scout_limited: checks.agent_worker_scout_limited,
     background_terminals: checks.agent_background_terminals,
-    tmux_right_lanes: checks.agent_tmux_right_lanes,
+    zellij_runtime: checks.agent_zellij_runtime,
     codex_app_visual_consistency: checks.agent_visual_consistency
   },
   runtime_truth_1_18_8: {
-    status: checks.agent_tmux_physical_lifecycle_wired
-      && checks.agent_tmux_physical_proof_v2
+    status: checks.zellij_pane_lifecycle
+      && checks.zellij_physical_proof
       && checks.real_codex_dynamic_smoke_v2
       && checks.agent_cleanup_executor_v2
       && checks.agent_cleanup_command_ux
@@ -764,8 +765,8 @@ const report = {
       && checks.proof_fake_real_policy_v2
       && checks.release_runtime_truth_matrix
       && runtimeChecks.runtime_truth_matrix ? 'present' : 'missing',
-    tmux_physical_lifecycle_wired: checks.agent_tmux_physical_lifecycle_wired,
-    tmux_physical_proof_v2: checks.agent_tmux_physical_proof_v2,
+    zellij_pane_lifecycle: checks.zellij_pane_lifecycle,
+    zellij_physical_proof: checks.zellij_physical_proof,
     real_codex_dynamic_smoke_v2: checks.real_codex_dynamic_smoke_v2,
     real_codex_dynamic_smoke_report_ok: runtimeChecks.real_codex_dynamic_smoke,
     cleanup_executor_v2: checks.agent_cleanup_executor_v2,
@@ -794,17 +795,17 @@ const report = {
       && checks.research_actual_route_backfill
       && checks.qa_backfill_route_blackbox
       && checks.qa_actual_route_backfill
-      && checks.agent_tmux_lane_persistence
-      && checks.agent_tmux_lane_no_flicker
-      && checks.agent_tmux_supervisor_integrated
-      && checks.agent_tmux_slot_lane_runtime
+      && checks.zellij_layout_valid
+      && checks.zellij_lane_renderer_parallel
+      && checks.zellij_pane_proof_parallel
+      && checks.zellij_screen_proof_parallel
       && checks.agent_proof_contract_reconciled
       && checks.agent_scheduler_proof_hardening
       && checks.agent_backfill_replenishment
       && checks.agent_scheduler_proof
       && checks.agent_session_generation
       && checks.agent_terminal_generations
-      && checks.agent_tmux_real_right_lanes
+      && checks.agent_zellij_runtime_parallel
       && checks.agent_dynamic_cockpit
       && checks.agent_source_intelligence_propagation
       && checks.agent_goal_mode_propagation ? 'present' : 'missing',
@@ -820,10 +821,10 @@ const report = {
     research_actual_route_backfill: checks.research_actual_route_backfill,
     qa_backfill_route_blackbox: checks.qa_backfill_route_blackbox,
     qa_actual_route_backfill: checks.qa_actual_route_backfill,
-    tmux_lane_persistence: checks.agent_tmux_lane_persistence,
-    tmux_lane_no_flicker: checks.agent_tmux_lane_no_flicker,
-    tmux_supervisor_integrated: checks.agent_tmux_supervisor_integrated,
-    tmux_slot_lane_runtime: checks.agent_tmux_slot_lane_runtime,
+    zellij_layout_valid: checks.zellij_layout_valid,
+    zellij_lane_renderer: checks.zellij_lane_renderer_parallel,
+    zellij_pane_proof: checks.zellij_pane_proof_parallel,
+    zellij_screen_proof: checks.zellij_screen_proof_parallel,
     proof_contract_reconciled: checks.agent_proof_contract_reconciled,
     scheduler_proof_hardening: checks.agent_scheduler_proof_hardening,
     dynamic_pool: checks.agent_dynamic_pool,
@@ -831,7 +832,7 @@ const report = {
     scheduler_proof: checks.agent_scheduler_proof,
     session_generation: checks.agent_session_generation,
     terminal_generations: checks.agent_terminal_generations,
-    tmux_real_right_lanes: checks.agent_tmux_real_right_lanes,
+    zellij_runtime_parallel: checks.agent_zellij_runtime_parallel,
     dynamic_cockpit: checks.agent_dynamic_cockpit,
     source_intelligence_propagation: checks.agent_source_intelligence_propagation,
     goal_mode_propagation: checks.agent_goal_mode_propagation
@@ -926,7 +927,7 @@ for (const key of [
   'extreme_stabilization_1_14_1',
   'mad_sks_1_16_0',
   'source_intelligence_1_18',
-  'agent_terminal_tmux_1_18',
+  'agent_terminal_zellij_1_18',
   'runtime_truth_1_18_8',
   'dynamic_agent_pool_1_18_3',
   'goal_mode_1_18',
@@ -1022,7 +1023,7 @@ function renderMarkdown(report) {
 - DFix gates: \`${report.dfix.status}\`
 - Hook trust warning-zero: \`${report.hook_trust_warning_zero.status}\`
 - Source Intelligence 1.18: \`${report.source_intelligence_1_18.status}\`
-- Agent terminal/tmux 1.18: \`${report.agent_terminal_tmux_1_18.status}\`
+- Agent terminal/Zellij 1.18: \`${report.agent_terminal_zellij_1_18.status}\`
 - Runtime truth ${RELEASE_VERSION}: \`${report.runtime_truth_1_18_8.status}\`
 - Dynamic agent pool ${RELEASE_VERSION}: \`${report.dynamic_agent_pool_1_18_3.status}\`
 - Goal mode 1.18: \`${report.goal_mode_1_18.status}\`

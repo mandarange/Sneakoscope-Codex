@@ -114,11 +114,11 @@ export async function classifyMadSksShellArgv({
     normalizedTokens.push(normalized);
     if (path.isAbsolute(stripFileUrl(token))) absoluteTokens.push(token);
     else relativeTokens.push(token);
-    const decision = await evaluateProtectedCorePath(normalized, { root, operation: 'shell_command' });
+    const decision = await evaluateProtectedCorePath(normalized, { root, targetRoot: resolvedTargetRoot, operation: 'shell_command' });
     if (!decision.ok) protectedMatches.push(decision);
   }
 
-  const cwdDecision = await evaluateProtectedCorePath(resolvedCwd, { root, operation: 'shell_cwd' });
+  const cwdDecision = await evaluateProtectedCorePath(resolvedCwd, { root, targetRoot: resolvedTargetRoot, operation: 'shell_cwd' });
   if (!cwdDecision.ok) reasons.add('cwd_is_protected_core');
   if (!isInside(resolvedCwd, resolvedTargetRoot)) reasons.add('cwd_outside_target_root');
   if (protectedMatches.length) reasons.add('command_mentions_protected_core_path');

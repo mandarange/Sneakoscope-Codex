@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveFastModePolicy, fastModeEnv, applyFastModeToRoster } from '../../dist/core/agents/fast-mode-policy.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { resolveFastModePolicy, fastModeEnv, applyFastModeToRoster, writeFastModePropagationProof } from '../../dist/core/agents/fast-mode-policy.js';
 
 test('fast mode policy defaults to fast without explicit opt-in', () => {
   const policy = resolveFastModePolicy({});
@@ -39,4 +42,20 @@ test('fast mode policy rewrites roster reasoning profiles and service tier', () 
   assert.equal(applied.fast_mode, true);
   assert.equal(applied.roster[0].reasoning_profile, 'sks-agent-medium-fast');
   assert.equal(applied.effort_policy.decisions[0].reasoning_profile, 'sks-agent-high-fast');
+});
+
+test('fast mode proof requires codex exec CLI service_tier override evidence', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-proof-'));
+  const dir = path.join(root, 'sessions', 'agent');
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, 'agent-process-report.json'), JSON.stringify({
+    schema: 'sks.agent-process-report.v1',
+    backend: 'codex-exec',
+    fast_mode: true,
+    service_tier: 'fast'
+  }));
+
+  const proof = await writeFastModePropagationProof(root, { policy: resolveFastModePolicy() });
+  assert.equal(proof.ok, false);
+  assert.ok(proof.blockers.some((blocker) => blocker.startsWith('service_tier_cli_override_missing:')));
 });

@@ -1,10 +1,10 @@
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
 
-export const TMUX_RIGHT_LANE_LAYOUT_SCHEMA = 'sks.agent-tmux-right-lane-layout.v1'
-export const TMUX_RIGHT_LANES_SCHEMA = 'sks.agent-tmux-right-lanes.v1'
+export const ZELLIJ_RIGHT_LANE_LAYOUT_SCHEMA = 'sks.agent-zellij-right-lane-layout.v1'
+export const ZELLIJ_RIGHT_LANES_SCHEMA = 'sks.agent-zellij-right-lanes.v1'
 
-export function buildTmuxRightLaneCockpit(input: {
+export function buildZellijRightLaneCockpit(input: {
   missionId?: string
   sessionName?: string
   agents?: any[]
@@ -34,7 +34,7 @@ export function buildTmuxRightLaneCockpit(input: {
   }))
   const pageCount = Math.max(1, Math.ceil(lanes.length / maxVisible))
   const layout = {
-    schema: TMUX_RIGHT_LANE_LAYOUT_SCHEMA,
+    schema: ZELLIJ_RIGHT_LANE_LAYOUT_SCHEMA,
     generated_at: nowIso(),
     mission_id: input.missionId || null,
     session_name: input.sessionName || null,
@@ -44,13 +44,13 @@ export function buildTmuxRightLaneCockpit(input: {
     visible_lane_count: Math.min(lanes.length, maxVisible),
     page_count: pageCount,
     actual_pane_ids: lanes.map((lane) => lane.pane_id).filter(Boolean),
-    attach_command: input.sessionName ? `tmux attach -t ${input.sessionName}` : 'sks team open-tmux latest',
-    keyboard_hint: 'Use tmux prefix + arrow keys to move panes; detach with prefix + d.',
-    cleanup_command_hint: 'sks team cleanup-tmux latest',
+    attach_command: input.sessionName ? `zellij attach ${input.sessionName}` : 'sks team open-zellij latest',
+    keyboard_hint: 'Use the Zellij pane controls to move between lanes; detach with the configured Zellij detach binding.',
+    cleanup_command_hint: 'sks team cleanup-zellij latest',
     ok: lanes.length > 0
   }
   const laneManifest = {
-    schema: TMUX_RIGHT_LANES_SCHEMA,
+    schema: ZELLIJ_RIGHT_LANES_SCHEMA,
     generated_at: layout.generated_at,
     mission_id: layout.mission_id,
     lane_count: lanes.length,
@@ -67,9 +67,9 @@ export function buildTmuxRightLaneCockpit(input: {
   return { layout, lanes: laneManifest }
 }
 
-export async function writeTmuxRightLaneCockpit(root: string, input: { missionId?: string; sessionName?: string; agents?: any[]; slots?: any[] } = {}) {
-  const cockpit = buildTmuxRightLaneCockpit(input)
-  await writeJsonAtomic(path.join(root, 'agent-tmux-layout.json'), cockpit.layout)
-  await writeJsonAtomic(path.join(root, 'agent-tmux-lanes.json'), cockpit.lanes)
+export async function writeZellijRightLaneCockpit(root: string, input: { missionId?: string; sessionName?: string; agents?: any[]; slots?: any[] } = {}) {
+  const cockpit = buildZellijRightLaneCockpit(input)
+  await writeJsonAtomic(path.join(root, 'agent-zellij-layout.json'), cockpit.layout)
+  await writeJsonAtomic(path.join(root, 'agent-zellij-lanes.json'), cockpit.lanes)
   return cockpit
 }

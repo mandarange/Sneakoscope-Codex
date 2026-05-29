@@ -7,7 +7,7 @@ const matrix = await mod.buildRuntimeTruthMatrix({ root, releaseVersion });
 await mod.writeRuntimeTruthMatrix(root, matrix);
 
 const requiredRows = [
-  'tmux_physical',
+  'zellij_pane',
   'codex_dynamic',
   'cleanup',
   'intelligent_work_graph',

@@ -517,28 +517,11 @@ export async function appendTeamEvent(dir: any, event: any) {
     if (terminalStatus) dashboard.agents[agent].closed_at = record.ts;
     await writeJsonAtomic(files.dashboard, dashboard);
   }
-  await reconcileTeamTmuxFromEvent(dir, record).catch(() => null);
   const current = await readText(files.live, teamLiveMarkdown('unknown', 'unknown'));
   const target = record.to ? ` -> ${record.to}` : '';
   const line = `\n- ${record.ts} [${record.phase || 'general'}] ${record.agent || 'unknown'}${target}: ${record.message || ''}${record.artifact ? ` (${record.artifact})` : ''}\n`;
   await writeTextAtomic(files.live, trimLiveMarkdown(`${current.trimEnd()}${line}`));
   return record;
-}
-
-async function reconcileTeamTmuxFromEvent(dir: any, record: any = {}) {
-  if (!process.env.TMUX || String(process.env.SKS_TMUX_EVENT_RECONCILE || '1') === '0') return null;
-  if (record.type === 'tmux_lane_opened') return null;
-  const missionId = path.basename(dir);
-  const root = path.resolve(dir, '..', '..', '..');
-  const cockpitState = await readJson(path.join(root, '.sneakoscope', 'state', 'tmux-cockpit.json'), {}).catch(() => ({}));
-  if (!cockpitState?.missions?.[missionId]) return null;
-  const plan = await readJson(path.join(dir, 'team-plan.json'), null).catch(() => null);
-  if (!plan) return null;
-  const { reconcileTmuxTeamCockpit } = await import('./tmux-ui.js');
-  const phase = String(record.phase || '');
-  const type = String(record.type || '');
-  const close = /^session_cleanup$|^team_cleanup$|^cleanup$/i.test(phase) || /^cleanup$/i.test(type);
-  return reconcileTmuxTeamCockpit({ root, missionId, plan, close, plannedFallback: false });
 }
 
 export async function readTeamControl(dir: any) {

@@ -55,7 +55,7 @@ export function validateNativeRun(json, gate, expected = {}) {
   const backfills = events.filter((event) => event.event_type === 'backfill_event');
   const graph = readJson(path.join(ledgerRoot, 'agent-task-graph.json'));
   const queue = readJson(path.join(ledgerRoot, 'agent-work-queue.json'));
-  const supervisor = readJson(path.join(ledgerRoot, 'agent-tmux-lane-supervisor.json'));
+  const supervisor = readJson(path.join(ledgerRoot, 'agent-zellij-lane-supervisor.json'));
   assertGate(json.ok === true, `${gate} proof must pass`, proof);
   assertGate(graph.schema === 'sks.agent-task-graph.v1', `${gate} task graph schema missing`, graph);
   assertGate(graph.target_active_slots === 5 && graph.total_work_items === 8, `${gate} task graph must split active slots and work items`, graph.route_work_count_summary);
@@ -82,8 +82,8 @@ export function validateNativeRun(json, gate, expected = {}) {
   assertGate(proof.terminal_reports_match_generations === true, `${gate} proof must bind terminal reports to generations`, proof);
   assertGate(proof.source_intelligence_generation_refs_ok === true && proof.task_graph_source_refs_ok === true && proof.work_queue_source_refs_ok === true, `${gate} source refs must propagate`, proof);
   assertGate(proof.goal_mode_generation_refs_ok === true && proof.task_graph_goal_refs_ok === true && proof.work_queue_goal_refs_ok === true, `${gate} goal refs must propagate`, proof);
-  assertGate(proof.lane_supervisor_integrated === true && supervisor.schema === 'sks.tmux-lane-supervisor.v1', `${gate} tmux supervisor must be integrated`, { proof, supervisor });
-  assertGate(proof.tmux_lane_no_flicker_verified === true, `${gate} tmux no-flicker proof must pass`, proof);
+  assertGate(proof.lane_supervisor_integrated === true && supervisor.schema === 'sks.zellij-lane-supervisor.v1', `${gate} Zellij supervisor must be integrated`, { proof, supervisor });
+  assertGate(proof.zellij_lane_no_flicker_verified === true, `${gate} Zellij no-flicker proof must pass`, proof);
   assertGate(proof.real_route_command_used === true, `${gate} must use real route command`, proof);
   assertGate(String(proof.route_command || '').includes(expected.command), `${gate} proof route command mismatch`, proof);
   assertGate(proof.route_blackbox_kind === expected.kind, `${gate} proof route blackbox kind mismatch`, proof);

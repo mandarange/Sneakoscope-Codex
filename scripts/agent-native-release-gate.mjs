@@ -10,7 +10,6 @@ const runtimeFiles = [
   'src/core/commands/team-command.ts',
   'src/core/team-dag.ts',
   'src/core/team-live.ts',
-  'src/core/tmux-ui.ts',
   'src/core/research.ts',
   'src/core/commands/research-command.ts',
   'src/core/commands/qa-loop-command.ts',
@@ -29,7 +28,9 @@ const agentFiles = [
   'src/core/agents/agent-runner-codex-exec.ts',
   'src/core/agents/agent-runner-process.ts',
   'src/core/agents/agent-runner-fake.ts',
-  'src/core/agents/agent-runner-tmux.ts',
+  'src/core/agents/agent-runner-zellij.ts',
+  'src/core/agents/zellij-right-lane-cockpit.ts',
+  'src/core/agents/zellij-lane-supervisor.ts',
   'src/core/agents/agent-persona.ts',
   'src/core/agents/agent-roster.ts',
   'src/core/agents/agent-effort-policy.ts',
@@ -97,10 +98,10 @@ function assertLegacyMultiagentRemoved() {
 function assertAgentSurface() {
   assertFiles(agentFiles);
   const registry = text('src/cli/command-registry.ts');
-  const tmux = text('src/core/agents/agent-runner-tmux.ts');
+  const zellij = text('src/core/agents/agent-runner-zellij.ts');
   assertGate(/\bagent:\s+entry/.test(registry), 'command registry must expose sks agent');
   assertGate(/'--agent': 'agent'/.test(registry), 'CLI parser must route --agent to agent command');
-  assertGate(tmux.includes('buildTmuxAgentPanePlan') && tmux.includes('overview_pane_created') && tmux.includes('self_closing_panes'), 'tmux agent backend must declare overview and self-closing pane policy');
+  assertGate(zellij.includes('buildZellijAgentPanePlan') && zellij.includes('persistent_worker_slot') && zellij.includes('agent-zellij-report.json'), 'Zellij agent backend must declare lane plan and report policy');
 }
 
 function assertNonRecursive() {

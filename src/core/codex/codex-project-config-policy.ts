@@ -12,6 +12,11 @@ const MACHINE_LOCAL_TOP_LEVEL_KEYS = new Set([
   'model_providers',
   'openai_base_url',
   'chatgpt_base_url',
+  'api_key',
+  'openai_api_key',
+  'chatgpt_api_key',
+  'auth',
+  'auth_file',
   'notify',
   'otel',
   'telemetry'
@@ -55,6 +60,7 @@ export async function splitCodexProjectConfigPolicy(rootInput: string = process.
   const profileName = split.profile_name || opts.profileName || null
   const projectText = normalizeProjectText(split.project_text)
   const changed = projectText !== String(original)
+  const parseSmoke = tomlRewriteSmoke(projectText)
   const actions: string[] = []
   let backupPath: string | null = null
   let userConfigPath: string | null = null
@@ -72,23 +78,18 @@ export async function splitCodexProjectConfigPolicy(rootInput: string = process.
     await ensureDir(codexHome)
     userConfigPath = path.join(codexHome, 'config.toml')
     const currentUser = await readText(userConfigPath, '')
+    const dedupedUser = removeConfigIds(String(currentUser || ''), configIds(split.machine_text))
     const movedBlock = [
       '',
       `# SKS moved machine-local Codex config from ${path.relative(root, configPath) || configPath} at ${nowIso()}`,
       split.machine_text.trim(),
       ''
     ].join('\n')
-    await writeTextAtomic(userConfigPath, `${String(currentUser || '').replace(/\s+$/, '')}${movedBlock}`.replace(/^\n+/, ''))
+    await writeTextAtomic(userConfigPath, `${dedupedUser.replace(/\s+$/, '')}${movedBlock}`.replace(/^\n+/, ''))
     actions.push('machine_local_keys_moved_to_codex_home_config')
   }
 
-  const profileBody = profileName ? profileTableBody(split.machine_blocks, profileName) : ''
-  if (opts.apply && profileName && profileBody.trim()) {
-    profileConfigPath = path.join(codexHome, `${profileName}.config.toml`)
-    const existing = await readText(profileConfigPath, '')
-    await writeTextAtomic(profileConfigPath, `${String(existing || '').replace(/\s+$/, '')}\n${profileBody.trim()}\n`.replace(/^\n+/, ''))
-    actions.push('selected_profile_table_moved_to_profile_config')
-  }
+  if (profileName) actions.push('legacy_project_profile_selector_removed')
 
   const report = {
     schema: CODEX_PROJECT_CONFIG_POLICY_SCHEMA,
@@ -96,18 +97,24 @@ export async function splitCodexProjectConfigPolicy(rootInput: string = process.
     root,
     config_path: configPath,
     codex_home: codexHome,
-    ok: true,
+    ok: parseSmoke.ok && split.blockers.length === 0,
     changed,
     applied: opts.apply === true,
     backup_path: backupPath,
     user_config_path: userConfigPath,
     profile_config_path: profileConfigPath,
     profile_name: profileName,
+    migration_artifact: {
+      moved: split.moved_keys.concat(split.moved_tables),
+      removed: profileName ? ['project_local_profile_selector'] : [],
+      kept: split.kept_keys
+    },
     moved_keys: split.moved_keys,
     moved_tables: split.moved_tables,
     deprecated_approval_policy_fixed: split.deprecated_approval_policy_fixed,
     actions,
-    blockers: []
+    parse_smoke: parseSmoke,
+    blockers: [...split.blockers, ...(parseSmoke.ok ? [] : ['project_config_rewrite_parse_smoke_failed'])]
   }
   if (opts.writeReport !== false) await writeJsonAtomic(reportPath, { ...report, report_path: reportPath })
   return report
@@ -120,11 +127,17 @@ function splitProjectToml(text: string) {
   const machineBlocks: any[] = []
   const movedKeys: string[] = []
   const movedTables: string[] = []
+  const blockers: string[] = []
   let profileName: string | null = null
   let deprecatedFixed = false
 
   for (const block of blocks) {
     if (block.table && isMachineLocalTable(block.table)) {
+      if (block.array) {
+        kept.push(block.text)
+        blockers.push(`unsupported_machine_local_table_array:${block.table}`)
+        continue
+      }
       moved.push(block.text)
       machineBlocks.push(block)
       movedTables.push(block.table)
@@ -162,24 +175,29 @@ function splitProjectToml(text: string) {
     machine_blocks: machineBlocks,
     moved_keys: [...new Set(movedKeys)],
     moved_tables: [...new Set(movedTables)],
+    kept_keys: [],
     profile_name: profileName,
-    deprecated_approval_policy_fixed: deprecatedFixed
+    deprecated_approval_policy_fixed: deprecatedFixed,
+    blockers: [...new Set(blockers)]
   }
 }
 
 function tomlBlocks(text: string) {
   const blocks: any[] = []
-  let current = { table: '', lines: [] as string[] }
+  let current = { table: '', array: false, lines: [] as string[] }
+  let multiline: string | null = null
   for (const line of text.split('\n')) {
-    const table = String(line).match(/^\s*\[([^\]]+)\]\s*$/)?.[1] || ''
+    const tableHeader = !multiline ? String(line).match(/^\s*(\[\[?)([^\]]+)\]\]?\s*(?:#.*)?$/) : null
+    const table = tableHeader?.[2] || ''
     if (table) {
-      blocks.push({ table: current.table, text: current.lines.join('\n') })
-      current = { table, lines: [line] }
+      blocks.push({ table: current.table, array: current.array, text: current.lines.join('\n') })
+      current = { table, array: tableHeader?.[1] === '[[', lines: [line] }
     } else {
       current.lines.push(line)
     }
+    multiline = updateMultilineState(line, multiline)
   }
-  blocks.push({ table: current.table, text: current.lines.join('\n') })
+  blocks.push({ table: current.table, array: current.array, text: current.lines.join('\n') })
   return blocks.filter((block) => block.text.trim())
 }
 
@@ -204,8 +222,72 @@ function normalizeProjectText(text: string) {
   return `${String(text || '').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '')}\n`
 }
 
+function updateMultilineState(line: string, current: string | null) {
+  const text = stripCommentOutsideQuotes(String(line))
+  const tokens = [...text.matchAll(/('''|""")/g)].map((match) => String(match[1] || ''))
+  let state = current
+  for (const token of tokens) {
+    if (!state) state = token
+    else if (state === token) state = null
+  }
+  return state
+}
+
+function stripCommentOutsideQuotes(line: string) {
+  let quote = ''
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i]
+    if ((ch === '"' || ch === "'") && line.slice(i, i + 3) !== `${ch}${ch}${ch}`) quote = quote === ch ? '' : quote || ch
+    if (ch === '#' && !quote) return line.slice(0, i)
+  }
+  return line
+}
+
+function tomlRewriteSmoke(text: string) {
+  let triple: string | null = null
+  for (const line of String(text || '').split('\n')) triple = updateMultilineState(line, triple)
+  const badHeader = String(text || '').split('\n').find((line) => /^\s*\[/.test(line) && !/^\s*\[\[?[^\]]+\]\]?\s*(?:#.*)?$/.test(line))
+  return {
+    ok: !triple && !badHeader,
+    unterminated_multiline_string: Boolean(triple),
+    invalid_table_header: badHeader || null
+  }
+}
+
 function profileTableBody(blocks: any[], profile: string) {
   const block = blocks.find((item) => item.table === `profiles.${profile}`)
   if (!block) return ''
   return block.text.split('\n').filter((line: string) => !/^\s*\[/.test(line)).join('\n')
+}
+
+function configIds(text: string) {
+  const ids = { keys: new Set<string>(), tables: new Set<string>() }
+  for (const block of tomlBlocks(text)) {
+    if (block.table) {
+      ids.tables.add(block.table)
+      continue
+    }
+    for (const line of block.text.split('\n')) {
+      const key = topLevelKey(line)
+      if (key) ids.keys.add(key)
+    }
+  }
+  return ids
+}
+
+function removeConfigIds(text: string, ids: { keys: Set<string>; tables: Set<string> }) {
+  const kept: string[] = []
+  for (const block of tomlBlocks(text)) {
+    if (block.table && ids.tables.has(block.table)) continue
+    if (!block.table) {
+      const lines = block.text.split('\n').filter((line: string) => {
+        const key = topLevelKey(line)
+        return !key || !ids.keys.has(key)
+      })
+      if (lines.some((line: string) => line.trim())) kept.push(lines.join('\n'))
+      continue
+    }
+    kept.push(block.text)
+  }
+  return normalizeProjectText(kept.join('\n\n'))
 }

@@ -9,6 +9,18 @@ test('shared hook runtime blocks destructive DB pre-tool payload', async () => {
   assert.equal(result.decision, 'block');
 });
 
+test('MAD-SKS pre-tool guard allows Sneakoscope source-project edits under source exception', async () => {
+  const result = await evaluateHookPayload('pre-tool', {
+    cwd: process.cwd(),
+    tool_input: { command: 'nl -ba src/core/hooks-runtime.ts' }
+  }, {
+    root: process.cwd(),
+    state: { mode: 'MADSKS', phase: 'MADSKS_SCOPED_PERMISSION_ACTIVE' }
+  });
+  assert.equal(result.continue, true);
+  assert.equal(result.decision, undefined);
+});
+
 test('honest loopback ignores resolved empty-gap summary lines', () => {
   const text = [
     '**완료 요약**',

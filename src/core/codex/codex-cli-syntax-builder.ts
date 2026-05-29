@@ -14,6 +14,7 @@ export type BuildCodexExecArgsOptions = {
   sandbox?: CodexSandboxMode
   serviceTier?: CodexServiceTier | null
   fullAuto?: boolean
+  allowFullAuto?: boolean
   danger?: boolean
   allowDanger?: boolean
   prompt: string
@@ -25,6 +26,9 @@ export function buildCodexExecArgs(opts: BuildCodexExecArgsOptions): string[] {
   }
   if (opts.danger && !opts.allowDanger) {
     throw new Error('codex exec danger mode requires explicit allowDanger=true')
+  }
+  if (opts.fullAuto && !opts.allowFullAuto) {
+    throw new Error('codex exec full-auto mode requires explicit allowFullAuto=true')
   }
   if (opts.profile && opts.ignoreUserConfig) {
     throw new Error('codex exec cannot combine --profile with --ignore-user-config')

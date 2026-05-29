@@ -1,5 +1,6 @@
+import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
+import { nowIso, readText, runProcess, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { inspectCodexConfigReadability } from './codex-config-readability.js'
 import { splitCodexProjectConfigPolicy } from './codex-project-config-policy.js'
 
@@ -14,6 +15,9 @@ export async function repairCodexConfigEperm(rootInput: string = process.cwd(), 
   const repairActions = opts.fix === true ? await runScopedRepairs(configPath, before.blockers) : []
   const after = await inspectCodexConfigReadability(root, { ...opts, configPath, writeReport: false })
   const blockers = [...new Set([...(policy.blockers || []), ...after.blockers])]
+  const tccProbable = process.platform === 'darwin'
+    && blockers.some((blocker) => blocker === 'codex_cli_config_eperm' || blocker === 'EPERM')
+    && repairActions.some((action) => action.ok === true)
   const report = {
     schema: CODEX_CONFIG_EPERM_REPAIR_SCHEMA,
     generated_at: nowIso(),
@@ -25,8 +29,13 @@ export async function repairCodexConfigEperm(rootInput: string = process.cwd(), 
     policy,
     repair_actions: repairActions,
     after,
+    tcc_risk: tccRisk(root),
+    tcc_probable: tccProbable,
     blockers,
-    operator_actions: after.operator_actions || []
+    operator_actions: [
+      ...(after.operator_actions || []),
+      ...(tccProbable ? ['macOS probable TCC block: grant Full Disk Access and Files and Folders permissions to Warp/Terminal/iTerm, Codex app, and the Codex CLI launch context, then rerun `sks mad repair-config --apply --tmux-smoke`.'] : [])
+    ]
   }
   if (opts.writeReport !== false) await writeJsonAtomic(reportPath, { ...report, report_path: reportPath })
   return report
@@ -45,7 +54,23 @@ async function runScopedRepairs(configPath: string, blockers: string[]) {
   if (process.platform === 'darwin' && has('flags_locked')) {
     actions.push(await repairCommand('remove_user_immutable_flag', 'chflags', ['nouchg', configPath], [0, 1]))
   }
+  if (has('symlink_escape')) {
+    actions.push(await replaceUnsafeSymlink(configPath))
+  }
   return actions
+}
+
+async function replaceUnsafeSymlink(configPath: string) {
+  const backup = `${configPath}.symlink-bak-${Date.now().toString(36)}`
+  try {
+    const target = await fsp.readlink(configPath)
+    const text = await readText(configPath, 'sandbox_mode = "workspace-write"\n')
+    await fsp.rename(configPath, backup)
+    await writeTextAtomic(configPath, text || 'sandbox_mode = "workspace-write"\n')
+    return { name: 'replace_unsafe_config_symlink', ok: true, backup_path: backup, symlink_target: target }
+  } catch (err: any) {
+    return { name: 'replace_unsafe_config_symlink', ok: false, error: err?.message || String(err), backup_path: backup }
+  }
 }
 
 async function repairCommand(name: string, command: string, args: string[], allowExitCodes: number[] = [0]) {
@@ -59,4 +84,8 @@ async function repairCommand(name: string, command: string, args: string[], allo
     stderr: result.stderr,
     timed_out: result.timedOut
   }
+}
+
+function tccRisk(root: string) {
+  return /\/(Desktop|Documents|Library\/Mobile Documents|iCloud Drive)\//.test(path.resolve(root))
 }

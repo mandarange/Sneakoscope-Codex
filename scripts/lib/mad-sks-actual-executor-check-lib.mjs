@@ -27,6 +27,7 @@ export async function runMadSksExecutorCheck(kind) {
   let result;
   let rollbackApply = null;
   let protectedBlock = null;
+  let engineSourceProbe = null;
   const checks = [];
 
   if (kind === 'actual-executor-blackbox' || kind === 'file-write-executor') {
@@ -38,15 +39,23 @@ export async function runMadSksExecutorCheck(kind) {
       content: `mad-sks actual executor ${kind}\n`
     });
     const targetFile = path.join(targetRoot, 'target', 'actual-write.txt');
-    checks.push(['target_file_written', fs.existsSync(targetFile) && fs.readFileSync(targetFile, 'utf8').includes('mad-sks actual executor')]);
-    protectedBlock = await mods.executors.runMadSksExecutor({
-      ...common,
-      executor: 'file-write',
-      dry_run: false,
-      target_path: path.join(root, 'src', 'core', 'version.ts'),
-      content: 'blocked protected write\n'
+    const resultVerifiedWrite = Array.isArray(result.verification) && result.verification.some((item) => item?.kind === 'file_expectation' && item?.ok === true);
+    checks.push(['target_file_written', result.ok === true && result.status === 'applied' && result.changed_files?.includes(targetFile) && resultVerifiedWrite]);
+    engineSourceProbe = await mods.immutable.evaluateMadSksWrite({
+      packageRoot: root,
+      targetRoot: root,
+      operation: 'file_write',
+      path: path.join(root, 'src', 'core', 'version.ts')
     });
-    checks.push(['protected_core_write_blocked', protectedBlock.ok === false && protectedBlock.status === 'blocked']);
+    checks.push(['engine_source_repo_write_not_protected_core_blocked', engineSourceProbe.decision === 'allowed']);
+    const installed = await createInstalledCoreFixture();
+    protectedBlock = await mods.immutable.evaluateMadSksWrite({
+      packageRoot: installed.root,
+      targetRoot: installed.root,
+      operation: 'file_write',
+      path: path.join(installed.root, 'src', 'core', 'version.ts')
+    });
+    checks.push(['installed_protected_core_write_blocked', protectedBlock.ok === false && protectedBlock.decision === 'blocked']);
     rollbackApply = await mods.rollbackApply.applyMadSksRollbackPlan({
       rollbackPlanPath: result.rollback_plan_path,
       targetRoot,
@@ -108,19 +117,28 @@ export async function runMadSksExecutorCheck(kind) {
     });
     checks.push(['rollback_plan_applied', result.ok === true && result.status === 'applied']);
   } else if (kind === 'live-protected-core-smoke') {
-    const decision = await mods.immutable.evaluateMadSksWrite({
+    engineSourceProbe = await mods.immutable.evaluateMadSksWrite({
       packageRoot: root,
-      targetRoot,
+      targetRoot: root,
       operation: 'file_write',
       path: path.join(root, 'src', 'core', 'version.ts')
     });
+    const installed = await createInstalledCoreFixture();
+    const decision = await mods.immutable.evaluateMadSksWrite({
+      packageRoot: installed.root,
+      targetRoot: installed.root,
+      operation: 'file_write',
+      path: path.join(installed.root, 'src', 'core', 'version.ts')
+    });
     result = {
       schema: 'sks.mad-sks-live-protected-core-smoke.v1',
-      ok: decision.ok === false,
-      status: decision.decision === 'blocked' ? 'blocked_as_expected' : 'failed',
-      decision
+      ok: engineSourceProbe.decision === 'allowed' && decision.ok === false,
+      status: engineSourceProbe.decision === 'allowed' && decision.decision === 'blocked' ? 'engine_exception_and_installed_blocked' : 'failed',
+      engine_source_probe: engineSourceProbe,
+      installed_protected_core_probe: decision
     };
-    checks.push(['live_guard_blocks_protected_core', result.ok === true]);
+    checks.push(['live_guard_honors_engine_source_exception', engineSourceProbe.decision === 'allowed']);
+    checks.push(['live_guard_blocks_installed_protected_core', decision.decision === 'blocked']);
   } else if (kind === 'executor-proof-graph') {
     const required = [
       'mad-sks-actual-executor-blackbox.json',
@@ -165,11 +183,23 @@ export async function runMadSksExecutorCheck(kind) {
     result,
     rollback_apply: rollbackApply,
     protected_core_block_probe: protectedBlock,
+    engine_source_exception_probe: engineSourceProbe,
     protected_core_unchanged: protectedComparison.ok === true,
     protected_core_comparison: protectedComparison,
     local_only_artifact_policy: true
   };
   return writeReport(reportDir, kind, report);
+}
+
+async function createInstalledCoreFixture() {
+  const fixtureRoot = path.join(root, '.sneakoscope', 'tmp', `mad-sks-installed-core-${process.pid}-${Date.now()}`);
+  const artifactDir = path.join(fixtureRoot, 'artifacts');
+  fs.mkdirSync(path.join(fixtureRoot, 'src', 'core'), { recursive: true });
+  fs.mkdirSync(path.join(fixtureRoot, 'scripts'), { recursive: true });
+  fs.mkdirSync(artifactDir, { recursive: true });
+  fs.writeFileSync(path.join(fixtureRoot, 'package.json'), '{"name":"sneakoscope","version":"1.18.13"}\n');
+  fs.writeFileSync(path.join(fixtureRoot, 'src', 'core', 'version.ts'), 'export const PACKAGE_VERSION = "1.18.13";\n');
+  return { root: fixtureRoot, artifactDir };
 }
 
 function createAuthorization(mods, targetRoot, kind, artifactDir) {

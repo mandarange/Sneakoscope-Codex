@@ -82,10 +82,10 @@ export async function writeFastModePropagationProof(root: string, input: { polic
   const workerFastReports = await collectNamedJson(root, 'worker-fast-mode.json')
   const workerProcessReports = await collectNamedJson(root, 'worker-process-report.json')
   const agentProcessReports = await collectNamedJson(root, 'agent-process-report.json')
-  const tmuxReports = await collectNamedJson(root, 'agent-tmux-report.json')
+  const zellijReports = await collectNamedJson(root, 'agent-zellij-report.json')
   const madReports = await collectNamedJson(root, 'mad-sks-worker-report.json')
   const defaultFastExpected = input.policy.disabled_by === 'none'
-  const childReports = [...workerFastReports, ...workerProcessReports, ...agentProcessReports, ...tmuxReports, ...madReports]
+  const childReports = [...workerFastReports, ...workerProcessReports, ...agentProcessReports, ...zellijReports, ...madReports]
   const missingFast = defaultFastExpected
     ? childReports.filter((row) => row.json?.fast_mode !== true && row.json?.fast_mode !== 'true')
     : []
@@ -93,13 +93,16 @@ export async function writeFastModePropagationProof(root: string, input: { polic
     const value = String(row.json?.service_tier || '')
     return value && value !== input.policy.service_tier
   })
+  const missingCliOverride = input.policy.service_tier === 'fast'
+    ? childReports.filter((row) => row.json?.backend === 'codex-exec' && row.json?.service_tier_cli_override_present !== true)
+    : []
   const workerMissing = defaultFastExpected && workerFastReports.length === 0 && workerProcessReports.length === 0
     ? ['fast_mode_worker_reports_missing']
     : []
   const report = {
     schema: FAST_MODE_PROPAGATION_PROOF_SCHEMA,
     generated_at: nowIso(),
-    ok: missingFast.length === 0 && missingTier.length === 0 && workerMissing.length === 0,
+    ok: missingFast.length === 0 && missingTier.length === 0 && workerMissing.length === 0 && missingCliOverride.length === 0,
     policy: input.policy,
     backend: input.backend || null,
     default_fast_mode: true,
@@ -109,14 +112,15 @@ export async function writeFastModePropagationProof(root: string, input: { polic
     worker_process_report_count: workerProcessReports.length,
     codex_exec_process_report_count: agentProcessReports.filter((row) => row.json?.backend === 'codex-exec').length,
     process_report_count: agentProcessReports.filter((row) => row.json?.backend === 'process').length,
-    tmux_report_count: tmuxReports.length,
+    zellij_report_count: zellijReports.length,
     mad_report_count: madReports.length,
     child_report_count: childReports.length,
     artifacts: childReports.map((row) => row.relative_path),
     blockers: [
       ...workerMissing,
       ...missingFast.map((row) => `fast_mode_missing:${row.relative_path}`),
-      ...missingTier.map((row) => `service_tier_mismatch:${row.relative_path}`)
+      ...missingTier.map((row) => `service_tier_mismatch:${row.relative_path}`),
+      ...missingCliOverride.map((row) => `service_tier_cli_override_missing:${row.relative_path}`)
     ]
   }
   await writeJsonAtomic(path.join(root, 'fast-mode-propagation-proof.json'), report)
