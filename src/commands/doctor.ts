@@ -19,11 +19,16 @@ export async function run(_command: any, args: any = []) {
   if (flag(args, '--fix')) {
     const { setupCommand } = await import('../core/commands/basic-cli.js');
     const installScope = installScopeFromArgs(args);
+    // Back up the existing managed project config before --force regeneration so a
+    // hand-edited .codex/config.toml is always recoverable (mirrors the splitter/structure
+    // repair backup contract).
+    const preFixBackup = await backupProjectConfigBeforeFix();
     const setupArgs = ['--force', '--install-scope', installScope];
     if (flag(args, '--local-only')) setupArgs.push('--local-only');
     await setupCommand(setupArgs);
     setupRepair = {
       install_scope: installScope,
+      config_backup_path: preFixBackup,
       global_skills: installScope === 'global' && !flag(args, '--local-only')
         ? await ensureGlobalCodexSkillsDuringInstall({ force: true })
         : { status: 'skipped', reason: 'project or local-only repair' }
@@ -128,6 +133,23 @@ export async function run(_command: any, args: any = []) {
     for (const action of ready.next_actions) console.log(`  - ${action}`);
   }
   if (!result.ok) process.exitCode = 1;
+}
+
+async function backupProjectConfigBeforeFix(): Promise<string | null> {
+  try {
+    const fsp = await import('node:fs/promises');
+    const path = await import('node:path');
+    const root = await projectRoot();
+    if (!root) return null;
+    const configPath = path.join(root, '.codex', 'config.toml');
+    if (!(await exists(configPath))) return null;
+    const text = await fsp.readFile(configPath, 'utf8');
+    const backupPath = `${configPath}.doctor-pre-fix-${Date.now().toString(36)}.bak`;
+    await fsp.writeFile(backupPath, text);
+    return backupPath;
+  } catch {
+    return null;
+  }
 }
 
 function installScopeFromArgs(args: any = []) {

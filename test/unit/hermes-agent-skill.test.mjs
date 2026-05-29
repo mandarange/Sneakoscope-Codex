@@ -96,4 +96,6 @@ test('Hermes runtime auto-approves install prompts without affecting explicit fl
   assert.equal(shouldAutoApproveInstall([], { SKS_OPENCLAW: '1' }), true);
   assert.equal(shouldAutoApproveInstall(['--yes'], {}), true);
   assert.equal(shouldAutoApproveInstall([], {}), false);
+  assert.equal(shouldAutoApproveInstall(['--from-postinstall'], { SKS_HERMES: '1' }), false);
+  assert.equal(shouldAutoApproveInstall(['--from-postinstall'], { SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS: '1' }), true);
 });

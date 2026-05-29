@@ -355,6 +355,22 @@ export const ROUTES = [
     examples: ['$Team executor:5 agree on the best plan and implement it', '$From-Chat-IMG 채팅+첨부 이미지 작업 지시서']
   },
   {
+    id: 'Naruto',
+    command: '$Naruto',
+    mode: 'NARUTO',
+    route: 'shadow clone swarm (high-scale parallel agents)',
+    description: 'Shadow Clone Swarm (影分身 / Kage Bunshin no Jutsu): fan out up to 100 parallel clone sessions on the native agent kernel for high-throughput work, with lease-based safe parallel writes, scheduler backfill, and per-clone proof.',
+    requiredSkills: ['team', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
+    dollarAliases: ['$ShadowClone', '$Kagebunshin'],
+    appSkillAliases: ['shadow-clone', 'kage-bunshin'],
+    lifecycle: ['clone_roster_build', 'work_partition', 'parallel_clone_scheduling', 'lease_based_write_swarm', 'per_clone_proof', 'session_cleanup', 'honest_mode'],
+    context7Policy: 'optional',
+    reasoningPolicy: 'high',
+    stopGate: 'team-gate.json',
+    cliEntrypoint: 'sks naruto run "task" [--clones N] [--backend codex-exec|fake] | sks naruto status',
+    examples: ['$Naruto run sweep the codebase for TODO comments with 50 clones', '$ShadowClone --clones 100 fan out and draft tests for every module']
+  },
+  {
     id: 'ReleaseReview',
     command: '$Release-Review',
     mode: 'RELEASE_REVIEW',
@@ -597,7 +613,7 @@ export const COMMAND_CATALOG = [
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/Zellij, and print ready true/false.' },
   { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
-  { name: 'deps', usage: 'sks deps check [--json]', description: 'Check Node/npm PATH readiness before doctor verifies Codex CLI/App, Context7, Browser tooling, Computer Use, Zellij, and Homebrew on macOS.' },
+  { name: 'deps', usage: 'sks deps check [--json] [--yes]', description: 'Check Node/npm, Codex CLI, and Zellij readiness; pass --yes to repair missing Codex CLI/Zellij tooling when supported.' },
   { name: 'codex', usage: 'sks codex compatibility|version|doctor|schema [--json]', description: 'Check Codex CLI rust-v0.134.0 compatibility, installed version, 0.134 capabilities, inherited 0.133 behavior, and vendored hook schema snapshot freshness.' },
   { name: 'codex-app', usage: 'sks codex-app [check|chrome-extension|pat status|remote-control]', description: 'Check Codex App install, Codex Chrome Extension web verification readiness, PAT-safe status, first-party MCP/plugin readiness, and Codex CLI 0.130.0+ remote-control availability.' },
   { name: 'hooks', usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]', description: 'Explain Codex hook events, validate vendored latest 10-event output schemas, replay fixtures, and enforce warning-zero SKS hook policies under the 0.134 compatibility matrix.' },

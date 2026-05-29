@@ -172,6 +172,7 @@ export const COMMANDS = {
   dfix: entry('stable', 'Run DFix diagnose/plan/patch/verify loop', 'dist/core/commands/dfix-command.js', commandArgsCommand(() => import('../core/commands/dfix-command.js'), 'dfixCommand', 'dist/core/commands/dfix-command.js')),
   team: entry('beta', 'Create and observe Team missions', 'dist/core/commands/team-command.js', argsCommand(() => import('../core/commands/team-command.js'), 'team', 'dist/core/commands/team-command.js')),
   agent: entry('beta', 'Run native multi-session agent missions', 'dist/core/commands/agent-command.js', argsCommand(() => import('../core/commands/agent-command.js'), 'agentCommand', 'dist/core/commands/agent-command.js')),
+  naruto: entry('labs', 'Run $Naruto shadow-clone swarm (up to 100 parallel sessions)', 'dist/core/commands/naruto-command.js', argsCommand(() => import('../core/commands/naruto-command.js'), 'narutoCommand', 'dist/core/commands/naruto-command.js')),
   'qa-loop': entry('beta', 'Run QA loop missions', 'dist/core/commands/qa-loop-command.js', subcommand(() => import('../core/commands/qa-loop-command.js'), 'qaLoopCommand', 'dist/core/commands/qa-loop-command.js')),
   research: entry('labs', 'Run research missions', 'dist/core/commands/research-command.js', subcommand(() => import('../core/commands/research-command.js'), 'researchCommand', 'dist/core/commands/research-command.js')),
   autoresearch: entry('labs', 'Alias for research/autoresearch route', 'dist/core/commands/autoresearch-command.js', subcommand(() => import('../core/commands/autoresearch-command.js'), 'autoresearchCommand', 'dist/core/commands/autoresearch-command.js', 'status')),
@@ -227,7 +228,8 @@ export const COMMAND_ALIASES = {
   '--mad': 'mad',
   '--MAD': 'mad',
   '--mad-sks': 'mad-sks',
-  '--agent': 'agent'
+  '--agent': 'agent',
+  '--naruto': 'naruto'
 } as const;
 
 export type CommandName = Extract<keyof typeof COMMANDS, string>;

@@ -2,19 +2,31 @@
 
 ## [Unreleased]
 
-
-## [1.18.14] - 2026-05-29
+## [1.19.0] - 2026-05-29
 
 ### Fixed
 
+- Production-harden the install flow so `npm i -g sneakoscope` no longer clobbers a user's global `~/.codex/config.toml`. `ensureGlobalCodexFastModeDuringInstall` now: preserves user-set top-level `model`/`service_tier`/`model_reasoning_effort` (only seeds SKS defaults when absent, never strips the user's reasoning effort); backs up the prior config before any mutation; refuses to overwrite an unparseable config (backs it up and reports `unparseable_config_preserved`); validates its own output parses before writing; and is now idempotent (a second install is a no-op). SKS continues to manage only its namespaced tables (`[features]`, `[profiles.sks-*]`, `[user.fast_mode]`, `[plugins]`).
+- Wrap the entire `postinstall` flow in try/catch so a failed setup side-effect never fails `npm i`, and always restore the codex-lb snapshot in `finally` (even on early return / throw).
+- Stop terminating third-party Codex App processes during `npm i` by default; this is now opt-in via `SKS_POSTINSTALL_RECONCILE_APP_PROCESSES=1` (otherwise detect-and-report, repair via `sks doctor --fix`).
+- A global `npm i -g sneakoscope` no longer initializes whatever project the shell happened to be in (it bootstraps only the global runtime root; run `sks setup` inside a project to initialize it).
+- `sks doctor --fix` now backs up the managed project `.codex/config.toml` before `--force` regeneration, so a hand-edited config is always recoverable.
+- `$Naruto` agents now get dynamic, team-style per-clone effort: truly simple / no-tool work runs at `low`, any tool use lifts a clone to `medium` (never high/xhigh), and every clone runs in fast service tier.
+
+- Make `sks --mad` install or repair its Zellij CLI dependency through the existing install/bootstrap and launch dependency flow, instead of letting a missing Homebrew package reach the Zellij launch path.
+- Launch MAD/Team Zellij layouts with the documented `zellij attach --create-background <session> options --default-layout <layout>` command, avoiding the stale `zellij --session <session> --layout <layout>` pattern that can fail after auth/preflight succeeds.
+- Keep npm postinstall from silently mutating Homebrew/npm global tools by default; explicit repair paths are `sks bootstrap --yes`, `sks deps check --yes`, `sks --mad --yes`, or opt-in `SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS=1`.
+- Surface labeled Zellij stdout/stderr tails and the report path in the `MAD Zellij action` line when launch still fails, so operators can act on the real Zellij error instead of only seeing `zellij_command_failed`.
 - Make `sks doctor --fix` actually recover an already-corrupted Codex config (its whole reason to exist). Previously the splitter could not help once machine-local keys were physically nested inside a table — it saw them as table members, not top-level keys — and `doctor --fix` only ever touched the project `.codex/config.toml`, never the global `CODEX_HOME/config.toml` that Codex actually loads. Added a structural recovery pass (`repairCodexConfigStructure`) that hoists misplaced machine-local keys (e.g. `model_provider`, `notify`) out of `mcp_servers`/`env` tables (and anything trailing an absorbed `# SKS moved …` comment) back above the first table, with backup + atomic write, and wired it into `doctor --fix` / `mad repair-config` for **both** the project and global configs. Legitimate keys inside `[profiles.*]` are preserved.
 - Detect structurally-broken configs: the config-load probe now classifies serde/TOML deserialize failures (`invalid type: …`, `expected a string`, `Error loading config.toml` without an EPERM cause) as `codex_cli_config_toml_parse_error` instead of silently falling back to `codex_cli_config_load_unverified`, and surfaces a `sks doctor --fix` operator action for it.
 - Stop the machine-local config mover from corrupting `~/.codex/config.toml`: moved top-level keys (e.g. `model_provider`, and array-valued `notify`) are now merged structurally **before** any `[table]` header instead of being appended at end-of-file, where TOML parsed them as members of the trailing table (producing `invalid type: sequence, expected a string` and a config Codex refused to load). Restores `sks --mad` gating and codex-lb when a machine-local `model_provider`/`notify` is present.
 - Make `splitCodexProjectConfigPolicy` a no-op when the project config resolves to the global `CODEX_HOME/config.toml` (e.g. running `sks` from the home directory), so the global config is no longer split against itself and re-corrupted on every `sks doctor --fix` / `sks --mad`.
-- Ship `codex-config-load-probe.mjs` inside the published package (`dist/scripts/`) and resolve it from there at runtime. The probe was previously excluded by the npm `files` allowlist + `.npmignore`, so installs could not run it and MAD preflight always fell back to the `codex_cli_config_load_unverified` blocker. The runtime now degrades gracefully (integration-optional) if the probe is ever absent rather than hard-blocking.
+- Ship `codex-config-load-probe.mjs` inside the published package via the `files` allowlist (resolved at runtime from `scripts/` or `dist/scripts/`). The probe was previously excluded by the npm `files` allowlist + `.npmignore`, so installs could not run it and MAD preflight always fell back to the `codex_cli_config_load_unverified` blocker. The runtime now degrades gracefully (integration-optional) if the probe is ever absent rather than hard-blocking, and `dist/` stays free of stray `.mjs` so the dist-parity gate passes.
 
 ### Added
 
+- Add `$Naruto` Shadow Clone Swarm mode (影分身 / Kage Bunshin no Jutsu): a high-scale variant of the native agent kernel that fans out up to 100 parallel clone sessions (`sks naruto run "task" --clones N`, aliases `$ShadowClone`/`$Kagebunshin`/`--naruto`). Lifts the standard 20-agent ceiling to `MAX_NARUTO_AGENT_COUNT = 100` **only for this route** (threaded via an optional `maxAgentCount` through roster/scheduler/orchestrator; every other route keeps the 20 cap), builds an identical-clone roster, and reuses the proven work-queue + scheduler + lease-based patch-swarm machinery for safe parallel writes. See `docs/naruto.md`.
+- Add `naruto:shadow-clone-swarm` release gate + blackbox test proving the ceiling lift (100), the unchanged default cap (20), a 100-unique-clone roster, and an end-to-end 24-clone run scheduling all clones to completion past the old 20 cap.
 - Add `codex-project-config-policy-merge-regression.mjs` covering moved-keys-before-tables ordering and the CODEX_HOME self-split no-op guard.
 - Add `doctor-fix-recovers-corrupted-config-check.mjs` proving `doctor --fix` recovers a corrupted project and global config (key hoisting), and is a no-op on a healthy config (profile keys preserved).
 

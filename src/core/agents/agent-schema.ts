@@ -9,6 +9,11 @@ export const AGENT_COUNT = DEFAULT_AGENT_COUNT
 export const AGENT_INTAKE_STAGE_ID = 'native_agent_intake'
 export const MAX_AGENT_COUNT = 20
 export const DEFAULT_AGENT_CONCURRENCY = 5
+// $Naruto "Shadow Clone" swarm: a high-scale mode that lifts the standard 20-agent
+// ceiling to up to 100 concurrent clone sessions. Only the naruto path opts into this
+// cap; every other roster/scheduler caller keeps MAX_AGENT_COUNT as the default.
+export const MAX_NARUTO_AGENT_COUNT = 100
+export const DEFAULT_NARUTO_CLONES = 12
 export const AGENT_BACKENDS = ['fake', 'process', 'codex-exec', 'zellij'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]
@@ -98,6 +103,9 @@ export interface AgentRunOptions {
   serviceTier?: AgentServiceTier
   noFast?: boolean
   nativeCliSwarm?: boolean
+  maxAgentCount?: number
+  clones?: number
+  narutoMode?: boolean
 }
 
 export interface AgentTaskSlice {
