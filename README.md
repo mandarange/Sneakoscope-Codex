@@ -344,17 +344,24 @@ sks
 
 Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes the codex-lb Codex CLI / IDE Extension provider block into `~/.codex/config.toml` for Codex App routing, loads the provider env key for interactive launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. If the provider block disappears but the stored env file is still recoverable, bare `sks`, npm postinstall upgrades, `sks doctor --fix`, and `sks codex-lb repair` restore it with `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = false`; imagegen checks may record this provider as configured codex-lb routing, but it is not accepted as official Codex App `$imagegen` evidence. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` Zellij session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths run a response-chain health check. `previous_response_not_found` is treated as a stateless-LB warning and keeps codex-lb active. Hard failures are surfaced to the user; SKS only bypasses codex-lb when the user chooses OAuth fallback or `SKS_CODEX_LB_AUTOBYPASS=1` is set.
 
-If codex-lb provider auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`; to replace it, run `sks codex-lb reconfigure --host <domain> --api-key <key>`.
-
-### Switching back to ChatGPT OAuth (releasing codex-lb)
-
-If you want to hand control back to your official ChatGPT account login after codex-lb has been reconciled, use `sks codex-lb release`:
+If codex-lb provider auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`. To **swap only the API key** at any time (without re-typing the host — it reuses the stored base URL), run:
 
 ```sh
-sks codex-lb release
+sks codex-lb set-key --api-key-stdin   # or: sks codex-lb set-key --api-key "sk-clb-..."
 ```
 
-This restores `~/.codex/auth.chatgpt-backup.json` (written by the 0.9.3 auto-reconcile) to `~/.codex/auth.json` and unsets `model_provider = "codex-lb"` so Codex CLI/App falls back to ChatGPT OAuth. To re-engage codex-lb afterward, run `sks codex-lb repair`.
+(To also change the host, use `sks codex-lb reconfigure --host <domain> --api-key <key>`.)
+
+### Switching auth mode: codex-lb ↔ ChatGPT OAuth
+
+Switch between the codex-lb API key and your ChatGPT OAuth login at any time with intent-named commands:
+
+```sh
+sks codex-lb use-oauth      # hand control back to ChatGPT OAuth
+sks codex-lb use-codex-lb   # switch back to the codex-lb API key
+```
+
+`use-oauth` restores `~/.codex/auth.chatgpt-backup.json` (written by auto-reconcile) to `~/.codex/auth.json` and unsets `model_provider = "codex-lb"` so Codex CLI/App falls back to ChatGPT OAuth; if no saved OAuth login exists it points you to `codex login`. `use-codex-lb` re-selects and re-syncs codex-lb. (The older verbs `sks codex-lb release` / `repair` remain as aliases.)
 
 Flags:
 
