@@ -423,6 +423,25 @@ Manual fan-out syntax:
 
 Effort is assigned per agent. Simple read-only/docs slices can run low, ordinary tooling and lease mapping use medium, safety/DB/schema/release lanes use high, and frontier/forensic research can escalate to xhigh. If a lease conflict, schema failure, proof blocker, DB risk, or release risk appears, the parent can escalate that lane while keeping unrelated lanes cheaper and faster.
 
+### Naruto Shadow Clone Swarm (`$Naruto`)
+
+`$Naruto` (影分身 / Kage Bunshin no Jutsu) is a high-scale mode of the native agent kernel for broad fan-out work — codebase-wide sweeps, parallel drafting, large audits. It lifts the standard 20-agent ceiling to **up to 100 clone sessions** (only for this route; every other route keeps the 20 cap).
+
+```sh
+sks naruto run "sweep the codebase for TODO comments and summarize"
+sks naruto run "draft a unit test for every module" --clones 100
+sks naruto run "demo" --clones 24 --backend fake --json   # fast, no Codex calls
+sks naruto status
+```
+
+Aliases: `$ShadowClone`, `$Kagebunshin`, and the CLI flag `sks --naruto`.
+
+- **System-aware concurrency:** `--clones N` is the total work fan-out, but `$Naruto` never spawns the whole count at once. Live concurrency is throttled to a host-safe number derived from CPU cores and free memory (heavier cap for real `codex-exec` workers, tighter packing for in-process `fake`). So `--clones 100` on a small host still processes all 100 work units while only running a safe handful at a time; the run reports when it throttles. Override with `SKS_NARUTO_MAX_CONCURRENCY=<n>`.
+- **Dynamic per-clone effort (like Team):** truly simple / no-tool work runs at `low`, any tool use lifts a clone to `medium` (never high/xhigh), and every clone runs in fast service tier.
+- **Safe parallel writes:** clones coordinate through the same lease-based patch-swarm (merge coordinator + conflict rebase + transaction journal) as Team.
+
+See [docs/naruto.md](docs/naruto.md) for the full reference.
+
 ### QA, Computer Use, Goal, Research, DB, Wiki, GX
 
 ```sh

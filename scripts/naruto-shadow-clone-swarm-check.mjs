@@ -52,7 +52,16 @@ assertGate(simple.reasoning_effort === 'low' && simple.service_tier === 'fast', 
 assertGate(toolWrite.reasoning_effort === 'medium' && toolWrite.service_tier === 'fast', 'writing clone (tool use) must be medium + fast', { toolWrite });
 assertGate(toolReadCmd.reasoning_effort === 'medium' && toolReadCmd.service_tier === 'fast', 'read-only work with tool/command signals must be medium + fast', { toolReadCmd });
 
-// 5) End-to-end CLI run: 24 clones (> standard 20) must schedule all to completion.
+// 5) System-safe concurrency: never spawn the whole count at once; throttle to host capacity.
+const fakeSafe = roster.systemSafeNarutoConcurrency({ backend: 'fake' });
+const heavySafe = roster.systemSafeNarutoConcurrency({ backend: 'codex-exec' });
+assertGate(fakeSafe.cap >= 1 && fakeSafe.cap <= schema.MAX_NARUTO_AGENT_COUNT, 'fake-backend concurrency cap must be in [1, 100]', { fakeSafe });
+assertGate(heavySafe.cap >= 1 && heavySafe.cap <= 16, 'heavy-backend concurrency cap must be in [1, 16]', { heavySafe });
+assertGate(heavySafe.cap <= fakeSafe.cap, 'heavy backend must throttle no looser than the light backend', { heavySafe, fakeSafe });
+assertGate(heavySafe.cores >= 1, 'must detect at least one core', { cores: heavySafe.cores });
+
+// 6) End-to-end run: 24 clones (> standard 20 → ceiling lifted) all complete, but live
+//    concurrency is throttled to the host-safe cap (never the full 24 unless the host allows).
 const proofClones = 24;
 const cli = path.join(root, 'dist', 'bin', 'sks.js');
 assertGate(exists('dist/bin/sks.js'), 'dist/bin/sks.js missing (build first)');
@@ -69,14 +78,20 @@ const parsed = parseJson(run.stdout);
 assertGate(parsed !== null, 'sks naruto run must emit JSON', { stdout: tail(run.stdout) });
 assertGate(parsed.ok === true, 'naruto run must be ok', { ok: parsed.ok });
 assertGate(parsed.mode === 'NARUTO' && parsed.jutsu === 'kage_bunshin_no_jutsu', 'naruto run must report NARUTO mode', { mode: parsed.mode, jutsu: parsed.jutsu });
-assertGate(parsed.clones === proofClones, 'naruto run must use the requested clone count', { clones: parsed.clones });
-assertGate(parsed.target_active_slots === proofClones, 'active slots must exceed the standard 20 cap (no clamp)', { target_active_slots: parsed.target_active_slots });
+assertGate(parsed.clones === proofClones, 'clone fan-out must use the requested count (> standard 20 ceiling)', { clones: parsed.clones });
 assertGate(parsed.max_clones === 100, 'naruto run must advertise the 100 ceiling', { max_clones: parsed.max_clones });
 assertGate(parsed.proof === 'passed', 'naruto run proof must pass', { proof: parsed.proof });
+// Throttle invariant: active concurrency never exceeds the requested count nor the host cap.
+assertGate(parsed.target_active_slots >= 1 && parsed.target_active_slots <= proofClones, 'active slots must be in [1, clones]', { target_active_slots: parsed.target_active_slots });
+assertGate(parsed.target_active_slots <= fakeSafe.cap, 'active slots must be throttled to the system-safe cap', { target_active_slots: parsed.target_active_slots, cap: fakeSafe.cap });
 
 const state = parsed.run?.scheduler?.state || parsed.run?.scheduler || {};
-assertGate(Number(state.completed_count) === proofClones, 'all clone work items must complete', { completed_count: state.completed_count });
-assertGate(Number(state.max_active_slots) >= proofClones, 'scheduler max_active_slots must reflect the lifted cap', { max_active_slots: state.max_active_slots });
+assertGate(Number(state.completed_count) === proofClones, 'all clone work items must complete despite throttling', { completed_count: state.completed_count });
+
+// 7) A small request is NOT throttled below what was asked (cap only ever reduces, never inflates).
+const small = spawnSync(process.execPath, [cli, 'naruto', 'run', 'tiny', '--clones', '2', '--backend', 'fake', '--work-items', '2', '--json'], { cwd: root, encoding: 'utf8', timeout: 60000, maxBuffer: 4 * 1024 * 1024 });
+const smallParsed = parseJson(small.stdout);
+assertGate(small.status === 0 && smallParsed?.target_active_slots === 2, 'a 2-clone run must run 2 concurrently (no over-throttle)', { status: small.status, target_active_slots: smallParsed?.target_active_slots });
 
 emitGate('naruto:shadow-clone-swarm', {
   max_naruto_agent_count: schema.MAX_NARUTO_AGENT_COUNT,
@@ -85,6 +100,9 @@ emitGate('naruto:shadow-clone-swarm', {
   naruto_slots_at_100: narutoSlots,
   proof_clones: proofClones,
   target_active_slots: parsed.target_active_slots,
+  fake_safe_cap: fakeSafe.cap,
+  heavy_safe_cap: heavySafe.cap,
+  cores: heavySafe.cores,
   completed_count: state.completed_count,
   mission_id: parsed.mission_id
 });

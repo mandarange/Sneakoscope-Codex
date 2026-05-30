@@ -64,6 +64,54 @@ export async function run(command: any, args: any = []) {
     if (result.status === 'failed') process.exitCode = 1;
     return;
   }
+  if (action === 'set-key' || action === 'update-key' || action === 'rotate-key') {
+    // Swap ONLY the API key, reusing the already-stored base URL (no need to re-type the host).
+    const status = await codexLbStatus();
+    const host = status.base_url;
+    if (!host) {
+      const result = { schema: 'sks.codex-lb-set-key.v1', ok: false, status: 'not_configured' };
+      if (flag(args, '--json')) return printJson(result);
+      console.error('codex-lb is not configured yet. Run: sks codex-lb setup --host <domain> --api-key-stdin');
+      process.exitCode = 1;
+      return;
+    }
+    const newKey = await resolveNewApiKey(args);
+    if (!newKey) {
+      const result = { schema: 'sks.codex-lb-set-key.v1', ok: false, status: 'missing_api_key' };
+      if (flag(args, '--json')) return printJson(result);
+      console.error('No new API key provided. Run: sks codex-lb set-key --api-key-stdin   (or --api-key <key>)');
+      process.exitCode = 1;
+      return;
+    }
+    const result = await configureCodexLb({ host, apiKey: newKey });
+    if (flag(args, '--json')) return printJson({ ...result, action: 'set-key' });
+    console.log(result.ok ? `codex-lb API key updated (${result.base_url || host}).` : `codex-lb key update failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'use-codex-lb' || action === 'use-lb') {
+    // Switch auth mode -> codex-lb (API key). Re-selects the provider and re-syncs auth.
+    const result = await repairCodexLbAuth();
+    if (flag(args, '--json')) return printJson({ ...result, mode: 'codex-lb' });
+    console.log(result.ok ? 'Auth mode: codex-lb selected (API key).' : `Switch to codex-lb failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'use-oauth' || action === 'use-chatgpt') {
+    // Switch auth mode -> ChatGPT OAuth. Restores the saved OAuth login if present.
+    const result = await releaseCodexLbAuthHold({ force: flag(args, '--force') });
+    if (flag(args, '--json')) return printJson({ ...result, mode: 'oauth' });
+    if (result.status === 'no_backup') {
+      console.log('No saved ChatGPT OAuth credentials to restore. Switch to OAuth by logging in:');
+      console.log('  codex login');
+      console.log('Then, if codex-lb is still the selected provider: sks codex-lb unselect');
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`Auth mode: ${['released', 'oauth_restored'].includes(result.status) ? 'ChatGPT OAuth restored' : result.status}.`);
+    if (['auth_in_use', 'failed'].includes(result.status)) process.exitCode = 1;
+    return;
+  }
   if (action === 'setup' || action === 'reconfigure') {
     const options = await codexLbSetupOptions(args);
     const plan = buildCodexLbSetupPlan({
@@ -197,8 +245,26 @@ export async function run(command: any, args: any = []) {
     console.log(`codex-lb proof evidence: ${result.status}`);
     return;
   }
-  console.error('Usage: sks codex-lb status|metrics|doctor --deep|health|repair|release|unselect|setup|circuit reset|circuit record-fixture|proof-evidence [--json]');
+  console.error('Usage: sks codex-lb status|metrics|doctor --deep|health|setup|set-key|use-codex-lb|use-oauth|repair|release|unselect|circuit reset|circuit record-fixture|proof-evidence [--json]');
+  console.error('  set-key       swap the codex-lb API key (reuses the stored host): sks codex-lb set-key --api-key-stdin');
+  console.error('  use-codex-lb  switch auth mode to codex-lb (API key)');
+  console.error('  use-oauth     switch auth mode to ChatGPT OAuth (restores saved login, else: codex login)');
   process.exitCode = 1;
+}
+
+async function resolveNewApiKey(args: any = []): Promise<string> {
+  const flagKey = readOption(args, '--api-key', '');
+  if (flagKey) return String(flagKey).trim();
+  if (flag(args, '--api-key-stdin')) return String(await readStdin()).trim();
+  if (input.isTTY && !flag(args, '--yes')) {
+    const rl = readline.createInterface({ input, output });
+    try {
+      return (await rl.question('New codex-lb API key (sk-clb-...): ')).trim();
+    } finally {
+      rl.close();
+    }
+  }
+  return '';
 }
 
 function shapeCodexLbStatus(status: any = {}) {
