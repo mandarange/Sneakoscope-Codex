@@ -33,6 +33,7 @@ for (const [script, extraArgs] of [
   ['codex:actual-config-load-probe', []],
   ['codex:0.135-compat:require-real', []],
   ['doctor:codex-doctor-parity:actual', []],
+  ['publish:dry-run-performance', []],
   ['zellij:capability', ['--require-real']],
   ['zellij:layout-valid', ['--require-real']],
   ['zellij:real-session-launch', ['--require-real', '--mission', 'M-release-real-zellij', '--session', 'sks-rrz']],

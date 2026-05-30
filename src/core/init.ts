@@ -586,39 +586,48 @@ function installPolicy(scope: any, commandPrefix: any) {
   };
 }
 
+// SKS-managed Codex App feature flags. Seeded as defaults for fresh configs but
+// NEVER force-re-enabled on upgrade: force-writing these reverted a user's
+// `enabled = false` and blanked/broke the Codex App UI (same rationale as the
+// install-helpers path). All are SET-IF-ABSENT below.
+const MANAGED_CODEX_FEATURE_FLAGS = [
+  'hooks', 'remote_control', 'multi_agent', 'fast_mode', 'fast_mode_ui',
+  'codex_git_commit', 'computer_use', 'browser_use', 'browser_use_external',
+  'image_generation', 'in_app_browser', 'guardian_approval', 'tool_suggest',
+  'apps', 'plugins'
+];
+
 function mergeManagedCodexConfigToml(existingContent: any = '') {
   let next = removeLegacyTopLevelCodexModeLocks(String(existingContent || '').trimEnd());
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
-  next = upsertTopLevelTomlString(next, 'model', 'gpt-5.5');
-  next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
-  next = upsertTopLevelTomlBoolean(next, 'suppress_unstable_features_warning', true);
-  next = upsertTomlTableKey(next, 'features', 'hooks = true');
-  next = upsertTomlTableKey(next, 'features', 'remote_control = true');
-  next = upsertTomlTableKey(next, 'features', 'multi_agent = true');
-  next = upsertTomlTableKey(next, 'features', 'fast_mode = true');
-  next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
-  next = upsertTomlTableKey(next, 'features', 'codex_git_commit = true');
-  next = upsertTomlTableKey(next, 'features', 'computer_use = true');
-  next = upsertTomlTableKey(next, 'features', 'browser_use = true');
-  next = upsertTomlTableKey(next, 'features', 'browser_use_external = true');
-  next = upsertTomlTableKey(next, 'features', 'image_generation = true');
-  next = upsertTomlTableKey(next, 'features', 'in_app_browser = true');
-  next = upsertTomlTableKey(next, 'features', 'guardian_approval = true');
-  next = upsertTomlTableKey(next, 'features', 'tool_suggest = true');
-  next = upsertTomlTableKey(next, 'features', 'apps = true');
-  next = upsertTomlTableKey(next, 'features', 'plugins = true');
-  next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
-  next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
-  next = upsertTomlTableKey(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
-  next = upsertTomlTableKey(next, 'agents', 'max_threads = 6');
-  next = upsertTomlTableKey(next, 'agents', 'max_depth = 1');
+  // User-overridable top-level keys: seed defaults only when ABSENT so an
+  // upgrade never clobbers a user's chosen model/service_tier. model_reasoning_effort
+  // is intentionally left untouched at the top level.
+  next = upsertTopLevelTomlStringIfAbsent(next, 'model', 'gpt-5.5');
+  next = upsertTopLevelTomlStringIfAbsent(next, 'service_tier', 'fast');
+  next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
+  // Codex App feature flags: SET-IF-ABSENT only (see note above).
+  for (const flag of MANAGED_CODEX_FEATURE_FLAGS) {
+    next = upsertTomlTableKeyIfAbsent(next, 'features', `${flag} = true`);
+  }
+  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'visible = true');
+  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'enabled = true');
+  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
+  next = upsertTomlTableKeyIfAbsent(next, 'agents', 'max_threads = 6');
+  next = upsertTomlTableKeyIfAbsent(next, 'agents', 'max_depth = 1');
   for (const block of managedCodexConfigBlocks()) {
     next = upsertTomlTable(next, block.table, block.text);
   }
-  for (const [name, marketplace] of DEFAULT_CODEX_APP_PLUGINS) {
-    const table = `plugins."${name}@${marketplace}"`;
-    next = upsertTomlTable(next, table, `[${table}]\nenabled = true`);
+  // Plugin tables broke the Codex App UI by force-reverting user `enabled=false`.
+  // Auto-enable is opt-in only, and even then never overwrites an existing table.
+  if (process.env.SKS_MANAGE_CODEX_APP_PLUGINS === '1') {
+    for (const [name, marketplace] of DEFAULT_CODEX_APP_PLUGINS) {
+      const table = `plugins."${name}@${marketplace}"`;
+      if (!hasTomlTable(next, table)) {
+        next = upsertTomlTable(next, table, `[${table}]\nenabled = true`);
+      }
+    }
   }
   return `${next.trim()}\n`;
 }
@@ -736,6 +745,46 @@ function upsertTopLevelTomlBoolean(text: any, key: any, value: any) {
   }
   lines.splice(end, 0, line);
   return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function hasTopLevelTomlKey(text: any, key: any): boolean {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
+  for (let i = 0; i < end; i += 1) if (re.test(lines[i] || '')) return true;
+  return false;
+}
+
+function upsertTopLevelTomlStringIfAbsent(text: any, key: any, value: any) {
+  return hasTopLevelTomlKey(text, key) ? String(text || '') : upsertTopLevelTomlString(text, key, value);
+}
+
+function upsertTopLevelTomlBooleanIfAbsent(text: any, key: any, value: any) {
+  return hasTopLevelTomlKey(text, key) ? String(text || '') : upsertTopLevelTomlBoolean(text, key, value);
+}
+
+function hasTomlTable(text: any, table: any): boolean {
+  return new RegExp(`(^|\\n)\\s*\\[${escapeRegExp(table)}\\]\\s*(?:#.*)?(?=\\n|$)`).test(String(text || ''));
+}
+
+function hasTomlTableKey(text: any, table: any, key: any): boolean {
+  const lines = String(text || '').split('\n');
+  const header = `[${table}]`;
+  const start = lines.findIndex((x: any) => x.trim() === header);
+  if (start === -1) return false;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) { end = i; break; }
+  }
+  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
+  for (let i = start + 1; i < end; i += 1) if (re.test(lines[i] || '')) return true;
+  return false;
+}
+
+function upsertTomlTableKeyIfAbsent(text: any, table: any, line: any) {
+  const key = (String(line).split('=')[0] || '').trim();
+  return hasTomlTableKey(text, table, key) ? String(text || '') : upsertTomlTableKey(text, table, line);
 }
 
 function removeTomlTableKey(text: any, table: any, key: any) {

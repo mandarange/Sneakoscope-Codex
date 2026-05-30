@@ -621,7 +621,7 @@ export const COMMAND_CATALOG = [
   { name: 'auth', usage: 'sks auth status|health|repair|setup --host <domain> --api-key <key>', description: 'Shortcut for codex-lb provider auth status, health, repair, and setup commands.' },
   { name: 'openclaw', usage: 'sks openclaw install|path|print [--dir path] [--force] [--json]', description: 'Generate an OpenClaw skill package so OpenClaw agents can discover and use local SKS workflows.' },
   { name: 'hermes', usage: 'sks hermes install|status|path|print [--dir path] [--force] [--json]', description: 'Generate a Hermes Agent skill package so Hermes agents can discover and use local SKS workflows.' },
-  { name: 'zellij', usage: 'npm run zellij:capability | sks team open-zellij latest | sks --mad', description: 'Verify and open the SKS Zellij runtime used by MAD and Team lane UI.' },
+  { name: 'zellij', usage: 'sks zellij status|repair [--json] | sks team open-zellij latest | sks --mad', description: 'Inspect Zellij runtime status, explain repair (no auto-install), and open the SKS Zellij runtime used by MAD and Team lane UI.' },
   { name: 'tmux', usage: 'sks tmux [--json]', description: 'Show the removed-runtime migration notice and point operators to Zellij.' },
   { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot Zellij Codex CLI workspace with the SKS MAD full-access auto-review profile.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS Zellij with the auto-review profile.' },

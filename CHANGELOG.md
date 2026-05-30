@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [1.19.1] - 2026-05-30
+
+Final hardening release: closes the remaining legacy-upgrade, publish, postinstall, runtime-boundary, and Zellij UX risks so 1.19.x is safe to merge to `main` and publish to npm. The 1.19.0 feature set is unchanged.
+
+### Fixed
+
+- **Legacy upgrade zero-break (`init.ts`).** `sks setup` / project `.codex/config.toml` regeneration no longer force-overwrites user keys or re-enables user-disabled Codex App flags. `mergeManagedCodexConfigToml` now seeds `model`/`service_tier`/`suppress_unstable_features_warning` and every `[features]` flag and `[user.fast_mode]` key **set-if-absent**, and plugin tables are auto-enabled only under `SKS_MANAGE_CODEX_APP_PLUGINS=1` (and even then never overwrite an existing table). This matches the already-hardened install-helpers path and is the same rationale that fixed the Codex App UI breakage: force-writing those tables reverted a user's `enabled = false`.
+- **Zellij real-session heartbeat is now a blocker.** `waitForLaneHeartbeat` (in `zellij-screen-proof.ts`) returns a decisive result and a timeout produces the `zellij_lane_heartbeat_timeout` blocker; `zellij:real-session-launch --require-real` fails (with the heartbeat path and waited/timeout ms recorded) instead of silently continuing when the lane renderer never emits a heartbeat.
+
+### Added
+
+- **Migration transaction journal** (`src/core/migration/migration-transaction-journal.ts`) writing `.sneakoscope/reports/migration-1.19-journal.jsonl`: every config mutation records `before_hash`, `after_hash`, `backup_path`, `changed`, and `rollback_available`. `sks doctor --fix` builds the journal for the whole fix transaction (project + CODEX_HOME config) and prints the journal path.
+- **Redesigned Zellij lane UI** (`composeLaneFrame`): sections SKS Lane / Mission / Mode / Fast / Workers / Codex child · Work (Current/Queue/Patch) · Safety (Lease/Protected/Rollback) · Blockers (max 3, rest → `+N more → <report>`) · Reports · `Keys:` footer. Width-safe at 80/100/120 with middle-ellipsis on long paths, `NO_COLOR`-respecting (status-only colors, screen proof strips ANSI), and a footer of real commands (`Ctrl+q detach · sks doctor --fix · sks zellij status · sks agent rollback-patches`).
+- **`sks zellij status|repair` command** — inspects Zellij runtime capability/readiness and explains repair steps (`brew install zellij`, `sks deps check --yes`, `sks doctor --fix`) without auto-installing anything.
+- **Release gates** added to `release:check`: `zellij:launch-command-truth` (locks the documented `attach --create-background … --default-layout` command and bans the stale `--session … --layout` form), `zellij:real-session-heartbeat` (hermetic heartbeat-blocker proof), `zellij:ui-design` (width/section/ellipsis/NO_COLOR/footer-command checks), `legacy:upgrade-zero-break` (10-state 1.18→1.19 upgrade matrix), `publish:packlist-performance` (tarball file-count/size + forbidden-path guard, also run in `prepublishOnly`), `postinstall:safe-side-effects` (no default network/tool-install/process-kill), `runtime:ts-rust-boundary` (TS source-of-truth; publish never compiles Rust; JS fallback proven). Added to `release:real-check`: `publish:dry-run-performance`.
+- **Naruto proof** now asserts `concurrency_capped` and host-derived `safe_concurrency`, making the fan-out (`clones`) vs live-concurrency (`target_active_slots`) distinction explicit ("N clones, running M at a time").
+- New docs: `docs/legacy-upgrade-1.19.md`, `docs/architecture-ts-rust-boundary.md`, `docs/zellij-ui-design.md`.
+
+### Changed
+
+- `.npmignore` no longer blanket-ignores `dist/` and `scripts/` (these contradicted the `package.json` `files` allowlist that actually ships them); the new `publish:packlist-performance` gate guards the tarball contents instead.
+
 ## [1.19.0] - 2026-05-29
 
 ### Fixed
