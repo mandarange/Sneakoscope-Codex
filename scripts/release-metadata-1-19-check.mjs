@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.19.0';
+const RELEASE_VERSION = '1.19.1';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');
@@ -65,7 +65,10 @@ const requiredDocs = [
   'docs/migration-1.18.7-to-1.18.8.md',
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
-  'docs/release-readiness.md'
+  'docs/release-readiness.md',
+  'docs/legacy-upgrade-1.19.md',
+  'docs/architecture-ts-rust-boundary.md',
+  'docs/zellij-ui-design.md'
 ];
 const versionedDocs = new Set([
   'README.md',
@@ -191,6 +194,13 @@ const requiredScripts = [
   'install:update-preserves-config',
   'codex-lb:config-toml-safety',
   'codex-app:ui-preservation',
+  'zellij:launch-command-truth',
+  'zellij:real-session-heartbeat',
+  'zellij:ui-design',
+  'legacy:upgrade-zero-break',
+  'publish:packlist-performance',
+  'postinstall:safe-side-effects',
+  'runtime:ts-rust-boundary',
   'agent:native-cli-session-swarm-10',
   'agent:native-cli-session-swarm-20',
   'agent:no-subagent-scaling',
@@ -234,6 +244,7 @@ const requiredScripts = [
 const requiredRealScripts = [
   'codex:0.135-compat:require-real',
   'doctor:codex-doctor-parity:actual',
+  'publish:dry-run-performance',
   'zellij:capability',
   'zellij:pane-proof',
   'zellij:screen-proof',

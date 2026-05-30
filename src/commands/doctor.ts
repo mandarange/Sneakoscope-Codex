@@ -13,10 +13,15 @@ import { writeDoctorReadinessMatrix } from '../core/doctor/doctor-readiness-matr
 import { runCodexDoctorBridge, compareCodexDoctorBridge } from '../core/doctor/codex-doctor-bridge.js';
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
 import { inventoryCodexPermissionProfiles } from '../core/codex/codex-permission-profiles.js';
+import { appendMigrationEvents, hashConfigText } from '../core/migration/migration-transaction-journal.js';
 
 export async function run(_command: any, args: any = []) {
   let setupRepair = null;
+  let migrationPreFix: Record<string, string | null> | null = null;
   if (flag(args, '--fix')) {
+    // Snapshot config content before ANY mutation so the migration journal can
+    // record real before/after hashes for the whole --fix transaction.
+    migrationPreFix = await captureCodexConfigSnapshot();
     const { setupCommand } = await import('../core/commands/basic-cli.js');
     const installScope = installScopeFromArgs(args);
     // Back up the existing managed project config before --force regeneration so a
@@ -44,6 +49,9 @@ export async function run(_command: any, args: any = []) {
   };
   const codexDoctorBefore = flag(args, '--fix') ? await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') }).catch(() => null) : null;
   const configRepair = flag(args, '--fix') ? await repairCodexConfigEperm(root, { fix: true, ...configProbeOpts }) : null;
+  const migrationJournal = flag(args, '--fix')
+    ? await writeFixMigrationJournal(root, migrationPreFix, configRepair, setupRepair).catch(() => null)
+    : null;
   const codexConfig = configRepair?.after || await inspectCodexConfigReadability(root, configProbeOpts);
   const codexDoctor = await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') });
   const codexDoctorDiff = compareCodexDoctorBridge(codexDoctorBefore, codexDoctor);
@@ -94,7 +102,7 @@ export async function run(_command: any, args: any = []) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { setup: setupRepair, codex_config: configRepair }
+    repair: { setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal }
   };
   if (flag(args, '--json')) {
     printJson(result);
@@ -128,11 +136,78 @@ export async function run(_command: any, args: any = []) {
     console.log('What I fixed:');
     for (const action of configRepair.repair_actions) console.log(`  - ${action.name}: ${action.ok ? 'ok' : 'failed'}`);
   }
+  if (migrationJournal?.journal_path) {
+    console.log(`Migration journal: ${migrationJournal.journal_path} (${migrationJournal.event_count} events, ${migrationJournal.mutations_without_rollback} without rollback)`);
+  }
   if (!ready.ready && ready.next_actions?.length) {
     console.log('What still needs you:');
     for (const action of ready.next_actions) console.log(`  - ${action}`);
   }
   if (!result.ok) process.exitCode = 1;
+}
+
+async function codexHomeConfigPath(): Promise<string> {
+  const path = await import('node:path');
+  const os = await import('node:os');
+  const home = process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), '.codex');
+  return path.join(home, 'config.toml');
+}
+
+async function captureCodexConfigSnapshot(): Promise<Record<string, string | null>> {
+  const fsp = await import('node:fs/promises');
+  const path = await import('node:path');
+  const read = async (p: string | null | undefined) => {
+    if (!p) return null;
+    try { return await fsp.readFile(p, 'utf8'); } catch { return null; }
+  };
+  const root = await projectRoot();
+  const projectPath = root ? path.join(root, '.codex', 'config.toml') : null;
+  const homePath = await codexHomeConfigPath();
+  return {
+    project_path: projectPath,
+    project_text: await read(projectPath),
+    home_path: homePath,
+    home_text: await read(homePath)
+  };
+}
+
+// Build a migration journal for the --fix transaction with real before/after
+// content hashes and the backup paths produced by setup/structure/split repair.
+async function writeFixMigrationJournal(
+  root: string,
+  preFix: Record<string, string | null> | null,
+  configRepair: any,
+  setupRepair: any
+) {
+  if (!preFix) return null;
+  const fsp = await import('node:fs/promises');
+  const read = async (p: string | null | undefined) => {
+    if (!p) return null;
+    try { return await fsp.readFile(p, 'utf8'); } catch { return null; }
+  };
+  const projectAfter = await read(preFix.project_path);
+  const homeAfter = await read(preFix.home_path);
+  const structureRepairs: any[] = Array.isArray(configRepair?.structure_repairs) ? configRepair.structure_repairs : [];
+  const projectStructure = structureRepairs.find((repair) => repair.scope === 'project');
+  const homeStructure = structureRepairs.find((repair) => repair.scope === 'codex_home');
+  const events = [
+    {
+      step: 'doctor_fix_project_config',
+      target: preFix.project_path || '.codex/config.toml',
+      beforeHash: preFix.project_text != null ? hashConfigText(preFix.project_text) : null,
+      afterHash: projectAfter != null ? hashConfigText(projectAfter) : null,
+      backupPath: setupRepair?.config_backup_path || projectStructure?.backup_path || configRepair?.policy?.backup_path || null
+    },
+    {
+      step: 'doctor_fix_codex_home_config',
+      target: preFix.home_path || '~/.codex/config.toml',
+      beforeHash: preFix.home_text != null ? hashConfigText(preFix.home_text) : null,
+      afterHash: homeAfter != null ? hashConfigText(homeAfter) : null,
+      backupPath: homeStructure?.backup_path || null
+    }
+  ].filter((event) => event.beforeHash != null || event.afterHash != null);
+  if (!events.length) return null;
+  return appendMigrationEvents(root, events);
 }
 
 async function backupProjectConfigBeforeFix(): Promise<string | null> {

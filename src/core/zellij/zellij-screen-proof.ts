@@ -4,7 +4,52 @@ import { checkZellijCapability } from './zellij-capability.js'
 import { runZellij } from './zellij-command.js'
 
 export const ZELLIJ_SCREEN_PROOF_SCHEMA = 'sks.zellij-screen-proof.v1'
-const REQUIRED_LANE_TEXT = ['SKS Lane', 'Mission', 'Workers', 'Patch queue', 'Current file', 'Blockers']
+const REQUIRED_LANE_TEXT = ['SKS Lane', 'Mission', 'Mode', 'Workers', 'Current', 'Queue', 'Safety', 'Blockers', 'Reports', 'Keys:']
+
+export const ZELLIJ_HEARTBEAT_TIMEOUT_BLOCKER = 'zellij_lane_heartbeat_timeout'
+
+export interface LaneHeartbeatResult {
+  ok: boolean
+  heartbeat_present: boolean
+  heartbeat_path: string
+  waited_ms: number
+  timeout_ms: number
+  blocker: string | null
+}
+
+/**
+ * Poll for the lane renderer heartbeat file and return a decisive result. A
+ * timeout is turned into the `zellij_lane_heartbeat_timeout` blocker so callers
+ * (real-session launch gate) can fail directly instead of waiting silently.
+ * Pure enough to be exercised hermetically without a real Zellij session.
+ */
+export async function waitForLaneHeartbeat(
+  file: string,
+  opts: { timeoutMs?: number; intervalMs?: number } = {}
+): Promise<LaneHeartbeatResult> {
+  const timeoutMs = Math.max(0, Number(opts.timeoutMs ?? 5000))
+  const intervalMs = Math.max(25, Number(opts.intervalMs ?? 250))
+  const startedAt = Date.now()
+  const deadline = startedAt + timeoutMs
+  let present = false
+  for (;;) {
+    const text = await readText(file, '')
+    if (String(text || '').trim()) {
+      present = true
+      break
+    }
+    if (Date.now() >= deadline) break
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+  return {
+    ok: present,
+    heartbeat_present: present,
+    heartbeat_path: file,
+    waited_ms: Date.now() - startedAt,
+    timeout_ms: timeoutMs,
+    blocker: present ? null : ZELLIJ_HEARTBEAT_TIMEOUT_BLOCKER
+  }
+}
 
 export async function writeZellijScreenProof(root: string, opts: { missionId?: string; require?: boolean; ledgerRoot?: string } = {}) {
   const proofRoot = path.resolve(opts.ledgerRoot || (opts.missionId ? path.join(root, '.sneakoscope', 'missions', opts.missionId) : path.join(root, '.sneakoscope', 'reports')))

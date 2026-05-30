@@ -32,10 +32,15 @@ if (pack.status === 0) {
 for (const required of ['package.json', 'README.md', 'LICENSE', 'dist/bin/sks.js', 'dist/cli/command-registry.js', 'schemas/codex/image-ux-issue-ledger.schema.json', 'schemas/codex/ux-review-callout-extraction.schema.json']) {
   if (!files.includes(required)) issues.push(`packed_missing:${required}`);
 }
-for (const forbidden of files.filter((file) => /^(src|scripts|test|\.sneakoscope|\.codex|\.agents)\//.test(file))) {
+// The Codex config-load probe is the one intentionally shipped runtime script
+// (resolveCodexConfigLoadProbe falls back to scripts/ when the dist copy is
+// absent); it is allowlisted in package.json `files` and required-present by
+// the publish:packlist-performance gate.
+const ALLOWED_PACKED_SCRIPTS = new Set(['scripts/codex-config-load-probe.mjs']);
+for (const forbidden of files.filter((file) => /^(src|scripts|test|\.sneakoscope|\.codex|\.agents)\//.test(file) && !ALLOWED_PACKED_SCRIPTS.has(file))) {
   issues.push(`packed_forbidden:${forbidden}`);
 }
-for (const forbidden of files.filter((file) => file.endsWith('.mjs'))) {
+for (const forbidden of files.filter((file) => file.endsWith('.mjs') && !ALLOWED_PACKED_SCRIPTS.has(file))) {
   issues.push(`packed_mjs_forbidden:${forbidden}`);
 }
 

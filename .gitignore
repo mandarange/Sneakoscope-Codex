@@ -90,6 +90,7 @@ id_ed25519
 # BEGIN SKS MANAGED GIT HYGIENE
 # Local SKS runtime noise
 .sneakoscope/missions/
+.sneakoscope/layouts/
 .sneakoscope/reports/
 .sneakoscope/tmp/
 .sneakoscope/cache/

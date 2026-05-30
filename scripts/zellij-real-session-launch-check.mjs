@@ -13,6 +13,7 @@ const sessionName = readArg(args, '--session') || 'sks-real';
 const requireReal = process.env.SKS_REQUIRE_ZELLIJ === '1' || args.includes('--require-real');
 const launcher = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-launcher.js')).href);
 const command = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-command.js')).href);
+const screenProof = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-screen-proof.js')).href);
 
 await command.runZellij(['kill-session', sessionName], { cwd: root, timeoutMs: 5000, optional: true });
 await fs.rm(path.join(root, '.sneakoscope', 'missions', missionId), { recursive: true, force: true }).catch(() => null);
@@ -26,12 +27,20 @@ const report = await launcher.launchMadZellijUi(['--session', sessionName], {
   slotCount: 1
 });
 
-await waitForHeartbeat(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-lane-renderer-heartbeat.jsonl'));
+const heartbeatPath = path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-lane-renderer-heartbeat.jsonl');
+const heartbeat = await screenProof.waitForLaneHeartbeat(heartbeatPath, { timeoutMs: 5000 });
+const blockers = [
+  ...(requireReal && report.ok !== true ? ['zellij_real_session_launch_failed'] : []),
+  ...(requireReal && heartbeat.blocker ? [heartbeat.blocker] : [])
+];
 const gate = {
   schema: 'sks.zellij-real-session-launch-check.v1',
-  ok: report.ok === true,
+  ok: requireReal ? (report.ok === true && heartbeat.ok === true && blockers.length === 0) : report.ok === true,
+  integration_optional: !requireReal,
   mission_id: missionId,
   session_name: sessionName,
+  heartbeat: { path: heartbeatPath, present: heartbeat.heartbeat_present, waited_ms: heartbeat.waited_ms, timeout_ms: heartbeat.timeout_ms },
+  blockers,
   report
 };
 await fs.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
@@ -43,12 +52,4 @@ function fail(blocker, detail) { emit({ schema: 'sks.zellij-real-session-launch-
 function readArg(args, name) {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] || null : null;
-}
-async function waitForHeartbeat(file) {
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    const text = await fs.readFile(file, 'utf8').catch(() => '');
-    if (text.trim()) return;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
 }

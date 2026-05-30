@@ -16,7 +16,7 @@ const report = await mod.writeZellijScreenProof(root, {
   missionId: missionId || undefined,
   ledgerRoot: missionId ? path.join(root, '.sneakoscope', 'missions', missionId) : undefined
 });
-const requiredTextOk = ['SKS Lane', 'Mission', 'Workers', 'Patch queue', 'Current file', 'Blockers'].every((label) => report.required_text?.includes(label));
+const requiredTextOk = ['SKS Lane', 'Mission', 'Mode', 'Workers', 'Current', 'Queue', 'Safety', 'Blockers', 'Reports', 'Keys:'].every((label) => report.required_text?.includes(label));
 emit({ ...report, required_text_fixture_ok: requiredTextOk, ok: report.ok && requiredTextOk });
 function emit(report) { console.log(JSON.stringify(report, null, 2)); if (!report.ok) process.exitCode = 1; }
 function fail(blocker, detail) { emit({ schema: 'sks.zellij-screen-proof-check.v1', ok: false, blockers: [blocker], detail }); process.exit(1); }

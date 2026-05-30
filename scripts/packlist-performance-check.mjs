@@ -1,0 +1,73 @@
+#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { assertGate, emitGate, root } from './sks-1-18-gate-lib.mjs';
+
+const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 1200);
+const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 6 * 1024 * 1024);
+const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 1536 * 1024);
+
+function runNpmPack() {
+  const npmCli = process.env.npm_execpath; // set when invoked via `npm run`
+  const argv = ['pack', '--dry-run', '--json', '--ignore-scripts'];
+  const res = npmCli
+    ? spawnSync(process.execPath, [npmCli, ...argv], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+    : spawnSync('npm', argv, { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  return res;
+}
+
+const res = runNpmPack();
+assertGate(res.status === 0, 'npm_pack_failed', { stderr: res.stderr });
+
+let info;
+try {
+  const parsed = JSON.parse(res.stdout);
+  info = Array.isArray(parsed) ? parsed[0] : parsed;
+} catch (err) {
+  assertGate(false, 'npm_pack_unparseable', { error: String(err && err.message ? err.message : err) });
+}
+
+const files = info.files.map((f) => f.path);
+
+assertGate(info.entryCount <= MAX_FILES, 'packlist_file_count_over_limit', { entryCount: info.entryCount, max_files: MAX_FILES });
+assertGate(info.unpackedSize <= MAX_UNPACKED, 'packlist_unpacked_over_limit', { unpackedSize: info.unpackedSize, max_unpacked: MAX_UNPACKED });
+assertGate(info.size <= MAX_PACKED, 'packlist_packed_over_limit', { size: info.size, max_packed: MAX_PACKED });
+
+assertGate(files.includes('dist/bin/sks.js'), 'packlist_missing_runtime_entry', { missing: 'dist/bin/sks.js' });
+assertGate(files.includes('scripts/codex-config-load-probe.mjs'), 'packlist_missing_runtime_entry', { missing: 'scripts/codex-config-load-probe.mjs' });
+assertGate(files.includes('package.json'), 'packlist_missing_runtime_entry', { missing: 'package.json' });
+assertGate(files.includes('README.md'), 'packlist_missing_runtime_entry', { missing: 'README.md' });
+assertGate(files.includes('LICENSE'), 'packlist_missing_runtime_entry', { missing: 'LICENSE' });
+assertGate(files.some((f) => f.startsWith('schemas/')), 'packlist_missing_runtime_entry', { missing: 'schemas/' });
+
+const forbidden = files.filter((f) =>
+  f.startsWith('test/') ||
+  f.startsWith('src/') ||
+  f.startsWith('docs/internal/') ||
+  f.endsWith('.map') ||
+  f.startsWith('.sneakoscope/') ||
+  f.endsWith('.tgz') ||
+  f.startsWith('coverage/') ||
+  /(^|\/)\.env/.test(f)
+);
+assertGate(forbidden.length === 0, 'packlist_forbidden_files', { forbidden });
+
+const report = {
+  entryCount: info.entryCount,
+  size: info.size,
+  unpackedSize: info.unpackedSize,
+  max_files: MAX_FILES,
+  max_packed: MAX_PACKED,
+  max_unpacked: MAX_UNPACKED,
+  forbidden: []
+};
+const out = path.join(root, '.sneakoscope', 'reports', 'packlist-performance.json');
+fs.mkdirSync(path.dirname(out), { recursive: true });
+fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
+
+emitGate('publish:packlist-performance', {
+  files: info.entryCount,
+  packed_kib: Math.round(info.size / 1024),
+  unpacked_mib: +(info.unpackedSize / 1048576).toFixed(2)
+});
