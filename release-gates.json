@@ -717,6 +717,19 @@
       "can_run_incremental": true
     },
     {
+      "id": "agent:wiki-context-proof",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "scripts/agent-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "agent:worker-backend-router",
       "tier": "P1",
       "cost": "hermetic",
@@ -1463,6 +1476,18 @@
     },
     {
       "id": "flagship:proof-graph-v4",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/**",
+        "scripts/**"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "git-collaboration:e2e",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
@@ -2602,6 +2627,18 @@
       "can_run_incremental": true
     },
     {
+      "id": "shared-memory:check",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/**",
+        "scripts/**"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "source-intelligence:all-modes",
       "tier": "P1",
       "cost": "hermetic",
@@ -2763,6 +2800,18 @@
     },
     {
       "id": "test:blackbox",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/**",
+        "scripts/**"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "trust:check",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
@@ -2943,6 +2992,30 @@
     },
     {
       "id": "verification:parallel-engine",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/**",
+        "scripts/**"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "wrongness:check",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/**",
+        "scripts/**"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "wrongness:fixtures",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
