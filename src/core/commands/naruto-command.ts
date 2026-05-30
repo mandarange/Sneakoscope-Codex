@@ -2,7 +2,7 @@ import path from 'node:path'
 import { findLatestMission, loadMission } from '../mission.js'
 import { readJson, sksRoot } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
-import { buildNarutoCloneRoster } from '../agents/agent-roster.js'
+import { buildNarutoCloneRoster, systemSafeNarutoConcurrency } from '../agents/agent-roster.js'
 import { DEFAULT_NARUTO_CLONES, MAX_NARUTO_AGENT_COUNT } from '../agents/agent-schema.js'
 
 const NARUTO_RESULT_SCHEMA = 'sks.naruto-command-result.v1'
@@ -28,6 +28,10 @@ async function narutoRun(parsed: NarutoArgs) {
     readonly: parsed.readonly,
     maxAgentCount: MAX_NARUTO_AGENT_COUNT
   })
+  // The clone roster is the full work fan-out; live concurrency is throttled to a
+  // system-safe number so naruto never spawns the whole count at once.
+  const safe = systemSafeNarutoConcurrency({ backend: parsed.backend })
+  const activeSlots = Math.max(1, Math.min(roster.agent_count, safe.cap))
   const result = await runNativeAgentOrchestrator({
     prompt: parsed.prompt,
     route: NARUTO_ROUTE,
@@ -35,8 +39,8 @@ async function narutoRun(parsed: NarutoArgs) {
     routeBlackboxKind: 'actual_naruto_command',
     roster,
     agents: roster.agent_count,
-    concurrency: roster.concurrency,
-    targetActiveSlots: roster.agent_count,
+    concurrency: activeSlots,
+    targetActiveSlots: activeSlots,
     desiredWorkItemCount: parsed.workItems,
     maxAgentCount: MAX_NARUTO_AGENT_COUNT,
     narutoMode: true,
@@ -52,6 +56,7 @@ async function narutoRun(parsed: NarutoArgs) {
     ...(parsed.writeMode ? { writeMode: parsed.writeMode } : {}),
     json: parsed.json
   })
+  const clones = result.roster?.agent_count ?? roster.agent_count
   const summary = {
     schema: NARUTO_RESULT_SCHEMA,
     ok: result.ok === true,
@@ -59,17 +64,19 @@ async function narutoRun(parsed: NarutoArgs) {
     jutsu: 'kage_bunshin_no_jutsu',
     mission_id: result.mission_id,
     backend: result.backend,
-    clones: result.roster?.agent_count ?? roster.agent_count,
+    clones,
     max_clones: MAX_NARUTO_AGENT_COUNT,
-    concurrency: result.roster?.concurrency ?? roster.concurrency,
-    target_active_slots: result.target_active_slots ?? roster.agent_count,
+    concurrency: result.target_active_slots ?? activeSlots,
+    target_active_slots: result.target_active_slots ?? activeSlots,
+    concurrency_capped: clones > (result.target_active_slots ?? activeSlots),
+    system: { cores: safe.cores, free_gb: safe.free_gb, safe_concurrency: safe.cap, heavy_backend: safe.heavy },
     proof: result.proof?.status || 'missing',
     run: result
   }
   return emit(parsed, summary, () => {
     console.log('🍥 Shadow Clone Jutsu — Kage Bunshin no Jutsu')
     console.log('Mission: ' + result.mission_id)
-    console.log('Clones: ' + summary.clones + ' / max ' + MAX_NARUTO_AGENT_COUNT + ' (concurrency ' + summary.concurrency + ', active slots ' + summary.target_active_slots + ')')
+    console.log('Clones: ' + summary.clones + ' / max ' + MAX_NARUTO_AGENT_COUNT + ', running ' + summary.target_active_slots + ' at a time' + (summary.concurrency_capped ? ` (throttled to host capacity: ${safe.cores} cores, ${safe.free_gb} GB free)` : ''))
     console.log('Backend: ' + result.backend)
     console.log('Proof: ' + summary.proof)
   })

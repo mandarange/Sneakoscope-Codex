@@ -1,7 +1,36 @@
+import os from 'node:os'
 import { DEFAULT_AGENT_CONCURRENCY, DEFAULT_AGENT_COUNT, DEFAULT_NARUTO_CLONES, MAX_AGENT_COUNT, MAX_NARUTO_AGENT_COUNT, agentSessionId } from './agent-schema.js'
 import type { AgentPersona, AgentRosterEntry } from './agent-schema.js'
 import { defaultAgentPersonas, validatePersonaUniqueness } from './agent-persona.js'
 import { buildAgentEffortPolicy, decideAgentEffort, decideNarutoCloneEffort } from './agent-effort-policy.js'
+
+// $Naruto must never blindly spawn the full clone count at once. The clone roster is the
+// total work fan-out, but live CONCURRENCY (scheduler active slots) is capped to what the
+// host can safely sustain — derived from CPU cores and free memory, heavier-bounded for
+// real child-process backends (codex-exec/zellij/process) than for in-process (fake).
+export function systemSafeNarutoConcurrency(opts: { backend?: string } = {}) {
+  const cores = Math.max(1, Number(os.cpus()?.length) || 4)
+  let freeBytes = 2 * 1024 * 1024 * 1024
+  try { freeBytes = os.freemem() || freeBytes } catch { /* keep fallback */ }
+  const freeGb = freeBytes / (1024 * 1024 * 1024)
+  const backend = String(opts.backend || 'codex-exec')
+  const heavy = backend === 'codex-exec' || backend === 'zellij' || backend === 'process'
+  let cap: number
+  if (heavy) {
+    // Real codex children are heavy (a model call + process). Leave a core free and budget
+    // ~0.6 GB per concurrent worker; clamp to a sane ceiling.
+    const byCpu = Math.max(1, cores - 1)
+    const byMem = Math.max(1, Math.floor(freeGb / 0.6))
+    cap = Math.min(byCpu, byMem, 16)
+  } else {
+    // In-process / light workers can pack tighter.
+    cap = Math.min(Math.max(2, cores * 2), 32)
+  }
+  const override = Number(process.env.SKS_NARUTO_MAX_CONCURRENCY)
+  if (Number.isFinite(override) && override >= 1) cap = Math.min(Math.floor(override), MAX_NARUTO_AGENT_COUNT)
+  cap = Math.max(1, Math.min(cap, MAX_NARUTO_AGENT_COUNT))
+  return { cap, cores, free_gb: Math.round(freeGb * 10) / 10, backend, heavy, override_applied: Number.isFinite(override) && override >= 1 }
+}
 
 function resolveMaxAgentCount(value: unknown): number {
   const parsed = Number(value)

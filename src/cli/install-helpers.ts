@@ -86,6 +86,7 @@ export type ConfigureCodexLbResult = {
   config_path?: string;
   env_path?: string;
   metadata_path?: string;
+  backup_path?: string | null;
   base_url?: string;
   env_key?: string;
   keychain?: Record<string, unknown>;
@@ -199,6 +200,7 @@ async function reportPostinstallCodexLbAuth() {
   else if (codexLbAuth.status === 'skipped') console.log(`codex-lb auth: skipped (${codexLbAuth.reason}).`);
   else if (codexLbAuth.status === 'missing_env_key') console.log('codex-lb auth: stored key missing. Run `sks codex-lb setup --host <domain> --api-key <key>` to repair.');
   else if (codexLbAuth.status === 'missing_base_url') console.log('codex-lb auth: stored key has no recoverable base URL. Run `sks codex-lb reconfigure --host <domain> --api-key <key>` once.');
+  else if (codexLbAuth.status === 'not_configured') console.log('codex-lb (optional multi-account load balancer): not configured — opt in anytime with `sks codex-lb setup` (your choice; never applied automatically, never edits your Codex config without it). Swap key later: `sks codex-lb set-key`; switch auth: `sks codex-lb use-oauth` / `use-codex-lb`.');
   else if (codexLbAuth.status && codexLbAuth.status !== 'not_configured') console.log(`codex-lb auth: repair skipped (${codexLbAuth.status}${codexLbAuth.error ? `: ${codexLbAuth.error}` : ''}).`);
   const reconcile = codexLbAuth.auth_reconcile;
   if (reconcile?.status === 'oauth_preserved') {
@@ -337,8 +339,8 @@ async function restorePostinstallCodexLbConfigSnapshot(snapshot: any) {
     const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, snapshot.base_url));
     const alreadyOk = next === ensureTrailingNewline(current) && codexLbProviderBaseUrl(current);
     if (!alreadyOk) {
-      await writeTextAtomic(snapshot.config_path, next);
-      configRestored = true;
+      const safeWrite = await safeWriteCodexConfigToml(snapshot.config_path, current, next, 'codex-lb-restore');
+      configRestored = safeWrite.ok && safeWrite.changed === true;
     }
   }
   // Restore auth.json only if bootstrap accidentally wiped or emptied a pre-existing auth.json.
@@ -413,8 +415,9 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   await ensureDir(path.dirname(configPath));
   const current = await readText(configPath, '');
   const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, baseUrl, useDefaultProvider));
-  await writeTextAtomic(configPath, next);
-  appliedActions.push({ type: 'write_config_provider', target: configPath, ok: true });
+  const safeWrite = await safeWriteCodexConfigToml(configPath, current, next, 'codex-lb');
+  if (!safeWrite.ok) return { ok: false, status: safeWrite.status, config_path: configPath, env_path: envPath, backup_path: safeWrite.backup_path };
+  appliedActions.push({ type: 'write_config_provider', target: configPath, ok: true, backup_path: safeWrite.backup_path });
   if (useDefaultProvider) appliedActions.push({ type: 'select_default_provider', target: configPath, ok: true });
   if (writeEnvFile) {
     await writeTextAtomic(envPath, `export CODEX_LB_BASE_URL=${shellSingleQuote(baseUrl)}\nexport CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
@@ -829,8 +832,8 @@ export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInst
   if (status.env_key_configured && status.base_url && (!status.ok || !status.selected || !status.provider_uses_codex_lb_env_auth || legacyAuthMigrated || hasTopLevelCodexModeLock(currentConfig))) {
     await ensureDir(path.dirname(status.config_path));
     const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(currentConfig, status.base_url));
-    await writeTextAtomic(status.config_path, next);
-    configRepaired = true;
+    const safeWrite = await safeWriteCodexConfigToml(status.config_path, currentConfig, next, 'codex-lb-repair');
+    configRepaired = safeWrite.ok && safeWrite.changed === true;
     status = await codexLbStatus(opts);
   }
   if (!status.ok) {
@@ -1363,7 +1366,7 @@ async function syncCodexApiKeyLogin(apiKey: any, opts: any = {}) {
   return { ok: false, status: 'login_failed', error: redactSecretText(login.stderr || login.stdout || 'codex login failed', [apiKey]).trim() };
 }
 
-function upsertCodexLbConfig(text: any = '', baseUrl: any, selectDefault = true) {
+export function upsertCodexLbConfig(text: any = '', baseUrl: any, selectDefault = true) {
   let next = selectDefault
     ? upsertTopLevelTomlString(text, 'model_provider', 'codex-lb')
     : removeTopLevelTomlKeyIfValue(text, 'model_provider', 'codex-lb');
@@ -1644,6 +1647,29 @@ async function backupCodexConfig(configPath: string, text: string, tag: string) 
   } catch {
     return null;
   }
+}
+
+// Single TOML-safe gate for every codex-lb config write. Mirrors the fast-mode safety so the
+// codex-lb path can NEVER corrupt ~/.codex/config.toml on install (esp. a fresh/initial one):
+//   - refuse to overwrite an existing config that is already unparseable (back it up, bail),
+//   - refuse to WRITE a result that would not parse (e.g. a regex helper mangled a multiline
+//     string), leaving the existing config untouched,
+//   - otherwise back up the prior config before mutating.
+export async function safeWriteCodexConfigToml(configPath: string, current: string, next: string, tag = 'codex-lb') {
+  const cur = String(current || '');
+  if (cur.trim() && !codexConfigParseSmoke(cur).ok) {
+    const backupPath = await backupCodexConfig(configPath, cur, `${tag}-unparseable`);
+    return { ok: false, status: 'unparseable_config_preserved', config_path: configPath, backup_path: backupPath };
+  }
+  if (!codexConfigParseSmoke(next).ok) {
+    return { ok: false, status: 'skipped_unsafe_rewrite', config_path: configPath, backup_path: null };
+  }
+  if (next === ensureTrailingNewline(cur)) {
+    return { ok: true, status: 'present', config_path: configPath, backup_path: null, changed: false };
+  }
+  const backupPath = cur.trim() ? await backupCodexConfig(configPath, cur, tag) : null;
+  await writeTextAtomic(configPath, next);
+  return { ok: true, status: 'written', config_path: configPath, backup_path: backupPath, changed: true };
 }
 
 function upsertTopLevelTomlBoolean(text: any, key: any, value: any) {

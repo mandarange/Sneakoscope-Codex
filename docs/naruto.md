@@ -52,10 +52,26 @@ Aliases: `$ShadowClone`, `$Kagebunshin`, and the CLI flag form `sks --naruto`.
 5. **Proof + cleanup** — every clone emits a session record; the mission writes proof
    evidence and cleans up worker sessions.
 
+## Adaptive concurrency (system-aware)
+
+`--clones N` sets the total work fan-out (up to 100), but `$Naruto` **never spawns the whole
+count at once**. Live concurrency (how many clones run simultaneously) is throttled to a
+host-safe number derived from CPU cores and free memory:
+
+- Heavy backends (`codex-exec`, `zellij`, `process`) leave a core free and budget ~0.6 GB per
+  concurrent worker, capped at 16.
+- Light/in-process backend (`fake`) packs tighter (≈ 2× cores, capped at 32).
+
+So `sks naruto run "…" --clones 100` on an 8-core/8 GB host might keep ~7 clones running at a
+time while still processing all 100 work units (the scheduler backfills as clones finish). The
+run output reports `running M at a time (throttled to host capacity: C cores, G GB free)` when
+throttling applies. Override with `SKS_NARUTO_MAX_CONCURRENCY=<n>` (still clamped to 100).
+
 ## Limits & guidance
 
-- 100 concurrent real Codex sessions is heavy: it is bounded by OS process/file-descriptor
-  limits and Codex rate limits. Start with a modest `--clones` and scale up.
+- 100 concurrent real Codex sessions would be heavy, which is exactly why concurrency is
+  throttled to host capacity by default. Increase `--clones` freely for fan-out; the scheduler
+  paces actual execution safely.
 - For CI/proof, use `--backend fake`, which runs clones in-process for a fast, deterministic
   swarm demonstration.
 
