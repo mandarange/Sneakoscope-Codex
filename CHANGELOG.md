@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.20.1] - 2026-05-30
+
+Core Engine SkillOpt release: introduces the SKS Core Skill Engine (a safe, self-evolving skill optimizer), a requested-scope side-effect-zero contract, and a dynamic risk-based release pipeline, on top of the 1.19.x hardening. `release:check` passes end-to-end at 1.20.1.
+
+### Added
+
+- **SKS Core Skill Engine** (`src/core/skills/**`, SkillOpt-derived). Skills are the frozen agent's external versioned state — **Core Skill Cards** (route-scoped, candidate/accepted/rejected/deployed). A **Core Skill Optimizer** (pure, no model call) proposes **bounded add/delete/replace** edits (**Core SkillPatch**) to a *single* skill document under a **textual edit budget**; patches that target code/config/package/global files or exceed budget are rejected. Edits are accepted **only on strict held-out improvement** (`core-skill:heldout-validation`); rejected patches are recorded in a **Rejected SkillPatch Buffer** (`.sneakoscope/skills/rejected-skill-patches.jsonl`) and never retried. Accepted candidates are promoted via an explicit gate to an **immutable Deployment Snapshot**; the **inference/deployment path reads the snapshot only and makes no extra model call** (`core-skill:no-inference-optimizer` proves the optimizer throws in deployment context). Rollout traces are scored with a side-effect-zero hard-fail component. Gates: `core-skill:card-schema`, `core-skill:rollout-scoring`, `core-skill:patch`, `core-skill:heldout-validation`, `core-skill:deployment-snapshot`, `core-skill:no-inference-optimizer`. Schemas: `schemas/skills/core-skill-card.schema.json`, `schemas/skills/core-skill-patch.schema.json`. Doc: `docs/core-skill-engine.md`.
+- **Requested-Scope Contract + Mutation Ledger** (`src/core/safety/**`): a deny-by-default contract per route declares which mutations are allowed; global/destructive mutations (global config, package install, process kill, codex-lb auth, Zellij install, skill promotion) require explicit confirmation, and every mutation is recorded in a ledger with `requested_scope_allowed` + a backup/no-op reason. Applying a mutation outside scope, or a config/skill mutation without a backup, is a violation. The skill optimizer cannot bypass the contract. Gate: `safety:side-effect-zero`. Doc: `docs/side-effect-zero-policy.md`.
+- **Dynamic release pipeline** (`src/core/release/**`): `release:gate-planner` builds the gate manifest `release-gates.json` (tier/cost/affected_by/always_on/required_for_publish) from the live release-gate set and validates manifest↔release parity; `release:check:dynamic` selects only P0 always-on gates plus gates whose `affected_by` files changed (docs-only changes skip heavy/real gates; publish mode never skips a required gate); `release:gate-budget` reports the slowest gates and any over the hard ceiling.
+- Legacy upgrade matrix extended to 1.20.1 with `1.19.x_zellij_project_noop` and `existing_skill_cards_preserved` states; `docs/legacy-upgrade-1.20.md`; `prepublish:fast-check` (stamp-based fast-path verification).
+
+### Changed
+
+- All version surfaces and the migration journal bumped to 1.20.1 (`.sneakoscope/reports/migration-1.20.1-journal.jsonl`).
+- The new Core Skill Engine, side-effect-zero, and dynamic-pipeline gates are wired into `release:check`.
+
 ## [1.19.1] - 2026-05-30
 
 Final hardening release: closes the remaining legacy-upgrade, publish, postinstall, runtime-boundary, and Zellij UX risks so 1.19.x is safe to merge to `main` and publish to npm. The 1.19.0 feature set is unchanged.

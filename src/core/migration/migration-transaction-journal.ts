@@ -6,7 +6,7 @@ import { appendJsonl, ensureDir, nowIso } from '../fsx.js'
 // or `sks doctor --fix`. Every config mutation is recorded with a before/after
 // content hash and the backup path so the change is auditable and reversible.
 export const MIGRATION_JOURNAL_SCHEMA = 'sks.migration-journal.v1'
-export const MIGRATION_JOURNAL_VERSION = '1.19'
+export const MIGRATION_JOURNAL_VERSION = '1.20.1'
 
 export interface MigrationEventInput {
   step: string

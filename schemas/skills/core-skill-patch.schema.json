@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "sks.core-skill-patch.v1",
+  "title": "SKS Core SkillPatch",
+  "description": "A bounded add/delete/replace edit to a single Core Skill Card body. Patches only ever edit the one skill document (a section/sentence/paragraph), never code/config/global files, and are bounded by a textual learning-rate budget.",
+  "type": "object",
+  "required": ["schema", "skill_id", "base_version", "operations", "textual_learning_rate"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "sks.core-skill-patch.v1" },
+    "skill_id": { "type": "string", "minLength": 1 },
+    "base_version": { "type": "integer" },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["op", "target"],
+        "additionalProperties": true,
+        "properties": {
+          "op": { "type": "string", "enum": ["add", "delete", "replace"] },
+          "target": { "type": "string" },
+          "before": { "type": "string" },
+          "after": { "type": "string" },
+          "text": { "type": "string" }
+        }
+      }
+    },
+    "textual_learning_rate": {
+      "type": "object",
+      "required": ["max_added_chars", "max_deleted_chars", "max_replaced_chars"],
+      "additionalProperties": true,
+      "properties": {
+        "max_added_chars": { "type": "number" },
+        "max_deleted_chars": { "type": "number" },
+        "max_replaced_chars": { "type": "number" }
+      }
+    }
+  }
+}

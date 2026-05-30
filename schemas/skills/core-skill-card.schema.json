@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "sks.core-skill-card.v1",
+  "title": "SKS Core Skill Card",
+  "description": "A Core Skill Card is the frozen agent's external, versioned skill state. It is read-only: it confers no mutation rights and a deployed card must be an immutable snapshot.",
+  "type": "object",
+  "required": ["schema", "skill_id", "route", "version", "status", "body", "deployment_snapshot", "side_effect_scope"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "sks.core-skill-card.v1" },
+    "skill_id": { "type": "string", "minLength": 1 },
+    "route": { "type": "string", "minLength": 1 },
+    "version": { "type": "integer", "minimum": 1 },
+    "status": { "type": "string", "enum": ["candidate", "accepted", "rejected", "deployed"] },
+    "body": { "type": "string" },
+    "deployment_snapshot": { "type": "boolean" },
+    "side_effect_scope": {
+      "type": "object",
+      "required": ["allowed_mutations", "read_only"],
+      "additionalProperties": true,
+      "properties": {
+        "allowed_mutations": { "type": "array", "items": { "type": "string" } },
+        "read_only": { "type": "boolean" }
+      }
+    }
+  }
+}
