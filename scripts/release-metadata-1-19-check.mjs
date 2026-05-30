@@ -190,6 +190,7 @@ const requiredScripts = [
   'doctor:fix-recovers-corrupted-config',
   'install:update-preserves-config',
   'codex-lb:config-toml-safety',
+  'codex-app:ui-preservation',
   'agent:native-cli-session-swarm-10',
   'agent:native-cli-session-swarm-20',
   'agent:no-subagent-scaling',
