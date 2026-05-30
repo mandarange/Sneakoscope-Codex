@@ -12,6 +12,8 @@ import { root, assertGate, emitGate, importDist } from './sks-1-18-gate-lib.mjs'
 const policy = await importDist('core/codex/codex-project-config-policy.js');
 const install = await importDist('cli/install-helpers.js');
 const journal = await importDist('core/migration/migration-transaction-journal.js');
+const skillCard = await importDist('core/skills/core-skill-card.js');
+const skillDeployment = await importDist('core/skills/core-skill-deployment.js');
 
 function mkTmp(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -286,6 +288,87 @@ try {
   }
 
   // ---------------------------------------------------------------------------
+  // State 1.19.x_zellij_project_noop — a clean 1.19.x config (no machine-local
+  // issues) is a no-op for the upgrade. repairCodexConfigStructure returns
+  // 'structure_ok' and the file is byte-identical afterwards.
+  // ---------------------------------------------------------------------------
+  {
+    const dir = mkTmp('sks-legacy-noop-');
+    tmpDirs.push(dir);
+    const configPath = path.join(dir, 'config.toml');
+    const clean = 'model = "gpt-5.5"\nservice_tier = "fast"\n\n[features]\nhooks = true\n';
+    fs.writeFileSync(configPath, clean, 'utf8');
+    const before = fs.readFileSync(configPath, 'utf8');
+
+    const result = await policy.repairCodexConfigStructure(configPath, { apply: true });
+    assertGate(
+      result.status === 'structure_ok',
+      '1.19.x_zellij_project_noop: clean config did not report structure_ok',
+      { status: result.status }
+    );
+    const after = fs.readFileSync(configPath, 'utf8');
+    assertGate(
+      after === before,
+      '1.19.x_zellij_project_noop: clean config was modified by a no-op upgrade',
+      { before, after }
+    );
+    assertGate(
+      result.changed === false && result.applied === false && !result.backup_path,
+      '1.19.x_zellij_project_noop: no-op upgrade reported a change/backup',
+      { changed: result.changed, applied: result.applied, backup_path: result.backup_path }
+    );
+    summary.states['1.19.x_zellij_project_noop'] = {
+      status: result.status,
+      changed: result.changed,
+      byte_identical: true
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // State existing_skill_cards_preserved — an upgrade never clobbers existing
+  // deployed skill cards. Deploy an accepted card, then read it back twice and
+  // assert the deployed snapshot's body_hash is byte-preserved across the
+  // simulated "upgrade read".
+  // ---------------------------------------------------------------------------
+  {
+    const skillRootDir = mkTmp('sks-legacy-skill-');
+    tmpDirs.push(skillRootDir);
+    const candidate = skillCard.createCandidateCard({
+      skillId: 'legacy-skill',
+      route: 'DFix',
+      baseVersion: 0,
+      body: '## Goal\nx\n'
+    });
+    const accepted = { ...candidate, status: 'accepted' };
+    const promote = await skillDeployment.promoteToDeployed(skillRootDir, accepted);
+    assertGate(
+      promote.ok === true && promote.snapshot,
+      'existing_skill_cards_preserved: accepted card failed to promote to a deployed snapshot',
+      { blockers: promote.blockers }
+    );
+
+    const deployed = await skillCard.loadDeployedSnapshot(skillRootDir, 'DFix', 'legacy-skill');
+    assertGate(
+      Boolean(deployed) && deployed.status === 'deployed' && deployed.deployment_snapshot === true,
+      'existing_skill_cards_preserved: deployed snapshot did not load back',
+      { deployed }
+    );
+
+    // Simulate an "upgrade read": loading the snapshot again must not clobber it.
+    const reread = await skillCard.loadDeployedSnapshot(skillRootDir, 'DFix', 'legacy-skill');
+    assertGate(
+      Boolean(reread) && reread.body_hash === deployed.body_hash,
+      'existing_skill_cards_preserved: skill card body_hash changed across an upgrade read',
+      { before_hash: deployed.body_hash, after_hash: reread && reread.body_hash }
+    );
+    summary.states.existing_skill_cards_preserved = {
+      promoted: true,
+      body_hash: deployed.body_hash,
+      byte_preserved: true
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // Write the report and emit the gate.
   // ---------------------------------------------------------------------------
   const reportDir = path.join(root, '.sneakoscope', 'reports');
@@ -306,7 +389,9 @@ try {
       'splitter_preserves_project',
       'tmux_removed_runtime',
       'zellij_status_informational',
-      'migration_journal'
+      'migration_journal',
+      '1.19.x_zellij_project_noop',
+      'existing_skill_cards_preserved'
     ]
   });
 } finally {

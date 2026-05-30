@@ -8,7 +8,7 @@ export interface ZellijLayoutInput {
   sessionName?: string
   ledgerRoot: string
   cwd?: string
-  kind?: 'mad' | 'agent' | 'team'
+  kind?: 'mad' | 'agent' | 'team' | 'naruto'
   slotCount?: number
   title?: string
 }

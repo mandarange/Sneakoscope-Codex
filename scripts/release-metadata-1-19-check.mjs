@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.19.1';
+const RELEASE_VERSION = '1.20.1';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');
@@ -68,7 +68,10 @@ const requiredDocs = [
   'docs/release-readiness.md',
   'docs/legacy-upgrade-1.19.md',
   'docs/architecture-ts-rust-boundary.md',
-  'docs/zellij-ui-design.md'
+  'docs/zellij-ui-design.md',
+  'docs/core-skill-engine.md',
+  'docs/side-effect-zero-policy.md',
+  'docs/legacy-upgrade-1.20.md'
 ];
 const versionedDocs = new Set([
   'README.md',
@@ -201,6 +204,15 @@ const requiredScripts = [
   'publish:packlist-performance',
   'postinstall:safe-side-effects',
   'runtime:ts-rust-boundary',
+  'core-skill:card-schema',
+  'core-skill:rollout-scoring',
+  'core-skill:patch',
+  'core-skill:heldout-validation',
+  'core-skill:deployment-snapshot',
+  'core-skill:no-inference-optimizer',
+  'safety:side-effect-zero',
+  'release:gate-planner',
+  'release:gate-budget',
   'agent:native-cli-session-swarm-10',
   'agent:native-cli-session-swarm-20',
   'agent:no-subagent-scaling',

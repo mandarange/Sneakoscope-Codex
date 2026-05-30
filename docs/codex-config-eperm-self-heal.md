@@ -1,6 +1,6 @@
 # Codex Config EPERM Self-Heal
 
-SKS 1.19.1 treats `.codex/config.toml` readability as a launch-critical proof, not a setup side effect.
+SKS 1.20.1 treats `.codex/config.toml` readability as a launch-critical proof, not a setup side effect.
 
 `inspectCodexConfigReadability()` writes `.sneakoscope/reports/codex-config-readability.json` with project config existence, parent traversal, stat/lstat, owner/mode, macOS ACL/flags/xattrs/quarantine, symlink safety, Node read, spawned-child read, and actual Codex CLI config-load checks.
 

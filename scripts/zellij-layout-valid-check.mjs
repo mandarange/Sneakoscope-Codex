@@ -11,6 +11,12 @@ const capabilityMod = await import(pathToFileURL(path.join(root, 'dist', 'core',
 const commandMod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-command.js')).href);
 const built = layoutMod.buildZellijLayoutKdl({ missionId: 'M-layout-check', ledgerRoot: path.join(root, '.sneakoscope', 'tmp', 'layout-check'), cwd: root, kind: 'agent', slotCount: 2 });
 const staticValidation = layoutMod.validateZellijLayoutKdl(built.layout_kdl);
+// Validate all four SKS layouts (MAD / Agent / Team / Naruto) build valid KDL.
+const kindsValidated = ['mad', 'agent', 'team', 'naruto'].map((kind) => {
+  const b = layoutMod.buildZellijLayoutKdl({ missionId: `M-layout-${kind}`, ledgerRoot: path.join(root, '.sneakoscope', 'tmp', `layout-${kind}`), cwd: root, kind, slotCount: 2 });
+  return { kind, ok: layoutMod.validateZellijLayoutKdl(b.layout_kdl).ok };
+});
+const allKindsOk = kindsValidated.every((k) => k.ok);
 const invalidValidation = layoutMod.validateZellijLayoutKdl('layout { pane command="zellij-lane" {');
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-layout-'));
 const layoutPath = path.join(tmp, 'layout.kdl');
@@ -31,6 +37,7 @@ if (realRun) {
   realRun.ok = realRun.create_background.ok === true;
 }
 const ok = staticValidation.ok
+  && allKindsOk
   && invalidValidation.ok === false
   && capability.ok
   && (requireReal ? realRun?.ok === true : true);
@@ -38,6 +45,7 @@ emit({
   schema: 'sks.zellij-layout-valid-check.v1',
   ok,
   layout: { ...built, layout_kdl: undefined, layout_path: layoutPath },
+  kinds_validated: kindsValidated,
   static_validation: staticValidation,
   invalid_fixture: invalidValidation,
   capability,
