@@ -9,7 +9,7 @@ import { readZellijLaneSupervisor } from './zellij-lane-supervisor.js'
 import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.js'
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; fastModePolicy?: any; fastModePropagation?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
@@ -270,6 +270,12 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     janitor_ok: input.janitor?.ok !== false,
     trust_report: 'agent-trust-report.json',
     wrongness_records: 'agent-wrongness-records.json',
+    triwiki_context: 'agent-triwiki-context.json',
+    triwiki_context_consulted: input.triwikiContext?.present === true,
+    context_pack_hash: input.triwikiContext?.context_pack_hash || null,
+    triwiki_use_first_count: Number(input.triwikiContext?.use_first?.length || 0),
+    triwiki_hydrate_first_count: Number(input.triwikiContext?.hydrate_first?.length || 0),
+    triwiki_claim_count: Number(input.triwikiContext?.claim_count || 0),
     changed_files_lease_checked: true,
     dependency_collision_risk: input.partition?.no_overlap_proof?.dependency_collision_risk || [],
     blockers

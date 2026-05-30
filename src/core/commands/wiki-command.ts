@@ -286,15 +286,6 @@ export async function writeWikiContextPack(root: any, args: any = [], opts: any 
   return { pack: enrichedPack, file, role, maxAnchors };
 }
 
-export async function migrateWikiContextPack(root: any) {
-  try {
-    const { pack } = await writeWikiContextPack(root, ['--max-anchors', '32']);
-    return wikiValidationResult(pack).result.ok;
-  } catch {
-    return false;
-  }
-}
-
 function wikiAnchorCount(wiki: any = {}) {
   return (wiki.anchors || wiki.a || []).length;
 }

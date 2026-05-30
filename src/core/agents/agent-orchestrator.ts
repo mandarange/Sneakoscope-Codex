@@ -7,6 +7,7 @@ import { initializeAgentCentralLedger, appendAgentLedgerEvent, compactAgentLedge
 import { detectStaleAgentSessions, killTimedOutAgentSessions, openAgentSession, heartbeatAgentSession, collectAgentSession, completeAgentSession, closeAgentSession, writeAgentLifecycleAggregate, writeAgentLifecyclePolicy } from './agent-lifecycle.js'
 import { writeAgentConsensus } from './agent-consensus.js'
 import { writeAgentProofEvidence } from './agent-proof-evidence.js'
+import { loadTriWikiRuntimeContext, writeTriWikiContextArtifact } from '../triwiki-runtime.js'
 import { MAX_AGENT_COUNT, normalizeAgentBackend } from './agent-schema.js'
 import type { AgentRunOptions } from './agent-schema.js'
 import { PersistentAgentPatchQueueStore } from './agent-patch-queue-store.js'
@@ -179,6 +180,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   })
   await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
   const ledgerRoot = await initializeAgentCentralLedger(dir, { missionId, roster, partition, route, prompt, dynamicScheduler: true })
+  // Consult the TriWiki context pack (read-only) before dispatching workers, and
+  // persist it as a proof artifact so the kernel proof references the wiki it acted on.
+  const triwikiContext = await loadTriWikiRuntimeContext(root)
+  await writeTriWikiContextArtifact(ledgerRoot, triwikiContext)
   await writeAgentTaskGraph(ledgerRoot, partition.task_graph)
   await writeAdhdOrchestrationArtifacts(ledgerRoot, strategyCompiled.gate)
   await writeStrategyCompilerArtifacts(ledgerRoot, strategyCompiled)
@@ -409,7 +414,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     nativeCliSessionProof,
     noSubagentScalingPolicy,
     fastModePolicy,
-    fastModePropagation
+    fastModePropagation,
+    triwikiContext
   })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })

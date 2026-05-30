@@ -65,7 +65,13 @@ const required = [
   'agent:fast-mode-worker-propagation',
   'codex:fast-mode-profile-propagation',
   'mad-sks:fast-mode-propagation',
-  'release:runtime-truth-matrix'
+  'release:runtime-truth-matrix',
+  'agent:wiki-context-proof',
+  'shared-memory:check',
+  'wrongness:check',
+  'wrongness:fixtures',
+  'trust:check',
+  'git-collaboration:e2e'
 ];
 
 for (const name of required) {
