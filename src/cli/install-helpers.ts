@@ -1481,25 +1481,20 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '') {
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
   next = upsertTopLevelTomlStringIfAbsent(next, 'model', 'gpt-5.5');
   next = upsertTopLevelTomlStringIfAbsent(next, 'service_tier', 'fast');
-  next = upsertTopLevelTomlBoolean(next, 'suppress_unstable_features_warning', true);
-  next = upsertTomlTableKey(next, 'features', 'hooks = true');
-  next = upsertTomlTableKey(next, 'features', 'remote_control = true');
-  next = upsertTomlTableKey(next, 'features', 'multi_agent = true');
-  next = upsertTomlTableKey(next, 'features', 'fast_mode = true');
-  next = upsertTomlTableKey(next, 'features', 'fast_mode_ui = true');
-  next = upsertTomlTableKey(next, 'features', 'codex_git_commit = true');
-  next = upsertTomlTableKey(next, 'features', 'computer_use = true');
-  next = upsertTomlTableKey(next, 'features', 'browser_use = true');
-  next = upsertTomlTableKey(next, 'features', 'browser_use_external = true');
-  next = upsertTomlTableKey(next, 'features', 'image_generation = true');
-  next = upsertTomlTableKey(next, 'features', 'in_app_browser = true');
-  next = upsertTomlTableKey(next, 'features', 'guardian_approval = true');
-  next = upsertTomlTableKey(next, 'features', 'tool_suggest = true');
-  next = upsertTomlTableKey(next, 'features', 'apps = true');
-  next = upsertTomlTableKey(next, 'features', 'plugins = true');
-  next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
-  next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
-  next = upsertTomlTableKey(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
+  // Codex App feature flags / fast-mode UI / suppress-warning are SET-IF-ABSENT: a fresh
+  // config still gets SKS's defaults, but SKS NEVER overrides (re-enables) a feature the
+  // user disabled in the App, and never rejects-then-hides UI by forcing an unrecognized
+  // flag on an older App build. This is what stops SKS from "removing/blocking" the App UI.
+  next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
+  for (const featureLine of [
+    'hooks = true', 'remote_control = true', 'multi_agent = true', 'fast_mode = true',
+    'fast_mode_ui = true', 'codex_git_commit = true', 'computer_use = true', 'browser_use = true',
+    'browser_use_external = true', 'image_generation = true', 'in_app_browser = true',
+    'guardian_approval = true', 'tool_suggest = true', 'apps = true', 'plugins = true'
+  ]) next = upsertTomlTableKeyIfAbsent(next, 'features', featureLine);
+  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'visible = true');
+  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'enabled = true');
+  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'model = "gpt-5.5"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'service_tier = "fast"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'approval_policy = "on-request"');
@@ -1515,9 +1510,16 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '') {
   next = upsertTomlTableKey(next, 'profiles.sks-research', 'approval_policy = "never"');
   next = upsertTomlTableKey(next, 'profiles.sks-research', 'sandbox_mode = "workspace-write"');
   next = upsertTomlTableKey(next, 'profiles.sks-research', 'model_reasoning_effort = "xhigh"');
-  for (const [name, marketplace] of DEFAULT_CODEX_APP_PLUGINS) {
-    const table = `plugins."${name}@${marketplace}"`;
-    next = upsertTomlTable(next, table, `[${table}]\nenabled = true`);
+  // Plugin auto-enable is OPT-IN only. Force-writing `[plugins."name@marketplace"] enabled =
+  // true` for marketplace plugins the App may not have installed (different build/channel)
+  // makes the App reference plugins it cannot load -> broken/blocked plugin UI. It also
+  // replaced the user's whole plugin table, reverting any `enabled = false` they set. By
+  // default SKS leaves the user's [plugins] alone; opt in with SKS_MANAGE_CODEX_APP_PLUGINS=1.
+  if (process.env.SKS_MANAGE_CODEX_APP_PLUGINS === '1') {
+    for (const [name, marketplace] of DEFAULT_CODEX_APP_PLUGINS) {
+      const table = `plugins."${name}@${marketplace}"`;
+      if (!hasTomlTable(next, table)) next = upsertTomlTable(next, table, `[${table}]\nenabled = true`);
+    }
   }
   return ensureTrailingNewline(next);
 }
@@ -1586,6 +1588,34 @@ function upsertTomlTableKey(text: any, table: any, line: any) {
   }
   lines.splice(end, 0, line);
   return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+// True if [table] already declares `key` (so we never override a user's explicit value).
+function hasTomlTableKey(text: any, table: any, key: any) {
+  const lines = String(text || '').split('\n');
+  const header = `[${table}]`;
+  const start = lines.findIndex((x: any) => x.trim() === header);
+  if (start === -1) return false;
+  const keyRe = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const ln = lines[i];
+    if (ln === undefined) continue;
+    if (/^\s*\[.+\]\s*$/.test(ln)) break;
+    if (keyRe.test(ln)) return true;
+  }
+  return false;
+}
+
+// Set a [table] key only when absent — preserves a Codex App feature the user toggled off
+// (so SKS never re-enables / re-surfaces UI the user hid). On a fresh config the key/table
+// is still created, preserving fresh-install enablement.
+function upsertTomlTableKeyIfAbsent(text: any, table: any, line: any) {
+  const key = String(line).split('=')[0]?.trim() ?? '';
+  return hasTomlTableKey(text, table, key) ? String(text || '') : upsertTomlTableKey(text, table, line);
+}
+
+function upsertTopLevelTomlBooleanIfAbsent(text: any, key: any, value: any) {
+  return hasTopLevelTomlKey(text, key) ? String(text || '') : upsertTopLevelTomlBoolean(text, key, value);
 }
 
 function ensureTrailingNewline(text: any = '') {
@@ -1687,6 +1717,11 @@ function upsertTopLevelTomlBoolean(text: any, key: any, value: any) {
   }
   lines.splice(end, 0, line);
   return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function hasTomlTable(text: any, table: any) {
+  const header = `[${table}]`;
+  return String(text || '').split('\n').some((line) => String(line).trim() === header);
 }
 
 function upsertTomlTable(text: any, table: any, block: any) {

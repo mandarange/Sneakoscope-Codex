@@ -64,6 +64,7 @@
     "doctor:fix-recovers-corrupted-config": "node ./scripts/doctor-fix-recovers-corrupted-config-check.mjs",
     "install:update-preserves-config": "node ./scripts/install-update-preserves-config-check.mjs",
     "codex-lb:config-toml-safety": "node ./scripts/codex-lb-config-toml-safety-check.mjs",
+    "codex-app:ui-preservation": "node ./scripts/codex-app-ui-preservation-check.mjs",
     "mad:preflight-blocks-unreadable-config": "node ./scripts/mad-preflight-blocks-unreadable-config-check.mjs",
     "codex:0.135-compat": "node ./scripts/codex-0-135-compat-check.mjs",
     "codex:0.135-compat:require-real": "node ./scripts/codex-0-135-compat-check.mjs --require-real",

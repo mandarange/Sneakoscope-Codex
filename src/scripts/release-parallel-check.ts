@@ -103,6 +103,7 @@ const tasks: VerificationTask[] = [
   task('doctor:fix-recovers-corrupted-config', 'npm run doctor:fix-recovers-corrupted-config --silent', { dependencies: ['build'] }),
   task('install:update-preserves-config', 'npm run install:update-preserves-config --silent', { dependencies: ['build'] }),
   task('codex-lb:config-toml-safety', 'npm run codex-lb:config-toml-safety --silent', { dependencies: ['build'] }),
+  task('codex-app:ui-preservation', 'npm run codex-app:ui-preservation --silent', { dependencies: ['build'] }),
   task('agent:native-cli-session-swarm-10', 'npm run agent:native-cli-session-swarm-10 --silent', { dependencies: ['build'] }),
   task('agent:native-cli-session-swarm-20', 'npm run agent:native-cli-session-swarm-20 --silent', { dependencies: ['build'] }),
   task('agent:no-subagent-scaling', 'npm run agent:no-subagent-scaling --silent', { dependencies: ['build'] }),
