@@ -496,6 +496,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-dfix': ['dfix', 'fixture', '--json'],
   'cli-all-features': ['all-features', 'complete', '--json'],
   'route-team': ['team', 'fixture', '--mock', '--json'],
+  'route-naruto': ['naruto', 'run', 'fixture', '--clones', '4', '--backend', 'fake', '--work-items', '4', '--json'],
   'route-qa-loop': { setup: [['qa-loop', 'prepare', 'fixture API QA', '--json']], command: ['qa-loop', 'run', 'latest', '--mock', '--json'] },
   'route-research': { setup: [['research', 'prepare', 'fixture research topic', '--json']], command: ['research', 'run', 'latest', '--mock', '--json'] },
   'route-ppt': ['ppt', 'fixture', '--mock', '--json'],

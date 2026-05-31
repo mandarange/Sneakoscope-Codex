@@ -30,10 +30,17 @@ test('MAD-SKS argv classifier does not treat argv strings as shell syntax', asyn
 });
 
 test('MAD-SKS shell classifier blocks protected-core command targets', async () => {
+  // targetRoot must be an unrelated dir, not the engine source repo itself:
+  // when targetRoot === root (the sks engine repo) the engine_source_exception
+  // intentionally permits writes to its own src/core, so protected-core blocking
+  // is exercised against a separate target. Reference the engine's protected
+  // src/core by absolute path so it is detected relative to `root`.
+  const targetRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'mad-sks-protected-core-'));
+  const protectedCorePath = path.join(root, 'src', 'core');
   const classified = await classifyMadSksShellArgv({
-    command: 'echo hi; rm -rf src/core',
-    cwd: root,
-    targetRoot: root,
+    command: `echo hi; rm -rf ${protectedCorePath}`,
+    cwd: targetRoot,
+    targetRoot,
     root
   });
 

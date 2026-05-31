@@ -116,6 +116,75 @@ test('gpt-image-2 fallback uses codex-lb key only when explicitly enabled', asyn
   }
 });
 
+test('gpt-image-2 retries a rate-limited OpenAI images call then succeeds', async () => {
+  const { root, imagePath } = await tempImageRoot('sks-imagegen-retry-429-');
+  const outputDir = path.join(root, 'out');
+  const onePxPng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l/5gVQAAAABJRU5ErkJggg==';
+  const calls = [];
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    if (calls.length <= 2) {
+      return new Response(JSON.stringify({ error: { type: 'rate_limit_exceeded', message: 'slow down' } }), { status: 429, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ data: [{ b64_json: onePxPng }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const result = await withoutImagegenOutputEnv(() => generateGptImage2CalloutReview({
+      mission_id: null,
+      source_screen_id: 'screen-1',
+      source_image_path: imagePath,
+      output_dir: outputDir,
+      prompt: buildCalloutPrompt('screen-1'),
+      requested_fidelity: 'original',
+      privacy: 'local-only'
+    }, {
+      capability: { codexBin: path.join(root, 'missing-codex'), timeoutMs: 100, env: { HOME: root }, configText: '', codexLbEnvText: '' },
+      // Direct OpenAI key path: API fallback auto-enables, codex-lb stays off.
+      openai: { apiKey: 'sk-test-openai-key', retrySleep: async () => {} }
+    }));
+
+    assert.equal(calls.length, 3, 'should retry the two 429s before the 200');
+    assert.equal(result.ok, true);
+    assert.equal(result.provider, 'openai_images_api');
+    assert.ok(result.generated_image_path);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('gpt-image-2 gives up after exhausting retries on persistent 503', async () => {
+  const { root, imagePath } = await tempImageRoot('sks-imagegen-retry-503-');
+  const outputDir = path.join(root, 'out');
+  let calls = 0;
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ error: { type: 'server_error', message: 'overloaded' } }), { status: 503, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const result = await withoutImagegenOutputEnv(() => generateGptImage2CalloutReview({
+      mission_id: null,
+      source_screen_id: 'screen-1',
+      source_image_path: imagePath,
+      output_dir: outputDir,
+      prompt: buildCalloutPrompt('screen-1'),
+      requested_fidelity: 'original',
+      privacy: 'local-only'
+    }, {
+      capability: { codexBin: path.join(root, 'missing-codex'), timeoutMs: 100, env: { HOME: root }, configText: '', codexLbEnvText: '' },
+      openai: { apiKey: 'sk-test-openai-key', retrySleep: async () => {} }
+    }));
+
+    assert.equal(calls, 4, 'should attempt the policy max (4) before giving up');
+    assert.equal(result.ok, false);
+    assert.equal(result.provider, 'openai_images_api');
+    assert.equal(result.blocker, 'imagegen_remote_rate_limited');
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 function codexLbConfig() {
   return `model_provider = "codex-lb"
 

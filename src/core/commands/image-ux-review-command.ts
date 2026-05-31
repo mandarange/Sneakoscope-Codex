@@ -133,6 +133,12 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
   if (generatedImage) await attachGeneratedReviewImage(root, dir, contract, generatedImage, { realGenerated: !flag(args, '--mock'), mock: flag(args, '--mock') });
   if (!generatedImage && shouldGenerateCallouts) {
     const outputDir = path.join(dir, 'generated-callouts');
+    // Auto-discover the Codex App GUI $imagegen output from ~/.codex/generated_images.
+    // --strict-generated-since limits discovery to images created at/after this run
+    // started (use when an old GUI image could be mistaken for this run's output);
+    // otherwise a max-age window guards against stale reuse.
+    const missionStartMs = Date.parse(mission.created_at || '') || undefined;
+    const maxAgeOverride = readOption(args, '--generated-image-max-age-min', null);
     const result = await generateGptImage2CalloutReview({
       mission_id: id,
       source_screen_id: 'screen-1',
@@ -141,6 +147,11 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
       prompt: promptForRun(command, args),
       requested_fidelity: 'original',
       privacy: 'local-only'
+    }, {
+      codexApp: {
+        generatedImageSinceMs: flag(args, '--strict-generated-since') ? missionStartMs : null,
+        generatedImageMaxAgeMs: maxAgeOverride ? Number(maxAgeOverride) * 60 * 1000 : 30 * 60 * 1000
+      }
     });
     if (result.generated_image_path) {
       const fakeGenerated = result.provider === 'fake_imagegen_adapter';

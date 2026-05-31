@@ -2811,6 +2811,18 @@
       "can_run_incremental": true
     },
     {
+      "id": "test:no-orphan-dist-imports",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/**",
+        "scripts/**"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "trust:check",
       "tier": "P1",
       "cost": "hermetic",

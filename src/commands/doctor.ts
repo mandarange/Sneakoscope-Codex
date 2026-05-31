@@ -69,6 +69,8 @@ export async function run(_command: any, args: any = []) {
   const codexLb = codexLbMetrics(await readCodexLbCircuit(root).catch(() => ({})));
   const zellij = await checkZellijCapability({ root, require: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
+  const { detectImagegenCapability } = await import('../core/imagegen/imagegen-capability.js');
+  const imagegen = await detectImagegenCapability({ codexBin: codexBin || undefined }).catch((err: any) => ({ ok: false, error: err.message, auth_readiness: null }));
   const pkgBytes = await dirSize(root).catch(() => 0);
   const ready = await writeDoctorReadinessMatrix(root, {
     codex,
@@ -99,6 +101,11 @@ export async function run(_command: any, args: any = []) {
     codex_doctor_diff: codexDoctorDiff,
     zellij,
     codex_permission_profiles: permissionProfiles,
+    imagegen: {
+      ok: (imagegen as any).auth_readiness?.available_paths?.length > 0,
+      auth_readiness: (imagegen as any).auth_readiness || null,
+      codex_app_builtin_available: (imagegen as any).codex_app?.available === true
+    },
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
@@ -122,6 +129,14 @@ export async function run(_command: any, args: any = []) {
   console.log(`  codex doctor:    ${codexDoctor.available ? (codexDoctor.exit_code === 0 ? 'ok' : 'warning') : 'unavailable'}`);
   console.log(`Rust acc.: ${rust.mode || (rust.available ? 'rust_accelerated' : 'js_fallback')} ${rust.version || rust.status || ''}`);
   console.log(`Codex App: ${ready.codex_app_ready ? 'ok' : 'optional_missing'}`);
+  const imagegenReady = (imagegen as any).auth_readiness;
+  if (imagegenReady) {
+    const paths = imagegenReady.available_paths?.length ? imagegenReady.available_paths.join(', ') : 'none';
+    console.log(`Image Gen: auth=${imagegenReady.auth_mode} | headless_auto=${imagegenReady.headless_auto_available ? 'available' : 'unavailable'} | paths: ${paths}`);
+    if (!imagegenReady.headless_auto_available) {
+      for (const action of imagegenReady.next_actions || []) console.log(`  - ${action}`);
+    }
+  }
   console.log(`codex-lb:  ${codexLb.ok ? 'ok' : `warning ${codexLb.circuit?.state || 'unknown'}`}`);
   console.log(`Permissions: config profile and permission profile are tracked separately (${permissionProfiles.codex_config_profile_field}, ${permissionProfiles.codex_permission_profile_field})`);
   console.log('Ready:');
