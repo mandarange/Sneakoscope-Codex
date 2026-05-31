@@ -9,7 +9,7 @@ import { readZellijLaneSupervisor } from './zellij-lane-supervisor.js'
 import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.js'
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any; selectedCoreSkill?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
@@ -151,6 +151,9 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     backend: input.backend,
     route,
     route_command: routeCommand,
+    // Deployed Core Skill snapshot consulted at route start (read-only; never
+    // confers mutation rights). Null when no snapshot is deployed for this route.
+    selected_core_skill: input.selectedCoreSkill || null,
     route_blackbox_kind: input.routeBlackboxKind || (realRouteCommandUsed ? 'actual_route_command' : 'generic_agent_route_standin'),
     real_route_command_used: realRouteCommandUsed,
     native_cli_session_proof: nativeCliSessionProof ? 'native-cli-session-proof.json' : null,

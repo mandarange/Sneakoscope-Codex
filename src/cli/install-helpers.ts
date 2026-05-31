@@ -4,6 +4,8 @@ import fsp from 'node:fs/promises';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { ensureDir, exists, globalSksRoot, packageRoot, PACKAGE_VERSION, readText, runProcess, tmpdir, which, writeTextAtomic } from '../core/fsx.js';
+import { createRequestedScopeContract } from '../core/safety/requested-scope-contract.js';
+import { guardedPackageInstall, guardContextForRoute } from '../core/safety/mutation-guard.js';
 import { EMPTY_CODEX_INFO, getCodexInfo } from '../core/codex-adapter.js';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.js';
 import { initProject, installSkills } from '../core/init.js';
@@ -2066,10 +2068,18 @@ export async function ensureCodexCliTool({ skip = false, args = [] }: any = {}) 
   if (!await confirmInstallYesDefault(`Codex CLI is missing. Install latest Codex CLI with ${command}?`, args)) {
     return { status: 'needs_approval', command, error: 'Codex CLI not found on PATH.' };
   }
-  const install = await runProcess(npmBin, ['i', '-g', '@openai/codex@latest'], {
-    timeoutMs: 120000,
-    maxOutputBytes: 128 * 1024
-  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
+  // Global package install is a confirmation-required mutation: route it through
+  // the mutation guard so it is scope-checked and recorded in the ledger. The
+  // user already approved via confirmInstallYesDefault above (confirmed:true).
+  const installRoot = globalSksRoot();
+  const installContract = createRequestedScopeContract({
+    route: 'install', userRequest: command, projectRoot: installRoot, overrides: { package_install: true }
+  });
+  const install = await guardedPackageInstall(
+    guardContextForRoute(installRoot, installContract, command),
+    '@openai/codex@latest',
+    { confirmed: true, command: npmBin, args: ['i', '-g', '@openai/codex@latest'], timeoutMs: 120000 }
+  ).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   if (install.code !== 0) {
     return { status: 'failed', error: `${install.stderr || install.stdout || 'npm i -g @openai/codex@latest failed'}`.trim() };
   }
@@ -2097,7 +2107,15 @@ export async function ensureZellijCliTool(args: any = [], opts: any = {}) {
     : `Zellij is missing. Install latest Zellij with ${repairCommand}?`;
   if (!await confirmInstallYesDefault(question, args)) return { target: 'zellij', status: 'needs_approval', command: repairCommand, error: before.blockers[0] || before.warnings[0] || null };
   const brewArgs = hasInstalledZellij ? ['upgrade', 'zellij'] : ['install', 'zellij'];
-  const install = await runProcess(brew, brewArgs, { timeoutMs: 180000, maxOutputBytes: 128 * 1024 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
+  const zellijRoot = globalSksRoot();
+  const zellijContract = createRequestedScopeContract({
+    route: 'install', userRequest: repairCommand, projectRoot: zellijRoot, overrides: { package_install: true, zellij_install: true }
+  });
+  const install = await guardedPackageInstall(
+    guardContextForRoute(zellijRoot, zellijContract, repairCommand),
+    'zellij',
+    { confirmed: true, command: brew, args: brewArgs, timeoutMs: 180000 }
+  ).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   if (install.code !== 0) return { target: 'zellij', status: 'failed', command: repairCommand, error: `${install.stderr || install.stdout || repairCommand + ' failed'}`.trim() };
   const after = await checkZellijCapability({ require: false, writeReport: false });
   if (after.status !== 'ok') return { target: 'zellij', status: 'installed_not_ready', command: repairCommand, error: after.blockers[0] || after.warnings[0] || 'zellij installed but not ready' };

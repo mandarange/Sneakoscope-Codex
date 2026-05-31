@@ -2,9 +2,11 @@ import path from 'node:path'
 import { ensureDir, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { checkZellijCapability } from './zellij-capability.js'
 import { runZellij } from './zellij-command.js'
+import { ZELLIJ_SCREEN_SCRAPEABLE_SECTIONS } from './zellij-lane-renderer.js'
 
 export const ZELLIJ_SCREEN_PROOF_SCHEMA = 'sks.zellij-screen-proof.v1'
-const REQUIRED_LANE_TEXT = ['SKS Lane', 'Mission', 'Mode', 'Workers', 'Current', 'Queue', 'Safety', 'Blockers', 'Reports', 'Keys:']
+// Canonical scrapeable subset (a strict subset of ZELLIJ_LANE_SECTIONS).
+const REQUIRED_LANE_TEXT = ZELLIJ_SCREEN_SCRAPEABLE_SECTIONS
 
 export const ZELLIJ_HEARTBEAT_TIMEOUT_BLOCKER = 'zellij_lane_heartbeat_timeout'
 

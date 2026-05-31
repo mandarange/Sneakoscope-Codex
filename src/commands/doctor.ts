@@ -87,6 +87,7 @@ export async function run(_command: any, args: any = []) {
       ...(configRepair?.operator_actions || [])
     ]
   });
+  const zellijReadiness = buildZellijReadiness(root, zellij as any, ready as any);
   const result = {
     schema: 'sks.doctor-status.v1',
     ok: ready.ready,
@@ -100,6 +101,7 @@ export async function run(_command: any, args: any = []) {
     codex_doctor: codexDoctor,
     codex_doctor_diff: codexDoctorDiff,
     zellij,
+    zellij_readiness: zellijReadiness,
     codex_permission_profiles: permissionProfiles,
     imagegen: {
       ok: (imagegen as any).auth_readiness?.available_paths?.length > 0,
@@ -124,8 +126,14 @@ export async function run(_command: any, args: any = []) {
   console.log('Project config:');
   console.log(`  node read:       ${ready.codex_config_readable_by_node ? 'ok' : 'failed'}`);
   console.log(`  codex cli read:  ${ready.codex_config_readable_by_codex_cli ? 'ok' : (actual?.status || 'failed')}`);
-  console.log(`  Zellij:          ${zellij.status}`);
   console.log(`  removed runtime: tmux`);
+  console.log('Zellij:');
+  console.log(`  binary:      ${zellijReadiness.binary} ${zellijReadiness.version || ''} ${zellijReadiness.status === 'ok' ? 'ok' : zellijReadiness.status}`);
+  console.log(`  required_for: ${zellijReadiness.required_for.join(', ')}`);
+  console.log(`  layout:      ${zellijReadiness.layout_proof}`);
+  console.log(`  pane proof:  ${zellijReadiness.pane_proof}`);
+  console.log(`  screen proof:${zellijReadiness.screen_proof}`);
+  console.log(`  tmux:        ${zellijReadiness.tmux_removed_runtime ? 'removed_runtime' : 'present'}`);
   console.log(`  codex doctor:    ${codexDoctor.available ? (codexDoctor.exit_code === 0 ? 'ok' : 'warning') : 'unavailable'}`);
   console.log(`Rust acc.: ${rust.mode || (rust.available ? 'rust_accelerated' : 'js_fallback')} ${rust.version || rust.status || ''}`);
   console.log(`Codex App: ${ready.codex_app_ready ? 'ok' : 'optional_missing'}`);
@@ -159,6 +167,34 @@ export async function run(_command: any, args: any = []) {
     for (const action of ready.next_actions) console.log(`  - ${action}`);
   }
   if (!result.ok) process.exitCode = 1;
+}
+
+// Assemble the explicit Zellij readiness block for `doctor --json` from the
+// capability probe + readiness matrix. Proof statuses are availability-derived:
+// `verified` is reserved for a real environment run (SKS_REQUIRE_ZELLIJ=1 gates);
+// here they report `optional` when the binary is usable and `unavailable` when
+// Zellij is missing/too old. Zellij missing keeps mad_ready=false while cli_ready
+// can remain true (the matrix already enforces this).
+function buildZellijReadiness(root: string, zellij: any, ready: any) {
+  const status = String(zellij?.status || 'missing');
+  const usable = status === 'ok';
+  const proofStatus = usable ? 'optional' : 'unavailable';
+  const readiness: Record<string, any> = {
+    schema: 'sks.zellij-readiness.v1',
+    binary: zellij?.bin || 'zellij',
+    status,
+    min_version: zellij?.min_version || '0.41.0',
+    version: zellij?.version || null,
+    required_for: zellij?.required_for || ['sks --mad', 'interactive lane UI'],
+    layout_proof: proofStatus,
+    pane_proof: proofStatus,
+    screen_proof: proofStatus,
+    tmux_removed_runtime: true,
+    mad_ready: ready?.mad_ready === true,
+    cli_ready: ready?.cli_ready === true,
+    ready_for_interactive_runtime: ready?.codex_config_readable_in_zellij_context === true
+  };
+  return readiness;
 }
 
 async function codexHomeConfigPath(): Promise<string> {

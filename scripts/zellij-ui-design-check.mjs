@@ -12,7 +12,7 @@ const ESC = '';
 const ANSI_RE = /\[[0-9;]*m/g;
 
 const mod = await importDist('core/zellij/zellij-lane-renderer.js');
-const { composeLaneFrame, ZELLIJ_LANE_FOOTER_KEYS, ZELLIJ_LANE_MAX_BLOCKERS } = mod;
+const { composeLaneFrame, ZELLIJ_LANE_FOOTER_KEYS, ZELLIJ_LANE_MAX_BLOCKERS, ZELLIJ_LANE_SECTIONS } = mod;
 
 assertGate(typeof composeLaneFrame === 'function', 'composeLaneFrame export missing', {});
 assertGate(Array.isArray(ZELLIJ_LANE_FOOTER_KEYS), 'ZELLIJ_LANE_FOOTER_KEYS export missing', {});
@@ -38,10 +38,8 @@ const view = {
   laneNote: 'fixture'
 };
 
-const REQUIRED_SECTIONS = [
-  'SKS Lane', 'Mission', 'Mode', 'Fast', 'Workers', 'Codex child', 'Work', 'Current',
-  'Queue', 'Patch', 'Safety', 'Lease', 'Protected', 'Rollback', 'Blockers', 'Reports', 'Keys:'
-];
+// Canonical composed-frame superset (shared with screen-proof's scrapeable subset).
+const REQUIRED_SECTIONS = ZELLIJ_LANE_SECTIONS;
 
 // No-overflow + all-sections across the common Zellij pane widths.
 for (const width of [80, 100, 120]) {

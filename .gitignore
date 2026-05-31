@@ -136,3 +136,4 @@ id_ed25519
 # .sneakoscope/wiki/image-voxels/
 # .sneakoscope/wiki/avoidance-rules/
 # END SKS MANAGED GIT HYGIENE
+.claude/scheduled_tasks.lock
