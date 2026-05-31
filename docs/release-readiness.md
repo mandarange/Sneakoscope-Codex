@@ -4,6 +4,15 @@ SKS 1.20.1 writes the `sks.release-readiness.v1` report for actual Codex config-
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
+## Publish authorization policy (1.20.2)
+
+Publishing to npm requires a full `npm run release:check` (the complete hermetic gate
+set) **plus** `npm run release:real-check` for environment-dependent proof. The
+change-aware incremental runner `npm run release:check:dynamic:execute` is a local/CI
+acceleration only — it narrows the gate set to changed inputs and caches results, so
+it **cannot** authorize a publish on its own. See `docs/dynamic-release-pipeline.md`
+for the two-tier model.
+
 ```bash
 npm run xai-mcp:capability
 npm run source-intelligence:policy

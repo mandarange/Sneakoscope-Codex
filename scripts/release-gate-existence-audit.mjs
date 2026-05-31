@@ -17,6 +17,8 @@ const required = [
   'zellij:pane-proof',
   'zellij:screen-proof',
   'zellij:lane-renderer',
+  'zellij:doctor-readiness',
+  'safety:mutation-callsite-coverage',
   'mad-sks:zellij-launch',
   'agent:zellij-runtime',
   'codex:0.135-compat',

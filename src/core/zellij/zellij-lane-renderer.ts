@@ -17,6 +17,23 @@ export const ZELLIJ_LANE_FOOTER_KEYS = [
   'sks agent rollback-patches'
 ]
 
+// Canonical lane section sets (1.20.2 Area 5.2).
+// ZELLIJ_LANE_SECTIONS is the full composed-frame superset the UI-design fixture
+// gate enforces. ZELLIJ_SCREEN_SCRAPEABLE_SECTIONS is the strict SUBSET that the
+// runtime screen-proof reliably scrapes from a live terminal — the 7 extra
+// sections (Fast, Codex child, Work, Patch, Lease, Protected, Rollback) are
+// detail rows that may be elided/wrapped on a real pane, so requiring them in
+// the live screen-proof would make it flaky. The subset relationship is asserted
+// by zellij:doctor-readiness so the two layers can never silently diverge.
+export const ZELLIJ_LANE_SECTIONS = [
+  'SKS Lane', 'Mission', 'Mode', 'Fast', 'Workers', 'Codex child', 'Work', 'Current',
+  'Queue', 'Patch', 'Safety', 'Lease', 'Protected', 'Rollback', 'Blockers', 'Reports', 'Keys:'
+]
+
+export const ZELLIJ_SCREEN_SCRAPEABLE_SECTIONS = [
+  'SKS Lane', 'Mission', 'Mode', 'Workers', 'Current', 'Queue', 'Safety', 'Blockers', 'Reports', 'Keys:'
+]
+
 export interface ZellijLaneRenderOptions {
   missionId: string
   slot: string

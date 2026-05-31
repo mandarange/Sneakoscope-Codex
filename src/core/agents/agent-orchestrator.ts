@@ -7,6 +7,8 @@ import { initializeAgentCentralLedger, appendAgentLedgerEvent, compactAgentLedge
 import { detectStaleAgentSessions, killTimedOutAgentSessions, openAgentSession, heartbeatAgentSession, collectAgentSession, completeAgentSession, closeAgentSession, writeAgentLifecycleAggregate, writeAgentLifecyclePolicy } from './agent-lifecycle.js'
 import { writeAgentConsensus } from './agent-consensus.js'
 import { writeAgentProofEvidence } from './agent-proof-evidence.js'
+import { selectRouteSkill, skillProofRecord } from '../skills/core-skill-runtime.js'
+import { routeSkillId } from '../skills/core-skill-card.js'
 import { loadTriWikiRuntimeContext, writeTriWikiContextArtifact } from '../triwiki-runtime.js'
 import { MAX_AGENT_COUNT, normalizeAgentBackend } from './agent-schema.js'
 import type { AgentRunOptions } from './agent-schema.js'
@@ -61,6 +63,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     : await createMission(root, { mode: 'agent', prompt })
   const missionId = created.id
   const dir = created.dir
+  // Route start: consult this route's deployed Core Skill snapshot (read-only).
+  // Graceful fallback when none is deployed — zero-risk, never invokes the optimizer.
+  const routeSkillSelection = await selectRouteSkill(root, route, routeSkillId(route)).catch(() => null)
+  const selectedCoreSkill = routeSkillSelection ? skillProofRecord(routeSkillSelection) : null
   const namespace = await buildProjectNamespace({ root, missionId })
   await writeProjectNamespaceArtifact(dir, namespace)
   let roster = buildProvidedAgentRoster(opts.roster, { concurrency: opts.concurrency, readonly: opts.readonly, maxAgentCount }) || buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, maxAgentCount, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
@@ -415,7 +421,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     noSubagentScalingPolicy,
     fastModePolicy,
     fastModePropagation,
-    triwikiContext
+    triwikiContext,
+    selectedCoreSkill
   })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })

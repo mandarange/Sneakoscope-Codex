@@ -2,6 +2,14 @@ import path from 'node:path'
 import { ensureDir, exists, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { cardBodyHash, loadDeployedSnapshot, skillDir, validateCardShape } from './core-skill-card.js'
 import type { CoreSkillCard } from './core-skill-types.js'
+import { evaluateMutation, recordMutation } from '../safety/mutation-ledger.js'
+import type { RequestedScopeContract } from '../safety/requested-scope-contract.js'
+
+export interface PromotionMutationOptions {
+  contract?: RequestedScopeContract
+  confirmed?: boolean
+  context?: 'release' | string
+}
 
 export class SkillDeploymentViolationError extends Error {
   constructor(fnName: string) {
@@ -35,7 +43,7 @@ export const readDeploymentSnapshot = loadDeployedSnapshot
  * Promote an accepted candidate to an immutable deployed snapshot. The previous
  * snapshot is archived for rollback. Deployed snapshots are never edited in place.
  */
-export async function promoteToDeployed(root: string, accepted: CoreSkillCard): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {
+export async function promoteToDeployed(root: string, accepted: CoreSkillCard, opts: PromotionMutationOptions = {}): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {
   const blockers: string[] = []
   if (accepted.status !== 'accepted') blockers.push('promote_requires_accepted_status')
   const shape = validateCardShape(accepted)
@@ -66,6 +74,24 @@ export async function promoteToDeployed(root: string, accepted: CoreSkillCard): 
     created_at: nowIso()
   }
   await writeJsonAtomic(deployedPath, snapshot)
+  // Record the promotion as a side-effect-zero ledger entry when a contract is
+  // provided OR a release/deployment-owned context is active. The archived
+  // snapshot is the rollback pointer. Best-effort: a ledger write failure never
+  // breaks promotion semantics (existing 2-arg callers are unaffected).
+  if (opts.contract && (opts.context === 'release' || opts.confirmed || isDeploymentContext())) {
+    try {
+      const entry = evaluateMutation(opts.contract, 'skill_snapshot_promotion', {
+        target: deployedPath,
+        confirmed: true,
+        backupPath: archivedPath,
+        noOpReason: archivedPath ? null : 'first_deploy_no_previous_snapshot',
+        applied: true
+      })
+      await recordMutation(root, entry)
+    } catch {
+      // best-effort ledger recording; promotion already succeeded.
+    }
+  }
   return { ok: true, blockers: [], snapshot, archived_path: archivedPath }
 }
 

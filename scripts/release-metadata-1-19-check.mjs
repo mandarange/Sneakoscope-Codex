@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.20.1';
+const RELEASE_VERSION = '1.20.2';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');
@@ -210,7 +210,11 @@ const requiredScripts = [
   'core-skill:heldout-validation',
   'core-skill:deployment-snapshot',
   'core-skill:no-inference-optimizer',
+  'core-skill:route-runtime-integration',
+  'core-skill:promotion-side-effect-ledger',
   'safety:side-effect-zero',
+  'safety:mutation-callsite-coverage',
+  'zellij:doctor-readiness',
   'release:gate-planner',
   'release:gate-budget',
   'agent:wiki-context-proof',

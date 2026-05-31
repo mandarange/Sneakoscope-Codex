@@ -1270,6 +1270,19 @@
       "can_run_incremental": true
     },
     {
+      "id": "core-skill:promotion-side-effect-ledger",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/skills/**",
+        "schemas/skills/**",
+        "scripts/core-skill-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "core-skill:rollout-scoring",
       "tier": "P0",
       "cost": "hermetic",
@@ -1280,6 +1293,19 @@
       ],
       "always_on_release": false,
       "required_for_publish": true,
+      "can_run_incremental": true
+    },
+    {
+      "id": "core-skill:route-runtime-integration",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/skills/**",
+        "schemas/skills/**",
+        "scripts/core-skill-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
       "can_run_incremental": true
     },
     {
@@ -2603,6 +2629,18 @@
       "can_run_incremental": true
     },
     {
+      "id": "safety:mutation-callsite-coverage",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/safety/**",
+        "scripts/side-effect-zero-gate-check.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "safety:side-effect-zero",
       "tier": "P0",
       "cost": "hermetic",
@@ -3045,6 +3083,20 @@
       "affected_by": [
         "src/**",
         "scripts/**"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "zellij:doctor-readiness",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/zellij/**",
+        "scripts/zellij-*.mjs",
+        "templates/zellij/**",
+        "src/core/agents/zellij-lane-supervisor.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
