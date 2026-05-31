@@ -493,6 +493,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-memory': ['memory', '--dry-run', '--json'],
   'cli-stats': ['stats', '--json'],
   'cli-dollar-commands': ['dollar-commands', '--json'],
+  'cli-fast-mode': ['fast-mode', 'status', '--json'],
   'cli-dfix': ['dfix', 'fixture', '--json'],
   'cli-all-features': ['all-features', 'complete', '--json'],
   'route-team': ['team', 'fixture', '--mock', '--json'],
@@ -503,6 +504,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'route-image-ux-review': ['image-ux-review', 'fixture', '--mock', '--json'],
   'route-computer-use': ['computer-use', 'import-fixture', '--mock', '--json'],
   'route-dfix': ['dfix', 'fixture', '--json'],
+  'route-fast-mode': ['fast-mode', 'status', '--json'],
   'route-db': ['db', 'check', '--sql', 'SELECT 1', '--json'],
   'route-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
   'route-gx': ['gx', 'validate', 'fixture', '--mock', '--json']
@@ -841,13 +843,13 @@ function commandCategory(name: any) {
 }
 
 function commandMaturity(name: any) {
-  if (['help', 'version', 'commands', 'usage', 'root', 'quickstart', 'setup', 'doctor', 'selftest', 'update-check'].includes(name)) return 'stable';
+  if (['help', 'version', 'commands', 'usage', 'root', 'quickstart', 'setup', 'doctor', 'selftest', 'update-check', 'fast-mode'].includes(name)) return 'stable';
   if (['codex', 'codex-app', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'team', 'pipeline', 'goal', 'db', 'guard'].includes(name)) return 'beta';
   return 'labs';
 }
 
 function routeMaturity(command: any) {
-  if (['$Answer', '$DFix', '$SKS', '$Wiki', '$Help'].includes(command)) return 'stable';
+  if (['$Answer', '$DFix', '$SKS', '$Fast-Mode', '$Wiki', '$Help'].includes(command)) return 'stable';
   if (['$Team', '$Goal', '$DB', '$Computer-Use', '$CU', '$QA-LOOP', '$MAD-SKS'].includes(command)) return 'beta';
   return 'labs';
 }

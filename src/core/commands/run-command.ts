@@ -367,7 +367,7 @@ async function executeRouteCommand(
   return routeExecutionResult(route, ['sks', ...commandArgs].join(' '), result, {
     okStatus: 'completed',
     trustStatus: 'verified_partial',
-    executionKind: route.command === '$DB' || route.command === '$Wiki' ? 'safe_deterministic' : 'mock_safe',
+    executionKind: route.command === '$DB' || route.command === '$Wiki' || route.command === '$Fast-Mode' ? 'safe_deterministic' : 'mock_safe',
   });
 }
 
@@ -487,7 +487,27 @@ function runNextAction(route: RouteSelection, id: string, args: readonly string[
 function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = false }: { auto?: boolean } = {}): string[] {
   if (route.command === '$DB') return ['db', 'check', '--sql', 'SELECT 1', '--json'];
   if (route.command === '$Wiki') return ['wiki', 'refresh', '--json'];
+  if (route.command === '$Fast-Mode') return ['fast-mode', fastModeActionFromPrompt(prompt), '--json'];
   return ['team', prompt, '--mock', '--json', ...(auto ? ['--no-open-zellij'] : [])];
+}
+
+function fastModeActionFromPrompt(prompt = ''): string {
+  const text = String(prompt || '');
+  const lower = text.toLowerCase();
+  if (/\$fast-off\b/.test(lower)) return 'off';
+  if (/\$fast-on\b/.test(lower)) return 'on';
+  const routeMatch = /\$fast-mode\b/i.exec(text);
+  if (!routeMatch) return 'status';
+  const afterRoute = text
+    .slice(routeMatch.index + routeMatch[0].length)
+    .replace(/^[\s:=\-]+/, '')
+    .trimStart()
+    .toLowerCase();
+  const token = afterRoute.match(/^[^\s?!.,;:()"'`]+/)?.[0] || '';
+  if (['off', 'disable', 'disabled', 'standard', 'slow', '끄기', '꺼', '꺼줘'].includes(token) || token.startsWith('끄') || token.startsWith('꺼')) return 'off';
+  if (['on', 'enable', 'enabled', 'fast', '켜기', '켜', '켜줘'].includes(token) || token.startsWith('켜')) return 'on';
+  if (['clear', 'reset', 'default', '초기화', '기본'].includes(token) || token.startsWith('초기화')) return 'clear';
+  return 'status';
 }
 
 function destructiveDbPrompt(prompt = ''): boolean {

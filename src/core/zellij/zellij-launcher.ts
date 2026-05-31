@@ -1,11 +1,12 @@
 import path from 'node:path'
-import { appendJsonl, nowIso, writeJsonAtomic } from '../fsx.js'
+import { appendJsonl, nowIso, sha256, writeJsonAtomic } from '../fsx.js'
 import { checkZellijCapability } from './zellij-capability.js'
-import { runZellij } from './zellij-command.js'
+import { formatZellijCommand, resolveZellijProcessEnvMeta, runZellij } from './zellij-command.js'
 import { writeZellijLayout, type ZellijLayoutInput } from './zellij-layout-builder.js'
 import { writeZellijPaneProof } from './zellij-pane-proof.js'
 
 export const ZELLIJ_SESSION_SCHEMA = 'sks.zellij-session.v1'
+export const ZELLIJ_SESSION_NAME_MAX = 64
 
 export interface ZellijLaunchOptions {
   root?: string
@@ -39,6 +40,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   const createCommand = ['attach', '--create-background', sessionName, 'options', '--default-layout', layout.layout_path]
   const attachCommand = ['attach', sessionName]
   const command = opts.attach === true ? attachCommand : createCommand
+  const zellijEnv = resolveZellijProcessEnvMeta()
   const launch: any = opts.dryRun === true || capability.status !== 'ok'
     ? null
     : opts.attach === true
@@ -80,8 +82,13 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     layout_artifact: path.relative(root, layout.layout_path),
     command: ['zellij', ...command],
     launch_command: ['zellij', ...createCommand],
+    launch_command_with_env: formatZellijCommand(createCommand, zellijEnv),
     background_command: ['zellij', ...createCommand],
+    background_command_with_env: formatZellijCommand(createCommand, zellijEnv),
     attach_command: `zellij attach ${sessionName}`,
+    attach_command_with_env: formatZellijCommand(attachCommand, zellijEnv),
+    zellij_socket_dir: zellijEnv.zellij_socket_dir,
+    zellij_socket_dir_source: zellijEnv.zellij_socket_dir_source,
     pane_proof_path: path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-pane-proof.json'),
     pane_proof: paneProof,
     dry_run: opts.dryRun === true,
@@ -128,7 +135,11 @@ export async function launchTeamZellijView(opts: ZellijLaunchOptions = {}) {
 
 export function sanitizeZellijSessionName(value: unknown): string {
   const cleaned = String(value || 'sks-session').replace(/[^A-Za-z0-9_.:-]+/g, '-').replace(/^-+|-+$/g, '')
-  return cleaned.slice(0, 80) || 'sks-session'
+  if (!cleaned) return 'sks-session'
+  if (cleaned.length <= ZELLIJ_SESSION_NAME_MAX) return cleaned
+  const suffix = sha256(cleaned).slice(0, 8)
+  const prefix = cleaned.slice(0, ZELLIJ_SESSION_NAME_MAX - suffix.length - 1).replace(/[-_.:]+$/g, '')
+  return `${prefix}-${suffix}`.slice(0, ZELLIJ_SESSION_NAME_MAX)
 }
 
 function readOption(args: readonly unknown[], name: string, fallback: string | null): string | null {

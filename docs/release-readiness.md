@@ -1,6 +1,8 @@
 # Release Readiness
 
-SKS 1.20.1 writes the `sks.release-readiness.v1` report for actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, Zellij readiness/proof, install-time Zellij dependency repair, and official Fast mode service-tier propagation. `ok: true` in the 1.20.1 slice means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, Zellij-only runtime checks, background-layout launch wiring, and `-c service_tier=fast` propagation evidence have no remaining blockers.
+SKS 1.20.3 keeps the release-readiness contract stable while adding the Zellij socket-dir launch fallback required for long macOS `$TMPDIR` paths. The readiness artifacts now surface `zellij_socket_dir`, `zellij_socket_dir_source`, and `*_command_with_env` when Zellij sessions are prepared.
+
+The current `sks.release-readiness.v1` report covers actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, Zellij readiness/proof, install-time Zellij dependency repair, Zellij socket-dir launch metadata, and official Fast mode service-tier propagation. `ok: true` in the 1.20.3 readiness report means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, Zellij-only runtime checks, background-layout launch wiring, socket-dir fallback evidence, and `-c service_tier=fast` propagation evidence have no remaining blockers.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
@@ -128,17 +130,17 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.20.1.json`
-- `.sneakoscope/reports/release-readiness-1.20.1.md`
-- `.sneakoscope/reports/all-feature-completion-1.20.1.json`
-- `.sneakoscope/reports/all-feature-completion-1.20.1.md`
-- `.sneakoscope/reports/official-docs-compat-1.20.1.json`
-- `.sneakoscope/reports/official-docs-compat-1.20.1.md`
-- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.20.1.json`
+- `.sneakoscope/reports/release-readiness-1.20.3.json`
+- `.sneakoscope/reports/release-readiness-1.20.3.md`
+- `.sneakoscope/reports/all-feature-completion-1.20.3.json`
+- `.sneakoscope/reports/all-feature-completion-1.20.3.md`
+- `.sneakoscope/reports/official-docs-compat-1.20.3.json`
+- `.sneakoscope/reports/official-docs-compat-1.20.3.md`
+- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.20.3.json`
 - `.sneakoscope/reports/agent-real-codex-patch-envelope-smoke.json`
 - `.sneakoscope/reports/agent-real-codex-parallel-workers.json`
 - `.sneakoscope/reports/zellij-real-session-launch.json`
-- `.sneakoscope/reports/runtime-truth-matrix-1.20.1.json`
+- `.sneakoscope/reports/runtime-truth-matrix-1.20.3.json`
 - `.sneakoscope/reports/codex-0-134-official-compat.json`
 - `.sneakoscope/reports/codex-0-134-runner-truth.json`
 - `.sneakoscope/reports/mcp-0-134-modernization.json`
@@ -171,7 +173,7 @@ npm run release:readiness
 - `.sneakoscope/reports/dfix-patch-swarm-route-blackbox.json`
 - `.sneakoscope/reports/retention-cleanup-safety.json`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, real Codex parallel worker proof, Zellij lane/session proof, and remaining 1.20.1 P0-P9 closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, real Codex parallel worker proof, Zellij lane/session proof, and the current 1.20.3 release closure gaps.
 
 ## Priority Closure
 

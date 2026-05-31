@@ -1,6 +1,23 @@
 # Fast Mode Default
 
-SKS 1.18.11 defaults agent runs to Fast mode. A user must explicitly pass `--no-fast` or `--service-tier standard` to disable it.
+SKS 1.18.11 defaults agent runs to Fast mode. A user can explicitly pass `--no-fast` or `--service-tier standard` for one run, or use the project-local dollar commands in 1.20.3 to toggle the default:
+
+```bash
+sks fast-mode on
+sks fast-mode off
+sks fast-mode status
+sks fast-mode clear
+```
+
+Codex App aliases:
+
+```text
+$Fast-On
+$Fast-Off
+$Fast-Mode
+```
+
+The toggle writes `.sneakoscope/state/fast-mode.json` in the active project. Per-run flags still take precedence over the saved preference.
 
 Default policy artifact:
 
@@ -23,7 +40,7 @@ SKS_REASONING_PROFILE_SUFFIX=fast
 
 The policy is attached to the roster, concurrency policy, backend report, native worker process reports, `worker-fast-mode.json`, `fast-mode-propagation-proof.json`, and runtime truth matrix row `fast_mode_default`.
 
-Explicit opt-out:
+Explicit one-run opt-out:
 
 ```bash
 sks agent run "fixture" --no-fast
