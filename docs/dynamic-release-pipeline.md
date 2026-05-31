@@ -1,4 +1,4 @@
-# Dynamic Release Pipeline (1.20.2)
+# Dynamic Release Pipeline (1.20.3)
 
 SKS has a **two-tier** release verification model. Understanding the difference is
 critical: only one tier can authorize a publish.
