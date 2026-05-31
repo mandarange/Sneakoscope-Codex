@@ -12,7 +12,7 @@ test('runtime truth matrix gate writes P0-P6 subsystem proof levels', () => {
   assert.equal(report.ok, true);
   assert.equal(report.schema, 'sks.runtime-truth-matrix.v1');
   assert.equal(report.release_version, pkg.version);
-  for (const subsystem of ['tmux_physical', 'codex_dynamic', 'cleanup', 'intelligent_work_graph', 'source_intelligence', 'goal_mode', 'route_blackbox', 'dynamic_scheduler', 'warp_mad_lanes', 'codex_0_134', 'mcp_0_134', 'parallel_write', 'patch_proof']) {
+  for (const subsystem of ['zellij_pane', 'codex_dynamic', 'cleanup', 'intelligent_work_graph', 'source_intelligence', 'goal_mode', 'route_blackbox', 'dynamic_scheduler', 'warp_mad_lanes', 'codex_0_134', 'mcp_0_134', 'parallel_write', 'patch_proof']) {
     const row = report.rows.find((item) => item.subsystem === subsystem);
     assert.ok(row, `missing subsystem ${subsystem}`);
     assert.equal(typeof row.proof_level, 'string');

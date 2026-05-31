@@ -23,7 +23,7 @@ test('release readiness report writes current readiness artifacts', () => {
   assert.deepEqual(json.remaining_p0_gaps, []);
   assert.equal(json.ok, true);
   assert.equal(json.source_intelligence_1_18.status, 'present');
-  assert.equal(json.agent_terminal_tmux_1_18.status, 'present');
+  assert.equal(json.agent_terminal_zellij_1_18.status, 'present');
   assert.equal(json.dynamic_agent_pool_1_18_3.status, 'present');
   assert.equal(json.dynamic_agent_pool_1_18.status, 'present');
   assert.equal(json.goal_mode_1_18.status, 'present');

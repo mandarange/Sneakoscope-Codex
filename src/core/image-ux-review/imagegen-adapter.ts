@@ -5,6 +5,8 @@ import { ensureDir, exists, nowIso, readJson, readText, writeJsonAtomic } from '
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 import { detectImagegenCapability } from '../imagegen/imagegen-capability.js';
 import { validateGptImage2Request } from '../imagegen/gpt-image-2-request-validator.js';
+import { withResponsesRetry } from '../responses-retry-policy.js';
+import { discoverCodexAppGeneratedImage } from './codex-app-generated-image-discovery.js';
 
 const DEFAULT_OPENAI_IMAGE_EDITS_ENDPOINT = 'https://api.openai.com/v1/images/edits';
 
@@ -32,6 +34,7 @@ export interface ImageUxReviewImagegenResult {
   output_id: string | null;
   blocker: string | null;
   provider?: string;
+  output_source?: 'manual_attach' | 'auto_discovered_generated_images' | null;
   request_artifact?: string | null;
   response_artifact?: string | null;
   latency_ms?: number | null;
@@ -79,7 +82,20 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
     model: 'gpt-image-2',
     available,
     async generateCalloutReview(input: ImageUxReviewImagegenRequest) {
-      const suppliedOutput = opts.outputImagePath || process.env.SKS_CODEX_APP_IMAGEGEN_OUTPUT || null;
+      // Manual attach wins; otherwise auto-discover the most recent Codex App
+      // GUI $imagegen output from ~/.codex/generated_images so the route does not
+      // require the user to pass SKS_CODEX_APP_IMAGEGEN_OUTPUT by hand.
+      const manualOutput = opts.outputImagePath || process.env.SKS_CODEX_APP_IMAGEGEN_OUTPUT || null;
+      const discovery = !manualOutput && opts.autoDiscoverGeneratedImage !== false
+        ? await discoverCodexAppGeneratedImage({
+            codexHome: opts.codexHome,
+            env: opts.env,
+            sinceMs: typeof opts.generatedImageSinceMs === 'number' ? opts.generatedImageSinceMs : null,
+            maxAgeMs: opts.generatedImageMaxAgeMs,
+            nowMs: typeof opts.nowMs === 'number' ? opts.nowMs : Date.now()
+          }).catch(() => null)
+        : null;
+      const suppliedOutput = manualOutput || discovery?.selected?.path || null;
       if (!input?.output_dir && !suppliedOutput) {
         const blocker = available ? 'imagegen_request_output_dir_missing' : 'imagegen_capability_missing';
         return {
@@ -141,6 +157,7 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
           output_id: opts.outputId || null,
           real_generated: true
         });
+        const outputSource = manualOutput ? 'manual_attach' : 'auto_discovered_generated_images';
         await writeJsonAtomic(responseArtifact, {
           schema: 'sks.image-ux-gpt-image-2-response.v1',
           created_at: nowIso(),
@@ -151,6 +168,9 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
           output_image_path: dest,
           output_image_sha256: meta.sha256,
           output_id: meta.output_id,
+          output_source: outputSource,
+          discovered_from: discovery?.selected?.path || null,
+          discovery: discovery ? { candidates_considered: discovery.candidates_considered, since_ms: discovery.since_ms, max_age_ms: discovery.max_age_ms } : null,
           local_only: true
         });
         return {
@@ -160,6 +180,7 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
           output_id: opts.outputId || null,
           blocker: null,
           provider: 'codex_app_imagegen',
+          output_source: outputSource,
           request_artifact: requestArtifact,
           response_artifact: responseArtifact,
           latency_ms: null
@@ -174,8 +195,10 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
         status: 'blocked',
         blocker: available ? 'codex_app_imagegen_output_missing' : 'imagegen_capability_missing',
         setup_guidance: available
-          ? 'Codex App image generation is available, but SKS did not receive an attached generated annotated review image. Re-run with $imagegen/gpt-image-2 and provide SKS_CODEX_APP_IMAGEGEN_OUTPUT or attach the generated image path.'
+          ? 'Codex App image generation is available, but SKS found no fresh generated image. In Codex App run $imagegen/gpt-image-2 to generate the annotated review image (SKS auto-discovers the newest output from ~/.codex/generated_images), or attach it explicitly with SKS_CODEX_APP_IMAGEGEN_OUTPUT.'
           : 'Codex App image generation was not detected. Run in Codex App with $imagegen/gpt-image-2. For a separate non-Codex API task, explicitly enable the OpenAI Images API fallback and set OPENAI_API_KEY.',
+        generated_images_dir: discovery?.generated_images_dir || null,
+        discovery_rejected_reason: discovery?.rejected_reason || null,
         local_only: true
       });
       return {
@@ -355,25 +378,30 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
       try {
         if (useResponsesImageTool) {
           const imageDataUrl = `data:${mimeForPath(sourcePath)};base64,${await fsp.readFile(sourcePath, 'base64')}`;
-          const response = await fetchWithTimeout(effectiveEndpoint, {
-            method: 'POST',
-            headers: { authorization: `Bearer ${auth.apiKey}`, 'content-type': 'application/json' },
-            body: JSON.stringify({
-              model: responsesImagegenModel(opts),
-              input: [{
-                role: 'user',
-                content: [
-                  { type: 'input_text', text: input.prompt },
-                  { type: 'input_image', image_url: imageDataUrl }
-                ]
-              }],
-              tools: [{ type: 'image_generation', action: 'edit', size: 'auto' }],
-              tool_choice: { type: 'image_generation' }
-            })
-          }, imagegenFetchTimeoutMs(opts));
-          const payload = await readResponsePayload(response, imagegenFetchTimeoutMs(opts));
+          const { result: attemptResult, attempts, retry_log } = await withResponsesRetry(async () => {
+            const response = await fetchWithTimeout(effectiveEndpoint, {
+              method: 'POST',
+              headers: { authorization: `Bearer ${auth.apiKey}`, 'content-type': 'application/json' },
+              body: JSON.stringify({
+                model: responsesImagegenModel(opts),
+                input: [{
+                  role: 'user',
+                  content: [
+                    { type: 'input_text', text: input.prompt },
+                    { type: 'input_image', image_url: imageDataUrl }
+                  ]
+                }],
+                tools: [{ type: 'image_generation', action: 'edit', size: 'auto', ...imagegenQualityParam(opts) }],
+                tool_choice: { type: 'image_generation' }
+              })
+            }, imagegenFetchTimeoutMs(opts));
+            const payload = await readResponsePayload(response, imagegenFetchTimeoutMs(opts));
+            // Retry on transient HTTP status OR an SSE/JSON server_error/rate_limit payload.
+            return { value: { response, payload }, status: response.ok ? null : response.status, code: payloadRetryCode(payload) };
+          }, imagegenRetryOptions(opts));
+          const { response, payload } = attemptResult;
           if (!response.ok) {
-            await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started, 'openai_responses_image_generation'));
+            await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started, 'openai_responses_image_generation', { attempts, retry_log }));
             return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider: 'openai_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
           }
           if (payload?.error) {
@@ -412,18 +440,25 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           });
           return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'openai_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
         }
-        const form = new FormData();
-        form.append('model', 'gpt-image-2');
-        form.append('prompt', input.prompt);
-        form.append('image', new Blob([await fsp.readFile(sourcePath)], { type: mimeForPath(sourcePath) }), path.basename(sourcePath));
-        const response = await fetchWithTimeout(auth.endpoint, {
-          method: 'POST',
-          headers: { authorization: `Bearer ${auth.apiKey}` },
-          body: form
-        }, imagegenFetchTimeoutMs(opts));
-        const payload = await readResponsePayload(response, imagegenFetchTimeoutMs(opts));
+        const sourceBytes = await fsp.readFile(sourcePath);
+        const qualityParam = imagegenQualityParam(opts);
+        const { result: attemptResult, attempts, retry_log } = await withResponsesRetry(async () => {
+          const form = new FormData();
+          form.append('model', 'gpt-image-2');
+          form.append('prompt', input.prompt);
+          if (qualityParam.quality) form.append('quality', String(qualityParam.quality));
+          form.append('image', new Blob([sourceBytes], { type: mimeForPath(sourcePath) }), path.basename(sourcePath));
+          const response = await fetchWithTimeout(auth.endpoint, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${auth.apiKey}` },
+            body: form
+          }, imagegenFetchTimeoutMs(opts));
+          const payload = await readResponsePayload(response, imagegenFetchTimeoutMs(opts));
+          return { value: { response, payload }, status: response.ok ? null : response.status, code: payloadRetryCode(payload) };
+        }, imagegenRetryOptions(opts));
+        const { response, payload } = attemptResult;
         if (!response.ok) {
-          await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started));
+          await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started, 'openai_images_api', { attempts, retry_log }));
           return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
         }
         const image = Array.isArray(payload?.data) ? payload.data[0] : null;
@@ -473,8 +508,22 @@ export async function generateGptImage2CalloutReview(input: ImageUxReviewImagege
     return createFakeImagegenAdapter(opts.fakeAdapter || {}).generateCalloutReview(input);
   }
   const capability = await detectImagegenCapability(opts.capability || {}).catch(() => null);
-  const allowApiFallback = opts.allowApiFallback === true || process.env.SKS_IMAGEGEN_ALLOW_API_FALLBACK === '1';
+  // Auto-enable the OpenAI direct-key API fallback whenever an OPENAI_API_KEY is
+  // available, so a missing/failed Codex App $imagegen surface still produces a
+  // real image instead of a hard block. Explicit opt-out wins: pass
+  // allowApiFallback:false or SKS_IMAGEGEN_ALLOW_API_FALLBACK=0.
+  // codex-lb is deliberately NOT auto-enabled: a codex-lb key is not Codex App
+  // evidence and must remain an explicit opt-in (allowCodexLbApiFallback / env=1),
+  // so the route never silently routes screenshots through the LB proxy.
+  const openAiKeyPresent = Boolean(opts.openai?.apiKey || process.env.OPENAI_API_KEY);
+  const explicitDisableApiFallback = opts.allowApiFallback === false || process.env.SKS_IMAGEGEN_ALLOW_API_FALLBACK === '0';
   const allowCodexLbApiFallback = opts.allowCodexLbApiFallback === true || process.env.SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK === '1';
+  const allowApiFallback = !explicitDisableApiFallback && (
+    opts.allowApiFallback === true
+    || process.env.SKS_IMAGEGEN_ALLOW_API_FALLBACK === '1'
+    || openAiKeyPresent
+    || allowCodexLbApiFallback
+  );
   const openaiOptions = {
     ...(opts.openai || {}),
     codexLb: allowCodexLbApiFallback ? opts.openai?.codexLb || capability?.codex_lb || null : null,
@@ -669,7 +718,7 @@ function mimeForPath(file: string) {
   return 'image/png';
 }
 
-function redactedImagegenResponse(payload: any, ok: boolean, latencyMs: number, provider = 'openai_images_api') {
+function redactedImagegenResponse(payload: any, ok: boolean, latencyMs: number, provider = 'openai_images_api', retry: { attempts?: number; retry_log?: any[] } = {}) {
   return {
     schema: 'sks.image-ux-gpt-image-2-response.v1',
     created_at: nowIso(),
@@ -681,7 +730,50 @@ function redactedImagegenResponse(payload: any, ok: boolean, latencyMs: number, 
     redacted_error: payload?.error?.message ? String(payload.error.message).replace(/sk-[A-Za-z0-9_-]{16,}/g, '[REDACTED_OPENAI_KEY]') : null,
     payload_summary: summarizeImagegenPayload(payload),
     latency_ms: latencyMs,
+    attempts: retry.attempts ?? null,
+    retry_log: retry.retry_log ?? null,
     local_only: true
+  };
+}
+
+// Classify a parsed image-API/Responses payload into a retryable error code so a
+// 200-with-server_error SSE body or an `error.code` of rate_limit/overloaded is
+// retried, not just non-2xx HTTP statuses. Returns null when not retryable.
+function payloadRetryCode(payload: any): string | null {
+  if (!payload) return null;
+  const status = String(payload?.status || '');
+  const errorType = String(payload?.error?.type || payload?.error?.code || '');
+  const haystack = `${status} ${errorType} ${JSON.stringify(payload?.error || '')}`.toLowerCase();
+  if (/rate[_ -]?limit|too many requests|429/.test(haystack)) return 'rate_limit_exceeded';
+  if (/overloaded|proxy_overloaded|server[_ -]?error|temporarily unavailable|unavailable|5\d\d/.test(haystack)) return 'server_error';
+  if (/timeout|timed out|aborted/.test(haystack)) return 'ETIMEDOUT';
+  if (status === 'failed' && /server|overload|unavailable|rate/.test(haystack)) return 'server_error';
+  return null;
+}
+
+// gpt-image-2 supports an optional `quality` (low|medium|high|auto). Default to
+// 'high' for review callouts so legibility holds; allow override/disable.
+function imagegenQualityParam(opts: any = {}): { quality?: string } {
+  const raw = String(opts.quality || process.env.SKS_IMAGEGEN_QUALITY || 'high').trim().toLowerCase();
+  if (raw === 'none' || raw === 'off' || raw === '') return {};
+  return ['low', 'medium', 'high', 'auto'].includes(raw) ? { quality: raw } : { quality: 'high' };
+}
+
+// Wire imagegen fetches into the centralized responses retry policy: exponential
+// backoff on 429/5xx/timeout and transient network errors, classifying a thrown
+// fetch error (abort/timeout/network) into a retryable code.
+function imagegenRetryOptions(opts: any = {}) {
+  return {
+    sleep: opts.retrySleep,
+    classifyError: (err: unknown) => {
+      const code = String((err as { code?: string; name?: string; message?: string } | null)?.code
+        || (err as { name?: string } | null)?.name
+        || (err as { message?: string } | null)?.message
+        || '');
+      if (/AbortError|timeout|abort/i.test(code)) return { code: 'ETIMEDOUT', status: null };
+      if (/ECONNRESET|EAI_AGAIN|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|fetch failed/i.test(code)) return { code: 'ECONNRESET', status: null };
+      return { code: 'request_failed', status: null };
+    }
   };
 }
 

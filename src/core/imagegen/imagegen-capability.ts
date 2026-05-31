@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { codexLbEnvPath, parseShellEnvValue } from '../codex-lb/codex-lb-env.js';
 import { nowIso, readText, runProcess, which } from '../fsx.js';
+import { evaluateImagegenAuthReadiness } from './imagegen-auth-readiness.js';
 
 export async function detectImagegenCapability(opts: any = {}) {
   const codexBin = opts.codexBin || await which('codex').catch(() => null);
@@ -10,6 +11,12 @@ export async function detectImagegenCapability(opts: any = {}) {
   const openaiApiKeyPresent = Boolean(opts.apiKey || env.OPENAI_API_KEY);
   const codexLb = await detectCodexLbImagegenAuth(opts, env);
   const codexAppBuiltInAvailable = codexApp.available === true;
+  const authReadiness = await evaluateImagegenAuthReadiness({
+    codexHome: opts.codexHome,
+    env,
+    codexAppBuiltInAvailable,
+    authJsonText: opts.authJsonText
+  }).catch(() => null);
   const apiFallbackAvailable = openaiApiKeyPresent;
   const fakeAdapterEnabled = opts.fake === true || env.SKS_TEST_FAKE_IMAGEGEN === '1';
   const realGenerationAvailable = codexAppBuiltInAvailable || apiFallbackAvailable;
@@ -75,6 +82,7 @@ export async function detectImagegenCapability(opts: any = {}) {
       structured_extraction_required_after_generation: true,
       full_verification_requires_codex_app_output: true
     },
+    auth_readiness: authReadiness,
     core_blockers: coreBlockers,
     route_generation_blockers: routeGenerationBlockers,
     blockers: [...coreBlockers, ...routeGenerationBlockers]
