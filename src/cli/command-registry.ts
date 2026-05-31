@@ -168,6 +168,7 @@ export const COMMANDS = {
   'dollar-commands': entry('stable', 'List Codex App dollar commands', 'dist/core/commands/basic-cli.js', basicArgs('dollarCommandsCommand')),
   dollars: entry('stable', 'Alias for dollar-commands', 'dist/core/commands/basic-cli.js', basicArgs('dollarCommandsCommand')),
   '$': entry('stable', 'Alias for dollar-commands', 'dist/core/commands/basic-cli.js', basicArgs('dollarCommandsCommand')),
+  'fast-mode': entry('stable', 'Toggle SKS Fast mode default for dollar-command routes', 'dist/core/commands/fast-mode-command.js', argsCommand(() => import('../core/commands/fast-mode-command.js'), 'fastModeCommand', 'dist/core/commands/fast-mode-command.js')),
   commit: entry('stable', 'Create a simple git commit', 'dist/commands/commit.js', directCommand(() => import('../commands/commit.js'), 'dist/commands/commit.js')),
   'commit-and-push': entry('stable', 'Create a simple git commit and push', 'dist/commands/commit-and-push.js', directCommand(() => import('../commands/commit-and-push.js'), 'dist/commands/commit-and-push.js')),
   dfix: entry('stable', 'Run DFix diagnose/plan/patch/verify loop', 'dist/core/commands/dfix-command.js', commandArgsCommand(() => import('../core/commands/dfix-command.js'), 'dfixCommand', 'dist/core/commands/dfix-command.js')),

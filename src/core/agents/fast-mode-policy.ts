@@ -1,10 +1,13 @@
+import fsSync from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 
 export const FAST_MODE_POLICY_SCHEMA = 'sks.fast-mode-policy.v1'
 export const FAST_MODE_PROPAGATION_PROOF_SCHEMA = 'sks.fast-mode-propagation-proof.v1'
+export const FAST_MODE_PREFERENCE_SCHEMA = 'sks.fast-mode-preference.v1'
 export type AgentServiceTier = 'fast' | 'standard'
+export type FastModePreferenceMode = AgentServiceTier
 
 export interface FastModePolicy {
   schema: typeof FAST_MODE_POLICY_SCHEMA
@@ -12,32 +15,99 @@ export interface FastModePolicy {
   fast_mode: boolean
   service_tier: AgentServiceTier
   default_fast_mode: true
-  disabled_by: 'none' | 'no-fast' | 'service-tier-standard'
+  disabled_by: 'none' | 'no-fast' | 'service-tier-standard' | 'preference-standard'
   explicit_fast: boolean
   explicit_no_fast: boolean
   explicit_service_tier: AgentServiceTier | null
+  preference_mode: FastModePreferenceMode | null
+  preference_path: string | null
+  preference_source: 'project-state' | null
+}
+
+export interface FastModePreference {
+  schema: typeof FAST_MODE_PREFERENCE_SCHEMA
+  updated_at: string
+  mode: FastModePreferenceMode
+  fast_mode: boolean
+  service_tier: AgentServiceTier
+  source: string
 }
 
 export function resolveFastModePolicy(input: any = {}): FastModePolicy {
   const explicitTier = normalizeServiceTier(input.serviceTier ?? input.service_tier, null)
   const explicitNoFast = input.fastMode === false || input.fast_mode === false || input.noFast === true || input.no_fast === true
   const explicitFast = input.fastMode === true || input.fast_mode === true || input.fast === true
+  const preference = explicitNoFast || explicitFast || explicitTier
+    ? null
+    : readFastModePreferenceSync(input.preferenceRoot || input.preference_root || input.root)
   const serviceTier: AgentServiceTier = explicitNoFast
     ? 'standard'
     : explicitTier === 'standard'
       ? 'standard'
-      : 'fast'
+      : preference?.mode === 'standard'
+        ? 'standard'
+        : 'fast'
   return {
     schema: FAST_MODE_POLICY_SCHEMA,
     generated_at: nowIso(),
     fast_mode: serviceTier === 'fast',
     service_tier: serviceTier,
     default_fast_mode: true,
-    disabled_by: explicitNoFast ? 'no-fast' : serviceTier === 'standard' ? 'service-tier-standard' : 'none',
+    disabled_by: explicitNoFast ? 'no-fast' : explicitTier === 'standard' ? 'service-tier-standard' : preference?.mode === 'standard' ? 'preference-standard' : 'none',
     explicit_fast: explicitFast,
     explicit_no_fast: explicitNoFast,
-    explicit_service_tier: explicitTier
+    explicit_service_tier: explicitTier,
+    preference_mode: preference?.mode || null,
+    preference_path: preference?.path || null,
+    preference_source: preference ? 'project-state' : null
   }
+}
+
+export function fastModePreferencePath(root: string = process.cwd()) {
+  return path.join(path.resolve(root), '.sneakoscope', 'state', 'fast-mode.json')
+}
+
+export function readFastModePreferenceSync(root?: string | null): (FastModePreference & { path: string }) | null {
+  if (!root) return null
+  const file = fastModePreferencePath(root)
+  try {
+    const parsed = JSON.parse(fsSync.readFileSync(file, 'utf8'))
+    const mode = normalizeServiceTier(parsed?.mode ?? parsed?.service_tier, null)
+    if (!mode) return null
+    return normalizeFastModePreference({ ...parsed, mode }, file)
+  } catch {
+    return null
+  }
+}
+
+export async function readFastModePreference(root: string = process.cwd()): Promise<(FastModePreference & { path: string }) | null> {
+  const file = fastModePreferencePath(root)
+  const parsed = await readJson<any>(file, null)
+  const mode = normalizeServiceTier(parsed?.mode ?? parsed?.service_tier, null)
+  if (!mode) return null
+  return normalizeFastModePreference({ ...parsed, mode }, file)
+}
+
+export async function writeFastModePreference(root: string = process.cwd(), mode: FastModePreferenceMode, source = 'sks fast-mode'): Promise<FastModePreference & { path: string }> {
+  const normalized = normalizeServiceTier(mode, 'fast') || 'fast'
+  const file = fastModePreferencePath(root)
+  const preference: FastModePreference = {
+    schema: FAST_MODE_PREFERENCE_SCHEMA,
+    updated_at: nowIso(),
+    mode: normalized,
+    fast_mode: normalized === 'fast',
+    service_tier: normalized,
+    source
+  }
+  await writeJsonAtomic(file, preference)
+  return { ...preference, path: file }
+}
+
+export async function clearFastModePreference(root: string = process.cwd()): Promise<{ path: string; removed: boolean }> {
+  const file = fastModePreferencePath(root)
+  const existed = fsSync.existsSync(file)
+  await fs.rm(file, { force: true }).catch(() => {})
+  return { path: file, removed: existed }
 }
 
 export function fastModeEnv(policy: FastModePolicy): NodeJS.ProcessEnv {
@@ -131,6 +201,19 @@ function normalizeServiceTier(value: unknown, fallback: AgentServiceTier | null 
   const text = String(value || '').toLowerCase()
   if (text === 'fast' || text === 'standard') return text
   return fallback
+}
+
+function normalizeFastModePreference(parsed: any, file: string): FastModePreference & { path: string } {
+  const mode = normalizeServiceTier(parsed?.mode ?? parsed?.service_tier, 'fast') || 'fast'
+  return {
+    schema: FAST_MODE_PREFERENCE_SCHEMA,
+    updated_at: typeof parsed?.updated_at === 'string' ? parsed.updated_at : nowIso(),
+    mode,
+    fast_mode: mode === 'fast',
+    service_tier: mode,
+    source: typeof parsed?.source === 'string' ? parsed.source : 'unknown',
+    path: file
+  }
 }
 
 function normalizeReasoningProfile(value: unknown, policy: FastModePolicy) {

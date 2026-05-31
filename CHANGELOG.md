@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [1.20.3] - 2026-05-31
+
+Patch release: fixes macOS Zellij IPC socket path failures during `sks --mad` / codex-lb launches when `$TMPDIR` is long.
+
+### Added
+
+- **Fast mode dollar toggles.** Added `$Fast-On`, `$Fast-Off`, and `$Fast-Mode` plus `sks fast-mode on|off|status|clear`. The toggle writes the project-local `.sneakoscope/state/fast-mode.json` preference and native-agent routes honor it only when no explicit `--fast`, `--no-fast`, or `--service-tier` flag is present.
+
+### Fixed
+
+- **Zellij socket path fallback for MAD/codex-lb launches.** SKS-launched Zellij commands now default `ZELLIJ_SOCKET_DIR` to a short per-user `/tmp/zj<uid>` directory when the operator has not set one, preserving explicit `ZELLIJ_SOCKET_DIR` / `SKS_ZELLIJ_SOCKET_DIR` overrides. Launch reports include `*_command_with_env`, `zellij_socket_dir`, and `zellij_socket_dir_source` so manual attach commands use the same socket namespace.
+- **Session name length guard.** Zellij session names are capped at 64 characters with a deterministic hash suffix when truncated, keeping the generated `contract_version_1/<session>` socket path under the Unix-domain socket path limit with SKS's default socket directory.
+- **Sharper failure diagnosis.** Zellij stderr containing `IPC socket path is too long` is now classified as `zellij_socket_path_too_long` instead of the generic `zellij_command_failed`.
+
+### Verified
+
+- Added `test/unit/zellij-socket-dir.test.mjs` covering the long macOS `$TMPDIR` case, explicit socket-dir preservation, attach-command surfacing, and precise blocker classification.
+- Added `test/blackbox/fast-mode-command-packed.test.mjs` and expanded `test/unit/fast-mode-policy.test.mjs` to cover project-local preference on/off/clear behavior, dollar-command discovery, and explicit flag precedence.
+- Reproduced the user-shaped launch condition with a long `TMPDIR` and session `sks-codex-lb-mptvbk59-Sneakoscope-Codex`; the real background Zellij launch succeeded with `ZELLIJ_SOCKET_DIR=/tmp/zj501`.
+
 ## [1.20.2] - 2026-05-31
 
 Stabilization patch: closes the enforcement / integration / execution layers that 1.20.1 shipped as infrastructure-only. No new large features. `release:check` passes end-to-end at 1.20.2.

@@ -28,7 +28,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|research|db|git|codex|codex-app|hooks|features|all-features|openclaw|hermes|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|fast-mode|research|db|git|codex|codex-app|hooks|features|all-features|openclaw|hermes|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE = 'codex_chrome_extension';
 export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
@@ -339,6 +339,22 @@ export const ROUTES = [
     examples: ['$SKS show me available workflows']
   },
   {
+    id: 'FastMode',
+    command: '$Fast-Mode',
+    mode: 'FAST_MODE',
+    route: 'fast-mode toggle',
+    description: 'Turn the SKS Fast mode default on or off for project-local dollar-command and native-agent routes. Explicit --fast, --no-fast, and --service-tier flags still override it.',
+    requiredSkills: ['fast-mode', 'honest-mode'],
+    dollarAliases: ['$Fast-On', '$Fast-Off'],
+    appSkillAliases: ['fast-on', 'fast-off'],
+    lifecycle: ['project_state_toggle', 'policy_status', 'honest_mode'],
+    context7Policy: 'not_required',
+    reasoningPolicy: 'low',
+    stopGate: 'none',
+    cliEntrypoint: 'sks fast-mode on|off|status|clear [--json]',
+    examples: ['$Fast-On', '$Fast-Off', '$Fast-Mode status']
+  },
+  {
     id: 'Team',
     command: '$Team',
     mode: 'TEAM',
@@ -626,6 +642,7 @@ export const COMMAND_CATALOG = [
   { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot Zellij Codex CLI workspace with the SKS MAD full-access auto-review profile.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS Zellij with the auto-review profile.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Team.' },
+  { name: 'fast-mode', usage: 'sks fast-mode on|off|status|clear [--json]', description: 'Toggle the project-local Fast mode default used by $Fast-On, $Fast-Off, and native-agent routes.' },
   { name: 'commit', usage: 'sks commit [--message "msg"] [--json]', description: 'Stage current changes, summarize them, and create a simple git commit without the full SKS pipeline.' },
   { name: 'commit-and-push', usage: 'sks commit-and-push [--message "msg"] [--json]', description: 'Stage current changes, create a simple git commit, and push without the full SKS pipeline.' },
   { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight direct-fix mode.' },

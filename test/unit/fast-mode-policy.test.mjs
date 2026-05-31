@@ -3,7 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { resolveFastModePolicy, fastModeEnv, applyFastModeToRoster, writeFastModePropagationProof } from '../../dist/core/agents/fast-mode-policy.js';
+import {
+  resolveFastModePolicy,
+  fastModeEnv,
+  applyFastModeToRoster,
+  writeFastModePropagationProof,
+  writeFastModePreference,
+  readFastModePreference,
+  clearFastModePreference
+} from '../../dist/core/agents/fast-mode-policy.js';
 
 test('fast mode policy defaults to fast without explicit opt-in', () => {
   const policy = resolveFastModePolicy({});
@@ -30,6 +38,49 @@ test('fast mode policy records explicit no-fast and standard-tier opt-out', () =
   assert.equal(standard.fast_mode, false);
   assert.equal(standard.service_tier, 'standard');
   assert.equal(standard.disabled_by, 'service-tier-standard');
+});
+
+test('fast mode preference toggles project default while explicit flags still win', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-preference-'));
+  const saved = await writeFastModePreference(root, 'standard', 'unit-test');
+  assert.equal(saved.service_tier, 'standard');
+  assert.equal(saved.fast_mode, false);
+
+  const preference = await readFastModePreference(root);
+  assert.equal(preference.service_tier, 'standard');
+
+  const preferred = resolveFastModePolicy({ root });
+  assert.equal(preferred.fast_mode, false);
+  assert.equal(preferred.service_tier, 'standard');
+  assert.equal(preferred.disabled_by, 'preference-standard');
+  assert.equal(preferred.preference_source, 'project-state');
+
+  const explicitFast = resolveFastModePolicy({ root, fastMode: true });
+  assert.equal(explicitFast.fast_mode, true);
+  assert.equal(explicitFast.service_tier, 'fast');
+  assert.equal(explicitFast.disabled_by, 'none');
+
+  const explicitFastTier = resolveFastModePolicy({ root, serviceTier: 'fast' });
+  assert.equal(explicitFastTier.fast_mode, true);
+  assert.equal(explicitFastTier.service_tier, 'fast');
+  assert.equal(explicitFastTier.preference_mode, null);
+
+  const standardTierBeatsFastFlag = resolveFastModePolicy({ root, serviceTier: 'standard', fastMode: true });
+  assert.equal(standardTierBeatsFastFlag.fast_mode, false);
+  assert.equal(standardTierBeatsFastFlag.service_tier, 'standard');
+  assert.equal(standardTierBeatsFastFlag.disabled_by, 'service-tier-standard');
+
+  const noFastBeatsFastTier = resolveFastModePolicy({ root, noFast: true, serviceTier: 'fast' });
+  assert.equal(noFastBeatsFastTier.fast_mode, false);
+  assert.equal(noFastBeatsFastTier.service_tier, 'standard');
+  assert.equal(noFastBeatsFastTier.disabled_by, 'no-fast');
+
+  await writeFastModePreference(root, 'fast', 'unit-test');
+  assert.equal(resolveFastModePolicy({ root }).service_tier, 'fast');
+
+  const cleared = await clearFastModePreference(root);
+  assert.equal(cleared.removed, true);
+  assert.equal(resolveFastModePolicy({ root }).service_tier, 'fast');
 });
 
 test('fast mode policy rewrites roster reasoning profiles and service tier', () => {

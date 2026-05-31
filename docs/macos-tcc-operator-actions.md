@@ -1,6 +1,6 @@
 # macOS TCC Operator Actions
 
-In SKS 1.20.2, when Codex reports `Operation not permitted (os error 1)` while Node can read `.codex/config.toml`, SKS treats macOS TCC as a probable diagnosis, not a certain one.
+In SKS 1.20.3, when Codex reports `Operation not permitted (os error 1)` while Node can read `.codex/config.toml`, SKS treats macOS TCC as a probable diagnosis, not a certain one.
 
 Check:
 

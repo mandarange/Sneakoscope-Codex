@@ -53,7 +53,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   const route = opts.route || '$Agent'
   const routeCommand = String(opts.routeCommand || defaultRouteCommand(route))
   const routeBlackboxKind = String(opts.routeBlackboxKind || defaultRouteBlackboxKind(route))
-  const fastModePolicy = resolveFastModePolicy(opts)
+  const fastModePolicy = resolveFastModePolicy({ ...opts, root })
   const backend = normalizeAgentBackend(opts.backend || (opts.mock ? 'fake' : 'codex-exec'))
   const maxAgentCount = Number.isFinite(Number(opts.maxAgentCount)) && Number(opts.maxAgentCount) >= 1 ? Math.floor(Number(opts.maxAgentCount)) : MAX_AGENT_COUNT
   const realZellij = backend === 'zellij' && opts.real === true
