@@ -4,6 +4,7 @@ import { appendJsonl, nowIso, sha256, writeJsonAtomic } from '../fsx.js'
 import { checkZellijCapability } from './zellij-capability.js'
 import { formatZellijCommand, resolveZellijProcessEnvMeta, runZellij } from './zellij-command.js'
 import { writeZellijLayout, type ZellijLayoutInput } from './zellij-layout-builder.js'
+import { writeZellijClipboardConfig } from './zellij-clipboard-config.js'
 import { writeZellijPaneProof, type ZellijPaneProofOptions } from './zellij-pane-proof.js'
 
 export const ZELLIJ_SESSION_SCHEMA = 'sks.zellij-session.v1'
@@ -44,7 +45,13 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   if (opts.codexBin) layoutInput.codexBin = opts.codexBin
   const layout = await writeZellijLayout(root, layoutInput)
   const capability = await checkZellijCapability({ root, require: opts.requireZellij === true })
-  const createCommand = ['attach', '--create-background', sessionName, 'options', '--default-layout', layout.layout_path]
+  // Configure the clipboard pipeline so selections inside the session reach the OS
+  // clipboard (Zellij's default OSC-52 copy is dropped by Terminal.app etc.). The
+  // copy option flags are appended AFTER `--default-layout <path>` so the launch
+  // command prefix ['zellij','attach','--create-background',session,'options','--default-layout',...]
+  // is preserved (required by the zellij launch-command-truth gate + E2E assertions).
+  const clipboard = await writeZellijClipboardConfig(root, missionId)
+  const createCommand = ['attach', '--create-background', sessionName, 'options', '--default-layout', layout.layout_path, ...clipboard.optionFlags]
   const attachCommand = ['attach', sessionName]
   const zellijEnv = resolveZellijProcessEnvMeta()
   const launch: any = opts.dryRun === true || capability.status !== 'ok'
@@ -102,6 +109,8 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     attach_requested: opts.attach === true,
     zellij_socket_dir: zellijEnv.zellij_socket_dir,
     zellij_socket_dir_source: zellijEnv.zellij_socket_dir_source,
+    clipboard_config_path: clipboard.config_path,
+    clipboard_copy_command: clipboard.copy_command,
     pane_proof_path: path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-pane-proof.json'),
     pane_proof: paneProof,
     dry_run: opts.dryRun === true,
@@ -166,12 +175,18 @@ export interface ZellijAttachResult {
  */
 export function attachZellijSessionInteractive(
   sessionName: string,
-  opts: { cwd?: string } = {}
+  opts: { cwd?: string; configPath?: string } = {}
 ): ZellijAttachResult {
   if (!sessionName) return { ok: false, status: null, signal: null, error: 'missing_session_name' }
   const meta = resolveZellijProcessEnvMeta()
   const env: NodeJS.ProcessEnv = { ...process.env }
   if (meta.zellij_socket_dir && !env.ZELLIJ_SOCKET_DIR) env.ZELLIJ_SOCKET_DIR = meta.zellij_socket_dir
+  // Steer the foreground attach at our generated clipboard config so the interactive
+  // session honors copy_command=pbcopy + copy_on_select. The `options` subcommand only
+  // configures the *created* background session, so the attach needs its own config
+  // delivery; ZELLIJ_CONFIG_FILE avoids reordering CLI args. Defer to a user-exported
+  // ZELLIJ_CONFIG_FILE if they already set one.
+  if (opts.configPath && !env.ZELLIJ_CONFIG_FILE) env.ZELLIJ_CONFIG_FILE = opts.configPath
   try {
     const result = spawnSync('zellij', ['attach', sessionName], {
       cwd: opts.cwd || process.cwd(),

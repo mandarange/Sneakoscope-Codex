@@ -6,8 +6,6 @@ import { ensureDir, nowIso, readText, writeJsonAtomic, writeTextAtomic } from '.
 export const CODEX_PROJECT_CONFIG_POLICY_SCHEMA = 'sks.codex-project-config-policy.v1'
 
 const MACHINE_LOCAL_TOP_LEVEL_KEYS = new Set([
-  'profile',
-  'profiles',
   'model_provider',
   'model_providers',
   'openai_base_url',
@@ -23,13 +21,25 @@ const MACHINE_LOCAL_TOP_LEVEL_KEYS = new Set([
 ])
 
 const MACHINE_LOCAL_TABLE_PREFIXES = [
-  'profiles',
   'model_providers',
   'notify',
   'otel',
   'telemetry',
   'experimental_telemetry'
 ]
+
+// Codex 0.134+ removed the legacy config-profile consumers: `--profile NAME` now
+// layers `$CODEX_HOME/<name>.config.toml` over the base config and the top-level
+// `profile = "..."` selector / `[profiles.*]` tables are deprecated and warned about
+// at startup. So these are NO LONGER machine-local-and-moved-to-home — they are
+// DROPPED from the project config entirely. The per-file profiles are owned by
+// migrateSksProfilesToPerFile (src/core/auto-review.ts), which runs on `sks --mad`.
+const DEPRECATED_LEGACY_PROFILE_TOP_LEVEL_KEYS = new Set(['profile', 'profiles'])
+const DEPRECATED_LEGACY_PROFILE_TABLE_PREFIXES = ['profiles']
+
+function isDeprecatedLegacyProfileTable(table: string) {
+  return DEPRECATED_LEGACY_PROFILE_TABLE_PREFIXES.some((prefix) => table === prefix || table.startsWith(`${prefix}.`))
+}
 
 export async function splitCodexProjectConfigPolicy(rootInput: string = process.cwd(), opts: any = {}) {
   const root = path.resolve(rootInput || process.cwd())
@@ -130,6 +140,7 @@ export async function splitCodexProjectConfigPolicy(rootInput: string = process.
     },
     moved_keys: split.moved_keys,
     moved_tables: split.moved_tables,
+    removed_legacy_profiles: split.removed_legacy_profiles,
     deprecated_approval_policy_fixed: split.deprecated_approval_policy_fixed,
     actions,
     parse_smoke: parseSmoke,
@@ -256,11 +267,18 @@ function splitProjectToml(text: string) {
   const machineBlocks: any[] = []
   const movedKeys: string[] = []
   const movedTables: string[] = []
+  const removedLegacyProfiles: string[] = []
   const blockers: string[] = []
   let profileName: string | null = null
   let deprecatedFixed = false
 
   for (const block of blocks) {
+    // Deprecated legacy config profiles are DROPPED, not moved to the home config
+    // (Codex 0.134+ warns about `[profiles.*]` tables and the `profile=` selector).
+    if (block.table && isDeprecatedLegacyProfileTable(block.table)) {
+      removedLegacyProfiles.push(block.table)
+      continue
+    }
     if (block.table && isMachineLocalTable(block.table)) {
       if (block.array) {
         kept.push(block.text)
@@ -277,10 +295,14 @@ function splitProjectToml(text: string) {
       const moveLines: string[] = []
       for (const line of block.text.split('\n')) {
         const key = topLevelKey(line)
+        if (key && DEPRECATED_LEGACY_PROFILE_TOP_LEVEL_KEYS.has(key)) {
+          if (key === 'profile') profileName = tomlStringValue(line)
+          removedLegacyProfiles.push(`top_level:${key}`)
+          continue
+        }
         if (key && MACHINE_LOCAL_TOP_LEVEL_KEYS.has(key)) {
           moveLines.push(line)
           movedKeys.push(key)
-          if (key === 'profile') profileName = tomlStringValue(line)
           continue
         }
         const fixed = fixDeprecatedApprovalPolicy(line)
@@ -304,6 +326,7 @@ function splitProjectToml(text: string) {
     machine_blocks: machineBlocks,
     moved_keys: [...new Set(movedKeys)],
     moved_tables: [...new Set(movedTables)],
+    removed_legacy_profiles: [...new Set(removedLegacyProfiles)],
     kept_keys: [],
     profile_name: profileName,
     deprecated_approval_policy_fixed: deprecatedFixed,

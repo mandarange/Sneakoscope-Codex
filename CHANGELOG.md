@@ -4,6 +4,16 @@
 
 
 
+## [1.21.1] - 2026-06-01
+
+Patch release: three `sks --mad` launch fixes — faster launch, working Zellij clipboard copy, and no more Codex legacy-profile deprecation warning.
+
+### Fixed
+
+- **`sks --mad` launch is no longer slow.** `activateMadZellijPermissionState` content-hashed the entire protected core (~1,900 files across `dist`/`src`/`scripts`/`schemas`) on every launch, even though that "before" snapshot is only stored and never compared during the interactive session. `snapshotProtectedCore` (`src/core/mad-sks/immutable-harness-guard.ts`) gained an opt-in `mode: 'metadata'` (lstat-only, no file reads) used only for the launch snapshot; the default stays `'content'` so the `mad-sks:immutable-harness` / `mad-sks:no-harness-modification` gates and `run`/`apply` comparisons are unchanged. The launch preflight also skips the redundant live `codex exec` config probe via a new `launchFast` flag in `runCodexLaunchPreflight` (`src/core/preflight/parallel-preflight-engine.ts`); the real Codex profile is exercised when the Zellij session opens moments later. All filesystem/permission/EPERM readability checks still run, and `SKS_LAUNCH_FULL_CODEX_PROBE=1` restores the full probe.
+- **Text copy works inside the MAD Zellij session.** Zellij's default OSC 52 clipboard is dropped by macOS Terminal.app, and SKS passed no clipboard configuration. New `src/core/zellij/zellij-clipboard-config.ts` writes a clipboard config (`copy_command "pbcopy"`, `copy_on_select true`, `copy_clipboard "system"`); `zellij-launcher.ts` appends the `--copy-command/--copy-clipboard/--copy-on-select` options to the created session (after `--default-layout`, preserving the launch-command shape) and steers the foreground attach at the config via `ZELLIJ_CONFIG_FILE`. Holding Shift while drag-selecting remains the native-terminal selection fallback.
+- **No more Codex "legacy profile" deprecation warning on launch.** `enableMadHighProfile` already removed `[profiles.sks-mad-high]`, but `runCodexLaunchPreflight`'s project-config splitter ran afterward and re-injected the legacy `[profiles.*]` tables from the project config back into `~/.codex/config.toml` every launch. Codex 0.134+ deprecated config-profile tables and the top-level `profile=` selector in favor of per-file `$CODEX_HOME/<name>.config.toml` overlays loaded by `--profile`. `splitCodexProjectConfigPolicy` (`src/core/codex/codex-project-config-policy.ts`) now drops those deprecated tables/selectors (reported as `removed_legacy_profiles`) instead of relocating them; `init.ts` and `install-helpers.ts` stopped emitting the legacy tables; and `migrateSksProfilesToPerFile` (`src/core/auto-review.ts`) writes per-file profile overlays and strips the stale tables on `sks --mad`. The Codex App fast-mode `[profiles.sks-fast-high]` table, `[user.fast_mode] default_profile`, and `model_provider = "codex-lb"` are preserved.
+
 ## [1.21.0] - 2026-06-01
 
 ### Fixed

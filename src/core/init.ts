@@ -812,19 +812,16 @@ function managedCodexConfigBlocks() {
     { table: 'agents.implementation_worker', text: agentConfigBlock('implementation_worker', 'SKS bounded implementation worker.', './agents/implementation-worker.toml', ['Builder', 'Mason']) },
     { table: 'agents.db_safety_reviewer', text: agentConfigBlock('db_safety_reviewer', 'Read-only DB safety reviewer.', './agents/db-safety-reviewer.toml', ['Sentinel', 'Ledger']) },
     { table: 'agents.qa_reviewer', text: agentConfigBlock('qa_reviewer', 'Read-only QA reviewer.', './agents/qa-reviewer.toml', ['Verifier', 'Reviewer']) },
-    { table: 'profiles.sks-task-low', text: profileConfigBlock('sks-task-low', 'low') },
-    { table: 'profiles.sks-task-medium', text: profileConfigBlock('sks-task-medium', 'medium') },
-    { table: 'profiles.sks-logic-high', text: profileConfigBlock('sks-logic-high', 'high') },
-    { table: 'profiles.sks-fast-high', text: profileConfigBlock('sks-fast-high', 'high', { serviceTier: 'fast' }) },
-    { table: 'profiles.sks-research-xhigh', text: profileConfigBlock('sks-research-xhigh', 'xhigh') },
-    { table: 'profiles.sks-research', text: profileConfigBlock('sks-research', 'xhigh', { approval: 'never' }) },
-    { table: 'profiles.sks-team', text: profileConfigBlock('sks-team', 'medium') },
-    { table: 'profiles.sks-mad-high', text: profileConfigBlock('sks-mad-high', 'high', { approval: 'never', sandbox: 'danger-full-access', approvalsReviewer: 'auto_review' }) },
+    // NOTE: SKS config profiles are NO LONGER emitted as `[profiles.sks-*]` tables.
+    // Codex 0.134+ deprecated config-profile tables / the `profile=` selector (warns at
+    // startup) in favor of per-file `$CODEX_HOME/<name>.config.toml` overlays loaded by
+    // `--profile <name>`. Those per-file profiles are owned by migrateSksProfilesToPerFile
+    // (src/core/auto-review.ts), invoked on `sks --mad`. Emitting the tables here only got
+    // them relocated into the home config by the splitter, re-triggering the warning.
     {
       table: 'auto_review',
       text: '[auto_review]\npolicy = "In MAD launches, allow live-server work, normal DB writes, Supabase MCP DB writes, direct execute SQL, schema cleanup, and migration application for the active invocation. Deny only catastrophic database wipes, all-row value deletion/update, dangerous project or branch management, credential exfiltration, persistent security weakening, broad unrelated file deletion, and unrequested fallback implementation code."'
-    },
-    { table: 'profiles.sks-default', text: profileConfigBlock('sks-default', 'high') }
+    }
   ];
 }
 
@@ -837,17 +834,6 @@ function agentConfigBlock(table: any, description: any, configFile: any, nicknam
   ].join('\n');
 }
 
-function profileConfigBlock(profile: any, effort: any, opts: any = {}) {
-  return [
-    `[profiles.${profile}]`,
-    'model = "gpt-5.5"',
-    `service_tier = "${opts.serviceTier || 'fast'}"`,
-    `approval_policy = "${opts.approval || 'on-request'}"`,
-    ...(opts.approvalsReviewer ? [`approvals_reviewer = "${opts.approvalsReviewer}"`] : []),
-    `sandbox_mode = "${opts.sandbox || 'workspace-write'}"`,
-    `model_reasoning_effort = "${effort}"`
-  ].join('\n');
-}
 
 function upsertTomlTableKey(text: any, table: any, line: any) {
   const key = (String(line).split('=')[0] || '').trim();

@@ -157,16 +157,29 @@ export async function evaluateMadSksWrite({
   };
 }
 
-export async function snapshotProtectedCore(root: string = packageRoot(), label = 'snapshot') {
+export interface SnapshotProtectedCoreOptions {
+  // 'content' (default): read + sha256 every file (strong integrity). Used by the
+  //   release gates (mad-sks:immutable-harness / no-harness-modification) and by
+  //   materializeMadSksRun's before/after comparison.
+  // 'metadata': hash only lstat metadata (mtimeMs+size+mode) per file — no file
+  //   reads. Used for the interactive `sks --mad` launch 'before' snapshot, which
+  //   is only persisted (env + policy json) and never compared during the session,
+  //   so the ~10MB/1900-file content hash is wasted work on the launch hot path.
+  mode?: 'content' | 'metadata';
+}
+
+export async function snapshotProtectedCore(root: string = packageRoot(), label = 'snapshot', opts: SnapshotProtectedCoreOptions = {}) {
+  const mode = opts.mode === 'metadata' ? 'metadata' : 'content';
   const resolution = resolveProtectedCore(root);
   const entries = [];
   for (const entry of resolution.protected_paths) {
-    entries.push(await hashProtectedEntry(entry));
+    entries.push(mode === 'metadata' ? await metadataHashProtectedEntry(entry) : await hashProtectedEntry(entry));
   }
   const digest = sha256(entries.map((entry) => `${entry.id}:${entry.hash || 'missing'}:${entry.file_count}:${entry.bytes}`).join('\n'));
   return {
     schema: MAD_SKS_PROTECTED_CORE_SNAPSHOT_SCHEMA,
     label,
+    digest_mode: mode,
     generated_at: nowIso(),
     package_root: resolution.package_root,
     engine_source_exception: resolution.engine_source_exception,
@@ -227,6 +240,36 @@ async function hashProtectedEntry(entry: ProtectedCoreEntry) {
     const buf = await fsp.readFile(file);
     bytes += buf.length;
     parts.push(`${path.relative(entry.absolute_path, file).split(path.sep).join('/')}:${sha256(buf)}`);
+  }
+  return { id: entry.id, path: entry.path, relative_path: entry.path, present: true, hash: sha256(parts.join('\n')), file_count: files.length, bytes };
+}
+
+// Cheap variant of hashProtectedEntry: hash only filesystem metadata
+// (mtimeMs + size + mode) instead of reading + sha256-ing file contents. Walks the
+// same file set so file_count/bytes stay comparable, but avoids the ~10MB read +
+// per-file sha256 cost. Only used for the never-compared interactive launch 'before'
+// snapshot; integrity-critical callers keep the default 'content' mode.
+async function metadataHashProtectedEntry(entry: ProtectedCoreEntry) {
+  if (!(await exists(entry.absolute_path))) {
+    return { id: entry.id, path: entry.path, relative_path: entry.path, present: false, hash: null, file_count: 0, bytes: 0 };
+  }
+  const stat = await fsp.lstat(entry.absolute_path);
+  if (stat.isFile()) {
+    return { id: entry.id, path: entry.path, relative_path: entry.path, present: true, hash: sha256(`${stat.mtimeMs}:${stat.size}:${stat.mode}`), file_count: 1, bytes: stat.size };
+  }
+  if (!stat.isDirectory()) {
+    return { id: entry.id, path: entry.path, relative_path: entry.path, present: true, hash: sha256(`${stat.mode}:${stat.size}`), file_count: 1, bytes: stat.size };
+  }
+  if (entry.match === 'exact') {
+    return { id: entry.id, path: entry.path, relative_path: entry.path, present: true, hash: sha256(`dir:${stat.mode}:${stat.uid}:${stat.gid}`), file_count: 1, bytes: 0 };
+  }
+  const files = await walk(entry.absolute_path);
+  let bytes = 0;
+  const parts = [];
+  for (const file of files.sort()) {
+    const st = await fsp.lstat(file);
+    bytes += st.size;
+    parts.push(`${path.relative(entry.absolute_path, file).split(path.sep).join('/')}:${st.mtimeMs}:${st.size}:${st.mode}`);
   }
   return { id: entry.id, path: entry.path, relative_path: entry.path, present: true, hash: sha256(parts.join('\n')), file_count: files.length, bytes };
 }

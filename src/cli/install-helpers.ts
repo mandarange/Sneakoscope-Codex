@@ -1497,21 +1497,18 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '') {
   next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'visible = true');
   next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'enabled = true');
   next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
+  // Keep ONLY the sks-fast-high config-profile table: the Codex App fast-mode
+  // (`[user.fast_mode] default_profile = "sks-fast-high"`) and the
+  // codex-app:ui-preservation gate still expect it. The other SKS config profiles are
+  // no longer written as `[profiles.sks-*]` tables here (Codex 0.134+ deprecates them);
+  // they are managed as per-file `<name>.config.toml` overlays by
+  // migrateSksProfilesToPerFile (src/core/auto-review.ts), which also writes the
+  // sks-fast-high overlay for CLI `--profile` use.
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'model = "gpt-5.5"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'service_tier = "fast"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'approval_policy = "on-request"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'sandbox_mode = "workspace-write"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'model_reasoning_effort = "high"');
-  next = upsertTomlTableKey(next, 'profiles.sks-research-xhigh', 'model = "gpt-5.5"');
-  next = upsertTomlTableKey(next, 'profiles.sks-research-xhigh', 'service_tier = "fast"');
-  next = upsertTomlTableKey(next, 'profiles.sks-research-xhigh', 'approval_policy = "on-request"');
-  next = upsertTomlTableKey(next, 'profiles.sks-research-xhigh', 'sandbox_mode = "workspace-write"');
-  next = upsertTomlTableKey(next, 'profiles.sks-research-xhigh', 'model_reasoning_effort = "xhigh"');
-  next = upsertTomlTableKey(next, 'profiles.sks-research', 'model = "gpt-5.5"');
-  next = upsertTomlTableKey(next, 'profiles.sks-research', 'service_tier = "fast"');
-  next = upsertTomlTableKey(next, 'profiles.sks-research', 'approval_policy = "never"');
-  next = upsertTomlTableKey(next, 'profiles.sks-research', 'sandbox_mode = "workspace-write"');
-  next = upsertTomlTableKey(next, 'profiles.sks-research', 'model_reasoning_effort = "xhigh"');
   // Plugin auto-enable is OPT-IN only. Force-writing `[plugins."name@marketplace"] enabled =
   // true` for marketplace plugins the App may not have installed (different build/channel)
   // makes the App reference plugins it cannot load -> broken/blocked plugin UI. It also
