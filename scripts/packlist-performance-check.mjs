@@ -29,13 +29,17 @@ try {
 }
 
 const files = info.files.map((f) => f.path);
+const runtimeManifest = JSON.parse(fs.readFileSync(path.join(root, 'runtime-required-scripts.json'), 'utf8'));
+assertGate(runtimeManifest.schema === 'sks.runtime-required-scripts.v1' && Array.isArray(runtimeManifest.scripts), 'runtime required scripts manifest invalid', runtimeManifest);
 
 assertGate(info.entryCount <= MAX_FILES, 'packlist_file_count_over_limit', { entryCount: info.entryCount, max_files: MAX_FILES });
 assertGate(info.unpackedSize <= MAX_UNPACKED, 'packlist_unpacked_over_limit', { unpackedSize: info.unpackedSize, max_unpacked: MAX_UNPACKED });
 assertGate(info.size <= MAX_PACKED, 'packlist_packed_over_limit', { size: info.size, max_packed: MAX_PACKED });
 
 assertGate(files.includes('dist/bin/sks.js'), 'packlist_missing_runtime_entry', { missing: 'dist/bin/sks.js' });
-assertGate(files.includes('scripts/codex-config-load-probe.mjs'), 'packlist_missing_runtime_entry', { missing: 'scripts/codex-config-load-probe.mjs' });
+for (const entry of runtimeManifest.scripts) {
+  assertGate(files.includes(entry.path), 'packlist_missing_runtime_required_script', { missing: entry.path, reason: entry.reason });
+}
 assertGate(files.includes('package.json'), 'packlist_missing_runtime_entry', { missing: 'package.json' });
 assertGate(files.includes('README.md'), 'packlist_missing_runtime_entry', { missing: 'README.md' });
 assertGate(files.includes('LICENSE'), 'packlist_missing_runtime_entry', { missing: 'LICENSE' });
@@ -57,6 +61,8 @@ const report = {
   entryCount: info.entryCount,
   size: info.size,
   unpackedSize: info.unpackedSize,
+  runtime_required_scripts: runtimeManifest.scripts.map((entry) => entry.path),
+  runtime_required_missing: runtimeManifest.scripts.filter((entry) => !files.includes(entry.path)).map((entry) => entry.path),
   max_files: MAX_FILES,
   max_packed: MAX_PACKED,
   max_unpacked: MAX_UNPACKED,

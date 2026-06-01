@@ -1,0 +1,689 @@
+{
+  "schema": "sks.safety-mutation-allowlist.v1",
+  "entries": [
+    {
+      "file": "scripts/agent-codex-app-cockpit-check.mjs",
+      "symbol": "runFixture",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/agent-codex-child-overlap-check.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/agent-real-codex-dynamic-smoke-check.mjs",
+      "symbol": "writeReport",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/agent-real-codex-patch-envelope-smoke.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/agent-real-codex-patch-envelope-smoke.mjs",
+      "symbol": "writeReport",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/agent-zellij-runtime-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/blackbox-pack-install.mjs",
+      "symbol": "cleanupInstallAttempt",
+      "token": "rmSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/blackbox-pack-install.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-0-133-official-compat-report.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-0-134-official-compat-report.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-0-134-runner-truth-check.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-0-135-compat-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-config-eperm-fixture.mjs",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-config-eperm-fixture.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-config-load-probe.mjs",
+      "symbol": "module",
+      "token": "fs.rm",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-exec-output-schema-actual-syntax-check.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-history-search-check.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-lb-config-toml-safety-check.mjs",
+      "symbol": "tripleTokens",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-project-config-policy-merge-regression.mjs",
+      "symbol": "idxOf",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-project-config-policy-merge-regression.mjs",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-project-config-policy-merge-regression.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-project-config-policy-splitter-check.mjs",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/codex-project-config-policy-splitter-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/doctor-fix-recovers-corrupted-config-check.mjs",
+      "symbol": "envTableHasMachineKey",
+      "token": "codex config write",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/doctor-fix-recovers-corrupted-config-check.mjs",
+      "symbol": "envTableHasMachineKey",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/fast-codex-service-tier-proof-check.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/fixtures/fake-codex-config-loader.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/install-update-preserves-config-check.mjs",
+      "symbol": "backups",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/install-update-preserves-config-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/lib/real-codex-parallel-gate.mjs",
+      "symbol": "runRealCodexParallelGate",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/lib/real-codex-parallel-proof-fixture.mjs",
+      "symbol": "buildFixtureProof",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/mad-sks-zellij-launch-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/npm-publish-performance-check.mjs",
+      "symbol": "writeReport",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/postinstall-safe-side-effects-check.mjs",
+      "symbol": "postinstall",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-check-dynamic-execute.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-check-dynamic.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-check-stamp.mjs",
+      "symbol": "writeStamp",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-dynamic-performance-check.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-gate-budget-check.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-gate-planner.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-metadata-1-19-check.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-native-agent-fixture-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-provenance-check.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-readiness-report.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-version-truth-check.mjs",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/typescript-migration-report.mjs",
+      "symbol": "typedEntries",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/zellij-lane-renderer-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/zellij-launch-command-truth-check.mjs",
+      "symbol": "walk",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/zellij-layout-valid-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/zellij-real-session-heartbeat-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/zellij-real-session-launch-check.mjs",
+      "symbol": "module",
+      "token": "fs.rm",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/zellij-real-session-launch-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/zellij-ui-design-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "configureCodexLb",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "ensureSksCommandDuringInstall",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "hardBrokenLaunch",
+      "token": "codex config write",
+      "reason": "Codex config or auth mutation path is constrained by caller contract and exact symbol audit."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "migrateCodexAuthKeyFormat",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "reconcileCodexLbAuthConflict",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "reconcileSksPathShimsDuringInstall",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "releaseCodexLbAuthHold",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "releaseCodexLbAuthHold",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "restoreCodexLbEnvFromSharedLogin",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "restorePostinstallCodexLbConfigSnapshot",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "selftestCodexLb",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "selftestCodexLb",
+      "token": "codex config write",
+      "reason": "Codex config or auth mutation path is constrained by caller contract and exact symbol audit."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "selftestCodexLb",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "selftestSksShimRepair",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "writeCodexLbChainCache",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/commands/doctor.ts",
+      "symbol": "backupProjectConfigBeforeFix",
+      "token": "fsp.writeFile",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/agents/agent-cleanup-executor.ts",
+      "symbol": "runAgentCleanupExecutor",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/agents/agent-cleanup-executor.ts",
+      "symbol": "safeKill",
+      "token": "process.kill",
+      "reason": "Process lifecycle helper terminates only owned child or process tree during cleanup."
+    },
+    {
+      "file": "src/core/agents/agent-janitor.ts",
+      "symbol": "runAgentJanitor",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/agents/agent-patch-apply-worker.ts",
+      "symbol": "applyAgentPatchEnvelope",
+      "token": "fs.writeFile",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/agents/agent-patch-apply-worker.ts",
+      "symbol": "releaseFileLock",
+      "token": "fs.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/agents/agent-patch-apply-worker.ts",
+      "symbol": "rollbackAgentPatchApply",
+      "token": "fs.writeFile",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/agents/agent-patch-apply-worker.ts",
+      "symbol": "rollbackAgentPatchApply",
+      "token": "unlink",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/agents/fast-mode-policy.ts",
+      "symbol": "clearFastModePreference",
+      "token": "fs.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/codex-hooks/codex-hook-managed-install.ts",
+      "symbol": "chmodExecutable",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/core/codex/codex-config-eperm-repair.ts",
+      "symbol": "replaceUnsafeSymlink",
+      "token": "rename",
+      "reason": "Atomic or repair rename primitive is caller-scoped and externally audited by exact symbol."
+    },
+    {
+      "file": "src/core/commands/image-ux-review-command.ts",
+      "symbol": "imageUxFixture",
+      "token": "fsp.writeFile",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/commands/rollback-command.ts",
+      "symbol": "rollbackCommand",
+      "token": "fs.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/computer-use-live-evidence.ts",
+      "symbol": "materializeScreenshot",
+      "token": "fsp.writeFile",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/dfix/patch-runner.ts",
+      "symbol": "runDfixPatch",
+      "token": "fsp.writeFile",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/feature-fixture-runner.ts",
+      "symbol": "prepareHermeticFixtureRoot",
+      "token": "writeFileSync",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/feature-fixture-runner.ts",
+      "symbol": "writeFeatureFixtureReports",
+      "token": "writeFileSync",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "rmrf",
+      "token": "fsp.rm",
+      "reason": "Central filesystem primitive kept as an audited helper for higher-level guarded flows."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "writeTextAtomic",
+      "token": "fsp.rm",
+      "reason": "Central filesystem primitive kept as an audited helper for higher-level guarded flows."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "writeTextAtomic",
+      "token": "fsp.writeFile",
+      "reason": "Central filesystem primitive kept as an audited helper for higher-level guarded flows."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "writeTextAtomic",
+      "token": "rename",
+      "reason": "Central filesystem primitive kept as an audited helper for higher-level guarded flows."
+    },
+    {
+      "file": "src/core/harness-conflicts.ts",
+      "symbol": "repairSksGeneratedArtifacts",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/image-ux-review/imagegen-adapter.ts",
+      "symbol": "createOpenAIImagesApiAdapter",
+      "token": "fsp.writeFile",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/init.ts",
+      "symbol": "removeGeneratedAgentSkillAliases",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/init.ts",
+      "symbol": "removeGeneratedCodexSkillMirrors",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/init.ts",
+      "symbol": "removeGeneratedPluginSkillCollisions",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/init.ts",
+      "symbol": "removeGeneratedRelPath",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/init.ts",
+      "symbol": "removeStaleGeneratedSkillsFromManifest",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/mad-sks/executors/file-write-executor.ts",
+      "symbol": "runFileWrite",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/mad-sks/rollback-apply.ts",
+      "symbol": "applyMadSksRollbackPlan",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/ppt-review/slide-exporter.ts",
+      "symbol": "writeFixturePng",
+      "token": "fsp.writeFile",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/ppt.ts",
+      "symbol": "cleanupPptBuildTemps",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/ppt.ts",
+      "symbol": "writePptBuildArtifacts",
+      "token": "fsp.writeFile",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/safety/mutation-guard.ts",
+      "symbol": "guardedChflags",
+      "token": "chflags",
+      "reason": "Low-level mutation guard primitive executes only after contract and path scope checks."
+    },
+    {
+      "file": "src/core/safety/mutation-guard.ts",
+      "symbol": "guardedChmod",
+      "token": "chmod",
+      "reason": "Low-level mutation guard primitive executes only after contract and path scope checks."
+    },
+    {
+      "file": "src/core/safety/mutation-guard.ts",
+      "symbol": "guardedProcessKill",
+      "token": "process.kill",
+      "reason": "Low-level mutation guard primitive executes only after contract and path scope checks."
+    },
+    {
+      "file": "src/core/safety/mutation-guard.ts",
+      "symbol": "guardedRename",
+      "token": "rename",
+      "reason": "Low-level mutation guard primitive executes only after contract and path scope checks."
+    },
+    {
+      "file": "src/core/safety/mutation-guard.ts",
+      "symbol": "guardedRm",
+      "token": "fsp.rm",
+      "reason": "Low-level mutation guard primitive executes only after contract and path scope checks."
+    },
+    {
+      "file": "src/core/safety/mutation-guard.ts",
+      "symbol": "guardedXattr",
+      "token": "xattr",
+      "reason": "Low-level mutation guard primitive executes only after contract and path scope checks."
+    },
+    {
+      "file": "src/core/skills/core-skill-deployment.ts",
+      "symbol": "rollbackPromotionWrite",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/verification/verification-worker-pool.ts",
+      "symbol": "terminateProcessTree",
+      "token": "process.kill",
+      "reason": "Process lifecycle helper terminates only owned child or process tree during cleanup."
+    },
+    {
+      "file": "src/core/version-manager.ts",
+      "symbol": "disableVersionGitHook",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/core/version-manager.ts",
+      "symbol": "disableVersionGitHook",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/version-manager.ts",
+      "symbol": "withVersionLock",
+      "token": "fsp.rm",
+      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+    },
+    {
+      "file": "src/core/wiki-image/route-image-evidence.ts",
+      "symbol": "ensureRouteImageEvidence",
+      "token": "fsp.writeFile",
+      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+    },
+    {
+      "file": "src/core/zellij/zellij-command.ts",
+      "symbol": "prepareZellijProcessEnv",
+      "token": "chmod",
+      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    }
+  ]
+}

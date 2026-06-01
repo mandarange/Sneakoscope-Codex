@@ -212,10 +212,16 @@ const requiredScripts = [
   'core-skill:no-inference-optimizer',
   'core-skill:route-runtime-integration',
   'core-skill:promotion-side-effect-ledger',
+  'core-skill:legacy-promotion-api-audit',
   'safety:side-effect-zero',
   'safety:mutation-callsite-coverage',
+  'safety:mutation-callsite-coverage:repo-wide',
+  'side-effect:runtime-report',
+  'release:version-truth',
   'zellij:doctor-readiness',
   'release:gate-planner',
+  'release:dynamic-performance',
+  'release:provenance',
   'release:gate-budget',
   'agent:wiki-context-proof',
   'shared-memory:check',
@@ -291,7 +297,7 @@ assertVersionSurface('crates/sks-core/src/main.rs', `sks-rs ${RELEASE_VERSION}`)
 assertGate(distManifest?.version === RELEASE_VERSION, `dist/build-manifest version must be ${RELEASE_VERSION}`, { version: distManifest?.version || null });
 assertGate(distManifest?.package_version === RELEASE_VERSION, `dist/build-manifest package_version must be ${RELEASE_VERSION}`, { package_version: distManifest?.package_version || null });
 assertGate(typeof distManifest?.source_digest === 'string' && distManifest.source_digest.length >= 32, 'dist/build-manifest must include source_digest', { source_digest: distManifest?.source_digest || null });
-assertGate(pkg.scripts?.['release:metadata']?.includes('release-metadata-1-19-check.mjs'), 'release:metadata must point to the 1.19 release check');
+assertGate(pkg.scripts?.['release:metadata']?.includes('release-metadata-check.mjs'), 'release:metadata must point to the generic release metadata check');
 assertGate(String(pkg.scripts?.['release:check'] || '').startsWith('npm run release:check:parallel'), 'release:check must use release:check:parallel');
 for (const script of requiredScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
 for (const script of requiredRealScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package real script: ${script}`);

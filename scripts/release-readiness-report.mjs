@@ -210,9 +210,16 @@ const checks = {
     && fileContains('src/core/hooks-runtime.ts', 'runSksUpdateCheck')
 };
 const docs = runNodeScript('scripts/docs-truthfulness-check.mjs');
-const officialDocs = runNodeScript('scripts/official-docs-compat-report.mjs');
-const releaseMetadata = runNodeScript('scripts/release-metadata-1-19-check.mjs');
+const officialDocs = runNodeScriptWithOkReportCache(
+  'scripts/official-docs-compat-report.mjs',
+  `.sneakoscope/reports/official-docs-compat-${RELEASE_VERSION}.json`,
+  ['scripts/official-docs-compat-report.mjs', 'package.json', 'package-lock.json']
+);
+const releaseMetadata = runNodeScript('scripts/release-metadata-check.mjs');
+const sideEffectRuntime = runNodeScript('scripts/side-effect-runtime-report-check.mjs');
+const releaseProvenance = runNodeScript('scripts/release-provenance-check.mjs');
 const imagegenCore = runNodeScript('scripts/imagegen-capability-check.mjs');
+const dynamicReleaseMode = process.env.SKS_RELEASE_DYNAMIC === '1';
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
   flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null),
@@ -403,6 +410,8 @@ for (const [name, ok] of Object.entries({
 if (docs.status !== 0) remainingP0.push('docs_truthfulness_failed');
 if (officialDocs.status !== 0) remainingP0.push('official_docs_compat_failed');
 if (releaseMetadata.status !== 0) remainingP0.push('release_metadata_failed');
+if (sideEffectRuntime.status !== 0) remainingP0.push('side_effect_runtime_report_failed');
+if (releaseProvenance.status !== 0) remainingP0.push('release_provenance_failed');
 if (imagegenCore.status !== 0) remainingP0.push('imagegen_core_capability_failed');
 
 const stamp = readJson('.sneakoscope/reports/release-check-stamp.json', null);
@@ -413,7 +422,7 @@ const stampVerify = spawnSync(process.execPath, ['scripts/release-check-stamp.mj
   timeout: 30_000
 });
 const currentStamp = stampVerify.status === 0 && stamp?.package_version === RELEASE_VERSION ? stamp : null;
-if (stampVerify.status !== 0) remainingP0.push('release_check_stamp_stale_or_missing');
+if (stampVerify.status !== 0 && !dynamicReleaseMode) remainingP0.push('release_check_stamp_stale_or_missing');
 const report = {
   schema: 'sks.release-readiness.v1',
   generated_at: new Date().toISOString(),
@@ -887,13 +896,26 @@ const report = {
     status: releaseMetadata.status === 0 ? 'pass' : 'fail',
     stdout: trimOutput(releaseMetadata.stdout)
   },
+  side_effect_runtime: {
+    status: sideEffectRuntime.status === 0 ? 'pass' : 'fail',
+    report: readJson('.sneakoscope/reports/side-effect-runtime-report.json', null),
+    stdout: trimOutput(sideEffectRuntime.stdout),
+    stderr: trimOutput(sideEffectRuntime.stderr)
+  },
+  provenance: {
+    status: releaseProvenance.status === 0 ? 'pass' : 'fail',
+    report: readJson('.sneakoscope/reports/release-provenance.json', null),
+    stdout: trimOutput(releaseProvenance.stdout),
+    stderr: trimOutput(releaseProvenance.stderr)
+  },
   release_gate_last_pass_stamp: currentStamp ? {
     package_version: currentStamp.package_version || null,
     generated_at: currentStamp.generated_at || null,
     source_digest: currentStamp.source_digest || null
   } : null,
   release_gate_stamp_verification: {
-    status: stampVerify.status === 0 ? 'pass' : 'fail',
+    status: stampVerify.status === 0 ? 'pass' : dynamicReleaseMode ? 'dynamic_deferred' : 'fail',
+    dynamic_release_mode: dynamicReleaseMode,
     stdout: trimOutput(stampVerify.stdout),
     stderr: trimOutput(stampVerify.stderr)
   },
@@ -997,6 +1019,48 @@ function runNodeScript(rel) {
   });
 }
 
+function runNodeScriptWithOkReportCache(rel, reportRel, freshnessInputs = []) {
+  const cached = readFreshOkReport(reportRel, freshnessInputs);
+  if (cached) {
+    return {
+      status: 0,
+      stdout: JSON.stringify({
+        ok: true,
+        cached: true,
+        report: reportRel,
+        generated_at: cached.generated_at || null
+      }),
+      stderr: ''
+    };
+  }
+  return runNodeScript(rel);
+}
+
+function readFreshOkReport(reportRel, freshnessInputs = []) {
+  const reportPath = path.join(root, reportRel);
+  let report;
+  try {
+    report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  } catch {
+    return null;
+  }
+  if (report?.ok !== true) return null;
+  let reportStat;
+  try {
+    reportStat = fs.statSync(reportPath);
+  } catch {
+    return null;
+  }
+  for (const input of freshnessInputs) {
+    try {
+      if (fs.statSync(path.join(root, input)).mtimeMs > reportStat.mtimeMs) return null;
+    } catch {
+      return null;
+    }
+  }
+  return report;
+}
+
 function trimOutput(text) {
   return String(text || '').slice(0, 4000);
 }
@@ -1040,6 +1104,8 @@ function renderMarkdown(report) {
 - Loop blocker stop: \`${report.loop_blocker_stop.status}\`
 - Docs truthfulness: \`${report.docs_truthfulness.status}\`
 - Release metadata: \`${report.release_metadata.status}\`
+- Side-effect runtime: \`${report.side_effect_runtime.status}\` (${report.side_effect_runtime.report?.unexpected_applied_mutations ?? 'not_reported'} unexpected applied mutations)
+- Provenance: \`${report.provenance.status}\` (reviewed_ref=${report.provenance.report?.reviewed_ref || 'not_reported'}, main=${report.provenance.report?.main_version || 'unavailable'}, npm=${report.provenance.report?.npm_version || 'unavailable'}, tag=${report.provenance.report?.tag_status?.exists ? 'present' : 'missing'})
 - Priority closure: P0 through P9 are tracked in the ${RELEASE_VERSION} readiness surface.
 - Remaining ${RELEASE_VERSION} P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
 

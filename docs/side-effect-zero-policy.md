@@ -11,6 +11,12 @@ unless the user explicitly opts in. This policy is enforced by two compiled modu
 The gate `scripts/side-effect-zero-gate-check.mjs` (id `safety:side-effect-zero`)
 proves the invariants below and writes `.sneakoscope/reports/side-effect-zero.json`.
 
+For 1.20.4, `scripts/mutation-callsite-coverage-check.mjs` extends the static check
+repo-wide across `src/**/*.ts` and the install/publish/release/doctor/codex/zellij/
+migration script surface. Raw mutation tokens must either be an observed `guarded*`
+call or match an external `safety-mutation-allowlist.json` entry with exact
+`file`, `symbol`, `token`, and `reason`. Unused or blanket allowlist entries fail.
+
 ## 1. The requested-scope contract (deny-by-default)
 
 `createRequestedScopeContract({ route, userRequest, projectRoot?, overrides? })`
@@ -102,6 +108,14 @@ mutation is always a violation.**
 `recordMutation(root, entry)` appends the entry and returns the ledger path
 (`mutationLedgerPath(root)`). There is no code path that mutates without first
 producing a ledger entry.
+
+`side-effect:runtime-report` reads the project and mission mutation ledgers and
+writes `.sneakoscope/reports/side-effect-runtime-report.json`. Release readiness
+requires:
+
+- `unexpected_applied_mutations = 0`
+- `global_mutations_without_confirmation = 0`
+- `config_mutations_without_backup_or_noop = 0`
 
 ## 4. The skill optimizer cannot bypass the contract
 

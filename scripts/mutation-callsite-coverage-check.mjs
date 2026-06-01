@@ -1,116 +1,179 @@
 #!/usr/bin/env node
-// safety:mutation-callsite-coverage (1.20.2 Area 1c).
-//
-// Static gate: every genuinely-risky mutation on a fixed risk-surface file list
-// must be EITHER routed through src/core/safety/mutation-guard.ts OR explicitly
-// allowlisted with a function-level reason. A raw risky mutation that is neither
-// guarded nor allowlisted fails the gate. The allowlist is function-level (file +
-// token + reason), never a blanket file exclusion, so each conscious bypass is
-// documented.
+// Repo-wide risky mutation callsite gate. Every raw mutation must be either a
+// guarded call or an external allowlist entry with a concrete function/symbol and
+// reason. The allowlist is intentionally data, not code, so unused/stale entries
+// fail the release gate.
 import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.mjs';
 
-// Files that perform real global/config/permission/package/process mutations.
-const RISK_SURFACE = [
-  'src/cli/install-helpers.ts',
-  'src/core/codex/codex-config-eperm-repair.ts',
-  'src/core/codex/codex-project-config-policy.ts',
-  'src/commands/doctor.ts',
-  'src/core/skills/core-skill-deployment.ts'
-];
+const allowlistPath = path.join(root, 'safety-mutation-allowlist.json');
+const allowlist = readAllowlist();
+const allowlistHits = new Set();
 
-// Risky mutation tokens (regex) — the ACTUAL spawn/syscall, not comments/hints.
-// `code` flags tokens we only count when the line is real code (not a // comment
-// or a quoted hint string), to keep the allowlist meaningful.
-const RISKY = [
-  { kind: 'package_install_spawn', re: /runProcess\(\s*(npmBin|brew)\b/, code: true },
-  { kind: 'process_kill', re: /\bprocess\.kill\(/, code: true },
-  { kind: 'file_rename', re: /\bfsp\.rename\(/, code: true },
-  { kind: 'chmod', re: /\bfsp\.chmod\(/, code: true },
-  { kind: 'chflags', re: /runProcess\(\s*['"]chflags['"]/, code: true },
-  { kind: 'xattr', re: /runProcess\(\s*['"]xattr['"]/, code: true },
-  { kind: 'copyfile_backup', re: /\bfsp\.copyFile\(/, code: true },
-  { kind: 'writefile_backup', re: /\bfsp\.writeFile\(/, code: true }
-];
-
-function isComment(line) {
-  const t = line.trim();
-  return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*');
-}
-
-// Function-level allowlist: each entry says WHY this risky token is safe without
-// the guard. Matched by (file endsWith, token substring present on the line).
-const ALLOWLIST = [
-  // Secret permission HARDENING (0o600) — install-internal, best-effort, narrows
-  // access rather than widening it; not user-state mutation.
-  { file: 'install-helpers.ts', token: '0o600', reason: 'secret_permission_hardening_install_internal' },
-  // Internal package layout binary perms (0o755) — not user state.
-  { file: 'install-helpers.ts', token: '0o755', reason: 'internal_package_binary_layout' },
-  // EPERM repair: permission RECOVERY commands (xattr/chflags) whose entire
-  // purpose is restoring access to an unreadable config; project-scoped, each via
-  // repairCommand with a recorded action.
-  { file: 'codex-config-eperm-repair.ts', token: "runProcess('xattr'", reason: 'eperm_permission_recovery_via_repairCommand' },
-  { file: 'codex-config-eperm-repair.ts', token: "runProcess('chflags'", reason: 'eperm_permission_recovery_via_repairCommand' },
-  // Unsafe symlink replacement: project-scoped .codex/config.toml rename with a
-  // recorded backup_path (see replaceUnsafeSymlink).
-  { file: 'codex-config-eperm-repair.ts', token: 'fsp.rename(', reason: 'unsafe_symlink_replacement_has_backup_project_scoped' },
-  // Project config backups (copyFile to .bak) — non-destructive backup OF a
-  // mutation; the parent split/structure-repair records the change.
-  { file: 'codex-project-config-policy.ts', token: 'fsp.copyFile(', reason: 'non_destructive_config_backup_before_rewrite' },
-  // Doctor pre-fix backup write — non-destructive backup of project config.
-  { file: 'doctor.ts', token: 'fsp.writeFile(backupPath', reason: 'non_destructive_doctor_pre_fix_backup' },
-  // core-skill-deployment writes deployed snapshot + archive; promotion is
-  // ledger-recorded via the optional opts path (Area 4.3) — project-scoped.
-  { file: 'core-skill-deployment.ts', token: 'fsp.copyFile(', reason: 'skill_snapshot_archive_project_scoped' }
-];
-
-const GUARD_CALL = /\bguarded(WriteFile|Rm|Rename|Chmod|Xattr|Chflags|GlobalCodexConfigWrite|ProcessKill|PackageInstall|SkillSnapshotPromotion|Apply)\(/;
-
+const scanFiles = listScanFiles();
 const covered = [];
 const allowlisted = [];
 const uncovered = [];
 
-for (const rel of RISK_SURFACE) {
-  const abs = path.join(root, rel);
-  if (!fs.existsSync(abs)) continue;
-  const text = fs.readFileSync(abs, 'utf8');
+const GUARD_CALL = /\bguarded(WriteFile|Rm|Rename|Chmod|Xattr|Chflags|GlobalCodexConfigWrite|ProcessKill|PackageInstall|SkillSnapshotPromotion|Apply)\(/;
+const RISKY = [
+  { kind: 'write_file', token: 'fs.writeFile', re: /\bfs\.writeFile\(/ },
+  { kind: 'write_file', token: 'fsp.writeFile', re: /\bfsp\.writeFile\(/ },
+  { kind: 'write_file', token: 'writeFileSync', re: /\b(?:fs\.)?writeFileSync\(/ },
+  { kind: 'rm', token: 'fs.rm', re: /\bfs\.rm\(/ },
+  { kind: 'rm', token: 'fsp.rm', re: /\bfsp\.rm\(/ },
+  { kind: 'rm', token: 'rmSync', re: /\b(?:fs\.)?rmSync\(/ },
+  { kind: 'unlink', token: 'unlink', re: /\b(?:fs\.|fsp\.)?unlink\(/ },
+  { kind: 'unlink', token: 'unlinkSync', re: /\b(?:fs\.)?unlinkSync\(/ },
+  { kind: 'rename', token: 'rename', re: /\b(?:fs\.|fsp\.)?rename\(/ },
+  { kind: 'rename', token: 'renameSync', re: /\b(?:fs\.)?renameSync\(/ },
+  { kind: 'chmod', token: 'chmod', re: /\b(?:fs\.|fsp\.)?chmod\(/ },
+  { kind: 'chmod', token: 'chmodSync', re: /\b(?:fs\.)?chmodSync\(/ },
+  { kind: 'process_kill', token: 'process.kill', re: /\bprocess\.kill\(/ },
+  { kind: 'package_install', token: 'runProcess(npm/brew)', re: /runProcess\(\s*(?:npmBin|['"](?:npm|brew)['"])/ },
+  { kind: 'package_install', token: 'spawn(npm install)', re: /\bspawn(?:Sync)?\(\s*['"]npm['"][\s\S]{0,80}(?:install|i)\b/ },
+  { kind: 'xattr', token: 'xattr', re: /runProcess\(\s*['"]xattr['"]/ },
+  { kind: 'chflags', token: 'chflags', re: /runProcess\(\s*['"]chflags['"]/ },
+  { kind: 'codex_home_write', token: 'codex config write', re: /(?:~\/\.codex|CODEX_HOME|auth\.json|config\.toml)/ }
+];
+
+for (const rel of scanFiles) {
+  const text = fs.readFileSync(path.join(root, rel), 'utf8');
   const lines = text.split('\n');
-  const base = path.basename(rel);
+  let currentSymbol = 'module';
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    // Real guarded mutation call → coverage evidence (the guard IS used here).
-    if (GUARD_CALL.test(line) && !isComment(line)) {
-      covered.push({ file: rel, line: i + 1, kind: 'guarded_call', snippet: line.trim().slice(0, 120) });
+    currentSymbol = symbolFromLine(line) || currentSymbol;
+    if (isIgnoredLine(line)) continue;
+    if (GUARD_CALL.test(line)) {
+      covered.push({ file: rel, line: i + 1, symbol: currentSymbol, kind: 'guarded_call', snippet: snippet(line) });
     }
-    for (const { kind, re, code } of RISKY) {
-      if (!re.test(line)) continue;
-      if (code && isComment(line)) continue; // ignore the token inside comments
-      const allow = ALLOWLIST.find((a) => base.endsWith(a.file) && line.includes(a.token));
-      const entry = { file: rel, line: i + 1, kind, snippet: line.trim().slice(0, 120) };
-      if (allow) allowlisted.push({ ...entry, reason: allow.reason });
-      else uncovered.push(entry);
+    for (const risky of RISKY) {
+      if (!risky.re.test(line)) continue;
+      if (risky.kind === 'package_install' && !packageMutationOnLine(line)) continue;
+      if (risky.kind === 'codex_home_write' && !codexHomeMutationOnLine(line)) continue;
+      if (risky.kind === 'process_kill' && processKillIsLivenessProbe(line)) continue;
+      const entry = { file: rel, line: i + 1, symbol: currentSymbol, kind: risky.kind, token: risky.token, snippet: snippet(line) };
+      const allow = findAllow(entry);
+      if (allow) {
+        allowlistHits.add(allow.id);
+        allowlisted.push({ ...entry, reason: allow.reason });
+      } else {
+        uncovered.push(entry);
+      }
     }
   }
 }
 
-const ok = uncovered.length === 0;
+const unused_allowlist = allowlist.filter((entry) => !allowlistHits.has(entry.id)).map(({ id, file, symbol, token, reason }) => ({ id, file, symbol, token, reason }));
+const blanket_allowlist = allowlist.filter((entry) => !entry.symbol || entry.symbol === '*' || !entry.token || entry.token === '*');
+const ok = uncovered.length === 0 && unused_allowlist.length === 0 && blanket_allowlist.length === 0;
 const report = {
-  schema: 'sks.mutation-callsite-coverage.v1',
+  schema: 'sks.mutation-callsite-coverage.v2',
   ok,
-  risk_surface: RISK_SURFACE,
+  repo_wide: true,
+  allowlist_path: 'safety-mutation-allowlist.json',
+  scanned_file_count: scanFiles.length,
   covered,
   allowlisted,
-  uncovered
+  uncovered,
+  unused_allowlist,
+  blanket_allowlist
 };
 const reportDir = path.join(root, '.sneakoscope', 'reports');
 fs.mkdirSync(reportDir, { recursive: true });
 fs.writeFileSync(path.join(reportDir, 'mutation-callsite-coverage.json'), `${JSON.stringify(report, null, 2)}\n`);
 
-assertGate(ok, 'risky mutation call sites must be guarded or allowlisted-with-reason', { uncovered });
+assertGate(ok, 'repo-wide risky mutation call sites must be guarded or allowlisted-with-reason', {
+  scanned_file_count: scanFiles.length,
+  uncovered,
+  unused_allowlist,
+  blanket_allowlist
+});
 emitGate('safety:mutation-callsite-coverage', {
+  scanned_file_count: scanFiles.length,
   covered: covered.length,
   allowlisted: allowlisted.length,
-  uncovered: uncovered.length,
-  risk_surface: RISK_SURFACE.length
+  uncovered: uncovered.length
 });
+
+function readAllowlist() {
+  const raw = JSON.parse(fs.readFileSync(allowlistPath, 'utf8'));
+  assertGate(raw.schema === 'sks.safety-mutation-allowlist.v1', 'mutation allowlist schema mismatch', raw);
+  assertGate(Array.isArray(raw.entries), 'mutation allowlist entries must be an array', raw);
+  return raw.entries.map((entry, index) => {
+    for (const key of ['file', 'symbol', 'token', 'reason']) {
+      assertGate(typeof entry[key] === 'string' && entry[key].trim().length > 0, `allowlist entry missing ${key}`, { index, entry });
+    }
+    assertGate(entry.reason.length >= 12, 'allowlist reason must be concrete', { index, entry });
+    return { ...entry, id: `${entry.file}:${entry.symbol}:${entry.token}:${index}` };
+  });
+}
+
+function listScanFiles() {
+  const files = [];
+  walk(path.join(root, 'src'), (file) => {
+    if (file.endsWith('.ts')) files.push(rel(file));
+  });
+  walk(path.join(root, 'scripts'), (file) => {
+    if (!file.endsWith('.mjs')) return;
+    const base = path.basename(file);
+    if (/(install|publish|release|doctor|codex|zellij|migration)/i.test(base)) files.push(rel(file));
+  });
+  return files.sort();
+}
+
+function walk(dir, visit) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!['node_modules', 'dist', 'target'].includes(entry.name)) walk(file, visit);
+    } else if (entry.isFile()) {
+      visit(file);
+    }
+  }
+}
+
+function findAllow(entry) {
+  return allowlist.find((allow) => entry.file === allow.file && entry.symbol === allow.symbol && entry.token === allow.token);
+}
+
+function symbolFromLine(line) {
+  const match = line.match(/(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_$]+)/)
+    || line.match(/(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*(?:async\s*)?\(/)
+    || line.match(/class\s+([A-Za-z0-9_$]+)/);
+  return match?.[1] || null;
+}
+
+function isIgnoredLine(line) {
+  const trimmed = line.trim();
+  return !trimmed || trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*');
+}
+
+function packageMutationOnLine(line) {
+  return /\b(?:install|i|add|uninstall|remove|publish)\b/.test(line);
+}
+
+function processKillIsLivenessProbe(line) {
+  return /\bprocess\.kill\([^,\n]+,\s*0\s*\)/.test(line);
+}
+
+function codexHomeMutationOnLine(line) {
+  return /\b(?:writeTextAtomic|writeJsonAtomic|writeFileSync|fs\.writeFile|fsp\.writeFile|fs\.rm|fsp\.rm|fs\.rename|fsp\.rename|fs\.chmod|fsp\.chmod|copyFile|open)\b/.test(line)
+    && /(?:~\/\.codex|CODEX_HOME|codexHome|codexLbHome|auth\.json|config\.toml)/.test(line);
+}
+
+function snippet(line) {
+  return line.trim().slice(0, 160);
+}
+
+function rel(file) {
+  return path.relative(root, file).split(path.sep).join('/');
+}

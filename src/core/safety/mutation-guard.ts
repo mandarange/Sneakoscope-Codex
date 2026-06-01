@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { runProcess, writeTextAtomic } from '../fsx.js'
-import { isMutationAllowed, type MutationKind, type RequestedScopeContract } from './requested-scope-contract.js'
+import { isMutationAllowed, isPathAllowed, type MutationKind, type RequestedScopeContract } from './requested-scope-contract.js'
 import { evaluateMutation, recordMutation, type MutationLedgerKind } from './mutation-ledger.js'
 
 // Mutation Guard Adapter (1.20.2 Area 1a).
@@ -40,6 +40,7 @@ export interface GuardOptions {
   confirmed?: boolean
   backupPath?: string | null
   noOpReason?: string | null
+  pathTargets?: string[]
 }
 
 // Config/skill mutations that must carry a backup or a no-op reason (mirrors the
@@ -69,6 +70,10 @@ async function guard<T>(
   // Pre-apply scope check (applied:false → violation reflects scope only).
   const scope = isMutationAllowed(ctx.contract, scopeForKind(kind), { confirmed: opts.confirmed === true })
   if (!scope.allowed) throw new MutationGuardViolationError(kind, target, scope.reason)
+  for (const pathTarget of pathTargetsFor(kind, target, opts)) {
+    const pathDecision = isPathAllowed(ctx.contract, pathTarget)
+    if (!pathDecision.allowed) throw new MutationGuardViolationError(kind, pathTarget, pathDecision.reason)
+  }
   if (NEEDS_BACKUP.has(kind) && !opts.backupPath && !opts.noOpReason) {
     throw new MutationGuardViolationError(kind, target, 'backup_or_no_op_reason_required')
   }
@@ -117,6 +122,23 @@ function buildEvalOpts(target: string, opts: GuardOptions, applied: boolean): { 
   return out
 }
 
+const PATH_SCOPED_KINDS: ReadonlySet<MutationLedgerKind> = new Set([
+  'file_write',
+  'file_delete',
+  'file_rename',
+  'chmod',
+  'xattr',
+  'chflags',
+  'global_config_write'
+])
+
+function pathTargetsFor(kind: MutationLedgerKind, target: string, opts: GuardOptions): string[] {
+  if (!PATH_SCOPED_KINDS.has(kind)) return []
+  if (opts.pathTargets?.length) return opts.pathTargets
+  if (kind === 'file_rename' && target.includes(' -> ')) return target.split(' -> ').map((s) => s.trim()).filter(Boolean)
+  return [target]
+}
+
 // ---- Public guarded wrappers -------------------------------------------------
 
 export async function guardedWriteFile(ctx: GuardContext, target: string, data: string, opts: GuardOptions = {}): Promise<void> {
@@ -132,7 +154,7 @@ export async function guardedRm(ctx: GuardContext, target: string, opts: GuardOp
 }
 
 export async function guardedRename(ctx: GuardContext, from: string, to: string, opts: GuardOptions = {}): Promise<void> {
-  await guard(ctx, 'file_rename', `${from} -> ${to}`, opts, () => fsp.rename(from, to))
+  await guard(ctx, 'file_rename', `${from} -> ${to}`, { ...opts, pathTargets: [from, to] }, () => fsp.rename(from, to))
 }
 
 export async function guardedChmod(ctx: GuardContext, target: string, mode: number, opts: GuardOptions = {}): Promise<void> {

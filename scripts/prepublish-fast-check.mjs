@@ -102,6 +102,19 @@ function main() {
       );
     }
   }
+  if (Object.prototype.hasOwnProperty.call(stamp, 'package_files_sha256')) {
+    // Full package file hashing is owned by release-check-stamp.mjs; this check
+    // confirms the fast stamp carries the comparator and leaves exact matching to
+    // `release-check-stamp verify`.
+    if (!stamp.package_files_sha256) {
+      mismatched.push('package_files_sha256');
+      reasons.push('package_files_sha256: absent from stamp');
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(stamp, 'release_gate_sha256') && !stamp.release_gate_sha256) {
+    mismatched.push('release_gate_sha256');
+    reasons.push('release_gate_sha256: absent from stamp');
+  }
 
   // git commit: compared only if the stamp stored one; otherwise informational.
   if (Object.prototype.hasOwnProperty.call(stamp, 'git_commit') && stamp.git_commit) {

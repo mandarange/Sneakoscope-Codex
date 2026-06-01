@@ -11,6 +11,7 @@ import { root, assertGate, emitGate, importDist } from './sks-1-18-gate-lib.mjs'
 
 const scope = await importDist('core/safety/requested-scope-contract.js');
 const ledger = await importDist('core/safety/mutation-ledger.js');
+const guardMod = await importDist('core/safety/mutation-guard.js');
 
 const {
   createRequestedScopeContract,
@@ -20,6 +21,7 @@ const {
   CONFIRMATION_REQUIRED
 } = scope;
 const { evaluateMutation, recordMutation, mutationLedgerPath, MUTATION_KINDS, MUTATION_LEDGER_SCHEMA } = ledger;
+const { guardedWriteFile, guardedRename, guardContextForRoute, MutationGuardViolationError } = guardMod;
 
 function mkTmp(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -144,6 +146,51 @@ try {
     forbidden_codex_config: codexConfigPath.allowed
   };
 
+  // Guard wrappers must enforce path scope before applying mutations.
+  const guardRoot = mkTmp('sks-mutation-guard-path-');
+  tmpDirs.push(guardRoot);
+  const guardContract = createRequestedScopeContract({
+    route: 'guard-fixture',
+    userRequest: 'mutate project fixture',
+    projectRoot: guardRoot
+  });
+  guardContract.forbidden_paths.push(path.join(guardRoot, 'forbidden/**'));
+  const guardCtx = guardContextForRoute(guardRoot, guardContract, 'side-effect-zero-fixture');
+  const insideTarget = path.join(guardRoot, 'ok.txt');
+  await guardedWriteFile(guardCtx, insideTarget, 'ok');
+  assertGate(fs.existsSync(insideTarget), 'guard path fixture: project file mutation should apply', { insideTarget });
+  const outsideTarget = path.join(os.tmpdir(), `sks-outside-${Date.now()}.txt`);
+  let outsideBlocked = false;
+  try {
+    await guardedWriteFile(guardCtx, outsideTarget, 'no');
+  } catch (err) {
+    outsideBlocked = err instanceof MutationGuardViolationError || String(err?.message || err).includes('path_not_in_scope');
+  }
+  assertGate(outsideBlocked && !fs.existsSync(outsideTarget), 'guard path fixture: outside project write must fail before apply', { outsideTarget });
+  const forbiddenTarget = path.join(guardRoot, 'forbidden', 'no.txt');
+  let forbiddenBlocked = false;
+  try {
+    await guardedWriteFile(guardCtx, forbiddenTarget, 'no');
+  } catch (err) {
+    forbiddenBlocked = err instanceof MutationGuardViolationError || String(err?.message || err).includes('forbidden_path');
+  }
+  assertGate(forbiddenBlocked && !fs.existsSync(forbiddenTarget), 'guard path fixture: forbidden path write must fail before apply', { forbiddenTarget });
+  const renameSource = path.join(guardRoot, 'rename-source.txt');
+  fs.writeFileSync(renameSource, 'keep');
+  let renameBlocked = false;
+  try {
+    await guardedRename(guardCtx, renameSource, path.join(guardRoot, 'forbidden', 'renamed.txt'));
+  } catch (err) {
+    renameBlocked = err instanceof MutationGuardViolationError || String(err?.message || err).includes('forbidden_path');
+  }
+  assertGate(renameBlocked && fs.existsSync(renameSource), 'guard path fixture: forbidden rename target must fail before apply', { renameSource });
+  summary.checks.mutation_guard_path_scope = {
+    project_write_applied: true,
+    outside_project_blocked: outsideBlocked,
+    forbidden_path_blocked: forbiddenBlocked,
+    rename_target_forbidden_blocked: renameBlocked
+  };
+
   // ---------------------------------------------------------------------------
   // Mutation ledger violations.
   // ---------------------------------------------------------------------------
@@ -256,6 +303,7 @@ try {
       'deny_by_default',
       'explicit_confirmation',
       'path_scope',
+      'mutation_guard_path_scope',
       'ledger_violations',
       'no_mutation_without_ledger'
     ]
