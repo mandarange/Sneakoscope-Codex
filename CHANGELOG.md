@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+
+## [1.20.5] - 2026-06-01
+
+Patch release: `sks --mad` now actually opens the Zellij session in an interactive terminal instead of only printing an attach hint.
+
+### Fixed
+
+- **MAD Zellij session now auto-attaches.** A successful `sks --mad` launch previously created a *detached* background Zellij session (`zellij attach --create-background …`) and only printed `Attach with: …`, so nothing opened in the operator's terminal and stale sessions accumulated. SKS now performs the follow-up foreground attach automatically when launched in an interactive TTY, so the session takes over the terminal as expected. New `attachZellijSessionInteractive` (`src/core/zellij/zellij-launcher.ts`) spawns `zellij attach <session>` with `stdio: 'inherit'` and the same `ZELLIJ_SOCKET_DIR` namespace used to create the session, and never throws — on failure it falls back to printing the manual attach command.
+- **Non-interactive launches are unchanged.** Auto-attach is skipped (keeping the `Attach with: …` hint) for `--json`, non-TTY/piped invocations, when already inside a Zellij session (`$ZELLIJ`), or when `SKS_NO_ZELLIJ_ATTACH=1` / `--no-attach` is set. `--attach` forces attaching even without a detected TTY.
+
+### Verified
+
+- `npm run typecheck`
+- `npm run runtime:dist-parity`, `npm run zellij:launch-command-truth`, `npm run release:version-truth`
+- `git diff --check`
+
 ## [1.20.4] - 2026-06-01
 
 Patch release: makes successful `sks --mad` / codex-lb Zellij launches immediately actionable by printing the exact attach command that uses the same socket namespace as the background session.

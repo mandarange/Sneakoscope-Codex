@@ -4,7 +4,7 @@ import { initProject } from '../init.js';
 import { createMission, setCurrent } from '../mission.js';
 import { enableMadHighProfile, madHighProfileName } from '../auto-review.js';
 import { permissionGateSummary } from '../permission-gates.js';
-import { launchMadZellijUi, sanitizeZellijSessionName } from '../zellij/zellij-launcher.js';
+import { attachZellijSessionInteractive, launchMadZellijUi, sanitizeZellijSessionName } from '../zellij/zellij-launcher.js';
 import { createMadSksAuthorizationManifest, validateMadSksAuthorizationManifest } from '../mad-sks/authorization-manifest.js';
 import { createMadSksAuditLedger, madSksAuditAction, writeMadSksAuditLedger } from '../mad-sks/audit-ledger.js';
 import { compareProtectedCoreSnapshots, evaluateMadSksWrite, resolveProtectedCore, snapshotProtectedCore } from '../mad-sks/immutable-harness-guard.js';
@@ -76,9 +76,41 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`));
   const launch = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
-  if (!launch.ok) console.log(`MAD Zellij action: ${formatMadZellijAction(launch)}`);
-  else if (launch.attach_command_with_env) console.log(`Attach with: ${launch.attach_command_with_env}`);
+  if (!launch.ok) {
+    console.log(`MAD Zellij action: ${formatMadZellijAction(launch)}`);
+    return launch;
+  }
+  // The launcher only creates a detached background session. In an interactive
+  // terminal, immediately attach so the session actually opens for the user
+  // instead of leaving them to copy/paste the attach command by hand.
+  if (shouldAutoAttachZellij(args)) {
+    console.log(`Opening Zellij session: ${launch.session_name} (detach with Ctrl+q, re-attach later with: ${launch.attach_command_with_env})`);
+    const attached = attachZellijSessionInteractive(launch.session_name, { cwd: process.cwd() });
+    if (!attached.ok) {
+      console.log(`Could not open the Zellij session automatically${attached.error ? ` (${attached.error})` : ''}.`);
+      if (launch.attach_command_with_env) console.log(`Attach with: ${launch.attach_command_with_env}`);
+    }
+    return launch;
+  }
+  if (launch.attach_command_with_env) console.log(`Attach with: ${launch.attach_command_with_env}`);
   return launch;
+}
+
+// Decide whether to take over the current terminal with a foreground Zellij
+// attach. We only do this for genuinely interactive launches; piped, JSON,
+// non-TTY, or already-inside-Zellij invocations keep the previous behaviour of
+// printing a manual "Attach with:" hint. Use --no-attach (or
+// SKS_NO_ZELLIJ_ATTACH=1) to force the background-only behaviour, and --attach
+// to force attaching even without a detected TTY.
+function shouldAutoAttachZellij(args: any[]): boolean {
+  const list = (args || []).map((arg: any) => String(arg));
+  if (list.includes('--no-attach')) return false;
+  if (list.includes('--json')) return false;
+  if (process.env.SKS_NO_ZELLIJ_ATTACH === '1') return false;
+  // Nested attach is rejected by Zellij when already inside a session.
+  if (process.env.ZELLIJ) return false;
+  if (list.includes('--attach')) return true;
+  return Boolean(process.stdout.isTTY && process.stdin.isTTY);
 }
 
 function formatMadZellijAction(launch: any) {
@@ -186,6 +218,8 @@ function madLaunchOnlyFlags() {
     '--MAD',
     '--mad-sks',
     '--high',
+    '--attach',
+    '--no-attach',
     '--no-auto-install-zellij',
     '--allow-system',
     '--allow-db-write',
