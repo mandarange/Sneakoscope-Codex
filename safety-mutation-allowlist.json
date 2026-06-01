@@ -291,9 +291,9 @@
     },
     {
       "file": "scripts/zellij-layout-valid-check.mjs",
-      "symbol": "module",
+      "symbol": "narutoFanoutPaneCount",
       "token": "fs.writeFile",
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+      "reason": "Release/check script writes a scoped temporary Zellij layout fixture; exact callsite is externally audited."
     },
     {
       "file": "scripts/zellij-real-session-heartbeat-check.mjs",

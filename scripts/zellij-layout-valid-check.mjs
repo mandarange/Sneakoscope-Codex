@@ -11,6 +11,14 @@ const capabilityMod = await import(pathToFileURL(path.join(root, 'dist', 'core',
 const commandMod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-command.js')).href);
 const built = layoutMod.buildZellijLayoutKdl({ missionId: 'M-layout-check', ledgerRoot: path.join(root, '.sneakoscope', 'tmp', 'layout-check'), cwd: root, kind: 'agent', slotCount: 2 });
 const staticValidation = layoutMod.validateZellijLayoutKdl(built.layout_kdl);
+const narutoFanoutLayout = layoutMod.buildZellijLayoutKdl({
+  missionId: 'M-layout-naruto-fanout',
+  ledgerRoot: path.join(root, '.sneakoscope', 'tmp', 'layout-naruto-fanout'),
+  cwd: root,
+  kind: 'naruto',
+  slotCount: 24
+});
+const narutoFanoutPaneCount = (narutoFanoutLayout.layout_kdl.match(/pane name="slot-/g) || []).length;
 // Validate all four SKS layouts (MAD / Agent / Team / Naruto) build valid KDL.
 const kindsValidated = ['mad', 'agent', 'team', 'naruto'].map((kind) => {
   const b = layoutMod.buildZellijLayoutKdl({
@@ -21,7 +29,7 @@ const kindsValidated = ['mad', 'agent', 'team', 'naruto'].map((kind) => {
     slotCount: 2,
     codexArgs: kind === 'mad' ? ['--profile', 'sks-mad-high', '-c', 'service_tier=fast'] : []
   });
-  const hasCodexPane = kind !== 'mad' || (b.main_pane_kind === 'codex_interactive' && /exec\s+'?codex'?/.test(b.layout_kdl) && b.layout_kdl.includes('sks-mad-high'));
+  const hasCodexPane = kind !== 'mad' || (b.main_pane_kind === 'codex_interactive' && /exec\s+'?codex'?/.test(b.layout_kdl) && b.layout_kdl.includes('sks-mad-high') && b.layout_kdl.includes('--no-alt-screen'));
   const hasLanePane = b.layout_kdl.includes('zellij-lane');
   return { kind, ok: layoutMod.validateZellijLayoutKdl(b.layout_kdl).ok && hasCodexPane && hasLanePane, main_pane_kind: b.main_pane_kind, has_codex_pane: hasCodexPane, has_lane_pane: hasLanePane };
 });
@@ -47,6 +55,8 @@ if (realRun) {
 }
 const ok = staticValidation.ok
   && allKindsOk
+  && layoutMod.validateZellijLayoutKdl(narutoFanoutLayout.layout_kdl).ok
+  && narutoFanoutPaneCount === 24
   && invalidValidation.ok === false
   && capability.ok
   && (requireReal ? realRun?.ok === true : true);
@@ -55,6 +65,7 @@ emit({
   ok,
   layout: { ...built, layout_kdl: undefined, layout_path: layoutPath },
   kinds_validated: kindsValidated,
+  naruto_fanout_layout: { slot_count: narutoFanoutLayout.slot_count, pane_count: narutoFanoutPaneCount },
   static_validation: staticValidation,
   invalid_fixture: invalidValidation,
   capability,
