@@ -12,7 +12,7 @@ export function assertGate(condition, message, detail = {}) {
 }
 
 export function emitGate(name, detail = {}) {
-  console.log(JSON.stringify({ schema: 'sks.release-gate.1-18.v1', ok: true, gate: name, ...detail }, null, 2));
+  console.log(JSON.stringify({ schema: 'sks.release-gate.v1', ok: true, gate: name, ...detail }, null, 2));
 }
 
 export function readText(rel) {
