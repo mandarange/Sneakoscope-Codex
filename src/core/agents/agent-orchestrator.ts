@@ -266,7 +266,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       await openAgentSession(ledgerRoot, agent)
       await heartbeatAgentSession(ledgerRoot, agent)
       await appendAgentCodexCockpitHookEvent(dir, {
-        hook_event_name: 'SubagentStart',
+        hook_event_name: 'NativeSessionStart',
         agent_id: agent.id,
         agent_type: agent.role || agent.persona_id || 'agent',
         session_id: agent.session_id,
@@ -311,7 +311,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       if (result.status === 'done') await completeAgentSession(ledgerRoot, agent)
       await closeAgentSession(ledgerRoot, agent, result.status === 'done' ? 'closed' : result.status)
       await appendAgentCodexCockpitHookEvent(dir, {
-        hook_event_name: 'SubagentStop',
+        hook_event_name: 'NativeSessionStop',
         agent_id: agent.id,
         agent_type: agent.role || agent.persona_id || 'agent',
         session_id: agent.session_id,

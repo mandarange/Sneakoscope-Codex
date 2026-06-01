@@ -931,22 +931,22 @@ export function looksLikeExecutionWork(prompt: any = '') {
 export function subagentExecutionPolicyText(route: any, prompt: any = '') {
   const required = routeRequiresSubagents(route, prompt);
   if (route?.id === 'Goal') {
-    if (!required) return 'Subagent policy: Goal itself is a lightweight native /goal persistence overlay; subagents are not required for bridge creation/control.';
+    if (!required) return 'Native session policy: Goal itself is a lightweight native /goal persistence overlay; extra worker sessions are not required for bridge creation/control.';
     return [
-      'Subagent policy: Goal itself remains a lightweight native /goal persistence overlay.',
+      'Native session policy: Goal itself remains a lightweight native /goal persistence overlay.',
       'Because the prompt also asks for code-changing or execution work, continue that work through the selected SKS execution route and apply that route\'s worker/reviewer policy there.',
       noUnrequestedFallbackCodePolicyText()
     ].join(' ');
   }
   if (!required) {
-    return 'Subagent policy: optional for this route; use subagents only when parallel exploration materially helps.';
+    return 'Native session policy: optional for this route; open extra native sessions only when parallel exploration materially helps.';
   }
   return [
-    'Subagent policy: REQUIRED for code-changing or execution work in this route.',
-    'The selected SKS route itself authorizes route-owned worker/reviewer subagents; the user does not need to separately ask for subagents when the default Team pipeline is active.',
-    'Before editing, the parent orchestrator must visibly state the SKS route, split independent write scopes, and spawn worker/reviewer subagents whenever the tools are available.',
+    'Native multi-session policy: REQUIRED for code-changing or execution work in this route.',
+    'The selected SKS route itself authorizes route-owned worker/reviewer native sessions; the user does not need to separately ask for helper sessions when the default Team pipeline is active.',
+    'Before editing, the parent orchestrator must visibly state the SKS route, split independent write scopes, and run worker/reviewer native sessions whenever the route can be split safely.',
     'Run workers in parallel only with disjoint ownership. The parent owns integration, verification, and final evidence.',
-    'If subagent tools are unavailable or the work cannot be safely split, record that as explicit subagent evidence before editing.',
+    'If native sessions are unavailable or the work cannot be safely split, record explicit unavailable/unsplittable native-session evidence before editing.',
     noUnrequestedFallbackCodePolicyText()
   ].join(' ');
 }

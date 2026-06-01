@@ -62,16 +62,16 @@ export async function fastModeCommand(args: string[] = []) {
   if (action === 'on') console.log('Saved: fast mode on')
   else if (action === 'off') console.log('Saved: fast mode off')
   else if (action === 'clear') console.log(`Cleared: ${removed ? 'yes' : 'already default'}`)
-  else if (!preference) console.log('Preference: default fast')
+  else if (!preference) console.log('Preference: implicit fast')
   console.log('Dollar: $Fast-On | $Fast-Off | $Fast-Mode')
   return result
 }
 
 function normalizeFastModeAction(value: unknown): 'status' | 'on' | 'off' | 'clear' {
   const text = String(value || 'status').toLowerCase()
-  if (['on', 'enable', 'enabled', 'fast'].includes(text)) return 'on'
-  if (['off', 'disable', 'disabled', 'standard', 'slow'].includes(text)) return 'off'
-  if (['clear', 'default', 'reset'].includes(text)) return 'clear'
+  if (['on', 'enable', 'enabled', 'fast', 'priority'].includes(text)) return 'on'
+  if (['off', 'disable', 'disabled', 'standard', 'slow', 'default'].includes(text)) return 'off'
+  if (['clear', 'reset'].includes(text)) return 'clear'
   return 'status'
 }
 

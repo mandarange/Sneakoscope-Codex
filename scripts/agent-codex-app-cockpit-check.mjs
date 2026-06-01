@@ -17,8 +17,8 @@ for (const token of [
   'agent-session-cards.md',
   'agent-live-summary.json',
   'agent-progress-timeline.md',
-  'SubagentStart',
-  'SubagentStop'
+  'NativeSessionStart',
+  'NativeSessionStop'
 ]) {
   if (!source.includes(token)) issues.push(`cockpit_missing:${token}`);
 }
@@ -58,8 +58,8 @@ async function runFixture() {
   fs.writeFileSync(path.join(agentDir, 'agent-sessions.json'), JSON.stringify({ schema: 'sks.agent-sessions.v1', sessions: { agent_1: { agent_id: 'agent_1', session_id: 'session_1', status: 'closed', heartbeat_at: '2026-05-25T00:00:00.000Z' } } }));
   fs.writeFileSync(path.join(agentDir, 'agent-proof-evidence.json'), JSON.stringify({ schema: 'sks.agent-proof-evidence.v1', ok: true, status: 'passed', mission_id: 'M-cockpit', backend: 'fake', agent_count: 1, all_sessions_closed: true, blockers: [] }));
   const mod = await import(pathToFileURL(built).href);
-  await mod.appendAgentCodexCockpitHookEvent(missionDir, { hook_event_name: 'SubagentStart', agent_id: 'agent_1', session_id: 'session_1', cwd: tmp });
-  await mod.appendAgentCodexCockpitHookEvent(missionDir, { hook_event_name: 'SubagentStop', agent_id: 'agent_1', session_id: 'session_1', cwd: tmp, last_assistant_message: 'done' });
+  await mod.appendAgentCodexCockpitHookEvent(missionDir, { hook_event_name: 'NativeSessionStart', agent_id: 'agent_1', session_id: 'session_1', cwd: tmp });
+  await mod.appendAgentCodexCockpitHookEvent(missionDir, { hook_event_name: 'NativeSessionStop', agent_id: 'agent_1', session_id: 'session_1', cwd: tmp, last_assistant_message: 'done' });
   await mod.writeAgentCodexCockpitArtifacts(missionDir, { missionId: 'M-cockpit', projectHash: 'fixture' });
   for (const artifact of ['agent-codex-dashboard.md', 'agent-codex-dashboard.json', 'agent-session-cards.md', 'agent-live-summary.json', 'agent-progress-timeline.md', 'agent-codex-cockpit-events.jsonl']) {
     if (!fs.existsSync(path.join(agentDir, artifact))) issues.push(`fixture_missing:${artifact}`);
@@ -68,7 +68,7 @@ async function runFixture() {
   if (!dashboard.agents?.[0] || dashboard.agents[0].heartbeat_age_ms === undefined) issues.push('fixture_heartbeat_age_missing');
   if (dashboard.agents?.[0]?.status !== 'closed') issues.push('fixture_object_session_status_not_rendered');
   const eventStream = fs.readFileSync(path.join(agentDir, 'agent-codex-cockpit-events.jsonl'), 'utf8');
-  if (!eventStream.includes('SubagentStart') || !eventStream.includes('SubagentStop')) issues.push('fixture_cockpit_event_stream_missing_lifecycle');
+  if (!eventStream.includes('NativeSessionStart') || !eventStream.includes('NativeSessionStop')) issues.push('fixture_cockpit_event_stream_missing_native_session_lifecycle');
   const cli = spawnSync(process.execPath, [path.join(root, 'dist/bin/sks.js'), 'agent', 'cockpit', 'M-cockpit'], { cwd: tmp, encoding: 'utf8' });
   if (cli.status !== 0 || !cli.stdout.includes('Agent Codex Dashboard')) issues.push('fixture_agent_cockpit_cli_failed');
   const broken = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-cockpit-broken-'));

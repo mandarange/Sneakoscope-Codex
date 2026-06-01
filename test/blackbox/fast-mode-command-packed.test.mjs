@@ -93,6 +93,16 @@ test('sks fast-mode toggles project-local preference from an unpacked cwd', asyn
   assert.equal(on.service_tier, 'fast');
   assert.equal(on.preference.mode, 'fast');
 
+  const defaultAlias = run('default');
+  assert.equal(defaultAlias.fast_mode, false);
+  assert.equal(defaultAlias.service_tier, 'standard');
+  assert.equal(defaultAlias.preference.mode, 'standard');
+
+  const priorityAlias = run('priority');
+  assert.equal(priorityAlias.fast_mode, true);
+  assert.equal(priorityAlias.service_tier, 'fast');
+  assert.equal(priorityAlias.preference.mode, 'fast');
+
   const cleared = run('clear');
   assert.equal(cleared.fast_mode, true);
   assert.equal(cleared.preference, null);
@@ -124,6 +134,12 @@ test('$Fast-Mode status questions do not toggle project preference', async () =>
   const explicitOff = runPrompt('$Fast-Mode off');
   assert.equal(explicitOff.execution.command, 'sks fast-mode off --json');
   assert.equal(JSON.parse(await fs.readFile(stateFile, 'utf8')).mode, 'standard');
+
+  const defaultTier = runPrompt('$Fast-Mode default');
+  assert.equal(defaultTier.execution.command, 'sks fast-mode off --json');
+
+  const priorityTier = runPrompt('$Fast-Mode priority');
+  assert.equal(priorityTier.execution.command, 'sks fast-mode on --json');
 });
 
 test('dollar command list includes fast mode on/off aliases', () => {

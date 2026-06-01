@@ -4,6 +4,7 @@ import { readJson, sksRoot } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
 import { buildNarutoCloneRoster, systemSafeNarutoConcurrency } from '../agents/agent-roster.js'
 import { DEFAULT_NARUTO_CLONES, MAX_NARUTO_AGENT_COUNT } from '../agents/agent-schema.js'
+import { attachZellijSessionInteractive, launchZellijLayout } from '../zellij/zellij-launcher.js'
 
 const NARUTO_RESULT_SCHEMA = 'sks.naruto-command-result.v1'
 const NARUTO_ROUTE = '$Naruto'
@@ -22,6 +23,7 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
 }
 
 async function narutoRun(parsed: NarutoArgs) {
+  const root = await sksRoot()
   const roster = buildNarutoCloneRoster({
     clones: parsed.clones,
     prompt: parsed.prompt,
@@ -71,7 +73,23 @@ async function narutoRun(parsed: NarutoArgs) {
     concurrency_capped: clones > (result.target_active_slots ?? activeSlots),
     system: { cores: safe.cores, free_gb: safe.free_gb, safe_concurrency: safe.cap, heavy_backend: safe.heavy },
     proof: result.proof?.status || 'missing',
-    run: result
+    run: result,
+    zellij: null as any
+  }
+  if (!parsed.json && !parsed.mock && !parsed.noOpenZellij) {
+    const ledgerRoot = result.ledger_root
+      ? path.join(root, result.ledger_root)
+      : path.join(root, '.sneakoscope', 'missions', result.mission_id, 'agents')
+    summary.zellij = await launchZellijLayout({
+      root,
+      missionId: result.mission_id,
+      ledgerRoot,
+      kind: 'naruto',
+      slotCount: summary.target_active_slots,
+      dryRun: false,
+      attach: false
+    })
+    if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok' && parsed.attach) attachZellijSessionInteractive(summary.zellij.session_name, { cwd: process.cwd() })
   }
   return emit(parsed, summary, () => {
     console.log('🍥 Shadow Clone Jutsu — Kage Bunshin no Jutsu')
@@ -79,6 +97,8 @@ async function narutoRun(parsed: NarutoArgs) {
     console.log('Clones: ' + summary.clones + ' / max ' + MAX_NARUTO_AGENT_COUNT + ', running ' + summary.target_active_slots + ' at a time' + (summary.concurrency_capped ? ` (throttled to host capacity: ${safe.cores} cores, ${safe.free_gb} GB free)` : ''))
     console.log('Backend: ' + result.backend)
     console.log('Proof: ' + summary.proof)
+    if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok') console.log('Zellij: prepared ' + summary.target_active_slots + ' native session lane(s) in ' + summary.zellij.session_name)
+    else if (summary.zellij?.ok) console.log('Zellij: optional live panes unavailable (' + ((summary.zellij.warnings || []).join('; ') || summary.zellij.capability?.status || 'unknown') + ')')
   })
 }
 
@@ -138,6 +158,8 @@ interface NarutoArgs {
   writeMode: 'proof-safe' | 'parallel' | 'serial' | 'off' | null
   json: boolean
   missionId: string
+  noOpenZellij: boolean
+  attach: boolean
 }
 
 function parseNarutoArgs(args: string[] = []): NarutoArgs {
@@ -156,9 +178,11 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const writeModeRaw = String(readOption(args, '--write-mode', hasFlag(args, '--parallel-write') ? 'parallel' : '') || '')
   const writeMode = (['proof-safe', 'parallel', 'serial', 'off'].includes(writeModeRaw) ? writeModeRaw : null) as NarutoArgs['writeMode']
   const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', 'latest')))
+  const noOpenZellij = hasFlag(args, '--no-open-zellij') || hasFlag(args, '--no-zellij')
+  const attach = hasFlag(args, '--attach')
   const valueFlags = new Set(['--clones', '--agents', '--work-items', '--backend', '--write-mode', '--mission', '--mission-id'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
-  return { action, prompt, clones, workItems, backend, mock, real, readonly, writeMode, json, missionId }
+  return { action, prompt, clones, workItems, backend, mock, real, readonly, writeMode, json, missionId, noOpenZellij, attach }
 }
 
 function clampClones(value: number): number {

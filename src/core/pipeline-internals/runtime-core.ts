@@ -103,7 +103,8 @@ export function buildPipelinePlan(input: any = {}) {
       stop_gate: route?.stopGate || 'honest_mode',
       required_skills: route?.requiredSkills || [],
       context7_required: Boolean(input.required),
-      subagents_required: routeRequiresSubagents(route, task),
+      subagents_required: false,
+      native_sessions_required: routeRequiresSubagents(route, task),
       reflection_required: reflectionRequiredForRoute(route)
     },
     task,
@@ -287,7 +288,7 @@ function optionalStage(route: any, task: any, ambiguity: any, context7Required: 
   if (id === 'ambiguity_gate' && CLARIFICATION_BYPASS_ROUTES.has(route?.id)) return { skip: true, notApplicable: true, reason: 'route_bypasses_clarification' };
   if (id === 'context7_evidence' && !context7Required) return { skip: true, notApplicable: true, reason: 'context7_not_required_by_route' };
   if (id === 'reflection' && !reflectionRequiredForRoute(route)) return { skip: true, notApplicable: true, reason: 'reflection_not_required_for_route' };
-  if (['native_agent_intake', 'planning_debate', 'fresh_executor_team'].includes(id) && !routeRequiresSubagents(route, task)) return { skip: true, notApplicable: true, reason: 'subagent_team_not_required_by_route' };
+  if (['native_agent_intake', 'planning_debate', 'fresh_executor_team'].includes(id) && !routeRequiresSubagents(route, task)) return { skip: true, notApplicable: true, reason: 'native_session_team_not_required_by_route' };
   return { skip: false, reason: 'required_by_lane' };
 }
 
@@ -374,7 +375,7 @@ export function dfixQuickContext(prompt: any, route: any = routePrompt(prompt)) 
   return [
     `DFix ultralight pipeline active. Route: ${routeLabel} (Direct Fix: tiny copy/config/docs/labels/spacing/translation/simple mechanical edits).`,
     responseLanguageInstruction(task),
-    'Bypass: do not enter the general SKS prompt pipeline, mission creation, ambiguity gate, TriWiki refresh, Context7 routing, subagent orchestration, Goal, Research, eval, or broad planning.',
+    'Bypass: do not enter the general SKS prompt pipeline, mission creation, ambiguity gate, TriWiki refresh, Context7 routing, native-session orchestration, Goal, Research, eval, or broad planning.',
     `Task: ${task}`,
     'Task list:',
     '1. Infer the smallest visible Direct Fix target from the request and current files.',
@@ -391,7 +392,7 @@ export function answerOnlyContext(prompt: any, route: any = routePrompt(prompt))
   return [
     `SKS answer-only pipeline active. Route: ${route?.command || '$Answer'} (${route?.route || 'answer-only research'}).`,
     responseLanguageInstruction(task),
-    'Intent classification: answer/research question, not implementation. Do not create route mission state, ask ambiguity-gate questions, spawn subagents, continue active Team/Goal work, or edit files unless the user explicitly asks for implementation.',
+    'Intent classification: answer/research question, not implementation. Do not create route mission state, ask ambiguity-gate questions, open worker sessions, continue active Team/Goal work, or edit files unless the user explicitly asks for implementation.',
     `Question: ${task}`,
     'Evidence flow:',
     '1. Check current repo facts and TriWiki context first; hydrate low-trust wiki claims from source paths before relying on them.',
@@ -420,7 +421,7 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}): Pro
   if (route.id === 'ImageUXReview') return withSkillDreamContext(await prepareImageUxReview(root, route, task, routeNeedsContext7(route, cleanPrompt)), dreamContext);
   const required = routeNeedsContext7(route, cleanPrompt);
   const reasoning = routeReasoning(route, cleanPrompt);
-  const subagentsRequired = routeRequiresSubagents(route, cleanPrompt);
+  const nativeSessionsRequired = routeRequiresSubagents(route, cleanPrompt);
   if (QUESTION_GATE_ROUTES.has(route.id) || route.id === 'MadSKS') return withSkillDreamContext(await prepareClarificationGate(root, route, task, required, { madSksAuthorization }), dreamContext);
   if (route.id === 'Team') return withSkillDreamContext(await prepareTeam(root, route, task, required, { madSksAuthorization }), dreamContext);
   if (route.id === 'Research') return withSkillDreamContext(await prepareResearch(root, route, task, required), dreamContext);
@@ -430,7 +431,7 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}): Pro
   if (explicit || required) return withSkillDreamContext(await prepareLightRoute(root, route, task, required), dreamContext);
   return withSkillDreamContext({
     route,
-    additionalContext: `${promptPipelineContext(prompt, route)}\n\nReasoning: ${reasoning.effort} (${reasoning.reason}); temporary profile ${reasoning.profile}.\nRequired skills: ${route.requiredSkills.join(', ')}.\nSubagents required: ${subagentsRequired ? 'yes' : 'no'}.`
+    additionalContext: `${promptPipelineContext(prompt, route)}\n\nReasoning: ${reasoning.effort} (${reasoning.reason}); temporary profile ${reasoning.profile}.\nRequired skills: ${route.requiredSkills.join(', ')}.\nNative sessions required: ${nativeSessionsRequired ? 'yes' : 'no'}.`
   }, dreamContext);
 }
 
@@ -485,7 +486,7 @@ export function computerUseFastContext(prompt: any, route: any = routePrompt(pro
   return [
     `Native Computer Use fast lane active. Route: ${route?.command || '$Computer-Use'} (${route?.route || 'native Computer Use fast lane'}).`,
     responseLanguageInstruction(task),
-    'Speed contract: do not enter Team, QA-LOOP clarification, repeated upfront TriWiki refresh, Context7, subagent orchestration, debate, reflection, or broad planning unless the user explicitly requests that heavier route.',
+    'Speed contract: do not enter Team, QA-LOOP clarification, repeated upfront TriWiki refresh, Context7, native-session orchestration, debate, reflection, or broad planning unless the user explicitly requests that heavier route.',
     `Task: ${task}`,
     'Execution order:',
     '1. Infer the smallest native Mac, desktop-app, OS-settings, or non-web visual target and acceptance from the prompt and current app context.',
@@ -509,7 +510,7 @@ async function prepareWikiQuickRoute(route: any, task: any) {
       `Task: ${task || 'refresh and validate TriWiki'}`,
       'Run policy: refresh/update/갱신 -> `sks wiki refresh` then validate; prune/clean/정리 -> `sks wiki refresh --prune` or dry-run prune first; pack -> `sks wiki pack` then validate.',
       stackCurrentDocsPolicyText(),
-      'Report claims, anchors, trust, validation, and blockers. Do not create mission state, ask ambiguity-gate questions, spawn subagents, or run unrelated work.'
+      'Report claims, anchors, trust, validation, and blockers. Do not create mission state, ask ambiguity-gate questions, open worker sessions, or run unrelated work.'
     ].join('\n')
   };
 }
@@ -572,10 +573,10 @@ export async function activeRouteContext(root: any, state: any) {
       ? ' Context7 evidence is still required before completion: use resolve-library-id, then query-docs (or legacy get-library-docs).'
       : '';
     const roles = state.role_counts ? ` Role counts: ${formatRoleCounts(state.role_counts)}.` : '';
-    return `Active Team mission ${state.mission_id || 'latest'} must keep the user-visible live transcript updated. Agent session budget: ${state.agent_sessions || MIN_TEAM_REVIEWER_LANES}.${roles} Run agents, TriWiki refresh, debate, consensus, fresh development, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, then close or account for every Team subagent session and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final. ${MIN_TEAM_REVIEW_POLICY_TEXT} After each subagent status/result/handoff, run: sks team event ${state.mission_id || 'latest'} --agent <name> --phase <phase> --message "...". Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}${planNote}`;
+    return `Active Team mission ${state.mission_id || 'latest'} must keep the user-visible live transcript updated. Native session budget: ${state.agent_sessions || MIN_TEAM_REVIEWER_LANES}.${roles} Run native sessions, TriWiki refresh, debate, consensus, fresh development, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, then close or account for every Team native session and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final. ${MIN_TEAM_REVIEW_POLICY_TEXT} After each native-session status/result/handoff, run: sks team event ${state.mission_id || 'latest'} --agent <name> --phase <phase> --message "...". Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}${planNote}`;
   }
   if (state.subagents_required && !(await hasSubagentEvidence(root, state))) {
-    return `Active SKS route ${id} requires subagent execution evidence before code-changing work can be considered complete. Spawn worker/reviewer subagents for disjoint write scopes, or record an explicit unavailable/unsplittable subagent evidence event before editing.${reasoningNote}${planNote}`;
+    return `Active SKS route ${id} requires native multi-session evidence before code-changing work can be considered complete. Run worker/reviewer native sessions for disjoint write scopes, or record explicit unavailable/unsplittable native-session evidence before editing.${reasoningNote}${planNote}`;
   }
   if (state.mode === 'GOAL') return `Active Goal mission ${state.mission_id || 'latest'} uses Codex native /goal continuation. Inspect .sneakoscope/missions/${state.mission_id || 'latest'}/${GOAL_WORKFLOW_ARTIFACT}, then use /goal create, pause, resume, or clear in the Codex runtime as appropriate.${planNote}`;
   if (state.context7_required && !(await hasContext7DocsEvidence(root, state))) {
@@ -823,7 +824,7 @@ async function materializeAutoSealedTeam(root: any, id: any, dir: any, route: an
     agent_session_count: agentSessions,
     default_agent_session_count: MIN_TEAM_REVIEWER_LANES,
     role_counts: roleCounts,
-    session_policy: `Use at most ${agentSessions} subagent sessions at a time; the parent orchestrator is not counted.`,
+    session_policy: `Use at most ${agentSessions} native multi-session lanes at a time; the parent orchestrator is not counted.`,
     review_policy: teamReviewPolicy(),
     review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
     bundle_size: roster.bundle_size,
@@ -842,13 +843,13 @@ async function materializeAutoSealedTeam(root: any, id: any, dir: any, route: an
     team_runtime: teamRuntimePlanMetadata(),
     phases: [
       { id: 'team_roster_confirmation', goal: `Materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'native_agent_intake', goal: `Read TriWiki context, then spawn exactly ${roster.bundle_size} read-only native_agent_N agents in parallel. ${fromChatImgRequired ? `From-Chat-IMG active: ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'}`, agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
+      { id: 'native_agent_intake', goal: `Read TriWiki context, then run exactly ${roster.bundle_size} read-only native_agent_N sessions in parallel. ${fromChatImgRequired ? `From-Chat-IMG active: ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'}`, agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_native_sessions: agentSessions, write_policy: 'read-only' },
       { id: 'triwiki_refresh', goal: `Refresh or pack TriWiki and run ${triwikiContextTracking().validate_command}.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
       { id: 'planning_debate', goal: 'Run read-only planning debate, map constraints and implementation slices, then seal one objective.', agents: roster.debate_team.map((agent: any) => agent.id) },
       { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR}.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
-      { id: 'parallel_implementation', goal: `Close debate agents, then spawn a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership.`, agents: roster.development_team.map((agent: any) => agent.id) },
+      { id: 'parallel_implementation', goal: `Close debate agents, then run a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership.`, agents: roster.development_team.map((agent: any) => agent.id) },
       { id: 'review_integration', goal: `${MIN_TEAM_REVIEW_POLICY_TEXT} Integrate, verify, and record evidence before final.`, agents: roster.validation_team.map((agent: any) => agent.id), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
-      { id: 'session_cleanup', goal: `Close or account for Team subagent sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.`, agents: ['parent_orchestrator'] }
+      { id: 'session_cleanup', goal: `Close or account for Team native sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.`, agents: ['parent_orchestrator'] }
     ],
     live_visibility: {
       markdown: 'team-live.md',
@@ -914,7 +915,7 @@ async function prepareTeam(root: any, route: any, task: any, required: any, opts
     agent_session_count: agentSessions,
     default_agent_session_count: MIN_TEAM_REVIEWER_LANES,
     role_counts: roleCounts,
-    session_policy: `Use at most ${agentSessions} subagent sessions at a time; the parent orchestrator is not counted.`,
+    session_policy: `Use at most ${agentSessions} native multi-session lanes at a time; the parent orchestrator is not counted.`,
     review_policy: teamReviewPolicy(),
     review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
     bundle_size: roster.bundle_size,
@@ -932,14 +933,14 @@ async function prepareTeam(root: any, route: any, task: any, required: any, opts
     team_runtime: teamRuntimePlanMetadata(),
     phases: [
       { id: 'team_roster_confirmation', goal: `Before any implementation, materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}. Implementation cannot be considered complete unless team-gate.json has team_roster_confirmed=true.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'native_agent_intake', goal: `Before native agent intake, read TriWiki context. ${fromChatImgRequired ? `From-Chat-IMG active: for web/browser/webapp targets require Codex Chrome Extension readiness first; for native Mac/non-web surfaces use Codex Computer Use visual inspection when available. List every visible customer request, match every screenshot image region to attachments, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, then require scoped QA-LOOP evidence in ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} after the customer-request work is done. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}` : `From-Chat-IMG inactive: do not assume ordinary images are chat captures. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}`} Spawn exactly ${roster.bundle_size} read-only native_agent_N agents in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, and record source-backed findings.`, agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
+      { id: 'native_agent_intake', goal: `Before native agent intake, read TriWiki context. ${fromChatImgRequired ? `From-Chat-IMG active: for web/browser/webapp targets require Codex Chrome Extension readiness first; for native Mac/non-web surfaces use Codex Computer Use visual inspection when available. List every visible customer request, match every screenshot image region to attachments, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, then require scoped QA-LOOP evidence in ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} after the customer-request work is done. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}` : `From-Chat-IMG inactive: do not assume ordinary images are chat captures. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}`} Run exactly ${roster.bundle_size} read-only native_agent_N sessions in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, and record source-backed findings.`, agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_native_sessions: agentSessions, write_policy: 'read-only' },
       { id: 'triwiki_refresh', goal: `Parent orchestrator updates Team analysis artifacts, then runs ${triwikiContextTracking().refresh_command} or ${triwikiContextTracking().pack_command}, prunes with ${triwikiContextTracking().prune_command} when stale/oversized wiki state would pollute handoffs, and runs ${triwikiContextTracking().validate_command} so the next stage uses current TriWiki context.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
       { id: 'planning_debate', goal: `Before debate, read the refreshed TriWiki pack. Debate team of exactly ${roster.bundle_size} participants maps user inconvenience, options, constraints, affected files, DB/test risk, and tradeoffs while applying compact Hyperplan-derived lenses: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative. Hydrate low-trust claims from source.`, agents: roster.debate_team.map((agent: any) => agent.id) },
       { id: 'consensus', goal: `Seal one objective with acceptance criteria and disjoint implementation slices, then refresh/validate TriWiki so implementation receives current consensus context.` },
       { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}; remap symbolic plan nodes to concrete task ids, allocate role/path/domain worker lanes, and write ${TEAM_INBOX_DIR} before executor work starts.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
-      { id: 'parallel_implementation', goal: `Before implementation, read relevant TriWiki context and current source. Close debate agents, then spawn a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership. Refresh TriWiki after implementation changes or blockers.`, agents: roster.development_team.map((agent: any) => agent.id) },
+      { id: 'parallel_implementation', goal: `Before implementation, read relevant TriWiki context and current source. Close debate agents, then run a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership. Refresh TriWiki after implementation changes or blockers.`, agents: roster.development_team.map((agent: any) => agent.id) },
       { id: 'review_integration', goal: `Before review and final output, read/validate current TriWiki context, integrate executor output, run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes for correctness/DB safety/tests/evidence, validate user friction with validation_team, refresh after review findings, and record evidence.`, agents: roster.validation_team.map((agent: any) => agent.id), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
-      { id: 'session_cleanup', goal: `Close or account for all Team subagent sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection or final.`, agents: ['parent_orchestrator'] }
+      { id: 'session_cleanup', goal: `Close or account for all Team native sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection or final.`, agents: ['parent_orchestrator'] }
     ],
     live_visibility: {
       markdown: 'team-live.md',
@@ -1015,8 +1016,8 @@ async function prepareLightRoute(root: any, route: any, task: any, required: any
 
 function routeState(id: any, route: any, phase: any, context7Required: any, extra: any = {}) {
   const reasoning = routeReasoning(route, extra.prompt || '');
-  const subagentsRequired = routeRequiresSubagents(route, extra.prompt || '');
-  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: false, agents_required: routeRequiresAgentIntake(route, { task: extra.prompt }), agent_count: AGENT_COUNT, reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, goal_continuation: ambientGoalContinuation(), ...extra };
+  const nativeSessionsRequired = routeRequiresSubagents(route, extra.prompt || '');
+  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: false, subagents_verified: true, native_sessions_required: nativeSessionsRequired, native_sessions_verified: false, agents_required: routeRequiresAgentIntake(route, { task: extra.prompt }), agent_count: AGENT_COUNT, reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, goal_continuation: ambientGoalContinuation(), ...extra };
 }
 
 function routeContext(route: any, id: any, task: any, required: any, next: any) {
@@ -1031,7 +1032,7 @@ Task: ${visibleTask}
 Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
 Required skills: ${route.requiredSkills.join(', ')}
 Stop gate: ${route.stopGate}
-Subagents: ${routeRequiresSubagents(route, visibleTask) ? 'required before code-changing execution; spawn parallel workers/reviewers with disjoint ownership or record explicit unavailable/unsplittable evidence.' : 'optional'}
+Native sessions: ${routeRequiresSubagents(route, visibleTask) ? 'required before code-changing execution; run parallel workers/reviewers with disjoint ownership or record explicit unavailable/unsplittable evidence.' : 'optional'}
 TriWiki: use only the latest coordinate+voxel-overlay context pack before each route phase, hydrate low-trust claims during the phase, refresh after new findings or artifact changes, and validate before handoffs/final claims. Coordinate-only legacy packs are invalid and must be refreshed before pipeline decisions.
 Final closeout: every pipeline final answer must summarize what was done, what changed for the user/repo, what was verified, and any remaining gaps.
 ${reflectionRequiredForRoute(route) ? `Reflection: ${reflectionInstructionText()}` : 'Reflection: not required for this lightweight route.'}

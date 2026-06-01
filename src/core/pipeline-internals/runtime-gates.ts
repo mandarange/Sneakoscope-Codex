@@ -125,9 +125,9 @@ export async function projectGateStatus(root: any, state: any = {}) {
   if (state?.subagents_required) {
     const evidence = await subagentEvidence(root, state);
     gates.push({
-      id: 'subagent-evidence',
+      id: 'native-session-evidence',
       ok: evidence.ok,
-      missing: evidence.ok ? [] : ['spawn_agent_or_exception_evidence'],
+      missing: evidence.ok ? [] : ['native_session_or_exception_evidence'],
       source: id ? `.sneakoscope/missions/${id}/subagent-evidence.jsonl` : '.sneakoscope/state/subagent-evidence.jsonl'
     });
   }
@@ -195,7 +195,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires Context7 evidence before completion. Use Context7 resolve-library-id, then query-docs (or legacy get-library-docs), so SKS can record context7-evidence.jsonl.`, { gate: 'context7-evidence' });
   }
   if (state?.subagents_required && !(await hasSubagentEvidence(root, state))) {
-    return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires subagent execution evidence before completion. Spawn worker/reviewer subagents for disjoint code-changing work, or record explicit evidence that subagents were unavailable or unsafe to split.`, { gate: 'subagent-evidence' });
+    return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires native multi-session evidence before completion. Run worker/reviewer native sessions for disjoint code-changing work, or record explicit evidence that native sessions were unavailable or unsafe to split.`, { gate: 'native-session-evidence' });
   }
   if (state?.mission_id && !(await exists(path.join(missionDir(root, state.mission_id), 'completion-proof.json'))) && routeRequiresAgentIntake(routeFromState(state), { task: state.prompt, force: state.forceAgents === true, noAgents: state.agents_required === false })) {
     const agentGate = await readAgentGateStatus(root, state.mission_id);

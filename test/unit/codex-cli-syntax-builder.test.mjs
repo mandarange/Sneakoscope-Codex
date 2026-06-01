@@ -51,3 +51,8 @@ test('codex exec args keep default path away from unsafe automation flags', () =
   assert.equal(args.includes('--dangerously-bypass-approvals-and-sandbox'), false);
   assert.equal(args[args.indexOf('--sandbox') + 1], 'workspace-write');
 });
+
+test('codex exec args normalize desktop service tier aliases to SKS canonical tiers', () => {
+  assert.ok(buildCodexExecArgs({ prompt: 'x', serviceTier: 'priority' }).includes('service_tier=fast'));
+  assert.ok(buildCodexExecArgs({ prompt: 'x', serviceTier: 'default' }).includes('service_tier=standard'));
+});

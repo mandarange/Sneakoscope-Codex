@@ -13,7 +13,7 @@ import { createWorkOrderLedger, writeWorkOrderLedger } from '../work-order-ledge
 import { writeFromChatImgArtifacts } from '../from-chat-img-forensics.js';
 import { renderTeamDashboardState, writeTeamDashboardState } from '../team-dashboard-renderer.js';
 import { PIPELINE_PLAN_ARTIFACT, validatePipelinePlan, writePipelinePlan } from '../pipeline.js';
-import { launchTeamZellijView } from '../zellij/zellij-launcher.js';
+import { attachZellijSessionInteractive, launchTeamZellijView } from '../zellij/zellij-launcher.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
 import { ambientGoalContinuation, flag, readBoundedIntegerFlag, readFlagValue } from './command-utils.js';
@@ -48,7 +48,7 @@ export async function team(args: any = []) {
   const { id, dir } = await createMission(root, { mode: 'team', prompt });
   const schema = buildQuestionSchema(prompt);
   await writeQuestions(dir, schema);
-  const plan = buildTeamPlan(id, prompt, { agentSessions, roleCounts, roster });
+  const plan = buildTeamPlan(id, prompt, { agentSessions, roleCounts, roster, targetActiveSlots });
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
   await writeTextAtomic(path.join(dir, 'team-workflow.md'), teamWorkflowMarkdown(plan));
   const liveFiles = await initTeamLive(id, dir, prompt, { agentSessions, roleCounts, roster });
@@ -77,6 +77,13 @@ export async function team(args: any = []) {
   const workOrder = createWorkOrderLedger({ missionId: id, route: fromChatImgRequired ? 'from-chat-img' : 'team', sourcesComplete: !fromChatImgRequired, requests: [{ verbatim: prompt, normalized_requirement: prompt, implementation_tasks: ['TASK-001'], status: 'pending' }] });
   await writeWorkOrderLedger(dir, workOrder);
   if (fromChatImgRequired) await writeFromChatImgArtifacts(dir, { missionId: id, requests: [{ verbatim: prompt }], ambiguities: ['image source inventory must be completed before implementation'] });
+  let liveZellij: any = null;
+  if (!mock && openZellij) {
+    liveZellij = await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: targetActiveSlots, dryRun: false, attach: false });
+    if (liveZellij?.ok && liveZellij.capability?.status === 'ok') console.log(`Zellij: prepared ${targetActiveSlots} native session lane(s) in ${liveZellij.session_name}. Attach with: ${liveZellij.attach_command_with_env || liveZellij.attach_command}`);
+    else if (liveZellij?.ok) console.log(`Zellij: optional live panes unavailable (${(liveZellij.warnings || []).join('; ') || liveZellij.capability?.status || 'unknown'}).`);
+    else console.log(`Zellij: blocked (${Array.from(new Set(liveZellij?.blockers || [])).join('; ')})`);
+  }
   const nativeAgentRun = await runNativeAgentOrchestrator({
     root,
     missionId: id,
@@ -112,7 +119,7 @@ export async function team(args: any = []) {
   const route = routePrompt(`$Team ${prompt}`) || ROUTES.find((candidate: any) => candidate.id === 'Team');
   const routeReason = routeReasoning(route, prompt);
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: prompt, required: false, ambiguity: { required: false, status: 'team_cli_direct' } });
-  await setCurrent(root, { mission_id: id, route: 'Team', route_command: '$Team', mode: 'TEAM', phase: mock ? 'TEAM_FIXTURE_DONE' : 'TEAM_NATIVE_AGENT_INTAKE', questions_allowed: false, implementation_allowed: true, context7_required: false, context7_verified: mock, subagents_required: true, subagents_verified: nativeAgentRun.proof?.ok === true, reflection_required: true, visible_progress_required: true, context_tracking: 'triwiki', required_skills: route?.requiredSkills || ['team'], stop_gate: 'team-gate.json', reasoning_effort: routeReason.effort, reasoning_profile: routeReason.profile, reasoning_temporary: true, team_agent_reasoning_policy: teamReasoning, goal_continuation: pipelinePlan.goal_continuation, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, team_live_ready: true, from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, native_agent_backend: nativeAgentRun.backend, native_agent_proof: 'agents/agent-proof-evidence.json', prompt });
+  await setCurrent(root, { mission_id: id, route: 'Team', route_command: '$Team', mode: 'TEAM', phase: mock ? 'TEAM_FIXTURE_DONE' : 'TEAM_NATIVE_AGENT_INTAKE', questions_allowed: false, implementation_allowed: true, context7_required: false, context7_verified: mock, subagents_required: false, subagents_verified: true, native_sessions_required: true, native_sessions_verified: nativeAgentRun.proof?.ok === true, reflection_required: true, visible_progress_required: true, context_tracking: 'triwiki', required_skills: route?.requiredSkills || ['team'], stop_gate: 'team-gate.json', reasoning_effort: routeReason.effort, reasoning_profile: routeReason.profile, reasoning_temporary: true, team_agent_reasoning_policy: teamReasoning, goal_continuation: pipelinePlan.goal_continuation, agent_sessions: agentSessions, target_active_slots: targetActiveSlots, role_counts: roleCounts, team_roster_confirmed: true, team_graph_ready: runtime.ok, team_live_ready: true, from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, native_agent_backend: nativeAgentRun.backend, native_agent_proof: 'agents/agent-proof-evidence.json', prompt });
   const result: any = {
     mission_id: id,
     mission_dir: dir,
@@ -155,14 +162,16 @@ export async function team(args: any = []) {
     result.mock = true;
     result.proof = proof.validation;
   } else {
-    result.zellij = await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: targetActiveSlots, dryRun: jsonOutput || !openZellij, attach: openZellij });
+    result.zellij = liveZellij || await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: targetActiveSlots, dryRun: jsonOutput || !openZellij, attach: false });
+    if (openZellij && result.zellij?.ok && result.zellij.capability?.status === 'ok' && shouldAutoAttachTeamZellij(args)) attachZellijSessionInteractive(result.zellij.session_name, { cwd: root });
   }
   if (jsonOutput) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
   console.log(`Agent sessions: ${agentSessions}`);
   console.log(`Role counts: ${formatRoleCounts(roleCounts)}`);
   console.log(`Review policy: minimum ${MIN_TEAM_REVIEWER_LANES} reviewer/QA validation lanes`);
-  if (result.zellij?.ok) console.log(`Zellij: prepared ${targetActiveSlots} agent lane(s) in ${result.zellij.session_name}`);
+  if (result.zellij?.ok && result.zellij.capability?.status === 'ok') console.log(`Zellij: prepared ${targetActiveSlots} native session lane(s) in ${result.zellij.session_name}`);
+  else if (result.zellij?.ok) console.log(`Zellij: optional live panes unavailable (${(result.zellij.warnings || []).join('; ') || result.zellij.capability?.status || 'unknown'})`);
   else if (!mock) console.log(`Zellij: blocked (${Array.from(new Set(result.zellij?.blockers || [])).join('; ')})`);
   console.log(`Watch: sks team watch ${id}`);
   console.log(`Artifacts: .sneakoscope/missions/${id}`);
@@ -187,8 +196,9 @@ export function buildTeamPlan(id: any, prompt: any, opts: any = {}) {
     prompt,
     agent_session_count: agentSessions,
     default_agent_session_count: MIN_TEAM_REVIEWER_LANES,
+    target_active_slots: opts.targetActiveSlots || agentSessions,
     role_counts: roleCounts,
-    session_policy: `Use at most ${agentSessions} subagent sessions at a time; parent orchestrator is not counted.`,
+    session_policy: `Use at most ${opts.targetActiveSlots || agentSessions} native multi-session lanes at a time; parent orchestrator is not counted.`,
     review_policy: teamReviewPolicy(),
     review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
     bundle_size: roster.bundle_size,
@@ -212,11 +222,11 @@ export function buildTeamPlan(id: any, prompt: any, opts: any = {}) {
     context_tracking: triwikiContextTracking(),
     phases: [
       { id: 'team_roster_confirmation', goal: 'Materialize Team roster and write team-roster.json.', agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'native_agent_intake', goal: fromChatImgRequired ? `Complete From-Chat-IMG source inventory and coverage artifacts. Web/browser/webapp screenshots require Codex Chrome Extension readiness first; native Mac/non-web surfaces may use Codex Computer Use. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'Read relevant TriWiki context and run read-only native agent intake agents before debate.', agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only', output: 'team-analysis.md' },
+      { id: 'native_agent_intake', goal: fromChatImgRequired ? `Complete From-Chat-IMG source inventory and coverage artifacts. Web/browser/webapp screenshots require Codex Chrome Extension readiness first; native Mac/non-web surfaces may use Codex Computer Use. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'Read relevant TriWiki context and run read-only native agent intake agents before debate.', agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_native_sessions: opts.targetActiveSlots || agentSessions, write_policy: 'read-only', output: 'team-analysis.md' },
       { id: 'triwiki_refresh', goal: 'Refresh and validate TriWiki from agent intake findings.', agents: ['parent_orchestrator'], commands: ['sks wiki refresh', 'sks wiki validate .sneakoscope/wiki/context-pack.json'], output: '.sneakoscope/wiki/context-pack.json' },
-      { id: 'planning_debate', goal: 'Debate risks and viable approaches with refreshed context.', agents: roster.debate_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'read-only' },
+      { id: 'planning_debate', goal: 'Debate risks and viable approaches with refreshed context.', agents: roster.debate_team.map((agent: any) => agent.id), max_parallel_native_sessions: opts.targetActiveSlots || agentSessions, write_policy: 'read-only' },
       { id: 'runtime_task_graph_compile', goal: `Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}.`, agents: ['parent_orchestrator'] },
-      { id: 'parallel_implementation', goal: 'Fresh executor developers implement disjoint slices.', agents: roster.development_team.map((agent: any) => agent.id), max_parallel_subagents: agentSessions, write_policy: 'workspace-write with explicit ownership' },
+      { id: 'parallel_implementation', goal: 'Fresh executor developers implement disjoint slices.', agents: roster.development_team.map((agent: any) => agent.id), max_parallel_native_sessions: opts.targetActiveSlots || agentSessions, write_policy: 'workspace-write with explicit ownership' },
       { id: 'review_and_integrate', goal: `Review with at least ${MIN_TEAM_REVIEWER_LANES} independent lanes.`, agents: roster.validation_team.map((agent: any) => agent.id).concat(['parent_orchestrator']), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
       { id: 'session_cleanup', goal: `Write ${TEAM_SESSION_CLEANUP_ARTIFACT}.`, agents: ['parent_orchestrator'], output: TEAM_SESSION_CLEANUP_ARTIFACT }
     ],
@@ -241,7 +251,7 @@ ${plan.prompt}
 \`\`\`text
 ${plan.prompt_command || '$Team'} ${plan.prompt}
 
-Use at most ${plan.agent_session_count || MIN_TEAM_REVIEWER_LANES} subagent sessions at a time; the parent orchestrator is not counted. ${plan.review_policy?.text || MIN_TEAM_REVIEW_POLICY_TEXT}
+Use at most ${plan.target_active_slots || plan.agent_session_count || MIN_TEAM_REVIEWER_LANES} native multi-session lanes at a time; the parent orchestrator is not counted. ${plan.review_policy?.text || MIN_TEAM_REVIEW_POLICY_TEXT}
 \`\`\`
 
 ## Context Tracking
@@ -302,14 +312,17 @@ async function teamCommand(sub: any, args: any) {
       process.exitCode = 2;
       return;
     }
-    const zellij = await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: Number(plan.agent_session_count || 5), dryRun: flag(args, '--json'), attach: sub === 'attach-zellij' || !flag(args, '--no-attach') });
+    const slotCount = await inferTeamZellijSlotCount(dir, plan);
+    const zellij = await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount, dryRun: flag(args, '--json'), attach: false });
     if (flag(args, '--json')) return console.log(JSON.stringify(zellij, null, 2));
     if (!zellij.ok) {
       console.error(`Zellij Team view blocked for ${id}: ${(zellij.blockers || []).join('; ') || 'Zellij launch failed'}`);
       process.exitCode = 2;
       return;
     }
-    console.log(`Zellij: prepared Team lane(s) in ${zellij.session_name}`);
+    if (zellij.capability?.status === 'ok') console.log(`Zellij: prepared Team lane(s) in ${zellij.session_name}`);
+    else console.log(`Zellij: optional live panes unavailable (${(zellij.warnings || []).join('; ') || zellij.capability?.status || 'unknown'})`);
+    if (zellij.capability?.status === 'ok' && (sub === 'attach-zellij' || shouldAutoAttachTeamZellij(args))) attachZellijSessionInteractive(zellij.session_name, { cwd: root });
     return;
   }
   if (sub === 'event') {
@@ -387,4 +400,27 @@ async function teamCommand(sub: any, args: any) {
     if (sub === 'watch' && !flag(args, '--raw')) console.log(await renderTeamWatch(dir, { missionId: id, lines: Number(lines) }));
     else for (const line of await readTeamTranscriptTail(dir, Number(lines))) console.log(line);
   }
+}
+
+async function inferTeamZellijSlotCount(dir: string, plan: any = {}) {
+  const scheduler = await readJson<any>(path.join(dir, 'agents', 'agent-scheduler-state.json'), null)
+  const lanes = await readJson<any>(path.join(dir, 'agents', 'agent-zellij-lanes.json'), null)
+  const candidates = [
+    scheduler?.target_active_slots,
+    lanes?.lane_count,
+    plan?.target_active_slots,
+    plan?.agent_session_count,
+    plan?.bundle_size
+  ].map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)
+  return Math.max(1, Math.min(100, Math.floor(candidates[0] || 5)))
+}
+
+function shouldAutoAttachTeamZellij(args: any[] = []) {
+  const list = (args || []).map((arg: any) => String(arg))
+  if (list.includes('--no-attach')) return false
+  if (list.includes('--json')) return false
+  if (process.env.SKS_NO_ZELLIJ_ATTACH === '1') return false
+  if (process.env.ZELLIJ) return false
+  if (list.includes('--attach')) return true
+  return Boolean(process.stdout.isTTY && process.stdin.isTTY)
 }

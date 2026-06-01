@@ -11,6 +11,9 @@ export interface ZellijLayoutInput {
   kind?: 'mad' | 'agent' | 'team' | 'naruto'
   slotCount?: number
   title?: string
+  codexBin?: string
+  codexArgs?: readonly unknown[]
+  launchEnv?: Record<string, unknown>
 }
 
 export interface ZellijLayoutBuild {
@@ -25,6 +28,9 @@ export interface ZellijLayoutBuild {
   layout_kdl: string
   launch_command: string[]
   attach_command: string
+  main_pane_kind: 'codex_interactive' | 'status_shell'
+  codex_args: string[]
+  launch_env_keys: string[]
 }
 
 export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuild {
@@ -34,6 +40,7 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
   const ledgerRoot = path.resolve(input.ledgerRoot)
   const title = input.title || `SKS ${input.kind || 'agent'} ${input.missionId}`
   const sksCommand = `${shellQuote(process.execPath)} ${shellQuote(path.join(packageRoot(), 'dist', 'bin', 'sks.js'))}`
+  const mainPane = buildMainPaneCommand(input, sksCommand)
   const panes = Array.from({ length: slotCount }, (_, index) => {
     const slot = `slot-${String(index + 1).padStart(3, '0')}`
     const stderrLog = shellQuote(path.join(ledgerRoot, 'zellij-lane-renderer.stderr.log'))
@@ -57,7 +64,7 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     '    }',
     `    tab name=${kdlString(title)} cwd=${kdlString(cwd)} split_direction="vertical" {`,
     '        pane name="orchestrator" command="sh" {',
-    `            args "-lc" ${kdlString(`${sksCommand} status --json || true; exec ${process.env.SHELL || '/bin/zsh'}`)}`,
+    `            args "-lc" ${kdlString(mainPane.command)}`,
     '        }',
     '        pane split_direction="horizontal" size="38%" {',
     panes,
@@ -77,7 +84,10 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     slot_count: slotCount,
     layout_kdl: layout,
     launch_command: ['zellij', 'attach', '--create-background', sessionName, 'options', '--default-layout', '<layout-path>'],
-    attach_command: `zellij attach ${shellQuote(sessionName)}`
+    attach_command: `zellij attach ${shellQuote(sessionName)}`,
+    main_pane_kind: mainPane.kind,
+    codex_args: mainPane.codexArgs,
+    launch_env_keys: mainPane.launchEnvKeys
   }
 }
 
@@ -108,6 +118,36 @@ function kdlString(value: unknown): string {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function buildMainPaneCommand(input: ZellijLayoutInput, sksCommand: string) {
+  const codexArgs = (input.codexArgs || []).map((arg) => String(arg)).filter(Boolean)
+  const shouldLaunchCodex = input.kind === 'mad' || codexArgs.length > 0
+  if (!shouldLaunchCodex) {
+    const shell = shellQuote(String(process.env.SHELL || '/bin/zsh'))
+    return {
+      kind: 'status_shell' as const,
+      command: `${sksCommand} status --json || true; exec ${shell}`,
+      codexArgs: [],
+      launchEnvKeys: []
+    }
+  }
+  const launchEnv = sanitizeLaunchEnv(input.launchEnv || {})
+  const envPrefix = launchEnv.map(([key, value]) => `${key}=${shellQuote(value)}`)
+  const codexBin = shellQuote(String(input.codexBin || process.env.SKS_CODEX_BIN || 'codex'))
+  return {
+    kind: 'codex_interactive' as const,
+    command: [...envPrefix, 'exec', codexBin, ...codexArgs.map(shellQuote)].join(' '),
+    codexArgs,
+    launchEnvKeys: launchEnv.map(([key]) => key)
+  }
+}
+
+function sanitizeLaunchEnv(env: Record<string, unknown>): Array<[string, string]> {
+  return Object.entries(env)
+    .filter(([key, value]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && value != null && String(value) !== '')
+    .map(([key, value]) => [key, String(value)] as [string, string])
+    .sort(([left], [right]) => left.localeCompare(right))
 }
 
 function braceBalance(text: string): number {

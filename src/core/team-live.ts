@@ -166,7 +166,7 @@ export function defaultTeamDashboard(id: any, prompt: any, opts: any = {}) {
     prompt,
     agent_session_count: spec.agentSessions,
     role_counts: spec.roleCounts,
-    session_policy: `Use at most ${spec.agentSessions} subagent sessions at a time; parent orchestrator is not counted.`,
+    session_policy: `Use at most ${spec.agentSessions} native multi-session lanes at a time; parent orchestrator is not counted.`,
     bundle_size: spec.bundleSize,
     roster: spec.roster,
     context_tracking: triwikiContextTracking(),
@@ -212,7 +212,7 @@ ${prompt}
 ## How to Read
 
 - This file is the Codex App-visible replacement for Zellij-style team panes.
-- Use at most ${spec.agentSessions} subagent sessions at a time unless the mission is recreated with a different budget.
+- Use at most ${spec.agentSessions} native multi-session lanes at a time unless the mission is recreated with a different budget.
 - Team mode has three bundles: parallel native agent intake agents first, debate team second, then fresh parallel development team.
 - Use relevant TriWiki context before every stage, hydrate low-trust claims from source during the stage, refresh after findings/artifact changes, and validate before handoffs or final claims.
 - Native agent intake agents are read-only and split repo, docs, tests, risk, API, and user-flow investigation before the parent refreshes TriWiki for debate.
@@ -223,8 +223,8 @@ ${prompt}
 - Executors are capable developers with disjoint ownership.
 - Team reviewer lane policy enforces at least ${MIN_TEAM_REVIEWER_LANES} strict reviewers and enough review-stage parallel capacity.
 - Reviewers are strict and adversarial about correctness, safety, tests, and evidence.
-- Every useful subagent status, debate result, handoff, review finding, and integration decision must be appended here.
-- Before reflection/final, close or account for all Team subagent sessions and write team-session-cleanup.json.
+- Every useful native-session status, debate result, handoff, review finding, and integration decision must be appended here.
+- Before reflection/final, close or account for all Team native sessions and write team-session-cleanup.json.
 - Machine-readable events are mirrored to team-transcript.jsonl.
 - Dashboard state is mirrored to team-dashboard.json.
 - ${contextTracking}

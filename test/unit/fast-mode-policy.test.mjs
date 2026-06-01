@@ -24,6 +24,7 @@ test('fast mode policy defaults to fast without explicit opt-in', () => {
   assert.deepEqual(fastModeEnv(policy), {
     SKS_FAST_MODE: '1',
     SKS_SERVICE_TIER: 'fast',
+    SKS_CODEX_DESKTOP_SERVICE_TIER: 'priority',
     SKS_REASONING_PROFILE_SUFFIX: 'fast'
   });
 });
@@ -37,7 +38,16 @@ test('fast mode policy records explicit no-fast and standard-tier opt-out', () =
   const standard = resolveFastModePolicy({ serviceTier: 'standard' });
   assert.equal(standard.fast_mode, false);
   assert.equal(standard.service_tier, 'standard');
+  assert.equal(standard.codex_desktop_service_tier, 'default');
   assert.equal(standard.disabled_by, 'service-tier-standard');
+
+  const priorityAlias = resolveFastModePolicy({ serviceTier: 'priority' });
+  assert.equal(priorityAlias.fast_mode, true);
+  assert.equal(priorityAlias.service_tier, 'fast');
+
+  const defaultAlias = resolveFastModePolicy({ serviceTier: 'default' });
+  assert.equal(defaultAlias.fast_mode, false);
+  assert.equal(defaultAlias.service_tier, 'standard');
 });
 
 test('fast mode preference toggles project default while explicit flags still win', async () => {
