@@ -35,8 +35,14 @@ Propagation env:
 ```text
 SKS_FAST_MODE=1
 SKS_SERVICE_TIER=fast
+SKS_CODEX_DESKTOP_SERVICE_TIER=priority
 SKS_REASONING_PROFILE_SUFFIX=fast
 ```
+
+SKS keeps its canonical service tiers as `fast` and `standard`. Codex Desktop
+may surface the same choice as `priority` and `default`; SKS normalizes
+`priority -> fast` and `default -> standard` at the command boundary so agent
+reports and CLI overrides stay consistent.
 
 The policy is attached to the roster, concurrency policy, backend report, native worker process reports, `worker-fast-mode.json`, `fast-mode-propagation-proof.json`, and runtime truth matrix row `fast_mode_default`.
 

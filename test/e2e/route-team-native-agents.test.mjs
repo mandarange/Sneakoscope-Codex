@@ -58,4 +58,7 @@ test('Team route preserves compatibility artifacts and exposes Zellij cockpit la
   assert.equal(zellij.launch_command.includes('--layout'), false);
   assert.match(zellij.attach_command, /^zellij attach /);
   assert.match(zellij.layout_artifact, /\.kdl$/);
+  assert.equal(zellij.pane_proof.expected_lane_count, plan.target_active_slots || plan.agent_session_count);
+  const layoutJson = JSON.parse(await fs.readFile(path.join(root, '.sneakoscope', 'missions', json.mission_id, 'zellij-layout.kdl.json'), 'utf8'));
+  assert.equal(layoutJson.slot_count, plan.target_active_slots || plan.agent_session_count);
 });

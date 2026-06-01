@@ -13,7 +13,7 @@ Policy artifact:
 }
 ```
 
-Codex cockpit `SubagentStart` and `SubagentStop` events may remain UI evidence, but they do not prove SKS worker capacity. The release gate requires `native-cli-session-proof.json` and `agent-native-cli-session-swarm.json` with real child process ids.
+Official Codex hook compatibility still supports `SubagentStart` and `SubagentStop`, but SKS-owned worker lifecycle UI records `NativeSessionStart` and `NativeSessionStop`. Subagent hook events never prove SKS worker capacity. The release gate requires `native-cli-session-proof.json` and `agent-native-cli-session-swarm.json` with real child process ids.
 
 Allowed helper behavior:
 

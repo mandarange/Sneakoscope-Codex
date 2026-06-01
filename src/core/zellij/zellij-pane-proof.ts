@@ -13,12 +13,14 @@ export interface ZellijPaneProofOptions {
   sessionName?: string
   expectedLaneCount?: number
   expectedCwd?: string
+  expectedMainCommandIncludes?: string
 }
 
 export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOptions = {}) {
   const outRoot = path.resolve(opts.ledgerRoot || (opts.missionId ? path.join(root, '.sneakoscope', 'missions', opts.missionId) : path.join(root, '.sneakoscope', 'reports')))
   const session = await readJson<any>(path.join(outRoot, 'zellij-session.json'), null)
   const sessionName = opts.sessionName || session?.session_name || null
+  const expectedMainCommand = opts.expectedMainCommandIncludes || (session?.codex_pane?.enabled === true ? String(session.codex_pane.bin || 'codex') : '')
   const capability = await checkZellijCapability({ root, require: opts.require === true, writeReport: true })
   const command = sessionName
     ? ['--session', sessionName, 'action', 'list-panes', '--json', '--all']
@@ -28,8 +30,9 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
     : null
   const rawRows = parsePaneRows(paneRun?.stdout_tail || '')
   const paneRows = normalizeZellijPaneRows(rawRows)
-  const evaluationOpts: { expectedLaneCount?: number; expectedCwd?: string } = { expectedCwd: opts.expectedCwd || root }
+  const evaluationOpts: { expectedLaneCount?: number; expectedCwd?: string; expectedMainCommandIncludes?: string } = { expectedCwd: opts.expectedCwd || root }
   if (opts.expectedLaneCount !== undefined) evaluationOpts.expectedLaneCount = opts.expectedLaneCount
+  if (expectedMainCommand) evaluationOpts.expectedMainCommandIncludes = expectedMainCommand
   const evaluation = evaluateZellijPaneProofRows(paneRows, evaluationOpts)
   const blockers = [
     ...capability.blockers,
@@ -49,6 +52,8 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
     main_pane: evaluation.main_pane,
     lane_panes: evaluation.lane_panes,
     expected_lane_count: evaluation.expected_lane_count,
+    expected_main_command_includes: evaluation.expected_main_command_includes,
+    main_command_ok: evaluation.main_command_ok,
     lane_count_ok: evaluation.lane_count_ok,
     geometry_distinct: evaluation.geometry_distinct,
     panes: paneRows,
@@ -104,12 +109,15 @@ export function normalizeZellijPaneRows(rows: any[]): any[] {
   })
 }
 
-export function evaluateZellijPaneProofRows(panes: any[], opts: { expectedLaneCount?: number; expectedCwd?: string } = {}) {
+export function evaluateZellijPaneProofRows(panes: any[], opts: { expectedLaneCount?: number; expectedCwd?: string; expectedMainCommandIncludes?: string } = {}) {
   const mainPane = panes.find((pane) => pane.role === 'main') || null
   const lanePanes = panes.filter((pane) => pane.role === 'lane')
   const expectedLaneCount = Math.max(1, Number(opts.expectedLaneCount || lanePanes.length || 1))
+  const expectedMainCommandIncludes = String(opts.expectedMainCommandIncludes || '').trim()
+  const mainCommandOk = !expectedMainCommandIncludes || Boolean(mainPane?.command && mainCommandContainsExecutable(mainPane.command, expectedMainCommandIncludes))
   const blockers = [
     ...(!mainPane ? ['zellij_main_pane_missing'] : []),
+    ...(mainPane && !mainCommandOk ? [`zellij_main_pane_unexpected_command:${expectedMainCommandIncludes}`] : []),
     ...(lanePanes.length === 0 ? ['zellij_lane_pane_missing'] : []),
     ...(lanePanes.length > 0 && lanePanes.length !== expectedLaneCount ? ['zellij_lane_pane_count_mismatch'] : []),
     ...(mainPane?.exited ? ['zellij_main_pane_exited'] : []),
@@ -122,6 +130,8 @@ export function evaluateZellijPaneProofRows(panes: any[], opts: { expectedLaneCo
     main_pane: mainPane,
     lane_panes: lanePanes,
     expected_lane_count: expectedLaneCount,
+    expected_main_command_includes: expectedMainCommandIncludes || null,
+    main_command_ok: mainCommandOk,
     lane_count_ok: lanePanes.length === expectedLaneCount,
     geometry_distinct: geometryDistinct(mainPane, lanePanes),
     blockers
@@ -137,6 +147,16 @@ function inferPaneRole(input: { name: string; command: string }): 'main' | 'lane
 function normalizeCommand(value: unknown): string {
   if (Array.isArray(value)) return value.map(String).join(' ')
   return stringValue(value)
+}
+
+function mainCommandContainsExecutable(command: unknown, expected: string): boolean {
+  const text = String(command || '')
+  const expectedBase = path.basename(expected)
+  if (!expectedBase) return false
+  const tokens = text.match(/'[^']*'|"[^"]*"|[^\s;|&]+/g) || []
+  return tokens
+    .map((token) => token.replace(/^['"]|['"]$/g, ''))
+    .some((token) => path.basename(token) === expectedBase)
 }
 
 function stringValue(value: unknown): string {

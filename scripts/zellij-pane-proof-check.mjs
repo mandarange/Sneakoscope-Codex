@@ -27,10 +27,25 @@ const exitedLane = mod.evaluateZellijPaneProofRows(mod.normalizeZellijPaneRows([
   { pane_id: '1', name: 'orchestrator', command: 'sh', cwd: root, exited: false },
   { pane_id: '2', name: 'slot-001', command: 'sks zellij-lane --mission M --slot slot-001', cwd: root, exited: true }
 ]), { expectedLaneCount: 1, expectedCwd: root });
+const madCodexMain = mod.evaluateZellijPaneProofRows(mod.normalizeZellijPaneRows([
+  { pane_id: '1', name: 'orchestrator', command: 'codex --profile sks-mad-high', cwd: root, exited: false },
+  { pane_id: '2', name: 'slot-001', command: 'sks zellij-lane --mission M --slot slot-001', cwd: root, exited: false }
+]), { expectedLaneCount: 1, expectedCwd: root, expectedMainCommandIncludes: 'codex' });
+const madShellMain = mod.evaluateZellijPaneProofRows(mod.normalizeZellijPaneRows([
+  { pane_id: '1', name: 'orchestrator', command: 'sh -lc sks status --json', cwd: root, exited: false },
+  { pane_id: '2', name: 'slot-001', command: 'sks zellij-lane --mission M --slot slot-001', cwd: root, exited: false }
+]), { expectedLaneCount: 1, expectedCwd: root, expectedMainCommandIncludes: 'codex' });
+const codexLbOnlyMain = mod.evaluateZellijPaneProofRows(mod.normalizeZellijPaneRows([
+  { pane_id: '1', name: 'orchestrator', command: 'sh -lc model_provider="codex-lb"', cwd: root, exited: false },
+  { pane_id: '2', name: 'slot-001', command: 'sks zellij-lane --mission M --slot slot-001', cwd: root, exited: false }
+]), { expectedLaneCount: 1, expectedCwd: root, expectedMainCommandIncludes: 'codex' });
 const fixtureOk = positive.blockers.length === 0
   && missingLane.blockers.includes('zellij_lane_pane_missing')
-  && exitedLane.blockers.some((blocker) => blocker.startsWith('zellij_lane_pane_exited'));
-emit({ ...report, fixture_ok: fixtureOk, fixture_results: { positive, missingLane, exitedLane }, ok: report.ok && fixtureOk });
+  && exitedLane.blockers.some((blocker) => blocker.startsWith('zellij_lane_pane_exited'))
+  && madCodexMain.blockers.length === 0
+  && madShellMain.blockers.includes('zellij_main_pane_unexpected_command:codex')
+  && codexLbOnlyMain.blockers.includes('zellij_main_pane_unexpected_command:codex');
+emit({ ...report, fixture_ok: fixtureOk, fixture_results: { positive, missingLane, exitedLane, madCodexMain, madShellMain, codexLbOnlyMain }, ok: report.ok && fixtureOk });
 function emit(report) { console.log(JSON.stringify(report, null, 2)); if (!report.ok) process.exitCode = 1; }
 function fail(blocker, detail) { emit({ schema: 'sks.zellij-pane-proof-check.v1', ok: false, blockers: [blocker], detail }); process.exit(1); }
 function readArg(args, name) {

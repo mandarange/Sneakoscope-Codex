@@ -504,9 +504,9 @@ function fastModeActionFromPrompt(prompt = ''): string {
     .trimStart()
     .toLowerCase();
   const token = afterRoute.match(/^[^\s?!.,;:()"'`]+/)?.[0] || '';
-  if (['off', 'disable', 'disabled', 'standard', 'slow', '끄기', '꺼', '꺼줘'].includes(token) || token.startsWith('끄') || token.startsWith('꺼')) return 'off';
-  if (['on', 'enable', 'enabled', 'fast', '켜기', '켜', '켜줘'].includes(token) || token.startsWith('켜')) return 'on';
-  if (['clear', 'reset', 'default', '초기화', '기본'].includes(token) || token.startsWith('초기화')) return 'clear';
+  if (['off', 'disable', 'disabled', 'standard', 'default', 'slow', '끄기', '꺼', '꺼줘'].includes(token) || token.startsWith('끄') || token.startsWith('꺼')) return 'off';
+  if (['on', 'enable', 'enabled', 'fast', 'priority', '켜기', '켜', '켜줘'].includes(token) || token.startsWith('켜')) return 'on';
+  if (['clear', 'reset', '초기화', '기본'].includes(token) || token.startsWith('초기화')) return 'clear';
   return 'status';
 }
 

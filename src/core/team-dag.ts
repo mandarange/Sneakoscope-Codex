@@ -184,7 +184,7 @@ function planToTeamDag(plan: any = {}, opts: any = {}) {
   let previousIds: any[] = [];
   for (const phase of plan.phases || []) {
     const agents = Array.isArray(phase.agents) && phase.agents.length ? phase.agents.map(String) : ['parent_orchestrator'];
-    const parallel = agents.length > 1 && (/parallel|debate|review/i.test(String(phase.id || '')) || phase.max_parallel_subagents);
+    const parallel = agents.length > 1 && (/parallel|debate|review/i.test(String(phase.id || '')) || phase.max_parallel_native_sessions || phase.max_parallel_subagents);
     const created = parallel
       ? agents.map((agent: any) => phaseNode(phase, { agent, suffix: agent, dependsOn: previousIds }))
       : [phaseNode(phase, { agent: agents[0], dependsOn: previousIds })];

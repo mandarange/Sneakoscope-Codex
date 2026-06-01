@@ -35,7 +35,7 @@ export function agentPipelineStage(policy: any = {}) {
     id: AGENT_INTAKE_STAGE_ID,
     goal: 'Run native multi-session agent intake with non-overlapping leases and proof evidence.',
     agent_count: required ? Number(policy.agent_count || DEFAULT_AGENT_COUNT) : 0,
-    max_parallel_subagents: Number(policy.agent_count || DEFAULT_AGENT_COUNT),
+    max_parallel_native_sessions: Number(policy.agent_count || DEFAULT_AGENT_COUNT),
     backend: 'native-agent-kernel',
     read_only: true,
     write_policy: 'read-only analysis; parent-owned integration',

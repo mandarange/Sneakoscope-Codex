@@ -10,7 +10,7 @@ export const AGENT_PROGRESS_TIMELINE_MD = 'agent-progress-timeline.md'
 export const AGENT_CODEX_COCKPIT_EVENTS = 'agent-codex-cockpit-events.jsonl'
 
 export type CodexCockpitHookPayload = {
-  hook_event_name: 'SubagentStart' | 'SubagentStop'
+  hook_event_name: 'NativeSessionStart' | 'NativeSessionStop' | 'SubagentStart' | 'SubagentStop'
   agent_id?: string
   agent_type?: string
   session_id?: string

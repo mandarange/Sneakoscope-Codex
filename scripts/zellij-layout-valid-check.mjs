@@ -13,8 +13,17 @@ const built = layoutMod.buildZellijLayoutKdl({ missionId: 'M-layout-check', ledg
 const staticValidation = layoutMod.validateZellijLayoutKdl(built.layout_kdl);
 // Validate all four SKS layouts (MAD / Agent / Team / Naruto) build valid KDL.
 const kindsValidated = ['mad', 'agent', 'team', 'naruto'].map((kind) => {
-  const b = layoutMod.buildZellijLayoutKdl({ missionId: `M-layout-${kind}`, ledgerRoot: path.join(root, '.sneakoscope', 'tmp', `layout-${kind}`), cwd: root, kind, slotCount: 2 });
-  return { kind, ok: layoutMod.validateZellijLayoutKdl(b.layout_kdl).ok };
+  const b = layoutMod.buildZellijLayoutKdl({
+    missionId: `M-layout-${kind}`,
+    ledgerRoot: path.join(root, '.sneakoscope', 'tmp', `layout-${kind}`),
+    cwd: root,
+    kind,
+    slotCount: 2,
+    codexArgs: kind === 'mad' ? ['--profile', 'sks-mad-high', '-c', 'service_tier=fast'] : []
+  });
+  const hasCodexPane = kind !== 'mad' || (b.main_pane_kind === 'codex_interactive' && /exec\s+'?codex'?/.test(b.layout_kdl) && b.layout_kdl.includes('sks-mad-high'));
+  const hasLanePane = b.layout_kdl.includes('zellij-lane');
+  return { kind, ok: layoutMod.validateZellijLayoutKdl(b.layout_kdl).ok && hasCodexPane && hasLanePane, main_pane_kind: b.main_pane_kind, has_codex_pane: hasCodexPane, has_lane_pane: hasLanePane };
 });
 const allKindsOk = kindsValidated.every((k) => k.ok);
 const invalidValidation = layoutMod.validateZellijLayoutKdl('layout { pane command="zellij-lane" {');

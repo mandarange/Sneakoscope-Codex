@@ -1,4 +1,5 @@
 import { DEFAULT_AGENT_COUNT } from './agent-schema.js'
+import { normalizeServiceTier } from './fast-mode-policy.js'
 
 export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const first = args[0] && !String(args[0]).startsWith('--') ? String(args[0]) : ''
@@ -23,7 +24,7 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const dryRunPatches = hasFlag(args, '--dry-run-patches') || hasFlag(args, '--dryrun-patches')
   const maxWriteAgents = Number(readOption(args, '--max-write-agents', Math.max(1, Math.min(concurrency, agents))))
   const explicitServiceTier = String(readOption(args, '--service-tier', '') || '')
-  const serviceTier = explicitServiceTier === 'standard' || explicitServiceTier === 'fast' ? explicitServiceTier : undefined
+  const serviceTier = normalizeServiceTier(explicitServiceTier, null) || undefined
   const fastMode = hasFlag(args, '--no-fast') || serviceTier === 'standard' ? false : hasFlag(args, '--fast') ? true : undefined
   const noFast = hasFlag(args, '--no-fast')
   const apply = hasFlag(args, '--apply')

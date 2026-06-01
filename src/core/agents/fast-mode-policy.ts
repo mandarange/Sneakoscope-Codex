@@ -7,6 +7,7 @@ export const FAST_MODE_POLICY_SCHEMA = 'sks.fast-mode-policy.v1'
 export const FAST_MODE_PROPAGATION_PROOF_SCHEMA = 'sks.fast-mode-propagation-proof.v1'
 export const FAST_MODE_PREFERENCE_SCHEMA = 'sks.fast-mode-preference.v1'
 export type AgentServiceTier = 'fast' | 'standard'
+export type CodexDesktopServiceTier = 'priority' | 'default'
 export type FastModePreferenceMode = AgentServiceTier
 
 export interface FastModePolicy {
@@ -14,6 +15,7 @@ export interface FastModePolicy {
   generated_at: string
   fast_mode: boolean
   service_tier: AgentServiceTier
+  codex_desktop_service_tier: CodexDesktopServiceTier
   default_fast_mode: true
   disabled_by: 'none' | 'no-fast' | 'service-tier-standard' | 'preference-standard'
   explicit_fast: boolean
@@ -30,6 +32,7 @@ export interface FastModePreference {
   mode: FastModePreferenceMode
   fast_mode: boolean
   service_tier: AgentServiceTier
+  codex_desktop_service_tier: CodexDesktopServiceTier
   source: string
 }
 
@@ -52,6 +55,7 @@ export function resolveFastModePolicy(input: any = {}): FastModePolicy {
     generated_at: nowIso(),
     fast_mode: serviceTier === 'fast',
     service_tier: serviceTier,
+    codex_desktop_service_tier: codexDesktopServiceTier(serviceTier),
     default_fast_mode: true,
     disabled_by: explicitNoFast ? 'no-fast' : explicitTier === 'standard' ? 'service-tier-standard' : preference?.mode === 'standard' ? 'preference-standard' : 'none',
     explicit_fast: explicitFast,
@@ -97,6 +101,7 @@ export async function writeFastModePreference(root: string = process.cwd(), mode
     mode: normalized,
     fast_mode: normalized === 'fast',
     service_tier: normalized,
+    codex_desktop_service_tier: codexDesktopServiceTier(normalized),
     source
   }
   await writeJsonAtomic(file, preference)
@@ -114,6 +119,7 @@ export function fastModeEnv(policy: FastModePolicy): NodeJS.ProcessEnv {
   return {
     SKS_FAST_MODE: policy.fast_mode ? '1' : '0',
     SKS_SERVICE_TIER: policy.service_tier,
+    SKS_CODEX_DESKTOP_SERVICE_TIER: policy.codex_desktop_service_tier,
     SKS_REASONING_PROFILE_SUFFIX: policy.fast_mode ? 'fast' : 'standard'
   }
 }
@@ -197,10 +203,16 @@ export async function writeFastModePropagationProof(root: string, input: { polic
   return report
 }
 
-function normalizeServiceTier(value: unknown, fallback: AgentServiceTier | null = 'fast'): AgentServiceTier | null {
+export function normalizeServiceTier(value: unknown, fallback: AgentServiceTier | null = 'fast'): AgentServiceTier | null {
   const text = String(value || '').toLowerCase()
   if (text === 'fast' || text === 'standard') return text
+  if (text === 'priority') return 'fast'
+  if (text === 'default') return 'standard'
   return fallback
+}
+
+export function codexDesktopServiceTier(tier: AgentServiceTier): CodexDesktopServiceTier {
+  return tier === 'fast' ? 'priority' : 'default'
 }
 
 function normalizeFastModePreference(parsed: any, file: string): FastModePreference & { path: string } {
@@ -211,6 +223,7 @@ function normalizeFastModePreference(parsed: any, file: string): FastModePrefere
     mode,
     fast_mode: mode === 'fast',
     service_tier: mode,
+    codex_desktop_service_tier: codexDesktopServiceTier(mode),
     source: typeof parsed?.source === 'string' ? parsed.source : 'unknown',
     path: file
   }

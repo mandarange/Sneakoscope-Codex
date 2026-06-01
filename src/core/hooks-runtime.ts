@@ -1338,7 +1338,7 @@ function visibleHookMessage(name: any, text: any = '') {
     if (body.includes('$Goal route prepared')) return 'SKS: Goal workflow bridge prepared for native Codex /goal continuation.';
     if (body.includes('Computer Use fast lane active')) return 'SKS: native Computer Use lane injected; defer TriWiki/Honest Mode to final closeout.';
     if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: stale clarification gate detected; continue from inferred route contract.';
-    if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team route, live transcript, and subagent plan injected.';
+    if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team route, live transcript, and native multi-session plan injected.';
     if (body.includes('$Research route prepared')) return 'SKS: Research route, xhigh Eureka agent council, source/debate ledgers, paper output, and falsification gate injected.';
     if (body.includes('$AutoResearch route prepared')) return 'SKS: AutoResearch experiment loop and evidence gate injected.';
     if (body.includes('$PPT route prepared')) return 'SKS: PPT route and delivery-context gate injected.';
@@ -1346,10 +1346,10 @@ function visibleHookMessage(name: any, text: any = '') {
     if (body.includes('$DB route prepared')) return 'SKS: DB safety review route injected.';
     if (body.includes('$GX route prepared')) return 'SKS: GX visual context route injected.';
     if (body.includes('$QA-LOOP route prepared')) return 'SKS: QA-LOOP route and safety checklist injected.';
-    if (body.includes('Subagent policy: REQUIRED')) return 'SKS: route context injected; subagent execution gate is active.';
+    if (body.includes('Native multi-session policy: REQUIRED')) return 'SKS: route context injected; native multi-session gate is active.';
     return 'SKS: skill-first route context injected.';
   }
-  if (name === 'post-tool') return 'SKS: tool result inspected; Context7/subagent/DB evidence updated when relevant.';
+  if (name === 'post-tool') return 'SKS: tool result inspected; Context7/native-session/DB evidence updated when relevant.';
   if (name === 'stop') {
     if (body.includes('Required questions')) return 'SKS: stale clarification wording detected; route should auto-seal from inferred defaults.';
     return body ? 'SKS: stop gate checked; continuing until route evidence passes.' : 'SKS: stop gate checked.';
