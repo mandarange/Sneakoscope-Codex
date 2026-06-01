@@ -186,7 +186,7 @@ function inspectStamp() {
   }
   const current = currentStampPayload();
   const mismatches = [];
-  for (const key of ['schema', 'package_name', 'package_version', 'git_commit', 'package_json_sha256', 'package_files_sha256', 'dist_build_sha256', 'dist_file_count', 'release_gate_sha256', 'release_check_sha256', 'source_digest', 'source_file_count']) {
+  for (const key of ['schema', 'package_name', 'package_version', 'package_json_sha256', 'package_files_sha256', 'dist_build_sha256', 'dist_file_count', 'release_gate_sha256', 'release_check_sha256', 'source_digest', 'source_file_count']) {
     if (stamp[key] !== current[key]) mismatches.push(`${key}: stamp=${stamp[key] || 'missing'} current=${current[key] || 'missing'}`);
   }
   if (mismatches.length) {

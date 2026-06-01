@@ -116,13 +116,13 @@ function main() {
     reasons.push('release_gate_sha256: absent from stamp');
   }
 
-  // git commit: compared only if the stamp stored one; otherwise informational.
-  if (Object.prototype.hasOwnProperty.call(stamp, 'git_commit') && stamp.git_commit) {
-    if (gitCommit && stamp.git_commit !== gitCommit) {
-      mismatched.push('git_commit');
-      reasons.push(`git_commit: stamp=${stamp.git_commit} current=${gitCommit}`);
-    }
-  }
+  // git_commit is provenance, not a freshness comparator. A valid release flow often
+  // runs release:check, commits the exact checked tree, then publishes from that new
+  // commit. In that case the tree/package/dist hashes still prove freshness, while
+  // comparing HEAD to the pre-commit stamp would block a good publish. The stricter
+  // `release-check-stamp verify` that follows this fast check owns the content
+  // comparators; keep the current commit visible in this report for audit only.
+  const stampedGitCommit = Object.prototype.hasOwnProperty.call(stamp, 'git_commit') ? stamp.git_commit || null : null;
 
   const eligible = mismatched.length === 0;
   console.log(
@@ -132,6 +132,8 @@ function main() {
       fast_path: eligible,
       version: currentVersion,
       git_commit: gitCommit,
+      stamped_git_commit: stampedGitCommit,
+      git_commit_changed_since_stamp: Boolean(stampedGitCommit && gitCommit && stampedGitCommit !== gitCommit),
       mismatched,
       reasons
     })
