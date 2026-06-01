@@ -16,6 +16,8 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
+SKS **1.20.5** makes `sks --mad` actually open the Zellij session. Previous releases only *created* a detached background session and printed an `Attach with: ...` hint, so nothing opened in the operator's terminal. SKS now performs the follow-up foreground attach automatically when launched in an interactive TTY (using the same `ZELLIJ_SOCKET_DIR` namespace as the background session), and falls back to printing the manual attach command if attach fails. Auto-attach is skipped for `--json`, non-TTY/piped launches, when already inside a Zellij session, or with `--no-attach` / `SKS_NO_ZELLIJ_ATTACH=1`; `--attach` forces it.
+
 SKS **1.20.4** is a targeted `sks --mad` / codex-lb Zellij usability patch: when a background MAD Zellij session launches successfully, SKS now prints the exact `Attach with: ZELLIJ_SOCKET_DIR=... zellij attach ...` command so operators can enter the fresh session without manually reconstructing the socket namespace.
 
 SKS **1.20.3** added the macOS Zellij launch fallback and project-local Fast mode control. SKS supplies a short per-user `ZELLIJ_SOCKET_DIR` by default, caps generated session names safely, records `*_command_with_env` attach commands, and classifies `IPC socket path is too long` as `zellij_socket_path_too_long` instead of a generic launch failure. It also adds `sks fast-mode on|off|status|clear`, `$Fast-On`, `$Fast-Off`, and `$Fast-Mode`; saved project preferences are used only when no explicit `--fast`, `--no-fast`, or `--service-tier` flag is present.

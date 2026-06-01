@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { appendJsonl, nowIso, sha256, writeJsonAtomic } from '../fsx.js'
 import { checkZellijCapability } from './zellij-capability.js'
 import { formatZellijCommand, resolveZellijProcessEnvMeta, runZellij } from './zellij-command.js'
@@ -131,6 +132,45 @@ export async function launchTeamZellijView(opts: ZellijLaunchOptions = {}) {
     kind: 'team',
     slotCount: opts.slotCount || 5
   })
+}
+
+export interface ZellijAttachResult {
+  ok: boolean
+  status: number | null
+  signal: NodeJS.Signals | null
+  error?: string
+}
+
+/**
+ * Attach the current terminal to an existing Zellij session in the foreground.
+ *
+ * `launchZellijLayout` only ever *creates* a detached background session, which
+ * is correct for proof/automation but means an interactive launch (e.g.
+ * `sks --mad`) never actually opens anything. This helper performs the
+ * follow-up foreground attach, inheriting stdio so the session takes over the
+ * user's terminal until they detach. It is a no-op-style failure (never throws)
+ * when Zellij is missing or attach fails, so callers can fall back to printing a
+ * manual attach hint.
+ */
+export function attachZellijSessionInteractive(
+  sessionName: string,
+  opts: { cwd?: string } = {}
+): ZellijAttachResult {
+  if (!sessionName) return { ok: false, status: null, signal: null, error: 'missing_session_name' }
+  const meta = resolveZellijProcessEnvMeta()
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  if (meta.zellij_socket_dir && !env.ZELLIJ_SOCKET_DIR) env.ZELLIJ_SOCKET_DIR = meta.zellij_socket_dir
+  try {
+    const result = spawnSync('zellij', ['attach', sessionName], {
+      cwd: opts.cwd || process.cwd(),
+      env,
+      stdio: 'inherit'
+    })
+    if (result.error) return { ok: false, status: null, signal: null, error: result.error.message }
+    return { ok: result.status === 0, status: result.status ?? null, signal: result.signal ?? null }
+  } catch (err: any) {
+    return { ok: false, status: null, signal: null, error: err?.message || String(err) }
+  }
 }
 
 export function sanitizeZellijSessionName(value: unknown): string {
