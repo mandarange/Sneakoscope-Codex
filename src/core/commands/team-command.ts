@@ -30,6 +30,7 @@ export async function team(args: any = []) {
   const opts = parseTeamCreateArgs(cleanCreateArgs);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', roster.bundle_size, 1, 20);
+  const visualLaneCount = roster.bundle_size;
   const desiredWorkItemCount = readBoundedIntegerFlag(args, '--work-items', targetActiveSlots, 1, 200);
   const minimumWorkItems = readBoundedIntegerFlag(args, '--minimum-work-items', targetActiveSlots, 1, 200);
   const maxQueueExpansion = readBoundedIntegerFlag(args, '--max-queue-expansion', 10, 0, 200);
@@ -79,8 +80,8 @@ export async function team(args: any = []) {
   if (fromChatImgRequired) await writeFromChatImgArtifacts(dir, { missionId: id, requests: [{ verbatim: prompt }], ambiguities: ['image source inventory must be completed before implementation'] });
   let liveZellij: any = null;
   if (!mock && openZellij) {
-    liveZellij = await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: targetActiveSlots, dryRun: false, attach: false });
-    if (liveZellij?.ok && liveZellij.capability?.status === 'ok') console.log(`Zellij: prepared ${targetActiveSlots} native session lane(s) in ${liveZellij.session_name}. Attach with: ${liveZellij.attach_command_with_env || liveZellij.attach_command}`);
+    liveZellij = await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: visualLaneCount, dryRun: false, attach: false });
+    if (liveZellij?.ok && liveZellij.capability?.status === 'ok') console.log(`Zellij: prepared ${visualLaneCount} native agent lane(s) in ${liveZellij.session_name}. Attach with: ${liveZellij.attach_command_with_env || liveZellij.attach_command}`);
     else if (liveZellij?.ok) console.log(`Zellij: optional live panes unavailable (${(liveZellij.warnings || []).join('; ') || liveZellij.capability?.status || 'unknown'}).`);
     else console.log(`Zellij: blocked (${Array.from(new Set(liveZellij?.blockers || [])).join('; ')})`);
   }
@@ -93,6 +94,7 @@ export async function team(args: any = []) {
     mock,
     agents: roster.bundle_size,
     targetActiveSlots,
+    visualLaneCount,
     desiredWorkItemCount,
     minimumWorkItems,
     maxQueueExpansion,
@@ -141,6 +143,7 @@ export async function team(args: any = []) {
     agent_sessions: agentSessions,
     bundle_size: roster.bundle_size,
     target_active_slots: targetActiveSlots,
+    visual_lane_count: visualLaneCount,
     desired_work_items: desiredWorkItemCount,
     minimum_work_items: minimumWorkItems,
     max_queue_expansion: maxQueueExpansion,
@@ -162,7 +165,7 @@ export async function team(args: any = []) {
     result.mock = true;
     result.proof = proof.validation;
   } else {
-    result.zellij = liveZellij || await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: targetActiveSlots, dryRun: jsonOutput || !openZellij, attach: false });
+    result.zellij = liveZellij || await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: visualLaneCount, dryRun: jsonOutput || !openZellij, attach: false });
     if (openZellij && result.zellij?.ok && result.zellij.capability?.status === 'ok' && shouldAutoAttachTeamZellij(args)) attachZellijSessionInteractive(result.zellij.session_name, { cwd: root });
   }
   if (jsonOutput) return console.log(JSON.stringify(result, null, 2));
@@ -170,7 +173,7 @@ export async function team(args: any = []) {
   console.log(`Agent sessions: ${agentSessions}`);
   console.log(`Role counts: ${formatRoleCounts(roleCounts)}`);
   console.log(`Review policy: minimum ${MIN_TEAM_REVIEWER_LANES} reviewer/QA validation lanes`);
-  if (result.zellij?.ok && result.zellij.capability?.status === 'ok') console.log(`Zellij: prepared ${targetActiveSlots} native session lane(s) in ${result.zellij.session_name}`);
+  if (result.zellij?.ok && result.zellij.capability?.status === 'ok') console.log(`Zellij: prepared ${visualLaneCount} native agent lane(s) in ${result.zellij.session_name}`);
   else if (result.zellij?.ok) console.log(`Zellij: optional live panes unavailable (${(result.zellij.warnings || []).join('; ') || result.zellij.capability?.status || 'unknown'})`);
   else if (!mock) console.log(`Zellij: blocked (${Array.from(new Set(result.zellij?.blockers || [])).join('; ')})`);
   console.log(`Watch: sks team watch ${id}`);
@@ -406,11 +409,11 @@ async function inferTeamZellijSlotCount(dir: string, plan: any = {}) {
   const scheduler = await readJson<any>(path.join(dir, 'agents', 'agent-scheduler-state.json'), null)
   const lanes = await readJson<any>(path.join(dir, 'agents', 'agent-zellij-lanes.json'), null)
   const candidates = [
-    scheduler?.target_active_slots,
+    plan?.bundle_size,
+    plan?.agent_session_count,
     lanes?.lane_count,
     plan?.target_active_slots,
-    plan?.agent_session_count,
-    plan?.bundle_size
+    scheduler?.target_active_slots
   ].map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)
   return Math.max(1, Math.min(100, Math.floor(candidates[0] || 5)))
 }

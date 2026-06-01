@@ -6,8 +6,9 @@ import { assertAgentProof, assertCompletionProof, createHermeticProjectRoot, run
 
 test('Team route fixture includes native agent proof evidence', async () => {
   const json = await runSks(['team', 'fixture', '--mock', '--json']);
-  await assertCompletionProof(json.mission_id, '$Team');
-  await assertAgentProof(json.mission_id, { route: '$Team' });
+  const completion = await assertCompletionProof(json.mission_id, '$Team');
+  assert.notEqual(completion.status, 'blocked');
+  await assertAgentProof(json.mission_id, { route: '$Team', agentCount: json.bundle_size });
 });
 
 test('Team route exposes native agent backend only', async () => {
@@ -58,7 +59,27 @@ test('Team route preserves compatibility artifacts and exposes Zellij cockpit la
   assert.equal(zellij.launch_command.includes('--layout'), false);
   assert.match(zellij.attach_command, /^zellij attach /);
   assert.match(zellij.layout_artifact, /\.kdl$/);
-  assert.equal(zellij.pane_proof.expected_lane_count, plan.target_active_slots || plan.agent_session_count);
+  assert.equal(zellij.pane_proof.expected_lane_count, plan.bundle_size || plan.agent_session_count);
   const layoutJson = JSON.parse(await fs.readFile(path.join(root, '.sneakoscope', 'missions', json.mission_id, 'zellij-layout.kdl.json'), 'utf8'));
-  assert.equal(layoutJson.slot_count, plan.target_active_slots || plan.agent_session_count);
+  assert.equal(layoutJson.slot_count, plan.bundle_size || plan.agent_session_count);
+});
+
+test('Team Zellij opens one visible right lane per native agent even when active slots are throttled', async () => {
+  const root = await createHermeticProjectRoot({ fixtureName: 'team-zellij-visible-agent-lanes' });
+  const json = await runSksInRoot(root, ['team', 'fixture', '--target-active-slots', '1', '--mock', '--json']);
+  const missionDir = path.join(root, '.sneakoscope', 'missions', json.mission_id);
+  const plan = JSON.parse(await fs.readFile(path.join(missionDir, 'team-plan.json'), 'utf8'));
+
+  assert.equal(plan.target_active_slots, 1);
+  assert.ok(plan.bundle_size > plan.target_active_slots);
+
+  const proof = JSON.parse(await fs.readFile(path.join(missionDir, 'agents', 'agent-proof-evidence.json'), 'utf8'));
+  assert.equal(proof.target_active_slots, 1);
+  assert.equal(proof.visual_lane_count, plan.bundle_size);
+
+  const zellij = await runSksInRoot(root, ['team', 'open-zellij', json.mission_id, '--json', '--no-attach']);
+  const layoutJson = JSON.parse(await fs.readFile(path.join(root, '.sneakoscope', 'missions', json.mission_id, 'zellij-layout.kdl.json'), 'utf8'));
+
+  assert.equal(zellij.pane_proof.expected_lane_count, plan.bundle_size);
+  assert.equal(layoutJson.slot_count, plan.bundle_size);
 });

@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.21.2** fixes the `sks --mad` Zellij launch regression from 1.21.1: Zellij rejects `--copy-command` when it is paired with the OSC52-only `--copy-clipboard` flag, so SKS now passes only `--copy-command pbcopy` and `--copy-on-select true` on the launch CLI while keeping the generated clipboard config for attach-time behavior. It carries forward the 1.21.1 launch-speed and Codex legacy-profile fixes.
+SKS **1.21.3** restores macOS native text copy in SKS-launched Zellij sessions: the generated clipboard config and launch options now set `mouse_mode false` alongside `copy_command pbcopy`, so drag-select + `Cmd+C` reaches the terminal/system clipboard instead of being intercepted by Zellij. It also keeps Team/Naruto native agents individually visible in the right-side Zellij UI by separating runtime concurrency (`target_active_slots`) from the visual lane count (`visual_lane_count`). It carries forward the 1.21.2 Zellij launch fix, 1.21.1 launch-speed fix, and Codex legacy-profile cleanup.
 
 SKS **1.20.4** is a targeted `sks --mad` / codex-lb Zellij usability patch: when a background MAD Zellij session launches successfully, SKS now prints the exact `Attach with: ZELLIJ_SOCKET_DIR=... zellij attach ...` command so operators can enter the fresh session without manually reconstructing the socket namespace.
 

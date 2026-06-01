@@ -85,9 +85,12 @@ export async function updateZellijLaneSupervisorFromSlots(root: string, input: {
       targetActiveSlots: Math.max(1, input.slots.length || input.state?.target_active_slots || 1)
     })
   }
-  const laneBySlot = new Map(supervisor.lanes.map((lane) => [lane.slot_id, lane]))
-  const lanes = input.slots.map((slot, index) => {
-    const previous = laneBySlot.get(slot.slot_id) || createLane(input.missionId, supervisor.session_name, index + 1, nowIso())
+  const slotById = new Map(input.slots.map((slot) => [slot.slot_id, slot]))
+  const laneCount = Math.max(supervisor.lanes.length, input.slots.length)
+  const lanes = Array.from({ length: laneCount }, (_, index) => {
+    const previous = supervisor.lanes[index] || createLane(input.missionId, supervisor.session_name, index + 1, nowIso())
+    const slot = slotById.get(previous.slot_id)
+    if (!slot) return previous
     return {
       ...previous,
       current_session_id: slot.current_session_id,
