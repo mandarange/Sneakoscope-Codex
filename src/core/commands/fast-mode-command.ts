@@ -10,6 +10,7 @@ import {
   writeFastModePreference,
   type FastModePreferenceMode
 } from '../agents/fast-mode-policy.js'
+import { ensureGlobalCodexFastModeDuringInstall } from '../../cli/install-helpers.js'
 
 export const FAST_MODE_COMMAND_SCHEMA = 'sks.fast-mode-command.v1'
 
@@ -30,6 +31,9 @@ export async function fastModeCommand(args: string[] = []) {
   }
 
   const policy = resolveFastModePolicy({ root })
+  const codexFastModeRepair = action === 'on'
+    ? await ensureGlobalCodexFastModeDuringInstall({ forceFastMode: true })
+    : null
   const result = {
     schema: FAST_MODE_COMMAND_SCHEMA,
     ok: true,
@@ -41,6 +45,7 @@ export async function fastModeCommand(args: string[] = []) {
     fast_mode: policy.fast_mode,
     service_tier: policy.service_tier,
     disabled_by: policy.disabled_by,
+    codex_fast_mode_repair: codexFastModeRepair,
     policy,
     dollar_commands: {
       on: '$Fast-On',

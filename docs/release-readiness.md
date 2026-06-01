@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.21.3 keeps the release-readiness contract stable while restoring macOS native `Cmd+C` text copy in SKS-launched Zellij sessions. Launched sessions now pass `--copy-command pbcopy`, `--copy-on-select true`, and `--mouse-mode false` on the CLI, and the generated clipboard config records `mouse_mode false` with `copy_command "pbcopy"`, `copy_clipboard "system"`, and `copy_on_select true` for attach-time config delivery. Disabling Zellij mouse interception leaves drag-select + `Cmd+C` to the terminal/system clipboard. Team and Naruto Zellij views also keep each native agent/clone individually visible on the right by separating scheduler concurrency (`target_active_slots`) from visual pane count (`visual_lane_count`). SKS carries forward the 1.21.2 Zellij launch fix, the 1.21.1 launch-speed fix (metadata-only interactive launch snapshot plus `runCodexLaunchPreflight` `launchFast`), and the Codex legacy-profile warning fix (per-file `$CODEX_HOME/<name>.config.toml` overlays with deprecated project `[profiles.*]` / `profile=` entries dropped).
+SKS 1.21.3 keeps the release-readiness contract stable while restoring macOS native `Cmd+C` text copy in SKS-launched Zellij sessions. Launched sessions now pass `--copy-command pbcopy`, `--copy-on-select true`, and `--mouse-mode false` on the CLI, and the generated clipboard config records `mouse_mode false` with `copy_command "pbcopy"`, `copy_clipboard "system"`, and `copy_on_select true` for attach-time config delivery. Disabling Zellij mouse interception leaves drag-select + `Cmd+C` to the terminal/system clipboard. Team and Naruto Zellij views also keep each native agent/clone individually visible on the right by separating scheduler concurrency (`target_active_slots`) from visual pane count (`visual_lane_count`). Direct `npm publish` now uses `prepublish:release-check-or-fast`: a current release stamp keeps the fast path, while a missing/stale stamp triggers the full authoritative `npm run release:check` before publish continues. Explicit `sks fast-mode on` / `$Fast-On` now forces Codex Fast mode UI/default-profile keys back to `visible = true`, `enabled = true`, `default_profile = "sks-fast-high"`, and top-level `service_tier = "fast"` while preserving unrelated user/plugin settings. SKS carries forward the 1.21.2 Zellij launch fix, the 1.21.1 launch-speed fix (metadata-only interactive launch snapshot plus `runCodexLaunchPreflight` `launchFast`), and the Codex legacy-profile warning fix (per-file `$CODEX_HOME/<name>.config.toml` overlays with deprecated project `[profiles.*]` / `profile=` entries dropped).
 
 The current `sks.release-readiness.v1` report covers actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, Zellij readiness/proof, install-time Zellij dependency repair, Zellij socket-dir launch metadata, MAD attach-command visibility, Zellij clipboard/mouse-mode launch evidence, native-agent visual lane count evidence, and official Fast mode service-tier propagation. `ok: true` in the 1.21.3 readiness report means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, Zellij-only runtime checks, background-layout launch wiring, socket-dir fallback evidence, attach-command output evidence, clipboard command/mouse-mode evidence, native-agent right-pane lane evidence, and `-c service_tier=fast` propagation evidence have no remaining blockers.
 
@@ -27,11 +27,14 @@ without confirmation, or config/auth/skill mutations without backup or no-op pro
 ## Publish authorization policy (1.20.2)
 
 Publishing to npm requires a full `npm run release:check` (the complete hermetic gate
-set) **plus** `npm run release:real-check` for environment-dependent proof. The
-change-aware incremental runner `npm run release:check:dynamic:execute` is a local/CI
-acceleration only — it narrows the gate set to changed inputs and caches results, so
-it **cannot** authorize a publish on its own. See `docs/dynamic-release-pipeline.md`
-for the two-tier model.
+set) **plus** `npm run release:real-check` for environment-dependent proof. Direct
+`npm publish` may use the fast path only when `.sneakoscope/reports/release-check-stamp.json`
+matches the current package/source/dist state; when that stamp is missing or stale,
+`prepublish:release-check-or-fast` runs the full `release:check` once and then
+re-verifies the stamp. The change-aware incremental runner
+`npm run release:check:dynamic:execute` is a local/CI acceleration only — it narrows
+the gate set to changed inputs and caches results, so it **cannot** authorize a publish
+on its own. See `docs/dynamic-release-pipeline.md` for the two-tier model.
 
 ```bash
 npm run xai-mcp:capability

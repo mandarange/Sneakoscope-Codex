@@ -20,7 +20,7 @@ export async function readAgentGateStatus(root: string, missionId: string) {
   const gate = await readJson(gatePath, null)
   const policy = await readJson(policyPath, null)
   const teamPlan = await readJson(teamPlanPath, null)
-  const expectedAgentCount = Math.max(1, Number(
+  const expectedAgentCount = Math.max(DEFAULT_AGENT_COUNT, Number(
     gate?.expected_agent_count ||
     teamPlan?.bundle_size ||
     policy?.agents ||
@@ -31,7 +31,9 @@ export async function readAgentGateStatus(root: string, missionId: string) {
   const blockers = [...(Array.isArray(proof?.blockers) ? proof.blockers : []), ...(Array.isArray(gate?.blockers) ? gate.blockers : [])]
   if (proof?.ok !== true) blockers.push('agent_proof_not_ok')
   if (proof?.status !== 'passed') blockers.push('agent_proof_status_not_passed')
-  if (Number(proof?.agent_count || 0) < expectedAgentCount) blockers.push('agent_count_below_expected')
+  const agentCount = Number(proof?.agent_count || 0)
+  if (agentCount < DEFAULT_AGENT_COUNT) blockers.push('agent_count_below_5')
+  if (agentCount < expectedAgentCount) blockers.push('agent_count_below_expected')
   if (proof?.no_overlap_ok !== true) blockers.push('agent_no_overlap_not_ok')
   if (proof?.ledger_hash_chain_ok !== true) blockers.push('agent_ledger_hash_chain_not_ok')
   if (proof?.consensus_ok !== true) blockers.push('agent_consensus_not_ok')
