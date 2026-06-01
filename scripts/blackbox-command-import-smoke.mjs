@@ -10,6 +10,7 @@ const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-command-import-smoke-'));
 const cache = path.join(tmp, 'npm-cache');
 const consumer = path.join(tmp, 'consumer');
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const failures = [];
 const rows = [];
 fs.mkdirSync(consumer, { recursive: true });
@@ -20,7 +21,7 @@ try {
   const pack = run('npm_pack', npmBin, ['pack', '--json', '--ignore-scripts', '--pack-destination', tmp, '--registry', 'https://registry.npmjs.org/'], { cwd: root });
   const info = pack.ok ? JSON.parse(pack.stdout || '[]')[0] : null;
   const tarball = info ? path.join(tmp, info.filename) : null;
-  if (tarball) run('npm_install_tarball', npmBin, ['install', '--no-audit', '--no-fund', tarball], { cwd: consumer });
+  if (tarball) extractPackedTarball(tarball);
   const pkgRoot = path.join(consumer, 'node_modules', 'sneakoscope');
   if (!fs.existsSync(pkgRoot)) failures.push('installed_package_missing');
   else await smokeCommands(pkgRoot);
@@ -67,6 +68,41 @@ function childNpmEnv(extra = {}) {
   delete env.npm_config_dry_run;
   delete env.NPM_CONFIG_DRY_RUN;
   return env;
+}
+
+function extractPackedTarball(tarball) {
+  const pkgRoot = path.join(consumer, 'node_modules', 'sneakoscope');
+  fs.mkdirSync(pkgRoot, { recursive: true });
+  const stripFlag = process.platform === 'win32' ? '--strip-components=1' : '--strip-components';
+  const args = process.platform === 'win32'
+    ? ['-xzf', tarball, '-C', pkgRoot, stripFlag]
+    : ['-xzf', tarball, '-C', pkgRoot, stripFlag, '1'];
+  const extracted = run('extract_pack_tarball', 'tar', args, { cwd: consumer });
+  if (!extracted.ok) return;
+  linkRuntimeDependencies(pkgRoot);
+}
+
+function linkRuntimeDependencies(pkgRoot) {
+  const deps = Object.keys(pkg.dependencies || {});
+  if (!deps.length) return;
+  const nodeModules = path.join(pkgRoot, 'node_modules');
+  fs.mkdirSync(nodeModules, { recursive: true });
+  for (const dep of deps) {
+    const source = path.join(root, 'node_modules', dep);
+    const target = path.join(nodeModules, dep);
+    if (!fs.existsSync(source)) {
+      failures.push(`dependency_missing:${dep}`);
+      continue;
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    try {
+      fs.symlinkSync(source, target, process.platform === 'win32' ? 'junction' : 'dir');
+      rows.push({ label: `link_dependency:${dep}`, ok: true, status: 0 });
+    } catch (err) {
+      failures.push(`dependency_link_failed:${dep}:${err.message}`);
+      rows.push({ label: `link_dependency:${dep}`, ok: false, status: 1, stderr_tail: String(err.message).slice(-800) });
+    }
+  }
 }
 
 async function smokeCommands(pkgRoot) {

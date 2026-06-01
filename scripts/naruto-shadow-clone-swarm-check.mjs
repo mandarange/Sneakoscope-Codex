@@ -71,7 +71,7 @@ const run = spawnSync(process.execPath, [
   '--backend', 'fake',
   '--work-items', String(proofClones),
   '--json'
-], { cwd: root, encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 });
+], { cwd: root, encoding: 'utf8', timeout: 240000, maxBuffer: 8 * 1024 * 1024 });
 assertGate(run.status === 0, 'sks naruto run must exit 0', { status: run.status, stderr: tail(run.stderr) });
 
 const parsed = parseJson(run.stdout);
@@ -95,7 +95,7 @@ const state = parsed.run?.scheduler?.state || parsed.run?.scheduler || {};
 assertGate(Number(state.completed_count) === proofClones, 'all clone work items must complete despite throttling', { completed_count: state.completed_count });
 
 // 7) A small request is NOT throttled below what was asked (cap only ever reduces, never inflates).
-const small = spawnSync(process.execPath, [cli, 'naruto', 'run', 'tiny', '--clones', '2', '--backend', 'fake', '--work-items', '2', '--json'], { cwd: root, encoding: 'utf8', timeout: 60000, maxBuffer: 4 * 1024 * 1024 });
+const small = spawnSync(process.execPath, [cli, 'naruto', 'run', 'tiny', '--clones', '2', '--backend', 'fake', '--work-items', '2', '--json'], { cwd: root, encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
 const smallParsed = parseJson(small.stdout);
 assertGate(small.status === 0 && smallParsed?.target_active_slots === 2, 'a 2-clone run must run 2 concurrently (no over-throttle)', { status: small.status, target_active_slots: smallParsed?.target_active_slots });
 

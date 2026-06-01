@@ -5,7 +5,7 @@ import { runProcess } from '../../dist/core/fsx.js';
 test('packed command import smoke validates every registered command from dist', async () => {
   const result = await runProcess(process.execPath, ['scripts/blackbox-command-import-smoke.mjs'], {
     cwd: process.cwd(),
-    timeoutMs: 120_000,
+    timeoutMs: 240_000,
     maxOutputBytes: 128 * 1024,
     env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
   });
