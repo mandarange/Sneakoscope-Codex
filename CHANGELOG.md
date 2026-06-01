@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 
+
+## [1.21.0] - 2026-06-01
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [1.20.5] - 2026-06-01
 
 Patch release: `sks --mad` now actually opens the Zellij session in an interactive terminal instead of only printing an attach hint.
