@@ -62,10 +62,11 @@ export async function writeZellijClipboardConfig(
     copy_command,
     copy_clipboard,
     copy_on_select,
-    // Appended AFTER `--default-layout <path>` in the create command. The `options`
-    // subcommand sets these on the *created* background session; per Zellij CLI docs
-    // the value formats are: --copy-on-select true|false, --copy-clipboard system|primary.
-    optionFlags: ['--copy-command', copy_command, '--copy-clipboard', copy_clipboard, '--copy-on-select', String(copy_on_select)],
+    // Appended AFTER `--default-layout <path>` in the create command. Zellij treats
+    // --copy-command as mutually exclusive with --copy-clipboard (OSC52 target), so
+    // only pass the command and copy-on-select flags on the CLI. The generated KDL
+    // still records copy_clipboard for config-file consumers that use OSC52.
+    optionFlags: ['--copy-command', copy_command, '--copy-on-select', String(copy_on_select)],
     config_path,
     generated_at: nowIso()
   }

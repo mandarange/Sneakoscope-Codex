@@ -52,6 +52,11 @@ const codexPaneChecks = {
   layout_not_status_shell: !layoutText.includes('sks status --json || true; exec')
 };
 const codexPaneOk = Object.values(codexPaneChecks).every(Boolean);
+const clipboardCliOk = report.launch_command.includes('--copy-command')
+  && report.launch_command.includes('pbcopy')
+  && report.launch_command.includes('--copy-on-select')
+  && report.launch_command.includes('true')
+  && !report.launch_command.includes('--copy-clipboard');
 const ok = report.kind === 'mad'
   && report.layout_artifact
   && report.layout_path
@@ -65,8 +70,9 @@ const ok = report.kind === 'mad'
   && installSafetyOk
   && consoleDetailOk
   && autoAttachOk
+  && clipboardCliOk
   && codexPaneOk;
-const gate = { schema: 'sks.mad-sks-zellij-launch-check.v1', ok, install_safety_ok: installSafetyOk, console_detail_ok: consoleDetailOk, auto_attach_ok: autoAttachOk, codex_pane_ok: codexPaneOk, codex_pane_checks: codexPaneChecks, report };
+const gate = { schema: 'sks.mad-sks-zellij-launch-check.v1', ok, install_safety_ok: installSafetyOk, console_detail_ok: consoleDetailOk, auto_attach_ok: autoAttachOk, clipboard_cli_ok: clipboardCliOk, codex_pane_ok: codexPaneOk, codex_pane_checks: codexPaneChecks, report };
 await fs.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
 await fs.writeFile(path.join(root, '.sneakoscope', 'reports', 'mad-sks-zellij-launch.json'), `${JSON.stringify(gate, null, 2)}\n`);
 emit(gate);
