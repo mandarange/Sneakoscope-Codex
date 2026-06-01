@@ -930,6 +930,18 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
     });
   }
   if (pending?.conversation_id === conv && pending?.latest) {
+    // Don't re-inject the full update choice on EVERY prompt — that is the "tiny
+    // update text keeps appearing" nag. After the choice has been shown, stay quiet
+    // for a short window so the user can keep working; we re-surface it once the
+    // window elapses (or next conversation). Accept/decline are handled above and
+    // still take effect immediately. SKS_UPDATE_OFFER_THROTTLE_MS=0 restores the
+    // old always-repeat behavior.
+    const throttleMs = updateOfferThrottleMs();
+    const lastOfferedMs = Date.parse(pending.offered_at || '') || 0;
+    if (throttleMs > 0 && lastOfferedMs > 0 && Date.now() - lastOfferedMs < throttleMs) {
+      return updateCheckResult('');
+    }
+    await writeJsonAtomic(statePath, { ...updateState, pending_offer: { ...pending, offered_at: nowIso() } });
     return updateCheckResult(copyStableUpdateChoiceText(pending.latest), {
       blocksRouting: true
     });
@@ -972,6 +984,14 @@ function updateCheckResult(text: any, opts: any = {}) {
     blocksRouting: opts.blocksRouting === true,
     resumeActiveRoute: opts.resumeActiveRoute === true
   };
+}
+
+// How long (ms) to stay quiet after showing the update choice before re-surfacing
+// it in the same conversation. Default 8 minutes; set 0 to always repeat (legacy).
+function updateOfferThrottleMs() {
+  const raw = Number(process.env.SKS_UPDATE_OFFER_THROTTLE_MS);
+  if (Number.isFinite(raw) && raw >= 0) return Math.floor(raw);
+  return 8 * 60 * 1000;
 }
 
 function sksUpdateInstallCommand(version: any) {

@@ -6,6 +6,36 @@
 
 
 
+
+## [1.21.5] - 2026-06-01
+
+Patch release: restore Codex App compatibility for Codex CLI 0.135-era hook routing, Git Actions readiness, and Context7-backed repair prompts.
+
+### Fixed
+
+- **Codex App repair prompts now route to `$Team`, not `$Answer`.** Mixed complaint/directive prompts such as "호환이 안되는거같은데...?? 원인 분석해서 수정하고 배포 준비해줘 use context7 mcp" now keep the explicit implementation/release directive, even when the prompt contains `??`. Pure method questions such as "이 오류는 어떻게 수정해야 해?" still stay answer-only.
+- **Context7 MCP mentions no longer misroute non-database repair work to `$DB`.** Bare `mcp` wording is no longer treated as a database signal; database routing still triggers on concrete database terms such as SQL, Supabase, Postgres, migrations, RLS, Prisma, Drizzle, Knex, `database`, `DB`, and `execute_sql`.
+- **Codex App Git Actions readiness no longer depends on the removed `remote_control` feature flag.** SKS now treats `codex remote-control` command/version support as the remote-control capability source for Commit, Push, Commit and Push, and PR flows. On Codex CLI 0.135.0, this removes the stale `remote_control_feature` blocker while preserving real blockers when the command is unavailable.
+- **`$Naruto` / native-agent parallelism is no longer gated by CPU cores.** Codex-exec workers are network-bound (each mostly idle awaiting the Codex API), so live concurrency now scales by memory and the provider rate limit up to the 100-clone ceiling — a capable host can run up to 100 in parallel regardless of core count (a 10-core / 32 GB host now allows 64). Tunable via `SKS_NARUTO_MAX_CONCURRENCY`, `SKS_NARUTO_GB_PER_WORKER`, and `SKS_NARUTO_MIN_CONCURRENCY`.
+- **Zellij trackpad scroll now scrolls the conversation, not the prompt.** SKS-launched sessions enable `mouse_mode`, routing the trackpad wheel to the pane under the cursor (the transcript scrollback) instead of the focused Codex prompt. Copy still works via `copy_command=pbcopy` + `copy_on_select`; opt out with `SKS_ZELLIJ_MOUSE_MODE=0`.
+- **Image generation works when authenticated through codex-lb.** `gpt-image-2` routes through the same Codex `/responses` backend the load balancer already proxies, so `$imagegen` no longer hard-blocks for codex-lb-only users (no direct `OPENAI_API_KEY`). The official Codex App `$imagegen` surface stays primary; opt out with `SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK=0`.
+- **The MAD / Naruto cockpit lane reflects live fan-out.** When the lane's own mission ledger is idle, the renderer mirrors the most-recent active agent mission so parallel work shows up instead of a permanent "Workers idle". Disable with `SKS_LANE_FOLLOW_ACTIVE_MISSION=0`.
+- **The "update available" prompt no longer repeats on every turn.** After the choice is shown it stays quiet for a short window (default 8 min, `SKS_UPDATE_OFFER_THROTTLE_MS`) before re-surfacing; accept/decline still take effect immediately.
+- **`sks doctor --fix` re-seeds the Codex App Fast-mode UI table.** The global `~/.codex/config.toml` `[user.fast_mode]` (`visible`/`enabled`/`default_profile`) is refreshed so installs whose config predates the Fast-mode keys get the Codex App speed selector back.
+
+### Added
+
+- **`sks xai` command** (alias `sks grok`) to set up, check, and document the optional xAI/Grok Live Search MCP provider for source intelligence, with an install-time discovery hint. `sks xai check`, `setup`, `status`, `docs`.
+
+### Verified
+
+- `npm run build --silent`
+- `node --test test/unit/route-codex-app-compat-classification.test.mjs test/unit/codex-app-remote-control-readiness.test.mjs`
+- `node --test test/unit/hook-command-output.test.mjs`
+- `npm run codex:compat --silent`
+- `npm run hooks:semantic-check --silent`
+- `node ./dist/bin/sks.js codex-app check --json` (Git Actions and Chrome Extension pass; local Fast UI remains blocked by `global:top_level_model_reasoning_effort` until `sks doctor --fix` repairs the user's global Codex config)
+
 ## [1.21.4] - 2026-06-01
 
 Patch release: make SKS Fast mode on/off status visible from the Zellij lane UI, restore Mac trackpad scrollback for interactive Codex-in-Zellij panes, and prepare the next npm release candidate.

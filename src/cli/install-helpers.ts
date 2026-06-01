@@ -144,6 +144,10 @@ export async function postinstall({ bootstrap, args = [] }: any) {
   else if (context7Install.status === 'codex_missing') console.log('Context7 MCP: Codex CLI missing. Install @openai/codex or set SKS_CODEX_BIN, then run `sks context7 setup --scope global` or `sks setup` in a project.');
   else if (context7Install.status === 'skipped') console.log(`Context7 MCP: skipped (${context7Install.reason}).`);
   else if (context7Install.status === 'failed') console.log(`Context7 MCP: auto setup failed. Run \`sks context7 setup --scope global\` or \`sks setup\`. ${context7Install.error || ''}`.trim());
+  // xAI/Grok web search is an optional source-intelligence provider. It needs a
+  // user-chosen MCP server + XAI_API_KEY, so we never auto-configure it — just make
+  // it discoverable (the integration the operator otherwise can't find at install).
+  console.log('xAI/Grok search (optional): add Grok Live Search with `sks xai setup` (then `export XAI_API_KEY=...`); see `sks xai docs`.');
   const fastModeRepair = await ensureGlobalCodexFastModeDuringInstall();
   if (fastModeRepair.status === 'updated') console.log(`Codex App Fast mode: updated ${fastModeRepair.config_path}${fastModeRepair.backup_path ? ` (backup ${fastModeRepair.backup_path})` : ''}.`);
   else if (fastModeRepair.status === 'present') console.log('Codex App Fast mode: config already compatible.');

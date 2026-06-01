@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.21.4** makes Fast mode state and Naruto clone activity directly visible in SKS Zellij lanes. The lane renderer now resolves the project-local `sks fast-mode on|off` preference even before worker scheduler artifacts arrive, and Naruto launches the right-side Zellij lane stack before clone scheduling starts so each clone slot can show live activity. Naruto's host-capacity model also no longer collapses `codex-exec` concurrency to one slot on capable Macs just because `freemem` is low; use `--concurrency` / `--target-active-slots` or `SKS_NARUTO_MAX_CONCURRENCY` for explicit operator control. SKS-launched interactive Codex panes also use `--no-alt-screen` by default so Mac trackpad/wheel gestures scroll the terminal conversation history instead of the prompt textarea/history; set `SKS_ZELLIJ_CODEX_ALT_SCREEN=1` before launch to opt back into alternate-screen mode. It carries forward the 1.21.3 Zellij clipboard, visual lane count, direct-publish stamp repair, and Codex Fast mode repair fixes.
+SKS **1.21.5** restores Codex App compatibility for Codex CLI 0.135-era routing and readiness checks. User prompts that mix frustration/question marks with explicit implementation or release work now route to `$Team` instead of `$Answer`, bare `context7 mcp` wording no longer falls into the `$DB` route, and Codex App Git Actions readiness now trusts the `codex remote-control` command/version capability instead of the removed `remote_control` feature flag. This keeps Commit, Push, Commit and Push, and PR flow checks green on modern Codex when `codex_git_commit`, `hooks`, and remote-control command support are present. It carries forward the 1.21.4 Zellij lane, Naruto, and terminal scrollback improvements.
 
 SKS **1.20.4** is a targeted `sks --mad` / codex-lb Zellij usability patch: when a background MAD Zellij session launches successfully, SKS now prints the exact `Attach with: ZELLIJ_SOCKET_DIR=... zellij attach ...` command so operators can enter the fresh session without manually reconstructing the socket namespace.
 
@@ -88,6 +88,32 @@ npm run release:readiness
 ```
 
 Detailed release history lives in [CHANGELOG.md](CHANGELOG.md); every version-facing change should be recorded there before release. Current release gate status lives in [docs/release-readiness.md](docs/release-readiness.md).
+
+## Parallelism, UX, And Integrations
+
+- **Extreme parallel fan-out (`$Naruto` / native agents).** Each clone is a separate CLI worker that spends almost all of its wall-clock awaiting the Codex API, so live concurrency scales by **memory and the provider rate limit, not CPU cores** — a capable host can run up to 100 workers in parallel. The 429/rate-limit backoff is handled by the centralized responses retry policy. Tune it with `SKS_NARUTO_MAX_CONCURRENCY` (hard cap, 1–100), `SKS_NARUTO_GB_PER_WORKER` (memory budget per worker), and `SKS_NARUTO_MIN_CONCURRENCY` (low-free-memory floor).
+
+  ```bash
+  sks naruto run "refactor the data layer" --clones 100 --json
+  SKS_NARUTO_MAX_CONCURRENCY=48 sks naruto run "sweep the test suite" --clones 48
+  ```
+
+- **Zellij trackpad scroll.** SKS-launched Zellij sessions enable `mouse_mode` so the trackpad wheel scrolls the pane under the cursor (the conversation/transcript) instead of the focused prompt input. Copy still works via `copy_command=pbcopy` + `copy_on_select`; set `SKS_ZELLIJ_MOUSE_MODE=0` to opt out.
+
+- **Live MAD / Naruto cockpit lanes.** The right-pane lane now mirrors the most recent active agent mission when its own ledger is idle, so fan-out work shows up live instead of a permanent "Workers idle". Disable with `SKS_LANE_FOLLOW_ACTIVE_MISSION=0`.
+
+- **Image generation under codex-lb.** `gpt-image-2` routes through the same Codex `/responses` backend the load balancer already proxies, so `$imagegen` works when you are authenticated only through codex-lb (no direct `OPENAI_API_KEY`). The official Codex App `$imagegen` surface stays primary; the codex-lb/OpenAI API path is the fallback. Opt out with `SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK=0`.
+
+- **xAI / Grok search.** Wire xAI Live Search into source intelligence as an MCP provider:
+
+  ```bash
+  sks xai check
+  sks xai setup --scope project --command "npx" --arg "-y" --arg "<your-grok-search-mcp>"
+  export XAI_API_KEY=xai-...
+  sks xai docs
+  ```
+
+- **Quieter update prompts.** The "update available" choice is shown once per conversation and then stays quiet for a short window (default 8 min, `SKS_UPDATE_OFFER_THROTTLE_MS`) instead of repeating on every prompt.
 
 ## Retention And Cleanup
 
@@ -694,7 +720,7 @@ sks doctor --fix
 sks codex-app check
 ```
 
-`sks codex-app check` now prints `Git Actions`. It should be `ok` for Codex App Commit, Push, Commit and Push, and PR buttons to bypass SKS route gates. If it is blocked, repair config with `sks doctor --fix`; if the blocker mentions remote-control, update Codex CLI to `0.130.0` or newer and restart older app-server/TUI sessions.
+`sks codex-app check` now prints `Git Actions`. It should be `ok` for Codex App Commit, Push, Commit and Push, and PR buttons to bypass SKS route gates. Recent Codex builds expose remote control through the `codex remote-control` command rather than a `remote_control` feature flag, so SKS checks the command/version capability directly. If it is blocked, repair config with `sks doctor --fix`; if the blocker mentions remote-control, update Codex CLI to `0.130.0` or newer and restart older app-server/TUI sessions.
 
 ### Codex App UI looks stale after codex-lb changes
 

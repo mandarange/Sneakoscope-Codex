@@ -13,7 +13,6 @@ export const CODEX_REMOTE_CONTROL_MIN_VERSION = '0.130.0';
 const REQUIRED_CODEX_APP_FEATURE_FLAGS = [
   'codex_git_commit',
   'hooks',
-  'remote_control',
   'fast_mode',
   'computer_use',
   'browser_use',
@@ -453,7 +452,7 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
   if (featureList?.checked && featureList.ok && !requiredFeatureFlagsOk) {
     const missing = missingRequiredFeatureFlags(requiredFeatureFlags);
     lines.push(`Codex App feature flag(s) disabled or missing: ${missing.join(', ')}. Commit message generation, mobile/remote-control, and app-only tool paths can fail even when CLI chat works.`);
-    lines.push('Verify with: codex features list | rg "codex_git_commit|hooks|remote_control|fast_mode|computer_use|browser_use|browser_use_external|image_generation|in_app_browser|guardian_approval|tool_suggest|apps|plugins"');
+    lines.push('Verify with: codex features list | rg "codex_git_commit|hooks|fast_mode|computer_use|browser_use|browser_use_external|image_generation|in_app_browser|guardian_approval|tool_suggest|apps|plugins"');
   }
   if (defaultPlugins?.missing_enabled?.length) {
     lines.push(`Codex default plugin(s) installed but not enabled: ${defaultPlugins.missing_enabled.join(', ')}. Composer/tool UI can hide built-in surfaces even while feature flags look green.`);
@@ -477,7 +476,7 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
     lines.push('Run: sks doctor --fix');
   }
   if (!gitActions?.ok) {
-    lines.push(`Codex App git commit/push actions are blocked: ${gitActions?.blockers?.join(', ') || 'git action readiness'}. The app Commit, Push, Commit and Push, and PR flows need codex_git_commit, hooks, remote_control, and Codex CLI remote-control support.`);
+    lines.push(`Codex App git commit/push actions are blocked: ${gitActions?.blockers?.join(', ') || 'git action readiness'}. The app Commit, Push, Commit and Push, and PR flows need codex_git_commit, hooks, and Codex CLI remote-control support.`);
     lines.push(`Run: sks doctor --fix; if remote-control is still blocked, update Codex CLI to ${CODEX_REMOTE_CONTROL_MIN_VERSION}+ and restart older app-server/TUI sessions.`);
   } else {
     lines.push('Codex App git actions are enabled for Commit, Push, Commit and Push, and PR flows; SKS hooks treat those app metadata actions as lightweight git UI actions.');
@@ -561,11 +560,10 @@ function missingRequiredFeatureFlags(flags: any = {}) {
   return REQUIRED_CODEX_APP_FEATURE_FLAGS.filter((name: any) => flags?.[name] !== true);
 }
 
-function codexGitActionReadiness({ requiredFeatureFlags = {}, remoteControl = {} }: any = {}) {
+export function codexGitActionReadiness({ requiredFeatureFlags = {}, remoteControl = {} }: any = {}) {
   const blockers: any[] = [];
   if (requiredFeatureFlags.codex_git_commit !== true) blockers.push('codex_git_commit');
   if (requiredFeatureFlags.hooks !== true) blockers.push('hooks');
-  if (requiredFeatureFlags.remote_control !== true) blockers.push('remote_control_feature');
   if (!remoteControl?.ok) blockers.push(remoteControl?.reason || 'codex_cli_remote_control');
   const ok = blockers.length === 0;
   return {
@@ -575,7 +573,8 @@ function codexGitActionReadiness({ requiredFeatureFlags = {}, remoteControl = {}
     push: ok,
     commit_push: ok,
     pull_request: ok,
-    required_flags: ['codex_git_commit', 'hooks', 'remote_control'],
+    required_flags: ['codex_git_commit', 'hooks'],
+    required_capabilities: ['codex_cli_remote_control'],
     remote_control_min_version: CODEX_REMOTE_CONTROL_MIN_VERSION
   };
 }
