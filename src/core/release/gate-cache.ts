@@ -12,6 +12,11 @@ export interface GateCacheKeyInput {
   inputHashes: string[]
   envMode: string
   distHash: string
+  manifestHash?: string
+  packageScriptsHash?: string
+  gateImplementationHash?: string
+  nodeVersion?: string
+  npmVersion?: string
 }
 
 export function gateCacheKey(input: GateCacheKeyInput): string {
@@ -22,7 +27,12 @@ export function gateCacheKey(input: GateCacheKeyInput): string {
     h: input.gitCommit,
     i: [...input.inputHashes].sort(),
     e: input.envMode,
-    d: input.distHash
+    d: input.distHash,
+    m: input.manifestHash || '',
+    s: input.packageScriptsHash || '',
+    gimpl: input.gateImplementationHash || '',
+    node: input.nodeVersion || '',
+    npm: input.npmVersion || ''
   })
   return crypto.createHash('sha256').update(canonical).digest('hex')
 }

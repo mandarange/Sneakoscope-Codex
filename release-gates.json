@@ -773,8 +773,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/all-features-*.mjs",
+        "scripts/all-features-completion-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -785,8 +785,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/all-features-*.mjs",
+        "scripts/all-features-deep-completion-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -797,8 +797,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/appshots-*.mjs",
+        "scripts/appshots-capability-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -809,8 +809,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/appshots-*.mjs",
+        "scripts/appshots-evidence-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -821,8 +821,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/appshots-*.mjs",
+        "scripts/appshots-operator-policy-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -833,8 +833,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/appshots-*.mjs",
+        "scripts/appshots-privacy-safety-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -845,8 +845,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/appshots-*.mjs",
+        "scripts/appshots-source-intelligence-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -857,8 +857,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/appshots-*.mjs",
+        "scripts/appshots-thread-attachment-discovery-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -869,8 +869,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/appshots-*.mjs",
+        "scripts/appshots-triwiki-voxel-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -881,8 +881,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/blackbox-*.mjs",
+        "scripts/blackbox-matrix-contract-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -949,8 +949,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/codex-web-*.mjs",
+        "scripts/codex-web-adapter-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1185,8 +1185,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/computer-use-*.mjs",
+        "scripts/computer-use-live-evidence-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1197,8 +1197,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/computer-use-*.mjs",
+        "scripts/computer-use-visual-route-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1241,6 +1241,19 @@
       ],
       "always_on_release": true,
       "required_for_publish": true,
+      "can_run_incremental": true
+    },
+    {
+      "id": "core-skill:legacy-promotion-api-audit",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/skills/**",
+        "schemas/skills/**",
+        "scripts/core-skill-*.mjs"
+      ],
+      "always_on_release": true,
+      "required_for_publish": false,
       "can_run_incremental": true
     },
     {
@@ -1313,8 +1326,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/dfix-*.mjs",
+        "scripts/dfix-blackbox-fast-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1325,8 +1338,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/dfix-*.mjs",
+        "scripts/dfix-fast-kernel-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1337,8 +1350,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/dfix-*.mjs",
+        "scripts/dfix-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1349,8 +1362,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/dfix-*.mjs",
+        "scripts/dfix-parallel-write-blackbox-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1361,8 +1374,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/dfix-*.mjs",
+        "scripts/dfix-patch-handoff-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1373,8 +1386,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/dfix-*.mjs",
+        "scripts/dfix-patch-swarm-route-blackbox-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1385,8 +1398,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/dfix-*.mjs",
+        "scripts/dfix-performance-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1397,8 +1410,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/dfix-*.mjs",
+        "scripts/dfix-verification-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1409,8 +1422,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/dfix-*.mjs",
+        "scripts/dfix-verification-recommendation-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1421,8 +1434,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/docs-*.mjs",
+        "scripts/docs-truthfulness-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1433,8 +1446,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/doctor-*.mjs",
+        "scripts/doctor-codex-doctor-parity-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1445,8 +1458,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/doctor-*.mjs",
+        "scripts/doctor-fix-proves-codex-read-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1457,8 +1470,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/doctor-*.mjs",
+        "scripts/doctor-fix-recovers-corrupted-config-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1469,8 +1482,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/evidence-*.mjs",
+        "scripts/evidence-flagship-coverage-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1481,8 +1494,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/fast-*.mjs",
+        "scripts/fast-codex-service-tier-proof-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1493,8 +1506,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/flagship-*.mjs",
+        "scripts/flagship-proof-graph-v3-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1505,8 +1518,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/flagship-*.mjs",
+        "scripts/flagship-proof-graph-v4-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1517,8 +1530,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/git-collaboration-*.mjs",
+        "scripts/git-collaboration-e2e-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1529,8 +1542,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/goal-mode-*.mjs",
+        "scripts/goal-mode-official-default-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1541,8 +1554,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-0.134-context-parity-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1553,8 +1566,8 @@
       "tier": "P1",
       "cost": "real",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-actual-parity-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1565,8 +1578,8 @@
       "tier": "P1",
       "cost": "real",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-actual-parity-v2-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1577,8 +1590,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-latest-schema-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1589,8 +1602,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-managed-install-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1601,8 +1614,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-no-unsupported-handlers-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1613,8 +1626,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-official-hash-oracle-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1625,8 +1638,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-official-hash-parity-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1637,8 +1650,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-runtime-replay-warning-zero-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1649,8 +1662,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-runtime-replay-warning-zero-v2-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1661,8 +1674,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-strict-subset-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1673,8 +1686,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-subagent-events-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1685,8 +1698,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-trust-state-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1697,8 +1710,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/hooks-*.mjs",
+        "scripts/hooks-trust-warning-zero-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1709,8 +1722,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/image-fidelity-*.mjs",
+        "scripts/image-fidelity-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1721,8 +1734,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/imagegen-*.mjs",
+        "scripts/imagegen-capability-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1733,8 +1746,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/imagegen-*.mjs",
+        "scripts/imagegen-gpt-image-2-request-validator-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1745,8 +1758,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/install-*.mjs",
+        "scripts/install-update-preserves-config-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1757,8 +1770,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/json-schema-*.mjs",
+        "scripts/json-schema-recursive-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1784,8 +1797,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/loop-blocker-*.mjs",
+        "scripts/loop-blocker-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1796,8 +1809,8 @@
       "tier": "P1",
       "cost": "real",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-actual-executor-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1808,8 +1821,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-audit-proof-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1820,8 +1833,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-db-executor-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1832,8 +1845,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-executor-proof-graph-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1844,8 +1857,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-fast-mode-propagation-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1856,8 +1869,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-file-write-executor-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1868,8 +1881,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-immutable-harness-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1880,8 +1893,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-live-guard-smoke-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1892,8 +1905,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-no-harness-modification-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1904,8 +1917,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-package-executor-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1916,8 +1929,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-permission-model-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1928,8 +1941,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-rollback-apply-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1940,8 +1953,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-service-executor-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1952,8 +1965,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-shell-executor-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1964,8 +1977,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-write-guard-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1976,8 +1989,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-sks-*.mjs",
+        "scripts/mad-sks-zellij-launch-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1988,8 +2001,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mad-*.mjs",
+        "scripts/mad-preflight-blocks-unreadable-config-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2000,8 +2013,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mcp-*.mjs",
+        "scripts/mcp-0.134-modernization-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2012,8 +2025,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mcp-*.mjs",
+        "scripts/mcp-readonly-concurrency-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2024,8 +2037,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mcp-*.mjs",
+        "scripts/mcp-readonly-runtime-scheduler-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2036,8 +2049,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/mcp-*.mjs",
+        "scripts/mcp-tool-naming-parity-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2048,8 +2061,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/memory-summary-*.mjs",
+        "scripts/memory-summary-rebuild-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2073,8 +2086,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/official-docs-*.mjs",
+        "scripts/official-docs-compat-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2085,8 +2098,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/perf-*.mjs",
+        "scripts/perf-gate-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2110,8 +2123,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-full-e2e-artifact-graph-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2122,8 +2135,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-full-e2e-blackbox-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2134,8 +2147,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-image-voxel-relations-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2146,8 +2159,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-imagegen-blackbox-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2158,8 +2171,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-imagegen-review-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2170,8 +2183,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-issue-extraction-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2182,8 +2195,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-no-mock-as-real-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2194,8 +2207,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-no-text-fallback-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2206,8 +2219,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-proof-trust-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2218,8 +2231,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-real-export-adapter-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2230,8 +2243,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-real-imagegen-wiring-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2242,8 +2255,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-reexport-rereview-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2254,8 +2267,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ppt-*.mjs",
+        "scripts/ppt-slide-export-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2266,8 +2279,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/priority-*.mjs",
+        "scripts/priority-full-closure-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2278,8 +2291,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/proof-*.mjs",
+        "scripts/proof-fake-real-policy-v2-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2290,8 +2303,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/proof-*.mjs",
+        "scripts/proof-fake-vs-real-policy-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2343,6 +2356,7 @@
       "tier": "P0",
       "cost": "hermetic",
       "affected_by": [
+        "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
         "scripts/release-*.mjs",
         "package.json"
@@ -2352,10 +2366,25 @@
       "can_run_incremental": true
     },
     {
+      "id": "release:dynamic-performance",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/release/**",
+        "src/scripts/release-parallel-check.ts",
+        "scripts/release-*.mjs",
+        "package.json"
+      ],
+      "always_on_release": true,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "release:gate-budget",
       "tier": "P0",
       "cost": "hermetic",
       "affected_by": [
+        "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
         "scripts/release-*.mjs",
         "package.json"
@@ -2369,6 +2398,7 @@
       "tier": "P0",
       "cost": "hermetic",
       "affected_by": [
+        "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
         "scripts/release-*.mjs",
         "package.json"
@@ -2382,6 +2412,7 @@
       "tier": "P0",
       "cost": "hermetic",
       "affected_by": [
+        "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
         "scripts/release-*.mjs",
         "package.json"
@@ -2395,6 +2426,7 @@
       "tier": "P0",
       "cost": "hermetic",
       "affected_by": [
+        "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
         "scripts/release-*.mjs",
         "package.json"
@@ -2408,6 +2440,7 @@
       "tier": "P0",
       "cost": "hermetic",
       "affected_by": [
+        "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
         "scripts/release-*.mjs",
         "package.json"
@@ -2421,6 +2454,7 @@
       "tier": "P0",
       "cost": "hermetic",
       "affected_by": [
+        "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
         "scripts/release-*.mjs",
         "package.json"
@@ -2430,10 +2464,25 @@
       "can_run_incremental": true
     },
     {
+      "id": "release:provenance",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/release/**",
+        "src/scripts/release-parallel-check.ts",
+        "scripts/release-*.mjs",
+        "package.json"
+      ],
+      "always_on_release": true,
+      "required_for_publish": true,
+      "can_run_incremental": true
+    },
+    {
       "id": "release:readiness",
       "tier": "P0",
       "cost": "hermetic",
       "affected_by": [
+        "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
         "scripts/release-*.mjs",
         "package.json"
@@ -2447,12 +2496,27 @@
       "tier": "P0",
       "cost": "hermetic",
       "affected_by": [
+        "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
         "scripts/release-*.mjs",
         "package.json"
       ],
       "always_on_release": false,
       "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "release:version-truth",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/release/**",
+        "src/scripts/release-parallel-check.ts",
+        "scripts/release-*.mjs",
+        "package.json"
+      ],
+      "always_on_release": true,
+      "required_for_publish": true,
       "can_run_incremental": true
     },
     {
@@ -2486,8 +2550,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/responses-*.mjs",
+        "scripts/responses-retry-policy-centralized-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2498,8 +2562,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/retention-*.mjs",
+        "scripts/retention-cleanup-safety-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2510,8 +2574,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/route-*.mjs",
+        "scripts/route-blackbox-realism-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2522,8 +2586,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/routes-*.mjs",
+        "scripts/routes-proof-artifact-structure-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2609,8 +2673,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/rust-*.mjs",
+        "scripts/rust-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2621,8 +2685,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/rust-*.mjs",
+        "scripts/rust-smoke-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2634,10 +2698,26 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/safety/**",
-        "scripts/side-effect-zero-gate-check.mjs"
+        "scripts/side-effect-zero-gate-check.mjs",
+        "scripts/mutation-callsite-coverage-check.mjs",
+        "safety-mutation-allowlist.json"
       ],
       "always_on_release": false,
       "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "safety:mutation-callsite-coverage:repo-wide",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/safety/**",
+        "scripts/side-effect-zero-gate-check.mjs",
+        "scripts/mutation-callsite-coverage-check.mjs",
+        "safety-mutation-allowlist.json"
+      ],
+      "always_on_release": true,
+      "required_for_publish": true,
       "can_run_incremental": true
     },
     {
@@ -2646,7 +2726,9 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/safety/**",
-        "scripts/side-effect-zero-gate-check.mjs"
+        "scripts/side-effect-zero-gate-check.mjs",
+        "scripts/mutation-callsite-coverage-check.mjs",
+        "safety-mutation-allowlist.json"
       ],
       "always_on_release": true,
       "required_for_publish": true,
@@ -2657,8 +2739,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/schema-*.mjs",
+        "scripts/schema-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2669,11 +2751,25 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/shared-memory-*.mjs",
+        "scripts/shared-memory-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "side-effect:runtime-report",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/safety/**",
+        "scripts/side-effect-runtime-report-check.mjs",
+        ".sneakoscope/missions/**/mutation-ledger.jsonl",
+        ".sneakoscope/mutation-ledger.jsonl"
+      ],
+      "always_on_release": true,
+      "required_for_publish": true,
       "can_run_incremental": true
     },
     {
@@ -2681,8 +2777,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/source-intelligence-*.mjs",
+        "scripts/source-intelligence-all-modes-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2693,8 +2789,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/source-intelligence-*.mjs",
+        "scripts/source-intelligence-codex-history-search-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2705,8 +2801,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/source-intelligence-*.mjs",
+        "scripts/source-intelligence-policy-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2717,8 +2813,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/strategy-*.mjs",
+        "scripts/strategy-adhd-orchestrating-gate-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2729,8 +2825,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/strategy-*.mjs",
+        "scripts/strategy-file-ownership-plan-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2741,8 +2837,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/strategy-*.mjs",
+        "scripts/strategy-parallel-modification-plan-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2753,8 +2849,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/strategy-*.mjs",
+        "scripts/strategy-verification-rollback-dag-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2817,8 +2913,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/terminal-*.mjs",
+        "scripts/terminal-keyboard-enhancement-safety-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2829,8 +2925,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/terminal-*.mjs",
+        "scripts/terminal-tui-output-stability-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2841,8 +2937,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/test-*.mjs",
+        "scripts/test-blackbox-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2853,8 +2949,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/test-*.mjs",
+        "scripts/test-no-orphan-dist-imports-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2865,8 +2961,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/trust-*.mjs",
+        "scripts/trust-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2877,8 +2973,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/typecheck-*.mjs",
+        "scripts/typecheck-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2889,8 +2985,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-ppt-*.mjs",
+        "scripts/ux-ppt-structured-extraction-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2901,8 +2997,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-extract-real-callouts-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2913,8 +3009,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-extract-wires-real-extractor-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2925,8 +3021,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-generate-callouts-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2937,8 +3033,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-image-voxel-relations-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2949,8 +3045,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-imagegen-blackbox-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2961,8 +3057,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-no-fake-callouts-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2973,8 +3069,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-no-text-fallback-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2985,8 +3081,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-patch-diff-recheck-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2997,8 +3093,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-patch-handoff-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3009,8 +3105,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-real-loop-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3021,8 +3117,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-recapture-recheck-fixture-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3033,8 +3129,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/ux-review-*.mjs",
+        "scripts/ux-review-run-wires-imagegen-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3045,8 +3141,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/verification-*.mjs",
+        "scripts/verification-parallel-engine-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3057,8 +3153,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/wrongness-*.mjs",
+        "scripts/wrongness-check-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3069,8 +3165,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/wrongness-*.mjs",
+        "scripts/wrongness-fixtures-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3081,8 +3177,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "src/**",
-        "scripts/**"
+        "scripts/xai-mcp-*.mjs",
+        "scripts/xai-mcp-capability-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,

@@ -6,6 +6,24 @@ The current `sks.release-readiness.v1` report covers actual Codex config-load tr
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
+## Version, provenance, and side-effect readiness (1.20.4)
+
+`release:version-truth` is the version surface gate for 1.20.4. It verifies
+`package.json`, `package-lock.json`, `src/core/version.ts`, `src/core/fsx.ts`,
+`src/bin/sks.ts`, Cargo metadata/lockfile state, `dist/build-manifest.json`,
+CHANGELOG, README display text when present, and the generic
+`scripts/release-metadata-check.mjs` entrypoint.
+
+`release:provenance` writes `.sneakoscope/reports/release-provenance.json` with
+`reviewed_ref`, current commit, package/dist/src/Cargo versions, latest versioned
+CHANGELOG section, `origin/main` version when available, npm registry version, and
+`v<version>` tag status. Dev review mode reports `main_out_of_date` as a warning.
+Publish mode treats main/tag/npm mismatches as blockers.
+
+`side-effect:runtime-report` is included in readiness and reports mutation-ledger
+runtime totals. Readiness blocks on unexpected applied mutations, global mutations
+without confirmation, or config/auth/skill mutations without backup or no-op proof.
+
 ## Publish authorization policy (1.20.2)
 
 Publishing to npm requires a full `npm run release:check` (the complete hermetic gate

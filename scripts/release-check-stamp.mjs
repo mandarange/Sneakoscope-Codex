@@ -41,6 +41,39 @@ function treeDigest(dir) {
   return { digest: hash.digest('hex'), file_count: files.length };
 }
 
+function fileDigestForPackageFiles(pkg) {
+  const hash = crypto.createHash('sha256');
+  const files = Array.isArray(pkg.files) ? [...pkg.files].sort() : [];
+  for (const entry of files) {
+    const full = path.join(root, entry);
+    hash.update(entry);
+    hash.update('\0');
+    if (!fs.existsSync(full)) {
+      hash.update('missing\0');
+      continue;
+    }
+    const stat = fs.statSync(full);
+    if (stat.isDirectory()) {
+      const digest = treeDigest(full);
+      hash.update(`${digest.digest || 'empty'}:${digest.file_count}`);
+    } else if (stat.isFile()) {
+      hash.update(sha256(fs.readFileSync(full)));
+    }
+    hash.update('\0');
+  }
+  return sha256(hash.digest('hex'));
+}
+
+function gitCommit() {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
+function releaseGateHash(pkg) {
+  const gateManifest = fs.existsSync(path.join(root, 'release-gates.json')) ? fs.readFileSync(path.join(root, 'release-gates.json'), 'utf8') : '';
+  return sha256(`${pkg.scripts?.['release:check'] || ''}\0${pkg.scripts?.['prepublishOnly'] || ''}\0${gateManifest}`);
+}
+
 function collectFiles(dir, out) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, entry.name);
@@ -111,9 +144,12 @@ function currentStampPayload() {
     schema: 'sks.release-check-stamp.v1',
     package_name: pkg.name,
     package_version: pkg.version,
+    git_commit: gitCommit(),
     package_json_sha256: sha256(fs.readFileSync(path.join(root, 'package.json'))),
+    package_files_sha256: fileDigestForPackageFiles(pkg),
     dist_build_sha256: dist.digest,
     dist_file_count: dist.file_count,
+    release_gate_sha256: releaseGateHash(pkg),
     release_check_sha256: sha256(pkg.scripts?.['release:check'] || ''),
     source_digest: snapshot.digest,
     source_file_count: snapshot.file_count
@@ -150,7 +186,7 @@ function inspectStamp() {
   }
   const current = currentStampPayload();
   const mismatches = [];
-  for (const key of ['schema', 'package_name', 'package_version', 'package_json_sha256', 'dist_build_sha256', 'dist_file_count', 'release_check_sha256', 'source_digest', 'source_file_count']) {
+  for (const key of ['schema', 'package_name', 'package_version', 'git_commit', 'package_json_sha256', 'package_files_sha256', 'dist_build_sha256', 'dist_file_count', 'release_gate_sha256', 'release_check_sha256', 'source_digest', 'source_file_count']) {
     if (stamp[key] !== current[key]) mismatches.push(`${key}: stamp=${stamp[key] || 'missing'} current=${current[key] || 'missing'}`);
   }
   if (mismatches.length) {
@@ -177,21 +213,9 @@ function ensureStamp() {
     console.log(`Release check stamp verified: ${path.relative(root, stampPath)} (${first.current.source_file_count} files)`);
     return;
   }
-  const refreshCommand = process.env.SKS_RELEASE_CHECK_REFRESH_COMMAND || 'npm run release:check';
-  console.error(`Release check stamp is not current; running \`${refreshCommand}\` before publishing.`);
+  console.error('Release check stamp is not current; publish path will not run a full release:check refresh.');
   if (first.detail) console.error(first.detail.trim());
-  const refresh = spawnSync(refreshCommand, {
-    cwd: root,
-    encoding: 'utf8',
-    env: process.env,
-    shell: true,
-    stdio: 'inherit'
-  });
-  if (refresh.error) fail('unable to refresh release:check stamp', refresh.error.message);
-  if (refresh.status !== 0) {
-    fail('release:check refresh command failed', `command: ${refreshCommand}\nexit_code: ${refresh.status}`);
-  }
-  verifyStamp();
+  fail(first.message, 'Run `npm run release:check` outside the publish path to refresh the stamp.');
 }
 
 if (command === 'write') writeStamp();

@@ -9,6 +9,7 @@ export interface PromotionMutationOptions {
   contract?: RequestedScopeContract
   confirmed?: boolean
   context?: 'release' | string
+  ledgerRoot?: string
 }
 
 export class SkillDeploymentViolationError extends Error {
@@ -40,10 +41,24 @@ export function assertNotInDeployment(fnName: string): void {
 export const readDeploymentSnapshot = loadDeployedSnapshot
 
 /**
- * Promote an accepted candidate to an immutable deployed snapshot. The previous
- * snapshot is archived for rollback. Deployed snapshots are never edited in place.
+ * Primary release/deployment promotion API. It writes the immutable deployed
+ * snapshot and treats the side-effect ledger as part of the transaction: when
+ * ledger recording fails, the deployed pointer is rolled back or removed.
  */
+export async function promoteToDeployedWithLedger(root: string, accepted: CoreSkillCard, opts: PromotionMutationOptions & { contract: RequestedScopeContract }): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {
+  return promoteToDeployedInternal(root, accepted, opts, true)
+}
+
+export async function promoteToDeployedLegacyForCompatibility(root: string, accepted: CoreSkillCard): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {
+  return promoteToDeployedInternal(root, accepted, {}, false)
+}
+
 export async function promoteToDeployed(root: string, accepted: CoreSkillCard, opts: PromotionMutationOptions = {}): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {
+  if (opts.contract) return promoteToDeployedWithLedger(root, accepted, opts as PromotionMutationOptions & { contract: RequestedScopeContract })
+  return promoteToDeployedLegacyForCompatibility(root, accepted)
+}
+
+async function promoteToDeployedInternal(root: string, accepted: CoreSkillCard, opts: PromotionMutationOptions, ledgerRequired: boolean): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {
   const blockers: string[] = []
   if (accepted.status !== 'accepted') blockers.push('promote_requires_accepted_status')
   const shape = validateCardShape(accepted)
@@ -74,11 +89,11 @@ export async function promoteToDeployed(root: string, accepted: CoreSkillCard, o
     created_at: nowIso()
   }
   await writeJsonAtomic(deployedPath, snapshot)
-  // Record the promotion as a side-effect-zero ledger entry when a contract is
-  // provided OR a release/deployment-owned context is active. The archived
-  // snapshot is the rollback pointer. Best-effort: a ledger write failure never
-  // breaks promotion semantics (existing 2-arg callers are unaffected).
-  if (opts.contract && (opts.context === 'release' || opts.confirmed || isDeploymentContext())) {
+  if (ledgerRequired) {
+    if (!opts.contract) {
+      await rollbackPromotionWrite(deployedPath, existing)
+      return { ok: false, blockers: ['promotion_ledger_contract_required'], snapshot: null, archived_path: archivedPath }
+    }
     try {
       const entry = evaluateMutation(opts.contract, 'skill_snapshot_promotion', {
         target: deployedPath,
@@ -87,12 +102,28 @@ export async function promoteToDeployed(root: string, accepted: CoreSkillCard, o
         noOpReason: archivedPath ? null : 'first_deploy_no_previous_snapshot',
         applied: true
       })
-      await recordMutation(root, entry)
-    } catch {
-      // best-effort ledger recording; promotion already succeeded.
+      if (entry.violation) {
+        await rollbackPromotionWrite(deployedPath, existing)
+        return { ok: false, blockers: [`promotion_ledger_violation:${entry.reason || 'unknown'}`], snapshot: null, archived_path: archivedPath }
+      }
+      await recordMutation(opts.ledgerRoot || root, entry)
+    } catch (err) {
+      await rollbackPromotionWrite(deployedPath, existing)
+      const message = err instanceof Error ? err.message : String(err)
+      return { ok: false, blockers: [`promotion_ledger_write_failed:${message}`], snapshot: null, archived_path: archivedPath }
     }
   }
   return { ok: true, blockers: [], snapshot, archived_path: archivedPath }
+}
+
+async function rollbackPromotionWrite(deployedPath: string, existing: CoreSkillCard | null): Promise<void> {
+  if (existing) await writeJsonAtomic(deployedPath, existing)
+  else {
+    try {
+      const fsp = await import('node:fs/promises')
+      await fsp.rm(deployedPath, { force: true })
+    } catch {}
+  }
 }
 
 export async function rollbackDeployment(root: string, route: string, skillId: string): Promise<{ ok: boolean; restored_version: number | null }> {

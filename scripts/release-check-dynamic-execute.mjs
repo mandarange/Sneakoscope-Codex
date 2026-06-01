@@ -16,7 +16,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { emitGate, importDist, root } from './sks-1-18-gate-lib.mjs';
 
-const { buildGateManifest, selectGates } = await importDist('core/release/gate-manifest.js');
+const { buildGateManifest, selectGates, FORBIDDEN_RECURSIVE_GATES } = await importDist('core/release/gate-manifest.js');
 const { gateCacheKey, readGateCache, writeGateCache, recordGateResult, lookupGateResult } = await importDist('core/release/gate-cache.js');
 
 let TRACKED = null;
@@ -44,6 +44,10 @@ const invariants = {
 
 const distHash = distHashValue();
 const gitCommit = gitHead();
+const manifestHash = fileHash('release-gates.json');
+const packageScriptsHash = sha256(JSON.stringify(pkg.scripts || {}));
+const nodeVersion = process.version;
+const npmVersion = npmVersionValue();
 const cache = await readGateCache(root);
 
 const executed = [];
@@ -52,12 +56,20 @@ const skipped = [...plan.skipped];
 const failures = [];
 
 for (const gate of plan.selected) {
+  if (FORBIDDEN_RECURSIVE_GATES.has(gate.id)) {
+    skipped.push({ id: gate.id, reason: 'forbidden_recursive_gate' });
+    continue;
+  }
   // Real/heavy gates are never run incrementally or cached — defer to release:real-check.
   if (gate.cost === 'real' || gate.cost === 'heavy') {
     skipped.push({ id: gate.id, reason: 'deferred_to_real_check' });
     continue;
   }
   const command = `npm run ${gate.id}`;
+  if (FORBIDDEN_RECURSIVE_GATES.has(gate.id) || /npm\s+run\s+(release:check|release:real-check|release:publish|publish:npm|publish:dry|prepublishOnly)\b/.test(command)) {
+    failures.push({ id: gate.id, exit_code: null, stdout_tail: '', stderr_tail: 'forbidden_recursive_gate_spawn' });
+    continue;
+  }
   const key = gateCacheKey({
     gateId: gate.id,
     command,
@@ -65,7 +77,12 @@ for (const gate of plan.selected) {
     gitCommit,
     inputHashes: hashAffectedFiles(gate.affected_by),
     envMode,
-    distHash
+    distHash,
+    manifestHash,
+    packageScriptsHash,
+    gateImplementationHash: gateImplementationHash(gate.id),
+    nodeVersion,
+    npmVersion
   });
   const hit = lookupGateResult(cache, key);
   if (hit && hit.ok) {
@@ -77,7 +94,8 @@ for (const gate of plan.selected) {
     continue;
   }
   const started = Date.now();
-  const res = spawnSync('npm', ['run', gate.id, '--silent'], { cwd: root, env: process.env, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
+  const childEnv = { ...process.env, SKS_RELEASE_DYNAMIC: '1', SKS_ENV_MODE: envMode };
+  const res = spawnSync('npm', ['run', gate.id, '--silent'], { cwd: root, env: childEnv, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
   const durationMs = Date.now() - started;
   const ok = res.status === 0;
   executed.push({ id: gate.id, ok, exit_code: res.status, duration_ms: durationMs });
@@ -145,6 +163,30 @@ function hashAffectedFiles(globs) {
     } catch {}
   }
   return hashes;
+}
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
+function fileHash(rel) {
+  try {
+    return crypto.createHash('sha256').update(fs.readFileSync(path.join(root, rel))).digest('hex');
+  } catch {
+    return 'missing';
+  }
+}
+
+function gateImplementationHash(id) {
+  const script = String(pkg.scripts?.[id] || '');
+  const match = script.match(/node\s+\.\/([^ ]+\.mjs)/);
+  if (match) return fileHash(match[1]);
+  return sha256(script);
+}
+
+function npmVersionValue() {
+  const res = spawnSync('npm', ['--version'], { cwd: root, encoding: 'utf8' });
+  return res.status === 0 ? res.stdout.trim() : 'npm-unavailable';
 }
 
 function listTrackedFiles() {

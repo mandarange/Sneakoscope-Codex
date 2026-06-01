@@ -7,6 +7,7 @@
 // lane section superset (so the two layers can never silently diverge).
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { assertGate, emitGate, importDist, root } from './sks-1-18-gate-lib.mjs';
 
 const { buildDoctorReadinessMatrix } = await importDist('core/doctor/doctor-readiness-matrix.js');
@@ -50,9 +51,20 @@ assertGate(ZELLIJ_SCREEN_SCRAPEABLE_SECTIONS.length < ZELLIJ_LANE_SECTIONS.lengt
 const doctorSource = fs.readFileSync(path.join(root, 'src/commands/doctor.ts'), 'utf8');
 assertGate(/zellij_readiness\s*:/.test(doctorSource), 'doctor result must expose a zellij_readiness block', {});
 
+// --- built dist smoke: JSON and human output must expose the Zellij section ---
+const doctorJson = spawnSync(process.execPath, ['dist/bin/sks.js', 'doctor', '--json'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+assertGate(doctorJson.stdout.trim().startsWith('{'), 'built doctor --json must print JSON', { stderr: doctorJson.stderr.slice(-2000), status: doctorJson.status });
+const parsedDoctor = JSON.parse(doctorJson.stdout);
+assertGate(parsedDoctor.zellij_readiness && parsedDoctor.zellij_readiness.schema === 'sks.zellij-readiness.v1', 'built doctor --json must carry zellij_readiness block', { zellij_readiness: parsedDoctor.zellij_readiness || null });
+
+const doctorHuman = spawnSync(process.execPath, ['dist/bin/sks.js', 'doctor'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+assertGate(/(^|\n)Zellij:\n/.test(doctorHuman.stdout), 'built doctor human output must include Zellij section', { stdout_tail: doctorHuman.stdout.slice(-2000), stderr_tail: doctorHuman.stderr.slice(-2000), status: doctorHuman.status });
+
 emitGate('zellij:doctor-readiness', {
   mad_ready_when_missing: false,
   cli_ready_when_missing: true,
+  built_json_smoke: true,
+  built_human_smoke: true,
   lane_sections: ZELLIJ_LANE_SECTIONS.length,
   scrapeable_sections: ZELLIJ_SCREEN_SCRAPEABLE_SECTIONS.length
 });
