@@ -1,14 +1,14 @@
 # Release Readiness
 
-SKS 1.20.5 keeps the release-readiness contract stable while making successful MAD Zellij launches actually open: in an interactive terminal `sks --mad` now automatically attaches to the fresh background session, and falls back to printing the exact `Attach with: ZELLIJ_SOCKET_DIR=... zellij attach ...` command when auto-attach is skipped (`--json`, non-TTY, already inside Zellij, `--no-attach`/`SKS_NO_ZELLIJ_ATTACH=1`) or fails. It carries forward the 1.20.3 Zellij socket-dir launch fallback required for long macOS `$TMPDIR` paths. The readiness artifacts surface `zellij_socket_dir`, `zellij_socket_dir_source`, and `*_command_with_env` when Zellij sessions are prepared.
+SKS 1.21.0 keeps the release-readiness contract stable while making successful MAD Zellij launches actually open: in an interactive terminal `sks --mad` now automatically attaches to the fresh background session, and falls back to printing the exact `Attach with: ZELLIJ_SOCKET_DIR=... zellij attach ...` command when auto-attach is skipped (`--json`, non-TTY, already inside Zellij, `--no-attach`/`SKS_NO_ZELLIJ_ATTACH=1`) or fails. It carries forward the 1.20.3 Zellij socket-dir launch fallback required for long macOS `$TMPDIR` paths. The readiness artifacts surface `zellij_socket_dir`, `zellij_socket_dir_source`, and `*_command_with_env` when Zellij sessions are prepared.
 
-The current `sks.release-readiness.v1` report covers actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, Zellij readiness/proof, install-time Zellij dependency repair, Zellij socket-dir launch metadata, MAD attach-command visibility, and official Fast mode service-tier propagation. `ok: true` in the 1.20.5 readiness report means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, Zellij-only runtime checks, background-layout launch wiring, socket-dir fallback evidence, attach-command output evidence, and `-c service_tier=fast` propagation evidence have no remaining blockers.
+The current `sks.release-readiness.v1` report covers actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, Zellij readiness/proof, install-time Zellij dependency repair, Zellij socket-dir launch metadata, MAD attach-command visibility, and official Fast mode service-tier propagation. `ok: true` in the 1.21.0 readiness report means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, Zellij-only runtime checks, background-layout launch wiring, socket-dir fallback evidence, attach-command output evidence, and `-c service_tier=fast` propagation evidence have no remaining blockers.
 
 Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported when evidence exists, but they are marked `not_in_1_18_parallel_gate` when not run by this closure DAG. They are not silently treated as passed.
 
-## Version, provenance, and side-effect readiness (1.20.5)
+## Version, provenance, and side-effect readiness (1.21.0)
 
-`release:version-truth` is the version surface gate for 1.20.5. It verifies
+`release:version-truth` is the version surface gate for 1.21.0. It verifies
 `package.json`, `package-lock.json`, `src/core/version.ts`, `src/core/fsx.ts`,
 `src/bin/sks.ts`, Cargo metadata/lockfile state, `dist/build-manifest.json`,
 CHANGELOG, README display text when present, and the generic

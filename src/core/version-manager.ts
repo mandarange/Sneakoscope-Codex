@@ -313,23 +313,44 @@ async function syncPackageLockVersions(root: any, version: any) {
 
 async function syncSourcePackageVersion(root: any, version: any) {
   const files: any[] = [];
-  for (const rel of ['src/core/fsx.ts', 'src/core/version.ts']) {
+  const replacements = [
+    {
+      rel: 'src/core/fsx.ts',
+      replace: (text: string) => text.replace(/export const PACKAGE_VERSION = ['"][^'"]+['"];/, `export const PACKAGE_VERSION = '${version}';`)
+    },
+    {
+      rel: 'src/core/version.ts',
+      replace: (text: string) => text.replace(/export const PACKAGE_VERSION = ['"][^'"]+['"];/, `export const PACKAGE_VERSION = '${version}';`)
+    },
+    {
+      rel: 'src/bin/sks.ts',
+      replace: (text: string) => text.replace(/const FAST_PACKAGE_VERSION = ['"][^'"]+['"];/, `const FAST_PACKAGE_VERSION = '${version}';`)
+    },
+    {
+      rel: 'crates/sks-core/Cargo.toml',
+      replace: (text: string) => text.replace(/^version\s*=\s*"[^"]+"/m, `version = "${version}"`)
+    },
+    {
+      rel: 'crates/sks-core/Cargo.lock',
+      replace: (text: string) => text.replace(/(\[\[package\]\]\nname = "sks-core"\nversion = ")[^"]+(")/, `$1${version}$2`)
+    },
+    {
+      rel: 'crates/sks-core/src/main.rs',
+      replace: (text: string) => text.replace(/sks-rs \d+\.\d+\.\d+/, `sks-rs ${version}`)
+    },
+    {
+      rel: 'README.md',
+      replace: (text: string) => text.replace(/SKS \*\*\d+\.\d+\.\d+\*\*/, `SKS **${version}**`)
+    }
+  ];
+  for (const { rel, replace } of replacements) {
     const file = path.join(root, rel);
     const text = await readFileMaybe(file);
     if (!text) continue;
-    const next = text.replace(/export const PACKAGE_VERSION = ['"][^'"]+['"];/, `export const PACKAGE_VERSION = '${version}';`);
+    const next = replace(text);
     if (next === text) continue;
     await writeTextAtomic(file, next);
     files.push(file);
-  }
-  const binFile = path.join(root, 'src', 'bin', 'sks.ts');
-  const binText = await readFileMaybe(binFile);
-  if (binText) {
-    const next = binText.replace(/const FAST_PACKAGE_VERSION = ['"][^'"]+['"];/, `const FAST_PACKAGE_VERSION = '${version}';`);
-    if (next !== binText) {
-      await writeTextAtomic(binFile, next);
-      files.push(binFile);
-    }
   }
   return { files, relative_files: files.map((file: any) => path.relative(root, file)) };
 }
