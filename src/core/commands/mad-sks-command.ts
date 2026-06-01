@@ -77,6 +77,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`));
   const launch = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   if (!launch.ok) console.log(`MAD Zellij action: ${formatMadZellijAction(launch)}`);
+  else if (launch.attach_command_with_env) console.log(`Attach with: ${launch.attach_command_with_env}`);
   return launch;
 }
 

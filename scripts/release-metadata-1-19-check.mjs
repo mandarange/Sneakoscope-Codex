@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.20.3';
+const RELEASE_VERSION = '1.20.4';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');

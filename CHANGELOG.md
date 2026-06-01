@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.20.4] - 2026-06-01
+
+Patch release: makes successful `sks --mad` / codex-lb Zellij launches immediately actionable by printing the exact attach command that uses the same socket namespace as the background session.
+
+### Fixed
+
+- **MAD Zellij attach guidance.** After a successful `sks --mad` launch, SKS now prints `Attach with: ZELLIJ_SOCKET_DIR=... zellij attach ...` using the already-generated `attach_command_with_env`. This closes the confusing state where a fresh Zellij session existed but the operator had to infer the `/tmp/zj<uid>` socket namespace manually.
+
+### Verified
+
+- Confirmed `sks --mad` created the live `sks-codex-lb-mpue8wem-Sneakoscope-Codex` Zellij session under `/tmp/zj501`.
+- Confirmed Zellij session discovery and attach syntax with Context7 Zellij docs.
+- `npm run typecheck --silent`
+- `git diff --check`
+
 ## [1.20.3] - 2026-05-31
 
 Patch release: fixes macOS Zellij IPC socket path failures during `sks --mad` / codex-lb launches when `$TMPDIR` is long.
