@@ -99,14 +99,71 @@ export async function enableAutoReview(opts: any = {}) {
   };
 }
 
+// Canonical registry of every SKS config profile. Codex 0.134+ deprecated the
+// `[profiles.*]` tables / top-level `profile=` selector (warns at startup) in favor of
+// per-file `$CODEX_HOME/<name>.config.toml` overlays loaded by `--profile <name>`.
+// `stripTable: true` => remove the legacy `[profiles.<name>]` table from the home
+// config during migration. sks-fast-high keeps its table because the Codex App
+// fast-mode (`[user.fast_mode] default_profile = "sks-fast-high"`) and the
+// codex-app:ui-preservation gate still expect it; its per-file overlay is also written
+// so CLI `--profile sks-fast-high` works too.
+export const SKS_CONFIG_PROFILES: Array<{ name: string; stripTable: boolean; block: string }> = [
+  { name: 'sks-task-low', stripTable: true, block: sksProfileFileBlock({ effort: 'low' }) },
+  { name: 'sks-task-medium', stripTable: true, block: sksProfileFileBlock({ effort: 'medium' }) },
+  { name: 'sks-logic-high', stripTable: true, block: sksProfileFileBlock({ effort: 'high' }) },
+  { name: 'sks-fast-high', stripTable: false, block: sksProfileFileBlock({ effort: 'high', serviceTier: 'fast' }) },
+  { name: 'sks-research-xhigh', stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh' }) },
+  { name: 'sks-research', stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh', approvalPolicy: 'never' }) },
+  { name: 'sks-team', stripTable: true, block: sksProfileFileBlock({ effort: 'medium' }) },
+  { name: MAD_HIGH_PROFILE, stripTable: true, block: sksProfileFileBlock({ effort: 'high', approvalPolicy: 'never', sandboxMode: 'danger-full-access', reviewer: AUTO_REVIEW_REVIEWER }) },
+  { name: 'sks-default', stripTable: true, block: sksProfileFileBlock({ effort: 'high' }) }
+];
+
+function sksProfileFileBlock(opts: any = {}) {
+  return [
+    'model = "gpt-5.5"',
+    `service_tier = "${opts.serviceTier || 'fast'}"`,
+    `approval_policy = "${opts.approvalPolicy || 'on-request'}"`,
+    ...(opts.reviewer ? [`approvals_reviewer = "${opts.reviewer}"`] : []),
+    `sandbox_mode = "${opts.sandboxMode || 'workspace-write'}"`,
+    `model_reasoning_effort = "${opts.effort || 'medium'}"`
+  ].join('\n');
+}
+
+// Migrate every SKS config profile to a per-file `<name>.config.toml` overlay in
+// CODEX_HOME and strip the deprecated legacy `[profiles.sks-*]` tables / `profile=`
+// selectors from the home config. Idempotent (second run is a no-op). This is the
+// step that clears the Codex deprecation warning on `sks --mad`.
+export async function migrateSksProfilesToPerFile(opts: any = {}) {
+  const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
+  await ensureDir(path.dirname(configPath));
+  const current = await readText(configPath, '');
+  let next = String(current || '');
+  for (const profile of SKS_CONFIG_PROFILES) {
+    if (profile.stripTable) next = removeLegacyProfileConfig(next, profile.name);
+  }
+  if (next && !next.endsWith('\n')) next += '\n';
+  if (next !== String(current || '')) await writeTextAtomic(configPath, next);
+  for (const profile of SKS_CONFIG_PROFILES) await writeProfileConfig(configPath, profile.name, profile.block);
+  return {
+    config_path: configPath,
+    profiles_written: SKS_CONFIG_PROFILES.map((profile) => profile.name),
+    tables_stripped: SKS_CONFIG_PROFILES.filter((profile) => profile.stripTable).map((profile) => profile.name)
+  };
+}
+
 export async function enableMadHighProfile(opts: any = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
+  const env = opts.env || process.env;
   await ensureDir(path.dirname(configPath));
   const current = await readText(configPath, '');
   let next = removeLegacyProfileConfig(current, MAD_HIGH_PROFILE);
   next = upsertAutoReviewPolicy(next);
   if (!next.endsWith('\n')) next += '\n';
   await writeTextAtomic(configPath, next);
+  // Convert all SKS profiles to per-file overlays and strip the deprecated tables /
+  // selectors so Codex stops warning about the legacy config profile on launch.
+  await migrateSksProfilesToPerFile({ configPath, env });
   await writeProfileConfig(configPath, MAD_HIGH_PROFILE, profileConfigBlock({
     effort: 'high',
     approvalPolicy: 'never',

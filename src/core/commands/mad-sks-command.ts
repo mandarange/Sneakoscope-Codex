@@ -56,7 +56,12 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const profile = await enableMadHighProfile();
   const launchRoot = process.cwd();
   if (!(await exists(path.join(launchRoot, '.sneakoscope')))) await initProject(launchRoot, {});
-  const launchPreflight = await runCodexLaunchPreflight(launchRoot, { fix: true, profile: profile.profile_name, sandbox: 'danger-full-access', serviceTier: 'fast' });
+  // launchFast skips the redundant live-`codex exec` config probe (up to ~20s, run
+  // up to 3x via repair re-inspections): the real codex profile is exercised moments
+  // later when the Zellij session opens. All filesystem/permission/EPERM/symlink/ACL
+  // readability + repair checks still run. SKS_LAUNCH_FULL_CODEX_PROBE=1 restores the
+  // old behavior.
+  const launchPreflight = await runCodexLaunchPreflight(launchRoot, { fix: true, launchFast: process.env.SKS_LAUNCH_FULL_CODEX_PROBE !== '1', profile: profile.profile_name, sandbox: 'danger-full-access', serviceTier: 'fast' });
   if (!launchPreflight.ok) {
     console.error('SKS MAD launch blocked by config preflight.');
     for (const blocker of launchPreflight.blockers || []) console.error(`- blocker: ${blocker}`);
@@ -85,7 +90,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   // instead of leaving them to copy/paste the attach command by hand.
   if (shouldAutoAttachZellij(args)) {
     console.log(`Opening Zellij session: ${launch.session_name} (detach with Ctrl+q, re-attach later with: ${launch.attach_command_with_env})`);
-    const attached = attachZellijSessionInteractive(launch.session_name, { cwd: process.cwd() });
+    const attached = attachZellijSessionInteractive(launch.session_name, { cwd: process.cwd(), configPath: launch.clipboard_config_path });
     if (!attached.ok) {
       console.log(`Could not open the Zellij session automatically${attached.error ? ` (${attached.error})` : ''}.`);
       if (launch.attach_command_with_env) console.log(`Attach with: ${launch.attach_command_with_env}`);
@@ -140,7 +145,12 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
   const dbWriteAllowed = has('db_write');
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad Zellij scoped high-power maintenance session' });
   const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot: cwd });
-  const protectedCoreBefore = await snapshotProtectedCore(packageRoot(), 'mad-live-before');
+  // The interactive launch 'before' snapshot is only persisted (env + policy json)
+  // and is never compared against an 'after' snapshot during the session, so the
+  // strong full-content hash is wasted here. Use the cheap metadata digest (no file
+  // reads) on the launch hot path. run/apply and the release gates still take their
+  // own strong content snapshots where the digest is actually compared.
+  const protectedCoreBefore = await snapshotProtectedCore(packageRoot(), 'mad-live-before', { mode: 'metadata' });
   const protectedCorePolicyPath = path.join(dir, 'mad-sks-protected-core-policy.json');
   const protectedCoreBeforePath = path.join(dir, 'mad-sks-live-protected-core-before.json');
   await writeJsonAtomic(protectedCorePolicyPath, {

@@ -38,10 +38,11 @@ test('project config policy splitter moves machine-local config with backup', as
 
   const report = await mod.splitCodexProjectConfigPolicy(root, { apply: true, codexHome });
   const project = await fs.readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
-  // Machine-local keys AND profile tables are merged into the single CODEX_HOME
-  // config.toml (the file Codex actually loads). Codex does not auto-read a
-  // separate `<profile>.config.toml`, so the splitter intentionally keeps
-  // profile_config_path null and folds `[profiles.*]` into the user config.
+  // Codex 0.134+ deprecated config-profile tables and the top-level `profile=` selector
+  // (it warns at startup); `--profile NAME` now layers a per-file
+  // $CODEX_HOME/<name>.config.toml over the base config. So the splitter DROPS the legacy
+  // profile table and selector instead of folding them into the CODEX_HOME config; genuine
+  // machine-local config (model_providers, notify, ...) is still moved there.
   const user = await fs.readFile(path.join(codexHome, 'config.toml'), 'utf8');
 
   assert.equal(report.ok, true);
@@ -51,9 +52,12 @@ test('project config policy splitter moves machine-local config with backup', as
   assert.doesNotMatch(project, /^\[profiles\.sks-mad-high\]/m);
   assert.doesNotMatch(project, /on-failure/);
   assert.match(project, /approval_policy = "on-request"/);
-  assert.match(user, /^profile\s*=\s*"sks-mad-high"/m);
-  assert.match(user, /^\[profiles\.sks-mad-high\]/m);
-  assert.match(user, /^model_reasoning_effort\s*=\s*"high"/m);
+  // Deprecated legacy profile table + selector are dropped, NOT moved into the home config.
+  assert.doesNotMatch(user, /^profile\s*=\s*"sks-mad-high"/m);
+  assert.doesNotMatch(user, /^\[profiles\.sks-mad-high\]/m);
+  assert.ok((report.removed_legacy_profiles || []).includes('profiles.sks-mad-high'));
+  assert.ok((report.removed_legacy_profiles || []).includes('top_level:profile'));
+  // Genuine machine-local config still moves into the CODEX_HOME config.
   assert.match(user, /^\[model_providers\.codex-lb\]/m);
 });
 

@@ -32,12 +32,19 @@ export async function runParallelPreflight(checks: Array<{ id: string; run: () =
 export async function runCodexLaunchPreflight(rootInput: string = process.cwd(), opts: any = {}) {
   const root = path.resolve(rootInput || process.cwd())
   const reportPath = opts.reportPath || path.join(root, '.sneakoscope', 'reports', 'mad-launch-preflight.json')
+  // On the interactive launch path the real codex profile is exercised the moment the
+  // Zellij session opens, so spawning `codex exec` here (up to ~20s, and again inside
+  // the repair re-inspections) is redundant. launchFast skips ONLY the live-codex probe;
+  // all filesystem/permission/symlink/ACL/EPERM readability + repair checks still run, so
+  // the EPERM/tcc_possible/EACCES blockers still fire for unreadable configs
+  // (codex_cli_config_eperm is probe-only and intentionally not exercised on this path).
+  const probeCodex = opts.launchFast === true ? false : opts.actualCodex !== false
   const readonly = await runParallelPreflight([
-    { id: 'codex_config_readability', run: () => inspectCodexConfigReadability(root, { ...opts, codexProbe: true, actualCodex: opts.actualCodex !== false, writeReport: false }) },
+    { id: 'codex_config_readability', run: () => inspectCodexConfigReadability(root, { ...opts, codexProbe: probeCodex, actualCodex: probeCodex, writeReport: false }) },
     { id: 'codex_project_config_policy', run: () => splitCodexProjectConfigPolicy(root, { ...opts, writeReport: false }) }
   ])
   const repair = opts.fix === true || readonly.ok === false
-    ? await repairCodexConfigEperm(root, { ...opts, codexProbe: true, actualCodex: opts.actualCodex !== false, fix: opts.fix !== false, writeReport: false })
+    ? await repairCodexConfigEperm(root, { ...opts, codexProbe: probeCodex, actualCodex: probeCodex, fix: opts.fix !== false, writeReport: false })
     : null
   const zellijCapability = opts.zellijCapability === false
     ? null
