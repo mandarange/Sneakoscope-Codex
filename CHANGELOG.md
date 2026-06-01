@@ -7,19 +7,25 @@
 
 ## [1.21.3] - 2026-06-01
 
-Patch release: restore macOS native `Cmd+C` text copy in SKS-launched Zellij sessions and keep every native agent visible in the right-side Zellij UI.
+Patch release: restore macOS native `Cmd+C` text copy in SKS-launched Zellij sessions, keep every native agent visible in the right-side Zellij UI, harden direct publish stamp repair, and make explicit Fast mode toggles repair Codex Fast mode too.
 
 ### Fixed
 
 - **`Cmd+C` text copy works in `sks --mad` Zellij sessions.** SKS now writes `mouse_mode false` into the generated Zellij clipboard config and passes `--mouse-mode false` with the launch options, while preserving `copy_command pbcopy` and `copy_on_select true`. This leaves drag-select + `Cmd+C` to the terminal/system clipboard instead of letting Zellij intercept the selection.
 - **Native agent Zellij lanes no longer collapse to the active concurrency cap.** Team and Naruto routes now separate runtime concurrency (`target_active_slots`) from right-side UI lane count (`visual_lane_count`), so each native agent/clone gets a visible right pane even when the scheduler is throttled to fewer active workers.
+- **Direct `npm publish` self-heals stale release stamps safely.** The publish path now runs `prepublish:release-check-or-fast`: if the existing release-check stamp is current, publish stays on the fast path; if the stamp is missing or stale, publish runs the full authoritative `npm run release:check` once, then rechecks the stamp before continuing. This fixes the recurring stale `prepublish:fast-check` failure after version bumps without replacing the full release gate with a synthetic stamp write.
+- **`sks fast-mode on` now also repairs Codex Fast mode.** The explicit on action still writes the project-local SKS preference, and now also restores Codex's Fast mode UI/default profile keys (`[user.fast_mode] enabled/visible/default_profile`) plus top-level `service_tier = "fast"` when those were disabled, while preserving unrelated user/plugin settings.
+- **Release proof structure checks see the minimum-agent blocker again.** The agent gate now records `agent_count_below_5` as well as the dynamic expected-count blocker, restoring the release DAG's route-proof artifact audit.
 
 ### Verified
 
 - `npm run build --silent`
 - `node --test test/e2e/route-team-native-agents.test.mjs`
 - `node --test test/unit/zellij-clipboard-config.test.mjs`
+- `node --test test/unit/prepublish-release-check-or-fast.test.mjs`
+- `node --test test/blackbox/fast-mode-command-packed.test.mjs`
 - `npm run mad-sks:zellij-launch --silent`
+- `npm run routes:proof-artifact-structure --silent`
 - `npm run release:version-truth --silent`
 
 ## [1.21.2] - 2026-06-01

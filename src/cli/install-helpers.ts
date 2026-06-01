@@ -1453,7 +1453,7 @@ export async function ensureGlobalCodexFastModeDuringInstall(opts: any = {}) {
         return { status: 'unparseable_config_preserved', config_path: configPath, backup_path: backupPath, parse_smoke: currentSmoke };
       }
     }
-    const next = normalizeCodexFastModeUiConfig(current);
+    const next = normalizeCodexFastModeUiConfig(current, { forceFastMode: opts.forceFastMode === true });
     if (next === ensureTrailingNewline(current)) return { status: 'present', config_path: configPath };
     // Safety gate 2: never WRITE a config that would not parse.
     const nextSmoke = codexConfigParseSmoke(next);
@@ -1467,13 +1467,13 @@ export async function ensureGlobalCodexFastModeDuringInstall(opts: any = {}) {
   }
 }
 
-export function normalizeCodexFastModeUiConfig(text: any = '') {
+export function normalizeCodexFastModeUiConfig(text: any = '', opts: any = {}) {
   // Run to a fixed point so a second install is a true no-op (idempotent). The per-pass
   // table/whitespace normalization converges within one extra pass.
-  return normalizeCodexFastModeUiConfigOnce(normalizeCodexFastModeUiConfigOnce(text));
+  return normalizeCodexFastModeUiConfigOnce(normalizeCodexFastModeUiConfigOnce(text, opts), opts);
 }
 
-function normalizeCodexFastModeUiConfigOnce(text: any = '') {
+function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   // Preserve user-owned top-level scalars (model / service_tier / model_reasoning_effort):
   // SKS only supplies a default when the user has not chosen one, and never strips the
   // user's own reasoning effort. SKS continues to manage its own namespaced tables below
@@ -1482,7 +1482,9 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '') {
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
   next = upsertTopLevelTomlStringIfAbsent(next, 'model', 'gpt-5.5');
-  next = upsertTopLevelTomlStringIfAbsent(next, 'service_tier', 'fast');
+  next = opts.forceFastMode === true
+    ? upsertTopLevelTomlString(next, 'service_tier', 'fast')
+    : upsertTopLevelTomlStringIfAbsent(next, 'service_tier', 'fast');
   // Codex App feature flags / fast-mode UI / suppress-warning are SET-IF-ABSENT: a fresh
   // config still gets SKS's defaults, but SKS NEVER overrides (re-enables) a feature the
   // user disabled in the App, and never rejects-then-hides UI by forcing an unrecognized
@@ -1494,9 +1496,15 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '') {
     'browser_use_external = true', 'image_generation = true', 'in_app_browser = true',
     'guardian_approval = true', 'tool_suggest = true', 'apps = true', 'plugins = true'
   ]) next = upsertTomlTableKeyIfAbsent(next, 'features', featureLine);
-  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'visible = true');
-  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'enabled = true');
-  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
+  if (opts.forceFastMode === true) {
+    next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
+    next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
+    next = upsertTomlTableKey(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
+  } else {
+    next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'visible = true');
+    next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'enabled = true');
+    next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
+  }
   // Keep ONLY the sks-fast-high config-profile table: the Codex App fast-mode
   // (`[user.fast_mode] default_profile = "sks-fast-high"`) and the
   // codex-app:ui-preservation gate still expect it. The other SKS config profiles are
