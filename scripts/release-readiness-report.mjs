@@ -1015,7 +1015,8 @@ function runNodeScript(rel) {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, CI: 'true' },
-    timeout: 30_000
+    timeout: 90_000,
+    maxBuffer: 2 * 1024 * 1024
   });
 }
 

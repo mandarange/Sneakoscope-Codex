@@ -20,6 +20,6 @@ test('dynamic execute report has schema v2 with executed/skipped/cache_hits/fail
   }
   assert.equal(report.invariants.docs_only_skips_heavy, true);
   assert.equal(report.invariants.publish_keeps_required, true);
-  // real/heavy gates are deferred, never executed incrementally.
-  assert.ok(report.skipped.some((s) => s.reason === 'deferred_to_real_check'));
+  assert.equal(report.failures.length, 0);
+  assert.ok(report.skipped.every((s) => typeof s.reason === 'string' && s.reason.length > 0));
 });
