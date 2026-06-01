@@ -81,6 +81,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     })
   }))
   const targetActiveSlots = normalizeTargetActiveSlots(opts.targetActiveSlots ?? opts.agents ?? roster.agent_count, maxAgentCount)
+  const visualLaneCount = normalizeVisualLaneCount(opts.visualLaneCount ?? opts.clones ?? opts.agents ?? roster.agent_count, roster.agent_count, maxAgentCount)
   const desiredWorkItemCount = normalizeDesiredWorkItemCount(opts.desiredWorkItemCount, opts.minimumWorkItems, targetActiveSlots)
   const minimumWorkItems = normalizeMinimumWorkItems(opts.minimumWorkItems, targetActiveSlots)
   const sourceIntelligence = await runSourceIntelligence({ root, missionDir: dir, route, query: prompt, offline: true, context7Available: true })
@@ -197,7 +198,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   await writeIntelligentWorkGraphArtifacts(ledgerRoot, partition.intelligent_work_graph)
   await writeScoutPolicyArtifact(ledgerRoot)
   await writeZellijRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster })
-  await initializeZellijLaneSupervisor(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, targetActiveSlots, launchRealZellij: realZellij })
+  await initializeZellijLaneSupervisor(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, targetActiveSlots: visualLaneCount, launchRealZellij: realZellij })
   await writeZellijPaneProof(root, { missionId, require: realZellijProofRequired, phase: 'initial', ledgerRoot })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-no-overlap-proof.json'), partition.no_overlap_proof || { schema: 'sks.agent-no-overlap-proof.v1', ok: false, blockers: ['missing_no_overlap_proof'] })
@@ -211,6 +212,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     concurrency: roster.concurrency,
     batch_count: 0,
     target_active_slots: targetActiveSlots,
+    visual_lane_count: visualLaneCount,
     desired_work_items: desiredWorkItemCount,
     minimum_work_items: minimumWorkItems,
     requested_work_items: desiredWorkItemCount,
@@ -403,6 +405,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     minimumWorkItems,
     targetActiveSlots,
     realParallel: backend === 'codex-exec' && opts.mock !== true,
+    visualLaneCount,
     roster,
     partition,
     consensus,
@@ -441,6 +444,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     requested_work_items: desiredWorkItemCount,
     actual_total_work_items: partition.task_graph?.total_work_items || partition.slices.length,
     target_active_slots: targetActiveSlots,
+    visual_lane_count: visualLaneCount,
     minimum_work_items: minimumWorkItems,
     scheduler,
     source_intelligence: sourceIntelligenceRef,
@@ -719,6 +723,17 @@ function normalizeMinimumWorkItems(value: unknown, targetActiveSlots: number) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < 1) return Math.max(1, Math.floor(targetActiveSlots))
   return Math.max(1, Math.floor(parsed))
+}
+
+function normalizeVisualLaneCount(value: unknown, fallback: unknown, maxAgentCount: number) {
+  const parsed = Number(value)
+  const fallbackCount = Number(fallback)
+  const raw = Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : Number.isFinite(fallbackCount) && fallbackCount > 0
+      ? fallbackCount
+      : 1
+  return Math.max(1, Math.min(maxAgentCount, Math.floor(raw)))
 }
 
 function isWriteCapableRun(opts: AgentRunOptions) {

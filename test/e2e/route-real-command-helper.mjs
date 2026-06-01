@@ -60,14 +60,14 @@ export async function assertCompletionProofInRoot(root, missionId, route) {
   return proof;
 }
 
-export async function assertAgentProof(missionId, { route } = {}) {
+export async function assertAgentProof(missionId, { route, agentCount = 5 } = {}) {
   const file = path.join(missionRoot(missionId), '.sneakoscope', 'missions', missionId, 'completion-proof.json');
   const proof = JSON.parse(await fs.readFile(file, 'utf8'));
   const agents = proof.evidence?.agents;
   assert.equal(agents?.schema, 'sks.agent-proof-evidence.v1');
   assert.equal(agents.ok, true);
   assert.equal(agents.status, 'passed');
-  assert.equal(agents.agent_count, 5);
+  assert.equal(agents.agent_count, agentCount);
   assert.equal(agents.all_sessions_closed, true);
   assert.equal(agents.no_overlap_ok, true);
   assert.equal(agents.ledger_hash_chain_ok, true);

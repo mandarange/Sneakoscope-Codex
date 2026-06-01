@@ -43,6 +43,7 @@ async function narutoRun(parsed: NarutoArgs) {
     agents: roster.agent_count,
     concurrency: activeSlots,
     targetActiveSlots: activeSlots,
+    visualLaneCount: roster.agent_count,
     desiredWorkItemCount: parsed.workItems,
     maxAgentCount: MAX_NARUTO_AGENT_COUNT,
     narutoMode: true,
@@ -85,7 +86,7 @@ async function narutoRun(parsed: NarutoArgs) {
       missionId: result.mission_id,
       ledgerRoot,
       kind: 'naruto',
-      slotCount: summary.target_active_slots,
+      slotCount: summary.clones,
       dryRun: false,
       attach: false
     })
@@ -97,7 +98,7 @@ async function narutoRun(parsed: NarutoArgs) {
     console.log('Clones: ' + summary.clones + ' / max ' + MAX_NARUTO_AGENT_COUNT + ', running ' + summary.target_active_slots + ' at a time' + (summary.concurrency_capped ? ` (throttled to host capacity: ${safe.cores} cores, ${safe.free_gb} GB free)` : ''))
     console.log('Backend: ' + result.backend)
     console.log('Proof: ' + summary.proof)
-    if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok') console.log('Zellij: prepared ' + summary.target_active_slots + ' native session lane(s) in ' + summary.zellij.session_name)
+    if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok') console.log('Zellij: prepared ' + summary.clones + ' native clone lane(s) in ' + summary.zellij.session_name)
     else if (summary.zellij?.ok) console.log('Zellij: optional live panes unavailable (' + ((summary.zellij.warnings || []).join('; ') || summary.zellij.capability?.status || 'unknown') + ')')
   })
 }

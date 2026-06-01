@@ -111,6 +111,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     zellij_socket_dir_source: zellijEnv.zellij_socket_dir_source,
     clipboard_config_path: clipboard.config_path,
     clipboard_copy_command: clipboard.copy_command,
+    clipboard_mouse_mode: clipboard.mouse_mode,
     pane_proof_path: path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-pane-proof.json'),
     pane_proof: paneProof,
     dry_run: opts.dryRun === true,

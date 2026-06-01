@@ -9,7 +9,7 @@ import { readZellijLaneSupervisor } from './zellij-lane-supervisor.js'
 import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.js'
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any; selectedCoreSkill?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; visualLaneCount?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any; selectedCoreSkill?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
@@ -48,6 +48,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const workQueueTotalWorkItems = Number(workQueue?.total_work_items || 0)
   const schedulerTotalWorkItems = Number(scheduler?.total_work_items || 0)
   const targetActiveSlots = Number(input.targetActiveSlots || scheduler?.target_active_slots || taskGraph?.target_active_slots || input.roster?.agent_count || 0)
+  const visualLaneCount = Number(input.visualLaneCount || zellijLanes?.lane_count || laneSupervisor?.lane_count || targetActiveSlots || 0)
   const minimumWorkItems = Number(input.minimumWorkItems || taskGraph?.minimum_work_items || targetActiveSlots || 0)
   const taskGraphMatchesCliOptions = Boolean(taskGraph) && requestedWorkItems === taskGraphTotalWorkItems && targetActiveSlots === Number(taskGraph.target_active_slots || 0)
   const workQueueMatchesTaskGraph = Boolean(workQueue && taskGraph) && workQueueTotalWorkItems === taskGraphTotalWorkItems
@@ -112,6 +113,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(terminalCloseReportCount < generationCount ? ['terminal_close_report_count_below_generation_count'] : []),
     ...(slots && slots.all_slots_closed_after_drain !== true ? ['agent_worker_slots_not_closed_after_drain'] : []),
     ...(!laneSupervisor ? ['zellij_lane_supervisor_missing'] : []),
+    ...(laneSupervisor && visualLaneCount > 0 && Number(laneSupervisor.lane_count || 0) < visualLaneCount ? ['zellij_lane_count_below_visual_lane_count'] : []),
     ...(laneSupervisor && laneSupervisor.no_flicker_verified !== true ? ['zellij_lane_no_flicker_not_verified'] : []),
     ...(laneSupervisor && laneSupervisor.pane_survival_checked !== true ? ['zellij_lane_survival_not_checked'] : []),
     ...(laneSupervisor && Number(laneSupervisor.unexpected_close_count || 0) > 0 ? ['zellij_lane_unexpected_close_before_drain'] : []),
@@ -207,6 +209,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     all_generations_closed: generations.ok,
     scheduler_state: 'agent-scheduler-state.json',
     target_active_slots: targetActiveSlots,
+    visual_lane_count: visualLaneCount,
     requested_work_items: requestedWorkItems,
     actual_total_work_items: taskGraphTotalWorkItems || schedulerTotalWorkItems,
     minimum_work_items: minimumWorkItems,

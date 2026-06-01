@@ -4,6 +4,24 @@
 
 
 
+
+## [1.21.3] - 2026-06-01
+
+Patch release: restore macOS native `Cmd+C` text copy in SKS-launched Zellij sessions and keep every native agent visible in the right-side Zellij UI.
+
+### Fixed
+
+- **`Cmd+C` text copy works in `sks --mad` Zellij sessions.** SKS now writes `mouse_mode false` into the generated Zellij clipboard config and passes `--mouse-mode false` with the launch options, while preserving `copy_command pbcopy` and `copy_on_select true`. This leaves drag-select + `Cmd+C` to the terminal/system clipboard instead of letting Zellij intercept the selection.
+- **Native agent Zellij lanes no longer collapse to the active concurrency cap.** Team and Naruto routes now separate runtime concurrency (`target_active_slots`) from right-side UI lane count (`visual_lane_count`), so each native agent/clone gets a visible right pane even when the scheduler is throttled to fewer active workers.
+
+### Verified
+
+- `npm run build --silent`
+- `node --test test/e2e/route-team-native-agents.test.mjs`
+- `node --test test/unit/zellij-clipboard-config.test.mjs`
+- `npm run mad-sks:zellij-launch --silent`
+- `npm run release:version-truth --silent`
+
 ## [1.21.2] - 2026-06-01
 
 Patch release: fix the `sks --mad` Zellij launch regression from 1.21.1.

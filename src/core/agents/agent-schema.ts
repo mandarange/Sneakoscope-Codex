@@ -104,6 +104,7 @@ export interface AgentRunOptions {
   noFast?: boolean
   nativeCliSwarm?: boolean
   maxAgentCount?: number
+  visualLaneCount?: number
   clones?: number
   narutoMode?: boolean
 }

@@ -102,24 +102,28 @@ async function ensureMockAgentEvidence(root: any, missionId: string, route: stri
   if (!(await exists(path.join(dir, 'agent-consensus.json')))) await writeJsonAtomic(path.join(dir, 'agent-consensus.json'), { schema: 'sks.agent-consensus.v1', ok: true, route, prompt, blockers: [] });
   if (!(await exists(path.join(dir, 'agent-task-board.json')))) await writeJsonAtomic(path.join(dir, 'agent-task-board.json'), { schema: 'sks.agent-task-board.v1', tasks: [] });
   if (!(await exists(path.join(dir, 'agent-janitor-report.json')))) await writeJsonAtomic(path.join(dir, 'agent-janitor-report.json'), { schema: 'sks.agent-janitor-report.v1', ok: true, mission_id: missionId, project_hash: null, blockers: [] });
-  await writeJsonAtomic(path.join(dir, 'agent-concurrency-policy.json'), { schema: 'sks.agent-concurrency-policy.v1', agents: DEFAULT_AGENT_COUNT, concurrency: DEFAULT_AGENT_COUNT, backend: 'fake' });
-  await writeJsonAtomic(path.join(dir, 'agent-proof-evidence.json'), {
-    schema: 'sks.agent-proof-evidence.v1',
-    ok: true,
-    status: 'passed',
-    mission_id: missionId,
-    route,
-    backend: 'fake',
-    real_parallel_claim: false,
-    fake_backend_disclaimer: 'fixture only; no real parallel execution claim',
-    agent_count: DEFAULT_AGENT_COUNT,
-    max_agents: 20,
-    all_sessions_closed: true,
-    ledger_hash_chain_ok: true,
-    no_overlap_ok: true,
-    consensus_ok: true,
-    janitor_report: 'agents/agent-janitor-report.json',
-    janitor_ok: true,
-    blockers: []
-  });
+  if (!(await exists(path.join(dir, 'agent-concurrency-policy.json')))) {
+    await writeJsonAtomic(path.join(dir, 'agent-concurrency-policy.json'), { schema: 'sks.agent-concurrency-policy.v1', agents: DEFAULT_AGENT_COUNT, concurrency: DEFAULT_AGENT_COUNT, backend: 'fake' });
+  }
+  if (!(await exists(path.join(dir, 'agent-proof-evidence.json')))) {
+    await writeJsonAtomic(path.join(dir, 'agent-proof-evidence.json'), {
+      schema: 'sks.agent-proof-evidence.v1',
+      ok: true,
+      status: 'passed',
+      mission_id: missionId,
+      route,
+      backend: 'fake',
+      real_parallel_claim: false,
+      fake_backend_disclaimer: 'fixture only; no real parallel execution claim',
+      agent_count: DEFAULT_AGENT_COUNT,
+      max_agents: 20,
+      all_sessions_closed: true,
+      ledger_hash_chain_ok: true,
+      no_overlap_ok: true,
+      consensus_ok: true,
+      janitor_report: 'agents/agent-janitor-report.json',
+      janitor_ok: true,
+      blockers: []
+    });
+  }
 }
