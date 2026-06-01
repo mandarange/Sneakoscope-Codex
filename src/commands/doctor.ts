@@ -5,7 +5,7 @@ import { getCodexInfo } from '../core/codex-adapter.js';
 import { rustInfo } from '../core/rust-accelerator.js';
 import { codexAppIntegrationStatus } from '../core/codex-app.js';
 import { codexLbMetrics, readCodexLbCircuit } from '../core/codex-lb-circuit.js';
-import { ensureGlobalCodexSkillsDuringInstall } from '../cli/install-helpers.js';
+import { ensureGlobalCodexSkillsDuringInstall, ensureGlobalCodexFastModeDuringInstall } from '../cli/install-helpers.js';
 import { normalizeInstallScope } from '../core/init.js';
 import { inspectCodexConfigReadability } from '../core/codex/codex-config-readability.js';
 import { repairCodexConfigEperm } from '../core/codex/codex-config-eperm-repair.js';
@@ -36,7 +36,14 @@ export async function run(_command: any, args: any = []) {
       config_backup_path: preFixBackup,
       global_skills: installScope === 'global' && !flag(args, '--local-only')
         ? await ensureGlobalCodexSkillsDuringInstall({ force: true })
-        : { status: 'skipped', reason: 'project or local-only repair' }
+        : { status: 'skipped', reason: 'project or local-only repair' },
+      // Re-seed the Codex App Fast-mode UI table ([user.fast_mode] visible/enabled/
+      // default_profile) in the global ~/.codex/config.toml so existing installs whose
+      // config predates the Fast-mode UI keys get the App speed selector back. Safe:
+      // backs up + parse-validates before writing, no-op when already present.
+      codex_app_fast_mode: flag(args, '--local-only')
+        ? { status: 'skipped', reason: 'local-only repair' }
+        : await ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) }))
     };
   }
   const root = await projectRoot();

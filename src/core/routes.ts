@@ -28,7 +28,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|fast-mode|research|db|git|codex|codex-app|hooks|features|all-features|openclaw|hermes|dfix|commit|commit-and-push|design|imagegen|dollar|context7|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|goal|fast-mode|research|db|git|codex|codex-app|hooks|features|all-features|openclaw|hermes|dfix|commit|commit-and-push|design|imagegen|dollar|context7|xai|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE = 'codex_chrome_extension';
 export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
@@ -650,6 +650,7 @@ export const COMMAND_CATALOG = [
   { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $PPT HTML/PDF artifacts from a sealed presentation decision contract.' },
   { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: 'Run or inspect $Image-UX-Review gpt-image-2/imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
+  { name: 'xai', usage: 'sks xai check|setup|status|docs [--scope project|global] [--url <u>|--command <c>] ...', description: 'Set up and check the optional xAI/Grok Live Search MCP provider for source intelligence.' },
   { name: 'recallpulse', usage: 'sks recallpulse run|status|eval|governance|checklist <mission-id|latest>', description: 'Run report-only RecallPulse active recall, durable status, proof capsule, evidence envelope, and governance checks.' },
   { name: 'pipeline', usage: 'sks pipeline status|resume|plan|answer ...', description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
@@ -759,7 +760,7 @@ export function stripDollarCommand(prompt: any) {
 export function looksLikeTinyDirectFix(prompt: any) {
   const text = String(prompt || '');
   if (looksLikeDirectFixQuestion(text)) return false;
-  const broadCodeCue = /(구현|개발|리팩터|마이그레이션|버그|기능|로직|인증|데이터베이스|스키마|서버|API|테스트|동작|작동|implement|build|develop|refactor|rewrite|migrate|bug|feature|logic|auth|database|schema|server|endpoint|test|deploy|generator|workflow|flow|work(?:ing)?)/i.test(text);
+  const broadCodeCue = /(구현|개발|리팩터|마이그레이션|버그|기능|로직|인증|데이터베이스|스키마|서버|API|테스트|동작|작동|호환|배포|릴리즈|다음\s*버전|컨텍스트7|context7|MCP|implement|build|develop|refactor|rewrite|migrate|bug|feature|logic|auth|database|schema|server|endpoint|test|deploy|release|publish|compat(?:ible|ibility)?|next\s+version|generator|workflow|flow|work(?:ing)?)/i.test(text);
   if (broadCodeCue) return false;
   const creationCue = /(?:\b(?:create|add|make|build|implement)\b.*\b(?:button|component|page|screen|form|modal|endpoint|feature|route|view|flow)\b)|(?:(?:버튼|컴포넌트|페이지|화면|폼|모달|엔드포인트|기능|플로우).*(?:만들|생성|추가|구현))/i.test(text);
   if (creationCue && !/(라벨|문구|텍스트|글자|색|컬러|간격|여백|정렬|label|copy|text|color|spacing|padding|margin|align)/i.test(text)) return false;
@@ -836,7 +837,7 @@ export function routePrompt(prompt: any): any {
   if (looksLikeTinyDirectFix(text)) return routeById('DFix');
   if (looksLikeQuestionShapedDirective(text)) return routeById('Team');
   if (looksLikeAnswerOnlyRequest(text)) return routeById('Answer');
-  if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql|mcp)\b/i.test(text)) return routeById('DB');
+  if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) return routeById('DB');
   if (/\b(team|multi-agent|subagent|parallel agents|agent team)\b|병렬|팀/i.test(text)) return routeById('Team');
   if (looksLikeChatCaptureRequest(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('Team');
   if (/\b(qa[-\s]?loop|qaloop|e2e\s+qa|qa\s+e2e)\b/i.test(text)) return routeById('QALoop');
@@ -875,21 +876,34 @@ export function looksLikeAnswerOnlyRequest(prompt: any = '') {
 export function looksLikeQuestionShapedDirective(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
+  const complaint = /(왜|근데|그런데).*(안\s*하|안\s*되|없이|누락|빠뜨|생략|스킵|못\s*하).*(많|자주|계속|이렇게|함|하지|하냐|하니|\?)/i.test(text);
+  if (looksLikeMethodQuestion(text) && !looksLikePoliteDirectWorkRequest(text) && !looksLikeExplicitDirectWorkDirective(text) && !complaint) return false;
   const directive = /(반드시|필수|무조건|해야\s*(?:해|함|돼|한다|하지|한다는|되는)|해야지|해야돼|해야한다|알지|기억해|파악해야|구분해야|막아야|보장해야|강제|기본적으로)/i.test(text);
   const pipelineCue = /(질문|질문형|암묵|지시|파이프라인|라우팅|route|routing|team|팀|sks|기본|구성|게이트|gate|작업|수정|구현|실행)/i.test(text);
-  const complaint = /(왜|근데|그런데).*(안\s*하|안\s*되|없이|누락|빠뜨|생략|스킵|못\s*하).*(많|자주|계속|이렇게|함|하지|하냐|하니|\?)/i.test(text);
   return (directive && pipelineCue) || complaint;
 }
 
 export function looksLikeDirectWorkRequest(prompt: any = '') {
   const text = String(prompt || '');
-  if (looksLikeDirectFixQuestion(text)) return false;
-  if (looksLikeMethodQuestion(text) && !looksLikePoliteDirectWorkRequest(text) && !looksLikeQuestionShapedDirective(text)) return false;
+  const explicitDirective = looksLikeExplicitDirectWorkDirective(text);
+  if (looksLikeDirectFixQuestion(text) && !explicitDirective) return false;
+  if (looksLikeMethodQuestion(text) && !looksLikePoliteDirectWorkRequest(text) && !looksLikeQuestionShapedDirective(text) && !explicitDirective) return false;
   return looksLikeCodeChangingWork(text)
     || looksLikeChatCaptureRequest(text)
     || looksLikeQuestionShapedDirective(text)
+    || explicitDirective
     || /(작업|파이프라인|구현|수정|변경|추가|적용|반영|처리|수행|검수|설치|해결|리드미|README).*(해줘|해달|해라|해야|되게|줘야|줘야지|달라)/i.test(text)
     || /(진행해|수행해|작업해|처리해|적용해|반영해|검수해|고쳐줘|바꿔줘|해결해줘|만들어줘|해줘야|해줘야지|해달라|해야지|되게 해|install|run|execute|test|deploy|commit|push)/i.test(text);
+}
+
+function looksLikeExplicitDirectWorkDirective(prompt: any = '') {
+  const text = String(prompt || '').trim();
+  if (!text) return false;
+  const koreanDirective = /(해\s*줘|해\s*주세요|해달|달라|진행해|수행해|작업해|처리해|적용해|반영해|검수해|고쳐줘|수정해줘|변경해줘|바꿔줘|해결해줘|만들어줘|준비해줘|완료해줘|배포\s*준비|릴리즈\s*준비|다음\s*버전)/i.test(text);
+  const englishDirective = /\b(?:please\s+)?(?:fix|repair|resolve|solve|implement|patch|update|change|modify|prepare|ship|release|publish|deploy)\b[\s\S]{0,180}\b(?:for\s+me|now|release|deployment|publish|next\s+version|ship|deploy|prepare)\b/i.test(text)
+    || /\b(?:prepare|make)\b[\s\S]{0,120}\b(?:next\s+version|release|deployment|publish|ship)\b/i.test(text)
+    || /\b(?:fix|repair|resolve|solve|implement|patch|update|change|modify)\b[\s\S]{0,180}\b(?:prepare|ship|release|publish|deploy)\b/i.test(text);
+  return koreanDirective || englishDirective;
 }
 
 export function routeNeedsContext7(route: any, prompt: any = '') {
@@ -919,13 +933,16 @@ export function reflectionRequiredForRoute(route: any) {
 }
 
 export function looksLikeCodeChangingWork(prompt: any = '') {
-  return /\b(implement|build|make|add|edit|modify|change|fix|refactor|rewrite|migrate|create|delete|remove|rename|update|patch|코드|구현|개발|수정|변경|추가|삭제|해결|고쳐|바꿔|리팩터|마이그레이션)\b/i.test(String(prompt || ''));
+  const text = String(prompt || '');
+  return /\b(implement|build|make|add|edit|modify|change|fix|refactor|rewrite|migrate|create|delete|remove|rename|update|patch)\b/i.test(text)
+    || /(코드|구현|개발|수정|변경|추가|삭제|해결|고쳐|바꿔|리팩터|마이그레이션)/i.test(text);
 }
 
 export function looksLikeExecutionWork(prompt: any = '') {
   const text = String(prompt || '');
   return looksLikeCodeChangingWork(text)
-    || /\b(test|verify|run|doctor|setup|install|lint|typecheck|selftest|release|publish|execute|실행|검증|테스트|설치|배포)\b/i.test(text);
+    || /\b(test|verify|run|doctor|setup|install|lint|typecheck|selftest|release|publish|execute|deploy)\b/i.test(text)
+    || /(실행|검증|테스트|설치|배포|릴리즈|출시)/i.test(text);
 }
 
 export function subagentExecutionPolicyText(route: any, prompt: any = '') {

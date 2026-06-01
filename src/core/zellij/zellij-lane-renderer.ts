@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { readdir, stat } from 'node:fs/promises'
 import { appendJsonl, ensureDir, exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { resolveFastModePolicy } from '../agents/fast-mode-policy.js'
 
@@ -210,7 +211,16 @@ export async function renderZellijLaneFrame(opts: ZellijLaneRenderOptions) {
   await ensureDir(laneDir)
   const laneJson = await readJson<any>(path.join(laneDir, 'lane.json'), null)
   const laneMd = await readText(path.join(laneDir, 'lane.md'), '')
-  const dashboard = await buildLaneDashboard(root, slot, laneJson)
+  // The persistent MAD/Naruto cockpit lane watches its OWN mission ledger, but the
+  // orchestrator's native-agent fan-out (sks agent/naruto) writes scheduler state to
+  // a separate mission ledger. When this lane's own ledger has no live scheduler
+  // state, mirror the most-recent active agent mission so the cockpit reflects real
+  // parallel work instead of a permanent "Workers idle". Artifacts/heartbeat still
+  // write to the requested `root` so launch/heartbeat gates are unaffected; only the
+  // displayed dashboard is sourced from `dataRoot`. Disable with
+  // SKS_LANE_FOLLOW_ACTIVE_MISSION=0.
+  const dataRoot = await resolveActiveLedgerRoot(root)
+  const dashboard = await buildLaneDashboard(dataRoot, slot, laneJson)
   const view: ZellijLaneFrameView = {
     missionId: opts.missionId,
     slot,
@@ -227,7 +237,11 @@ export async function renderZellijLaneFrame(opts: ZellijLaneRenderOptions) {
     rollback: dashboard.rollback,
     blockers: dashboard.blocker_list,
     reports: dashboard.reports,
-    laneNote: laneMd ? String(laneMd) : 'no lane.md; rendering canonical ledger state'
+    laneNote: laneMd
+      ? String(laneMd)
+      : path.resolve(dataRoot) === path.resolve(root)
+        ? 'no lane.md; rendering canonical ledger state'
+        : `following active mission ${path.basename(path.dirname(dataRoot))}`
   }
   const frame = composeLaneFrame(view, { width: opts.width, color: opts.color })
   const report = {
@@ -429,6 +443,48 @@ function firstDefined(values: unknown[]): unknown {
     if (value !== undefined && value !== null) return value
   }
   return undefined
+}
+
+// When this lane's own ledger has no scheduler state, find the most-recently
+// updated sibling mission ledger that does (the orchestrator's native-agent /
+// $Naruto fan-out), so the cockpit reflects live parallel work. Bounded by a
+// freshness window so a long-finished run never lingers on the cockpit. Pure
+// read; never mutates. Returns the original root when nothing better is found or
+// when disabled via SKS_LANE_FOLLOW_ACTIVE_MISSION=0.
+async function resolveActiveLedgerRoot(ledgerRoot: string): Promise<string> {
+  if (process.env.SKS_LANE_FOLLOW_ACTIVE_MISSION === '0') return ledgerRoot
+  if (await exists(path.join(ledgerRoot, 'agent-scheduler-state.json'))) return ledgerRoot
+  const projectRoot = inferProjectRootFromLedgerRoot(ledgerRoot)
+  const missionsDir = path.join(projectRoot, '.sneakoscope', 'missions')
+  const windowMs = activeMissionWindowMs()
+  const now = Date.now()
+  let entries: string[] = []
+  try {
+    entries = await readdir(missionsDir)
+  } catch {
+    return ledgerRoot
+  }
+  let best: { dir: string; mtime: number } | null = null
+  for (const entry of entries) {
+    const candidate = path.join(missionsDir, entry, 'agents')
+    if (path.resolve(candidate) === path.resolve(ledgerRoot)) continue
+    const statePath = path.join(candidate, 'agent-scheduler-state.json')
+    let mtimeMs = 0
+    try {
+      mtimeMs = (await stat(statePath)).mtimeMs
+    } catch {
+      continue
+    }
+    if (windowMs > 0 && now - mtimeMs > windowMs) continue
+    if (!best || mtimeMs > best.mtime) best = { dir: candidate, mtime: mtimeMs }
+  }
+  return best ? best.dir : ledgerRoot
+}
+
+function activeMissionWindowMs(): number {
+  const raw = Number(process.env.SKS_LANE_ACTIVE_WINDOW_MS)
+  if (Number.isFinite(raw) && raw >= 0) return Math.floor(raw)
+  return 2 * 60 * 60 * 1000
 }
 
 function inferProjectRootFromLedgerRoot(value: string): string {

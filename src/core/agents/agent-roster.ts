@@ -4,10 +4,18 @@ import type { AgentPersona, AgentRosterEntry } from './agent-schema.js'
 import { defaultAgentPersonas, validatePersonaUniqueness } from './agent-persona.js'
 import { buildAgentEffortPolicy, decideAgentEffort, decideNarutoCloneEffort } from './agent-effort-policy.js'
 
-// $Naruto must never blindly spawn the full clone count at once. The clone roster is the
-// total work fan-out, but live CONCURRENCY (scheduler active slots) is capped to what the
-// host can safely sustain — derived from CPU cores and free memory, heavier-bounded for
-// real child-process backends (codex-exec/zellij/process) than for in-process (fake).
+// $Naruto must never blindly spawn the full clone count at once, but the live
+// CONCURRENCY ceiling is NOT a function of CPU cores. Each clone is a separate CLI
+// worker process that spends ~all of its wall-clock awaiting the Codex API
+// (network-bound, mostly idle), so the local CPU is never the bottleneck —
+// oversubscribing cores is exactly the point. The real local limit is MEMORY
+// (resident set of N node+codex child processes) plus an absolute clone ceiling
+// (MAX_NARUTO_AGENT_COUNT = 100); the provider rate limit is handled separately by
+// the responses retry/backoff policy. So a capable host can run up to 100 in
+// parallel regardless of core count. Tunables:
+//   SKS_NARUTO_MAX_CONCURRENCY   hard cap (1..100), wins over everything
+//   SKS_NARUTO_GB_PER_WORKER     memory budget per heavy worker (default 0.25 GB)
+//   SKS_NARUTO_MIN_CONCURRENCY   floor so low-free-memory hosts still parallelize
 export function systemSafeNarutoConcurrency(opts: { backend?: string; cores?: number; freeBytes?: number; totalBytes?: number } = {}) {
   const cores = Math.max(1, Number(opts.cores ?? os.cpus()?.length) || 4)
   let freeBytes = 2 * 1024 * 1024 * 1024
@@ -18,23 +26,25 @@ export function systemSafeNarutoConcurrency(opts: { backend?: string; cores?: nu
   const totalGb = totalBytes / (1024 * 1024 * 1024)
   const backend = String(opts.backend || 'codex-exec')
   const heavy = backend === 'codex-exec' || backend === 'zellij' || backend === 'process'
+  const ceiling = MAX_NARUTO_AGENT_COUNT
+  // macOS reports very low freemem while reclaimable memory is still available, so
+  // budget against a total-memory-derived floor rather than the instantaneous free.
+  const reclaimableFloorGb = totalGb >= 32 ? 16 : totalGb >= 16 ? 8 : totalGb >= 8 ? 4 : totalGb >= 4 ? 2 : Math.max(freeGb, 1)
+  const budgetGb = Math.max(freeGb, reclaimableFloorGb)
   let cap: number
   if (heavy) {
-    // Real codex children are heavier than fake workers, but macOS can report
-    // very low freemem while reclaimable memory is still available. Use a
-    // conservative total-memory floor so Naruto keeps meaningful parallelism
-    // instead of collapsing to one slot on otherwise capable machines.
-    const byCpu = Math.max(1, cores - 1)
-    const gbPerWorker = positiveEnvNumber('SKS_NARUTO_GB_PER_WORKER', 0.6)
-    const reclaimableFloorGb = totalGb >= 16 ? 6 : totalGb >= 8 ? 3 : totalGb >= 4 ? 1.5 : freeGb
-    const budgetGb = Math.max(freeGb, reclaimableFloorGb)
+    // Memory-bound, NOT core-bound. ~0.25 GB per mostly-idle codex-exec worker.
+    const gbPerWorker = positiveEnvNumber('SKS_NARUTO_GB_PER_WORKER', 0.25)
     const byMem = Math.max(1, Math.floor(budgetGb / gbPerWorker))
-    const minParallelDefault = totalGb >= 16 ? 8 : totalGb >= 8 ? 4 : totalGb >= 4 ? 2 : 1
-    const minParallel = Math.min(byCpu, Math.floor(positiveEnvNumber('SKS_NARUTO_MIN_CONCURRENCY', minParallelDefault)))
-    cap = Math.min(byCpu, Math.max(byMem, minParallel), 16)
+    const minParallelDefault = totalGb >= 16 ? 16 : totalGb >= 8 ? 8 : totalGb >= 4 ? 4 : 2
+    const minParallel = Math.floor(positiveEnvNumber('SKS_NARUTO_MIN_CONCURRENCY', minParallelDefault))
+    cap = Math.min(Math.max(byMem, minParallel), ceiling)
   } else {
-    // In-process / light workers can pack tighter.
-    cap = Math.min(Math.max(2, cores * 2), 32)
+    // In-process / light workers are even cheaper; pack toward the ceiling, and never
+    // throttle tighter than the heavy backend (invariant: heavy.cap <= fake.cap).
+    const gbPerWorker = positiveEnvNumber('SKS_NARUTO_LIGHT_GB_PER_WORKER', 0.1)
+    const byMem = Math.max(2, Math.floor(budgetGb / gbPerWorker))
+    cap = Math.min(byMem, ceiling)
   }
   const override = Number(process.env.SKS_NARUTO_MAX_CONCURRENCY)
   if (Number.isFinite(override) && override >= 1) cap = Math.min(Math.floor(override), MAX_NARUTO_AGENT_COUNT)
@@ -47,7 +57,7 @@ export function systemSafeNarutoConcurrency(opts: { backend?: string; cores?: nu
     backend,
     heavy,
     override_applied: Number.isFinite(override) && override >= 1,
-    memory_model: heavy ? 'free_or_reclaimable_floor' : 'light_worker_cpu_bound'
+    memory_model: heavy ? 'memory_budget_network_bound' : 'light_worker_memory_bound'
   }
 }
 

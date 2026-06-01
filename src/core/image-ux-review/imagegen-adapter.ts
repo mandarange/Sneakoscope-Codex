@@ -512,12 +512,25 @@ export async function generateGptImage2CalloutReview(input: ImageUxReviewImagege
   // available, so a missing/failed Codex App $imagegen surface still produces a
   // real image instead of a hard block. Explicit opt-out wins: pass
   // allowApiFallback:false or SKS_IMAGEGEN_ALLOW_API_FALLBACK=0.
-  // codex-lb is deliberately NOT auto-enabled: a codex-lb key is not Codex App
-  // evidence and must remain an explicit opt-in (allowCodexLbApiFallback / env=1),
-  // so the route never silently routes screenshots through the LB proxy.
   const openAiKeyPresent = Boolean(opts.openai?.apiKey || process.env.OPENAI_API_KEY);
   const explicitDisableApiFallback = opts.allowApiFallback === false || process.env.SKS_IMAGEGEN_ALLOW_API_FALLBACK === '0';
-  const allowCodexLbApiFallback = opts.allowCodexLbApiFallback === true || process.env.SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK === '1';
+  // codex-lb imagegen routes gpt-image-2 through the same Codex /responses
+  // backend the LB already proxies (base_url ends in /backend-api/codex, so the
+  // image_generation tool call is just another Responses request). When codex-lb
+  // is the active, fully-configured auth (selected provider + key + base_url) and
+  // there is no direct OPENAI_API_KEY, enable it BY DEFAULT so image generation
+  // works for users authenticated only through codex-lb — that is the common case
+  // and a hard block here is the bug the user hit. It still never overrides a real
+  // OpenAI key, and SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK=0 (or
+  // allowCodexLbApiFallback:false) opts out for callers that require Codex App
+  // built-in evidence only.
+  const codexLbAuthActive = capability?.codex_lb?.available === true;
+  const explicitDisableCodexLbFallback = opts.allowCodexLbApiFallback === false || process.env.SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK === '0';
+  const allowCodexLbApiFallback = !explicitDisableCodexLbFallback && (
+    opts.allowCodexLbApiFallback === true
+    || process.env.SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK === '1'
+    || (codexLbAuthActive && !openAiKeyPresent)
+  );
   const allowApiFallback = !explicitDisableApiFallback && (
     opts.allowApiFallback === true
     || process.env.SKS_IMAGEGEN_ALLOW_API_FALLBACK === '1'

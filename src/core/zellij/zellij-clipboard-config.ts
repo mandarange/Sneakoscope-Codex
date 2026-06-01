@@ -4,10 +4,18 @@ import { ensureDir, nowIso, writeTextAtomic } from '../fsx.js'
 // Single source of truth for the Zellij clipboard pipeline used by `sks --mad`
 // (and any other SKS-launched Zellij session). By default Zellij copies via the
 // OSC 52 escape sequence, which several macOS terminals (Terminal.app always,
-// some iTerm2 configs) silently drop, and mouse_mode can intercept native
-// terminal selections so Cmd+C has nothing to copy. Setting copy_command="pbcopy"
-// keeps Zellij's copy action wired to the macOS clipboard, while mouse_mode=false
-// leaves drag-select + Cmd+C to the terminal.
+// some iTerm2 configs) silently drop. Setting copy_command="pbcopy" keeps
+// Zellij's copy action wired to the macOS clipboard.
+//
+// mouse_mode is TRUE on purpose: with mouse_mode off, the trackpad wheel is
+// passed straight through to whichever pane has focus (the Codex prompt input),
+// so scrolling never reaches the conversation/transcript scrollback the user is
+// reading. With mouse_mode on, Zellij captures the wheel and scrolls the pane
+// *under the cursor* through its own scrollback — so hovering the conversation
+// pane and scrolling moves the transcript, not the prompt. Copy is unaffected:
+// copy_on_select + copy_command="pbcopy" make Zellij's own mouse selection copy
+// to the system clipboard, and SHIFT+drag still falls back to native terminal
+// selection for users who prefer it.
 
 export const ZELLIJ_CLIPBOARD_CONFIG_SCHEMA = 'sks.zellij-clipboard-config.v1'
 
@@ -55,7 +63,11 @@ export async function writeZellijClipboardConfig(
   const copy_command = resolveCopyCommand(platform)
   const copy_clipboard: 'system' | 'primary' = 'system'
   const copy_on_select = true
-  const mouse_mode = false
+  // mouse_mode on: route the trackpad wheel to the pane under the cursor so the
+  // conversation/transcript scrolls instead of the focused prompt input. See the
+  // module header for the copy interaction (pbcopy + copy_on_select keep Cmd/drag
+  // copy working). Opt out with SKS_ZELLIJ_MOUSE_MODE=0 if a terminal misbehaves.
+  const mouse_mode = process.env.SKS_ZELLIJ_MOUSE_MODE !== '0'
   const dir = path.join(root, '.sneakoscope', 'missions', missionId)
   await ensureDir(dir)
   const config_path = path.join(dir, 'zellij-clipboard.kdl')
