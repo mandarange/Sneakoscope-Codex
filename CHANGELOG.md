@@ -4,6 +4,14 @@
 
 
 
+## [1.21.2] - 2026-06-01
+
+Patch release: fix the `sks --mad` Zellij launch regression from 1.21.1.
+
+### Fixed
+
+- **`sks --mad` opens again with Zellij clipboard support enabled.** Zellij 0.44 rejects `--copy-command` when it is paired with the OSC52-only `--copy-clipboard` option, so the background session launch now passes only `--copy-command pbcopy` and `--copy-on-select true`. The generated config file still records `copy_clipboard "system"` for attach/config-file consumers, but the CLI no longer combines the mutually exclusive flags.
+
 ## [1.21.1] - 2026-06-01
 
 Patch release: three `sks --mad` launch fixes — faster launch, working Zellij clipboard copy, and no more Codex legacy-profile deprecation warning.
