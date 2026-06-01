@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.20.5** makes `sks --mad` actually open the Zellij session. Previous releases only *created* a detached background session and printed an `Attach with: ...` hint, so nothing opened in the operator's terminal. SKS now performs the follow-up foreground attach automatically when launched in an interactive TTY (using the same `ZELLIJ_SOCKET_DIR` namespace as the background session), and falls back to printing the manual attach command if attach fails. Auto-attach is skipped for `--json`, non-TTY/piped launches, when already inside a Zellij session, or with `--no-attach` / `SKS_NO_ZELLIJ_ATTACH=1`; `--attach` forces it.
+SKS **1.21.0** carries forward the `sks --mad` Zellij auto-attach fix and aligns the release metadata gates with explicit version bumps. Previous releases only *created* a detached background session and printed an `Attach with: ...` hint, so nothing opened in the operator's terminal. SKS now performs the follow-up foreground attach automatically when launched in an interactive TTY (using the same `ZELLIJ_SOCKET_DIR` namespace as the background session), and falls back to printing the manual attach command if attach fails. Auto-attach is skipped for `--json`, non-TTY/piped launches, when already inside a Zellij session, or with `--no-attach` / `SKS_NO_ZELLIJ_ATTACH=1`; `--attach` forces it.
 
 SKS **1.20.4** is a targeted `sks --mad` / codex-lb Zellij usability patch: when a background MAD Zellij session launches successfully, SKS now prints the exact `Attach with: ZELLIJ_SOCKET_DIR=... zellij attach ...` command so operators can enter the fresh session without manually reconstructing the socket namespace.
 

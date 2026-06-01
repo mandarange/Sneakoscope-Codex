@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.mjs';
@@ -10,10 +11,22 @@ const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 1536 * 1024);
 
 function runNpmPack() {
   const npmCli = process.env.npm_execpath; // set when invoked via `npm run`
+  const npmCache = process.env.SKS_RELEASE_NPM_CACHE || path.join(os.tmpdir(), 'sneakoscope-npm-cache');
+  fs.mkdirSync(npmCache, { recursive: true });
   const argv = ['pack', '--dry-run', '--json', '--ignore-scripts'];
+  const opts = {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+    env: {
+      ...process.env,
+      npm_config_cache: npmCache,
+      NPM_CONFIG_CACHE: npmCache
+    }
+  };
   const res = npmCli
-    ? spawnSync(process.execPath, [npmCli, ...argv], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
-    : spawnSync('npm', argv, { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+    ? spawnSync(process.execPath, [npmCli, ...argv], opts)
+    : spawnSync('npm', argv, opts);
   return res;
 }
 

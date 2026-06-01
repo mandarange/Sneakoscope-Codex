@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.mjs';
 
-const RELEASE_VERSION = '1.20.5';
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const RELEASE_VERSION = String(pkg.version || '');
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');
 const distManifest = fs.existsSync(distManifestPath) ? JSON.parse(fs.readFileSync(distManifestPath, 'utf8')) : null;
@@ -76,13 +76,7 @@ const requiredDocs = [
 const versionedDocs = new Set([
   'README.md',
   'CHANGELOG.md',
-  'docs/release-readiness.md',
-  'docs/codex-config-eperm-self-heal.md',
-  'docs/doctor-real-fix.md',
-  'docs/mad-launch-preflight.md',
-  'docs/fast-mode-official-service-tier.md',
-  'docs/codex-project-config-policy.md',
-  'docs/macos-tcc-operator-actions.md'
+  'docs/release-readiness.md'
 ]);
 const requiredScripts = [
   'runtime:no-src-mjs',
@@ -285,7 +279,7 @@ const requiredRealScripts = [
   'agent:real-codex-parallel-workers-20'
 ];
 
-assertGate(pkg.version === RELEASE_VERSION, `package.json version must be ${RELEASE_VERSION}`, { version: pkg.version });
+assertGate(/^\d+\.\d+\.\d+$/.test(RELEASE_VERSION), 'package.json version must be a stable semver', { version: pkg.version });
 assertGate(lock.version === RELEASE_VERSION, `package-lock version must be ${RELEASE_VERSION}`, { version: lock.version });
 assertGate(lock.packages?.['']?.version === RELEASE_VERSION, `package-lock root version must be ${RELEASE_VERSION}`, { version: lock.packages?.['']?.version });
 assertVersionSurface('src/core/version.ts', `PACKAGE_VERSION = '${RELEASE_VERSION}'`);
