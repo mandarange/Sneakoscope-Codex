@@ -121,8 +121,8 @@ function shellQuote(value: string): string {
 }
 
 function buildMainPaneCommand(input: ZellijLayoutInput, sksCommand: string) {
-  const codexArgs = (input.codexArgs || []).map((arg) => String(arg)).filter(Boolean)
-  const shouldLaunchCodex = input.kind === 'mad' || codexArgs.length > 0
+  const requestedCodexArgs = (input.codexArgs || []).map((arg) => String(arg)).filter(Boolean)
+  const shouldLaunchCodex = input.kind === 'mad' || requestedCodexArgs.length > 0
   if (!shouldLaunchCodex) {
     const shell = shellQuote(String(process.env.SHELL || '/bin/zsh'))
     return {
@@ -132,6 +132,7 @@ function buildMainPaneCommand(input: ZellijLayoutInput, sksCommand: string) {
       launchEnvKeys: []
     }
   }
+  const codexArgs = withCodexScrollbackArgs(requestedCodexArgs)
   const launchEnv = sanitizeLaunchEnv(input.launchEnv || {})
   const envPrefix = launchEnv.map(([key, value]) => `${key}=${shellQuote(value)}`)
   const codexBin = shellQuote(String(input.codexBin || process.env.SKS_CODEX_BIN || 'codex'))
@@ -141,6 +142,12 @@ function buildMainPaneCommand(input: ZellijLayoutInput, sksCommand: string) {
     codexArgs,
     launchEnvKeys: launchEnv.map(([key]) => key)
   }
+}
+
+function withCodexScrollbackArgs(args: string[]): string[] {
+  if (process.env.SKS_ZELLIJ_CODEX_ALT_SCREEN === '1') return args
+  if (args.includes('--no-alt-screen')) return args
+  return ['--no-alt-screen', ...args]
 }
 
 function sanitizeLaunchEnv(env: Record<string, unknown>): Array<[string, string]> {

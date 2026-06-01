@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { appendJsonl, ensureDir, exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { resolveFastModePolicy } from '../agents/fast-mode-policy.js'
 
 export const ZELLIJ_LANE_RENDER_SCHEMA = 'sks.zellij-lane-render.v1'
 
@@ -335,11 +336,25 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
   ]) || 'Agent'
 
   // Fast service tier.
-  const serviceTier = firstString([laneJson?.service_tier, scheduler?.service_tier, swarm?.service_tier])
-  const fastMode = laneJson?.fast_mode ?? scheduler?.fast_mode ?? swarm?.fast_mode
+  const projectRoot = inferProjectRootFromLedgerRoot(root)
+  const policy = resolveFastModePolicy({ root: projectRoot })
+  const serviceTier = firstString([
+    laneJson?.service_tier,
+    scheduler?.service_tier,
+    swarm?.service_tier,
+    proof?.fast_mode_policy?.service_tier,
+    policy.service_tier
+  ])
+  const fastMode = firstDefined([
+    laneJson?.fast_mode,
+    scheduler?.fast_mode,
+    swarm?.fast_mode,
+    proof?.fast_mode_policy?.fast_mode,
+    policy.fast_mode
+  ])
   const fast = serviceTier === 'fast' || fastMode === true
     ? `on · service_tier=${serviceTier || 'fast'}`
-    : (serviceTier ? `service_tier=${serviceTier}` : 'off')
+    : `off · service_tier=${serviceTier || 'standard'}`
 
   // Workers: live active/target + (naruto) clone fan-out.
   const cloneTotal = numberOf([scheduler?.clones, scheduler?.clone_count, swarm?.clones])
@@ -407,6 +422,21 @@ function firstString(values: unknown[]): string | null {
     if (typeof value === 'string' && value.trim()) return value.trim()
   }
   return null
+}
+
+function firstDefined(values: unknown[]): unknown {
+  for (const value of values.flat()) {
+    if (value !== undefined && value !== null) return value
+  }
+  return undefined
+}
+
+function inferProjectRootFromLedgerRoot(value: string): string {
+  const root = path.resolve(value)
+  const parts = root.split(path.sep)
+  const index = parts.lastIndexOf('.sneakoscope')
+  if (index > 0) return parts.slice(0, index).join(path.sep) || path.sep
+  return root
 }
 
 function numberOf(values: unknown[]): number | null {

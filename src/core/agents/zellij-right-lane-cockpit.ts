@@ -12,7 +12,7 @@ export function buildZellijRightLaneCockpit(input: {
   maxVisibleLanes?: number
 } = {}) {
   const agents = input.slots || input.agents || []
-  const maxVisible = input.maxVisibleLanes || 20
+  const maxVisible = input.maxVisibleLanes || Math.max(agents.length, 1)
   const lanes = agents.map((agent, index) => ({
     lane_index: index + 1,
     slot_id: String(agent.slot_id || agent.id || agent.agent_id || `slot-${String(index + 1).padStart(3, '0')}`),

@@ -12,9 +12,24 @@ await fs.writeFile(path.join(tmp, 'agent-scheduler-state.json'), `${JSON.stringi
 await fs.writeFile(path.join(tmp, 'agent-patch-queue.json'), `${JSON.stringify({ queue: [{ slot_id: 'slot-001', target_file: 'src/core/example.ts' }] }, null, 2)}\n`);
 await fs.writeFile(path.join(tmp, 'agent-proof-evidence.json'), `${JSON.stringify({ ok: false, blockers: ['fixture_blocker_visible'] }, null, 2)}\n`);
 const frame = await mod.renderZellijLaneFrame({ missionId: 'M-lane', slot: 'slot-001', ledgerRoot: tmp, once: true, color: false });
-const required = ['SKS Lane', 'Mission', 'Mode', 'Workers', 'Current', 'Queue', 'Safety', 'Blockers', 'Reports', 'Keys:', 'src/core/example.ts', 'fixture_blocker_visible'];
-const ok = required.every((item) => frame.frame.includes(item)) && frame.report.stdout_only === true;
-const report = { schema: 'sks.zellij-lane-renderer-check.v1', ok, frame: frame.report };
+const project = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-fast-off-'));
+const projectLedger = path.join(project, '.sneakoscope', 'missions', 'M-fast-off', 'agents');
+await fs.mkdir(path.join(project, '.sneakoscope', 'state'), { recursive: true });
+await fs.mkdir(projectLedger, { recursive: true });
+await fs.writeFile(path.join(project, '.sneakoscope', 'state', 'fast-mode.json'), `${JSON.stringify({
+  schema: 'sks.fast-mode-preference.v1',
+  updated_at: '2026-06-01T00:00:00.000Z',
+  mode: 'standard',
+  fast_mode: false,
+  service_tier: 'standard',
+  codex_desktop_service_tier: 'default',
+  source: 'zellij-lane-renderer-check'
+}, null, 2)}\n`);
+const offFrame = await mod.renderZellijLaneFrame({ missionId: 'M-fast-off', slot: 'slot-001', ledgerRoot: projectLedger, once: true, color: false });
+const required = ['SKS Lane', 'Mission', 'Mode', 'Fast', 'on · service_tier=fast', 'Workers', 'Current', 'Queue', 'Safety', 'Blockers', 'Reports', 'Keys:', 'src/core/example.ts', 'fixture_blocker_visible'];
+const offRequired = ['Fast', 'off · service_tier=standard'];
+const ok = required.every((item) => frame.frame.includes(item)) && offRequired.every((item) => offFrame.frame.includes(item)) && frame.report.stdout_only === true;
+const report = { schema: 'sks.zellij-lane-renderer-check.v1', ok, frame: frame.report, fast_off_frame: offFrame.report };
 await fs.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
 await fs.writeFile(path.join(root, '.sneakoscope', 'reports', 'zellij-lane-renderer.json'), `${JSON.stringify(report, null, 2)}\n`);
 emit(report);

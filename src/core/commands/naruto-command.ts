@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { findLatestMission, loadMission } from '../mission.js'
+import { createMission, findLatestMission, loadMission } from '../mission.js'
 import { readJson, sksRoot } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
 import { buildNarutoCloneRoster, systemSafeNarutoConcurrency } from '../agents/agent-roster.js'
@@ -31,10 +31,34 @@ async function narutoRun(parsed: NarutoArgs) {
     maxAgentCount: MAX_NARUTO_AGENT_COUNT
   })
   // The clone roster is the full work fan-out; live concurrency is throttled to a
-  // system-safe number so naruto never spawns the whole count at once.
+  // system-safe number so naruto never spawns the whole count at once unless an
+  // explicit operator override asks for a higher target.
   const safe = systemSafeNarutoConcurrency({ backend: parsed.backend })
-  const activeSlots = Math.max(1, Math.min(roster.agent_count, safe.cap))
+  const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || safe.cap))
+  const mission = await createMission(root, { mode: 'naruto', prompt: parsed.prompt })
+  const ledgerRoot = path.join(mission.dir, 'agents')
+  let liveZellij: any = null
+  if (!parsed.json && !parsed.mock && !parsed.noOpenZellij) {
+    liveZellij = await launchZellijLayout({
+      root,
+      missionId: mission.id,
+      ledgerRoot,
+      kind: 'naruto',
+      slotCount: roster.agent_count,
+      dryRun: false,
+      attach: false
+    })
+    if (liveZellij?.ok && liveZellij.capability?.status === 'ok') {
+      console.log('Zellij: prepared ' + roster.agent_count + ' live clone lane(s) in ' + liveZellij.session_name + '. Attach with: ' + (liveZellij.attach_command_with_env || liveZellij.attach_command))
+      if (parsed.attach) attachZellijSessionInteractive(liveZellij.session_name, { cwd: process.cwd(), configPath: liveZellij.clipboard_config_path })
+    } else if (liveZellij?.ok) {
+      console.log('Zellij: optional live panes unavailable (' + ((liveZellij.warnings || []).join('; ') || liveZellij.capability?.status || 'unknown') + ')')
+    } else {
+      console.log('Zellij: blocked (' + Array.from(new Set(liveZellij?.blockers || [])).join('; ') + ')')
+    }
+  }
   const result = await runNativeAgentOrchestrator({
+    missionId: mission.id,
     prompt: parsed.prompt,
     route: NARUTO_ROUTE,
     routeCommand: 'sks naruto run',
@@ -77,21 +101,7 @@ async function narutoRun(parsed: NarutoArgs) {
     run: result,
     zellij: null as any
   }
-  if (!parsed.json && !parsed.mock && !parsed.noOpenZellij) {
-    const ledgerRoot = result.ledger_root
-      ? path.join(root, result.ledger_root)
-      : path.join(root, '.sneakoscope', 'missions', result.mission_id, 'agents')
-    summary.zellij = await launchZellijLayout({
-      root,
-      missionId: result.mission_id,
-      ledgerRoot,
-      kind: 'naruto',
-      slotCount: summary.clones,
-      dryRun: false,
-      attach: false
-    })
-    if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok' && parsed.attach) attachZellijSessionInteractive(summary.zellij.session_name, { cwd: process.cwd() })
-  }
+  summary.zellij = liveZellij
   return emit(parsed, summary, () => {
     console.log('🍥 Shadow Clone Jutsu — Kage Bunshin no Jutsu')
     console.log('Mission: ' + result.mission_id)
@@ -152,6 +162,7 @@ interface NarutoArgs {
   prompt: string
   clones: number
   workItems: number
+  concurrency: number | null
   backend: string
   mock: boolean
   real: boolean
@@ -172,6 +183,7 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const requestedClones = Number(readOption(args, '--clones', readOption(args, '--agents', DEFAULT_NARUTO_CLONES)))
   const clones = clampClones(requestedClones)
   const workItems = clampWorkItems(Number(readOption(args, '--work-items', clones)), clones)
+  const concurrency = normalizeConcurrency(readOption(args, '--concurrency', readOption(args, '--target-active-slots', null)), clones)
   const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : 'codex-exec'))
   const mock = hasFlag(args, '--mock') || backend === 'fake'
   const real = hasFlag(args, '--real')
@@ -181,9 +193,9 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', 'latest')))
   const noOpenZellij = hasFlag(args, '--no-open-zellij') || hasFlag(args, '--no-zellij')
   const attach = hasFlag(args, '--attach')
-  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--backend', '--write-mode', '--mission', '--mission-id'])
+  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--mission', '--mission-id'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
-  return { action, prompt, clones, workItems, backend, mock, real, readonly, writeMode, json, missionId, noOpenZellij, attach }
+  return { action, prompt, clones, workItems, concurrency, backend, mock, real, readonly, writeMode, json, missionId, noOpenZellij, attach }
 }
 
 function clampClones(value: number): number {
@@ -194,6 +206,13 @@ function clampClones(value: number): number {
 function clampWorkItems(value: number, clones: number): number {
   if (!Number.isFinite(value) || value < 1) return clones
   return Math.floor(value)
+}
+
+function normalizeConcurrency(value: unknown, clones: number): number | null {
+  if (value == null || value === '') return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 1) return null
+  return Math.min(Math.floor(parsed), clones, MAX_NARUTO_AGENT_COUNT)
 }
 
 function hasFlag(args: string[], flag: string) {

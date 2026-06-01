@@ -35,6 +35,7 @@ const autoAttachOk = madCommand.includes('shouldAutoAttachZellij(args)')
 const codexPaneChecks = {
   main_pane_kind: report.main_pane_kind === 'codex_interactive',
   report_enabled: report.codex_pane?.enabled === true,
+  report_no_alt_screen_arg: report.codex_pane.args.includes('--no-alt-screen'),
   report_profile_arg: report.codex_pane.args.includes('--profile') && report.codex_pane.args.includes('sks-mad-high'),
   report_sandbox_arg: report.codex_pane.args.includes('--sandbox') && report.codex_pane.args.includes('danger-full-access'),
   report_approval_arg: report.codex_pane.args.includes('--ask-for-approval') && report.codex_pane.args.includes('never'),
@@ -44,6 +45,7 @@ const codexPaneChecks = {
   report_policy_env: report.codex_pane.launch_env_keys.includes('SKS_PROTECTED_CORE_POLICY'),
   layout_orchestrator_pane: layoutText.includes('pane name="orchestrator" command="sh"'),
   layout_codex_exec: /exec\s+'?codex'?/.test(layoutText),
+  layout_no_alt_screen_arg: layoutText.includes('--no-alt-screen'),
   layout_profile_arg: layoutText.includes('--profile') && layoutText.includes('sks-mad-high'),
   layout_sandbox_arg: layoutText.includes('--sandbox') && layoutText.includes('danger-full-access'),
   layout_approval_arg: layoutText.includes('--ask-for-approval') && layoutText.includes('never'),
