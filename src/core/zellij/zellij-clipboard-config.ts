@@ -7,15 +7,11 @@ import { ensureDir, nowIso, writeTextAtomic } from '../fsx.js'
 // some iTerm2 configs) silently drop. Setting copy_command="pbcopy" keeps
 // Zellij's copy action wired to the macOS clipboard.
 //
-// mouse_mode is TRUE on purpose: with mouse_mode off, the trackpad wheel is
-// passed straight through to whichever pane has focus (the Codex prompt input),
-// so scrolling never reaches the conversation/transcript scrollback the user is
-// reading. With mouse_mode on, Zellij captures the wheel and scrolls the pane
-// *under the cursor* through its own scrollback — so hovering the conversation
-// pane and scrolling moves the transcript, not the prompt. Copy is unaffected:
-// copy_on_select + copy_command="pbcopy" make Zellij's own mouse selection copy
-// to the system clipboard, and SHIFT+drag still falls back to native terminal
-// selection for users who prefer it.
+// Keep Zellij mouse_mode off by default so normal terminal mouse-drag selection
+// remains available for copy. Conversation scrollback is preserved separately by
+// the Codex `--no-alt-screen` launch path. Users who prefer Zellij hover-pane
+// wheel routing can opt in with SKS_ZELLIJ_MOUSE_MODE=1; in that mode some
+// terminals require Shift-drag for native selection.
 
 export const ZELLIJ_CLIPBOARD_CONFIG_SCHEMA = 'sks.zellij-clipboard-config.v1'
 
@@ -63,11 +59,9 @@ export async function writeZellijClipboardConfig(
   const copy_command = resolveCopyCommand(platform)
   const copy_clipboard: 'system' | 'primary' = 'system'
   const copy_on_select = true
-  // mouse_mode on: route the trackpad wheel to the pane under the cursor so the
-  // conversation/transcript scrolls instead of the focused prompt input. See the
-  // module header for the copy interaction (pbcopy + copy_on_select keep Cmd/drag
-  // copy working). Opt out with SKS_ZELLIJ_MOUSE_MODE=0 if a terminal misbehaves.
-  const mouse_mode = process.env.SKS_ZELLIJ_MOUSE_MODE !== '0'
+  // Default off for native drag-copy. Opt in when hover-pane wheel routing is more
+  // important than the terminal's plain selection gesture.
+  const mouse_mode = isTruthyEnv(process.env.SKS_ZELLIJ_MOUSE_MODE)
   const dir = path.join(root, '.sneakoscope', 'missions', missionId)
   await ensureDir(dir)
   const config_path = path.join(dir, 'zellij-clipboard.kdl')
@@ -85,4 +79,8 @@ export async function writeZellijClipboardConfig(
     config_path,
     generated_at: nowIso()
   }
+}
+
+function isTruthyEnv(value: string | undefined): boolean {
+  return /^(1|true|yes|on)$/i.test(String(value || '').trim())
 }

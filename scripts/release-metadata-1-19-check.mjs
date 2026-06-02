@@ -20,6 +20,7 @@ const requiredDocs = [
   'docs/main-no-scout-worker-scout-policy.md',
   'docs/agent-terminal-lanes.md',
   'docs/migration/tmux-to-zellij.md',
+  'docs/codex-0.136-compat.md',
   'docs/codex-0.135-compat.md',
   'docs/triwiki-runtime-state.md',
   'docs/codex-official-goal-mode.md',
@@ -132,6 +133,7 @@ const requiredScripts = [
   'proof:fake-real-policy-v2',
   'release:runtime-truth-matrix',
   'release:gate-existence-audit',
+  'codex:0.136-compat',
   'codex:0.135-compat',
   'doctor:codex-doctor-parity',
   'codex:permission-profiles',
@@ -264,6 +266,7 @@ const requiredScripts = [
   'release:check:parallel'
 ];
 const requiredRealScripts = [
+  'codex:0.136-compat:require-real',
   'codex:0.135-compat:require-real',
   'doctor:codex-doctor-parity:actual',
   'publish:dry-run-performance',

@@ -21,6 +21,7 @@ const required = [
   'safety:mutation-callsite-coverage',
   'mad-sks:zellij-launch',
   'agent:zellij-runtime',
+  'codex:0.136-compat',
   'codex:0.135-compat',
   'doctor:codex-doctor-parity',
   'codex:permission-profiles',

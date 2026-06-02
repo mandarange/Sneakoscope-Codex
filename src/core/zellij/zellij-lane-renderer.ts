@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { readdir, stat } from 'node:fs/promises'
+import { open, readdir, stat } from 'node:fs/promises'
 import { appendJsonl, ensureDir, exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { resolveFastModePolicy } from '../agents/fast-mode-policy.js'
 
@@ -222,6 +222,12 @@ export async function renderZellijLaneFrame(opts: ZellijLaneRenderOptions) {
   // SKS_LANE_FOLLOW_ACTIVE_MISSION=0.
   const dataRoot = await resolveActiveLedgerRoot(root)
   const dashboard = await buildLaneDashboard(dataRoot, slot, laneJson)
+  const baseLaneNote = laneMd
+    ? String(laneMd)
+    : path.resolve(dataRoot) === path.resolve(root)
+      ? 'no lane.md; rendering canonical ledger state'
+      : `following active mission ${path.basename(path.dirname(dataRoot))}`
+  const liveLaneNote = firstString([dashboard.live_worker_note])
   const view: ZellijLaneFrameView = {
     missionId: opts.missionId,
     slot,
@@ -238,11 +244,7 @@ export async function renderZellijLaneFrame(opts: ZellijLaneRenderOptions) {
     rollback: dashboard.rollback,
     blockers: dashboard.blocker_list,
     reports: dashboard.reports,
-    laneNote: laneMd
-      ? String(laneMd)
-      : path.resolve(dataRoot) === path.resolve(root)
-        ? 'no lane.md; rendering canonical ledger state'
-        : `following active mission ${path.basename(path.dirname(dataRoot))}`
+    laneNote: [baseLaneNote, liveLaneNote].filter(Boolean).join('\n')
   }
   const frame = composeLaneFrame(view, { width: opts.width, color: opts.color })
   const report = {
@@ -374,6 +376,7 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
   for (const name of artifacts) data[name] = await readJson<any>(path.join(root, name), null)
   const scheduler = data['agent-scheduler-state.json']
   const swarm = data['agent-native-cli-session-swarm.json']
+  const worker = await resolveSlotWorkerSnapshot(root, slot, swarm)
   const proof = data['agent-proof-evidence.json']
   const queue = data['agent-patch-queue.json']
   const apply = data['agent-patch-apply-results.json']
@@ -389,6 +392,8 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
     currentItem?.file,
     currentItem?.path,
     currentItem?.files?.[0],
+    worker?.current_file,
+    worker?.summary,
     firstPatchFile(apply),
     firstPatchFile(verify)
   ]) || 'none'
@@ -427,19 +432,25 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
   const cloneActive = numberOf([scheduler?.active_clone, scheduler?.active_slot_count])
   const workers = [
     scheduler ? `active ${scheduler.active_slot_count ?? 'n/a'}/${scheduler.target_active_slots ?? scheduler.max_active_slots ?? 'n/a'}` : 'idle',
+    worker ? `${slot} gen-${worker.generation_index || '?'} ${worker.status || 'observed'}` : null,
     cloneTotal ? `clone ${pad3(cloneActive || 0)}/${pad3(cloneTotal)}` : null,
     scheduler ? `pending ${scheduler.pending_count ?? 'n/a'}` : null
   ].filter(Boolean).join(' · ') || 'idle'
 
   // Codex child sessions.
   const sessions = arrayFrom(swarm, ['sessions', 'workers', 'items'])
-  const codexChild = sessions.length > 0
+  const codexChild = worker
+    ? `live ${worker.status || 'observed'} · result ${worker.result_status || 'pending'}`
+    : sessions.length > 0
     ? `active ${sessions.length}`
     : (swarm ? 'optional' : 'not-run')
 
-  const queueSummary = scheduler
+  const baseQueueSummary = scheduler
     ? `pending ${scheduler.pending_count ?? 0} · applying ${scheduler.active_slot_count ?? 0} · verified ${numberOf([scheduler.verified_count, scheduler.completed_count]) ?? 0} · blocked ${scheduler.blocked_count ?? 0}`
     : `pending ${queueItems.length}`
+  const queueSummary = worker?.heartbeat
+    ? `${baseQueueSummary} · hb ${worker.heartbeat}`
+    : baseQueueSummary
   const patchSummary = [
     apply ? `apply ${statusOf(apply)}` : null,
     verify ? `verify ${statusOf(verify)}` : null,
@@ -451,9 +462,10 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
   const protectedPaths = firstString([laneJson?.protected_status, apply?.protected_status]) || 'ok'
   const rollbackStatus = rollback ? statusOf(rollback) : 'ready'
 
-  const blockerList = collectBlockers([scheduler, swarm, proof, queue, apply, verify, rollback, laneJson])
+  const blockerList = collectBlockers([scheduler, swarm, worker?.result, proof, queue, apply, verify, rollback, laneJson])
   const presentArtifacts = artifacts.filter((name) => data[name])
   const reports = firstString([
+    worker?.result_path ? rootedPath(root, worker.result_path) : null,
     proof?.report_path,
     laneJson?.report_path,
     path.join(root, 'agent-proof-evidence.json')
@@ -473,8 +485,195 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
     blockers: blockerList.slice(0, 5).join('; ') || 'none',
     blocker_list: blockerList,
     artifacts: presentArtifacts.length ? presentArtifacts.join(', ') : 'none',
-    reports
+    reports,
+    live_worker: worker,
+    live_worker_note: worker ? formatWorkerLaneNote(worker) : null
   }
+}
+
+interface SlotWorkerSnapshot {
+  slot: string
+  generation_index: number | null
+  status: string
+  result_status: string | null
+  summary: string | null
+  current_file: string | null
+  worker_artifact_dir: string
+  stdout_log: string | null
+  stderr_log: string | null
+  heartbeat_path: string | null
+  result_path: string | null
+  stdout_tail: string[]
+  stderr_tail: string[]
+  heartbeat_tail: string[]
+  heartbeat: string | null
+  result: any
+}
+
+async function resolveSlotWorkerSnapshot(root: string, slot: string, swarm: any): Promise<SlotWorkerSnapshot | null> {
+  const record = pickLatestSlotWorkerRecord(swarm, slot) || await latestFilesystemWorkerRecord(root, slot)
+  if (!record) return null
+  const workerDir = firstString([record.worker_artifact_dir, record.worker_dir]) || path.join('sessions', slot, `gen-${record.generation_index || 1}`, 'worker')
+  const stdoutRel = firstString([record.stdout_log, path.join(workerDir, 'worker.stdout.log')])
+  const stderrRel = firstString([record.stderr_log, path.join(workerDir, 'worker.stderr.log')])
+  const heartbeatRel = firstString([record.heartbeat_path, path.join(workerDir, 'worker-heartbeat.jsonl')])
+  const resultRel = firstString([record.result_path, path.join(workerDir, 'worker-result.json')])
+  const intakeRel = firstString([record.worker_intake, path.join(workerDir, 'worker-intake.json')])
+  const result = resultRel ? await readJson<any>(rootedPath(root, resultRel), null) : null
+  const intake = intakeRel ? await readJson<any>(rootedPath(root, intakeRel), null) : null
+  const stdoutTail = stdoutRel ? tailLines(await readFileTail(rootedPath(root, stdoutRel), 4096), 4) : []
+  const stderrTail = stderrRel ? tailLines(await readFileTail(rootedPath(root, stderrRel), 2048), 3) : []
+  const heartbeatTail = heartbeatRel ? tailLines(await readFileTail(rootedPath(root, heartbeatRel), 4096), 3) : []
+  const lastHeartbeat = parseJsonLine(heartbeatTail[heartbeatTail.length - 1] || '')
+  const status = firstString([
+    record.status,
+    result?.status,
+    lastHeartbeat?.status,
+    lastHeartbeat?.event
+  ]) || 'observed'
+  const resultStatus = firstString([result?.status, lastHeartbeat?.status])
+  const summary = firstString([
+    result?.summary,
+    result?.handoff_notes,
+    intake?.slice?.title,
+    intake?.slice?.summary,
+    intake?.slice?.prompt,
+    intake?.slice?.description
+  ])
+  const currentFile = firstString([
+    result?.changed_files?.[0],
+    result?.writes?.[0]?.path,
+    result?.writes?.[0]?.file,
+    intake?.slice?.target_file,
+    intake?.slice?.file,
+    intake?.slice?.path,
+    intake?.slice?.write_paths?.[0],
+    intake?.slice?.files?.[0]
+  ])
+  const generation = Number(record.generation_index ?? intake?.generation_index)
+  return {
+    slot,
+    generation_index: Number.isFinite(generation) && generation > 0 ? generation : null,
+    status,
+    result_status: resultStatus,
+    summary,
+    current_file: currentFile,
+    worker_artifact_dir: workerDir,
+    stdout_log: stdoutRel,
+    stderr_log: stderrRel,
+    heartbeat_path: heartbeatRel,
+    result_path: resultRel,
+    stdout_tail: stdoutTail,
+    stderr_tail: stderrTail,
+    heartbeat_tail: heartbeatTail,
+    heartbeat: summarizeHeartbeat(lastHeartbeat),
+    result
+  }
+}
+
+function pickLatestSlotWorkerRecord(swarm: any, slot: string): any | null {
+  const records = arrayFrom(swarm, ['records', 'sessions', 'workers', 'items'])
+    .filter((record) => normalizeSlot(firstString([record?.slot_id, record?.slot, record?.agent?.slot_id, record?.agent_id]) || '') === slot)
+  return records.sort((a, b) => workerRecordTime(b) - workerRecordTime(a))[0] || null
+}
+
+async function latestFilesystemWorkerRecord(root: string, slot: string): Promise<any | null> {
+  const slotDir = path.join(root, 'sessions', slot)
+  let entries: string[] = []
+  try {
+    entries = await readdir(slotDir)
+  } catch {
+    return null
+  }
+  let best: any | null = null
+  for (const entry of entries.filter((name) => /^gen-\d+$/.test(name))) {
+    const workerDir = path.join('sessions', slot, entry, 'worker')
+    const workerAbs = path.join(root, workerDir)
+    let mtime = 0
+    try {
+      mtime = (await stat(workerAbs)).mtimeMs
+    } catch {
+      continue
+    }
+    const generation = Number.parseInt(entry.replace(/\D+/g, ''), 10)
+    const record = {
+      slot_id: slot,
+      generation_index: Number.isFinite(generation) ? generation : null,
+      worker_artifact_dir: workerDir,
+      stdout_log: path.join(workerDir, 'worker.stdout.log'),
+      stderr_log: path.join(workerDir, 'worker.stderr.log'),
+      heartbeat_path: path.join(workerDir, 'worker-heartbeat.jsonl'),
+      result_path: path.join(workerDir, 'worker-result.json'),
+      worker_intake: path.join(workerDir, 'worker-intake.json'),
+      status: 'observed',
+      __mtime: mtime
+    }
+    if (!best || workerRecordTime(record) > workerRecordTime(best)) best = record
+  }
+  return best
+}
+
+function workerRecordTime(record: any): number {
+  const times = [
+    Date.parse(record?.closed_at || ''),
+    Date.parse(record?.launched_at || ''),
+    Date.parse(record?.generated_at || ''),
+    Number(record?.__mtime || 0)
+  ].filter((value) => Number.isFinite(value) && value > 0)
+  return Math.max(0, ...times)
+}
+
+async function readFileTail(filePath: string, maxBytes: number): Promise<string> {
+  try {
+    const handle = await open(filePath, 'r')
+    try {
+      const info = await handle.stat()
+      const start = Math.max(0, info.size - maxBytes)
+      const buf = Buffer.alloc(Math.max(0, info.size - start))
+      if (!buf.length) return ''
+      await handle.read(buf, 0, buf.length, start)
+      return buf.toString('utf8')
+    } finally {
+      await handle.close().catch(() => null)
+    }
+  } catch {
+    return ''
+  }
+}
+
+function tailLines(text: string, limit: number): string[] {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-Math.max(1, limit))
+}
+
+function parseJsonLine(line: string): any | null {
+  try {
+    return line ? JSON.parse(line) : null
+  } catch {
+    return null
+  }
+}
+
+function summarizeHeartbeat(heartbeat: any): string | null {
+  if (!heartbeat) return null
+  return [heartbeat.event, heartbeat.status, heartbeat.ts].filter(Boolean).join('/')
+}
+
+function formatWorkerLaneNote(worker: SlotWorkerSnapshot): string {
+  const lines = [
+    `live worker: ${worker.worker_artifact_dir} · status ${worker.status} · result ${worker.result_status || 'pending'}`
+  ]
+  if (worker.stdout_tail.length) lines.push('stdout tail:', ...worker.stdout_tail.map((line) => `  ${line}`))
+  if (worker.stderr_tail.length) lines.push('stderr tail:', ...worker.stderr_tail.map((line) => `  ${line}`))
+  if (worker.heartbeat_tail.length) lines.push('heartbeat tail:', ...worker.heartbeat_tail.map((line) => `  ${line}`))
+  return lines.join('\n')
+}
+
+function rootedPath(root: string, value: string): string {
+  return path.isAbsolute(value) ? value : path.join(root, value)
 }
 
 function arrayFrom(value: any, keys: string[]): any[] {
@@ -497,15 +696,13 @@ function firstDefined(values: unknown[]): unknown {
   return undefined
 }
 
-// When this lane's own ledger has no scheduler state, find the most-recently
-// updated sibling mission ledger that does (the orchestrator's native-agent /
-// $Naruto fan-out), so the cockpit reflects live parallel work. Bounded by a
-// freshness window so a long-finished run never lingers on the cockpit. Pure
-// read; never mutates. Returns the original root when nothing better is found or
-// when disabled via SKS_LANE_FOLLOW_ACTIVE_MISSION=0.
+// Follow the freshest ledger that has actual native worker session data. A lane's
+// own mission can have a scheduler placeholder while the native/Naruto worker
+// swarm writes logs into a sibling agent ledger; showing the placeholder makes
+// the right panes look disconnected. Pure read; never mutates. Returns the
+// original root when nothing better is found or when disabled.
 async function resolveActiveLedgerRoot(ledgerRoot: string): Promise<string> {
   if (process.env.SKS_LANE_FOLLOW_ACTIVE_MISSION === '0') return ledgerRoot
-  if (await exists(path.join(ledgerRoot, 'agent-scheduler-state.json'))) return ledgerRoot
   const projectRoot = inferProjectRootFromLedgerRoot(ledgerRoot)
   const missionsDir = path.join(projectRoot, '.sneakoscope', 'missions')
   const windowMs = activeMissionWindowMs()
@@ -517,20 +714,29 @@ async function resolveActiveLedgerRoot(ledgerRoot: string): Promise<string> {
     return ledgerRoot
   }
   let best: { dir: string; mtime: number } | null = null
-  for (const entry of entries) {
-    const candidate = path.join(missionsDir, entry, 'agents')
-    if (path.resolve(candidate) === path.resolve(ledgerRoot)) continue
-    const statePath = path.join(candidate, 'agent-scheduler-state.json')
-    let mtimeMs = 0
-    try {
-      mtimeMs = (await stat(statePath)).mtimeMs
-    } catch {
-      continue
-    }
+  const candidates = [ledgerRoot, ...entries.map((entry) => path.join(missionsDir, entry, 'agents'))]
+  for (const candidate of candidates) {
+    const mtimeMs = await nativeWorkerActivityMtime(candidate)
+    if (mtimeMs <= 0) continue
     if (windowMs > 0 && now - mtimeMs > windowMs) continue
     if (!best || mtimeMs > best.mtime) best = { dir: candidate, mtime: mtimeMs }
   }
-  return best ? best.dir : ledgerRoot
+  if (best) return best.dir
+  if (await exists(path.join(ledgerRoot, 'agent-scheduler-state.json'))) return ledgerRoot
+  return ledgerRoot
+}
+
+async function nativeWorkerActivityMtime(candidate: string): Promise<number> {
+  const mtimes: number[] = []
+  for (const artifact of ['agent-native-cli-session-swarm.json', 'agent-worker-slots.json']) {
+    try {
+      mtimes.push((await stat(path.join(candidate, artifact))).mtimeMs)
+    } catch {}
+  }
+  try {
+    mtimes.push((await stat(path.join(candidate, 'sessions'))).mtimeMs)
+  } catch {}
+  return Math.max(0, ...mtimes)
 }
 
 function activeMissionWindowMs(): number {

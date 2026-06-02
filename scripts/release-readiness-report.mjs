@@ -30,6 +30,7 @@ const checks = {
   ppt_full_e2e_blackbox: scriptContains('release:check', 'ppt:full-e2e-blackbox'),
   ppt_full_e2e_artifact_graph: scriptContains('release:check', 'ppt:full-e2e-artifact-graph'),
   codex_0133_official_compat: scriptContains('release:check', 'codex:0.133-official-compat'),
+  codex_0136_compat: scriptContains('release:check', 'codex:0.136-compat'),
   codex_0134_compat: scriptContains('release:check', 'codex:0.134-compat'),
   codex_0134_official_compat: scriptContains('release:check', 'codex:0.134-official-compat'),
   codex_profile_primary: scriptContains('release:check', 'codex:profile-primary'),
@@ -227,6 +228,7 @@ const runtimeReports = {
   flagship_proof_graph_v4: readJson('.sneakoscope/reports/flagship-proof-graph-v4.json', null),
   runtime_truth_matrix: readJson(`.sneakoscope/reports/runtime-truth-matrix-${RELEASE_VERSION}.json`, null),
   real_codex_dynamic_smoke: readJson(`.sneakoscope/reports/agent-real-codex-dynamic-smoke-${RELEASE_VERSION}.json`, null),
+  codex_0_136_compat: readJson('.sneakoscope/reports/codex-0.136-compat.json', null),
   codex_0_134_official_compat: readJson('.sneakoscope/reports/codex-0-134-official-compat.json', null),
   codex_0_134_runner_truth: readJson('.sneakoscope/reports/codex-0-134-runner-truth.json', null),
   mcp_0_134_modernization: readJson('.sneakoscope/reports/mcp-0-134-modernization.json', null),
@@ -353,6 +355,7 @@ for (const [name, ok] of Object.entries({
   proof_fake_vs_real_policy: checks.proof_fake_vs_real_policy,
   proof_fake_real_policy_v2: checks.proof_fake_real_policy_v2,
   release_runtime_truth_matrix: checks.release_runtime_truth_matrix && runtimeChecks.runtime_truth_matrix,
+  codex_0136_compat: checks.codex_0136_compat && (!runtimeReports.codex_0_136_compat || runtimeReports.codex_0_136_compat.ok === true),
   codex_0134_compat: checks.codex_0134_compat && runtimeReports.codex_0_134_official_compat?.ok === true,
   codex_0134_official_compat: checks.codex_0134_official_compat && runtimeReports.codex_0_134_official_compat?.ok === true,
   codex_profile_primary: checks.codex_profile_primary,
@@ -460,6 +463,18 @@ const report = {
     fallback_surface: 'Explicit OpenAI Images API gpt-image-2 fallback (non-Codex evidence)',
     api_fallback_satisfies_codex_app_evidence: false,
     stdout: trimOutput(imagegenCore.stdout)
+  },
+  codex_0_136: {
+    status: checks.codex_0136_compat
+      && (!runtimeReports.codex_0_136_compat || runtimeReports.codex_0_136_compat.ok === true) ? 'present' : 'missing',
+    baseline: 'rust-v0.136.0',
+    compat_gate: checks.codex_0136_compat,
+    compat_report_ok: runtimeReports.codex_0_136_compat ? runtimeReports.codex_0_136_compat.ok === true : null,
+    session_archive: runtimeReports.codex_0_136_compat?.session_archive_supported ?? null,
+    app_server_stdio: runtimeReports.codex_0_136_compat?.app_server_stdio_supported ?? null,
+    remote_api_key_registration: runtimeReports.codex_0_136_compat?.remote_api_key_registration_supported ?? null,
+    command_safety_hardening: runtimeReports.codex_0_136_compat?.command_safety_hardening_supported ?? null,
+    native_image_generation_extension: runtimeReports.codex_0_136_compat?.native_image_generation_extension_supported ?? null
   },
   codex_0_133: {
     status: checks.codex_0133_compat ? 'present' : 'missing',
@@ -935,6 +950,7 @@ for (const key of [
   'codex_lb_setup_truthfulness',
   'computer_use_evidence_mode_support',
   'imagegen_core',
+  'codex_0_136',
   'codex_0_134',
   'codex_0_133',
   'mcp_0_134',
@@ -1078,6 +1094,7 @@ function renderMarkdown(report) {
 - codex-lb persistence truth: \`${report.codex_lb_setup_truthfulness.status}\`
 - Computer Use evidence modes: \`${report.computer_use_evidence_mode_support.status}\`
 - Imagegen core gpt-image-2 readiness: \`${report.imagegen_core.status}\` (Codex App $imagegen required; capability detection is not output proof)
+- Codex 0.136 compatibility: \`${report.codex_0_136.status}\`
 - Codex 0.134 compatibility: \`${report.codex_0_134.status}\`
 - Real Codex patch envelope smoke ${RELEASE_VERSION}: \`${report.real_codex_patch_envelope_smoke_1_18_11.status}\` (${report.real_codex_patch_envelope_smoke_1_18_11.proof_level || 'not_reported'})
 - Real Codex parallel workers ${RELEASE_VERSION}: \`${report.real_codex_parallel_workers_1_18_11.status}\` (${report.real_codex_parallel_workers_1_18_11.real_codex_parallel_proof_level || 'not_reported'})

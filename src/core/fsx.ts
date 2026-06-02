@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export const PACKAGE_VERSION = '1.21.5';
+export const PACKAGE_VERSION = '1.21.6';
 export const DEFAULT_PROCESS_TAIL_BYTES = 256 * 1024;
 export const DEFAULT_PROCESS_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -104,6 +104,7 @@ export async function writeTextAtomic(p: string, text: string): Promise<void> {
     await fsp.rm(tmp, { force: true }).catch(() => {});
     if (!canFallbackToDirectWrite(err)) throw err;
     try {
+      await ensureDir(path.dirname(p));
       await fsp.writeFile(p, text, 'utf8');
     } catch (fallbackErr: unknown) {
       const error = fallbackErr instanceof Error ? fallbackErr : new Error(String(fallbackErr));
@@ -114,7 +115,7 @@ export async function writeTextAtomic(p: string, text: string): Promise<void> {
 }
 
 function canFallbackToDirectWrite(err: unknown): boolean {
-  return ['EACCES', 'EEXIST', 'ENOTEMPTY', 'EPERM', 'EXDEV'].includes(errorCode(err));
+  return ['EACCES', 'EEXIST', 'ENOENT', 'ENOTEMPTY', 'EPERM', 'EXDEV'].includes(errorCode(err));
 }
 
 function errorCode(err: unknown): string {

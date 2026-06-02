@@ -43,6 +43,7 @@ const tasks: VerificationTask[] = [
   task('source-intelligence:policy', 'npm run source-intelligence:policy --silent', { dependencies: ['build'] }),
   task('source-intelligence:all-modes', 'npm run source-intelligence:all-modes --silent', { dependencies: ['build', 'source-intelligence:policy', 'xai-mcp:capability', 'codex-web:adapter'] }),
   task('codex-web:adapter', 'npm run codex-web:adapter --silent', { dependencies: ['build'] }),
+  task('codex:0.136-compat', 'npm run codex:0.136-compat --silent', { dependencies: ['build'] }),
   task('codex:0.135-compat', 'npm run codex:0.135-compat --silent', { dependencies: ['build'] }),
   task('doctor:codex-doctor-parity', 'npm run doctor:codex-doctor-parity --silent', { dependencies: ['build'] }),
   task('codex:permission-profiles', 'npm run codex:permission-profiles --silent', { dependencies: ['build'] }),

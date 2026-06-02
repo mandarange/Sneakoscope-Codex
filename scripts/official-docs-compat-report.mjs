@@ -12,10 +12,12 @@ const jsonPath = path.join(reportDir, `official-docs-compat-${RELEASE_VERSION}.j
 const mdPath = path.join(reportDir, `official-docs-compat-${RELEASE_VERSION}.md`);
 
 const sources = {
-  codex_release: 'https://github.com/openai/codex/releases/tag/rust-v0.134.0',
+  codex_release: 'https://github.com/openai/codex/releases/tag/rust-v0.136.0',
+  codex_0135_release: 'https://github.com/openai/codex/releases/tag/rust-v0.135.0',
+  codex_0134_release: 'https://github.com/openai/codex/releases/tag/rust-v0.134.0',
   codex_0133_release: 'https://github.com/openai/codex/releases/tag/rust-v0.133.0',
-  codex_config_schema: 'https://raw.githubusercontent.com/openai/codex/rust-v0.134.0/codex-rs/core/config.schema.json',
-  codex_hook_schema_listing: 'https://api.github.com/repos/openai/codex/contents/codex-rs/hooks/schema/generated?ref=rust-v0.134.0',
+  codex_config_schema: 'https://raw.githubusercontent.com/openai/codex/rust-v0.136.0/codex-rs/core/config.schema.json',
+  codex_hook_schema_listing: 'https://api.github.com/repos/openai/codex/contents/codex-rs/hooks/schema/generated?ref=rust-v0.136.0',
   codex_chrome_extension: 'https://developers.openai.com/codex/app/chrome-extension',
   codex_app_image_generation: 'https://developers.openai.com/codex/app/features#image-generation',
   chatgpt_images_2: 'https://openai.com/index/introducing-chatgpt-images-2-0/',
@@ -25,11 +27,23 @@ const sources = {
   structured_outputs: 'https://developers.openai.com/api/docs/guides/structured-outputs'
 };
 
-const codex0134ReleaseApi = 'https://api.github.com/repos/openai/codex/releases/tags/rust-v0.134.0';
-const codex0134Release = await fetchJson(codex0134ReleaseApi);
-const codex0134ReleaseBody = String(codex0134Release.json?.body || '');
+const codex0136ReleaseApi = 'https://api.github.com/repos/openai/codex/releases/tags/rust-v0.136.0';
+const codex0136Release = await fetchJson(codex0136ReleaseApi);
+const codex0136ReleaseHtml = codex0136Release.ok ? null : await fetchText(sources.codex_release);
+const codex0136ReleaseSource = codex0136Release.ok
+  ? codex0136Release
+  : {
+      ...codex0136ReleaseHtml,
+      statusCode: codex0136ReleaseHtml?.statusCode || codex0136Release.statusCode || null,
+      error: codex0136ReleaseHtml?.error || codex0136Release.error || null,
+      fallback_source: sources.codex_release
+    };
+const codex0136ReleaseBody = String(codex0136Release.json?.body || codex0136ReleaseHtml?.body || '');
 const codexConfigSchema = await fetchText(sources.codex_config_schema);
-const codexHookSchemaListing = await fetchText(sources.codex_hook_schema_listing, { accept: 'application/vnd.github+json' });
+const codexHookSchemaListingApi = await fetchText(sources.codex_hook_schema_listing, { accept: 'application/vnd.github+json' });
+const codexHookSchemaListing = codexHookSchemaListingApi.ok
+  ? codexHookSchemaListingApi
+  : await fetchHookSchemaListingFallback(codexHookSchemaListingApi);
 const codexChromeExtension = await fetchText(sources.codex_chrome_extension);
 const codexAppImageGeneration = await fetchText(sources.codex_app_image_generation);
 const chatgptImages2SafetyCard = await fetchText(sources.chatgpt_images_2_safety_card);
@@ -37,13 +51,16 @@ const openaiImageGeneration = await fetchText(sources.image_generation);
 const gptImage2Model = await fetchText(sources.gpt_image_2_model);
 const structuredOutputs = await fetchText(sources.structured_outputs);
 const sourceValidations = [
-  sourceRow('codex_release', sources.codex_release, codex0134Release, codex0134ReleaseBody, [
-    'search across local conversation history',
-    '--profile',
-    'per-server environment targeting',
-    'OAuth options',
-    'subagent identity in hook inputs',
-    'managed network proxy environment'
+  sourceRow('codex_release', sources.codex_release, codex0136ReleaseSource, codex0136ReleaseBody, [
+    'codex archive',
+    'codex app-server --stdio',
+    'CODEX_API_KEY',
+    'server tokens',
+    'codex sandbox setup --elevated',
+    'image generation extension',
+    '/diff',
+    'AWS_REGION',
+    'rmcp'
   ]),
   sourceRow('codex_config_schema', sources.codex_config_schema, codexConfigSchema, codexConfigSchema.body || '', [
     '$ref',
@@ -89,6 +106,10 @@ const sourceValidations = [
 ];
 
 const checks = [
+  row('codex_0136_release_matrix', 'rust-v0.136.0', 'src/core/codex/codex-0-136-compat.ts', ['rust-v0.136.0', 'session_archive_restore', 'app_server_resume_status_stdio', 'remote_api_key_registration_server_tokens', 'command_safety_hardening']),
+  row('codex_0136_release_gate', 'rust-v0.136.0', 'scripts/codex-0-136-compat-check.mjs', ['sks.codex-0.136-compat-check.v1', 'codex-0.136-compat.json', '--require-real']),
+  row('codex_0136_aggregate_report', 'rust-v0.136.0', 'src/core/codex-compat/codex-compat-report.ts', ['codex_0_136', 'collectCodex0136LocalEvidence', 'session_archive_supported']),
+  row('codex_0135_release_matrix', 'rust-v0.135.0', 'src/core/codex/codex-0-135-compat.ts', ['rust-v0.135.0', 'named_permission_profiles', 'responses_retry_centralized']),
   row('codex_0134_release_matrix', 'rust-v0.134.0', 'src/core/codex/codex-0-134-compat.ts', ['rust-v0.134.0', 'profile_primary_selector', 'local_conversation_history_search', 'mcp_readonly_parallel_hint', 'managed_network_proxy_env']),
   row('codex_0134_official_compat_report', 'rust-v0.134.0', 'scripts/codex-0-134-official-compat-report.mjs', ['sks.codex-0-134-official-compat.v1', 'release_source_url', 'source_delta']),
   row('codex_0134_profile_primary', 'rust-v0.134.0', 'src/core/codex/codex-cli-syntax-builder.ts', ['--profile', '--ignore-user-config', 'cannot combine --profile with --ignore-user-config']),
@@ -127,8 +148,8 @@ for (const source of sourceValidations) {
 const report = {
   schema: 'sks.official-docs-compat.v1',
   generated_at: new Date().toISOString(),
-  codex_release_baseline: 'rust-v0.134.0',
-  codex_inherited_baselines: ['rust-v0.133.0', 'rust-v0.132.0'],
+  codex_release_baseline: 'rust-v0.136.0',
+  codex_inherited_baselines: ['rust-v0.135.0', 'rust-v0.134.0', 'rust-v0.133.0', 'rust-v0.132.0'],
   codex_app_image_generation_docs_baseline: sources.codex_app_image_generation,
   codex_chrome_extension_docs_baseline: sources.codex_chrome_extension,
   chatgpt_images_2_docs_baseline: sources.chatgpt_images_2_safety_card,
@@ -141,7 +162,8 @@ const report = {
     codex_app_imagegen_evidence: 'full SKS visual evidence requires Codex App $imagegen output; API fallbacks are non-Codex evidence',
     codex_chrome_extension_web_verification: 'web/browser/webapp verification uses Codex Chrome Extension first; Computer Use is native Mac/non-web only',
     structured_outputs: 'prefer strict json_schema/text.format when schema adherence matters',
-    codex_output_schema: 'prefer codex exec resume --output-schema for session-preserving structured extraction'
+    codex_output_schema: 'prefer codex exec resume --output-schema for session-preserving structured extraction',
+    codex_0_136_release_mapping: 'archive/unarchive, app-server --stdio, CODEX_API_KEY registration, server-token remote-control, elevated Windows sandbox setup, native image generation extension pipeline, and command-safety hardening are tracked in the 0.136 compatibility matrix'
   },
   sources,
   source_validations: sourceValidations,
@@ -180,7 +202,8 @@ function sourceRow(feature, url, fetchResult, body, needles) {
     status: fetchResult.ok && missing.length === 0 ? 'verified' : 'warning',
     ok: fetchResult.ok === true && missing.length === 0,
     missing,
-    error: fetchResult.error || null
+    error: fetchResult.error || null,
+    fallback_source: fetchResult.fallback_source || null
   };
 }
 
@@ -242,6 +265,27 @@ function fetchText(url, opts = {}) {
       resolve({ ok: false, error: err.message, body: '' });
     });
   });
+}
+
+async function fetchHookSchemaListingFallback(apiResult) {
+  const schemaNames = [
+    'subagent-start.command.input.schema.json',
+    'subagent-stop.command.input.schema.json',
+    'permission-request.command.input.schema.json'
+  ];
+  const fetched = await Promise.all(schemaNames.map(async (name) => {
+    const url = `https://raw.githubusercontent.com/openai/codex/rust-v0.136.0/codex-rs/hooks/schema/generated/${name}`;
+    const result = await fetchText(url, { accept: 'application/json,text/plain,*/*' });
+    return { name, url, result };
+  }));
+  const ok = fetched.every((row) => row.result.ok);
+  return {
+    ok,
+    statusCode: ok ? 200 : apiResult.statusCode || null,
+    body: fetched.filter((row) => row.result.ok).map((row) => row.name).join('\n'),
+    error: ok ? null : `api_${apiResult.statusCode || apiResult.error || 'unavailable'};raw_missing:${fetched.filter((row) => !row.result.ok).map((row) => row.name).join(',')}`,
+    fallback_source: 'raw.githubusercontent.com/openai/codex/rust-v0.136.0/codex-rs/hooks/schema/generated/*.json'
+  };
 }
 
 function renderMarkdown(report) {

@@ -1,6 +1,6 @@
 # Codex CLI Compatibility
 
-SKS 1.18.8 targets the OpenAI Codex CLI `rust-v0.134.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
+SKS 1.21.6 targets the OpenAI Codex CLI `rust-v0.136.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
 
 Computer Use and codex-lb compatibility notes are bounded: native Mac/non-web Computer Use live evidence can be `probe_only`, `live_capture_success`, or a structured blocker depending on the local Codex App/macOS capability, while web/browser/webapp verification uses the Codex Chrome Extension gate first; codex-lb can be durable or `process_only_ephemeral` depending on setup choices. Recovery commands are `sks computer-use smoke --json` for a probe-only native status and `sks codex-lb setup --write-env-file --keychain --launchctl` for durable persistence. Local screenshots and secrets stay private/redacted by default.
 
@@ -11,6 +11,9 @@ sks codex compatibility --json
 sks codex version --json
 sks codex doctor --json
 sks codex schema --json
+npm run codex:0.136-compat
+npm run codex:0.136-compat:require-real
+npm run codex:0.135-compat
 npm run codex:0.134-compat
 npm run codex:0.134-official-compat
 npm run codex:profile-primary
@@ -25,9 +28,29 @@ npm run hooks:strict-subset-check
 
 Version detection checks `codex --version`, `codex exec --help`, `codex exec resume --help`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored snapshot metadata. A missing live Codex binary is `integration_optional`; release hook validation uses the vendored snapshot, not the local binary.
 
-## Codex 0.134 Capabilities
+## Codex 0.136 Capabilities
 
-The 1.18.8 compatibility matrix records these 0.134 capability ids:
+The 1.21.6 compatibility matrix records these 0.136 capability ids:
+
+- `tui_hyperlink_markdown_tables`: TUI output preserves OSC 8 links and keeps cramped markdown tables readable.
+- `session_archive_restore`: `codex archive`, `codex unarchive`, and `/archive` are tracked as first-class session lifecycle surfaces.
+- `app_server_resume_status_stdio`: app-server readiness covers resumed turns, MCP status, and `codex app-server --stdio`.
+- `remote_api_key_registration_server_tokens`: remote registration records `CODEX_API_KEY` and short-lived remote-control server-token support.
+- `windows_sandbox_elevated_setup`: `codex sandbox setup --elevated` is mapped as release-baseline evidence, with live Windows setup remaining environment-specific.
+- `native_image_generation_extension_pipeline`: the feature-gated standalone image-generation extension pipeline is recorded, while SKS still requires real Codex App `$imagegen`/`gpt-image-2` output for visual proof.
+- `chatgpt_auth_refresh_relogin`: ChatGPT auth refresh and relogin-required handling are treated as explicit readiness signals.
+- `command_safety_hardening`: `/diff` helper isolation, non-Windows PowerShell avoidance, and browser-origin websocket rejection remain release safety inputs.
+- `sandbox_cleanup_deny_read_preserved`: sandbox cleanup and deny-read preservation are tracked as P0 compatibility risks.
+- `tui_resume_hook_vim_stability`: resumed prompt history, multiline hook output, and Vim normal-mode fixes stay mapped to terminal/hook stability gates.
+- `app_server_fs_watch_search_activity`: app-server watcher debounce and standalone web search activity restoration are release-readiness evidence.
+- `bedrock_region_service_tier_hardening`: Bedrock `AWS_REGION` fallback and unsupported service-tier removal are provider-catalog compatibility notes.
+- `rmcp_1_7_compat`: rmcp 1.7.0 compatibility remains connected to MCP scheduler gates.
+
+## Inherited Codex 0.135 And 0.134 Capabilities
+
+The 0.135 matrix remains inherited for named permission profiles, shortcut handling, ChatGPT usage-limit/token refresh reporting, and app-server/remote-control readiness behavior.
+
+The 0.134 compatibility matrix records these capability ids:
 
 - `profile_primary_selector`: Codex `--profile` is the primary selector and SKS native agents pass it without `--ignore-user-config`.
 - `local_conversation_history_search`: Source Intelligence can search bounded local Codex history case-insensitively with previews.
@@ -54,7 +77,7 @@ The inherited 0.133 compatibility matrix records these capability ids:
 - `extension_lifecycle_events`: extension lifecycle events for turn/tool/model/item phases are tracked separately from hook schema validation.
 - `remote_executor_standard_auth`, `python_sdk_auth`, and `python_sdk_turn_result`: P1 warning-only review items unless a route explicitly uses those SDK surfaces.
 
-Unknown newer Codex fields are warning-only. Codex versions below 0.134 are degraded but supported for inherited surfaces, and output-schema fallbacks cannot support claims above `verified_partial`.
+Unknown newer Codex fields are warning-only. Codex versions below 0.136 are degraded but supported for inherited surfaces, and output-schema fallbacks cannot support claims above `verified_partial`.
 
 Fresh `codex exec` and `codex exec resume` are checked independently because a release gate that only inspects resume help can miss syntax drift in new sessions. Native agent output-schema fixtures must record which command form was exercised.
 
@@ -103,6 +126,8 @@ SKS strict-subset examples:
 
 ```bash
 npm run codex:compat
+npm run codex:0.136-compat
+npm run codex:0.135-compat
 npm run codex:0.134-compat
 npm run codex:0.134-official-compat
 npm run codex:profile-primary

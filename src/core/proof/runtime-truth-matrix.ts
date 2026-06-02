@@ -14,6 +14,7 @@ export const RUNTIME_TRUTH_SUBSYSTEMS = [
   'route_blackbox',
   'dynamic_scheduler',
   'warp_mad_lanes',
+  'codex_0_136',
   'codex_0_134',
   'mcp_0_134',
   'mcp_readonly_runtime_scheduler',
@@ -86,7 +87,7 @@ export async function buildRuntimeTruthMatrix(input: {
     warp_mad_lanes: process.env.SKS_REQUIRE_WARP_MAD_LANES === '1',
     ...(input.required || {})
   } as Partial<Record<RuntimeTruthSubsystem, boolean>>
-  const [zellijPane, codex, codexPatch, realCodexParallel, workerBackendRouter, codexChildOverlap, modelAuthoredPatch, zellijRightLanePhysical, zellijRightLaneCoordinate, zellijRightLaneContent, madWarpRightLaneAttach, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0134, mcp0134, mcpReadonlyRuntime, adhdOrchestration, appshots, parallelWrite, patchProof, nativeCliSession, fastModeDefault] = await Promise.all([
+  const [zellijPane, codex, codexPatch, realCodexParallel, workerBackendRouter, codexChildOverlap, modelAuthoredPatch, zellijRightLanePhysical, zellijRightLaneCoordinate, zellijRightLaneContent, madWarpRightLaneAttach, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0136, codex0134, mcp0134, mcpReadonlyRuntime, adhdOrchestration, appshots, parallelWrite, patchProof, nativeCliSession, fastModeDefault] = await Promise.all([
     readReport('zellij-pane-proof.json'),
     readReport(`agent-real-codex-dynamic-smoke-${input.releaseVersion}.json`, ['agent-real-codex-dynamic-smoke-1.18.6.json']),
     readReport('agent-real-codex-patch-envelope-smoke.json'),
@@ -105,6 +106,7 @@ export async function buildRuntimeTruthMatrix(input: {
     readReport('goal-mode-applied.json'),
     readReport('agent-scheduler-state.json'),
     readReport('zellij-session.json'),
+    readReport('codex-0.136-compat.json'),
     readReport('codex-0-134-official-compat.json'),
     readReport('mcp-0-134-modernization.json'),
     readReport('mcp-readonly-runtime-scheduler.json'),
@@ -126,6 +128,7 @@ export async function buildRuntimeTruthMatrix(input: {
     row('route_blackbox', fakeReal?.subsystem_levels?.route_blackbox || 'integration_optional', ['fake-real-proof-policy.json', 'agent-proof-evidence.json'], false, fakeReal, 'run actual route blackbox proof'),
     row('dynamic_scheduler', scheduler?.pending_queue_drained === true || scheduler?.ok === true ? 'proven' : 'integration_optional', ['agent-scheduler-state.json'], false, scheduler, 'run dynamic scheduler proof gate'),
     row('warp_mad_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || zellijRightLanePhysical, required.warp_mad_lanes === true), ['zellij-session.json', 'zellij-pane-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || zellijRightLanePhysical, 'run `sks --mad` with Zellij and capture visible lane proof'),
+    row('codex_0_136', levelFromOk(codex0136, 'integration_optional'), ['codex-0.136-compat.json'], false, codex0136, 'run `npm run codex:0.136-compat`'),
     row('codex_0_134', levelFromOk(codex0134, 'integration_optional'), ['codex-0-134-official-compat.json'], false, codex0134, 'run `npm run codex:0.134-official-compat`'),
     row('mcp_0_134', levelFromOk(mcp0134, 'integration_optional'), ['mcp-0-134-modernization.json'], false, mcp0134, 'run `npm run mcp:0.134-modernization`'),
     row('mcp_readonly_runtime_scheduler', levelFromOk(mcpReadonlyRuntime, 'integration_optional'), ['mcp-readonly-runtime-scheduler.json'], false, mcpReadonlyRuntime, 'run `npm run mcp:readonly-runtime-scheduler`'),

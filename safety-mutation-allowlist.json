@@ -74,6 +74,12 @@
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
+      "file": "scripts/codex-0-136-compat-check.mjs",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
       "file": "scripts/codex-config-eperm-fixture.mjs",
       "symbol": "module",
       "token": "codex config write",
