@@ -16,40 +16,26 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.21.6** promotes OpenAI Codex CLI `rust-v0.136.0` as the current compatibility baseline. The release matrix tracks 0.136 session archive/unarchive, app-server `--stdio`, resumed-turn/status behavior, `CODEX_API_KEY` remote registration, short-lived remote-control tokens, elevated Windows sandbox setup, feature-gated image-generation extension support, ChatGPT auth refresh handling, command-safety hardening, sandbox cleanup, Bedrock region fallback, and rmcp 1.7.0 compatibility.
+SKS **1.21.7** is a Zellij/Naruto runtime patch. Real Zellij workers now run as pane-bound native CLI sessions: SKS creates or targets the Zellij session, splits a named slot pane, launches the worker inside that pane, and reads `worker-result.json` plus heartbeat/log artifacts back in the parent scheduler.
 
-This release also tightens the day-to-day operator path:
+What changed:
 
-- Zellij lane panes now surface the native worker session they are following, including per-slot worker status and stdout/stderr/heartbeat tails.
-- Native terminal drag-copy is the default in SKS-launched Zellij sessions; hover-pane mouse routing is opt-in with `SKS_ZELLIJ_MOUSE_MODE=1`.
-- Update prompts compare npm latest against an effective installed version that includes source, PATH, and global npm package metadata, so completed global updates stop being re-offered.
-- `sks doctor --fix` can remove duplicate global `sks`/`sneakoscope` npm installs while exempting the Sneakoscope source checkout.
+- `--backend zellij --real` now uses real slot panes for worker sessions instead of only recording synthetic lane artifacts.
+- Pane ids are reconciled from `zellij --session <name> action list-panes --json --all` when `new-pane` does not print one.
+- The parent/worker transport is explicit: `worker-result.json`, `worker-heartbeat.jsonl`, `worker.stdout.log`, and `worker.stderr.log`.
+- Zellij lane supervisor actions target the intended session with `--session`, so pane creation no longer depends on ambient terminal state.
 
-It carries forward the 0.135-era routing/readiness fixes: mixed frustration plus explicit implementation prompts still route to `$Team`, bare `context7 mcp` no longer implies `$DB`, Git Actions readiness uses the `codex remote-control` command/version capability, and repeated substantive prompts prepare fresh Team/Research-style native sessions. Zellij lane, Naruto, terminal scrollback, MAD cockpit, Goal bridge, and Fast profile fixes remain in place.
-
-SKS **1.20.4** is a targeted `sks --mad` / codex-lb Zellij usability patch: when a background MAD Zellij session launches successfully, SKS now prints the exact `Attach with: ZELLIJ_SOCKET_DIR=... zellij attach ...` command so operators can enter the fresh session without manually reconstructing the socket namespace.
-
-SKS **1.20.3** added the macOS Zellij launch fallback and project-local Fast mode control. SKS supplies a short per-user `ZELLIJ_SOCKET_DIR` by default, caps generated session names safely, records `*_command_with_env` attach commands, and classifies `IPC socket path is too long` as `zellij_socket_path_too_long` instead of a generic launch failure. It also adds `sks fast-mode on|off|status|clear`, `$Fast-On`, `$Fast-Off`, and `$Fast-Mode`; saved project preferences are used only when no explicit `--fast`, `--no-fast`, or `--service-tier` flag is present. In 1.21.3 and newer, the explicit `on` action also restores Codex App/CLI Fast mode defaults in `~/.codex/config.toml` when they were disabled.
-
-It carries forward the **1.20.2** stabilization layer: **Mutation Guard** routes genuinely-risky global/config/permission/package mutations through the Requested-Scope Contract + Mutation Ledger (`safety:mutation-callsite-coverage` fails any unguarded, unallowlisted risky call site); `release:check:dynamic:execute` is the real **caching gate runner** (schema v2, real/heavy gates deferred to `release:real-check`, dynamic-only cannot authorize publish); the **Core Skill** deployed snapshot is read by the route runtime and recorded in `agent-proof-evidence.json` (`selected_core_skill`), with promotions written to the mutation ledger; and `sks doctor` exposes an explicit **`zellij_readiness`** block (`zellij:doctor-readiness`). See `docs/dynamic-release-pipeline.md`.
-
-SKS **1.20.1** introduces the **SKS Core Skill Engine** — a SkillOpt-style self-evolving skill layer — while locking the harness into a deploy-ready stable build. Skills are the agent's *external, versioned state* (Core Skill Cards): an optimizer proposes **bounded** add/delete/replace edits to a single skill document under a **textual edit budget**, edits are accepted **only on strict held-out improvement**, rejected edits are buffered so they are never retried, and the **deployed snapshot is immutable**. Critically, the optimizer runs only in training/evaluation — the **deployment/inference path reads the deployed snapshot and never makes an extra model call**, and a skill patch can never mutate code/config/package/global files.
-
-1.20.1 also adds a **Requested-Scope Contract + Mutation Ledger** so SKS performs **no side effect the user did not request** (deny-by-default; global/destructive mutations require explicit `--yes`/env opt-in and a backup or no-op reason), and a **dynamic, risk-based release pipeline** (`release:gate-planner` builds `release-gates.json`; `release:check:dynamic` runs only P0 always-on gates plus gates whose files changed; `release:gate-budget` reports the slowest gates) so unrelated heavy gates are skipped during incremental checks while publish never skips a required gate.
-
-It carries forward the 1.19.x hardening unchanged: legacy 1.18.x/1.19.x→1.20.1 **zero-break upgrade** (user `model`/`service_tier`/`model_reasoning_effort` and user-disabled Codex App flags never overwritten; existing skill cards preserved), the **migration transaction journal** (`.sneakoscope/reports/migration-1.20.1-journal.jsonl`), **Zellij launch-command truth** + real-session **heartbeat-timeout blocker** + the redesigned **Zellij lane UI**, **packlist/publish-performance** gates, a **postinstall safe-side-effects** gate, and the **TS source-of-truth / Rust optional-accelerator** boundary (publish never compiles Rust). `sks zellij status`/`repair` inspects the Zellij runtime without auto-installing anything.
-
-Core release checks:
+Quick checks:
 
 ```bash
-npm run codex:0.136-compat
+npm run typecheck
+npm run build
+npm run agent:zellij-runtime
+npm run zellij:layout-valid
 npm run zellij:lane-renderer
-npm run mad-sks:zellij-launch
-npm run release:readiness
-npm run release:check
 ```
 
-Detailed release history lives in [CHANGELOG.md](CHANGELOG.md); every version-facing change should be recorded there before release. Current release gate status lives in [docs/release-readiness.md](docs/release-readiness.md).
+Broader release checks still live behind `npm run release:check`. Detailed release history is in [CHANGELOG.md](CHANGELOG.md), and release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
 
 ## Parallelism, UX, And Integrations
 

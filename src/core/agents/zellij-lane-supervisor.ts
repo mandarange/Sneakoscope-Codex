@@ -306,7 +306,7 @@ async function createSupervisorLanes(root: string, missionId: string, sessionNam
 
 async function launchPersistentSlotLane(root: string, lane: ZellijLaneSupervisorLane, missionId: string): Promise<ZellijLaneSupervisorLane> {
   const command = persistentLaneCommandForRoot(root, missionId, lane.slot_id, lane.runtime.session_name)
-  const launch = await runZellij(['action', 'new-pane', '--name', lane.slot_id, '--', 'sh', '-lc', command], { cwd: root, timeoutMs: 5000, optional: true })
+  const launch = await runZellij(['--session', lane.runtime.session_name, 'action', 'new-pane', '--name', lane.slot_id, '--', 'sh', '-lc', command], { cwd: root, timeoutMs: 5000, optional: true })
   const paneId = launch.ok ? extractZellijPaneIdFromOutput(launch.stdout_tail) : null
   const nextPaneId = paneId || lane.pane_id
   const paneIdSource = paneId ? 'zellij_new_pane_stdout' : launch.ok ? 'synthetic_fallback_new_pane_stdout_missing' : lane.pane_id_source

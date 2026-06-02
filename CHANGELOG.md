@@ -3,6 +3,35 @@
 ## [Unreleased]
 
 
+
+## [1.21.7] - 2026-06-02
+
+Patch release: make real Zellij backend workers run inside named slot panes, wire parent/worker communication through durable worker artifacts, and refresh release metadata for npm publication.
+
+### Changed
+
+- **Real Zellij workers are now pane-bound sessions.** For `--backend zellij --real`, the native CLI swarm creates or targets the Zellij session, opens a named slot pane with `zellij --session <name> action new-pane --name slot-...`, launches the worker CLI inside that pane, and waits for `worker-result.json` plus heartbeat/log artifacts instead of only spawning the worker from the parent process.
+- **Zellij pane ids are reconciled immediately.** When `new-pane` does not print a pane id, SKS queries `zellij --session <name> action list-panes --json --all` and matches by slot title plus worker command/result path, recording `zellij_worker_list_panes` evidence.
+- **README current-release guidance is shorter and task-focused.** The top release section now highlights the Zellij/Naruto runtime fix, the relevant artifacts, and the focused verification commands instead of carrying forward several old release narratives.
+
+### Fixed
+
+- **Zellij supervisor pane creation no longer depends on ambient session state.** Real supervisor lane launches now include `--session`, so pane creation targets the intended SKS Zellij session from outside Zellij as well as inside it.
+- **Release metadata stays aligned after the explicit version bump.** `sks versioning bump patch` advanced package, Cargo, README, and changelog version surfaces to 1.21.7.
+
+### Verified
+
+- `npm view sneakoscope version --json` returned `1.21.6` before the bump, so no newer package update prompt was required.
+- Context7 Zellij docs confirmed current `--session`, `new-pane`, `list-panes --json --all`, and background session syntax.
+- `npm run typecheck`
+- `npm run build`
+- `npm run agent:zellij-runtime`
+- `npm run zellij:layout-valid`
+- `npm run zellij:pane-proof`
+- `npm run zellij:lane-renderer`
+- `sks naruto run ... --clones 3 --work-items 3 --readonly --json`
+- `SKS_ZELLIJ_WORKER_RESULT_TIMEOUT_MS=45000 SKS_ZELLIJ_WORKER_PANE_HOLD_MS=1500 node ./dist/bin/sks.js naruto run ... --clones 1 --work-items 1 --backend zellij --real --readonly --json`
+
 ## [1.21.6] - 2026-06-02
 
 Patch release: promote OpenAI Codex CLI `rust-v0.136.0` as the current compatibility baseline, wire its release-note features and bug fixes into SKS readiness, and prepare the npm release metadata.
