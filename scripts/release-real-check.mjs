@@ -31,6 +31,7 @@ if (!skipReleaseCheck) {
 
 for (const [script, extraArgs] of [
   ['codex:actual-config-load-probe', []],
+  ['codex:0.136-compat:require-real', []],
   ['codex:0.135-compat:require-real', []],
   ['doctor:codex-doctor-parity:actual', []],
   ['publish:dry-run-performance', []],

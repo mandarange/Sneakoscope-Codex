@@ -11,6 +11,7 @@ import { inspectCodexConfigReadability } from '../core/codex/codex-config-readab
 import { repairCodexConfigEperm } from '../core/codex/codex-config-eperm-repair.js';
 import { writeDoctorReadinessMatrix } from '../core/doctor/doctor-readiness-matrix.js';
 import { runCodexDoctorBridge, compareCodexDoctorBridge } from '../core/doctor/codex-doctor-bridge.js';
+import { cleanDuplicateGlobalSksInstalls } from '../core/doctor/global-sks-install-cleanup.js';
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
 import { inventoryCodexPermissionProfiles } from '../core/codex/codex-permission-profiles.js';
 import { appendMigrationEvents, hashConfigText } from '../core/migration/migration-transaction-journal.js';
@@ -76,6 +77,9 @@ export async function run(_command: any, args: any = []) {
   const codexLb = codexLbMetrics(await readCodexLbCircuit(root).catch(() => ({})));
   const zellij = await checkZellijCapability({ root, require: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
+  const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only')
+    ? await cleanDuplicateGlobalSksInstalls({ root, fix: true }).catch((err: any) => ({ schema: 'sks.global-sks-install-cleanup.v1', ok: false, fix: true, error: err?.message || String(err), blockers: ['global_sks_install_cleanup_exception'] }))
+    : null;
   const { detectImagegenCapability } = await import('../core/imagegen/imagegen-capability.js');
   const imagegen = await detectImagegenCapability({ codexBin: codexBin || undefined }).catch((err: any) => ({ ok: false, error: err.message, auth_readiness: null }));
   const pkgBytes = await dirSize(root).catch(() => 0);
@@ -118,7 +122,7 @@ export async function run(_command: any, args: any = []) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal }
+    repair: { setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup }
   };
   if (flag(args, '--json')) {
     printJson(result);
@@ -168,6 +172,9 @@ export async function run(_command: any, args: any = []) {
   }
   if (migrationJournal?.journal_path) {
     console.log(`Migration journal: ${migrationJournal.journal_path} (${migrationJournal.event_count} events, ${migrationJournal.mutations_without_rollback} without rollback)`);
+  }
+  if (globalSksInstallCleanup) {
+    console.log(`Global SKS installs: kept ${(globalSksInstallCleanup as any).kept?.length ?? 0}, removed ${(globalSksInstallCleanup as any).removed?.filter((entry: any) => entry.ok).length ?? 0}, source repo exempt ${(globalSksInstallCleanup as any).candidates?.filter((entry: any) => entry.source_repo_exempt).length ?? 0}`);
   }
   if (!ready.ready && ready.next_actions?.length) {
     console.log('What still needs you:');

@@ -168,7 +168,9 @@ export async function team(args: any = []) {
     result.proof = proof.validation;
   } else {
     result.zellij = liveZellij || await launchTeamZellijView({ root, missionId: id, ledgerRoot: path.join(dir, 'agents'), slotCount: visualLaneCount, dryRun: jsonOutput || !openZellij, attach: false });
-    if (openZellij && result.zellij?.ok && result.zellij.capability?.status === 'ok' && shouldAutoAttachTeamZellij(args)) attachZellijSessionInteractive(result.zellij.session_name, { cwd: root });
+    if (openZellij && result.zellij?.ok && result.zellij.capability?.status === 'ok' && shouldAutoAttachTeamZellij(args)) {
+      attachZellijSessionInteractive(result.zellij.session_name, { cwd: root, configPath: result.zellij.clipboard_config_path });
+    }
   }
   if (jsonOutput) return console.log(JSON.stringify(result, null, 2));
   console.log(`Team mission created: ${id}`);
@@ -330,7 +332,9 @@ async function teamCommand(sub: any, args: any) {
     }
     if (zellij.capability?.status === 'ok') console.log(`Zellij: prepared Team lane(s) in ${zellij.session_name}`);
     else console.log(`Zellij: optional live panes unavailable (${(zellij.warnings || []).join('; ') || zellij.capability?.status || 'unknown'})`);
-    if (zellij.capability?.status === 'ok' && (sub === 'attach-zellij' || shouldAutoAttachTeamZellij(args))) attachZellijSessionInteractive(zellij.session_name, { cwd: root });
+    if (zellij.capability?.status === 'ok' && (sub === 'attach-zellij' || shouldAutoAttachTeamZellij(args))) {
+      attachZellijSessionInteractive(zellij.session_name, { cwd: root, configPath: zellij.clipboard_config_path });
+    }
     return;
   }
   if (sub === 'event') {

@@ -16,7 +16,16 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.21.5** restores Codex App compatibility for Codex CLI 0.135-era routing and readiness checks. User prompts that mix frustration/question marks with explicit implementation or release work now route to `$Team` instead of `$Answer`, bare `context7 mcp` wording no longer falls into the `$DB` route, and Codex App Git Actions readiness now trusts the `codex remote-control` command/version capability instead of the removed `remote_control` feature flag. Active-route follow-up prompts now re-evaluate substantive analysis, research, and code work for fresh Team/Research-style native sessions instead of collapsing into the previous single active context; plain "keep going" continuations still resume the current route, and commit-only prompts stay lightweight. `sks --mad` now starts a same-mission native agent swarm before opening the cockpit lanes, `sks-fast-high` no longer forces `workspace-write` over the Codex App Full Access selector, and `$Goal` official-mode detection also reads `codex features list`. This keeps Commit, Push, Commit and Push, PR, MAD cockpit, Goal bridge, and repeated Team-route hook checks green on modern Codex when the corresponding Codex capabilities are present. It carries forward the 1.21.4 Zellij lane, Naruto, and terminal scrollback improvements.
+SKS **1.21.6** promotes OpenAI Codex CLI `rust-v0.136.0` as the current compatibility baseline. The release matrix tracks 0.136 session archive/unarchive, app-server `--stdio`, resumed-turn/status behavior, `CODEX_API_KEY` remote registration, short-lived remote-control tokens, elevated Windows sandbox setup, feature-gated image-generation extension support, ChatGPT auth refresh handling, command-safety hardening, sandbox cleanup, Bedrock region fallback, and rmcp 1.7.0 compatibility.
+
+This release also tightens the day-to-day operator path:
+
+- Zellij lane panes now surface the native worker session they are following, including per-slot worker status and stdout/stderr/heartbeat tails.
+- Native terminal drag-copy is the default in SKS-launched Zellij sessions; hover-pane mouse routing is opt-in with `SKS_ZELLIJ_MOUSE_MODE=1`.
+- Update prompts compare npm latest against an effective installed version that includes source, PATH, and global npm package metadata, so completed global updates stop being re-offered.
+- `sks doctor --fix` can remove duplicate global `sks`/`sneakoscope` npm installs while exempting the Sneakoscope source checkout.
+
+It carries forward the 0.135-era routing/readiness fixes: mixed frustration plus explicit implementation prompts still route to `$Team`, bare `context7 mcp` no longer implies `$DB`, Git Actions readiness uses the `codex remote-control` command/version capability, and repeated substantive prompts prepare fresh Team/Research-style native sessions. Zellij lane, Naruto, terminal scrollback, MAD cockpit, Goal bridge, and Fast profile fixes remain in place.
 
 SKS **1.20.4** is a targeted `sks --mad` / codex-lb Zellij usability patch: when a background MAD Zellij session launches successfully, SKS now prints the exact `Attach with: ZELLIJ_SOCKET_DIR=... zellij attach ...` command so operators can enter the fresh session without manually reconstructing the socket namespace.
 
@@ -30,61 +39,14 @@ SKS **1.20.1** introduces the **SKS Core Skill Engine** — a SkillOpt-style sel
 
 It carries forward the 1.19.x hardening unchanged: legacy 1.18.x/1.19.x→1.20.1 **zero-break upgrade** (user `model`/`service_tier`/`model_reasoning_effort` and user-disabled Codex App flags never overwritten; existing skill cards preserved), the **migration transaction journal** (`.sneakoscope/reports/migration-1.20.1-journal.jsonl`), **Zellij launch-command truth** + real-session **heartbeat-timeout blocker** + the redesigned **Zellij lane UI**, **packlist/publish-performance** gates, a **postinstall safe-side-effects** gate, and the **TS source-of-truth / Rust optional-accelerator** boundary (publish never compiles Rust). `sks zellij status`/`repair` inspects the Zellij runtime without auto-installing anything.
 
+Core release checks:
+
 ```bash
-sks mad-sks plan --target-root <path> --json
-sks mad-sks permissions --json
-sks mad-sks proof --json
-sks mad-sks rollback-apply --rollback-plan <path> --yes --json
-sks features complete --json
-sks agent status latest --json
-sks agent run "release review" --agents 8 --work-items 16 --concurrency 4 --mock --json
-npm run source-intelligence:all-modes
-npm run agent:background-terminals
+npm run codex:0.136-compat
 npm run zellij:lane-renderer
-npm run zellij:pane-proof
-npm run zellij:screen-proof
-npm run agent:cleanup-executor
-npm run agent:cleanup-executor-v2
-npm run retention:cleanup-safety
-npm run agent:intelligent-work-graph
-npm run agent:ast-aware-work-graph
-npm run proof:fake-vs-real-policy
-npm run proof:fake-real-policy-v2
-npm run release:runtime-truth-matrix
-npm run codex:0.134-official-compat
-npm run codex:profile-primary
-npm run codex:managed-proxy-env
-npm run strategy:adhd-orchestrating-gate
-npm run strategy:parallel-modification-plan
-npm run appshots:evidence
-npm run appshots:source-intelligence
-npm run appshots:thread-attachment-discovery
-npm run mcp:0.134-modernization
-npm run mcp:readonly-runtime-scheduler
-npm run codex:0.134-runner-truth
-npm run source-intelligence:codex-history-search
-    npm run agent:parallel-write-kernel
-    npm run agent:patch-swarm-runtime-truth
-    npm run agent:patch-transaction-journal
-    npm run agent:patch-conflict-rebase
-    npm run agent:strategy-to-patch-strict
-    npm run agent:rollback-command
-    npm run agent:native-cli-session-swarm
-    npm run agent:native-cli-session-swarm-10
-    npm run agent:native-cli-session-swarm-20
-    npm run agent:no-subagent-scaling
-    npm run agent:native-cli-session-proof
-    npm run agent:fast-mode-default
-    npm run agent:fast-mode-worker-propagation
-    npm run codex:fast-mode-profile-propagation
-    npm run mad-sks:fast-mode-propagation
-    SKS_TEST_REAL_CODEX_PATCHES=1 npm run agent:real-codex-patch-envelope-smoke
-    npm run release:gate-existence-audit
-npm run route:blackbox-realism
-npm run release:real-check
-npm run agent:backfill-route-blackbox
-npm run team:actual-route-backfill
+npm run mad-sks:zellij-launch
 npm run release:readiness
+npm run release:check
 ```
 
 Detailed release history lives in [CHANGELOG.md](CHANGELOG.md); every version-facing change should be recorded there before release. Current release gate status lives in [docs/release-readiness.md](docs/release-readiness.md).
@@ -98,9 +60,9 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md); every version-fa
   SKS_NARUTO_MAX_CONCURRENCY=48 sks naruto run "sweep the test suite" --clones 48
   ```
 
-- **Zellij trackpad scroll.** SKS-launched Zellij sessions enable `mouse_mode` so the trackpad wheel scrolls the pane under the cursor (the conversation/transcript) instead of the focused prompt input. Copy still works via `copy_command=pbcopy` + `copy_on_select`; set `SKS_ZELLIJ_MOUSE_MODE=0` to opt out.
+- **Zellij scrollback and copy.** SKS launches Codex panes with `--no-alt-screen`, so the terminal keeps the conversation transcript in scrollback. Zellij `mouse_mode` is off by default so normal mouse-drag text selection works for copy. Set `SKS_ZELLIJ_MOUSE_MODE=1` only when you prefer Zellij hover-pane wheel routing; in that mode some terminals require Shift-drag for native selection.
 
-- **Live MAD / Naruto cockpit lanes.** `sks --mad` starts a same-mission native agent swarm and opens the right-pane cockpit against that ledger, so fan-out work shows up live instead of a permanent "Workers idle". Tune MAD fan-out with `--mad-agents`, `--mad-swarm-work-items`, and `--mad-swarm-backend`; use `--no-mad-swarm` only when you intentionally want the old UI-only launch. Each Zellij lane now has per-slot SKS state, a nonblocking JSONL command bus, dynamic pane-id reconciliation from `zellij action list-panes --json --all`, and `nice`/dispatch-throttle metadata so later lane coordination does not fall back to a single synthetic pane. If a lane's own mission ledger is idle, the renderer can still mirror the most-recent active agent mission; disable that follow behavior with `SKS_LANE_FOLLOW_ACTIVE_MISSION=0`.
+- **Live MAD / Naruto cockpit lanes.** `sks --mad` starts a same-mission native agent swarm and opens the right-pane cockpit against that ledger. Lane panes follow per-slot worker artifacts such as `worker.stdout.log`, `worker.stderr.log`, and `worker-heartbeat.jsonl`, so fan-out work shows as live worker status instead of a static "Workers idle" panel. Tune MAD fan-out with `--mad-agents`, `--mad-swarm-work-items`, and `--mad-swarm-backend`; use `--no-mad-swarm` only when you intentionally want the old UI-only launch. Each Zellij lane has per-slot SKS state, a nonblocking JSONL command bus, dynamic pane-id reconciliation from `zellij action list-panes --json --all`, and `nice`/dispatch-throttle metadata. If a lane's own mission ledger is idle, the renderer can mirror the most-recent active agent mission; disable that follow behavior with `SKS_LANE_FOLLOW_ACTIVE_MISSION=0`.
 
 - **Image generation under codex-lb.** `gpt-image-2` routes through the same Codex `/responses` backend the load balancer already proxies, so `$imagegen` works when you are authenticated only through codex-lb (no direct `OPENAI_API_KEY`). The official Codex App `$imagegen` surface stays primary; the codex-lb/OpenAI API path is the fallback. Opt out with `SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK=0`.
 
@@ -113,7 +75,7 @@ Detailed release history lives in [CHANGELOG.md](CHANGELOG.md); every version-fa
   sks xai docs
   ```
 
-- **Quieter update prompts.** The "update available" choice is shown once per conversation and then stays quiet for a short window (default 8 min, `SKS_UPDATE_OFFER_THROTTLE_MS`) instead of repeating on every prompt.
+- **Quieter update prompts.** The "update available" choice is shown once per conversation and then stays quiet for a short window (default 8 min, `SKS_UPDATE_OFFER_THROTTLE_MS`) instead of repeating on every prompt. The check compares npm latest against source metadata, PATH `sks --version`, and the global npm package, so a completed `npm i -g sneakoscope` clears stale pending/accepted offers.
 
 ## Retention And Cleanup
 
@@ -216,9 +178,9 @@ sks rust smoke --json
 2. Image Voxel TriWiki anchors and relations for every visual route
 3. Route contracts, evidence indexes, wrongness memory, trust reports, Codex App, codex-lb, hooks, Rust fallback parity, DB, route modularity, and generated fixtures verified by release gates
 
-## Install Options
+## Install
 
-Recommended: install globally with `npm i -g sneakoscope`, then run `sks` from either a project or any global shell location:
+Recommended path:
 
 ```sh
 npm i -g sneakoscope
@@ -226,22 +188,32 @@ sks root
 sks doctor
 ```
 
-`npm i -g sneakoscope` is the recommended install path. It automatically refreshes the `sks` command shim, global Codex App `$` skills, and SKS bootstrap surface. When the install is run from a project, postinstall bootstraps that project. When it is run outside a repo/project marker, postinstall bootstraps the per-user global runtime root instead of writing `.sneakoscope` into a random current directory. `sks root` tells you which root SKS will use.
+The global npm install refreshes the `sks` command shim, generated Codex App `$` skills, and the SKS bootstrap surface together. If a project marker is present, postinstall bootstraps that project; otherwise SKS uses the per-user global runtime root. `sks root` shows the active root.
 
-If you only want a one-shot run without keeping `sks` installed globally:
+One-shot run without keeping a global install:
 
 ```sh
 npx -y -p sneakoscope sks root
 ```
 
-For a repo-local install:
+Project-pinned install:
 
 ```sh
 npm i -D sneakoscope
 npx sks setup --install-scope project
 ```
 
-Check that the install is usable:
+Source checkout for developing Sneakoscope itself:
+
+```sh
+git clone https://github.com/mandarange/Sneakoscope-Codex.git
+cd Sneakoscope-Codex
+npm install
+npm install -g .
+sks --version
+```
+
+Install health checks:
 
 ```sh
 sks deps check
@@ -283,55 +255,9 @@ brew install zellij
 
 The default `sks` runtime checks npm for newer `sneakoscope` and `@openai/codex` versions before opening the interactive runtime. `npm i -g sneakoscope` runs a safe bootstrap/readiness pass; use `sks bootstrap --yes`, `sks deps check --yes`, or `sks --mad --yes` to install or repair Codex CLI/Zellij when Homebrew is available. `sks --mad` requires Zellij for interactive MAD/lane UI and prints the session, gate, attach command, blockers, and labeled Zellij stderr/stdout details needed to act.
 
-## Installation
-
-### Global Install
-
-Use this recommended path when you want `sks` available from any repo:
-
-```sh
-npm i -g sneakoscope
-sks root
-```
-
-`sks` commands work even when no project root is present. Project-aware commands use the nearest `.sneakoscope`, `.dcodex`, or `.git` root; if none exists, SKS uses a per-user global runtime root. Global npm install/upgrade automatically bootstraps the current project when a project marker is present, otherwise it bootstraps the global runtime root. Run `sks bootstrap` manually only when you intentionally want to initialize or repair the current project after install.
-
 Project setup writes shared `.gitignore` entries for generated SKS files: `.sneakoscope/`, `.codex/`, `.agents/`, and managed `AGENTS.md`. Setup, doctor repair, and npm postinstall refreshes also compare the previous SKS generated-file manifest with the current package templates and prune stale SKS-generated legacy skills or agent files while preserving user-owned custom skills. Use `sks setup --local-only` when you want those excludes kept only in `.git/info/exclude`.
 
 During npm postinstall, SKS installs generated Codex App skills and tries `skills add MohtashamMurshid/getdesign` when the `skills` CLI is available. Design work still flows through one authority: `design.md`.
-
-### One-Shot Install
-
-Use this when you do not want to keep a global install:
-
-```sh
-npx -y -p sneakoscope sks bootstrap
-```
-
-`npx` fetches the package into npm's cache and runs the binary for that command. This is useful for first-time setup or CI-style verification.
-
-### Project Install
-
-Use this when a repo should pin Sneakoscope as a development dependency:
-
-```sh
-npm i -D sneakoscope
-npx sks setup --install-scope project
-```
-
-Project installs are useful when a team wants a repeatable harness version checked through `package-lock.json`.
-
-### Source Checkout
-
-Use this when developing Sneakoscope itself:
-
-```sh
-git clone https://github.com/mandarange/Sneakoscope-Codex.git
-cd Sneakoscope-Codex
-npm install
-npm install -g .
-sks --version
-```
 
 ## Terminal CLI Usage
 
@@ -687,13 +613,25 @@ By default, SKS favors inspection, local files, branch-safe changes, explicit co
 ### `sks` points to an old version
 
 ```sh
-which sks
+which -a sks
 sks --version
 node ./dist/bin/sks.js --version
+npm ls -g sneakoscope --depth=0
 npm install -g .
+sks doctor --fix
 ```
 
-If stale, reinstall globally from the repo or npm.
+If PATH or npm has duplicate global installs, `sks doctor --fix` keeps one global npm install and removes duplicate global `sneakoscope` installs. The Sneakoscope source checkout is exempt so local development files are not removed.
+
+### SKS keeps asking to update after a global update
+
+```sh
+sks update-check --json
+npm ls -g sneakoscope --depth=0
+sks doctor --fix
+```
+
+Update prompts compare npm latest against the effective installed version from source metadata, PATH `sks --version`, and global npm package metadata. If a global update succeeded but an old shim remains earlier on PATH, `sks doctor --fix` can remove duplicate global installs and refresh the managed setup.
 
 ### Zellij is missing
 
@@ -703,6 +641,15 @@ npm run zellij:capability
 ```
 
 Install Zellij from [zellij.dev](https://zellij.dev/documentation/installation.html), then run `npm run zellij:capability` or `sks doctor --json`. Without Zellij, non-interactive checks can continue, but `sks --mad` and interactive lane UI report `mad_ready: false`.
+
+### Zellij copy or right lanes feel wrong
+
+```sh
+sks team open-zellij latest
+sks zellij status
+```
+
+Normal mouse-drag copy is the default because SKS launches Zellij with `mouse_mode=false`. Conversation scrollback is still preserved by Codex `--no-alt-screen`. If you prefer Zellij hover-pane wheel routing, launch with `SKS_ZELLIJ_MOUSE_MODE=1`; use Shift-drag if your terminal then captures selection differently. Right lanes are renderer panes that follow SKS worker artifacts, so live native-agent output is shown from per-slot `worker.stdout.log`, `worker.stderr.log`, and `worker-heartbeat.jsonl`.
 
 ### Codex App tools are missing
 
@@ -763,7 +710,7 @@ npm run release:check
 npm run publish:dry
 ```
 
-`release:check` runs the current 1.20.x release-closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.18 baseline gates and adds patch swarm runtime truth, transaction journaling, serial conflict rebase, strict strategy-to-patch proof, rollback command proof, Native CLI Session Swarm 5/10/20-process proof, Real Worker Backend Router proof, Codex child overlap proof, model-authored patch-envelope separation, Zellij layout/pane/screen/socket-dir proof, no-subagent-scaling proof, Fast mode default/worker/Codex/MAD propagation proof, Appshots attachment provenance, MCP runtime overlap evidence, Codex 0.134/0.135 runner truth, task graph expansion, schema-bound follow-up work, actual Agent/Team/Research/QA route blackboxes, scheduler proof hardening, Source Intelligence propagation, and Goal mode propagation checks. Broader live gates remain explicit scripts such as `release:real-check`; real Codex patch smoke, real Codex parallel worker proof, and real Zellij proof are optional unless their `SKS_REQUIRE_REAL_*` or `SKS_REQUIRE_ZELLIJ=1` environment variables are set. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
+`release:check` runs the current 1.21.x release-closure DAG, writes a source digest stamp under `.sneakoscope/reports/`, then refreshes release readiness so publish commands can verify the same stamp. The DAG preserves the 1.18 baseline gates and adds Codex 0.136 compatibility, inherited Codex 0.135/0.134 runner truth, patch swarm runtime truth, transaction journaling, serial conflict rebase, strict strategy-to-patch proof, rollback command proof, Native CLI Session Swarm 5/10/20-process proof, Real Worker Backend Router proof, Codex child overlap proof, model-authored patch-envelope separation, Zellij layout/pane/screen/socket-dir proof, no-subagent-scaling proof, Fast mode default/worker/Codex/MAD propagation proof, Appshots attachment provenance, MCP runtime overlap evidence, task graph expansion, schema-bound follow-up work, actual Agent/Team/Research/QA route blackboxes, scheduler proof hardening, Source Intelligence propagation, and Goal mode propagation checks. Broader live gates remain explicit scripts such as `release:real-check`; real Codex patch smoke, real Codex parallel worker proof, and real Zellij proof are optional unless their `SKS_REQUIRE_REAL_*` or `SKS_REQUIRE_ZELLIJ=1` environment variables are set. Generate the human-readable registry with `sks features inventory --write-docs`. Plain `npm publish` uses the `latest` dist-tag. npm's `prepublishOnly` verifies the fresh release stamp instead of rerunning the full gate, and `prepack` only rebuilds `dist`; publish no longer repeats the expensive release suite during packaging. `npm run publish:dry` remains the explicit dry-run helper.
 
 Version bumps are manual. Run `sks versioning bump` only when preparing release metadata; SKS will not create `.git/hooks/pre-commit` or auto-bump during ordinary commits.
 

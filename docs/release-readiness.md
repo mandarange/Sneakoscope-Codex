@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.21.5 keeps the release-readiness contract stable while restoring Codex App compatibility for Codex CLI 0.135-era routing and readiness checks. Codex App `UserPromptSubmit` hooks now route mixed complaint/directive repair prompts to `$Team` instead of `$Answer`, bare `context7 mcp` wording no longer implies `$DB`, and Git Actions readiness now uses the `codex remote-control` command/version capability instead of the removed `remote_control` feature flag. Repeated substantive prompts during an active mission now prepare a fresh Team/Research-style route with native-session evidence instead of replaying only the previous active route context; plain continuation prompts and simple commit-only requests remain lightweight exceptions. SKS carries forward the 1.21.4 Zellij lane, Naruto, and terminal scrollback fixes, and the next readiness cycle also records Zellij lane runtime manifests, nonblocking JSONL dispatch, and dynamic pane-id reconciliation. The local Codex App readiness check still reports user-config Fast UI blockers separately when `~/.codex/config.toml` contains top-level `model_reasoning_effort`.
+SKS 1.21.6 promotes OpenAI Codex CLI `rust-v0.136.0` to the current compatibility baseline while preserving the 0.135 routing/readiness fixes and inherited 0.134/0.133 matrices. Readiness now records 0.136 session archive/unarchive commands, app-server `--stdio` and resumed-turn/status behavior, `CODEX_API_KEY` remote registration, short-lived remote-control server tokens, elevated Windows sandbox setup, feature-gated image-generation extension support, ChatGPT auth refresh/relogin-required handling, command-safety hardening, sandbox cleanup, Bedrock region fallback, and rmcp 1.7.0 compatibility. The local Codex App readiness check still reports user-config Fast UI blockers separately when `~/.codex/config.toml` contains top-level `model_reasoning_effort`.
 
 The current `sks.release-readiness.v1` report covers actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, Zellij readiness/proof, install-time Zellij dependency repair, Zellij socket-dir launch metadata, MAD attach-command visibility, Zellij clipboard/mouse-mode launch evidence, native-agent visual lane count evidence, and official Fast mode service-tier propagation. `ok: true` in the 1.21.3 readiness report means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, Zellij-only runtime checks, background-layout launch wiring, socket-dir fallback evidence, attach-command output evidence, clipboard command/mouse-mode evidence, native-agent right-pane lane evidence, and `-c service_tier=fast` propagation evidence have no remaining blockers.
 
@@ -90,6 +90,8 @@ npm run proof:fake-real-policy-v2
 npm run release:runtime-truth-matrix
 npm run imagegen:capability
 npm run imagegen:gpt-image-2-request-validator
+npm run codex:0.136-compat
+npm run codex:0.135-compat
 npm run codex:0.134-official-compat
 npm run codex:profile-primary
 npm run codex:managed-proxy-env
@@ -164,17 +166,18 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.20.5.json`
-- `.sneakoscope/reports/release-readiness-1.20.5.md`
-- `.sneakoscope/reports/all-feature-completion-1.20.5.json`
-- `.sneakoscope/reports/all-feature-completion-1.20.5.md`
-- `.sneakoscope/reports/official-docs-compat-1.20.5.json`
-- `.sneakoscope/reports/official-docs-compat-1.20.5.md`
-- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.20.5.json`
+- `.sneakoscope/reports/release-readiness-1.21.6.json`
+- `.sneakoscope/reports/release-readiness-1.21.6.md`
+- `.sneakoscope/reports/all-feature-completion-1.21.6.json`
+- `.sneakoscope/reports/all-feature-completion-1.21.6.md`
+- `.sneakoscope/reports/official-docs-compat-1.21.6.json`
+- `.sneakoscope/reports/official-docs-compat-1.21.6.md`
+- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.21.6.json`
 - `.sneakoscope/reports/agent-real-codex-patch-envelope-smoke.json`
 - `.sneakoscope/reports/agent-real-codex-parallel-workers.json`
 - `.sneakoscope/reports/zellij-real-session-launch.json`
-- `.sneakoscope/reports/runtime-truth-matrix-1.20.5.json`
+- `.sneakoscope/reports/runtime-truth-matrix-1.21.6.json`
+- `.sneakoscope/reports/codex-0.136-compat.json`
 - `.sneakoscope/reports/codex-0-134-official-compat.json`
 - `.sneakoscope/reports/codex-0-134-runner-truth.json`
 - `.sneakoscope/reports/mcp-0-134-modernization.json`
@@ -207,7 +210,7 @@ npm run release:readiness
 - `.sneakoscope/reports/dfix-patch-swarm-route-blackbox.json`
 - `.sneakoscope/reports/retention-cleanup-safety.json`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, real Codex parallel worker proof, Zellij lane/session proof, and the current 1.20.5 release closure gaps.
+The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.136 release compatibility, inherited Codex 0.135/0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, real Codex parallel worker proof, Zellij lane/session proof, and the current 1.21.6 release closure gaps.
 
 ## Priority Closure
 
@@ -219,7 +222,7 @@ The report covers version drift, release metadata freshness, stale `dist` preven
 | P3 | README, policy docs, migration, troubleshooting, CLI help, `--work-items`, active-slot semantics, real smoke envs, cleanup commands, retention cleanup wording, and onboarding |
 | P4 | Human-readable summaries for source intelligence, X AI used/not used, Goal fallback, terminal close, Zellij persistence, physical pane proof, cleanup, scheduler health, and worker Scout evidence |
 | P5 | Regression catalog for fake pane rejection, missing capture/list-panes, output-last-message absence, cleanup dry-run/apply, retention preserve/remove safety, work graph partial quality, non-agent route stand-ins, source refs, and Goal refs |
-| P6 | Codex 0.134 compatibility, MCP 0.134 policy, managed proxy propagation, local Codex history search, strategy-first orchestration, Appshots evidence, parallel write kernel proof, and release gate existence audit |
+| P6 | Codex 0.136 compatibility, inherited Codex 0.135/0.134 compatibility, MCP 0.134 policy, managed proxy propagation, local Codex history search, strategy-first orchestration, Appshots evidence, parallel write kernel proof, and release gate existence audit |
 | P7 | Patch swarm runtime truth, transaction journal, conflict rebase, strict strategy-to-patch coverage, rollback command proof, and real Codex patch smoke optional/required state |
 | P8 | Dashboard, Trust Report, runtime truth, and human summary surfaces for patch swarm status, rollback command, changed files by agent, MCP scheduler status, and real Codex patch smoke next action |
 | P9 | Native CLI Session Swarm proof, no-subagent scaling proof, and Fast mode default propagation across worker CLI, Codex exec, Zellij, and MAD paths |

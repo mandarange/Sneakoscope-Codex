@@ -2,37 +2,31 @@
 
 ## [Unreleased]
 
+
+## [1.21.6] - 2026-06-02
+
+Patch release: promote OpenAI Codex CLI `rust-v0.136.0` as the current compatibility baseline, wire its release-note features and bug fixes into SKS readiness, and prepare the npm release metadata.
+
+### Added
+
+- **Codex 0.136 compatibility matrix and release gate.** New `codex:0.136-compat` / `codex:0.136-compat:require-real` checks record `rust-v0.136.0` evidence for session archive/unarchive, app-server `--stdio` plus resumed-turn/status behavior, `CODEX_API_KEY` remote registration, short-lived remote-control server tokens, elevated Windows sandbox setup, feature-gated image-generation extension support, ChatGPT auth refresh/relogin-required handling, command-safety hardening, sandbox cleanup, Bedrock region fallback, and rmcp 1.7.0 compatibility.
+- **0.136 release documentation and truthfulness coverage.** `docs/codex-0.136-compat.md`, the Codex CLI compatibility guide, official docs compatibility report, release-readiness report, and README now name the 0.136 capability ids directly while keeping 0.135/0.134/0.133 as inherited baselines.
+- **`sks zellij dispatch` / `sks zellij send`.** Operators can queue a lane command through the nonblocking JSONL bus, and optionally target a reconciled real pane id with Zellij `write-chars` via `--write-pane`.
+
+### Changed
+
+- **`sks codex compatibility` now reports 0.136 first.** The aggregate compatibility output uses `rust-v0.136.0` as `required_baseline`, keeps the 0.135 and 0.134 matrices visible as inherited compatibility, and exposes local 0.136 probe evidence when the installed Codex CLI is available.
+- **Release readiness now tracks the 0.136 gate.** `release:check`, the parallel release DAG, metadata checks, real-check wiring, runtime truth matrix, and gate-existence audit all include the warning-only 0.136 compatibility check, with `:require-real` kept in environment-dependent release proof.
+
 ### Fixed
 
 - **Zellij parallel lanes now have a real runtime contract.** Generated KDL lanes receive per-slot SKS state dirs, nonblocking JSONL command inbox/ack/outbox files, `SKS_ZELLIJ_*` env, `nice -n 10` launch priority, dispatch throttle metadata, and a FIFO policy that explicitly avoids blocking writers. Live pane proof reconciles dynamic Zellij pane ids back into the lane supervisor instead of relying only on synthetic `zellij-pane-slot-*` ids.
 - **`npm publish` now fails before `prepack` when npm auth is missing, stale, or not a maintainer.** The registry gate checks `npm whoami` and the package maintainer list under `--require-publish-auth`, detects configured-but-rejected npmrc tokens, and explains how to refresh `npm login` or configure an npm-consumed registry token before the expensive build and final registry `PUT /sneakoscope`.
-
-### Added
-
-- **`sks zellij dispatch` / `sks zellij send`.** Operators can queue a lane command through the nonblocking JSONL bus, and optionally target a reconciled real pane id with Zellij `write-chars` via `--write-pane`.
+- **Release metadata stays aligned after the explicit version bump.** `sks versioning bump patch` advanced package, Cargo, README, and changelog version surfaces to 1.21.6.
 
 ### Verified
 
-- `npm run build --silent`
-- `npm run zellij:layout-valid --silent`
-- `npm run zellij:lane-renderer --silent`
-- `npm run agent:zellij-runtime --silent`
-- `npm run zellij:pane-proof --silent`
-- `npm run zellij:launch-command-truth --silent`
-- `npm run typecheck --silent`
-- `git diff --check`
-- `npm run mad-sks:zellij-launch --silent`
-- `npm run zellij:screen-proof --silent`
-- `npm run zellij:doctor-readiness --silent`
-- `npm run zellij:ui-design --silent`
-- `node ./dist/bin/sks.js zellij dispatch --mission M-agent-zellij --ledger-root /tmp/sks-zellij-dispatch-check --slot slot-001 --text ping --json`
-- `node --test test/unit/release-registry-check.test.mjs test/unit/package-publish-lifecycle.test.mjs`
-- `node ./scripts/release-registry-check.mjs --require-unpublished --require-publish-auth` (correctly detects the rejected `/Users/weklem/.npmrc` token and blocks with E401 repair instructions)
-- `npm run release:check:parallel --silent` (254/254 passed)
-
-
-
-
+- Verification for the 0.136 compatibility and release-prep changes is recorded in this turn's final release report.
 
 ## [1.21.5] - 2026-06-01
 

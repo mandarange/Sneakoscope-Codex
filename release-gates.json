@@ -1059,6 +1059,20 @@
       "can_run_incremental": true
     },
     {
+      "id": "codex:0.136-compat",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/codex/**",
+        "src/core/codex-app.ts",
+        "src/core/codex-lb-circuit.ts",
+        "scripts/codex-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "codex:config-eperm-fixture",
       "tier": "P1",
       "cost": "hermetic",

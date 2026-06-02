@@ -12,7 +12,7 @@ import { classifyToolError } from './evaluation.js';
 import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.js';
 import { dollarCommand, routeRequiresSubagents, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { appendMissionStatus } from './recallpulse.js';
-import { runSksUpdateCheck } from './update-check.js';
+import { detectEffectiveSksVersion, runSksUpdateCheck } from './update-check.js';
 import { scanAgentTextForRecursion } from './agents/agent-recursion-guard.js';
 import {
   buildCompactContinue,
@@ -876,10 +876,10 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
   let effective: any = null;
   async function effectiveVersion() {
     if (!effective) {
-      const installed = await detectInstalledSksVersion();
+      const installed = await detectEffectiveSksVersion({ timeoutMs: 2500 });
       effective = {
         installed,
-        current: highestVersion([PACKAGE_VERSION, installed.version])
+        current: highestVersion([PACKAGE_VERSION, installed.current])
       };
     }
     return effective;
@@ -891,7 +891,8 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
         ...updateState,
         current: currentCheck.current,
         runtime_current: PACKAGE_VERSION,
-        installed_current: currentCheck.installed.version || null,
+        installed_current: currentCheck.installed.current || null,
+        installed_sources: currentCheck.installed.candidates || [],
         latest: pending.latest,
         checked_at: nowIso(),
         pending_offer: null,
@@ -907,7 +908,8 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
         ...updateState,
         current: currentCheck.current,
         runtime_current: PACKAGE_VERSION,
-        installed_current: currentCheck.installed.version || null,
+        installed_current: currentCheck.installed.current || null,
+        installed_sources: currentCheck.installed.candidates || [],
         latest: updateState.skipped.latest,
         checked_at: nowIso(),
         pending_offer: null,
@@ -924,7 +926,8 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
         ...updateState,
         current: currentCheck.current,
         runtime_current: PACKAGE_VERSION,
-        installed_current: currentCheck.installed.version || null,
+        installed_current: currentCheck.installed.current || null,
+        installed_sources: currentCheck.installed.candidates || [],
         latest: updateState.accepted.latest,
         checked_at: nowIso(),
         pending_offer: null,
@@ -988,7 +991,8 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
     ...updateState,
     current,
     runtime_current: PACKAGE_VERSION,
-    installed_current: installed.version || null,
+    installed_current: installed.current || null,
+    installed_sources: installed.candidates || [],
     latest: check.latest || null,
     checked_at: nowIso(),
     pending_offer: isCurrent ? null : updateState.pending_offer || null,
@@ -999,7 +1003,8 @@ async function updateCheckContext(root: any, payload: any, prompt: any) {
     ...updateState,
     current,
     runtime_current: PACKAGE_VERSION,
-    installed_current: installed.version || null,
+    installed_current: installed.current || null,
+    installed_sources: installed.candidates || [],
     latest: check.latest,
     checked_at: nowIso(),
     pending_offer: { conversation_id: conv, latest: check.latest, offered_at: nowIso() },

@@ -134,3 +134,26 @@ test('accepted SKS update is not re-offered in the same conversation', async () 
     assert.deepEqual(await missionEntries(root), []);
   });
 });
+
+test('accepted SKS update state clears once effective installed version reaches latest', async () => {
+  await withEnv({
+    SKS_INSTALLED_SKS_VERSION: '9.9.9',
+    SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9'
+  }, async () => {
+    const root = await makeRoot();
+    await fs.writeFile(path.join(root, '.sneakoscope', 'state', 'update-check.json'), `${JSON.stringify({
+      accepted: {
+        conversation_id: 'update-check-control',
+        latest: '9.9.9',
+        accepted_at: '2026-05-23T00:00:00.000Z'
+      }
+    }, null, 2)}\n`);
+    const result = await evaluateUpdatePrompt(root, 'continue after global update');
+    const context = String(result.additionalContext || '');
+    assert.doesNotMatch(context, /update .*already accepted|Run exactly this command|Update SKS now|Skip update for this conversation/i);
+    const state = await readUpdateState(root);
+    assert.equal(state.accepted, null);
+    assert.equal(state.installed_current, '9.9.9');
+    assert.equal(state.pending_offer, null);
+  });
+});
