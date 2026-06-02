@@ -73,6 +73,7 @@ const FIXTURES = Object.freeze({
   'cli-commit': fixture('mock', 'sks commit --dry-run', [], 'pass'),
   'cli-commit-and-push': fixture('mock', 'sks commit-and-push --dry-run', [], 'pass'),
   'cli-context7': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
+  'cli-xai': fixture('real_optional', 'sks xai check --json', [], 'pass'),
   'cli-all-features': fixture('mock', 'sks all-features complete --json', [`.sneakoscope/reports/all-feature-completion-${PACKAGE_VERSION}.json`], 'pass'),
   'cli-init': fixture('mock', 'sks init --local-only --dry-run', [], 'pass'),
   'cli-eval': fixture('mock', 'sks eval run --mock --json', [], 'pass'),

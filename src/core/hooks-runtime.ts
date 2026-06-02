@@ -10,7 +10,7 @@ import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext a
 import { localizedFinalizationReason } from './language-preference.js';
 import { classifyToolError } from './evaluation.js';
 import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.js';
-import { dollarCommand, stripVisibleDecisionAnswerBlocks } from './routes.js';
+import { dollarCommand, routeRequiresSubagents, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { appendMissionStatus } from './recallpulse.js';
 import { runSksUpdateCheck } from './update-check.js';
 import { scanAgentTextForRecursion } from './agents/agent-recursion-guard.js';
@@ -302,18 +302,30 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
     }
     const command = dollarCommand(prompt);
     const route = routePrompt(prompt);
-    const bypassActiveRoute = route?.id === 'DFix' || route?.id === 'Answer';
+    if (routeIsGitOnly(route)) {
+      await armCodexGitActionStopBypass(root, payload).catch(() => null);
+      return {
+        continue: true,
+        systemMessage: `SKS: ${route.command} git action bypassed pipeline route gates.`
+      };
+    }
+    const bypassActiveRoute = routeBypassesActiveContext(route);
     const goalOverlay = activeGoalOverlayContext(state, route);
+    const prepareFreshRoute = shouldPrepareFreshRouteOnActivePrompt(prompt, route, {
+      command,
+      bypassActiveRoute,
+      goalOverlay
+    });
     if (isBlockingClarificationAwaiting(state) && !looksLikeClarificationCancel(prompt)) {
       const activeContext = await activeRouteContext(root, state);
       const teamDigest = await teamLiveDigest(root, state);
       const additionalContext = [updateContext, activeContext, teamDigest?.context].filter(Boolean).join('\n\n');
       return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
     }
-    const teamDigest = (bypassActiveRoute || command) ? null : await teamLiveDigest(root, state);
+    const teamDigest = (bypassActiveRoute || command || prepareFreshRoute) ? null : await teamLiveDigest(root, state);
     const activeContext = await activeRouteContext(root, state);
     const contexts = [updateContext];
-    if (activeContext && !command && !bypassActiveRoute && !goalOverlay) contexts.push(routePipelineContext(prompt), activeContext);
+    if (activeContext && !command && !bypassActiveRoute && !goalOverlay && !prepareFreshRoute) contexts.push(routePipelineContext(prompt), activeContext);
     else contexts.push((await prepareRoute(root, prompt, state)).additionalContext);
     if (goalOverlay) contexts.push(goalOverlay);
     if (teamDigest?.context) contexts.push(teamDigest.context);
@@ -326,6 +338,26 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
     decision: 'block',
     reason: 'SKS no-question/no-interruption mode is active. User prompt has been queued until the run completes.'
   };
+}
+
+function routeBypassesActiveContext(route: any = null) {
+  return ['DFix', 'Answer', 'Commit', 'CommitAndPush', 'Wiki', 'ComputerUse'].includes(String(route?.id || ''));
+}
+
+function routeIsGitOnly(route: any = null) {
+  return ['Commit', 'CommitAndPush'].includes(String(route?.id || ''));
+}
+
+function shouldPrepareFreshRouteOnActivePrompt(prompt: any, route: any = null, opts: any = {}) {
+  if (!route || opts.command || opts.bypassActiveRoute || opts.goalOverlay) return false;
+  if (looksLikeActiveContinuationPrompt(prompt)) return false;
+  return routeRequiresSubagents(route, prompt);
+}
+
+function looksLikeActiveContinuationPrompt(prompt: any = '') {
+  const text = stripVisibleDecisionAnswerBlocks(String(prompt || '')).trim();
+  if (!text) return false;
+  return /^(?:keep\s+going|continue|resume|go\s+on|proceed|carry\s+on|계속|이어\s*서|이어서|진행|계속\s*해|마저\s*해|다음|next)$/i.test(text);
 }
 
 function isClarificationAwaiting(state: any = {}) {
@@ -1278,7 +1310,10 @@ export async function selftestCodexCommitHooks() {
   const userCommitPushHook = await runHook('user-prompt-submit', { prompt: '배포하게 커밋하고 푸쉬해줘' });
   if (userCommitPushHook.code !== 0) throw new Error(`selftest failed: user commit-push hook ${userCommitPushHook.code}: ${userCommitPushHook.stderr}`);
   const userCommitPushJson = JSON.parse(userCommitPushHook.stdout);
-  if (String(userCommitPushJson.systemMessage || '').includes('git action') || !userCommitPushJson.hookSpecificOutput?.additionalContext) throw new Error('selftest failed: user commit-push prompt should stay on normal route');
+  if (userCommitPushJson.decision === 'block' || userCommitPushJson.hookSpecificOutput?.additionalContext || !String(userCommitPushJson.systemMessage || '').includes('git action')) throw new Error('selftest failed: user commit-push prompt should bypass route');
+  const userCommitPushStop = await runHook('stop', { last_assistant_message: 'Commit and push complete.' });
+  if (userCommitPushStop.code !== 0) throw new Error(`selftest failed: user commit-push stop ${userCommitPushStop.code}: ${userCommitPushStop.stderr}`);
+  if (JSON.parse(userCommitPushStop.stdout).decision === 'block') throw new Error('selftest failed: user commit-push stop bypass');
 }
 
 function normalizeHookResult(name: any, result: any = {}) {

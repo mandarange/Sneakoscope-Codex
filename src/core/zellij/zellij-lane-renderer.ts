@@ -211,6 +211,7 @@ export async function renderZellijLaneFrame(opts: ZellijLaneRenderOptions) {
   await ensureDir(laneDir)
   const laneJson = await readJson<any>(path.join(laneDir, 'lane.json'), null)
   const laneMd = await readText(path.join(laneDir, 'lane.md'), '')
+  const commandBus = await processZellijLaneCommandBus(root, slot)
   // The persistent MAD/Naruto cockpit lane watches its OWN mission ledger, but the
   // orchestrator's native-agent fan-out (sks agent/naruto) writes scheduler state to
   // a separate mission ledger. When this lane's own ledger has no live scheduler
@@ -252,6 +253,7 @@ export async function renderZellijLaneFrame(opts: ZellijLaneRenderOptions) {
     ledger_root: root,
     status: laneJson?.status || 'idle',
     dashboard,
+    command_bus: commandBus,
     view,
     frame_bytes: Buffer.byteLength(frame),
     stdout_only: true,
@@ -260,6 +262,56 @@ export async function renderZellijLaneFrame(opts: ZellijLaneRenderOptions) {
   await writeJsonAtomic(path.join(laneDir, 'zellij-lane-render.json'), report)
   await appendJsonl(path.join(root, 'zellij-lane-renderer-heartbeat.jsonl'), report)
   return { report, frame }
+}
+
+async function processZellijLaneCommandBus(root: string, slot: string) {
+  const laneDir = path.join(root, 'lanes', normalizeSlot(slot))
+  const inboxPath = path.join(laneDir, 'command-inbox.jsonl')
+  const ackPath = path.join(laneDir, 'command-ack.jsonl')
+  const cursorPath = path.join(laneDir, 'command-cursor.json')
+  const inboxText = await readText(inboxPath, '')
+  const lines = inboxText.split(/\r?\n/).filter((line) => line.trim())
+  const cursor = await readJson<any>(cursorPath, null)
+  const seen = Math.max(0, Number(cursor?.line_count || 0))
+  const nextLines = lines.slice(seen)
+  let acked = 0
+  for (const line of nextLines) {
+    let command: any = null
+    try {
+      command = JSON.parse(line)
+    } catch {
+      command = { schema: 'sks.zellij-lane-command.v1', id: `invalid-${seen + acked + 1}`, parse_error: true, raw: line.slice(0, 500) }
+    }
+    await appendJsonl(ackPath, {
+      schema: 'sks.zellij-lane-command-ack.v1',
+      ts: nowIso(),
+      slot_id: normalizeSlot(slot),
+      command_id: command?.id || null,
+      status: command?.parse_error ? 'invalid_json_observed' : 'observed',
+      transport: 'jsonl_nonblocking',
+      action: 'render_lane_ack_only'
+    })
+    acked += 1
+  }
+  if (nextLines.length > 0 || cursor?.line_count !== lines.length) {
+    await writeJsonAtomic(cursorPath, {
+      schema: 'sks.zellij-lane-command-cursor.v1',
+      updated_at: nowIso(),
+      slot_id: normalizeSlot(slot),
+      line_count: lines.length
+    })
+  }
+  return {
+    schema: 'sks.zellij-lane-command-bus.v1',
+    mode: 'jsonl_nonblocking',
+    fifo_policy: 'disabled_to_avoid_writer_blocking',
+    inbox: path.join('lanes', normalizeSlot(slot), 'command-inbox.jsonl'),
+    ack: path.join('lanes', normalizeSlot(slot), 'command-ack.jsonl'),
+    cursor: path.join('lanes', normalizeSlot(slot), 'command-cursor.json'),
+    observed_count: lines.length,
+    newly_acked_count: acked,
+    pending_count: Math.max(0, lines.length - seen - acked)
+  }
 }
 
 export async function runZellijLaneRenderer(opts: ZellijLaneRenderOptions) {

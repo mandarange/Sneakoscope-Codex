@@ -29,7 +29,7 @@ test('UX-Review proof evidence marks reference-only closeout as partial', () => 
 
   assert.equal(evidence.status, 'verified_partial');
   assert.equal(evidence.reference_only, true);
-  assert.equal(evidence.reference_closeout_status, 'source_screenshot_only_generated_image_unavailable');
+  assert.equal(evidence.reference_closeout_status, 'source_screenshot_only_real_generated_image_unavailable');
   assert.equal(evidence.generated_gpt_image_2_callout_images_count, 0);
   assert.ok(evidence.full_verification_blockers.includes('missing_generated_annotated_review_images'));
   assert.deepEqual(evidence.blockers, []);

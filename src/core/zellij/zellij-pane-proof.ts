@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { reconcileZellijLaneSupervisorPaneIds } from '../agents/zellij-lane-supervisor.js'
 import { checkZellijCapability } from './zellij-capability.js'
 import { runZellij } from './zellij-command.js'
 
@@ -34,6 +35,16 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
   if (opts.expectedLaneCount !== undefined) evaluationOpts.expectedLaneCount = opts.expectedLaneCount
   if (expectedMainCommand) evaluationOpts.expectedMainCommandIncludes = expectedMainCommand
   const evaluation = evaluateZellijPaneProofRows(paneRows, evaluationOpts)
+  const paneIdReconciliation = opts.ledgerRoot
+    ? await reconcileZellijLaneSupervisorPaneIds(outRoot, paneRows).catch((err: any) => ({
+        schema: 'sks.zellij-lane-pane-reconciliation.v1',
+        ok: false,
+        changed: false,
+        matched_count: 0,
+        lane_count: 0,
+        blockers: [`zellij_lane_pane_reconciliation_exception:${err?.message || String(err)}`]
+      }))
+    : null
   const blockers = [
     ...capability.blockers,
     ...(opts.require === true && paneRun && !paneRun.ok ? paneRun.blockers.map((blocker) => `zellij_pane_${blocker}`) : []),
@@ -56,6 +67,7 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
     main_command_ok: evaluation.main_command_ok,
     lane_count_ok: evaluation.lane_count_ok,
     geometry_distinct: evaluation.geometry_distinct,
+    pane_id_reconciliation: paneIdReconciliation,
     panes: paneRows,
     command: ['zellij', ...command],
     command_result: paneRun,

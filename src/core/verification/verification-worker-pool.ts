@@ -85,22 +85,26 @@ export async function runVerificationTask(
     const child = spawn(task.command, { cwd, env: { ...process.env, ...(task.env || {}) }, shell: true, detached: true })
     let settled = false
     let timedOut = false
+    const timeoutMs = task.timeout_ms || 10 * 60 * 1000
+    let killTimeout: NodeJS.Timeout | null = null
     const finish = (payload: { code: number | null; error?: string }) => {
       if (settled) return
       settled = true
       clearTimeout(timeout)
-      clearTimeout(killTimeout)
+      if (killTimeout) clearTimeout(killTimeout)
       resolve(payload)
     }
     const timeout = setTimeout(() => {
       timedOut = true
       terminateProcessTree(child.pid, 'SIGTERM')
-      killTimeout.refresh()
-    }, task.timeout_ms || 10 * 60 * 1000)
-    const killTimeout = setTimeout(() => {
-      if (timedOut) terminateProcessTree(child.pid, 'SIGKILL')
-    }, 2_000)
-    killTimeout.unref()
+      killTimeout = setTimeout(async () => {
+        if (!timedOut) return
+        terminateProcessTree(child.pid, 'SIGKILL')
+        await waitForProcessTreeExit(child.pid, 2_000)
+        finish({ code: null, error: `timeout:${timeoutMs}` })
+      }, 2_000)
+      killTimeout.unref()
+    }, timeoutMs)
     child.stdout.on('data', (chunk) => chunks.push(String(chunk)))
     child.stderr.on('data', (chunk) => errChunks.push(String(chunk)))
     child.on('error', (err) => {
@@ -108,7 +112,7 @@ export async function runVerificationTask(
     })
     child.on('close', async (code) => {
       if (timedOut) await waitForProcessTreeExit(child.pid, 2_000)
-      finish({ code, ...(timedOut ? { error: `timeout:${task.timeout_ms}` } : {}) })
+      finish({ code, ...(timedOut ? { error: `timeout:${timeoutMs}` } : {}) })
     })
   })
   await writeTextAtomic(stdoutLog, chunks.join(''))

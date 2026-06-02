@@ -189,7 +189,7 @@
     },
     {
       "file": "scripts/mad-sks-zellij-launch-check.mjs",
-      "symbol": "module",
+      "symbol": "writeMadZellijLaunchGate",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -258,6 +258,12 @@
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "scripts/release-registry-check.mjs",
+      "symbol": "checkPublishAuth",
+      "token": "writeFileSync",
+      "reason": "Release registry auth preflight writes only the scoped release-publish-auth report under .sneakoscope/reports."
     },
     {
       "file": "scripts/release-readiness-report.mjs",

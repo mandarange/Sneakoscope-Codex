@@ -877,6 +877,24 @@
       "can_run_incremental": true
     },
     {
+      "id": "architecture:guard",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/safety/ssot-guard.ts",
+        "src/core/pipeline-internals/runtime-core.ts",
+        "src/core/pipeline-internals/runtime-gates.ts",
+        "src/core/commands/team-command.ts",
+        "src/scripts/release-parallel-check.ts",
+        "scripts/architecture-guard-check.mjs",
+        "docs/architecture-ts-rust-boundary.md",
+        "package.json"
+      ],
+      "always_on_release": true,
+      "required_for_publish": true,
+      "can_run_incremental": true
+    },
+    {
       "id": "blackbox:matrix:contract",
       "tier": "P1",
       "cost": "hermetic",

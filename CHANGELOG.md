@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Zellij parallel lanes now have a real runtime contract.** Generated KDL lanes receive per-slot SKS state dirs, nonblocking JSONL command inbox/ack/outbox files, `SKS_ZELLIJ_*` env, `nice -n 10` launch priority, dispatch throttle metadata, and a FIFO policy that explicitly avoids blocking writers. Live pane proof reconciles dynamic Zellij pane ids back into the lane supervisor instead of relying only on synthetic `zellij-pane-slot-*` ids.
+- **`npm publish` now fails before `prepack` when npm auth is missing, stale, or not a maintainer.** The registry gate checks `npm whoami` and the package maintainer list under `--require-publish-auth`, detects configured-but-rejected npmrc tokens, and explains how to refresh `npm login` or configure an npm-consumed registry token before the expensive build and final registry `PUT /sneakoscope`.
+
+### Added
+
+- **`sks zellij dispatch` / `sks zellij send`.** Operators can queue a lane command through the nonblocking JSONL bus, and optionally target a reconciled real pane id with Zellij `write-chars` via `--write-pane`.
+
+### Verified
+
+- `npm run build --silent`
+- `npm run zellij:layout-valid --silent`
+- `npm run zellij:lane-renderer --silent`
+- `npm run agent:zellij-runtime --silent`
+- `npm run zellij:pane-proof --silent`
+- `npm run zellij:launch-command-truth --silent`
+- `npm run typecheck --silent`
+- `git diff --check`
+- `npm run mad-sks:zellij-launch --silent`
+- `npm run zellij:screen-proof --silent`
+- `npm run zellij:doctor-readiness --silent`
+- `npm run zellij:ui-design --silent`
+- `node ./dist/bin/sks.js zellij dispatch --mission M-agent-zellij --ledger-root /tmp/sks-zellij-dispatch-check --slot slot-001 --text ping --json`
+- `node --test test/unit/release-registry-check.test.mjs test/unit/package-publish-lifecycle.test.mjs`
+- `node ./scripts/release-registry-check.mjs --require-unpublished --require-publish-auth` (correctly detects the rejected `/Users/weklem/.npmrc` token and blocks with E401 repair instructions)
+- `npm run release:check:parallel --silent` (254/254 passed)
 
 
 
@@ -20,6 +47,10 @@ Patch release: restore Codex App compatibility for Codex CLI 0.135-era hook rout
 - **Zellij trackpad scroll now scrolls the conversation, not the prompt.** SKS-launched sessions enable `mouse_mode`, routing the trackpad wheel to the pane under the cursor (the transcript scrollback) instead of the focused Codex prompt. Copy still works via `copy_command=pbcopy` + `copy_on_select`; opt out with `SKS_ZELLIJ_MOUSE_MODE=0`.
 - **Image generation works when authenticated through codex-lb.** `gpt-image-2` routes through the same Codex `/responses` backend the load balancer already proxies, so `$imagegen` no longer hard-blocks for codex-lb-only users (no direct `OPENAI_API_KEY`). The official Codex App `$imagegen` surface stays primary; opt out with `SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK=0`.
 - **The MAD / Naruto cockpit lane reflects live fan-out.** When the lane's own mission ledger is idle, the renderer mirrors the most-recent active agent mission so parallel work shows up instead of a permanent "Workers idle". Disable with `SKS_LANE_FOLLOW_ACTIVE_MISSION=0`.
+- **`sks --mad` now fans out through the native agent swarm.** MAD launch starts a read-only `sks agent run` swarm in the same MAD mission ledger before opening the cockpit, so the right-side lanes are backed by live native workers instead of a single orchestrator-only session. Tune with `--mad-agents`, `--mad-swarm-work-items`, and `--mad-swarm-backend`; use `--no-mad-swarm` only as an emergency UI-only fallback.
+- **Codex App Full Access is no longer shadowed by the Fast profile.** The generated `sks-fast-high` profile no longer pins `sandbox_mode = "workspace-write"`, letting the Codex App/IDE permissions selector own Full Access vs workspace-write. The explicit `sks-mad-high` maintenance profile still uses `danger-full-access` for user-authorized MAD launches.
+- **`$Goal` official-mode detection now checks `codex features list`.** SKS can detect `goals ... true` feature output even when `codex goal --help` is slow, hidden, or unavailable, and still falls back to the SKS goal bridge when no official signal is present.
+- **Substantive follow-up prompts no longer collapse into the previous single active route.** When an active mission exists, new analysis, research, or code-changing `UserPromptSubmit` prompts now prepare a fresh Team/Research-style route with native sessions required instead of only replaying the old active context. Plain continuation prompts such as "keep going" still resume the current route, and simple commit/commit-and-push requests stay lightweight instead of entering Team parallelism.
 - **The "update available" prompt no longer repeats on every turn.** After the choice is shown it stays quiet for a short window (default 8 min, `SKS_UPDATE_OFFER_THROTTLE_MS`) before re-surfacing; accept/decline still take effect immediately.
 - **`sks doctor --fix` re-seeds the Codex App Fast-mode UI table.** The global `~/.codex/config.toml` `[user.fast_mode]` (`visible`/`enabled`/`default_profile`) is refreshed so installs whose config predates the Fast-mode keys get the Codex App speed selector back.
 
@@ -35,6 +66,16 @@ Patch release: restore Codex App compatibility for Codex CLI 0.135-era hook rout
 - `npm run codex:compat --silent`
 - `npm run hooks:semantic-check --silent`
 - `node ./dist/bin/sks.js codex-app check --json` (Git Actions and Chrome Extension pass; local Fast UI remains blocked by `global:top_level_model_reasoning_effort` until `sks doctor --fix` repairs the user's global Codex config)
+- `node --test test/unit/mad-sks-native-swarm-wiring.test.mjs test/unit/auto-review-profile-config.test.mjs test/unit/official-goal-mode.test.mjs`
+- `npm run goal-mode:official-default --silent`
+- `node ./scripts/codex-app-ui-preservation-check.mjs`
+- `npm run mad-sks:zellij-launch --silent`
+- `npm run typecheck --silent`
+- `node --test test/unit/hook-active-route-parallel-refresh.test.mjs test/unit/hook-command-output.test.mjs test/unit/hooks-update-check-control-plane.test.mjs`
+- `npm run hooks:runtime-replay-warning-zero --silent`
+- `npm run selftest -- --mock --silent`
+- `npm run packcheck --silent`
+- `npm run release:check:parallel --silent` (254/254 passed)
 
 ## [1.21.4] - 2026-06-01
 

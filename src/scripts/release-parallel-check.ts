@@ -32,6 +32,7 @@ const tasks: VerificationTask[] = [
   task('build', 'npm run build --silent', { outputs: ['dist'] }),
   task('runtime:no-src-mjs', 'npm run runtime:no-src-mjs --silent', { dependencies: ['build'] }),
   task('runtime:ts-source-of-truth', 'npm run runtime:ts-source-of-truth --silent', { dependencies: ['build'] }),
+  task('architecture:guard', 'npm run architecture:guard --silent', { dependencies: ['build', 'runtime:ts-source-of-truth'] }),
   task('runtime:dist-parity', 'npm run runtime:dist-parity --silent', { dependencies: ['build', 'runtime:no-src-mjs'] }),
   task('routes:proof-artifact-structure', 'npm run routes:proof-artifact-structure --silent', { dependencies: ['build'] }),
   task('agent:codex-app-cockpit', 'npm run agent:codex-app-cockpit --silent', { dependencies: ['build'] }),

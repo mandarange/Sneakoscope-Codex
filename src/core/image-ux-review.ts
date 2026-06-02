@@ -268,15 +268,16 @@ export function buildImageUxGeneratedReviewLedger(contract: any = {}, inventory:
   const existingImages = Array.isArray(existing?.generated_review_images) ? existing.generated_review_images : [];
   const sourceScreens = inventory.source_screens || [];
   const normalizedImages = existingImages.map((image: any, index: number) => normalizeGeneratedReviewImage(image, sourceScreens[index] || {}, opts));
-  const missingScreens = sourceScreens.filter((screen: any) => !normalizedImages.some((image: any) => image.source_screen_id === screen.id));
   const realGeneratedCount = normalizedImages.filter((image: any) => image.real_generated === true && image.mock !== true).length;
+  const missingRealGeneratedScreens = sourceScreens.filter((screen: any) => !normalizedImages.some((image: any) => image.source_screen_id === screen.id && image.real_generated === true && image.mock !== true));
+  const nonRealGeneratedCount = normalizedImages.filter((image: any) => image.real_generated !== true || image.mock === true).length;
   const textOnlyCount = normalizedImages.filter((image: any) => image.text_only === true).length;
   const evidenceBlockers: string[] = Array.from(new Set<string>(
     normalizedImages.flatMap((image: any) => image.evidence_blockers || []).map((blocker: any) => String(blocker))
   ));
   const blockers: string[] = [];
   if (sourceScreens.length === 0) blockers.push('no_source_screenshots_for_imagegen_review');
-  if (missingScreens.length > 0) blockers.push('missing_generated_annotated_review_images', 'generated_review_image_missing');
+  if (missingRealGeneratedScreens.length > 0) blockers.push('missing_generated_annotated_review_images', 'generated_review_image_missing');
   blockers.push(...evidenceBlockers);
   if (textOnlyCount > 0) blockers.push('ux_review_text_only_fallback');
   if (normalizedImages.some((image: any) => image.mock === true && image.real_generated === true)) blockers.push('mock_fixture_marked_real');
@@ -310,15 +311,15 @@ export function buildImageUxGeneratedReviewLedger(contract: any = {}, inventory:
     })),
     generated_count: normalizedImages.length,
     real_generated_count: realGeneratedCount,
+    non_real_generated_count: nonRealGeneratedCount,
     required_count: sourceScreens.length,
     text_only_count: textOnlyCount,
     generated_image_file_evidence_checked: Boolean(opts.root),
     evidence_verified: normalizedImages.length > 0 && evidenceBlockers.length === 0 && realGeneratedCount === normalizedImages.length,
     reference_closeout_eligible: sourceScreens.length > 0
-      && normalizedImages.length === 0
       && realGeneratedCount === 0
       && textOnlyCount === 0
-      && missingScreens.length > 0,
+      && missingRealGeneratedScreens.length > 0,
     blockers: uniqueBlockers,
     passed: sourceScreens.length > 0 && blockers.length === 0 && realGeneratedCount === sourceScreens.length,
     imagegen_blocker: uniqueBlockers.includes('imagegen_capability_missing')
@@ -405,6 +406,8 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
   const fixLoop = parts.fixLoop || runImageUxFixLoop(issueLedger, fixTaskPlan);
   const recapturePlan = parts.recapturePlan || buildRecapturePlan(fixLoop);
   const iterationReport = parts.iterationReport || buildImageUxIterationReport(contract, policy, generatedReviewLedger, issueLedger, fixTaskPlan, fixLoop, recapturePlan);
+  const realGeneratedCount = Number(generatedReviewLedger.real_generated_count || 0);
+  const realGeneratedImages = (generatedReviewLedger.generated_review_images || []).filter((image: any) => image.real_generated === true && image.mock !== true);
   const rawBlockers = [
     ...(inventory.blockers || []),
     ...(generatedReviewLedger.blockers || []),
@@ -414,7 +417,7 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
     ...(recapturePlan.blockers || [])
   ];
   const nonReferenceBlockers = rawBlockers.filter((blocker: any) => !IMAGE_UX_REVIEW_REFERENCE_CLOSABLE_BLOCKERS.has(String(blocker)));
-  const generatedImageUnavailable = Number(generatedReviewLedger.generated_count || 0) === 0
+  const generatedImageUnavailable = realGeneratedCount === 0
     && Number(generatedReviewLedger.required_count || 0) > 0;
   const realSourceScreenshotPresent = inventory.passed === true;
   const officialOrUserScreenshotSource = (inventory.source_screens || []).some((screen: any) => [
@@ -456,15 +459,15 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
     real_source_screenshot_present: realSourceScreenshotPresent,
     computer_use_or_user_screenshot_source: officialOrUserScreenshotSource,
     official_or_user_screenshot_source: officialOrUserScreenshotSource,
-    gpt_image_2_callout_generated: generatedReviewLedger.passed === true && Number(generatedReviewLedger.real_generated_count || 0) > 0,
-    generated_image_ingested: Number(generatedReviewLedger.generated_count || 0) > 0,
+    gpt_image_2_callout_generated: generatedReviewLedger.passed === true && realGeneratedCount > 0,
+    generated_image_ingested: realGeneratedCount > 0,
     callout_extraction_schema_valid: calloutExtractionSchemaValid,
-    issue_ledger_from_generated_callout: issueLedger.extracted_from_generated_callout === true,
+    issue_ledger_from_generated_callout: issueLedger.extracted_from_generated_callout === true && realGeneratedCount > 0,
     p0_p1_zero_after_fix: p0P1ZeroAfterFix,
     fix_loop_executed_or_not_needed: fixLoopExecutedOrNotNeeded,
     changed_screens_rechecked: changedScreensRechecked,
     image_voxel_reference_anchor_created: imageVoxelReferenceAnchorCreated,
-    image_voxel_relations_created: parts.imageVoxelRelationsCreated === true || generatedReviewLedger.generated_review_images?.some((image: any) => image.image_voxel_relation === 'generated_callout_review_of') === true,
+    image_voxel_relations_created: parts.imageVoxelRelationsCreated === true || realGeneratedImages.some((image: any) => image.image_voxel_relation === 'generated_callout_review_of') === true,
     wrongness_checked: wrongnessChecked,
     honest_mode_complete: honestModeComplete,
     required_artifacts: [
@@ -600,28 +603,33 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
 export function imageUxReviewProofEvidence(gate: any = {}, artifacts: any = {}) {
   const issueLedger = artifacts.issue_ledger || {};
   const generated = artifacts.generated_review_ledger || {};
+  const referenceOnly = gate.reference_only === true;
+  const realGeneratedImages = (generated.generated_review_images || []).filter((image: any) => image.real_generated === true && image.mock !== true);
   return {
     schema: 'sks.image-ux-review-proof-evidence.v1',
-    status: gate.reference_only === true ? 'verified_partial' : gate.passed ? 'verified' : generated.generated_count ? 'verified_partial' : artifacts.inventory?.passed ? 'verified_partial' : 'blocked',
-    reference_only: gate.reference_only === true,
-    reference_closeout_status: gate.reference_only === true ? 'source_screenshot_only_generated_image_unavailable' : null,
+    status: referenceOnly ? 'verified_partial' : gate.passed ? 'verified' : generated.generated_count ? 'verified_partial' : artifacts.inventory?.passed ? 'verified_partial' : 'blocked',
+    reference_only: referenceOnly,
+    reference_closeout_status: referenceOnly ? 'source_screenshot_only_real_generated_image_unavailable' : null,
     source_screenshots_count: artifacts.inventory?.source_screens?.length || 0,
     generated_gpt_image_2_callout_images_count: generated.real_generated_count || 0,
     generated_images_total: generated.generated_count || 0,
+    non_real_generated_images_total: generated.non_real_generated_count || 0,
     callout_extraction_schema_status: issueLedger.validation?.ok ? 'valid' : 'blocked',
     callout_extraction_report_status: artifacts.callout_extraction_report?.validation_status || (issueLedger.validation?.ok ? 'valid' : 'missing_or_blocked'),
     open_p0_p1_count: issueLedger.blocking_issue_count || 0,
     fixed_p0_p1_count: (issueLedger.issues || []).filter((issue: any) => ['P0', 'P1'].includes(issue.severity) && issue.status === 'fixed').length,
     recapture_re_review_status: artifacts.recapture_plan?.changed_screens_rechecked_or_not_applicable ? 'complete_or_not_applicable' : 'blocked',
-    image_voxel_relation_count: generated.generated_review_images?.filter((image: any) => image.image_voxel_relation).length || 0,
+    image_voxel_relation_count: referenceOnly ? 0 : realGeneratedImages.filter((image: any) => image.image_voxel_relation).length,
     computer_use_evidence_mode: artifacts.inventory?.source_screens?.some((screen: any) => screen.capture_source === 'codex_native_computer_use_screenshot' || screen.capture_source === 'codex_computer_use_screenshot') ? 'native_computer_use_source_screenshot' : artifacts.inventory?.source_screens?.some((screen: any) => screen.capture_source === 'codex_chrome_extension_screenshot') ? 'chrome_extension_source_screenshot' : 'user_or_static_screenshot',
     claims: {
       ux_review_source_screenshot_verified: artifacts.inventory?.passed === true,
       ux_review_gpt_image_2_callouts_generated: (generated.real_generated_count || 0) > 0,
-      ux_review_issues_extracted_from_callout_image: issueLedger.extracted_from_generated_callout === true,
+      ux_review_issues_extracted_from_callout_image: referenceOnly ? false : issueLedger.extracted_from_generated_callout === true,
       ux_review_p0_p1_fixed_or_blocked: (issueLedger.blocking_issue_count || 0) === 0 || (gate.blockers || []).length > 0,
       ux_review_changed_screens_rechecked: artifacts.recapture_plan?.changed_screens_rechecked_or_not_applicable === true,
-      ux_review_image_voxel_relations_verified: (generated.generated_review_images || []).some((image: any) => image.image_voxel_relation)
+      ux_review_image_voxel_relations_verified: referenceOnly
+        ? gate.source_reference_evidence?.ok === true
+        : realGeneratedImages.some((image: any) => image.image_voxel_relation)
     },
     full_verification_blockers: gate.full_verification_blockers || gate.blockers || [],
     blockers: gate.blockers || []
@@ -689,7 +697,7 @@ async function ensureImageUxHonestModeEvidence(dir: string, parts: any = {}, opt
     const issues = parts.issueLedger || {};
     const sourceEvidence = parts.sourceReferenceEvidence || {};
     const sourceCaptured = inventory.passed === true && Number(inventory.source_screens?.length || 0) > 0;
-    const generatedMissing = Number(generated.generated_count || 0) === 0 && Number(generated.required_count || 0) > 0;
+    const generatedMissing = Number(generated.real_generated_count || 0) === 0 && Number(generated.required_count || 0) > 0;
     report = {
       schema: 'sks.final-honest-mode-report.v1',
       created_at: nowIso(),
@@ -705,7 +713,7 @@ async function ensureImageUxHonestModeEvidence(dir: string, parts: any = {}, opt
           evidence: ['image-voxel-ledger.json', 'visual-anchors.json', IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT]
         }] : []),
         ...(generatedMissing ? [{
-          claim: 'Missing generated gpt-image-2 annotated review image is recorded as a full-verification blocker.',
+          claim: 'No real generated gpt-image-2 annotated review image is recorded; fake/mock generated images are not counted as full UX evidence.',
           evidence: [IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT]
         }] : []),
         ...(issues.validation?.ok === true ? [{
@@ -714,13 +722,13 @@ async function ensureImageUxHonestModeEvidence(dir: string, parts: any = {}, opt
         }] : [])
       ],
       unverified: [
-        ...(generatedMissing ? ['No generated gpt-image-2 annotated review image exists, so annotated-image callouts and full UX verification remain unverified.'] : []),
+        ...(generatedMissing ? ['No real generated gpt-image-2 annotated review image exists, so annotated-image callouts and full UX verification remain unverified.'] : []),
         ...(issues.extracted_from_generated_callout !== true ? ['No issue row was extracted from a generated annotated callout image.'] : [])
       ],
       blocked: [
         ...(generatedMissing ? [{
           item: 'full_image_ux_review_verification',
-          reason: 'generated_gpt_image_2_annotated_review_image_unavailable'
+          reason: 'real_generated_gpt_image_2_annotated_review_image_unavailable'
         }] : [])
       ],
       risks: [

@@ -111,7 +111,7 @@ export const SKS_CONFIG_PROFILES: Array<{ name: string; stripTable: boolean; blo
   { name: 'sks-task-low', stripTable: true, block: sksProfileFileBlock({ effort: 'low' }) },
   { name: 'sks-task-medium', stripTable: true, block: sksProfileFileBlock({ effort: 'medium' }) },
   { name: 'sks-logic-high', stripTable: true, block: sksProfileFileBlock({ effort: 'high' }) },
-  { name: 'sks-fast-high', stripTable: false, block: sksProfileFileBlock({ effort: 'high', serviceTier: 'fast' }) },
+  { name: 'sks-fast-high', stripTable: false, block: sksProfileFileBlock({ effort: 'high', serviceTier: 'fast', inheritSandbox: true }) },
   { name: 'sks-research-xhigh', stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh' }) },
   { name: 'sks-research', stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh', approvalPolicy: 'never' }) },
   { name: 'sks-team', stripTable: true, block: sksProfileFileBlock({ effort: 'medium' }) },
@@ -125,7 +125,7 @@ function sksProfileFileBlock(opts: any = {}) {
     `service_tier = "${opts.serviceTier || 'fast'}"`,
     `approval_policy = "${opts.approvalPolicy || 'on-request'}"`,
     ...(opts.reviewer ? [`approvals_reviewer = "${opts.reviewer}"`] : []),
-    `sandbox_mode = "${opts.sandboxMode || 'workspace-write'}"`,
+    ...(opts.inheritSandbox ? [] : [`sandbox_mode = "${opts.sandboxMode || 'workspace-write'}"`]),
     `model_reasoning_effort = "${opts.effort || 'medium'}"`
   ].join('\n');
 }

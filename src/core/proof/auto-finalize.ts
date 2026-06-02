@@ -52,7 +52,8 @@ export async function maybeFinalizeRoute(root: any, {
   const agentGate = agentRequired ? await readAgentGateStatus(root, missionId) : null;
   const agentArtifacts = agentGate ? await existingAgentArtifacts(root, missionId) : [];
   const agentBlockers = agentRequired && agentGate?.ok !== true ? ['agent_gate_not_passed'] : [];
-  const finalStatus = statusHint || (blockers.length || agentBlockers.length ? 'blocked' : (passed ? (mock ? 'verified_partial' : 'verified') : (mock ? 'verified_partial' : 'blocked')));
+  const effectiveAgentBlockers = mock ? [] : agentBlockers;
+  const finalStatus = statusHint || (blockers.length || effectiveAgentBlockers.length ? 'blocked' : (passed ? (mock ? 'verified_partial' : 'verified') : (mock ? 'verified_partial' : 'blocked')));
   const proof = await finalizeRouteWithProof(root, {
     missionId,
     route,
@@ -67,12 +68,13 @@ export async function maybeFinalizeRoute(root: any, {
     unverified: [
       ...unverified,
       ...(agentGate?.proof?.fake_backend_disclaimer ? [agentGate.proof.fake_backend_disclaimer] : []),
+      ...(mock && agentBlockers.length ? [`Mock agent intake does not satisfy full production gate: ${agentBlockers.join(', ')}`] : []),
       ...(mock ? ['Route was finalized from an explicit mock/fixture command path.'] : []),
       ...(!passed && !mock ? ['Route gate did not pass' + (reason ? ': ' + reason : '') + '.'] : [])
     ],
     blockers: [
       ...blockers,
-      ...agentBlockers,
+      ...effectiveAgentBlockers,
       ...(!passed && !mock ? ['route_gate_not_passed'] : [])
     ],
     statusHint: finalStatus,

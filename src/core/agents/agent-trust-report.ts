@@ -4,6 +4,7 @@ import { readZellijLaneSupervisor } from './zellij-lane-supervisor.js'
 
 export async function writeAgentTrustReport(root: string, input: any = {}) {
   const laneSupervisor = await readZellijLaneSupervisor(root)
+  const zellijRuntimeManifest = await readJson<any>(path.join(root, 'zellij-lane-runtime.json'), null)
   const zellijPaneProof = await readJson<any>(path.join(root, 'zellij-pane-proof.json'), null)
   const cleanupProof = await readJson<any>(path.join(root, 'agent-cleanup-proof.json'), null)
   const intelligentWorkGraph = await readJson<any>(path.join(root, 'agent-intelligent-work-graph.json'), null)
@@ -62,6 +63,13 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
       zellij_lane_manifest: 'agent-zellij-lanes.json',
       zellij_lane_persistence: {
         supervisor: 'agent-zellij-lane-supervisor.json',
+        runtime_manifest: zellijRuntimeManifest ? 'zellij-lane-runtime.json' : null,
+        dispatch_mode: laneSupervisor?.dispatch_mode || zellijRuntimeManifest?.dispatch_mode || null,
+        fifo_policy: laneSupervisor?.fifo_policy || zellijRuntimeManifest?.fifo_policy || null,
+        resource_throttle_ms: laneSupervisor?.resource_throttle_ms || zellijRuntimeManifest?.resource_throttle_ms || null,
+        nice_level: laneSupervisor?.nice_level ?? zellijRuntimeManifest?.nice_level ?? null,
+        runtime_policy_ok: Array.isArray(laneSupervisor?.lanes) && laneSupervisor.lanes.every((lane: any) => lane?.dispatch_mode === 'jsonl_nonblocking' && lane?.command_inbox && lane?.state_dir),
+        pane_id_source_ok: Array.isArray(laneSupervisor?.lanes) && laneSupervisor.lanes.every((lane: any) => typeof lane?.pane_id_source === 'string' && lane.pane_id_source.length > 0),
         no_flicker_verified: laneSupervisor?.no_flicker_verified === true,
         pane_survival_checked: laneSupervisor?.pane_survival_checked === true,
         unexpected_close_count: laneSupervisor?.unexpected_close_count || 0,
@@ -136,6 +144,10 @@ function renderAgentTrustReportMarkdown(report: any) {
     `- expected_backfill_count: ${orchestration.expected_backfill_count ?? 'unknown'}`,
     `- pending_queue_drained: ${orchestration.pending_queue_drained === true}`,
     `- zellij_lane_manifest: ${orchestration.zellij_lane_manifest || 'unknown'}`,
+    `- zellij_runtime_manifest: ${orchestration.zellij_lane_persistence?.runtime_manifest || 'not_run'}`,
+    `- zellij_dispatch_mode: ${orchestration.zellij_lane_persistence?.dispatch_mode || 'unknown'}`,
+    `- zellij_fifo_policy: ${orchestration.zellij_lane_persistence?.fifo_policy || 'unknown'}`,
+    `- zellij_runtime_policy_ok: ${orchestration.zellij_lane_persistence?.runtime_policy_ok === true}`,
     `- zellij_no_flicker_verified: ${orchestration.zellij_lane_persistence?.no_flicker_verified === true}`,
     `- zellij_pane_survival_checked: ${orchestration.zellij_lane_persistence?.pane_survival_checked === true}`,
     `- zellij_pane_proof_ok: ${orchestration.zellij_lane_persistence?.pane_proof_ok === true}`,
