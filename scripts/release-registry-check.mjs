@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const expectedRegistry = 'https://registry.npmjs.org/';
 const requireUnpublished = process.argv.includes('--require-unpublished');
+const requirePublishAuth = process.argv.includes('--require-publish-auth');
 const skipNetwork = process.env.SKS_SKIP_REGISTRY_NETWORK_CHECK === '1';
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
@@ -192,10 +193,146 @@ function checkPublishedVersion(pkg) {
   console.log(`Registry metadata check passed: ${pkg.name}@${pkg.version}; ${note}.`);
 }
 
+function checkPublishAuth(pkg) {
+  if (skipNetwork) {
+    fail('publish auth check cannot run when SKS_SKIP_REGISTRY_NETWORK_CHECK=1 is set');
+  }
+
+  const env = npmRegistryReadEnv({
+    npm_config_cache: process.env.SKS_RELEASE_NPM_CACHE || path.join(os.tmpdir(), 'sneakoscope-npm-cache')
+  });
+  const whoami = run(npmBin, ['whoami', '--registry', expectedRegistry], { env });
+  if (whoami.status !== 0) {
+    const authHints = npmAuthSourceHints(env);
+    fail(
+      'npm publish auth is missing or invalid',
+      [
+        tail(`${whoami.stdout || ''}\n${whoami.stderr || ''}`),
+        '',
+        ...publishAuthRepairInstructions(pkg, authHints)
+      ].join('\n')
+    );
+  }
+
+  const user = normalizeNpmUser(whoami.stdout);
+  if (!user) fail('npm whoami returned an empty username', whoami.stdout || '');
+
+  const maintainers = packageMaintainers(pkg, env);
+  if (maintainers.length > 0 && !maintainers.includes(user)) {
+    fail(
+      'authenticated npm user is not a package maintainer',
+      [
+        `npm whoami: ${user}`,
+        `${pkg.name} maintainers: ${maintainers.join(', ')}`,
+        `Log in as one of the listed maintainers or ask an owner to run \`npm owner add ${user} ${pkg.name}\`.`
+      ].join('\n')
+    );
+  }
+
+  const report = {
+    schema: 'sks.release-publish-auth.v1',
+    ok: true,
+    package: pkg.name,
+    version: pkg.version,
+    registry: expectedRegistry,
+    npm_user: user,
+    maintainers,
+    maintainer_match: maintainers.length === 0 ? null : maintainers.includes(user),
+    generated_at: new Date().toISOString()
+  };
+  const out = path.join(root, '.sneakoscope', 'reports', 'release-publish-auth.json');
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(`Publish auth check passed: ${pkg.name}@${pkg.version} as ${user}.`);
+}
+
+function publishAuthRepairInstructions(pkg, authHints) {
+  const lines = [];
+  if (authHints.length > 0) {
+    lines.push(`npm auth config was found (${authHints.join(', ')}), but the npm registry rejected it.`);
+    lines.push('That usually means the token is expired, revoked, not valid for npmjs.org, or not publish-capable for this package.');
+  } else {
+    lines.push('No npm auth token was found in the checked npm config/env locations.');
+  }
+  lines.push(`Refresh local auth: \`npm logout --registry ${expectedRegistry}\`, then \`npm login --registry ${expectedRegistry}\` as a maintainer of ${pkg.name}.`);
+  lines.push(`Verify before publishing: \`npm whoami --registry ${expectedRegistry}\`.`);
+  lines.push('For token-based publishing, configure npm itself with a registry token, for example `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` in the npm userconfig/project .npmrc and export a publish-capable token. A raw `NPM_TOKEN` environment variable alone is not enough unless npm config references it.');
+  return lines;
+}
+
+function npmAuthSourceHints(env) {
+  const hints = [];
+  if (env.NODE_AUTH_TOKEN) hints.push('NODE_AUTH_TOKEN env');
+  if (env.NPM_TOKEN) hints.push('NPM_TOKEN env (requires npmrc interpolation)');
+  for (const file of npmConfigCandidateFiles(env)) {
+    for (const hint of npmAuthHintsFromFile(file)) hints.push(hint);
+  }
+  return [...new Set(hints)];
+}
+
+function npmConfigCandidateFiles(env) {
+  const files = [
+    path.join(root, '.npmrc'),
+    env.npm_config_userconfig,
+    env.NPM_CONFIG_USERCONFIG,
+    path.join(os.homedir(), '.npmrc')
+  ].filter(Boolean);
+  return [...new Set(files.map((file) => path.resolve(String(file))))];
+}
+
+function npmAuthHintsFromFile(file) {
+  if (!fs.existsSync(file)) return [];
+  let text = '';
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return [];
+  }
+  const hints = [];
+  for (const [index, line] of text.split(/\r?\n/).entries()) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) continue;
+    const lower = trimmed.toLowerCase();
+    const hasAuthKey = /(?::|^)_authtoken\s*=|(?::|^)_auth\s*=|(?::|^)username\s*=|(?::|^)_password\s*=/.test(lower);
+    if (!hasAuthKey) continue;
+    const scopedToExpectedRegistry = lower.includes('//registry.npmjs.org/') || lower.startsWith('_auth');
+    if (scopedToExpectedRegistry) hints.push(`${file}:${index + 1}`);
+  }
+  return hints;
+}
+
+function packageMaintainers(pkg, env) {
+  const result = run(npmBin, ['view', pkg.name, 'maintainers', '--json', '--registry', expectedRegistry], { env });
+  if (result.status !== 0) {
+    const text = `${result.stdout || ''}\n${result.stderr || ''}`;
+    if (/E404|not in this registry|No match found/i.test(text)) return [];
+    fail('npm maintainer lookup failed', text);
+  }
+  try {
+    const parsed = JSON.parse(result.stdout);
+    const rows = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+    return [...new Set(rows.map(normalizeNpmUser).filter(Boolean))].sort();
+  } catch {
+    return [...new Set(String(result.stdout || '').split(/\r?\n/).map(normalizeNpmUser).filter(Boolean))].sort();
+  }
+}
+
+function normalizeNpmUser(value) {
+  if (!value) return '';
+  if (typeof value === 'object') return normalizeNpmUser(value.name || value.username || '');
+  return String(value).trim().replace(/^@/, '').split(/\s+/)[0].toLowerCase();
+}
+
+function tail(value, limit = 1200) {
+  const text = String(value || '').trim();
+  return text.length > limit ? text.slice(-limit) : text;
+}
+
 const pkg = readJson('package.json');
 checkPackagePublishConfig(pkg);
 checkRootNpmrc(pkg);
 checkLockfile(pkg);
 checkPackedMetadata(pkg);
 checkPublishedVersion(pkg);
+if (requirePublishAuth) checkPublishAuth(pkg);
 console.log(`Release registry check passed: ${pkg.name}@${pkg.version} -> ${expectedRegistry}`);

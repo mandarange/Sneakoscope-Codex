@@ -55,3 +55,19 @@ test('enableAutoReview writes profile files instead of legacy profile tables', a
   assert.match(profile, /^model_reasoning_effort\s*=\s*"medium"/m);
   assert.match(highProfile, /^model_reasoning_effort\s*=\s*"high"/m);
 });
+
+test('sks-fast-high profile is sandbox-neutral so Codex App permissions selector wins', async () => {
+  const mod = await import('../../dist/core/auto-review.js');
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-profile-'));
+  const codexHome = path.join(home, '.codex');
+  await fs.mkdir(codexHome, { recursive: true });
+  const configPath = path.join(codexHome, 'config.toml');
+  await fs.writeFile(configPath, 'model = "gpt-5.5"\n');
+
+  await mod.migrateSksProfilesToPerFile({ env: { HOME: home }, configPath });
+  const fastProfile = await fs.readFile(path.join(codexHome, 'sks-fast-high.config.toml'), 'utf8');
+
+  assert.match(fastProfile, /^service_tier\s*=\s*"fast"/m);
+  assert.match(fastProfile, /^model_reasoning_effort\s*=\s*"high"/m);
+  assert.doesNotMatch(fastProfile, /^sandbox_mode\s*=/m);
+});

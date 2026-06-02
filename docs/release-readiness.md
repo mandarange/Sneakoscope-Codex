@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 1.21.5 keeps the release-readiness contract stable while restoring Codex App compatibility for Codex CLI 0.135-era routing and readiness checks. Codex App `UserPromptSubmit` hooks now route mixed complaint/directive repair prompts to `$Team` instead of `$Answer`, bare `context7 mcp` wording no longer implies `$DB`, and Git Actions readiness now uses the `codex remote-control` command/version capability instead of the removed `remote_control` feature flag. SKS carries forward the 1.21.4 Zellij lane, Naruto, and terminal scrollback fixes; the local Codex App readiness check still reports user-config Fast UI blockers separately when `~/.codex/config.toml` contains top-level `model_reasoning_effort`.
+SKS 1.21.5 keeps the release-readiness contract stable while restoring Codex App compatibility for Codex CLI 0.135-era routing and readiness checks. Codex App `UserPromptSubmit` hooks now route mixed complaint/directive repair prompts to `$Team` instead of `$Answer`, bare `context7 mcp` wording no longer implies `$DB`, and Git Actions readiness now uses the `codex remote-control` command/version capability instead of the removed `remote_control` feature flag. Repeated substantive prompts during an active mission now prepare a fresh Team/Research-style route with native-session evidence instead of replaying only the previous active route context; plain continuation prompts and simple commit-only requests remain lightweight exceptions. SKS carries forward the 1.21.4 Zellij lane, Naruto, and terminal scrollback fixes, and the next readiness cycle also records Zellij lane runtime manifests, nonblocking JSONL dispatch, and dynamic pane-id reconciliation. The local Codex App readiness check still reports user-config Fast UI blockers separately when `~/.codex/config.toml` contains top-level `model_reasoning_effort`.
 
 The current `sks.release-readiness.v1` report covers actual Codex config-load truth, Codex config EPERM self-heal, doctor real-fix readiness, MAD launch preflight, Zellij readiness/proof, install-time Zellij dependency repair, Zellij socket-dir launch metadata, MAD attach-command visibility, Zellij clipboard/mouse-mode launch evidence, native-agent visual lane count evidence, and official Fast mode service-tier propagation. `ok: true` in the 1.21.3 readiness report means config readability, actual/fake Codex config-load proof, project config policy splitting, EPERM repair proof, MAD preflight, Zellij-only runtime checks, background-layout launch wiring, socket-dir fallback evidence, attach-command output evidence, clipboard command/mouse-mode evidence, native-agent right-pane lane evidence, and `-c service_tier=fast` propagation evidence have no remaining blockers.
 
@@ -35,6 +35,19 @@ re-verifies the stamp. The change-aware incremental runner
 `npm run release:check:dynamic:execute` is a local/CI acceleration only — it narrows
 the gate set to changed inputs and caches results, so it **cannot** authorize a publish
 on its own. See `docs/dynamic-release-pipeline.md` for the two-tier model.
+
+`prepublishOnly` also runs `release-registry-check.mjs --require-publish-auth`
+before `prepack`. That check uses the documented npm `whoami` identity and the
+published package maintainer list to prove the current shell can publish
+`sneakoscope`; otherwise it fails early with an `npm login --registry
+https://registry.npmjs.org/` instruction instead of allowing the final registry
+`PUT` to fail after the package build. If npm config already contains a token but
+`whoami` returns `E401`, the token is treated as stale/revoked/wrong-scope and
+the gate reports the redacted config location. Token-based publishing must be
+configured through npm itself, for example an npmrc entry such as
+`//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` plus an exported
+publish-capable token; a raw `NPM_TOKEN` environment variable alone is not enough
+unless npm config references it.
 
 ```bash
 npm run xai-mcp:capability

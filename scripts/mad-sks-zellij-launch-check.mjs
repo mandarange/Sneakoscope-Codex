@@ -32,6 +32,14 @@ const autoAttachOk = madCommand.includes('shouldAutoAttachZellij(args)')
   && madCommand.includes('process.env.ZELLIJ')
   && madCommand.includes("list.includes('--attach')")
   && madCommand.includes('process.stdout.isTTY && process.stdin.isTTY');
+const nativeSwarmOk = madCommand.includes('startMadNativeSwarm(')
+  && madCommand.includes('stripMadLaunchOnlyArgs(args)')
+  && madCommand.includes('function madLaunchValueFlags()')
+  && madCommand.includes("route: '$MAD-SKS'")
+  && madCommand.includes("route_command: 'sks --mad native swarm'")
+  && madCommand.includes("same_mission_ledger: true")
+  && madCommand.includes('slotCount: madNativeSwarm.lane_count || 1')
+  && madCommand.includes('mad_sks.native_swarm_started');
 const codexPaneChecks = {
   main_pane_kind: report.main_pane_kind === 'codex_interactive',
   report_enabled: report.codex_pane?.enabled === true,
@@ -75,11 +83,15 @@ const ok = report.kind === 'mad'
   && installSafetyOk
   && consoleDetailOk
   && autoAttachOk
+  && nativeSwarmOk
   && clipboardCliOk
   && codexPaneOk;
-const gate = { schema: 'sks.mad-sks-zellij-launch-check.v1', ok, install_safety_ok: installSafetyOk, console_detail_ok: consoleDetailOk, auto_attach_ok: autoAttachOk, clipboard_cli_ok: clipboardCliOk, codex_pane_ok: codexPaneOk, codex_pane_checks: codexPaneChecks, report };
-await fs.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
-await fs.writeFile(path.join(root, '.sneakoscope', 'reports', 'mad-sks-zellij-launch.json'), `${JSON.stringify(gate, null, 2)}\n`);
+const gate = { schema: 'sks.mad-sks-zellij-launch-check.v1', ok, install_safety_ok: installSafetyOk, console_detail_ok: consoleDetailOk, auto_attach_ok: autoAttachOk, native_swarm_ok: nativeSwarmOk, clipboard_cli_ok: clipboardCliOk, codex_pane_ok: codexPaneOk, codex_pane_checks: codexPaneChecks, report };
+await writeMadZellijLaunchGate(gate);
 emit(gate);
+async function writeMadZellijLaunchGate(gate) {
+  await fs.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
+  await fs.writeFile(path.join(root, '.sneakoscope', 'reports', 'mad-sks-zellij-launch.json'), `${JSON.stringify(gate, null, 2)}\n`);
+}
 function emit(report) { console.log(JSON.stringify(report, null, 2)); if (!report.ok) process.exitCode = 1; }
 function fail(blocker, detail) { emit({ schema: 'sks.mad-sks-zellij-launch-check.v1', ok: false, blockers: [blocker], detail }); process.exit(1); }

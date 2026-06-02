@@ -831,6 +831,8 @@ export function routePrompt(prompt: any): any {
     return route;
   }
   if (hasFromChatImgSignal(text)) return routeById('Team');
+  const simpleGitRoute = simpleGitOnlyRouteId(text);
+  if (simpleGitRoute) return routeById(simpleGitRoute);
   if (looksLikePresentationArtifactRequest(text)) return routeById('PPT');
   if (looksLikeImageUxReviewRequest(text)) return routeById('ImageUXReview');
   if (looksLikeComputerUseFastLane(text)) return routeById('ComputerUse');
@@ -917,7 +919,7 @@ export function routeRequiresSubagents(route: any, prompt: any = '') {
   if (!route) return false;
   if (route.id === 'Team') return true;
   if (route.id === 'SKS') return looksLikeTeamDefaultWork(prompt);
-  if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse') return false;
+  if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse' || route.id === 'Commit' || route.id === 'CommitAndPush') return false;
   if (route.id === 'PPT') return false;
   if (route.id === 'ImageUXReview') return false;
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
@@ -925,6 +927,22 @@ export function routeRequiresSubagents(route: any, prompt: any = '') {
   if (route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
   if (route.id === 'DFix') return looksLikeCodeChangingWork(prompt) && !looksLikeTinyDirectFix(prompt);
   return looksLikeExecutionWork(prompt);
+}
+
+export function simpleGitOnlyRouteId(prompt: any = '') {
+  const text = stripVisibleDecisionAnswerBlocks(String(prompt || '')).trim();
+  if (!text) return null;
+  const hasCommit = /\bcommit\b|커밋/i.test(text);
+  const hasPush = /\bpush\b|푸쉬|푸시/i.test(text);
+  if (!hasCommit && !hasPush) return null;
+  const repairOrImplementationCue = /(고쳐|수정|변경|해결|구현|코드|버그|오류|에러|문제|깨짐|작동|분석|조사|리서치|설계|fix|repair|resolve|solve|implement|patch|bug|error|problem|broken|analy[sz]e|research|design|refactor|hook|pipeline|route|routing)/i.test(text);
+  const safeGitObjectCue = /(변경사항|스테이징|스테이지|현재\s*변경|작업\s*내용|diff|staged|current\s+changes|changes|working\s+tree|git)/i.test(text);
+  if (repairOrImplementationCue && !safeGitObjectCue) return null;
+  const commitAction = hasCommit && /(커밋\s*(?:하고|해|해줘|해주세요|생성|만들|작성)|(?:create|make|do|write)?\s*(?:a\s+)?commit(?:\s+(?:and|&)\s+push)?|commit\s+(?:changes|staged|current))/i.test(text);
+  const pushAction = hasPush && /(푸쉬|푸시|\bpush\b)/i.test(text);
+  if (commitAction && pushAction) return 'CommitAndPush';
+  if (commitAction) return 'Commit';
+  return null;
 }
 
 export function reflectionRequiredForRoute(route: any) {

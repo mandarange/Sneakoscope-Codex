@@ -1519,7 +1519,10 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'model = "gpt-5.5"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'service_tier = "fast"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'approval_policy = "on-request"');
-  next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'sandbox_mode = "workspace-write"');
+  // Do not force a sandbox from the Codex App fast profile. The App/IDE
+  // permissions selector owns full-access vs workspace-write; this profile only
+  // supplies SKS's model, speed, approval, and reasoning defaults.
+  next = removeTomlTableKey(next, 'profiles.sks-fast-high', 'sandbox_mode');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'model_reasoning_effort = "high"');
   // Plugin auto-enable is OPT-IN only. Force-writing `[plugins."name@marketplace"] enabled =
   // true` for marketplace plugins the App may not have installed (different build/channel)

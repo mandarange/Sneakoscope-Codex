@@ -57,7 +57,12 @@ delete process.env.SKS_MANAGE_CODEX_APP_PLUGINS;
 // 5) Fresh/empty config still gets [features] + hooks + [profiles.sks-fast-high] (fresh enablement).
 {
   const out = normalize('');
-  const ok = /\[features\]/.test(out) && featureValue(out, 'hooks') === 'true' && /\[profiles\.sks-fast-high\]/.test(out);
+  const fastProfile = tableBody(out, 'profiles.sks-fast-high');
+  const ok = /\[features\]/.test(out)
+    && featureValue(out, 'hooks') === 'true'
+    && /\[profiles\.sks-fast-high\]/.test(out)
+    && /service_tier\s*=\s*"fast"/.test(fastProfile)
+    && !/sandbox_mode\s*=/.test(fastProfile);
   results.push({ case: 'fresh_config_seeds_defaults', ok });
 }
 
@@ -79,3 +84,15 @@ if (!ok) {
   process.exit(1);
 }
 emitGate('codex-app:ui-preservation', { cases: results.map((r) => r.case) });
+
+function tableBody(text, table) {
+  const lines = String(text || '').split('\n');
+  const start = lines.findIndex((line) => line.trim() === `[${table}]`);
+  if (start < 0) return '';
+  const body = [];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^\s*\[.+\]\s*$/.test(lines[i])) break;
+    body.push(lines[i]);
+  }
+  return body.join('\n');
+}

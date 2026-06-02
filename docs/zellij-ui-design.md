@@ -54,6 +54,28 @@ Ctrl+q detach · sks doctor --fix · sks zellij status · sks agent rollback-pat
 The footer wraps onto additional lines when the width cannot hold the whole
 palette.
 
+## Runtime and dispatch
+
+Every generated Zellij lane has a companion runtime manifest:
+
+- `zellij-lane-runtime.json` at the mission agent ledger root.
+- `lanes/<slot>/runtime.json` for each visible slot.
+- `lanes/<slot>/command-inbox.jsonl`, `command-ack.jsonl`, and
+  `command-outbox.jsonl` for nonblocking lane coordination.
+- `lanes/<slot>/pane-id.json` for the current pane id and its evidence source.
+
+The command bus is JSONL-first instead of FIFO-first so a writer never blocks
+when a pane has not finished booting. The lane renderer acknowledges newly seen
+commands into `command-ack.jsonl`; operators can queue commands with
+`sks zellij dispatch --mission <mission> --slot slot-001 --text "..."`. Passing
+`--write-pane` additionally uses Zellij `write-chars` only after the supervisor
+has a reconciled real pane id.
+
+The layout injects `SKS_ZELLIJ_*` env vars for the lane's ledger, state dir,
+command bus, heartbeat, pane-id record, drain signal, dispatch throttle, and
+nice level. Lane commands run through `nice -n 10` by default on Unix-like
+systems so heavy parallel renders do not starve the interactive terminal UI.
+
 ## Example frame (80 columns, color stripped)
 
 ```

@@ -3,6 +3,7 @@ import { appendJsonl, readJson, writeJsonAtomic } from '../fsx.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { buildFixturePatchEnvelopes } from './agent-runner-fake.js'
 import { fastModeEnv, resolveFastModePolicy } from './fast-mode-policy.js'
+import { buildZellijLaneRuntimePolicy, buildZellijLaneShellCommand } from '../zellij/zellij-lane-runtime.js'
 
 export function buildZellijAgentPanePlan(agent: any, slice: any = {}) {
   const agentId = String(agent?.id || 'agent')
@@ -82,7 +83,12 @@ async function recordZellijPane(agent: any, slice: any, opts: any = {}) {
   const supervisorEvidence = await recordSupervisorLaneEvidence(root, agent, slice, sessionName)
   if (supervisorEvidence) return supervisorEvidence
   const slotId = String(agent.slot_id || agent.id)
-  const command = `sks zellij-lane --mission ${opts.missionId || 'latest'} --slot ${slotId} --ledger-root ${root} --follow`
+  const runtime = buildZellijLaneRuntimePolicy(root, {
+    missionId: opts.missionId || 'latest',
+    sessionName,
+    slotId
+  })
+  const command = buildZellijLaneShellCommand(`sks zellij-lane --mission ${opts.missionId || 'latest'} --slot ${slotId} --ledger-root ${root} --follow`, runtime)
   const evidence = {
     schema: 'sks.agent-zellij-pane-launch.v1',
     generated_at: new Date().toISOString(),
@@ -93,7 +99,14 @@ async function recordZellijPane(agent: any, slice: any, opts: any = {}) {
     session_id: agent.session_id,
     session_name: sessionName,
     pane_id: `zellij-pane-${slotId}`,
+    pane_id_source: 'synthetic_layout_pending_proof',
     command,
+    command_inbox: runtime.command_inbox,
+    command_ack: runtime.command_ack,
+    dispatch_mode: runtime.dispatch.mode,
+    dispatch_throttle_ms: runtime.dispatch.throttle_ms,
+    nice_level: runtime.resource.nice_level,
+    runtime,
     attach_command: `zellij attach ${sessionName}`,
     blockers: opts.real === true ? ['zellij_real_launch_requires_session_layout'] : [],
     warnings: opts.real === true ? [] : ['zellij_artifact_mode']
@@ -117,7 +130,14 @@ async function recordSupervisorLaneEvidence(root: string, agent: any, slice: any
     session_id: agent.session_id,
     session_name: supervisor.session_name || sessionName,
     pane_id: lane.pane_id,
+    pane_id_source: lane.pane_id_source || 'supervisor',
     command: lane.command,
+    command_inbox: lane.command_inbox || lane.runtime?.command_inbox || null,
+    command_ack: lane.command_ack || lane.runtime?.command_ack || null,
+    dispatch_mode: lane.dispatch_mode || lane.runtime?.dispatch?.mode || 'jsonl_nonblocking',
+    dispatch_throttle_ms: lane.dispatch_throttle_ms || lane.runtime?.dispatch?.throttle_ms || null,
+    nice_level: lane.nice_level ?? lane.runtime?.resource?.nice_level ?? null,
+    runtime: lane.runtime || null,
     attach_command: `zellij attach ${supervisor.session_name || sessionName}`,
     persistent_slot_lane: true,
     reused_persistent_slot_lane: true,

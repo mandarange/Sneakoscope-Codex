@@ -16,6 +16,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const ledger = await validateAgentLedgerHashChain(root)
   const zellijLanes = await readJson<any>(path.join(root, 'agent-zellij-lanes.json'), null)
   const laneSupervisor = await readZellijLaneSupervisor(root)
+  const zellijRuntimeManifest = await readJson<any>(path.join(root, 'zellij-lane-runtime.json'), null)
   const workQueue = await readJson<any>(path.join(root, 'agent-work-queue.json'), null)
   const scheduler = input.scheduler || await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const taskGraph = input.partition?.task_graph || await readJson<any>(path.join(root, 'agent-task-graph.json'), null)
@@ -65,6 +66,16 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const genericAgentRouteStandIn = !/\$?agent$/i.test(route) && /\bagent\s+run\b/i.test(routeCommand) && /--route/i.test(routeCommand)
   const realRouteCommandUsed = !genericAgentRouteStandIn
   const laneSupervisorIntegrated = Boolean(laneSupervisor)
+  const zellijLaneRuntimePolicyOk = Boolean(laneSupervisor)
+    && Array.isArray(laneSupervisor?.lanes)
+    && laneSupervisor.lanes.length > 0
+    && laneSupervisor.lanes.every((lane: any) => lane?.dispatch_mode === 'jsonl_nonblocking'
+      && lane?.command_inbox
+      && lane?.state_dir
+      && lane?.runtime?.dispatch?.fifo_policy === 'disabled_to_avoid_writer_blocking')
+  const zellijLanePaneIdSourceOk = Boolean(laneSupervisor)
+    && Array.isArray(laneSupervisor?.lanes)
+    && laneSupervisor.lanes.every((lane: any) => typeof lane?.pane_id_source === 'string' && lane.pane_id_source.length > 0)
   const patchEntries = Array.isArray(patchQueue?.entries) ? patchQueue.entries : []
   const patchApplyRows = Array.isArray(patchApplyResults?.results) ? patchApplyResults.results : []
   const patchQueuePendingCount = Number(patchQueue?.queued_count || patchEntries.filter((entry: any) => entry.status === 'pending').length || 0)
@@ -117,6 +128,8 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(laneSupervisor && laneSupervisor.no_flicker_verified !== true ? ['zellij_lane_no_flicker_not_verified'] : []),
     ...(laneSupervisor && laneSupervisor.pane_survival_checked !== true ? ['zellij_lane_survival_not_checked'] : []),
     ...(laneSupervisor && Number(laneSupervisor.unexpected_close_count || 0) > 0 ? ['zellij_lane_unexpected_close_before_drain'] : []),
+    ...(laneSupervisor && !zellijLaneRuntimePolicyOk ? ['zellij_lane_runtime_policy_missing'] : []),
+    ...(laneSupervisor && !zellijLanePaneIdSourceOk ? ['zellij_lane_pane_id_source_missing'] : []),
     ...(laneSupervisor?.blockers || []),
     ...(input.backend === 'zellij' && zellijPaneProof?.ok !== true ? ['zellij_pane_proof_missing'] : []),
     ...(input.backend === 'zellij' && Array.isArray(zellijPaneProof?.blockers) ? zellijPaneProof.blockers : []),
@@ -240,6 +253,13 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     zellij_lane_manifest_ok: zellijLanes?.ok === true,
     zellij_lane_supervisor: 'agent-zellij-lane-supervisor.json',
     lane_supervisor_integrated: laneSupervisorIntegrated,
+    zellij_lane_runtime_manifest: zellijRuntimeManifest ? 'zellij-lane-runtime.json' : null,
+    zellij_lane_runtime_policy_ok: zellijLaneRuntimePolicyOk,
+    zellij_lane_dispatch_mode: laneSupervisor?.dispatch_mode || zellijRuntimeManifest?.dispatch_mode || null,
+    zellij_lane_fifo_policy: laneSupervisor?.fifo_policy || zellijRuntimeManifest?.fifo_policy || null,
+    zellij_lane_resource_throttle_ms: laneSupervisor?.resource_throttle_ms || zellijRuntimeManifest?.resource_throttle_ms || null,
+    zellij_lane_nice_level: laneSupervisor?.nice_level ?? zellijRuntimeManifest?.nice_level ?? null,
+    zellij_lane_pane_id_source_ok: zellijLanePaneIdSourceOk,
     zellij_lane_no_flicker_verified: laneSupervisor?.no_flicker_verified === true,
     zellij_lane_survival_checked: laneSupervisor?.pane_survival_checked === true,
     zellij_lane_unexpected_close_count: laneSupervisor?.unexpected_close_count || 0,

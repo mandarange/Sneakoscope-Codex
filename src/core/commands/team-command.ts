@@ -5,6 +5,7 @@ import { createMission, loadMission, setCurrent } from '../mission.js';
 import { buildQuestionSchema, writeQuestions } from '../questions.js';
 import { CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, ROUTES, hasFromChatImgSignal, routePrompt, routeReasoning, triwikiContextTracking } from '../routes.js';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../team-dag.js';
+import { SSOT_GUARD_ARTIFACT, buildSsotGuard, ssotGuardPolicyText } from '../safety/ssot-guard.js';
 import { appendTeamEvent, formatAgentReasoning, formatRoleCounts, initTeamLive, isTerminalTeamAgentStatus, normalizeTeamSpec, parseTeamSpecArgs, readTeamControl, readTeamDashboard, readTeamLive, readTeamTranscriptTail, renderTeamAgentLane, renderTeamCleanupSummary, renderTeamWatch, requestTeamSessionCleanup, teamCleanupRequested, teamReasoningPolicy } from '../team-live.js';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../team-review-policy.js';
 import { ARTIFACT_FILES } from '../artifact-schemas.js';
@@ -51,6 +52,7 @@ export async function team(args: any = []) {
   await writeQuestions(dir, schema);
   const plan = buildTeamPlan(id, prompt, { agentSessions, roleCounts, roster, targetActiveSlots });
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
+  await writeJsonAtomic(path.join(dir, SSOT_GUARD_ARTIFACT), plan.ssot_guard);
   await writeTextAtomic(path.join(dir, 'team-workflow.md'), teamWorkflowMarkdown(plan));
   const liveFiles = await initTeamLive(id, dir, prompt, { agentSessions, roleCounts, roster });
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
@@ -116,7 +118,7 @@ export async function team(args: any = []) {
     message: 'Native agent orchestrator completed with ' + nativeAgentRun.backend + ' backend; proof ' + (nativeAgentRun.proof?.status || 'unknown') + '.'
   });
   let dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team native agent intake agents' });
-  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, native_agent_proof: nativeAgentRun.proof?.ok === true, agent_central_ledger: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
+  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, native_agent_proof: nativeAgentRun.proof?.ok === true, agent_central_ledger: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, ssot_guard: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
   dashboardState = await writeTeamDashboardState(dir, { missionId: id, mission: { id, mode: 'team' }, effort: effortDecision.selected_effort, phase: 'intake', next_action: fromChatImgRequired ? 'complete visual source inventory and work-order mapping' : 'run Team native agent intake agents' });
   const route = routePrompt(`$Team ${prompt}`) || ROUTES.find((candidate: any) => candidate.id === 'Team');
   const routeReason = routeReasoning(route, prompt);
@@ -157,11 +159,11 @@ export async function team(args: any = []) {
     await writeTextAtomic(path.join(dir, 'team-consensus.md'), `# Team Consensus\n\nMock Team fixture consensus reached for ${id}.\n`);
     await writeTextAtomic(path.join(dir, 'team-review.md'), `# Team Review\n\nMock Team fixture review completed with ${MIN_TEAM_REVIEWER_LANES} validation lanes for ${id}.\n`);
     await writeTextAtomic(path.join(dir, 'context7-evidence.jsonl'), `${JSON.stringify({ schema: 'sks.context7-evidence.v1', mission_id: id, route: '$Team', status: 'mock_not_required', generated_at: nowIso() })}\n`);
-    const cleanup = { schema_version: 1, mission_id: id, status: 'clean', outstanding_sessions: 0, mock: true, generated_at: nowIso() };
+    const cleanup = { schema_version: 1, mission_id: id, status: 'clean', passed: true, all_sessions_closed: true, outstanding_sessions: 0, live_transcript_finalized: true, mock: true, generated_at: nowIso() };
     await writeJsonAtomic(path.join(dir, TEAM_SESSION_CLEANUP_ARTIFACT), cleanup);
-    const gate = { passed: true, team_roster_confirmed: true, native_agent_proof: nativeAgentRun.proof?.ok === true, agent_central_ledger: true, analysis_artifact: true, triwiki_refreshed: true, triwiki_validated: true, consensus_artifact: true, ...runtime.gate_fields, implementation_team_fresh: true, review_artifact: true, review_lanes: MIN_TEAM_REVIEWER_LANES, integration_evidence: true, session_cleanup: true, context7_evidence: true, mock: true };
+    const gate = { passed: true, team_roster_confirmed: true, native_agent_proof: nativeAgentRun.proof?.ok === true, agent_central_ledger: true, analysis_artifact: true, triwiki_refreshed: true, triwiki_validated: true, ssot_guard: true, consensus_artifact: true, ...runtime.gate_fields, implementation_team_fresh: true, review_artifact: true, review_lanes: MIN_TEAM_REVIEWER_LANES, integration_evidence: true, session_cleanup: true, context7_evidence: true, mock: true };
     await writeJsonAtomic(path.join(dir, 'team-gate.json'), gate);
-    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Team', gateFile: 'team-gate.json', gate, mock: true, artifacts: ['agents/agent-proof-evidence.json', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-plan.json', 'team-runtime-tasks.json', 'completion-proof.json'], claims: [{ id: 'team-fixture-complete', status: 'verified_partial' }], command: { cmd: `sks team "${prompt}" --mock`, status: 0 } });
+    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Team', gateFile: 'team-gate.json', gate, mock: true, statusHint: 'verified_partial', artifacts: ['agents/agent-proof-evidence.json', SSOT_GUARD_ARTIFACT, 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-plan.json', 'team-runtime-tasks.json', 'completion-proof.json'], claims: [{ id: 'team-fixture-complete', status: 'verified_partial' }], command: { cmd: `sks team "${prompt}" --mock`, status: 0 } });
     result.mock = true;
     result.proof = proof.validation;
   } else {
@@ -191,7 +193,8 @@ export function buildTeamPlan(id: any, prompt: any, opts: any = {}) {
   const spec = normalizeTeamSpec({ ...opts, prompt });
   const { agentSessions, roleCounts, roster } = spec;
   const fromChatImgRequired = hasFromChatImgSignal(prompt);
-  const requiredArtifacts = ['team-roster.json', 'work-order-ledger.json', 'effort-decision.json', 'team-dashboard-state.json', 'agents/agent-proof-evidence.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'];
+  const ssotGuard = buildSsotGuard({ route: 'Team', mode: 'TEAM', task: prompt });
+  const requiredArtifacts = ['team-roster.json', 'work-order-ledger.json', 'effort-decision.json', 'team-dashboard-state.json', 'agents/agent-proof-evidence.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), SSOT_GUARD_ARTIFACT, 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl'];
   return {
     schema_version: 1,
     mission_id: id,
@@ -222,18 +225,20 @@ export function buildTeamPlan(id: any, prompt: any, opts: any = {}) {
       MIN_TEAM_REVIEW_POLICY_TEXT
     ],
     reasoning: teamReasoningPolicy(prompt, roster),
+    ssot_guard: ssotGuard,
     context_tracking: triwikiContextTracking(),
     phases: [
       { id: 'team_roster_confirmation', goal: 'Materialize Team roster and write team-roster.json.', agents: ['parent_orchestrator'], output: 'team-roster.json' },
       { id: 'native_agent_intake', goal: fromChatImgRequired ? `Complete From-Chat-IMG source inventory and coverage artifacts. Web/browser/webapp screenshots require Codex Chrome Extension readiness first; native Mac/non-web surfaces may use Codex Computer Use. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'Read relevant TriWiki context and run read-only native agent intake agents before debate.', agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_native_sessions: opts.targetActiveSlots || agentSessions, write_policy: 'read-only', output: 'team-analysis.md' },
       { id: 'triwiki_refresh', goal: 'Refresh and validate TriWiki from agent intake findings.', agents: ['parent_orchestrator'], commands: ['sks wiki refresh', 'sks wiki validate .sneakoscope/wiki/context-pack.json'], output: '.sneakoscope/wiki/context-pack.json' },
+      { id: 'ssot_guard', goal: ssotGuardPolicyText(), agents: ['parent_orchestrator'], output: SSOT_GUARD_ARTIFACT },
       { id: 'planning_debate', goal: 'Debate risks and viable approaches with refreshed context.', agents: roster.debate_team.map((agent: any) => agent.id), max_parallel_native_sessions: opts.targetActiveSlots || agentSessions, write_policy: 'read-only' },
       { id: 'runtime_task_graph_compile', goal: `Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}.`, agents: ['parent_orchestrator'] },
       { id: 'parallel_implementation', goal: 'Fresh executor developers implement disjoint slices.', agents: roster.development_team.map((agent: any) => agent.id), max_parallel_native_sessions: opts.targetActiveSlots || agentSessions, write_policy: 'workspace-write with explicit ownership' },
       { id: 'review_and_integrate', goal: `Review with at least ${MIN_TEAM_REVIEWER_LANES} independent lanes.`, agents: roster.validation_team.map((agent: any) => agent.id).concat(['parent_orchestrator']), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
       { id: 'session_cleanup', goal: `Write ${TEAM_SESSION_CLEANUP_ARTIFACT}.`, agents: ['parent_orchestrator'], output: TEAM_SESSION_CLEANUP_ARTIFACT }
     ],
-    invariants: ['The parent thread remains the orchestrator and owns final integration.', 'Native agent intake are read-only.', 'Implementation workers receive disjoint ownership scopes.', MIN_TEAM_REVIEW_POLICY_TEXT],
+    invariants: ['The parent thread remains the orchestrator and owns final integration.', 'Native agent intake are read-only.', 'Implementation workers receive disjoint ownership scopes.', 'SSOT guard blocks source-of-truth drift before implementation and final gate pass.', MIN_TEAM_REVIEW_POLICY_TEXT],
     live_visibility: { markdown: 'team-live.md', transcript: 'team-transcript.jsonl', dashboard: 'team-dashboard.json' },
     required_artifacts: requiredArtifacts,
     prompt_command: fromChatImgRequired ? '$From-Chat-IMG' : '$Team'

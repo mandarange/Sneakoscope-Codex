@@ -14,6 +14,7 @@ import { AGENT_INTAKE_STAGE_ID } from '../agents/agent-schema.js';
 import { routeRequiresAgentIntake } from '../agents/agent-plan.js';
 import { readAgentGateStatus } from '../agents/agent-gate.js';
 import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from '../mistake-recall.js';
+import { SSOT_GUARD_ARTIFACT, validateSsotGuardArtifact } from '../safety/ssot-guard.js';
 import { validateTeamRuntimeArtifacts } from '../team-dag.js';
 import {
   clarificationStopReason,
@@ -349,7 +350,7 @@ async function passedHardBlocker(root: any, state: any) {
 function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
   const mode = String(state?.mode || '').toUpperCase();
   if (file === 'team-gate.json' || mode === 'TEAM') {
-    const required = ['team_roster_confirmed', 'analysis_artifact', 'triwiki_refreshed', 'triwiki_validated', 'consensus_artifact', 'implementation_team_fresh', 'review_artifact', 'integration_evidence', 'session_cleanup'];
+    const required = ['team_roster_confirmed', 'analysis_artifact', 'triwiki_refreshed', 'triwiki_validated', 'ssot_guard', 'consensus_artifact', 'implementation_team_fresh', 'review_artifact', 'integration_evidence', 'session_cleanup'];
     if (fromChatImgCoverageRequired(state, gate)) required.push('from_chat_img_request_coverage');
     if (teamGraphRequired(state, gate)) required.push('team_graph_compiled', 'runtime_dependencies_concrete', 'worker_inboxes_written', 'write_scope_conflicts_zero', 'task_claim_readiness_checked');
     return required
@@ -388,6 +389,11 @@ async function missingRequiredGateArtifacts(root: any, file: any, state: any, ga
   if (file !== 'team-gate.json' && mode !== 'TEAM') return [];
   const missing: any[] = [];
   if (gate.team_roster_confirmed === true && !(await exists(path.join(missionDir(root, state.mission_id), 'team-roster.json')))) missing.push('team-roster.json');
+  if (gate.ssot_guard === true) {
+    const ssotGuard = await readJson(path.join(missionDir(root, state.mission_id), SSOT_GUARD_ARTIFACT), null);
+    const validation = validateSsotGuardArtifact(ssotGuard);
+    if (!validation.ok) missing.push(...validation.issues.map((issue) => `${SSOT_GUARD_ARTIFACT}:${issue}`));
+  }
   if (teamGraphRequired(state, gate) && gate.team_graph_compiled === true) {
     const validation = await validateTeamRuntimeArtifacts(missionDir(root, state.mission_id));
     if (!validation.ok) missing.push(...validation.issues.map((issue: any) => `team-runtime:${issue}`));

@@ -10,7 +10,7 @@ SKS 1.18.2 also propagates the Goal mode reference into task graph items and sch
 
 SKS 1.18.3 validates that the Goal reference remains present across actual Agent, Team, Research, and QA route backfill artifacts before readiness is accepted.
 
-When official Goal support is detected from Codex help/config surfaces, SKS records `default_enabled: true` in `goal-mode-applied.json` and passes that context to the Goal workflow artifact. When official support is not detectable, SKS records `sks_goal_fallback` instead of blocking implementation routes.
+When official Goal support is detected from Codex help/config surfaces, SKS records `default_enabled: true` in `goal-mode-applied.json` and passes that context to the Goal workflow artifact. Detection checks `codex features list` for enabled `goals` output before relying on `codex goal --help`, so newer Codex App/CLI builds can be recognized even when the goal subcommand help surface is slow, hidden, or unavailable. When official support is not detectable, SKS records `sks_goal_fallback` instead of blocking implementation routes.
 
 Goal mode does not replace Team, QA, DB, or other route gates. It persists continuation context while the selected execution route still owns implementation and verification.
 

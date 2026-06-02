@@ -16,6 +16,7 @@ const releaseRealCheckSource = readText('scripts/release-real-check.mjs', '');
 const checks = {
   runtime_no_src_mjs: scriptContains('release:check:parallel', 'runtime:no-src-mjs'),
   runtime_ts_source_of_truth: scriptContains('release:check:parallel', 'runtime:ts-source-of-truth'),
+  architecture_guard: scriptContains('release:check:parallel', 'architecture:guard'),
   runtime_dist_parity: scriptContains('release:check:parallel', 'runtime:dist-parity'),
   route_proof_artifact_structure: scriptContains('release:check:parallel', 'routes:proof-artifact-structure'),
   agent_codex_app_cockpit: scriptContains('release:check:parallel', 'agent:codex-app-cockpit'),
@@ -299,6 +300,7 @@ if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${REL
 for (const [name, ok] of Object.entries({
   runtime_no_src_mjs: checks.runtime_no_src_mjs,
   runtime_ts_source_of_truth: checks.runtime_ts_source_of_truth,
+  architecture_guard: checks.architecture_guard,
   runtime_dist_parity: checks.runtime_dist_parity,
   route_proof_artifact_structure: checks.route_proof_artifact_structure,
   agent_codex_app_cockpit: checks.agent_codex_app_cockpit,

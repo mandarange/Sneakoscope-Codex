@@ -31,6 +31,7 @@ test('Team route preserves compatibility artifacts and exposes Zellij cockpit la
     'team-workflow.md',
     'team-roster.json',
     'team-runtime-tasks.json',
+    'ssot-guard.json',
     'team-analysis.md',
     'team-gate.json',
     'team-live.md',
@@ -42,9 +43,15 @@ test('Team route preserves compatibility artifacts and exposes Zellij cockpit la
     await fs.access(path.join(missionDir, name));
   }
   assert.ok(plan.required_artifacts.includes('team-analysis.md'));
+  assert.ok(plan.required_artifacts.includes('ssot-guard.json'));
   assert.ok(plan.required_artifacts.includes('team-live.md'));
   assert.ok(plan.required_artifacts.includes('team-transcript.jsonl'));
   assert.ok(plan.required_artifacts.includes('team-dashboard.json'));
+  const ssotGuard = JSON.parse(await fs.readFile(path.join(missionDir, 'ssot-guard.json'), 'utf8'));
+  assert.equal(ssotGuard.ok, true);
+  assert.equal(ssotGuard.solid_principles.length, 5);
+  const teamGate = JSON.parse(await fs.readFile(path.join(missionDir, 'team-gate.json'), 'utf8'));
+  assert.equal(teamGate.ssot_guard, true);
 
   const zellij = await runSksInRoot(root, ['team', 'open-zellij', json.mission_id, '--json', '--no-attach']);
   assert.equal(zellij.schema, 'sks.zellij-session.v1');

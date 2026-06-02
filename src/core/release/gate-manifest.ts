@@ -31,6 +31,7 @@ export const ALWAYS_ON_GATES = new Set<string>([
   'release:metadata',
   'release:readiness',
   'release:gate-existence-audit',
+  'architecture:guard',
   'runtime:dist-parity',
   'runtime:ts-source-of-truth',
   'runtime:no-src-mjs',
@@ -55,6 +56,7 @@ export const ALWAYS_ON_GATES = new Set<string>([
 // Gates that must never be skipped when planning for publish.
 export const REQUIRED_FOR_PUBLISH = new Set<string>([
   'release:metadata',
+  'architecture:guard',
   'runtime:dist-parity',
   'runtime:ts-rust-boundary',
   'safety:side-effect-zero',
@@ -75,7 +77,7 @@ export const REQUIRED_FOR_PUBLISH = new Set<string>([
   'zellij:ui-design'
 ])
 
-const P0_PREFIXES = ['core-skill:', 'safety:', 'side-effect:', 'runtime:', 'release:', 'legacy:', 'publish:', 'postinstall:', 'zellij:']
+const P0_PREFIXES = ['architecture:', 'core-skill:', 'safety:', 'side-effect:', 'runtime:', 'release:', 'legacy:', 'publish:', 'postinstall:', 'zellij:']
 
 function tierFor(id: string): GateTier {
   if (P0_PREFIXES.some((p) => id.startsWith(p))) return 'P0'
@@ -93,6 +95,8 @@ function costFor(id: string): GateCost {
 export function affectedGlobsFor(id: string): string[] {
   const prefix = id.split(':')[0]
   switch (prefix) {
+    case 'architecture':
+      return ['src/core/safety/ssot-guard.ts', 'src/core/pipeline-internals/runtime-core.ts', 'src/core/pipeline-internals/runtime-gates.ts', 'src/core/commands/team-command.ts', 'src/scripts/release-parallel-check.ts', 'scripts/architecture-guard-check.mjs', 'docs/architecture-ts-rust-boundary.md', 'package.json']
     case 'core-skill':
       return ['src/core/skills/**', 'schemas/skills/**', 'scripts/core-skill-*.mjs']
     case 'zellij':

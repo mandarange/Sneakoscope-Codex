@@ -6,6 +6,7 @@ export const RELEASE_1_17_GATE_SNAPSHOT = Object.freeze([
   'build',
   'runtime:no-src-mjs',
   'runtime:ts-source-of-truth',
+  'architecture:guard',
   'runtime:dist-parity',
   'routes:proof-artifact-structure',
   'agent:codex-app-cockpit',

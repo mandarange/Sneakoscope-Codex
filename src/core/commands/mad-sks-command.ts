@@ -1,4 +1,6 @@
 import path from 'node:path';
+import fs from 'node:fs';
+import { spawn } from 'node:child_process';
 import { appendJsonlBounded, exists, nowIso, packageRoot, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
 import { createMission, setCurrent } from '../mission.js';
@@ -20,7 +22,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
   if (subcommand) return madSksSubcommand(subcommand, args.filter((arg: any) => String(arg) !== subcommand));
 
-  const cleanArgs = args.filter((arg: any) => !madLaunchOnlyFlags().has(String(arg)));
+  const cleanArgs = stripMadLaunchOnlyArgs(args);
   if (args.includes('--json')) {
     const profile = await enableMadHighProfile();
     return console.log(JSON.stringify(profile, null, 2));
@@ -78,9 +80,12 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     SKS_MAD_SKS_TARGET_ROOT: madLaunch.gate.cwd,
     SKS_MAD_SKS_PROTECTED_CORE_DIGEST: madLaunch.gate.protected_core_digest
   };
+  const madNativeSwarm = await startMadNativeSwarm(madLaunch.root, madLaunch, args, profile, {
+    env: madSksEnv
+  });
   const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`));
-  const launch = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
+  const launch = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), slotCount: madNativeSwarm.lane_count || 1, requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   if (!launch.ok) {
     console.log(`MAD Zellij action: ${formatMadZellijAction(launch)}`);
     return launch;
@@ -99,6 +104,147 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   }
   if (launch.attach_command_with_env) console.log(`Attach with: ${launch.attach_command_with_env}`);
   return launch;
+}
+
+export async function startMadNativeSwarm(root: string, madLaunch: any, args: any[] = [], profile: any = {}, opts: any = {}) {
+  const swarm = resolveMadNativeSwarmOptions(args, profile, opts);
+  const dir = madLaunch.dir || missionDirLike(root, madLaunch.mission_id);
+  const ledgerRoot = path.join(dir, 'agents');
+  const artifactPath = path.join(dir, 'mad-sks-native-swarm.json');
+  const stdoutLog = path.join(dir, 'mad-sks-native-swarm.stdout.log');
+  const stderrLog = path.join(dir, 'mad-sks-native-swarm.stderr.log');
+  if (!swarm.enabled) {
+    const disabled = {
+      schema: 'sks.mad-sks-native-swarm.v1',
+      ok: true,
+      status: 'disabled',
+      reason: swarm.disabled_reason,
+      mission_id: madLaunch.mission_id,
+      lane_count: 1,
+      ledger_root: path.relative(root, ledgerRoot)
+    };
+    await writeJsonAtomic(artifactPath, disabled);
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.native_swarm_disabled', reason: swarm.disabled_reason });
+    return disabled;
+  }
+  const prompt = swarm.prompt || 'MAD-SKS native swarm: inspect the active high-power maintenance session, keep lane cockpit state current, and report risks before writes.';
+  const command = [
+    process.execPath,
+    path.join(packageRoot(), 'dist', 'bin', 'sks.js'),
+    'agent',
+    'run',
+    prompt,
+    '--mission',
+    madLaunch.mission_id,
+    '--route',
+    '$MAD-SKS',
+    '--agents',
+    String(swarm.agents),
+    '--target-active-slots',
+    String(swarm.agents),
+    '--work-items',
+    String(swarm.workItems),
+    '--minimum-work-items',
+    String(swarm.agents),
+    '--concurrency',
+    String(swarm.agents),
+    '--backend',
+    swarm.backend,
+    '--readonly',
+    '--profile',
+    profile.profile_name || madHighProfileName(),
+    '--service-tier',
+    'fast',
+    '--fast',
+    '--json'
+  ];
+  const baseReport = {
+    schema: 'sks.mad-sks-native-swarm.v1',
+    ok: true,
+    status: opts.dryRun === true || swarm.dryRun ? 'dry_run' : 'spawned',
+    mission_id: madLaunch.mission_id,
+    route: '$MAD-SKS',
+    route_command: 'sks --mad native swarm',
+    same_mission_ledger: true,
+    ledger_root: path.relative(root, ledgerRoot),
+    lane_count: swarm.agents,
+    agents: swarm.agents,
+    target_active_slots: swarm.agents,
+    work_items: swarm.workItems,
+    backend: swarm.backend,
+    readonly: true,
+    command,
+    stdout_log: path.relative(root, stdoutLog),
+    stderr_log: path.relative(root, stderrLog),
+    pid: null as number | null,
+    blockers: [] as string[]
+  };
+  if (baseReport.status === 'spawned') {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const out = fs.openSync(stdoutLog, 'a');
+      const err = fs.openSync(stderrLog, 'a');
+      const child = spawn(command[0], command.slice(1), {
+        cwd: process.cwd(),
+        detached: true,
+        env: {
+          ...process.env,
+          ...(opts.env || {}),
+          SKS_SKIP_NPM_FRESHNESS_CHECK: '1',
+          SKS_MAD_NATIVE_SWARM: '1',
+          SKS_PARENT_MAD_MISSION: String(madLaunch.mission_id || '')
+        },
+        stdio: ['ignore', out, err]
+      });
+      child.unref();
+      fs.closeSync(out);
+      fs.closeSync(err);
+      baseReport.pid = child.pid || null;
+    } catch (err: any) {
+      baseReport.ok = false;
+      baseReport.status = 'blocked';
+      baseReport.blockers = [`mad_native_swarm_spawn_failed:${err?.message || String(err)}`];
+    }
+  }
+  await writeJsonAtomic(artifactPath, baseReport);
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), {
+    ts: nowIso(),
+    type: baseReport.ok ? 'mad_sks.native_swarm_started' : 'mad_sks.native_swarm_blocked',
+    status: baseReport.status,
+    agents: swarm.agents,
+    backend: swarm.backend,
+    pid: baseReport.pid,
+    blockers: baseReport.blockers
+  });
+  return baseReport;
+}
+
+export function resolveMadNativeSwarmOptions(args: any[] = [], profile: any = {}, opts: any = {}) {
+  const list = (args || []).map((arg: any) => String(arg));
+  const disabled = list.includes('--no-swarm') || list.includes('--no-mad-swarm') || process.env.SKS_MAD_NATIVE_SWARM === '0';
+  const agents = clampInt(readOption(list, '--mad-agents', readOption(list, '--mad-swarm-agents', process.env.SKS_MAD_SWARM_AGENTS || opts.agents || 5)), 1, 20);
+  const workItems = clampInt(readOption(list, '--mad-swarm-work-items', process.env.SKS_MAD_SWARM_WORK_ITEMS || opts.workItems || agents), agents, 100);
+  const backend = String(readOption(list, '--mad-swarm-backend', process.env.SKS_MAD_SWARM_BACKEND || opts.backend || 'codex-exec'));
+  return {
+    enabled: !disabled,
+    disabled_reason: disabled ? 'operator_disabled_mad_native_swarm' : null,
+    agents,
+    workItems,
+    backend,
+    dryRun: list.includes('--dry-run') || opts.dryRun === true,
+    prompt: String(readOption(list, '--mad-swarm-prompt', opts.prompt || '') || ''),
+    profile_name: profile.profile_name || madHighProfileName()
+  };
+}
+
+function missionDirLike(root: string, missionId: string) {
+  return path.join(root, '.sneakoscope', 'missions', missionId);
+}
+
+function clampInt(value: unknown, min: number, max: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return min;
+  return Math.max(min, Math.min(max, Math.floor(parsed)));
 }
 
 // Decide whether to take over the current terminal with a foreground Zellij
@@ -247,11 +393,43 @@ function madLaunchOnlyFlags() {
     '--allow-delete',
     '--confirm-delete',
     '--confirm-destructive-delete',
+    '--no-swarm',
+    '--no-mad-swarm',
+    '--mad-agents',
+    '--mad-swarm-agents',
+    '--mad-swarm-work-items',
+    '--mad-swarm-backend',
+    '--mad-swarm-prompt',
     '--yes',
     '-y',
     '--dry-run',
     '--plan-only'
   ]);
+}
+
+function madLaunchValueFlags() {
+  return new Set([
+    '--mad-agents',
+    '--mad-swarm-agents',
+    '--mad-swarm-work-items',
+    '--mad-swarm-backend',
+    '--mad-swarm-prompt'
+  ]);
+}
+
+function stripMadLaunchOnlyArgs(args: any[] = []) {
+  const flags = madLaunchOnlyFlags();
+  const valueFlags = madLaunchValueFlags();
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = String(args[i]);
+    if (!flags.has(arg)) {
+      out.push(arg);
+      continue;
+    }
+    if (valueFlags.has(arg) && args[i + 1] && !String(args[i + 1]).startsWith('--')) i += 1;
+  }
+  return out;
 }
 
 function readOption(args: any, name: any, fallback: any) {

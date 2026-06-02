@@ -17,6 +17,7 @@ import { PPT_REQUIRED_GATE_FIELDS, writePptRouteArtifacts } from '../ppt.js';
 import { writeQaLoopArtifacts } from '../qa-loop.js';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, writeImageUxReviewRouteArtifacts } from '../image-ux-review.js';
 import { responseLanguageInstruction } from '../language-preference.js';
+import { SSOT_GUARD_ARTIFACT, buildSsotGuard, ssotGuardPolicyText } from '../safety/ssot-guard.js';
 import { SPEED_LANE_POLICY } from '../proof-field.js';
 import { validateRouteCompletionProof } from '../proof/route-proof-gate.js';
 import { routeFromState, routeRequiresCompletionProof } from '../proof/route-proof-policy.js';
@@ -62,6 +63,7 @@ const FULL_ROUTE_STAGES = Object.freeze([
   'pipeline_plan',
   'proof_field_scan',
   'triwiki_use_first',
+  'ssot_guard',
   'context7_evidence',
   AGENT_INTAKE_STAGE_ID,
   'native_agent_intake',
@@ -120,8 +122,9 @@ export function buildPipelinePlan(input: any = {}) {
     skipped_stages: skipped,
     kept_stages: kept,
     verification,
-    invariants: ['no_unrequested_fallback_code', 'listed_verification', 'triwiki_validate_before_final', 'honest_mode'],
+    invariants: ['no_unrequested_fallback_code', 'ssot_guard', 'listed_verification', 'triwiki_validate_before_final', 'honest_mode'],
     proof_field: proof,
+    ssot_guard: buildSsotGuard({ route: route?.id || 'SKS', mode: route?.mode || 'SKS', task }),
     route_economy: routeEconomy,
     agent_intake: agentPolicy,
     skill_dream: input.skillDream || { attached: false, reason: 'skill dreaming uses cheap counters and only runs inventory at threshold' },
@@ -148,6 +151,8 @@ export function validatePipelinePlan(plan: any = {}) {
   const routeEconomyLatticeIssues = validateRouteEconomyDecisionLattice(plan.route_economy, plan.proof_field);
   if (routeEconomyLatticeIssues.length) issues.push(...routeEconomyLatticeIssues.map((issue: any) => `route_economy.decision_lattice:${issue}`));
   if (plan.no_unrequested_fallback_code !== true || !plan.invariants?.includes('no_unrequested_fallback_code')) issues.push('fallback_guard');
+  if (!plan.ssot_guard?.required || !plan.invariants?.includes('ssot_guard')) issues.push('ssot_guard');
+  if (!plan.stages?.some((stage: any) => stage.id === 'ssot_guard' && !['skipped', 'not_applicable'].includes(stage.status))) issues.push('ssot_guard_stage');
   if (!plan.next_actions?.length) issues.push('next_actions');
   if (plan.agent_intake?.required && !plan.stages?.some((stage: any) => stage.id === AGENT_INTAKE_STAGE_ID && stage.agent_count === AGENT_COUNT && stage.read_only === true)) issues.push('agent_intake_stage');
   return { ok: issues.length === 0, issues };
@@ -344,6 +349,7 @@ export function promptPipelineContext(prompt: any, route: any = null) {
     subagentExecutionPolicyText(route, cleanPrompt),
     solutionScoutPolicyText(cleanPrompt),
     noUnrequestedFallbackCodePolicyText(),
+    ssotGuardPolicyText(),
     outcomeRubricPolicyText(),
     speedLanePolicyText(),
     skillDreamPolicyText(),
@@ -832,6 +838,7 @@ async function materializeAutoSealedTeam(root: any, id: any, dir: any, route: an
     goal_continuation: ambientGoalContinuation(),
     reasoning: teamReasoningPolicy(cleanTask, roster),
     contract_hash: contractHash,
+    ssot_guard: buildSsotGuard({ route: route?.id || 'Team', mode: route?.mode || 'TEAM', task: cleanTask, contractHash }),
     team_model: {
       phases: ['native_agent_intake', 'triwiki_stage_refresh', 'debate_team', 'runtime_task_graph', 'development_team', 'review'],
       analysis_team: `Native multi-session agent intake with exactly ${roster.bundle_size} native_agent_N agents.`,
@@ -845,6 +852,7 @@ async function materializeAutoSealedTeam(root: any, id: any, dir: any, route: an
       { id: 'team_roster_confirmation', goal: `Materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
       { id: 'native_agent_intake', goal: `Read TriWiki context, then run exactly ${roster.bundle_size} read-only native_agent_N sessions in parallel. ${fromChatImgRequired ? `From-Chat-IMG active: ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'}`, agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_native_sessions: agentSessions, write_policy: 'read-only' },
       { id: 'triwiki_refresh', goal: `Refresh or pack TriWiki and run ${triwikiContextTracking().validate_command}.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
+      { id: 'ssot_guard', goal: ssotGuardPolicyText(), agents: ['parent_orchestrator'], output: SSOT_GUARD_ARTIFACT },
       { id: 'planning_debate', goal: 'Run read-only planning debate, map constraints and implementation slices, then seal one objective.', agents: roster.debate_team.map((agent: any) => agent.id) },
       { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR}.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
       { id: 'parallel_implementation', goal: `Close debate agents, then run a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership.`, agents: roster.development_team.map((agent: any) => agent.id) },
@@ -858,9 +866,10 @@ async function materializeAutoSealedTeam(root: any, id: any, dir: any, route: an
       zellij: 'CLI Team entrypoints open Zellij live lanes for the visible Team agent budget when Zellij is available.',
       commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team open-zellij latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow']
     },
-    required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
+    required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), SSOT_GUARD_ARTIFACT, 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
   };
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
+  await writeJsonAtomic(path.join(dir, SSOT_GUARD_ARTIFACT), plan.ssot_guard);
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'auto_sealed_team_spec' });
   const contextTracking = triwikiContextTracking();
   await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReview policy: ${MIN_TEAM_REVIEW_POLICY_TEXT}\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}.\n\nAuto-sealed ambiguity gate: no user question was required. Continue directly with Team agenting, debate, runtime task graph, implementation, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review, cleanup, reflection, and Honest Mode.\n`);
@@ -883,6 +892,7 @@ async function materializeAutoSealedTeam(root: any, id: any, dir: any, route: an
     integration_evidence: false,
     session_cleanup: false,
     context7_evidence: false,
+    ssot_guard: false,
     ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}),
     contract_hash: contractHash
   });
@@ -922,6 +932,7 @@ async function prepareTeam(root: any, route: any, task: any, required: any, opts
     roster,
     goal_continuation: ambientGoalContinuation(),
     reasoning: teamReasoningPolicy(cleanTask, roster),
+    ssot_guard: buildSsotGuard({ route: route?.id || 'Team', mode: route?.mode || 'TEAM', task: cleanTask }),
     team_model: {
       phases: ['native_agent_intake', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'runtime_task_graph', 'development_team', 'triwiki_stage_refresh', 'review'],
       analysis_team: `Native multi-session agent intake with exactly ${roster.bundle_size} native_agent_N agents. Each native agent owns one investigation slice and returns TriWiki-ready findings with source paths, risks, and suggested implementation slices.`,
@@ -935,6 +946,7 @@ async function prepareTeam(root: any, route: any, task: any, required: any, opts
       { id: 'team_roster_confirmation', goal: `Before any implementation, materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}. Implementation cannot be considered complete unless team-gate.json has team_roster_confirmed=true.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
       { id: 'native_agent_intake', goal: `Before native agent intake, read TriWiki context. ${fromChatImgRequired ? `From-Chat-IMG active: for web/browser/webapp targets require Codex Chrome Extension readiness first; for native Mac/non-web surfaces use Codex Computer Use visual inspection when available. List every visible customer request, match every screenshot image region to attachments, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, then require scoped QA-LOOP evidence in ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} after the customer-request work is done. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}` : `From-Chat-IMG inactive: do not assume ordinary images are chat captures. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}`} Run exactly ${roster.bundle_size} read-only native_agent_N sessions in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, and record source-backed findings.`, agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_native_sessions: agentSessions, write_policy: 'read-only' },
       { id: 'triwiki_refresh', goal: `Parent orchestrator updates Team analysis artifacts, then runs ${triwikiContextTracking().refresh_command} or ${triwikiContextTracking().pack_command}, prunes with ${triwikiContextTracking().prune_command} when stale/oversized wiki state would pollute handoffs, and runs ${triwikiContextTracking().validate_command} so the next stage uses current TriWiki context.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
+      { id: 'ssot_guard', goal: ssotGuardPolicyText(), agents: ['parent_orchestrator'], output: SSOT_GUARD_ARTIFACT },
       { id: 'planning_debate', goal: `Before debate, read the refreshed TriWiki pack. Debate team of exactly ${roster.bundle_size} participants maps user inconvenience, options, constraints, affected files, DB/test risk, and tradeoffs while applying compact Hyperplan-derived lenses: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative. Hydrate low-trust claims from source.`, agents: roster.debate_team.map((agent: any) => agent.id) },
       { id: 'consensus', goal: `Seal one objective with acceptance criteria and disjoint implementation slices, then refresh/validate TriWiki so implementation receives current consensus context.` },
       { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}; remap symbolic plan nodes to concrete task ids, allocate role/path/domain worker lanes, and write ${TEAM_INBOX_DIR} before executor work starts.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
@@ -949,9 +961,10 @@ async function prepareTeam(root: any, route: any, task: any, required: any, opts
       zellij: 'CLI Team entrypoints open Zellij live lanes for the visible Team agent budget when Zellij is available.',
       commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team open-zellij latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow', 'sks team event latest --agent <name> --phase <phase> --message "..."']
     },
-    required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
+    required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), SSOT_GUARD_ARTIFACT, 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
   };
   await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
+  await writeJsonAtomic(path.join(dir, SSOT_GUARD_ARTIFACT), plan.ssot_guard);
   await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
   const contextTracking = triwikiContextTracking();
   await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReview policy: ${MIN_TEAM_REVIEW_POLICY_TEXT}\nReasoning: dynamic per-agent Fast reasoning; simple bounded lanes can use low, tool-heavy runtime lanes medium, and knowledge/safety/release lanes high or xhigh.\nGoal continuation: ambient Codex native /goal overlay is available when useful, without replacing Team route gates.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\nNative agent intake reasoning:\n${roster.analysis_team.map((agent: any) => `- ${agent.id}: ${formatAgentReasoning(agent)}`).join('\n')}\n\n1. Run exactly ${roster.bundle_size} native agent intake agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants through the compact Hyperplan-derived adversarial lens pass, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent native_agent_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
@@ -961,7 +974,7 @@ async function prepareTeam(root: any, route: any, task: any, required: any, opts
   await writeSkillForgeReport(dir, { mission_id: id, route: 'team', task_signature: cleanTask }).catch(() => null);
   await writeMistakeMemoryReport(dir, { mission_id: id, route: 'team', task: cleanTask }).catch(() => null);
   await writeCodeStructureReport(root, dir, { missionId: id, exception: 'Team prepare records split-review risk; extraction happens only when the mission scope includes the touched file.' }).catch(() => null);
-  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
+  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ssot_guard: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
   const madSksState = opts.madSksAuthorization
     ? await materializeMadSksAuthorization(dir, id, route, { mad_sks_authorization: true }, {})
     : {};

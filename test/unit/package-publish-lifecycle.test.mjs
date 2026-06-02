@@ -19,6 +19,7 @@ test('publish lifecycle runs the expensive release gate only once', () => {
   assert.match(scripts.prepublishOnly, /release-check-stamp\.mjs verify/);
   assert.doesNotMatch(scripts.prepublishOnly, /npm run release:check/);
   assert.match(scripts.prepublishOnly, /--require-unpublished/);
+  assert.match(scripts.prepublishOnly, /--require-publish-auth/);
   assert.doesNotMatch(scripts['publish:dry'], /release:check/);
   assert.match(scripts['publish:dry'], /prepublish:release-check-or-fast/);
   assert.match(scripts['publish:dry'], /release-check-stamp\.mjs verify/);

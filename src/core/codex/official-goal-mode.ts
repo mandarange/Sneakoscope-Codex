@@ -12,7 +12,9 @@ export interface OfficialGoalModeDetection {
   mode: 'official_goal_default' | 'sks_goal_fallback'
   codex_help_checked: boolean
   codex_goal_help_checked: boolean
+  codex_features_checked: boolean
   codex_exec_goal_support: boolean
+  codex_goals_feature_enabled: boolean
   config_goal_defaults_detected: boolean
   blockers: string[]
   warnings: string[]
@@ -22,14 +24,20 @@ export async function detectOfficialGoalMode(opts: {
   codexHelpText?: string
   codexGoalHelpText?: string
   codexExecHelpText?: string
+  codexFeaturesText?: string
   configText?: string
   runCommand?: boolean
 } = {}): Promise<OfficialGoalModeDetection> {
   const helpText = opts.codexHelpText ?? (opts.runCommand === false ? '' : await safeCodexHelp(['--help']))
+  const featuresText = opts.codexFeaturesText ?? (opts.runCommand === false ? '' : await safeCodexHelp(['features', 'list']))
   const goalHelpText = opts.codexGoalHelpText ?? (opts.runCommand === false ? '' : await safeCodexHelp(['goal', '--help']))
   const execHelpText = opts.codexExecHelpText ?? ''
-  const all = `${helpText}\n${goalHelpText}\n${execHelpText}\n${opts.configText || ''}`
-  const official = /(?:^|\s)(?:\/goal|goal)(?:\s|,|$)/i.test(all) || /persist(?:ed|ence).{0,40}goal/i.test(all)
+  const all = `${helpText}\n${goalHelpText}\n${execHelpText}\n${featuresText}\n${opts.configText || ''}`
+  const goalsFeature = /^\s*goals\s+\S+\s+true\b/im.test(featuresText)
+    || /\bgoals\b.{0,80}\b(?:stable|enabled)\b.{0,80}\btrue\b/i.test(featuresText)
+  const official = goalsFeature
+    || /(?:^|\s)(?:\/goal|goal)(?:\s|,|$)/i.test(all)
+    || /persist(?:ed|ence).{0,40}goal/i.test(all)
   const execGoal = /(?:--goal|goal mode|\/goal)/i.test(execHelpText || helpText)
   const configDefault = /goal[^=\n]*=\s*(?:true|"enabled"|'enabled')/i.test(opts.configText || '')
   return {
@@ -41,7 +49,9 @@ export async function detectOfficialGoalMode(opts: {
     mode: official ? 'official_goal_default' : 'sks_goal_fallback',
     codex_help_checked: Boolean(helpText),
     codex_goal_help_checked: Boolean(goalHelpText),
+    codex_features_checked: Boolean(featuresText),
     codex_exec_goal_support: execGoal,
+    codex_goals_feature_enabled: goalsFeature,
     config_goal_defaults_detected: configDefault,
     blockers: [],
     warnings: official ? [] : ['official_goal_unavailable_using_sks_goal_fallback']

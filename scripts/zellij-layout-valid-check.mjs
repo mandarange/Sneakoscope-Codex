@@ -11,6 +11,15 @@ const capabilityMod = await import(pathToFileURL(path.join(root, 'dist', 'core',
 const commandMod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-command.js')).href);
 const built = layoutMod.buildZellijLayoutKdl({ missionId: 'M-layout-check', ledgerRoot: path.join(root, '.sneakoscope', 'tmp', 'layout-check'), cwd: root, kind: 'agent', slotCount: 2 });
 const staticValidation = layoutMod.validateZellijLayoutKdl(built.layout_kdl);
+const runtimePolicyOk = built.lane_dispatch_policy?.mode === 'jsonl_nonblocking'
+  && built.lane_dispatch_policy?.fifo_policy === 'disabled_to_avoid_writer_blocking'
+  && built.lane_resource_policy?.nice_level === 10
+  && built.lane_runtime_policies?.length === 2
+  && built.lane_runtime_policies.every((lane) => lane.command_inbox && lane.state_dir && lane.dispatch?.mode === 'jsonl_nonblocking')
+  && built.layout_kdl.includes('SKS_ZELLIJ_COMMAND_INBOX=')
+  && built.layout_kdl.includes('SKS_ZELLIJ_STATE_DIR=')
+  && built.layout_kdl.includes('SKS_ZELLIJ_DISPATCH_THROTTLE_MS=')
+  && built.layout_kdl.includes('nice -n 10');
 const narutoFanoutLayout = layoutMod.buildZellijLayoutKdl({
   missionId: 'M-layout-naruto-fanout',
   ledgerRoot: path.join(root, '.sneakoscope', 'tmp', 'layout-naruto-fanout'),
@@ -54,6 +63,7 @@ if (realRun) {
   realRun.ok = realRun.create_background.ok === true;
 }
 const ok = staticValidation.ok
+  && runtimePolicyOk
   && allKindsOk
   && layoutMod.validateZellijLayoutKdl(narutoFanoutLayout.layout_kdl).ok
   && narutoFanoutPaneCount === 24
@@ -64,6 +74,7 @@ emit({
   schema: 'sks.zellij-layout-valid-check.v1',
   ok,
   layout: { ...built, layout_kdl: undefined, layout_path: layoutPath },
+  runtime_policy_ok: runtimePolicyOk,
   kinds_validated: kindsValidated,
   naruto_fanout_layout: { slot_count: narutoFanoutLayout.slot_count, pane_count: narutoFanoutPaneCount },
   static_validation: staticValidation,
