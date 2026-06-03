@@ -66,7 +66,14 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const genericAgentRouteStandIn = !/\$?agent$/i.test(route) && /\bagent\s+run\b/i.test(routeCommand) && /--route/i.test(routeCommand)
   const realRouteCommandUsed = !genericAgentRouteStandIn
   const laneSupervisorIntegrated = Boolean(laneSupervisor)
-  const zellijLaneRuntimePolicyOk = Boolean(laneSupervisor)
+  const zellijSpawnOnDemandSupervisor = Boolean(laneSupervisor)
+    && Number(laneSupervisor?.lane_count || 0) === 0
+    && Array.isArray(laneSupervisor?.lanes)
+    && laneSupervisor.lanes.length === 0
+    && Number(zellijRuntimeManifest?.lane_count || 0) === 0
+    && Array.isArray(zellijRuntimeManifest?.lanes)
+    && zellijRuntimeManifest.lanes.length === 0
+  const zellijLaneRuntimePolicyOk = zellijSpawnOnDemandSupervisor || Boolean(laneSupervisor)
     && Array.isArray(laneSupervisor?.lanes)
     && laneSupervisor.lanes.length > 0
     && laneSupervisor.lanes.every((lane: any) => lane?.dispatch_mode === 'jsonl_nonblocking'
@@ -124,7 +131,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(terminalCloseReportCount < generationCount ? ['terminal_close_report_count_below_generation_count'] : []),
     ...(slots && slots.all_slots_closed_after_drain !== true ? ['agent_worker_slots_not_closed_after_drain'] : []),
     ...(!laneSupervisor ? ['zellij_lane_supervisor_missing'] : []),
-    ...(laneSupervisor && visualLaneCount > 0 && Number(laneSupervisor.lane_count || 0) < visualLaneCount ? ['zellij_lane_count_below_visual_lane_count'] : []),
+    ...(laneSupervisor && !zellijSpawnOnDemandSupervisor && visualLaneCount > 0 && Number(laneSupervisor.lane_count || 0) < visualLaneCount ? ['zellij_lane_count_below_visual_lane_count'] : []),
     ...(laneSupervisor && laneSupervisor.no_flicker_verified !== true ? ['zellij_lane_no_flicker_not_verified'] : []),
     ...(laneSupervisor && laneSupervisor.pane_survival_checked !== true ? ['zellij_lane_survival_not_checked'] : []),
     ...(laneSupervisor && Number(laneSupervisor.unexpected_close_count || 0) > 0 ? ['zellij_lane_unexpected_close_before_drain'] : []),
@@ -206,7 +213,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     changed_files_by_agent: changedFilesByAgent(patchApplyRows, patchEntries),
     lease_compliance_by_patch: leaseComplianceByPatch(patchEntries, input.partition?.leases || []),
     rollback_digest_count: patchApplyRows.filter((row: any) => row.rollback_digest).length,
-    real_parallel_claim: input.realParallel === true && input.backend === 'codex-exec',
+    real_parallel_claim: input.realParallel === true && input.backend === 'codex-sdk',
     fake_backend_disclaimer: input.backend === 'fake' ? 'fixture only; no real parallel execution claim' : null,
     agent_count: input.roster?.agent_count || input.results?.length || 0,
     max_agents: input.roster?.max_agents || 20,
@@ -254,6 +261,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     zellij_lane_supervisor: 'agent-zellij-lane-supervisor.json',
     lane_supervisor_integrated: laneSupervisorIntegrated,
     zellij_lane_runtime_manifest: zellijRuntimeManifest ? 'zellij-lane-runtime.json' : null,
+    zellij_spawn_on_demand_supervisor: zellijSpawnOnDemandSupervisor,
     zellij_lane_runtime_policy_ok: zellijLaneRuntimePolicyOk,
     zellij_lane_dispatch_mode: laneSupervisor?.dispatch_mode || zellijRuntimeManifest?.dispatch_mode || null,
     zellij_lane_fifo_policy: laneSupervisor?.fifo_policy || zellijRuntimeManifest?.fifo_policy || null,

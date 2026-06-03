@@ -61,6 +61,22 @@ function imagegenRequestEvidence(missionId) {
     response: readJsonIfExists(responseArtifact)
   };
 }
+function verifiedGeneratedOutput(response) {
+  const outputPath = response?.output_image_path ? path.resolve(String(response.output_image_path)) : null;
+  const exists = Boolean(outputPath && fs.existsSync(outputPath));
+  const fake = response?.fake_adapter === true || response?.mock === true || response?.provider === 'fake_imagegen_adapter';
+  return {
+    output_image_path: outputPath,
+    output_image_exists: exists,
+    output_image_sha256: response?.output_image_sha256 || null,
+    output_dimensions: response?.dimensions || null,
+    provider: response?.provider || null,
+    response_ok: response?.ok === true,
+    response_status: response?.status || null,
+    fake_adapter: fake,
+    real_generated_output_verified: response?.ok === true && response?.status === 'generated' && exists && !fake
+  };
+}
 if (!enabled) {
   const skipped = {
     schema: 'sks.imagegen-real-smoke.v1',
@@ -90,10 +106,11 @@ const parsed = parseUxReviewJson(run.stdout);
 const missionId = missionIdFromRun(run.stdout, parsed);
 const evidence = imagegenRequestEvidence(missionId);
 const inputFidelityPresent = evidence.request?.validation?.params_checked?.input_fidelity_present === true;
+const generatedOutput = verifiedGeneratedOutput(evidence.response);
 const report = {
   schema: 'sks.imagegen-real-smoke.v1',
-  ok: run.status === 0,
-  status: run.status === 0 ? 'passed' : 'blocked',
+  ok: run.status === 0 && generatedOutput.real_generated_output_verified === true,
+  status: run.status === 0 && generatedOutput.real_generated_output_verified === true ? 'passed' : 'blocked',
   env_flag: 'SKS_TEST_REAL_IMAGEGEN',
   mission_id: missionId,
   latency_ms: Date.now() - started,
@@ -104,6 +121,7 @@ const report = {
   response_artifact: evidence.response_artifact,
   imagegen_provider: evidence.request?.provider || evidence.response?.provider || null,
   imagegen_blocker: evidence.response?.blocker || null,
+  generated_output: generatedOutput,
   process_error: run.error?.message || null,
   process_signal: run.signal || null,
   input_fidelity_present: inputFidelityPresent,
@@ -111,6 +129,13 @@ const report = {
   stdout_tail: run.stdout.slice(-4000),
   stderr_tail: run.stderr.slice(-4000)
 };
+if (run.status === 0 && !generatedOutput.real_generated_output_verified) {
+  report.blocker = generatedOutput.fake_adapter
+    ? 'fake_imagegen_output_not_real_smoke'
+    : generatedOutput.output_image_exists
+      ? 'generated_output_not_marked_real'
+      : 'generated_output_file_missing';
+}
 if (report.input_fidelity_present) {
   report.ok = false;
   report.status = 'blocked';

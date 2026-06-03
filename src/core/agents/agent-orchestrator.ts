@@ -18,10 +18,10 @@ import { coordinateAgentPatchMerge, writeAgentMergeCoordinatorArtifacts } from '
 import { buildAgentPatchProof } from './agent-patch-proof.js'
 import { executeAgentPatchConflictRebase } from './agent-patch-conflict-rebase.js'
 import { AgentPatchTransactionJournal } from './agent-patch-transaction-journal.js'
+import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-patch-schema.js'
 import { runFakeAgent } from './agent-runner-fake.js'
 import { runProcessAgent } from './agent-runner-process.js'
-import { runCodexExecAgent } from './agent-runner-codex-exec.js'
-import { runZellijAgent } from './agent-runner-zellij.js'
+import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { writeAgentCleanupReport } from './agent-cleanup.js'
 import { writeAgentTrustReport } from './agent-trust-report.js'
 import { writeAgentWrongnessRecords } from './agent-wrongness.js'
@@ -36,7 +36,7 @@ import { normalizeTargetActiveSlots, runAgentScheduler } from './agent-scheduler
 import { runSourceIntelligence } from '../source-intelligence/source-intelligence-runner.js'
 import { detectOfficialGoalMode, writeOfficialGoalModeArtifact } from '../codex/official-goal-mode.js'
 import { writeAgentTaskGraph } from './agent-task-graph.js'
-import { drainZellijLaneSupervisor, initializeZellijLaneSupervisor, updateZellijLaneSupervisorFromSlots, verifyZellijLaneSurvival } from './zellij-lane-supervisor.js'
+import { drainZellijLaneSupervisor, initializeZellijLaneSupervisorEmpty, updateZellijLaneSupervisorFromSlots, verifyZellijLaneSurvival } from './zellij-lane-supervisor.js'
 import { writeZellijPaneProof } from '../zellij/zellij-pane-proof.js'
 import { writeIntelligentWorkGraphArtifacts } from './intelligent-work-graph.js'
 import { writeAdhdOrchestrationArtifacts } from '../strategy/adhd-orchestrating-gate.js'
@@ -46,15 +46,19 @@ import { applyFastModeToRoster, resolveFastModePolicy, writeFastModePropagationP
 import { createNativeCliSessionSwarmRecorder } from './native-cli-session-swarm.js'
 import { writeNativeCliSessionProof } from './native-cli-session-proof.js'
 import { writeNoSubagentScalingPolicy } from './no-subagent-scaling-policy.js'
+import { runCodexTask } from '../codex-control/codex-control-plane.js'
+import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
 
-export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
+export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Promise<any> {
   const root = path.resolve(opts.root || process.cwd())
   const prompt = String(opts.prompt || 'Native agent run')
   const route = opts.route || '$Agent'
   const routeCommand = String(opts.routeCommand || defaultRouteCommand(route))
   const routeBlackboxKind = String(opts.routeBlackboxKind || defaultRouteBlackboxKind(route))
   const fastModePolicy = resolveFastModePolicy({ ...opts, root })
-  const backend = normalizeAgentBackend(opts.backend || (opts.mock ? 'fake' : 'codex-exec'))
+  const requestedBackend = String(opts.backend || (opts.mock ? 'fake' : 'codex-sdk'))
+  const legacyCodexExecRequested = requestedBackend === 'codex-exec'
+  const backend = legacyCodexExecRequested ? 'codex-sdk' : normalizeAgentBackend(requestedBackend)
   const maxAgentCount = Number.isFinite(Number(opts.maxAgentCount)) && Number(opts.maxAgentCount) >= 1 ? Math.floor(Number(opts.maxAgentCount)) : MAX_AGENT_COUNT
   const realZellij = backend === 'zellij' && opts.real === true
   const realZellijProofRequired = realZellij && process.env.SKS_REQUIRE_ZELLIJ === '1'
@@ -63,6 +67,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     : await createMission(root, { mode: 'agent', prompt })
   const missionId = created.id
   const dir = created.dir
+  if (legacyCodexExecRequested) {
+    await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_LEGACY_CODEX_EXEC_BLOCKED', route_command: routeCommand, native_agent_backend: 'codex-sdk', updated_at: nowIso() })
+    return legacyCodexExecBlockedRun({ root, missionId, dir, route, routeCommand, routeBlackboxKind, backend: 'codex-sdk' })
+  }
   // Route start: consult this route's deployed Core Skill snapshot (read-only).
   // Graceful fallback when none is deployed — zero-risk, never invokes the optimizer.
   const routeSkillSelection = await selectRouteSkill(root, route, routeSkillId(route)).catch(() => null)
@@ -198,7 +206,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
   await writeIntelligentWorkGraphArtifacts(ledgerRoot, partition.intelligent_work_graph)
   await writeScoutPolicyArtifact(ledgerRoot)
   await writeZellijRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, agents: roster.roster })
-  await initializeZellijLaneSupervisor(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, targetActiveSlots: visualLaneCount, launchRealZellij: realZellij })
+  await initializeZellijLaneSupervisorEmpty(ledgerRoot, { missionId, sessionName: `sks-${missionId}` })
   await writeZellijPaneProof(root, { missionId, require: realZellijProofRequired, phase: 'initial', ledgerRoot })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-no-overlap-proof.json'), partition.no_overlap_proof || { schema: 'sks.agent-no-overlap-proof.v1', ok: false, blockers: ['missing_no_overlap_proof'] })
@@ -221,7 +229,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     fast_mode: fastModePolicy.fast_mode,
     fast_mode_default: true,
     backpressure: 'dynamic scheduler maintains target active slots until the work queue drains',
-    rate_limit_delay_ms: backend === 'codex-exec' ? 250 : 0,
+    rate_limit_delay_ms: backend === 'codex-sdk' ? 250 : 0,
     resource_pressure_warnings: roster.agent_count > roster.concurrency ? ['agents_exceed_concurrency_batches'] : []
   })
   const parallelWritePolicy = {
@@ -283,7 +291,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
       await appendAgentLedgerEvent(ledgerRoot, { agent_id: agent.id, session_id: agent.session_id, event_type: 'agent_started', payload: { backend, slice_id: slice.id } })
       await startAgentTerminalSession(ledgerRoot, agent, {
         backend,
-        real: backend === 'process' || (backend === 'codex-exec' && opts.real === true) || backend === 'zellij',
+        real: backend === 'process' || (backend === 'codex-sdk' && opts.real === true) || backend === 'zellij',
         slotId: agent.slot_id,
         generationIndex: agent.generation_index,
         requireGeneration: true
@@ -404,7 +412,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     requestedWorkItems: desiredWorkItemCount,
     minimumWorkItems,
     targetActiveSlots,
-    realParallel: backend === 'codex-exec' && opts.mock !== true,
+    realParallel: backend === 'codex-sdk' && opts.mock !== true,
     visualLaneCount,
     roster,
     partition,
@@ -467,6 +475,60 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}) {
     fast_mode_propagation: fastModePropagation,
     patch_swarm: patchSwarm,
     proof
+  }
+}
+
+async function legacyCodexExecBlockedRun(input: { root: string; missionId: string; dir: string; route: string; routeCommand: string; routeBlackboxKind: string; backend: string }) {
+  const blockers = ['legacy_codex_exec_runtime_removed']
+  const ledgerRoot = path.join(input.dir, 'agents')
+  const artifact = {
+    schema: 'sks.codex-sdk-legacy-runtime-removal.v1',
+    generated_at: nowIso(),
+    ok: false,
+    requested_backend: 'codex-exec',
+    selected_backend: input.backend,
+    blockers,
+    message: 'The raw Codex exec runtime has been removed. Use the Codex SDK Control Plane backend.'
+  }
+  await writeJsonAtomic(path.join(input.dir, 'codex-exec-runtime-removed.json'), artifact)
+  return {
+    schema: 'sks.agent-run.v1',
+    ok: false,
+    status: 'blocked',
+    mission_id: input.missionId,
+    route: input.route,
+    route_command: input.routeCommand,
+    route_blackbox_kind: input.routeBlackboxKind,
+    backend: input.backend,
+    ledger_root: path.relative(input.root, ledgerRoot),
+    roster: { schema: 'sks.agent-roster.v1', agent_count: 0, roster: [] },
+    partition: { ok: false, slice_count: 0, lease_count: 0, blockers },
+    task_graph: null,
+    requested_work_items: 0,
+    actual_total_work_items: 0,
+    target_active_slots: 0,
+    minimum_work_items: 0,
+    source_intelligence: null,
+    goal_mode: null,
+    strategy_gate: null,
+    scheduler: { ok: false, status: 'blocked_before_scheduler', blockers },
+    results: [],
+    consensus: { ok: false, blockers },
+    output_validation: { ok: false, blockers },
+    backend_report: { ok: false, blockers },
+    recursion: { ok: true, violations: [] },
+    timeout_kill: { killed_sessions: [] },
+    output_tails: { ok: true, records: [] },
+    cleanup: { ok: true, all_sessions_closed: true, blockers: [] },
+    trust: { ok: false, blockers },
+    wrongness: { ok: false, blockers },
+    parallel_write_policy: null,
+    proof: {
+      ok: false,
+      status: 'blocked',
+      blockers,
+      artifacts: ['codex-exec-runtime-removed.json']
+    }
   }
 }
 
@@ -802,13 +864,100 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
 
 async function runAgentByBackend(backend: string, agent: any, slice: any, opts: any) {
   if (backend === 'process') return runProcessAgent(agent, slice, opts)
-  if (backend === 'codex-exec') {
-    const writeLeaseRequested = Array.isArray(slice?.write_paths) && slice.write_paths.length > 0
-    const workspaceWrite = opts.workspaceWrite === true || (opts.readonly !== true && opts.writeMode && opts.writeMode !== 'off' && writeLeaseRequested)
-    return runCodexExecAgent(agent, slice, { ...opts, workspaceWrite, dryRun: opts.real === true ? false : true })
+  if (backend === 'codex-sdk' || backend === 'zellij') {
+    const ledgerRoot = path.resolve(opts.agentRoot || opts.cwd || process.cwd())
+    const workerDir = path.join(ledgerRoot, 'codex-sdk-workers', String(agent.session_id || agent.id || 'agent'), String(slice?.id || 'slice'))
+    const writePaths = sdkWritePaths(slice, opts)
+    const sdkTask = await runCodexTask({
+      route: String(opts.route || '$Agent'),
+      missionId: String(opts.missionId || opts.mission_id || ''),
+      workItemId: String(slice?.id || ''),
+      slotId: String(agent.slot_id || agent.id || ''),
+      generationIndex: Number(agent.generation_index || 1),
+      sessionId: String(agent.session_id || ''),
+      cwd: String(opts.cwd || process.cwd()),
+      prompt: buildDirectSdkWorkerPrompt(slice),
+      inputFiles: Array.isArray(opts.inputFiles) ? opts.inputFiles.map(String) : [],
+      inputImages: Array.isArray(opts.inputImages) ? opts.inputImages.map(String) : [],
+      outputSchemaId: CODEX_AGENT_WORKER_RESULT_SCHEMA_ID,
+      outputSchema: codexAgentWorkerResultSchema as Record<string, unknown>,
+      sandboxPolicy: writePaths.length ? 'workspace-write' : 'read-only',
+      requestedScopeContract: {
+        id: String(slice?.lease_id || slice?.id || ''),
+        route: String(opts.route || '$Agent'),
+        read_only: writePaths.length === 0,
+        allowed_paths: writePaths,
+        write_paths: writePaths,
+        user_confirmed_full_access: false,
+        mad_sks_authorized: opts.madSksAuthorized === true || process.env.SKS_MAD_SKS_ACTIVE === '1'
+      },
+      mutationLedgerRoot: workerDir,
+      zellijPaneId: null
+    })
+    const sdkWorkerResult = await readJson<any>(sdkTask.workerResultPath, null)
+    const patchEnvelopes = normalizeDirectSdkPatchEnvelopes(sdkWorkerResult?.patch_envelopes || [], agent, opts, sdkTask.sdkThreadId)
+    const sdkReport = {
+      schema: 'sks.codex-sdk-worker-adapter.v1',
+      backend: 'codex-sdk',
+      sdk_thread_id: sdkTask.sdkThreadId,
+      sdk_run_id: sdkTask.sdkRunId,
+      stream_event_count: sdkTask.streamEventCount,
+      structured_output_valid: sdkTask.structuredOutputValid,
+      worker_result_path: path.relative(ledgerRoot, sdkTask.workerResultPath),
+      patch_envelope_path: sdkTask.patchEnvelopePath ? path.relative(ledgerRoot, sdkTask.patchEnvelopePath) : null,
+      service_tier: opts.serviceTier || 'fast',
+      fast_mode: opts.fastMode !== false,
+      blockers: sdkTask.blockers
+    }
+    return validateAgentWorkerResult({
+      ...sdkWorkerResult,
+      backend: 'codex-sdk',
+      patch_envelopes: patchEnvelopes,
+      codex_child_report: sdkReport,
+      codex_sdk_thread: sdkReport,
+      model_authored_patch_envelopes: patchEnvelopes.length > 0,
+      fixture_patch_envelopes: false,
+      artifacts: [...new Set([...(sdkWorkerResult?.artifacts || []), path.relative(ledgerRoot, sdkTask.workerResultPath), path.join(path.relative(ledgerRoot, workerDir), 'codex-control-proof.json'), path.join(path.relative(ledgerRoot, workerDir), 'codex-thread-registry.json'), path.join(path.relative(ledgerRoot, workerDir), 'codex-sdk-events.jsonl')])],
+      blockers: [...(sdkWorkerResult?.blockers || []), ...sdkTask.blockers],
+      verification: {
+        status: sdkTask.ok ? 'passed' : 'failed',
+        checks: [...(sdkWorkerResult?.verification?.checks || []), 'codex-sdk-control-plane', 'codex-sdk-event-stream', 'codex-sdk-structured-output']
+      }
+    })
   }
-  if (backend === 'zellij') return runZellijAgent(agent, slice, opts)
   return runFakeAgent(agent, slice, opts)
+}
+
+function buildDirectSdkWorkerPrompt(slice: any) {
+  const write = sdkWritePaths(slice, {})
+  return [
+    String(slice?.description || slice?.title || 'Complete the assigned worker task.'),
+    '',
+    write.length
+      ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}.`
+      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}.`,
+    'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
+  ].join('\n')
+}
+
+function sdkWritePaths(slice: any, opts: any) {
+  return [
+    ...(Array.isArray(slice?.write_paths) ? slice.write_paths : []),
+    ...(Array.isArray(opts?.write_paths) ? opts.write_paths : [])
+  ].map(String).filter(Boolean)
+}
+
+function normalizeDirectSdkPatchEnvelopes(envelopes: AgentPatchEnvelope[], agent: any, opts: any, sdkThreadId: string) {
+  return envelopes.map((envelope) => normalizeAgentPatchEnvelope({
+    ...envelope,
+    source: 'model_authored',
+    native_cli_worker_session_id: agent.session_id,
+    native_cli_process_id: process.pid,
+    worker_process_id: process.pid,
+    backend_sdk_thread_id: sdkThreadId,
+    fast_mode: opts.fastMode !== false,
+    service_tier: opts.serviceTier || 'fast'
+  }))
 }
 
 async function readZellijPaneIdsBySlot(root: string) {

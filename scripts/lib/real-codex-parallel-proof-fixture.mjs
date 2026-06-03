@@ -14,10 +14,12 @@ export async function buildFixtureProof({ workers, required }) {
     await fs.writeFile(path.join(root, dir, 'worker-backend-router-report.json'), JSON.stringify({
       schema: 'sks.native-worker-backend-router.v1',
       ok: true,
-      selected_backend: 'codex-exec',
+      selected_backend: 'codex-sdk',
       worker_process_id: 3000 + index,
-      child_process_ids: [4000 + index],
-      output_last_message_path: path.join(root, dir, 'codex-output-last-message.json'),
+      child_process_ids: [],
+      sdk_thread_id: `sdk-thread-${index}`,
+      stream_event_count: 4,
+      structured_output_valid: true,
       patch_envelope_count: 1,
       model_authored_patch_envelopes: true,
       fixture_patch_envelopes: false,
@@ -26,18 +28,17 @@ export async function buildFixtureProof({ workers, required }) {
       service_tier: 'fast',
       blockers: []
     }, null, 2));
-    await fs.writeFile(path.join(root, dir, 'codex-worker-process-report.json'), JSON.stringify({
-      schema: 'sks.codex-exec-worker-adapter.v1',
-      backend: 'codex-exec',
-      codex_child_pid: 4000 + index,
-      codex_child_started_at: new Date(base).toISOString(),
-      codex_child_finished_at: new Date(base + 5000).toISOString(),
-      output_last_message_path: path.join(root, dir, 'codex-output-last-message.json'),
+    await fs.writeFile(path.join(root, dir, 'codex-control-proof.json'), JSON.stringify({
+      schema: 'sks.codex-control-proof.v1',
+      ok: true,
+      backend: 'codex-sdk',
+      sdk_thread_id: `sdk-thread-${index}`,
+      sdk_run_id: `sdk-run-${index}`,
+      stream_event_count: 4,
+      structured_output_valid: true,
+      output_schema_id: 'sks.agent-worker-result.v1',
       fast_mode: true,
-      service_tier: 'fast',
-      dry_run: false,
-      synthetic_stdout_fallback: false,
-      patch_envelope_count: 1
+      service_tier: 'fast'
     }, null, 2));
     await fs.writeFile(path.join(root, dir, 'codex-worker-output-truth.json'), JSON.stringify({ ok: true, patch_envelope_count: 1 }, null, 2));
   }

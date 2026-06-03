@@ -67,8 +67,8 @@ const clipboardCliOk = report.launch_command.includes('--copy-command')
   && report.launch_command.includes('--copy-on-select')
   && report.launch_command.includes('true')
   && report.launch_command.includes('--mouse-mode')
-  && report.launch_command[report.launch_command.indexOf('--mouse-mode') + 1] === 'false'
-  && report.clipboard_mouse_mode === false
+  && report.launch_command[report.launch_command.indexOf('--mouse-mode') + 1] === 'true'
+  && report.clipboard_mouse_mode === true
   && !report.launch_command.includes('--copy-clipboard');
 const ok = report.kind === 'mad'
   && report.layout_artifact

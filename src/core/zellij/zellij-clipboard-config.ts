@@ -7,11 +7,11 @@ import { ensureDir, nowIso, writeTextAtomic } from '../fsx.js'
 // some iTerm2 configs) silently drop. Setting copy_command="pbcopy" keeps
 // Zellij's copy action wired to the macOS clipboard.
 //
-// Keep Zellij mouse_mode off by default so normal terminal mouse-drag selection
-// remains available for copy. Conversation scrollback is preserved separately by
-// the Codex `--no-alt-screen` launch path. Users who prefer Zellij hover-pane
-// wheel routing can opt in with SKS_ZELLIJ_MOUSE_MODE=1; in that mode some
-// terminals require Shift-drag for native selection.
+// Keep Zellij mouse_mode on by default so trackpad/wheel gestures are handled by
+// Zellij pane scrollback instead of being translated into prompt-history input
+// inside the focused Codex TUI. Copy remains wired through copy_command/pbcopy
+// plus copy_on_select; users who need terminal-native selection can hold Shift
+// or opt out with SKS_ZELLIJ_MOUSE_MODE=0.
 
 export const ZELLIJ_CLIPBOARD_CONFIG_SCHEMA = 'sks.zellij-clipboard-config.v1'
 
@@ -59,9 +59,7 @@ export async function writeZellijClipboardConfig(
   const copy_command = resolveCopyCommand(platform)
   const copy_clipboard: 'system' | 'primary' = 'system'
   const copy_on_select = true
-  // Default off for native drag-copy. Opt in when hover-pane wheel routing is more
-  // important than the terminal's plain selection gesture.
-  const mouse_mode = isTruthyEnv(process.env.SKS_ZELLIJ_MOUSE_MODE)
+  const mouse_mode = resolveMouseMode(process.env)
   const dir = path.join(root, '.sneakoscope', 'missions', missionId)
   await ensureDir(dir)
   const config_path = path.join(dir, 'zellij-clipboard.kdl')
@@ -81,6 +79,10 @@ export async function writeZellijClipboardConfig(
   }
 }
 
-function isTruthyEnv(value: string | undefined): boolean {
-  return /^(1|true|yes|on)$/i.test(String(value || '').trim())
+export function resolveMouseMode(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = String(env.SKS_ZELLIJ_MOUSE_MODE || '').trim()
+  if (!raw) return true
+  if (/^(0|false|no|off)$/i.test(raw)) return false
+  if (/^(1|true|yes|on)$/i.test(raw)) return true
+  return true
 }

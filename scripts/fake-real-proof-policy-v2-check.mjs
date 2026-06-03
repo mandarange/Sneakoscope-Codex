@@ -3,7 +3,7 @@ import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.mjs';
 
 const mod = await importDist('core/proof/fake-real-proof-policy.js');
 const fixtureReal = mod.evaluateFakeRealProofPolicy({
-  backend: 'codex-exec',
+  backend: 'codex-sdk',
   real_parallel_claim: true,
   output_schema_used: true,
   output_last_message_path: 'result.json',
@@ -12,7 +12,7 @@ const fixtureReal = mod.evaluateFakeRealProofPolicy({
   cleanup_proof: { ok: true }
 });
 const requiredMissing = mod.evaluateFakeRealProofPolicy({
-  backend: 'codex-exec',
+  backend: 'codex-sdk',
   real_parallel_claim: true,
   integration_optional: true,
   require_real_dynamic_agents: true

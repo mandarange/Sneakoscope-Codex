@@ -16,23 +16,28 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.21.7** is a Zellij/Naruto runtime patch. Real Zellij workers now run as pane-bound native CLI sessions: SKS creates or targets the Zellij session, splits a named slot pane, launches the worker inside that pane, and reads `worker-result.json` plus heartbeat/log artifacts back in the parent scheduler.
+SKS **1.21.9** is a Codex SDK Control Plane runtime patch. Native workers now use `@openai/codex-sdk` for thread/run/stream/schema execution while Zellij remains pane-level visual proof.
 
 What changed:
 
-- `--backend zellij --real` now uses real slot panes for worker sessions instead of only recording synthetic lane artifacts.
-- Pane ids are reconciled from `zellij --session <name> action list-panes --json --all` when `new-pane` does not print one.
-- The parent/worker transport is explicit: `worker-result.json`, `worker-heartbeat.jsonl`, `worker.stdout.log`, and `worker.stderr.log`.
-- Zellij lane supervisor actions target the intended session with `--session`, so pane creation no longer depends on ambient terminal state.
+- `codex-sdk` is the default native agent backend for Team, QA, Research, Naruto, MAD-SKS, and direct agent runs.
+- Raw `codex exec` execution is removed from runtime fallback paths; explicit legacy requests are blocked with `legacy_codex_exec_runtime_removed`.
+- SDK runs write `codex-control-proof.json`, `codex-thread-registry.json`, `codex-sdk-events.jsonl`, and schema-validated worker results.
+- Zellij proof now links `pane_id`, `slot_id`, `generation_index`, `session_id`, and `sdk_thread_id`.
+- Release gates include `codex-sdk:*` capability, routing, structured output, event ledger, sandbox, thread registry, Zellij binding, pipeline, and smoke checks.
 
 Quick checks:
 
 ```bash
 npm run typecheck
 npm run build
-npm run agent:zellij-runtime
-npm run zellij:layout-valid
-npm run zellij:lane-renderer
+npm run codex-sdk:capability
+npm run codex-sdk:backend-router
+npm run codex-sdk:structured-output
+npm run codex-sdk:event-stream-ledger
+npm run codex-sdk:thread-registry
+npm run codex-sdk:zellij-pane-binding
+npm run codex-sdk:all-pipelines
 ```
 
 Broader release checks still live behind `npm run release:check`. Detailed release history is in [CHANGELOG.md](CHANGELOG.md), and release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
@@ -46,9 +51,9 @@ Broader release checks still live behind `npm run release:check`. Detailed relea
   SKS_NARUTO_MAX_CONCURRENCY=48 sks naruto run "sweep the test suite" --clones 48
   ```
 
-- **Zellij scrollback and copy.** SKS launches Codex panes with `--no-alt-screen`, so the terminal keeps the conversation transcript in scrollback. Zellij `mouse_mode` is off by default so normal mouse-drag text selection works for copy. Set `SKS_ZELLIJ_MOUSE_MODE=1` only when you prefer Zellij hover-pane wheel routing; in that mode some terminals require Shift-drag for native selection.
+- **Zellij scrollback and copy.** SKS launches Codex panes with `--no-alt-screen`, so the terminal keeps the conversation transcript in scrollback. Zellij `mouse_mode` is on by default so trackpad/wheel gestures scroll the conversation pane instead of recalling prompt history in the focused Codex input. Copy still uses `copy_command=pbcopy` and `copy_on_select=true`; hold Shift for terminal-native selection, or set `SKS_ZELLIJ_MOUSE_MODE=0` if you intentionally prefer native drag selection over hover-pane scrolling.
 
-- **Live MAD / Naruto cockpit lanes.** `sks --mad` starts a same-mission native agent swarm and opens the right-pane cockpit against that ledger. Lane panes follow per-slot worker artifacts such as `worker.stdout.log`, `worker.stderr.log`, and `worker-heartbeat.jsonl`, so fan-out work shows as live worker status instead of a static "Workers idle" panel. Tune MAD fan-out with `--mad-agents`, `--mad-swarm-work-items`, and `--mad-swarm-backend`; use `--no-mad-swarm` only when you intentionally want the old UI-only launch. Each Zellij lane has per-slot SKS state, a nonblocking JSONL command bus, dynamic pane-id reconciliation from `zellij action list-panes --json --all`, and `nice`/dispatch-throttle metadata. If a lane's own mission ledger is idle, the renderer can mirror the most-recent active agent mission; disable that follow behavior with `SKS_LANE_FOLLOW_ACTIVE_MISSION=0`.
+- **MAD / Naruto Zellij worker panes.** `sks --mad` and Naruto-style fan-out keep the main Zellij session lean at launch, then open named worker panes on demand as scheduler slots are reserved. Each worker pane is bound to a slot generation, writes `worker.stdout.log`, `worker.stderr.log`, `worker-heartbeat.jsonl`, `worker-result.json`, and `zellij-worker-pane.json`, then drains when the generation completes. Tune MAD fan-out with `--mad-agents`, `--mad-swarm-work-items`, and `--mad-swarm-backend`; use `--no-mad-swarm` only when you intentionally want the UI-only launch.
 
 - **Image generation under codex-lb.** `gpt-image-2` routes through the same Codex `/responses` backend the load balancer already proxies, so `$imagegen` works when you are authenticated only through codex-lb (no direct `OPENAI_API_KEY`). The official Codex App `$imagegen` surface stays primary; the codex-lb/OpenAI API path is the fallback. Opt out with `SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK=0`.
 
@@ -365,7 +370,7 @@ Team missions keep at least five QA/reviewer lanes active, record live events, c
 ```sh
 sks agent run "map the risky files" --mock --json
 sks agent run "wide release audit" --route '$Release-Review' --agents 10 --concurrency 5 --mock --json
-sks agent run "real one-agent smoke" --backend codex-exec --real --agents 1 --concurrency 1 --json
+sks agent run "real one-agent smoke" --backend codex-sdk --real --agents 1 --concurrency 1 --json
 ```
 
 Defaults are intentionally bounded but not subagent-limited: 5 agents by default, maximum 20 native CLI worker sessions, and a separate `--concurrency` cap. When enough work exists, `--agents 10 --concurrency 10` and `--agents 20 --concurrency 20` must create 10 or 20 independent child processes using `node dist/bin/sks.js --agent worker --intake <worker-intake.json> --json`. The parent orchestrator writes `agents/agent-roster.json`, `agents/agent-effort-policy.json`, `agents/agent-task-board.json`, `agents/agent-leases.json`, `agents/agent-no-overlap-proof.json`, `agents/agent-native-cli-session-swarm.json`, `agents/native-cli-session-proof.json`, `agents/no-subagent-scaling-policy.json`, `agents/fast-mode-propagation-proof.json`, `agents/agent-cleanup.json`, and `agents/agent-proof-evidence.json` under the mission.
@@ -393,7 +398,7 @@ sks naruto status
 
 Aliases: `$ShadowClone`, `$Kagebunshin`, and the CLI flag `sks --naruto`.
 
-- **System-aware concurrency:** `--clones N` is the total work fan-out, but `$Naruto` never spawns the whole count at once. Live concurrency is throttled to a host-safe number derived from CPU cores and free memory (heavier cap for real `codex-exec` workers, tighter packing for in-process `fake`). So `--clones 100` on a small host still processes all 100 work units while only running a safe handful at a time; the run reports when it throttles. Override with `SKS_NARUTO_MAX_CONCURRENCY=<n>`.
+- **System-aware concurrency:** `--clones N` is the total work fan-out, but `$Naruto` never spawns the whole count at once. Live concurrency is throttled to a host-safe number derived from CPU cores and free memory (heavier cap for real `codex-sdk` workers, tighter packing for in-process `fake`). So `--clones 100` on a small host still processes all 100 work units while only running a safe handful at a time; the run reports when it throttles. Override with `SKS_NARUTO_MAX_CONCURRENCY=<n>`.
 - **Dynamic per-clone effort (like Team):** truly simple / no-tool work runs at `low`, any tool use lifts a clone to `medium` (never high/xhigh), and every clone runs in fast service tier.
 - **Safe parallel writes:** clones coordinate through the same lease-based patch-swarm (merge coordinator + conflict rebase + transaction journal) as Team.
 
@@ -635,7 +640,7 @@ sks team open-zellij latest
 sks zellij status
 ```
 
-Normal mouse-drag copy is the default because SKS launches Zellij with `mouse_mode=false`. Conversation scrollback is still preserved by Codex `--no-alt-screen`. If you prefer Zellij hover-pane wheel routing, launch with `SKS_ZELLIJ_MOUSE_MODE=1`; use Shift-drag if your terminal then captures selection differently. Right lanes are renderer panes that follow SKS worker artifacts, so live native-agent output is shown from per-slot `worker.stdout.log`, `worker.stderr.log`, and `worker-heartbeat.jsonl`.
+Conversation scrollback is preserved by Codex `--no-alt-screen`, and SKS launches Zellij with `mouse_mode=true` by default so trackpad/wheel gestures route to pane scrollback instead of the focused prompt input history. Copy still uses Zellij clipboard integration (`copy_command=pbcopy`, `copy_on_select=true`); hold Shift for terminal-native selection, or launch with `SKS_ZELLIJ_MOUSE_MODE=0` if native drag selection matters more than hover-pane scrolling. Right lanes are renderer panes that follow SKS worker artifacts, so live native-agent output is shown from per-slot `worker.stdout.log`, `worker.stderr.log`, and `worker-heartbeat.jsonl`.
 
 ### Codex App tools are missing
 

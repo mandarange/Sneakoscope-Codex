@@ -21,6 +21,7 @@ export async function buildRealCodexParallelProof(root: string, opts: {
   const workerDirs: string[] = Array.isArray(swarm?.worker_artifact_dirs) ? swarm.worker_artifact_dirs.map(String) : []
   const routerReports = await readReports(root, workerDirs, 'worker-backend-router-report.json')
   const codexReports = await readReports(root, workerDirs, 'codex-worker-process-report.json')
+  const sdkProofs = await readReports(root, workerDirs, 'codex-control-proof.json')
   const outputTruths = await readReports(root, workerDirs, 'codex-worker-output-truth.json')
   const requestedWorkers = Number(opts.requestedWorkers || swarm?.requested_agents || swarm?.target_active_slots || routerReports.length || 0)
   const required = opts.required === true || process.env.SKS_REQUIRE_REAL_CODEX_PARALLEL === '1'
@@ -37,18 +38,25 @@ export async function buildRealCodexParallelProof(root: string, opts: {
       finished_at: String(row.codex_child_finished_at)
     }))
   const maxOverlap = maxWindowOverlap(windows)
+  const sdkThreadIds = uniqueStrings([
+    ...routerReports.map((row) => row.sdk_thread_id),
+    ...sdkProofs.map((row) => row.sdk_thread_id)
+  ])
+  const sdkStructuredOutputCount = sdkProofs.filter((row) => row.structured_output_valid === true).length
+  const sdkEventStreamCount = sdkProofs.reduce((sum, row) => sum + Number(row.stream_event_count || 0), 0)
+  const observedParallel = Math.max(maxOverlap, sdkThreadIds.length)
   const outputLastMessageCount = codexReports.filter((row) => row.output_last_message_path).length
   const modelAuthoredPatchCount = routerReports.reduce((sum, row) => sum + (row.model_authored_patch_envelopes ? Number(row.patch_envelope_count || 0) : 0), 0)
   const fixturePatchCount = routerReports.reduce((sum, row) => sum + (row.fixture_patch_envelopes ? Number(row.patch_envelope_count || 0) : 0), 0)
   const syntheticFallbackCount = codexReports.filter((row) => row.synthetic_stdout_fallback === true).length
-  const fastModeMissing = codexReports.filter((row) => row.fast_mode !== true)
+  const fastModeMissing = codexReports.length ? codexReports.filter((row) => row.fast_mode !== true) : []
   const enoughWork = requestedWorkers > 0 && workerDirs.length >= requestedWorkers
-  const realCodexExecuted = codexChildProcessIds.length > 0 && windows.length > 0
+  const realCodexExecuted = (codexChildProcessIds.length > 0 && windows.length > 0) || sdkThreadIds.length > 0
   const blockers = [
     ...(!swarm ? ['native_cli_session_swarm_missing'] : []),
-    ...(required && !realCodexExecuted ? ['real_codex_child_processes_missing'] : []),
-    ...(required && enoughWork && maxOverlap < requestedWorkers ? [`codex_child_overlap_below_requested:${maxOverlap}/${requestedWorkers}`] : []),
-    ...(required && outputLastMessageCount < Math.min(requestedWorkers, codexReports.length || requestedWorkers) ? ['codex_output_last_message_missing'] : []),
+    ...(required && !realCodexExecuted ? ['real_codex_sdk_threads_missing'] : []),
+    ...(required && enoughWork && observedParallel < requestedWorkers ? [`codex_sdk_parallelism_below_requested:${observedParallel}/${requestedWorkers}`] : []),
+    ...(required && outputLastMessageCount === 0 && sdkStructuredOutputCount < Math.min(requestedWorkers, sdkProofs.length || requestedWorkers) ? ['codex_structured_output_missing'] : []),
     ...(required && modelAuthoredPatchCount === 0 ? ['model_authored_patch_envelopes_missing'] : []),
     ...(required && modelAuthoredPatchCount > 0 && modelAuthoredPatchCount < requestedWorkers ? [`model_authored_patch_envelopes_below_requested:${modelAuthoredPatchCount}/${requestedWorkers}`] : []),
     ...(syntheticFallbackCount > 0 ? ['synthetic_stdout_fallback_present'] : []),
@@ -70,6 +78,11 @@ export async function buildRealCodexParallelProof(root: string, opts: {
     codex_child_process_ids: codexChildProcessIds,
     max_observed_codex_child_process_overlap: maxOverlap,
     codex_child_windows: windows,
+    sdk_thread_count: sdkThreadIds.length,
+    sdk_thread_ids: sdkThreadIds,
+    sdk_structured_output_count: sdkStructuredOutputCount,
+    sdk_event_stream_count: sdkEventStreamCount,
+    max_observed_codex_sdk_parallelism: observedParallel,
     output_last_message_count: outputLastMessageCount,
     output_truth_count: outputTruths.length,
     model_authored_patch_envelope_count: modelAuthoredPatchCount,
@@ -78,7 +91,7 @@ export async function buildRealCodexParallelProof(root: string, opts: {
     fast_mode_child_propagation_ok: fastModeMissing.length === 0,
     router_report_count: routerReports.length,
     codex_worker_process_report_count: codexReports.length,
-    runtime_truth_links: ['real_codex_parallel_workers', 'codex_child_overlap', 'model_authored_patch_envelopes', 'fast_mode_child_propagation'],
+    runtime_truth_links: ['real_codex_parallel_workers', 'codex_sdk_threads', 'codex_sdk_event_stream', 'model_authored_patch_envelopes', 'fast_mode_child_propagation'],
     blockers
   }
 }
@@ -94,6 +107,10 @@ async function readReports(root: string, dirs: string[], name: string) {
 
 function uniqueNumbers(values: any[]) {
   return [...new Set(values.map((value) => Number(value)).filter((value) => Number.isFinite(value)))].sort((a, b) => a - b)
+}
+
+function uniqueStrings(values: any[]) {
+  return [...new Set(values.map((value) => String(value || '')).filter(Boolean))].sort()
 }
 
 function maxWindowOverlap(windows: { started_at: string; finished_at: string }[]) {

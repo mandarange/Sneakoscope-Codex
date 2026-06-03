@@ -30,7 +30,7 @@ assert.equal(plan.validation.non_overlap_leases_assigned, true);
 assert.equal(plan.validation.session_close_validated, true);
 assert.equal(plan.validation.proof_graph_validated, true);
 assert.equal(plan.validation.release_gate_updated, true);
-assert.equal(plan.validation.real_mode_codex_exec_backend, true);
+assert.equal(plan.validation.real_mode_codex_sdk_backend, true);
 assert.equal(proof.ok, true);
 
 console.log(JSON.stringify({

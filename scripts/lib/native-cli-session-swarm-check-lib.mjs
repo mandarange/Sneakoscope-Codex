@@ -28,6 +28,10 @@ export function runNativeCliSwarmCheck({ agents, workItems = agents, reportName,
   const stdout = execFileSync(process.execPath, args, {
     cwd: root,
     encoding: 'utf8',
+    env: {
+      ...process.env,
+      ...(backend === 'codex-sdk' ? { SKS_CODEX_SDK_FAKE: '1', NODE_ENV: 'test' } : {})
+    },
     maxBuffer: 96 * 1024 * 1024
   });
   const result = JSON.parse(stdout);

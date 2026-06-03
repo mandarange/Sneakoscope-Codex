@@ -6,6 +6,12 @@ import { runProcess } from '../dist/core/fsx.js';
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-trust-fixture-'));
 await fs.writeFile(path.join(root, 'package.json'), '{"private":true,"name":"sks-trust-fixture"}\n');
+await runProcess('git', ['init', '-q'], {
+  cwd: root,
+  timeoutMs: 10_000,
+  maxOutputBytes: 64 * 1024,
+  env: { CI: 'true' }
+});
 const sks = path.join(process.cwd(), 'dist', 'bin', 'sks.js');
 const run = await runJson(root, sks, ['run', 'fixture', '--mock', '--json']);
 const trust = await runJson(root, sks, ['trust', 'validate', run.mission_id, '--json']);

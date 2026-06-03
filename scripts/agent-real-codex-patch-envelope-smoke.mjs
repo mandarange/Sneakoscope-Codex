@@ -13,11 +13,6 @@ if (process.env.SKS_TEST_REAL_CODEX_PATCHES !== '1') {
   optionalOrBlocked('set SKS_TEST_REAL_CODEX_PATCHES=1 to run real Codex patch envelope smoke', 'real_codex_patch_smoke_not_requested');
 }
 
-const help = spawnSync('codex', ['exec', '--help'], { encoding: 'utf8', maxBuffer: 1024 * 1024 });
-if (help.status !== 0) optionalOrBlocked('codex exec binary unavailable', 'codex_missing', { stderr: help.stderr?.slice(-2000) || '' });
-const helpText = `${help.stdout}\n${help.stderr}`;
-if (!helpText.includes('--output-schema') || !helpText.includes('--output-last-message')) optionalOrBlocked('codex exec output schema flags unavailable', 'output_schema_unsupported');
-
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-real-codex-patches-'));
 fs.mkdirSync(path.join(fixture, '.sneakoscope'), { recursive: true });
 for (const file of ['alpha.txt', 'beta.txt', 'gamma.txt']) fs.writeFileSync(path.join(fixture, file), `${file}: before\n`);
@@ -33,7 +28,7 @@ const run = spawnSync(process.execPath, [
   'run',
   prompt,
   '--route', '$Agent',
-  '--backend', 'codex-exec',
+  '--backend', 'codex-sdk',
   '--real',
   '--agents', '2',
   '--target-active-slots', '2',

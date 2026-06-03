@@ -3,6 +3,85 @@
 ## [Unreleased]
 
 
+## [1.21.9] - 2026-06-03
+
+Patch release: replace runtime Codex execution with the Codex SDK Control Plane, keep Zellij as visual pane proof, and add SDK-specific release gates.
+
+### Added
+
+- **Codex SDK Control Plane.** New `src/core/codex-control/*` modules manage SDK capability, thread registry, event translation, structured output schemas, sandbox/env/config policy, fake hermetic adapter, real SDK adapter, and control proof artifacts.
+- **SDK proof artifacts.** Every SDK worker writes `codex-control-proof.json`, `codex-thread-registry.json`, `codex-sdk-events.jsonl`, and `codex-sdk-worker-result.json` with `sdk_thread_id`, `sdk_run_id`, stream event count, and output schema id.
+- **Release gates.** Added `codex-sdk:*` checks for capability, no legacy fallback, backend routing, structured output, event ledgers, thread registry, sandbox policy, Zellij pane binding, all pipelines, route-specific pipelines, and real smoke.
+
+### Changed
+
+- **Native agent default backend is `codex-sdk`.** Team, QA-LOOP, Research, Naruto, MAD-SKS, and direct agent command surfaces now default to SDK execution unless mock/fake mode is requested.
+- **Zellij is pane proof, not execution fallback.** Worker pane records use `worker_codex_sdk` and link pane/slot/generation/session records to SDK thread evidence.
+- **Fast/proof policy recognizes SDK evidence.** Real/fake proof policy, fast-mode propagation, route collaboration, and real-parallel proof now treat SDK thread and event evidence as the Codex runtime proof.
+
+### Removed
+
+- Runtime fallback to raw `codex exec` for native workers. Explicit `codex-exec` requests now block with `legacy_codex_exec_runtime_removed`.
+
+### Verified
+
+- `npm view sneakoscope version` returned `1.21.7` before the bump, so no newer package update prompt was required.
+- Context7/OpenAI Codex SDK documentation was consulted for `@openai/codex-sdk` thread, run, streaming, output schema, sandbox, approval, and working directory APIs.
+- `npm run typecheck`
+- `npm run build`
+- `npm run codex-sdk:capability && npm run codex-sdk:no-legacy-fallback && npm run codex-sdk:backend-router && npm run codex-sdk:structured-output && npm run codex-sdk:event-stream-ledger && npm run codex-sdk:thread-registry && npm run codex-sdk:sandbox-policy && npm run codex-sdk:zellij-pane-binding && npm run codex-sdk:all-pipelines && npm run codex-sdk:dfix-pipeline && npm run codex-sdk:qa-pipeline && npm run codex-sdk:research-pipeline && npm run codex-sdk:team-naruto-agent-pipeline && npm run codex-sdk:release-review-pipeline && npm run codex-sdk:ux-ppt-review-pipeline && npm run codex-sdk:core-skill-pipeline && npm run codex-sdk:real-smoke`
+
+## [1.21.8] - 2026-06-02
+
+Patch release: replace pre-created Zellij worker lanes with spawn-on-demand worker panes, preserve trackpad scrollback in interactive Codex panes, and add release gates for the slot/pane communication contract.
+
+### Added
+
+- **Zellij WorkerPaneManager.** `src/core/zellij/zellij-worker-pane-manager.ts` opens named worker panes at slot generation time with `zellij --session <session> action new-pane --name slot-001/gen-1 -- sh -lc <worker-command>`, writes `zellij-worker-pane.json`, and records pane lifecycle events.
+- **Slot/pane proof gates.** New checks cover main-only layout generation, worker pane manager metadata, scheduler spawn order, slot-to-pane binding, worker artifact communication, dynamic backfill panes, and real-codex-in-worker-pane wiring:
+  - `npm run zellij:spawn-on-demand-layout`
+  - `npm run zellij:worker-pane-manager`
+  - `npm run zellij:worker-pane-spawn-order`
+  - `npm run agent:slot-pane-binding-proof`
+  - `npm run agent:worker-pane-communication-contract`
+  - `npm run agent:zellij-dynamic-backfill-panes`
+  - `npm run agent:real-codex-in-zellij-worker-pane`
+- **Worker pane schema.** `schemas/zellij/zellij-worker-pane.schema.json` documents the runtime artifact contract for slot generation panes.
+
+### Changed
+
+- **Zellij layouts are main-only by default.** Generated layouts no longer pre-split `slot-*` worker panes or embed `zellij-lane --slot` commands. `initial_worker_panes` is now `0`; the optional monitor pane is behind `SKS_ZELLIJ_MONITOR_PANE=1`.
+- **Real Zellij native workers use pane-bound scaling.** The native CLI swarm now records `native_cli_process_in_zellij_worker_pane`, accepts only real pane id sources (`zellij_worker_new_pane_stdout` or `zellij_worker_list_panes`), and uses durable worker artifacts for parent/worker communication.
+- **Zellij lane supervisor starts empty.** The orchestrator no longer initializes persistent scheduler lanes before worker scheduling; the supervisor records an empty, drained state while worker panes are owned by WorkerPaneManager.
+- **Release wiring covers the new runtime contract.** `release:check` includes the first five spawn-on-demand gates, and `release:real-check` includes real Zellij pane/screen proof plus `agent:real-codex-in-zellij-worker-pane -- --require-real`.
+
+### Fixed
+
+- Fix a Zellij mouse-mode regression in SKS-launched interactive Codex panes: `mouse_mode` now defaults to true again so trackpad/wheel gestures scroll the conversation pane instead of being translated into prompt-history navigation inside the focused input area. Clipboard integration remains enabled through `copy_command=pbcopy` and `copy_on_select=true`; opt out with `SKS_ZELLIJ_MOUSE_MODE=0` when terminal-native drag selection is preferred.
+- Prevent worker-pane-internal Zellij backend reports from writing legacy synthetic persistent-lane launch evidence.
+- Accept `native_cli_process_in_zellij_worker_pane` as a native worker scaling primitive in native session proof and no-subagent scaling policy.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
+### Verified
+
+- `npm view sneakoscope version --json` returned `1.21.7` before the bump, so no newer package update prompt was required.
+- Context7 Zellij documentation was consulted for current `--session`, `new-pane`, `list-panes --json --all`, mouse mode, and copy command behavior.
+- `npm run build`
+- `npm run typecheck`
+- `npm run zellij:spawn-on-demand-layout`
+- `npm run zellij:worker-pane-manager`
+- `npm run zellij:worker-pane-spawn-order`
+- `npm run agent:slot-pane-binding-proof`
+- `npm run agent:worker-pane-communication-contract`
+- `npm run agent:zellij-dynamic-backfill-panes`
+- `npm run zellij:layout-valid`
+- `npm run agent:zellij-runtime`
+- `npm run agent:native-cli-session-swarm`
+- `npm run agent:native-cli-session-swarm-10`
+- `npm run agent:native-cli-session-swarm-20`
+- `npm run mad-sks:zellij-launch`
+- `npm run agent:real-codex-in-zellij-worker-pane`
+- Real smoke: `SKS_ZELLIJ_WORKER_RESULT_TIMEOUT_MS=45000 SKS_ZELLIJ_WORKER_HEARTBEAT_TIMEOUT_MS=15000 SKS_ZELLIJ_WORKER_PANE_HOLD_MS=200 node ./dist/bin/sks.js agent run "spawn on demand zellij worker pane smoke" --backend zellij --real --agents 1 --concurrency 1 --work-items 1 --minimum-work-items 1 --json`
 
 ## [1.21.7] - 2026-06-02
 

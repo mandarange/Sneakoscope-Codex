@@ -37,7 +37,7 @@ export async function runRealCodexParallelGate({ workers, gate }) {
     'run',
     prompt,
     '--backend',
-    'codex-exec',
+    'codex-sdk',
     '--real',
     '--agents',
     String(workers),

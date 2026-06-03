@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { ensureDir, nowIso, packageRoot, writeTextAtomic } from '../fsx.js'
-import { buildZellijLaneRuntimePolicy, buildZellijLaneShellCommand, writeZellijLaneRuntimeManifest, type ZellijLaneRuntimePolicy } from './zellij-lane-runtime.js'
+import { writeZellijLaneRuntimeManifest, type ZellijLaneRuntimePolicy } from './zellij-lane-runtime.js'
 
 export const ZELLIJ_LAYOUT_SCHEMA = 'sks.zellij-layout.v1'
 
@@ -34,6 +34,9 @@ export interface ZellijLayoutBuild {
   launch_env_keys: string[]
   lane_runtime_manifest: string
   lane_runtime_policies: ZellijLaneRuntimePolicy[]
+  initial_worker_panes: number
+  monitor_pane_enabled: boolean
+  monitor_pane_count: number
   lane_dispatch_policy: {
     mode: 'jsonl_nonblocking'
     fifo_policy: 'disabled_to_avoid_writer_blocking'
@@ -54,20 +57,15 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
   const title = input.title || `SKS ${input.kind || 'agent'} ${input.missionId}`
   const sksCommand = `${shellQuote(process.execPath)} ${shellQuote(path.join(packageRoot(), 'dist', 'bin', 'sks.js'))}`
   const mainPane = buildMainPaneCommand(input, sksCommand)
-  const laneRuntimes = Array.from({ length: slotCount }, (_, index) => buildZellijLaneRuntimePolicy(ledgerRoot, {
-    missionId: input.missionId,
-    sessionName,
-    slotId: `slot-${String(index + 1).padStart(3, '0')}`
-  }))
-  const panes = laneRuntimes.map((runtime) => {
-    const stderrLog = shellQuote(path.join(ledgerRoot, 'zellij-lane-renderer.stderr.log'))
-    const command = buildZellijLaneShellCommand(`${sksCommand} zellij-lane --mission ${shellQuote(input.missionId)} --slot ${shellQuote(runtime.slot_id)} --ledger-root ${shellQuote(ledgerRoot)} --follow 2>> ${stderrLog}`, runtime)
-    return [
-      `            pane name=${kdlString(runtime.slot_id)} command="sh" {`,
-      `                args "-lc" ${kdlString(command)}`,
-      '            }'
-    ].join('\n')
-  }).join('\n')
+  const laneRuntimes: ZellijLaneRuntimePolicy[] = []
+  const monitorPaneEnabled = process.env.SKS_ZELLIJ_MONITOR_PANE === '1'
+  const monitorPane = monitorPaneEnabled
+    ? [
+        '        pane name="monitor" size="30%" command="sh" {',
+        `            args "-lc" ${kdlString(`${sksCommand} status --json || true; exec ${shellQuote(String(process.env.SHELL || '/bin/zsh'))}`)}`,
+        '        }'
+      ].join('\n')
+    : ''
   const layout = [
     'layout {',
     '    default_tab_template {',
@@ -83,9 +81,7 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     '        pane name="orchestrator" command="sh" {',
     `            args "-lc" ${kdlString(mainPane.command)}`,
     '        }',
-    '        pane split_direction="horizontal" size="38%" {',
-    panes,
-    '        }',
+    ...(monitorPane ? [monitorPane] : []),
     '    }',
     '}',
     ''
@@ -107,15 +103,18 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     launch_env_keys: mainPane.launchEnvKeys,
     lane_runtime_manifest: path.join(ledgerRoot, 'zellij-lane-runtime.json'),
     lane_runtime_policies: laneRuntimes,
+    initial_worker_panes: 0,
+    monitor_pane_enabled: monitorPaneEnabled,
+    monitor_pane_count: monitorPaneEnabled ? 1 : 0,
     lane_dispatch_policy: {
       mode: 'jsonl_nonblocking',
       fifo_policy: 'disabled_to_avoid_writer_blocking',
       pane_transport: 'zellij_action_optional',
-      throttle_ms: laneRuntimes[0]?.dispatch.throttle_ms || 100
+      throttle_ms: 0
     },
     lane_resource_policy: {
-      nice_level: laneRuntimes[0]?.resource.nice_level || 0,
-      throttle_ms: laneRuntimes[0]?.resource.throttle_ms || 100
+      nice_level: 0,
+      throttle_ms: 0
     }
   }
 }
@@ -123,10 +122,10 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
 export function validateZellijLayoutKdl(text: string) {
   const blockers = [
     ...(!/\blayout\s*\{/.test(text) ? ['zellij_layout_root_missing'] : []),
-    ...(!/\bzellij-lane\b/.test(text) ? ['zellij_layout_lane_command_missing'] : []),
-    ...(!/\bSKS_ZELLIJ_COMMAND_INBOX=/.test(text) ? ['zellij_layout_command_inbox_missing'] : []),
-    ...(!/\bSKS_ZELLIJ_STATE_DIR=/.test(text) ? ['zellij_layout_state_dir_missing'] : []),
-    ...(!/\bSKS_ZELLIJ_DISPATCH_THROTTLE_MS=/.test(text) ? ['zellij_layout_dispatch_throttle_missing'] : []),
+    ...(!/\bpane\s+name="orchestrator"/.test(text) ? ['zellij_layout_orchestrator_pane_missing'] : []),
+    ...(/\bzellij-lane\b/.test(text) ? ['zellij_layout_precreated_lane_command_present'] : []),
+    ...(/\bpane\s+name="slot-\d+"/.test(text) ? ['zellij_layout_precreated_worker_pane_present'] : []),
+    ...(/\bSKS_ZELLIJ_COMMAND_INBOX=/.test(text) ? ['zellij_layout_lane_inbox_env_present'] : []),
     ...(/\btmux\b/i.test(text) ? ['zellij_layout_references_removed_tmux'] : []),
     ...(braceBalance(text) !== 0 ? ['zellij_layout_unbalanced_braces'] : [])
   ]

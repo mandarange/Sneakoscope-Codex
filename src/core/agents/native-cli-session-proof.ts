@@ -17,9 +17,10 @@ export async function writeNativeCliSessionProof(root: string, input: { requeste
   const spawnedWorkerProcessCount = Number(swarm?.spawned_worker_process_count || 0)
   const maxObservedWorkerProcessCount = Number(swarm?.max_observed_worker_process_count || 0)
   const processIds = Array.isArray(swarm?.process_ids) ? swarm.process_ids.filter((pid: any) => Number.isFinite(Number(pid))) : []
+  const allowedScalingPrimitives = new Set(['native_cli_process', 'native_cli_process_in_zellij_worker_pane'])
   const blockers = [
     ...(!swarm ? ['native_cli_session_swarm_missing'] : []),
-    ...(swarm && swarm.scaling_primitive !== 'native_cli_process' ? ['scaling_primitive_not_native_cli_process'] : []),
+    ...(swarm && !allowedScalingPrimitives.has(String(swarm.scaling_primitive || '')) ? ['scaling_primitive_not_native_cli_process'] : []),
     ...(swarm && processIds.length < spawnedWorkerProcessCount ? ['worker_process_ids_missing'] : []),
     ...(swarm && spawnedWorkerProcessCount === 0 ? ['native_worker_process_count_zero'] : []),
     ...(enoughWork && requestedAgents >= 10 && spawnedWorkerProcessCount < requestedAgents ? [`native_worker_process_count_below_requested:${requestedAgents}`] : []),

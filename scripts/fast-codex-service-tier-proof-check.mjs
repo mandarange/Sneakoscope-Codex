@@ -16,10 +16,10 @@ const reportDir = path.join(temp, 'sessions', 'agent');
 fs.mkdirSync(reportDir, { recursive: true });
 fs.writeFileSync(path.join(reportDir, 'agent-process-report.json'), `${JSON.stringify({
   schema: 'sks.agent-process-report.v1',
-  backend: 'codex-exec',
+  backend: 'codex-sdk',
   fast_mode: true,
   service_tier: 'fast',
-  service_tier_cli_override_present: args.includes('-c') && args.includes('service_tier=fast')
+  sdk_config_service_tier: 'fast'
 })}\n`);
 fs.writeFileSync(path.join(reportDir, 'worker-fast-mode.json'), `${JSON.stringify({
   schema: 'sks.native-cli-worker-fast-mode.v1',

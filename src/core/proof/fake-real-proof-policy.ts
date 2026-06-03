@@ -28,7 +28,7 @@ export function evaluateFakeRealProofPolicy(input: any = {}): FakeRealProofPolic
   const backend = String(input.backend || input.agent_orchestration?.backend || '')
   const zellijPane = input.zellij_pane_verified === true || input.real_truth_summary?.zellij_pane_verified === true
   const realParallel = input.real_parallel_claim === true
-  const realCodex = backend === 'codex-exec' && realParallel
+  const realCodex = backend === 'codex-sdk' && realParallel
   const outputSchema = input.output_schema_used === true || input.real_codex_dynamic_smoke?.output_schema_used === true
   const outputLast = Boolean(input.output_last_message_path || input.real_codex_dynamic_smoke?.output_last_message_path)
   const realUnavailable = input.integration_optional === true || input.real_codex_dynamic_smoke?.status === 'integration_optional'

@@ -109,6 +109,37 @@ export async function initializeZellijLaneSupervisor(root: string, input: {
   return state
 }
 
+export async function initializeZellijLaneSupervisorEmpty(root: string, input: {
+  missionId: string
+  sessionName?: string
+}) {
+  const now = nowIso()
+  const sessionName = input.sessionName || `sks-${input.missionId}`
+  const state: ZellijLaneSupervisorState = {
+    schema: ZELLIJ_LANE_SUPERVISOR_SCHEMA,
+    updated_at: now,
+    mission_id: input.missionId,
+    session_name: sessionName,
+    drain_signal_path: 'lanes/.drain',
+    lane_runtime_manifest: 'zellij-lane-runtime.json',
+    dispatch_mode: 'jsonl_nonblocking',
+    fifo_policy: 'disabled_to_avoid_writer_blocking',
+    resource_throttle_ms: 0,
+    nice_level: 0,
+    lane_count: 0,
+    no_flicker_verified: true,
+    pane_survival_checked: true,
+    unexpected_close_count: 0,
+    auto_reopen_count: 0,
+    all_lanes_closed_after_drain: true,
+    blockers: [],
+    lanes: []
+  }
+  await writeZellijLaneRuntimeManifest(root, { missionId: input.missionId, sessionName, lanes: [] })
+  await writeSupervisor(root, state, 'lane_supervisor_initialized_empty')
+  return state
+}
+
 export async function updateZellijLaneSupervisorFromSlots(root: string, input: {
   missionId: string
   sessionName?: string
@@ -118,14 +149,13 @@ export async function updateZellijLaneSupervisorFromSlots(root: string, input: {
 }) {
   let supervisor = await readSupervisor(root)
   if (!supervisor) {
-    supervisor = await initializeZellijLaneSupervisor(root, {
+    supervisor = await initializeZellijLaneSupervisorEmpty(root, {
       missionId: input.missionId,
-      ...(input.sessionName === undefined ? {} : { sessionName: input.sessionName }),
-      targetActiveSlots: Math.max(1, input.slots.length || input.state?.target_active_slots || 1)
+      ...(input.sessionName === undefined ? {} : { sessionName: input.sessionName })
     })
   }
   const slotById = new Map(input.slots.map((slot) => [slot.slot_id, slot]))
-  const laneCount = Math.max(supervisor.lanes.length, input.slots.length)
+  const laneCount = supervisor.lanes.length
   const lanes = Array.from({ length: laneCount }, (_, index) => {
     const previous = hydrateLaneRuntime(root, supervisor.lanes[index] || createLane(root, input.missionId, supervisor.session_name, index + 1, nowIso()), input.missionId, supervisor.session_name)
     const slot = slotById.get(previous.slot_id)
@@ -472,7 +502,7 @@ function summarizeSupervisor(state: ZellijLaneSupervisorState): ZellijLaneSuperv
     unexpected_close_count: unexpected,
     auto_reopen_count: reopened,
     pane_survival_checked: state.pane_survival_checked || state.lanes.every((lane) => lane.pane_survival_checked),
-    all_lanes_closed_after_drain: state.lanes.length > 0 && state.lanes.every((lane) => lane.drained && Boolean(lane.closed_at)),
+    all_lanes_closed_after_drain: state.lanes.length === 0 || state.lanes.every((lane) => lane.drained && Boolean(lane.closed_at)),
     blockers: [
       ...(unexpected > 0 ? ['zellij_lane_unexpected_close_before_drain'] : []),
       ...(state.lanes.some((lane) => lane.launch_mode === 'real_zellij_supervisor_failed') ? ['zellij_lane_real_launch_failed'] : []),

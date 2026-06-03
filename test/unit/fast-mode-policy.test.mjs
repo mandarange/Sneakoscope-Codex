@@ -105,18 +105,23 @@ test('fast mode policy rewrites roster reasoning profiles and service tier', () 
   assert.equal(applied.effort_policy.decisions[0].reasoning_profile, 'sks-agent-high-fast');
 });
 
-test('fast mode proof requires codex exec CLI service_tier override evidence', async () => {
+test('fast mode proof accepts Codex SDK service tier propagation evidence', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-proof-'));
   const dir = path.join(root, 'sessions', 'agent');
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, 'agent-process-report.json'), JSON.stringify({
     schema: 'sks.agent-process-report.v1',
-    backend: 'codex-exec',
+    backend: 'codex-sdk',
+    fast_mode: true,
+    service_tier: 'fast'
+  }));
+  await fs.writeFile(path.join(dir, 'worker-fast-mode.json'), JSON.stringify({
+    schema: 'sks.native-cli-worker-fast-mode.v1',
     fast_mode: true,
     service_tier: 'fast'
   }));
 
   const proof = await writeFastModePropagationProof(root, { policy: resolveFastModePolicy() });
-  assert.equal(proof.ok, false);
-  assert.ok(proof.blockers.some((blocker) => blocker.startsWith('service_tier_cli_override_missing:')));
+  assert.equal(proof.ok, true);
+  assert.equal(proof.codex_sdk_process_report_count, 1);
 });

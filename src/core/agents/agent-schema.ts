@@ -14,7 +14,7 @@ export const DEFAULT_AGENT_CONCURRENCY = 5
 // cap; every other roster/scheduler caller keeps MAX_AGENT_COUNT as the default.
 export const MAX_NARUTO_AGENT_COUNT = 100
 export const DEFAULT_NARUTO_CLONES = 12
-export const AGENT_BACKENDS = ['fake', 'process', 'codex-exec', 'zellij'] as const
+export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]
 export type AgentServiceTier = 'fast' | 'standard'
@@ -181,6 +181,7 @@ export interface AgentRunnerResult {
   rollback_refs?: string[]
   backend_router_report?: Record<string, unknown>
   codex_child_report?: Record<string, unknown>
+  codex_sdk_thread?: Record<string, unknown>
   process_child_report?: Record<string, unknown>
   zellij_child_report?: Record<string, unknown>
   model_authored_patch_envelopes?: boolean
@@ -194,8 +195,8 @@ export interface AgentRunnerResult {
 }
 
 export function normalizeAgentBackend(input: unknown): AgentBackend {
-  const value = String(input || 'fake')
-  return (AGENT_BACKENDS as readonly string[]).includes(value) ? value as AgentBackend : 'fake'
+  const value = String(input || 'codex-sdk')
+  return (AGENT_BACKENDS as readonly string[]).includes(value) ? value as AgentBackend : 'codex-sdk'
 }
 
 export function agentSessionId(agentId: string, index = 1): string {

@@ -74,7 +74,7 @@ async function assertNativeRouteArtifacts(root, missionId, routeKey) {
   assert.equal(plan.validation.session_close_validated, true);
   assert.equal(plan.validation.proof_graph_validated, true);
   assert.equal(plan.validation.recursive_command_block_policy, true);
-  assert.equal(plan.validation.real_mode_codex_exec_backend, true);
+  assert.equal(plan.validation.real_mode_codex_sdk_backend, true);
   assert.ok(plan.route_specific_personas.length >= 3);
   assert.equal(proof.ok, true);
   assert.equal(proof.all_sessions_closed, true);

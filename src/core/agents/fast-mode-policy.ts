@@ -169,9 +169,7 @@ export async function writeFastModePropagationProof(root: string, input: { polic
     const value = String(row.json?.service_tier || '')
     return value && value !== input.policy.service_tier
   })
-  const missingCliOverride = input.policy.service_tier === 'fast'
-    ? childReports.filter((row) => row.json?.backend === 'codex-exec' && row.json?.service_tier_cli_override_present !== true)
-    : []
+  const missingCliOverride: any[] = []
   const workerMissing = defaultFastExpected && workerFastReports.length === 0 && workerProcessReports.length === 0
     ? ['fast_mode_worker_reports_missing']
     : []
@@ -186,7 +184,7 @@ export async function writeFastModePropagationProof(root: string, input: { polic
     fast_mode: input.policy.fast_mode,
     worker_fast_report_count: workerFastReports.length,
     worker_process_report_count: workerProcessReports.length,
-    codex_exec_process_report_count: agentProcessReports.filter((row) => row.json?.backend === 'codex-exec').length,
+    codex_sdk_process_report_count: agentProcessReports.filter((row) => row.json?.backend === 'codex-sdk').length,
     process_report_count: agentProcessReports.filter((row) => row.json?.backend === 'process').length,
     zellij_report_count: zellijReports.length,
     mad_report_count: madReports.length,
