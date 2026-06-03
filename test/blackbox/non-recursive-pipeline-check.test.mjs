@@ -9,14 +9,14 @@ const SOURCE_ROOT = process.cwd();
 
 test('non-recursive pipeline checker passes allowed fixture and blocks negative fixture', async () => {
   const allowedRoot = await copyFixtureRoot('allowed');
-  const allowed = spawnSync(process.execPath, [path.join(SOURCE_ROOT, 'scripts/non-recursive-pipeline-check.mjs'), '--root', allowedRoot, '--json', '--no-write'], {
+  const allowed = spawnSync(process.execPath, [path.join(SOURCE_ROOT, 'dist', 'scripts', 'non-recursive-pipeline-check.js'), '--root', allowedRoot, '--json', '--no-write'], {
     encoding: 'utf8'
   });
   assert.equal(allowed.status, 0, allowed.stderr || allowed.stdout);
   assert.equal(JSON.parse(allowed.stdout).ok, true);
 
   const violationRoot = await copyFixtureRoot('violation');
-  const blocked = spawnSync(process.execPath, [path.join(SOURCE_ROOT, 'scripts/non-recursive-pipeline-check.mjs'), '--root', violationRoot, '--json', '--no-write'], {
+  const blocked = spawnSync(process.execPath, [path.join(SOURCE_ROOT, 'dist', 'scripts', 'non-recursive-pipeline-check.js'), '--root', violationRoot, '--json', '--no-write'], {
     encoding: 'utf8'
   });
   assert.equal(blocked.status, 1, blocked.stderr || blocked.stdout);

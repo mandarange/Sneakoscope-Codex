@@ -124,14 +124,17 @@ export function normalizeZellijPaneRows(rows: any[]): any[] {
 export function evaluateZellijPaneProofRows(panes: any[], opts: { expectedLaneCount?: number; expectedCwd?: string; expectedMainCommandIncludes?: string } = {}) {
   const mainPane = panes.find((pane) => pane.role === 'main') || null
   const lanePanes = panes.filter((pane) => pane.role === 'lane')
-  const expectedLaneCount = Math.max(1, Number(opts.expectedLaneCount || lanePanes.length || 1))
+  const expectedLaneCountExplicit = opts.expectedLaneCount !== undefined
+  const expectedLaneCount = expectedLaneCountExplicit
+    ? Math.max(0, Math.floor(Number(opts.expectedLaneCount)))
+    : Math.max(1, Number(lanePanes.length || 1))
   const expectedMainCommandIncludes = String(opts.expectedMainCommandIncludes || '').trim()
   const mainCommandOk = !expectedMainCommandIncludes || Boolean(mainPane?.command && mainCommandContainsExecutable(mainPane.command, expectedMainCommandIncludes))
   const blockers = [
     ...(!mainPane ? ['zellij_main_pane_missing'] : []),
     ...(mainPane && !mainCommandOk ? [`zellij_main_pane_unexpected_command:${expectedMainCommandIncludes}`] : []),
-    ...(lanePanes.length === 0 ? ['zellij_lane_pane_missing'] : []),
-    ...(lanePanes.length > 0 && lanePanes.length !== expectedLaneCount ? ['zellij_lane_pane_count_mismatch'] : []),
+    ...(expectedLaneCount > 0 && lanePanes.length === 0 ? ['zellij_lane_pane_missing'] : []),
+    ...((expectedLaneCountExplicit || lanePanes.length > 0) && lanePanes.length !== expectedLaneCount ? ['zellij_lane_pane_count_mismatch'] : []),
     ...(mainPane?.exited ? ['zellij_main_pane_exited'] : []),
     ...lanePanes.filter((pane) => pane.exited).map((pane) => `zellij_lane_pane_exited:${pane.pane_id}`),
     ...lanePanes.filter((pane) => !/zellij-lane/.test(pane.command)).map((pane) => `zellij_lane_unexpected_command:${pane.pane_id}`),

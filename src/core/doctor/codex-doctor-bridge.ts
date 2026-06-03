@@ -43,6 +43,10 @@ export async function runCodexDoctorBridge(opts: { codexBin?: string | null; cwd
   const parsed = parseDoctorJson(result.stdout)
   const checks = parsed?.checks && typeof parsed.checks === 'object' ? Object.values(parsed.checks) : []
   const failed = result.code !== 0
+  const failedChecks = checks.filter((check: any) => ['fail', 'error', 'blocked', 'unavailable'].includes(String(check?.status || '').toLowerCase()))
+  const installUpdateMismatchOnly = failedChecks.length > 0
+    && failedChecks.every((check: any) => ['install', 'updates'].includes(String(check?.category || '')))
+    && failedChecks.every((check: any) => /different (?:install|npm install)|update would target|package root/i.test(`${String(check?.summary || '')}\n${String(check?.remediation || '')}`))
   const hasWarning = checks.some((check: any) => String(check?.status || '').toLowerCase() === 'warning')
   const hasProblem = /fail|failed|error|blocked|unavailable/i.test(text)
   const report = {
@@ -57,8 +61,9 @@ export async function runCodexDoctorBridge(opts: { codexBin?: string | null; cwd
     thread_inventory_ok: checks.length ? categoryOk(checks, ['threads']) : fieldOk(text, 'thread|session'),
     stdout_tail: String(result.stdout || '').slice(-12000),
     stderr_tail: String(result.stderr || '').slice(-12000),
-    blockers: opts.required && failed ? ['codex_doctor_failed_required'] : [],
+    blockers: opts.required && failed && !installUpdateMismatchOnly ? ['codex_doctor_failed_required'] : [],
     warnings: [
+      ...(installUpdateMismatchOnly ? ['codex_doctor_install_update_path_mismatch'] : []),
       ...(!opts.required && failed ? ['codex_doctor_failed_optional'] : []),
       ...((hasWarning || (hasProblem && !failed)) ? ['codex_doctor_reported_warnings'] : [])
     ]

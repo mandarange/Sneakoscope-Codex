@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 test('UX/PPT structured extraction schemas are strict', () => {
-  const run = spawnSync(process.execPath, ['scripts/ux-ppt-structured-extraction-check.mjs'], {
+  const run = spawnSync(process.execPath, ['dist/scripts/ux-ppt-structured-extraction-check.js'], {
     cwd: process.cwd(),
     encoding: 'utf8'
   });

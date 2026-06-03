@@ -3,6 +3,70 @@
 ## [Unreleased]
 
 
+## [2.0.1] - 2026-06-04
+
+Patch release: preserve Codex App Fast UI state around `sks --mad`, make provider identity visible in worker proof, and finish the production runtime migration from root `scripts/*.mjs` to TypeScript-built `dist/scripts`.
+
+### Added
+
+- **Codex App Fast UI preservation.** Added UI state snapshots, host-owned key diffing, project-local clobber detection, repair planning, and a doctor repair path guarded by explicit `--repair-codex-app-ui`.
+- **Provider badge context.** Added provider resolution for `openai`, `codex-lb`, and `codex-app`, plus badge/fallback reporting that avoids mutating private Codex App UI state.
+- **Zellij worker proof metadata.** Spawn-on-demand worker panes now record pane titles, provider context, and `service_tier`, and worker-pane communication proof checks `codex-control-proof.json`, pane lifecycle events, worker results, and pane drain evidence.
+- **TypeScript runtime scripts and optional Python diagnostics.** Production gates now run from `dist/scripts/*.js` built from `src/scripts/*.ts`; optional Python helpers live under `pytools` and are not runtime fallbacks.
+
+### Changed
+
+- Package scripts, release-gate paths, package-boundary checks, architecture guards, and runtime parity checks now treat `src/scripts` as the source of truth and `dist/scripts` as the runtime surface.
+- Doctor JSON/readiness output includes Codex App UI preservation state and provider context.
+
+### Verified
+
+- `npm view sneakoscope version --registry https://registry.npmjs.org/` returned `1.21.9` before the 2.0.1 bump, so no newer package update prompt was required.
+- `npm run typecheck`
+- `npm run build`
+- `npm run runtime:no-mjs-scripts`
+- `npm run runtime:ts-python-boundary`
+- `npm run runtime:no-src-mjs`
+- `npm run runtime:ts-source-of-truth`
+- `npm run runtime:dist-parity`
+- `npm run package-boundary:check`
+- `npm run architecture:guard`
+- `npm run runtime:ts-rust-boundary`
+- `npm run codex-app:fast-ui-preservation`
+- `npm run codex-app:ui-clobber-guard`
+- `npm run doctor:fixes-codex-app-fast-ui`
+- `npm run provider:badge-context`
+- `npm run codex-app:provider-badge`
+- `npm run zellij:spawn-on-demand-layout`
+- `npm run zellij:worker-pane-manager`
+- `npm run agent:worker-pane-communication-contract`
+- `sks wiki validate .sneakoscope/wiki/context-pack.json`
+
+## [2.0.0] - 2026-06-03
+
+Major architecture release: unify Codex runtime execution behind the Codex SDK Control Plane, add UltraRouter task/profile decisions, harden SDK reliability behavior, and keep Zellij worker panes spawn-on-demand instead of pre-created runtime lanes.
+
+### Added
+
+- **Codex Control Plane release gates.** Added `codex-control:*` checks for capability, no legacy fallback, structured output, event ledgers, thread registry, side-effect scope, all-pipeline coverage, empty-result retry, stream-idle watchdog, tool-call sequence repair, keepalive without CoT leak, and real smoke aliasing.
+- **Reliability Shield.** `src/core/codex-control/codex-reliability-shield.ts` evaluates SDK attempts, retries empty results before meaningful output, blocks idle streams after partial output, repairs missing tool-result sequences with explicit stubs, and emits redacted thinking heartbeats.
+- **UltraRouter.** New `src/core/router/*` modules classify orchestrator/worker tasks, score capability cards, cache route decisions, hard-filter image/profile mismatches, and write `ultra-router-proof.json`.
+
+### Changed
+
+- `runCodexTask` now records UltraRouter decisions and Reliability Shield reports in `codex-control-proof.json`.
+- Native worker SDK tasks pass explicit worker tier and reliability policy into the control plane.
+- `release:check` now includes the new `codex-control:*` and `ultra-router:*` gates alongside the existing SDK, Zellij, safety, and release gates.
+- Version truth was advanced to `2.0.0` across package, lockfile, TypeScript, Rust, README, and changelog surfaces through the SKS versioning bump path.
+
+### Removed
+
+- No runtime Codex task may fall back to raw `codex exec`; explicit legacy backend requests continue to block with `legacy_codex_exec_runtime_removed`.
+
+### Verified
+
+- `npm view sneakoscope version --registry https://registry.npmjs.org/` returned `1.21.9` before the 2.0.0 bump, so no newer package update prompt was required.
+
 ## [1.21.9] - 2026-06-03
 
 Patch release: replace runtime Codex execution with the Codex SDK Control Plane, keep Zellij as visual pane proof, and add SDK-specific release gates.

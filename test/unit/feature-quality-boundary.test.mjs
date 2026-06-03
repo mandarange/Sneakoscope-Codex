@@ -33,7 +33,7 @@ test('runtime route features are not static_contract', async () => {
 });
 
 test('check-feature-quality script reports visible quality counts', () => {
-  const result = spawnSync(process.execPath, ['scripts/check-feature-quality.mjs', '--json'], {
+  const result = spawnSync(process.execPath, ['dist/scripts/check-feature-quality.js', '--json'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }

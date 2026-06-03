@@ -16,28 +16,40 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **1.21.9** is a Codex SDK Control Plane runtime patch. Native workers now use `@openai/codex-sdk` for thread/run/stream/schema execution while Zellij remains pane-level visual proof.
+SKS **2.0.1** is a Codex App Fast UI preservation patch on top of the 2.0 execution layer. Native workers still run through the Codex SDK Control Plane, UltraRouter still classifies orchestrator/worker tasks, Reliability Shield still hardens long SDK streams, and Zellij worker panes now carry provider/service-tier proof while spawning only when scheduler slot generations need them.
 
 What changed:
 
-- `codex-sdk` is the default native agent backend for Team, QA, Research, Naruto, MAD-SKS, and direct agent runs.
+- `codex-sdk` is the default native agent backend for Team, QA, Research, Naruto, MAD-SKS, and direct agent runs, with every runtime task entering through `runCodexTask`.
+- Codex App UI snapshot, preservation, clobber guard, and doctor repair checks protect host-owned Fast UI/profile settings around `sks --mad`.
+- Provider context resolves `openai`, `codex-lb`, and `codex-app` with badge/fallback surfaces while avoiding private Codex App UI mutation.
+- UltraRouter writes `ultra-router-proof.json` decisions with tier, scores, hard filters, cache state, and cheapest-good-enough profile selection.
+- Reliability Shield writes `codex-reliability-shield.json` for empty-result retry, stream-idle blocking, tool-result repair, and no-CoT keepalive heartbeats.
 - Raw `codex exec` execution is removed from runtime fallback paths; explicit legacy requests are blocked with `legacy_codex_exec_runtime_removed`.
 - SDK runs write `codex-control-proof.json`, `codex-thread-registry.json`, `codex-sdk-events.jsonl`, and schema-validated worker results.
-- Zellij proof now links `pane_id`, `slot_id`, `generation_index`, `session_id`, and `sdk_thread_id`.
-- Release gates include `codex-sdk:*` capability, routing, structured output, event ledger, sandbox, thread registry, Zellij binding, pipeline, and smoke checks.
+- Zellij proof now links `pane_id`, `slot_id`, `generation_index`, `session_id`, `sdk_thread_id`, provider, and `service_tier`.
+- Production runtime scripts are TypeScript source under `src/scripts` and build to `dist/scripts`; Python remains optional diagnostics under `pytools`.
+- Release gates include `codex-control:*`, `ultra-router:*`, `codex-sdk:*`, Codex App Fast UI preservation, provider badges, Zellij spawn-on-demand, slot/pane binding, release truth, and real smoke checks.
 
 Quick checks:
 
 ```bash
 npm run typecheck
 npm run build
-npm run codex-sdk:capability
-npm run codex-sdk:backend-router
-npm run codex-sdk:structured-output
-npm run codex-sdk:event-stream-ledger
-npm run codex-sdk:thread-registry
+npm run codex-control:capability
+npm run codex-control:structured-output
+npm run codex-control:event-stream-ledger
+npm run codex-control:thread-registry
+npm run codex-control:empty-result-retry
+npm run codex-control:stream-idle-watchdog
+npm run ultra-router:auto-router
 npm run codex-sdk:zellij-pane-binding
-npm run codex-sdk:all-pipelines
+npm run codex-app:fast-ui-preservation
+npm run provider:badge-context
+npm run zellij:worker-pane-manager
+npm run runtime:no-mjs-scripts
+npm run runtime:ts-python-boundary
+npm run codex-control:all-pipelines
 ```
 
 Broader release checks still live behind `npm run release:check`. Detailed release history is in [CHANGELOG.md](CHANGELOG.md), and release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).

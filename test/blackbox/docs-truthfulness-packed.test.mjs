@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runProcess } from '../../dist/core/fsx.js';
 
 test('black-box docs truthfulness check passes', async () => {
-  const result = await runProcess(process.execPath, ['./scripts/docs-truthfulness-check.mjs'], {
+  const result = await runProcess(process.execPath, ['./dist/scripts/docs-truthfulness-check.js'], {
     env: { ...process.env, CI: 'true' },
     timeoutMs: 30_000,
     maxOutputBytes: 256 * 1024

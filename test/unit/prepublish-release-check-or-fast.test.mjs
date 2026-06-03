@@ -17,13 +17,13 @@ test('prepublish wrapper repairs stale stamp by running the configured full rele
     package_json_sha256: 'stale'
   }, null, 2)}\n`);
 
-  const result = spawnSync(process.execPath, ['./scripts/prepublish-release-check-or-fast.mjs'], {
+  const result = spawnSync(process.execPath, ['./dist/scripts/prepublish-release-check-or-fast.js'], {
     cwd: root,
     encoding: 'utf8',
     env: {
       ...process.env,
       SKS_RELEASE_STAMP_PATH: stampPath,
-      SKS_PREPUBLISH_RELEASE_CHECK_CMD: `${process.execPath} ./scripts/release-check-stamp.mjs write`
+      SKS_PREPUBLISH_RELEASE_CHECK_CMD: `${process.execPath} ./dist/scripts/release-check-stamp.js write`
     }
   });
 

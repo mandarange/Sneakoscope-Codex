@@ -10,7 +10,7 @@ import path from 'node:path';
 // contract under test is that it always RUNS and emits valid JSON with a boolean
 // `ok` field — never throws.
 test('prepublish fast-check runs and emits valid JSON with a boolean ok', () => {
-  const r = spawnSync(process.execPath, ['scripts/prepublish-fast-check.mjs'], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, ['dist/scripts/prepublish-fast-check.js'], { encoding: 'utf8' });
   assert.ok(r.status === 0 || r.status === 1, `unexpected exit ${r.status}: ${r.stderr || r.stdout}`);
   const j = JSON.parse(r.stdout);
   assert.equal(typeof j.ok, 'boolean');
@@ -30,7 +30,7 @@ test('prepublish fast-check does not fail solely on git commit drift', () => {
     })}\n`
   );
 
-  const r = spawnSync(process.execPath, ['scripts/prepublish-fast-check.mjs'], {
+  const r = spawnSync(process.execPath, ['dist/scripts/prepublish-fast-check.js'], {
     encoding: 'utf8',
     env: { ...process.env, SKS_RELEASE_STAMP_PATH: stampPath }
   });

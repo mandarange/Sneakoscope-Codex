@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 test('hooks runtime replay warning-zero script covers subagent events', () => {
-  const run = spawnSync(process.execPath, ['scripts/hooks-runtime-replay-warning-zero.mjs'], {
+  const run = spawnSync(process.execPath, ['dist/scripts/hooks-runtime-replay-warning-zero.js'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     maxBuffer: 4 * 1024 * 1024

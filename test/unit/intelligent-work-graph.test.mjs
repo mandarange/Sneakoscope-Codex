@@ -13,7 +13,7 @@ test('intelligent work graph computes ownership, critical path, and score', asyn
   fs.writeFileSync(path.join(root, 'src/b.ts'), "export function helper() { return 'ok'; }\n");
   fs.writeFileSync(path.join(root, 'test/a.test.mjs'), "import { makeA } from '../src/a';\n");
   const graph = mod.buildIntelligentWorkGraphFromData({
-    inventory: { source_files: ['src/a.ts', 'src/b.ts'], tests: ['test/a.test.mjs'], docs: ['README.md'], scripts: ['scripts/check.mjs'] },
+    inventory: { source_files: ['src/a.ts', 'src/b.ts'], tests: ['test/a.test.mjs'], docs: ['README.md'], scripts: ['dist/scripts/check.js'] },
     dependencyGraph: { edges: [{ from: 'src/a.ts', imports: ['src/b.ts'] }] },
     root,
     changedFiles: ['src/a.ts']

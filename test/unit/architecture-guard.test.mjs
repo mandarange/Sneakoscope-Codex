@@ -12,7 +12,7 @@ test('architecture guard carries SSOT and SOLID expectations', () => {
 });
 
 test('architecture:guard script verifies pipeline and release wiring', () => {
-  const result = spawnSync(process.execPath, ['scripts/architecture-guard-check.mjs'], {
+  const result = spawnSync(process.execPath, ['dist/scripts/architecture-guard-check.js'], {
     cwd: process.cwd(),
     encoding: 'utf8'
   });

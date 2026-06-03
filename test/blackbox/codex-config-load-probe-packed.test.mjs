@@ -6,8 +6,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
-const probe = path.join(root, 'scripts', 'codex-config-load-probe.mjs');
-const fakeCodex = path.join(root, 'scripts', 'fixtures', 'fake-codex-config-loader.mjs');
+const probe = path.join(root, 'dist', 'scripts', 'codex-config-load-probe.js');
+const fakeCodex = path.join(root, 'dist', 'scripts', 'fixtures', 'fake-codex-config-loader.js');
 
 test('codex config load probe fails when Node can read but fake Codex gets EPERM', async () => {
   const fixture = await makeFixture();

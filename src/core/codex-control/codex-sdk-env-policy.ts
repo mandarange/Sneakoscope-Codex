@@ -1,4 +1,5 @@
 import type { CodexTaskInput } from './codex-control-plane.js'
+import path from 'node:path'
 
 const SECRET_RE = /(?:key|token|secret|password|credential|auth|cookie)/i
 
@@ -15,12 +16,19 @@ export function buildCodexSdkEnv(input: CodexTaskInput): { env: Record<string, s
   if (input.sessionId) env.SKS_AGENT_SESSION_ID = input.sessionId
   if (input.generationIndex !== undefined) env.SKS_AGENT_GENERATION_INDEX = String(input.generationIndex)
   env.SKS_SERVICE_TIER = 'fast'
+  const isolatedRoot = path.resolve(input.mutationLedgerRoot, 'codex-sdk-home')
+  env.HOME = path.join(isolatedRoot, 'home')
+  env.CODEX_HOME = path.join(isolatedRoot, 'codex')
+  env.SKS_CODEX_CONTROL_PLANE_CONFIG_ISOLATED = '1'
   return {
     env,
     proof: {
       injected_keys: Object.keys(env).filter((key) => key.startsWith('SKS_')).sort(),
       inherited_key_count: Object.keys(process.env).length,
-      redacted_sensitive_keys: Object.keys(env).filter((key) => SECRET_RE.test(key)).sort()
+      redacted_sensitive_keys: Object.keys(env).filter((key) => SECRET_RE.test(key)).sort(),
+      codex_home_isolated: true,
+      codex_home: env.CODEX_HOME,
+      home: env.HOME
     }
   }
 }

@@ -65,7 +65,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     phase: opts.dryRun === true ? 'dry_run_launch' : 'post_launch',
     ledgerRoot: path.join(root, '.sneakoscope', 'missions', missionId),
     sessionName,
-    expectedLaneCount: opts.slotCount || 1,
+    expectedLaneCount: 0,
     expectedCwd: opts.cwd || root
   }
   if (layout.main_pane_kind === 'codex_interactive') paneProofOpts.expectedMainCommandIncludes = 'codex'

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runNativeCliSwarmCheck } from '../../scripts/lib/native-cli-session-swarm-check-lib.mjs';
+import { runNativeCliSwarmCheck } from '../../dist/scripts/lib/native-cli-session-swarm-check-lib.js';
 
 test('native CLI worker processes inherit Fast mode by default', () => {
   const report = runNativeCliSwarmCheck({

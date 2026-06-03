@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
 test('non-recursive pipeline checker emits passing repo report shape', () => {
-  const result = spawnSync(process.execPath, ['scripts/non-recursive-pipeline-check.mjs', '--json', '--no-write'], {
+  const result = spawnSync(process.execPath, ['dist/scripts/non-recursive-pipeline-check.js', '--json', '--no-write'], {
     cwd: process.cwd(),
     encoding: 'utf8'
   });

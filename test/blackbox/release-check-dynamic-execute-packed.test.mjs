@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
 test('dynamic execute --plan-only produces a v2 report with execute/cache fields and passing invariants', () => {
-  const result = spawnSync(process.execPath, ['scripts/release-check-dynamic-execute.mjs', '--plan-only'], { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
+  const result = spawnSync(process.execPath, ['dist/scripts/release-check-dynamic-execute.js', '--plan-only'], { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const json = JSON.parse(result.stdout);
   assert.equal(json.gate, 'release:check:dynamic:execute');
@@ -11,7 +11,7 @@ test('dynamic execute --plan-only produces a v2 report with execute/cache fields
 });
 
 test('dynamic execute report has schema v2 with executed/skipped/cache_hits/failures', async () => {
-  spawnSync(process.execPath, ['scripts/release-check-dynamic-execute.mjs', '--plan-only'], { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
+  spawnSync(process.execPath, ['dist/scripts/release-check-dynamic-execute.js', '--plan-only'], { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
   const fs = await import('node:fs/promises');
   const report = JSON.parse(await fs.readFile('.sneakoscope/reports/release-check-dynamic-execute.json', 'utf8'));
   assert.equal(report.schema, 'sks.release-check-dynamic.v2');

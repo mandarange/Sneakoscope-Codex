@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 test('runtime truth matrix gate writes P0-P6 subsystem proof levels', () => {
   const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
-  const result = spawnSync(process.execPath, ['scripts/release-runtime-truth-matrix-check.mjs'], { cwd: path.resolve('.'), encoding: 'utf8' });
+  const result = spawnSync(process.execPath, ['dist/scripts/release-runtime-truth-matrix-check.js'], { cwd: path.resolve('.'), encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   const report = JSON.parse(fs.readFileSync(path.resolve(`.sneakoscope/reports/runtime-truth-matrix-${pkg.version}.json`), 'utf8'));
   assert.equal(report.ok, true);

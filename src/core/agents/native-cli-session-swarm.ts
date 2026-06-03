@@ -5,6 +5,7 @@ import { appendJsonl, ensureDir, exists, nowIso, packageRoot, readJson, writeJso
 import { fastModeEnv, type FastModePolicy } from './fast-mode-policy.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { closeWorkerPane, openWorkerPane } from '../zellij/zellij-worker-pane-manager.js'
+import { resolveProviderContext } from '../provider/provider-context.js'
 
 export const NATIVE_CLI_SESSION_SWARM_SCHEMA = 'sks.agent-native-cli-session-swarm.v1'
 
@@ -212,6 +213,11 @@ class NativeCliSessionSwarmRecorder {
         SKS_ZELLIJ_SESSION_NAME: sessionName
       }
     })
+    const providerContext = await resolveProviderContext({
+      root: this.root,
+      route: this.input.route,
+      serviceTier: this.input.fastModePolicy.service_tier
+    })
     let paneRecord = await openWorkerPane({
       root: this.root,
       missionId: this.input.missionId,
@@ -226,7 +232,9 @@ class NativeCliSessionSwarmRecorder {
       patchEnvelopePath: input.record.patch_envelope_path,
       stdoutLog: input.stdoutRel,
       stderrLog: input.stderrRel,
-      cwd: input.ctx.opts.cwd || packageRoot()
+      cwd: input.ctx.opts.cwd || packageRoot(),
+      providerContext,
+      serviceTier: this.input.fastModePolicy.service_tier
     })
     const launchBlockers = paneRecord.blockers || []
     input.record.command_line = ['zellij', '--session', sessionName, 'action', 'new-pane', '--name', paneRecord.pane_name, '--', 'sh', '-lc', '<native-cli-worker-command>']
@@ -238,6 +246,9 @@ class NativeCliSessionSwarmRecorder {
     input.record.zellij_worker_pane = path.join(input.workerDirRel, 'zellij-worker-pane.json')
     input.record.pane_kind = 'worker_codex_sdk'
     input.record.scaling_primitive = 'native_cli_process_in_zellij_worker_pane'
+    input.record.provider = paneRecord.provider
+    input.record.service_tier = paneRecord.service_tier
+    input.record.provider_context = paneRecord.provider_context
     input.record.status = launchBlockers.length ? 'failed' : 'running'
     input.record.blockers = launchBlockers
     await this.record(input.record)

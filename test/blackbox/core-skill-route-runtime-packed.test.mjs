@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
 test('core-skill route-runtime-integration gate passes', () => {
-  const result = spawnSync(process.execPath, ['scripts/core-skill-route-runtime-integration-check.mjs'], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, ['dist/scripts/core-skill-route-runtime-integration-check.js'], { encoding: 'utf8' });
   const json = JSON.parse(result.stdout);
   assert.equal(json.ok, true, result.stdout + result.stderr);
   assert.equal(result.status, 0);
@@ -13,7 +13,7 @@ test('core-skill route-runtime-integration gate passes', () => {
 });
 
 test('core-skill promotion-side-effect-ledger gate passes', () => {
-  const result = spawnSync(process.execPath, ['scripts/core-skill-promotion-side-effect-ledger-check.mjs'], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, ['dist/scripts/core-skill-promotion-side-effect-ledger-check.js'], { encoding: 'utf8' });
   const json = JSON.parse(result.stdout);
   assert.equal(json.ok, true, result.stdout + result.stderr);
   assert.equal(result.status, 0);

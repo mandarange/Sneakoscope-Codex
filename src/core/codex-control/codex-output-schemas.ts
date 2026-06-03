@@ -19,8 +19,8 @@ export function resolveCodexOutputSchema(schemaId: string, fallback?: Record<str
     properties: {
       status: { type: 'string' },
       summary: { type: 'string' },
-      blockers: { type: 'array' }
+      blockers: { type: 'array', items: { type: 'string' } }
     },
-    additionalProperties: true
+    additionalProperties: false
   }
 }

@@ -1,0 +1,135 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { ensureDir, nowIso, readText, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import {
+  codexHome,
+  scanProjectLocalForbiddenKeys,
+  snapshotCodexAppUiState
+} from './codex-app-ui-state-snapshot.js'
+import { assertCodexAppUiMutationAllowed } from './codex-app-ui-clobber-guard.js'
+
+export const CODEX_APP_FAST_UI_REPAIR_SCHEMA = 'sks.codex-app-fast-ui-repair.v1'
+
+const HOST_OWNED_TOP_LEVEL_RE = /^\s*(openai_base_url|chatgpt_base_url|apps_mcp_product_sku|model_provider|notify|profile|experimental_realtime_ws_base_url|service_tier)\s*=/
+const HOST_OWNED_TABLE_RE = /^\s*\[(model_providers(?:[.\]].*)?|profiles(?:[.\]].*)?|otel(?:[.\]].*)?|user\.fast_mode(?:[.\]].*)?)\]\s*$/
+const SKS_CAUSED_RE = /(?:SKS|Sneakoscope|codex-lb|sks-mad|sks fast)/i
+
+export async function repairCodexAppFastUi(root: string = process.cwd(), input: {
+  codexHome?: string | null
+  apply?: boolean
+  reportPath?: string | null
+} = {}) {
+  const resolvedRoot = path.resolve(root)
+  const home = codexHome(input.codexHome === undefined ? {} : { codexHome: input.codexHome })
+  const before = await snapshotCodexAppUiState(resolvedRoot, { codexHome: home })
+  const candidates = [
+    { scope: 'project', file: path.join(resolvedRoot, '.codex', 'config.toml'), mode: 'project_forbidden_keys' },
+    { scope: 'codex_home', file: path.join(home, 'config.toml'), mode: 'sks_caused_host_owned_keys' }
+  ]
+  const actions = []
+  for (const candidate of candidates) {
+    const text = await readText(candidate.file, null)
+    if (text == null) {
+      actions.push({ scope: candidate.scope, file: displayPath(candidate.file), status: 'missing', changed: false })
+      continue
+    }
+    const repaired = candidate.mode === 'project_forbidden_keys'
+      ? stripProjectLocalForbiddenKeys(text)
+      : stripSksCausedHostOwnedLines(text)
+    if (repaired.text === text) {
+      actions.push({ scope: candidate.scope, file: displayPath(candidate.file), status: 'ok', changed: false, removed_keys: repaired.removedKeys })
+      continue
+    }
+    const backupPath = `${candidate.file}.codex-app-ui-repair-${Date.now().toString(36)}.bak`
+    if (input.apply) {
+      await ensureDir(path.dirname(candidate.file))
+      await fs.writeFile(backupPath, text, 'utf8')
+      assertCodexAppUiMutationAllowed({ kind: 'codex_app_ui_state', scope: 'codex-app-ui-repair', backupPath })
+      await writeTextAtomic(candidate.file, repaired.text)
+    }
+    actions.push({
+      scope: candidate.scope,
+      file: displayPath(candidate.file),
+      status: input.apply ? 'repaired' : 'planned',
+      changed: true,
+      backup_path: input.apply ? displayPath(backupPath) : null,
+      before_hash: sha256(text),
+      after_hash: sha256(repaired.text),
+      removed_keys: repaired.removedKeys
+    })
+  }
+  const after = await snapshotCodexAppUiState(resolvedRoot, { codexHome: home })
+  const changed = actions.some((action) => action.changed)
+  const manual = changed && !input.apply
+  const blockers = [
+    ...(manual ? ['codex_app_fast_ui_repair_requires_explicit_apply'] : []),
+    ...(after.indicators.secret_leak_suspected ? ['codex_app_ui_repair_secret_leak_suspected'] : [])
+  ]
+  const report = {
+    schema: CODEX_APP_FAST_UI_REPAIR_SCHEMA,
+    generated_at: nowIso(),
+    ok: blockers.length === 0,
+    apply: input.apply === true,
+    fast_selector: changed ? (input.apply ? 'repaired' : 'manual_action_required') : before.indicators.fast_selector === 'maybe_hidden_or_locked' ? 'manual_action_required' : 'ok',
+    provider_selector: 'ok',
+    host_owned_config: input.apply && changed ? 'repaired_with_backup' : changed ? 'preserved_until_explicit_apply' : 'preserved',
+    actions,
+    before_fast_selector: before.indicators.fast_selector,
+    after_fast_selector: after.indicators.fast_selector,
+    next_action: manual ? 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.' : changed ? 'Restart Codex App if the selector was already hidden.' : 'No Codex App UI repair needed.',
+    blockers
+  }
+  if (input.reportPath) await writeJsonAtomic(input.reportPath, report)
+  return report
+}
+
+function stripProjectLocalForbiddenKeys(text: string) {
+  const forbidden = scanProjectLocalForbiddenKeys(text)
+  if (!forbidden.length) return { text, removedKeys: [] as string[] }
+  return stripMatchingLines(text, (line, table) => {
+    if (table && forbidden.some((key) => key === table || key.startsWith(`${table}.`))) return true
+    const key = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=/)?.[1]
+    return Boolean(key && forbidden.includes(key))
+  })
+}
+
+function stripSksCausedHostOwnedLines(text: string) {
+  return stripMatchingLines(text, (line, table, previous, next) => {
+    const isHostOwned = HOST_OWNED_TOP_LEVEL_RE.test(line) || HOST_OWNED_TABLE_RE.test(line) || Boolean(table && /^(model_providers|profiles|otel|user\.fast_mode)/.test(table))
+    return isHostOwned && (SKS_CAUSED_RE.test(line) || SKS_CAUSED_RE.test(previous) || SKS_CAUSED_RE.test(next))
+  })
+}
+
+function stripMatchingLines(text: string, shouldRemove: (line: string, table: string | null, previous: string, next: string) => boolean) {
+  const lines = text.split(/\r?\n/)
+  let table: string | null = null
+  let removingTable: string | null = null
+  const removedKeys: string[] = []
+  const kept: string[] = []
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] || ''
+    const tableMatch = line.match(/^\s*\[([^\]]+)\]\s*$/)
+    if (tableMatch?.[1]) removingTable = null
+    if (removingTable) {
+      removedKeys.push(removingTable)
+      continue
+    }
+    const currentTable = tableMatch?.[1] || table
+    const remove = shouldRemove(line, currentTable, lines[i - 1] || '', lines[i + 1] || '')
+    if (remove) {
+      removedKeys.push(tableMatch?.[1] || line.match(/^\s*([A-Za-z0-9_.-]+)\s*=/)?.[1] || '<table-body>')
+      if (tableMatch?.[1]) {
+        table = null
+        removingTable = tableMatch[1]
+      }
+      continue
+    }
+    kept.push(line)
+    if (tableMatch?.[1]) table = tableMatch[1]
+  }
+  return { text: kept.join('\n'), removedKeys: [...new Set(removedKeys)] }
+}
+
+function displayPath(file: string) {
+  return file.replace(process.env.HOME || '', '~')
+}

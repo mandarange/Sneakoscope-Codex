@@ -53,7 +53,7 @@ export async function waitForLaneHeartbeat(
   }
 }
 
-export async function writeZellijScreenProof(root: string, opts: { missionId?: string; require?: boolean; ledgerRoot?: string } = {}) {
+export async function writeZellijScreenProof(root: string, opts: { missionId?: string; require?: boolean; ledgerRoot?: string; mainOnly?: boolean } = {}) {
   const proofRoot = path.resolve(opts.ledgerRoot || (opts.missionId ? path.join(root, '.sneakoscope', 'missions', opts.missionId) : path.join(root, '.sneakoscope', 'reports')))
   const paneProof = await readJson<any>(path.join(proofRoot, 'zellij-pane-proof.json'), null)
   const heartbeat = await readFirstText([
@@ -95,10 +95,10 @@ export async function writeZellijScreenProof(root: string, opts: { missionId?: s
   }
   const blockers = [
     ...(opts.require === true && paneProof?.ok !== true ? ['zellij_pane_proof_missing_or_failed'] : []),
-    ...(opts.require === true && !hasHeartbeat ? ['zellij_lane_renderer_heartbeat_missing'] : []),
+    ...(opts.require === true && opts.mainOnly !== true && !hasHeartbeat ? ['zellij_lane_renderer_heartbeat_missing'] : []),
     ...capability.blockers,
-    ...(opts.require === true && lanePanes.length === 0 ? ['zellij_screen_lane_panes_missing'] : []),
-    ...(opts.require === true && capability.status === 'ok' && dumps.length === 0 ? ['zellij_screen_dump_missing'] : []),
+    ...(opts.require === true && opts.mainOnly !== true && lanePanes.length === 0 ? ['zellij_screen_lane_panes_missing'] : []),
+    ...(opts.require === true && opts.mainOnly !== true && capability.status === 'ok' && dumps.length === 0 ? ['zellij_screen_dump_missing'] : []),
     ...(opts.require === true ? dumps.flatMap((dump) => dump.result.ok ? [] : dump.result.blockers.map((blocker: string) => `zellij_screen_${blocker}`)) : []),
     ...(opts.require === true ? dumps.flatMap((dump) => dump.missing_text.map((label: string) => `zellij_screen_missing_text:${dump.pane_id}:${label}`)) : [])
   ]
@@ -106,6 +106,7 @@ export async function writeZellijScreenProof(root: string, opts: { missionId?: s
     schema: ZELLIJ_SCREEN_PROOF_SCHEMA,
     generated_at: nowIso(),
     ok: blockers.length === 0,
+    main_only: opts.mainOnly === true,
     mission_id: opts.missionId || null,
     proof_root: proofRoot,
     session_present: Boolean(session),

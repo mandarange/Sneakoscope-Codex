@@ -14,6 +14,7 @@ export interface RequestedScopeContract {
 
 export interface CodexTaskInput {
   route: string
+  tier?: 'orchestrator' | 'worker'
   missionId: string
   workItemId?: string
   slotId?: string
@@ -27,6 +28,11 @@ export interface CodexTaskInput {
   outputSchema: Record<string, unknown>
   sandboxPolicy: 'read-only' | 'workspace-write' | 'full-access'
   requestedScopeContract: RequestedScopeContract
+  reliabilityPolicy?: {
+    maxEmptyResultRetries?: number
+    idleTimeoutMs?: number
+    timeoutClass?: 'short' | 'standard' | 'long'
+  }
   mutationLedgerRoot: string
   zellijPaneId?: string | null
 }
@@ -41,6 +47,8 @@ export interface CodexTaskResult {
   workerResultPath: string
   patchEnvelopePath?: string | null
   blockers: string[]
+  reliabilityShield?: Record<string, unknown>
+  ultraRouterDecision?: Record<string, unknown>
 }
 
 export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResult & Record<string, unknown>> {

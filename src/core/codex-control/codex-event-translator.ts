@@ -15,6 +15,7 @@ export function translateCodexSdkEvent(event: any): CodexTranslatedEvent {
   const type = String(event?.type || 'unknown')
   const item = event?.item || {}
   const isTool = item.type === 'command_execution' || item.type === 'mcp_tool_call'
+  const isThinking = /reasoning|thinking/i.test(`${type} ${item.type || ''}`)
   const fileChange = item.type === 'file_change' && Array.isArray(item.changes) ? item.changes[0] : null
   return {
     schema: 'sks.codex-sdk-translated-event.v1',
@@ -23,7 +24,7 @@ export function translateCodexSdkEvent(event: any): CodexTranslatedEvent {
     lane_status: type === 'turn.failed' || type === 'error' ? 'blocked' : type === 'turn.completed' ? 'completed' : 'running',
     current_tool: isTool ? String(item.command || item.tool || item.type || '') : null,
     current_file: fileChange?.path ? String(fileChange.path) : null,
-    message_tail: item.type === 'agent_message' ? String(item.text || '').slice(-500) : null,
+    message_tail: item.type === 'agent_message' ? String(item.text || '').slice(-500) : isThinking ? '[thinking]' : null,
     blocker: type === 'turn.failed' ? String(event?.error?.message || 'turn_failed') : type === 'error' ? String(event?.message || 'sdk_stream_error') : null
   }
 }

@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 test('PPT fake imagegen blackbox produces slide review artifacts', () => {
-  const run = spawnSync(process.execPath, ['scripts/ppt-imagegen-blackbox-check.mjs'], {
+  const run = spawnSync(process.execPath, ['dist/scripts/ppt-imagegen-blackbox-check.js'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024

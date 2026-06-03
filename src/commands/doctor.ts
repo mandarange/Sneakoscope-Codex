@@ -15,6 +15,8 @@ import { cleanDuplicateGlobalSksInstalls } from '../core/doctor/global-sks-insta
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
 import { inventoryCodexPermissionProfiles } from '../core/codex/codex-permission-profiles.js';
 import { appendMigrationEvents, hashConfigText } from '../core/migration/migration-transaction-journal.js';
+import { repairCodexAppFastUi } from '../core/codex-app/codex-app-fast-ui-repair.js';
+import { resolveProviderContext } from '../core/provider/provider-context.js';
 
 export async function run(_command: any, args: any = []) {
   let setupRepair = null;
@@ -75,6 +77,38 @@ export async function run(_command: any, args: any = []) {
   }));
   const codexApp = await codexAppIntegrationStatus({ codex }).catch((err: any) => ({ ok: false, error: err.message }));
   const codexLb = codexLbMetrics(await readCodexLbCircuit(root).catch(() => ({})));
+  const providerContext = await resolveProviderContext({ root, route: '$Doctor', serviceTier: process.env.SKS_SERVICE_TIER || 'fast' }).catch((err: any) => ({
+    schema: 'sks.provider-context.v1',
+    generated_at: new Date().toISOString(),
+    provider: 'unknown',
+    auth_mode: 'unknown',
+    route: '$Doctor',
+    service_tier: 'unknown',
+    source: 'unknown',
+    confidence: 'low',
+    conflict: false,
+    warnings: [err?.message || String(err)],
+    signals: {
+      openai_api_key_present: false,
+      codex_lb_key_present: false,
+      codex_lb_explicit: false,
+      codex_app_auth_present: false,
+      model_provider: null
+    }
+  }));
+  const codexAppUi = await repairCodexAppFastUi(root, {
+    apply: flag(args, '--fix') && flag(args, '--repair-codex-app-ui'),
+    reportPath: `${root}/.sneakoscope/reports/codex-app-fast-ui-repair.json`
+  }).catch((err: any) => ({
+    schema: 'sks.codex-app-fast-ui-repair.v1',
+    ok: false,
+    fast_selector: 'manual_action_required',
+    provider_selector: 'ok',
+    host_owned_config: 'diagnostic_failed',
+    next_action: 'Review Codex App UI config manually.',
+    actions: [],
+    blockers: [err?.message || String(err)]
+  }));
   const zellij = await checkZellijCapability({ root, require: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
   const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only')
@@ -92,6 +126,7 @@ export async function run(_command: any, args: any = []) {
     require_codex_doctor: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     zellij,
     repair: configRepair,
+    codex_app_ui: codexAppUi,
     require_codex_cli_config_load: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     operator_actions: [
       ...(codexConfig.operator_actions || []),
@@ -108,6 +143,8 @@ export async function run(_command: any, args: any = []) {
     codex_config: codexConfig,
     rust,
     codex_app: codexApp,
+    codex_app_ui: codexAppUi,
+    provider_context: providerContext,
     codex_lb: codexLb,
     codex_doctor: codexDoctor,
     codex_doctor_diff: codexDoctorDiff,
@@ -148,6 +185,16 @@ export async function run(_command: any, args: any = []) {
   console.log(`  codex doctor:    ${codexDoctor.available ? (codexDoctor.exit_code === 0 ? 'ok' : 'warning') : 'unavailable'}`);
   console.log(`Rust acc.: ${rust.mode || (rust.available ? 'rust_accelerated' : 'js_fallback')} ${rust.version || rust.status || ''}`);
   console.log(`Codex App: ${ready.codex_app_ready ? 'ok' : 'optional_missing'}`);
+  console.log('Codex App UI:');
+  console.log(`  fast selector: ${codexAppUi.fast_selector || 'unknown'}`);
+  console.log(`  provider selector: ${codexAppUi.provider_selector || 'unknown'}`);
+  console.log(`  host-owned config: ${codexAppUi.host_owned_config || 'unknown'}`);
+  if (Array.isArray(codexAppUi.actions) && codexAppUi.actions.some((action: any) => action.changed)) {
+    console.log('  repaired files:');
+    for (const action of codexAppUi.actions.filter((entry: any) => entry.changed)) console.log(`    - ${action.file}${action.backup_path ? ` (backup ${action.backup_path})` : ''}`);
+  }
+  if (codexAppUi.next_action) console.log(`  next action: ${codexAppUi.next_action}`);
+  console.log(`Provider: ${providerContext.provider || 'unknown'} ${providerContext.service_tier || ''} (${providerContext.source || 'unknown'}, ${providerContext.confidence || 'low'})`);
   const imagegenReady = (imagegen as any).auth_readiness;
   if (imagegenReady) {
     const paths = imagegenReady.available_paths?.length ? imagegenReady.available_paths.join(', ') : 'none';

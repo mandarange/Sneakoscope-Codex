@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runProcess } from '../../dist/core/fsx.js';
 
 test('visual route Computer Use fixture includes proof-linkable status', async () => {
-  const result = await runProcess(process.execPath, ['./scripts/computer-use-visual-route-fixture-check.mjs'], {
+  const result = await runProcess(process.execPath, ['./dist/scripts/computer-use-visual-route-fixture-check.js'], {
     env: { ...process.env, CI: 'true' },
     timeoutMs: 30_000,
     maxOutputBytes: 256 * 1024

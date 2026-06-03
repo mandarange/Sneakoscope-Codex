@@ -10,15 +10,22 @@ import { fakeCodexSdkAllowed, runFakeCodexSdkTask } from './codex-fake-sdk-adapt
 import { translateCodexSdkEvents } from './codex-event-translator.js'
 import { writeCodexControlProof } from './codex-control-proof.js'
 import { recordCodexThread } from './codex-thread-registry.js'
+import { runWithCodexReliabilityShield } from './codex-reliability-shield.js'
+import { routeCodexTask } from '../router/ultra-router.js'
+import { writeUltraRouterProof } from '../router/router-proof.js'
 
 export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResult & Record<string, unknown>> {
   const root = path.resolve(input.mutationLedgerRoot)
   await ensureDir(root)
   const schema = resolveCodexOutputSchema(input.outputSchemaId, input.outputSchema)
-  const task = { ...input, outputSchema: schema }
+  const routerDecision = routeCodexTask(input)
+  const task = { ...input, tier: input.tier || routerDecision.tier, outputSchema: schema }
+  await writeUltraRouterProof(root, { task, decision: routerDecision })
   const capability = await detectCodexSdkCapability()
   const sandbox = mapCodexSdkSandboxPolicy(task)
   const runtime = codexSdkRuntimePolicies(task)
+  if (runtime.env.env.HOME) await ensureDir(runtime.env.env.HOME)
+  if (runtime.env.env.CODEX_HOME) await ensureDir(runtime.env.env.CODEX_HOME)
   const fakeAllowed = fakeCodexSdkAllowed()
   const blockers = [
     ...(capability.ok || fakeAllowed ? [] : capability.blockers),
@@ -26,25 +33,28 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
   ]
   let adapterResult: any = null
   if (!blockers.length) {
-    try {
-      adapterResult = fakeAllowed
-        ? await runFakeCodexSdkTask(task)
-        : await runRealCodexSdkTask(task, { sandboxMode: sandbox.sandboxMode, env: runtime.env.env, config: runtime.config })
-    } catch (err: any) {
-      adapterResult = {
-        ok: false,
-        sdkThreadId: '',
-        sdkRunId: null,
-        events: [],
-        finalResponse: '',
-        structuredOutput: null,
-        blockers: ['codex_sdk_run_failed:' + String(err?.message || err)]
+    adapterResult = await runWithCodexReliabilityShield(task, async () => {
+      try {
+        return fakeAllowed
+          ? await runFakeCodexSdkTask(task)
+          : await runRealCodexSdkTask(task, { sandboxMode: sandbox.sandboxMode, env: runtime.env.env, config: runtime.config })
+      } catch (err: any) {
+        return {
+          ok: false,
+          sdkThreadId: '',
+          sdkRunId: null,
+          events: [],
+          finalResponse: '',
+          structuredOutput: null,
+          blockers: ['codex_sdk_run_failed:' + String(err?.message || err)]
+        }
       }
-    }
+    })
   }
   const events = Array.isArray(adapterResult?.events) ? adapterResult.events : []
   const translatedEvents = translateCodexSdkEvents(events)
   for (const event of translatedEvents) await appendJsonl(path.join(root, 'codex-sdk-events.jsonl'), event)
+  if (adapterResult?.reliabilityShield) await writeJsonAtomic(path.join(root, 'codex-reliability-shield.json'), adapterResult.reliabilityShield)
   const structuredOutput = adapterResult?.structuredOutput
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }
   const finalBlockers = [
@@ -78,6 +88,8 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
     workerResultPath,
     patchEnvelopePath,
     blockers: finalBlockers,
+    reliabilityShield: adapterResult?.reliabilityShield || null,
+    ultraRouterDecision: routerDecision as unknown as Record<string, unknown>,
     outputSchemaId: task.outputSchemaId,
     finalResponse: adapterResult?.finalResponse || '',
     eventTypes: events.map((event: any) => String(event?.type || 'unknown')),
@@ -105,6 +117,8 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
     sandbox,
     envProof: runtime.env.proof,
     config: runtime.config,
+    reliabilityShield: adapterResult?.reliabilityShield || null,
+    routerDecision: routerDecision as unknown as Record<string, unknown>,
     translatedEvents
   })
   return result

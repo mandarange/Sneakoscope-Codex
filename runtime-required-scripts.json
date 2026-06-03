@@ -2,7 +2,7 @@
   "schema": "sks.runtime-required-scripts.v1",
   "scripts": [
     {
-      "path": "scripts/codex-config-load-probe.mjs",
+      "path": "dist/scripts/codex-config-load-probe.js",
       "reason": "doctor/install runtime probes Codex config load behavior after package install"
     }
   ]
