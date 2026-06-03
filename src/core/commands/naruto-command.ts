@@ -145,10 +145,10 @@ async function narutoHelp(parsed: NarutoArgs) {
     mode: 'NARUTO',
     description: 'Shadow Clone Swarm: fan out up to ' + MAX_NARUTO_AGENT_COUNT + ' parallel clone sessions.',
     usage: [
-      'sks naruto run "<task>" [--clones N] [--backend codex-exec|fake] [--work-items N] [--real] [--readonly] [--json]',
+      'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake] [--work-items N] [--real] [--readonly] [--json]',
       'sks naruto status [--mission <id>] [--json]'
     ],
-    defaults: { clones: DEFAULT_NARUTO_CLONES, max_clones: MAX_NARUTO_AGENT_COUNT, backend: 'codex-exec' }
+    defaults: { clones: DEFAULT_NARUTO_CLONES, max_clones: MAX_NARUTO_AGENT_COUNT, backend: 'codex-sdk' }
   }
   return emit(parsed, help, () => {
     console.log('🍥 $Naruto — Shadow Clone Swarm (影分身)')
@@ -184,7 +184,7 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const clones = clampClones(requestedClones)
   const workItems = clampWorkItems(Number(readOption(args, '--work-items', clones)), clones)
   const concurrency = normalizeConcurrency(readOption(args, '--concurrency', readOption(args, '--target-active-slots', null)), clones)
-  const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : 'codex-exec'))
+  const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : 'codex-sdk'))
   const mock = hasFlag(args, '--mock') || backend === 'fake'
   const real = hasFlag(args, '--real')
   const readonly = hasFlag(args, '--readonly') || hasFlag(args, '--read-only')

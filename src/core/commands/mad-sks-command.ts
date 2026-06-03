@@ -224,7 +224,7 @@ export function resolveMadNativeSwarmOptions(args: any[] = [], profile: any = {}
   const disabled = list.includes('--no-swarm') || list.includes('--no-mad-swarm') || process.env.SKS_MAD_NATIVE_SWARM === '0';
   const agents = clampInt(readOption(list, '--mad-agents', readOption(list, '--mad-swarm-agents', process.env.SKS_MAD_SWARM_AGENTS || opts.agents || 5)), 1, 20);
   const workItems = clampInt(readOption(list, '--mad-swarm-work-items', process.env.SKS_MAD_SWARM_WORK_ITEMS || opts.workItems || agents), agents, 100);
-  const backend = String(readOption(list, '--mad-swarm-backend', process.env.SKS_MAD_SWARM_BACKEND || opts.backend || 'codex-exec'));
+  const backend = String(readOption(list, '--mad-swarm-backend', process.env.SKS_MAD_SWARM_BACKEND || opts.backend || 'codex-sdk'));
   return {
     enabled: !disabled,
     disabled_reason: disabled ? 'operator_disabled_mad_native_swarm' : null,

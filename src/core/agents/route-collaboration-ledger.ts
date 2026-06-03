@@ -73,9 +73,9 @@ export async function writeRouteCollaborationArtifacts(root: string, opts: {
     proof_graph: 'agents/agent-proof-evidence.json',
     trust_report: 'agents/agent-trust-report.json',
     fake_backend_fixture: backend === 'fake',
-    real_mode_codex_exec_backend: {
+    real_mode_codex_sdk_backend: {
       supported: true,
-      command_pattern: 'sks agent run "<task>" --backend codex-exec --real --agents <1-20> --concurrency <1-20> --json',
+      command_pattern: 'sks agent run "<task>" --backend codex-sdk --real --agents <1-20> --concurrency <1-20> --json',
       requires_user_runtime: true
     },
     route_specific_personas: ROUTE_PERSONAS[routeKey] || [],
@@ -98,7 +98,7 @@ export async function writeRouteCollaborationArtifacts(root: string, opts: {
       docs_update_required: false,
       release_gate_updated: true,
       mock_mode_fake_agent_backend: backend === 'fake',
-      real_mode_codex_exec_backend: true
+      real_mode_codex_sdk_backend: true
     }
   }
   await writeJsonAtomic(path.join(missionDir, routePlanName(routeKey)), plan)

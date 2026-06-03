@@ -92,7 +92,7 @@ export async function team(args: any = []) {
     missionId: id,
     route: '$Team',
     prompt,
-    backend: mock ? 'fake' : 'codex-exec',
+    backend: mock ? 'fake' : 'codex-sdk',
     mock,
     agents: roster.bundle_size,
     targetActiveSlots,

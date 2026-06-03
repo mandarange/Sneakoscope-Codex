@@ -215,6 +215,13 @@ export async function runAgentScheduler(input: {
       const agent = buildAgentForGeneration(slot, generation, workItem)
       const openedSlot = openWorkerSlotGeneration(slot, generation)
       slots[slotIndex] = openedSlot
+      await writeAll(input.root, state, slots, queue, active, {
+        event_type: 'session_launch_started',
+        session_id: generation.session_id,
+        slot_id: slot.slot_id,
+        generation_index: generation.generation_index,
+        work_item_id: workItem.id
+      }, input.onSchedulerEvent)
       const promise = Promise.resolve()
         .then(() => input.launchSession({ agent, workItem, generation, slot: openedSlot, queue, state }))
         .then((result) => ({

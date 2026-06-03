@@ -80,6 +80,24 @@ async function writeAgentZellijReport(root: string, agent: any, report: any) {
 async function recordZellijPane(agent: any, slice: any, opts: any = {}) {
   const root = opts.agentRoot || opts.cwd || process.cwd()
   const sessionName = opts.zellijSessionName || (opts.missionId ? `sks-${opts.missionId}` : 'sks-agent-runtime')
+  if (process.env.SKS_ZELLIJ_WORKER_PANE === '1') {
+    return {
+      schema: 'sks.agent-zellij-pane-launch.v1',
+      generated_at: new Date().toISOString(),
+      launch_mode: 'zellij_worker_pane_backend_child',
+      agent_id: agent.id,
+      slot_id: String(agent.slot_id || agent.id),
+      generation_index: agent.generation_index || 1,
+      session_id: agent.session_id,
+      session_name: sessionName,
+      pane_id: null,
+      pane_id_source: 'zellij_worker_pane_parent_record',
+      command: '<worker-pane-managed-backend>',
+      attach_command: `zellij attach ${sessionName}`,
+      blockers: [],
+      warnings: []
+    }
+  }
   const supervisorEvidence = await recordSupervisorLaneEvidence(root, agent, slice, sessionName)
   if (supervisorEvidence) return supervisorEvidence
   const slotId = String(agent.slot_id || agent.id)

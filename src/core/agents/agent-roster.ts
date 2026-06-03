@@ -24,8 +24,8 @@ export function systemSafeNarutoConcurrency(opts: { backend?: string; cores?: nu
   try { totalBytes = Number(opts.totalBytes ?? os.totalmem()) || totalBytes } catch { /* keep fallback */ }
   const freeGb = freeBytes / (1024 * 1024 * 1024)
   const totalGb = totalBytes / (1024 * 1024 * 1024)
-  const backend = String(opts.backend || 'codex-exec')
-  const heavy = backend === 'codex-exec' || backend === 'zellij' || backend === 'process'
+  const backend = String(opts.backend || 'codex-sdk')
+  const heavy = backend === 'codex-sdk' || backend === 'zellij' || backend === 'process'
   const ceiling = MAX_NARUTO_AGENT_COUNT
   // macOS reports very low freemem while reclaimable memory is still available, so
   // budget against a total-memory-derived floor rather than the instantaneous free.
@@ -33,7 +33,7 @@ export function systemSafeNarutoConcurrency(opts: { backend?: string; cores?: nu
   const budgetGb = Math.max(freeGb, reclaimableFloorGb)
   let cap: number
   if (heavy) {
-    // Memory-bound, NOT core-bound. ~0.25 GB per mostly-idle codex-exec worker.
+    // Memory-bound, NOT core-bound. ~0.25 GB per mostly-idle Codex SDK worker.
     const gbPerWorker = positiveEnvNumber('SKS_NARUTO_GB_PER_WORKER', 0.25)
     const byMem = Math.max(1, Math.floor(budgetGb / gbPerWorker))
     const minParallelDefault = totalGb >= 16 ? 16 : totalGb >= 8 ? 8 : totalGb >= 4 ? 4 : 2

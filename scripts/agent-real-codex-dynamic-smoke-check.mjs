@@ -10,16 +10,7 @@ fs.mkdirSync(path.dirname(reportPath), { recursive: true });
 const required = process.env.SKS_REQUIRE_REAL_DYNAMIC_AGENTS === '1';
 
 if (process.env.SKS_TEST_REAL_DYNAMIC_AGENTS !== '1') {
-  optionalOrBlocked('set SKS_TEST_REAL_DYNAMIC_AGENTS=1 to run real codex exec dynamic smoke', 'real_dynamic_agents_not_requested');
-}
-
-const codex = spawnSync('codex', ['exec', '--help'], { encoding: 'utf8', maxBuffer: 1024 * 1024 });
-if (codex.status !== 0) {
-  optionalOrBlocked('codex exec binary unavailable', 'codex_missing', { stderr: codex.stderr?.slice(-2000) || '' });
-}
-const helpText = `${codex.stdout}\n${codex.stderr}`;
-if (!helpText.includes('--output-schema') || !helpText.includes('--output-last-message')) {
-  optionalOrBlocked('codex exec output schema flags unavailable', 'output_schema_unsupported');
+  optionalOrBlocked('set SKS_TEST_REAL_DYNAMIC_AGENTS=1 to run real Codex SDK dynamic smoke', 'real_dynamic_agents_not_requested');
 }
 
 const full = process.argv.includes('--full');
@@ -32,7 +23,7 @@ const run = spawnSync(process.execPath, [
   'run',
   'real codex dynamic backfill read-only smoke: inspect package metadata and report no file changes',
   '--route', '$Agent',
-  '--backend', 'codex-exec',
+  '--backend', 'codex-sdk',
   '--real',
   '--readonly',
   '--json',

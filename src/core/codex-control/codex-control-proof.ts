@@ -1,0 +1,46 @@
+import path from 'node:path'
+import { nowIso, writeJsonAtomic } from '../fsx.js'
+import type { CodexTaskInput, CodexTaskResult } from './codex-control-plane.js'
+import { redactCodexSdkConfig } from './codex-sdk-config-policy.js'
+
+export const CODEX_CONTROL_PROOF_SCHEMA = 'sks.codex-control-proof.v1'
+
+export async function writeCodexControlProof(root: string, input: {
+  task: CodexTaskInput
+  result: CodexTaskResult & Record<string, unknown>
+  capability?: Record<string, unknown> | null
+  sandbox?: Record<string, unknown> | null
+  envProof?: Record<string, unknown> | null
+  config?: Record<string, unknown> | null
+  translatedEvents?: unknown[]
+}) {
+  const proof = {
+    schema: CODEX_CONTROL_PROOF_SCHEMA,
+    generated_at: nowIso(),
+    ok: input.result.ok === true,
+    backend: 'codex-sdk',
+    route: input.task.route,
+    mission_id: input.task.missionId,
+    work_item_id: input.task.workItemId || null,
+    slot_id: input.task.slotId || null,
+    generation_index: input.task.generationIndex ?? null,
+    session_id: input.task.sessionId || null,
+    zellij_pane_id: input.task.zellijPaneId || null,
+    sdk_thread_id: input.result.sdkThreadId,
+    sdk_run_id: input.result.sdkRunId,
+    stream_event_count: input.result.streamEventCount,
+    structured_output_valid: input.result.structuredOutputValid,
+    output_schema_id: input.task.outputSchemaId,
+    worker_result_path: input.result.workerResultPath,
+    patch_envelope_path: input.result.patchEnvelopePath || null,
+    sandbox: input.sandbox || null,
+    env: input.envProof || null,
+    config: input.config ? redactCodexSdkConfig(input.config) : null,
+    capability: input.capability || null,
+    translated_event_count: input.translatedEvents?.length || 0,
+    blockers: input.result.blockers || []
+  }
+  const proofPath = path.join(root, 'codex-control-proof.json')
+  await writeJsonAtomic(proofPath, proof)
+  return { proof, proofPath }
+}

@@ -7,7 +7,7 @@ test('agent command parser forwards real backend flags without leaking option va
     'run',
     'fixture task',
     '--backend',
-    'codex-exec',
+    'codex-sdk',
     '--agents',
     '1',
     '--concurrency',
@@ -18,7 +18,7 @@ test('agent command parser forwards real backend flags without leaking option va
 
   assert.equal(parsed.action, 'run');
   assert.equal(parsed.prompt, 'fixture task');
-  assert.equal(parsed.backend, 'codex-exec');
+  assert.equal(parsed.backend, 'codex-sdk');
   assert.equal(parsed.agents, 1);
   assert.equal(parsed.concurrency, 1);
   assert.equal(parsed.real, true);

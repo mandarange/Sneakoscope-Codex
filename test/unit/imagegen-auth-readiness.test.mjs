@@ -18,18 +18,18 @@ test('detects ChatGPT OAuth auth mode from auth.json', async () => {
   assert.equal(r.openai_api_key_present, false);
 });
 
-test('OAuth-only without OpenAI key: headless auto unavailable, GUI path offered', async () => {
+test('OAuth-only with Codex built-in available: headless Codex imagegen path offered', async () => {
   const r = await evaluateImagegenAuthReadiness({
     env: { HOME: '/tmp/none' },
     authJsonText: OAUTH_AUTH_JSON,
     codexAppBuiltInAvailable: true
   });
   assert.equal(r.auth_mode, 'chatgpt_oauth');
-  assert.equal(r.headless_auto_available, false);
-  assert.equal(r.primary_blocker, 'imagegen_headless_auto_unavailable_oauth_only');
+  assert.equal(r.headless_auto_available, true);
+  assert.equal(r.primary_blocker, null);
+  assert.ok(r.available_paths.includes('codex_exec_builtin_image_generation'));
   assert.ok(r.available_paths.includes('codex_app_gui_generated_images_autodiscovery'));
-  assert.ok(r.next_actions.some((a) => /OPENAI_API_KEY/.test(a)));
-  assert.ok(r.next_actions.some((a) => /Codex App/.test(a)));
+  assert.equal(r.next_actions.length, 0);
 });
 
 test('OpenAI key present: headless auto available', async () => {

@@ -639,6 +639,19 @@
       "can_run_incremental": true
     },
     {
+      "id": "agent:slot-pane-binding-proof",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "scripts/agent-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "agent:source-intelligence-propagation",
       "tier": "P1",
       "cost": "hermetic",
@@ -743,7 +756,33 @@
       "can_run_incremental": true
     },
     {
+      "id": "agent:worker-pane-communication-contract",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "scripts/agent-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "agent:worker-scout-limited",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "scripts/agent-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "agent:zellij-dynamic-backfill-panes",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
@@ -957,6 +996,198 @@
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
         "scripts/codex-lb-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:all-pipelines",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-all-pipelines-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:backend-router",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-backend-router-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:capability",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-capability-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:core-skill-pipeline",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-core-skill-pipeline-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:dfix-pipeline",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-dfix-pipeline-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:event-stream-ledger",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-event-stream-ledger-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:no-legacy-fallback",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-no-legacy-fallback-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:qa-pipeline",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-qa-pipeline-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:release-review-pipeline",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-release-review-pipeline-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:research-pipeline",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-research-pipeline-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:sandbox-policy",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-sandbox-policy-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:structured-output",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-structured-output-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:team-naruto-agent-pipeline",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-team-naruto-agent-pipeline-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:thread-registry",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-thread-registry-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:ux-ppt-review-pipeline",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-ux-ppt-review-pipeline-*.mjs"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-sdk:zellij-pane-binding",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "scripts/codex-sdk-*.mjs",
+        "scripts/codex-sdk-zellij-pane-binding-*.mjs"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3315,6 +3546,20 @@
       "can_run_incremental": false
     },
     {
+      "id": "zellij:spawn-on-demand-layout",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/zellij/**",
+        "scripts/zellij-*.mjs",
+        "templates/zellij/**",
+        "src/core/agents/zellij-lane-supervisor.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "zellij:ui-design",
       "tier": "P0",
       "cost": "hermetic",
@@ -3326,6 +3571,20 @@
       ],
       "always_on_release": false,
       "required_for_publish": true,
+      "can_run_incremental": true
+    },
+    {
+      "id": "zellij:worker-pane-manager",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/zellij/**",
+        "scripts/zellij-*.mjs",
+        "templates/zellij/**",
+        "src/core/agents/zellij-lane-supervisor.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
       "can_run_incremental": true
     }
   ]

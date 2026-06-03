@@ -13,7 +13,7 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const minimumWorkItems = Number(readOption(args, '--minimum-work-items', targetActiveSlots))
   const maxQueueExpansion = Number(readOption(args, '--max-queue-expansion', 10))
   const concurrency = Number(readOption(args, '--concurrency', Math.min(agents, 5)))
-  const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : 'codex-exec'))
+  const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : 'codex-sdk'))
   const route = String(readOption(args, '--route', '$Agent'))
   const mock = hasFlag(args, '--mock') || backend === 'fake'
   const real = hasFlag(args, '--real')

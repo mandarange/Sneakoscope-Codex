@@ -5,7 +5,8 @@ import { runProcessAgent } from './agent-runner-process.js'
 import { runZellijAgent } from './agent-runner-zellij.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-patch-schema.js'
-import { runCodexExecWorkerAdapter } from './codex-exec-worker-adapter.js'
+import { runCodexTask } from '../codex-control/codex-control-plane.js'
+import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
 
 export const NATIVE_WORKER_BACKEND_ROUTER_SCHEMA = 'sks.native-worker-backend-router.v1'
 
@@ -24,7 +25,8 @@ export async function runNativeWorkerBackendRouter(input: {
   guard: any
 }) {
   const root = path.resolve(input.agentRoot)
-  const backend = normalizeBackend(input.backend)
+  const requestedBackend = String(input.backend || '')
+  const backend = normalizeBackend(requestedBackend)
   const reportRel = path.join(input.workerDirRel, 'worker-backend-router-report.json')
   const startedAt = nowIso()
   let result: any
@@ -35,6 +37,8 @@ export async function runNativeWorkerBackendRouter(input: {
 
   if (!input.guard?.ok) {
     result = validateAgentWorkerResult(blockedResult(input, ['native_cli_worker_recursion_guard_missing']))
+  } else if (requestedBackend === 'codex-exec') {
+    result = validateAgentWorkerResult(blockedResult(input, ['legacy_codex_exec_runtime_removed']))
   } else if (!backend) {
     result = validateAgentWorkerResult(blockedResult(input, ['native_worker_backend_unknown']))
   } else if (backend === 'fake') {
@@ -68,23 +72,64 @@ export async function runNativeWorkerBackendRouter(input: {
       fixture_patch_envelopes: false,
       verification: { status: processRun.status === 'done' ? 'passed' : 'failed', checks: [...(processRun.verification?.checks || []), 'native-worker-backend-router', 'process-child-execution'] }
     })
-  } else if (backend === 'codex-exec') {
-    const adapter = await runCodexExecWorkerAdapter({
-      agentRoot: root,
-      workerDirRel: input.workerDirRel,
-      agent: input.agent,
-      slice: input.slice,
-      intake: input.intake,
-      fastModePolicy: input.fastModePolicy,
-      outputSchemaFile: input.intake.output_schema_file,
-      resultFile: path.join(root, input.workerDirRel, 'codex-output-last-message.json'),
-      real: input.intake.real_backend === true || input.intake.real === true || process.env.SKS_TEST_REAL_CODEX_PARALLEL === '1'
+  } else if (backend === 'codex-sdk' || backend === 'zellij') {
+    const sdkTask = await runCodexTask({
+      route: String(input.intake.route || '$Agent'),
+      missionId: String(input.intake.mission_id || input.intake.parent_mission_id || ''),
+      workItemId: String(input.slice?.id || ''),
+      slotId: String(input.agent.slot_id || input.agent.id || ''),
+      generationIndex: Number(input.agent.generation_index || 1),
+      sessionId: String(input.agent.session_id || ''),
+      cwd: String(input.intake.cwd || root),
+      prompt: buildWorkerPrompt(input.slice),
+      inputFiles: input.intake.input_files || [],
+      inputImages: input.intake.input_images || [],
+      outputSchemaId: CODEX_AGENT_WORKER_RESULT_SCHEMA_ID,
+      outputSchema: codexAgentWorkerResultSchema as Record<string, unknown>,
+      sandboxPolicy: hasWriteLease(input.slice, input.intake) ? 'workspace-write' : 'read-only',
+      requestedScopeContract: {
+        id: String(input.intake.lease_id || input.slice?.id || ''),
+        route: String(input.intake.route || '$Agent'),
+        read_only: !hasWriteLease(input.slice, input.intake),
+        allowed_paths: writePaths(input.slice, input.intake),
+        write_paths: writePaths(input.slice, input.intake),
+        user_confirmed_full_access: false,
+        mad_sks_authorized: input.intake.mad_sks_authorized === true || process.env.SKS_MAD_SKS_ACTIVE === '1'
+      },
+      mutationLedgerRoot: path.join(root, input.workerDirRel),
+      zellijPaneId: await readZellijPaneId(root, input.workerDirRel)
     })
-    childReports = [adapter.processReport]
-    patchEnvelopes = adapter.patchEnvelopes
-    outputLastMessagePath = adapter.processReport.output_last_message_path
-    proofLevel = adapter.processReport.dry_run ? 'prepared_only' : patchEnvelopes.length ? 'model_authored' : 'blocked'
-    result = validateAgentWorkerResult(adapter.result)
+    outputLastMessagePath = sdkTask.workerResultPath
+    const sdkWorkerResult = await readJson<any>(sdkTask.workerResultPath, null)
+    patchEnvelopes = normalizeSdkPatchEnvelopes(sdkWorkerResult?.patch_envelopes || [], input, sdkTask.sdkThreadId)
+    proofLevel = sdkTask.ok ? (patchEnvelopes.length ? 'model_authored' : 'codex_sdk_thread_proven') : 'blocked'
+    const sdkReport = {
+      schema: 'sks.codex-sdk-worker-adapter.v1',
+      backend: 'codex-sdk',
+      sdk_thread_id: sdkTask.sdkThreadId,
+      sdk_run_id: sdkTask.sdkRunId,
+      stream_event_count: sdkTask.streamEventCount,
+      structured_output_valid: sdkTask.structuredOutputValid,
+      worker_result_path: sdkTask.workerResultPath,
+      patch_envelope_path: sdkTask.patchEnvelopePath || null,
+      blockers: sdkTask.blockers
+    }
+    childReports = [sdkReport]
+    result = validateAgentWorkerResult({
+      ...sdkWorkerResult,
+      backend: 'codex-sdk',
+      patch_envelopes: patchEnvelopes,
+      codex_child_report: sdkReport,
+      codex_sdk_thread: sdkReport,
+      model_authored_patch_envelopes: patchEnvelopes.length > 0,
+      fixture_patch_envelopes: false,
+      artifacts: [...new Set([...(sdkWorkerResult?.artifacts || []), path.relative(root, sdkTask.workerResultPath), path.join(input.workerDirRel, 'codex-control-proof.json'), path.join(input.workerDirRel, 'codex-thread-registry.json'), path.join(input.workerDirRel, 'codex-sdk-events.jsonl')])],
+      blockers: [...(sdkWorkerResult?.blockers || []), ...sdkTask.blockers],
+      verification: {
+        status: sdkTask.ok ? 'passed' : 'failed',
+        checks: [...(sdkWorkerResult?.verification?.checks || []), 'codex-sdk-control-plane', 'codex-sdk-event-stream', 'codex-sdk-structured-output']
+      }
+    })
   } else {
     const zellijRun = await runZellijAgent(input.agent, input.slice, {
       missionId: input.intake.mission_id || input.intake.parent_mission_id || '',
@@ -127,7 +172,10 @@ export async function runNativeWorkerBackendRouter(input: {
     proof_level: proofLevel,
     fast_mode: input.fastModePolicy.fast_mode,
     service_tier: input.fastModePolicy.service_tier,
-    ...(backend === 'codex-exec' ? { service_tier_cli_override_present: childReports.some((report) => report?.service_tier_cli_override_present === true) } : {}),
+    sdk_thread_id: childReports.find((report) => report?.sdk_thread_id)?.sdk_thread_id || null,
+    sdk_run_id: childReports.find((report) => report?.sdk_run_id)?.sdk_run_id || null,
+    stream_event_count: Number(childReports.find((report) => report?.stream_event_count)?.stream_event_count || 0),
+    structured_output_valid: childReports.some((report) => report?.structured_output_valid === true),
     blockers: result.blockers || []
   }
   await writeJsonAtomic(path.join(root, reportRel), report)
@@ -143,8 +191,8 @@ export async function runNativeWorkerBackendRouter(input: {
   }
 }
 
-function normalizeBackend(value: string): 'fake' | 'process' | 'codex-exec' | 'zellij' | null {
-  return value === 'fake' || value === 'process' || value === 'codex-exec' || value === 'zellij' ? value : null
+function normalizeBackend(value: string): 'fake' | 'process' | 'codex-sdk' | 'zellij' | null {
+  return value === 'fake' || value === 'process' || value === 'codex-sdk' || value === 'zellij' ? value : null
 }
 
 function envelopeOpts(input: any, source: BackendSource, childPid?: number) {
@@ -167,6 +215,47 @@ function buildGeneratedPatchEnvelopes(input: any, source: BackendSource, childPi
     source,
     worker_process_id: process.pid,
     ...(childPid === undefined ? {} : { backend_child_process_id: childPid })
+  }))
+}
+
+function buildWorkerPrompt(slice: any) {
+  const write = writePaths(slice, {})
+  return [
+    String(slice?.description || slice?.title || 'Complete the assigned worker task.'),
+    '',
+    write.length
+      ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}.`
+      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}.`,
+    'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
+  ].join('\n')
+}
+
+function hasWriteLease(slice: any, intake: any) {
+  return writePaths(slice, intake).length > 0
+}
+
+function writePaths(slice: any, intake: any) {
+  return [
+    ...(Array.isArray(slice?.write_paths) ? slice.write_paths : []),
+    ...(Array.isArray(intake?.write_paths) ? intake.write_paths : [])
+  ].map(String).filter(Boolean)
+}
+
+async function readZellijPaneId(root: string, workerDirRel: string) {
+  const pane = await readJson<any>(path.join(root, workerDirRel, 'zellij-worker-pane.json'), null)
+  return pane?.pane_id ? String(pane.pane_id) : null
+}
+
+function normalizeSdkPatchEnvelopes(envelopes: AgentPatchEnvelope[], input: any, sdkThreadId: string) {
+  return envelopes.map((envelope) => normalizeAgentPatchEnvelope({
+    ...envelope,
+    source: 'model_authored',
+    native_cli_worker_session_id: input.agent.session_id,
+    native_cli_process_id: process.pid,
+    worker_process_id: process.pid,
+    backend_sdk_thread_id: sdkThreadId,
+    fast_mode: input.fastModePolicy.fast_mode,
+    service_tier: input.fastModePolicy.service_tier
   }))
 }
 

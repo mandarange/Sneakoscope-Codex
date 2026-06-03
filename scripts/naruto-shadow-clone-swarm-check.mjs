@@ -54,25 +54,25 @@ assertGate(toolReadCmd.reasoning_effort === 'medium' && toolReadCmd.service_tier
 
 // 5) System-safe concurrency: never spawn the whole count at once; throttle to host capacity.
 const fakeSafe = roster.systemSafeNarutoConcurrency({ backend: 'fake' });
-const heavySafe = roster.systemSafeNarutoConcurrency({ backend: 'codex-exec' });
+const heavySafe = roster.systemSafeNarutoConcurrency({ backend: 'codex-sdk' });
 const lowFreeButCapable = roster.systemSafeNarutoConcurrency({
-  backend: 'codex-exec',
+  backend: 'codex-sdk',
   cores: 10,
   freeBytes: 512 * 1024 * 1024,
   totalBytes: 16 * 1024 * 1024 * 1024
 });
 assertGate(fakeSafe.cap >= 1 && fakeSafe.cap <= schema.MAX_NARUTO_AGENT_COUNT, 'fake-backend concurrency cap must be in [1, 100]', { fakeSafe });
-// codex-exec workers are network-bound (each mostly idle awaiting the Codex API),
+// codex-sdk workers are network-bound (each mostly idle awaiting the Codex API),
 // so concurrency is bounded by MEMORY + the 100-clone ceiling, NOT by CPU cores: a
 // capable host may run up to MAX_NARUTO_AGENT_COUNT in parallel.
 assertGate(heavySafe.cap >= 1 && heavySafe.cap <= schema.MAX_NARUTO_AGENT_COUNT, 'heavy-backend concurrency cap must be in [1, 100]', { heavySafe });
 assertGate(heavySafe.cap <= fakeSafe.cap, 'heavy backend must throttle no looser than the light backend', { heavySafe, fakeSafe });
 assertGate(heavySafe.cores >= 1, 'must detect at least one core', { cores: heavySafe.cores });
-assertGate(lowFreeButCapable.cap >= 4, 'capable hosts must not collapse Naruto codex-exec concurrency to 1 just because free memory is low', { lowFreeButCapable });
+assertGate(lowFreeButCapable.cap >= 4, 'capable hosts must not collapse Naruto codex-sdk concurrency to 1 just because free memory is low', { lowFreeButCapable });
 // A big-memory host is NOT throttled by core count: simulate 64 GB and assert the
 // heavy backend scales well past the old 16-core-derived ceiling toward 100.
-const bigMemoryHost = roster.systemSafeNarutoConcurrency({ backend: 'codex-exec', cores: 4, freeBytes: 48 * 1024 * 1024 * 1024, totalBytes: 64 * 1024 * 1024 * 1024 });
-assertGate(bigMemoryHost.cap >= 64, 'a 64 GB host must allow >= 64 parallel codex-exec workers regardless of core count (network-bound, memory-budgeted)', { bigMemoryHost });
+const bigMemoryHost = roster.systemSafeNarutoConcurrency({ backend: 'codex-sdk', cores: 4, freeBytes: 48 * 1024 * 1024 * 1024, totalBytes: 64 * 1024 * 1024 * 1024 });
+assertGate(bigMemoryHost.cap >= 64, 'a 64 GB host must allow >= 64 parallel codex-sdk workers regardless of core count (network-bound, memory-budgeted)', { bigMemoryHost });
 
 // 6) End-to-end run: 24 clones (> standard 20 → ceiling lifted) all complete, but live
 //    concurrency is throttled to the host-safe cap (never the full 24 unless the host allows).
