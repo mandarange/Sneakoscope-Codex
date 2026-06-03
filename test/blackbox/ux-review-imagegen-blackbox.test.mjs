@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 test('UX review fake imagegen blackbox produces artifact graph without real claims', () => {
-  const run = spawnSync(process.execPath, ['scripts/ux-review-imagegen-blackbox-check.mjs'], {
+  const run = spawnSync(process.execPath, ['dist/scripts/ux-review-imagegen-blackbox-check.js'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024

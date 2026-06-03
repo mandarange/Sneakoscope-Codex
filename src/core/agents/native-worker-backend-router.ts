@@ -75,6 +75,7 @@ export async function runNativeWorkerBackendRouter(input: {
   } else if (backend === 'codex-sdk' || backend === 'zellij') {
     const sdkTask = await runCodexTask({
       route: String(input.intake.route || '$Agent'),
+      tier: 'worker',
       missionId: String(input.intake.mission_id || input.intake.parent_mission_id || ''),
       workItemId: String(input.slice?.id || ''),
       slotId: String(input.agent.slot_id || input.agent.id || ''),
@@ -97,7 +98,11 @@ export async function runNativeWorkerBackendRouter(input: {
         mad_sks_authorized: input.intake.mad_sks_authorized === true || process.env.SKS_MAD_SKS_ACTIVE === '1'
       },
       mutationLedgerRoot: path.join(root, input.workerDirRel),
-      zellijPaneId: await readZellijPaneId(root, input.workerDirRel)
+      zellijPaneId: await readZellijPaneId(root, input.workerDirRel),
+      reliabilityPolicy: {
+        maxEmptyResultRetries: 1,
+        timeoutClass: 'standard'
+      }
     })
     outputLastMessagePath = sdkTask.workerResultPath
     const sdkWorkerResult = await readJson<any>(sdkTask.workerResultPath, null)

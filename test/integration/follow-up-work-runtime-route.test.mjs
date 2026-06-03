@@ -3,6 +3,6 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 test('follow-up runtime route enqueues generated work and generation proof', () => {
-  const result = spawnSync(process.execPath, ['scripts/agent-follow-up-work-schema-check.mjs'], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, ['dist/scripts/agent-follow-up-work-schema-check.js'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr || result.stdout);
 });

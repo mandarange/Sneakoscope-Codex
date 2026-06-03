@@ -7,7 +7,7 @@ test('real Codex patch envelope smoke is integration_optional unless explicitly 
   const env = { ...process.env };
   delete env.SKS_TEST_REAL_CODEX_PATCHES;
   delete env.SKS_REQUIRE_REAL_CODEX_PATCHES;
-  const run = spawnSync(process.execPath, ['scripts/agent-real-codex-patch-envelope-smoke.mjs'], {
+  const run = spawnSync(process.execPath, ['dist/scripts/agent-real-codex-patch-envelope-smoke.js'], {
     encoding: 'utf8',
     env,
     timeout: 60_000

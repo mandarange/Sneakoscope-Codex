@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
 test('docs truthfulness check covers release wording', () => {
-  const result = spawnSync(process.execPath, ['scripts/docs-truthfulness-check.mjs'], {
+  const result = spawnSync(process.execPath, ['dist/scripts/docs-truthfulness-check.js'], {
     cwd: process.cwd(),
     encoding: 'utf8'
   });

@@ -213,11 +213,9 @@ function errorDetail(err: any) {
 }
 
 function resolveCodexConfigLoadProbe(): string | null {
-  // Prefer the packaged copy under dist/scripts (shipped via the `dist` files
-  // allowlist); fall back to the repo-root scripts/ copy for local development.
+  // The probe ships as executable runtime JS under dist/scripts.
   const candidates = [
-    path.join(packageRoot(), 'dist', 'scripts', 'codex-config-load-probe.mjs'),
-    path.join(packageRoot(), 'scripts', 'codex-config-load-probe.mjs')
+    path.join(packageRoot(), 'dist', 'scripts', 'codex-config-load-probe.js')
   ]
   for (const candidate of candidates) {
     try {

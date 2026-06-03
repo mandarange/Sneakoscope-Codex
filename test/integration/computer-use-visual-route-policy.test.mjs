@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runProcess } from '../../dist/core/fsx.js';
 
 test('Computer Use policy check returns structured status without forbidden wording', async () => {
-  const result = await runProcess(process.execPath, ['./scripts/computer-use-policy-check.mjs'], {
+  const result = await runProcess(process.execPath, ['./dist/scripts/computer-use-policy-check.js'], {
     env: { ...process.env, CI: 'true' },
     timeoutMs: 25_000,
     maxOutputBytes: 256 * 1024

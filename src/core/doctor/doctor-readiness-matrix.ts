@@ -39,6 +39,8 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   if (codexDoctor && codexDoctor.available && codexDoctor.exit_code !== 0 && input.require_codex_doctor === true) blockers.add('codex_doctor_failed')
   if (codexDoctor?.warnings?.length) for (const warning of codexDoctor.warnings) warnings.add(String(warning))
   if (input.codex_app?.ok === false) warnings.add('codex_app_needs_setup_optional_for_cli')
+  if (input.codex_app_ui?.fast_selector === 'manual_action_required') warnings.add('codex_app_fast_selector_manual_action_required')
+  if (input.codex_app_ui?.fast_selector === 'repaired') warnings.add('codex_app_fast_selector_repaired_restart_app_if_needed')
   if (input.codex_lb?.ok === false) warnings.add(`codex_lb_${input.codex_lb?.circuit?.state || 'blocked'}`)
 
   const codexConfigNode = nodeRead.ok !== false && codexConfig.ok !== false
@@ -73,6 +75,7 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     },
     codex_doctor: codexDoctor || null,
     fast_mode_ready: input.fast_mode_ready !== false,
+    codex_app_ui: input.codex_app_ui || null,
     hooks_ready: input.hooks_ready !== false,
     codex_app_ready: input.codex_app?.ok === true,
     codex_app_required_for_cli: false,

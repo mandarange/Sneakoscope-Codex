@@ -1,5 +1,7 @@
 import path from 'node:path'
 import { appendJsonl, ensureDir, nowIso, packageRoot, readJson, writeJsonAtomic } from '../fsx.js'
+import { providerPaneLabel } from '../provider/provider-badge.js'
+import { resolveProviderContext, type ProviderContext } from '../provider/provider-context.js'
 import { runZellij, type ZellijCommandResult } from './zellij-command.js'
 import { extractZellijPaneIdFromOutput } from './zellij-lane-runtime.js'
 
@@ -27,6 +29,8 @@ export interface ZellijWorkerPaneOpenInput {
   stdoutLog: string
   stderrLog: string
   cwd?: string
+  providerContext?: ProviderContext | null
+  serviceTier?: string | null
 }
 
 export interface ZellijWorkerPaneRecord {
@@ -41,9 +45,13 @@ export interface ZellijWorkerPaneRecord {
   generation_index: number
   session_id: string
   pane_name: string
+  pane_title: string
   pane_kind: 'worker_codex_sdk'
   pane_id: string | null
   pane_id_source: ZellijWorkerPaneIdSource
+  provider: string
+  service_tier: string
+  provider_context: ProviderContext
   worker_artifact_dir: string
   worker_result_path: string
   heartbeat_path: string
@@ -70,6 +78,12 @@ export function buildWorkerPaneName(slotId: string, generationIndex: number) {
   return `${slotId}/gen-${Math.max(1, Math.floor(Number(generationIndex) || 1))}`
 }
 
+export function buildWorkerPaneTitle(slotId: string, generationIndex: number, context?: ProviderContext | null, serviceTier?: string | null) {
+  const base = buildWorkerPaneName(slotId, generationIndex)
+  const normalized = normalizePaneProviderContext(context, serviceTier)
+  return `${base} · codex-sdk · ${providerPaneLabel(normalized)}`
+}
+
 export function isRealZellijWorkerPaneIdSource(value: unknown) {
   return value === 'zellij_worker_new_pane_stdout' || value === 'zellij_worker_list_panes'
 }
@@ -90,6 +104,8 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   const now = nowIso()
   const paneIdSource = input.paneIdSource || 'zellij_worker_pane_launch_failed'
   const blockers = input.blockers || []
+  const providerContext = normalizePaneProviderContext(input.providerContext, input.serviceTier)
+  const paneTitle = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier)
   return {
     schema: ZELLIJ_WORKER_PANE_SCHEMA,
     generated_at: now,
@@ -101,10 +117,14 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     slot_id: input.slotId,
     generation_index: input.generationIndex,
     session_id: input.sessionId,
-    pane_name: buildWorkerPaneName(input.slotId, input.generationIndex),
+    pane_name: paneTitle,
+    pane_title: paneTitle,
     pane_kind: 'worker_codex_sdk',
     pane_id: input.paneId || null,
     pane_id_source: paneIdSource,
+    provider: providerContext.provider,
+    service_tier: providerContext.service_tier,
+    provider_context: providerContext,
     worker_artifact_dir: input.workerArtifactDir,
     worker_result_path: input.resultPath,
     heartbeat_path: input.heartbeatPath,
@@ -131,6 +151,10 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
 export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<ZellijWorkerPaneRecord> {
   const root = path.resolve(input.root)
   const cwd = input.cwd || packageRoot()
+  const providerInput: Parameters<typeof resolveProviderContext>[0] = { root, route: '$Agent' }
+  const serviceTier = input.serviceTier || process.env.SKS_SERVICE_TIER
+  if (serviceTier != null) providerInput.serviceTier = serviceTier
+  const providerContext = input.providerContext || await resolveProviderContext(providerInput)
   const workerDir = path.join(root, input.workerArtifactDir)
   await ensureDir(workerDir)
   await appendWorkerPaneEvent(root, 'session_launch_started', input, {})
@@ -139,7 +163,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     timeoutMs: 5000,
     optional: false
   })
-  const paneName = buildWorkerPaneName(input.slotId, input.generationIndex)
+  const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier)
   const launch = createSession.ok
     ? await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--name', paneName, '--', 'sh', '-lc', input.workerCommand], {
         cwd,
@@ -170,6 +194,8 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     launch,
     paneReconciliation: reconciledPane,
     status: blockers.length ? 'failed' : 'running',
+    providerContext,
+    serviceTier: input.serviceTier || providerContext.service_tier,
     blockers
   })
   await writeWorkerPaneArtifact(root, record)
@@ -189,9 +215,13 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     session_id: input.sessionId,
     session_name: input.sessionName,
     pane_name: paneName,
+    pane_title: paneName,
     pane_kind: 'worker_codex_sdk',
     pane_id: record.pane_id,
     pane_id_source: record.pane_id_source,
+    provider: record.provider,
+    service_tier: record.service_tier,
+    provider_context: record.provider_context,
     command: '<native-cli-worker-command>',
     worker_artifact_dir: input.workerArtifactDir,
     worker_result_path: input.resultPath,
@@ -332,6 +362,38 @@ async function reconcileZellijWorkerPaneId(sessionName: string, paneName: string
     command: listed,
     blockers: paneId == null ? ['zellij_worker_pane_id_not_reconciled'] : []
   }
+}
+
+function normalizePaneProviderContext(context?: ProviderContext | null, serviceTier?: string | null): ProviderContext {
+  const tier = normalizeServiceTier(serviceTier || context?.service_tier)
+  return context
+    ? { ...context, service_tier: tier }
+    : {
+        schema: 'sks.provider-context.v1',
+        generated_at: nowIso(),
+        provider: 'unknown',
+        auth_mode: 'unknown',
+        route: '$Agent',
+        service_tier: tier,
+        source: 'unknown',
+        confidence: 'low',
+        conflict: false,
+        warnings: [],
+        signals: {
+          openai_api_key_present: false,
+          codex_lb_key_present: false,
+          codex_lb_explicit: false,
+          codex_app_auth_present: false,
+          model_provider: null
+        }
+      }
+}
+
+function normalizeServiceTier(value: unknown): ProviderContext['service_tier'] {
+  const text = String(value || '').toLowerCase()
+  if (text === 'fast' || text === 'priority') return 'fast'
+  if (text === 'standard' || text === 'default') return 'standard'
+  return 'unknown'
 }
 
 function parsePaneRows(text: unknown): any[] {

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { runProcess } from '../../dist/core/fsx.js';
 
 test('legacy-free check passes the split command registry', async () => {
-  const result = await runProcess(process.execPath, [path.join(process.cwd(), 'scripts/check-legacy-free.mjs')], {
+  const result = await runProcess(process.execPath, [path.join(process.cwd(), 'dist', 'scripts', 'check-legacy-free.js')], {
     cwd: process.cwd(),
     timeoutMs: 10000,
     maxOutputBytes: 64 * 1024

@@ -2,331 +2,379 @@
   "schema": "sks.safety-mutation-allowlist.v1",
   "entries": [
     {
-      "file": "scripts/agent-codex-app-cockpit-check.mjs",
+      "file": "src/scripts/agent-codex-app-cockpit-check.ts",
       "symbol": "runFixture",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/agent-codex-child-overlap-check.mjs",
+      "file": "src/scripts/agent-codex-child-overlap-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/agent-real-codex-dynamic-smoke-check.mjs",
+      "file": "src/scripts/agent-real-codex-dynamic-smoke-check.ts",
       "symbol": "writeReport",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/agent-real-codex-patch-envelope-smoke.mjs",
+      "file": "src/scripts/agent-real-codex-patch-envelope-smoke.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/agent-real-codex-patch-envelope-smoke.mjs",
+      "file": "src/scripts/agent-real-codex-patch-envelope-smoke.ts",
       "symbol": "writeReport",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/agent-zellij-runtime-check.mjs",
+      "file": "src/scripts/agent-real-codex-in-zellij-worker-pane-check.ts",
+      "symbol": "emit",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes a scoped real Zellij worker-pane proof report under .sneakoscope/reports."
+    },
+    {
+      "file": "src/scripts/agent-zellij-runtime-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/blackbox-pack-install.mjs",
+      "file": "src/scripts/blackbox-pack-install.ts",
       "symbol": "cleanupInstallAttempt",
       "token": "rmSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/blackbox-pack-install.mjs",
+      "file": "src/scripts/blackbox-pack-install.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-0-133-official-compat-report.mjs",
+      "file": "src/scripts/codex-0-133-official-compat-report.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-0-134-official-compat-report.mjs",
+      "file": "src/scripts/codex-0-134-official-compat-report.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-0-134-runner-truth-check.mjs",
+      "file": "src/scripts/codex-0-134-runner-truth-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-0-135-compat-check.mjs",
+      "file": "src/scripts/codex-0-135-compat-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-0-136-compat-check.mjs",
+      "file": "src/scripts/codex-0-136-compat-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-config-eperm-fixture.mjs",
+      "file": "src/scripts/codex-config-eperm-fixture.ts",
       "symbol": "module",
       "token": "codex config write",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-config-eperm-fixture.mjs",
+      "file": "src/scripts/codex-config-eperm-fixture.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-config-load-probe.mjs",
+      "file": "src/scripts/codex-config-load-probe.ts",
       "symbol": "module",
       "token": "fs.rm",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-exec-output-schema-actual-syntax-check.mjs",
+      "file": "src/core/codex-app/codex-app-fast-ui-repair.ts",
+      "symbol": "repairCodexAppFastUi",
+      "token": "fs.writeFile",
+      "reason": "Codex App UI repair writes a scoped backup file before applying explicit user-approved repair."
+    },
+    {
+      "file": "src/scripts/codex-app-fast-ui-preservation-check.ts",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/codex-app-fast-ui-preservation-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/codex-app-ui-clobber-guard-check.ts",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/codex-app-ui-clobber-guard-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/codex-exec-output-schema-actual-syntax-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-history-search-check.mjs",
+      "file": "src/scripts/codex-history-search-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-lb-config-toml-safety-check.mjs",
+      "file": "src/scripts/codex-lb-config-toml-safety-check.ts",
       "symbol": "tripleTokens",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-project-config-policy-merge-regression.mjs",
+      "file": "src/scripts/codex-project-config-policy-merge-regression.ts",
       "symbol": "idxOf",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-project-config-policy-merge-regression.mjs",
+      "file": "src/scripts/codex-project-config-policy-merge-regression.ts",
       "symbol": "module",
       "token": "codex config write",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-project-config-policy-merge-regression.mjs",
+      "file": "src/scripts/codex-project-config-policy-merge-regression.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-project-config-policy-splitter-check.mjs",
+      "file": "src/scripts/codex-project-config-policy-splitter-check.ts",
       "symbol": "module",
       "token": "codex config write",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/codex-project-config-policy-splitter-check.mjs",
+      "file": "src/scripts/codex-project-config-policy-splitter-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/doctor-fix-recovers-corrupted-config-check.mjs",
+      "file": "src/scripts/doctor-fix-recovers-corrupted-config-check.ts",
       "symbol": "envTableHasMachineKey",
       "token": "codex config write",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/doctor-fix-recovers-corrupted-config-check.mjs",
+      "file": "src/scripts/doctor-fix-recovers-corrupted-config-check.ts",
       "symbol": "envTableHasMachineKey",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/fast-codex-service-tier-proof-check.mjs",
+      "file": "src/scripts/doctor-fixes-codex-app-fast-ui-check.ts",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/doctor-fixes-codex-app-fast-ui-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/fast-codex-service-tier-proof-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/fixtures/fake-codex-config-loader.mjs",
+      "file": "src/scripts/fixtures/fake-codex-config-loader.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/install-update-preserves-config-check.mjs",
+      "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "backups",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/install-update-preserves-config-check.mjs",
+      "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/lib/real-codex-parallel-gate.mjs",
+      "file": "src/scripts/lib/real-codex-parallel-gate.ts",
       "symbol": "runRealCodexParallelGate",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/lib/real-codex-parallel-proof-fixture.mjs",
+      "file": "src/scripts/lib/real-codex-parallel-proof-fixture.ts",
       "symbol": "buildFixtureProof",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/mad-sks-zellij-launch-check.mjs",
+      "file": "src/scripts/mad-sks-zellij-launch-check.ts",
       "symbol": "writeMadZellijLaunchGate",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/npm-publish-performance-check.mjs",
+      "file": "src/scripts/npm-publish-performance-check.ts",
       "symbol": "writeReport",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/postinstall-safe-side-effects-check.mjs",
+      "file": "src/scripts/postinstall-safe-side-effects-check.ts",
       "symbol": "postinstall",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-check-dynamic-execute.mjs",
+      "file": "src/scripts/release-check-dynamic-execute.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-check-dynamic.mjs",
+      "file": "src/scripts/release-check-dynamic.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-check-stamp.mjs",
+      "file": "src/scripts/release-check-stamp.ts",
       "symbol": "writeStamp",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-dynamic-performance-check.mjs",
+      "file": "src/scripts/release-dynamic-performance-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-gate-budget-check.mjs",
+      "file": "src/scripts/release-gate-budget-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-gate-planner.mjs",
+      "file": "src/scripts/release-gate-planner.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-metadata-1-19-check.mjs",
+      "file": "src/scripts/release-metadata-1-19-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-native-agent-fixture-check.mjs",
+      "file": "src/scripts/release-native-agent-fixture-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-provenance-check.mjs",
+      "file": "src/scripts/release-provenance-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-registry-check.mjs",
+      "file": "src/scripts/release-registry-check.ts",
       "symbol": "checkPublishAuth",
       "token": "writeFileSync",
       "reason": "Release registry auth preflight writes only the scoped release-publish-auth report under .sneakoscope/reports."
     },
     {
-      "file": "scripts/release-readiness-report.mjs",
+      "file": "src/scripts/release-readiness-report.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/release-version-truth-check.mjs",
+      "file": "src/scripts/release-version-truth-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/typescript-migration-report.mjs",
+      "file": "src/scripts/typescript-migration-report.ts",
       "symbol": "typedEntries",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/zellij-lane-renderer-check.mjs",
+      "file": "src/scripts/zellij-lane-renderer-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/zellij-launch-command-truth-check.mjs",
+      "file": "src/scripts/zellij-launch-command-truth-check.ts",
       "symbol": "walk",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/zellij-layout-valid-check.mjs",
+      "file": "src/scripts/zellij-layout-valid-check.ts",
       "symbol": "narutoFanoutPaneCount",
       "token": "fs.writeFile",
       "reason": "Release/check script writes a scoped temporary Zellij layout fixture; exact callsite is externally audited."
     },
     {
-      "file": "scripts/zellij-real-session-heartbeat-check.mjs",
+      "file": "src/scripts/zellij-real-session-heartbeat-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/zellij-real-session-launch-check.mjs",
+      "file": "src/scripts/zellij-real-session-launch-check.ts",
       "symbol": "module",
       "token": "fs.rm",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/zellij-real-session-launch-check.mjs",
+      "file": "src/scripts/zellij-real-session-launch-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "scripts/zellij-ui-design-check.mjs",
+      "file": "src/scripts/zellij-ui-design-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."

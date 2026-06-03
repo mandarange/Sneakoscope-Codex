@@ -1,6 +1,8 @@
 # Release Readiness
 
-SKS 1.21.9 is a Codex SDK Control Plane readiness patch. Native worker execution now routes through `@openai/codex-sdk` for thread/run/stream/schema control; Zellij remains the pane-level visual proof surface and links slot/generation/session records to SDK thread evidence.
+SKS 2.0.1 is the Codex App Fast UI preservation patch for the Codex SDK Control Plane release. Native worker execution routes through `runCodexTask`, UltraRouter records orchestrator/worker profile decisions, Reliability Shield hardens SDK streams, and Zellij remains the pane-level visual proof surface that links slot/generation/session records to SDK thread/provider/service-tier evidence.
+
+The 2.0.1 release gate keeps the 2.0.0 `codex-control:*` and `ultra-router:*` coverage, and adds Codex App UI snapshot/preservation/clobber-guard/doctor repair checks, provider badge context checks, Zellij spawn-on-demand provider/service-tier proof, worker-pane communication proof, no-production-MJS runtime checks, and the TypeScript/Python boundary check.
 
 SKS 1.21.8 continues to use OpenAI Codex CLI `rust-v0.136.0` as the current compatibility baseline while preserving the 0.135 routing/readiness fixes and inherited 0.134/0.133 matrices. Readiness records 0.136 session archive/unarchive commands, app-server `--stdio` and resumed-turn/status behavior, `CODEX_API_KEY` remote registration, short-lived remote-control server tokens, elevated Windows sandbox setup, feature-gated image-generation extension support, ChatGPT auth refresh/relogin-required handling, command-safety hardening, sandbox cleanup, Bedrock region fallback, and rmcp 1.7.0 compatibility. The local Codex App readiness check still reports user-config Fast UI blockers separately when `~/.codex/config.toml` contains top-level `model_reasoning_effort`.
 
@@ -10,11 +12,11 @@ Historical, live, or broader Codex/MAD/UX/PPT/DFix/Hook trust gates are reported
 
 ## Version, provenance, and side-effect readiness (1.21.0)
 
-`release:version-truth` is the version surface gate for 1.21.0. It verifies
+`release:version-truth` is the version surface gate. It verifies
 `package.json`, `package-lock.json`, `src/core/version.ts`, `src/core/fsx.ts`,
 `src/bin/sks.ts`, Cargo metadata/lockfile state, `dist/build-manifest.json`,
 CHANGELOG, README display text when present, and the generic
-`scripts/release-metadata-check.mjs` entrypoint.
+`dist/scripts/release-metadata-check.js` entrypoint built from `src/scripts/release-metadata-check.ts`.
 
 `release:provenance` writes `.sneakoscope/reports/release-provenance.json` with
 `reviewed_ref`, current commit, package/dist/src/Cargo versions, latest versioned
@@ -98,6 +100,19 @@ npm run proof:fake-real-policy-v2
 npm run release:runtime-truth-matrix
 npm run imagegen:capability
 npm run imagegen:gpt-image-2-request-validator
+npm run codex-control:capability
+npm run codex-control:no-legacy-fallback
+npm run codex-control:structured-output
+npm run codex-control:event-stream-ledger
+npm run codex-control:thread-registry
+npm run codex-control:side-effect-scope
+npm run codex-control:all-pipelines
+npm run codex-control:empty-result-retry
+npm run codex-control:stream-idle-watchdog
+npm run codex-control:tool-call-sequence-repair
+npm run codex-control:keepalive-no-cot-leak
+npm run ultra-router:classification
+npm run ultra-router:auto-router
 npm run codex:0.136-compat
 npm run codex:0.135-compat
 npm run codex:0.134-official-compat

@@ -96,37 +96,37 @@ export function affectedGlobsFor(id: string): string[] {
   const prefix = id.split(':')[0]
   switch (prefix) {
     case 'architecture':
-      return ['src/core/safety/ssot-guard.ts', 'src/core/pipeline-internals/runtime-core.ts', 'src/core/pipeline-internals/runtime-gates.ts', 'src/core/commands/team-command.ts', 'src/scripts/release-parallel-check.ts', 'scripts/architecture-guard-check.mjs', 'docs/architecture-ts-rust-boundary.md', 'package.json']
+      return ['src/core/safety/ssot-guard.ts', 'src/core/pipeline-internals/runtime-core.ts', 'src/core/pipeline-internals/runtime-gates.ts', 'src/core/commands/team-command.ts', 'src/scripts/release-parallel-check.ts', 'src/scripts/architecture-guard-check.ts', 'docs/architecture-ts-rust-boundary.md', 'package.json']
     case 'core-skill':
-      return ['src/core/skills/**', 'schemas/skills/**', 'scripts/core-skill-*.mjs']
+      return ['src/core/skills/**', 'schemas/skills/**', 'src/scripts/core-skill-*.ts']
     case 'zellij':
-      return ['src/core/zellij/**', 'scripts/zellij-*.mjs', 'templates/zellij/**', 'src/core/agents/zellij-lane-supervisor.ts']
+      return ['src/core/zellij/**', 'src/scripts/zellij-*.ts', 'templates/zellij/**', 'src/core/agents/zellij-lane-supervisor.ts']
     case 'safety':
-      return ['src/core/safety/**', 'scripts/side-effect-zero-gate-check.mjs', 'scripts/mutation-callsite-coverage-check.mjs', 'safety-mutation-allowlist.json']
+      return ['src/core/safety/**', 'src/scripts/side-effect-zero-gate-check.ts', 'src/scripts/mutation-callsite-coverage-check.ts', 'safety-mutation-allowlist.json']
     case 'side-effect':
-      return ['src/core/safety/**', 'scripts/side-effect-runtime-report-check.mjs', '.sneakoscope/missions/**/mutation-ledger.jsonl', '.sneakoscope/mutation-ledger.jsonl']
+      return ['src/core/safety/**', 'src/scripts/side-effect-runtime-report-check.ts', '.sneakoscope/missions/**/mutation-ledger.jsonl', '.sneakoscope/mutation-ledger.jsonl']
     case 'legacy':
-      return ['src/core/migration/**', 'src/core/codex/**', 'src/core/init.ts', 'src/cli/install-helpers.ts', 'scripts/legacy-upgrade-matrix-check.mjs']
+      return ['src/core/migration/**', 'src/core/codex/**', 'src/core/init.ts', 'src/cli/install-helpers.ts', 'src/scripts/legacy-upgrade-matrix-check.ts']
     case 'publish':
-      return ['package.json', '.npmignore', 'scripts/packlist-performance-check.mjs', 'scripts/npm-publish-performance-check.mjs', 'dist/**']
+      return ['package.json', '.npmignore', 'src/scripts/packlist-performance-check.ts', 'src/scripts/npm-publish-performance-check.ts', 'dist/**']
     case 'postinstall':
-      return ['src/cli/install-helpers.ts', 'src/core/init.ts', 'scripts/postinstall-safe-side-effects-check.mjs']
+      return ['src/cli/install-helpers.ts', 'src/core/init.ts', 'src/scripts/postinstall-safe-side-effects-check.ts']
     case 'runtime':
-      return ['src/**', 'scripts/runtime-*.mjs', 'scripts/build-dist.mjs', 'scripts/clean-dist.mjs', 'package.json']
+      return ['src/**', 'src/scripts/runtime-*.ts', 'src/scripts/build-dist.ts', 'src/scripts/clean-dist.ts', 'package.json']
     case 'agent':
     case 'team':
     case 'research':
     case 'qa':
     case 'naruto':
-      return ['src/core/agents/**', 'src/core/commands/**', `scripts/${prefix}-*.mjs`]
+      return ['src/core/agents/**', 'src/core/commands/**', `src/scripts/${prefix}-*.ts`]
     case 'codex':
     case 'codex-app':
     case 'codex-lb':
-      return ['src/core/codex/**', 'src/core/codex-app.ts', 'src/core/codex-lb-circuit.ts', `scripts/${prefix}-*.mjs`]
+      return ['src/core/codex/**', 'src/core/codex-app.ts', 'src/core/codex-lb-circuit.ts', `src/scripts/${prefix}-*.ts`]
     case 'release':
-      return ['src/core/release/**', 'src/scripts/release-parallel-check.ts', 'scripts/release-*.mjs', 'package.json']
+      return ['src/core/release/**', 'src/scripts/release-parallel-check.ts', 'src/scripts/release-*.ts', 'package.json']
     default:
-      return [`scripts/${prefix}-*.mjs`, `scripts/${id.replace(/:/g, '-')}-*.mjs`]
+      return [`src/scripts/${prefix}-*.ts`, `src/scripts/${id.replace(/:/g, '-')}-*.ts`]
   }
 }
 

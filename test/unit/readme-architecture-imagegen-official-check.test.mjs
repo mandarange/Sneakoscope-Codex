@@ -8,7 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const scriptPath = path.join(repoRoot, 'scripts', 'readme-architecture-imagegen-official-check.mjs');
+const scriptPath = path.join(repoRoot, 'dist', 'scripts', 'readme-architecture-imagegen-official-check.js');
 const fixtureImage = path.join(repoRoot, 'docs', 'assets', 'sneakoscope-architecture-pipeline.jpg');
 
 test('README architecture imagegen check blocks when official output is missing', async () => {

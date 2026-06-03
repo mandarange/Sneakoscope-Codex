@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
 function run(env = {}) {
-  return spawnSync(process.execPath, ['scripts/check-publish-tag.mjs'], {
+  return spawnSync(process.execPath, ['dist/scripts/check-publish-tag.js'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: { ...process.env, ...env }

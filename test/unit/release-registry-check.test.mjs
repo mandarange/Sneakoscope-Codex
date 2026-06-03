@@ -49,7 +49,7 @@ exec "${process.execPath}" "${fakeNpm}" "$@"
   await fs.chmod(path.join(bin, 'npm'), 0o755);
   await fs.writeFile(path.join(bin, 'npm.cmd'), `@echo off\r\n"${process.execPath}" "${fakeNpm}" %*\r\n`);
 
-  const result = spawnSync(process.execPath, ['scripts/release-registry-check.mjs', '--require-unpublished'], {
+  const result = spawnSync(process.execPath, ['dist/scripts/release-registry-check.js', '--require-unpublished'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: {
@@ -83,7 +83,7 @@ if (args[0] === 'whoami') {
 }
 `);
 
-  const result = spawnSync(process.execPath, ['scripts/release-registry-check.mjs', '--require-unpublished', '--require-publish-auth'], {
+  const result = spawnSync(process.execPath, ['dist/scripts/release-registry-check.js', '--require-unpublished', '--require-publish-auth'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: {
@@ -121,7 +121,7 @@ if (args[0] === 'view' && args[1] === 'sneakoscope' && args[2] === 'maintainers'
     ...process.env,
     PATH: `${bin}${path.delimiter}${process.env.PATH || ''}`
   };
-  const ok = spawnSync(process.execPath, ['scripts/release-registry-check.mjs', '--require-unpublished', '--require-publish-auth'], {
+  const ok = spawnSync(process.execPath, ['dist/scripts/release-registry-check.js', '--require-unpublished', '--require-publish-auth'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: baseEnv
@@ -129,7 +129,7 @@ if (args[0] === 'view' && args[1] === 'sneakoscope' && args[2] === 'maintainers'
   assert.equal(ok.status, 0, `${ok.stdout}\n${ok.stderr}`);
   assert.match(ok.stdout, /Publish auth check passed: sneakoscope@/);
 
-  const blocked = spawnSync(process.execPath, ['scripts/release-registry-check.mjs', '--require-unpublished', '--require-publish-auth'], {
+  const blocked = spawnSync(process.execPath, ['dist/scripts/release-registry-check.js', '--require-unpublished', '--require-publish-auth'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: { ...baseEnv, SKS_FAKE_NPM_USER: 'someone-else' }

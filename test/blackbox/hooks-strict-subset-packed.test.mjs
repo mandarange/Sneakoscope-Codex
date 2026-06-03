@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runProcess } from '../../dist/core/fsx.js';
 
 test('black-box hook strict subset check passes from packed dist', async () => {
-  const result = await runProcess(process.execPath, ['./scripts/codex-hook-strict-subset-check.mjs'], {
+  const result = await runProcess(process.execPath, ['./dist/scripts/codex-hook-strict-subset-check.js'], {
     env: { ...process.env, CI: 'true' },
     timeoutMs: 20_000,
     maxOutputBytes: 256 * 1024

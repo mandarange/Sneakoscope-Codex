@@ -12,6 +12,8 @@ export async function writeCodexControlProof(root: string, input: {
   sandbox?: Record<string, unknown> | null
   envProof?: Record<string, unknown> | null
   config?: Record<string, unknown> | null
+  reliabilityShield?: Record<string, unknown> | null
+  routerDecision?: Record<string, unknown> | null
   translatedEvents?: unknown[]
 }) {
   const proof = {
@@ -36,6 +38,8 @@ export async function writeCodexControlProof(root: string, input: {
     sandbox: input.sandbox || null,
     env: input.envProof || null,
     config: input.config ? redactCodexSdkConfig(input.config) : null,
+    reliability_shield: input.reliabilityShield || null,
+    ultra_router: input.routerDecision || null,
     capability: input.capability || null,
     translated_event_count: input.translatedEvents?.length || 0,
     blockers: input.result.blockers || []

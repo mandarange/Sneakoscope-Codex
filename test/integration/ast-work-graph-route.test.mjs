@@ -10,7 +10,7 @@ test('AST-aware work graph influences task graph work items', async () => {
       source_files: ['src/core/commands/agent-command.ts', 'src/core/agents/agent-cleanup-executor.ts'],
       tests: ['test/unit/agent-cleanup-executor-v2.test.mjs'],
       docs: ['docs/agent-cleanup-executor.md'],
-      scripts: ['scripts/agent-cleanup-executor-v2-check.mjs']
+      scripts: ['dist/scripts/agent-cleanup-executor-v2-check.js']
     },
     dependencyGraph: { edges: [{ from: 'src/core/commands/agent-command.ts', imports: ['src/core/agents/agent-cleanup-executor.ts'] }] },
     changedFiles: ['src/core/agents/agent-cleanup-executor.ts'],

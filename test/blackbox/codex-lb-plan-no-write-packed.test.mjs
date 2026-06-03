@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runProcess } from '../../dist/core/fsx.js';
 
 test('black-box codex-lb plan writes nothing', async () => {
-  const result = await runProcess(process.execPath, ['./scripts/codex-lb-persistence-truth-check.mjs'], {
+  const result = await runProcess(process.execPath, ['./dist/scripts/codex-lb-persistence-truth-check.js'], {
     env: { ...process.env, CI: 'true' },
     timeoutMs: 60_000,
     maxOutputBytes: 256 * 1024

@@ -8,7 +8,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -21,7 +21,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -34,7 +34,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -47,7 +47,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -60,7 +60,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -73,7 +73,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -86,7 +86,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -99,7 +99,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -112,7 +112,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -125,7 +125,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -138,7 +138,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -151,7 +151,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -164,7 +164,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -177,7 +177,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -190,7 +190,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -203,7 +203,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -216,7 +216,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -229,7 +229,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -242,7 +242,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -255,7 +255,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -268,7 +268,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -281,7 +281,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -294,7 +294,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -307,7 +307,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -320,7 +320,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -333,7 +333,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -346,7 +346,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -359,7 +359,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -372,7 +372,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -385,7 +385,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -398,7 +398,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -411,7 +411,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -424,7 +424,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -437,7 +437,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -450,7 +450,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -463,7 +463,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -476,7 +476,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -489,7 +489,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -502,7 +502,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -515,7 +515,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -528,7 +528,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -541,7 +541,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -554,7 +554,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -567,7 +567,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -580,7 +580,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -593,7 +593,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -606,7 +606,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -619,7 +619,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -632,7 +632,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -645,7 +645,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -658,7 +658,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -671,7 +671,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -684,7 +684,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -697,7 +697,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -710,7 +710,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -723,7 +723,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -736,7 +736,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -749,7 +749,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -762,7 +762,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -775,7 +775,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -788,7 +788,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -801,7 +801,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/agent-*.mjs"
+        "src/scripts/agent-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -812,8 +812,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/all-features-*.mjs",
-        "scripts/all-features-completion-*.mjs"
+        "src/scripts/all-features-*.ts",
+        "src/scripts/all-features-completion-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -824,8 +824,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/all-features-*.mjs",
-        "scripts/all-features-deep-completion-*.mjs"
+        "src/scripts/all-features-*.ts",
+        "src/scripts/all-features-deep-completion-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -836,8 +836,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/appshots-*.mjs",
-        "scripts/appshots-capability-*.mjs"
+        "src/scripts/appshots-*.ts",
+        "src/scripts/appshots-capability-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -848,8 +848,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/appshots-*.mjs",
-        "scripts/appshots-evidence-*.mjs"
+        "src/scripts/appshots-*.ts",
+        "src/scripts/appshots-evidence-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -860,8 +860,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/appshots-*.mjs",
-        "scripts/appshots-operator-policy-*.mjs"
+        "src/scripts/appshots-*.ts",
+        "src/scripts/appshots-operator-policy-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -872,8 +872,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/appshots-*.mjs",
-        "scripts/appshots-privacy-safety-*.mjs"
+        "src/scripts/appshots-*.ts",
+        "src/scripts/appshots-privacy-safety-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -884,8 +884,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/appshots-*.mjs",
-        "scripts/appshots-source-intelligence-*.mjs"
+        "src/scripts/appshots-*.ts",
+        "src/scripts/appshots-source-intelligence-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -896,8 +896,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/appshots-*.mjs",
-        "scripts/appshots-thread-attachment-discovery-*.mjs"
+        "src/scripts/appshots-*.ts",
+        "src/scripts/appshots-thread-attachment-discovery-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -908,8 +908,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/appshots-*.mjs",
-        "scripts/appshots-triwiki-voxel-*.mjs"
+        "src/scripts/appshots-*.ts",
+        "src/scripts/appshots-triwiki-voxel-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -925,7 +925,7 @@
         "src/core/pipeline-internals/runtime-gates.ts",
         "src/core/commands/team-command.ts",
         "src/scripts/release-parallel-check.ts",
-        "scripts/architecture-guard-check.mjs",
+        "src/scripts/architecture-guard-check.ts",
         "docs/architecture-ts-rust-boundary.md",
         "package.json"
       ],
@@ -938,8 +938,50 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/blackbox-*.mjs",
-        "scripts/blackbox-matrix-contract-*.mjs"
+        "src/scripts/blackbox-*.ts",
+        "src/scripts/blackbox-matrix-contract-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-app:fast-ui-preservation",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/codex/**",
+        "src/core/codex-app.ts",
+        "src/core/codex-lb-circuit.ts",
+        "src/scripts/codex-app-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-app:provider-badge",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/codex/**",
+        "src/core/codex-app.ts",
+        "src/core/codex-lb-circuit.ts",
+        "src/scripts/codex-app-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-app:ui-clobber-guard",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/codex/**",
+        "src/core/codex-app.ts",
+        "src/core/codex-lb-circuit.ts",
+        "src/scripts/codex-app-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -953,7 +995,139 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-app-*.mjs"
+        "src/scripts/codex-app-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:all-pipelines",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-all-pipelines-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:capability",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-capability-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:empty-result-retry",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-empty-result-retry-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:event-stream-ledger",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-event-stream-ledger-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:keepalive-no-cot-leak",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-keepalive-no-cot-leak-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:no-legacy-fallback",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-no-legacy-fallback-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:side-effect-scope",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-side-effect-scope-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:stream-idle-watchdog",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-stream-idle-watchdog-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:structured-output",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-structured-output-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:thread-registry",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-thread-registry-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex-control:tool-call-sequence-repair",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/codex-control-*.ts",
+        "src/scripts/codex-control-tool-call-sequence-repair-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -967,7 +1141,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-lb-*.mjs"
+        "src/scripts/codex-lb-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -981,7 +1155,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-lb-*.mjs"
+        "src/scripts/codex-lb-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -995,7 +1169,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-lb-*.mjs"
+        "src/scripts/codex-lb-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1006,8 +1180,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-all-pipelines-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-all-pipelines-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1018,8 +1192,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-backend-router-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-backend-router-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1030,8 +1204,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-capability-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-capability-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1042,8 +1216,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-core-skill-pipeline-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-core-skill-pipeline-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1054,8 +1228,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-dfix-pipeline-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-dfix-pipeline-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1066,8 +1240,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-event-stream-ledger-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-event-stream-ledger-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1078,8 +1252,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-no-legacy-fallback-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-no-legacy-fallback-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1090,8 +1264,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-qa-pipeline-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-qa-pipeline-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1102,8 +1276,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-release-review-pipeline-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-release-review-pipeline-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1114,8 +1288,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-research-pipeline-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-research-pipeline-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1126,8 +1300,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-sandbox-policy-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-sandbox-policy-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1138,8 +1312,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-structured-output-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-structured-output-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1150,8 +1324,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-team-naruto-agent-pipeline-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-team-naruto-agent-pipeline-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1162,8 +1336,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-thread-registry-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-thread-registry-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1174,8 +1348,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-ux-ppt-review-pipeline-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-ux-ppt-review-pipeline-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1186,8 +1360,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-sdk-*.mjs",
-        "scripts/codex-sdk-zellij-pane-binding-*.mjs"
+        "src/scripts/codex-sdk-*.ts",
+        "src/scripts/codex-sdk-zellij-pane-binding-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1198,8 +1372,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/codex-web-*.mjs",
-        "scripts/codex-web-adapter-*.mjs"
+        "src/scripts/codex-web-*.ts",
+        "src/scripts/codex-web-adapter-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1213,7 +1387,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1227,7 +1401,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1241,7 +1415,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1255,7 +1429,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1269,7 +1443,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1283,7 +1457,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1297,7 +1471,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1311,7 +1485,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1325,7 +1499,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1339,7 +1513,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1353,7 +1527,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1367,7 +1541,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1381,7 +1555,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1395,7 +1569,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1409,7 +1583,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1423,7 +1597,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1437,7 +1611,7 @@
         "src/core/codex/**",
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
-        "scripts/codex-*.mjs"
+        "src/scripts/codex-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1448,8 +1622,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/computer-use-*.mjs",
-        "scripts/computer-use-live-evidence-*.mjs"
+        "src/scripts/computer-use-*.ts",
+        "src/scripts/computer-use-live-evidence-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1460,8 +1634,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/computer-use-*.mjs",
-        "scripts/computer-use-visual-route-fixture-*.mjs"
+        "src/scripts/computer-use-*.ts",
+        "src/scripts/computer-use-visual-route-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1474,7 +1648,7 @@
       "affected_by": [
         "src/core/skills/**",
         "schemas/skills/**",
-        "scripts/core-skill-*.mjs"
+        "src/scripts/core-skill-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": true,
@@ -1487,7 +1661,7 @@
       "affected_by": [
         "src/core/skills/**",
         "schemas/skills/**",
-        "scripts/core-skill-*.mjs"
+        "src/scripts/core-skill-*.ts"
       ],
       "always_on_release": true,
       "required_for_publish": true,
@@ -1500,7 +1674,7 @@
       "affected_by": [
         "src/core/skills/**",
         "schemas/skills/**",
-        "scripts/core-skill-*.mjs"
+        "src/scripts/core-skill-*.ts"
       ],
       "always_on_release": true,
       "required_for_publish": true,
@@ -1513,7 +1687,7 @@
       "affected_by": [
         "src/core/skills/**",
         "schemas/skills/**",
-        "scripts/core-skill-*.mjs"
+        "src/scripts/core-skill-*.ts"
       ],
       "always_on_release": true,
       "required_for_publish": false,
@@ -1526,7 +1700,7 @@
       "affected_by": [
         "src/core/skills/**",
         "schemas/skills/**",
-        "scripts/core-skill-*.mjs"
+        "src/scripts/core-skill-*.ts"
       ],
       "always_on_release": true,
       "required_for_publish": true,
@@ -1539,7 +1713,7 @@
       "affected_by": [
         "src/core/skills/**",
         "schemas/skills/**",
-        "scripts/core-skill-*.mjs"
+        "src/scripts/core-skill-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": true,
@@ -1552,7 +1726,7 @@
       "affected_by": [
         "src/core/skills/**",
         "schemas/skills/**",
-        "scripts/core-skill-*.mjs"
+        "src/scripts/core-skill-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1565,7 +1739,7 @@
       "affected_by": [
         "src/core/skills/**",
         "schemas/skills/**",
-        "scripts/core-skill-*.mjs"
+        "src/scripts/core-skill-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": true,
@@ -1578,7 +1752,7 @@
       "affected_by": [
         "src/core/skills/**",
         "schemas/skills/**",
-        "scripts/core-skill-*.mjs"
+        "src/scripts/core-skill-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1589,8 +1763,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/dfix-*.mjs",
-        "scripts/dfix-blackbox-fast-*.mjs"
+        "src/scripts/dfix-*.ts",
+        "src/scripts/dfix-blackbox-fast-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1601,8 +1775,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/dfix-*.mjs",
-        "scripts/dfix-fast-kernel-*.mjs"
+        "src/scripts/dfix-*.ts",
+        "src/scripts/dfix-fast-kernel-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1613,8 +1787,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/dfix-*.mjs",
-        "scripts/dfix-fixture-*.mjs"
+        "src/scripts/dfix-*.ts",
+        "src/scripts/dfix-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1625,8 +1799,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/dfix-*.mjs",
-        "scripts/dfix-parallel-write-blackbox-*.mjs"
+        "src/scripts/dfix-*.ts",
+        "src/scripts/dfix-parallel-write-blackbox-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1637,8 +1811,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/dfix-*.mjs",
-        "scripts/dfix-patch-handoff-*.mjs"
+        "src/scripts/dfix-*.ts",
+        "src/scripts/dfix-patch-handoff-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1649,8 +1823,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/dfix-*.mjs",
-        "scripts/dfix-patch-swarm-route-blackbox-*.mjs"
+        "src/scripts/dfix-*.ts",
+        "src/scripts/dfix-patch-swarm-route-blackbox-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1661,8 +1835,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/dfix-*.mjs",
-        "scripts/dfix-performance-*.mjs"
+        "src/scripts/dfix-*.ts",
+        "src/scripts/dfix-performance-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1673,8 +1847,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/dfix-*.mjs",
-        "scripts/dfix-verification-*.mjs"
+        "src/scripts/dfix-*.ts",
+        "src/scripts/dfix-verification-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1685,8 +1859,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/dfix-*.mjs",
-        "scripts/dfix-verification-recommendation-*.mjs"
+        "src/scripts/dfix-*.ts",
+        "src/scripts/dfix-verification-recommendation-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1697,8 +1871,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/docs-*.mjs",
-        "scripts/docs-truthfulness-*.mjs"
+        "src/scripts/docs-*.ts",
+        "src/scripts/docs-truthfulness-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1709,8 +1883,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/doctor-*.mjs",
-        "scripts/doctor-codex-doctor-parity-*.mjs"
+        "src/scripts/doctor-*.ts",
+        "src/scripts/doctor-codex-doctor-parity-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1721,8 +1895,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/doctor-*.mjs",
-        "scripts/doctor-fix-proves-codex-read-*.mjs"
+        "src/scripts/doctor-*.ts",
+        "src/scripts/doctor-fix-proves-codex-read-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1733,8 +1907,20 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/doctor-*.mjs",
-        "scripts/doctor-fix-recovers-corrupted-config-*.mjs"
+        "src/scripts/doctor-*.ts",
+        "src/scripts/doctor-fix-recovers-corrupted-config-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "doctor:fixes-codex-app-fast-ui",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/doctor-*.ts",
+        "src/scripts/doctor-fixes-codex-app-fast-ui-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1745,8 +1931,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/evidence-*.mjs",
-        "scripts/evidence-flagship-coverage-*.mjs"
+        "src/scripts/evidence-*.ts",
+        "src/scripts/evidence-flagship-coverage-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1757,8 +1943,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/fast-*.mjs",
-        "scripts/fast-codex-service-tier-proof-*.mjs"
+        "src/scripts/fast-*.ts",
+        "src/scripts/fast-codex-service-tier-proof-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1769,8 +1955,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/flagship-*.mjs",
-        "scripts/flagship-proof-graph-v3-*.mjs"
+        "src/scripts/flagship-*.ts",
+        "src/scripts/flagship-proof-graph-v3-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1781,8 +1967,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/flagship-*.mjs",
-        "scripts/flagship-proof-graph-v4-*.mjs"
+        "src/scripts/flagship-*.ts",
+        "src/scripts/flagship-proof-graph-v4-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1793,8 +1979,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/git-collaboration-*.mjs",
-        "scripts/git-collaboration-e2e-*.mjs"
+        "src/scripts/git-collaboration-*.ts",
+        "src/scripts/git-collaboration-e2e-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1805,8 +1991,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/goal-mode-*.mjs",
-        "scripts/goal-mode-official-default-*.mjs"
+        "src/scripts/goal-mode-*.ts",
+        "src/scripts/goal-mode-official-default-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1817,8 +2003,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-0.134-context-parity-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-0.134-context-parity-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1829,8 +2015,8 @@
       "tier": "P1",
       "cost": "real",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-actual-parity-check-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-actual-parity-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1841,8 +2027,8 @@
       "tier": "P1",
       "cost": "real",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-actual-parity-v2-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-actual-parity-v2-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1853,8 +2039,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-latest-schema-check-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-latest-schema-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1865,8 +2051,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-managed-install-fixture-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-managed-install-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1877,8 +2063,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-no-unsupported-handlers-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-no-unsupported-handlers-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1889,8 +2075,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-official-hash-oracle-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-official-hash-oracle-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1901,8 +2087,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-official-hash-parity-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-official-hash-parity-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1913,8 +2099,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-runtime-replay-warning-zero-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-runtime-replay-warning-zero-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1925,8 +2111,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-runtime-replay-warning-zero-v2-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-runtime-replay-warning-zero-v2-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1937,8 +2123,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-strict-subset-check-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-strict-subset-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1949,8 +2135,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-subagent-events-check-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-subagent-events-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1961,8 +2147,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-trust-state-check-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-trust-state-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1973,8 +2159,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/hooks-*.mjs",
-        "scripts/hooks-trust-warning-zero-*.mjs"
+        "src/scripts/hooks-*.ts",
+        "src/scripts/hooks-trust-warning-zero-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1985,8 +2171,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/image-fidelity-*.mjs",
-        "scripts/image-fidelity-check-*.mjs"
+        "src/scripts/image-fidelity-*.ts",
+        "src/scripts/image-fidelity-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1997,8 +2183,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/imagegen-*.mjs",
-        "scripts/imagegen-capability-*.mjs"
+        "src/scripts/imagegen-*.ts",
+        "src/scripts/imagegen-capability-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2009,8 +2195,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/imagegen-*.mjs",
-        "scripts/imagegen-gpt-image-2-request-validator-*.mjs"
+        "src/scripts/imagegen-*.ts",
+        "src/scripts/imagegen-gpt-image-2-request-validator-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2021,8 +2207,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/install-*.mjs",
-        "scripts/install-update-preserves-config-*.mjs"
+        "src/scripts/install-*.ts",
+        "src/scripts/install-update-preserves-config-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2033,8 +2219,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/json-schema-*.mjs",
-        "scripts/json-schema-recursive-check-*.mjs"
+        "src/scripts/json-schema-*.ts",
+        "src/scripts/json-schema-recursive-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2049,7 +2235,7 @@
         "src/core/codex/**",
         "src/core/init.ts",
         "src/cli/install-helpers.ts",
-        "scripts/legacy-upgrade-matrix-check.mjs"
+        "src/scripts/legacy-upgrade-matrix-check.ts"
       ],
       "always_on_release": true,
       "required_for_publish": true,
@@ -2060,8 +2246,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/loop-blocker-*.mjs",
-        "scripts/loop-blocker-check-*.mjs"
+        "src/scripts/loop-blocker-*.ts",
+        "src/scripts/loop-blocker-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2072,8 +2258,8 @@
       "tier": "P1",
       "cost": "real",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-actual-executor-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-actual-executor-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2084,8 +2270,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-audit-proof-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-audit-proof-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2096,8 +2282,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-db-executor-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-db-executor-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2108,8 +2294,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-executor-proof-graph-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-executor-proof-graph-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2120,8 +2306,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-fast-mode-propagation-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-fast-mode-propagation-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2132,8 +2318,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-file-write-executor-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-file-write-executor-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2144,8 +2330,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-immutable-harness-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-immutable-harness-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2156,8 +2342,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-live-guard-smoke-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-live-guard-smoke-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2168,8 +2354,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-no-harness-modification-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-no-harness-modification-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2180,8 +2366,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-package-executor-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-package-executor-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2192,8 +2378,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-permission-model-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-permission-model-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2204,8 +2390,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-rollback-apply-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-rollback-apply-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2216,8 +2402,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-service-executor-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-service-executor-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2228,8 +2414,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-shell-executor-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-shell-executor-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2240,8 +2426,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-write-guard-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-write-guard-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2252,8 +2438,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-sks-*.mjs",
-        "scripts/mad-sks-zellij-launch-*.mjs"
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-zellij-launch-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2264,8 +2450,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mad-*.mjs",
-        "scripts/mad-preflight-blocks-unreadable-config-*.mjs"
+        "src/scripts/mad-*.ts",
+        "src/scripts/mad-preflight-blocks-unreadable-config-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2276,8 +2462,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mcp-*.mjs",
-        "scripts/mcp-0.134-modernization-*.mjs"
+        "src/scripts/mcp-*.ts",
+        "src/scripts/mcp-0.134-modernization-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2288,8 +2474,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mcp-*.mjs",
-        "scripts/mcp-readonly-concurrency-*.mjs"
+        "src/scripts/mcp-*.ts",
+        "src/scripts/mcp-readonly-concurrency-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2300,8 +2486,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mcp-*.mjs",
-        "scripts/mcp-readonly-runtime-scheduler-*.mjs"
+        "src/scripts/mcp-*.ts",
+        "src/scripts/mcp-readonly-runtime-scheduler-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2312,8 +2498,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/mcp-*.mjs",
-        "scripts/mcp-tool-naming-parity-*.mjs"
+        "src/scripts/mcp-*.ts",
+        "src/scripts/mcp-tool-naming-parity-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2324,8 +2510,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/memory-summary-*.mjs",
-        "scripts/memory-summary-rebuild-check-*.mjs"
+        "src/scripts/memory-summary-*.ts",
+        "src/scripts/memory-summary-rebuild-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2338,7 +2524,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/naruto-*.mjs"
+        "src/scripts/naruto-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2349,8 +2535,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/official-docs-*.mjs",
-        "scripts/official-docs-compat-*.mjs"
+        "src/scripts/official-docs-*.ts",
+        "src/scripts/official-docs-compat-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2361,8 +2547,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/perf-*.mjs",
-        "scripts/perf-gate-*.mjs"
+        "src/scripts/perf-*.ts",
+        "src/scripts/perf-gate-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2375,7 +2561,7 @@
       "affected_by": [
         "src/cli/install-helpers.ts",
         "src/core/init.ts",
-        "scripts/postinstall-safe-side-effects-check.mjs"
+        "src/scripts/postinstall-safe-side-effects-check.ts"
       ],
       "always_on_release": true,
       "required_for_publish": true,
@@ -2386,8 +2572,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-full-e2e-artifact-graph-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-full-e2e-artifact-graph-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2398,8 +2584,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-full-e2e-blackbox-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-full-e2e-blackbox-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2410,8 +2596,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-image-voxel-relations-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-image-voxel-relations-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2422,8 +2608,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-imagegen-blackbox-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-imagegen-blackbox-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2434,8 +2620,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-imagegen-review-fixture-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-imagegen-review-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2446,8 +2632,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-issue-extraction-fixture-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-issue-extraction-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2458,8 +2644,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-no-mock-as-real-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-no-mock-as-real-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2470,8 +2656,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-no-text-fallback-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-no-text-fallback-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2482,8 +2668,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-proof-trust-fixture-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-proof-trust-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2494,8 +2680,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-real-export-adapter-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-real-export-adapter-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2506,8 +2692,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-real-imagegen-wiring-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-real-imagegen-wiring-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2518,8 +2704,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-reexport-rereview-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-reexport-rereview-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2530,8 +2716,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ppt-*.mjs",
-        "scripts/ppt-slide-export-fixture-*.mjs"
+        "src/scripts/ppt-*.ts",
+        "src/scripts/ppt-slide-export-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2542,8 +2728,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/priority-*.mjs",
-        "scripts/priority-full-closure-*.mjs"
+        "src/scripts/priority-*.ts",
+        "src/scripts/priority-full-closure-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2554,8 +2740,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/proof-*.mjs",
-        "scripts/proof-fake-real-policy-v2-*.mjs"
+        "src/scripts/proof-*.ts",
+        "src/scripts/proof-fake-real-policy-v2-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2566,8 +2752,20 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/proof-*.mjs",
-        "scripts/proof-fake-vs-real-policy-*.mjs"
+        "src/scripts/proof-*.ts",
+        "src/scripts/proof-fake-vs-real-policy-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "provider:badge-context",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/provider-*.ts",
+        "src/scripts/provider-badge-context-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2580,8 +2778,8 @@
       "affected_by": [
         "package.json",
         ".npmignore",
-        "scripts/packlist-performance-check.mjs",
-        "scripts/npm-publish-performance-check.mjs",
+        "src/scripts/packlist-performance-check.ts",
+        "src/scripts/npm-publish-performance-check.ts",
         "dist/**"
       ],
       "always_on_release": true,
@@ -2595,7 +2793,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/qa-*.mjs"
+        "src/scripts/qa-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2608,7 +2806,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/qa-*.mjs"
+        "src/scripts/qa-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2621,7 +2819,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": false,
@@ -2635,7 +2833,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": true,
@@ -2649,7 +2847,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": false,
@@ -2663,7 +2861,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": true,
@@ -2677,7 +2875,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": false,
@@ -2691,7 +2889,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": true,
@@ -2705,7 +2903,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": false,
@@ -2719,7 +2917,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": false,
@@ -2733,7 +2931,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": true,
@@ -2747,7 +2945,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": true,
@@ -2761,7 +2959,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": false,
@@ -2775,7 +2973,7 @@
       "affected_by": [
         "src/core/release/**",
         "src/scripts/release-parallel-check.ts",
-        "scripts/release-*.mjs",
+        "src/scripts/release-*.ts",
         "package.json"
       ],
       "always_on_release": true,
@@ -2789,7 +2987,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/research-*.mjs"
+        "src/scripts/research-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2802,7 +3000,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/research-*.mjs"
+        "src/scripts/research-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2813,8 +3011,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/responses-*.mjs",
-        "scripts/responses-retry-policy-centralized-*.mjs"
+        "src/scripts/responses-*.ts",
+        "src/scripts/responses-retry-policy-centralized-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2825,8 +3023,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/retention-*.mjs",
-        "scripts/retention-cleanup-safety-*.mjs"
+        "src/scripts/retention-*.ts",
+        "src/scripts/retention-cleanup-safety-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2837,8 +3035,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/route-*.mjs",
-        "scripts/route-blackbox-realism-*.mjs"
+        "src/scripts/route-*.ts",
+        "src/scripts/route-blackbox-realism-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2849,8 +3047,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/routes-*.mjs",
-        "scripts/routes-proof-artifact-structure-*.mjs"
+        "src/scripts/routes-*.ts",
+        "src/scripts/routes-proof-artifact-structure-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2862,13 +3060,28 @@
       "cost": "hermetic",
       "affected_by": [
         "src/**",
-        "scripts/runtime-*.mjs",
-        "scripts/build-dist.mjs",
-        "scripts/clean-dist.mjs",
+        "src/scripts/runtime-*.ts",
+        "src/scripts/build-dist.ts",
+        "src/scripts/clean-dist.ts",
         "package.json"
       ],
       "always_on_release": true,
       "required_for_publish": true,
+      "can_run_incremental": true
+    },
+    {
+      "id": "runtime:no-mjs-scripts",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/**",
+        "src/scripts/runtime-*.ts",
+        "src/scripts/build-dist.ts",
+        "src/scripts/clean-dist.ts",
+        "package.json"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
       "can_run_incremental": true
     },
     {
@@ -2877,9 +3090,9 @@
       "cost": "hermetic",
       "affected_by": [
         "src/**",
-        "scripts/runtime-*.mjs",
-        "scripts/build-dist.mjs",
-        "scripts/clean-dist.mjs",
+        "src/scripts/runtime-*.ts",
+        "src/scripts/build-dist.ts",
+        "src/scripts/clean-dist.ts",
         "package.json"
       ],
       "always_on_release": true,
@@ -2892,12 +3105,27 @@
       "cost": "hermetic",
       "affected_by": [
         "src/**",
-        "scripts/runtime-*.mjs",
-        "scripts/build-dist.mjs",
-        "scripts/clean-dist.mjs",
+        "src/scripts/runtime-*.ts",
+        "src/scripts/build-dist.ts",
+        "src/scripts/clean-dist.ts",
         "package.json"
       ],
       "always_on_release": true,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "runtime:ts-python-boundary",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/**",
+        "src/scripts/runtime-*.ts",
+        "src/scripts/build-dist.ts",
+        "src/scripts/clean-dist.ts",
+        "package.json"
+      ],
+      "always_on_release": false,
       "required_for_publish": false,
       "can_run_incremental": true
     },
@@ -2907,9 +3135,9 @@
       "cost": "hermetic",
       "affected_by": [
         "src/**",
-        "scripts/runtime-*.mjs",
-        "scripts/build-dist.mjs",
-        "scripts/clean-dist.mjs",
+        "src/scripts/runtime-*.ts",
+        "src/scripts/build-dist.ts",
+        "src/scripts/clean-dist.ts",
         "package.json"
       ],
       "always_on_release": true,
@@ -2922,9 +3150,9 @@
       "cost": "hermetic",
       "affected_by": [
         "src/**",
-        "scripts/runtime-*.mjs",
-        "scripts/build-dist.mjs",
-        "scripts/clean-dist.mjs",
+        "src/scripts/runtime-*.ts",
+        "src/scripts/build-dist.ts",
+        "src/scripts/clean-dist.ts",
         "package.json"
       ],
       "always_on_release": true,
@@ -2936,8 +3164,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/rust-*.mjs",
-        "scripts/rust-check-*.mjs"
+        "src/scripts/rust-*.ts",
+        "src/scripts/rust-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2948,8 +3176,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/rust-*.mjs",
-        "scripts/rust-smoke-*.mjs"
+        "src/scripts/rust-*.ts",
+        "src/scripts/rust-smoke-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2961,8 +3189,8 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/safety/**",
-        "scripts/side-effect-zero-gate-check.mjs",
-        "scripts/mutation-callsite-coverage-check.mjs",
+        "src/scripts/side-effect-zero-gate-check.ts",
+        "src/scripts/mutation-callsite-coverage-check.ts",
         "safety-mutation-allowlist.json"
       ],
       "always_on_release": false,
@@ -2975,8 +3203,8 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/safety/**",
-        "scripts/side-effect-zero-gate-check.mjs",
-        "scripts/mutation-callsite-coverage-check.mjs",
+        "src/scripts/side-effect-zero-gate-check.ts",
+        "src/scripts/mutation-callsite-coverage-check.ts",
         "safety-mutation-allowlist.json"
       ],
       "always_on_release": true,
@@ -2989,8 +3217,8 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/safety/**",
-        "scripts/side-effect-zero-gate-check.mjs",
-        "scripts/mutation-callsite-coverage-check.mjs",
+        "src/scripts/side-effect-zero-gate-check.ts",
+        "src/scripts/mutation-callsite-coverage-check.ts",
         "safety-mutation-allowlist.json"
       ],
       "always_on_release": true,
@@ -3002,8 +3230,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/schema-*.mjs",
-        "scripts/schema-check-*.mjs"
+        "src/scripts/schema-*.ts",
+        "src/scripts/schema-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3014,8 +3242,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/shared-memory-*.mjs",
-        "scripts/shared-memory-check-*.mjs"
+        "src/scripts/shared-memory-*.ts",
+        "src/scripts/shared-memory-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3027,7 +3255,7 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/safety/**",
-        "scripts/side-effect-runtime-report-check.mjs",
+        "src/scripts/side-effect-runtime-report-check.ts",
         ".sneakoscope/missions/**/mutation-ledger.jsonl",
         ".sneakoscope/mutation-ledger.jsonl"
       ],
@@ -3040,8 +3268,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/source-intelligence-*.mjs",
-        "scripts/source-intelligence-all-modes-*.mjs"
+        "src/scripts/source-intelligence-*.ts",
+        "src/scripts/source-intelligence-all-modes-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3052,8 +3280,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/source-intelligence-*.mjs",
-        "scripts/source-intelligence-codex-history-search-*.mjs"
+        "src/scripts/source-intelligence-*.ts",
+        "src/scripts/source-intelligence-codex-history-search-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3064,8 +3292,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/source-intelligence-*.mjs",
-        "scripts/source-intelligence-policy-*.mjs"
+        "src/scripts/source-intelligence-*.ts",
+        "src/scripts/source-intelligence-policy-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3076,8 +3304,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/strategy-*.mjs",
-        "scripts/strategy-adhd-orchestrating-gate-*.mjs"
+        "src/scripts/strategy-*.ts",
+        "src/scripts/strategy-adhd-orchestrating-gate-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3088,8 +3316,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/strategy-*.mjs",
-        "scripts/strategy-file-ownership-plan-*.mjs"
+        "src/scripts/strategy-*.ts",
+        "src/scripts/strategy-file-ownership-plan-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3100,8 +3328,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/strategy-*.mjs",
-        "scripts/strategy-parallel-modification-plan-*.mjs"
+        "src/scripts/strategy-*.ts",
+        "src/scripts/strategy-parallel-modification-plan-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3112,8 +3340,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/strategy-*.mjs",
-        "scripts/strategy-verification-rollback-dag-*.mjs"
+        "src/scripts/strategy-*.ts",
+        "src/scripts/strategy-verification-rollback-dag-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3126,7 +3354,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/team-*.mjs"
+        "src/scripts/team-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3139,7 +3367,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/team-*.mjs"
+        "src/scripts/team-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3152,7 +3380,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/team-*.mjs"
+        "src/scripts/team-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3165,7 +3393,7 @@
       "affected_by": [
         "src/core/agents/**",
         "src/core/commands/**",
-        "scripts/team-*.mjs"
+        "src/scripts/team-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3176,8 +3404,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/terminal-*.mjs",
-        "scripts/terminal-keyboard-enhancement-safety-*.mjs"
+        "src/scripts/terminal-*.ts",
+        "src/scripts/terminal-keyboard-enhancement-safety-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3188,8 +3416,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/terminal-*.mjs",
-        "scripts/terminal-tui-output-stability-*.mjs"
+        "src/scripts/terminal-*.ts",
+        "src/scripts/terminal-tui-output-stability-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3200,8 +3428,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/test-*.mjs",
-        "scripts/test-blackbox-*.mjs"
+        "src/scripts/test-*.ts",
+        "src/scripts/test-blackbox-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3212,8 +3440,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/test-*.mjs",
-        "scripts/test-no-orphan-dist-imports-*.mjs"
+        "src/scripts/test-*.ts",
+        "src/scripts/test-no-orphan-dist-imports-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3224,8 +3452,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/trust-*.mjs",
-        "scripts/trust-check-*.mjs"
+        "src/scripts/trust-*.ts",
+        "src/scripts/trust-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3236,8 +3464,32 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/typecheck-*.mjs",
-        "scripts/typecheck-*.mjs"
+        "src/scripts/typecheck-*.ts",
+        "src/scripts/typecheck-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "ultra-router:auto-router",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/ultra-router-*.ts",
+        "src/scripts/ultra-router-auto-router-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "ultra-router:classification",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/ultra-router-*.ts",
+        "src/scripts/ultra-router-classification-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3248,8 +3500,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-ppt-*.mjs",
-        "scripts/ux-ppt-structured-extraction-*.mjs"
+        "src/scripts/ux-ppt-*.ts",
+        "src/scripts/ux-ppt-structured-extraction-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3260,8 +3512,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-extract-real-callouts-fixture-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-extract-real-callouts-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3272,8 +3524,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-extract-wires-real-extractor-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-extract-wires-real-extractor-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3284,8 +3536,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-generate-callouts-fixture-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-generate-callouts-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3296,8 +3548,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-image-voxel-relations-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-image-voxel-relations-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3308,8 +3560,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-imagegen-blackbox-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-imagegen-blackbox-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3320,8 +3572,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-no-fake-callouts-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-no-fake-callouts-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3332,8 +3584,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-no-text-fallback-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-no-text-fallback-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3344,8 +3596,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-patch-diff-recheck-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-patch-diff-recheck-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3356,8 +3608,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-patch-handoff-fixture-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-patch-handoff-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3368,8 +3620,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-real-loop-fixture-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-real-loop-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3380,8 +3632,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-recapture-recheck-fixture-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-recapture-recheck-fixture-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3392,8 +3644,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/ux-review-*.mjs",
-        "scripts/ux-review-run-wires-imagegen-*.mjs"
+        "src/scripts/ux-review-*.ts",
+        "src/scripts/ux-review-run-wires-imagegen-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3404,8 +3656,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/verification-*.mjs",
-        "scripts/verification-parallel-engine-*.mjs"
+        "src/scripts/verification-*.ts",
+        "src/scripts/verification-parallel-engine-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3416,8 +3668,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/wrongness-*.mjs",
-        "scripts/wrongness-check-*.mjs"
+        "src/scripts/wrongness-*.ts",
+        "src/scripts/wrongness-check-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3428,8 +3680,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/wrongness-*.mjs",
-        "scripts/wrongness-fixtures-*.mjs"
+        "src/scripts/wrongness-*.ts",
+        "src/scripts/wrongness-fixtures-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3440,8 +3692,8 @@
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
-        "scripts/xai-mcp-*.mjs",
-        "scripts/xai-mcp-capability-*.mjs"
+        "src/scripts/xai-mcp-*.ts",
+        "src/scripts/xai-mcp-capability-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3453,7 +3705,7 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/zellij/**",
-        "scripts/zellij-*.mjs",
+        "src/scripts/zellij-*.ts",
         "templates/zellij/**",
         "src/core/agents/zellij-lane-supervisor.ts"
       ],
@@ -3467,7 +3719,7 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/zellij/**",
-        "scripts/zellij-*.mjs",
+        "src/scripts/zellij-*.ts",
         "templates/zellij/**",
         "src/core/agents/zellij-lane-supervisor.ts"
       ],
@@ -3481,7 +3733,7 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/zellij/**",
-        "scripts/zellij-*.mjs",
+        "src/scripts/zellij-*.ts",
         "templates/zellij/**",
         "src/core/agents/zellij-lane-supervisor.ts"
       ],
@@ -3495,7 +3747,7 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/zellij/**",
-        "scripts/zellij-*.mjs",
+        "src/scripts/zellij-*.ts",
         "templates/zellij/**",
         "src/core/agents/zellij-lane-supervisor.ts"
       ],
@@ -3509,7 +3761,7 @@
       "cost": "real",
       "affected_by": [
         "src/core/zellij/**",
-        "scripts/zellij-*.mjs",
+        "src/scripts/zellij-*.ts",
         "templates/zellij/**",
         "src/core/agents/zellij-lane-supervisor.ts"
       ],
@@ -3523,7 +3775,7 @@
       "cost": "real",
       "affected_by": [
         "src/core/zellij/**",
-        "scripts/zellij-*.mjs",
+        "src/scripts/zellij-*.ts",
         "templates/zellij/**",
         "src/core/agents/zellij-lane-supervisor.ts"
       ],
@@ -3537,7 +3789,7 @@
       "cost": "real",
       "affected_by": [
         "src/core/zellij/**",
-        "scripts/zellij-*.mjs",
+        "src/scripts/zellij-*.ts",
         "templates/zellij/**",
         "src/core/agents/zellij-lane-supervisor.ts"
       ],
@@ -3551,7 +3803,7 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/zellij/**",
-        "scripts/zellij-*.mjs",
+        "src/scripts/zellij-*.ts",
         "templates/zellij/**",
         "src/core/agents/zellij-lane-supervisor.ts"
       ],
@@ -3565,7 +3817,7 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/zellij/**",
-        "scripts/zellij-*.mjs",
+        "src/scripts/zellij-*.ts",
         "templates/zellij/**",
         "src/core/agents/zellij-lane-supervisor.ts"
       ],
@@ -3579,7 +3831,7 @@
       "cost": "hermetic",
       "affected_by": [
         "src/core/zellij/**",
-        "scripts/zellij-*.mjs",
+        "src/scripts/zellij-*.ts",
         "templates/zellij/**",
         "src/core/agents/zellij-lane-supervisor.ts"
       ],

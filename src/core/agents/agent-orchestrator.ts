@@ -934,7 +934,7 @@ function buildDirectSdkWorkerPrompt(slice: any) {
     String(slice?.description || slice?.title || 'Complete the assigned worker task.'),
     '',
     write.length
-      ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}.`
+      ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}. Each patch envelope must include schema, source "model_authored", agent_id, session_id, slot_id, generation_index, task_slice_id, lease_id, allowed_paths, operations, and rationale. Each operation must include op, path, search, replace, content, and diff; use empty strings for operation fields that do not apply.`
       : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}.`,
     'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
   ].join('\n')

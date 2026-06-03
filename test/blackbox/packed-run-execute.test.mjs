@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runProcess } from '../../dist/core/fsx.js';
 
 test('pack install black-box contract includes packed sks run --execute', async () => {
-  const result = await runProcess(process.execPath, ['scripts/blackbox-pack-install.mjs', '--dry-run', '--json'], {
+  const result = await runProcess(process.execPath, ['dist/scripts/blackbox-pack-install.js', '--dry-run', '--json'], {
     cwd: process.cwd(),
     timeoutMs: 30_000,
     maxOutputBytes: 64 * 1024,

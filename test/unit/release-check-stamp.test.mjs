@@ -13,7 +13,7 @@ test('release-check stamp can be written and verified without rerunning release:
   const stamp = path.join(tmp, 'stamp.json');
   const env = { ...process.env, SKS_RELEASE_STAMP_PATH: stamp };
 
-  const write = spawnSync(process.execPath, ['scripts/release-check-stamp.mjs', 'write'], {
+  const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'write'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env
@@ -21,7 +21,7 @@ test('release-check stamp can be written and verified without rerunning release:
   assert.equal(write.status, 0, write.stderr);
   assert.match(write.stdout, /Release check stamp written/);
 
-  const verify = spawnSync(process.execPath, ['scripts/release-check-stamp.mjs', 'verify'], {
+  const verify = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'verify'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env
@@ -43,10 +43,10 @@ test('release-check stamp ensure refreshes a stale publish stamp', async () => {
   const env = {
     ...process.env,
     SKS_RELEASE_STAMP_PATH: stamp,
-    SKS_RELEASE_CHECK_REFRESH_COMMAND: `${JSON.stringify(process.execPath)} ./scripts/release-check-stamp.mjs write`
+    SKS_RELEASE_CHECK_REFRESH_COMMAND: `${JSON.stringify(process.execPath)} ./dist/scripts/release-check-stamp.js write`
   };
 
-  const ensure = spawnSync(process.execPath, ['scripts/release-check-stamp.mjs', 'ensure'], {
+  const ensure = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'ensure'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env

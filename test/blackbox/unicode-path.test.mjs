@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runProcess } from '../../dist/core/fsx.js';
 
 test('real blackbox matrix tracks Korean/Unicode path coverage', async () => {
-  const result = await runProcess(process.execPath, ['scripts/blackbox-matrix.mjs', '--contract'], {
+  const result = await runProcess(process.execPath, ['dist/scripts/blackbox-matrix.js', '--contract'], {
     cwd: process.cwd(),
     timeoutMs: 30_000,
     maxOutputBytes: 64 * 1024,

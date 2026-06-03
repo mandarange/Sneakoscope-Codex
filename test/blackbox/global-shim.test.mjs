@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runProcess } from '../../dist/core/fsx.js';
 
 test('global shim black-box script supports dry-run proof shape', async () => {
-  const result = await runProcess(process.execPath, ['scripts/blackbox-global-shim.mjs', '--dry-run', '--json'], {
+  const result = await runProcess(process.execPath, ['dist/scripts/blackbox-global-shim.js', '--dry-run', '--json'], {
     cwd: process.cwd(),
     timeoutMs: 30_000,
     maxOutputBytes: 64 * 1024,

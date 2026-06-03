@@ -40,20 +40,34 @@ async function checkRecord(root: string, record: any) {
   const intakePath = path.join(root, String(record.worker_intake || path.join(workerDir, 'worker-intake.json')))
   const processReportPath = path.join(root, workerDir, 'worker-process-report.json')
   const panePath = path.join(root, workerDir, 'zellij-worker-pane.json')
+  const codexControlProofPath = path.join(root, workerDir, 'codex-control-proof.json')
+  const eventsPath = path.join(root, workerDir, 'zellij-worker-pane-events.jsonl')
   const heartbeatText = await readText(heartbeatPath)
+  const eventsText = await readText(eventsPath)
   const result = await readJson<any>(resultPath, null)
   const processReport = await readJson<any>(processReportPath, null)
   const pane = await readJson<any>(panePath, null)
+  const codexControlProof = await readJson<any>(codexControlProofPath, null)
   const patchPath = record.patch_envelope_path ? path.join(root, String(record.patch_envelope_path)) : path.join(root, workerDir, 'worker-patch-envelope.json')
   const noPatchPath = path.join(root, workerDir, 'worker-no-patch-reason.json')
   const intakeExists = await exists(intakePath)
   const patchOrNoPatchExists = await exists(patchPath) || await exists(noPatchPath)
+  const events = eventsText.trim().split(/\r?\n/).filter(Boolean).map((line) => {
+    try { return JSON.parse(line) } catch { return { event_type: 'parse_error' } }
+  })
+  const eventTypes = events.map((event) => String(event.event_type || event.event || ''))
+  const resultObserved = eventTypes.includes('result_written')
+  const paneClosedObserved = eventTypes.includes('pane_closed')
   const blockers = [
     ...(!intakeExists ? ['worker_pane_contract_intake_missing'] : []),
     ...(!result ? ['worker_pane_contract_result_missing'] : []),
     ...(!heartbeatText.trim() ? ['worker_pane_contract_heartbeat_missing'] : []),
     ...(!processReport ? ['worker_pane_contract_process_report_missing'] : []),
+    ...(!codexControlProof ? ['worker_pane_contract_codex_control_proof_missing'] : []),
     ...(!pane ? ['worker_pane_contract_pane_artifact_missing'] : []),
+    ...(!eventsText.trim() ? ['worker_pane_contract_events_missing'] : []),
+    ...(eventsText.trim() && !resultObserved ? ['worker_pane_contract_result_event_missing'] : []),
+    ...(eventsText.trim() && !paneClosedObserved ? ['worker_pane_contract_pane_closed_event_missing'] : []),
     ...(!patchOrNoPatchExists ? ['worker_pane_contract_patch_or_no_patch_missing'] : []),
     ...(pane && pane.parent_child_transport !== 'worker-result-json-and-heartbeat' ? ['worker_pane_contract_transport_mismatch'] : [])
   ]
@@ -65,9 +79,12 @@ async function checkRecord(root: string, record: any) {
     result_path: resultPath,
     heartbeat_path: heartbeatPath,
     process_report_path: processReportPath,
+    codex_control_proof_path: codexControlProofPath,
     pane_path: panePath,
+    events_path: eventsPath,
     result_status: result?.status || null,
     heartbeat_lines: heartbeatText.trim() ? heartbeatText.trim().split(/\r?\n/).length : 0,
+    event_types: eventTypes,
     worker_process_id: processReport?.pid || null,
     pane_id: pane?.pane_id || null,
     blockers
