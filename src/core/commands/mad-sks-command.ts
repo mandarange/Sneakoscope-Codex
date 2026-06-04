@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { appendJsonlBounded, exists, nowIso, packageRoot, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
 import { createMission, setCurrent } from '../mission.js';
-import { enableMadHighProfile, madHighProfileName } from '../auto-review.js';
+import { buildMadHighLaunchProfileNoWrite, madHighProfileName } from '../auto-review.js';
 import { permissionGateSummary } from '../permission-gates.js';
 import { attachZellijSessionInteractive, launchMadZellijUi, sanitizeZellijSessionName } from '../zellij/zellij-launcher.js';
 import { createMadSksAuthorizationManifest, validateMadSksAuthorizationManifest } from '../mad-sks/authorization-manifest.js';
@@ -17,6 +17,7 @@ import { runMadSksExecutor } from '../mad-sks/executors/index.js';
 import { applyMadSksRollbackPlan } from '../mad-sks/rollback-apply.js';
 import { repairCodexConfigEperm } from '../codex/codex-config-eperm-repair.js';
 import { runCodexLaunchPreflight } from '../preflight/parallel-preflight-engine.js';
+import { diffCodexAppUiSnapshots, writeCodexAppUiSnapshot } from '../codex-app/codex-app-ui-state-snapshot.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
@@ -24,7 +25,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
 
   const cleanArgs = stripMadLaunchOnlyArgs(args);
   if (args.includes('--json')) {
-    const profile = await enableMadHighProfile();
+    const profile = buildMadHighLaunchProfileNoWrite();
     return console.log(JSON.stringify(profile, null, 2));
   }
   const update = deps.maybePromptSksUpdateForLaunch ? await deps.maybePromptSksUpdateForLaunch(args, { label: 'MAD launch' }) : { status: 'skipped' };
@@ -55,15 +56,27 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     process.exitCode = 1;
     return;
   }
-  const profile = await enableMadHighProfile();
+  const profile = buildMadHighLaunchProfileNoWrite();
   const launchRoot = process.cwd();
   if (!(await exists(path.join(launchRoot, '.sneakoscope')))) await initProject(launchRoot, {});
+  const uiSnapshotId = Date.now().toString(36);
+  const beforeUi = await writeCodexAppUiSnapshot(launchRoot, `mad-before-${uiSnapshotId}`).catch(() => null);
   // launchFast skips the redundant live-`codex exec` config probe (up to ~20s, run
   // up to 3x via repair re-inspections): the real codex profile is exercised moments
   // later when the Zellij session opens. All filesystem/permission/EPERM/symlink/ACL
   // readability + repair checks still run. SKS_LAUNCH_FULL_CODEX_PROBE=1 restores the
   // old behavior.
-  const launchPreflight = await runCodexLaunchPreflight(launchRoot, { fix: true, launchFast: process.env.SKS_LAUNCH_FULL_CODEX_PROBE !== '1', profile: profile.profile_name, sandbox: 'danger-full-access', serviceTier: 'fast' });
+  const rawArgs = (args || []).map((arg: any) => String(arg));
+  const allowMadRepair = rawArgs.includes('--repair-config') || rawArgs.includes('--fix') || rawArgs.includes('--yes-repair');
+  const launchPreflight = await runCodexLaunchPreflight(launchRoot, { fix: allowMadRepair, launchFast: process.env.SKS_LAUNCH_FULL_CODEX_PROBE !== '1', profile: profile.profile_name, sandbox: 'danger-full-access', serviceTier: 'fast' });
+  const afterPreflightUi = beforeUi ? await writeCodexAppUiSnapshot(launchRoot, `mad-after-preflight-${uiSnapshotId}`).catch(() => null) : null;
+  const preflightUiDiff = beforeUi && afterPreflightUi ? diffCodexAppUiSnapshots(beforeUi, afterPreflightUi) : null;
+  if (preflightUiDiff && !preflightUiDiff.ok) {
+    await writeJsonAtomic(path.join(launchRoot, '.sneakoscope', 'reports', 'mad-codex-app-ui-preflight-diff.json'), preflightUiDiff);
+    console.error('SKS MAD launch changed Codex App UI state during preflight. Run `sks doctor --fix`.');
+    process.exitCode = 1;
+    return preflightUiDiff;
+  }
   if (!launchPreflight.ok) {
     console.error('SKS MAD launch blocked by config preflight.');
     for (const blocker of launchPreflight.blockers || []) console.error(`- blocker: ${blocker}`);
@@ -80,16 +93,30 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     SKS_MAD_SKS_TARGET_ROOT: madLaunch.gate.cwd,
     SKS_MAD_SKS_PROTECTED_CORE_DIGEST: madLaunch.gate.protected_core_digest
   };
-  const madNativeSwarm = await startMadNativeSwarm(madLaunch.root, madLaunch, args, profile, {
-    env: madSksEnv
-  });
   const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`));
-  const launch = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), slotCount: madNativeSwarm.lane_count || 1, requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
+  const launch = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), slotCount: 0, requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
+  const afterLaunchUi = beforeUi ? await writeCodexAppUiSnapshot(launchRoot, `mad-after-launch-${uiSnapshotId}`).catch(() => null) : null;
+  const launchUiDiff = beforeUi && afterLaunchUi ? diffCodexAppUiSnapshots(beforeUi, afterLaunchUi) : null;
+  if (launchUiDiff) {
+    await writeJsonAtomic(path.join(madLaunch.dir, 'codex-app-ui-diff.json'), launchUiDiff);
+    if (!launchUiDiff.ok) {
+      console.error('SKS MAD launch changed Codex App UI state. Run `sks doctor --fix`.');
+      process.exitCode = 1;
+      return launchUiDiff;
+    }
+  }
   if (!launch.ok) {
     console.log(`MAD Zellij action: ${formatMadZellijAction(launch)}`);
     return launch;
   }
+  const madNativeSwarm = await startMadNativeSwarm(madLaunch.root, madLaunch, args, profile, {
+    env: {
+      ...madSksEnv,
+      SKS_ZELLIJ_SESSION_NAME: launch.session_name
+    },
+    zellijSessionName: launch.session_name
+  });
   // The launcher only creates a detached background session. In an interactive
   // terminal, immediately attach so the session actually opens for the user
   // instead of leaving them to copy/paste the attach command by hand.
@@ -158,6 +185,11 @@ export async function startMadNativeSwarm(root: string, madLaunch: any, args: an
     '--fast',
     '--json'
   ];
+  if (swarm.backend === 'zellij') {
+    command.push('--real');
+    command.push('--zellij-session-name', opts.zellijSessionName || `sks-${madLaunch.mission_id}`);
+    command.push('--zellij-pane-worker');
+  }
   const baseReport = {
     schema: 'sks.mad-sks-native-swarm.v1',
     ok: true,
@@ -172,6 +204,7 @@ export async function startMadNativeSwarm(root: string, madLaunch: any, args: an
     target_active_slots: swarm.agents,
     work_items: swarm.workItems,
     backend: swarm.backend,
+    zellij_session_name: opts.zellijSessionName || null,
     readonly: true,
     command,
     stdout_log: path.relative(root, stdoutLog),
@@ -224,7 +257,7 @@ export function resolveMadNativeSwarmOptions(args: any[] = [], profile: any = {}
   const disabled = list.includes('--no-swarm') || list.includes('--no-mad-swarm') || process.env.SKS_MAD_NATIVE_SWARM === '0';
   const agents = clampInt(readOption(list, '--mad-agents', readOption(list, '--mad-swarm-agents', process.env.SKS_MAD_SWARM_AGENTS || opts.agents || 5)), 1, 20);
   const workItems = clampInt(readOption(list, '--mad-swarm-work-items', process.env.SKS_MAD_SWARM_WORK_ITEMS || opts.workItems || agents), agents, 100);
-  const backend = String(readOption(list, '--mad-swarm-backend', process.env.SKS_MAD_SWARM_BACKEND || opts.backend || 'codex-sdk'));
+  const backend = defaultMadSwarmBackend(list, opts);
   return {
     enabled: !disabled,
     disabled_reason: disabled ? 'operator_disabled_mad_native_swarm' : null,
@@ -400,6 +433,9 @@ function madLaunchOnlyFlags() {
     '--mad-swarm-work-items',
     '--mad-swarm-backend',
     '--mad-swarm-prompt',
+    '--repair-config',
+    '--fix',
+    '--yes-repair',
     '--yes',
     '-y',
     '--dry-run',
@@ -415,6 +451,16 @@ function madLaunchValueFlags() {
     '--mad-swarm-backend',
     '--mad-swarm-prompt'
   ]);
+}
+
+export function defaultMadSwarmBackend(args: any[] = [], opts: any = {}) {
+  const list = (args || []).map((arg: any) => String(arg));
+  const explicit = readOption(list, '--mad-swarm-backend', null);
+  if (explicit) return String(explicit);
+  if (process.env.SKS_MAD_SWARM_BACKEND) return String(process.env.SKS_MAD_SWARM_BACKEND);
+  if (opts.backend) return String(opts.backend);
+  if (list.includes('--json') || list.includes('--no-attach') || opts.nonInteractive === true) return 'codex-sdk';
+  return 'zellij';
 }
 
 function stripMadLaunchOnlyArgs(args: any[] = []) {

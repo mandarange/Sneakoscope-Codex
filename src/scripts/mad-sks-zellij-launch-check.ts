@@ -39,7 +39,8 @@ const nativeSwarmOk = madCommand.includes('startMadNativeSwarm(')
   && madCommand.includes("route: '$MAD-SKS'")
   && madCommand.includes("route_command: 'sks --mad native swarm'")
   && madCommand.includes("same_mission_ledger: true")
-  && madCommand.includes('slotCount: madNativeSwarm.lane_count || 1')
+  && madCommand.includes('slotCount: 0')
+  && madCommand.includes('zellijSessionName: launch.session_name')
   && madCommand.includes('mad_sks.native_swarm_started');
 const codexPaneChecks = {
   main_pane_kind: report.main_pane_kind === 'codex_interactive',

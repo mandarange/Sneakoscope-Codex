@@ -3,6 +3,46 @@
 ## [Unreleased]
 
 
+
+## [2.0.2] - 2026-06-04
+
+P0 closure release: make `sks --mad` stop rewriting user-level Codex App config, make safe Fast UI repair apply through `doctor --fix`, wire interactive MAD worker panes through real Zellij sessions, and tighten provider/runtime release gates.
+
+### Added
+
+- **MAD no-mutation release gate.** Added `mad-sks:app-ui-no-mutation` to exercise the actual `madHighCommand()` fixture path and assert `~/.codex/config.toml` hashes, plugin flags, profile files, and legacy profile tables are unchanged.
+- **MAD Zellij pane-worker gate.** Added `mad-sks:zellij-default-pane-worker` and `zellij:worker-pane-manager-single-owner` to prove interactive MAD defaults to the Zellij worker-pane contract, with WorkerPaneManager as the single native worker pane creator.
+- **Provider config.toml gate.** Added `provider:context-config-toml` to verify `model_provider = "codex-lb"` plus `[model_providers.codex-lb]` and `CODEX_LB_API_KEY` resolve to a high-confidence provider badge.
+
+### Fixed
+
+- `sks --mad` now uses a read-only launch profile with `-c service_tier=fast` / `-c model_reasoning_effort=high` overrides instead of calling the user-config-writing `enableMadHighProfile()` path.
+- `sks --mad` launch preflight no longer repairs config by default; mutation-capable repair is limited to explicit repair flags.
+- `sks --mad` creates the main Zellij session before starting the native swarm, then passes the session name into worker pane startup.
+- `doctor --fix` now auto-applies safe Codex App Fast UI repair plans and leaves unsafe user-selected `standard` / `flex` state for explicit confirmation.
+- Provider context resolution now reads `~/.codex/config.toml` provider selection and codex-lb provider blocks instead of relying only on env/auth state.
+- Production runtime MJS enforcement now covers both root `scripts/*.mjs` and `bin/*.mjs`; the obsolete `bin/sks.mjs` shim was removed.
+
+### Verified
+
+- `npm view sneakoscope version --json` returned `2.0.1`, so no newer package update prompt was required before this 2.0.2 closure work.
+- `npm run build`
+- `npm run mad-sks:app-ui-no-mutation`
+- `npm run doctor:fixes-codex-app-fast-ui`
+- `npm run provider:badge-context`
+- `npm run provider:context-config-toml`
+- `npm run mad-sks:zellij-default-pane-worker`
+- `npm run mad-sks:zellij-launch`
+- `npm run zellij:worker-pane-manager`
+- `npm run zellij:worker-pane-manager-single-owner`
+- `npm run runtime:no-mjs-scripts`
+- `npm run runtime:ts-source-of-truth`
+- `npm run runtime:ts-python-boundary`
+- `npm run release:gate-existence-audit`
+- `npm run codex-app:fast-ui-preservation`
+- `npm run codex-app:ui-clobber-guard`
+- `npm run codex-app:provider-badge`
+
 ## [2.0.1] - 2026-06-04
 
 Patch release: preserve Codex App Fast UI state around `sks --mad`, make provider identity visible in worker proof, and finish the production runtime migration from root `scripts/*.mjs` to TypeScript-built `dist/scripts`.

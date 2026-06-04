@@ -56,6 +56,11 @@ const DISPOSABLE_MISSION_DIRS = Object.freeze([
   'research/tmp'
 ]);
 
+const DISPOSABLE_MISSION_FILES = Object.freeze([
+  'agents/agent-intelligent-work-graph.json',
+  'agents/agent-intelligent-work-graph-v2.json'
+]);
+
 const MISSION_CLOSE_GATES = Object.freeze([
   'team-gate.json',
   'reflection-gate.json',
@@ -232,6 +237,9 @@ async function compactClosedMissionWorkdirs(root: any, policy: any, dryRun: bool
       const target = path.join(mission.path, rel);
       await removePath('remove_closed_mission_workdir', target, dryRun, actions, { mission: mission.id, rel, reason: 'closed_mission_disposable_workdir' });
     }
+    for (const rel of DISPOSABLE_MISSION_FILES) {
+      await removePath('remove_closed_mission_large_file', path.join(mission.path, rel), dryRun, actions, { mission: mission.id, rel, reason: 'closed_mission_disposable_large_file' });
+    }
     await pruneMissionDisposableLogs(mission, dryRun, actions);
   }
 }
@@ -269,6 +277,9 @@ async function compactOldMissionWithDurableArtifacts(mission: any, dryRun: boole
   });
   for (const rel of DISPOSABLE_MISSION_DIRS) {
     await removePath('remove_old_mission_workdir', path.join(mission.path, rel), dryRun, actions, { mission: mission.id, rel, reason });
+  }
+  for (const rel of DISPOSABLE_MISSION_FILES) {
+    await removePath('remove_old_mission_large_file', path.join(mission.path, rel), dryRun, actions, { mission: mission.id, rel, reason });
   }
   await pruneMissionDisposableLogs(mission, dryRun, actions);
 }
@@ -515,6 +526,7 @@ export async function enforceRetention(root: any, opts: any = {}) {
     action_count: actions.length,
     protected_durable_context: DURABLE_RETENTION_CLASSES,
     disposable_mission_dirs: DISPOSABLE_MISSION_DIRS,
+    disposable_mission_files: DISPOSABLE_MISSION_FILES,
     prune_report_logs: Boolean(opts.pruneReportLogs || policy.prune_disposable_report_logs),
     completed_mission_id: opts.completedMissionId || null,
     actions

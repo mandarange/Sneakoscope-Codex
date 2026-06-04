@@ -14,7 +14,7 @@ export const DEFAULT_AGENT_CONCURRENCY = 5
 // cap; every other roster/scheduler caller keeps MAX_AGENT_COUNT as the default.
 export const MAX_NARUTO_AGENT_COUNT = 100
 export const DEFAULT_NARUTO_CLONES = 12
-export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij'] as const
+export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij', 'ollama'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]
 export type AgentServiceTier = 'fast' | 'standard'
@@ -89,6 +89,7 @@ export interface AgentRunOptions {
   refillDelayMs?: number
   roster?: unknown
   backend?: AgentBackend | string
+  backendExplicit?: boolean
   json?: boolean
   mock?: boolean
   readonly?: boolean
@@ -103,6 +104,12 @@ export interface AgentRunOptions {
   serviceTier?: AgentServiceTier
   noFast?: boolean
   nativeCliSwarm?: boolean
+  ollamaEnabled?: boolean
+  noOllama?: boolean
+  ollamaModel?: string | null
+  ollamaBaseUrl?: string | null
+  zellijSessionName?: string | null
+  zellijPaneWorker?: boolean
   maxAgentCount?: number
   visualLaneCount?: number
   clones?: number

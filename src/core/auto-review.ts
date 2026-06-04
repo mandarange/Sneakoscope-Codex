@@ -152,7 +152,33 @@ export async function migrateSksProfilesToPerFile(opts: any = {}) {
   };
 }
 
-export async function enableMadHighProfile(opts: any = {}) {
+export function buildMadHighLaunchProfileNoWrite(opts: any = {}) {
+  const env = opts.env || process.env;
+  const profileName = String(opts.profileName || MAD_HIGH_PROFILE);
+  return {
+    config_path: codexConfigPath(env),
+    profile_config_path: codexProfileConfigPath(profileName, env),
+    profile_name: profileName,
+    launch_args: [
+      '--sandbox',
+      'danger-full-access',
+      '--ask-for-approval',
+      'never',
+      '-c',
+      'service_tier=fast',
+      '-c',
+      'model_reasoning_effort=high'
+    ],
+    sandbox_mode: 'danger-full-access',
+    approval_policy: 'never',
+    model_reasoning_effort: 'high',
+    service_tier: 'fast',
+    scope: 'explicit_launch_only',
+    writes_user_codex_config: false
+  };
+}
+
+export async function ensureMadHighProfileForSetupOrRepair(opts: any = {}) {
   const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
   const env = opts.env || process.env;
   await ensureDir(path.dirname(configPath));
@@ -178,8 +204,17 @@ export async function enableMadHighProfile(opts: any = {}) {
     approval_policy: 'never',
     approvals_reviewer: AUTO_REVIEW_REVIEWER,
     model_reasoning_effort: 'high',
-    scope: 'explicit_launch_only'
+    service_tier: 'fast',
+    scope: 'setup_or_repair_only',
+    writes_user_codex_config: true
   };
+}
+
+export async function enableMadHighProfile(opts: any = {}) {
+  if (opts.allowUserConfigWrite !== true) {
+    throw new Error('enableMadHighProfile writes Codex user config; use buildMadHighLaunchProfileNoWrite for sks --mad');
+  }
+  return ensureMadHighProfileForSetupOrRepair(opts);
 }
 
 export function madHighProfileName() {

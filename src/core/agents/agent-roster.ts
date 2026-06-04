@@ -25,7 +25,7 @@ export function systemSafeNarutoConcurrency(opts: { backend?: string; cores?: nu
   const freeGb = freeBytes / (1024 * 1024 * 1024)
   const totalGb = totalBytes / (1024 * 1024 * 1024)
   const backend = String(opts.backend || 'codex-sdk')
-  const heavy = backend === 'codex-sdk' || backend === 'zellij' || backend === 'process'
+  const heavy = backend === 'codex-sdk' || backend === 'zellij' || backend === 'process' || backend === 'ollama'
   const ceiling = MAX_NARUTO_AGENT_COUNT
   // macOS reports very low freemem while reclaimable memory is still available, so
   // budget against a total-memory-derived floor rather than the instantaneous free.

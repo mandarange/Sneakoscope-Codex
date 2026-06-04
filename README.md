@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.1** is a Codex App Fast UI preservation patch on top of the 2.0 execution layer. Native workers still run through the Codex SDK Control Plane, UltraRouter still classifies orchestrator/worker tasks, Reliability Shield still hardens long SDK streams, and Zellij worker panes now carry provider/service-tier proof while spawning only when scheduler slot generations need them.
+SKS **2.0.2** is a P0 Codex App Fast UI and MAD Zellij worker-pane closure patch on top of the 2.0 execution layer. `sks --mad` now relies on launch-time Fast/high overrides instead of user-level Codex config rewrites, safe Fast UI repair runs through `sks doctor --fix`, provider badges read env/auth/config.toml consistently, and interactive MAD worker panes attach to the real Zellij session as scheduler slots spawn.
 
 What changed:
 
@@ -498,6 +498,8 @@ Then open Codex App and use prompt commands directly in the chat. Examples:
 
 ```text
 $Team implement the checkout fix and verify it
+$with-local-llm-on
+$with-local-llm-off
 $DFix change this label and spacing only
 $QA-LOOP dogfood localhost:3000 and fix safe issues
 $PPT create an investor deck as HTML/PDF
@@ -506,6 +508,23 @@ $Goal persist this migration workflow with native /goal continuation
 $Research investigate this mechanism with source-backed agent lenses
 $Wiki refresh and validate the context pack
 $DB inspect this migration for destructive risk
+```
+
+### Optional Local LLM Workers
+
+Local Ollama workers are off by default, so SKS stays GPT-only unless you explicitly enable them. Use the Codex App prompt commands:
+
+```text
+$with-local-llm-on
+$with-local-llm-off
+```
+
+When enabled, the local model can only help with policy-eligible simple code patch-envelope work or read-only collection. GPT/Codex still owns strategy, planning, design, review, verification, safety, and integration. Check or tune the machine-local setting from the terminal:
+
+```sh
+sks with-local-llm status --json
+sks with-local-llm on --model rafw007/qwen36-a3b-claude-coder:q4_K_M
+sks with-local-llm off
 ```
 
 Generated app files include:
@@ -568,7 +587,7 @@ SKS_HERMES=1 sks status --json
 
 Use these inside Codex App or another agent prompt. They are prompt commands, not terminal commands.
 
-Common prompts: `$Team`, `$From-Chat-IMG`, `$DFix`, `$Answer`, `$SKS`, `$QA-LOOP`, `$PPT`, `$Computer-Use`/`$CU`, `$Goal`, `$Research`, `$AutoResearch`, `$DB`, `$MAD-SKS`, `$GX`, `$Wiki`, and `$Help`.
+Common prompts: `$Team`, `$From-Chat-IMG`, `$with-local-llm-on`, `$with-local-llm-off`, `$DFix`, `$Answer`, `$SKS`, `$QA-LOOP`, `$PPT`, `$Computer-Use`/`$CU`, `$Goal`, `$Research`, `$AutoResearch`, `$DB`, `$MAD-SKS`, `$GX`, `$Wiki`, and `$Help`.
 
 ## Common Workflows
 
@@ -590,7 +609,7 @@ sks
 # or: sks --mad
 ```
 
-Use Codex App routes with `$Team`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Goal`, `$Wiki`, and `$DB`. Team missions write artifacts under `.sneakoscope/missions/`; validate them with `sks validate-artifacts latest`.
+Use Codex App routes with `$Team`, `$with-local-llm-on`/`$with-local-llm-off`, `$DFix`, `$QA-LOOP`, `$PPT`, `$Goal`, `$Wiki`, and `$DB`. Team missions write artifacts under `.sneakoscope/missions/`; validate them with `sks validate-artifacts latest`.
 
 Refresh context before risky work:
 

@@ -113,6 +113,7 @@ const FIXTURES = Object.freeze({
   'route-fast-mode': fixture('execute', 'sks fast-mode status --json', [], 'pass'),
   'route-fast-on': fixture('mock', '$Fast-On covered by hermetic fast-mode blackbox toggle test', [], 'pass'),
   'route-fast-off': fixture('mock', '$Fast-Off covered by hermetic fast-mode blackbox toggle test', [], 'pass'),
+  'route-local-model': fixture('execute', 'sks with-local-llm status --json', [], 'pass'),
   'route-help': fixture('mock', '$Help lightweight route', [], 'pass'),
   'route-commit': fixture('mock', '$Commit git route', ['completion-proof.json'], 'pass'),
   'route-commit-and-push': fixture('mock', '$Commit-And-Push git route', ['completion-proof.json'], 'pass'),

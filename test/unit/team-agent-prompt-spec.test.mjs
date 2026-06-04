@@ -35,6 +35,20 @@ test('Team CLI args accept count-first agent budget tokens', () => {
   assert.equal(quotedTask.roleCounts.executor, 20);
 });
 
+test('Team CLI args keep local-model flags out of prompt text', () => {
+  const spec = parseTeamSpecArgs([
+    'implement',
+    'simple',
+    'task',
+    '--ollama',
+    '--ollama-model',
+    'local:test',
+    '--ollama-base-url=http://127.0.0.1:11434',
+    '--no-open-zellij'
+  ]);
+  assert.deepEqual(spec.cleanArgs, ['implement', 'simple', 'task']);
+});
+
 test('Team agent budget tokens stay bounded by native max', () => {
   const spec = parseTeamSpecText('25:agents improve the route parser');
   assert.equal(MAX_TEAM_AGENT_SESSIONS, 20);

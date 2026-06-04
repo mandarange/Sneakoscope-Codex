@@ -87,11 +87,13 @@ export async function runVerificationTask(
     let timedOut = false
     const timeoutMs = task.timeout_ms || 10 * 60 * 1000
     let killTimeout: NodeJS.Timeout | null = null
+    let exitFallback: NodeJS.Timeout | null = null
     const finish = (payload: { code: number | null; error?: string }) => {
       if (settled) return
       settled = true
       clearTimeout(timeout)
       if (killTimeout) clearTimeout(killTimeout)
+      if (exitFallback) clearTimeout(exitFallback)
       resolve(payload)
     }
     const timeout = setTimeout(() => {
@@ -109,6 +111,13 @@ export async function runVerificationTask(
     child.stderr.on('data', (chunk) => errChunks.push(String(chunk)))
     child.on('error', (err) => {
       finish({ code: null, error: err.message })
+    })
+    child.on('exit', (code) => {
+      if (settled) return
+      exitFallback = setTimeout(async () => {
+        if (timedOut) await waitForProcessTreeExit(child.pid, 2_000)
+        finish({ code, ...(timedOut ? { error: `timeout:${timeoutMs}` } : {}) })
+      }, 1_000)
     })
     child.on('close', async (code) => {
       if (timedOut) await waitForProcessTreeExit(child.pid, 2_000)

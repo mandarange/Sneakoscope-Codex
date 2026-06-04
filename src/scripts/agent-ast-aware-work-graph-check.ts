@@ -22,5 +22,5 @@ assertGate(Object.keys(graph.command_to_module_ownership).length > 0, 'AST-aware
 assertGate(graph.test_ownership_confidence >= 0, 'AST-aware work graph must record test ownership confidence', graph);
 assertGate(['proven', 'partial', 'blocked'].includes(graph.proof_level), 'AST-aware work graph must report an honest proof level', graph);
 fs.mkdirSync(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
-fs.writeFileSync(path.join(root, '.sneakoscope', 'reports', `agent-intelligent-work-graph-v2-${releaseVersion}.json`), `${JSON.stringify(graph, null, 2)}\n`);
+fs.writeFileSync(path.join(root, '.sneakoscope', 'reports', `agent-intelligent-work-graph-v2-${releaseVersion}.json`), `${JSON.stringify(graphMod.compactIntelligentWorkGraph(graph), null, 2)}\n`);
 emitGate('agent:ast-aware-work-graph', { score: graph.work_graph_quality_score, ast_coverage: graph.ast_coverage, proof_level: graph.proof_level });

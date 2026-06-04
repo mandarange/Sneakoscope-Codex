@@ -128,6 +128,8 @@ export function enhanceTaskGraphWithIntelligence(taskGraph: any, graph: Intellig
   if (!taskGraph || !Array.isArray(taskGraph.work_items)) return taskGraph
   const bottleneckTargets = new Set((graph.integration_bottlenecks?.bottlenecks || []).map((row: any) => String(row.file)))
   const criticalTargets = new Set(graph.critical_path?.path || [])
+  const targetActiveSlots = Math.max(1, Math.floor(Number(taskGraph.target_active_slots || 1)))
+  const canSerializeCriticalPath = taskGraph.work_items.length > targetActiveSlots
   const workItems = taskGraph.work_items.map((item: any, index: number) => {
     const targets = Array.isArray(item.target_paths) ? item.target_paths.map(String) : []
     const critical = targets.some((file: string) => criticalTargets.has(file))
@@ -141,7 +143,7 @@ export function enhanceTaskGraphWithIntelligence(taskGraph: any, graph: Intellig
       test_ownership_ref: 'agent-test-ownership-map.json',
       critical_path_ref: 'agent-critical-path.json',
       integration_bottleneck_ref: 'agent-integration-bottlenecks.json',
-      dependencies: mergeDependencies(item.dependencies, critical && index > 0 ? [taskGraph.work_items[index - 1]?.work_item_id].filter(Boolean) : []),
+      dependencies: mergeDependencies(item.dependencies, canSerializeCriticalPath && critical && index > 0 ? [taskGraph.work_items[index - 1]?.work_item_id].filter(Boolean) : []),
       lease_requirements: [
         ...(Array.isArray(item.lease_requirements) ? item.lease_requirements : []),
         ...(bottleneck ? targets.map((file: string) => ({ kind: 'integration-bottleneck-read', path: file })) : [])
@@ -161,8 +163,9 @@ export function enhanceTaskGraphWithIntelligence(taskGraph: any, graph: Intellig
 }
 
 export async function writeIntelligentWorkGraphArtifacts(root: string, graph: IntelligentWorkGraph) {
-  await writeJsonAtomic(path.join(root, 'agent-intelligent-work-graph.json'), graph)
-  await writeJsonAtomic(path.join(root, 'agent-intelligent-work-graph-v2.json'), graph)
+  const compact = compactIntelligentWorkGraph(graph)
+  await writeJsonAtomic(path.join(root, 'agent-intelligent-work-graph.json'), compact)
+  await writeJsonAtomic(path.join(root, 'agent-intelligent-work-graph-v2.json'), compact)
   await writeJsonAtomic(path.join(root, 'agent-symbol-ownership-map.json'), {
     schema: 'sks.agent-symbol-ownership-map.v1',
     generated_at: graph.generated_at,
@@ -231,6 +234,47 @@ export async function writeIntelligentWorkGraphArtifacts(root: string, graph: In
     critical_path_confidence: graph.critical_path.confidence || null,
     ...graph.integration_bottlenecks
   })
+}
+
+export function compactIntelligentWorkGraph(graph: IntelligentWorkGraph) {
+  return {
+    schema: graph.schema,
+    generated_at: graph.generated_at,
+    ok: graph.ok,
+    mode: graph.mode,
+    compact: true,
+    source_inventory_count: graph.source_inventory_count,
+    test_inventory_count: graph.test_inventory_count,
+    docs_inventory_count: graph.docs_inventory_count,
+    script_schema_inventory_count: graph.script_schema_inventory_count,
+    dependency_edge_count: graph.dependency_edge_count,
+    ast_coverage: graph.ast_coverage,
+    test_ownership_confidence: graph.test_ownership_confidence,
+    changed_file_candidates: limitArray(graph.changed_file_candidates, 200),
+    route_domain_priority: limitArray(graph.route_domain_priority, 100),
+    critical_path: graph.critical_path,
+    integration_bottlenecks: graph.integration_bottlenecks,
+    parallelizable_groups: limitArray(graph.parallelizable_groups, 80),
+    serial_dependency_groups: limitArray(graph.serial_dependency_groups, 40),
+    work_graph_quality_score: graph.work_graph_quality_score,
+    proof_level: graph.proof_level,
+    ast_parser_limitations: limitArray(graph.ast_parser_limitations, 100),
+    warnings: limitArray(graph.warnings, 200),
+    blockers: graph.blockers,
+    expanded_artifacts: {
+      symbol_ownership: 'agent-symbol-ownership-map.json',
+      route_ownership: 'agent-route-ownership-map.json',
+      command_ownership: 'agent-command-ownership-map.json',
+      test_ownership: 'agent-test-ownership-map.json',
+      source_test_ownership: 'agent-source-test-ownership-v2.json',
+      critical_path: 'agent-critical-path-v2.json',
+      integration_bottlenecks: 'agent-integration-bottlenecks-v2.json'
+    }
+  }
+}
+
+function limitArray<T>(items: T[] | undefined, limit: number) {
+  return Array.isArray(items) ? items.slice(0, limit) : []
 }
 
 function buildTestOwnershipMap(sourceFiles: string[], testFiles: string[], ast: any, dependencyGraph: any = {}) {

@@ -27,7 +27,11 @@ export async function team(args: any = []) {
   const jsonOutput = flag(args, '--json');
   const mock = flag(args, '--mock');
   const openZellij = !mock && !jsonOutput && !flag(args, '--no-open-zellij') && !flag(args, '--no-zellij');
-  const cleanCreateArgs = args.filter((arg: any) => !['--open-zellij', '--zellij-open', '--no-open-zellij', '--no-zellij', '--no-attach', '--mock'].includes(String(arg)));
+  const useOllama = flag(args, '--ollama') || flag(args, '--local-model');
+  const noOllama = flag(args, '--no-ollama') || flag(args, '--no-local-model');
+  const ollamaModel = readFlagValue(args, '--ollama-model', readFlagValue(args, '--local-model-model', '')) || null;
+  const ollamaBaseUrl = readFlagValue(args, '--ollama-base-url', readFlagValue(args, '--local-model-base-url', '')) || null;
+  const cleanCreateArgs = stripTeamCreateControlArgs(args);
   const opts = parseTeamCreateArgs(cleanCreateArgs);
   const { prompt, agentSessions, roleCounts, roster } = opts;
   const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', roster.bundle_size, 1, 20);
@@ -41,7 +45,7 @@ export async function team(args: any = []) {
   const dryRunPatches = flag(args, '--dry-run-patches') || flag(args, '--dryrun-patches');
   const maxWriteAgents = readBoundedIntegerFlag(args, '--max-write-agents', Math.min(roster.bundle_size, 5), 1, 20);
   if (!prompt) {
-    console.error('Usage: sks team "task" [20:agents] [executor:5 reviewer:6 user:1] [--agents N] [--work-items N] [--target-active-slots N] [--profile NAME] [--write-mode off|proof-safe|parallel|serial] [--apply-patches] [--no-open-zellij] [--json] [--mock]');
+    console.error('Usage: sks team "task" [20:agents] [executor:5 reviewer:6 user:1] [--agents N] [--work-items N] [--target-active-slots N] [--profile NAME] [--write-mode off|proof-safe|parallel|serial] [--apply-patches] [--ollama|--no-ollama] [--no-open-zellij] [--json] [--mock]');
     process.exitCode = 1;
     return;
   }
@@ -107,6 +111,10 @@ export async function team(args: any = []) {
     applyPatches,
     dryRunPatches,
     maxWriteAgents,
+    ollamaEnabled: useOllama && !noOllama,
+    noOllama,
+    ollamaModel,
+    ollamaBaseUrl,
     routeCommand: 'sks team',
     routeBlackboxKind: 'actual_team_command'
   });
@@ -189,6 +197,26 @@ export function parseTeamCreateArgs(args: any) {
   const prompt = spec.cleanArgs.join(' ').trim();
   const normalized = normalizeTeamSpec({ agentSessions: spec.agentSessions, roleCounts: spec.roleCounts, prompt });
   return { prompt, agentSessions: normalized.agentSessions, roleCounts: normalized.roleCounts, roster: normalized.roster };
+}
+
+function stripTeamCreateControlArgs(args: any[] = []) {
+  const booleanFlags = new Set([
+    '--open-zellij', '--zellij-open', '--no-open-zellij', '--no-zellij', '--no-attach',
+    '--mock', '--ollama', '--local-model', '--no-ollama', '--no-local-model'
+  ]);
+  const valueFlags = new Set(['--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url']);
+  const out: any[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = String(args[i]);
+    if (booleanFlags.has(arg)) continue;
+    if (valueFlags.has(arg)) {
+      i += 1;
+      continue;
+    }
+    if ([...valueFlags].some((flagName) => arg.startsWith(flagName + '='))) continue;
+    out.push(args[i]);
+  }
+  return out;
 }
 
 export function buildTeamPlan(id: any, prompt: any, opts: any = {}) {
