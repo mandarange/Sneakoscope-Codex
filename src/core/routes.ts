@@ -569,7 +569,7 @@ export const ROUTES = [
     requiredSkills: ['mad-sks', 'db-safety-guard', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
     lifecycle: ['explicit_invocation', 'auto_sealed_permission_scope', 'scoped_permission_override', 'catastrophic_guard', 'permission_deactivation', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'required',
-    reasoningPolicy: 'high',
+    reasoningPolicy: 'xhigh',
     stopGate: 'mad-sks-gate.json',
     cliEntrypoint: 'Codex App prompt route only: $MAD-SKS <task>',
     examples: ['$MAD-SKS $Team target project maintenance with package/service/file and DB scopes', '$DB Supabase 점검 $MAD-SKS']
@@ -645,6 +645,7 @@ export const COMMAND_CATALOG = [
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/Zellij, and print ready true/false.' },
   { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
+  { name: 'update', usage: 'sks update check|now [--version <version>] [--json] [--dry-run]', description: 'Check for SKS updates or install the requested package version through npm global mode.' },
   { name: 'deps', usage: 'sks deps check [--json] [--yes]', description: 'Check Node/npm, Codex CLI, and Zellij readiness; pass --yes to repair missing Codex CLI/Zellij tooling when supported.' },
   { name: 'codex', usage: 'sks codex compatibility|version|doctor|schema [--json]', description: 'Check Codex CLI rust-v0.136.0 compatibility, installed version, 0.136 capabilities, inherited 0.135/0.134/0.133 behavior, and vendored hook schema snapshot freshness.' },
   { name: 'codex-app', usage: 'sks codex-app [check|chrome-extension|pat status|remote-control]', description: 'Check Codex App install, Codex Chrome Extension web verification readiness, PAT-safe status, first-party MCP/plugin readiness, and Codex CLI 0.130.0+ remote-control availability.' },
@@ -1009,6 +1010,7 @@ export function routeReasoning(route: any, prompt: any = '') {
   const text = String(prompt || '');
   const base = ALLOWED_REASONING_EFFORTS.has(route?.reasoningPolicy) ? route.reasoningPolicy : 'medium';
   if (hasFromChatImgSignal(text)) return reasoning('xhigh', 'from_chat_img_image_work_order_analysis');
+  if (/(?:^|\s)sks\s+--mad\b|(?:^|\s)--mad\b|\$MAD-SKS\b|\bmad-sks\b|\bmadsks\b/i.test(text)) return reasoning('xhigh', 'mad_sks_or_mad_launch_default');
   if (route?.id === 'Team') return teamRouteReasoning(text);
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
   if (route?.id === 'ImageUXReview') return reasoning('high', 'image_generation_visual_review_route');

@@ -285,6 +285,7 @@ sks deps check --yes
 sks codex-app check
 sks doctor --fix
 sks fix-path
+sks update now
 ```
 
 ### Open Codex CLI With Zellij
@@ -356,7 +357,7 @@ sks --mad
 sks --mad --allow-package-install --allow-service-control --allow-network --yes
 ```
 
-This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` high-power maintenance profile, opens the MAD-SKS permission gate for that Zellij run, starts a same-mission read-only native agent swarm, and launches a Codex CLI layout whose right-side lanes read that MAD ledger. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock: it is explicit user authorization to widen approved target-project scopes. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
+This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` xhigh maintenance profile, opens the MAD-SKS permission gate for that Zellij run, starts a same-mission read-only native agent swarm, and launches a Codex CLI layout whose right-side lanes read that MAD ledger. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock: it is explicit user authorization to widen approved target-project scopes. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
 
 Before launching, SKS checks npm for a newer `sneakoscope`; answer `y` to update or `n` to continue. Use `--yes` to approve missing dependency installs automatically. Tune MAD swarm startup with `--mad-agents <n>`, `--mad-swarm-work-items <n>`, and `--mad-swarm-backend <backend>`; `--no-mad-swarm` keeps only the cockpit UI if you need a temporary fallback.
 
@@ -649,11 +650,12 @@ If PATH or npm has duplicate global installs, `sks doctor --fix` keeps one globa
 
 ```sh
 sks update-check --json
+sks update now
 npm ls -g sneakoscope --depth=0
 sks doctor --fix
 ```
 
-Update prompts compare npm latest against the effective installed version from source metadata, PATH `sks --version`, and global npm package metadata. If a global update succeeded but an old shim remains earlier on PATH, `sks doctor --fix` can remove duplicate global installs and refresh the managed setup.
+Update prompts compare npm latest against the effective installed version from source metadata, PATH `sks --version`, and global npm package metadata. `sks update now` installs through npm global mode instead of mutating the current project's dependencies. If a global update succeeded but an old shim remains earlier on PATH, `sks doctor --fix` can remove duplicate global installs and refresh the managed setup.
 
 ### Zellij is missing
 
