@@ -12,6 +12,8 @@ export function buildAgentPatchProof(input: {
   conflictRebase?: any
   verificationRollbackDag?: any
   fileOwnershipPlan?: any
+  gptFinalArbiter?: any
+  finalGptPatchStage?: any
 } = {}) {
   const applyResults = input.applyResults || []
   const queueEntries = Array.isArray(input.queue?.entries) ? input.queue.entries : []
@@ -62,6 +64,8 @@ export function buildAgentPatchProof(input: {
     ...journalBlockers,
     ...rebaseBlockers,
     ...parallelGroupBlockers,
+    ...(input.gptFinalArbiter && input.gptFinalArbiter.ok !== true ? input.gptFinalArbiter.blockers || ['gpt_final_arbiter_not_ok'] : []),
+    ...(input.finalGptPatchStage && input.finalGptPatchStage.ok !== true ? input.finalGptPatchStage.blockers || ['final_gpt_patch_stage_not_ok'] : []),
     ...applyResults.flatMap((applyResult) => applyResult.ok ? [] : (applyResult.violations || ['patch_apply_failed']))
   ].map(String)
   const changedFilesByAgent = changedFilesGroupedByAgent(applyResults)
@@ -83,6 +87,9 @@ export function buildAgentPatchProof(input: {
     verification_node_coverage: strictWiring.verification_node_coverage,
     rollback_node_coverage: strictWiring.rollback_node_coverage,
     parallel_patch_apply_verified: hasParallelGroup,
+    gpt_final_arbiter: input.gptFinalArbiter ? 'gpt-final-arbiter/gpt-final-arbiter.json' : null,
+    gpt_final_status: input.gptFinalArbiter?.result?.status || null,
+    final_patch_source: input.finalGptPatchStage?.final_patch_source || null,
     patch_conflict_count: Number(input.merge?.conflicts?.length || 0),
     serial_bottleneck_count: Number(input.merge?.serial_conflicts?.length || 0),
     changed_files_by_agent: changedFilesByAgent,

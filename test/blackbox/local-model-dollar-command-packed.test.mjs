@@ -38,7 +38,9 @@ test('$with-local-llm-on/off dollar commands toggle the machine-local Ollama wor
   const on = runPrompt('$with-local-llm-on');
   assert.equal(on.execution.command, 'sks with-local-llm enable --json');
   assert.equal(on.execution.execution_kind, 'safe_deterministic');
-  assert.equal(JSON.parse(await fs.readFile(configPath, 'utf8')).enabled, true);
+  const enabledConfig = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(enabledConfig.enabled, true);
+  assert.notEqual(enabledConfig.model, '--json');
 
   const off = runPrompt('$with-local-llm-off');
   assert.equal(off.execution.command, 'sks with-local-llm disable --json');

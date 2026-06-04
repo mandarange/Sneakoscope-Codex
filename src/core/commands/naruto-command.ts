@@ -2,8 +2,10 @@ import path from 'node:path'
 import { createMission, findLatestMission, loadMission } from '../mission.js'
 import { readJson, sksRoot } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
+import { classifyOllamaWorkerSlice } from '../agents/agent-runner-ollama.js'
 import { buildNarutoCloneRoster, systemSafeNarutoConcurrency } from '../agents/agent-roster.js'
 import { DEFAULT_NARUTO_CLONES, MAX_NARUTO_AGENT_COUNT } from '../agents/agent-schema.js'
+import { resolveOllamaWorkerConfig } from '../agents/ollama-worker-config.js'
 import { attachZellijSessionInteractive, launchZellijLayout } from '../zellij/zellij-launcher.js'
 
 const NARUTO_RESULT_SCHEMA = 'sks.naruto-command-result.v1'
@@ -33,7 +35,9 @@ async function narutoRun(parsed: NarutoArgs) {
   // The clone roster is the full work fan-out; live concurrency is throttled to a
   // system-safe number so naruto never spawns the whole count at once unless an
   // explicit operator override asks for a higher target.
-  const safe = systemSafeNarutoConcurrency({ backend: parsed.backend })
+  const localWorker = await resolveNarutoLocalWorkerMode(parsed)
+  const schedulerBackend = localWorker.auto_select_eligible ? 'ollama' : parsed.backend
+  const safe = systemSafeNarutoConcurrency({ backend: schedulerBackend })
   const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || safe.cap))
   const mission = await createMission(root, { mode: 'naruto', prompt: parsed.prompt })
   const ledgerRoot = path.join(mission.dir, 'agents')
@@ -73,6 +77,11 @@ async function narutoRun(parsed: NarutoArgs) {
     narutoMode: true,
     clones: roster.agent_count,
     backend: parsed.backend,
+    backendExplicit: parsed.backendExplicit,
+    noOllama: parsed.noOllama,
+    ollamaEnabled: parsed.ollamaEnabled,
+    ollamaModel: parsed.ollamaModel,
+    ollamaBaseUrl: parsed.ollamaBaseUrl,
     mock: parsed.mock,
     real: parsed.real,
     readonly: parsed.readonly,
@@ -84,6 +93,7 @@ async function narutoRun(parsed: NarutoArgs) {
     json: parsed.json
   })
   const clones = result.roster?.agent_count ?? roster.agent_count
+  const localWorkerSummary = summarizeNarutoLocalWorkerResult(localWorker, result)
   const summary = {
     schema: NARUTO_RESULT_SCHEMA,
     ok: result.ok === true,
@@ -97,6 +107,7 @@ async function narutoRun(parsed: NarutoArgs) {
     target_active_slots: result.target_active_slots ?? activeSlots,
     concurrency_capped: clones > (result.target_active_slots ?? activeSlots),
     system: { cores: safe.cores, free_gb: safe.free_gb, safe_concurrency: safe.cap, heavy_backend: safe.heavy },
+    local_worker: localWorkerSummary,
     proof: result.proof?.status || 'missing',
     run: result,
     zellij: null as any
@@ -111,6 +122,20 @@ async function narutoRun(parsed: NarutoArgs) {
     if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok') console.log('Zellij: prepared ' + summary.clones + ' native clone lane(s) in ' + summary.zellij.session_name)
     else if (summary.zellij?.ok) console.log('Zellij: optional live panes unavailable (' + ((summary.zellij.warnings || []).join('; ') || summary.zellij.capability?.status || 'unknown') + ')')
   })
+}
+
+function summarizeNarutoLocalWorkerResult(localWorker: any, result: any) {
+  const backendCounts: Record<string, number> = {}
+  const rows = Array.isArray(result?.results) ? result.results : []
+  for (const row of rows) {
+    const selected = String(row?.backend_router_report?.selected_backend || row?.backend || 'unknown')
+    backendCounts[selected] = (backendCounts[selected] || 0) + 1
+  }
+  return {
+    ...localWorker,
+    selected_worker_count: backendCounts.ollama || 0,
+    backend_counts: backendCounts
+  }
 }
 
 async function narutoStatus(parsed: NarutoArgs) {
@@ -145,7 +170,7 @@ async function narutoHelp(parsed: NarutoArgs) {
     mode: 'NARUTO',
     description: 'Shadow Clone Swarm: fan out up to ' + MAX_NARUTO_AGENT_COUNT + ' parallel clone sessions.',
     usage: [
-      'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake] [--work-items N] [--real] [--readonly] [--json]',
+      'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake|ollama] [--local-model|--no-ollama] [--work-items N] [--real] [--readonly] [--json]',
       'sks naruto status [--mission <id>] [--json]'
     ],
     defaults: { clones: DEFAULT_NARUTO_CLONES, max_clones: MAX_NARUTO_AGENT_COUNT, backend: 'codex-sdk' }
@@ -164,9 +189,14 @@ interface NarutoArgs {
   workItems: number
   concurrency: number | null
   backend: string
+  backendExplicit: boolean
   mock: boolean
   real: boolean
   readonly: boolean
+  ollamaEnabled: boolean
+  noOllama: boolean
+  ollamaModel: string | null
+  ollamaBaseUrl: string | null
   writeMode: 'proof-safe' | 'parallel' | 'serial' | 'off' | null
   json: boolean
   missionId: string
@@ -184,18 +214,23 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const clones = clampClones(requestedClones)
   const workItems = clampWorkItems(Number(readOption(args, '--work-items', clones)), clones)
   const concurrency = normalizeConcurrency(readOption(args, '--concurrency', readOption(args, '--target-active-slots', null)), clones)
-  const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : 'codex-sdk'))
+  const useOllama = hasFlag(args, '--ollama') || hasFlag(args, '--local-model')
+  const noOllama = hasFlag(args, '--no-ollama') || hasFlag(args, '--no-local-model')
+  const backendExplicit = hasOption(args, '--backend') || useOllama || noOllama
+  const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : useOllama && !noOllama ? 'ollama' : 'codex-sdk'))
   const mock = hasFlag(args, '--mock') || backend === 'fake'
   const real = hasFlag(args, '--real')
   const readonly = hasFlag(args, '--readonly') || hasFlag(args, '--read-only')
   const writeModeRaw = String(readOption(args, '--write-mode', hasFlag(args, '--parallel-write') ? 'parallel' : '') || '')
   const writeMode = (['proof-safe', 'parallel', 'serial', 'off'].includes(writeModeRaw) ? writeModeRaw : null) as NarutoArgs['writeMode']
   const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', 'latest')))
+  const ollamaModel = String(readOption(args, '--ollama-model', readOption(args, '--local-model-model', '')) || '') || null
+  const ollamaBaseUrl = String(readOption(args, '--ollama-base-url', readOption(args, '--local-model-base-url', '')) || '') || null
   const noOpenZellij = hasFlag(args, '--no-open-zellij') || hasFlag(args, '--no-zellij')
   const attach = hasFlag(args, '--attach')
-  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--mission', '--mission-id'])
+  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
-  return { action, prompt, clones, workItems, concurrency, backend, mock, real, readonly, writeMode, json, missionId, noOpenZellij, attach }
+  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, json, missionId, noOpenZellij, attach }
 }
 
 function clampClones(value: number): number {
@@ -226,6 +261,10 @@ function readOption(args: string[], name: string, fallback: unknown) {
   return prefixed ? prefixed.slice(name.length + 1) : fallback
 }
 
+function hasOption(args: string[], name: string) {
+  return args.includes(name) || args.some((arg) => String(arg).startsWith(name + '='))
+}
+
 function positionalArgs(args: string[], valueFlags: Set<string>) {
   const out: string[] = []
   for (let i = 0; i < args.length; i += 1) {
@@ -246,4 +285,44 @@ function emit(parsed: NarutoArgs, result: any, text: () => void) {
   }
   text()
   return result
+}
+
+async function resolveNarutoLocalWorkerMode(parsed: NarutoArgs) {
+  const configInput: Parameters<typeof resolveOllamaWorkerConfig>[0] = {
+    ollamaEnabled: parsed.ollamaEnabled,
+    model: parsed.ollamaModel,
+    baseUrl: parsed.ollamaBaseUrl
+  }
+  if (parsed.backend === 'ollama') configInput.backend = 'ollama'
+  const config = await resolveOllamaWorkerConfig(configInput).catch(() => null)
+  const policy = classifyOllamaWorkerSlice({
+    id: 'naruto-local-worker-probe',
+    role: parsed.readonly ? 'collector' : 'implementer',
+    description: parsed.prompt,
+    write_paths: parsed.readonly ? [] : ['<lease-scoped-worker-path>']
+  }, { route: NARUTO_ROUTE, agent: { role: parsed.readonly ? 'collector' : 'implementer' } })
+  const autoSelectEligible = parsed.backend === 'codex-sdk'
+    && parsed.backendExplicit !== true
+    && parsed.noOllama !== true
+    && config?.ok === true
+    && config.enabled === true
+    && policy.ok === true
+  return {
+    schema: 'sks.naruto-local-worker-mode.v1',
+    enabled: config?.enabled === true,
+    provider: config?.provider || 'ollama',
+    model: config?.model || null,
+    requested_backend: parsed.backend,
+    backend_explicit: parsed.backendExplicit,
+    auto_select_eligible: autoSelectEligible,
+    worker_only: true,
+    no_strategy_planning_design: true,
+    policy,
+    blockers: [
+      ...(config?.blockers || (config ? [] : ['ollama_worker_config_unavailable'])),
+      ...(policy.blockers || []),
+      ...(parsed.backendExplicit ? ['backend_explicit'] : []),
+      ...(parsed.noOllama ? ['no_ollama_requested'] : [])
+    ]
+  }
 }

@@ -145,6 +145,46 @@ test('SKS update check can run without npm through the hermetic env override', a
   assert.equal(result.pipeline_required, false);
 });
 
+test('SKS update check override does not call npm view', async () => {
+  const { runSksUpdateCheck } = await import('../../dist/core/update-check.js');
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-check-override-'));
+  const log = path.join(tmp, 'npm-log.jsonl');
+  const fakeNpm = path.join(tmp, 'npm-fake.mjs');
+  await fs.writeFile(fakeNpm, `#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.SKS_FAKE_NPM_LOG, JSON.stringify(args) + '\\n');
+if (args[0] === 'list' && args[1] === '-g' && args[2] === 'sneakoscope') {
+  console.log(JSON.stringify({ dependencies: { sneakoscope: { version: '1.10.0' } } }));
+  process.exit(0);
+}
+if (args[0] === 'root' && args[1] === '-g') {
+  console.log(path.join(process.cwd(), 'node_modules'));
+  process.exit(0);
+}
+if (args[0] === 'view') {
+  console.error('npm view should not run when override is present');
+  process.exit(1);
+}
+process.exit(0);
+`);
+  await fs.chmod(fakeNpm, 0o755);
+  const result = await runSksUpdateCheck({
+    npmBin: fakeNpm,
+    currentVersion: '1.10.0',
+    env: {
+      ...process.env,
+      SKS_FAKE_NPM_LOG: log,
+      SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '99.99.99'
+    }
+  });
+  assert.equal(result.status, 'available');
+  assert.equal(result.latest, '99.99.99');
+  const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  assert.equal(calls.some((args) => args[0] === 'view'), false);
+});
+
 test('SKS update check reports unavailable instead of starting fallback work', async () => {
   const { runSksUpdateCheck } = await import('../../dist/core/update-check.js');
   const result = await runSksUpdateCheck({

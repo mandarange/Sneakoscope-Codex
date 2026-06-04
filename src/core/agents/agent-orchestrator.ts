@@ -50,6 +50,9 @@ import { writeNativeCliSessionProof } from './native-cli-session-proof.js'
 import { writeNoSubagentScalingPolicy } from './no-subagent-scaling-policy.js'
 import { runCodexTask } from '../codex-control/codex-control-plane.js'
 import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
+import { resolveLocalCollaborationPolicy, localCollaborationParticipated } from '../local-llm/local-collaboration-policy.js'
+import { runFinalGptReviewStage } from '../pipeline/final-gpt-review-stage.js'
+import { selectFinalGptPatchSource } from '../pipeline/final-gpt-patch-stage.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Promise<any> {
   const root = path.resolve(opts.root || process.cwd())
@@ -369,15 +372,51 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   })
   const noSubagentScalingPolicy = await writeNoSubagentScalingPolicy(ledgerRoot, { nativeProof: nativeCliSessionProof })
   const fastModePropagation = await writeFastModePropagationProof(ledgerRoot, { policy: fastModePolicy, backend, results })
+  const localCollaborationPolicy = resolveLocalCollaborationPolicy()
+  await writeJsonAtomic(path.join(ledgerRoot, 'local-collaboration-policy.json'), localCollaborationPolicy)
+  const localParticipated = localCollaborationParticipated(results)
+  const candidatePatchEnvelopes = results.flatMap((result: any) => Array.isArray(result.patch_envelopes) ? result.patch_envelopes : [])
+  const gptFinalArbiter = localParticipated
+    ? await runFinalGptReviewStage({
+      schema: 'sks.gpt-final-arbiter-input.v1',
+      route,
+      mission_id: missionId,
+      local_mode: localCollaborationPolicy.mode,
+      local_outputs: results.map((result: any) => ({
+        worker_id: result.agent_id,
+        backend: result.backend_router_report?.selected_backend || result.backend || backend,
+        status: result.status,
+        summary: result.summary,
+        patch_envelopes: result.patch_envelopes || [],
+        proof: result.verification?.status || '',
+        blockers: result.blockers || [],
+        changed_files: result.changed_files || []
+      })),
+      candidate_diff: '',
+      candidate_patch_envelopes: candidatePatchEnvelopes,
+      verification_results: results.map((result: any) => result.verification || { status: result.status || 'unknown' }),
+      side_effect_report: { schema: 'sks.agent-side-effect-summary.v1', ok: true, route, mutation_owner: 'parent_agent_orchestrator' },
+      mutation_ledger: { parallel_write_policy: parallelWritePolicy, result_count: results.length },
+      rollback_plan: { verification_rollback_dag: strategyCompiled.verification_rollback_dag || null }
+    }, { cwd: root, mutationLedgerRoot: path.join(ledgerRoot, 'gpt-final-arbiter') })
+    : null
+  const finalGptPatchStage = localParticipated
+    ? selectFinalGptPatchSource(gptFinalArbiter, candidatePatchEnvelopes)
+    : null
+  const resultsForPatchSwarm = localParticipated && finalGptPatchStage?.ok === true && gptFinalArbiter?.result?.status === 'modified'
+    ? withFinalGptPatchEnvelopes(results, finalGptPatchStage.patch_envelopes)
+    : results
   const patchSwarm = await runAgentPatchSwarmRuntime(root, ledgerRoot, {
     missionId,
     route,
     routeCommand,
     writeCapable,
-    results,
+    results: resultsForPatchSwarm,
     parallelWritePolicy,
     verificationRollbackDag: strategyCompiled.verification_rollback_dag,
-    dryRun: opts.dryRunPatches === true || opts.applyPatches !== true
+    dryRun: opts.dryRunPatches === true || opts.applyPatches !== true || (localParticipated && gptFinalArbiter?.ok !== true),
+    gptFinalArbiter,
+    finalGptPatchStage
   })
   const stale = await detectStaleAgentSessions(ledgerRoot)
   if (!stale.ok) await appendAgentLedgerEvent(ledgerRoot, { agent_id: 'orchestrator', session_id: 'orchestrator', event_type: 'stale_sessions_detected', payload: stale })
@@ -402,6 +441,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     ...(nativeCliSessionProof.ok ? [] : nativeCliSessionProof.blockers),
     ...(noSubagentScalingPolicy.ok ? [] : noSubagentScalingPolicy.blockers),
     ...(fastModePropagation.ok ? [] : fastModePropagation.blockers),
+    ...(localParticipated && gptFinalArbiter?.ok !== true ? gptFinalArbiter?.blockers || ['gpt_final_arbiter_not_ok'] : []),
+    ...(localParticipated && finalGptPatchStage?.ok === false ? finalGptPatchStage.blockers || ['final_gpt_patch_stage_not_ok'] : []),
     ...(patchSwarm.ok ? [] : patchSwarm.blockers),
     ...(janitor.ok ? [] : janitor.blockers)
   ]
@@ -437,7 +478,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     fastModePolicy,
     fastModePropagation,
     triwikiContext,
-    selectedCoreSkill
+    selectedCoreSkill,
+    localCollaborationPolicy,
+    gptFinalArbiter,
+    finalGptPatchStage
   })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })
@@ -477,9 +521,28 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     no_subagent_scaling_policy: noSubagentScalingPolicy,
     fast_mode_policy: fastModePolicy,
     fast_mode_propagation: fastModePropagation,
+    local_collaboration_policy: localCollaborationPolicy,
+    gpt_final_arbiter: gptFinalArbiter,
+    final_gpt_patch_stage: finalGptPatchStage,
     patch_swarm: patchSwarm,
     proof
   }
+}
+
+function withFinalGptPatchEnvelopes(results: any[], patchEnvelopes: any[] = []) {
+  const byAgent = new Map<string, any[]>()
+  for (const envelope of patchEnvelopes) {
+    const agentId = String(envelope?.agent_id || 'gpt-final-arbiter')
+    byAgent.set(agentId, [...(byAgent.get(agentId) || []), envelope])
+  }
+  let assigned = false
+  const next = results.map((result) => {
+    const envelopes = byAgent.get(String(result.agent_id || '')) || []
+    if (envelopes.length) assigned = true
+    return { ...result, patch_envelopes: envelopes }
+  })
+  if (!assigned && patchEnvelopes.length && next[0]) next[0] = { ...next[0], patch_envelopes: patchEnvelopes }
+  return next
 }
 
 async function legacyCodexExecBlockedRun(input: { root: string; missionId: string; dir: string; route: string; routeCommand: string; routeBlackboxKind: string; backend: string }) {
@@ -536,7 +599,7 @@ async function legacyCodexExecBlockedRun(input: { root: string; missionId: strin
   }
 }
 
-async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input: { missionId: string; route: string; routeCommand: string; writeCapable: boolean; results: any[]; parallelWritePolicy: any; verificationRollbackDag?: any; dryRun: boolean }) {
+async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input: { missionId: string; route: string; routeCommand: string; writeCapable: boolean; results: any[]; parallelWritePolicy: any; verificationRollbackDag?: any; dryRun: boolean; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
   await setCurrent(root, { mission_id: input.missionId, mode: 'AGENT', phase: 'AGENT_PATCH_SWARM_RUNNING', route_command: input.routeCommand, updated_at: nowIso() })
   const queueStore = new PersistentAgentPatchQueueStore(ledgerRoot)
   for (const result of input.results || []) {
@@ -703,7 +766,9 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     verification: verificationResults.results.map((result) => result.status),
     parallelWritePolicy: input.parallelWritePolicy,
     conflictRebase,
-    verificationRollbackDag: input.verificationRollbackDag
+    verificationRollbackDag: input.verificationRollbackDag,
+    gptFinalArbiter: input.gptFinalArbiter,
+    finalGptPatchStage: input.finalGptPatchStage
   }
   const initialProof = buildAgentPatchProof(proofInput)
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-proof.json'), initialProof)
