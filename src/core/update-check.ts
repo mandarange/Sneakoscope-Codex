@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import { PACKAGE_VERSION, packageRoot, readJson, runProcess, which } from './fsx.js';
 
@@ -48,6 +49,30 @@ export interface SksUpdateCheckResult {
 }
 
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org/';
+
+export interface SksUpdateNowOptions extends SksUpdateCheckOptions {
+  version?: string | null;
+  dryRun?: boolean;
+}
+
+export interface SksUpdateNowResult {
+  schema: 'sks.update-now.v1';
+  ok: boolean;
+  status: 'updated' | 'current' | 'dry_run' | 'unavailable' | 'failed';
+  package: string;
+  from: string;
+  latest: string | null;
+  requested_version: string | null;
+  install_version: string | null;
+  npm_bin: string | null;
+  npm_args: string[];
+  command: string | null;
+  cwd: string;
+  registry: string;
+  global_root: string | null;
+  install_code: number | null;
+  error: string | null;
+}
 
 export async function runSksUpdateCheck(options: SksUpdateCheckOptions = {}): Promise<SksUpdateCheckResult> {
   const packageName = options.packageName || 'sneakoscope';
@@ -108,6 +133,136 @@ export async function runSksUpdateCheck(options: SksUpdateCheckOptions = {}): Pr
     registry,
     npmBin
   });
+}
+
+export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promise<SksUpdateNowResult> {
+  const packageName = options.packageName || 'sneakoscope';
+  const registry = options.registry || DEFAULT_REGISTRY;
+  const env = options.env || process.env;
+  const npmBin = options.npmBin === undefined ? await which('npm') : options.npmBin;
+  const cwd = os.homedir();
+  const check = await runSksUpdateCheck({
+    ...options,
+    packageName,
+    registry,
+    npmBin,
+    env
+  });
+  const requestedVersion = parseVersionText(options.version || '') || null;
+  const installVersion = requestedVersion || check.latest;
+  const npmArgs = installVersion ? sksGlobalInstallArgs(packageName, installVersion, registry) : [];
+  const command = npmBin && npmArgs.length ? [npmBin, ...npmArgs].join(' ') : null;
+  const globalRoot = npmBin ? await detectNpmGlobalRoot(npmBin, env, options).catch(() => null) : null;
+
+  if (!npmBin) {
+    return buildUpdateNowResult({
+      packageName,
+      from: check.current,
+      latest: check.latest,
+      requestedVersion,
+      installVersion,
+      npmBin: null,
+      npmArgs,
+      command,
+      cwd,
+      registry,
+      globalRoot,
+      status: 'unavailable',
+      ok: false,
+      installCode: null,
+      error: 'npm not found on PATH'
+    });
+  }
+  if (!installVersion) {
+    return buildUpdateNowResult({
+      packageName,
+      from: check.current,
+      latest: check.latest,
+      requestedVersion,
+      installVersion,
+      npmBin,
+      npmArgs,
+      command,
+      cwd,
+      registry,
+      globalRoot,
+      status: 'unavailable',
+      ok: false,
+      installCode: null,
+      error: check.error || 'latest version unavailable'
+    });
+  }
+  if (!requestedVersion && check.latest && !check.update_available) {
+    return buildUpdateNowResult({
+      packageName,
+      from: check.current,
+      latest: check.latest,
+      requestedVersion,
+      installVersion,
+      npmBin,
+      npmArgs,
+      command,
+      cwd,
+      registry,
+      globalRoot,
+      status: 'current',
+      ok: true,
+      installCode: null,
+      error: null
+    });
+  }
+  if (options.dryRun) {
+    return buildUpdateNowResult({
+      packageName,
+      from: check.current,
+      latest: check.latest,
+      requestedVersion,
+      installVersion,
+      npmBin,
+      npmArgs,
+      command,
+      cwd,
+      registry,
+      globalRoot,
+      status: 'dry_run',
+      ok: true,
+      installCode: null,
+      error: null
+    });
+  }
+
+  const install = await runProcess(npmBin, npmArgs, {
+    cwd,
+    env,
+    timeoutMs: options.timeoutMs ?? 10 * 60 * 1000,
+    maxOutputBytes: options.maxOutputBytes ?? 128 * 1024
+  }).catch((err: unknown) => ({
+    code: 1,
+    stdout: '',
+    stderr: err instanceof Error ? err.message : String(err)
+  }));
+  const ok = install.code === 0;
+  return buildUpdateNowResult({
+    packageName,
+    from: check.current,
+    latest: check.latest,
+    requestedVersion,
+    installVersion,
+    npmBin,
+    npmArgs,
+    command,
+    cwd,
+    registry,
+    globalRoot,
+    status: ok ? 'updated' : 'failed',
+    ok,
+    installCode: install.code,
+    error: ok ? null : `${install.stderr || install.stdout || 'npm global install failed'}`.trim()
+  });
+}
+
+export function sksGlobalInstallArgs(packageName: string, version: string, registry = DEFAULT_REGISTRY): string[] {
+  return ['install', '--global', `${packageName}@${version}`, '--registry', registry];
 }
 
 export async function detectEffectiveSksVersion(options: SksUpdateCheckOptions = {}): Promise<SksEffectiveVersionResult> {
@@ -240,11 +395,57 @@ function buildResult(input: {
     mode: 'function',
     route_required: false,
     pipeline_required: false,
-    command: updateAvailable ? `npm i -g ${input.packageName}@${input.latest} --registry ${input.registry}` : null,
+    command: updateAvailable ? `sks update now --version ${input.latest}` : null,
     npm_bin: input.npmBin,
     registry: input.registry,
     error: input.error || null
   };
+}
+
+function buildUpdateNowResult(input: {
+  packageName: string;
+  from: string;
+  latest: string | null;
+  requestedVersion: string | null;
+  installVersion: string | null;
+  npmBin: string | null;
+  npmArgs: string[];
+  command: string | null;
+  cwd: string;
+  registry: string;
+  globalRoot: string | null;
+  status: SksUpdateNowResult['status'];
+  ok: boolean;
+  installCode: number | null;
+  error: string | null;
+}): SksUpdateNowResult {
+  return {
+    schema: 'sks.update-now.v1',
+    ok: input.ok,
+    status: input.status,
+    package: input.packageName,
+    from: input.from,
+    latest: input.latest,
+    requested_version: input.requestedVersion,
+    install_version: input.installVersion,
+    npm_bin: input.npmBin,
+    npm_args: input.npmArgs,
+    command: input.command,
+    cwd: input.cwd,
+    registry: input.registry,
+    global_root: input.globalRoot,
+    install_code: input.installCode,
+    error: input.error
+  };
+}
+
+async function detectNpmGlobalRoot(npmBin: string, env: NodeJS.ProcessEnv, opts: SksUpdateCheckOptions = {}): Promise<string | null> {
+  const result = await runProcess(npmBin, ['root', '--global', '--silent'], {
+    env,
+    timeoutMs: opts.timeoutMs ?? 2500,
+    maxOutputBytes: opts.maxOutputBytes ?? 4096
+  }).catch(() => ({ code: 1, stdout: '', stderr: '' }));
+  return result.code === 0 ? String(result.stdout || '').trim().split(/\r?\n/).pop() || null : null;
 }
 
 function versionOverrideEnvName(packageName: string): string {

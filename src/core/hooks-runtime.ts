@@ -1032,7 +1032,7 @@ function updateOfferThrottleMs() {
 }
 
 function sksUpdateInstallCommand(version: any) {
-  return `npm i -g sneakoscope@${version} --registry https://registry.npmjs.org/`;
+  return `sks update now --version ${version}`;
 }
 
 function copyStableUpdateChoiceText(latest: any, current: any = null) {

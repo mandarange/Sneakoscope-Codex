@@ -22,7 +22,7 @@ test('enableMadHighProfile migrates legacy profile table to Codex 0.134 profile 
     ''
   ].join('\n'));
 
-  const result = await mod.enableMadHighProfile({ env: { HOME: home } });
+  const result = await mod.enableMadHighProfile({ env: { HOME: home }, allowUserConfigWrite: true });
   const config = await fs.readFile(configPath, 'utf8');
   const profile = await fs.readFile(path.join(codexHome, 'sks-mad-high.config.toml'), 'utf8');
 
@@ -33,8 +33,22 @@ test('enableMadHighProfile migrates legacy profile table to Codex 0.134 profile 
   assert.match(profile, /^sandbox_mode\s*=\s*"danger-full-access"/m);
   assert.match(profile, /^approval_policy\s*=\s*"never"/m);
   assert.match(profile, /^approvals_reviewer\s*=\s*"auto_review"/m);
+  assert.match(profile, /^model_reasoning_effort\s*=\s*"xhigh"/m);
   assert.ok(result.launch_args.includes('-c'));
   assert.ok(result.launch_args.includes('service_tier=fast'));
+  assert.ok(result.launch_args.includes('model_reasoning_effort=xhigh'));
+});
+
+test('sks --mad launch-only profile defaults reasoning to xhigh without config writes', async () => {
+  const mod = await import('../../dist/core/auto-review.js');
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-mad-nowrite-'));
+
+  const result = mod.buildMadHighLaunchProfileNoWrite({ env: { HOME: home } });
+
+  assert.equal(result.profile_name, 'sks-mad-high');
+  assert.equal(result.writes_user_codex_config, false);
+  assert.equal(result.model_reasoning_effort, 'xhigh');
+  assert.ok(result.launch_args.includes('model_reasoning_effort=xhigh'));
 });
 
 test('enableAutoReview writes profile files instead of legacy profile tables', async () => {

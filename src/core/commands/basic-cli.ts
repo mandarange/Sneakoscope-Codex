@@ -10,7 +10,7 @@ import { buildFeatureRegistry, validateFeatureRegistry } from '../feature-regist
 import { hooksExplainReport } from '../../cli/feature-commands.js';
 import { writeSelftestRouteProof } from '../proof/selftest-proof-fixtures.js';
 import { createMission } from '../mission.js';
-import { formatSksUpdateCheckText, runSksUpdateCheck } from '../update-check.js';
+import { formatSksUpdateCheckText, runSksUpdateCheck, runSksUpdateNow } from '../update-check.js';
 
 interface CommandRow {
   name: string;
@@ -117,6 +117,29 @@ export async function updateCheckCommand(args: any = []) {
   const result = await runSksUpdateCheck();
   if (flag(args, '--json')) return printJson(result);
   console.log(`${sksTextLogo()}\n\n${formatSksUpdateCheckText(result)}`);
+}
+
+export async function updateCommand(sub: any = 'check', args: any = []) {
+  const action = String(sub || 'check').toLowerCase();
+  if (action === 'check' || action === 'status') return updateCheckCommand(args);
+  if (action !== 'now') {
+    console.error('Usage: sks update check|now [--version <version>] [--json] [--dry-run]');
+    process.exitCode = 1;
+    return;
+  }
+  const result = await runSksUpdateNow({
+    version: valueAfter(args, '--version') || valueAfter(args, '-v'),
+    dryRun: flag(args, '--dry-run'),
+    timeoutMs: 10 * 60 * 1000,
+    maxOutputBytes: 128 * 1024
+  });
+  if (flag(args, '--json')) return printJson(result);
+  console.log(`${sksTextLogo()}\n`);
+  console.log(`SKS update ${result.status}`);
+  if (result.command) console.log(`Command: ${result.command}`);
+  if (result.global_root) console.log(`Global root: ${result.global_root}`);
+  if (result.error) console.log(`Error: ${result.error}`);
+  if (!result.ok) process.exitCode = 1;
 }
 
 export async function setupCommand(args: any = []) {
@@ -333,4 +356,11 @@ function whichSync(command: any) {
     shell: process.platform !== 'win32'
   });
   return result.status === 0 ? String(result.stdout || '').trim().split(/\r?\n/)[0] : null;
+}
+
+function valueAfter(args: any[] = [], name: string): string | null {
+  const index = args.findIndex((arg: any) => String(arg) === name);
+  if (index < 0) return null;
+  const value = args[index + 1];
+  return value === undefined ? null : String(value);
 }

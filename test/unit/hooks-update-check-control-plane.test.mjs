@@ -77,6 +77,8 @@ test('Update SKS now acceptance is control-plane only and does not start a route
     const context = String(result.additionalContext || '');
     assert.match(context, /user accepted update to 9\.9\.9/);
     assert.match(context, /run exactly this command and nothing else/);
+    assert.match(context, /sks update now --version 9\.9\.9/);
+    assert.doesNotMatch(context, /npm i -g/);
     assert.doesNotMatch(context, /\$Team route prepared|Pipeline plan:/);
     assert.deepEqual(await missionEntries(root), []);
     const state = await readUpdateState(root);
@@ -130,6 +132,8 @@ test('accepted SKS update is not re-offered in the same conversation', async () 
     const context = String(result.additionalContext || '');
     assert.match(context, /was already accepted for this conversation/);
     assert.match(context, /Do not ask again or start a pipeline route/);
+    assert.match(context, /sks update now --version 9\.9\.9/);
+    assert.doesNotMatch(context, /npm i -g/);
     assert.doesNotMatch(context, /\$Team route prepared|Pipeline plan:/);
     assert.deepEqual(await missionEntries(root), []);
   });

@@ -115,7 +115,7 @@ export const SKS_CONFIG_PROFILES: Array<{ name: string; stripTable: boolean; blo
   { name: 'sks-research-xhigh', stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh' }) },
   { name: 'sks-research', stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh', approvalPolicy: 'never' }) },
   { name: 'sks-team', stripTable: true, block: sksProfileFileBlock({ effort: 'medium' }) },
-  { name: MAD_HIGH_PROFILE, stripTable: true, block: sksProfileFileBlock({ effort: 'high', approvalPolicy: 'never', sandboxMode: 'danger-full-access', reviewer: AUTO_REVIEW_REVIEWER }) },
+  { name: MAD_HIGH_PROFILE, stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh', approvalPolicy: 'never', sandboxMode: 'danger-full-access', reviewer: AUTO_REVIEW_REVIEWER }) },
   { name: 'sks-default', stripTable: true, block: sksProfileFileBlock({ effort: 'high' }) }
 ];
 
@@ -167,11 +167,11 @@ export function buildMadHighLaunchProfileNoWrite(opts: any = {}) {
       '-c',
       'service_tier=fast',
       '-c',
-      'model_reasoning_effort=high'
+      'model_reasoning_effort=xhigh'
     ],
     sandbox_mode: 'danger-full-access',
     approval_policy: 'never',
-    model_reasoning_effort: 'high',
+    model_reasoning_effort: 'xhigh',
     service_tier: 'fast',
     scope: 'explicit_launch_only',
     writes_user_codex_config: false
@@ -191,7 +191,7 @@ export async function ensureMadHighProfileForSetupOrRepair(opts: any = {}) {
   // selectors so Codex stops warning about the legacy config profile on launch.
   await migrateSksProfilesToPerFile({ configPath, env });
   await writeProfileConfig(configPath, MAD_HIGH_PROFILE, profileConfigBlock({
-    effort: 'high',
+    effort: 'xhigh',
     approvalPolicy: 'never',
     sandboxMode: 'danger-full-access'
   }));
@@ -199,11 +199,11 @@ export async function ensureMadHighProfileForSetupOrRepair(opts: any = {}) {
     config_path: configPath,
     profile_config_path: path.join(path.dirname(configPath), `${MAD_HIGH_PROFILE}.config.toml`),
     profile_name: MAD_HIGH_PROFILE,
-    launch_args: ['--profile', MAD_HIGH_PROFILE, '--sandbox', 'danger-full-access', '--ask-for-approval', 'never', '-c', 'service_tier=fast'],
+    launch_args: ['--profile', MAD_HIGH_PROFILE, '--sandbox', 'danger-full-access', '--ask-for-approval', 'never', '-c', 'service_tier=fast', '-c', 'model_reasoning_effort=xhigh'],
     sandbox_mode: 'danger-full-access',
     approval_policy: 'never',
     approvals_reviewer: AUTO_REVIEW_REVIEWER,
-    model_reasoning_effort: 'high',
+    model_reasoning_effort: 'xhigh',
     service_tier: 'fast',
     scope: 'setup_or_repair_only',
     writes_user_codex_config: true
