@@ -1,5 +1,6 @@
 import { nowIso, randomId } from '../fsx.js'
 import type { CodexTaskInput } from './codex-control-plane.js'
+import { GPT_FINAL_ARBITER_RESULT_SCHEMA_ID } from './gpt-final-review-schema.js'
 
 export function fakeCodexSdkAllowed() {
   return process.env.NODE_ENV === 'test'
@@ -29,6 +30,25 @@ export async function runFakeCodexSdkTask(input: CodexTaskInput) {
 }
 
 function fakeStructuredOutput(input: CodexTaskInput) {
+  if (input.outputSchemaId === GPT_FINAL_ARBITER_RESULT_SCHEMA_ID) {
+    const unsafe = /\b(truncate|delete all|drop table|credential)\b/i.test(input.prompt || '')
+    return {
+      schema: GPT_FINAL_ARBITER_RESULT_SCHEMA_ID,
+      status: unsafe ? 'rejected' : 'approved',
+      summary: unsafe
+        ? 'Fake Codex SDK GPT final arbiter rejected an unsafe candidate for hermetic verification.'
+        : 'Fake Codex SDK GPT final arbiter approved the candidate for hermetic verification.',
+      gpt_review_findings: unsafe ? [{ severity: 'high', message: 'unsafe candidate rejected' }] : [],
+      accepted_patch_envelopes: unsafe ? [] : [],
+      modified_patch_envelopes: [],
+      rejected_patch_envelopes: unsafe ? [{ reason: 'unsafe candidate' }] : [],
+      required_followup_work: unsafe ? [{ blocker: 'unsafe_candidate_patch' }] : [],
+      verification_plan: ['schema validation', 'local collaboration final gate'],
+      rollback_notes: [],
+      blockers: unsafe ? ['unsafe_candidate_patch'] : [],
+      confidence: unsafe ? 'medium' : 'high'
+    }
+  }
   return {
     status: 'done',
     summary: `Fake Codex SDK task completed for ${input.workItemId || input.route}.`,

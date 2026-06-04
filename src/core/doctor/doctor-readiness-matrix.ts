@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
+import { resolveLocalCollaborationPolicy } from '../local-llm/local-collaboration-policy.js'
 
 export const DOCTOR_READINESS_MATRIX_SCHEMA = 'sks.doctor-readiness-matrix.v1'
 
@@ -43,6 +44,11 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   if (input.codex_app_ui?.requires_confirmation === true) blockers.add('codex_app_fast_ui_repair_requires_confirmation')
   if (input.codex_app_ui?.fast_selector === 'repaired') warnings.add('codex_app_fast_selector_repaired_restart_app_if_needed')
   if (input.codex_lb?.ok === false) warnings.add(`codex_lb_${input.codex_lb?.circuit?.state || 'blocked'}`)
+  const localCollaborationPolicy = resolveLocalCollaborationPolicy({ mode: input.local_collaboration?.mode || null })
+  const gptFinalAvailable = input.local_collaboration?.gpt_final_arbiter_available === undefined
+    ? codexBinOk
+    : input.local_collaboration.gpt_final_arbiter_available === true
+  if (localCollaborationPolicy.gpt_final_required && !gptFinalAvailable) blockers.add('gpt_final_arbiter_unavailable')
 
   const codexConfigNode = nodeRead.ok !== false && codexConfig.ok !== false
   const codexConfigChild = childRead.ok !== false && codexConfig.ok !== false
@@ -81,6 +87,14 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     hooks_ready: input.hooks_ready !== false,
     codex_app_ready: input.codex_app?.ok === true,
     codex_app_required_for_cli: false,
+    local_collaboration: {
+      mode: localCollaborationPolicy.mode,
+      local_backend: input.local_collaboration?.local_backend || input.local_model?.provider || 'ollama',
+      local_model: input.local_collaboration?.local_model || input.local_model?.model || null,
+      final_arbiter: gptFinalAvailable ? 'GPT available' : 'missing',
+      final_apply_allowed: localCollaborationPolicy.gpt_final_required ? gptFinalAvailable : localCollaborationPolicy.mode === 'disabled',
+      blockers: localCollaborationPolicy.gpt_final_required && !gptFinalAvailable ? ['gpt_final_arbiter_unavailable'] : localCollaborationPolicy.blockers
+    },
     ready: blockers.size === 0 && cliReady,
     primary_blocker: [...blockers][0] || null,
     blockers: [...blockers],

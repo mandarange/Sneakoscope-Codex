@@ -367,7 +367,7 @@ async function executeRouteCommand(
   return routeExecutionResult(route, ['sks', ...commandArgs].join(' '), result, {
     okStatus: 'completed',
     trustStatus: 'verified_partial',
-      executionKind: route.command === '$DB' || route.command === '$Wiki' || route.command === '$Fast-Mode' || route.command === '$with-local-llm-on' ? 'safe_deterministic' : 'mock_safe',
+      executionKind: route.command === '$DB' || route.command === '$Wiki' || route.command === '$Fast-Mode' || route.command === '$with-local-llm-on' || route.command === '$Commit' || route.command === '$Commit-And-Push' ? 'safe_deterministic' : 'mock_safe',
   });
 }
 
@@ -489,6 +489,8 @@ function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = 
   if (route.command === '$Wiki') return ['wiki', 'refresh', '--json'];
   if (route.command === '$Fast-Mode') return ['fast-mode', fastModeActionFromPrompt(prompt), '--json'];
   if (route.command === '$with-local-llm-on') return ['with-local-llm', localModelActionFromPrompt(prompt), '--json'];
+  if (route.command === '$Commit') return ['commit', '--json'];
+  if (route.command === '$Commit-And-Push') return ['commit-and-push', '--json'];
   return ['team', prompt, '--mock', '--json', ...(auto ? ['--no-open-zellij'] : [])];
 }
 

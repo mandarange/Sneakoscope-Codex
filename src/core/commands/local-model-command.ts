@@ -21,7 +21,7 @@ function normalizeLocalModelAction(value: unknown): 'enable' | 'disable' | 'set-
 }
 
 async function enable(args: string[]) {
-  const model = readOption(args, '--model', args[0] || '')
+  const model = readOption(args, '--model', firstPositional(args) || '')
   const baseUrl = readOption(args, '--base-url', '')
   const think = readBoolFlag(args, '--think', '--no-think')
   const patch: any = { enabled: true, provider: 'ollama' }
@@ -94,4 +94,17 @@ function readBoolFlag(args: string[], trueName: string, falseName: string): bool
   if (args.includes(trueName)) return true
   if (args.includes(falseName)) return false
   return null
+}
+
+function firstPositional(args: string[] = []) {
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = String(args[i] || '')
+    if (arg === '--model' || arg === '--base-url') {
+      if (args[i + 1] && !String(args[i + 1]).startsWith('--')) i += 1
+      continue
+    }
+    if (arg.startsWith('--model=') || arg.startsWith('--base-url=')) continue
+    if (!arg.startsWith('--')) return arg
+  }
+  return ''
 }

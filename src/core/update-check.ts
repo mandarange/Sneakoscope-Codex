@@ -87,9 +87,21 @@ export async function runSksUpdateCheck(options: SksUpdateCheckOptions = {}): Pr
   };
   if (options.timeoutMs !== undefined) effectiveOptions.timeoutMs = options.timeoutMs;
   if (options.maxOutputBytes !== undefined) effectiveOptions.maxOutputBytes = options.maxOutputBytes;
-  const effective = await detectEffectiveSksVersion(effectiveOptions);
-  const current = effective.current;
   const override = env[versionOverrideEnvName(packageName)];
+  const effectivePromise = detectEffectiveSksVersion(effectiveOptions);
+  const latestPromise = !override && npmBin
+    ? runProcess(npmBin, ['view', packageName, 'version', '--silent', '--registry', registry], {
+      env,
+      timeoutMs: options.timeoutMs ?? 5000,
+      maxOutputBytes: options.maxOutputBytes ?? 4096
+    }).catch((err: unknown) => ({
+      code: 1,
+      stdout: '',
+      stderr: err instanceof Error ? err.message : String(err)
+    }))
+    : Promise.resolve(null);
+  const effective = await effectivePromise;
+  const current = effective.current;
   if (override) return buildResult({ packageName, current, effective, latest: override, registry, npmBin });
 
   if (!npmBin) {
@@ -104,16 +116,18 @@ export async function runSksUpdateCheck(options: SksUpdateCheckOptions = {}): Pr
     });
   }
 
-  const args = ['view', packageName, 'version', '--silent', '--registry', registry];
-  const result = await runProcess(npmBin, args, {
-    env,
-    timeoutMs: options.timeoutMs ?? 5000,
-    maxOutputBytes: options.maxOutputBytes ?? 4096
-  }).catch((err: unknown) => ({
-    code: 1,
-    stdout: '',
-    stderr: err instanceof Error ? err.message : String(err)
-  }));
+  const result = await latestPromise;
+  if (!result) {
+    return buildResult({
+      packageName,
+      current,
+      effective,
+      latest: null,
+      registry,
+      npmBin,
+      error: 'npm view failed'
+    });
+  }
   if (result.code !== 0) {
     return buildResult({
       packageName,
@@ -277,25 +291,31 @@ export async function detectEffectiveSksVersion(options: SksUpdateCheckOptions =
   };
   add(options.currentVersion || PACKAGE_VERSION, 'runtime');
   add(env.SKS_INSTALLED_SKS_VERSION, 'env:SKS_INSTALLED_SKS_VERSION');
-  const pkg = await readJson<any>(path.join(packageRoot(), 'package.json'), {}).catch(() => ({}));
-  add(pkg?.version, 'packageRoot:package.json');
-
-  const sks = await which('sks').catch(() => null);
-  if (sks) {
-    const result = await runProcess(sks, ['--version'], {
-      timeoutMs: 2000,
-      maxOutputBytes: 4096,
-      env: { ...env, SKS_DISABLE_UPDATE_CHECK: '1' }
-    }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
-    if (result.code === 0) add(result.stdout, `PATH:${sks}`);
-    else errors.push(`path_sks_version:${String(result.stderr || result.stdout || 'failed').trim()}`);
-  }
-
-  if (npmBin) {
-    const npmGlobal = await detectNpmGlobalPackageVersion(npmBin, packageName, env, {
+  const packageRootPromise = readJson<any>(path.join(packageRoot(), 'package.json'), {}).catch(() => ({}));
+  const pathSksPromise = which('sks')
+    .then(async (sks) => {
+      if (!sks) return null;
+      const result = await runProcess(sks, ['--version'], {
+        timeoutMs: 2000,
+        maxOutputBytes: 4096,
+        env: { ...env, SKS_DISABLE_UPDATE_CHECK: '1' }
+      }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+      return { sks, result };
+    })
+    .catch(() => null);
+  const npmGlobalPromise = npmBin
+    ? detectNpmGlobalPackageVersion(npmBin, packageName, env, {
       timeoutMs: options.timeoutMs ?? 2500,
       maxOutputBytes: options.maxOutputBytes ?? 8192
-    }).catch((err: any) => ({ version: null, error: err?.message || String(err) }));
+    }).catch((err: any) => ({ version: null, error: err?.message || String(err) }))
+    : Promise.resolve(null);
+  const [pkg, pathSks, npmGlobal] = await Promise.all([packageRootPromise, pathSksPromise, npmGlobalPromise]);
+  add(pkg?.version, 'packageRoot:package.json');
+  if (pathSks?.sks) {
+    if (pathSks.result.code === 0) add(pathSks.result.stdout, `PATH:${pathSks.sks}`);
+    else errors.push(`path_sks_version:${String(pathSks.result.stderr || pathSks.result.stdout || 'failed').trim()}`);
+  }
+  if (npmGlobal) {
     add(npmGlobal.version, `npm-global:${packageName}`);
     if (npmGlobal.error) errors.push(`npm_global_version:${npmGlobal.error}`);
   }
