@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.4 is the local LLM / publish-readiness closure patch for the 2.0 line. It keeps the 2.0.2 MAD, Codex App Fast UI, provider, and Zellij release surface, then closes the new release DAG gaps for `sks update`, `$with-local-llm-on`, and `$with-local-llm-off` fixture coverage while keeping package-install mutation safety guarded and ledgered.
+
+The 2.0.4 release gate requires all-feature completion/deep-completion to include the local LLM command fixtures, mutation callsite coverage to report zero uncovered risky package-install callsites, release metadata to mention 2.0.4 across versioned docs, and the package/lockfile/TypeScript/Rust/dist version surfaces to agree before publish checks proceed.
+
 SKS 2.0.2 is the P0 closure patch for the Codex App Fast UI and MAD Zellij worker-pane release. Native worker execution routes through `runCodexTask`, UltraRouter records orchestrator/worker profile decisions, Reliability Shield hardens SDK streams, and Zellij remains the pane-level visual proof surface that links slot/generation/session records to SDK thread/provider/service-tier evidence.
 
 The 2.0.2 release gate keeps the 2.0.0 `codex-control:*` and `ultra-router:*` coverage, keeps the 2.0.1 Codex App UI snapshot/preservation/clobber-guard/doctor repair checks, and adds actual `sks --mad` no-mutation proof, config.toml-backed provider context checks, MAD Zellij default pane-worker proof, WorkerPaneManager single-owner proof, no-production-MJS runtime checks including `bin/*.mjs`, and the TypeScript/Python boundary check.

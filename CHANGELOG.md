@@ -4,6 +4,22 @@
 
 
 
+
+
+## [2.0.4] - 2026-06-04
+
+### Fixed
+
+- Add all-feature completion fixtures for `sks update` and `$with-local-llm-on/off` so the release DAG can verify the new local LLM command surface instead of reporting fixture gaps.
+- Route `sks update now` package installation through the mutation guard and package-install ledger so safety callsite coverage stays complete.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
+## [2.0.3] - 2026-06-04
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [2.0.2] - 2026-06-04
 
 P0 closure release: make `sks --mad` stop rewriting user-level Codex App config, make safe Fast UI repair apply through `doctor --fix`, wire interactive MAD worker panes through real Zellij sessions, and tighten provider/runtime release gates.
