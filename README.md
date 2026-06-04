@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.2** is a P0 Codex App Fast UI and MAD Zellij worker-pane closure patch on top of the 2.0 execution layer. `sks --mad` now relies on launch-time Fast/high overrides instead of user-level Codex config rewrites, safe Fast UI repair runs through `sks doctor --fix`, provider badges read env/auth/config.toml consistently, and interactive MAD worker panes attach to the real Zellij session as scheduler slots spawn.
+SKS **2.0.4** is a P0 Codex App Fast UI and MAD Zellij worker-pane closure patch on top of the 2.0 execution layer. `sks --mad` now relies on launch-time Fast/high overrides instead of user-level Codex config rewrites, safe Fast UI repair runs through `sks doctor --fix`, provider badges read env/auth/config.toml consistently, and interactive MAD worker panes attach to the real Zellij session as scheduler slots spawn.
 
 What changed:
 

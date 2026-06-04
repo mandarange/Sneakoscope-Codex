@@ -2242,6 +2242,54 @@
       "can_run_incremental": true
     },
     {
+      "id": "local-collab:gpt-final-arbiter",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/local-collab-*.ts",
+        "src/scripts/local-collab-gpt-final-arbiter-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "local-collab:gpt-final-availability",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/local-collab-*.ts",
+        "src/scripts/local-collab-gpt-final-availability-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "local-collab:no-local-only-final",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/local-collab-*.ts",
+        "src/scripts/local-collab-no-local-only-final-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "local-collab:policy",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/local-collab-*.ts",
+        "src/scripts/local-collab-policy-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "loop-blocker:check",
       "tier": "P1",
       "cost": "hermetic",

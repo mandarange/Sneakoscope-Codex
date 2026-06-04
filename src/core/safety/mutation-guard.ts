@@ -185,9 +185,10 @@ export async function guardedProcessKill(ctx: GuardContext, pid: number, opts: G
   })
 }
 
-export async function guardedPackageInstall(ctx: GuardContext, spec: string, opts: GuardOptions & { command: string; args: string[]; timeoutMs?: number; maxOutputBytes?: number; env?: NodeJS.ProcessEnv } ): Promise<{ code: number | null; stdout: string; stderr: string }> {
+export async function guardedPackageInstall(ctx: GuardContext, spec: string, opts: GuardOptions & { command: string; args: string[]; cwd?: string; timeoutMs?: number; maxOutputBytes?: number; env?: NodeJS.ProcessEnv } ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return guard(ctx, 'package_install', spec, opts, async () => {
-    const runOpts: { env?: NodeJS.ProcessEnv; timeoutMs: number; maxOutputBytes?: number } = { timeoutMs: opts.timeoutMs ?? 600000 }
+    const runOpts: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs: number; maxOutputBytes?: number } = { timeoutMs: opts.timeoutMs ?? 600000 }
+    if (opts.cwd !== undefined) runOpts.cwd = opts.cwd
     if (opts.env !== undefined) runOpts.env = opts.env
     if (opts.maxOutputBytes !== undefined) runOpts.maxOutputBytes = opts.maxOutputBytes
     const result = await runProcess(opts.command, opts.args, runOpts)

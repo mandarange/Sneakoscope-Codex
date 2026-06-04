@@ -1,6 +1,8 @@
 import os from 'node:os';
 import path from 'node:path';
 import { PACKAGE_VERSION, packageRoot, readJson, runProcess, which } from './fsx.js';
+import { createRequestedScopeContract } from './safety/requested-scope-contract.js';
+import { guardedPackageInstall, guardContextForRoute } from './safety/mutation-guard.js';
 
 export interface SksUpdateCheckOptions {
   packageName?: string;
@@ -245,12 +247,26 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     });
   }
 
-  const install = await runProcess(npmBin, npmArgs, {
-    cwd,
-    env,
-    timeoutMs: options.timeoutMs ?? 10 * 60 * 1000,
-    maxOutputBytes: options.maxOutputBytes ?? 128 * 1024
-  }).catch((err: unknown) => ({
+  const mutationLedgerRoot = env.SKS_MUTATION_LEDGER_ROOT || packageRoot();
+  const installContract = createRequestedScopeContract({
+    route: 'update',
+    userRequest: command || `npm global install ${packageName}`,
+    projectRoot: mutationLedgerRoot,
+    overrides: { package_install: true }
+  });
+  const install = await guardedPackageInstall(
+    guardContextForRoute(mutationLedgerRoot, installContract, command || `npm global install ${packageName}`),
+    `${packageName}@${installVersion}`,
+    {
+      confirmed: true,
+      command: npmBin,
+      args: npmArgs,
+      cwd,
+      env,
+      timeoutMs: options.timeoutMs ?? 10 * 60 * 1000,
+      maxOutputBytes: options.maxOutputBytes ?? 128 * 1024
+    }
+  ).catch((err: unknown) => ({
     code: 1,
     stdout: '',
     stderr: err instanceof Error ? err.message : String(err)

@@ -45,7 +45,7 @@ process.exit(1);
   assert.equal(result.npm_global_current, '1.10.0');
   assert.equal(result.command, 'sks update now --version 99.99.99');
   const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
-  assert.deepEqual(calls.at(-1), ['view', 'sneakoscope', 'version', '--silent', '--registry', 'https://registry.npmjs.org/']);
+  assert.ok(calls.some((args) => JSON.stringify(args) === JSON.stringify(['view', 'sneakoscope', 'version', '--silent', '--registry', 'https://registry.npmjs.org/'])));
   assert.ok(calls.some((args) => args[0] === 'list' && args[1] === '-g' && args[2] === 'sneakoscope'));
   assert.equal(comparePackageVersions('1.10.0', '1.9.9'), 1);
 });
@@ -84,7 +84,7 @@ process.exit(1);
   const result = await runSksUpdateNow({
     npmBin: fakeNpm,
     currentVersion: '1.10.0',
-    env: { ...process.env, SKS_FAKE_NPM_LOG: log }
+    env: { ...process.env, SKS_FAKE_NPM_LOG: log, SKS_MUTATION_LEDGER_ROOT: tmp }
   });
 
   assert.equal(result.schema, 'sks.update-now.v1');
@@ -95,6 +95,8 @@ process.exit(1);
   assert.ok(calls.some((call) => call.args[0] === 'root' && call.args[1] === '--global'));
   assert.ok(calls.some((call) => call.args[0] === 'install' && call.args[1] === '--global'));
   assert.ok(!calls.some((call) => call.args[0] === 'install' && call.args[1] !== '--global'));
+  const ledger = await fs.readFile(path.join(tmp, '.sneakoscope', 'reports', 'mutation-ledger.jsonl'), 'utf8');
+  assert.match(ledger, /"kind":"package_install"/);
 });
 
 test('SKS update check treats current global npm package as installed even when runtime is older', async () => {
