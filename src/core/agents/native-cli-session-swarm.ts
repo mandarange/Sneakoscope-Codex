@@ -14,6 +14,8 @@ export function createNativeCliSessionSwarmRecorder(root: string, input: {
   requestedAgents: number
   targetActiveSlots: number
   backend: string
+  backendExplicit?: boolean
+  noOllama?: boolean
   route: string
   fastModePolicy: FastModePolicy
 }) {
@@ -27,7 +29,7 @@ class NativeCliSessionSwarmRecorder {
   private writeLock: Promise<unknown> = Promise.resolve()
   private nextPaneToken = -1
 
-  constructor(private root: string, private input: { missionId: string; requestedAgents: number; targetActiveSlots: number; backend: string; route: string; fastModePolicy: FastModePolicy }) {}
+  constructor(private root: string, private input: { missionId: string; requestedAgents: number; targetActiveSlots: number; backend: string; backendExplicit?: boolean; noOllama?: boolean; route: string; fastModePolicy: FastModePolicy }) {}
 
   async initialize() {
     await this.persist()
@@ -50,6 +52,8 @@ class NativeCliSessionSwarmRecorder {
       parent_mission_id: this.input.missionId,
       route: this.input.route,
       backend: this.input.backend,
+      backend_explicit: this.input.backendExplicit === true,
+      no_ollama: this.input.noOllama === true || ctx.opts.noOllama === true,
       agent_root: this.root,
       agent: ctx.agent,
       slice: ctx.slice,
@@ -59,6 +63,9 @@ class NativeCliSessionSwarmRecorder {
       patch_envelope_path: patchRel,
       service_tier: this.input.fastModePolicy.service_tier,
       fast_mode: this.input.fastModePolicy.fast_mode,
+      ollama_enabled: ctx.opts.ollamaEnabled === true || this.input.backend === 'ollama',
+      ollama_model: ctx.opts.ollamaModel || null,
+      ollama_base_url: ctx.opts.ollamaBaseUrl || null,
       source_intelligence_refs: ctx.agent.source_intelligence_refs || null,
       goal_mode_ref: ctx.agent.goal_mode_ref || null,
       strategy_refs: ctx.slice?.strategy_refs || null,
@@ -209,6 +216,8 @@ class NativeCliSessionSwarmRecorder {
         SKS_AGENT_SESSION_ID: String(input.ctx.agent.session_id || ''),
         SKS_AGENT_SLOT_ID: slotId,
         SKS_AGENT_GENERATION_INDEX: String(input.ctx.agent.generation_index || 1),
+        ...(input.ctx.opts.ollamaModel ? { SKS_OLLAMA_MODEL: String(input.ctx.opts.ollamaModel) } : {}),
+        ...(input.ctx.opts.ollamaBaseUrl ? { SKS_OLLAMA_BASE_URL: String(input.ctx.opts.ollamaBaseUrl) } : {}),
         SKS_ZELLIJ_WORKER_PANE: '1',
         SKS_ZELLIJ_SESSION_NAME: sessionName
       }
@@ -237,7 +246,7 @@ class NativeCliSessionSwarmRecorder {
       serviceTier: this.input.fastModePolicy.service_tier
     })
     const launchBlockers = paneRecord.blockers || []
-    input.record.command_line = ['zellij', '--session', sessionName, 'action', 'new-pane', '--name', paneRecord.pane_name, '--', 'sh', '-lc', '<native-cli-worker-command>']
+    input.record.command_line = ['zellij', '--session', sessionName, 'action', 'new-pane', '--direction', paneRecord.direction_applied, '--name', paneRecord.pane_name, '--', 'sh', '-lc', '<native-cli-worker-command>']
     input.record.zellij_session_name = sessionName
     input.record.zellij_pane_id = paneRecord.pane_id || null
     input.record.zellij_pane_id_source = paneRecord.pane_id_source

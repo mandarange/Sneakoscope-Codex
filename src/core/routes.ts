@@ -355,6 +355,22 @@ export const ROUTES = [
     examples: ['$Fast-On', '$Fast-Off', '$Fast-Mode status']
   },
   {
+    id: 'LocalModel',
+    command: '$with-local-llm-on',
+    mode: 'LOCAL_MODEL',
+    route: 'local Ollama worker toggle',
+    description: 'Turn the optional local Ollama worker backend on or off. Default off keeps SKS GPT-only; enabled mode lets eligible simple code/collection worker slices use Ollama while GPT/Codex owns strategy, design, review, verification, and integration.',
+    requiredSkills: ['with-local-llm-on', 'honest-mode'],
+    dollarAliases: ['$with-local-llm-off'],
+    appSkillAliases: ['with-local-llm-off'],
+    lifecycle: ['global_local_model_toggle', 'worker_only_policy_status', 'honest_mode'],
+    context7Policy: 'not_required',
+    reasoningPolicy: 'low',
+    stopGate: 'none',
+    cliEntrypoint: 'sks with-local-llm on|off|status|set-model [--json]',
+    examples: ['$with-local-llm-on', '$with-local-llm-off', 'sks with-local-llm status --json']
+  },
+  {
     id: 'Team',
     command: '$Team',
     mode: 'TEAM',
@@ -643,6 +659,7 @@ export const COMMAND_CATALOG = [
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS Zellij with the auto-review profile.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Team.' },
   { name: 'fast-mode', usage: 'sks fast-mode on|off|status|clear [--json]', description: 'Toggle the project-local Fast mode default used by $Fast-On, $Fast-Off, and native-agent routes.' },
+  { name: 'with-local-llm', usage: 'sks with-local-llm on|off|status|set-model [--json]', description: 'Toggle the optional local Ollama worker backend used by $with-local-llm-on/$with-local-llm-off and eligible simple worker slices.' },
   { name: 'commit', usage: 'sks commit [--message "msg"] [--json]', description: 'Stage current changes, summarize them, and create a simple git commit without the full SKS pipeline.' },
   { name: 'commit-and-push', usage: 'sks commit-and-push [--message "msg"] [--json]', description: 'Stage current changes, create a simple git commit, and push without the full SKS pipeline.' },
   { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight direct-fix mode.' },

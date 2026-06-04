@@ -21,6 +21,8 @@ import { AgentPatchTransactionJournal } from './agent-patch-transaction-journal.
 import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-patch-schema.js'
 import { runFakeAgent } from './agent-runner-fake.js'
 import { runProcessAgent } from './agent-runner-process.js'
+import { classifyOllamaWorkerSlice, runOllamaAgent } from './agent-runner-ollama.js'
+import { resolveOllamaWorkerConfig } from './ollama-worker-config.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { writeAgentCleanupReport } from './agent-cleanup.js'
 import { writeAgentTrustReport } from './agent-trust-report.js'
@@ -253,6 +255,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     requestedAgents: Number(opts.agents || roster.agent_count || targetActiveSlots),
     targetActiveSlots,
     backend,
+    backendExplicit: opts.backendExplicit === true,
+    noOllama: opts.noOllama === true,
     route,
     fastModePolicy
   })
@@ -863,7 +867,9 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
 }
 
 async function runAgentByBackend(backend: string, agent: any, slice: any, opts: any) {
+  backend = await maybeSelectOllamaBackend(backend, agent, slice, opts)
   if (backend === 'process') return runProcessAgent(agent, slice, opts)
+  if (backend === 'ollama') return runOllamaAgent(agent, slice, opts)
   if (backend === 'codex-sdk' || backend === 'zellij') {
     const ledgerRoot = path.resolve(opts.agentRoot || opts.cwd || process.cwd())
     const workerDir = path.join(ledgerRoot, 'codex-sdk-workers', String(agent.session_id || agent.id || 'agent'), String(slice?.id || 'slice'))
@@ -926,6 +932,19 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
     })
   }
   return runFakeAgent(agent, slice, opts)
+}
+
+async function maybeSelectOllamaBackend(backend: string, agent: any, slice: any, opts: any) {
+  if (backend !== 'codex-sdk') return backend
+  if (opts.backendExplicit === true || opts.backend_explicit === true || opts.noOllama === true || opts.no_ollama === true) return backend
+  const config = await resolveOllamaWorkerConfig({
+    ollamaEnabled: opts.ollamaEnabled === true || opts.ollama_enabled === true,
+    model: opts.ollamaModel || opts.ollama_model || null,
+    baseUrl: opts.ollamaBaseUrl || opts.ollama_base_url || null
+  }).catch(() => null)
+  if (!config?.ok || config.enabled !== true) return backend
+  const policy = classifyOllamaWorkerSlice(slice, { route: opts.route, agent })
+  return policy.ok ? 'ollama' : backend
 }
 
 function buildDirectSdkWorkerPrompt(slice: any) {

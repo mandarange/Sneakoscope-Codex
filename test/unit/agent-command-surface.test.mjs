@@ -19,11 +19,25 @@ test('agent command parser forwards real backend flags without leaking option va
   assert.equal(parsed.action, 'run');
   assert.equal(parsed.prompt, 'fixture task');
   assert.equal(parsed.backend, 'codex-sdk');
+  assert.equal(parsed.backendExplicit, true);
   assert.equal(parsed.agents, 1);
   assert.equal(parsed.concurrency, 1);
   assert.equal(parsed.real, true);
   assert.equal(parsed.mock, false);
   assert.equal(parsed.json, true);
+});
+
+test('agent command parser marks default backend as implicit', () => {
+  const parsed = parseAgentCommandArgs('agent', [
+    'run',
+    'simple code write only',
+    '--agents',
+    '1',
+    '--json'
+  ]);
+
+  assert.equal(parsed.backend, 'codex-sdk');
+  assert.equal(parsed.backendExplicit, false);
 });
 
 test('agent command parser keeps patch entry id out of rollback prompt positionals', () => {

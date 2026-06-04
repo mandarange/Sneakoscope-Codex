@@ -13,7 +13,10 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const minimumWorkItems = Number(readOption(args, '--minimum-work-items', targetActiveSlots))
   const maxQueueExpansion = Number(readOption(args, '--max-queue-expansion', 10))
   const concurrency = Number(readOption(args, '--concurrency', Math.min(agents, 5)))
-  const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : 'codex-sdk'))
+  const useOllama = hasFlag(args, '--ollama') || hasFlag(args, '--local-model')
+  const noOllama = hasFlag(args, '--no-ollama') || hasFlag(args, '--no-local-model')
+  const backendExplicit = hasOption(args, '--backend')
+  const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : useOllama && !noOllama ? 'ollama' : 'codex-sdk'))
   const route = String(readOption(args, '--route', '$Agent'))
   const mock = hasFlag(args, '--mock') || backend === 'fake'
   const real = hasFlag(args, '--real')
@@ -27,6 +30,10 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const serviceTier = normalizeServiceTier(explicitServiceTier, null) || undefined
   const fastMode = hasFlag(args, '--no-fast') || serviceTier === 'standard' ? false : hasFlag(args, '--fast') ? true : undefined
   const noFast = hasFlag(args, '--no-fast')
+  const ollamaModel = String(readOption(args, '--ollama-model', readOption(args, '--local-model-model', '')) || '') || null
+  const ollamaBaseUrl = String(readOption(args, '--ollama-base-url', readOption(args, '--local-model-base-url', '')) || '') || null
+  const zellijSessionName = String(readOption(args, '--zellij-session-name', '') || '') || null
+  const zellijPaneWorker = hasFlag(args, '--no-zellij-pane-worker') ? false : hasFlag(args, '--zellij-pane-worker') ? true : undefined
   const apply = hasFlag(args, '--apply')
   const dryRun = hasFlag(args, '--dry-run') || hasFlag(args, '--dryrun')
   const drain = hasFlag(args, '--drain')
@@ -34,7 +41,7 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const graceMs = Number(readOption(args, '--grace-ms', 750))
   const killEscalation = hasFlag(args, '--kill-escalation') || !hasFlag(args, '--no-kill-escalation')
   const codexApp = hasFlag(args, '--codex-app')
-  const positionals = positionalArgs(rest, new Set(['--agents', '--target-active-slots', '--work-items', '--minimum-work-items', '--max-queue-expansion', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane', '--stale-ms', '--grace-ms', '--profile', '--write-mode', '--max-write-agents', '--patch-entry-id', '--patch-entry', '--service-tier', '--intake', '--agent-root', '--artifact-dir', '--result-path', '--heartbeat-path', '--patch-envelope-path']))
+  const positionals = positionalArgs(rest, new Set(['--agents', '--target-active-slots', '--work-items', '--minimum-work-items', '--max-queue-expansion', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane', '--stale-ms', '--grace-ms', '--profile', '--write-mode', '--max-write-agents', '--patch-entry-id', '--patch-entry', '--service-tier', '--zellij-session-name', '--intake', '--agent-root', '--artifact-dir', '--result-path', '--heartbeat-path', '--patch-envelope-path', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url']))
   const missionDefault = action === 'run' || action === 'spawn' || action === 'plan' ? '' : 'latest'
   const positionalMission = action === 'run' || action === 'spawn' || action === 'plan' ? '' : (positionals[0] || '')
   const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', positionalMission || missionDefault)))
@@ -42,7 +49,7 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const patchEntryId = String(readOption(args, '--patch-entry-id', readOption(args, '--patch-entry', '')))
   const promptPositionals = positionalMission ? positionals.slice(1) : positionals
   const prompt = promptPositionals.join(' ').trim() || 'Native agent run'
-  return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, mock, real, readonly, profile, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, apply, dryRun, drain, staleMs, graceMs, killEscalation, json, missionId, lane, codexApp, patchEntryId }
+  return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, backendExplicit, mock, real, readonly, profile, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, zellijSessionName, zellijPaneWorker, apply, dryRun, drain, staleMs, graceMs, killEscalation, json, missionId, lane, codexApp, patchEntryId }
 }
 
 function hasFlag(args: string[], flag: string) {
@@ -54,6 +61,10 @@ function readOption(args: string[], name: string, fallback: unknown) {
   if (index >= 0 && args[index + 1] && !String(args[index + 1]).startsWith('--')) return args[index + 1]
   const prefixed = args.find((arg) => String(arg).startsWith(name + '='))
   return prefixed ? prefixed.slice(name.length + 1) : fallback
+}
+
+function hasOption(args: string[], name: string) {
+  return args.includes(name) || args.some((arg) => String(arg).startsWith(name + '='))
 }
 
 function positionalArgs(args: string[], valueFlags: Set<string>) {

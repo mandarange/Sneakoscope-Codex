@@ -67,6 +67,8 @@ export interface ZellijWorkerPaneRecord {
   opened_at: string
   closed_at: string | null
   close: ZellijCommandResult | null
+  direction_requested: 'right'
+  direction_applied: 'right' | 'unknown' | 'not_applied'
   sdk_thread_id?: string | null
   sdk_run_id?: string | null
   stream_event_count?: number
@@ -94,6 +96,7 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   createSession?: ZellijCommandResult | null
   launch?: ZellijCommandResult | null
   paneReconciliation?: any
+  directionApplied?: 'right' | 'unknown' | 'not_applied'
   status?: ZellijWorkerPaneRecord['status']
   sdkThreadId?: string | null
   sdkRunId?: string | null
@@ -140,6 +143,8 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     opened_at: now,
     closed_at: null,
     close: null,
+    direction_requested: 'right',
+    direction_applied: input.directionApplied || 'not_applied',
     sdk_thread_id: input.sdkThreadId || null,
     sdk_run_id: input.sdkRunId || null,
     stream_event_count: Number(input.streamEventCount || 0),
@@ -164,13 +169,25 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     optional: false
   })
   const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier)
-  const launch = createSession.ok
-    ? await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--name', paneName, '--', 'sh', '-lc', input.workerCommand], {
+  let launch = createSession.ok
+    ? await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--direction', 'right', '--name', paneName, '--', 'sh', '-lc', input.workerCommand], {
         cwd,
         timeoutMs: 5000,
         optional: false
       })
     : null
+  let directionApplied: ZellijWorkerPaneRecord['direction_applied'] = launch?.ok ? 'right' : 'not_applied'
+  if (createSession.ok && launch && !launch.ok) {
+    const fallback = await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--name', paneName, '--', 'sh', '-lc', input.workerCommand], {
+      cwd,
+      timeoutMs: 5000,
+      optional: false
+    })
+    if (fallback.ok) {
+      launch = fallback
+      directionApplied = 'unknown'
+    }
+  }
   const stdoutPaneId = launch?.ok ? extractZellijPaneIdFromOutput(launch.stdout_tail) : null
   const reconciledPane = stdoutPaneId ? null : launch?.ok ? await reconcileZellijWorkerPaneId(input.sessionName, paneName, path.join(root, input.resultPath), cwd) : null
   const paneId = stdoutPaneId || reconciledPane?.pane_id || null
@@ -193,6 +210,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     createSession,
     launch,
     paneReconciliation: reconciledPane,
+    directionApplied,
     status: blockers.length ? 'failed' : 'running',
     providerContext,
     serviceTier: input.serviceTier || providerContext.service_tier,
@@ -222,6 +240,8 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     provider: record.provider,
     service_tier: record.service_tier,
     provider_context: record.provider_context,
+    direction_requested: record.direction_requested,
+    direction_applied: record.direction_applied,
     command: '<native-cli-worker-command>',
     worker_artifact_dir: input.workerArtifactDir,
     worker_result_path: input.resultPath,

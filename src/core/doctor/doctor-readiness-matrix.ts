@@ -40,6 +40,7 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   if (codexDoctor?.warnings?.length) for (const warning of codexDoctor.warnings) warnings.add(String(warning))
   if (input.codex_app?.ok === false) warnings.add('codex_app_needs_setup_optional_for_cli')
   if (input.codex_app_ui?.fast_selector === 'manual_action_required') warnings.add('codex_app_fast_selector_manual_action_required')
+  if (input.codex_app_ui?.requires_confirmation === true) blockers.add('codex_app_fast_ui_repair_requires_confirmation')
   if (input.codex_app_ui?.fast_selector === 'repaired') warnings.add('codex_app_fast_selector_repaired_restart_app_if_needed')
   if (input.codex_lb?.ok === false) warnings.add(`codex_lb_${input.codex_lb?.circuit?.state || 'blocked'}`)
 
@@ -49,6 +50,7 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   const madReady = cliReady && zellijReadyForInteractive
   const nextActions = normalizeList(input.operator_actions || codexConfig.operator_actions)
   if (!nextActions.length && blockers.size) nextActions.push('Run `sks doctor --fix`, then run `sks mad repair-config --apply` if config-load still fails.')
+  if (input.codex_app_ui?.requires_confirmation === true) nextActions.push(input.codex_app_ui.next_action || 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.')
   if (!zellijReadyForInteractive) nextActions.push('Install Zellij for `sks --mad` and interactive lane UI. On macOS: `brew install zellij`.')
 
   return {

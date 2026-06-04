@@ -17,6 +17,7 @@ const SKS_CAUSED_RE = /(?:SKS|Sneakoscope|codex-lb|sks-mad|sks fast)/i
 export async function repairCodexAppFastUi(root: string = process.cwd(), input: {
   codexHome?: string | null
   apply?: boolean
+  force?: boolean
   reportPath?: string | null
 } = {}) {
   const resolvedRoot = path.resolve(root)
@@ -27,6 +28,9 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
     { scope: 'codex_home', file: path.join(home, 'config.toml'), mode: 'sks_caused_host_owned_keys' }
   ]
   const actions = []
+  const detectedProjectLocalForbiddenKeys: string[] = []
+  const unsafeReasons: string[] = []
+  let detectedSksCausedMutation = false
   for (const candidate of candidates) {
     const text = await readText(candidate.file, null)
     if (text == null) {
@@ -36,8 +40,14 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
     const repaired = candidate.mode === 'project_forbidden_keys'
       ? stripProjectLocalForbiddenKeys(text)
       : stripSksCausedHostOwnedLines(text)
+    if (candidate.mode === 'project_forbidden_keys') detectedProjectLocalForbiddenKeys.push(...repaired.removedKeys)
+    if (candidate.mode === 'sks_caused_host_owned_keys') {
+      const unsafe = detectUnsafeFastUiRepair(text)
+      unsafeReasons.push(...unsafe)
+      if (repaired.text !== text) detectedSksCausedMutation = true
+    }
     if (repaired.text === text) {
-      actions.push({ scope: candidate.scope, file: displayPath(candidate.file), status: 'ok', changed: false, removed_keys: repaired.removedKeys })
+      actions.push({ scope: candidate.scope, file: displayPath(candidate.file), status: unsafeReasons.length && candidate.mode === 'sks_caused_host_owned_keys' ? 'requires_confirmation' : 'ok', changed: false, removed_keys: repaired.removedKeys })
       continue
     }
     const backupPath = `${candidate.file}.codex-app-ui-repair-${Date.now().toString(36)}.bak`
@@ -60,9 +70,12 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
   }
   const after = await snapshotCodexAppUiState(resolvedRoot, { codexHome: home })
   const changed = actions.some((action) => action.changed)
+  const requiresConfirmation = unsafeReasons.length > 0 && input.force !== true
+  const safeAutoApply = changed && !requiresConfirmation
   const manual = changed && !input.apply
   const blockers = [
-    ...(manual ? ['codex_app_fast_ui_repair_requires_explicit_apply'] : []),
+    ...(requiresConfirmation ? ['codex_app_fast_ui_repair_requires_confirmation'] : []),
+    ...(manual && !safeAutoApply ? ['codex_app_fast_ui_repair_requires_explicit_apply'] : []),
     ...(after.indicators.secret_leak_suspected ? ['codex_app_ui_repair_secret_leak_suspected'] : [])
   ]
   const report = {
@@ -70,17 +83,42 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
     generated_at: nowIso(),
     ok: blockers.length === 0,
     apply: input.apply === true,
+    safe_auto_apply: safeAutoApply,
+    requires_confirmation: requiresConfirmation,
+    detected_sks_caused_mutation: detectedSksCausedMutation,
+    detected_project_local_forbidden_keys: [...new Set(detectedProjectLocalForbiddenKeys)],
+    unsafe_repair_reasons: [...new Set(unsafeReasons)],
     fast_selector: changed ? (input.apply ? 'repaired' : 'manual_action_required') : before.indicators.fast_selector === 'maybe_hidden_or_locked' ? 'manual_action_required' : 'ok',
     provider_selector: 'ok',
     host_owned_config: input.apply && changed ? 'repaired_with_backup' : changed ? 'preserved_until_explicit_apply' : 'preserved',
     actions,
     before_fast_selector: before.indicators.fast_selector,
     after_fast_selector: after.indicators.fast_selector,
-    next_action: manual ? 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.' : changed ? 'Restart Codex App if the selector was already hidden.' : 'No Codex App UI repair needed.',
+    next_action: requiresConfirmation ? 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.' : manual && safeAutoApply ? 'Run `sks doctor --fix` to apply the safe Codex App UI repair.' : manual ? 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.' : changed ? 'Restart Codex App if the selector was already hidden.' : 'No Codex App UI repair needed.',
     blockers
   }
   if (input.reportPath) await writeJsonAtomic(input.reportPath, report)
   return report
+}
+
+function detectUnsafeFastUiRepair(text: string) {
+  const reasons: string[] = []
+  const lines = text.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] || ''
+    const serviceTier = line.match(/^\s*service_tier\s*=\s*"(standard|flex)"\s*(?:#.*)?$/i)?.[1]
+    const sksMarked = SKS_CAUSED_RE.test(line) || SKS_CAUSED_RE.test(lines[i - 1] || '') || SKS_CAUSED_RE.test(lines[i + 1] || '')
+    if (serviceTier && !sksMarked) reasons.push(`user_selected_service_tier_${serviceTier.toLowerCase()}`)
+  }
+  if (hasOddUnescapedQuotes(text)) reasons.push('unparseable_config_requires_manual_review')
+  return [...new Set(reasons)]
+}
+
+function hasOddUnescapedQuotes(text: string) {
+  return text.split(/\r?\n/).some((line) => {
+    const stripped = line.replace(/\\"/g, '')
+    return (stripped.match(/"/g) || []).length % 2 === 1
+  })
 }
 
 function stripProjectLocalForbiddenKeys(text: string) {

@@ -25,3 +25,11 @@ The earlier hard-blocked state is superseded. The implementation now includes ba
 2. Codex real-parallel proof must distinguish native worker PIDs, Codex child PIDs, model-authored patch envelopes, and fixture envelopes.
 3. Structured output schemas for Codex exec need strict required fields at every nested object, or real worker calls fail after the process proof looks healthy.
 4. Release fixture commands can move the active mission pointer; final summaries should cite concrete report files and command results rather than relying on `latest`.
+
+## 2026-06-04 Local Ollama Hybrid Toggle Reflection
+
+- Mission: M-20260604-160801-bcd4
+- Route: Team
+- Outcome: Completed targeted hybrid local-model routing repair.
+- Issue recorded: The stored disabled local-model config made one-off explicit local backend activation behave like a hard blocker. The fix keeps default/off behavior intact while allowing explicit run activation, and preserves `SKS_OLLAMA_WORKERS=0` as the hard force-off.
+- Verification: `npm run build --silent`; `node --test test/unit/ollama-worker-config.test.mjs test/unit/native-worker-backend-router.test.mjs test/unit/agent-command-surface.test.mjs test/unit/team-agent-prompt-spec.test.mjs`; `node dist/bin/sks.js wiki validate .sneakoscope/wiki/context-pack.json`.

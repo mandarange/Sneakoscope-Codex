@@ -2,6 +2,8 @@ import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { buildFixturePatchEnvelopes } from './agent-runner-fake.js'
 import { runProcessAgent } from './agent-runner-process.js'
+import { classifyOllamaWorkerSlice, runOllamaAgent } from './agent-runner-ollama.js'
+import { resolveOllamaWorkerConfig } from './ollama-worker-config.js'
 import { runZellijAgent } from './agent-runner-zellij.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-patch-schema.js'
@@ -26,7 +28,8 @@ export async function runNativeWorkerBackendRouter(input: {
 }) {
   const root = path.resolve(input.agentRoot)
   const requestedBackend = String(input.backend || '')
-  const backend = normalizeBackend(requestedBackend)
+  let backend = normalizeBackend(requestedBackend)
+  backend = await maybeAutoSelectOllamaBackend(backend, input)
   const reportRel = path.join(input.workerDirRel, 'worker-backend-router-report.json')
   const startedAt = nowIso()
   let result: any
@@ -71,6 +74,27 @@ export async function runNativeWorkerBackendRouter(input: {
       model_authored_patch_envelopes: false,
       fixture_patch_envelopes: false,
       verification: { status: processRun.status === 'done' ? 'passed' : 'failed', checks: [...(processRun.verification?.checks || []), 'native-worker-backend-router', 'process-child-execution'] }
+    })
+  } else if (backend === 'ollama') {
+    const ollamaRun = await runOllamaAgent(input.agent, input.slice, {
+      ...input.intake,
+      missionId: input.intake.mission_id || input.intake.parent_mission_id || '',
+      agentRoot: root,
+      workerDirRel: input.workerDirRel,
+      cwd: input.intake.cwd || root,
+      route: input.intake.route || '$Agent',
+      fastMode: input.fastModePolicy.fast_mode,
+      serviceTier: input.fastModePolicy.service_tier
+    })
+    patchEnvelopes = Array.isArray(ollamaRun.patch_envelopes) ? ollamaRun.patch_envelopes : []
+    proofLevel = ollamaRun.status === 'done' ? (patchEnvelopes.length ? 'model_authored' : 'ollama_worker_proven') : 'blocked'
+    result = validateAgentWorkerResult({
+      ...ollamaRun,
+      backend: 'ollama',
+      patch_envelopes: patchEnvelopes,
+      model_authored_patch_envelopes: patchEnvelopes.length > 0,
+      fixture_patch_envelopes: false,
+      verification: { status: ollamaRun.status === 'done' ? 'passed' : 'failed', checks: [...(ollamaRun.verification?.checks || []), 'native-worker-backend-router', 'ollama-api-generate'] }
     })
   } else if (backend === 'codex-sdk' || backend === 'zellij') {
     const sdkTask = await runCodexTask({
@@ -166,6 +190,7 @@ export async function runNativeWorkerBackendRouter(input: {
     finished_at: nowIso(),
     ok: result.status === 'done',
     selected_backend: backend || input.backend,
+    requested_backend: requestedBackend,
     agent_id: input.agent.id,
     session_id: input.agent.session_id,
     worker_process_id: process.pid,
@@ -181,6 +206,7 @@ export async function runNativeWorkerBackendRouter(input: {
     sdk_run_id: childReports.find((report) => report?.sdk_run_id)?.sdk_run_id || null,
     stream_event_count: Number(childReports.find((report) => report?.stream_event_count)?.stream_event_count || 0),
     structured_output_valid: childReports.some((report) => report?.structured_output_valid === true),
+    ollama_request_ids: patchEnvelopes.map((envelope: AgentPatchEnvelope) => envelope.backend_ollama_request_id).filter(Boolean),
     blockers: result.blockers || []
   }
   await writeJsonAtomic(path.join(root, reportRel), report)
@@ -196,8 +222,25 @@ export async function runNativeWorkerBackendRouter(input: {
   }
 }
 
-function normalizeBackend(value: string): 'fake' | 'process' | 'codex-sdk' | 'zellij' | null {
-  return value === 'fake' || value === 'process' || value === 'codex-sdk' || value === 'zellij' ? value : null
+async function maybeAutoSelectOllamaBackend(backend: ReturnType<typeof normalizeBackend>, input: {
+  agent: any
+  slice: any
+  intake: any
+}) {
+  if (backend !== 'codex-sdk') return backend
+  if (input.intake?.backend_explicit === true || input.intake?.no_ollama === true) return backend
+  const config = await resolveOllamaWorkerConfig({
+    ollamaEnabled: input.intake?.ollama_enabled === true,
+    model: input.intake?.ollama_model || null,
+    baseUrl: input.intake?.ollama_base_url || null
+  }).catch(() => null)
+  if (!config?.ok || config.enabled !== true) return backend
+  const policy = classifyOllamaWorkerSlice(input.slice, { route: input.intake?.route, agent: input.agent })
+  return policy.ok ? 'ollama' : backend
+}
+
+function normalizeBackend(value: string): 'fake' | 'process' | 'codex-sdk' | 'zellij' | 'ollama' | null {
+  return value === 'fake' || value === 'process' || value === 'codex-sdk' || value === 'zellij' || value === 'ollama' ? value : null
 }
 
 function envelopeOpts(input: any, source: BackendSource, childPid?: number) {

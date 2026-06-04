@@ -2266,6 +2266,18 @@
       "can_run_incremental": false
     },
     {
+      "id": "mad-sks:app-ui-no-mutation",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-app-ui-no-mutation-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "mad-sks:audit-proof",
       "tier": "P1",
       "cost": "hermetic",
@@ -2428,6 +2440,18 @@
       "affected_by": [
         "src/scripts/mad-sks-*.ts",
         "src/scripts/mad-sks-write-guard-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "mad-sks:zellij-default-pane-worker",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/mad-sks-*.ts",
+        "src/scripts/mad-sks-zellij-default-pane-worker-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2766,6 +2790,18 @@
       "affected_by": [
         "src/scripts/provider-*.ts",
         "src/scripts/provider-badge-context-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "provider:context-config-toml",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/provider-*.ts",
+        "src/scripts/provider-context-config-toml-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -3827,6 +3863,20 @@
     },
     {
       "id": "zellij:worker-pane-manager",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/zellij/**",
+        "src/scripts/zellij-*.ts",
+        "templates/zellij/**",
+        "src/core/agents/zellij-lane-supervisor.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "zellij:worker-pane-manager-single-owner",
       "tier": "P0",
       "cost": "hermetic",
       "affected_by": [

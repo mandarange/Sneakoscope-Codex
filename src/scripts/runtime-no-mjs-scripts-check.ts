@@ -5,10 +5,11 @@ import { packageRoot } from '../core/fsx.js'
 
 const root = packageRoot()
 const scriptsDir = path.join(root, 'scripts')
-const mjs = await collectMjs(scriptsDir)
+const binDir = path.join(root, 'bin')
+const mjs = [...await collectMjs(scriptsDir), ...await collectMjs(binDir)].sort()
 const packageJson = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'))
 const scriptRefs = Object.entries(packageJson.scripts || {})
-  .filter(([, command]) => typeof command === 'string' && /(^|[\s;&|])\.\/scripts\/[^ ]+\.mjs\b/.test(command as string))
+  .filter(([, command]) => typeof command === 'string' && /(^|[\s;&|])\.\/(?:scripts|bin)\/[^ ]+\.mjs\b/.test(command as string))
   .map(([name, command]) => ({ name, command }))
 const ok = mjs.length === 0 && scriptRefs.length === 0
 emit({

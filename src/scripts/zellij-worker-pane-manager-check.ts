@@ -63,6 +63,7 @@ const spawnOrder = evaluateZellijWorkerPaneSpawnOrder([
 const syntheticRejected = !isRealZellijWorkerPaneIdSource('synthetic_layout_pending_proof')
   && !isRealZellijWorkerPaneIdSource('zellij_worker_pane_stdout_missing')
 const sourceOk = source.includes("action', 'new-pane'")
+  && source.includes("'--direction', 'right'")
   && source.includes("'--name', paneName")
   && source.includes("'--', 'sh', '-lc'")
   && source.includes('zellij_worker_new_pane_stdout')
@@ -73,6 +74,8 @@ const ok = artifact.ok
   && artifact.pane_kind === 'worker_codex_sdk'
   && artifact.provider === 'codex-lb'
   && artifact.service_tier === 'fast'
+  && artifact.direction_requested === 'right'
+  && artifact.direction_applied === 'not_applied'
   && artifact.sdk_thread_id === 'sdk-thread-7'
   && artifact.stream_event_count === 4
   && artifact.scaling_primitive === 'native_cli_process_in_zellij_worker_pane'

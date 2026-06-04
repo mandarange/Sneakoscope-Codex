@@ -96,12 +96,17 @@ export async function run(_command: any, args: any = []) {
       model_provider: null
     }
   }));
-  const codexAppUi = await repairCodexAppFastUi(root, {
-    apply: flag(args, '--fix') && flag(args, '--repair-codex-app-ui'),
-    reportPath: `${root}/.sneakoscope/reports/codex-app-fast-ui-repair.json`
+  const doctorFix = flag(args, '--fix');
+  const explicitCodexAppUiRepair = flag(args, '--repair-codex-app-ui') || flag(args, '--yes');
+  const codexAppUiPlan = await repairCodexAppFastUi(root, {
+    apply: false,
+    reportPath: `${root}/.sneakoscope/reports/codex-app-fast-ui-repair-plan.json`
   }).catch((err: any) => ({
     schema: 'sks.codex-app-fast-ui-repair.v1',
     ok: false,
+    apply: false,
+    safe_auto_apply: false,
+    requires_confirmation: true,
     fast_selector: 'manual_action_required',
     provider_selector: 'ok',
     host_owned_config: 'diagnostic_failed',
@@ -109,6 +114,29 @@ export async function run(_command: any, args: any = []) {
     actions: [],
     blockers: [err?.message || String(err)]
   }));
+  const shouldApplyCodexAppUiRepair = doctorFix && (
+    explicitCodexAppUiRepair ||
+    codexAppUiPlan.safe_auto_apply === true
+  );
+  const codexAppUi = shouldApplyCodexAppUiRepair
+    ? await repairCodexAppFastUi(root, {
+        apply: true,
+        force: explicitCodexAppUiRepair,
+        reportPath: `${root}/.sneakoscope/reports/codex-app-fast-ui-repair.json`
+      }).catch((err: any) => ({
+        schema: 'sks.codex-app-fast-ui-repair.v1',
+        ok: false,
+        apply: true,
+        safe_auto_apply: false,
+        requires_confirmation: true,
+        fast_selector: 'manual_action_required',
+        provider_selector: 'ok',
+        host_owned_config: 'diagnostic_failed',
+        next_action: 'Review Codex App UI config manually.',
+        actions: [],
+        blockers: [err?.message || String(err)]
+      }))
+    : codexAppUiPlan;
   const zellij = await checkZellijCapability({ root, require: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
   const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only')

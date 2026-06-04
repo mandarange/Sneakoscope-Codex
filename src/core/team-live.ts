@@ -358,7 +358,12 @@ export function parseTeamSpecArgs(args: any = []) {
       i++;
       continue;
     }
-    if (arg === '--json' || arg === '--open-zellij' || arg === '--zellij-open' || arg === '--no-open-zellij' || arg === '--no-zellij' || arg === '--no-attach' || arg === '--separate-session' || arg === '--new-session' || arg === '--legacy-team-session') continue;
+    if (/^--(?:ollama-model|local-model-model|ollama-base-url|local-model-base-url)$/.test(arg)) {
+      i++;
+      continue;
+    }
+    if (/^--(?:ollama-model|local-model-model|ollama-base-url|local-model-base-url)=/.test(arg)) continue;
+    if (arg === '--json' || arg === '--open-zellij' || arg === '--zellij-open' || arg === '--no-open-zellij' || arg === '--no-zellij' || arg === '--no-attach' || arg === '--separate-session' || arg === '--new-session' || arg === '--legacy-team-session' || arg === '--ollama' || arg === '--local-model' || arg === '--no-ollama' || arg === '--no-local-model') continue;
     const consumed = consumeTeamSpecText(arg, { roleCounts, explicitExecutor, explicitSession });
     roleCounts = consumed.roleCounts;
     explicitExecutor = consumed.explicitExecutor;
