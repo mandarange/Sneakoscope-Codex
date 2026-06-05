@@ -5,6 +5,7 @@
 // changing it for any other route, and that an end-to-end `sks naruto run` actually
 // schedules >20 concurrent clone sessions to completion with proof.
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, importDist, root, exists } from './sks-1-18-gate-lib.js';
 
@@ -109,8 +110,15 @@ assertGate(typeof parsed.concurrency_capped === 'boolean', 'naruto run must repo
 assertGate(parsed.concurrency_capped === (parsed.clones > parsed.target_active_slots), 'concurrency_capped must reflect clones > live slots', { clones: parsed.clones, target_active_slots: parsed.target_active_slots, concurrency_capped: parsed.concurrency_capped });
 assertGate(parsed.system && Number(parsed.system.safe_concurrency) >= 1, 'naruto run must report system safe_concurrency (host-derived cap)', { system: parsed.system });
 assertGate(parsed.work_graph?.write_allowed_count > 0 && parsed.work_graph?.mixed_work_kinds?.length > 1, 'naruto run must report a mixed work graph with write-capable items', { work_graph: parsed.work_graph });
+assertGate(Number(parsed.work_graph?.parallel_write_wave_count || 0) > 0, 'naruto run must expose at least one parallel write-capable wave with non-overlapping leases', { work_graph: parsed.work_graph });
 assertGate(parsed.role_distribution?.verifier_only === false, 'naruto run proof/status must distinguish active worker roles beyond verifier-only', { role_distribution: parsed.role_distribution });
 assertGate(Number(parsed.role_distribution?.implementation_like_ratio || 0) >= 0.4, 'naruto run must include implementation-like role distribution', { role_distribution: parsed.role_distribution });
+
+const commandGraphPath = path.join(root, '.sneakoscope', 'missions', parsed.mission_id, 'agents', 'naruto-work-graph.json');
+const commandGraph = JSON.parse(fs.readFileSync(commandGraphPath, 'utf8'));
+const writePaths = commandGraph.work_items.filter((row) => row.write_allowed).flatMap((row) => row.write_paths);
+assertGate(new Set(writePaths).size > 1, 'naruto command default patch-envelope leases must be per work item, not one shared write path', { sample: writePaths.slice(0, 8), unique: new Set(writePaths).size });
+assertGate(commandGraph.active_waves.some((wave) => wave.write_paths.length > 1), 'naruto command graph must contain a parallel write wave when route-local patch envelopes do not overlap', { waves: commandGraph.active_waves.slice(0, 3) });
 
 const state = parsed.run?.scheduler?.state || parsed.run?.scheduler || {};
 assertGate(Number(state.completed_count) === proofClones, 'all clone work items must complete despite throttling', { completed_count: state.completed_count });

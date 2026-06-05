@@ -201,3 +201,39 @@ test('SKS update check reports unavailable instead of starting fallback work', a
   assert.equal(result.route_required, false);
   assert.equal(result.pipeline_required, false);
 });
+
+test('CLI launch helper prints a nonblocking SKS update notice', async () => {
+  const { maybePromptSksUpdateForLaunch } = await import('../../dist/cli/install-helpers.js');
+  const previous = {
+    SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: process.env.SKS_NPM_VIEW_SNEAKOSCOPE_VERSION,
+    SKS_OPENCLAW: process.env.SKS_OPENCLAW,
+    OPENCLAW: process.env.OPENCLAW,
+    OPENCLAW_AGENT: process.env.OPENCLAW_AGENT,
+    OPENCLAW_RUN_ID: process.env.OPENCLAW_RUN_ID,
+    OPENCLAW_SESSION_ID: process.env.OPENCLAW_SESSION_ID,
+    SKS_HERMES: process.env.SKS_HERMES,
+    HERMES_AGENT: process.env.HERMES_AGENT,
+    HERMES_RUN_ID: process.env.HERMES_RUN_ID,
+    HERMES_SESSION_ID: process.env.HERMES_SESSION_ID
+  };
+  const logs = [];
+  const originalLog = console.log;
+  try {
+    process.env.SKS_NPM_VIEW_SNEAKOSCOPE_VERSION = '99.99.99';
+    for (const key of Object.keys(previous).filter((key) => key !== 'SKS_NPM_VIEW_SNEAKOSCOPE_VERSION')) {
+      delete process.env[key];
+    }
+    console.log = (message) => logs.push(String(message));
+    const result = await maybePromptSksUpdateForLaunch([], { label: 'MAD launch' });
+    assert.equal(result.status, 'available');
+    assert.equal(result.latest, '99.99.99');
+    assert.match(result.command, /sks update now --version 99\.99\.99/);
+    assert.match(logs.join('\n'), /SKS update available before MAD launch:/);
+  } finally {
+    console.log = originalLog;
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});

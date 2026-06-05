@@ -69,6 +69,7 @@ export async function runNativeWorkerBackendRouter(input: {
     result = validateAgentWorkerResult({
       ...processRun,
       patch_envelopes: patchEnvelopes,
+      ...(patchEnvelopes.length ? {} : { no_patch_reason: buildNoPatchReason(input, backend) }),
       artifacts: [...new Set([...(processRun.artifacts || []), ...(patchEnvelopes.length ? [input.patchRel] : [])])],
       process_child_report: processReport,
       model_authored_patch_envelopes: false,
@@ -92,6 +93,7 @@ export async function runNativeWorkerBackendRouter(input: {
       ...ollamaRun,
       backend: 'ollama',
       patch_envelopes: patchEnvelopes,
+      ...(patchEnvelopes.length ? {} : { no_patch_reason: buildNoPatchReason(input, backend) }),
       model_authored_patch_envelopes: patchEnvelopes.length > 0,
       fixture_patch_envelopes: false,
       verification: { status: ollamaRun.status === 'done' ? 'passed' : 'failed', checks: [...(ollamaRun.verification?.checks || []), 'native-worker-backend-router', 'ollama-api-generate'] }
@@ -157,6 +159,7 @@ export async function runNativeWorkerBackendRouter(input: {
       ...sdkWorkerResult,
       backend: sdkTask.backend === 'local-llm' ? 'local-llm' : 'codex-sdk',
       patch_envelopes: patchEnvelopes,
+      ...(patchEnvelopes.length ? {} : { no_patch_reason: buildNoPatchReason(input, sdkTask.backend || backend) }),
       codex_child_report: sdkReport,
       codex_sdk_thread: sdkReport,
       model_authored_patch_envelopes: patchEnvelopes.length > 0,
@@ -198,6 +201,7 @@ export async function runNativeWorkerBackendRouter(input: {
     result = validateAgentWorkerResult({
       ...zellijRun,
       patch_envelopes: patchEnvelopes,
+      ...(patchEnvelopes.length ? {} : { no_patch_reason: buildNoPatchReason(input, backend) }),
       zellij_child_report: zellijReport,
       model_authored_patch_envelopes: false,
       fixture_patch_envelopes: false,
@@ -295,9 +299,24 @@ function buildWorkerPrompt(slice: any) {
     '',
     write.length
       ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}.`
-      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}.`,
+      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; do not report pre-existing repository dirtiness as changed_files.`,
     'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
   ].join('\n')
+}
+
+function buildNoPatchReason(input: any, backend: string) {
+  const writePathCount = writePaths(input.slice, input.intake).length
+  return {
+    schema: 'sks.native-cli-worker-no-patch-reason.v1',
+    generated_at: nowIso(),
+    ok: writePathCount === 0,
+    reason: writePathCount ? 'write_capable_task_without_backend_patch_envelope' : 'read_only_or_no_write_paths',
+    route_justification: writePathCount ? 'backend returned no patch envelopes for a write-capable task' : 'task has no write paths',
+    read_only_or_noop_evidence: writePathCount === 0,
+    task_slice_id: input.slice?.id || null,
+    backend,
+    blockers: writePathCount && backend !== 'fake' ? ['write_capable_no_patch_envelope'] : []
+  }
 }
 
 function hasWriteLease(slice: any, intake: any) {

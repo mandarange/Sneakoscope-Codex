@@ -18,11 +18,24 @@ import { appendMigrationEvents, hashConfigText } from '../core/migration/migrati
 import { repairCodexAppFastUi } from '../core/codex-app/codex-app-fast-ui-repair.js';
 import { resolveProviderContext } from '../core/provider/provider-context.js';
 import { readLocalModelConfig } from '../core/agents/ollama-worker-config.js';
+import { runSksUpdateNow } from '../core/update-check.js';
 
 export async function run(_command: any, args: any = []) {
+  const doctorFix = flag(args, '--fix');
   let setupRepair = null;
+  const sksUpdate = doctorFix
+    ? await runSksUpdateNow({
+        timeoutMs: 10 * 60 * 1000,
+        maxOutputBytes: 128 * 1024
+      }).catch((err: any) => ({
+        schema: 'sks.update-now.v1',
+        ok: false,
+        status: 'failed',
+        error: err?.message || String(err)
+      }))
+    : null;
   let migrationPreFix: Record<string, string | null> | null = null;
-  if (flag(args, '--fix')) {
+  if (doctorFix) {
     // Snapshot config content before ANY mutation so the migration journal can
     // record real before/after hashes for the whole --fix transaction.
     migrationPreFix = await captureCodexConfigSnapshot();
@@ -97,7 +110,6 @@ export async function run(_command: any, args: any = []) {
       model_provider: null
     }
   }));
-  const doctorFix = flag(args, '--fix');
   const explicitCodexAppUiRepair = flag(args, '--repair-codex-app-ui') || flag(args, '--yes');
   const codexAppUiPlan = await repairCodexAppFastUi(root, {
     apply: false,
@@ -167,7 +179,7 @@ export async function run(_command: any, args: any = []) {
   const zellijReadiness = buildZellijReadiness(root, zellij as any, ready as any);
   const result = {
     schema: 'sks.doctor-status.v1',
-    ok: ready.ready,
+    ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false),
     root,
     node: { ok: Number(process.versions.node.split('.')[0]) >= 20, version: process.version },
     codex,
@@ -191,7 +203,7 @@ export async function run(_command: any, args: any = []) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup }
   };
   if (flag(args, '--json')) {
     printJson(result);
@@ -261,6 +273,9 @@ export async function run(_command: any, args: any = []) {
   }
   if (migrationJournal?.journal_path) {
     console.log(`Migration journal: ${migrationJournal.journal_path} (${migrationJournal.event_count} events, ${migrationJournal.mutations_without_rollback} without rollback)`);
+  }
+  if (sksUpdate) {
+    console.log(`SKS update: ${(sksUpdate as any).status}${(sksUpdate as any).latest ? ` latest ${(sksUpdate as any).latest}` : ''}${(sksUpdate as any).error ? ` (${(sksUpdate as any).error})` : ''}`);
   }
   if (globalSksInstallCleanup) {
     console.log(`Global SKS installs: kept ${(globalSksInstallCleanup as any).kept?.length ?? 0}, removed ${(globalSksInstallCleanup as any).removed?.filter((entry: any) => entry.ok).length ?? 0}, source repo exempt ${(globalSksInstallCleanup as any).candidates?.filter((entry: any) => entry.source_repo_exempt).length ?? 0}`);

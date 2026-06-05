@@ -119,6 +119,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   const strategyCompiled = compileStrategy({
     prompt,
     route,
+    ...(writeCapable ? {} : { writeTargets: [] }),
     agentCount: roster.agent_count,
     visualRequired
   })
@@ -237,12 +238,13 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     rate_limit_delay_ms: backend === 'codex-sdk' ? 250 : 0,
     resource_pressure_warnings: roster.agent_count > roster.concurrency ? ['agents_exceed_concurrency_batches'] : []
   })
+  const effectiveWriteMode = writeCapable ? opts.writeMode || 'off' : 'off'
   const parallelWritePolicy = {
     schema: 'sks.agent-parallel-write-policy.v1',
     generated_at: nowIso(),
     route,
     route_command: routeCommand,
-    write_mode: opts.writeMode || 'off',
+    write_mode: effectiveWriteMode,
     apply_patches: opts.applyPatches === true,
     dry_run_patches: opts.dryRunPatches === true,
     max_write_agents: Number(opts.maxWriteAgents || 0),
@@ -775,7 +777,7 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
   await queueStore.persistSnapshot()
   const journalSummary = await queueStore.journal.writeSummary()
   const proof = buildAgentPatchProof({ ...proofInput, transactionJournal: journalSummary })
-  const zeroPatchBlockers = input.writeCapable && input.parallelWritePolicy?.write_mode === 'parallel' && pendingEntries.length === 0 && input.parallelWritePolicy?.dry_run_patches !== true
+  const zeroPatchBlockers = input.writeCapable && input.parallelWritePolicy?.write_mode === 'parallel' && pendingEntries.length === 0 && input.dryRun !== true && input.parallelWritePolicy?.dry_run_patches !== true
     ? ['write_mode_parallel_zero_patch_envelopes']
     : []
   const blockers = [
@@ -868,6 +870,7 @@ function normalizeVisualLaneCount(value: unknown, fallback: unknown, maxAgentCou
 }
 
 function isWriteCapableRun(opts: AgentRunOptions) {
+  if (opts.readonly === true) return false
   return opts.applyPatches === true || opts.dryRunPatches === true || (opts.writeMode !== undefined && opts.writeMode !== 'off')
 }
 
@@ -984,6 +987,7 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
       ...sdkWorkerResult,
       backend: 'codex-sdk',
       patch_envelopes: patchEnvelopes,
+      ...(patchEnvelopes.length ? {} : { no_patch_reason: buildDirectNoPatchReason(slice, opts) }),
       codex_child_report: sdkReport,
       codex_sdk_thread: sdkReport,
       model_authored_patch_envelopes: patchEnvelopes.length > 0,
@@ -1019,9 +1023,24 @@ function buildDirectSdkWorkerPrompt(slice: any) {
     '',
     write.length
       ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}. Each patch envelope must include schema, source "model_authored", agent_id, session_id, slot_id, generation_index, task_slice_id, lease_id, allowed_paths, operations, and rationale. Each operation must include op, path, search, replace, content, and diff; use empty strings for operation fields that do not apply.`
-      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}.`,
+      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; do not report pre-existing repository dirtiness as changed_files.`,
     'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
   ].join('\n')
+}
+
+function buildDirectNoPatchReason(slice: any, opts: any) {
+  const writePathCount = sdkWritePaths(slice, opts).length
+  return {
+    schema: 'sks.native-cli-worker-no-patch-reason.v1',
+    generated_at: nowIso(),
+    ok: writePathCount === 0,
+    reason: writePathCount ? 'write_capable_task_without_backend_patch_envelope' : 'read_only_or_no_write_paths',
+    route_justification: writePathCount ? 'backend returned no patch envelopes for a write-capable task' : 'task has no write paths',
+    read_only_or_noop_evidence: writePathCount === 0,
+    task_slice_id: slice?.id || null,
+    backend: 'codex-sdk',
+    blockers: writePathCount ? ['write_capable_no_patch_envelope'] : []
+  }
 }
 
 function sdkWritePaths(slice: any, opts: any) {

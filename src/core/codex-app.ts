@@ -4,6 +4,8 @@ import fsp from 'node:fs/promises';
 import { exists, runProcess } from './fsx.js';
 import { EMPTY_CODEX_INFO, getCodexInfo } from './codex-adapter.js';
 import { CODEX_CHROME_EXTENSION_DOC_URL, DEFAULT_CODEX_APP_PLUGINS as DEFAULT_CODEX_APP_PLUGIN_TUPLES, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes.js';
+import { PRODUCT_DESIGN_PLUGIN, normalizeProductDesignPluginEvidence } from './product-design-plugin.js';
+import { PRODUCT_DESIGN_AUTO_INSTALL_ENV, ensureProductDesignPluginInstalled, productDesignAutoInstallRequested } from './product-design-app-server.js';
 
 export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/features';
 export const CODEX_CHANGELOG_URL = 'https://developers.openai.com/codex/changelog';
@@ -123,6 +125,7 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
   const chromePath = await findPluginCache('chrome', opts);
   const computerUsePath = await findPluginCache('computer-use', opts);
   const defaultPlugins = await codexDefaultPluginStatus(opts);
+  const productDesignPlugin = await codexProductDesignPluginStatus(opts);
   const pluginSkillShadows = await codexPluginSkillShadowStatus(opts);
   const fastModeConfig = await codexFastModeConfigStatus(opts);
   const computerUseMcpListed = /computer[-_ ]?use/i.test(mcpText);
@@ -204,6 +207,7 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
       browser_use_cache: browserUsePath,
       chrome_cache: chromePath,
       default_plugins: defaultPlugins,
+      design_product: productDesignPlugin,
       skill_shadows: pluginSkillShadows,
       picker: {
         ok: pluginPickerReady,
@@ -214,7 +218,7 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
       }
     },
     chrome_extension: chromeExtension,
-    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags, requiredFeatureFlagsOk, defaultPlugins, pluginSkillShadows, fastModeConfig, gitActions, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl })
+    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags, requiredFeatureFlagsOk, defaultPlugins, productDesignPlugin, pluginSkillShadows, fastModeConfig, gitActions, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl })
   };
 }
 
@@ -428,7 +432,7 @@ export function codexAccessTokenStatus(env: any = process.env) {
   };
 }
 
-export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, pluginSkillShadows = { ok: true, blocking: [] }, fastModeConfig = { ok: true, blockers: [] }, gitActions = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl }: any) {
+export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, productDesignPlugin = null, pluginSkillShadows = { ok: true, blocking: [] }, fastModeConfig = { ok: true, blockers: [] }, gitActions = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl }: any) {
   const lines: any[] = [];
   if (!appInstalled) {
     lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS Zellij launch can still run with Codex CLI alone, but Codex Computer Use and imagegen/gpt-image-2 evidence will be unavailable until Codex App is ready.');
@@ -461,6 +465,15 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
   if (defaultPlugins?.missing_installed?.length) {
     lines.push(`Codex default plugin source(s) missing: ${defaultPlugins.missing_installed.join(', ')}. The @ plugin picker can hide built-in surfaces when plugin files are absent even if config says enabled.`);
     lines.push('Run: sks doctor --fix, then restart Codex App if the plugin cache was just restored.');
+  }
+  if (productDesignPlugin?.ok) {
+    lines.push(`Product Design plugin is ready for design routes via ${productDesignPlugin.source || 'verified evidence'} (${productDesignPlugin.id}).`);
+  } else if (productDesignPlugin?.auto_install?.attempted) {
+    lines.push(`Product Design auto-install was attempted but did not produce ready evidence: ${(productDesignPlugin.blockers || []).join(', ') || 'unverified'}. Recheck with: ${productDesignPlugin.auto_install.command}`);
+  } else if (productDesignPlugin?.app_server?.checked && !productDesignPlugin.app_server.ok) {
+    lines.push(`Product Design app-server lookup ran but is not ready: ${(productDesignPlugin.blockers || []).join(', ') || 'unverified'}. Run: ${productDesignPlugin.auto_install?.command || 'sks codex-app product-design --json'}`);
+  } else if (productDesignPlugin?.remote_lookup_required) {
+    lines.push(`Product Design is a remote vertical marketplace plugin and may not appear in \`codex plugin list\`; design routes should run ${productDesignPlugin.auto_install?.command || 'sks codex-app product-design --json'} or set ${PRODUCT_DESIGN_AUTO_INSTALL_ENV}=1 before falling back to legacy design.md skills.`);
   }
   if (pluginSkillShadows?.generated?.length) {
     const names = pluginSkillShadows.generated.map((entry: any) => `${entry.name}:${entry.scope}`).join(', ');
@@ -521,6 +534,7 @@ export function formatCodexAppStatus(status: any, { includeRaw = false }: any = 
     `App Flags:  ${status.features?.required_flags_ok ? 'ok' : `missing ${missingRequiredFeatureFlags(status.features?.required_flags).join(', ') || 'required flags'}`}`,
     `Fast UI:    ${status.features?.fast_mode_config?.ok ? 'ok' : `locked ${(status.features?.fast_mode_config?.blockers || []).join(', ') || 'config'}`}`,
     `Default Plugins:${status.plugins?.default_plugins?.ok ? ' ok' : ` missing ${defaultPluginMissingSummary(status.plugins?.default_plugins) || 'plugin install/config'}`}`,
+    `Product Design:${productDesignStatusSummary(status.plugins?.design_product)}`,
     `Plugin Picker:${status.plugins?.picker?.ok ? ' ok' : ` blocked ${pluginPickerBlockers(status).join(', ') || 'config'}`}`,
     `Git Actions:${status.features?.git_actions?.ok ? ' ok' : ` blocked ${(status.features?.git_actions?.blockers || []).join(', ') || 'config'}`}`,
     `Chrome Ext: ${status.chrome_extension?.ok ? 'ok' : `setup ${(status.chrome_extension?.blockers || []).join(', ') || 'required'}`}`,
@@ -533,6 +547,29 @@ export function formatCodexAppStatus(status: any, { includeRaw = false }: any = 
   ];
   if (includeRaw && status.mcp.stdout) lines.push('', status.mcp.stdout.trim());
   if (includeRaw && status.features?.stdout) lines.push('', status.features.stdout.trim());
+  return lines.join('\n');
+}
+
+export function formatCodexProductDesignPluginStatus(status: any) {
+  const lines = [
+    'Codex App Product Design Plugin',
+    '',
+    `Ready:        ${status.ok ? 'yes' : 'no'}`,
+    `Installed:    ${status.installed ? 'yes' : 'no'}`,
+    `Enabled:      ${status.enabled === true ? 'yes' : status.enabled === false ? 'no' : 'unknown'}`,
+    `Source:       ${status.source || 'unverified'}`,
+    `Marketplace:  ${status.marketplace}`,
+    `Remote ID:    ${status.remote_plugin_id}`,
+    `Auto Install: ${status.auto_install?.requested ? 'requested' : 'not requested'}${status.auto_install?.attempted ? ' (attempted)' : ''}`,
+    `Command:      ${status.auto_install?.command || 'sks codex-app product-design --json'}`,
+    '',
+    ...(status.blockers || []).map((blocker: any) => `- ${blocker}`)
+  ];
+  if (status.remote_evidence?.missing_skills?.length) {
+    lines.push(`- missing skills: ${status.remote_evidence.missing_skills.join(', ')}`);
+  }
+  if (status.ok) lines.push('- Product Design is ready for design routes.');
+  else if (!status.auto_install?.requested) lines.push('- Run `sks codex-app product-design --json`, or set SKS_PRODUCT_DESIGN_AUTO_INSTALL=1 for design-route auto-ensure.');
   return lines.join('\n');
 }
 
@@ -611,6 +648,77 @@ async function codexDefaultPluginStatus(opts: any = {}) {
     entries,
     missing_installed: missingInstalled,
     missing_enabled: missingEnabled
+  };
+}
+
+export async function codexProductDesignPluginStatus(opts: any = {}) {
+  const home = opts.home || os.homedir();
+  const cwd = opts.cwd || process.cwd();
+  const globalConfigPath = path.join(home || '', '.codex', 'config.toml');
+  const projectConfigPath = path.join(cwd || '', '.codex', 'config.toml');
+  const globalConfig = await readTextIfExists(globalConfigPath);
+  const projectConfig = path.resolve(projectConfigPath) === path.resolve(globalConfigPath)
+    ? ''
+    : await readTextIfExists(projectConfigPath);
+  const configText = `${globalConfig}\n${projectConfig}`;
+  const plugin = { name: PRODUCT_DESIGN_PLUGIN.name, marketplace: PRODUCT_DESIGN_PLUGIN.marketplace };
+  const autoInstallProductDesign = productDesignAutoInstallRequested(opts);
+  const appServerStatus = opts.productDesignAppServerStatus || (autoInstallProductDesign
+    ? await ensureProductDesignPluginInstalled({
+        ...opts,
+        autoInstallProductDesign
+      })
+    : null);
+  const injectedRemoteEvidence = opts.productDesignPluginReadResponse
+    ? normalizeProductDesignPluginEvidence(opts.productDesignPluginReadResponse)
+    : null;
+  const appServerEvidence = appServerStatus?.remote_evidence?.schema === 'sks.product-design-plugin-evidence.v1'
+    ? appServerStatus.remote_evidence
+    : null;
+  const remoteEvidence = appServerEvidence || injectedRemoteEvidence;
+  const localSource = await findDefaultPluginSource(plugin, { home, configText });
+  const configEnabled = codexPluginEnabled(configText, plugin);
+  const enabled = remoteEvidence?.enabled === true ? true : configEnabled ? true : null;
+  const installed = Boolean(localSource) || remoteEvidence?.installed === true;
+  const ok = Boolean(remoteEvidence?.ok || (installed && enabled === true));
+  const remoteLookupRequired = !remoteEvidence?.ok && (!localSource || enabled !== true) && !appServerStatus?.checked;
+  const blockers = ok ? [] : Array.from(new Set([
+    ...(!installed ? ['product_design_plugin_not_installed_or_not_locally_visible'] : []),
+    ...(enabled !== true ? ['product_design_plugin_enabled_state_requires_remote_evidence'] : []),
+    ...(remoteLookupRequired ? ['product_design_remote_vertical_lookup_required'] : []),
+    ...(autoInstallProductDesign && appServerStatus && !appServerStatus.ok ? ['product_design_app_server_install_failed'] : []),
+    ...(appServerStatus?.blockers || [])
+  ]));
+  return {
+    schema: 'sks.codex-product-design-plugin-status.v1',
+    ok,
+    checked: true,
+    route_required_only: true,
+    id: PRODUCT_DESIGN_PLUGIN.id,
+    name: PRODUCT_DESIGN_PLUGIN.name,
+    display_name: PRODUCT_DESIGN_PLUGIN.display_name,
+    marketplace: PRODUCT_DESIGN_PLUGIN.marketplace,
+    marketplace_kind: PRODUCT_DESIGN_PLUGIN.marketplace_kind,
+    remote_plugin_id: PRODUCT_DESIGN_PLUGIN.remote_plugin_id,
+    installed,
+    enabled,
+    source: remoteEvidence?.ok
+      ? appServerStatus?.install_attempted ? 'app_server_plugin_install' : 'app_server_plugin_read'
+      : localSource ? 'local_plugin_cache_or_marketplace_source' : null,
+    local_source: localSource,
+    remote_evidence: remoteEvidence,
+    app_server: appServerStatus,
+    auto_install: {
+      requested: autoInstallProductDesign,
+      attempted: Boolean(appServerStatus?.install_attempted),
+      command: 'sks codex-app product-design --json',
+      env: PRODUCT_DESIGN_AUTO_INSTALL_ENV
+    },
+    remote_lookup_required: remoteLookupRequired,
+    app_server_read_params: PRODUCT_DESIGN_PLUGIN.app_server.read_params,
+    app_server_install_params: PRODUCT_DESIGN_PLUGIN.app_server.install_params,
+    app_server_list_params: PRODUCT_DESIGN_PLUGIN.app_server.list_params,
+    blockers
   };
 }
 
@@ -727,6 +835,14 @@ function pluginPickerBlockers(status: any = {}) {
   if (!status.plugins?.picker?.skill_shadows_ok) out.push('skill_shadows');
   if (!status.plugins?.picker?.fast_mode_config_ok) out.push('fast_mode_config');
   return out;
+}
+
+function productDesignStatusSummary(status: any = {}) {
+  if (status.ok) return ' ok';
+  if (status.auto_install?.attempted) return ' install unverified';
+  if (status.remote_lookup_required) return ' remote lookup required';
+  if (status.app_server?.checked) return ' app-server unverified';
+  return ' not checked';
 }
 
 function defaultPluginMissingSummary(defaultPlugins: any = {}) {

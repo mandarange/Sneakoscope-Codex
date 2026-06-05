@@ -70,7 +70,8 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     normalized.blockers.push(...patchEnvelopeValidation.blockers.map((issue) => 'patch_envelope_invalid:' + issue))
     normalized.verification = { status: 'failed', checks: [...normalized.verification.checks, 'agent-patch-envelope-schema'] }
   }
-  if (patchEnvelopeValidation.envelopes.length === 0 && (normalized.changed_files.length > 0 || normalized.writes.length > 0)) {
+  const readOnlyOrNoopWithoutPatch = acceptsNoPatchReadOnlyOrNoop(result?.no_patch_reason)
+  if (patchEnvelopeValidation.envelopes.length === 0 && (normalized.writes.length > 0 || (!readOnlyOrNoopWithoutPatch && normalized.changed_files.length > 0))) {
     normalized.status = 'blocked'
     normalized.blockers.push('no_patch_generated')
     normalized.verification = { status: 'failed', checks: [...normalized.verification.checks, 'agent-patch-envelope-required-for-write'] }
@@ -138,4 +139,11 @@ function normalizeVerification(value: any) {
     status: String(value?.status || 'not_run'),
     checks: Array.isArray(value?.checks) ? value.checks : []
   }
+}
+
+function acceptsNoPatchReadOnlyOrNoop(value: any) {
+  if (!value || typeof value !== 'object') return false
+  return value.ok === true
+    && value.read_only_or_noop_evidence === true
+    && String(value.reason || '') === 'read_only_or_no_write_paths'
 }

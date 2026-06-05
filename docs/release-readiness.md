@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.6 is the Product Design plugin and Naruto read-only routing closure patch for the 2.0 line. It makes design routes discover the remote `product-design@openai-curated-remote` Codex App plugin, auto-install it when the app-server reports it missing, and prefer its Product Design skill surface across UI, PPT, and design-adjacent pipeline stages.
+
+The 2.0.6 release gate adds Product Design plugin routing and auto-install checks, records the remote plugin id `Plugin_fa77aec24fc08191bc6e57f377126d76`, and adds a Naruto read-only routing check that proves read-only runs force write mode off while write-capable runs still schedule write work. It also keeps native proof from failing on pre-existing dirty files when no write leases, no writes, and no patch envelope exist.
+
 SKS 2.0.5 is the local collaboration closure patch for the 2.0 line. It turns `sks with-local-llm on` from a saved toggle into a verified worker state by requiring a fresh schema-valid Ollama generation smoke before `verified`, promotes Local LLM and Python Codex SDK to Codex Control Plane backend surfaces, and pins `@openai/codex-sdk` to the 0.137 compatibility baseline.
 
 The 2.0.5 release gate adds hermetic Local LLM structured-output/tool-repair/all-pipeline checks, GPT Final Arbiter enforcement for any local-participating pipeline, Python SDK capability/stream/sandbox/all-pipeline checks, Codex 0.137 plugin/runtime/approval compatibility checks, and real optional checks for Local LLM smoke/throughput/cache, Python SDK, Codex 0.137, and Zellij worker-pane proof.

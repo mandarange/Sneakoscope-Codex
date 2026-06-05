@@ -18,12 +18,14 @@ const cargoVersion = readVersionFrom('crates/sks-core/Cargo.toml', /^version\s*=
 const latestChangelog = latestVersionedChangelogSection(readText('CHANGELOG.md'));
 const tag = tagStatus(version, currentCommit);
 const main = mainVersion();
+const originMain = originMainVersion();
 const npm = npmVersion();
 const warnings = [];
 const blockers = [];
 
 if (main.version && main.version !== version) warnings.push('main_out_of_date');
 if (publish && main.version && main.version !== version) blockers.push('main_version_mismatch');
+if (originMain.version && originMain.version !== version) warnings.push('origin_main_out_of_date');
 if (publish && tag.exists && tag.commit !== currentCommit) blockers.push('tag_not_on_current_commit');
 if (publish && npm.version && semverCompare(npm.version, version) >= 0) blockers.push('npm_version_already_published_or_ahead');
 for (const [name, actual] of Object.entries({ dist_package_version: dist?.package_version, dist_version: dist?.version, src_version: srcVersion, fsx_version: fsxVersion, cargo_version: cargoVersion, changelog: latestChangelog })) {
@@ -44,6 +46,10 @@ const report = {
   latest_changelog_section: latestChangelog,
   main_version: main.version,
   main_commit: main.commit,
+  main_status: main.status,
+  origin_main_version: originMain.version,
+  origin_main_commit: originMain.commit,
+  origin_main_status: originMain.status,
   npm_version: npm.version,
   npm_status: npm.version ? (semverCompare(npm.version, version) < 0 ? 'registry_behind_candidate' : npm.version === version ? 'candidate_already_published' : 'registry_ahead') : npm.status,
   tag_status: tag,
@@ -63,6 +69,18 @@ function git(argv) {
 }
 
 function mainVersion() {
+  const ref = git(['rev-parse', '--verify', 'HEAD']);
+  if (!ref) return { version: null, commit: null, status: 'unavailable' };
+  const res = spawnSync('git', ['show', 'HEAD:package.json'], { cwd: root, encoding: 'utf8' });
+  if (res.status !== 0) return { version: null, commit: ref, status: 'package_unavailable' };
+  try {
+    return { version: JSON.parse(res.stdout).version || null, commit: ref, status: 'local_head' };
+  } catch {
+    return { version: null, commit: ref, status: 'unparseable' };
+  }
+}
+
+function originMainVersion() {
   const ref = git(['rev-parse', '--verify', 'origin/main']);
   if (!ref) return { version: null, commit: null, status: 'unavailable' };
   const res = spawnSync('git', ['show', 'origin/main:package.json'], { cwd: root, encoding: 'utf8' });

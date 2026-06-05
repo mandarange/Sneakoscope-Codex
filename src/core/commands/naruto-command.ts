@@ -35,10 +35,11 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
 async function narutoRun(parsed: NarutoArgs) {
   const root = await sksRoot()
   const writeCapable = parsed.readonly !== true && parsed.writeMode !== 'off'
+  const patchEnvelopeBasePath = '.sneakoscope/naruto/patch-envelopes'
   const placeholderGuard = checkPromptPlaceholders({
     prompt: parsed.prompt,
     writeCapable,
-    targetPaths: writeCapable ? ['.sneakoscope/naruto/patch-envelopes'] : []
+    targetPaths: writeCapable ? [patchEnvelopeBasePath] : []
   })
   if (!placeholderGuard.ok) {
     return emit(parsed, {
@@ -72,7 +73,7 @@ async function narutoRun(parsed: NarutoArgs) {
     totalWorkItems: parsed.workItems,
     readonly: parsed.readonly,
     writeCapable,
-    targetPaths: ['.sneakoscope/naruto/patch-envelopes'],
+    leaseBasePath: patchEnvelopeBasePath,
     maxActiveWorkers: parsed.concurrency || safe.cap
   })
   const roleDistribution = buildNarutoRoleDistribution(workGraph.work_items, { readonly: parsed.readonly })
@@ -160,7 +161,7 @@ async function narutoRun(parsed: NarutoArgs) {
     fastMode: true,
     serviceTier: 'fast',
     noFast: false,
-    ...(parsed.writeMode ? { writeMode: parsed.writeMode } : {}),
+    writeMode: writeCapable ? parsed.writeMode || 'parallel' : 'off',
     json: parsed.json
   })
   const clones = result.roster?.agent_count ?? roster.agent_count
@@ -182,6 +183,8 @@ async function narutoRun(parsed: NarutoArgs) {
       total_work_items: workGraph.total_work_items,
       mixed_work_kinds: workGraph.mixed_work_kinds,
       write_allowed_count: workGraph.write_allowed_count,
+      active_wave_count: workGraph.active_waves.length,
+      parallel_write_wave_count: workGraph.active_waves.filter((wave) => wave.write_paths.length > 1).length,
       ok: workGraph.ok
     },
     role_distribution: roleDistribution,
@@ -247,7 +250,9 @@ async function narutoStatus(parsed: NarutoArgs) {
     work_graph: workGraph ? {
       total_work_items: workGraph.total_work_items,
       mixed_work_kinds: workGraph.mixed_work_kinds,
-      write_allowed_count: workGraph.write_allowed_count
+      write_allowed_count: workGraph.write_allowed_count,
+      active_wave_count: Array.isArray(workGraph.active_waves) ? workGraph.active_waves.length : null,
+      parallel_write_wave_count: Array.isArray(workGraph.active_waves) ? workGraph.active_waves.filter((wave: any) => Array.isArray(wave.write_paths) && wave.write_paths.length > 1).length : null
     } : null,
     concurrency_governor: governor
   }
