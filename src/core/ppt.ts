@@ -2,6 +2,7 @@ import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, readJson, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
 import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_EVIDENCE_SOURCE, DESIGN_SYSTEM_SSOT, GETDESIGN_REFERENCE, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST } from './routes.js';
+import { PRODUCT_DESIGN_LEGACY_DESIGN_FALLBACK_SKILLS, PRODUCT_DESIGN_PIPELINE_STAGES, PRODUCT_DESIGN_PLUGIN, PRODUCT_DESIGN_REQUIRED_SKILLS } from './product-design-plugin.js';
 
 export const PPT_AUDIENCE_STRATEGY_ARTIFACT = 'ppt-audience-strategy.json';
 export const PPT_GATE_ARTIFACT = 'ppt-gate.json';
@@ -892,28 +893,48 @@ export function buildPptStyleTokens(contract: any = {}) {
         required_skills: [...PPT_PIPELINE_SKILL_ALLOWLIST],
         conditional_skills: [...PPT_CONDITIONAL_SKILL_ALLOWLIST],
         allowed_mcp_servers: [...PPT_PIPELINE_MCP_ALLOWLIST],
+        primary_design_plugin: PRODUCT_DESIGN_PLUGIN.id,
+        product_design_tools: [...PRODUCT_DESIGN_REQUIRED_SKILLS],
+        product_design_stage_map: [...PRODUCT_DESIGN_PIPELINE_STAGES],
         ignore_installed_out_of_pipeline_skills: true,
-        ignored_design_skills_even_if_installed: ['design-artifact-expert', 'design-ui-editor', 'design-system-builder'],
-        anti_ai_design_goal: 'prevent AI-like generic presentation design by forcing decisions through audience, sources, getdesign reference, and the design SSOT instead of freeform decorative design skills',
-        rule: 'PPT design and render work must use only the route allowlist. Installed skills or MCP servers outside this allowlist are ignored unless the sealed PPT contract explicitly activates a conditional entry.'
+        ignored_design_skills_even_if_installed: [...PRODUCT_DESIGN_LEGACY_DESIGN_FALLBACK_SKILLS],
+        anti_ai_design_goal: 'prevent AI-like generic presentation design by forcing decisions through Product Design plugin evidence, audience, sources, and route-local style tokens instead of freeform decorative design skills',
+        rule: 'PPT design and render work must use Product Design plugin first plus only the route allowlist. Installed skills or MCP servers outside this allowlist are ignored unless the sealed PPT contract explicitly activates a conditional entry.'
       },
       design_ssot: {
+        primary_authority: PRODUCT_DESIGN_PLUGIN.id,
         authority: DESIGN_SYSTEM_SSOT.authority_file,
         builder_prompt: DESIGN_SYSTEM_SSOT.builder_prompt,
         route_local_artifact: PPT_STYLE_TOKENS_ARTIFACT,
-        rule: 'PPT style tokens are a route-local projection of the design SSOT; source inputs are selected, fused, and applied here rather than kept as independent authorities.'
+        mode: 'product_design_primary_with_local_fallback_cache',
+        rule: 'PPT style tokens are a route-local projection of Product Design plugin evidence when available; design.md/getdesign fallback inputs are selected, fused, and applied here rather than kept as independent authorities.'
+      },
+      product_design_plugin: {
+        id: PRODUCT_DESIGN_PLUGIN.id,
+        display_name: PRODUCT_DESIGN_PLUGIN.display_name,
+        marketplace: PRODUCT_DESIGN_PLUGIN.marketplace,
+        marketplace_kind: PRODUCT_DESIGN_PLUGIN.marketplace_kind,
+        remote_plugin_id: PRODUCT_DESIGN_PLUGIN.remote_plugin_id,
+        app_server_read_params: PRODUCT_DESIGN_PLUGIN.app_server.read_params,
+        required_skills: [...PRODUCT_DESIGN_REQUIRED_SKILLS],
+        stage_map: [...PRODUCT_DESIGN_PIPELINE_STAGES]
       },
       design_reference_selection: reference,
       source_inputs: [
         {
+          id: PRODUCT_DESIGN_PLUGIN.id,
+          url: PRODUCT_DESIGN_PLUGIN.marketplace,
+          role: 'primary_codex_app_design_plugin'
+        },
+        {
           id: GETDESIGN_REFERENCE.id,
           url: GETDESIGN_REFERENCE.url,
-          role: 'source_input_for_ssot'
+          role: 'fallback_source_input_for_ssot'
         },
         {
           id: AWESOME_DESIGN_MD_REFERENCE.id,
           url: AWESOME_DESIGN_MD_REFERENCE.url,
-          role: 'source_input_for_ssot'
+          role: 'fallback_source_input_for_ssot'
         }
       ],
       avoid: ['over-designed decoration', 'ornamental gradients', 'nested cards', 'low-contrast gray body text', 'excessive motion or effects'],
@@ -1159,13 +1180,15 @@ export function buildPptRenderReport({ contract = {}, audience, sourceLedger, fa
     design_policy_checks: [
       { id: 'information_first', passed: styleTokens.design_policy?.priority === 'information_first' },
       { id: 'restrained_detail', passed: styleTokens.design_policy?.visual_style === 'simple_restrained_detailed' },
-      { id: 'design_ssot_declared', passed: styleTokens.design_policy?.design_ssot?.authority === DESIGN_SYSTEM_SSOT.authority_file },
-      { id: 'curated_design_md_input_fused', passed: (styleTokens.design_policy?.source_inputs || []).some((entry: any) => entry.url === AWESOME_DESIGN_MD_REFERENCE.url && entry.role === 'source_input_for_ssot') },
+      { id: 'product_design_plugin_declared', passed: styleTokens.design_policy?.product_design_plugin?.id === PRODUCT_DESIGN_PLUGIN.id && (styleTokens.design_policy?.product_design_plugin?.required_skills || []).includes('design-qa') },
+      { id: 'design_ssot_declared', passed: styleTokens.design_policy?.design_ssot?.authority === DESIGN_SYSTEM_SSOT.authority_file && styleTokens.design_policy?.design_ssot?.primary_authority === PRODUCT_DESIGN_PLUGIN.id },
+      { id: 'curated_design_md_input_fused', passed: (styleTokens.design_policy?.source_inputs || []).some((entry: any) => entry.url === AWESOME_DESIGN_MD_REFERENCE.url && /fallback_source_input/.test(entry.role || '')) },
       { id: 'concrete_design_reference_selected', passed: Boolean(styleTokens.design_policy?.design_reference_selection?.primary?.id && styleTokens.design_policy?.design_reference_selection?.selected_sources?.length) },
       { id: 'reference_rules_applied_to_tokens', passed: Boolean(styleTokens.layout?.composition && styleTokens.layout?.treatment && styleTokens.design_policy?.design_reference_selection?.applied_token_profile) },
       { id: 'html_uses_reference_layout', passed: typeof html === 'string' && html.includes('decision evidence') && html.includes(styleTokens.layout?.composition || 'presentation-grid') },
       { id: 'ppt_skill_allowlist_enforced', passed: JSON.stringify(styleTokens.design_policy?.pipeline_allowlist?.required_skills || []) === JSON.stringify([...PPT_PIPELINE_SKILL_ALLOWLIST]) },
       { id: 'out_of_pipeline_design_skills_ignored', passed: styleTokens.design_policy?.pipeline_allowlist?.ignore_installed_out_of_pipeline_skills === true && (styleTokens.design_policy?.pipeline_allowlist?.ignored_design_skills_even_if_installed || []).includes('design-artifact-expert') },
+      { id: 'legacy_design_skills_fallback_only', passed: styleTokens.design_policy?.pipeline_allowlist?.primary_design_plugin === PRODUCT_DESIGN_PLUGIN.id && (styleTokens.design_policy?.pipeline_allowlist?.ignored_design_skills_even_if_installed || []).includes('design-system-builder') },
       { id: 'ppt_mcp_allowlist_scoped', passed: (styleTokens.design_policy?.pipeline_allowlist?.allowed_mcp_servers || []).every((entry: any) => entry.mcp === 'context7' && /external_documentation/.test(entry.condition || '')) },
       { id: 'no_decorative_overdesign', passed: !String(html).includes('gradient') },
       { id: 'fact_ledger_embedded', passed: typeof html === 'string' && html.includes('ppt-fact-ledger') },

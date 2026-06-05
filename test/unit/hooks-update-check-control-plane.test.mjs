@@ -19,8 +19,13 @@ async function evaluateUpdatePrompt(root, prompt, conversationId = 'update-check
   }, { root, state: {} });
 }
 
-async function readUpdateState(root) {
-  return JSON.parse(await fs.readFile(path.join(root, '.sneakoscope', 'state', 'update-check.json'), 'utf8'));
+async function updateStateExists(root) {
+  try {
+    await fs.access(path.join(root, '.sneakoscope', 'state', 'update-check.json'));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function missionEntries(root) {
@@ -44,7 +49,7 @@ async function withEnv(env, fn) {
   }
 }
 
-test('SKS update offer is control-plane only and does not start a route', async () => {
+test('Codex App hook does not inject an SKS update choice when npm has a newer version', async () => {
   await withEnv({
     SKS_INSTALLED_SKS_VERSION: '1.15.1',
     SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9'
@@ -52,45 +57,17 @@ test('SKS update offer is control-plane only and does not start a route', async 
     const root = await makeRoot();
     const result = await evaluateUpdatePrompt(root, 'fix the project');
     const context = String(result.additionalContext || '');
-    assert.match(context, /Before any other work, ask the user to choose/);
-    assert.doesNotMatch(context, /\$Team route prepared|Pipeline plan:/);
-    assert.deepEqual(await missionEntries(root), []);
-    const state = await readUpdateState(root);
-    assert.equal(state.pending_offer.latest, '9.9.9');
-    assert.equal(state.pending_offer.conversation_id, 'update-check-control');
+    assert.doesNotMatch(context, /SKS update check/i);
+    assert.doesNotMatch(context, /Update SKS now|Skip update for this conversation/i);
+    assert.doesNotMatch(context, /Before any other work, ask the user to choose/i);
+    assert.equal(await updateStateExists(root), false);
   });
 });
 
-test('Update SKS now acceptance is control-plane only and does not start a route', async () => {
+test('legacy pending SKS update state is ignored by Codex App hooks', async () => {
   await withEnv({
-    SKS_INSTALLED_SKS_VERSION: '1.15.1'
-  }, async () => {
-    const root = await makeRoot();
-    await fs.writeFile(path.join(root, '.sneakoscope', 'state', 'update-check.json'), `${JSON.stringify({
-      pending_offer: {
-        conversation_id: 'update-check-control',
-        latest: '9.9.9',
-        offered_at: '2026-05-23T00:00:00.000Z'
-      }
-    }, null, 2)}\n`);
-    const result = await evaluateUpdatePrompt(root, 'Update SKS now');
-    const context = String(result.additionalContext || '');
-    assert.match(context, /user accepted update to 9\.9\.9/);
-    assert.match(context, /run exactly this command and nothing else/);
-    assert.match(context, /sks update now --version 9\.9\.9/);
-    assert.doesNotMatch(context, /npm i -g/);
-    assert.doesNotMatch(context, /\$Team route prepared|Pipeline plan:/);
-    assert.deepEqual(await missionEntries(root), []);
-    const state = await readUpdateState(root);
-    assert.equal(state.pending_offer, null);
-    assert.equal(state.accepted.latest, '9.9.9');
-    assert.equal(state.accepted.conversation_id, 'update-check-control');
-  });
-});
-
-test('pending SKS update choice repeats copy-stable prompt instead of starting a route', async () => {
-  await withEnv({
-    SKS_INSTALLED_SKS_VERSION: '1.15.1'
+    SKS_INSTALLED_SKS_VERSION: '1.15.1',
+    SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9'
   }, async () => {
     const root = await makeRoot();
     await fs.writeFile(path.join(root, '.sneakoscope', 'state', 'update-check.json'), `${JSON.stringify({
@@ -102,62 +79,11 @@ test('pending SKS update choice repeats copy-stable prompt instead of starting a
     }, null, 2)}\n`);
     const result = await evaluateUpdatePrompt(root, '잠깐 이거 복사 중이야');
     const context = String(result.additionalContext || '');
-    assert.match(context, /copy-stable option/);
-    assert.match(context, /Update SKS now/);
-    assert.match(context, /Skip update for this conversation/);
-    assert.match(context, /do not start a pipeline route/);
-    assert.doesNotMatch(context, /\$Team route prepared|Pipeline plan:/);
+    assert.doesNotMatch(context, /copy-stable option/i);
+    assert.doesNotMatch(context, /Update SKS now|Skip update for this conversation/i);
+    assert.doesNotMatch(context, /do not start a pipeline route/i);
+    assert.equal(result.decision, undefined);
+    assert.equal(result.continue, true);
     assert.deepEqual(await missionEntries(root), []);
-    const state = await readUpdateState(root);
-    assert.equal(state.pending_offer.latest, '9.9.9');
-    assert.equal(state.accepted, undefined);
-    assert.equal(state.skipped, undefined);
-  });
-});
-
-test('accepted SKS update is not re-offered in the same conversation', async () => {
-  await withEnv({
-    SKS_INSTALLED_SKS_VERSION: '1.15.1',
-    SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9'
-  }, async () => {
-    const root = await makeRoot();
-    await fs.writeFile(path.join(root, '.sneakoscope', 'state', 'update-check.json'), `${JSON.stringify({
-      accepted: {
-        conversation_id: 'update-check-control',
-        latest: '9.9.9',
-        accepted_at: '2026-05-23T00:00:00.000Z'
-      }
-    }, null, 2)}\n`);
-    const result = await evaluateUpdatePrompt(root, 'continue the previous work');
-    const context = String(result.additionalContext || '');
-    assert.match(context, /was already accepted for this conversation/);
-    assert.match(context, /Do not ask again or start a pipeline route/);
-    assert.match(context, /sks update now --version 9\.9\.9/);
-    assert.doesNotMatch(context, /npm i -g/);
-    assert.doesNotMatch(context, /\$Team route prepared|Pipeline plan:/);
-    assert.deepEqual(await missionEntries(root), []);
-  });
-});
-
-test('accepted SKS update state clears once effective installed version reaches latest', async () => {
-  await withEnv({
-    SKS_INSTALLED_SKS_VERSION: '9.9.9',
-    SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '9.9.9'
-  }, async () => {
-    const root = await makeRoot();
-    await fs.writeFile(path.join(root, '.sneakoscope', 'state', 'update-check.json'), `${JSON.stringify({
-      accepted: {
-        conversation_id: 'update-check-control',
-        latest: '9.9.9',
-        accepted_at: '2026-05-23T00:00:00.000Z'
-      }
-    }, null, 2)}\n`);
-    const result = await evaluateUpdatePrompt(root, 'continue after global update');
-    const context = String(result.additionalContext || '');
-    assert.doesNotMatch(context, /update .*already accepted|Run exactly this command|Update SKS now|Skip update for this conversation/i);
-    const state = await readUpdateState(root);
-    assert.equal(state.accepted, null);
-    assert.equal(state.installed_current, '9.9.9');
-    assert.equal(state.pending_offer, null);
   });
 });

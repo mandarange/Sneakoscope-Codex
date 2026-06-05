@@ -13,6 +13,7 @@ export interface NarutoActivePoolReport {
   max_observed_active_workers: number
   duplicate_execution_count: number
   conflict_items_enqueued: number
+  max_observed_write_lease_conflicts: number
   timeline: Array<{ tick: number; active: number; pending: number; completed: number; event: string }>
   blockers: string[]
 }
@@ -31,18 +32,20 @@ export function simulateNarutoActivePool(input: {
   const completed = new Set<string>()
   const failed = new Set<string>()
   const executed = new Map<string, number>()
+  const byId = new Map(input.graph.work_items.map((item) => [item.id, item]))
   const timeline: NarutoActivePoolReport['timeline'] = []
   let generationIndex = 1
   let tick = 0
   let refillEvents = 0
   let maxObserved = 0
+  let maxObservedWriteLeaseConflicts = 0
   let conflictItemsEnqueued = 0
 
   while (pending.length || active.size) {
     let launched = 0
     for (;;) {
       if (active.size >= safeActiveWorkers) break
-      const next = popRunnable(pending, completed, active)
+      const next = popRunnable(pending, completed, active, byId)
       if (!next) break
       const generation = createNarutoGeneration(next, generationIndex, tick)
       generationIndex += 1
@@ -52,6 +55,7 @@ export function simulateNarutoActivePool(input: {
     }
     if (launched) refillEvents += launched
     maxObserved = Math.max(maxObserved, active.size)
+    maxObservedWriteLeaseConflicts = Math.max(maxObservedWriteLeaseConflicts, countActiveWriteLeaseConflicts(active, byId))
     timeline.push({ tick, active: active.size, pending: pending.length, completed: completed.size, event: launched ? 'refill' : 'wait' })
     const done = [...active.values()].slice(0, Math.max(1, Math.ceil(active.size / 2)))
     if (!done.length && pending.length) break
@@ -62,7 +66,9 @@ export function simulateNarutoActivePool(input: {
       if (shouldFail) {
         failed.add(generation.work_item_id)
         conflictItemsEnqueued += 1
-        pending.push(conflictResolutionFollowup(generation.work_item_id, input.graph.work_items.length + conflictItemsEnqueued))
+        const followup = conflictResolutionFollowup(generation.work_item_id, input.graph.work_items.length + conflictItemsEnqueued)
+        pending.push(followup)
+        byId.set(followup.id, followup)
       } else {
         completed.add(generation.work_item_id)
       }
@@ -75,6 +81,7 @@ export function simulateNarutoActivePool(input: {
     ...(pending.length ? ['naruto_active_pool_pending_not_drained'] : []),
     ...(active.size ? ['naruto_active_pool_active_not_drained'] : []),
     ...(maxObserved > safeActiveWorkers ? ['naruto_active_pool_exceeded_safe_workers'] : []),
+    ...(maxObservedWriteLeaseConflicts > 0 ? ['naruto_active_pool_overlapping_write_leases'] : []),
     ...(duplicateExecutionCount > conflictItemsEnqueued ? ['naruto_active_pool_duplicate_execution_without_retry'] : [])
   ]
   return {
@@ -88,12 +95,13 @@ export function simulateNarutoActivePool(input: {
     max_observed_active_workers: maxObserved,
     duplicate_execution_count: duplicateExecutionCount,
     conflict_items_enqueued: conflictItemsEnqueued,
+    max_observed_write_lease_conflicts: maxObservedWriteLeaseConflicts,
     timeline,
     blockers
   }
 }
 
-function popRunnable(pending: NarutoWorkItem[], completed: Set<string>, active: Map<string, NarutoGeneration>): NarutoWorkItem | null {
+function popRunnable(pending: NarutoWorkItem[], completed: Set<string>, active: Map<string, NarutoGeneration>, byId: Map<string, NarutoWorkItem>): NarutoWorkItem | null {
   const activeWorkIds = new Set([...active.values()].map((item) => item.work_item_id))
   for (let index = 0; index < pending.length; index += 1) {
     const item = pending[index]
@@ -101,7 +109,7 @@ function popRunnable(pending: NarutoWorkItem[], completed: Set<string>, active: 
     if (activeWorkIds.has(item.id)) continue
     if (!item.dependencies.every((dep) => completed.has(dep))) continue
     const writeConflict = [...active.values()].some((generation) => {
-      const activeItem = pending.find((candidate) => candidate.id === generation.work_item_id)
+      const activeItem = byId.get(generation.work_item_id)
       return activeItem?.write_paths.some((file) => item.write_paths.includes(file))
     })
     if (writeConflict) continue
@@ -109,6 +117,15 @@ function popRunnable(pending: NarutoWorkItem[], completed: Set<string>, active: 
     return item
   }
   return null
+}
+
+function countActiveWriteLeaseConflicts(active: Map<string, NarutoGeneration>, byId: Map<string, NarutoWorkItem>): number {
+  const counts = new Map<string, number>()
+  for (const generation of active.values()) {
+    const item = byId.get(generation.work_item_id)
+    for (const file of item?.write_paths || []) counts.set(file, (counts.get(file) || 0) + 1)
+  }
+  return [...counts.values()].filter((count) => count > 1).reduce((sum, count) => sum + count - 1, 0)
 }
 
 function conflictResolutionFollowup(failedId: string, index: number): NarutoWorkItem {
@@ -131,4 +148,3 @@ function conflictResolutionFollowup(failedId: string, index: number): NarutoWork
     acceptance: { requires_patch_envelope: true, requires_verification: true, requires_gpt_final: true }
   }
 }
-

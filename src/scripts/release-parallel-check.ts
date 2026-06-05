@@ -314,8 +314,23 @@ if (result.ok) {
   };
   await writeParallelVerificationProof(reportDir, result);
 }
-console.log(JSON.stringify(result, null, 2));
+console.log(JSON.stringify(releaseParallelStdoutSummary(result), null, 2));
 process.exit(result.ok ? 0 : 1);
+
+function releaseParallelStdoutSummary(result: ParallelVerificationResult): Record<string, unknown> {
+  return {
+    schema: 'sks.release-parallel-check.stdout-summary.v1',
+    ok: result.ok,
+    tasks: result.task_count,
+    passed: result.passed,
+    failed: result.failed,
+    skipped: result.skipped,
+    dependency_count: result.dependency_count,
+    report_json: '.sneakoscope/reports/release-parallel-report.json',
+    report_md: '.sneakoscope/reports/release-parallel-report.md',
+    retention_cleanup: (result as any).retention_cleanup ?? null
+  };
+}
 
 function summarizeReleaseLogsForCleanup(result: ParallelVerificationResult, logDir: string): void {
   const prefix = `${path.resolve(logDir)}${path.sep}`;

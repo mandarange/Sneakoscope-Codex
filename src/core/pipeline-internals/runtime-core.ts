@@ -355,7 +355,7 @@ export function promptPipelineContext(prompt: any, route: any = null) {
     skillDreamPolicyText(),
     route?.id === 'PPT'
       ? `${pptPipelineAllowlistPolicyText()} ${getdesignReferencePolicyText()}`
-      : `Design routing: UI/UX reads design.md first; if missing, use design-system-builder from docs/Design-Sys-Prompt.md with plan-tool clarification and a default font recommendation. Existing designs use design-ui-editor plus design-artifact-expert. Image/logo/raster assets use imagegen, which must prefer Codex App built-in image generation documented at ${CODEX_APP_IMAGE_GENERATION_DOC_URL}. ${CODEX_IMAGEGEN_REQUIRED_POLICY} ${getdesignReferencePolicyText()}`,
+      : `Design routing: UI/UX uses the Codex App Product Design plugin first for get-context/user-context, research/ideate, prototype/image-to-code/url-to-code, audit/design-qa, and share when available. Treat design.md, design-system-builder, design-ui-editor, design-artifact-expert, and getdesign-reference as compatibility fallback only when the Product Design plugin is unavailable or an existing local design.md must be preserved. Image/logo/raster assets use imagegen, which must prefer Codex App built-in image generation documented at ${CODEX_APP_IMAGE_GENERATION_DOC_URL}. ${CODEX_IMAGEGEN_REQUIRED_POLICY} ${getdesignReferencePolicyText()}`,
     triwikiContextTrackingText(),
     triwikiStagePolicyText(),
     stackCurrentDocsPolicyText(),

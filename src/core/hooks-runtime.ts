@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, which, PACKAGE_VERSION, sha256, packageRoot, tmpdir, type JsonData } from './fsx.js';
+import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, sha256, packageRoot, tmpdir, type JsonData } from './fsx.js';
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.js';
 import { missionDir, setCurrent, stateFile } from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
@@ -12,7 +12,6 @@ import { classifyToolError } from './evaluation.js';
 import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.js';
 import { dollarCommand, routeRequiresSubagents, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { appendMissionStatus } from './recallpulse.js';
-import { detectEffectiveSksVersion, runSksUpdateCheck } from './update-check.js';
 import { scanAgentTextForRecursion } from './agents/agent-recursion-guard.js';
 import {
   buildCompactContinue,
@@ -177,14 +176,6 @@ function toolFailed(payload: any = {}) {
   return false;
 }
 
-function looksLikeUpdateDecline(prompt: any) {
-  return /^(no|nope|skip|later|not now|don't|dont|아니|아니요|안해|안 함|나중에|건너뛰|스킵)/i.test(String(prompt || '').trim());
-}
-
-function looksLikeUpdateAccept(prompt: any) {
-  return /^(yes|y|ok|okay|update|upgrade|do it|go ahead|응|네|예|업데이트|해줘|진행)/i.test(String(prompt || '').trim());
-}
-
 export async function hookMain(name: any): Promise<JsonData> {
   const payload = await loadHookPayload();
   return evaluateHookPayload(name, payload);
@@ -292,14 +283,7 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       const additionalContext = [madSksConfirmation.additionalContext, teamDigest?.context].filter(Boolean).join('\n\n');
       return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
     }
-    const updateCheck = await updateCheckContext(root, payload, prompt);
-    const updateContext = updateCheck.text;
-    if (updateCheck.blocksRouting) {
-      const teamDigest = updateCheck.resumeActiveRoute ? await teamLiveDigest(root, state) : null;
-      const activeContext = updateCheck.resumeActiveRoute ? await activeRouteContext(root, state) : '';
-      const additionalContext = [updateContext, activeContext, teamDigest?.context].filter(Boolean).join('\n\n');
-      return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
-    }
+    const updateContext = '';
     const command = dollarCommand(prompt);
     const route = routePrompt(prompt);
     if (routeIsGitOnly(route)) {
@@ -867,221 +851,6 @@ function pruneStopRepeatEntries(entries: any = {}, now: any = nowIso()) {
     .slice(0, STOP_REPEAT_GUARD_MAX_ENTRIES));
 }
 
-async function updateCheckContext(root: any, payload: any, prompt: any) {
-  if (process.env.SKS_DISABLE_UPDATE_CHECK === '1') return updateCheckResult('');
-  const statePath = path.join(root, '.sneakoscope', 'state', 'update-check.json');
-  const updateState = await readJson(statePath, {});
-  const conv = conversationId(payload);
-  const pending = updateState.pending_offer;
-  let effective: any = null;
-  async function effectiveVersion() {
-    if (!effective) {
-      const installed = await detectEffectiveSksVersion({ timeoutMs: 2500 });
-      effective = {
-        installed,
-        current: highestVersion([PACKAGE_VERSION, installed.current])
-      };
-    }
-    return effective;
-  }
-  if (pending?.latest) {
-    const currentCheck = await effectiveVersion();
-    if (compareVersions(pending.latest, currentCheck.current) <= 0) {
-      await writeJsonAtomic(statePath, {
-        ...updateState,
-        current: currentCheck.current,
-        runtime_current: PACKAGE_VERSION,
-        installed_current: currentCheck.installed.current || null,
-        installed_sources: currentCheck.installed.candidates || [],
-        latest: pending.latest,
-        checked_at: nowIso(),
-        pending_offer: null,
-        check_error: null
-      });
-      return updateCheckResult('');
-    }
-  }
-  if (updateState.skipped?.latest) {
-    const currentCheck = await effectiveVersion();
-    if (compareVersions(updateState.skipped.latest, currentCheck.current) <= 0) {
-      await writeJsonAtomic(statePath, {
-        ...updateState,
-        current: currentCheck.current,
-        runtime_current: PACKAGE_VERSION,
-        installed_current: currentCheck.installed.current || null,
-        installed_sources: currentCheck.installed.candidates || [],
-        latest: updateState.skipped.latest,
-        checked_at: nowIso(),
-        pending_offer: null,
-        skipped: null,
-        check_error: null
-      });
-      return updateCheckResult('');
-    }
-  }
-  if (updateState.accepted?.latest) {
-    const currentCheck = await effectiveVersion();
-    if (compareVersions(updateState.accepted.latest, currentCheck.current) <= 0) {
-      await writeJsonAtomic(statePath, {
-        ...updateState,
-        current: currentCheck.current,
-        runtime_current: PACKAGE_VERSION,
-        installed_current: currentCheck.installed.current || null,
-        installed_sources: currentCheck.installed.candidates || [],
-        latest: updateState.accepted.latest,
-        checked_at: nowIso(),
-        pending_offer: null,
-        accepted: null,
-        check_error: null
-      });
-      return updateCheckResult('');
-    }
-    if (updateState.accepted.conversation_id === conv) {
-      return updateCheckResult(`SKS update check: update ${updateState.accepted.latest} was already accepted for this conversation. Run exactly this command and nothing else: ${sksUpdateInstallCommand(updateState.accepted.latest)}. Do not ask again or start a pipeline route until the update command has completed.`, {
-        blocksRouting: true
-      });
-    }
-  }
-  if (pending?.conversation_id === conv && pending?.latest && looksLikeUpdateDecline(prompt)) {
-    await writeJsonAtomic(statePath, {
-      ...updateState,
-      pending_offer: null,
-      skipped: { conversation_id: conv, latest: pending.latest, skipped_at: nowIso() }
-    });
-    return updateCheckResult(`SKS update check: user skipped update to ${pending.latest} for this conversation only. Continue the previous task without updating. Check again on the next conversation.`, {
-      blocksRouting: true,
-      resumeActiveRoute: true
-    });
-  }
-  if (pending?.conversation_id === conv && pending?.latest && looksLikeUpdateAccept(prompt)) {
-    const command = sksUpdateInstallCommand(pending.latest);
-    await writeJsonAtomic(statePath, {
-      ...updateState,
-      pending_offer: null,
-      accepted: { conversation_id: conv, latest: pending.latest, accepted_at: nowIso() }
-    });
-    return updateCheckResult(`SKS update check: user accepted update to ${pending.latest}. Before doing other work, run exactly this command and nothing else: ${command}. Do not start a pipeline route, run setup, or run doctor for this accepted update command.`, {
-      blocksRouting: true
-    });
-  }
-  if (pending?.conversation_id === conv && pending?.latest) {
-    // Don't re-inject the full update choice on EVERY prompt — that is the "tiny
-    // update text keeps appearing" nag. After the choice has been shown, stay quiet
-    // for a short window so the user can keep working; we re-surface it once the
-    // window elapses (or next conversation). Accept/decline are handled above and
-    // still take effect immediately. SKS_UPDATE_OFFER_THROTTLE_MS=0 restores the
-    // old always-repeat behavior.
-    const throttleMs = updateOfferThrottleMs();
-    const lastOfferedMs = Date.parse(pending.offered_at || '') || 0;
-    if (throttleMs > 0 && lastOfferedMs > 0 && Date.now() - lastOfferedMs < throttleMs) {
-      return updateCheckResult('');
-    }
-    await writeJsonAtomic(statePath, { ...updateState, pending_offer: { ...pending, offered_at: nowIso() } });
-    return updateCheckResult(copyStableUpdateChoiceText(pending.latest), {
-      blocksRouting: true
-    });
-  }
-  if (updateState.skipped?.conversation_id === conv && updateState.skipped?.latest) {
-    return updateCheckResult(`SKS update check: update ${updateState.skipped.latest} was skipped for this conversation only. Do not ask again in this conversation; check again next conversation.`);
-  }
-  const check = await checkLatestVersion();
-  const { installed, current } = await effectiveVersion();
-  const isCurrent = check.latest && compareVersions(check.latest, current) <= 0;
-  await writeJsonAtomic(statePath, {
-    ...updateState,
-    current,
-    runtime_current: PACKAGE_VERSION,
-    installed_current: installed.current || null,
-    installed_sources: installed.candidates || [],
-    latest: check.latest || null,
-    checked_at: nowIso(),
-    pending_offer: isCurrent ? null : updateState.pending_offer || null,
-    check_error: check.error || null
-  });
-  if (!check.latest || check.error || isCurrent) return updateCheckResult('');
-  await writeJsonAtomic(statePath, {
-    ...updateState,
-    current,
-    runtime_current: PACKAGE_VERSION,
-    installed_current: installed.current || null,
-    installed_sources: installed.candidates || [],
-    latest: check.latest,
-    checked_at: nowIso(),
-    pending_offer: { conversation_id: conv, latest: check.latest, offered_at: nowIso() },
-    skipped: updateState.skipped?.conversation_id === conv ? null : updateState.skipped || null
-  });
-  return updateCheckResult(copyStableUpdateChoiceText(check.latest, current), {
-    blocksRouting: true
-  });
-}
-
-function updateCheckResult(text: any, opts: any = {}) {
-  return {
-    text: String(text || ''),
-    blocksRouting: opts.blocksRouting === true,
-    resumeActiveRoute: opts.resumeActiveRoute === true
-  };
-}
-
-// How long (ms) to stay quiet after showing the update choice before re-surfacing
-// it in the same conversation. Default 8 minutes; set 0 to always repeat (legacy).
-function updateOfferThrottleMs() {
-  const raw = Number(process.env.SKS_UPDATE_OFFER_THROTTLE_MS);
-  if (Number.isFinite(raw) && raw >= 0) return Math.floor(raw);
-  return 8 * 60 * 1000;
-}
-
-function sksUpdateInstallCommand(version: any) {
-  return `sks update now --version ${version}`;
-}
-
-function copyStableUpdateChoiceText(latest: any, current: any = null) {
-  const installed = current ? `installed ${current}, latest ${latest}` : `latest ${latest}`;
-  return `SKS update check: ${installed}. Before any other work, ask the user to choose exactly one copy-stable option: "Update SKS now" or "Skip update for this conversation". If the user sends anything else while this update choice is pending, repeat this same choice and do not start a pipeline route. If they choose update, run exactly this command and nothing else: ${sksUpdateInstallCommand(latest)}. Do not start a pipeline route, run setup, or run doctor for this accepted update command. If they skip, do not ask again in this conversation, but check again next conversation.`;
-}
-
-async function checkLatestVersion() {
-  const check = await runSksUpdateCheck({ timeoutMs: 3500 });
-  return { latest: check.latest, error: check.error || undefined };
-}
-
-async function detectInstalledSksVersion() {
-  const override = parseVersionText(process.env.SKS_INSTALLED_SKS_VERSION || '');
-  if (override) return { version: override, source: 'env' };
-  const candidates: any[] = [];
-  const pkg = await readJson(path.join(packageRoot(), 'package.json'), {}).catch(() => ({}));
-  if (parseVersionText(pkg.version)) candidates.push({ version: parseVersionText(pkg.version), source: 'package.json' });
-  const sks = await which('sks').catch(() => null);
-  if (!sks) return candidates[0] || { version: null, source: null };
-  const result = await runProcess(sks, ['--version'], {
-    timeoutMs: 2000,
-    maxOutputBytes: 4096,
-    env: { SKS_DISABLE_UPDATE_CHECK: '1' }
-  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
-  if (result.code === 0 && parseVersionText(result.stdout)) candidates.push({ version: parseVersionText(result.stdout), source: sks });
-  if (candidates.length) return candidates.reduce((best: any, candidate: any) => compareVersions(candidate.version, best.version) > 0 ? candidate : best);
-  return { version: null, source: sks, error: `${result.stderr || result.stdout || 'sks --version failed'}`.trim() };
-}
-
-function parseVersionText(text: any) {
-  const match = String(text || '').match(/\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b/);
-  return match ? match[0] : null;
-}
-
-function highestVersion(versions: any = []) {
-  return versions.filter(Boolean).reduce((best: any, candidate: any) => compareVersions(candidate, best) > 0 ? candidate : best, '0.0.0');
-}
-
-function compareVersions(a: any, b: any) {
-  const pa = String(a || '').split(/[.-]/).map((x: any) => Number.parseInt(x, 10) || 0);
-  const pb = String(b || '').split(/[.-]/).map((x: any) => Number.parseInt(x, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length, 3); i++) {
-    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
-    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
-  }
-  return 0;
-}
-
 function hasHonestMode(text: any) {
   const s = String(text || '');
   return /(SKS Honest Mode|솔직모드|Honest Mode)/i.test(s)
@@ -1391,7 +1160,6 @@ function codexHookEventName(name: any) {
 function visibleHookMessage(name: any, text: any = '') {
   const body = String(text || '');
   if (name === 'user-prompt-submit') {
-    if (body.includes('SKS update check:')) return 'SKS: update check control-plane prompt injected; no pipeline route started.';
     if (body.includes('DFix ultralight pipeline active')) return 'SKS: DFix ultralight task list injected.';
     if (body.includes('SKS answer-only pipeline active')) return 'SKS: answer-only research context injected.';
     if (body.includes('SKS wiki pipeline active')) return 'SKS: wiki refresh context injected.';

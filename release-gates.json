@@ -1618,6 +1618,34 @@
       "can_run_incremental": true
     },
     {
+      "id": "codex:product-design-auto-install",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/codex/**",
+        "src/core/codex-app.ts",
+        "src/core/codex-lb-circuit.ts",
+        "src/scripts/codex-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex:product-design-plugin-routing",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/codex/**",
+        "src/core/codex-app.ts",
+        "src/core/codex-lb-circuit.ts",
+        "src/scripts/codex-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "codex:profile-primary",
       "tier": "P1",
       "cost": "hermetic",
@@ -2746,6 +2774,19 @@
     },
     {
       "id": "naruto:parallel-patch-apply",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "src/scripts/naruto-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "naruto:readonly-routing",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [

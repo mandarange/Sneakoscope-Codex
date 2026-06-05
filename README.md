@@ -16,10 +16,13 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.5** is a P0 Codex App Fast UI and MAD Zellij worker-pane closure patch on top of the 2.0 execution layer. `sks --mad` now relies on launch-time Fast/high overrides instead of user-level Codex config rewrites, safe Fast UI repair runs through `sks doctor --fix`, provider badges read env/auth/config.toml consistently, and interactive MAD worker panes attach to the real Zellij session as scheduler slots spawn.
+SKS **2.0.6** wires Codex App Product Design into the design pipeline and hardens Naruto read-only routing on top of the 2.0 execution layer. Design routes can now discover, install, verify, and prefer the remote `product-design@openai-curated-remote` plugin, while read-only native worker runs keep write mode off and avoid treating pre-existing dirty files as generated patches.
 
 What changed:
 
+- Product Design plugin readiness now checks both local and remote Codex App catalogs, auto-installs the remote plugin when needed, and records the installed/enabled skill surface.
+- UI/design/PPT runtime routes prefer Product Design for research, ideation, audit, design QA, prototype, URL-to-code, image-to-code, share, and user-context steps.
+- Naruto read-only runs force write mode off, propagate no-patch reasons through worker proof, and skip changed-file lease checks when no write-capable patch envelope exists.
 - `codex-sdk` is the default native agent backend for Team, QA, Research, Naruto, MAD-SKS, and direct agent runs, with every runtime task entering through `runCodexTask`.
 - Codex App UI snapshot, preservation, clobber guard, and doctor repair checks protect host-owned Fast UI/profile settings around `sks --mad`.
 - Provider context resolves `openai`, `codex-lb`, and `codex-app` with badge/fallback surfaces while avoiding private Codex App UI mutation.
@@ -78,7 +81,7 @@ Broader release checks still live behind `npm run release:check`. Detailed relea
   sks xai docs
   ```
 
-- **Quieter update prompts.** The "update available" choice is shown once per conversation and then stays quiet for a short window (default 8 min, `SKS_UPDATE_OFFER_THROTTLE_MS`) instead of repeating on every prompt. The check compares npm latest against source metadata, PATH `sks --version`, and the global npm package, so a completed `npm i -g sneakoscope` clears stale pending/accepted offers.
+- **CLI-only SKS update notices.** Codex App hooks no longer stop normal work to ask for an SKS update. CLI launch surfaces such as `sks --mad` print a non-blocking latest-version notice, `sks update-check` / `sks update check` show the explicit status, and `sks doctor --fix` runs the guarded global SKS update path before repair.
 
 ## Retention And Cleanup
 
@@ -359,7 +362,7 @@ sks --mad --allow-package-install --allow-service-control --allow-network --yes
 
 This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` xhigh maintenance profile, opens the MAD-SKS permission gate for that Zellij run, starts a same-mission read-only native agent swarm, and launches a Codex CLI layout whose right-side lanes read that MAD ledger. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock: it is explicit user authorization to widen approved target-project scopes. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
 
-Before launching, SKS checks npm for a newer `sneakoscope`; answer `y` to update or `n` to continue. Use `--yes` to approve missing dependency installs automatically. Tune MAD swarm startup with `--mad-agents <n>`, `--mad-swarm-work-items <n>`, and `--mad-swarm-backend <backend>`; `--no-mad-swarm` keeps only the cockpit UI if you need a temporary fallback.
+Before launching, SKS checks npm for a newer `sneakoscope` and prints a non-blocking update notice when one is available; use `sks update now` or `sks doctor --fix` when you want SKS to update itself. Use `--yes` to approve missing dependency installs automatically. Tune MAD swarm startup with `--mad-agents <n>`, `--mad-swarm-work-items <n>`, and `--mad-swarm-backend <backend>`; `--no-mad-swarm` keeps only the cockpit UI if you need a temporary fallback.
 
 ### Team Missions
 
@@ -659,7 +662,7 @@ npm ls -g sneakoscope --depth=0
 sks doctor --fix
 ```
 
-Update prompts compare npm latest against the effective installed version from source metadata, PATH `sks --version`, and global npm package metadata. `sks update now` installs through npm global mode instead of mutating the current project's dependencies. If a global update succeeded but an old shim remains earlier on PATH, `sks doctor --fix` can remove duplicate global installs and refresh the managed setup.
+CLI update checks compare npm latest against the effective installed version from source metadata, PATH `sks --version`, and global npm package metadata. Codex App hooks do not force update choices during ordinary work. `sks update now` installs through npm global mode instead of mutating the current project's dependencies, and `sks doctor --fix` runs that guarded global update path before setup/config repair. If a global update succeeded but an old shim remains earlier on PATH, `sks doctor --fix` can remove duplicate global installs and refresh the managed setup.
 
 ### Zellij is missing
 

@@ -120,6 +120,14 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     return !changed || Boolean(row.rollback_digest)
   }) : true
   const parallelPatchApplyVerified = patchSwarm ? Array.isArray(patchProof?.wall_clock_parallel_evidence) && patchProof.wall_clock_parallel_evidence.length > 0 || Number(patchSwarm?.parallel_apply_count || 0) > 1 : false
+  const readOnlyNoWriteLeaseMode = isReadOnlyNoWriteLeaseMode({
+    results: input.results || [],
+    leases: input.partition?.leases || [],
+    parallelWritePolicy,
+    taskGraph,
+    narutoWorkGraph
+  })
+  const changedFileLeaseBlockers = readOnlyNoWriteLeaseMode ? [] : agentChangedFileLeaseViolations(input.results || [], input.partition?.leases || [])
   const blockers = [
     ...(lifecycle.ok ? [] : ['agent_lifecycle_not_all_closed']),
     ...(lifecycle.ok ? [] : lifecycle.open_sessions.map((id: string) => 'session_open:' + id)),
@@ -196,7 +204,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(isNarutoRoute && !narutoVerificationDag ? ['naruto_verification_dag_missing'] : []),
     ...(isNarutoRoute && !narutoGptFinalPack ? ['naruto_gpt_final_pack_missing'] : []),
     ...(isNarutoRoute && !narutoZellijDashboard ? ['naruto_zellij_dashboard_missing'] : []),
-    ...agentChangedFileLeaseViolations(input.results || [], input.partition?.leases || [])
+    ...changedFileLeaseBlockers
   ]
   const evidence = {
     schema: AGENT_PROOF_EVIDENCE_SCHEMA,
@@ -370,7 +378,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     triwiki_use_first_count: Number(input.triwikiContext?.use_first?.length || 0),
     triwiki_hydrate_first_count: Number(input.triwikiContext?.hydrate_first?.length || 0),
     triwiki_claim_count: Number(input.triwikiContext?.claim_count || 0),
-    changed_files_lease_checked: true,
+    changed_files_lease_checked: !readOnlyNoWriteLeaseMode,
     dependency_collision_risk: input.partition?.no_overlap_proof?.dependency_collision_risk || [],
     blockers
   }
@@ -451,6 +459,21 @@ function agentChangedFileLeaseViolations(results: any[], leases: any[]) {
     }
   }
   return violations
+}
+
+function isReadOnlyNoWriteLeaseMode(input: { results: any[]; leases: any[]; parallelWritePolicy: any; taskGraph: any; narutoWorkGraph: any }) {
+  const writeLeaseCount = input.leases.filter((lease) => lease.kind === 'write').length
+  if (writeLeaseCount > 0) return false
+  const resultWriteSignals = input.results.some((result) =>
+    (Array.isArray(result?.writes) && result.writes.length > 0)
+    || (Array.isArray(result?.patch_envelopes) && result.patch_envelopes.length > 0)
+  )
+  if (resultWriteSignals) return false
+  const policyReadonly = input.parallelWritePolicy?.readonly === true
+  const policyWriteOff = String(input.parallelWritePolicy?.write_mode || 'off') === 'off'
+  const narutoReadOnly = input.narutoWorkGraph?.readonly === true || Number(input.narutoWorkGraph?.write_allowed_count || 0) === 0
+  const taskGraphNoWrites = Number(input.taskGraph?.write_allowed_count || 0) === 0
+  return policyReadonly || policyWriteOff || narutoReadOnly || taskGraphNoWrites
 }
 
 function pathWithin(file: string, leasePath: string) {

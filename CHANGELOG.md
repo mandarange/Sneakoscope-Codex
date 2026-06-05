@@ -2,10 +2,21 @@
 
 ## [Unreleased]
 
+## [2.0.6] - 2026-06-05
 
+### Added
 
+- Add Codex App Product Design plugin discovery, remote catalog lookup, auto-install readiness checks, and release gates for `product-design@openai-curated-remote`.
+- Add Product Design-first routing hints for UI/design/PPT pipeline stages including research, ideation, audit, design QA, prototype, URL-to-code, image-to-code, share, and user-context.
+- Add a Naruto read-only routing regression gate so read-only worker runs keep write mode off and avoid false patch requirements.
 
+### Fixed
 
+- Propagate read-only/no-write no-patch reasons through native worker proof so pre-existing dirty files do not fail proof as generated patches.
+- Keep changed-file lease checks write-scoped, skipping them for proof runs that have no write leases, no writes, and no patch envelope.
+- Keep `release-parallel-check` stdout bounded by writing full task detail to report files and printing only a concise summary.
+- Keep SKS update prompts out of Codex App hooks while preserving CLI launch notices and making `sks doctor --fix` run the SKS global update path.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
 
 ## [2.0.5] - 2026-06-04
 
