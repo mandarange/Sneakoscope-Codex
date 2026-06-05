@@ -33,6 +33,11 @@ export interface ZellijWorkerPaneOpenInput {
   serviceTier?: string | null
   backend?: string | null
   statusLabel?: string | null
+  worktree?: {
+    id: string
+    path: string
+    branch: string
+  } | null
 }
 
 export interface ZellijWorkerPaneRecord {
@@ -54,6 +59,11 @@ export interface ZellijWorkerPaneRecord {
   provider: string
   service_tier: string
   provider_context: ProviderContext
+  worktree: {
+    id: string
+    path: string
+    branch: string
+  } | null
   worker_artifact_dir: string
   worker_result_path: string
   heartbeat_path: string
@@ -82,10 +92,11 @@ export function buildWorkerPaneName(slotId: string, generationIndex: number) {
   return `${slotId}/gen-${Math.max(1, Math.floor(Number(generationIndex) || 1))}`
 }
 
-export function buildWorkerPaneTitle(slotId: string, generationIndex: number, context?: ProviderContext | null, serviceTier?: string | null, backend?: string | null, status?: string | null) {
+export function buildWorkerPaneTitle(slotId: string, generationIndex: number, context?: ProviderContext | null, serviceTier?: string | null, backend?: string | null, status?: string | null, worktree?: ZellijWorkerPaneOpenInput['worktree']) {
   const base = buildWorkerPaneName(slotId, generationIndex)
   const normalized = normalizePaneProviderContext(context, serviceTier)
-  return `${base} · ${backend || 'codex-sdk'} · ${providerPaneLabel(normalized)} · ${status || 'launching'}`
+  const wt = worktree ? ` · WT:${worktree.id} · branch:${worktree.branch}` : ''
+  return `${base}${wt} · ${backend || 'codex-sdk'} · ${providerPaneLabel(normalized)} · ${status || 'launching'}`
 }
 
 export function isRealZellijWorkerPaneIdSource(value: unknown) {
@@ -110,7 +121,7 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   const paneIdSource = input.paneIdSource || 'zellij_worker_pane_launch_failed'
   const blockers = input.blockers || []
   const providerContext = normalizePaneProviderContext(input.providerContext, input.serviceTier)
-  const paneTitle = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.status || input.statusLabel)
+  const paneTitle = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.status || input.statusLabel, input.worktree || null)
   return {
     schema: ZELLIJ_WORKER_PANE_SCHEMA,
     generated_at: now,
@@ -130,6 +141,7 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     provider: providerContext.provider,
     service_tier: providerContext.service_tier,
     provider_context: providerContext,
+    worktree: input.worktree || null,
     worker_artifact_dir: input.workerArtifactDir,
     worker_result_path: input.resultPath,
     heartbeat_path: input.heartbeatPath,
@@ -170,7 +182,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     timeoutMs: 5000,
     optional: false
   })
-  const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || 'running')
+  const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || 'running', input.worktree || null)
   let launch = createSession.ok
     ? await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--direction', 'right', '--name', paneName, '--', 'sh', '-lc', input.workerCommand], {
         cwd,

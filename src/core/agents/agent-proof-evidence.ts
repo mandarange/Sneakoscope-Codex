@@ -10,7 +10,7 @@ import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 import { evaluateLocalCollaborationFinalGate, localCollaborationParticipated, resolveLocalCollaborationPolicy } from '../local-llm/local-collaboration-policy.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; visualLaneCount?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any; selectedCoreSkill?: any; localCollaborationPolicy?: any; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; visualLaneCount?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; gitWorktreeRuntime?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any; selectedCoreSkill?: any; localCollaborationPolicy?: any; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
@@ -22,6 +22,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const scheduler = input.scheduler || await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const taskGraph = input.partition?.task_graph || await readJson<any>(path.join(root, 'agent-task-graph.json'), null)
   const parallelWritePolicy = input.parallelWritePolicy || await readJson<any>(path.join(root, 'agent-parallel-write-policy.json'), null)
+  const gitWorktreeRuntime = input.gitWorktreeRuntime || await readJson<any>(path.join(root, 'agent-git-worktree-runtime.json'), null)
   const patchQueue = await readJson<any>(path.join(root, 'agent-patch-queue.json'), null)
   const patchQueueEvents = await readTextSafe(path.join(root, 'agent-patch-queue-events.jsonl'))
   const patchMerge = await readJson<any>(path.join(root, 'agent-merge-coordinator-report.json'), null)
@@ -181,6 +182,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(noSubagentScalingPolicy?.ok === false ? noSubagentScalingPolicy.blockers || ['no_subagent_scaling_policy_not_ok'] : []),
     ...(fastModePropagation?.ok === false ? fastModePropagation.blockers || ['fast_mode_propagation_not_ok'] : []),
     ...(patchSwarm?.ok === false ? patchSwarm.blockers || ['patch_swarm_not_ok'] : []),
+    ...(gitWorktreeRuntime?.required === true && gitWorktreeRuntime?.ok === false ? gitWorktreeRuntime.blockers || ['git_worktree_runtime_not_ok'] : []),
     ...(patchSwarm && !patchQueue ? ['patch_queue_missing'] : []),
     ...(patchSwarm && !patchMerge ? ['patch_merge_report_missing'] : []),
     ...(patchSwarm && !patchApplyResults ? ['patch_apply_results_missing'] : []),
@@ -218,6 +220,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     // Deployed Core Skill snapshot consulted at route start (read-only; never
     // confers mutation rights). Null when no snapshot is deployed for this route.
     selected_core_skill: input.selectedCoreSkill || null,
+    git_worktree_runtime: gitWorktreeRuntime,
     route_blackbox_kind: input.routeBlackboxKind || (realRouteCommandUsed ? 'actual_route_command' : 'generic_agent_route_standin'),
     real_route_command_used: realRouteCommandUsed,
     native_cli_session_proof: nativeCliSessionProof ? 'native-cli-session-proof.json' : null,

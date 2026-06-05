@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sks.git-worktree-capability.v1",
+  "type": "object",
+  "required": ["schema", "ok", "mode", "is_git_repo", "worktree_supported", "worktree_probe_attempted", "blockers"],
+  "properties": {
+    "schema": { "const": "sks.git-worktree-capability.v1" },
+    "ok": { "type": "boolean" },
+    "mode": { "enum": ["git-worktree", "patch-envelope-only"] },
+    "require_git_worktree": { "type": "boolean" },
+    "git_available": { "type": "boolean" },
+    "is_git_repo": { "type": "boolean" },
+    "worktree_supported": { "type": "boolean" },
+    "worktree_probe_attempted": { "type": "boolean" },
+    "detection": { "type": "object" },
+    "root_resolution": { "type": ["object", "null"] },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  }
+}

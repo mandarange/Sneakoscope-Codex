@@ -3,6 +3,7 @@ import {
   isNarutoWriteKind,
   normalizeNarutoPath,
   type NarutoLeaseRequirement,
+  type NarutoWorktreePolicy,
   type NarutoWorkGraph,
   type NarutoWorkItem,
   type NarutoWorkKind,
@@ -19,6 +20,7 @@ export interface BuildNarutoWorkGraphInput {
   readonlyPaths?: string[]
   leaseBasePath?: string
   maxActiveWorkers?: number
+  worktreePolicy?: NarutoWorktreePolicy
 }
 
 const WRITE_CAPABLE_KIND_CYCLE: NarutoWorkKind[] = [
@@ -56,6 +58,13 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
   const basePath = normalizeNarutoPath(input.leaseBasePath || '.sneakoscope/naruto/patch-envelopes')
   const targetPaths = normalizePaths(input.targetPaths || [])
   const readonlyPaths = normalizePaths(input.readonlyPaths || [])
+  const worktreePolicy = input.worktreePolicy || {
+    mode: 'patch-envelope-only' as const,
+    required: false,
+    main_repo_root: null,
+    worktree_root: null,
+    fallback_reason: writeCapable ? 'git_capability_not_evaluated' : 'readonly_or_write_disabled'
+  }
   const workItems: NarutoWorkItem[] = []
 
   for (let index = 0; index < totalWorkItems; index += 1) {
@@ -88,7 +97,14 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
         requires_patch_envelope: writePaths.length > 0,
         requires_verification: kind !== 'research' && kind !== 'final_review_input_pack',
         requires_gpt_final: writePaths.length > 0 || kind === 'final_review_input_pack'
-      }
+      },
+      ...(writePaths.length > 0 ? {
+        worktree: {
+          mode: worktreePolicy.mode,
+          required: worktreePolicy.required,
+          allocation_required: worktreePolicy.mode === 'git-worktree'
+        }
+      } : {})
     })
   }
 
@@ -113,6 +129,7 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
     active_waves: activeWaves,
     mixed_work_kinds: mixedWorkKinds,
     write_allowed_count: writeAllowedCount,
+    worktree_policy: worktreePolicy,
     ok: blockers.length === 0,
     blockers
   }
@@ -219,4 +236,3 @@ function normalizePositiveInt(value: unknown, fallback: number): number {
 function normalizePaths(paths: string[]): string[] {
   return [...new Set(paths.map(normalizeNarutoPath).filter(Boolean))]
 }
-

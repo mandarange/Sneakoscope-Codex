@@ -53,6 +53,10 @@ import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } fro
 import { resolveLocalCollaborationPolicy, localCollaborationParticipated } from '../local-llm/local-collaboration-policy.js'
 import { runFinalGptReviewStage } from '../pipeline/final-gpt-review-stage.js'
 import { selectFinalGptPatchSource } from '../pipeline/final-gpt-patch-stage.js'
+import { allocateWorkerWorktree } from '../git/git-worktree-manager.js'
+import { exportGitWorktreeDiff } from '../git/git-worktree-diff.js'
+import { buildGitWorktreePatchEnvelope } from '../git/git-worktree-patch-envelope.js'
+import { cleanupGitWorktree } from '../git/git-worktree-cleanup.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Promise<any> {
   const root = path.resolve(opts.root || process.cwd())
@@ -255,6 +259,21 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     strategy_gate: strategyRef
   }
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-parallel-write-policy.json'), parallelWritePolicy)
+  const gitWorktreePolicy = opts.gitWorktreePolicy || null
+  const gitWorktreeRuntime = {
+    schema: 'sks.agent-git-worktree-runtime.v1',
+    generated_at: nowIso(),
+    ok: true,
+    mode: gitWorktreePolicy?.mode || 'patch-envelope-only',
+    required: gitWorktreePolicy?.required === true,
+    main_repo_root: gitWorktreePolicy?.main_repo_root || root,
+    worktree_root: gitWorktreePolicy?.worktree_root || null,
+    allocations: [] as any[],
+    diffs: [] as any[],
+    cleanup: [] as any[],
+    blockers: [] as string[]
+  }
+  await writeJsonAtomic(path.join(ledgerRoot, 'agent-git-worktree-runtime.json'), gitWorktreeRuntime)
   const nativeCliSwarm = createNativeCliSessionSwarmRecorder(ledgerRoot, {
     missionId,
     requestedAgents: Number(opts.agents || roster.agent_count || targetActiveSlots),
@@ -282,6 +301,17 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     goalModeRef,
     launchSession: async ({ agent, workItem }) => {
       const slice = workItem.slice || { id: workItem.id, description: workItem.description || prompt }
+      const workerWorktree = await prepareWorkerGitWorktree({
+        root,
+        ledgerRoot,
+        missionId,
+        agent,
+        slice,
+        policy: gitWorktreePolicy,
+        runtime: gitWorktreeRuntime
+      })
+      const runtimeAgent = workerWorktree ? { ...agent, worktree: workerWorktree.context } : agent
+      const runtimeSlice = workerWorktree ? { ...slice, worktree: workerWorktree.context } : slice
       await openAgentSession(ledgerRoot, agent)
       await heartbeatAgentSession(ledgerRoot, agent)
       await appendAgentCodexCockpitHookEvent(dir, {
@@ -305,10 +335,20 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
         generationIndex: agent.generation_index,
         requireGeneration: true
       })
-      const backendOpts = { ...opts, missionId, agentRoot: ledgerRoot, cwd: root, route, prompt, fastMode: fastModePolicy.fast_mode, serviceTier: fastModePolicy.service_tier }
+      const backendOpts = { ...opts, missionId, agentRoot: ledgerRoot, cwd: workerWorktree?.context.path || root, route, prompt, fastMode: fastModePolicy.fast_mode, serviceTier: fastModePolicy.service_tier, ...(workerWorktree ? { worktree: workerWorktree.context } : {}) }
       const result = opts.nativeCliSwarm === false
-        ? await runAgentByBackend(backend, agent, slice, backendOpts)
-        : await nativeCliSwarm.launchWorker({ agent, slice, opts: backendOpts })
+        ? await runAgentByBackend(backend, runtimeAgent, runtimeSlice, backendOpts)
+        : await nativeCliSwarm.launchWorker({ agent: runtimeAgent, slice: runtimeSlice, opts: backendOpts })
+      if (workerWorktree) await finalizeWorkerGitWorktree({
+        root,
+        ledgerRoot,
+        missionId,
+        agent: runtimeAgent,
+        slice: runtimeSlice,
+        result,
+        workerWorktree,
+        runtime: gitWorktreeRuntime
+      })
       const terminalClose = await closeAgentTerminalSession(ledgerRoot, agent, {
         exitCode: result.status === 'done' ? 0 : 1,
         status: result.status,
@@ -443,6 +483,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     ...(nativeCliSessionProof.ok ? [] : nativeCliSessionProof.blockers),
     ...(noSubagentScalingPolicy.ok ? [] : noSubagentScalingPolicy.blockers),
     ...(fastModePropagation.ok ? [] : fastModePropagation.blockers),
+    ...(gitWorktreeRuntime.required === true && gitWorktreeRuntime.ok === false ? gitWorktreeRuntime.blockers || ['git_worktree_runtime_not_ok'] : []),
     ...(localParticipated && gptFinalArbiter?.ok !== true ? gptFinalArbiter?.blockers || ['gpt_final_arbiter_not_ok'] : []),
     ...(localParticipated && finalGptPatchStage?.ok === false ? finalGptPatchStage.blockers || ['final_gpt_patch_stage_not_ok'] : []),
     ...(patchSwarm.ok ? [] : patchSwarm.blockers),
@@ -479,6 +520,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     noSubagentScalingPolicy,
     fastModePolicy,
     fastModePropagation,
+    gitWorktreeRuntime,
     triwikiContext,
     selectedCoreSkill,
     localCollaborationPolicy,
@@ -523,6 +565,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     no_subagent_scaling_policy: noSubagentScalingPolicy,
     fast_mode_policy: fastModePolicy,
     fast_mode_propagation: fastModePropagation,
+    git_worktree_runtime: gitWorktreeRuntime,
     local_collaboration_policy: localCollaborationPolicy,
     gpt_final_arbiter: gptFinalArbiter,
     final_gpt_patch_stage: finalGptPatchStage,
@@ -545,6 +588,113 @@ function withFinalGptPatchEnvelopes(results: any[], patchEnvelopes: any[] = []) 
   })
   if (!assigned && patchEnvelopes.length && next[0]) next[0] = { ...next[0], patch_envelopes: patchEnvelopes }
   return next
+}
+
+async function prepareWorkerGitWorktree(input: {
+  root: string
+  ledgerRoot: string
+  missionId: string
+  agent: any
+  slice: any
+  policy: AgentRunOptions['gitWorktreePolicy']
+  runtime: any
+}) {
+  if (input.policy?.mode !== 'git-worktree') return null
+  const sliceHasWritePaths = Array.isArray(input.slice.write_paths) && input.slice.write_paths.length > 0
+  const agentWriteCapable = input.agent.write_allowed === true || /write|lease|required/i.test(String(input.agent.write_policy || ''))
+  if (!sliceHasWritePaths && !agentWriteCapable) return null
+  const generationIndex = Math.max(1, Math.floor(Number(input.agent.generation_index || 1)))
+  const allocation = await allocateWorkerWorktree({
+    repoRoot: input.policy.main_repo_root || input.root,
+    missionId: input.missionId,
+    workerId: String(input.agent.id || input.slice.id || 'worker'),
+    slotId: String(input.agent.slot_id || input.agent.id || 'slot-001'),
+    generationIndex
+  })
+  const artifactDir = path.join(input.ledgerRoot, input.agent.session_artifact_dir || path.join('sessions', input.agent.id || input.slice.id || 'worker'), 'worker')
+  await writeJsonAtomic(path.join(artifactDir, 'git-worktree-allocation.json'), allocation)
+  input.runtime.allocations.push({
+    agent_id: input.agent.id,
+    slice_id: input.slice.id,
+    ok: allocation.ok,
+    worktree_path: allocation.worktree_path,
+    branch: allocation.branch,
+    blockers: allocation.blockers
+  })
+  input.runtime.blockers.push(...allocation.blockers)
+  input.runtime.ok = input.runtime.blockers.length === 0
+  await writeJsonAtomic(path.join(input.ledgerRoot, 'agent-git-worktree-runtime.json'), input.runtime)
+  if (!allocation.ok) return null
+  return {
+    allocation,
+    artifactDir,
+    context: {
+      id: `${allocation.slot_id}-gen-${allocation.generation_index}`,
+      path: allocation.worktree_path,
+      branch: allocation.branch,
+      main_repo_root: allocation.main_repo_root
+    }
+  }
+}
+
+async function finalizeWorkerGitWorktree(input: {
+  root: string
+  ledgerRoot: string
+  missionId: string
+  agent: any
+  slice: any
+  result: any
+  workerWorktree: any
+  runtime: any
+}) {
+  const allocation = input.workerWorktree.allocation
+  const diff = await exportGitWorktreeDiff({
+    mainRepoRoot: allocation.main_repo_root || input.root,
+    worktreePath: allocation.worktree_path,
+    missionId: input.missionId,
+    workerId: String(input.agent.id || input.slice.id || 'worker')
+  })
+  await writeJsonAtomic(path.join(input.workerWorktree.artifactDir, 'git-worktree-diff.json'), diff)
+  input.runtime.diffs.push({
+    agent_id: input.agent.id,
+    slice_id: input.slice.id,
+    ok: diff.ok,
+    clean: diff.clean,
+    changed_files: diff.changed_files,
+    diff_bytes: diff.diff_bytes,
+    blockers: diff.blockers
+  })
+  if (!diff.clean && diff.ok) {
+    const envelope = buildGitWorktreePatchEnvelope({
+      diff,
+      agentId: String(input.agent.id || 'agent'),
+      sessionId: String(input.agent.session_id || ''),
+      slotId: String(input.agent.slot_id || ''),
+      generationIndex: Math.max(1, Math.floor(Number(input.agent.generation_index || 1)))
+    })
+    input.result.patch_envelopes = [...(Array.isArray(input.result.patch_envelopes) ? input.result.patch_envelopes : []), envelope]
+    input.result.changed_files = [...new Set([...(input.result.changed_files || []), ...diff.changed_files])]
+    input.result.artifacts = [...new Set([...(input.result.artifacts || []), path.relative(input.ledgerRoot, path.join(input.workerWorktree.artifactDir, 'git-worktree-diff.json'))])]
+    input.result.git_worktree_diff = diff
+  }
+  const cleanup = await cleanupGitWorktree({
+    repoRoot: allocation.main_repo_root || input.root,
+    worktreePath: allocation.worktree_path,
+    branch: allocation.branch,
+    deleteBranch: diff.clean
+  })
+  await writeJsonAtomic(path.join(input.workerWorktree.artifactDir, 'git-worktree-cleanup.json'), cleanup)
+  input.runtime.cleanup.push({
+    agent_id: input.agent.id,
+    slice_id: input.slice.id,
+    action: cleanup.action,
+    clean: cleanup.clean,
+    retention_lock_path: cleanup.retention_lock_path,
+    blockers: cleanup.blockers
+  })
+  input.runtime.blockers.push(...diff.blockers, ...cleanup.blockers)
+  input.runtime.ok = input.runtime.blockers.length === 0
+  await writeJsonAtomic(path.join(input.ledgerRoot, 'agent-git-worktree-runtime.json'), input.runtime)
 }
 
 async function legacyCodexExecBlockedRun(input: { root: string; missionId: string; dir: string; route: string; routeCommand: string; routeBlackboxKind: string; backend: string }) {

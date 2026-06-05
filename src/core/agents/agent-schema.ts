@@ -120,6 +120,13 @@ export interface AgentRunOptions {
   visualLaneCount?: number
   clones?: number
   narutoMode?: boolean
+  gitWorktreePolicy?: {
+    mode: 'git-worktree' | 'patch-envelope-only'
+    required?: boolean
+    main_repo_root?: string | null
+    worktree_root?: string | null
+    fallback_reason?: string | null
+  } | null
 }
 
 export interface AgentTaskSlice {

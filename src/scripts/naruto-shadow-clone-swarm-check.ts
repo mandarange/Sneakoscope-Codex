@@ -6,6 +6,7 @@
 // schedules >20 concurrent clone sessions to completion with proof.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { assertGate, emitGate, importDist, root, exists } from './sks-1-18-gate-lib.js';
 
@@ -80,8 +81,10 @@ assertGate(bigMemoryHost.cap >= 64, 'a 64 GB host must allow >= 64 parallel code
 //    concurrency is throttled to the host-safe cap (never the full 24 unless the host allows).
 const proofClones = 24;
 const cli = path.join(root, 'dist', 'bin', 'sks.js');
+const isolatedWorktreeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-naruto-shadow-wt-'));
+const childEnv = { ...process.env, SKS_WORKTREE_ROOT: isolatedWorktreeRoot };
 assertGate(exists('dist/bin/sks.js'), 'dist/bin/sks.js missing (build first)');
-const helpRun = spawnSync(process.execPath, [cli, 'naruto', '--help', '--json'], { cwd: root, encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024 });
+const helpRun = spawnSync(process.execPath, [cli, 'naruto', '--help', '--json'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024 });
 const helpParsed = parseJson(helpRun.stdout);
 assertGate(helpRun.status === 0 && helpParsed?.action === 'help', 'sks naruto --help must emit help instead of launching a run', { status: helpRun.status, stdout: tail(helpRun.stdout), stderr: tail(helpRun.stderr) });
 const run = spawnSync(process.execPath, [
@@ -90,7 +93,7 @@ const run = spawnSync(process.execPath, [
   '--backend', 'fake',
   '--work-items', String(proofClones),
   '--json'
-], { cwd: root, encoding: 'utf8', timeout: 240000, maxBuffer: 8 * 1024 * 1024 });
+], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 240000, maxBuffer: 8 * 1024 * 1024 });
 assertGate(run.status === 0, 'sks naruto run must exit 0', { status: run.status, stderr: tail(run.stderr) });
 
 const parsed = parseJson(run.stdout);
@@ -123,12 +126,12 @@ assertGate(commandGraph.active_waves.some((wave) => wave.write_paths.length > 1)
 const state = parsed.run?.scheduler?.state || parsed.run?.scheduler || {};
 assertGate(Number(state.completed_count) === proofClones, 'all clone work items must complete despite throttling', { completed_count: state.completed_count });
 
-const explicitConcurrency = spawnSync(process.execPath, [cli, 'naruto', 'run', 'explicit concurrency', '--clones', '6', '--backend', 'fake', '--work-items', '6', '--concurrency', '6', '--json'], { cwd: root, encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+const explicitConcurrency = spawnSync(process.execPath, [cli, 'naruto', 'run', 'explicit concurrency', '--clones', '6', '--backend', 'fake', '--work-items', '6', '--concurrency', '6', '--json'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
 const explicitParsed = parseJson(explicitConcurrency.stdout);
 assertGate(explicitConcurrency.status === 0 && explicitParsed?.target_active_slots === 6, 'explicit --concurrency must let Naruto use the requested parallel slot count', { status: explicitConcurrency.status, target_active_slots: explicitParsed?.target_active_slots });
 
 // 7) A small request is NOT throttled below what was asked (cap only ever reduces, never inflates).
-const small = spawnSync(process.execPath, [cli, 'naruto', 'run', 'tiny', '--clones', '2', '--backend', 'fake', '--work-items', '2', '--json'], { cwd: root, encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+const small = spawnSync(process.execPath, [cli, 'naruto', 'run', 'tiny', '--clones', '2', '--backend', 'fake', '--work-items', '2', '--json'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
 const smallParsed = parseJson(small.stdout);
 assertGate(small.status === 0 && smallParsed?.target_active_slots === 2, 'a 2-clone run must run 2 concurrently (no over-throttle)', { status: small.status, target_active_slots: smallParsed?.target_active_slots });
 
@@ -144,7 +147,8 @@ emitGate('naruto:shadow-clone-swarm', {
   low_free_capable_cap: lowFreeButCapable.cap,
   cores: heavySafe.cores,
   completed_count: state.completed_count,
-  mission_id: parsed.mission_id
+  mission_id: parsed.mission_id,
+  isolated_worktree_root: isolatedWorktreeRoot
 });
 
 function parseJson(text) {

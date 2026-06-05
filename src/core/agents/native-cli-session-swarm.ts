@@ -36,6 +36,8 @@ class NativeCliSessionSwarmRecorder {
   }
 
   async launchWorker(ctx: { agent: any; slice: any; opts: any }) {
+    const worktree = normalizeWorkerWorktree(ctx.agent?.worktree || ctx.slice?.worktree || ctx.opts?.worktree || null)
+    const workerCwd = worktree?.path || ctx.opts.cwd || packageRoot()
     const workerDirRel = path.join(ctx.agent.session_artifact_dir || path.join('sessions', ctx.agent.id), 'worker')
     const workerDir = path.join(this.root, workerDirRel)
     await ensureDir(workerDir)
@@ -55,6 +57,9 @@ class NativeCliSessionSwarmRecorder {
       backend_explicit: this.input.backendExplicit === true,
       no_ollama: this.input.noOllama === true || ctx.opts.noOllama === true,
       agent_root: this.root,
+      main_repo_root: worktree?.main_repo_root || ctx.opts.cwd || packageRoot(),
+      cwd: workerCwd,
+      worktree,
       agent: ctx.agent,
       slice: ctx.slice,
       worker_artifact_dir: workerDirRel,
@@ -99,6 +104,7 @@ class NativeCliSessionSwarmRecorder {
       patch_envelope_path: patchRel,
       fast_mode: this.input.fastModePolicy.fast_mode,
       service_tier: this.input.fastModePolicy.service_tier,
+      cwd: workerCwd,
       status: 'launching',
       exit_code: null,
       blockers: []
@@ -120,7 +126,7 @@ class NativeCliSessionSwarmRecorder {
       })
     }
     const child = spawn(process.execPath, args, {
-      cwd: ctx.opts.cwd || packageRoot(),
+      cwd: workerCwd,
       env: {
         ...process.env,
         ...(ctx.opts.env || {}),
@@ -197,6 +203,8 @@ class NativeCliSessionSwarmRecorder {
   }) {
     const sessionName = String(input.ctx.opts.zellijSessionName || (this.input.missionId ? `sks-${this.input.missionId}` : 'sks-agent-runtime'))
     const slotId = String(input.ctx.agent.slot_id || input.ctx.agent.id || 'slot-001')
+    const worktree = normalizeWorkerWorktree(input.ctx.agent?.worktree || input.ctx.slice?.worktree || input.ctx.opts?.worktree || null)
+    const workerCwd = worktree?.path || input.ctx.opts.cwd || packageRoot()
     const activeToken = this.nextPaneToken--
     this.active.add(activeToken)
     this.maxObserved = Math.max(this.maxObserved, this.active.size)
@@ -241,9 +249,10 @@ class NativeCliSessionSwarmRecorder {
       patchEnvelopePath: input.record.patch_envelope_path,
       stdoutLog: input.stdoutRel,
       stderrLog: input.stderrRel,
-      cwd: input.ctx.opts.cwd || packageRoot(),
+      cwd: workerCwd,
       providerContext,
-      serviceTier: this.input.fastModePolicy.service_tier
+      serviceTier: this.input.fastModePolicy.service_tier,
+      worktree: worktree ? { id: worktree.id, path: worktree.path, branch: worktree.branch } : null
     })
     const launchBlockers = paneRecord.blockers || []
     input.record.command_line = ['zellij', '--session', sessionName, 'action', 'new-pane', '--direction', paneRecord.direction_applied, '--name', paneRecord.pane_name, '--', 'sh', '-lc', '<native-cli-worker-command>']
@@ -258,6 +267,7 @@ class NativeCliSessionSwarmRecorder {
     input.record.provider = paneRecord.provider
     input.record.service_tier = paneRecord.service_tier
     input.record.provider_context = paneRecord.provider_context
+    input.record.worktree = worktree
     input.record.status = launchBlockers.length ? 'failed' : 'running'
     input.record.blockers = launchBlockers
     await this.record(input.record)
@@ -343,7 +353,7 @@ class NativeCliSessionSwarmRecorder {
     paneRecord = await closeWorkerPane({
       root: this.root,
       paneRecord,
-      cwd: input.ctx.opts.cwd || packageRoot(),
+      cwd: workerCwd,
       status: input.record.status === 'closed' ? 'closed' : 'failed',
       blockers: input.record.blockers,
       sdkThreadId,
@@ -485,4 +495,20 @@ function redactWorkerArgs(args: string[]) {
 
 function shellQuote(value: string) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`
+}
+
+function normalizeWorkerWorktree(value: any): {
+  id: string
+  path: string
+  branch: string
+  main_repo_root: string | null
+} | null {
+  const pathValue = value?.path || value?.worktree_path
+  if (!pathValue) return null
+  return {
+    id: String(value?.id || value?.worktree_id || value?.slot_id || 'worktree'),
+    path: String(pathValue),
+    branch: String(value?.branch || 'unknown'),
+    main_repo_root: value?.main_repo_root == null ? null : String(value.main_repo_root)
+  }
 }

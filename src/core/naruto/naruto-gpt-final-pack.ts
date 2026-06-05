@@ -1,6 +1,7 @@
 import type { AgentPatchEnvelope } from '../agents/agent-patch-schema.js'
+import type { GitWorktreeDiff } from '../git/git-worktree-diff.js'
 import type { NarutoRoleDistribution } from './naruto-role-policy.js'
-import type { NarutoWorkGraph } from './naruto-work-item.js'
+import type { NarutoWorkGraph, NarutoWorktreePolicy } from './naruto-work-item.js'
 
 export interface NarutoGptFinalPack {
   schema: 'sks.naruto-gpt-final-pack.v1'
@@ -13,6 +14,8 @@ export interface NarutoGptFinalPack {
   }
   role_distribution: NarutoRoleDistribution
   changed_files: string[]
+  worktree_policy: NarutoWorktreePolicy
+  worktree_diffs: unknown[]
   patch_envelopes: unknown[]
   verification_results: unknown[]
   failed_shards: unknown[]
@@ -30,6 +33,8 @@ export function buildNarutoGptFinalPack(input: {
   graph: NarutoWorkGraph
   roleDistribution: NarutoRoleDistribution
   changedFiles?: string[]
+  worktreePolicy?: NarutoWorktreePolicy
+  worktreeDiffs?: GitWorktreeDiff[] | unknown[]
   patchEnvelopes?: AgentPatchEnvelope[] | unknown[]
   verificationResults?: unknown[]
   failedShards?: unknown[]
@@ -54,6 +59,8 @@ export function buildNarutoGptFinalPack(input: {
     },
     role_distribution: input.roleDistribution,
     changed_files: [...new Set((input.changedFiles || []).map(String))],
+    worktree_policy: input.worktreePolicy || input.graph.worktree_policy,
+    worktree_diffs: (input.worktreeDiffs || []).slice(0, maxPatchEnvelopes).map(redactSecrets),
     patch_envelopes: (input.patchEnvelopes || []).slice(0, maxPatchEnvelopes).map(redactSecrets),
     verification_results: (input.verificationResults || []).slice(0, 200).map(redactSecrets),
     failed_shards: (input.failedShards || []).slice(0, 100).map(redactSecrets),

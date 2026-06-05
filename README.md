@@ -16,10 +16,15 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.6** wires Codex App Product Design into the design pipeline and hardens Naruto read-only routing on top of the 2.0 execution layer. Design routes can now discover, install, verify, and prefer the remote `product-design@openai-curated-remote` plugin, while read-only native worker runs keep write mode off and avoid treating pre-existing dirty files as generated patches.
+SKS **2.0.7** adds Git worktree parallel coding foundations for Naruto/MAD-SKS-style high-throughput work. Write-capable Git missions can now declare `git-worktree` mode, allocate worker worktrees outside the main checkout by default, export full-index diffs into patch envelopes, apply them through an integration worktree queue, and retain dirty worktrees instead of deleting evidence. Non-Git projects degrade to patch-envelope-only without calling `git worktree`.
 
 What changed:
 
+- Git capability checks detect repo roots, Git dirs, worktree support, and safe cache roots while blocking in-repo worktree roots unless `SKS_ALLOW_IN_REPO_WORKTREES=1` is explicit.
+- Worker worktree allocation creates isolated branches/paths under `$SKS_WORKTREE_ROOT`, `$XDG_CACHE_HOME/sks/worktrees`, or `~/.cache/sks/worktrees`; main checkouts stay untouched until integration.
+- Worktree diff export records status, changed files, full-index binary diffs, and `git-worktree-diff` patch envelopes for parent-owned integration.
+- Integration worktrees apply worker diffs with `git apply --3way`, while cleanup removes only clean worktrees and retains dirty ones with a lock artifact.
+- Naruto work graphs, active-pool artifacts, Zellij dashboard titles, native worker intake, and GPT Final packs now carry worktree policy and WT/branch context.
 - Product Design plugin readiness now checks both local and remote Codex App catalogs, auto-installs the remote plugin when needed, and records the installed/enabled skill surface.
 - UI/design/PPT runtime routes prefer Product Design for research, ideation, audit, design QA, prototype, URL-to-code, image-to-code, share, and user-context steps.
 - Naruto read-only runs force write mode off, propagate no-patch reasons through worker proof, and skip changed-file lease checks when no write-capable patch envelope exists.

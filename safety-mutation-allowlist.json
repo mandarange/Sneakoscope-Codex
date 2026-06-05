@@ -762,6 +762,12 @@
       "symbol": "prepareZellijProcessEnv",
       "token": "chmod",
       "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/core/git/git-worktree-manager.ts",
+      "symbol": "allocateWorkerWorktree",
+      "token": "fsp.rm",
+      "reason": "Retry cleanup removes only the scoped partial worker worktree path before recreating it."
     }
   ]
 }

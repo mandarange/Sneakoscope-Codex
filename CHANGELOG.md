@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+
+## [2.0.7] - 2026-06-05
+
+### Added
+
+- Add Git worktree detection, capability, root allocation, worker worktree management, diff export, patch-envelope conversion, integration merge queue, cleanup/dirty-retention, cache policy, and pool planning modules.
+- Add Naruto Git worktree mode so write-capable Git missions record `git-worktree` policy, non-Git missions degrade to patch-envelope-only without probing `git worktree`, Zellij dashboard titles include WT/branch context, and GPT Final packs carry worktree diffs.
+- Add release gates for Git worktree capability, manager, diff export, merge queue, cleanup, cache/pool performance, Naruto worktree coding, Naruto worktree Zellij UI, and Naruto worktree GPT Final evidence.
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [2.0.6] - 2026-06-05
 
 ### Added

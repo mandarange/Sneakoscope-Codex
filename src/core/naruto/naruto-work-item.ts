@@ -37,6 +37,14 @@ export interface NarutoWorkItemAcceptance {
   requires_gpt_final: boolean
 }
 
+export interface NarutoWorktreePolicy {
+  mode: 'git-worktree' | 'patch-envelope-only'
+  required: boolean
+  main_repo_root: string | null
+  worktree_root: string | null
+  fallback_reason: string | null
+}
+
 export interface NarutoWorkItem {
   id: string
   kind: NarutoWorkKind
@@ -53,6 +61,11 @@ export interface NarutoWorkItem {
   estimated_cost: NarutoWorkItemCost
   lease_requirements: NarutoLeaseRequirement[]
   acceptance: NarutoWorkItemAcceptance
+  worktree?: {
+    mode: NarutoWorktreePolicy['mode']
+    required: boolean
+    allocation_required: boolean
+  }
 }
 
 export interface NarutoWorkGraph {
@@ -66,6 +79,7 @@ export interface NarutoWorkGraph {
   active_waves: NarutoWorkWave[]
   mixed_work_kinds: NarutoWorkKind[]
   write_allowed_count: number
+  worktree_policy: NarutoWorktreePolicy
   blockers: string[]
   ok: boolean
 }
@@ -120,4 +134,3 @@ export function normalizeNarutoWorkKind(value: unknown, fallback: NarutoWorkKind
 export function normalizeNarutoPath(value: string): string {
   return String(value || '').replace(/\\/g, '/').replace(/^\.\/+/, '').split('/').filter((part) => part && part !== '.').join('/')
 }
-

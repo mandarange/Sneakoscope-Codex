@@ -10,18 +10,24 @@ export async function detectPythonCodexSdkCapability() {
   const pyOk = parsePythonVersion(python.versionText) >= 3.10
   const probes: Array<Record<string, unknown>> = []
   let detected: PythonCodexSdkCandidate | null = null
+  let detectedModulePath = ''
+  let detectedModuleParentPath = ''
   if (pyOk) {
     for (const candidate of PYTHON_CODEX_SDK_CANDIDATES) {
-      const importProbe = await runProcess(python.path, ['-c', `import ${candidate.importName}; print("ok")`], { timeoutMs: 5000, maxOutputBytes: 4096 })
+      const importProbe = await runProcess(python.path, ['-c', `import ${candidate.importName} as m, os; print(os.path.dirname(os.path.abspath(getattr(m, "__file__", ""))))`], { timeoutMs: 5000, maxOutputBytes: 4096 })
         .catch((err: any) => ({ code: 1, stdout: '', stderr: err.message || String(err) }))
+      const modulePath = String(importProbe.stdout || '').trim().split(/\r?\n/).filter(Boolean).at(-1) || ''
       probes.push({
         package_name: candidate.packageName,
         import_name: candidate.importName,
         ok: importProbe.code === 0,
+        module_path: modulePath || null,
         stderr: String(importProbe.stderr || '').slice(-500)
       })
       if (importProbe.code === 0) {
         detected = candidate
+        detectedModulePath = modulePath
+        detectedModuleParentPath = modulePath ? path.dirname(modulePath) : ''
         break
       }
     }
@@ -37,7 +43,9 @@ export async function detectPythonCodexSdkCapability() {
     blockers,
     detected,
     blockers.length ? setupAction(python.path) : null,
-    probes
+    probes,
+    detectedModulePath,
+    detectedModuleParentPath
   )
 }
 
@@ -62,7 +70,7 @@ export async function runPythonCodexSdkTask(input: CodexTaskInput, opts: {
     prompt: input.prompt,
     output_schema: input.outputSchema || {}
   }
-  const events = await runPythonRunner(python, request, opts.env)
+  const events = await runPythonRunner(python, request, pythonRunnerEnv(opts.env, cap.module_parent_path))
   const translatedEvents = translatePythonCodexSdkEvents(events)
   const last = [...events].reverse().find((event: any) => event?.event === 'turn_completed') as any
   const errors = events.filter((event: any) => event?.event === 'error').map((event: any) => String(event.message || 'python_codex_sdk_error'))
@@ -76,6 +84,22 @@ export async function runPythonCodexSdkTask(input: CodexTaskInput, opts: {
     blockers: errors,
     capability: cap
   }
+}
+
+function pythonRunnerEnv(envOverride: Record<string, string> | undefined, moduleParentPath: unknown) {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(envOverride || process.env)) {
+    if (value !== undefined) env[key] = String(value)
+  }
+  const parent = String(moduleParentPath || '').trim()
+  if (!parent) return env
+  env.PYTHONPATH = prependPath(env.PYTHONPATH, parent)
+  return env
+}
+
+function prependPath(value: string | undefined, entry: string) {
+  const parts = String(value || '').split(path.delimiter).filter(Boolean)
+  return [entry, ...parts.filter((part) => part !== entry)].join(path.delimiter)
 }
 
 function runPythonRunner(python: string, request: unknown, envOverride?: Record<string, string>): Promise<any[]> {
@@ -197,7 +221,9 @@ function capability(
   blockers: string[],
   detected: PythonCodexSdkCandidate | null,
   setupActionValue: string | null,
-  probes: Array<Record<string, unknown>> = []
+  probes: Array<Record<string, unknown>> = [],
+  modulePath = '',
+  moduleParentPath = ''
 ) {
   const selected = detected || PYTHON_CODEX_SDK_CANDIDATES[0] || { packageName: 'codex-app-server', importName: 'codex_app_server', source: 'developers.openai.com/codex/sdk' }
   return {
@@ -210,6 +236,8 @@ function capability(
     source: selected.source,
     supported_packages: PYTHON_CODEX_SDK_CANDIDATES.map((candidate) => candidate.packageName),
     supported_imports: PYTHON_CODEX_SDK_CANDIDATES.map((candidate) => candidate.importName),
+    module_path: modulePath || null,
+    module_parent_path: moduleParentPath || null,
     import_probes: probes,
     setup_action: setupActionValue,
     blockers

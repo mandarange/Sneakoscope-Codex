@@ -10,11 +10,12 @@ import { attachZellijSessionInteractive, launchZellijLayout } from '../zellij/ze
 import { buildNarutoWorkGraph } from '../naruto/naruto-work-graph.js'
 import { buildNarutoRoleDistribution } from '../naruto/naruto-role-policy.js'
 import { decideNarutoConcurrency } from '../naruto/naruto-concurrency-governor.js'
-import { simulateNarutoActivePool } from '../naruto/naruto-active-pool.js'
+import { runNarutoActivePool } from '../naruto/naruto-active-pool.js'
 import { buildNarutoVerificationDag } from '../naruto/naruto-verification-dag.js'
 import { buildNarutoGptFinalPack } from '../naruto/naruto-gpt-final-pack.js'
 import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
 import { checkPromptPlaceholders } from '../prompt/prompt-placeholder-guard.js'
+import { evaluateGitWorktreeCapability } from '../git/git-worktree-capability.js'
 
 const NARUTO_RESULT_SCHEMA = 'sks.naruto-command-result.v1'
 const NARUTO_ROUTE = '$Naruto'
@@ -61,6 +62,25 @@ async function narutoRun(parsed: NarutoArgs) {
     readonly: parsed.readonly,
     maxAgentCount: MAX_NARUTO_AGENT_COUNT
   })
+  const mission = await createMission(root, { mode: 'naruto', prompt: parsed.prompt })
+  const gitWorktreeCapability = writeCapable
+    ? await evaluateGitWorktreeCapability({ root, missionId: mission.id })
+    : null
+  const worktreePolicy = gitWorktreeCapability?.mode === 'git-worktree'
+    ? {
+        mode: 'git-worktree' as const,
+        required: true,
+        main_repo_root: gitWorktreeCapability.detection.root,
+        worktree_root: gitWorktreeCapability.root_resolution?.root || null,
+        fallback_reason: null
+      }
+    : {
+        mode: 'patch-envelope-only' as const,
+        required: false,
+        main_repo_root: gitWorktreeCapability?.detection.root || null,
+        worktree_root: null,
+        fallback_reason: writeCapable ? (gitWorktreeCapability?.blockers.join(';') || 'not_git_repo_or_worktree_unavailable') : 'readonly_or_write_disabled'
+      }
   // The clone roster is the full work fan-out; live concurrency is throttled to a
   // system-safe number so naruto never spawns the whole count at once unless an
   // explicit operator override asks for a higher target.
@@ -74,7 +94,8 @@ async function narutoRun(parsed: NarutoArgs) {
     readonly: parsed.readonly,
     writeCapable,
     leaseBasePath: patchEnvelopeBasePath,
-    maxActiveWorkers: parsed.concurrency || safe.cap
+    maxActiveWorkers: parsed.concurrency || safe.cap,
+    worktreePolicy
   })
   const roleDistribution = buildNarutoRoleDistribution(workGraph.work_items, { readonly: parsed.readonly })
   const governor = decideNarutoConcurrency({
@@ -86,22 +107,24 @@ async function narutoRun(parsed: NarutoArgs) {
   const backendMinimum = schedulerBackend === 'fake' ? roster.agent_count : Math.min(roster.agent_count, 2)
   const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || Math.max(governor.safe_active_workers, backendMinimum), safe.cap))
   const zellijVisiblePanes = Math.max(1, Math.min(activeSlots, governor.safe_zellij_visible_panes))
-  const activePool = simulateNarutoActivePool({ graph: workGraph, governor: { ...governor, safe_active_workers: activeSlots } })
+  const activePool = await runNarutoActivePool({ graph: workGraph, governor: { ...governor, safe_active_workers: activeSlots } })
   const verificationDag = buildNarutoVerificationDag(workGraph, { cwd: root })
   const gptFinalPack = buildNarutoGptFinalPack({
-    missionId: 'pending',
+    missionId: mission.id,
     graph: workGraph,
     roleDistribution,
-    localLlmMetrics: localWorker
+    localLlmMetrics: localWorker,
+    worktreePolicy,
+    worktreeDiffs: []
   })
   const zellijDashboard = planNarutoZellijDashboard({
     targetActiveWorkers: activeSlots,
     visiblePaneCap: governor.safe_zellij_visible_panes,
     backpressure: governor.backpressure,
     roles: roleDistribution.work_item_roles.map((row) => row.role),
-    backend: schedulerBackend
+    backend: schedulerBackend,
+    worktreePolicy
   })
-  const mission = await createMission(root, { mode: 'naruto', prompt: parsed.prompt })
   const ledgerRoot = path.join(mission.dir, 'agents')
   await writeNarutoArtifacts(ledgerRoot, {
     workGraph,
@@ -109,9 +132,10 @@ async function narutoRun(parsed: NarutoArgs) {
     governor,
     activePool,
     verificationDag,
-    gptFinalPack: { ...gptFinalPack, mission_id: mission.id },
+    gptFinalPack,
     zellijDashboard,
-    placeholderGuard
+    placeholderGuard,
+    gitWorktreeCapability
   })
   let liveZellij: any = null
   if (!parsed.json && !parsed.mock && !parsed.noOpenZellij) {
@@ -162,6 +186,7 @@ async function narutoRun(parsed: NarutoArgs) {
     serviceTier: 'fast',
     noFast: false,
     writeMode: writeCapable ? parsed.writeMode || 'parallel' : 'off',
+    gitWorktreePolicy: worktreePolicy,
     json: parsed.json
   })
   const clones = result.roster?.agent_count ?? roster.agent_count
@@ -185,8 +210,10 @@ async function narutoRun(parsed: NarutoArgs) {
       write_allowed_count: workGraph.write_allowed_count,
       active_wave_count: workGraph.active_waves.length,
       parallel_write_wave_count: workGraph.active_waves.filter((wave) => wave.write_paths.length > 1).length,
-      ok: workGraph.ok
+      ok: workGraph.ok,
+      worktree_policy: workGraph.worktree_policy
     },
+    git_worktree: gitWorktreeCapability,
     role_distribution: roleDistribution,
     concurrency_governor: governor,
     active_pool: {
@@ -345,6 +372,7 @@ async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {
   gptFinalPack: any
   zellijDashboard: any
   placeholderGuard: any
+  gitWorktreeCapability: any
 }) {
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-work-graph.json'), artifacts.workGraph)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-role-distribution.json'), artifacts.roleDistribution)
@@ -354,6 +382,7 @@ async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-gpt-final-pack.json'), artifacts.gptFinalPack)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-zellij-dashboard.json'), artifacts.zellijDashboard)
   await writeJsonAtomic(path.join(ledgerRoot, 'prompt-placeholder-guard.json'), artifacts.placeholderGuard)
+  if (artifacts.gitWorktreeCapability) await writeJsonAtomic(path.join(ledgerRoot, 'git-worktree-capability.json'), artifacts.gitWorktreeCapability)
 }
 
 function clampClones(value: number): number {
