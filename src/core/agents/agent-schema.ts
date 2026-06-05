@@ -14,7 +14,7 @@ export const DEFAULT_AGENT_CONCURRENCY = 5
 // cap; every other roster/scheduler caller keeps MAX_AGENT_COUNT as the default.
 export const MAX_NARUTO_AGENT_COUNT = 100
 export const DEFAULT_NARUTO_CLONES = 12
-export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij', 'ollama'] as const
+export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij', 'ollama', 'local-llm'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]
 export type AgentServiceTier = 'fast' | 'standard'
@@ -28,6 +28,9 @@ export interface AgentPersona {
   id: string
   stable_id: string
   role: AgentRole
+  naruto_role?: string
+  work_kind?: string
+  write_allowed?: boolean
   temperament: string
   risk_focus: string
   allowed_tools: string[]
@@ -58,6 +61,9 @@ export interface AgentRosterEntry {
   session_id: string
   persona_id: string
   role: AgentRole
+  naruto_role?: string
+  work_kind?: string
+  write_allowed?: boolean
   index: number
   write_policy: string
   status: AgentStatus

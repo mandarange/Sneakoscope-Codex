@@ -31,6 +31,8 @@ export interface ZellijWorkerPaneOpenInput {
   cwd?: string
   providerContext?: ProviderContext | null
   serviceTier?: string | null
+  backend?: string | null
+  statusLabel?: string | null
 }
 
 export interface ZellijWorkerPaneRecord {
@@ -80,10 +82,10 @@ export function buildWorkerPaneName(slotId: string, generationIndex: number) {
   return `${slotId}/gen-${Math.max(1, Math.floor(Number(generationIndex) || 1))}`
 }
 
-export function buildWorkerPaneTitle(slotId: string, generationIndex: number, context?: ProviderContext | null, serviceTier?: string | null) {
+export function buildWorkerPaneTitle(slotId: string, generationIndex: number, context?: ProviderContext | null, serviceTier?: string | null, backend?: string | null, status?: string | null) {
   const base = buildWorkerPaneName(slotId, generationIndex)
   const normalized = normalizePaneProviderContext(context, serviceTier)
-  return `${base} · codex-sdk · ${providerPaneLabel(normalized)}`
+  return `${base} · ${backend || 'codex-sdk'} · ${providerPaneLabel(normalized)} · ${status || 'launching'}`
 }
 
 export function isRealZellijWorkerPaneIdSource(value: unknown) {
@@ -108,7 +110,7 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   const paneIdSource = input.paneIdSource || 'zellij_worker_pane_launch_failed'
   const blockers = input.blockers || []
   const providerContext = normalizePaneProviderContext(input.providerContext, input.serviceTier)
-  const paneTitle = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier)
+  const paneTitle = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.status || input.statusLabel)
   return {
     schema: ZELLIJ_WORKER_PANE_SCHEMA,
     generated_at: now,
@@ -168,7 +170,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     timeoutMs: 5000,
     optional: false
   })
-  const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier)
+  const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || 'running')
   let launch = createSession.ok
     ? await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--direction', 'right', '--name', paneName, '--', 'sh', '-lc', input.workerCommand], {
         cwd,

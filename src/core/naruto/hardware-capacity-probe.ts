@@ -1,0 +1,76 @@
+import os from 'node:os'
+
+export interface HardwareCapacityProbeInput {
+  cores?: number
+  loadAverage?: number[]
+  freeMemoryBytes?: number
+  totalMemoryBytes?: number
+  nodeHeapUsedBytes?: number
+  nodeHeapTotalBytes?: number
+  processCount?: number
+  fileDescriptorLimit?: number
+  zellijPaneCount?: number
+  terminalColumns?: number
+  terminalRows?: number
+  localLlmMaxParallelRequests?: number
+  remoteApiRateLimitBudget?: number
+  gpuAvailable?: boolean
+  gpuVramMb?: number
+  diskIoPressure?: number
+}
+
+export interface HardwareCapacityProbe {
+  schema: 'sks.naruto-hardware-capacity-probe.v1'
+  cpu_core_count: number
+  current_load_average: number[]
+  free_memory_bytes: number
+  total_memory_bytes: number
+  node_heap_used_bytes: number
+  node_heap_total_bytes: number
+  process_count: number
+  file_descriptor_limit: number
+  zellij_pane_count: number
+  terminal_columns: number
+  terminal_rows: number
+  local_llm_max_parallel_requests: number
+  remote_api_rate_limit_budget: number
+  gpu_available: boolean
+  gpu_vram_mb: number
+  disk_io_pressure: number
+}
+
+export function probeHardwareCapacity(input: HardwareCapacityProbeInput = {}): HardwareCapacityProbe {
+  const memory = process.memoryUsage()
+  return {
+    schema: 'sks.naruto-hardware-capacity-probe.v1',
+    cpu_core_count: normalizePositiveInt(input.cores, os.cpus()?.length || 1),
+    current_load_average: input.loadAverage || os.loadavg(),
+    free_memory_bytes: normalizePositiveInt(input.freeMemoryBytes, os.freemem()),
+    total_memory_bytes: normalizePositiveInt(input.totalMemoryBytes, os.totalmem()),
+    node_heap_used_bytes: normalizePositiveInt(input.nodeHeapUsedBytes, memory.heapUsed),
+    node_heap_total_bytes: normalizePositiveInt(input.nodeHeapTotalBytes, memory.heapTotal),
+    process_count: normalizePositiveInt(input.processCount, 1),
+    file_descriptor_limit: normalizePositiveInt(input.fileDescriptorLimit, Number(process.env.SKS_NARUTO_FD_LIMIT) || 256),
+    zellij_pane_count: normalizeNonNegativeInt(input.zellijPaneCount, 0),
+    terminal_columns: normalizePositiveInt(input.terminalColumns, process.stdout.columns || 120),
+    terminal_rows: normalizePositiveInt(input.terminalRows, process.stdout.rows || 40),
+    local_llm_max_parallel_requests: normalizePositiveInt(input.localLlmMaxParallelRequests, Number(process.env.SKS_LOCAL_LLM_MAX_PARALLEL_REQUESTS) || 4),
+    remote_api_rate_limit_budget: normalizePositiveInt(input.remoteApiRateLimitBudget, Number(process.env.SKS_REMOTE_API_PARALLEL_BUDGET) || 12),
+    gpu_available: input.gpuAvailable === true,
+    gpu_vram_mb: normalizeNonNegativeInt(input.gpuVramMb, 0),
+    disk_io_pressure: Math.max(0, Math.min(1, Number(input.diskIoPressure ?? 0)))
+  }
+}
+
+function normalizePositiveInt(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 1) return Math.max(1, Math.floor(fallback))
+  return Math.floor(parsed)
+}
+
+function normalizeNonNegativeInt(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return Math.max(0, Math.floor(fallback))
+  return Math.floor(parsed)
+}
+

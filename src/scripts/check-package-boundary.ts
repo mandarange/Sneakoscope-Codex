@@ -5,13 +5,20 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { currentDistFreshness } from './lib/ensure-dist-fresh.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const issues = [];
 
-const build = spawnSync(npmBin, ['run', 'build'], { cwd: root, encoding: 'utf8', stdio: 'pipe' });
-if (build.status !== 0) issues.push(`build_failed:${tail(build.stderr || build.stdout)}`);
+const noRebuild = process.env.SKS_ENSURE_DIST_NO_REBUILD === '1' || process.env.SKS_RELEASE_DIST_FRESHNESS_NO_REBUILD === '1';
+if (noRebuild) {
+  const freshness = currentDistFreshness();
+  if (!freshness.ok) issues.push(`dist_not_fresh:${freshness.issues.join(',')}`);
+} else {
+  const build = spawnSync(npmBin, ['run', 'build'], { cwd: root, encoding: 'utf8', stdio: 'pipe' });
+  if (build.status !== 0) issues.push(`build_failed:${tail(build.stderr || build.stdout)}`);
+}
 
 const pack = spawnSync(npmBin, ['pack', '--dry-run', '--json', '--ignore-scripts'], {
   cwd: root,

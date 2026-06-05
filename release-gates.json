@@ -1478,7 +1478,35 @@
       "can_run_incremental": true
     },
     {
+      "id": "codex:0.137-compat",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/codex/**",
+        "src/core/codex-app.ts",
+        "src/core/codex-lb-circuit.ts",
+        "src/scripts/codex-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "codex:config-eperm-fixture",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/codex/**",
+        "src/core/codex-app.ts",
+        "src/core/codex-lb-circuit.ts",
+        "src/scripts/codex-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex:environment-scoped-approvals",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
@@ -1576,6 +1604,20 @@
       "can_run_incremental": true
     },
     {
+      "id": "codex:plugin-list-json",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/codex/**",
+        "src/core/codex-app.ts",
+        "src/core/codex-lb-circuit.ts",
+        "src/scripts/codex-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "codex:profile-primary",
       "tier": "P1",
       "cost": "hermetic",
@@ -1605,6 +1647,20 @@
     },
     {
       "id": "codex:resume-cwd-truth",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/codex/**",
+        "src/core/codex-app.ts",
+        "src/core/codex-lb-circuit.ts",
+        "src/scripts/codex-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "codex:thread-runtime-choice",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
@@ -2242,6 +2298,18 @@
       "can_run_incremental": true
     },
     {
+      "id": "local-collab:all-pipelines-final-gpt",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/local-collab-*.ts",
+        "src/scripts/local-collab-all-pipelines-final-gpt-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "local-collab:gpt-final-arbiter",
       "tier": "P1",
       "cost": "hermetic",
@@ -2284,6 +2352,54 @@
       "affected_by": [
         "src/scripts/local-collab-*.ts",
         "src/scripts/local-collab-policy-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "local-llm:all-pipelines",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/local-llm-*.ts",
+        "src/scripts/local-llm-all-pipelines-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "local-llm:capability",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/local-llm-*.ts",
+        "src/scripts/local-llm-capability-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "local-llm:structured-output",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/local-llm-*.ts",
+        "src/scripts/local-llm-structured-output-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "local-llm:tool-call-repair",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/local-llm-*.ts",
+        "src/scripts/local-llm-tool-call-repair-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2590,7 +2706,111 @@
       "can_run_incremental": true
     },
     {
+      "id": "naruto:active-pool",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "src/scripts/naruto-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "naruto:concurrency-governor",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "src/scripts/naruto-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "naruto:gpt-final-pack",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "src/scripts/naruto-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "naruto:parallel-patch-apply",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "src/scripts/naruto-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "naruto:role-distribution",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "src/scripts/naruto-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "naruto:shadow-clone-swarm",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "src/scripts/naruto-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "naruto:verification-pool",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "src/scripts/naruto-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "naruto:work-graph",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "src/scripts/naruto-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "naruto:zellij-massive-ui",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
@@ -2808,6 +3028,18 @@
       "can_run_incremental": true
     },
     {
+      "id": "prompt:placeholder-guard",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/prompt-*.ts",
+        "src/scripts/prompt-placeholder-guard-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "proof:fake-real-policy-v2",
       "tier": "P1",
       "cost": "hermetic",
@@ -2868,6 +3100,54 @@
       ],
       "always_on_release": true,
       "required_for_publish": true,
+      "can_run_incremental": true
+    },
+    {
+      "id": "python-sdk:all-pipelines",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/python-sdk-*.ts",
+        "src/scripts/python-sdk-all-pipelines-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "python-sdk:capability",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/python-sdk-*.ts",
+        "src/scripts/python-sdk-capability-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "python-sdk:sandbox-policy",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/python-sdk-*.ts",
+        "src/scripts/python-sdk-sandbox-policy-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "python-sdk:stream-bridge",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/python-sdk-*.ts",
+        "src/scripts/python-sdk-stream-bridge-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
       "can_run_incremental": true
     },
     {

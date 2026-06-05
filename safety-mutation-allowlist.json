@@ -86,6 +86,12 @@
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
+      "file": "src/scripts/codex-0-137-compat-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes the scoped Codex 0.137 compatibility report under .sneakoscope/reports."
+    },
+    {
       "file": "src/scripts/codex-config-eperm-fixture.ts",
       "symbol": "module",
       "token": "codex config write",
@@ -534,6 +540,18 @@
       "symbol": "replaceUnsafeSymlink",
       "token": "rename",
       "reason": "Atomic or repair rename primitive is caller-scoped and externally audited by exact symbol."
+    },
+    {
+      "file": "src/core/codex-control/codex-task-runner.ts",
+      "symbol": "ensurePythonCodexLbConfig",
+      "token": "codex config write",
+      "reason": "Python SDK backend writes only a scoped temporary CODEX_HOME/config.toml so the real SDK runner uses the caller-provided Codex LB endpoint."
+    },
+    {
+      "file": "src/core/codex-control/python-codex-sdk-adapter.ts",
+      "symbol": "terminatePythonRunner",
+      "token": "process.kill",
+      "reason": "Python SDK timeout cleanup terminates only the owned runner process group after a bounded real-smoke/task timeout."
     },
     {
       "file": "src/core/commands/image-ux-review-command.ts",

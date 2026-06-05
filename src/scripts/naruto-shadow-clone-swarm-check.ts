@@ -80,6 +80,9 @@ assertGate(bigMemoryHost.cap >= 64, 'a 64 GB host must allow >= 64 parallel code
 const proofClones = 24;
 const cli = path.join(root, 'dist', 'bin', 'sks.js');
 assertGate(exists('dist/bin/sks.js'), 'dist/bin/sks.js missing (build first)');
+const helpRun = spawnSync(process.execPath, [cli, 'naruto', '--help', '--json'], { cwd: root, encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024 });
+const helpParsed = parseJson(helpRun.stdout);
+assertGate(helpRun.status === 0 && helpParsed?.action === 'help', 'sks naruto --help must emit help instead of launching a run', { status: helpRun.status, stdout: tail(helpRun.stdout), stderr: tail(helpRun.stderr) });
 const run = spawnSync(process.execPath, [
   cli, 'naruto', 'run', 'shadow clone swarm gate proof',
   '--clones', String(proofClones),
@@ -105,6 +108,9 @@ assertGate(parsed.target_active_slots <= fakeSafe.cap, 'active slots must be thr
 assertGate(typeof parsed.concurrency_capped === 'boolean', 'naruto run must report concurrency_capped', { concurrency_capped: parsed.concurrency_capped });
 assertGate(parsed.concurrency_capped === (parsed.clones > parsed.target_active_slots), 'concurrency_capped must reflect clones > live slots', { clones: parsed.clones, target_active_slots: parsed.target_active_slots, concurrency_capped: parsed.concurrency_capped });
 assertGate(parsed.system && Number(parsed.system.safe_concurrency) >= 1, 'naruto run must report system safe_concurrency (host-derived cap)', { system: parsed.system });
+assertGate(parsed.work_graph?.write_allowed_count > 0 && parsed.work_graph?.mixed_work_kinds?.length > 1, 'naruto run must report a mixed work graph with write-capable items', { work_graph: parsed.work_graph });
+assertGate(parsed.role_distribution?.verifier_only === false, 'naruto run proof/status must distinguish active worker roles beyond verifier-only', { role_distribution: parsed.role_distribution });
+assertGate(Number(parsed.role_distribution?.implementation_like_ratio || 0) >= 0.4, 'naruto run must include implementation-like role distribution', { role_distribution: parsed.role_distribution });
 
 const state = parsed.run?.scheduler?.state || parsed.run?.scheduler || {};
 assertGate(Number(state.completed_count) === proofClones, 'all clone work items must complete despite throttling', { completed_count: state.completed_count });

@@ -12,6 +12,18 @@ export interface RequestedScopeContract {
   [key: string]: unknown
 }
 
+export type CodexControlBackend =
+  | 'codex-sdk'
+  | 'python-codex-sdk'
+  | 'local-llm'
+  | 'fake'
+
+export type CodexControlBackendFamily =
+  | 'remote-gpt'
+  | 'python-sdk'
+  | 'local-llm'
+  | 'fake'
+
 export interface CodexTaskInput {
   route: string
   tier?: 'orchestrator' | 'worker'
@@ -33,19 +45,28 @@ export interface CodexTaskInput {
     idleTimeoutMs?: number
     timeoutClass?: 'short' | 'standard' | 'long'
   }
+  backendPreference?: CodexControlBackend[]
+  allowLocalLlm?: boolean
+  localLlmPolicy?: {
+    mode: 'worker_only' | 'local_preferred' | 'local_only' | 'disabled'
+    requiresGptFinal: boolean
+  }
   mutationLedgerRoot: string
   zellijPaneId?: string | null
 }
 
 export interface CodexTaskResult {
   ok: boolean
-  backend: 'codex-sdk'
+  backend: CodexControlBackend
+  backend_family: CodexControlBackendFamily
   sdkThreadId: string
   sdkRunId: string | null
   streamEventCount: number
   structuredOutputValid: boolean
   workerResultPath: string
   patchEnvelopePath?: string | null
+  localLlmProofPath?: string | null
+  pythonSdkProofPath?: string | null
   blockers: string[]
   reliabilityShield?: Record<string, unknown>
   ultraRouterDecision?: Record<string, unknown>

@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.4** is a P0 Codex App Fast UI and MAD Zellij worker-pane closure patch on top of the 2.0 execution layer. `sks --mad` now relies on launch-time Fast/high overrides instead of user-level Codex config rewrites, safe Fast UI repair runs through `sks doctor --fix`, provider badges read env/auth/config.toml consistently, and interactive MAD worker panes attach to the real Zellij session as scheduler slots spawn.
+SKS **2.0.5** is a P0 Codex App Fast UI and MAD Zellij worker-pane closure patch on top of the 2.0 execution layer. `sks --mad` now relies on launch-time Fast/high overrides instead of user-level Codex config rewrites, safe Fast UI repair runs through `sks doctor --fix`, provider badges read env/auth/config.toml consistently, and interactive MAD worker panes attach to the real Zellij session as scheduler slots spawn.
 
 What changed:
 
@@ -398,9 +398,9 @@ Manual fan-out syntax:
 
 Effort is assigned per agent. Simple read-only/docs slices can run low, ordinary tooling and lease mapping use medium, safety/DB/schema/release lanes use high, and frontier/forensic research can escalate to xhigh. If a lease conflict, schema failure, proof blocker, DB risk, or release risk appears, the parent can escalate that lane while keeping unrelated lanes cheaper and faster.
 
-### Naruto Shadow Clone Swarm (`$Naruto`)
+### Naruto Massive Parallel Work Swarm (`$Naruto`)
 
-`$Naruto` (影分身 / Kage Bunshin no Jutsu) is a high-scale mode of the native agent kernel for broad fan-out work — codebase-wide sweeps, parallel drafting, large audits. It lifts the standard 20-agent ceiling to **up to 100 clone sessions** (only for this route; every other route keeps the 20 cap).
+`$Naruto` (影分身 / Kage Bunshin no Jutsu) is the hardware-safe massive parallel work mode of the native agent kernel. It is not limited to validation. A Naruto run builds a mixed work graph, keeps a safe active worker pool full, and assigns clones to implementation, modification, test generation, verification, research, documentation, conflict resolution, rollback planning, integration support, and GPT final review input work. It lifts the standard 20-agent ceiling to **up to 100 total clone generations** for this route while keeping active workers under the live hardware, lease, memory, terminal UI, file descriptor, local LLM, and remote API caps.
 
 ```sh
 sks naruto run "sweep the codebase for TODO comments and summarize"
@@ -411,9 +411,11 @@ sks naruto status
 
 Aliases: `$ShadowClone`, `$Kagebunshin`, and the CLI flag `sks --naruto`.
 
-- **System-aware concurrency:** `--clones N` is the total work fan-out, but `$Naruto` never spawns the whole count at once. Live concurrency is throttled to a host-safe number derived from CPU cores and free memory (heavier cap for real `codex-sdk` workers, tighter packing for in-process `fake`). So `--clones 100` on a small host still processes all 100 work units while only running a safe handful at a time; the run reports when it throttles. Override with `SKS_NARUTO_MAX_CONCURRENCY=<n>`.
+- **Hardware-safe governor:** `--clones N` is the total work fan-out, but `$Naruto` never spawns the whole count at once. Live concurrency is throttled by current load, memory, file descriptors, Zellij pane budget, local LLM request budget, remote API budget, disk pressure, pending queue, and active lease conflicts.
+- **Dynamic active pool:** completed workers are drained and replaced while runnable work remains, so the active pool does not sit empty between generations.
 - **Dynamic per-clone effort (like Team):** truly simple / no-tool work runs at `low`, any tool use lifts a clone to `medium` (never high/xhigh), and every clone runs in fast service tier.
-- **Safe parallel writes:** clones coordinate through the same lease-based patch-swarm (merge coordinator + conflict rebase + transaction journal) as Team.
+- **Safe parallel writes:** write-capable clones produce patch envelopes for leased files. Non-overlapping envelopes can apply in parallel; overlapping envelopes serialize or route to conflict resolution. Local worker output remains a draft until the GPT final arbiter approves or modifies it.
+- **Massive UI without pane overload:** Zellij shows visible active worker panes up to the UI cap and tracks the remaining active headless workers in the Naruto dashboard.
 
 See [docs/naruto.md](docs/naruto.md) for the full reference.
 
@@ -513,18 +515,20 @@ $DB inspect this migration for destructive risk
 
 ### Optional Local LLM Workers
 
-Local Ollama workers are off by default, so SKS stays GPT-only unless you explicitly enable them. Use the Codex App prompt commands:
+Local model workers are off by default, so SKS stays GPT-only unless you explicitly enable them. Use the Codex App prompt commands:
 
 ```text
 $with-local-llm-on
 $with-local-llm-off
 ```
 
-When enabled, the local model can only help with policy-eligible simple code patch-envelope work or read-only collection. GPT/Codex still owns strategy, planning, design, review, verification, safety, and integration. Check or tune the machine-local setting from the terminal:
+When enabled, SKS auto-detects an installed local model from a running MLX LM server, OpenAI-compatible local server, or Ollama. If no local model is available, activation stays blocked and reports that no local model was found. The local model can only help with policy-eligible simple code patch-envelope work or read-only collection. GPT/Codex still owns strategy, planning, design, review, verification, safety, and integration. Check or tune the machine-local setting from the terminal:
 
 ```sh
 sks with-local-llm status --json
-sks with-local-llm on --model rafw007/qwen36-a3b-claude-coder:q4_K_M
+sks with-local-llm on
+sks with-local-llm on --provider mlx-lm --model mlx-community/Qwen3.6-35B-A3B-4bit --base-url http://127.0.0.1:8080
+sks with-local-llm on --provider ollama --model rafw007/qwen36-a3b-claude-coder:q4_K_M
 sks with-local-llm off
 ```
 

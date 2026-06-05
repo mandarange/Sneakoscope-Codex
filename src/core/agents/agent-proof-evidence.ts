@@ -32,6 +32,13 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const patchSwarm = input.patchSwarm || await readJson<any>(path.join(root, 'agent-patch-swarm-runtime.json'), null)
   const localCollaborationPolicy = input.localCollaborationPolicy || await readJson<any>(path.join(root, 'local-collaboration-policy.json'), null) || resolveLocalCollaborationPolicy()
   const gptFinalArbiter = input.gptFinalArbiter || await readJson<any>(path.join(root, 'gpt-final-arbiter', 'gpt-final-arbiter.json'), null)
+  const narutoWorkGraph = await readJson<any>(path.join(root, 'naruto-work-graph.json'), null)
+  const narutoRoleDistribution = await readJson<any>(path.join(root, 'naruto-role-distribution.json'), null)
+  const narutoConcurrencyGovernor = await readJson<any>(path.join(root, 'naruto-concurrency-governor.json'), null)
+  const narutoActivePool = await readJson<any>(path.join(root, 'naruto-active-pool.json'), null)
+  const narutoVerificationDag = await readJson<any>(path.join(root, 'naruto-verification-dag.json'), null)
+  const narutoGptFinalPack = await readJson<any>(path.join(root, 'naruto-gpt-final-pack.json'), null)
+  const narutoZellijDashboard = await readJson<any>(path.join(root, 'naruto-zellij-dashboard.json'), null)
   const localParticipated = localCollaborationParticipated(input.results || []) || Number(gptFinalArbiter?.local_outputs_count || 0) > 0
   const finalGptPatchStage = input.finalGptPatchStage || null
   const localFinalGate = gptFinalArbiter?.final_gate || evaluateLocalCollaborationFinalGate({
@@ -75,6 +82,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const workQueueGoalRefsOk = Boolean(workQueue?.items?.length) && workQueue.items.every((item: any) => item.goal_mode_ref)
   const workQueueStrategyRefsOk = Boolean(workQueue?.items?.length) && workQueue.items.every((item: any) => item.slice?.strategy_refs)
   const route = String(input.route || taskGraph?.route_type || '$Agent')
+  const isNarutoRoute = route === '$Naruto'
   const routeCommand = String(input.routeCommand || 'sks agent run')
   const genericAgentRouteStandIn = !/\$?agent$/i.test(route) && /\bagent\s+run\b/i.test(routeCommand) && /--route/i.test(routeCommand)
   const realRouteCommandUsed = !genericAgentRouteStandIn
@@ -178,6 +186,16 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(localParticipated && localFinalGate.ok !== true ? localFinalGate.blockers || ['gpt_final_arbiter_gate_not_ok'] : []),
     ...(localParticipated && gptFinalArbiter?.ok !== true ? gptFinalArbiter?.blockers || ['gpt_final_arbiter_not_ok'] : []),
     ...(localParticipated && finalGptPatchStage?.ok === false ? finalGptPatchStage.blockers || ['final_gpt_patch_stage_not_ok'] : []),
+    ...(isNarutoRoute && !narutoWorkGraph ? ['naruto_work_graph_missing'] : []),
+    ...(isNarutoRoute && narutoWorkGraph?.ok === false ? narutoWorkGraph.blockers || ['naruto_work_graph_not_ok'] : []),
+    ...(isNarutoRoute && !narutoRoleDistribution ? ['naruto_role_distribution_missing'] : []),
+    ...(isNarutoRoute && narutoRoleDistribution?.ok === false ? narutoRoleDistribution.blockers || ['naruto_role_distribution_not_ok'] : []),
+    ...(isNarutoRoute && !narutoConcurrencyGovernor ? ['naruto_concurrency_governor_missing'] : []),
+    ...(isNarutoRoute && !narutoActivePool ? ['naruto_active_pool_missing'] : []),
+    ...(isNarutoRoute && narutoActivePool?.ok === false ? narutoActivePool.blockers || ['naruto_active_pool_not_ok'] : []),
+    ...(isNarutoRoute && !narutoVerificationDag ? ['naruto_verification_dag_missing'] : []),
+    ...(isNarutoRoute && !narutoGptFinalPack ? ['naruto_gpt_final_pack_missing'] : []),
+    ...(isNarutoRoute && !narutoZellijDashboard ? ['naruto_zellij_dashboard_missing'] : []),
     ...agentChangedFileLeaseViolations(input.results || [], input.partition?.leases || [])
   ]
   const evidence = {
@@ -223,6 +241,23 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     gpt_final_patch_source: finalGptPatchStage?.final_patch_source || (localParticipated ? 'blocked' : 'not_applicable'),
     gpt_final_gate_ok: localFinalGate.ok === true,
     gpt_final_gate: localFinalGate,
+    naruto_work_graph: narutoWorkGraph ? 'naruto-work-graph.json' : null,
+    naruto_total_work_items: Number(narutoWorkGraph?.total_work_items || 0),
+    naruto_mixed_work_kinds: narutoWorkGraph?.mixed_work_kinds || [],
+    naruto_write_allowed_count: Number(narutoWorkGraph?.write_allowed_count || 0),
+    naruto_role_distribution: narutoRoleDistribution ? 'naruto-role-distribution.json' : null,
+    naruto_role_distribution_entries: narutoRoleDistribution?.entries || [],
+    naruto_verifier_only: narutoRoleDistribution?.verifier_only === true,
+    naruto_implementation_like_ratio: Number(narutoRoleDistribution?.implementation_like_ratio || 0),
+    naruto_concurrency_governor: narutoConcurrencyGovernor ? 'naruto-concurrency-governor.json' : null,
+    naruto_safe_active_workers: Number(narutoConcurrencyGovernor?.safe_active_workers || 0),
+    naruto_safe_zellij_visible_panes: Number(narutoConcurrencyGovernor?.safe_zellij_visible_panes || 0),
+    naruto_headless_workers: Number(narutoConcurrencyGovernor?.headless_workers || 0),
+    naruto_active_pool: narutoActivePool ? 'naruto-active-pool.json' : null,
+    naruto_active_pool_refill_events: Number(narutoActivePool?.refill_events || 0),
+    naruto_verification_dag: narutoVerificationDag ? 'naruto-verification-dag.json' : null,
+    naruto_gpt_final_pack: narutoGptFinalPack ? 'naruto-gpt-final-pack.json' : null,
+    naruto_zellij_dashboard: narutoZellijDashboard ? 'naruto-zellij-dashboard.json' : null,
     patch_swarm_runtime: patchSwarm ? 'agent-patch-swarm-runtime.json' : null,
     patch_queue: patchSwarm ? 'agent-patch-queue.json' : null,
     patch_queue_events: patchSwarm ? 'agent-patch-queue-events.jsonl' : null,

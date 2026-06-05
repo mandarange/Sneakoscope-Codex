@@ -260,9 +260,9 @@ export function extractZellijPaneIdFromOutput(text: unknown): string | null {
   }
   const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
   for (const line of lines.slice().reverse()) {
-    const direct = line.match(/^(?:pane[_ -]?id[:=]\s*)?([0-9]+)$/i)
+    const direct = line.match(/^(?:pane[_ -]?id[:=]\s*)?([0-9]+|terminal_[0-9]+)$/i)
     if (direct?.[1]) return direct[1]
-    const embedded = line.match(/\bpane[_ -]?id[:=]\s*([0-9]+)\b/i)
+    const embedded = line.match(/\bpane[_ -]?id[:=]\s*([0-9]+|terminal_[0-9]+)\b/i)
     if (embedded?.[1]) return embedded[1]
   }
   return null
