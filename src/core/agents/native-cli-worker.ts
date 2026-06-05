@@ -27,6 +27,8 @@ export async function runNativeCliWorker(input: any = {}) {
   }
   const slice = intake.slice || {}
   const backend = String(input.backend || intake.backend || 'fake')
+  const workerCwd = path.resolve(String(input.cwd || intake.cwd || process.cwd()))
+  const worktree = normalizeWorkerWorktree(input.worktree || intake.worktree || null)
   const policy = resolveFastModePolicy({
     fastMode: intake.fast_mode ?? input.fastMode,
     serviceTier: intake.service_tier ?? input.serviceTier
@@ -37,6 +39,9 @@ export async function runNativeCliWorker(input: any = {}) {
   const heartbeatRel = String(input.heartbeatPath || intake.heartbeat_path || path.join(workerDirRel, 'worker-heartbeat.jsonl'))
   const patchRel = String(input.patchEnvelopePath || intake.patch_envelope_path || path.join(workerDirRel, 'worker-patch-envelope.json'))
   await ensureDir(workerDir)
+  try {
+    process.chdir(workerCwd)
+  } catch {}
   const recursion = scanAgentTextForRecursion(JSON.stringify({ agent, slice, backend }))
   const guard = {
     schema: 'sks.native-cli-worker-recursion-guard.v1',
@@ -56,6 +61,9 @@ export async function runNativeCliWorker(input: any = {}) {
     persona_id: String(agent.persona_id || input.personaId || ''),
     lease_id: String(intake.lease_id || input.leaseId || ''),
     agent_root: agentRoot,
+    main_repo_root: String(input.mainRepoRoot || intake.main_repo_root || worktree?.main_repo_root || agentRoot),
+    cwd: workerCwd,
+    worktree,
     worker_artifact_dir: workerDirRel,
     result_path: resultRel,
     heartbeat_path: heartbeatRel,
@@ -65,7 +73,9 @@ export async function runNativeCliWorker(input: any = {}) {
       backend: backend === 'zellij' ? 'codex-sdk' : backend,
       output_schema_id: 'sks.agent-worker-result.v1',
       sandbox_policy: Array.isArray(slice.write_paths) && slice.write_paths.length > 0 ? 'workspace-write' : 'read-only',
-      thread_policy: 'new_thread_per_generation'
+      thread_policy: 'new_thread_per_generation',
+      worktree,
+      cwd: workerCwd
     },
     service_tier: policy.service_tier,
     fast_mode: policy.fast_mode,
@@ -141,6 +151,8 @@ export async function runNativeCliWorker(input: any = {}) {
     generated_at: nowIso(),
     ok: guard.ok,
     backend,
+    cwd: workerCwd,
+    worktree,
     agent_id: agent.id,
     session_id: agent.session_id,
     slot_id: agent.slot_id || null,
@@ -219,6 +231,9 @@ export async function runNativeCliWorker(input: any = {}) {
     slot_id: agent.slot_id || null,
     generation_index: agent.generation_index || null,
     process_id: process.pid,
+    main_repo_root: String(input.mainRepoRoot || intake.main_repo_root || worktree?.main_repo_root || agentRoot),
+    cwd: workerCwd,
+    worktree,
     artifact_dir: workerDirRel,
     patch_envelope: patchEnvelopes.length ? patchRel : null,
     no_patch_reason: patchEnvelopes.length ? null : path.join(workerDirRel, 'worker-no-patch-reason.json'),
@@ -289,4 +304,20 @@ function redactCommandLine(argv: string[]) {
     if (index > 0 && /(?:key|token|secret|password)=/i.test(part)) return part.replace(/=.*/, '=<redacted>')
     return part
   })
+}
+
+function normalizeWorkerWorktree(value: any): {
+  id: string
+  path: string
+  branch: string
+  main_repo_root: string | null
+} | null {
+  const pathValue = value?.path || value?.worktree_path
+  if (!pathValue) return null
+  return {
+    id: String(value?.id || value?.worktree_id || value?.slot_id || 'worktree'),
+    path: String(pathValue),
+    branch: String(value?.branch || 'unknown'),
+    main_repo_root: value?.main_repo_root == null ? null : String(value.main_repo_root)
+  }
 }

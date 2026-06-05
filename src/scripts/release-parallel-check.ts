@@ -275,7 +275,7 @@ const tasks: VerificationTask[] = [
   task('docs:truthfulness', 'npm run docs:truthfulness --silent', { dependencies: ['build'] }),
   task('official-docs:compat', 'npm run official-docs:compat --silent', { dependencies: ['build'] }),
   task('blackbox:matrix:contract', 'npm run blackbox:matrix:contract --silent', { dependencies: ['build'] }),
-  task('test:blackbox', 'npm run test:blackbox --silent', { dependencies: ['build'], timeout_ms: 20 * 60 * 1000 }),
+  task('test:blackbox', 'npm run test:blackbox --silent', { dependencies: ['build', 'naruto:shadow-clone-swarm'], timeout_ms: 20 * 60 * 1000 }),
   task('rust:check', 'npm run rust:check --silent', { dependencies: ['build'] }),
   task('rust:smoke', 'npm run rust:smoke --silent', { dependencies: ['build'] }),
   task('release:dist-freshness', 'npm run release:dist-freshness --silent', { dependencies: ['build'] }),

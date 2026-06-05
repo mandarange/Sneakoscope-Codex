@@ -18,6 +18,60 @@ export interface NarutoActivePoolReport {
   blockers: string[]
 }
 
+export interface NarutoWorktreeActivePoolReport extends NarutoActivePoolReport {
+  worktree_mode: 'git-worktree' | 'patch-envelope-only'
+  worktree_allocation_required_count: number
+  worktree_allocations: Array<{
+    work_item_id: string
+    mode: 'git-worktree' | 'patch-envelope-only'
+    allocation_status: 'planned' | 'allocated' | 'skipped'
+    worktree_path?: string
+    branch?: string
+    blockers: string[]
+  }>
+}
+
+export async function runNarutoActivePool(input: {
+  graph: NarutoWorkGraph
+  governor: NarutoConcurrencyGovernorDecision
+  failWorkItemIds?: string[]
+  retryLimit?: number
+  allocateWorktree?: (item: NarutoWorkItem) => Promise<{ ok: boolean; worktree_path?: string; branch?: string; blockers?: string[] }>
+}): Promise<NarutoWorktreeActivePoolReport> {
+  const base = simulateNarutoActivePool(input)
+  const allocations: NarutoWorktreeActivePoolReport['worktree_allocations'] = []
+  for (const item of input.graph.work_items) {
+    if (!item.write_allowed) continue
+    const mode = item.worktree?.mode || input.graph.worktree_policy.mode
+    if (mode !== 'git-worktree') {
+      allocations.push({ work_item_id: item.id, mode, allocation_status: 'skipped', blockers: [] })
+      continue
+    }
+    if (!input.allocateWorktree) {
+      allocations.push({ work_item_id: item.id, mode, allocation_status: 'planned', blockers: [] })
+      continue
+    }
+    const allocated = await input.allocateWorktree(item)
+    allocations.push({
+      work_item_id: item.id,
+      mode,
+      allocation_status: allocated.ok ? 'allocated' : 'planned',
+      ...(allocated.worktree_path ? { worktree_path: allocated.worktree_path } : {}),
+      ...(allocated.branch ? { branch: allocated.branch } : {}),
+      blockers: allocated.blockers || []
+    })
+  }
+  const allocationBlockers = allocations.flatMap((row) => row.blockers)
+  return {
+    ...base,
+    ok: base.ok && allocationBlockers.length === 0,
+    worktree_mode: input.graph.worktree_policy.mode,
+    worktree_allocation_required_count: allocations.filter((row) => row.mode === 'git-worktree').length,
+    worktree_allocations: allocations,
+    blockers: [...base.blockers, ...allocationBlockers]
+  }
+}
+
 export function simulateNarutoActivePool(input: {
   graph: NarutoWorkGraph
   governor: NarutoConcurrencyGovernorDecision

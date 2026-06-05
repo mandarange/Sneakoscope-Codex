@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.7 is the Git worktree parallel coding closure patch for the 2.0 line. It adds Git worktree capability detection, safe out-of-repo worktree allocation, worktree diff export into patch envelopes, integration worktree merge queues, cleanup/retention policy, and Naruto worker/runtime evidence for write-capable parallel coding while preserving patch-envelope-only fallback for non-Git projects.
+
+The 2.0.7 release gate adds `release:worktree-gates`, Git worktree capability/manager/diff/merge/cleanup/cache/pool checks, Naruto worktree coding/Zellij/GPT-final checks, and command-path runtime proof that write-capable Naruto workers receive real worktree allocations. It also keeps release readiness honest: full publish readiness still requires a fresh `release:check`, `release:real-check` where required, and publication/tag steps outside this local implementation pass.
+
 SKS 2.0.6 is the Product Design plugin and Naruto read-only routing closure patch for the 2.0 line. It makes design routes discover the remote `product-design@openai-curated-remote` Codex App plugin, auto-install it when the app-server reports it missing, and prefer its Product Design skill surface across UI, PPT, and design-adjacent pipeline stages.
 
 The 2.0.6 release gate adds Product Design plugin routing and auto-install checks, records the remote plugin id `Plugin_fa77aec24fc08191bc6e57f377126d76`, and adds a Naruto read-only routing check that proves read-only runs force write mode off while write-capable runs still schedule write work. It also keeps native proof from failing on pre-existing dirty files when no write leases, no writes, and no patch envelope exist.

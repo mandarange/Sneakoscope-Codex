@@ -13,7 +13,7 @@ export interface AgentPatchOperation {
 
 export interface AgentPatchEnvelope {
   schema: typeof AGENT_PATCH_SCHEMA
-  source?: 'fixture' | 'model_authored' | 'process_generated' | 'zellij_generated'
+  source?: 'fixture' | 'model_authored' | 'process_generated' | 'zellij_generated' | 'git-worktree-diff'
   mission_id?: string
   route?: string
   agent_id: string
@@ -46,6 +46,15 @@ export interface AgentPatchEnvelope {
     conflict_prediction_id?: string
     verification_node_id?: string
     rollback_node_id?: string
+  }
+  git_worktree?: {
+    main_repo_root: string
+    worktree_path: string
+    branch: string | null
+    base_head: string | null
+    worktree_head: string | null
+    changed_files: string[]
+    diff_bytes: number
   }
   operations: AgentPatchOperation[]
   rationale?: string
@@ -90,6 +99,7 @@ export function normalizeAgentPatchEnvelope(input: any): AgentPatchEnvelope {
     ...(input?.verification_node_id === undefined ? {} : { verification_node_id: String(input.verification_node_id) }),
     ...(input?.rollback_node_id === undefined ? {} : { rollback_node_id: String(input.rollback_node_id) }),
     ...(input?.lease_proof ? { lease_proof: normalizeLeaseProof(input.lease_proof) } : {}),
+    ...(input?.git_worktree ? { git_worktree: normalizeGitWorktreeMetadata(input.git_worktree) } : {}),
     ...(input?.rationale ? { rationale: String(input.rationale) } : {}),
     ...(input?.verification_hint ? { verification_hint: normalizeHint(input.verification_hint) } : {}),
     ...(input?.rollback_hint ? { rollback_hint: normalizeHint(input.rollback_hint) } : {}),
@@ -106,9 +116,10 @@ export function validateAgentPatchEnvelope(envelope: AgentPatchEnvelope): { ok: 
   if (!Number.isInteger(envelope.generation_index) || envelope.generation_index < 0) violations.push('generation_index_missing')
   if (!envelope.lease_id && !envelope.lease_proof?.lease_id) violations.push('lease_id_missing')
   if (!envelope.operations.length) violations.push('operations_missing')
-  if (envelope.source && !['fixture', 'model_authored', 'process_generated', 'zellij_generated'].includes(envelope.source)) violations.push('source_invalid')
+  if (envelope.source && !['fixture', 'model_authored', 'process_generated', 'zellij_generated', 'git-worktree-diff'].includes(envelope.source)) violations.push('source_invalid')
   if (envelope.source === 'model_authored' && !hasFiniteNumber(envelope.backend_child_process_id) && !envelope.backend_sdk_thread_id && !envelope.backend_ollama_request_id) violations.push('model_authored_backend_proof_missing')
   if (envelope.source === 'fixture' && envelope.backend_child_process_id !== undefined) violations.push('fixture_backend_child_process_id_present')
+  if (envelope.source === 'git-worktree-diff' && !envelope.git_worktree?.worktree_path) violations.push('git_worktree_metadata_missing')
   for (const operation of envelope.operations) {
     if (!operation.path || operation.path.includes('\0') || operation.path.startsWith('/') || operation.path.split(/[\\/]/).includes('..')) {
       violations.push(`invalid_path:${operation.path || 'missing'}`)
@@ -126,7 +137,7 @@ export function validateAgentPatchEnvelope(envelope: AgentPatchEnvelope): { ok: 
 
 function normalizeEnvelopeSource(value: any): AgentPatchEnvelope['source'] | null {
   const text = String(value || '')
-  return text === 'fixture' || text === 'model_authored' || text === 'process_generated' || text === 'zellij_generated' ? text : null
+  return text === 'fixture' || text === 'model_authored' || text === 'process_generated' || text === 'zellij_generated' || text === 'git-worktree-diff' ? text : null
 }
 
 function hasFiniteNumber(value: any): boolean {
@@ -157,6 +168,18 @@ function normalizeLeaseProof(input: any): AgentPatchLeaseProof {
     ...(input?.conflict_prediction_id === undefined ? {} : { conflict_prediction_id: String(input.conflict_prediction_id) }),
     ...(input?.verification_node_id === undefined ? {} : { verification_node_id: String(input.verification_node_id) }),
     ...(input?.rollback_node_id === undefined ? {} : { rollback_node_id: String(input.rollback_node_id) })
+  }
+}
+
+function normalizeGitWorktreeMetadata(input: any): NonNullable<AgentPatchEnvelope['git_worktree']> {
+  return {
+    main_repo_root: String(input?.main_repo_root || ''),
+    worktree_path: String(input?.worktree_path || ''),
+    branch: input?.branch == null ? null : String(input.branch),
+    base_head: input?.base_head == null ? null : String(input.base_head),
+    worktree_head: input?.worktree_head == null ? null : String(input.worktree_head),
+    changed_files: Array.isArray(input?.changed_files) ? input.changed_files.map(String) : [],
+    diff_bytes: Number(input?.diff_bytes || 0)
   }
 }
 

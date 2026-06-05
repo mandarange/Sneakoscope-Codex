@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sks.git-worktree-manifest.v1",
+  "type": "object",
+  "required": ["schema", "mission_id", "repo_root", "root", "allocations"],
+  "properties": {
+    "schema": { "const": "sks.git-worktree-manifest.v1" },
+    "updated_at": { "type": "string" },
+    "mission_id": { "type": "string" },
+    "repo_root": { "type": "string" },
+    "root": { "type": "string" },
+    "allocations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["schema", "ok", "mission_id", "worker_id", "worktree_path", "branch", "base_ref", "blockers"],
+        "properties": {
+          "schema": { "const": "sks.git-worktree-allocation.v1" },
+          "ok": { "type": "boolean" },
+          "mission_id": { "type": "string" },
+          "worker_id": { "type": "string" },
+          "slot_id": { "type": "string" },
+          "generation_index": { "type": "number" },
+          "repo_root": { "type": "string" },
+          "main_repo_root": { "type": "string" },
+          "worktree_path": { "type": "string" },
+          "branch": { "type": "string" },
+          "base_ref": { "type": "string" },
+          "base_head": { "type": ["string", "null"] },
+          "manifest_path": { "type": "string" },
+          "blockers": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}
