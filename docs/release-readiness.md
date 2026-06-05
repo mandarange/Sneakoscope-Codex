@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.5 is the local collaboration closure patch for the 2.0 line. It turns `sks with-local-llm on` from a saved toggle into a verified worker state by requiring a fresh schema-valid Ollama generation smoke before `verified`, promotes Local LLM and Python Codex SDK to Codex Control Plane backend surfaces, and pins `@openai/codex-sdk` to the 0.137 compatibility baseline.
+
+The 2.0.5 release gate adds hermetic Local LLM structured-output/tool-repair/all-pipeline checks, GPT Final Arbiter enforcement for any local-participating pipeline, Python SDK capability/stream/sandbox/all-pipeline checks, Codex 0.137 plugin/runtime/approval compatibility checks, and real optional checks for Local LLM smoke/throughput/cache, Python SDK, Codex 0.137, and Zellij worker-pane proof.
+
 SKS 2.0.4 is the local LLM / publish-readiness closure patch for the 2.0 line. It keeps the 2.0.2 MAD, Codex App Fast UI, provider, and Zellij release surface, then closes the new release DAG gaps for `sks update`, `$with-local-llm-on`, and `$with-local-llm-off` fixture coverage while keeping package-install mutation safety guarded and ledgered.
 
 The 2.0.4 release gate requires all-feature completion/deep-completion to include the local LLM command fixtures, mutation callsite coverage to report zero uncovered risky package-install callsites, release metadata to mention 2.0.4 across versioned docs, and the package/lockfile/TypeScript/Rust/dist version surfaces to agree before publish checks proceed.

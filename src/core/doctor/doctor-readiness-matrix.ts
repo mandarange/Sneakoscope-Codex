@@ -44,6 +44,11 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   if (input.codex_app_ui?.requires_confirmation === true) blockers.add('codex_app_fast_ui_repair_requires_confirmation')
   if (input.codex_app_ui?.fast_selector === 'repaired') warnings.add('codex_app_fast_selector_repaired_restart_app_if_needed')
   if (input.codex_lb?.ok === false) warnings.add(`codex_lb_${input.codex_lb?.circuit?.state || 'blocked'}`)
+  const localModel = input.local_model || {}
+  const localStatus = String(localModel.status || (localModel.enabled ? 'enabled_unverified' : 'disabled'))
+  if (localModel.enabled === true && localStatus === 'enabled_unverified') warnings.add('local_llm_enabled_unverified')
+  if (localModel.enabled === true && localStatus === 'degraded') warnings.add('local_llm_degraded')
+  if (localModel.enabled === true && localStatus === 'blocked') warnings.add('local_llm_blocked_worker_tier_disabled')
   const localCollaborationPolicy = resolveLocalCollaborationPolicy({ mode: input.local_collaboration?.mode || null })
   const gptFinalAvailable = input.local_collaboration?.gpt_final_arbiter_available === undefined
     ? codexBinOk
@@ -89,11 +94,22 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     codex_app_required_for_cli: false,
     local_collaboration: {
       mode: localCollaborationPolicy.mode,
-      local_backend: input.local_collaboration?.local_backend || input.local_model?.provider || 'ollama',
-      local_model: input.local_collaboration?.local_model || input.local_model?.model || null,
+      local_backend: input.local_collaboration?.local_backend || localModel.provider || 'ollama',
+      local_model: input.local_collaboration?.local_model || localModel.model || null,
       final_arbiter: gptFinalAvailable ? 'GPT available' : 'missing',
       final_apply_allowed: localCollaborationPolicy.gpt_final_required ? gptFinalAvailable : localCollaborationPolicy.mode === 'disabled',
       blockers: localCollaborationPolicy.gpt_final_required && !gptFinalAvailable ? ['gpt_final_arbiter_unavailable'] : localCollaborationPolicy.blockers
+    },
+    local_llm: {
+      enabled: localModel.enabled === true,
+      status: localStatus,
+      provider: localModel.provider || 'ollama',
+      model: localModel.model || null,
+      endpoint: localModel.endpoint || localModel.base_url || null,
+      last_smoke: localModel.last_smoke || null,
+      final_arbiter: 'GPT required',
+      worker_tier_enabled: localModel.enabled === true && localStatus === 'verified',
+      blockers: normalizeList(localModel.blockers)
     },
     ready: blockers.size === 0 && cliReady,
     primary_blocker: [...blockers][0] || null,

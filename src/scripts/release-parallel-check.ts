@@ -29,7 +29,7 @@ const deterministicReleaseEnv: Record<string, string> = {
 };
 
 const tasks: VerificationTask[] = [
-  task('build', 'npm run build --silent', { outputs: ['dist'] }),
+  task('build', 'npm run release:dist-freshness --silent', { outputs: ['dist'] }),
   task('runtime:no-src-mjs', 'npm run runtime:no-src-mjs --silent', { dependencies: ['build'] }),
   task('runtime:ts-source-of-truth', 'npm run runtime:ts-source-of-truth --silent', { dependencies: ['build'] }),
   task('architecture:guard', 'npm run architecture:guard --silent', { dependencies: ['build', 'runtime:ts-source-of-truth'] }),

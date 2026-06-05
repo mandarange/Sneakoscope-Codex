@@ -434,7 +434,7 @@ async function runSks(root: string, commandArgs: readonly string[]): Promise<Run
     cwd: root,
     timeoutMs: 180_000,
     maxOutputBytes: 512 * 1024,
-    env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true' },
+    env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1', SKS_LOCAL_LLM_TOGGLE_ONLY: '1', CI: 'true' },
   });
 }
 

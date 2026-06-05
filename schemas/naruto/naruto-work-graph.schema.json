@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sks.naruto-work-graph.v1",
+  "type": "object",
+  "required": ["schema", "route", "requested_clones", "total_work_items", "work_items", "active_waves", "ok"],
+  "properties": {
+    "schema": { "const": "sks.naruto-work-graph.v1" },
+    "route": { "const": "$Naruto" },
+    "requested_clones": { "type": "integer", "minimum": 1 },
+    "total_work_items": { "type": "integer", "minimum": 1 },
+    "readonly": { "type": "boolean" },
+    "write_capable": { "type": "boolean" },
+    "work_items": { "type": "array", "items": { "type": "object" } },
+    "active_waves": { "type": "array", "items": { "type": "object" } },
+    "mixed_work_kinds": { "type": "array", "items": { "type": "string" } },
+    "write_allowed_count": { "type": "integer", "minimum": 0 },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "ok": { "type": "boolean" }
+  },
+  "additionalProperties": true
+}
+

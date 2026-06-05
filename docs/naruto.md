@@ -1,83 +1,160 @@
-# $Naruto — Shadow Clone Swarm (影分身 / Kage Bunshin no Jutsu)
+# $Naruto — Massive Parallel Work Swarm
 
-`$Naruto` is a high-scale mode of the native SKS agent kernel. It fans out up to **100
-parallel "clone" sessions** (vs. the standard 20-agent ceiling) for high-throughput work
-such as broad codebase sweeps, fan-out drafting, or large parallel audits.
+`$Naruto` is SKS's hardware-safe massive parallel work mode. It is not a validation-only
+route. A Naruto run decomposes the user goal into a mixed work graph and keeps a safe
+active pool full while workers implement, modify, generate tests, verify, research,
+document, resolve conflicts, prepare rollback metadata, support integration, and build
+the GPT final arbiter input pack.
 
-It is the same proven engine used by `sks team` / `sks agent` — roster → work-queue →
-scheduler → backend → patch-swarm — with one difference: the concurrency ceiling is
-lifted from `MAX_AGENT_COUNT = 20` to `MAX_NARUTO_AGENT_COUNT = 100`, **only for this
-route**. Every other route keeps the 20 ceiling untouched.
+The standard native-agent ceiling remains 20 for ordinary routes. `$Naruto` can plan up
+to 100 total clone generations for this route, while active workers are capped by live
+hardware and policy signals.
 
 ## Usage
 
 ```bash
-# Default clone count (12) on the real Codex backend
-sks naruto run "sweep the codebase for TODO comments and summarize"
-
-# Up to 100 shadow clones
-sks naruto run "draft a unit test for every module" --clones 100
-
-# Dry/mock fan-out (no Codex calls) — fast proof of the swarm
+sks naruto run "implement this addendum" --clones 100
 sks naruto run "demo" --clones 24 --backend fake --work-items 24 --json
-
-# Status of the latest Naruto mission
 sks naruto status
 ```
 
 Aliases: `$ShadowClone`, `$Kagebunshin`, and the CLI flag form `sks --naruto`.
 
-### Flags
+## Core Contract
 
-| Flag | Meaning | Default |
-|------|---------|---------|
-| `--clones N` (alias `--agents N`) | Number of parallel clone sessions (clamped to 100) | 12 |
-| `--backend codex-exec\|fake\|process` | Worker backend | `codex-exec` |
-| `--work-items N` | Work items to distribute across clones | = clones |
-| `--real` | Use real Codex execution (not dry-run) | off |
-| `--readonly` | Read-only clones (no writes) | off |
-| `--json` | Machine-readable output | off |
+`$Naruto mode: launching hardware-safe massive parallel work swarm.`
 
-## How it works
+Clones may implement, modify, verify, test, research, document, and resolve conflicts
+according to lease and role policy. Write-capable clone output is accepted only through
+patch envelopes, the verification DAG, mutation guard, and GPT final arbiter review.
 
-1. **Clone roster** — `buildNarutoCloneRoster()` builds N identical clones (`naruto_clone_NNN`),
-   cycling the persona pool so it scales past the unique-persona ceiling. Naruto's clones
-   are copies, not distinct personas — which is exactly the shadow-clone model.
-2. **Work partition** — the prompt is sliced into work items with disjoint write leases.
-3. **Scheduler** — `runAgentScheduler` keeps up to `--clones` sessions active, backfilling
-   idle slots as clones finish (`MAX_NARUTO_AGENT_COUNT` ceiling).
-4. **Safe parallel writes** — the patch-swarm runtime applies disjoint patches in parallel
-   and serializes conflicting ones via the merge coordinator + conflict rebase, with a
-   transaction journal and rollback dry-run per clone.
-5. **Proof + cleanup** — every clone emits a session record; the mission writes proof
-   evidence and cleans up worker sessions.
+## Work Graph
 
-## Adaptive concurrency (system-aware)
+Naruto creates `naruto-work-graph.json` under the mission's `agents/` directory. The graph
+contains mixed work kinds:
 
-`--clones N` sets the total work fan-out (up to 100), but `$Naruto` **never spawns the whole
-count at once**. Live concurrency (how many clones run simultaneously) is throttled to a
-host-safe number derived from CPU cores and free memory:
+- `implementation`
+- `code_modification`
+- `refactor`
+- `test_generation`
+- `test_execution`
+- `verification`
+- `research`
+- `documentation`
+- `ux_review`
+- `ppt_review`
+- `image_review`
+- `conflict_resolution`
+- `patch_rebase`
+- `rollback_preparation`
+- `integration_support`
+- `final_review_input_pack`
 
-- Heavy backends (`codex-exec`, `zellij`, `process`) leave a core free and budget ~0.6 GB per
-  concurrent worker, capped at 16.
-- Light/in-process backend (`fake`) packs tighter (≈ 2× cores, capped at 32).
+When the route is write-capable, the graph must include `write_allowed=true` work items.
+Each write item carries write leases and acceptance rules requiring a patch envelope,
+verification, and GPT final review. Active waves are planned so two workers in the same
+wave do not hold overlapping write leases.
 
-So `sks naruto run "…" --clones 100` on an 8-core/8 GB host might keep ~7 clones running at a
-time while still processing all 100 work units (the scheduler backfills as clones finish). The
-run output reports `running M at a time (throttled to host capacity: C cores, G GB free)` when
-throttling applies. Override with `SKS_NARUTO_MAX_CONCURRENCY=<n>` (still clamped to 100).
+## Role Distribution
 
-## Limits & guidance
+Naruto writes `naruto-role-distribution.json` and the status output includes the same
+distribution. Default write-capable Naruto runs include implementation-like workers:
 
-- 100 concurrent real Codex sessions would be heavy, which is exactly why concurrency is
-  throttled to host capacity by default. Increase `--clones` freely for fan-out; the scheduler
-  paces actual execution safely.
-- For CI/proof, use `--backend fake`, which runs clones in-process for a fast, deterministic
-  swarm demonstration.
+- `implementer`
+- `modifier`
+- `test_writer`
+- `conflict_resolver`
+- `rollback_planner`
+- `integrator`
+- `verifier`
+- `researcher`
+- `gpt_final_arbiter`
 
-## Proof gate
+Verifier-only distribution is valid only for `--readonly` or an explicit verification
+route. Default write-capable Naruto keeps at least 40% implementation/modification/test
+style roles.
 
-`naruto:shadow-clone-swarm` (`scripts/naruto-shadow-clone-swarm-check.mjs`) proves the
-ceiling is lifted to 100 without changing the standard 20 cap, that a 100-clone roster
-builds 100 unique clones, and that an end-to-end `sks naruto run --clones 24` schedules all
-24 clones to completion (i.e. genuinely past the old 20 cap).
+## Hardware-Safe Governor
+
+`naruto-concurrency-governor.json` records the live decision:
+
+- requested clone count
+- total work item count
+- safe active workers
+- safe visible Zellij panes
+- headless workers
+- local LLM parallel request cap
+- remote Codex/API parallel budget
+- verification parallel cap
+- backpressure state and reasons
+
+The governor considers CPU load, free memory, Node heap, process count, file descriptor
+budget, Zellij pane count, terminal size, local LLM max parallel requests, remote API
+budget, GPU/VRAM hints, disk IO pressure, pending queue size, and active lease conflicts.
+
+## Dynamic Active Pool
+
+`naruto-active-pool.json` proves the scheduler refills active slots while runnable work
+remains. When a worker completes, the parent ingests the result, validates patch
+envelopes, enqueues verification/follow-up work, and backfills the slot. Failed work is
+bounded by retry policy or converted into conflict-resolution work.
+
+## Parallel Patch Apply
+
+Write-capable workers produce patch envelopes. Patch envelopes include lease id, work
+item id, generation id, target files, before/after hashes, and rollback data.
+Non-overlapping patch envelopes are grouped into parallel transaction batches. Overlaps
+serialize or route to conflict resolution. Failed batches roll back only the affected
+batch.
+
+## Parallel Verification
+
+`naruto-verification-dag.json` expands candidate work into verification shards such as
+typecheck, unit test, route gate, static scan, schema validation, patch-specific test,
+docs/changelog check, side-effect check, mutation ledger check, Zellij proof check, and
+local LLM structured output checks. Verification can start as soon as its dependencies
+are ready and uses a separate safe concurrency cap.
+
+## Zellij UI
+
+Naruto does not create hundreds of panes. `naruto-zellij-dashboard.json` plans visible
+active worker panes up to the UI cap and tracks remaining active workers as headless.
+Pane titles include slot, generation, role, backend, and status.
+
+## GPT Final Arbiter
+
+Local worker output is a draft. `naruto-gpt-final-pack.json` compresses the work graph,
+role distribution, changed files, patch envelopes, verification results, failed shards,
+conflict map, rollback plan, side-effect report, local LLM metrics, and representative
+logs. Secrets are redacted. Final accepted output comes only from deterministic no-local
+finalization or the GPT final arbiter.
+
+## Placeholder Guard
+
+Write-capable Naruto blocks before work graph creation when unresolved placeholders are
+present, including `@filename`, `<file>`, `TODO_PATH`, `INSERT_PATH_HERE`, `/path/to/file`,
+or empty target paths.
+
+## Release Gates
+
+```bash
+npm run naruto:work-graph
+npm run naruto:concurrency-governor
+npm run naruto:active-pool
+npm run naruto:role-distribution
+npm run naruto:parallel-patch-apply
+npm run naruto:verification-pool
+npm run naruto:zellij-massive-ui
+npm run naruto:gpt-final-pack
+npm run prompt:placeholder-guard
+npm run local-collab:gpt-final-arbiter
+npm run local-collab:no-local-only-final
+npm run release:check
+```
+
+Optional real checks:
+
+```bash
+SKS_REQUIRE_ZELLIJ=1 npm run naruto:zellij-massive-ui -- --require-real
+SKS_REQUIRE_LOCAL_LLM=1 SKS_REQUIRE_GPT_FINAL=1 npm run naruto:real-local-gpt-final-smoke
+```

@@ -70,7 +70,7 @@ const sourceOk = source.includes("action', 'new-pane'")
   && source.includes('zellij_worker_list_panes')
   && source.includes('provider_context')
 const ok = artifact.ok
-  && artifact.pane_name === 'slot-001/gen-7 · codex-sdk · fast · codex-lb'
+  && artifact.pane_name === 'slot-001/gen-7 · codex-sdk · fast · codex-lb · running'
   && artifact.pane_kind === 'worker_codex_sdk'
   && artifact.provider === 'codex-lb'
   && artifact.service_tier === 'fast'

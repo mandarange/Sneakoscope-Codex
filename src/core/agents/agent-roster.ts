@@ -3,6 +3,7 @@ import { DEFAULT_AGENT_CONCURRENCY, DEFAULT_AGENT_COUNT, DEFAULT_NARUTO_CLONES, 
 import type { AgentPersona, AgentRosterEntry } from './agent-schema.js'
 import { defaultAgentPersonas, validatePersonaUniqueness } from './agent-persona.js'
 import { buildAgentEffortPolicy, decideAgentEffort, decideNarutoCloneEffort } from './agent-effort-policy.js'
+import { mapNarutoRoleToAgentRole, narutoRoleAllowsWrite, type NarutoWorkerRole } from '../naruto/naruto-role-policy.js'
 
 // $Naruto must never blindly spawn the full clone count at once, but the live
 // CONCURRENCY ceiling is NOT a function of CPU cores. Each clone is a separate CLI
@@ -150,28 +151,40 @@ export function buildNarutoCloneRoster(opts: { clones?: unknown; prompt?: string
   const basePool = pool.length ? pool : defaultAgentPersonas(DEFAULT_AGENT_COUNT)
   const personas: AgentPersona[] = []
   const roster: AgentRosterEntry[] = []
+  const roleCycle = narutoRoleCycle(readonly)
   for (let index = 0; index < cloneCount; index += 1) {
     const base = basePool[index % basePool.length] as AgentPersona
     const cloneTag = 'clone-' + String(index + 1).padStart(3, '0')
     const id = 'naruto_' + cloneTag.replace(/-/g, '_')
-    const cloneReadonly = readonly || base.read_only
+    const narutoRole = roleCycle[index % roleCycle.length] || 'verifier'
+    const writeAllowed = !readonly && narutoRoleAllowsWrite(narutoRole)
+    const cloneReadonly = readonly || !writeAllowed
+    const role = mapNarutoRoleToAgentRole(narutoRole)
+    const allowedTools = writeAllowed ? ['read', 'search', 'edit', 'test'] : narutoRole === 'verifier' ? ['read', 'search', 'test'] : ['read', 'search']
     // Dynamic per-clone effort like team mode, capped at low/medium and always fast.
-    const effort = decideNarutoCloneEffort({ persona: base, prompt: opts.prompt || '', agentId: id, readonly: cloneReadonly })
+    const effort = decideNarutoCloneEffort({ persona: { ...base, role, allowed_tools: allowedTools, read_only: cloneReadonly, write_policy: writeAllowed ? 'exclusive Naruto patch-envelope lease required' : 'read-only Naruto role' }, prompt: opts.prompt || '', agentId: id, readonly: cloneReadonly })
     const persona: AgentPersona = {
       ...base,
       id,
       stable_id: base.stable_id + '-' + cloneTag,
-      read_only: readonly || base.read_only,
-      prompt: 'SHADOW CLONE: ' + cloneTag + ' (Kage Bunshin of ' + base.stable_id + ')\n' + base.prompt
+      role,
+      naruto_role: narutoRole,
+      write_allowed: writeAllowed,
+      read_only: cloneReadonly,
+      allowed_tools: allowedTools,
+      write_policy: writeAllowed ? 'exclusive Naruto patch-envelope lease required' : 'read-only Naruto role',
+      prompt: 'SHADOW CLONE: ' + cloneTag + ' (Kage Bunshin of ' + base.stable_id + ')\nNARUTO ROLE: ' + narutoRole + '\n' + base.prompt
     }
     personas.push(persona)
     roster.push({
       id,
       session_id: agentSessionId(id, index + 1),
       persona_id: id,
-      role: base.role,
+      role,
+      naruto_role: narutoRole,
+      write_allowed: writeAllowed,
       index: index + 1,
-      write_policy: cloneReadonly ? 'read-only' : base.write_policy,
+      write_policy: cloneReadonly ? 'read-only' : 'exclusive Naruto patch-envelope lease required',
       status: 'pending',
       reasoning_effort: effort.reasoning_effort,
       model_reasoning_effort: effort.model_reasoning_effort,
@@ -201,4 +214,20 @@ export function buildNarutoCloneRoster(opts: { clones?: unknown; prompt?: string
     roster
   }
   return { ...result, effort_policy: buildAgentEffortPolicy(result) }
+}
+
+function narutoRoleCycle(readonly: boolean): NarutoWorkerRole[] {
+  if (readonly) return ['verifier', 'researcher', 'verifier', 'gpt_final_arbiter']
+  return [
+    'implementer',
+    'modifier',
+    'test_writer',
+    'verifier',
+    'researcher',
+    'conflict_resolver',
+    'rollback_planner',
+    'integrator',
+    'modifier',
+    'test_writer'
+  ]
 }

@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { currentDistFreshness } from './lib/ensure-dist-fresh.js';
 
 const root = process.cwd();
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -18,7 +19,13 @@ fs.mkdirSync(consumer, { recursive: true });
 fs.writeFileSync(path.join(consumer, 'package.json'), `${JSON.stringify({ name: 'sks-command-smoke-consumer', private: true }, null, 2)}\n`);
 
 try {
-  run('build', npmBin, ['run', 'build'], { cwd: root });
+  if (process.env.SKS_ENSURE_DIST_NO_REBUILD === '1' || process.env.SKS_RELEASE_DIST_FRESHNESS_NO_REBUILD === '1') {
+    const freshness = currentDistFreshness();
+    rows.push({ label: 'dist_freshness', ok: freshness.ok, status: freshness.ok ? 0 : 1, issues: freshness.issues });
+    if (!freshness.ok) failures.push(`dist_not_fresh:${freshness.issues.join(',')}`);
+  } else {
+    run('build', npmBin, ['run', 'build'], { cwd: root });
+  }
   const pack = run('npm_pack', npmBin, ['pack', '--json', '--ignore-scripts', '--pack-destination', tmp, '--registry', 'https://registry.npmjs.org/'], { cwd: root });
   const info = pack.ok ? JSON.parse(pack.stdout || '[]')[0] : null;
   const tarball = info ? path.join(tmp, info.filename) : null;

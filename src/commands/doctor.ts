@@ -17,6 +17,7 @@ import { inventoryCodexPermissionProfiles } from '../core/codex/codex-permission
 import { appendMigrationEvents, hashConfigText } from '../core/migration/migration-transaction-journal.js';
 import { repairCodexAppFastUi } from '../core/codex-app/codex-app-fast-ui-repair.js';
 import { resolveProviderContext } from '../core/provider/provider-context.js';
+import { readLocalModelConfig } from '../core/agents/ollama-worker-config.js';
 
 export async function run(_command: any, args: any = []) {
   let setupRepair = null;
@@ -138,6 +139,7 @@ export async function run(_command: any, args: any = []) {
       }))
     : codexAppUiPlan;
   const zellij = await checkZellijCapability({ root, require: process.env.SKS_REQUIRE_ZELLIJ === '1' });
+  const localModel = await readLocalModelConfig().catch(() => null);
   const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
   const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only')
     ? await cleanDuplicateGlobalSksInstalls({ root, fix: true }).catch((err: any) => ({ schema: 'sks.global-sks-install-cleanup.v1', ok: false, fix: true, error: err?.message || String(err), blockers: ['global_sks_install_cleanup_exception'] }))
@@ -153,6 +155,7 @@ export async function run(_command: any, args: any = []) {
     codex_doctor: codexDoctor,
     require_codex_doctor: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     zellij,
+    local_model: localModel,
     repair: configRepair,
     codex_app_ui: codexAppUi,
     require_codex_cli_config_load: flag(args, '--fix') || flag(args, '--require-actual-codex'),
@@ -177,6 +180,7 @@ export async function run(_command: any, args: any = []) {
     codex_doctor: codexDoctor,
     codex_doctor_diff: codexDoctorDiff,
     zellij,
+    local_model: localModel,
     zellij_readiness: zellijReadiness,
     codex_permission_profiles: permissionProfiles,
     imagegen: {
@@ -232,6 +236,16 @@ export async function run(_command: any, args: any = []) {
     }
   }
   console.log(`codex-lb:  ${codexLb.ok ? 'ok' : `warning ${codexLb.circuit?.state || 'unknown'}`}`);
+  if (localModel) {
+    console.log('Local LLM:');
+    console.log(`  enabled: ${localModel.enabled ? 'yes' : 'no'}`);
+    console.log(`  status: ${localModel.status}`);
+    console.log(`  provider: ${localModel.provider}`);
+    console.log(`  model: ${localModel.model}`);
+    console.log(`  endpoint: ${localModel.base_url}`);
+    console.log(`  last smoke: ${localModel.last_smoke?.ok ? `ok ${localModel.last_smoke.latency_ms || 0}ms ${localModel.last_smoke.tokens_per_second || 0} tok/s` : 'missing'}`);
+    console.log('  final arbiter: GPT required');
+  }
   console.log(`Permissions: config profile and permission profile are tracked separately (${permissionProfiles.codex_config_profile_field}, ${permissionProfiles.codex_permission_profile_field})`);
   console.log('Ready:');
   console.log(`  cli_ready: ${ready.cli_ready ? 'yes' : 'no'}`);

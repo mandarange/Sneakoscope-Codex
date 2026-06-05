@@ -32,6 +32,7 @@ if (!skipReleaseCheck) {
 
 for (const [script, extraArgs] of [
   ['codex:actual-config-load-probe', []],
+  ['codex:0.137-compat:require-real', []],
   ['codex:0.136-compat:require-real', []],
   ['codex:0.135-compat:require-real', []],
   ['doctor:codex-doctor-parity:actual', []],
@@ -52,6 +53,10 @@ if (report.environment_required_checks.some((row) => !row.ok)) finish(false);
 
 for (const [script, extraArgs] of [
   ['codex-sdk:real-smoke', ['--require-real']],
+  ['local-llm:smoke', ['--require-real']],
+  ['local-llm:throughput', []],
+  ['local-llm:cache-performance', []],
+  ['python-sdk:real-smoke', []],
   ['codex:0.134-runner-truth', []],
   ['agent:real-codex-patch-envelope-smoke', []],
   ['agent:real-codex-parallel-workers', []],

@@ -1,12 +1,20 @@
 import path from 'node:path'
 import { createMission, findLatestMission, loadMission } from '../mission.js'
-import { readJson, sksRoot } from '../fsx.js'
+import { readJson, sksRoot, writeJsonAtomic } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
 import { classifyOllamaWorkerSlice } from '../agents/agent-runner-ollama.js'
 import { buildNarutoCloneRoster, systemSafeNarutoConcurrency } from '../agents/agent-roster.js'
 import { DEFAULT_NARUTO_CLONES, MAX_NARUTO_AGENT_COUNT } from '../agents/agent-schema.js'
 import { resolveOllamaWorkerConfig } from '../agents/ollama-worker-config.js'
 import { attachZellijSessionInteractive, launchZellijLayout } from '../zellij/zellij-launcher.js'
+import { buildNarutoWorkGraph } from '../naruto/naruto-work-graph.js'
+import { buildNarutoRoleDistribution } from '../naruto/naruto-role-policy.js'
+import { decideNarutoConcurrency } from '../naruto/naruto-concurrency-governor.js'
+import { simulateNarutoActivePool } from '../naruto/naruto-active-pool.js'
+import { buildNarutoVerificationDag } from '../naruto/naruto-verification-dag.js'
+import { buildNarutoGptFinalPack } from '../naruto/naruto-gpt-final-pack.js'
+import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
+import { checkPromptPlaceholders } from '../prompt/prompt-placeholder-guard.js'
 
 const NARUTO_RESULT_SCHEMA = 'sks.naruto-command-result.v1'
 const NARUTO_ROUTE = '$Naruto'
@@ -26,6 +34,26 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
 
 async function narutoRun(parsed: NarutoArgs) {
   const root = await sksRoot()
+  const writeCapable = parsed.readonly !== true && parsed.writeMode !== 'off'
+  const placeholderGuard = checkPromptPlaceholders({
+    prompt: parsed.prompt,
+    writeCapable,
+    targetPaths: writeCapable ? ['.sneakoscope/naruto/patch-envelopes'] : []
+  })
+  if (!placeholderGuard.ok) {
+    return emit(parsed, {
+      schema: NARUTO_RESULT_SCHEMA,
+      ok: false,
+      mode: 'NARUTO',
+      action: 'run',
+      status: 'blocked',
+      prompt_placeholder_guard: placeholderGuard,
+      blockers: placeholderGuard.blockers
+    }, () => {
+      console.log('$Naruto blocked before work graph creation: unresolved prompt placeholder or empty write target path.')
+      for (const blocker of placeholderGuard.blockers) console.log('- ' + blocker)
+    })
+  }
   const roster = buildNarutoCloneRoster({
     clones: parsed.clones,
     prompt: parsed.prompt,
@@ -38,9 +66,52 @@ async function narutoRun(parsed: NarutoArgs) {
   const localWorker = await resolveNarutoLocalWorkerMode(parsed)
   const schedulerBackend = localWorker.auto_select_eligible ? 'ollama' : parsed.backend
   const safe = systemSafeNarutoConcurrency({ backend: schedulerBackend })
-  const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || safe.cap))
+  const workGraph = buildNarutoWorkGraph({
+    prompt: parsed.prompt,
+    requestedClones: roster.agent_count,
+    totalWorkItems: parsed.workItems,
+    readonly: parsed.readonly,
+    writeCapable,
+    targetPaths: ['.sneakoscope/naruto/patch-envelopes'],
+    maxActiveWorkers: parsed.concurrency || safe.cap
+  })
+  const roleDistribution = buildNarutoRoleDistribution(workGraph.work_items, { readonly: parsed.readonly })
+  const governor = decideNarutoConcurrency({
+    requestedClones: roster.agent_count,
+    totalWorkItems: workGraph.total_work_items,
+    pendingWorkQueueSize: workGraph.total_work_items,
+    backend: schedulerBackend
+  })
+  const backendMinimum = schedulerBackend === 'fake' ? roster.agent_count : Math.min(roster.agent_count, 2)
+  const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || Math.max(governor.safe_active_workers, backendMinimum), safe.cap))
+  const zellijVisiblePanes = Math.max(1, Math.min(activeSlots, governor.safe_zellij_visible_panes))
+  const activePool = simulateNarutoActivePool({ graph: workGraph, governor: { ...governor, safe_active_workers: activeSlots } })
+  const verificationDag = buildNarutoVerificationDag(workGraph, { cwd: root })
+  const gptFinalPack = buildNarutoGptFinalPack({
+    missionId: 'pending',
+    graph: workGraph,
+    roleDistribution,
+    localLlmMetrics: localWorker
+  })
+  const zellijDashboard = planNarutoZellijDashboard({
+    targetActiveWorkers: activeSlots,
+    visiblePaneCap: governor.safe_zellij_visible_panes,
+    backpressure: governor.backpressure,
+    roles: roleDistribution.work_item_roles.map((row) => row.role),
+    backend: schedulerBackend
+  })
   const mission = await createMission(root, { mode: 'naruto', prompt: parsed.prompt })
   const ledgerRoot = path.join(mission.dir, 'agents')
+  await writeNarutoArtifacts(ledgerRoot, {
+    workGraph,
+    roleDistribution,
+    governor,
+    activePool,
+    verificationDag,
+    gptFinalPack: { ...gptFinalPack, mission_id: mission.id },
+    zellijDashboard,
+    placeholderGuard
+  })
   let liveZellij: any = null
   if (!parsed.json && !parsed.mock && !parsed.noOpenZellij) {
     liveZellij = await launchZellijLayout({
@@ -48,12 +119,12 @@ async function narutoRun(parsed: NarutoArgs) {
       missionId: mission.id,
       ledgerRoot,
       kind: 'naruto',
-      slotCount: roster.agent_count,
+      slotCount: zellijVisiblePanes,
       dryRun: false,
       attach: false
     })
     if (liveZellij?.ok && liveZellij.capability?.status === 'ok') {
-      console.log('Zellij: prepared ' + roster.agent_count + ' live clone lane(s) in ' + liveZellij.session_name + '. Attach with: ' + (liveZellij.attach_command_with_env || liveZellij.attach_command))
+      console.log('Zellij: prepared ' + zellijVisiblePanes + ' visible active clone lane(s) in ' + liveZellij.session_name + ' with ' + Math.max(0, activeSlots - zellijVisiblePanes) + ' headless active worker(s). Attach with: ' + (liveZellij.attach_command_with_env || liveZellij.attach_command))
       if (parsed.attach) attachZellijSessionInteractive(liveZellij.session_name, { cwd: process.cwd(), configPath: liveZellij.clipboard_config_path })
     } else if (liveZellij?.ok) {
       console.log('Zellij: optional live panes unavailable (' + ((liveZellij.warnings || []).join('; ') || liveZellij.capability?.status || 'unknown') + ')')
@@ -71,7 +142,7 @@ async function narutoRun(parsed: NarutoArgs) {
     agents: roster.agent_count,
     concurrency: activeSlots,
     targetActiveSlots: activeSlots,
-    visualLaneCount: roster.agent_count,
+    visualLaneCount: zellijVisiblePanes,
     desiredWorkItemCount: parsed.workItems,
     maxAgentCount: MAX_NARUTO_AGENT_COUNT,
     narutoMode: true,
@@ -107,6 +178,20 @@ async function narutoRun(parsed: NarutoArgs) {
     target_active_slots: result.target_active_slots ?? activeSlots,
     concurrency_capped: clones > (result.target_active_slots ?? activeSlots),
     system: { cores: safe.cores, free_gb: safe.free_gb, safe_concurrency: safe.cap, heavy_backend: safe.heavy },
+    work_graph: {
+      total_work_items: workGraph.total_work_items,
+      mixed_work_kinds: workGraph.mixed_work_kinds,
+      write_allowed_count: workGraph.write_allowed_count,
+      ok: workGraph.ok
+    },
+    role_distribution: roleDistribution,
+    concurrency_governor: governor,
+    active_pool: {
+      ok: activePool.ok,
+      max_observed_active_workers: activePool.max_observed_active_workers,
+      refill_events: activePool.refill_events,
+      completed_count: activePool.completed_count
+    },
     local_worker: localWorkerSummary,
     proof: result.proof?.status || 'missing',
     run: result,
@@ -118,8 +203,9 @@ async function narutoRun(parsed: NarutoArgs) {
     console.log('Mission: ' + result.mission_id)
     console.log('Clones: ' + summary.clones + ' / max ' + MAX_NARUTO_AGENT_COUNT + ', running ' + summary.target_active_slots + ' at a time' + (summary.concurrency_capped ? ` (throttled to host capacity: ${safe.cores} cores, ${safe.free_gb} GB free)` : ''))
     console.log('Backend: ' + result.backend)
+    console.log('Roles: ' + roleDistribution.entries.map((entry) => `${entry.role}:${entry.count}`).join(', '))
     console.log('Proof: ' + summary.proof)
-    if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok') console.log('Zellij: prepared ' + summary.clones + ' native clone lane(s) in ' + summary.zellij.session_name)
+    if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok') console.log('Zellij: prepared ' + zellijVisiblePanes + ' visible active clone lane(s) in ' + summary.zellij.session_name + '; dashboard tracks ' + Math.max(0, activeSlots - zellijVisiblePanes) + ' headless active worker(s)')
     else if (summary.zellij?.ok) console.log('Zellij: optional live panes unavailable (' + ((summary.zellij.warnings || []).join('; ') || summary.zellij.capability?.status || 'unknown') + ')')
   })
 }
@@ -145,6 +231,9 @@ async function narutoStatus(parsed: NarutoArgs) {
   const { dir } = await loadMission(root, id)
   const proof = await readJson<any>(path.join(dir, 'agents', 'agent-proof-evidence.json'), null)
   const scheduler = await readJson<any>(path.join(dir, 'agents', 'agent-scheduler-state.json'), null)
+  const roleDistribution = await readJson<any>(path.join(dir, 'agents', 'naruto-role-distribution.json'), null)
+  const workGraph = await readJson<any>(path.join(dir, 'agents', 'naruto-work-graph.json'), null)
+  const governor = await readJson<any>(path.join(dir, 'agents', 'naruto-concurrency-governor.json'), null)
   const summary = {
     schema: NARUTO_RESULT_SCHEMA,
     ok: proof !== null,
@@ -153,12 +242,20 @@ async function narutoStatus(parsed: NarutoArgs) {
     proof: proof?.status || 'missing',
     target_active_slots: scheduler?.target_active_slots ?? null,
     max_active_slots: scheduler?.max_active_slots ?? null,
-    completed: scheduler?.completed_count ?? null
+    completed: scheduler?.completed_count ?? null,
+    role_distribution: roleDistribution,
+    work_graph: workGraph ? {
+      total_work_items: workGraph.total_work_items,
+      mixed_work_kinds: workGraph.mixed_work_kinds,
+      write_allowed_count: workGraph.write_allowed_count
+    } : null,
+    concurrency_governor: governor
   }
   return emit(parsed, summary, () => {
     console.log('🍥 Naruto mission: ' + id)
     console.log('Proof: ' + summary.proof)
     if (summary.target_active_slots !== null) console.log('Active clones: ' + summary.target_active_slots + ' / max ' + summary.max_active_slots)
+    if (roleDistribution?.entries) console.log('Roles: ' + roleDistribution.entries.map((entry: any) => `${entry.role}:${entry.count}`).join(', '))
   })
 }
 
@@ -205,6 +302,7 @@ interface NarutoArgs {
 }
 
 function parseNarutoArgs(args: string[] = []): NarutoArgs {
+  if (hasFlag(args, '--help') || hasFlag(args, '-h')) args = ['help', ...args.filter((arg) => arg !== '--help' && arg !== '-h')]
   const first = args[0] && !String(args[0]).startsWith('--') ? String(args[0]) : ''
   const actions = new Set(['run', 'status', 'help'])
   const action = (actions.has(first) ? first : 'run') as NarutoArgs['action']
@@ -231,6 +329,26 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
   return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, json, missionId, noOpenZellij, attach }
+}
+
+async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {
+  workGraph: any
+  roleDistribution: any
+  governor: any
+  activePool: any
+  verificationDag: any
+  gptFinalPack: any
+  zellijDashboard: any
+  placeholderGuard: any
+}) {
+  await writeJsonAtomic(path.join(ledgerRoot, 'naruto-work-graph.json'), artifacts.workGraph)
+  await writeJsonAtomic(path.join(ledgerRoot, 'naruto-role-distribution.json'), artifacts.roleDistribution)
+  await writeJsonAtomic(path.join(ledgerRoot, 'naruto-concurrency-governor.json'), artifacts.governor)
+  await writeJsonAtomic(path.join(ledgerRoot, 'naruto-active-pool.json'), artifacts.activePool)
+  await writeJsonAtomic(path.join(ledgerRoot, 'naruto-verification-dag.json'), artifacts.verificationDag)
+  await writeJsonAtomic(path.join(ledgerRoot, 'naruto-gpt-final-pack.json'), artifacts.gptFinalPack)
+  await writeJsonAtomic(path.join(ledgerRoot, 'naruto-zellij-dashboard.json'), artifacts.zellijDashboard)
+  await writeJsonAtomic(path.join(ledgerRoot, 'prompt-placeholder-guard.json'), artifacts.placeholderGuard)
 }
 
 function clampClones(value: number): number {
