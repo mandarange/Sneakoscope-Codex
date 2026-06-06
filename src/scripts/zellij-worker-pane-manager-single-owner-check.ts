@@ -9,12 +9,13 @@ const nativePath = path.join(root, 'src', 'core', 'agents', 'native-cli-session-
 const manager = await fs.readFile(managerPath, 'utf8')
 const native = await fs.readFile(nativePath, 'utf8')
 
-const managerOwnsNewPane = /runZellij\(\[[\s\S]{0,500}'new-pane'/.test(manager)
+const managerOwnsNewPane = /runZellij\(\[[\s\S]{0,800}'new-pane'/.test(manager)
+  || (manager.includes("'new-pane'") && manager.includes('const newPaneArgs') && manager.includes('runZellij(newPaneArgs'))
 const nativeDirectNewPane = /runZellij\(\[[\s\S]{0,500}'new-pane'/.test(native)
 const nativeUsesManager = native.includes('openWorkerPane({') && native.includes('closeWorkerPane({')
-const directionRight = manager.includes("'--direction', 'right'")
-const fallbackRecorded = manager.includes("direction_applied: input.directionApplied") && manager.includes("directionApplied = 'unknown'")
-const ok = managerOwnsNewPane && !nativeDirectNewPane && nativeUsesManager && directionRight && fallbackRecorded
+const dynamicDirection = manager.includes("'--direction', directionRequested") && manager.includes("'--near-current-pane'")
+const fallbackRecorded = manager.includes("direction_applied: input.directionApplied") && (manager.includes("directionApplied = 'unknown'") || manager.includes("directionApplied = rightColumn ? 'down' : 'unknown'"))
+const ok = managerOwnsNewPane && !nativeDirectNewPane && nativeUsesManager && dynamicDirection && fallbackRecorded
 
 emit({
   schema: 'sks.zellij-worker-pane-manager-single-owner-check.v1',
@@ -23,14 +24,14 @@ emit({
     manager_owns_new_pane: managerOwnsNewPane,
     native_direct_new_pane_absent: !nativeDirectNewPane,
     native_uses_manager: nativeUsesManager,
-    direction_right_requested: directionRight,
+    dynamic_direction_requested: dynamicDirection,
     fallback_recorded: fallbackRecorded
   },
   blockers: ok ? [] : [
     ...(!managerOwnsNewPane ? ['worker_pane_manager_new_pane_missing'] : []),
     ...(nativeDirectNewPane ? ['native_cli_session_swarm_direct_new_pane'] : []),
     ...(!nativeUsesManager ? ['native_cli_session_swarm_not_using_worker_pane_manager'] : []),
-    ...(!directionRight ? ['zellij_worker_right_direction_missing'] : []),
+    ...(!dynamicDirection ? ['zellij_worker_dynamic_direction_missing'] : []),
     ...(!fallbackRecorded ? ['zellij_worker_direction_fallback_not_recorded'] : [])
   ]
 })

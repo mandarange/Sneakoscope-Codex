@@ -9,11 +9,13 @@ import fs from 'node:fs'
 const requireReal = process.env.SKS_REQUIRE_ZELLIJ === '1' || process.argv.includes('--require-real')
 const freshness = ensureDistFresh({ rebuild: false })
 assertGate(freshness.ok === true, 'dist must be fresh for zellij dashboard pane check', freshness)
+const managerSource = fs.readFileSync(path.join(root, 'src', 'core', 'zellij', 'zellij-right-column-manager.ts'), 'utf8')
 const narutoSource = fs.readFileSync(path.join(root, 'src', 'core', 'commands', 'naruto-command.ts'), 'utf8')
 const madSource = fs.readFileSync(path.join(root, 'src', 'core', 'commands', 'mad-sks-command.ts'), 'utf8')
-assertGate(narutoSource.includes('openZellijDashboardPane') && madSource.includes('openZellijDashboardPane'), 'Naruto and MAD Zellij launches must open dashboard pane', {
-  naruto: narutoSource.includes('openZellijDashboardPane'),
-  mad_sks: madSource.includes('openZellijDashboardPane')
+assertGate(managerSource.includes('openZellijDashboardPane') && narutoSource.includes("dashboard_created: false") && madSource.includes("dashboard_created: false"), 'Dashboard pane must be created by right-column manager after first worker spawn, not at launch', {
+  manager: managerSource.includes('openZellijDashboardPane'),
+  naruto_initial_dashboard_false: narutoSource.includes("dashboard_created: false"),
+  mad_initial_dashboard_false: madSource.includes("dashboard_created: false")
 })
 const dashboard = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-dashboard-pane.js')).href)
 const command = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-command.js')).href)
@@ -24,7 +26,7 @@ if (!requireReal) {
   const snapshotMod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-dashboard-renderer.js')).href)
   const snapshot = snapshotMod.buildZellijDashboardSnapshot({ mission_id: missionId, active_workers: 4, visible_panes: 2, headless_workers: 2 })
   const text = snapshotMod.renderZellijDashboardText(snapshot)
-  assertGate(text.includes('Mission') && text.includes('Backend counts') && text.includes('Headless workers') && text.includes('GPT final status'), 'dashboard renderer must include required fields', { text })
+  assertGate(text.includes('Mission') && text.includes('Backend counts') && text.includes('headless') && text.includes('GPT final status') && text.includes('Patch / verify'), 'dashboard renderer must include required fields', { text })
   assertGate(
     fs.readFileSync(path.join(root, 'src', 'scripts', 'zellij-dashboard-watch.ts'), 'utf8').includes('--interval-ms')
       && fs.existsSync(path.join(root, 'dist', 'scripts', 'zellij-dashboard-watch.js')),

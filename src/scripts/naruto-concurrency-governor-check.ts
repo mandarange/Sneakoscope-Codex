@@ -11,6 +11,7 @@ const normal = governorMod.decideNarutoConcurrency({
   zellijVisiblePaneCap: 12,
   hardware: {
     cores: 32,
+    loadAverage: [0, 0, 0],
     freeMemoryBytes: 48 * 1024 * 1024 * 1024,
     totalMemoryBytes: 64 * 1024 * 1024 * 1024,
     fileDescriptorLimit: 4096,
@@ -39,7 +40,11 @@ const pressure = governorMod.decideNarutoConcurrency({
   }
 })
 
-assertGate(normal.safe_active_workers <= 32, 'requested_clones=200 fixture must cap active workers safely', { normal })
+assertGate(
+  normal.safe_active_workers >= 32 && normal.safe_active_workers <= 100,
+  'requested_clones=200 fixture must cap active workers safely while allowing aggressive process-pool fanout',
+  { normal }
+)
 assertGate(normal.safe_zellij_visible_panes === 12 && normal.headless_workers === normal.safe_active_workers - 12, 'zellij visible panes must stay within UI cap', { normal })
 assertGate(normal.local_llm_parallel <= 4, 'local LLM active requests must respect max_parallel_requests=4', { normal })
 assertGate(pressure.safe_active_workers < normal.safe_active_workers, 'memory/load pressure fixture must decrease active workers', { normal: normal.safe_active_workers, pressure: pressure.safe_active_workers })
@@ -52,4 +57,3 @@ emitGate('naruto:concurrency-governor', {
   safe_zellij_visible_panes: normal.safe_zellij_visible_panes,
   pressure_safe_active_workers: pressure.safe_active_workers
 })
-

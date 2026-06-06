@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.9 is the dynamic Zellij worker-pane and Naruto extreme parallelism patch for the 2.0 line. It keeps `release:check` on the manifest-backed `release-gate-dag-runner`, adds dynamic right-column worker placement, and makes high-fanout Naruto runs use a bounded visible-pane cap with headless overflow workers.
+
+The 2.0.9 release gate adds initial-main-only Zellij proof, right-column manager state/schema checks, geometry proof, dynamic pane lifecycle checks, developer controls for worker focus/logs/dashboard/close-drained, real active-pool lifecycle checks, extreme parallelism checks, dynamic Zellij right-column checks, recursive release cache glob hashing, and full DAG coverage proof. Publish readiness still requires a fresh full release check, with `publish:dry` retaining the version/provenance/dist freshness/npm dry-run checks before a human runs the real publish.
+
 SKS 2.0.8 is the DAG-parallel release-check and worktree proof hardening patch for the 2.0 line. It makes `release:check` execute the manifest-backed `release-gate-dag-runner` by default, while preserving the historical full chain as `release:check:legacy` for audit coverage and long-form regression runs.
 
 The 2.0.8 release gate adds `release-gates.v2.json`, release gate node/schema/report/cache/scheduler infrastructure, resource-aware parallel scheduling, per-gate hermetic environments, release stability scoring, real Zellij dashboard/worker-pane proof, and targeted Git worktree regression gates for manifest appends, dirty main detection, untracked diffs, single `git_apply_patch` envelopes, integration worktree application, dirty worktree locks, and Naruto worktree coding blackbox behavior. Publish readiness now requires the generic metadata gate to accept either the legacy parallel chain or the new DAG runner, with `publish:dry` retaining the version/provenance/dist freshness/npm dry-run checks before a human runs the real publish.
@@ -209,13 +213,13 @@ npm run release:readiness
 
 `release:readiness` writes:
 
-- `.sneakoscope/reports/release-readiness-1.21.8.json`
-- `.sneakoscope/reports/release-readiness-1.21.8.md`
-- `.sneakoscope/reports/all-feature-completion-1.21.8.json`
-- `.sneakoscope/reports/all-feature-completion-1.21.8.md`
-- `.sneakoscope/reports/official-docs-compat-1.21.8.json`
-- `.sneakoscope/reports/official-docs-compat-1.21.8.md`
-- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-1.21.8.json`
+- `.sneakoscope/reports/release-readiness-2.0.9.json`
+- `.sneakoscope/reports/release-readiness-2.0.9.md`
+- `.sneakoscope/reports/all-feature-completion-2.0.9.json`
+- `.sneakoscope/reports/all-feature-completion-2.0.9.md`
+- `.sneakoscope/reports/official-docs-compat-2.0.9.json`
+- `.sneakoscope/reports/official-docs-compat-2.0.9.md`
+- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-2.0.9.json`
 - `.sneakoscope/reports/agent-real-codex-patch-envelope-smoke.json`
 - `.sneakoscope/reports/agent-real-codex-parallel-workers.json`
 - `.sneakoscope/reports/zellij-real-session-launch.json`

@@ -37,7 +37,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     ledgerRoot,
     cwd: opts.cwd || root,
     kind: opts.kind || 'agent',
-    slotCount: opts.slotCount || 1,
+    slotCount: opts.slotCount ?? 1,
     title: `SKS ${opts.kind || 'agent'} ${missionId}`,
     codexArgs: opts.codexArgs || [],
     launchEnv: opts.launchEnv || {}
@@ -141,7 +141,7 @@ export async function launchMadZellijUi(args: readonly unknown[] = [], opts: Zel
   const launchOpts: ZellijLaunchOptions = {
     ...opts,
     kind: 'mad',
-    slotCount: opts.slotCount || 1
+    slotCount: opts.slotCount ?? 1
   }
   const resolvedSession = session || opts.session
   if (resolvedSession) launchOpts.session = resolvedSession
@@ -152,7 +152,7 @@ export async function launchTeamZellijView(opts: ZellijLaunchOptions = {}) {
   return launchZellijLayout({
     ...opts,
     kind: 'team',
-    slotCount: opts.slotCount || 5
+    slotCount: opts.slotCount ?? 5
   })
 }
 

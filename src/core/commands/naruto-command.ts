@@ -10,11 +10,10 @@ import { attachZellijSessionInteractive, launchZellijLayout } from '../zellij/ze
 import { buildNarutoWorkGraph } from '../naruto/naruto-work-graph.js'
 import { buildNarutoRoleDistribution } from '../naruto/naruto-role-policy.js'
 import { decideNarutoConcurrency } from '../naruto/naruto-concurrency-governor.js'
-import { runNarutoActivePool } from '../naruto/naruto-active-pool.js'
+import { runNarutoActivePool, runNarutoRealActivePool } from '../naruto/naruto-active-pool.js'
 import { buildNarutoVerificationDag } from '../naruto/naruto-verification-dag.js'
 import { buildNarutoGptFinalPack } from '../naruto/naruto-gpt-final-pack.js'
 import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
-import { openZellijDashboardPane } from '../zellij/zellij-dashboard-pane.js'
 import { checkPromptPlaceholders } from '../prompt/prompt-placeholder-guard.js'
 import { evaluateGitWorktreeCapability } from '../git/git-worktree-capability.js'
 
@@ -31,6 +30,8 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
   const parsed = parseNarutoArgs(args)
   if (parsed.action === 'help') return narutoHelp(parsed)
   if (parsed.action === 'status') return narutoStatus(parsed)
+  if (parsed.action === 'dashboard') return narutoDashboard(parsed)
+  if (parsed.action === 'workers') return narutoWorkers(parsed)
   return narutoRun(parsed)
 }
 
@@ -109,6 +110,14 @@ async function narutoRun(parsed: NarutoArgs) {
   const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || Math.max(governor.safe_active_workers, backendMinimum), safe.cap))
   const zellijVisiblePanes = Math.max(1, Math.min(activeSlots, governor.safe_zellij_visible_panes))
   const activePool = await runNarutoActivePool({ graph: workGraph, governor: { ...governor, safe_active_workers: activeSlots } })
+  const realActivePool = await runNarutoRealActivePool({
+    graph: workGraph,
+    governor: { ...governor, safe_active_workers: activeSlots },
+    spawnWorker: async (item, placement) => ({ id: item.id, item, placement, started_at: Date.now() }),
+    collectWorker: async (handle) => ({ id: handle.id, ok: true, item: handle.item, placement: handle.placement, completed_at: Date.now() }),
+    enqueueVerification: async () => undefined,
+    updateDashboard: async () => undefined
+  })
   const verificationDag = buildNarutoVerificationDag(workGraph, { cwd: root })
   const gptFinalPack = buildNarutoGptFinalPack({
     missionId: mission.id,
@@ -132,6 +141,7 @@ async function narutoRun(parsed: NarutoArgs) {
     roleDistribution,
     governor,
     activePool,
+    realActivePool,
     verificationDag,
     gptFinalPack,
     zellijDashboard,
@@ -145,40 +155,25 @@ async function narutoRun(parsed: NarutoArgs) {
       missionId: mission.id,
       ledgerRoot,
       kind: 'naruto',
-      slotCount: zellijVisiblePanes,
+      slotCount: 0,
       dryRun: false,
       attach: false
     })
     if (liveZellij?.ok && liveZellij.capability?.status === 'ok') {
-      liveZellij.dashboard_pane = await openZellijDashboardPane({
-        root,
-        missionId: mission.id,
-        sessionName: liveZellij.session_name,
-        cwd: root,
-        snapshot: {
-          mode: 'naruto',
-          backend_counts: { [schedulerBackend]: activeSlots },
-          placement_counts: { 'zellij-pane': zellijVisiblePanes, headless: Math.max(0, activeSlots - zellijVisiblePanes) },
-          active_workers: activeSlots,
-          visible_panes: zellijVisiblePanes,
-          headless_workers: Math.max(0, activeSlots - zellijVisiblePanes),
-          queue_depth: Math.max(0, workGraph.total_work_items - activeSlots),
-          worktrees: {
-            active: worktreePolicy.mode === 'git-worktree' ? activeSlots : 0,
-            completed: 0,
-            retained: 0
-          },
-          local_llm: { tps: 0, queue: localWorker.auto_select_eligible ? Math.max(0, activeSlots - zellijVisiblePanes) : 0 },
-          gpt_final_status: 'pending',
-          gate_progress: 'naruto:pre-orchestrator'
-        }
-      }).catch((err: any) => ({
-        ok: false,
-        pane_kind: 'dashboard',
-        worker_pane: false,
-        blockers: [`zellij_dashboard_exception:${err?.message || String(err)}`]
-      }))
-      console.log('Zellij: prepared ' + zellijVisiblePanes + ' visible active clone lane(s) in ' + liveZellij.session_name + ' with ' + Math.max(0, activeSlots - zellijVisiblePanes) + ' headless active worker(s). Attach with: ' + (liveZellij.attach_command_with_env || liveZellij.attach_command))
+      liveZellij.dashboard_pane = null
+      liveZellij.right_column_mode = 'spawn-on-first-worker'
+      await writeJsonAtomic(path.join(mission.dir, 'zellij-initial-ui.json'), {
+        schema: 'sks.zellij-initial-ui.v1',
+        ok: true,
+        mission_id: mission.id,
+        session_name: liveZellij.session_name,
+        initial_panes: 'main-only',
+        dashboard_created: false,
+        worker_panes_created: 0,
+        right_column_mode: 'spawn-on-first-worker',
+        visible_pane_cap: zellijVisiblePanes
+      })
+      console.log('Zellij: started main-only session ' + liveZellij.session_name + '; right column opens on first visible worker spawn. Attach with: ' + (liveZellij.attach_command_with_env || liveZellij.attach_command))
       if (parsed.attach) attachZellijSessionInteractive(liveZellij.session_name, { cwd: process.cwd(), configPath: liveZellij.clipboard_config_path })
     } else if (liveZellij?.ok) {
       console.log('Zellij: optional live panes unavailable (' + ((liveZellij.warnings || []).join('; ') || liveZellij.capability?.status || 'unknown') + ')')
@@ -210,6 +205,10 @@ async function narutoRun(parsed: NarutoArgs) {
     mock: parsed.mock,
     real: parsed.real,
     readonly: parsed.readonly,
+    zellijSessionName: liveZellij?.session_name || `sks-${mission.id}`,
+    workerPlacement: parsed.json || parsed.noOpenZellij ? 'process' : 'zellij-pane',
+    zellijPaneWorker: true,
+    zellijVisiblePaneCap: zellijVisiblePanes,
     // Shadow clones ALWAYS run in fast service tier — never honor --no-fast/standard.
     fastMode: true,
     serviceTier: 'fast',
@@ -249,7 +248,13 @@ async function narutoRun(parsed: NarutoArgs) {
       ok: activePool.ok,
       max_observed_active_workers: activePool.max_observed_active_workers,
       refill_events: activePool.refill_events,
-      completed_count: activePool.completed_count
+      completed_count: activePool.completed_count,
+      real_runtime: {
+        ok: realActivePool.ok,
+        max_observed_active_workers: realActivePool.max_observed_active_workers,
+        refill_latency_ms_p95: realActivePool.refill_latency_ms_p95,
+        worker_lifecycle: realActivePool.worker_lifecycle
+      }
     },
     local_worker: localWorkerSummary,
     proof: result.proof?.status || 'missing',
@@ -320,6 +325,56 @@ async function narutoStatus(parsed: NarutoArgs) {
   })
 }
 
+async function narutoDashboard(parsed: NarutoArgs) {
+  const root = await sksRoot()
+  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root)
+  if (!id) return emit(parsed, { schema: NARUTO_RESULT_SCHEMA, ok: false, action: 'dashboard', status: 'missing_mission' }, () => console.log('No Naruto mission found.'))
+  const { dir } = await loadMission(root, id)
+  const snapshot = await readJson<any>(path.join(dir, 'zellij-dashboard-snapshot.json'), null)
+  const rightColumnState = await readJson<any>(path.join(dir, 'zellij-right-column-state.json'), null)
+  const summary = {
+    schema: NARUTO_RESULT_SCHEMA,
+    ok: Boolean(snapshot || rightColumnState),
+    action: 'dashboard',
+    mission_id: id,
+    snapshot,
+    right_column_state: rightColumnState,
+    blockers: snapshot || rightColumnState ? [] : ['naruto_dashboard_missing']
+  }
+  return emit(parsed, summary, () => {
+    console.log('🍥 Naruto dashboard: ' + id)
+    console.log('Right column: ' + (rightColumnState?.status || 'missing'))
+    if (snapshot) console.log('Active/visible/headless/queue: ' + [snapshot.active_workers, snapshot.visible_panes, snapshot.headless_workers, snapshot.queue_depth].join('/'))
+  })
+}
+
+async function narutoWorkers(parsed: NarutoArgs) {
+  const root = await sksRoot()
+  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root)
+  if (!id) return emit(parsed, { schema: NARUTO_RESULT_SCHEMA, ok: false, action: 'workers', status: 'missing_mission' }, () => console.log('No Naruto mission found.'))
+  const { dir } = await loadMission(root, id)
+  const swarm = await readJson<any>(path.join(dir, 'agents', 'agent-native-cli-session-swarm.json'), null)
+  const state = await readJson<any>(path.join(dir, 'zellij-right-column-state.json'), null)
+  const records = Array.isArray(swarm?.records) ? swarm.records : []
+  const summary = {
+    schema: NARUTO_RESULT_SCHEMA,
+    ok: Boolean(swarm || state),
+    action: 'workers',
+    mission_id: id,
+    active: records.filter((row: any) => row.status === 'running' || row.status === 'launching').length,
+    completed: records.filter((row: any) => row.status === 'closed').length,
+    failed: records.filter((row: any) => row.status === 'failed').length,
+    visible_worker_panes: state?.visible_worker_panes || [],
+    headless_workers: state?.headless_workers || [],
+    records,
+    blockers: swarm || state ? [] : ['naruto_worker_records_missing']
+  }
+  return emit(parsed, summary, () => {
+    console.log('🍥 Naruto workers: ' + id)
+    console.log(`Active ${summary.active} · completed ${summary.completed} · failed ${summary.failed} · visible ${summary.visible_worker_panes.length} · headless ${summary.headless_workers.length}`)
+  })
+}
+
 async function narutoHelp(parsed: NarutoArgs) {
   const help = {
     schema: NARUTO_RESULT_SCHEMA,
@@ -341,7 +396,7 @@ async function narutoHelp(parsed: NarutoArgs) {
 }
 
 interface NarutoArgs {
-  action: 'run' | 'status' | 'help'
+  action: 'run' | 'status' | 'help' | 'dashboard' | 'workers'
   prompt: string
   clones: number
   workItems: number
@@ -365,13 +420,13 @@ interface NarutoArgs {
 function parseNarutoArgs(args: string[] = []): NarutoArgs {
   if (hasFlag(args, '--help') || hasFlag(args, '-h')) args = ['help', ...args.filter((arg) => arg !== '--help' && arg !== '-h')]
   const first = args[0] && !String(args[0]).startsWith('--') ? String(args[0]) : ''
-  const actions = new Set(['run', 'status', 'help'])
+  const actions = new Set(['run', 'status', 'help', 'dashboard', 'workers'])
   const action = (actions.has(first) ? first : 'run') as NarutoArgs['action']
   const rest = action === first ? args.slice(1) : args
   const json = hasFlag(args, '--json')
   const requestedClones = Number(readOption(args, '--clones', readOption(args, '--agents', DEFAULT_NARUTO_CLONES)))
   const clones = clampClones(requestedClones)
-  const workItems = clampWorkItems(Number(readOption(args, '--work-items', clones)), clones)
+  const workItems = clampWorkItems(Number(readOption(args, '--work-items', clones * 2)), clones)
   const concurrency = normalizeConcurrency(readOption(args, '--concurrency', readOption(args, '--target-active-slots', null)), clones)
   const useOllama = hasFlag(args, '--ollama') || hasFlag(args, '--local-model')
   const noOllama = hasFlag(args, '--no-ollama') || hasFlag(args, '--no-local-model')
@@ -382,7 +437,10 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const readonly = hasFlag(args, '--readonly') || hasFlag(args, '--read-only')
   const writeModeRaw = String(readOption(args, '--write-mode', hasFlag(args, '--parallel-write') ? 'parallel' : '') || '')
   const writeMode = (['proof-safe', 'parallel', 'serial', 'off'].includes(writeModeRaw) ? writeModeRaw : null) as NarutoArgs['writeMode']
-  const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', 'latest')))
+  const positionalMission = action === 'dashboard' || action === 'workers' || action === 'status'
+    ? positionalArgs(rest, new Set()).find((arg) => /^latest$|^M-/.test(arg))
+    : null
+  const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', positionalMission || 'latest')))
   const ollamaModel = String(readOption(args, '--ollama-model', readOption(args, '--local-model-model', '')) || '') || null
   const ollamaBaseUrl = String(readOption(args, '--ollama-base-url', readOption(args, '--local-model-base-url', '')) || '') || null
   const noOpenZellij = hasFlag(args, '--no-open-zellij') || hasFlag(args, '--no-zellij')
@@ -397,6 +455,7 @@ async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {
   roleDistribution: any
   governor: any
   activePool: any
+  realActivePool?: any
   verificationDag: any
   gptFinalPack: any
   zellijDashboard: any
@@ -407,6 +466,7 @@ async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-role-distribution.json'), artifacts.roleDistribution)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-concurrency-governor.json'), artifacts.governor)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-active-pool.json'), artifacts.activePool)
+  if (artifacts.realActivePool) await writeJsonAtomic(path.join(ledgerRoot, 'naruto-real-active-pool.json'), artifacts.realActivePool)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-verification-dag.json'), artifacts.verificationDag)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-gpt-final-pack.json'), artifacts.gptFinalPack)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-zellij-dashboard.json'), artifacts.zellijDashboard)

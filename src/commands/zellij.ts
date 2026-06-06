@@ -1,10 +1,12 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { projectRoot, readJson } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
 import { runZellij } from '../core/zellij/zellij-command.js';
 import { appendZellijLaneCommand, normalizeZellijSlot } from '../core/zellij/zellij-lane-runtime.js';
+import { buildZellijDashboardSnapshot, renderZellijDashboardText } from '../core/zellij/zellij-dashboard-renderer.js';
 
 export const ZELLIJ_COMMAND_SCHEMA = 'sks.zellij-command.v1';
 export const ZELLIJ_REPAIR_SCHEMA = 'sks.zellij-repair.v1';
@@ -22,6 +24,10 @@ export async function run(_command: string = 'zellij', args: string[] = []) {
   if (sub === 'help') return printHelp(json);
   if (sub === 'repair') return zellijRepair(root, args, json);
   if (sub === 'dispatch' || sub === 'send') return zellijDispatch(root, args, json);
+  if (sub === 'focus-worker') return zellijFocusWorker(root, args, json);
+  if (sub === 'worker-logs') return zellijWorkerLogs(root, args, json);
+  if (sub === 'dashboard') return zellijDashboard(root, args, json);
+  if (sub === 'close-drained') return zellijCloseDrained(root, args, json);
   return zellijStatus(root, args, json);
 }
 
@@ -57,6 +63,98 @@ async function zellijStatus(root: string, args: string[], json: boolean) {
     }
   }
   if (!result.ok) process.exitCode = 1;
+}
+
+async function zellijFocusWorker(root: string, args: string[], json: boolean) {
+  const missionId = resolveMissionId(root, readOption(args, '--mission', readOption(args, '--mission-id', 'latest') || 'latest') || 'latest');
+  const slotId = normalizeZellijSlot(readOption(args, '--slot', positionalAfter(args, 'focus-worker') || 'slot-001'));
+  const state = await readJson<any>(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-right-column-state.json'), null);
+  const worker = state?.visible_worker_panes?.find?.((row: any) => normalizeZellijSlot(row.slot_id) === slotId && row.pane_id);
+  const result = worker?.pane_id
+    ? await runZellij(['--session', state.session_name, 'action', 'focus-pane-id', String(worker.pane_id)], { cwd: root, timeoutMs: 5000, optional: true })
+    : null;
+  const out = {
+    schema: 'sks.zellij-focus-worker.v1',
+    ok: Boolean(worker?.pane_id) && (result?.ok !== false),
+    mission_id: missionId,
+    slot_id: slotId,
+    pane_id: worker?.pane_id || null,
+    session_name: state?.session_name || null,
+    result,
+    blockers: worker?.pane_id ? (result && !result.ok ? result.blockers : []) : ['worker_pane_not_found']
+  };
+  if (json) printJson(out);
+  else console.log(out.ok ? `Focused ${slotId} (${out.pane_id})` : `Worker pane not found: ${slotId}`);
+  if (!out.ok) process.exitCode = 1;
+}
+
+async function zellijWorkerLogs(root: string, args: string[], json: boolean) {
+  const missionId = resolveMissionId(root, readOption(args, '--mission', readOption(args, '--mission-id', 'latest') || 'latest') || 'latest');
+  const slotArg = positionalAfter(args, 'worker-logs') || readOption(args, '--slot', '');
+  const slotId = slotArg ? normalizeZellijSlot(slotArg) : null;
+  const swarm = await readJson<any>(path.join(root, '.sneakoscope', 'missions', missionId, 'agents', 'agent-native-cli-session-swarm.json'), null);
+  const records = Array.isArray(swarm?.records) ? swarm.records : [];
+  const filtered = slotId ? records.filter((row: any) => normalizeZellijSlot(row.slot_id) === slotId) : records;
+  const out = {
+    schema: 'sks.zellij-worker-logs.v1',
+    ok: filtered.length > 0,
+    mission_id: missionId,
+    slot_id: slotId,
+    logs: filtered.map((row: any) => ({
+      slot_id: row.slot_id,
+      generation_index: row.generation_index,
+      status: row.status,
+      stdout_log: row.stdout_log ? path.join(root, '.sneakoscope', 'missions', missionId, 'agents', row.stdout_log) : null,
+      stderr_log: row.stderr_log ? path.join(root, '.sneakoscope', 'missions', missionId, 'agents', row.stderr_log) : null,
+      worker_artifact_dir: row.worker_artifact_dir
+    })),
+    blockers: filtered.length ? [] : ['worker_log_records_missing']
+  };
+  if (json) printJson(out);
+  else for (const log of out.logs) console.log(`${log.slot_id} gen-${log.generation_index} ${log.status}\nstdout: ${log.stdout_log}\nstderr: ${log.stderr_log}`);
+  if (!out.ok) process.exitCode = 1;
+}
+
+async function zellijDashboard(root: string, args: string[], json: boolean) {
+  const missionId = resolveMissionId(root, readOption(args, '--mission', readOption(args, '--mission-id', 'latest') || 'latest') || 'latest');
+  const snapshot = await readJson<any>(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-dashboard-snapshot.json'), null);
+  const state = await readJson<any>(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-right-column-state.json'), null);
+  const watch = flag(args, '--watch');
+  const out = {
+    schema: 'sks.zellij-dashboard-command.v1',
+    ok: Boolean(snapshot || state),
+    mission_id: missionId,
+    snapshot,
+    right_column_state: state,
+    watch,
+    watch_command: `sks zellij dashboard --mission ${missionId} --watch`
+  };
+  if (json) printJson(out);
+  else if (snapshot) console.log(renderZellijDashboardText(buildZellijDashboardSnapshot({ ...snapshot, mission_id: snapshot.mission_id || missionId })));
+  else console.log(JSON.stringify(state || out, null, 2));
+  if (!out.ok) process.exitCode = 1;
+}
+
+async function zellijCloseDrained(root: string, args: string[], json: boolean) {
+  const missionId = resolveMissionId(root, readOption(args, '--mission', readOption(args, '--mission-id', 'latest') || 'latest') || 'latest');
+  const state = await readJson<any>(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-right-column-state.json'), null);
+  const rows = Array.isArray(state?.visible_worker_panes) ? state.visible_worker_panes.filter((row: any) => row.pane_id && (row.status === 'draining' || row.status === 'closed')) : [];
+  const results = [];
+  for (const row of rows) {
+    results.push(await runZellij(['--session', state.session_name, 'action', 'close-pane', '--pane-id', String(row.pane_id)], { cwd: root, timeoutMs: 5000, optional: true }));
+  }
+  const out = {
+    schema: 'sks.zellij-close-drained.v1',
+    ok: results.every((result) => result.ok !== false),
+    mission_id: missionId,
+    closed_count: results.filter((result) => result.ok).length,
+    attempted_count: results.length,
+    results,
+    blockers: results.flatMap((result) => result.ok ? [] : result.blockers)
+  };
+  if (json) printJson(out);
+  else console.log(`Closed drained panes: ${out.closed_count}/${out.attempted_count}`);
+  if (!out.ok) process.exitCode = 1;
 }
 
 async function zellijDispatch(root: string, args: string[], json: boolean) {
@@ -145,12 +243,16 @@ function printHelp(json: boolean) {
     schema: ZELLIJ_COMMAND_SCHEMA,
     subcommand: 'help',
     ok: true,
-    usage: 'sks zellij status|repair|dispatch|send|capability [--require-real] [--json]',
+    usage: 'sks zellij status|repair|dispatch|send|focus-worker|worker-logs|dashboard|close-drained [--json]',
     subcommands: {
       status: 'Report Zellij runtime capability and interactive-route readiness.',
       repair: 'Explain how to install/repair Zellij (no automatic install).',
       dispatch: 'Append a nonblocking JSONL command for a lane; optionally write to a reconciled pane id with --write-pane.',
       send: 'Alias for dispatch.',
+      'focus-worker': 'Focus a visible right-column worker pane by slot.',
+      'worker-logs': 'Print stdout/stderr log paths for worker slots.',
+      dashboard: 'Render the latest dashboard snapshot; --watch prints watch metadata.',
+      'close-drained': 'Close drained right-column panes.',
       capability: 'Alias for status.'
     }
   };
@@ -160,6 +262,10 @@ function printHelp(json: boolean) {
     console.log('  sks zellij status [--require-real] [--json]');
     console.log('  sks zellij repair [--explain] [--json]');
     console.log('  sks zellij dispatch --mission M --slot slot-001 --text "..." [--write-pane] [--json]');
+    console.log('  sks zellij focus-worker slot-001 [--mission M] [--json]');
+    console.log('  sks zellij worker-logs [slot-001] [--mission M] [--json]');
+    console.log('  sks zellij dashboard [--mission M] [--watch] [--json]');
+    console.log('  sks zellij close-drained [--mission M] [--json]');
   }
 }
 
@@ -173,4 +279,26 @@ function readOption(args: string[], name: string, fallback: string | null): stri
 function readOption(args: string[], name: string, fallback: string | null): string | null {
   const index = args.indexOf(name);
   return index >= 0 && args[index + 1] ? String(args[index + 1]) : fallback;
+}
+
+function positionalAfter(args: string[], subcommand: string): string | null {
+  const index = args.indexOf(subcommand);
+  for (const arg of args.slice(index >= 0 ? index + 1 : 1)) {
+    if (!String(arg).startsWith('-')) return String(arg);
+  }
+  return null;
+}
+
+function resolveMissionId(root: string, requested: string): string {
+  if (requested && requested !== 'latest') return requested;
+  const dir = path.join(root, '.sneakoscope', 'missions');
+  try {
+    const rows = fs.readdirSync(dir)
+      .filter((name) => /^M-/.test(name))
+      .map((name) => ({ name, mtime: fs.statSync(path.join(dir, name)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+    return rows[0]?.name || 'latest';
+  } catch {
+    return 'latest';
+  }
 }

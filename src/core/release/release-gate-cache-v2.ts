@@ -23,11 +23,54 @@ export function releaseGateCacheKey(root: string, gate: ReleaseGateNode): string
   hashFileIfPresent(hash, path.join(root, 'package.json'))
   hashFileIfPresent(hash, path.join(root, 'dist', 'build-manifest.json'))
   for (const input of gate.cache.inputs) {
-    const file = path.join(root, input)
-    if (fs.existsSync(file) && fs.statSync(file).isFile()) hashFileIfPresent(hash, file)
-    else hash.update(input)
+    const expanded = expandGlob(root, input)
+    hash.update(`input:${input}`)
+    if (!expanded.length) {
+      hash.update(`missing_or_empty:${input}`)
+      continue
+    }
+    for (const file of expanded) {
+      hash.update(path.relative(root, file))
+      hashFileIfPresent(hash, file)
+    }
   }
   return hash.digest('hex')
+}
+
+export function expandGlob(root: string, input: string): string[] {
+  const absolute = path.join(root, input)
+  if (!/[*!?[\]{}]/.test(input)) {
+    if (!fs.existsSync(absolute)) return []
+    const stat = fs.statSync(absolute)
+    if (stat.isDirectory()) return hashDirectoryRecursive(absolute)
+    return stat.isFile() ? [absolute] : []
+  }
+  if (input.endsWith('/**')) {
+    const dir = path.join(root, input.slice(0, -3))
+    return fs.existsSync(dir) && fs.statSync(dir).isDirectory() ? hashDirectoryRecursive(dir) : []
+  }
+  const firstWildcard = input.search(/[*!?[\]{}]/)
+  const prefix = input.slice(0, firstWildcard)
+  const base = path.join(root, prefix.includes('/') ? prefix.slice(0, prefix.lastIndexOf('/')) : '')
+  if (!fs.existsSync(base)) return []
+  const re = globToRegExp(input)
+  return hashDirectoryRecursive(base).filter((file) => re.test(path.relative(root, file)))
+}
+
+export function hashDirectoryRecursive(dir: string): string[] {
+  if (!fs.existsSync(dir)) return []
+  const out: string[] = []
+  const stack = [dir]
+  while (stack.length) {
+    const current = stack.pop()!
+    for (const name of fs.readdirSync(current).sort()) {
+      const file = path.join(current, name)
+      const stat = fs.statSync(file)
+      if (stat.isDirectory()) stack.push(file)
+      else if (stat.isFile()) out.push(file)
+    }
+  }
+  return out.sort()
 }
 
 export function readReleaseGateCacheHit(root: string, gate: ReleaseGateNode): boolean {
@@ -61,4 +104,14 @@ export function writeReleaseGateCacheHit(root: string, gate: ReleaseGateNode): v
 
 function hashFileIfPresent(hash: crypto.Hash, file: string): void {
   if (fs.existsSync(file) && fs.statSync(file).isFile()) hash.update(fs.readFileSync(file))
+}
+
+function globToRegExp(input: string): RegExp {
+  const escaped = input
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*\*/g, '\u0000')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\?/g, '[^/]')
+    .replace(/\u0000/g, '.*')
+  return new RegExp(`^${escaped}$`)
 }

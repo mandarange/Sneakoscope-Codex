@@ -20,10 +20,10 @@ const checks = {
   zellij_session_before_swarm: launchIndex >= 0 && swarmIndex >= 0 && launchIndex < swarmIndex,
   main_only_session: mad.includes('slotCount: 0'),
   zellij_default_backend: /return 'zellij'/.test(mad) && mad.includes("list.includes('--json')") && mad.includes("list.includes('--no-attach')"),
-  worker_command_real_zellij: mad.includes("command.push('--real')") && mad.includes("command.push('--zellij-session-name'") && mad.includes("command.push('--zellij-pane-worker')"),
+  worker_command_real_zellij: mad.includes("command.push('--real')") && mad.includes("command.push('--zellij-session-name'") && mad.includes("command.push('--zellij-pane-worker')") && mad.includes("command.push('--worker-placement'"),
   parser_accepts_worker_flags: parser.includes('--zellij-session-name') && parser.includes('--zellij-pane-worker') && parser.includes('--no-zellij-pane-worker'),
   native_worker_pane_path: swarm.includes("this.input.backend === 'zellij'") && swarm.includes('ctx.opts.zellijPaneWorker !== false') && swarm.includes('openWorkerPane({'),
-  right_pane_requested: manager.includes("'--direction', 'right'")
+  right_pane_requested: manager.includes("'--direction', directionRequested") && manager.includes("'--near-current-pane'")
 }
 const ok = Object.values(checks).every(Boolean)
 

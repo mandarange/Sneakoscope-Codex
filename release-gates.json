@@ -639,19 +639,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "agent:slot-pane-binding-proof",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/agent-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "agent:source-intelligence-propagation",
       "tier": "P1",
       "cost": "hermetic",
@@ -756,33 +743,7 @@
       "can_run_incremental": true
     },
     {
-      "id": "agent:worker-pane-communication-contract",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/agent-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "agent:worker-scout-limited",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/agent-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "agent:zellij-dynamic-backfill-panes",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
@@ -946,48 +907,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "codex-app:fast-ui-preservation",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-app-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-app:provider-badge",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-app-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-app:ui-clobber-guard",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-app-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "codex-app:ui-preservation",
       "tier": "P1",
       "cost": "hermetic",
@@ -996,138 +915,6 @@
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
         "src/scripts/codex-app-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:all-pipelines",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-all-pipelines-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:capability",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-capability-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:empty-result-retry",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-empty-result-retry-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:event-stream-ledger",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-event-stream-ledger-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:keepalive-no-cot-leak",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-keepalive-no-cot-leak-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:no-legacy-fallback",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-no-legacy-fallback-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:side-effect-scope",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-side-effect-scope-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:stream-idle-watchdog",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-stream-idle-watchdog-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:structured-output",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-structured-output-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:thread-registry",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-thread-registry-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-control:tool-call-sequence-repair",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-control-*.ts",
-        "src/scripts/codex-control-tool-call-sequence-repair-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1170,198 +957,6 @@
         "src/core/codex-app.ts",
         "src/core/codex-lb-circuit.ts",
         "src/scripts/codex-lb-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:all-pipelines",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-all-pipelines-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:backend-router",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-backend-router-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:capability",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-capability-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:core-skill-pipeline",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-core-skill-pipeline-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:dfix-pipeline",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-dfix-pipeline-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:event-stream-ledger",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-event-stream-ledger-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:no-legacy-fallback",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-no-legacy-fallback-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:qa-pipeline",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-qa-pipeline-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:release-review-pipeline",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-release-review-pipeline-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:research-pipeline",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-research-pipeline-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:sandbox-policy",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-sandbox-policy-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:structured-output",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-structured-output-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:team-naruto-agent-pipeline",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-team-naruto-agent-pipeline-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:thread-registry",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-thread-registry-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:ux-ppt-review-pipeline",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-ux-ppt-review-pipeline-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex-sdk:zellij-pane-binding",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/codex-sdk-*.ts",
-        "src/scripts/codex-sdk-zellij-pane-binding-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -1478,48 +1073,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "codex:0.137-compat",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex:config-eperm-fixture",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex:environment-scoped-approvals",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "codex:exec-syntax-parity",
       "tier": "P1",
       "cost": "hermetic",
@@ -1604,48 +1157,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "codex:plugin-list-json",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex:product-design-auto-install",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex:product-design-plugin-routing",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "codex:profile-primary",
       "tier": "P1",
       "cost": "hermetic",
@@ -1660,35 +1171,7 @@
       "can_run_incremental": true
     },
     {
-      "id": "codex:project-config-policy-splitter",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "codex:resume-cwd-truth",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex:thread-runtime-choice",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
@@ -1975,18 +1458,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "doctor:fix-proves-codex-read",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/doctor-*.ts",
-        "src/scripts/doctor-fix-proves-codex-read-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "doctor:fix-recovers-corrupted-config",
       "tier": "P1",
       "cost": "hermetic",
@@ -1999,36 +1470,12 @@
       "can_run_incremental": true
     },
     {
-      "id": "doctor:fixes-codex-app-fast-ui",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/doctor-*.ts",
-        "src/scripts/doctor-fixes-codex-app-fast-ui-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "evidence:flagship-coverage",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
         "src/scripts/evidence-*.ts",
         "src/scripts/evidence-flagship-coverage-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "fast:codex-service-tier-proof",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/fast-*.ts",
-        "src/scripts/fast-codex-service-tier-proof-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2326,114 +1773,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "local-collab:all-pipelines-final-gpt",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/local-collab-*.ts",
-        "src/scripts/local-collab-all-pipelines-final-gpt-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "local-collab:gpt-final-arbiter",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/local-collab-*.ts",
-        "src/scripts/local-collab-gpt-final-arbiter-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "local-collab:gpt-final-availability",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/local-collab-*.ts",
-        "src/scripts/local-collab-gpt-final-availability-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "local-collab:no-local-only-final",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/local-collab-*.ts",
-        "src/scripts/local-collab-no-local-only-final-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "local-collab:policy",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/local-collab-*.ts",
-        "src/scripts/local-collab-policy-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "local-llm:all-pipelines",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/local-llm-*.ts",
-        "src/scripts/local-llm-all-pipelines-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "local-llm:capability",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/local-llm-*.ts",
-        "src/scripts/local-llm-capability-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "local-llm:structured-output",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/local-llm-*.ts",
-        "src/scripts/local-llm-structured-output-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "local-llm:tool-call-repair",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/local-llm-*.ts",
-        "src/scripts/local-llm-tool-call-repair-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "loop-blocker:check",
       "tier": "P1",
       "cost": "hermetic",
@@ -2456,18 +1795,6 @@
       "always_on_release": false,
       "required_for_publish": false,
       "can_run_incremental": false
-    },
-    {
-      "id": "mad-sks:app-ui-no-mutation",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/mad-sks-*.ts",
-        "src/scripts/mad-sks-app-ui-no-mutation-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
     },
     {
       "id": "mad-sks:audit-proof",
@@ -2638,36 +1965,12 @@
       "can_run_incremental": true
     },
     {
-      "id": "mad-sks:zellij-default-pane-worker",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/mad-sks-*.ts",
-        "src/scripts/mad-sks-zellij-default-pane-worker-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "mad-sks:zellij-launch",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
         "src/scripts/mad-sks-*.ts",
         "src/scripts/mad-sks-zellij-launch-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "mad:preflight-blocks-unreadable-config",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/mad-*.ts",
-        "src/scripts/mad-preflight-blocks-unreadable-config-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -2734,124 +2037,7 @@
       "can_run_incremental": true
     },
     {
-      "id": "naruto:active-pool",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/naruto-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "naruto:concurrency-governor",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/naruto-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "naruto:gpt-final-pack",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/naruto-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "naruto:parallel-patch-apply",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/naruto-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "naruto:readonly-routing",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/naruto-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "naruto:role-distribution",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/naruto-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "naruto:shadow-clone-swarm",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/naruto-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "naruto:verification-pool",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/naruto-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "naruto:work-graph",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/agents/**",
-        "src/core/commands/**",
-        "src/scripts/naruto-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "naruto:zellij-massive-ui",
       "tier": "P1",
       "cost": "hermetic",
       "affected_by": [
@@ -3069,18 +2255,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "prompt:placeholder-guard",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/prompt-*.ts",
-        "src/scripts/prompt-placeholder-guard-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "proof:fake-real-policy-v2",
       "tier": "P1",
       "cost": "hermetic",
@@ -3105,30 +2279,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "provider:badge-context",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/provider-*.ts",
-        "src/scripts/provider-badge-context-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "provider:context-config-toml",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/provider-*.ts",
-        "src/scripts/provider-context-config-toml-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "publish:packlist-performance",
       "tier": "P0",
       "cost": "hermetic",
@@ -3141,54 +2291,6 @@
       ],
       "always_on_release": true,
       "required_for_publish": true,
-      "can_run_incremental": true
-    },
-    {
-      "id": "python-sdk:all-pipelines",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/python-sdk-*.ts",
-        "src/scripts/python-sdk-all-pipelines-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "python-sdk:capability",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/python-sdk-*.ts",
-        "src/scripts/python-sdk-capability-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "python-sdk:sandbox-policy",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/python-sdk-*.ts",
-        "src/scripts/python-sdk-sandbox-policy-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "python-sdk:stream-bridge",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/python-sdk-*.ts",
-        "src/scripts/python-sdk-stream-bridge-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
       "can_run_incremental": true
     },
     {
@@ -3386,20 +2488,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "release:worktree-gates",
-      "tier": "P0",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/release/**",
-        "src/scripts/release-parallel-check.ts",
-        "src/scripts/release-*.ts",
-        "package.json"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "research:actual-route-backfill",
       "tier": "P1",
       "cost": "real",
@@ -3489,21 +2577,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "runtime:no-mjs-scripts",
-      "tier": "P0",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/**",
-        "src/scripts/runtime-*.ts",
-        "src/scripts/build-dist.ts",
-        "src/scripts/clean-dist.ts",
-        "package.json"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "runtime:no-src-mjs",
       "tier": "P0",
       "cost": "hermetic",
@@ -3530,21 +2603,6 @@
         "package.json"
       ],
       "always_on_release": true,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "runtime:ts-python-boundary",
-      "tier": "P0",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/**",
-        "src/scripts/runtime-*.ts",
-        "src/scripts/build-dist.ts",
-        "src/scripts/clean-dist.ts",
-        "package.json"
-      ],
-      "always_on_release": false,
       "required_for_publish": false,
       "can_run_incremental": true
     },
@@ -3855,18 +2913,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "test:no-orphan-dist-imports",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/test-*.ts",
-        "src/scripts/test-no-orphan-dist-imports-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "trust:check",
       "tier": "P1",
       "cost": "hermetic",
@@ -3885,30 +2931,6 @@
       "affected_by": [
         "src/scripts/typecheck-*.ts",
         "src/scripts/typecheck-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "ultra-router:auto-router",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/ultra-router-*.ts",
-        "src/scripts/ultra-router-auto-router-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "ultra-router:classification",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/ultra-router-*.ts",
-        "src/scripts/ultra-router-classification-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,
@@ -4217,20 +3239,6 @@
       "can_run_incremental": false
     },
     {
-      "id": "zellij:spawn-on-demand-layout",
-      "tier": "P0",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/zellij/**",
-        "src/scripts/zellij-*.ts",
-        "templates/zellij/**",
-        "src/core/agents/zellij-lane-supervisor.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "zellij:ui-design",
       "tier": "P0",
       "cost": "hermetic",
@@ -4242,34 +3250,6 @@
       ],
       "always_on_release": false,
       "required_for_publish": true,
-      "can_run_incremental": true
-    },
-    {
-      "id": "zellij:worker-pane-manager",
-      "tier": "P0",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/zellij/**",
-        "src/scripts/zellij-*.ts",
-        "templates/zellij/**",
-        "src/core/agents/zellij-lane-supervisor.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "zellij:worker-pane-manager-single-owner",
-      "tier": "P0",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/zellij/**",
-        "src/scripts/zellij-*.ts",
-        "templates/zellij/**",
-        "src/core/agents/zellij-lane-supervisor.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
       "can_run_incremental": true
     }
   ]

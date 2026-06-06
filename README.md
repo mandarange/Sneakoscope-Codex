@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.8** makes the release path DAG-parallel by default and hardens the Naruto/MAD-SKS worktree proof chain. `release:check` now runs a manifest-backed DAG runner with resource-aware scheduling, hermetic per-gate environments, bounded logs, per-gate reports, cache proof, and parallel speed-budget evidence. Git worktree coding now preserves allocation manifests, detects dirty main worktrees, includes untracked content in exported diffs, emits one `git_apply_patch` envelope operation, applies worktree diffs through an integration queue, and locks retained dirty worktrees.
+SKS **2.0.9** makes the release path DAG-parallel by default and hardens the Naruto/MAD-SKS worktree proof chain. `release:check` now runs a manifest-backed DAG runner with resource-aware scheduling, hermetic per-gate environments, bounded logs, per-gate reports, cache proof, and parallel speed-budget evidence. Git worktree coding now preserves allocation manifests, detects dirty main worktrees, includes untracked content in exported diffs, emits one `git_apply_patch` envelope operation, applies worktree diffs through an integration queue, and locks retained dirty worktrees.
 
 What changed:
 

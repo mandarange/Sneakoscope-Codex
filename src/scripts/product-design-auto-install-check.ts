@@ -2,7 +2,7 @@
 // @ts-nocheck
 import { ensureProductDesignPluginInstalledWithRequest, findProductDesignPluginSummaryFromMarketplaces, productDesignAutoInstallRequested } from '../core/product-design-app-server.js';
 import { PRODUCT_DESIGN_PLUGIN, PRODUCT_DESIGN_REQUIRED_SKILLS } from '../core/product-design-plugin.js';
-import { assertGate, emitGate, readText } from './lib/codex-sdk-gate-lib.js';
+import { assertGate, emitGate, readText, releaseGateIds } from './lib/codex-sdk-gate-lib.js';
 
 function pluginReadResponse({ installed, enabled }) {
   return {
@@ -96,7 +96,7 @@ const codexAppSource = readText('src/core/codex-app.ts');
 const commandSource = readText('src/commands/codex-app.ts');
 const appServerSource = readText('src/core/product-design-app-server.ts');
 const pkg = JSON.parse(readText('package.json'));
-const releaseCheck = String(pkg.scripts?.['release:check'] || '');
+const releaseGates = releaseGateIds();
 
 for (const token of [
   'ensureProductDesignPluginInstalled',
@@ -116,7 +116,7 @@ for (const token of [
 }
 
 assertGate(Boolean(pkg.scripts?.['codex:product-design-auto-install']), 'package script missing codex:product-design-auto-install');
-assertGate(releaseCheck.includes('codex:product-design-auto-install'), 'release:check must include Product Design auto-install gate');
+assertGate(releaseGates.has('codex:product-design-auto-install'), 'release gate DAG must include Product Design auto-install gate');
 
 emitGate('codex:product-design-auto-install', {
   install_calls: installCalls.map((call) => call.method),
