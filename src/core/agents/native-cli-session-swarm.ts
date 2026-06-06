@@ -18,6 +18,7 @@ export function createNativeCliSessionSwarmRecorder(root: string, input: {
   noOllama?: boolean
   route: string
   fastModePolicy: FastModePolicy
+  workerPlacement?: string
 }) {
   return new NativeCliSessionSwarmRecorder(root, input)
 }
@@ -29,7 +30,7 @@ class NativeCliSessionSwarmRecorder {
   private writeLock: Promise<unknown> = Promise.resolve()
   private nextPaneToken = -1
 
-  constructor(private root: string, private input: { missionId: string; requestedAgents: number; targetActiveSlots: number; backend: string; backendExplicit?: boolean; noOllama?: boolean; route: string; fastModePolicy: FastModePolicy }) {}
+  constructor(private root: string, private input: { missionId: string; requestedAgents: number; targetActiveSlots: number; backend: string; backendExplicit?: boolean; noOllama?: boolean; route: string; fastModePolicy: FastModePolicy; workerPlacement?: string }) {}
 
   async initialize() {
     await this.persist()
@@ -111,7 +112,11 @@ class NativeCliSessionSwarmRecorder {
     }
     const stdout = fs.createWriteStream(path.join(this.root, stdoutRel), { flags: 'a' })
     const stderr = fs.createWriteStream(path.join(this.root, stderrRel), { flags: 'a' })
-    if (this.input.backend === 'zellij' && ctx.opts.real === true && ctx.opts.zellijPaneWorker !== false) {
+    const placement = String(ctx.opts.workerPlacement || this.input.workerPlacement || (this.input.backend === 'zellij' ? 'zellij-pane' : 'process'))
+    const useZellijPane = placement === 'zellij-pane'
+      && ctx.opts.zellijPaneWorker !== false
+      && (ctx.opts.zellijSessionName || this.input.missionId)
+    if (useZellijPane) {
       stdout.end()
       stderr.end()
       return this.launchWorkerInZellijPane({
@@ -252,7 +257,8 @@ class NativeCliSessionSwarmRecorder {
       cwd: workerCwd,
       providerContext,
       serviceTier: this.input.fastModePolicy.service_tier,
-      worktree: worktree ? { id: worktree.id, path: worktree.path, branch: worktree.branch } : null
+      worktree: worktree ? { id: worktree.id, path: worktree.path, branch: worktree.branch } : null,
+      backend: this.input.backend
     })
     const launchBlockers = paneRecord.blockers || []
     input.record.command_line = ['zellij', '--session', sessionName, 'action', 'new-pane', '--direction', paneRecord.direction_applied, '--name', paneRecord.pane_name, '--', 'sh', '-lc', '<native-cli-worker-command>']

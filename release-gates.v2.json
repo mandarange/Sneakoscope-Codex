@@ -1,0 +1,148 @@
+{
+  "schema": "sks.release-gates.v2",
+  "gates": [
+    {
+      "id": "release:dag-runner",
+      "command": "npm run release:dag-runner --silent",
+      "deps": [],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["src/core/release/**", "src/scripts/release-gate-dag-runner.ts", "release-gates.v2.json", "package.json"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "release:parallel-speed-budget",
+      "command": "npm run release:parallel-speed-budget --silent",
+      "deps": ["release:dag-runner"],
+      "resource": ["cpu-light"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": false, "inputs": ["src/scripts/release-parallel-speed-budget-check.ts", "release-gates.v2.json"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "git:worktree-manifest-append",
+      "command": "npm run git:worktree-manifest-append --silent",
+      "deps": [],
+      "resource": ["git-worktree"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["src/core/git/git-worktree-manager.ts", "src/scripts/git-worktree-manifest-append-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "git:worktree-dirty-main-detection",
+      "command": "npm run git:worktree-dirty-main-detection --silent",
+      "deps": [],
+      "resource": ["git"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["src/core/git/git-repo-detection.ts", "src/scripts/git-worktree-dirty-main-detection-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "git:worktree-untracked-diff",
+      "command": "npm run git:worktree-untracked-diff --silent",
+      "deps": ["git:worktree-manifest-append"],
+      "resource": ["git-worktree"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["src/core/git/git-worktree-diff.ts", "src/scripts/git-worktree-untracked-diff-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "git:worktree-diff-envelope",
+      "command": "npm run git:worktree-diff-envelope --silent",
+      "deps": ["git:worktree-untracked-diff"],
+      "resource": ["cpu-light"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["src/core/git/git-worktree-patch-envelope.ts", "src/core/agents/agent-patch-schema.ts", "src/scripts/git-worktree-diff-envelope-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "git:worktree-integration-primary",
+      "command": "npm run git:worktree-integration-primary --silent",
+      "deps": ["git:worktree-diff-envelope"],
+      "resource": ["git-worktree"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["src/core/git/git-worktree-merge-queue.ts", "src/scripts/git-worktree-integration-primary-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "git:worktree-dirty-lock",
+      "command": "npm run git:worktree-dirty-lock --silent",
+      "deps": ["git:worktree-manifest-append"],
+      "resource": ["git-worktree"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["src/core/git/git-worktree-cleanup.ts", "src/scripts/git-worktree-dirty-lock-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "naruto:worktree-coding:blackbox",
+      "command": "npm run naruto:worktree-coding:blackbox --silent",
+      "deps": ["git:worktree-integration-primary", "git:worktree-dirty-lock"],
+      "resource": ["git-worktree", "cpu-light"],
+      "side_effect": "hermetic",
+      "timeout_ms": 180000,
+      "cache": { "enabled": false, "inputs": ["src/core/naruto/**", "src/core/git/**", "src/scripts/naruto-worktree-coding-blackbox.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "zellij:dashboard-pane",
+      "command": "npm run zellij:dashboard-pane --silent",
+      "deps": [],
+      "resource": ["cpu-light"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": false, "inputs": ["src/core/zellij/zellij-dashboard-pane.ts", "src/core/zellij/zellij-dashboard-renderer.ts", "src/scripts/zellij-dashboard-pane-check.ts", "src/scripts/zellij-dashboard-watch.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "release:version-truth",
+      "command": "npm run release:version-truth --silent",
+      "deps": [],
+      "resource": ["cpu-light"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": false, "inputs": ["package.json", "package-lock.json", "src/core/version.ts", "src/core/fsx.ts", "src/bin/sks.ts", "crates/sks-core/Cargo.toml", "CHANGELOG.md", "README.md"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "release:stability-report",
+      "command": "npm run release:stability-report --silent",
+      "deps": ["release:parallel-speed-budget", "release:version-truth", "naruto:worktree-coding:blackbox", "zellij:dashboard-pane"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": false, "inputs": ["src/scripts/release-stability-report-check.ts", "release-gates.v2.json", ".sneakoscope/reports/release-gates/**"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"]
+    },
+    {
+      "id": "zellij:worker-pane-real-ui:blackbox",
+      "command": "npm run zellij:worker-pane-real-ui:blackbox --silent",
+      "deps": [],
+      "resource": ["zellij-real"],
+      "side_effect": "real-env",
+      "timeout_ms": 180000,
+      "cache": { "enabled": false, "inputs": ["src/core/zellij/**", "src/scripts/zellij-worker-pane-real-ui-blackbox.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["real-check"]
+    }
+  ]
+}

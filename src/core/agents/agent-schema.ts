@@ -17,6 +17,8 @@ export const DEFAULT_NARUTO_CLONES = 12
 export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij', 'ollama', 'local-llm'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]
+export type AgentExecutionBackend = 'codex-sdk' | 'python-codex-sdk' | 'local-llm' | 'fake'
+export type AgentWorkerPlacement = 'zellij-pane' | 'process' | 'headless'
 export type AgentServiceTier = 'fast' | 'standard'
 export type AgentStatus = 'pending' | 'running' | 'closed' | 'blocked' | 'failed'
 export type AgentRole = 'architect' | 'implementer' | 'verifier' | 'safety' | 'integrator' | 'research' | 'documentation' | 'schema' | 'release' | 'ux' | 'db'
@@ -95,6 +97,7 @@ export interface AgentRunOptions {
   refillDelayMs?: number
   roster?: unknown
   backend?: AgentBackend | string
+  workerPlacement?: AgentWorkerPlacement | string
   backendExplicit?: boolean
   json?: boolean
   mock?: boolean
@@ -116,6 +119,7 @@ export interface AgentRunOptions {
   ollamaBaseUrl?: string | null
   zellijSessionName?: string | null
   zellijPaneWorker?: boolean
+  zellijVisiblePaneCap?: number
   maxAgentCount?: number
   visualLaneCount?: number
   clones?: number

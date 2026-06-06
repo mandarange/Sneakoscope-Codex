@@ -13,6 +13,9 @@ export interface GitWorktreeCleanupReport {
   action: 'removed' | 'retained_dirty' | 'remove_failed'
   retention_lock_path: string | null
   blockers: string[]
+  git_locked?: boolean
+  unlock_command?: string | null
+  cleanup_command?: string | null
 }
 
 export async function cleanupGitWorktree(input: {
@@ -26,6 +29,8 @@ export async function cleanupGitWorktree(input: {
   const status = await runGitCommand(worktreePath, ['status', '--porcelain=v1', '--untracked-files=all'])
   const clean = status.ok && status.stdout.trim().length === 0
   if (!clean) {
+    const reason = `SKS retained dirty failed worker ${path.basename(worktreePath)}`
+    const lock = await runGitCommand(repoRoot, ['worktree', 'lock', '--reason', reason, worktreePath])
     const lockPath = `${worktreePath}.retained.json`
     await writeJsonAtomic(lockPath, {
       schema: 'sks.git-worktree-retention-lock.v1',
@@ -34,7 +39,10 @@ export async function cleanupGitWorktree(input: {
       worktree_path: worktreePath,
       branch: input.branch || null,
       reason: status.ok ? 'dirty_worktree_retained' : 'status_failed_retained',
-      status_porcelain: status.stdout || null
+      status_porcelain: status.stdout || null,
+      git_locked: lock.ok,
+      unlock_command: `git worktree unlock ${JSON.stringify(worktreePath)}`,
+      cleanup_command: 'sks worktree cleanup --mission <id>'
     })
     return {
       schema: 'sks.git-worktree-cleanup.v1',
@@ -46,7 +54,10 @@ export async function cleanupGitWorktree(input: {
       clean: false,
       action: 'retained_dirty',
       retention_lock_path: lockPath,
-      blockers: []
+      blockers: lock.ok ? [] : ['git_worktree_lock_failed'],
+      git_locked: lock.ok,
+      unlock_command: `git worktree unlock ${JSON.stringify(worktreePath)}`,
+      cleanup_command: 'sks worktree cleanup --mission <id>'
     }
   }
 
@@ -65,6 +76,9 @@ export async function cleanupGitWorktree(input: {
     clean: true,
     action: remove.ok ? 'removed' : 'remove_failed',
     retention_lock_path: null,
-    blockers
+    blockers,
+    git_locked: false,
+    unlock_command: null,
+    cleanup_command: null
   }
 }

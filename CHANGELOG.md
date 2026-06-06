@@ -3,6 +3,18 @@
 ## [Unreleased]
 
 
+## [2.0.8] - 2026-06-06
+
+### Added
+
+- Add the `release-gates.v2.json` manifest, release gate node schema, and a DAG-based `release:check` runner with resource-aware scheduling, hermetic per-gate environments, bounded logs, per-gate reports, cache proof, and speed-budget reporting.
+- Add directive-named release gates for DAG runner proof, parallel speed budget, Git worktree manifest append, dirty main detection, untracked diff inclusion, single-operation worktree patch envelopes, integration worktree merge queue, dirty worktree locks, Naruto worktree coding blackbox, and Zellij real worker pane contract proof.
+
+### Fixed
+
+- Preserve every Git worker worktree allocation in the manifest instead of overwriting prior rows.
+- Include untracked file contents in exported Git worktree diffs with `git add -N`, emit one `git_apply_patch` envelope operation for worktree diffs, detect dirty main worktrees, and lock retained dirty worktrees with `git worktree lock`.
+
 ## [2.0.7] - 2026-06-05
 
 ### Added

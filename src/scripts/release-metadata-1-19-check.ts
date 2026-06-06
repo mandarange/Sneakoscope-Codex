@@ -11,6 +11,11 @@ const distManifestPath = path.join(root, 'dist/build-manifest.json');
 const distManifest = fs.existsSync(distManifestPath) ? JSON.parse(fs.readFileSync(distManifestPath, 'utf8')) : null;
 const parallelCheckPath = path.join(root, 'src/scripts/release-parallel-check.ts');
 const parallelCheckSource = fs.existsSync(parallelCheckPath) ? fs.readFileSync(parallelCheckPath, 'utf8') : '';
+const releaseCheckScriptSource = [
+  String(pkg.scripts?.['release:check'] || ''),
+  String(pkg.scripts?.['release:check:legacy'] || ''),
+  parallelCheckSource
+].join('\n');
 const releaseRealCheckPath = path.join(root, 'src/scripts/release-real-check.ts');
 const releaseRealCheckSource = fs.existsSync(releaseRealCheckPath) ? fs.readFileSync(releaseRealCheckPath, 'utf8') : '';
 const requiredDocs = [
@@ -306,11 +311,15 @@ assertGate(distManifest?.version === RELEASE_VERSION, `dist/build-manifest versi
 assertGate(distManifest?.package_version === RELEASE_VERSION, `dist/build-manifest package_version must be ${RELEASE_VERSION}`, { package_version: distManifest?.package_version || null });
 assertGate(typeof distManifest?.source_digest === 'string' && distManifest.source_digest.length >= 32, 'dist/build-manifest must include source_digest', { source_digest: distManifest?.source_digest || null });
 assertGate(pkg.scripts?.['release:metadata']?.includes('dist/scripts/release-metadata-check.js'), 'release:metadata must point to the generic release metadata check');
-assertGate(String(pkg.scripts?.['release:check'] || '').startsWith('npm run release:check:parallel'), 'release:check must use release:check:parallel');
+const releaseCheckScript = String(pkg.scripts?.['release:check'] || '');
+assertGate(
+  releaseCheckScript.startsWith('npm run release:check:parallel') || releaseCheckScript.includes('release-gate-dag-runner.js --preset release'),
+  'release:check must use release:check:parallel or the release gate DAG runner'
+);
 for (const script of requiredScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
 for (const script of requiredRealScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package real script: ${script}`);
 for (const script of requiredScripts.filter((name) => name !== 'release:check:parallel')) {
-  assertGate(parallelCheckSource.includes(`npm run ${script}`) || String(pkg.scripts?.['release:check'] || '').includes(`npm run ${script}`) || ['release:metadata', 'release:readiness'].includes(script), `release:check DAG missing ${script}`);
+  assertGate(releaseCheckScriptSource.includes(`npm run ${script}`) || ['release:metadata', 'release:readiness'].includes(script), `release check coverage missing ${script}`);
 }
 for (const script of requiredRealScripts) {
   assertGate(

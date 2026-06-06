@@ -282,7 +282,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     backendExplicit: opts.backendExplicit === true,
     noOllama: opts.noOllama === true,
     route,
-    fastModePolicy
+    fastModePolicy,
+    ...(opts.workerPlacement === undefined ? {} : { workerPlacement: String(opts.workerPlacement) })
   })
   await nativeCliSwarm.initialize()
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: routeCommand, native_agent_backend: backend })
