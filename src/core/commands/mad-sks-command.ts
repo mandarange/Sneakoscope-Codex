@@ -7,7 +7,6 @@ import { createMission, setCurrent } from '../mission.js';
 import { buildMadHighLaunchProfileNoWrite, madHighProfileName } from '../auto-review.js';
 import { permissionGateSummary } from '../permission-gates.js';
 import { attachZellijSessionInteractive, launchMadZellijUi, sanitizeZellijSessionName } from '../zellij/zellij-launcher.js';
-import { openZellijDashboardPane } from '../zellij/zellij-dashboard-pane.js';
 import { createMadSksAuthorizationManifest, validateMadSksAuthorizationManifest } from '../mad-sks/authorization-manifest.js';
 import { createMadSksAuditLedger, madSksAuditAction, writeMadSksAuditLedger } from '../mad-sks/audit-ledger.js';
 import { compareProtectedCoreSnapshots, evaluateMadSksWrite, resolveProtectedCore, snapshotProtectedCore } from '../mad-sks/immutable-harness-guard.js';
@@ -111,36 +110,24 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     console.log(`MAD Zellij action: ${formatMadZellijAction(launch)}`);
     return launch;
   }
-  launch.dashboard_pane = await openZellijDashboardPane({
-    root: madLaunch.root,
-    missionId: madLaunch.mission_id,
-    sessionName: launch.session_name,
-    cwd: process.cwd(),
-    snapshot: {
-      mode: 'mad-sks',
-      backend_counts: { zellij: 1 },
-      placement_counts: { 'zellij-pane': 1, headless: 0 },
-      active_workers: 1,
-      visible_panes: 1,
-      headless_workers: 0,
-      queue_depth: 0,
-      worktrees: { active: 0, completed: 0, retained: 0 },
-      local_llm: { tps: 0, queue: 0 },
-      gpt_final_status: 'pending',
-      gate_progress: 'mad-sks:session-open'
-    }
-  }).catch((err: any) => ({
-    ok: false,
-    pane_kind: 'dashboard',
-    worker_pane: false,
-    blockers: [`zellij_dashboard_exception:${err?.message || String(err)}`]
-  }));
+  await writeJsonAtomic(path.join(madLaunch.dir, 'zellij-initial-ui.json'), {
+    schema: 'sks.zellij-initial-ui.v1',
+    ok: true,
+    mission_id: madLaunch.mission_id,
+    session_name: launch.session_name,
+    initial_panes: 'main-only',
+    dashboard_created: false,
+    worker_panes_created: 0,
+    right_column_mode: 'spawn-on-first-worker'
+  });
   const madNativeSwarm = await startMadNativeSwarm(madLaunch.root, madLaunch, args, profile, {
     env: {
       ...madSksEnv,
       SKS_ZELLIJ_SESSION_NAME: launch.session_name
     },
-    zellijSessionName: launch.session_name
+    zellijSessionName: launch.session_name,
+    workerPlacement: shouldAutoAttachZellij(args) ? 'zellij-pane' : 'process',
+    zellijVisiblePaneCap: Number(process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || 8)
   });
   // The launcher only creates a detached background session. In an interactive
   // terminal, immediately attach so the session actually opens for the user
@@ -214,6 +201,8 @@ export async function startMadNativeSwarm(root: string, madLaunch: any, args: an
     command.push('--real');
     command.push('--zellij-session-name', opts.zellijSessionName || `sks-${madLaunch.mission_id}`);
     command.push('--zellij-pane-worker');
+    command.push('--worker-placement', opts.workerPlacement || 'zellij-pane');
+    command.push('--zellij-visible-pane-cap', String(opts.zellijVisiblePaneCap || swarm.agents));
   }
   const baseReport = {
     schema: 'sks.mad-sks-native-swarm.v1',
@@ -230,6 +219,8 @@ export async function startMadNativeSwarm(root: string, madLaunch: any, args: an
     work_items: swarm.workItems,
     backend: swarm.backend,
     zellij_session_name: opts.zellijSessionName || null,
+    worker_placement: opts.workerPlacement || (swarm.backend === 'zellij' ? 'zellij-pane' : 'process'),
+    zellij_visible_pane_cap: opts.zellijVisiblePaneCap || null,
     readonly: true,
     command,
     stdout_log: path.relative(root, stdoutLog),

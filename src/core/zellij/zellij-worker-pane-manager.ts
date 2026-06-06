@@ -4,6 +4,7 @@ import { providerPaneLabel } from '../provider/provider-badge.js'
 import { resolveProviderContext, type ProviderContext } from '../provider/provider-context.js'
 import { runZellij, type ZellijCommandResult } from './zellij-command.js'
 import { extractZellijPaneIdFromOutput } from './zellij-lane-runtime.js'
+import { closeWorkerInRightColumn, prepareWorkerInRightColumn, recordWorkerPaneInRightColumn } from './zellij-right-column-manager.js'
 
 export const ZELLIJ_WORKER_PANE_SCHEMA = 'sks.zellij-worker-pane.v1'
 export const ZELLIJ_WORKER_PANE_EVENT_SCHEMA = 'sks.zellij-worker-pane-event.v1'
@@ -38,6 +39,10 @@ export interface ZellijWorkerPaneOpenInput {
     path: string
     branch: string
   } | null
+  projectRoot?: string
+  rightColumnMode?: 'spawn-on-first-worker' | 'off'
+  visiblePaneCap?: number
+  dashboardSnapshot?: Record<string, unknown>
 }
 
 export interface ZellijWorkerPaneRecord {
@@ -79,8 +84,13 @@ export interface ZellijWorkerPaneRecord {
   opened_at: string
   closed_at: string | null
   close: ZellijCommandResult | null
-  direction_requested: 'right'
-  direction_applied: 'right' | 'unknown' | 'not_applied'
+  direction_requested: 'right' | 'down'
+  direction_applied: 'right' | 'down' | 'unknown' | 'not_applied'
+  right_column?: {
+    mode: 'spawn-on-first-worker' | 'off'
+    focus_pane_id: string | null
+    y_order: number | null
+  } | null
   sdk_thread_id?: string | null
   sdk_run_id?: string | null
   stream_event_count?: number
@@ -109,7 +119,9 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   createSession?: ZellijCommandResult | null
   launch?: ZellijCommandResult | null
   paneReconciliation?: any
-  directionApplied?: 'right' | 'unknown' | 'not_applied'
+  directionApplied?: 'right' | 'down' | 'unknown' | 'not_applied'
+  directionRequested?: 'right' | 'down'
+  rightColumn?: ZellijWorkerPaneRecord['right_column']
   status?: ZellijWorkerPaneRecord['status']
   sdkThreadId?: string | null
   sdkRunId?: string | null
@@ -157,8 +169,9 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     opened_at: now,
     closed_at: null,
     close: null,
-    direction_requested: 'right',
+    direction_requested: input.directionRequested || 'right',
     direction_applied: input.directionApplied || 'not_applied',
+    right_column: input.rightColumn || null,
     sdk_thread_id: input.sdkThreadId || null,
     sdk_run_id: input.sdkRunId || null,
     stream_event_count: Number(input.streamEventCount || 0),
@@ -183,24 +196,49 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     optional: false
   })
   const createSession = normalizeExistingZellijSession(input.sessionName, createSessionRaw)
+  const rightColumn = input.rightColumnMode === 'spawn-on-first-worker'
+    ? await prepareWorkerInRightColumn({
+        root,
+        ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+        missionId: input.missionId,
+        sessionName: input.sessionName,
+        cwd,
+        worker: { slotId: input.slotId, generationIndex: input.generationIndex },
+        visiblePaneCap: input.visiblePaneCap || 1,
+        dashboardSnapshot: {
+          ...(input.dashboardSnapshot || {}),
+          mode: String(input.dashboardSnapshot?.mode || 'naruto'),
+          active_workers: Number(input.dashboardSnapshot?.active_workers || input.visiblePaneCap || 1),
+          visible_panes: Number(input.dashboardSnapshot?.visible_panes || input.visiblePaneCap || 1)
+        }
+      })
+    : null
   const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || 'running', input.worktree || null)
+  const directionRequested: 'right' | 'down' = rightColumn ? 'down' : 'right'
+  const focus = rightColumn?.focusPaneId
+    ? await focusZellijPaneById(input.sessionName, rightColumn.focusPaneId, cwd)
+    : null
+  const newPaneArgs = ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, ...(rightColumn ? ['--near-current-pane'] : []), '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
   let launch = createSession.ok
-    ? await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--direction', 'right', '--name', paneName, '--', 'sh', '-lc', input.workerCommand], {
+    ? await runZellij(newPaneArgs, {
         cwd,
         timeoutMs: 5000,
         optional: false
       })
     : null
-  let directionApplied: ZellijWorkerPaneRecord['direction_applied'] = launch?.ok ? 'right' : 'not_applied'
+  let directionApplied: ZellijWorkerPaneRecord['direction_applied'] = launch?.ok ? directionRequested : 'not_applied'
   if (createSession.ok && launch && !launch.ok) {
-    const fallback = await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--name', paneName, '--', 'sh', '-lc', input.workerCommand], {
+    const fallbackArgs = rightColumn
+      ? ['--session', input.sessionName, 'action', 'new-pane', '--direction', 'down', '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
+      : ['--session', input.sessionName, 'action', 'new-pane', '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
+    const fallback = await runZellij(fallbackArgs, {
       cwd,
       timeoutMs: 5000,
       optional: false
     })
     if (fallback.ok) {
       launch = fallback
-      directionApplied = 'unknown'
+      directionApplied = rightColumn ? 'down' : 'unknown'
     }
   }
   const stdoutPaneId = launch?.ok ? extractZellijPaneIdFromOutput(launch.stdout_tail) : null
@@ -216,6 +254,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
         : 'zellij_worker_pane_launch_failed'
   const blockers = [
     ...(createSession.ok ? [] : createSession.blockers.map((blocker) => `zellij_worker_session_${blocker}`)),
+    ...(rightColumn && rightColumn.placement !== 'zellij-pane' ? [`zellij_worker_right_column_${rightColumn.placement}`] : []),
     ...(launch && !launch.ok ? launch.blockers.map((blocker) => `zellij_worker_pane_${blocker}`) : []),
     ...(launch?.ok && !isRealZellijWorkerPaneIdSource(paneIdSource) ? ['zellij_worker_pane_id_real_source_missing'] : [])
   ]
@@ -225,14 +264,30 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     paneIdSource,
     createSession,
     launch,
-    paneReconciliation: { ...(reconciledPane || {}), rename_pane: renamePane },
+    paneReconciliation: {
+      ...(reconciledPane || {}),
+      focus_pane: focus,
+      focus_degraded: focus ? focus.ok !== true : false,
+      rename_pane: renamePane
+    },
+    directionRequested,
     directionApplied,
+    rightColumn: rightColumn ? { mode: 'spawn-on-first-worker', focus_pane_id: rightColumn.focusPaneId, y_order: rightColumn.yOrder } : null,
     status: blockers.length ? 'failed' : 'running',
     providerContext,
     serviceTier: input.serviceTier || providerContext.service_tier,
     blockers
   })
   await writeWorkerPaneArtifact(root, record)
+  if (rightColumn) {
+    await recordWorkerPaneInRightColumn({
+      root,
+      ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+      missionId: input.missionId,
+      record,
+      yOrder: rightColumn.yOrder
+    })
+  }
   await appendWorkerPaneEvent(root, 'zellij_worker_pane_created', input, {
     ok: record.ok,
     pane_id: record.pane_id,
@@ -275,6 +330,7 @@ export async function closeWorkerPane(input: {
   root: string
   paneRecord: ZellijWorkerPaneRecord
   cwd?: string
+  projectRoot?: string
   status?: 'closed' | 'failed'
   blockers?: string[]
   sdkThreadId?: string | null
@@ -284,12 +340,21 @@ export async function closeWorkerPane(input: {
   workerResultPath?: string | null
 }) {
   const root = path.resolve(input.root)
-  const close = process.env.SKS_ZELLIJ_CLOSE_WORKER_PANE === '1' && input.paneRecord.pane_id
-    ? await runZellij(['--session', input.paneRecord.session_name, 'action', 'close-pane', '--pane-id', input.paneRecord.pane_id], {
-        cwd: input.cwd || packageRoot(),
-        timeoutMs: 5000,
-        optional: true
-      })
+  const success = (input.status || 'closed') === 'closed' && !(input.blockers || []).length
+  const closeSuccess = process.env.SKS_ZELLIJ_CLOSE_WORKER_PANE !== '0'
+  const closeFailed = process.env.SKS_ZELLIJ_CLOSE_FAILED_PANE === '1' || process.env.SKS_ZELLIJ_KEEP_FAILED_PANE === '0'
+  const paneId = input.paneRecord.pane_id
+  const shouldClose = Boolean(paneId) && (success ? closeSuccess : closeFailed)
+  const close = shouldClose
+    ? await closeZellijPaneById(input.paneRecord.session_name, paneId || '', input.cwd || packageRoot())
+    : null
+  const rename = !shouldClose && paneId
+    ? await renameZellijPaneById(
+        input.paneRecord.session_name,
+        paneId,
+        `${input.paneRecord.pane_title} · ${success ? 'drained' : 'failed'}`,
+        input.cwd || packageRoot()
+      )
     : null
   const next: ZellijWorkerPaneRecord = {
     ...input.paneRecord,
@@ -303,9 +368,25 @@ export async function closeWorkerPane(input: {
     stream_event_count: Number(input.streamEventCount || input.paneRecord.stream_event_count || 0),
     structured_output_valid: input.structuredOutputValid === true || input.paneRecord.structured_output_valid === true,
     worker_result_path: input.workerResultPath || input.paneRecord.worker_result_path,
-    blockers: [...input.paneRecord.blockers, ...(input.blockers || []), ...(close && !close.ok ? close.blockers.map((blocker) => `zellij_worker_close_${blocker}`) : [])]
+    blockers: [
+      ...input.paneRecord.blockers,
+      ...(input.blockers || []),
+      ...(close && !close.ok ? close.blockers.map((blocker) => `zellij_worker_close_${blocker}`) : []),
+      ...(rename && !rename.ok ? rename.blockers.map((blocker) => `zellij_worker_rename_${blocker}`) : [])
+    ]
   }
   await writeWorkerPaneArtifact(root, next)
+  if (next.right_column?.mode === 'spawn-on-first-worker') {
+    await closeWorkerInRightColumn({
+      root,
+      ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+      missionId: next.mission_id,
+      slotId: next.slot_id,
+      generationIndex: next.generation_index,
+      paneId: next.pane_id,
+      status: next.status === 'failed' ? 'failed' : close?.ok ? 'closed' : 'draining'
+    })
+  }
   await appendWorkerPaneEvent(root, 'pane_closed', {
     root,
     missionId: next.mission_id,
@@ -482,6 +563,48 @@ async function renameZellijPaneById(sessionName: string, paneId: string, paneNam
     }
   }
   return last
+}
+
+async function focusZellijPaneById(sessionName: string, paneId: string, cwd: string): Promise<ZellijCommandResult | null> {
+  const candidates = zellijPaneIdCandidates(paneId)
+  let last: ZellijCommandResult | null = null
+  for (const candidate of candidates) {
+    const focus = await runZellij(['--session', sessionName, 'action', 'focus-pane-id', candidate], {
+      cwd,
+      timeoutMs: 5000,
+      optional: true
+    })
+    last = focus
+    if (focus.ok) return focus
+  }
+  return last
+}
+
+async function closeZellijPaneById(sessionName: string, paneId: string, cwd: string): Promise<ZellijCommandResult | null> {
+  const candidates = zellijPaneIdCandidates(paneId)
+  let last: ZellijCommandResult | null = null
+  for (const candidate of candidates) {
+    const close = await runZellij(['--session', sessionName, 'action', 'close-pane', '--pane-id', candidate], {
+      cwd,
+      timeoutMs: 5000,
+      optional: true
+    })
+    last = close
+    if (close.ok) return close
+  }
+  return last
+}
+
+function zellijPaneIdCandidates(paneId: string) {
+  const raw = String(paneId || '').trim()
+  const numeric = raw.replace(/^terminal_/, '')
+  const parsed = Number.parseInt(numeric, 10)
+  return [...new Set([
+    raw,
+    numeric,
+    Number.isFinite(parsed) ? String(parsed) : '',
+    Number.isFinite(parsed) ? `terminal_${parsed}` : ''
+  ].filter(Boolean))]
 }
 
 function sleep(ms: number): Promise<void> {

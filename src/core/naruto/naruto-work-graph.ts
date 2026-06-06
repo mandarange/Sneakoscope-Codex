@@ -53,7 +53,8 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
   const requestedClones = normalizePositiveInt(input.requestedClones, 12)
   const readonly = input.readonly === true
   const writeCapable = input.writeCapable !== false && !readonly
-  const totalWorkItems = Math.max(requestedClones, normalizePositiveInt(input.totalWorkItems, requestedClones))
+  const minimumFanout = writeCapable ? requestedClones * 2 : requestedClones
+  const totalWorkItems = Math.max(minimumFanout, normalizePositiveInt(input.totalWorkItems, minimumFanout))
   const kindCycle = writeCapable ? WRITE_CAPABLE_KIND_CYCLE : READONLY_KIND_CYCLE
   const basePath = normalizeNarutoPath(input.leaseBasePath || '.sneakoscope/naruto/patch-envelopes')
   const targetPaths = normalizePaths(input.targetPaths || [])

@@ -283,7 +283,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     noOllama: opts.noOllama === true,
     route,
     fastModePolicy,
-    ...(opts.workerPlacement === undefined ? {} : { workerPlacement: String(opts.workerPlacement) })
+    ...(opts.workerPlacement === undefined ? {} : { workerPlacement: String(opts.workerPlacement) }),
+    zellijVisiblePaneCap: Number(opts.zellijVisiblePaneCap || visualLaneCount || targetActiveSlots),
+    projectRoot: root
   })
   await nativeCliSwarm.initialize()
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: routeCommand, native_agent_backend: backend })
@@ -336,7 +338,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
         generationIndex: agent.generation_index,
         requireGeneration: true
       })
-      const backendOpts = { ...opts, missionId, agentRoot: ledgerRoot, cwd: workerWorktree?.context.path || root, route, prompt, fastMode: fastModePolicy.fast_mode, serviceTier: fastModePolicy.service_tier, ...(workerWorktree ? { worktree: workerWorktree.context } : {}) }
+      const backendOpts = { ...opts, missionId, agentRoot: ledgerRoot, cwd: workerWorktree?.context.path || root, projectRoot: root, route, prompt, fastMode: fastModePolicy.fast_mode, serviceTier: fastModePolicy.service_tier, ...(workerWorktree ? { worktree: workerWorktree.context } : {}) }
       const result = opts.nativeCliSwarm === false
         ? await runAgentByBackend(backend, runtimeAgent, runtimeSlice, backendOpts)
         : await nativeCliSwarm.launchWorker({ agent: runtimeAgent, slice: runtimeSlice, opts: backendOpts })

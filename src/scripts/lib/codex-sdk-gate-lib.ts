@@ -64,6 +64,11 @@ export function packageScripts() {
   return readJson('package.json').scripts || {};
 }
 
+export function releaseGateIds() {
+  const manifest = readJson('release-gates.v2.json');
+  return new Set((manifest.gates || []).map((gate) => gate.id));
+}
+
 export function assertSourceIncludes(file, tokens) {
   const text = readText(file);
   for (const token of tokens) assertGate(text.includes(token), `${file} missing token ${token}`);

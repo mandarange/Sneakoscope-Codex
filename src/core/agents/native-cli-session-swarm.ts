@@ -5,6 +5,7 @@ import { appendJsonl, ensureDir, exists, nowIso, packageRoot, readJson, writeJso
 import { fastModeEnv, type FastModePolicy } from './fast-mode-policy.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { closeWorkerPane, openWorkerPane } from '../zellij/zellij-worker-pane-manager.js'
+import { recordHeadlessWorkerInRightColumn } from '../zellij/zellij-right-column-manager.js'
 import { resolveProviderContext } from '../provider/provider-context.js'
 
 export const NATIVE_CLI_SESSION_SWARM_SCHEMA = 'sks.agent-native-cli-session-swarm.v1'
@@ -19,6 +20,8 @@ export function createNativeCliSessionSwarmRecorder(root: string, input: {
   route: string
   fastModePolicy: FastModePolicy
   workerPlacement?: string
+  zellijVisiblePaneCap?: number
+  projectRoot?: string
 }) {
   return new NativeCliSessionSwarmRecorder(root, input)
 }
@@ -30,7 +33,7 @@ class NativeCliSessionSwarmRecorder {
   private writeLock: Promise<unknown> = Promise.resolve()
   private nextPaneToken = -1
 
-  constructor(private root: string, private input: { missionId: string; requestedAgents: number; targetActiveSlots: number; backend: string; backendExplicit?: boolean; noOllama?: boolean; route: string; fastModePolicy: FastModePolicy; workerPlacement?: string }) {}
+  constructor(private root: string, private input: { missionId: string; requestedAgents: number; targetActiveSlots: number; backend: string; backendExplicit?: boolean; noOllama?: boolean; route: string; fastModePolicy: FastModePolicy; workerPlacement?: string; zellijVisiblePaneCap?: number; projectRoot?: string }) {}
 
   async initialize() {
     await this.persist()
@@ -116,6 +119,7 @@ class NativeCliSessionSwarmRecorder {
     const useZellijPane = placement === 'zellij-pane'
       && ctx.opts.zellijPaneWorker !== false
       && (ctx.opts.zellijSessionName || this.input.missionId)
+      && this.visibleZellijPaneCount() < this.zellijVisiblePaneCap(ctx.opts)
     if (useZellijPane) {
       stdout.end()
       stderr.end()
@@ -129,6 +133,21 @@ class NativeCliSessionSwarmRecorder {
         heartbeatRel,
         workerDirRel
       })
+    }
+    if (placement === 'zellij-pane' && ctx.opts.zellijPaneWorker !== false && !useZellijPane) {
+      record.worker_placement = 'headless'
+      record.headless_reason = `visible_pane_cap:${this.zellijVisiblePaneCap(ctx.opts)}`
+      await recordHeadlessWorkerInRightColumn({
+        root: this.root,
+        projectRoot: ctx.opts.projectRoot || this.input.projectRoot || ctx.opts.cwd,
+        missionId: this.input.missionId,
+        sessionName: String(ctx.opts.zellijSessionName || (this.input.missionId ? `sks-${this.input.missionId}` : 'sks-agent-runtime')),
+        slotId: String(ctx.agent.slot_id || ctx.agent.id || 'slot-001'),
+        generationIndex: Number(ctx.agent.generation_index || 1),
+        reason: record.headless_reason
+      }).catch(() => null)
+    } else {
+      record.worker_placement = placement === 'zellij-pane' ? 'zellij-pane' : 'process'
     }
     const child = spawn(process.execPath, args, {
       cwd: workerCwd,
@@ -214,11 +233,26 @@ class NativeCliSessionSwarmRecorder {
     this.active.add(activeToken)
     this.maxObserved = Math.max(this.maxObserved, this.active.size)
 
+    const providerContext = await resolveProviderContext({
+      root: this.root,
+      route: this.input.route,
+      serviceTier: this.input.fastModePolicy.service_tier
+    })
     const workerCommand = buildPaneWorkerCommand({
       args: input.args,
       stdoutPath: path.join(this.root, input.stdoutRel),
       stderrPath: path.join(this.root, input.stderrRel),
       heartbeatPath: path.join(this.root, input.heartbeatRel),
+      header: buildPaneWorkerHeader({
+        slotId,
+        generationIndex: Number(input.ctx.agent.generation_index || 1),
+        role: input.ctx.agent.naruto_role || input.ctx.agent.role || input.ctx.agent.persona_id || 'worker',
+        backend: this.input.backend,
+        provider: providerContext.provider,
+        serviceTier: this.input.fastModePolicy.service_tier,
+        worktree,
+        task: input.ctx.slice?.description || input.ctx.slice?.title || input.ctx.slice?.id || ''
+      }),
       env: {
         ...(input.ctx.opts.env || {}),
         ...fastModeEnv(this.input.fastModePolicy),
@@ -234,11 +268,6 @@ class NativeCliSessionSwarmRecorder {
         SKS_ZELLIJ_WORKER_PANE: '1',
         SKS_ZELLIJ_SESSION_NAME: sessionName
       }
-    })
-    const providerContext = await resolveProviderContext({
-      root: this.root,
-      route: this.input.route,
-      serviceTier: this.input.fastModePolicy.service_tier
     })
     let paneRecord = await openWorkerPane({
       root: this.root,
@@ -258,7 +287,25 @@ class NativeCliSessionSwarmRecorder {
       providerContext,
       serviceTier: this.input.fastModePolicy.service_tier,
       worktree: worktree ? { id: worktree.id, path: worktree.path, branch: worktree.branch } : null,
-      backend: this.input.backend
+      backend: this.input.backend,
+      projectRoot: input.ctx.opts.projectRoot || this.input.projectRoot || input.ctx.opts.cwd,
+      rightColumnMode: 'spawn-on-first-worker',
+      visiblePaneCap: this.zellijVisiblePaneCap(input.ctx.opts),
+      dashboardSnapshot: {
+        mode: this.input.route || '$Agent',
+        backend_counts: { [this.input.backend]: this.input.targetActiveSlots },
+        placement_counts: {
+          'zellij-pane': this.zellijVisiblePaneCap(input.ctx.opts),
+          headless: Math.max(0, this.input.targetActiveSlots - this.zellijVisiblePaneCap(input.ctx.opts))
+        },
+        active_workers: this.input.targetActiveSlots,
+        visible_panes: this.zellijVisiblePaneCap(input.ctx.opts),
+        headless_workers: Math.max(0, this.input.targetActiveSlots - this.zellijVisiblePaneCap(input.ctx.opts)),
+        queue_depth: Math.max(0, this.input.requestedAgents - this.input.targetActiveSlots),
+        local_llm: { tps: 0, queue: 0 },
+        gpt_final_status: 'pending',
+        gate_progress: 'worker-spawn'
+      }
     })
     const launchBlockers = paneRecord.blockers || []
     input.record.command_line = ['zellij', '--session', sessionName, 'action', 'new-pane', '--direction', paneRecord.direction_applied, '--name', paneRecord.pane_name, '--', 'sh', '-lc', '<native-cli-worker-command>']
@@ -360,6 +407,7 @@ class NativeCliSessionSwarmRecorder {
       root: this.root,
       paneRecord,
       cwd: workerCwd,
+      projectRoot: input.ctx.opts.projectRoot || this.input.projectRoot || input.ctx.opts.cwd,
       status: input.record.status === 'closed' ? 'closed' : 'failed',
       blockers: input.record.blockers,
       sdkThreadId,
@@ -432,6 +480,8 @@ class NativeCliSessionSwarmRecorder {
       closed_worker_process_count: closed.length,
       max_observed_worker_process_count: this.maxObserved,
       active_worker_process_count: this.active.size,
+      visible_zellij_pane_cap: this.input.zellijVisiblePaneCap || null,
+      headless_overflow_worker_count: this.records.filter((row) => row.worker_placement === 'headless').length,
       unique_worker_session_count: new Set(this.records.map((row) => row.session_id).filter(Boolean)).size,
       unique_slot_count: new Set(this.records.map((row) => row.slot_id).filter(Boolean)).size,
       unique_generation_count: new Set(this.records.map((row) => `${row.slot_id}:${row.generation_index}`).filter(Boolean)).size,
@@ -446,18 +496,48 @@ class NativeCliSessionSwarmRecorder {
       blockers: this.records.flatMap((row) => row.blockers || [])
     }
   }
+
+  private zellijVisiblePaneCap(opts: any = {}) {
+    const raw = Number(opts.zellijVisiblePaneCap || this.input.zellijVisiblePaneCap || this.input.targetActiveSlots || 1)
+    return Math.max(1, Math.floor(Number.isFinite(raw) ? raw : 1))
+  }
+
+  private visibleZellijPaneCount() {
+    return this.records.filter((row) => row.scaling_primitive === 'native_cli_process_in_zellij_worker_pane' && (row.status === 'launching' || row.status === 'running')).length
+  }
 }
 
-export function buildPaneWorkerCommand(input: { args: string[]; stdoutPath: string; stderrPath: string; heartbeatPath: string; env: Record<string, unknown> }) {
+export function buildPaneWorkerCommand(input: { args: string[]; stdoutPath: string; stderrPath: string; heartbeatPath: string; env: Record<string, unknown>; header?: string }) {
   const envPrefix = Object.entries(input.env)
     .filter(([key, value]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && value != null)
-    .map(([key, value]) => `${key}=${shellQuote(String(value))}`)
+    .map(([key, value]) => `export ${key}=${shellQuote(String(value))};`)
     .sort()
   const command = [shellQuote(process.execPath), ...input.args.map(shellQuote)].join(' ')
   const heartbeat = `printf '%s\\n' ${shellQuote(JSON.stringify({ schema: 'sks.zellij-worker-pane-event.v1', event: 'worker_command_exited' }))} >> ${shellQuote(input.heartbeatPath)}`
   const holdMs = Math.max(0, Number(process.env.SKS_ZELLIJ_WORKER_PANE_HOLD_MS || 1500))
   const hold = holdMs > 0 ? `sleep ${shellQuote(String(Math.min(30, holdMs / 1000)))}` : ':'
-  return `${envPrefix.join(' ')} ${command} > ${shellQuote(input.stdoutPath)} 2> ${shellQuote(input.stderrPath)}; code=$?; ${heartbeat}; ${hold}; exit $code`.trim()
+  const header = input.header ? `printf '%s\\n' ${shellQuote(input.header)} | tee -a ${shellQuote(input.stdoutPath)};` : ''
+  return `${envPrefix.join(' ')} ${header} ${command} >> ${shellQuote(input.stdoutPath)} 2>> ${shellQuote(input.stderrPath)}; code=$?; ${heartbeat}; ${hold}; exit $code`.trim()
+}
+
+function buildPaneWorkerHeader(input: {
+  slotId: string
+  generationIndex: number
+  role: string
+  backend: string
+  provider: string
+  serviceTier: string
+  worktree: ReturnType<typeof normalizeWorkerWorktree>
+  task: string
+}) {
+  return [
+    'SKS Worker',
+    `slot: ${input.slotId} gen: ${input.generationIndex} role: ${input.role}`,
+    `backend: ${input.backend} provider: ${input.provider} service: ${input.serviceTier}`,
+    `worktree: ${input.worktree ? `${input.worktree.id} branch: ${input.worktree.branch}` : '-'}`,
+    `task: ${String(input.task || '').slice(0, 160)}`,
+    'status: running'
+  ].join('\n')
 }
 
 async function waitForWorkerResult(file: string, timeoutMs: number) {

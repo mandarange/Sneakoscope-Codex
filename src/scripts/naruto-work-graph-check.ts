@@ -13,7 +13,7 @@ const graph = workGraph.buildNarutoWorkGraph({
 const validation = workGraph.validateNarutoWorkGraph(graph)
 
 assertGate(graph.ok === true && validation.ok === true, 'Naruto work graph must validate', { graph_blockers: graph.blockers, validation })
-assertGate(graph.total_work_items >= graph.requested_clones, 'work graph must create at least requested clone count', { total: graph.total_work_items, requested: graph.requested_clones })
+assertGate(graph.total_work_items >= graph.requested_clones * 2, 'write-capable work graph must create at least 2x requested clone count', { total: graph.total_work_items, requested: graph.requested_clones })
 assertGate(graph.mixed_work_kinds.length > 4, 'work graph must contain mixed work kinds, not only verification', { kinds: graph.mixed_work_kinds })
 assertGate(graph.write_allowed_count > 0, 'write-capable Naruto graph must include write_allowed work items', { write_allowed_count: graph.write_allowed_count })
 assertGate(graph.active_waves.every((wave) => wave.conflict_count === 0), 'active waves must not overlap write leases', { waves: graph.active_waves })
@@ -24,4 +24,3 @@ emitGate('naruto:work-graph', {
   write_allowed_count: graph.write_allowed_count,
   wave_count: graph.active_waves.length
 })
-

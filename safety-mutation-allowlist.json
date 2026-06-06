@@ -758,6 +758,48 @@
       "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
     },
     {
+      "file": "src/core/release/release-gate-cache-v2.ts",
+      "symbol": "writeReleaseGateCacheHit",
+      "token": "writeFileSync",
+      "reason": "Release gate cache writer persists scoped cache-hit metadata under the per-gate report directory."
+    },
+    {
+      "file": "src/core/release/release-gate-report.ts",
+      "symbol": "writeReleaseGateJson",
+      "token": "writeFileSync",
+      "reason": "Release gate report helper writes scoped JSON artifacts for the active release-gate run."
+    },
+    {
+      "file": "src/scripts/release-cache-glob-hashing-check.ts",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes only hermetic temp fixture files for cache key hashing proof."
+    },
+    {
+      "file": "src/scripts/release-parallel-speed-budget-check.ts",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes the scoped speed-budget proof report under .sneakoscope/reports."
+    },
+    {
+      "file": "src/scripts/release-stability-report-check.ts",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes the scoped stability proof report under .sneakoscope/reports."
+    },
+    {
+      "file": "src/scripts/zellij-worker-pane-real-ui-blackbox.ts",
+      "symbol": "module",
+      "token": "rmSync",
+      "reason": "Real Zellij blackbox cleans only its generated mission fixture directory before recreating it."
+    },
+    {
+      "file": "src/scripts/zellij-worker-pane-real-ui-blackbox.ts",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Real Zellij blackbox writes scoped worker fixture results and the matching proof report."
+    },
+    {
       "file": "src/core/zellij/zellij-command.ts",
       "symbol": "prepareZellijProcessEnv",
       "token": "chmod",

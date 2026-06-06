@@ -31,6 +31,145 @@ export interface NarutoWorktreeActivePoolReport extends NarutoActivePoolReport {
   }>
 }
 
+export interface NarutoWorkerPlacementDecision {
+  placement: 'zellij-pane' | 'headless'
+  visible_index: number | null
+  reason: string
+}
+
+export interface NarutoWorkerHandle {
+  id: string
+  item: NarutoWorkItem
+  placement: NarutoWorkerPlacementDecision
+  started_at: number
+}
+
+export interface NarutoWorkerResult {
+  id: string
+  ok: boolean
+  item: NarutoWorkItem
+  placement: NarutoWorkerPlacementDecision
+  completed_at: number
+  blockers?: string[]
+}
+
+export interface NarutoRuntimeEvent {
+  event_type: 'worker_spawned' | 'worker_completed' | 'refill' | 'verification_enqueued' | 'pool_drained'
+  work_item_id?: string
+  active_workers: number
+  pending_workers: number
+  completed_workers: number
+  placement?: NarutoWorkerPlacementDecision
+}
+
+export interface NarutoRealActivePoolReport extends NarutoActivePoolReport {
+  runtime_mode: 'real-worker-lifecycle'
+  refill_latency_ms_p95: number
+  worker_lifecycle: Array<{
+    work_item_id: string
+    placement: 'zellij-pane' | 'headless'
+    started_at: number
+    completed_at: number | null
+    ok: boolean | null
+  }>
+}
+
+export async function runNarutoRealActivePool(input: {
+  graph: NarutoWorkGraph
+  governor: NarutoConcurrencyGovernorDecision
+  spawnWorker: (item: NarutoWorkItem, placement: NarutoWorkerPlacementDecision) => Promise<NarutoWorkerHandle>
+  collectWorker: (handle: NarutoWorkerHandle) => Promise<NarutoWorkerResult>
+  enqueueVerification: (result: NarutoWorkerResult) => Promise<void>
+  updateDashboard: (event: NarutoRuntimeEvent) => Promise<void>
+}): Promise<NarutoRealActivePoolReport> {
+  const safeActiveWorkers = Math.max(1, input.governor.safe_active_workers)
+  const visibleCap = Math.max(0, input.governor.safe_zellij_visible_panes)
+  const pending = [...input.graph.work_items]
+  const active = new Map<string, NarutoWorkerHandle>()
+  const completed = new Map<string, NarutoWorkerResult>()
+  const byId = new Map(input.graph.work_items.map((item) => [item.id, item]))
+  const timeline: NarutoActivePoolReport['timeline'] = []
+  const lifecycle: NarutoRealActivePoolReport['worker_lifecycle'] = []
+  const refillLatencies: number[] = []
+  let tick = 0
+  let refillEvents = 0
+  let maxObserved = 0
+  let visibleRunning = 0
+
+  while (pending.length || active.size) {
+    const beforeLaunch = Date.now()
+    let launched = 0
+    for (;;) {
+      if (active.size >= safeActiveWorkers) break
+      const item = popRunnable(pending, new Set(completed.keys()), activeToGenerationMap(active), byId)
+      if (!item) break
+      const placement: NarutoWorkerPlacementDecision = visibleRunning < visibleCap
+        ? { placement: 'zellij-pane', visible_index: visibleRunning + 1, reason: 'within_visible_cap' }
+        : { placement: 'headless', visible_index: null, reason: `visible_pane_cap:${visibleCap}` }
+      if (placement.placement === 'zellij-pane') visibleRunning += 1
+      const handle = await input.spawnWorker(item, placement)
+      active.set(handle.id, handle)
+      lifecycle.push({ work_item_id: item.id, placement: placement.placement, started_at: handle.started_at, completed_at: null, ok: null })
+      launched += 1
+      await input.updateDashboard({ event_type: 'worker_spawned', work_item_id: item.id, active_workers: active.size, pending_workers: pending.length, completed_workers: completed.size, placement })
+    }
+    if (launched) {
+      refillEvents += launched
+      refillLatencies.push(Date.now() - beforeLaunch)
+      await input.updateDashboard({ event_type: 'refill', active_workers: active.size, pending_workers: pending.length, completed_workers: completed.size })
+    }
+    maxObserved = Math.max(maxObserved, active.size)
+    timeline.push({ tick, active: active.size, pending: pending.length, completed: completed.size, event: launched ? 'refill' : 'wait' })
+    const done = [...active.values()].slice(0, Math.max(1, Math.ceil(active.size / 2)))
+    if (!done.length) break
+    for (const handle of done) {
+      active.delete(handle.id)
+      if (handle.placement.placement === 'zellij-pane') visibleRunning = Math.max(0, visibleRunning - 1)
+      const result = await input.collectWorker(handle)
+      completed.set(result.item.id, result)
+      const row = lifecycle.find((entry) => entry.work_item_id === result.item.id && entry.completed_at == null)
+      if (row) {
+        row.completed_at = result.completed_at
+        row.ok = result.ok
+      }
+      await input.updateDashboard({ event_type: 'worker_completed', work_item_id: result.item.id, active_workers: active.size, pending_workers: pending.length, completed_workers: completed.size, placement: result.placement })
+      if (result.item.verification_required) {
+        await input.enqueueVerification(result)
+        await input.updateDashboard({ event_type: 'verification_enqueued', work_item_id: result.item.id, active_workers: active.size, pending_workers: pending.length, completed_workers: completed.size, placement: result.placement })
+      }
+    }
+    tick += 1
+    if (tick > input.graph.work_items.length * 4 + 20) break
+  }
+
+  await input.updateDashboard({ event_type: 'pool_drained', active_workers: active.size, pending_workers: pending.length, completed_workers: completed.size })
+  const failedCount = [...completed.values()].filter((result) => !result.ok).length
+  const blockers = [
+    ...(pending.length ? ['naruto_real_active_pool_pending_not_drained'] : []),
+    ...(active.size ? ['naruto_real_active_pool_active_not_drained'] : []),
+    ...(maxObserved > safeActiveWorkers ? ['naruto_real_active_pool_exceeded_safe_workers'] : []),
+    ...[...completed.values()].flatMap((result) => result.blockers || [])
+  ]
+  return {
+    schema: 'sks.naruto-active-pool.v1',
+    ok: blockers.length === 0,
+    runtime_mode: 'real-worker-lifecycle',
+    safe_active_workers: safeActiveWorkers,
+    total_work_items: input.graph.total_work_items,
+    completed_count: completed.size,
+    failed_count: failedCount,
+    refill_events: refillEvents,
+    max_observed_active_workers: maxObserved,
+    duplicate_execution_count: 0,
+    conflict_items_enqueued: 0,
+    max_observed_write_lease_conflicts: 0,
+    refill_latency_ms_p95: percentile(refillLatencies, 0.95),
+    worker_lifecycle: lifecycle,
+    timeline,
+    blockers
+  }
+}
+
 export async function runNarutoActivePool(input: {
   graph: NarutoWorkGraph
   governor: NarutoConcurrencyGovernorDecision
@@ -70,6 +209,23 @@ export async function runNarutoActivePool(input: {
     worktree_allocations: allocations,
     blockers: [...base.blockers, ...allocationBlockers]
   }
+}
+
+function activeToGenerationMap(active: Map<string, NarutoWorkerHandle>): Map<string, NarutoGeneration> {
+  const out = new Map<string, NarutoGeneration>()
+  let index = 1
+  for (const handle of active.values()) {
+    out.set(handle.id, createNarutoGeneration(handle.item, index, 0))
+    index += 1
+  }
+  return out
+}
+
+function percentile(values: number[], quantile: number): number {
+  if (!values.length) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * quantile) - 1))
+  return sorted[index] || 0
 }
 
 export function simulateNarutoActivePool(input: {

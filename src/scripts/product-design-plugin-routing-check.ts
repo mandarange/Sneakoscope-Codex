@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import { PRODUCT_DESIGN_PIPELINE_STAGES, PRODUCT_DESIGN_PLUGIN, PRODUCT_DESIGN_REQUIRED_SKILLS, normalizeProductDesignPluginEvidence, productDesignPluginVisibilityFromCodexPluginList } from '../core/product-design-plugin.js';
-import { assertGate, emitGate, readText } from './lib/codex-sdk-gate-lib.js';
+import { assertGate, emitGate, readText, releaseGateIds } from './lib/codex-sdk-gate-lib.js';
 
 const routesSource = readText('src/core/routes.ts');
 const productDesignSource = readText('src/core/product-design-plugin.ts');
@@ -10,7 +10,7 @@ const pptSource = readText('src/core/ppt.ts');
 const codexAppSource = readText('src/core/codex-app.ts');
 const initSource = readText('src/core/init.ts');
 const pkg = JSON.parse(readText('package.json'));
-const releaseCheck = String(pkg.scripts?.['release:check'] || '');
+const releaseGates = releaseGateIds();
 
 assertGate(PRODUCT_DESIGN_PLUGIN.id === 'product-design@openai-curated-remote', 'Product Design plugin id must use the remote marketplace');
 assertGate(PRODUCT_DESIGN_PLUGIN.marketplace === 'openai-curated-remote', 'Product Design marketplace must be openai-curated-remote');
@@ -102,7 +102,7 @@ for (const token of [
 }
 
 assertGate(Boolean(pkg.scripts?.['codex:product-design-plugin-routing']), 'package script missing codex:product-design-plugin-routing');
-assertGate(releaseCheck.includes('codex:product-design-plugin-routing'), 'release:check must include Product Design routing gate');
+assertGate(releaseGates.has('codex:product-design-plugin-routing'), 'release gate DAG must include Product Design routing gate');
 
 emitGate('codex:product-design-plugin-routing', {
   plugin_id: PRODUCT_DESIGN_PLUGIN.id,

@@ -67,6 +67,40 @@ export async function runReleaseGateDag(input: {
   let sumGateMs = 0
   let peakRunning = 0
 
+  const writeSummarySnapshot = (finished = false): ReleaseGateDagRunResult & { in_progress?: boolean; pending?: number; running?: number } => {
+    const wallMs = Date.now() - started
+    const failures = [...failed.values()].map((row) => ({ id: row.id, exit_code: row.exit_code, stderr_tail: row.stderr_tail }))
+    const snapshot: ReleaseGateDagRunResult & { in_progress?: boolean; pending?: number; running?: number } = {
+      schema: 'sks.release-gate-dag-run.v1',
+      ok: failures.length === 0,
+      run_id: runId,
+      selected_preset: preset,
+      total_gates: manifest.gates.length,
+      selected_gates: selected.length,
+      completed: completed.size,
+      failed: failed.size,
+      cached,
+      wall_ms: wallMs,
+      sum_gate_ms: sumGateMs,
+      cpu_time_saved_ms: Math.max(0, sumGateMs - wallMs),
+      parallelism_gain: wallMs > 0 ? Number((sumGateMs / wallMs).toFixed(2)) : 1,
+      critical_path_ms: estimateCriticalPath(selected, completed),
+      peak_running: peakRunning,
+      peak_resources: peakResources,
+      budget_snapshot: budget,
+      budget_summary: summarizeReleaseGateBudget(budget),
+      report_dir: reportDir,
+      failures
+    }
+    if (!finished) {
+      snapshot.in_progress = true
+      snapshot.pending = pending.size
+      snapshot.running = running.size
+    }
+    writeReleaseGateJson(path.join(reportDir, 'summary.json'), snapshot)
+    return snapshot
+  }
+
   if (input.explain) {
     writeReleaseGateJson(path.join(reportDir, 'explain.json'), { schema: RELEASE_GATE_NODE_SCHEMA, preset, budget, gates: selected.map((gate) => ({ id: gate.id, deps: gate.deps, resource: gate.resource, command: gate.command })) })
   }
@@ -84,6 +118,7 @@ export async function runReleaseGateDag(input: {
         cached += 1
         progressed = true
         appendReleaseGateJsonl(timeline, { event: 'cache_hit', gate_id: gate.id, at: new Date().toISOString() })
+        writeSummarySnapshot(false)
         continue
       }
       appendReleaseGateJsonl(timeline, { event: 'start', gate_id: gate.id, resource: gate.resource, at: new Date().toISOString() })
@@ -131,33 +166,10 @@ export async function runReleaseGateDag(input: {
       }
     }
     appendReleaseGateJsonl(timeline, { event: result.ok ? 'pass' : 'fail', gate_id: result.id, duration_ms: result.duration_ms, at: new Date().toISOString() })
+    writeSummarySnapshot(false)
   }
 
-  const wallMs = Date.now() - started
-  const failures = [...failed.values()].map((row) => ({ id: row.id, exit_code: row.exit_code, stderr_tail: row.stderr_tail }))
-  const result: ReleaseGateDagRunResult = {
-    schema: 'sks.release-gate-dag-run.v1',
-    ok: failures.length === 0,
-    run_id: runId,
-    selected_preset: preset,
-    total_gates: manifest.gates.length,
-    selected_gates: selected.length,
-    completed: completed.size,
-    failed: failed.size,
-    cached,
-    wall_ms: wallMs,
-    sum_gate_ms: sumGateMs,
-    cpu_time_saved_ms: Math.max(0, sumGateMs - wallMs),
-    parallelism_gain: wallMs > 0 ? Number((sumGateMs / wallMs).toFixed(2)) : 1,
-    critical_path_ms: estimateCriticalPath(selected, completed),
-    peak_running: peakRunning,
-    peak_resources: peakResources,
-    budget_snapshot: budget,
-    budget_summary: summarizeReleaseGateBudget(budget),
-    report_dir: reportDir,
-    failures
-  }
-  writeReleaseGateJson(path.join(reportDir, 'summary.json'), result)
+  const result = writeSummarySnapshot(true)
   return result
 }
 

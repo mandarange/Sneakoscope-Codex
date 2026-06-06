@@ -50,7 +50,7 @@ export interface ZellijLayoutBuild {
 }
 
 export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuild {
-  const slotCount = Math.max(1, Number(input.slotCount || 1))
+  const slotCount = Math.max(0, Number(input.slotCount ?? 1))
   const sessionName = input.sessionName || `sks-${input.missionId}`
   const cwd = path.resolve(input.cwd || process.cwd())
   const ledgerRoot = path.resolve(input.ledgerRoot)

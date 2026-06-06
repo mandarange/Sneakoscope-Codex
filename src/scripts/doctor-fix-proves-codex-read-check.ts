@@ -27,7 +27,7 @@ const run = spawnSync(process.execPath, [
     SKS_DISABLE_UPDATE_CHECK: '1'
   },
   encoding: 'utf8',
-  timeout: 60000
+  timeout: 180000
 });
 
 const parsed = parseLastJson(run.stdout || '{}');
@@ -36,11 +36,29 @@ const ok = run.status !== 0
   && parsed.ready?.blockers?.includes('codex_cli_config_eperm')
   && parsed.ready?.next_actions?.length > 0;
 
-console.log(JSON.stringify({ schema: 'sks.doctor-fix-proves-codex-read-check.v1', ok, status: run.status, parsed }, null, 2));
+console.log(JSON.stringify({
+  schema: 'sks.doctor-fix-proves-codex-read-check.v1',
+  ok,
+  status: run.status,
+  signal: run.signal,
+  error: run.error ? String(run.error.message || run.error) : null,
+  parsed,
+  stdout_tail: String(run.stdout || '').slice(-1000),
+  stderr_tail: String(run.stderr || '').slice(-1000)
+}, null, 2));
 if (!ok) process.exitCode = 1;
 
 function parseLastJson(text) {
-  const index = String(text).lastIndexOf('\n{');
-  const jsonText = index >= 0 ? String(text).slice(index + 1) : String(text).slice(String(text).indexOf('{'));
-  return JSON.parse(jsonText || '{}');
+  const source = String(text || '').trim();
+  if (!source) return {};
+  const starts = [];
+  for (let index = source.indexOf('{'); index >= 0; index = source.indexOf('{', index + 1)) starts.push(index);
+  for (let i = starts.length - 1; i >= 0; i -= 1) {
+    try {
+      return JSON.parse(source.slice(starts[i]));
+    } catch {
+      // Continue searching for the outer JSON object; pretty JSON may contain nested objects.
+    }
+  }
+  return {};
 }

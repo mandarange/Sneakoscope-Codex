@@ -222,7 +222,7 @@ const releaseMetadata = runNodeScript('dist/scripts/release-metadata-check.js');
 const sideEffectRuntime = runNodeScript('dist/scripts/side-effect-runtime-report-check.js');
 const releaseProvenance = runNodeScript('dist/scripts/release-provenance-check.js');
 const imagegenCore = runNodeScript('dist/scripts/imagegen-capability-check.js');
-const dynamicReleaseMode = process.env.SKS_RELEASE_DYNAMIC === '1';
+const dynamicReleaseMode = process.env.SKS_RELEASE_DYNAMIC === '1' || Boolean(process.env.SKS_REPORT_DIR);
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
   flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null),
