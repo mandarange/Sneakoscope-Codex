@@ -7,6 +7,7 @@ import { createMission, setCurrent } from '../mission.js';
 import { buildMadHighLaunchProfileNoWrite, madHighProfileName } from '../auto-review.js';
 import { permissionGateSummary } from '../permission-gates.js';
 import { attachZellijSessionInteractive, launchMadZellijUi, sanitizeZellijSessionName } from '../zellij/zellij-launcher.js';
+import { openZellijDashboardPane } from '../zellij/zellij-dashboard-pane.js';
 import { createMadSksAuthorizationManifest, validateMadSksAuthorizationManifest } from '../mad-sks/authorization-manifest.js';
 import { createMadSksAuditLedger, madSksAuditAction, writeMadSksAuditLedger } from '../mad-sks/audit-ledger.js';
 import { compareProtectedCoreSnapshots, evaluateMadSksWrite, resolveProtectedCore, snapshotProtectedCore } from '../mad-sks/immutable-harness-guard.js';
@@ -95,7 +96,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   };
   const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`));
-  const launch = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), slotCount: 0, requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
+  const launch: any = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), slotCount: 0, requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const afterLaunchUi = beforeUi ? await writeCodexAppUiSnapshot(launchRoot, `mad-after-launch-${uiSnapshotId}`).catch(() => null) : null;
   const launchUiDiff = beforeUi && afterLaunchUi ? diffCodexAppUiSnapshots(beforeUi, afterLaunchUi) : null;
   if (launchUiDiff) {
@@ -110,6 +111,30 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     console.log(`MAD Zellij action: ${formatMadZellijAction(launch)}`);
     return launch;
   }
+  launch.dashboard_pane = await openZellijDashboardPane({
+    root: madLaunch.root,
+    missionId: madLaunch.mission_id,
+    sessionName: launch.session_name,
+    cwd: process.cwd(),
+    snapshot: {
+      mode: 'mad-sks',
+      backend_counts: { zellij: 1 },
+      placement_counts: { 'zellij-pane': 1, headless: 0 },
+      active_workers: 1,
+      visible_panes: 1,
+      headless_workers: 0,
+      queue_depth: 0,
+      worktrees: { active: 0, completed: 0, retained: 0 },
+      local_llm: { tps: 0, queue: 0 },
+      gpt_final_status: 'pending',
+      gate_progress: 'mad-sks:session-open'
+    }
+  }).catch((err: any) => ({
+    ok: false,
+    pane_kind: 'dashboard',
+    worker_pane: false,
+    blockers: [`zellij_dashboard_exception:${err?.message || String(err)}`]
+  }));
   const madNativeSwarm = await startMadNativeSwarm(madLaunch.root, madLaunch, args, profile, {
     env: {
       ...madSksEnv,

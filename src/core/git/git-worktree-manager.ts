@@ -1,6 +1,6 @@
 import path from 'node:path'
 import fsp from 'node:fs/promises'
-import { ensureDir, nowIso, writeJsonAtomic } from '../fsx.js'
+import { ensureDir, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { evaluateGitWorktreeCapability, type GitWorktreeCapability } from './git-worktree-capability.js'
 import { gitBlocker, gitOutputLine, runGitCommand } from './git-worktree-runner.js'
 import { sanitizePathPart } from './git-worktree-root.js'
@@ -96,13 +96,20 @@ export async function allocateWorkerWorktree(input: {
 }
 
 async function appendWorktreeManifest(allocation: GitWorkerWorktreeAllocation) {
+  const current = await readJson<{ allocations?: GitWorkerWorktreeAllocation[] }>(allocation.manifest_path, null as any).catch(() => null)
+  const allocations = Array.isArray(current?.allocations) ? current.allocations : []
+  const key = (row: GitWorkerWorktreeAllocation) => `${row.mission_id}:${row.slot_id}:${row.generation_index}:${row.worker_id}`
+  const nextAllocations = [
+    ...allocations.filter((row) => key(row) !== key(allocation)),
+    allocation
+  ]
   const manifest = {
     schema: 'sks.git-worktree-manifest.v1',
     updated_at: nowIso(),
     mission_id: allocation.mission_id,
     repo_root: allocation.repo_root,
     root: path.dirname(allocation.worktree_path),
-    allocations: [allocation]
+    allocations: nextAllocations
   }
   await writeJsonAtomic(allocation.manifest_path, manifest)
 }

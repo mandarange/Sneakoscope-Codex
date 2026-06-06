@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.8 is the DAG-parallel release-check and worktree proof hardening patch for the 2.0 line. It makes `release:check` execute the manifest-backed `release-gate-dag-runner` by default, while preserving the historical full chain as `release:check:legacy` for audit coverage and long-form regression runs.
+
+The 2.0.8 release gate adds `release-gates.v2.json`, release gate node/schema/report/cache/scheduler infrastructure, resource-aware parallel scheduling, per-gate hermetic environments, release stability scoring, real Zellij dashboard/worker-pane proof, and targeted Git worktree regression gates for manifest appends, dirty main detection, untracked diffs, single `git_apply_patch` envelopes, integration worktree application, dirty worktree locks, and Naruto worktree coding blackbox behavior. Publish readiness now requires the generic metadata gate to accept either the legacy parallel chain or the new DAG runner, with `publish:dry` retaining the version/provenance/dist freshness/npm dry-run checks before a human runs the real publish.
+
 SKS 2.0.7 is the Git worktree parallel coding closure patch for the 2.0 line. It adds Git worktree capability detection, safe out-of-repo worktree allocation, worktree diff export into patch envelopes, integration worktree merge queues, cleanup/retention policy, and Naruto worker/runtime evidence for write-capable parallel coding while preserving patch-envelope-only fallback for non-Git projects.
 
 The 2.0.7 release gate adds `release:worktree-gates`, Git worktree capability/manager/diff/merge/cleanup/cache/pool checks, Naruto worktree coding/Zellij/GPT-final checks, and command-path runtime proof that write-capable Naruto workers receive real worktree allocations. It also keeps release readiness honest: full publish readiness still requires a fresh `release:check`, `release:real-check` where required, and publication/tag steps outside this local implementation pass.

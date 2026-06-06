@@ -14,6 +14,7 @@ import { runNarutoActivePool } from '../naruto/naruto-active-pool.js'
 import { buildNarutoVerificationDag } from '../naruto/naruto-verification-dag.js'
 import { buildNarutoGptFinalPack } from '../naruto/naruto-gpt-final-pack.js'
 import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
+import { openZellijDashboardPane } from '../zellij/zellij-dashboard-pane.js'
 import { checkPromptPlaceholders } from '../prompt/prompt-placeholder-guard.js'
 import { evaluateGitWorktreeCapability } from '../git/git-worktree-capability.js'
 
@@ -149,6 +150,34 @@ async function narutoRun(parsed: NarutoArgs) {
       attach: false
     })
     if (liveZellij?.ok && liveZellij.capability?.status === 'ok') {
+      liveZellij.dashboard_pane = await openZellijDashboardPane({
+        root,
+        missionId: mission.id,
+        sessionName: liveZellij.session_name,
+        cwd: root,
+        snapshot: {
+          mode: 'naruto',
+          backend_counts: { [schedulerBackend]: activeSlots },
+          placement_counts: { 'zellij-pane': zellijVisiblePanes, headless: Math.max(0, activeSlots - zellijVisiblePanes) },
+          active_workers: activeSlots,
+          visible_panes: zellijVisiblePanes,
+          headless_workers: Math.max(0, activeSlots - zellijVisiblePanes),
+          queue_depth: Math.max(0, workGraph.total_work_items - activeSlots),
+          worktrees: {
+            active: worktreePolicy.mode === 'git-worktree' ? activeSlots : 0,
+            completed: 0,
+            retained: 0
+          },
+          local_llm: { tps: 0, queue: localWorker.auto_select_eligible ? Math.max(0, activeSlots - zellijVisiblePanes) : 0 },
+          gpt_final_status: 'pending',
+          gate_progress: 'naruto:pre-orchestrator'
+        }
+      }).catch((err: any) => ({
+        ok: false,
+        pane_kind: 'dashboard',
+        worker_pane: false,
+        blockers: [`zellij_dashboard_exception:${err?.message || String(err)}`]
+      }))
       console.log('Zellij: prepared ' + zellijVisiblePanes + ' visible active clone lane(s) in ' + liveZellij.session_name + ' with ' + Math.max(0, activeSlots - zellijVisiblePanes) + ' headless active worker(s). Attach with: ' + (liveZellij.attach_command_with_env || liveZellij.attach_command))
       if (parsed.attach) attachZellijSessionInteractive(liveZellij.session_name, { cwd: process.cwd(), configPath: liveZellij.clipboard_config_path })
     } else if (liveZellij?.ok) {

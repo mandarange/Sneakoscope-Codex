@@ -33,12 +33,16 @@ export async function exportGitWorktreeDiff(input: {
   const branch = await runGitCommand(worktreePath, ['branch', '--show-current'])
   const head = await runGitCommand(worktreePath, ['rev-parse', 'HEAD'])
   const status = await runGitCommand(worktreePath, ['status', '--porcelain=v1', '--untracked-files=all'])
+  const untracked = await runGitCommand(worktreePath, ['ls-files', '--others', '--exclude-standard'])
+  const untrackedFiles = lines(untracked.stdout)
+  if (untrackedFiles.length) {
+    const addIntent = await runGitCommand(worktreePath, ['add', '-N', '--', ...untrackedFiles])
+    if (!addIntent.ok) blockers.push('git_worktree_untracked_intent_to_add_failed')
+  }
   const diff = await runGitCommand(worktreePath, ['diff', '--binary', '--full-index', 'HEAD'])
   const names = await runGitCommand(worktreePath, ['diff', '--name-only', 'HEAD'])
-  const untracked = await runGitCommand(worktreePath, ['ls-files', '--others', '--exclude-standard'])
   if (!status.ok) blockers.push('git_worktree_status_failed')
   if (!diff.ok) blockers.push('git_worktree_diff_failed')
-  const untrackedFiles = lines(untracked.stdout)
   const trackedChanged = lines(names.stdout)
   const changedFiles = [...new Set([...trackedChanged, ...untrackedFiles, ...statusFiles(status.stdout)])]
   return {

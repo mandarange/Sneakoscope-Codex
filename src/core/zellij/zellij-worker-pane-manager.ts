@@ -121,7 +121,7 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   const paneIdSource = input.paneIdSource || 'zellij_worker_pane_launch_failed'
   const blockers = input.blockers || []
   const providerContext = normalizePaneProviderContext(input.providerContext, input.serviceTier)
-  const paneTitle = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.status || input.statusLabel, input.worktree || null)
+  const paneTitle = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || input.status, input.worktree || null)
   return {
     schema: ZELLIJ_WORKER_PANE_SCHEMA,
     generated_at: now,
@@ -177,11 +177,12 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
   const workerDir = path.join(root, input.workerArtifactDir)
   await ensureDir(workerDir)
   await appendWorkerPaneEvent(root, 'session_launch_started', input, {})
-  const createSession = await runZellij(['attach', '--create-background', input.sessionName], {
+  const createSessionRaw = await runZellij(['attach', '--create-background', input.sessionName], {
     cwd,
     timeoutMs: 5000,
     optional: false
   })
+  const createSession = normalizeExistingZellijSession(input.sessionName, createSessionRaw)
   const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || 'running', input.worktree || null)
   let launch = createSession.ok
     ? await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--direction', 'right', '--name', paneName, '--', 'sh', '-lc', input.workerCommand], {
@@ -205,6 +206,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
   const stdoutPaneId = launch?.ok ? extractZellijPaneIdFromOutput(launch.stdout_tail) : null
   const reconciledPane = stdoutPaneId ? null : launch?.ok ? await reconcileZellijWorkerPaneId(input.sessionName, paneName, path.join(root, input.resultPath), cwd) : null
   const paneId = stdoutPaneId || reconciledPane?.pane_id || null
+  const renamePane = paneId ? await renameZellijPaneById(input.sessionName, paneId, paneName, cwd) : null
   const paneIdSource: ZellijWorkerPaneIdSource = stdoutPaneId
     ? 'zellij_worker_new_pane_stdout'
     : reconciledPane?.pane_id
@@ -223,7 +225,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     paneIdSource,
     createSession,
     launch,
-    paneReconciliation: reconciledPane,
+    paneReconciliation: { ...(reconciledPane || {}), rename_pane: renamePane },
     directionApplied,
     status: blockers.length ? 'failed' : 'running',
     providerContext,
@@ -376,6 +378,11 @@ async function reconcileZellijWorkerPaneId(sessionName: string, paneName: string
     timeoutMs: 5000,
     optional: true
   })
+  const screen = await runZellij(['--session', sessionName, 'action', 'dump-screen'], {
+    cwd,
+    timeoutMs: 5000,
+    optional: true
+  })
   const rows = parsePaneRows(listed.stdout_tail)
   const pane = rows.find((row: any) => {
     const title = String(row.title || row.name || row.pane_name || '')
@@ -394,6 +401,7 @@ async function reconcileZellijWorkerPaneId(sessionName: string, paneName: string
     pane_id: paneId == null ? null : String(paneId),
     listed_count: rows.length,
     command: listed,
+    dump_screen: screen,
     blockers: paneId == null ? ['zellij_worker_pane_id_not_reconciled'] : []
   }
 }
@@ -440,4 +448,55 @@ function parsePaneRows(text: unknown): any[] {
   } catch {
     return []
   }
+}
+
+async function renameZellijPaneById(sessionName: string, paneId: string, paneName: string, cwd: string): Promise<ZellijCommandResult | null> {
+  const numeric = Number.parseInt(paneId.replace(/^terminal_/, ''), 10)
+  const numericCandidates = Number.isFinite(numeric)
+    ? [numeric, numeric + 1, numeric - 1].filter((value) => value >= 0).map(String)
+    : []
+  const candidates = [...new Set([paneId, paneId.replace(/^terminal_/, ''), ...numericCandidates].filter(Boolean))]
+  let last: ZellijCommandResult | null = null
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) await sleep(200 * attempt)
+    for (const candidate of candidates) {
+      last = await runZellij(['--session', sessionName, 'action', 'rename-pane', '--pane-id', candidate, paneName], {
+        cwd,
+        timeoutMs: 5000,
+        optional: true
+      })
+      if (last.ok) return last
+      const focus = await runZellij(['--session', sessionName, 'action', 'focus-pane-id', candidate], {
+        cwd,
+        timeoutMs: 5000,
+        optional: true
+      })
+      if (focus.ok) {
+        last = await runZellij(['--session', sessionName, 'action', 'rename-pane', paneName], {
+          cwd,
+          timeoutMs: 5000,
+          optional: true
+        })
+        if (last.ok) return last
+      }
+    }
+  }
+  return last
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function normalizeExistingZellijSession(sessionName: string, result: ZellijCommandResult): ZellijCommandResult {
+  if (result.ok) return result
+  if (/Session already exists/i.test(result.stderr_tail || '')) {
+    return {
+      ...result,
+      ok: true,
+      blockers: [],
+      warnings: [...result.warnings, `zellij_session_already_exists:${sessionName}`]
+    }
+  }
+  return result
 }

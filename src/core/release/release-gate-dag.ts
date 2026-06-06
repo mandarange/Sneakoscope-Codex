@@ -1,0 +1,219 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { spawn } from 'node:child_process'
+import { createReleaseGateHermeticEnv } from './release-gate-hermetic-env.js'
+import { appendReleaseGateJsonl, writeReleaseGateJson } from './release-gate-report.js'
+import { findReadyReleaseGateNodes, findReleaseGatesBlockedByFailedDeps, pickReadyLaunchableReleaseGates } from './release-gate-scheduler.js'
+import { readReleaseGateCacheHit, writeReleaseGateCacheHit } from './release-gate-cache-v2.js'
+import { RELEASE_GATE_NODE_SCHEMA, validateReleaseGateManifest, type ReleaseGateManifestV2, type ReleaseGateNode } from './release-gate-node.js'
+import { countReleaseGateResources, defaultReleaseGateBudget, summarizeReleaseGateBudget, type ReleaseGateBudget } from './release-gate-resource-governor.js'
+
+export interface ReleaseGateDagRunResult {
+  schema: 'sks.release-gate-dag-run.v1'
+  ok: boolean
+  run_id: string
+  selected_preset: string
+  total_gates: number
+  selected_gates: number
+  completed: number
+  failed: number
+  cached: number
+  wall_ms: number
+  sum_gate_ms: number
+  cpu_time_saved_ms: number
+  parallelism_gain: number
+  critical_path_ms: number
+  peak_running: number
+  peak_resources: Record<string, number>
+  budget_snapshot: ReleaseGateBudget
+  budget_summary: string
+  report_dir: string
+  failures: Array<{ id: string; exit_code: number | null; stderr_tail: string }>
+}
+
+export function loadReleaseGateManifest(root: string, file = 'release-gates.v2.json'): ReleaseGateManifestV2 {
+  const manifestPath = path.join(root, file)
+  const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  const validation = validateReleaseGateManifest(parsed)
+  if (!validation.ok || !validation.manifest) {
+    throw new Error(`invalid ${file}: ${validation.errors.join(', ')}`)
+  }
+  return validation.manifest
+}
+
+export async function runReleaseGateDag(input: {
+  root: string
+  preset?: string
+  noCache?: boolean
+  failFast?: boolean
+  explain?: boolean
+}): Promise<ReleaseGateDagRunResult> {
+  const root = path.resolve(input.root)
+  const preset = input.preset || 'release'
+  const manifest = loadReleaseGateManifest(root)
+  const selected = selectPreset(manifest, preset)
+  const runId = `rg-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
+  const reportDir = path.join(root, '.sneakoscope', 'reports', 'release-gates', runId)
+  fs.mkdirSync(reportDir, { recursive: true })
+  const timeline = path.join(reportDir, 'timeline.jsonl')
+  const started = Date.now()
+  const pending = new Map(selected.map((gate) => [gate.id, gate]))
+  const running = new Map<string, { gate: ReleaseGateNode; promise: Promise<GateRunResult> }>()
+  const completed = new Map<string, GateRunResult>()
+  const failed = new Map<string, GateRunResult>()
+  const budget = defaultReleaseGateBudget()
+  const peakResources: Record<string, number> = {}
+  let cached = 0
+  let sumGateMs = 0
+  let peakRunning = 0
+
+  if (input.explain) {
+    writeReleaseGateJson(path.join(reportDir, 'explain.json'), { schema: RELEASE_GATE_NODE_SCHEMA, preset, budget, gates: selected.map((gate) => ({ id: gate.id, deps: gate.deps, resource: gate.resource, command: gate.command })) })
+  }
+
+  while (pending.size || running.size) {
+    const ready = findReadyReleaseGateNodes({ pending, completed, failed })
+    const launchable = pickReadyLaunchableReleaseGates({ ready, running: [...running.values()].map((row) => row.gate) })
+    let progressed = false
+    for (const gate of launchable) {
+      pending.delete(gate.id)
+      const cacheHit = !input.noCache && gate.cache.enabled && readReleaseGateCacheHit(root, gate)
+      if (cacheHit) {
+        const result: GateRunResult = { id: gate.id, ok: true, exit_code: 0, duration_ms: 0, cached: true, stderr_tail: '' }
+        completed.set(gate.id, result)
+        cached += 1
+        progressed = true
+        appendReleaseGateJsonl(timeline, { event: 'cache_hit', gate_id: gate.id, at: new Date().toISOString() })
+        continue
+      }
+      appendReleaseGateJsonl(timeline, { event: 'start', gate_id: gate.id, resource: gate.resource, at: new Date().toISOString() })
+      running.set(gate.id, { gate, promise: runGate(root, runId, reportDir, gate) })
+      peakRunning = Math.max(peakRunning, running.size)
+      const used = countReleaseGateResources([...running.values()].map((row) => row.gate))
+      for (const [resource, count] of Object.entries(used)) {
+        peakResources[resource] = Math.max(peakResources[resource] || 0, Number(count) || 0)
+      }
+      progressed = true
+    }
+    if (!running.size) {
+      const blockedByFailedDeps = findReleaseGatesBlockedByFailedDeps({ pending, failed })
+      if (blockedByFailedDeps.length) {
+        for (const gate of blockedByFailedDeps) {
+          pending.delete(gate.id)
+          const result: GateRunResult = {
+            id: gate.id,
+            ok: false,
+            exit_code: null,
+            duration_ms: 0,
+            cached: false,
+            stderr_tail: `blocked by failed dependency: ${gate.deps.filter((dep) => failed.has(dep)).join(', ')}`
+          }
+          failed.set(gate.id, result)
+          appendReleaseGateJsonl(timeline, { event: 'blocked_by_failed_dependency', gate_id: gate.id, deps: gate.deps.filter((dep) => failed.has(dep)), at: new Date().toISOString() })
+        }
+        continue
+      }
+      if (progressed) continue
+      const blocked = [...pending.keys()]
+      throw new Error(`release gate DAG stalled: ${blocked.join(', ')}`)
+    }
+    const result = await Promise.race([...running.values()].map((row) => row.promise))
+    running.delete(result.id)
+    sumGateMs += result.duration_ms
+    if (result.ok) {
+      completed.set(result.id, result)
+      const gate = selected.find((row) => row.id === result.id)
+      if (gate?.cache.enabled && !input.noCache) writeReleaseGateCacheHit(root, gate)
+    } else {
+      failed.set(result.id, result)
+      if (input.failFast) {
+        for (const id of [...pending.keys()]) pending.delete(id)
+      }
+    }
+    appendReleaseGateJsonl(timeline, { event: result.ok ? 'pass' : 'fail', gate_id: result.id, duration_ms: result.duration_ms, at: new Date().toISOString() })
+  }
+
+  const wallMs = Date.now() - started
+  const failures = [...failed.values()].map((row) => ({ id: row.id, exit_code: row.exit_code, stderr_tail: row.stderr_tail }))
+  const result: ReleaseGateDagRunResult = {
+    schema: 'sks.release-gate-dag-run.v1',
+    ok: failures.length === 0,
+    run_id: runId,
+    selected_preset: preset,
+    total_gates: manifest.gates.length,
+    selected_gates: selected.length,
+    completed: completed.size,
+    failed: failed.size,
+    cached,
+    wall_ms: wallMs,
+    sum_gate_ms: sumGateMs,
+    cpu_time_saved_ms: Math.max(0, sumGateMs - wallMs),
+    parallelism_gain: wallMs > 0 ? Number((sumGateMs / wallMs).toFixed(2)) : 1,
+    critical_path_ms: estimateCriticalPath(selected, completed),
+    peak_running: peakRunning,
+    peak_resources: peakResources,
+    budget_snapshot: budget,
+    budget_summary: summarizeReleaseGateBudget(budget),
+    report_dir: reportDir,
+    failures
+  }
+  writeReleaseGateJson(path.join(reportDir, 'summary.json'), result)
+  return result
+}
+
+function selectPreset(manifest: ReleaseGateManifestV2, preset: string): ReleaseGateNode[] {
+  return manifest.gates.filter((gate) => gate.preset.includes(preset))
+}
+
+interface GateRunResult {
+  id: string
+  ok: boolean
+  exit_code: number | null
+  duration_ms: number
+  cached: boolean
+  stderr_tail: string
+}
+
+function runGate(root: string, runId: string, reportRoot: string, gate: ReleaseGateNode): Promise<GateRunResult> {
+  const started = Date.now()
+  const hermetic = createReleaseGateHermeticEnv({ root, runId, gate, reportRoot })
+  const stdoutFile = path.join(hermetic.report_dir, 'stdout.log')
+  const stderrFile = path.join(hermetic.report_dir, 'stderr.log')
+  const out = fs.createWriteStream(stdoutFile)
+  const err = fs.createWriteStream(stderrFile)
+  return new Promise((resolve) => {
+    const child = spawn(gate.command, { cwd: root, shell: true, env: hermetic.env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const timer = setTimeout(() => child.kill('SIGTERM'), gate.timeout_ms)
+    child.stdout.pipe(out)
+    child.stderr.pipe(err)
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      out.end()
+      err.end()
+      const durationMs = Date.now() - started
+      const stderrTail = tail(fs.existsSync(stderrFile) ? fs.readFileSync(stderrFile, 'utf8') : '')
+      const result = { id: gate.id, ok: code === 0, exit_code: code, duration_ms: durationMs, cached: false, stderr_tail: stderrTail }
+      writeReleaseGateJson(path.join(hermetic.report_dir, 'result.json'), { schema: 'sks.release-gate-result.v1', ...result, stdout_log: stdoutFile, stderr_log: stderrFile })
+      resolve(result)
+    })
+  })
+}
+
+function estimateCriticalPath(gates: ReleaseGateNode[], completed: Map<string, GateRunResult>): number {
+  const byId = new Map(gates.map((gate) => [gate.id, gate]))
+  const memo = new Map<string, number>()
+  const visit = (id: string): number => {
+    if (memo.has(id)) return memo.get(id)!
+    const gate = byId.get(id)
+    if (!gate) return 0
+    const own = completed.get(id)?.duration_ms || 0
+    const dep = Math.max(0, ...gate.deps.map(visit))
+    memo.set(id, own + dep)
+    return own + dep
+  }
+  return Math.max(0, ...gates.map((gate) => visit(gate.id)))
+}
+
+function tail(value: string, limit = 1200): string {
+  return value.length > limit ? value.slice(-limit) : value
+}

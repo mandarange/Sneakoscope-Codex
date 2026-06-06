@@ -29,11 +29,11 @@ export function buildGitWorktreePatchEnvelope(input: {
       changed_files: changedFiles,
       diff_bytes: input.diff.diff_bytes
     },
-    operations: changedFiles.map((file) => ({
-      op: 'unified_diff',
-      path: file,
+    operations: [{
+      op: 'git_apply_patch',
+      path: '.',
       diff: input.diff.diff
-    })),
+    }],
     rationale: 'Process-generated patch envelope exported from an isolated Git worktree diff.',
     verification_hint: {
       command: 'git apply --3way --check <diff>',

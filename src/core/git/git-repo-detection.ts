@@ -16,6 +16,8 @@ export interface GitRepoDetection {
   worktree_git_dir: string | null
   branch: string | null
   head: string | null
+  main_worktree_dirty: boolean
+  status_porcelain: string
   blockers: string[]
 }
 
@@ -38,11 +40,13 @@ export async function detectGitRepo(root: string = process.cwd()): Promise<GitRe
   const bare = await runGitCommand(cwd, ['rev-parse', '--is-bare-repository'])
   const branch = await runGitCommand(cwd, ['branch', '--show-current'])
   const head = await runGitCommand(cwd, ['rev-parse', 'HEAD'])
+  const status = await runGitCommand(cwd, ['status', '--porcelain=v1', '--untracked-files=all'])
 
   if (!top.ok) blockers.push(gitBlocker('git_root_unresolved', top))
   if (!gitDir.ok) blockers.push(gitBlocker('git_dir_unresolved', gitDir))
   if (!commonDir.ok) blockers.push(gitBlocker('git_common_dir_unresolved', commonDir))
   if (!head.ok) blockers.push(gitBlocker('git_head_unresolved', head))
+  if (!status.ok) blockers.push(gitBlocker('git_status_unresolved', status))
 
   const repoRoot = top.ok ? path.resolve(gitOutputLine(top)) : null
   const resolvedGitDir = gitDir.ok ? absolutizeGitPath(cwd, gitOutputLine(gitDir)) : null
@@ -62,6 +66,8 @@ export async function detectGitRepo(root: string = process.cwd()): Promise<GitRe
     worktree_git_dir: resolvedGitDir && resolvedCommonDir && resolvedGitDir !== resolvedCommonDir ? resolvedGitDir : null,
     branch: gitOutputLine(branch) || null,
     head: gitOutputLine(head) || null,
+    main_worktree_dirty: status.ok && status.stdout.trim().length > 0,
+    status_porcelain: status.stdout || '',
     blockers
   }
 }
@@ -81,6 +87,8 @@ function baseDetection(cwd: string, gitBinary: string | null, gitAvailable: bool
     worktree_git_dir: null,
     branch: null,
     head: null,
+    main_worktree_dirty: false,
+    status_porcelain: '',
     blockers
   }
 }

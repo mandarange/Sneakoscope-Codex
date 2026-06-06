@@ -1,6 +1,6 @@
 export const AGENT_PATCH_SCHEMA = 'sks.agent-patch-envelope.v1'
 
-export type AgentPatchOperationKind = 'replace' | 'write' | 'unified_diff'
+export type AgentPatchOperationKind = 'replace' | 'write' | 'unified_diff' | 'git_apply_patch'
 
 export interface AgentPatchOperation {
   op: AgentPatchOperationKind
@@ -127,8 +127,9 @@ export function validateAgentPatchEnvelope(envelope: AgentPatchEnvelope): { ok: 
     if (operation.op === 'replace' && typeof operation.search !== 'string') violations.push(`replace_search_missing:${operation.path}`)
     if (operation.op === 'write' && typeof operation.content !== 'string') violations.push(`write_content_missing:${operation.path}`)
     if (operation.op === 'unified_diff' && typeof operation.diff !== 'string') violations.push(`unified_diff_missing:${operation.path}`)
+    if (operation.op === 'git_apply_patch' && typeof operation.diff !== 'string') violations.push(`git_apply_patch_missing:${operation.path}`)
     const allowedPaths = envelope.allowed_paths?.length ? envelope.allowed_paths : envelope.lease_proof?.allowed_paths
-    if (allowedPaths?.length && !pathAllowedByLease(operation.path, allowedPaths)) {
+    if (operation.op !== 'git_apply_patch' && allowedPaths?.length && !pathAllowedByLease(operation.path, allowedPaths)) {
       violations.push(`lease_path_not_allowed:${operation.path}`)
     }
   }
@@ -145,7 +146,7 @@ function hasFiniteNumber(value: any): boolean {
 }
 
 function normalizeOperation(input: any): AgentPatchOperation {
-  const op = input?.op === 'write' ? 'write' : input?.op === 'unified_diff' || input?.op === 'patch' ? 'unified_diff' : 'replace'
+  const op = input?.op === 'write' ? 'write' : input?.op === 'git_apply_patch' ? 'git_apply_patch' : input?.op === 'unified_diff' || input?.op === 'patch' ? 'unified_diff' : 'replace'
   return {
     op,
     path: String(input?.path || ''),
