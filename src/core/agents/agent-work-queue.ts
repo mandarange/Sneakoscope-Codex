@@ -85,14 +85,45 @@ export function pendingWorkItems(queue: AgentWorkQueue) {
     .sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id))
 }
 
-export function leaseNextWorkItem(queue: AgentWorkQueue, sessionId: string): AgentWorkItem | null {
-  const item = pendingWorkItems(queue)[0]
+export function leaseNextWorkItem(queue: AgentWorkQueue, sessionId: string, opts: {
+  slotId?: string | null
+  agentId?: string | null
+  activeWritePaths?: string[]
+} = {}): AgentWorkItem | null {
+  const activeWritePaths = new Set((opts.activeWritePaths || []).map(normalizePath).filter(Boolean))
+  const ready = pendingWorkItems(queue).filter((candidate) => {
+    const writePaths = sliceWritePaths(candidate)
+    return writePaths.every((file) => !activeWritePaths.has(file))
+  })
+  const item = ready.find((candidate) => ownerMatches(candidate, opts))
+    || ready.find((candidate) => !candidateOwner(candidate))
+    || ready[0]
   if (!item) return null
   item.status = 'running'
   item.attempts += 1
   item.running_session_id = sessionId
   queue.updated_at = nowIso()
   return item
+}
+
+function ownerMatches(item: AgentWorkItem, opts: { slotId?: string | null; agentId?: string | null }) {
+  const owner = candidateOwner(item)
+  if (!owner) return false
+  return owner === opts.slotId || owner === opts.agentId
+}
+
+function candidateOwner(item: AgentWorkItem) {
+  const slice = item.slice || {}
+  return String(slice.owner_agent_id || slice.owner || slice.lane || '').trim()
+}
+
+function sliceWritePaths(item: AgentWorkItem) {
+  const paths = Array.isArray(item.slice?.write_paths) ? item.slice.write_paths : []
+  return paths.map((file) => normalizePath(String(file))).filter(Boolean)
+}
+
+function normalizePath(file: string) {
+  return String(file || '').replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/\/+$/, '')
 }
 
 export function completeWorkItem(queue: AgentWorkQueue, itemId: string, sessionId: string, status: 'completed' | 'failed' | 'blocked', reason: string | null = null) {

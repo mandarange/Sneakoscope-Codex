@@ -23,6 +23,7 @@ const integration = await integrationMod.createGitIntegrationWorktree({ repoRoot
 const report = await queueMod.applyGitWorktreeMergeQueue({ integrationWorktreePath: integration.worktree_path, diffs: [diffA, diffB] })
 
 assertGate(report.ok === true && report.applied_count === 2, 'merge queue must apply non-conflicting worktree diffs', report)
+assertGate((report.strategy_results || []).every((row) => row.strategy === 'diff-apply-3way'), 'merge queue must record the diff apply strategy for worktree diffs', report.strategy_results || [])
 assertGate(fs.readFileSync(path.join(integration.worktree_path, 'a.txt'), 'utf8').includes('from-a'), 'integration worktree must include first diff')
 assertGate(fs.readFileSync(path.join(integration.worktree_path, 'b.txt'), 'utf8').includes('from-b'), 'integration worktree must include second diff')
 assertGate(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8') === 'alpha\n', 'main worktree must remain unchanged before integration commit')

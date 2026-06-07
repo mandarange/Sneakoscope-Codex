@@ -6,6 +6,21 @@
 
 
 
+## [2.0.12] - 2026-06-07
+
+### Added
+
+- Add first-slot down-stack Zellij proof semantics, including slot renderer pane classification and a real-session geometry gate for worker panes stacked below the `SLOTS` anchor.
+- Add release DAG closure for slot renderer proof semantics, Naruto allocation runtime wiring, GPT Final worktree apply policy, and cache glob hashing coverage.
+- Add Naruto allocation/rebalance production wiring so assignment owners flow into work graph items, scheduler slices, queue ownership, and worker runtime proof artifacts.
+- Add Naruto actual worker production integration proof that records control-plane worker result validity and keeps pre-run smoke opt-in.
+- Add Git worktree public operator docs for parallel runtime, Zellij slot UI, Naruto worktree parallelism, and release DAG usage.
+
+### Fixed
+
+- Keep Git worktree checkpoint apply strategies explicit by preferring checkpoint cherry-pick, falling back to merge, and recording cross-rebase reports for idle clean worktrees after primary integration advances.
+- Keep local/worktree candidate patch application behind GPT Final approval, using GPT `modified` output as the patch source and blocking GPT `rejected` output.
+
 ## [2.0.11] - 2026-06-07
 
 ### Fixed

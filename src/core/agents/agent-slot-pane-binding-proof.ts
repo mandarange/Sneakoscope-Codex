@@ -17,9 +17,9 @@ export async function evaluateAgentSlotPaneBindingProof(root: string, input: { r
   const summary = await readJson<any>(path.join(root, 'agent-native-cli-session-swarm.json'), null)
   const ledger = await readJsonl(path.join(root, 'agent-zellij-pane-launch-ledger.jsonl'))
   const zellijRecords = Array.isArray(summary?.records)
-    ? summary.records.filter((record: any) => record.scaling_primitive === 'native_cli_process_in_zellij_worker_pane')
+    ? summary.records.filter((record: any) => record.scaling_primitive === 'native_cli_process_in_zellij_worker_pane' || record.scaling_primitive === 'native_cli_process_with_zellij_slot_renderer')
     : []
-  const paneLedgers = ledger.filter((row: any) => row.scaling_primitive === 'native_cli_process_in_zellij_worker_pane' || row.pane_kind === 'worker_codex_sdk')
+  const paneLedgers = ledger.filter((row: any) => row.scaling_primitive === 'native_cli_process_in_zellij_worker_pane' || row.scaling_primitive === 'native_cli_process_with_zellij_slot_renderer' || row.pane_kind === 'worker_codex_sdk' || row.pane_kind === 'slot_status_renderer')
   const uniqueKeys = new Set<string>()
   const duplicates: string[] = []
   for (const row of zellijRecords) {
@@ -31,7 +31,7 @@ export async function evaluateAgentSlotPaneBindingProof(root: string, input: { r
   const zellijPaneWorkerSessions = Number(summary?.zellij_pane_worker_sessions || 0)
   const blockers = [
     ...(input.requireZellij && !zellijRecords.length ? ['slot_pane_binding_zellij_records_missing'] : []),
-    ...(zellijRecords.some((record: any) => record.pane_kind !== 'worker_codex_sdk') ? ['slot_pane_binding_wrong_pane_kind'] : []),
+    ...(zellijRecords.some((record: any) => record.pane_kind !== 'worker_codex_sdk' && record.pane_kind !== 'slot_status_renderer') ? ['slot_pane_binding_wrong_pane_kind'] : []),
     ...(zellijRecords.some((record: any) => !isRealZellijWorkerPaneIdSource(record.zellij_pane_id_source)) ? ['slot_pane_binding_synthetic_or_missing_pane_id_source'] : []),
     ...(zellijRecords.some((record: any) => !record.zellij_pane_id) ? ['slot_pane_binding_pane_id_missing'] : []),
     ...(zellijRecords.some((record: any) => !record.sdk_thread_id) ? ['slot_pane_binding_sdk_thread_id_missing'] : []),

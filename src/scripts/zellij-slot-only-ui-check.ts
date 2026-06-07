@@ -14,10 +14,12 @@ const report = {
   state_records_ui_mode: manager.includes('ui_mode: uiMode'),
   compact_skips_dashboard: manager.includes('if (!createDashboard)') && manager.includes('dashboard_created: false'),
   first_slot_creates_slot_anchor_right: worker.includes('buildZellijSlotColumnAnchorCommand') && worker.includes("'--direction', 'right', '--name', 'SLOTS'"),
-  workers_stack_down_from_anchor: worker.includes("const directionRequested: 'right' | 'down' = rightColumn ? 'down' : 'right'")
+  workers_stack_down_from_anchor: worker.includes("const directionRequested: 'right' | 'down' = 'down'")
     && worker.includes("directionRequested === 'down' ? ['--near-current-pane'] : []")
     && worker.includes('slot_column_anchor_pane_id'),
   compact_uses_renderer: swarm.includes('buildZellijSlotPaneCommand') && swarm.includes("slot_visualization = uiMode === 'full-debug' ? 'worker-command-pane' : 'zellij-slot-pane-renderer'")
+    && swarm.includes('paneRecord.pane_kind')
+    && swarm.includes('paneRecord.scaling_primitive')
 }
 const ok = Object.values(report).every((value) => value === true || typeof value === 'string')
 assertGate(ok, 'Zellij default UI must be compact slot-only with opt-in dashboard', report)

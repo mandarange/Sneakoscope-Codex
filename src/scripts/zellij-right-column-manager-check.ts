@@ -15,7 +15,7 @@ const report = {
   dashboard_opt_in: source.includes('zellijUiModeCreatesDashboard') && source.includes('dashboard_created: false'),
   slot_column_anchor_right: worker.includes('buildZellijSlotColumnAnchorCommand') && worker.includes("'--direction', 'right', '--name', 'SLOTS'"),
   worker_direction_stack: worker.includes("'--direction', directionRequested")
-    && worker.includes("const directionRequested: 'right' | 'down' = rightColumn ? 'down' : 'right'")
+    && worker.includes("const directionRequested: 'right' | 'down' = 'down'")
     && worker.includes("'--near-current-pane'")
     && worker.includes('worker_direction_requested')
     && worker.includes('slot_column_anchor_pane_id'),

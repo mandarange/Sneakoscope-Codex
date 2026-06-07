@@ -1,3 +1,5 @@
+import type { NarutoWorkGraph } from '../naruto/naruto-work-item.js'
+
 export const AGENT_KERNEL_SCHEMA = 'sks.native-agent-kernel.v1'
 export const AGENT_RESULT_SCHEMA = 'sks.agent-result.v1'
 export const AGENT_LEDGER_EVENT_SCHEMA = 'sks.agent-ledger-event.v1'
@@ -124,6 +126,9 @@ export interface AgentRunOptions {
   visualLaneCount?: number
   clones?: number
   narutoMode?: boolean
+  narutoWorkGraph?: NarutoWorkGraph | null
+  narutoAllocationPolicy?: unknown
+  narutoRebalancePolicy?: unknown
   gitWorktreePolicy?: {
     mode: 'git-worktree' | 'patch-envelope-only'
     required?: boolean
@@ -216,6 +221,8 @@ export interface AgentRunnerResult {
   follow_up_work_items?: import('./agent-follow-up-work-items.js').AgentFollowUpWorkItem[]
   recursion_guard: { ok: boolean; violations: string[] }
   verification: { status: string; checks: string[] }
+  naruto_runtime?: Record<string, unknown>
+  control_plane_result?: Record<string, unknown>
 }
 
 export function normalizeAgentBackend(input: unknown): AgentBackend {

@@ -62,7 +62,7 @@ export interface ZellijWorkerPaneRecord {
   session_id: string
   pane_name: string
   pane_title: string
-  pane_kind: 'worker_codex_sdk'
+  pane_kind: 'slot_status_renderer' | 'worker_codex_sdk'
   pane_id: string | null
   pane_id_source: ZellijWorkerPaneIdSource
   provider: string
@@ -80,7 +80,10 @@ export interface ZellijWorkerPaneRecord {
   stdout_log: string
   stderr_log: string
   parent_child_transport: 'worker-result-json-and-heartbeat'
-  scaling_primitive: 'native_cli_process_in_zellij_worker_pane' | 'native_cli_process_headless_with_slot_dashboard'
+  scaling_primitive:
+    | 'native_cli_process_with_zellij_slot_renderer'
+    | 'native_cli_process_in_zellij_worker_pane'
+    | 'native_cli_process_headless_with_slot_dashboard'
   command: string
   create_session: ZellijCommandResult | null
   launch: ZellijCommandResult | null
@@ -142,7 +145,9 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   sdkRunId?: string | null
   streamEventCount?: number
   structuredOutputValid?: boolean
-    blockers?: string[]
+  blockers?: string[]
+  workerCommand?: string
+  paneKind?: ZellijWorkerPaneRecord['pane_kind']
   scalingPrimitive?: ZellijWorkerPaneRecord['scaling_primitive']
 }): ZellijWorkerPaneRecord {
   const now = nowIso()
@@ -150,7 +155,13 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   const blockers = input.blockers || []
   const providerContext = normalizePaneProviderContext(input.providerContext, input.serviceTier)
   const paneTitle = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || input.status, input.worktree || null)
-  const directionRequested = input.directionRequested || 'right'
+  const commandText = String(input.workerCommand || '')
+  const isSlotRenderer = commandText.includes('zellij-slot-pane')
+  const paneKind = input.paneKind || (isSlotRenderer ? 'slot_status_renderer' : 'worker_codex_sdk')
+  const scalingPrimitive = input.scalingPrimitive || (isSlotRenderer
+    ? 'native_cli_process_with_zellij_slot_renderer'
+    : 'native_cli_process_in_zellij_worker_pane')
+  const directionRequested = input.directionRequested || 'down'
   const directionApplied = input.directionApplied || 'not_applied'
   return {
     schema: ZELLIJ_WORKER_PANE_SCHEMA,
@@ -165,7 +176,7 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     session_id: input.sessionId,
     pane_name: paneTitle,
     pane_title: paneTitle,
-    pane_kind: 'worker_codex_sdk',
+    pane_kind: paneKind,
     pane_id: input.paneId || null,
     pane_id_source: paneIdSource,
     provider: providerContext.provider,
@@ -179,8 +190,8 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     stdout_log: input.stdoutLog,
     stderr_log: input.stderrLog,
     parent_child_transport: 'worker-result-json-and-heartbeat',
-    scaling_primitive: input.scalingPrimitive || 'native_cli_process_in_zellij_worker_pane',
-    command: String((input as any).workerCommand || '').includes('zellij-slot-pane') ? '<zellij-slot-pane-renderer-command>' : '<native-cli-worker-command>',
+    scaling_primitive: scalingPrimitive,
+    command: isSlotRenderer ? '<zellij-slot-pane-renderer-command>' : '<native-cli-worker-command>',
     create_session: input.createSession || null,
     launch: input.launch || null,
     pane_reconciliation: input.paneReconciliation || null,
@@ -306,7 +317,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     }
   }
   const focusPaneId = rightColumn?.focusPaneId || slotColumnAnchorPaneId || null
-  const directionRequested: 'right' | 'down' = rightColumn ? 'down' : 'right'
+  const directionRequested: 'right' | 'down' = 'down'
   const focus = focusPaneId
     ? await focusZellijPaneById(input.sessionName, focusPaneId, cwd)
     : null
@@ -406,7 +417,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     session_name: input.sessionName,
     pane_name: paneName,
     pane_title: paneName,
-    pane_kind: 'worker_codex_sdk',
+    pane_kind: record.pane_kind,
     pane_id: record.pane_id,
     pane_id_source: record.pane_id_source,
     provider: record.provider,
@@ -426,7 +437,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     patch_envelope_path: input.patchEnvelopePath,
     parent_child_transport: 'worker-result-json-and-heartbeat',
     persistent_slot_lane: false,
-    scaling_primitive: 'native_cli_process_in_zellij_worker_pane',
+    scaling_primitive: record.scaling_primitive,
     blockers
   })
   return record

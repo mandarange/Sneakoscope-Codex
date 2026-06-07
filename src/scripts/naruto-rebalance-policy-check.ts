@@ -25,5 +25,20 @@ const decisions = rebalanceNarutoReadyWork({
   workers: [{ id: 'idle-1', role: 'verifier', lane: 'src/core', alive: true, state: 'idle' }],
   completedTaskIds: []
 })
-assertGate(decisions.length === 1 && decisions[0]?.task_id === 'A', 'Naruto rebalance must assign only dependency-ready pending work to idle workers', { decisions })
-emitGate('naruto:rebalance-policy', { decisions })
+const inactiveOwner = rebalanceNarutoReadyWork({
+  tasks: [{ ...item('C'), owner: 'missing-worker' }],
+  workers: [{ id: 'idle-2', role: 'verifier', lane: 'src/core', alive: true, state: 'idle' }],
+  completedTaskIds: []
+})
+const writeConflict = rebalanceNarutoReadyWork({
+  tasks: [{ ...item('D'), write_paths: ['src/core/naruto/runtime.ts'], write_allowed: true }],
+  workers: [{ id: 'idle-3', role: 'verifier', lane: 'src/core', alive: true, state: 'idle' }],
+  completedTaskIds: [],
+  activeWritePaths: ['src/core/naruto/runtime.ts']
+})
+assertGate(decisions.length === 1 && decisions[0]?.task_id === 'A'
+  && inactiveOwner.length === 1 && inactiveOwner[0]?.worker_id === 'idle-2'
+  && writeConflict.length === 0,
+  'Naruto rebalance must assign dependency-ready work, reassign inactive owners, and skip active write conflicts',
+  { decisions, inactiveOwner, writeConflict })
+emitGate('naruto:rebalance-policy', { decisions, inactiveOwner, writeConflict })

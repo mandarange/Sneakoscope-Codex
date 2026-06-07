@@ -9,6 +9,17 @@ import {
   type NarutoWorkKind,
   type NarutoWorkWave
 } from './naruto-work-item.js'
+import type { NarutoTaskHints } from './naruto-task-hints.js'
+
+export interface NarutoAllocationAssignmentInput {
+  task_id?: string
+  id?: string
+  owner: string
+  allocation_reason?: string
+  allocation_score?: number
+  hints?: NarutoTaskHints | null
+  allocation_hints?: NarutoTaskHints | null
+}
 
 export interface BuildNarutoWorkGraphInput {
   prompt?: string
@@ -21,6 +32,7 @@ export interface BuildNarutoWorkGraphInput {
   leaseBasePath?: string
   maxActiveWorkers?: number
   worktreePolicy?: NarutoWorktreePolicy
+  allocationAssignments?: NarutoAllocationAssignmentInput[]
 }
 
 const WRITE_CAPABLE_KIND_CYCLE: NarutoWorkKind[] = [
@@ -67,6 +79,11 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
     fallback_reason: writeCapable ? 'git_capability_not_evaluated' : 'readonly_or_write_disabled'
   }
   const workItems: NarutoWorkItem[] = []
+  const assignmentById = new Map<string, NarutoAllocationAssignmentInput>()
+  for (const row of input.allocationAssignments || []) {
+    const id = String(row.task_id || row.id || '')
+    if (id) assignmentById.set(id, row)
+  }
 
   for (let index = 0; index < totalWorkItems; index += 1) {
     const id = `NW-${String(index + 1).padStart(6, '0')}`
@@ -79,6 +96,8 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
       ...writePaths.map((file) => ({ path: file, kind: 'write' as const })),
       ...readPaths.map((file) => ({ path: file, kind: 'read' as const }))
     ]
+    const assignment = assignmentById.get(id)
+    const allocationHints = assignment?.allocation_hints || assignment?.hints || null
     workItems.push({
       id,
       kind,
@@ -99,6 +118,11 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
         requires_verification: kind !== 'research' && kind !== 'final_review_input_pack',
         requires_gpt_final: writePaths.length > 0 || kind === 'final_review_input_pack'
       },
+      owner: assignment?.owner ?? null,
+      allocation_reason: assignment?.allocation_reason ?? null,
+      allocation_score: assignment?.allocation_score ?? null,
+      allocation_hints: allocationHints,
+      lane: assignment?.owner ?? null,
       ...(writePaths.length > 0 ? {
         worktree: {
           mode: worktreePolicy.mode,
