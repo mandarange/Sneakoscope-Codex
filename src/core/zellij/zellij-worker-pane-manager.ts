@@ -4,7 +4,8 @@ import { providerPaneLabel } from '../provider/provider-badge.js'
 import { resolveProviderContext, type ProviderContext } from '../provider/provider-context.js'
 import { runZellij, type ZellijCommandResult } from './zellij-command.js'
 import { extractZellijPaneIdFromOutput } from './zellij-lane-runtime.js'
-import { closeWorkerInRightColumn, prepareWorkerInRightColumn, recordWorkerPaneInRightColumn } from './zellij-right-column-manager.js'
+import { buildZellijSlotColumnAnchorCommand } from './zellij-slot-column-anchor.js'
+import { closeWorkerInRightColumn, prepareWorkerInRightColumn, recordSlotColumnAnchorInRightColumn, recordWorkerPaneInRightColumn } from './zellij-right-column-manager.js'
 import type { SksZellijUiMode } from './zellij-ui-mode.js'
 
 export const ZELLIJ_WORKER_PANE_SCHEMA = 'sks.zellij-worker-pane.v1'
@@ -89,10 +90,16 @@ export interface ZellijWorkerPaneRecord {
   close: ZellijCommandResult | null
   direction_requested: 'right' | 'down'
   direction_applied: 'right' | 'down' | 'unknown' | 'not_applied'
+  column_creation_direction_requested?: 'right' | null
+  column_creation_direction_applied?: 'right' | 'unknown' | 'not_applied' | null
+  worker_direction_requested: 'down'
+  worker_direction_applied: 'down' | 'unknown' | 'not_applied'
+  slot_column_anchor_pane_id?: string | null
   right_column?: {
     mode: 'spawn-on-first-worker' | 'off'
     focus_pane_id: string | null
     y_order: number | null
+    slot_column_anchor_pane_id?: string | null
   } | null
   sdk_thread_id?: string | null
   sdk_run_id?: string | null
@@ -124,6 +131,11 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   paneReconciliation?: any
   directionApplied?: 'right' | 'down' | 'unknown' | 'not_applied'
   directionRequested?: 'right' | 'down'
+  columnCreationDirectionRequested?: 'right' | null
+  columnCreationDirectionApplied?: 'right' | 'unknown' | 'not_applied' | null
+  workerDirectionRequested?: 'down'
+  workerDirectionApplied?: 'down' | 'unknown' | 'not_applied'
+  slotColumnAnchorPaneId?: string | null
   rightColumn?: ZellijWorkerPaneRecord['right_column']
   status?: ZellijWorkerPaneRecord['status']
   sdkThreadId?: string | null
@@ -138,6 +150,8 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   const blockers = input.blockers || []
   const providerContext = normalizePaneProviderContext(input.providerContext, input.serviceTier)
   const paneTitle = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || input.status, input.worktree || null)
+  const directionRequested = input.directionRequested || 'right'
+  const directionApplied = input.directionApplied || 'not_applied'
   return {
     schema: ZELLIJ_WORKER_PANE_SCHEMA,
     generated_at: now,
@@ -173,8 +187,13 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     opened_at: now,
     closed_at: null,
     close: null,
-    direction_requested: input.directionRequested || 'right',
-    direction_applied: input.directionApplied || 'not_applied',
+    direction_requested: directionRequested,
+    direction_applied: directionApplied,
+    column_creation_direction_requested: input.columnCreationDirectionRequested ?? null,
+    column_creation_direction_applied: input.columnCreationDirectionApplied ?? null,
+    worker_direction_requested: input.workerDirectionRequested || 'down',
+    worker_direction_applied: input.workerDirectionApplied || (directionApplied === 'down' ? 'down' : directionApplied === 'unknown' ? 'unknown' : 'not_applied'),
+    slot_column_anchor_pane_id: input.slotColumnAnchorPaneId || null,
     right_column: input.rightColumn || null,
     sdk_thread_id: input.sdkThreadId || null,
     sdk_run_id: input.sdkRunId || null,
@@ -226,12 +245,18 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
       createSession,
       launch: null,
       paneReconciliation: null,
-      directionRequested: 'right',
+      directionRequested: 'down',
       directionApplied: 'not_applied',
+      columnCreationDirectionRequested: null,
+      columnCreationDirectionApplied: 'not_applied',
+      workerDirectionRequested: 'down',
+      workerDirectionApplied: 'not_applied',
+      slotColumnAnchorPaneId: rightColumn.state.slot_column_anchor_pane_id || null,
       rightColumn: {
         mode: 'spawn-on-first-worker',
         focus_pane_id: null,
-        y_order: null
+        y_order: null,
+        slot_column_anchor_pane_id: rightColumn.state.slot_column_anchor_pane_id || null
       },
       status: 'running',
       providerContext,
@@ -248,9 +273,42 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     return record
   }
   const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || 'running', input.worktree || null)
-  const directionRequested: 'right' | 'down' = rightColumn?.focusPaneId ? 'down' : 'right'
-  const focus = rightColumn?.focusPaneId
-    ? await focusZellijPaneById(input.sessionName, rightColumn.focusPaneId, cwd)
+  let slotColumnAnchorPaneId = rightColumn?.state.slot_column_anchor_pane_id || null
+  let anchorLaunch: ZellijCommandResult | null = null
+  let columnCreationDirectionRequested: 'right' | null = null
+  let columnCreationDirectionApplied: 'right' | 'unknown' | 'not_applied' | null = null
+  if (rightColumn && !rightColumn.focusPaneId && !slotColumnAnchorPaneId) {
+    columnCreationDirectionRequested = 'right'
+    const anchorCommand = buildZellijSlotColumnAnchorCommand({
+      cliPath: path.join(packageRoot(), 'dist', 'bin', 'sks.js'),
+      missionId: input.missionId,
+      mode: input.uiMode || 'compact-slots',
+      artifactRoot: root,
+      watch: true
+    })
+    anchorLaunch = createSession.ok
+      ? await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--direction', 'right', '--name', 'SLOTS', '--', 'sh', '-lc', anchorCommand], {
+          cwd,
+          timeoutMs: 5000,
+          optional: false
+        })
+      : null
+    slotColumnAnchorPaneId = anchorLaunch?.ok ? extractZellijPaneIdFromOutput(anchorLaunch.stdout_tail) : null
+    columnCreationDirectionApplied = anchorLaunch?.ok ? (slotColumnAnchorPaneId ? 'right' : 'unknown') : 'not_applied'
+    if (slotColumnAnchorPaneId) {
+      await recordSlotColumnAnchorInRightColumn({
+        root,
+        ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+        missionId: input.missionId,
+        sessionName: input.sessionName,
+        paneId: slotColumnAnchorPaneId
+      })
+    }
+  }
+  const focusPaneId = rightColumn?.focusPaneId || slotColumnAnchorPaneId || null
+  const directionRequested: 'right' | 'down' = rightColumn ? 'down' : 'right'
+  const focus = focusPaneId
+    ? await focusZellijPaneById(input.sessionName, focusPaneId, cwd)
     : null
   const newPaneArgs = ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, ...(directionRequested === 'down' ? ['--near-current-pane'] : []), '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
   let launch = createSession.ok
@@ -289,6 +347,8 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
   const blockers = [
     ...(createSession.ok ? [] : createSession.blockers.map((blocker) => `zellij_worker_session_${blocker}`)),
     ...(rightColumn && rightColumn.placement !== 'zellij-pane' ? [`zellij_worker_right_column_${rightColumn.placement}`] : []),
+    ...(rightColumn && columnCreationDirectionRequested === 'right' && columnCreationDirectionApplied !== 'right' ? ['zellij_worker_slot_column_anchor_not_created'] : []),
+    ...(anchorLaunch && !anchorLaunch.ok ? anchorLaunch.blockers.map((blocker) => `zellij_worker_slot_column_anchor_${blocker}`) : []),
     ...(launch && !launch.ok ? launch.blockers.map((blocker) => `zellij_worker_pane_${blocker}`) : []),
     ...(launch?.ok && !isRealZellijWorkerPaneIdSource(paneIdSource) ? ['zellij_worker_pane_id_real_source_missing'] : [])
   ]
@@ -302,11 +362,18 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
       ...(reconciledPane || {}),
       focus_pane: focus,
       focus_degraded: focus ? focus.ok !== true : false,
+      slot_column_anchor_pane_id: slotColumnAnchorPaneId,
+      slot_column_anchor_launch: anchorLaunch,
       rename_pane: renamePane
     },
     directionRequested,
     directionApplied,
-    rightColumn: rightColumn ? { mode: 'spawn-on-first-worker', focus_pane_id: rightColumn.focusPaneId, y_order: rightColumn.yOrder } : null,
+    columnCreationDirectionRequested,
+    columnCreationDirectionApplied,
+    workerDirectionRequested: 'down',
+    workerDirectionApplied: directionApplied === 'down' ? 'down' : directionApplied === 'unknown' ? 'unknown' : 'not_applied',
+    slotColumnAnchorPaneId,
+    rightColumn: rightColumn ? { mode: 'spawn-on-first-worker', focus_pane_id: focusPaneId, y_order: rightColumn.yOrder, slot_column_anchor_pane_id: slotColumnAnchorPaneId } : null,
     status: blockers.length ? 'failed' : 'running',
     providerContext,
     serviceTier: input.serviceTier || providerContext.service_tier,
@@ -347,6 +414,11 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     provider_context: record.provider_context,
     direction_requested: record.direction_requested,
     direction_applied: record.direction_applied,
+    column_creation_direction_requested: record.column_creation_direction_requested || null,
+    column_creation_direction_applied: record.column_creation_direction_applied || null,
+    worker_direction_requested: record.worker_direction_requested,
+    worker_direction_applied: record.worker_direction_applied,
+    slot_column_anchor_pane_id: record.slot_column_anchor_pane_id || null,
     command: record.command,
     worker_artifact_dir: input.workerArtifactDir,
     worker_result_path: input.resultPath,

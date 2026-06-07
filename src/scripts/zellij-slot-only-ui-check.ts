@@ -13,8 +13,10 @@ const report = {
   default_compact_slots: uiMode.includes("return 'compact-slots'"),
   state_records_ui_mode: manager.includes('ui_mode: uiMode'),
   compact_skips_dashboard: manager.includes('if (!createDashboard)') && manager.includes('dashboard_created: false'),
-  first_slot_can_open_right: worker.includes("rightColumn?.focusPaneId ? 'down' : 'right'"),
-  second_slot_down_only_with_focus: worker.includes("directionRequested === 'down' ? ['--near-current-pane'] : []"),
+  first_slot_creates_slot_anchor_right: worker.includes('buildZellijSlotColumnAnchorCommand') && worker.includes("'--direction', 'right', '--name', 'SLOTS'"),
+  workers_stack_down_from_anchor: worker.includes("const directionRequested: 'right' | 'down' = rightColumn ? 'down' : 'right'")
+    && worker.includes("directionRequested === 'down' ? ['--near-current-pane'] : []")
+    && worker.includes('slot_column_anchor_pane_id'),
   compact_uses_renderer: swarm.includes('buildZellijSlotPaneCommand') && swarm.includes("slot_visualization = uiMode === 'full-debug' ? 'worker-command-pane' : 'zellij-slot-pane-renderer'")
 }
 const ok = Object.values(report).every((value) => value === true || typeof value === 'string')

@@ -10,7 +10,7 @@
         "fs-read"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 300000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -38,7 +38,7 @@
         "fs-read"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 300000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -3239,7 +3239,7 @@
         "fs-read"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 240000,
+      "timeout_ms": 360000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -3325,7 +3325,7 @@
         "fs-read"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 240000,
+      "timeout_ms": 360000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -4076,13 +4076,15 @@
     {
       "id": "release:readiness",
       "command": "npm run release:readiness --silent",
-      "deps": [],
+      "deps": [
+        "side-effect:runtime-report"
+      ],
       "resource": [
         "cpu-light",
         "fs-read"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 300000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -4461,7 +4463,7 @@
         "fs-read"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 300000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -5207,7 +5209,7 @@
         "cpu-light"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 300000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -5362,6 +5364,269 @@
       },
       "preset": [
         "real-check"
+      ]
+    },
+    {
+      "id": "zellij:slot-column-anchor",
+      "command": "npm run zellij:slot-column-anchor --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:first-slot-down-stack",
+      "command": "npm run zellij:first-slot-down-stack --silent",
+      "deps": [
+        "zellij:slot-column-anchor"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/zellij/**",
+          "src/commands/zellij-slot-column-anchor.ts",
+          "src/cli/command-registry.ts",
+          "src/scripts/zellij-first-slot-down-stack-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:first-slot-down-stack:real",
+      "command": "npm run zellij:first-slot-down-stack:real -- --require-real --silent",
+      "deps": [
+        "zellij:first-slot-down-stack"
+      ],
+      "resource": [
+        "zellij-real"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 180000,
+      "cache": {
+        "enabled": false,
+        "inputs": [
+          "src/core/zellij/**",
+          "src/scripts/zellij-first-slot-down-stack-real-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check"
+      ]
+    },
+    {
+      "id": "naruto:allocation-policy",
+      "command": "npm run naruto:allocation-policy --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:rebalance-policy",
+      "command": "npm run naruto:rebalance-policy --silent",
+      "deps": [
+        "naruto:allocation-policy"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:actual-worker-control-plane",
+      "command": "npm run naruto:actual-worker-control-plane --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 180000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:orchestrator-runtime-source",
+      "command": "npm run naruto:orchestrator-runtime-source --silent",
+      "deps": [
+        "naruto:actual-worker-control-plane"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "git:worktree-checkpoint",
+      "command": "npm run git:worktree-checkpoint --silent",
+      "deps": [
+        "git:worktree-diff-envelope"
+      ],
+      "resource": [
+        "git-worktree",
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "git:worktree-cross-rebase",
+      "command": "npm run git:worktree-cross-rebase --silent",
+      "deps": [
+        "git:worktree-checkpoint"
+      ],
+      "resource": [
+        "git-worktree",
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
       ]
     }
   ]

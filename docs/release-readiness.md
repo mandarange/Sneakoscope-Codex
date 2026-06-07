@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.11 is the external-parallelism and release-gate cleanup patch for the 2.0 line. It removes automatic npm update prompts from launch/doctor paths, adds the Zellij SLOTS anchor command with first-slot-down worker stacking, routes Naruto actual workers through the Codex Control Plane, and adds allocation/rebalance plus Git worktree checkpoint/cross-rebase release gates.
+
+The 2.0.11 release gate adds `zellij:slot-column-anchor`, `zellij:first-slot-down-stack`, `naruto:allocation-policy`, `naruto:rebalance-policy`, `naruto:actual-worker-control-plane`, `naruto:orchestrator-runtime-source`, `git:worktree-checkpoint`, and `git:worktree-cross-rebase`. Publish readiness still requires a fresh full `release:check` stamp, version/provenance alignment, and operator-run deployment.
+
 SKS 2.0.10 is the slot-only Zellij and Naruto runtime stabilization patch for the 2.0 line. It makes compact slot panes the default visual worker surface, keeps the initial Zellij session main-only until the first visible worker is spawned, sends overflow workers to headless runtime evidence instead of opening more panes, and keeps dashboard panes opt-in.
 
 The 2.0.10 release gate adds compact slot renderer checks, slot-only UI checks, right-column headless overflow proof, real Naruto active-pool runtime proof, extreme real parallelism proof, worktree integration primary-runtime proof, and agent role-config repair proof. Publish readiness still requires a fresh full `release:check` stamp, version-truth alignment, release metadata, and the optional real-environment checks where required.

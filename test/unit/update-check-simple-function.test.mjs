@@ -202,7 +202,7 @@ test('SKS update check reports unavailable instead of starting fallback work', a
   assert.equal(result.pipeline_required, false);
 });
 
-test('CLI launch helper prints a nonblocking SKS update notice', async () => {
+test('CLI launch helper does not run SKS package update checks', async () => {
   const { maybePromptSksUpdateForLaunch } = await import('../../dist/cli/install-helpers.js');
   const previous = {
     SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: process.env.SKS_NPM_VIEW_SNEAKOSCOPE_VERSION,
@@ -225,10 +225,11 @@ test('CLI launch helper prints a nonblocking SKS update notice', async () => {
     }
     console.log = (message) => logs.push(String(message));
     const result = await maybePromptSksUpdateForLaunch([], { label: 'MAD launch' });
-    assert.equal(result.status, 'available');
-    assert.equal(result.latest, '99.99.99');
-    assert.match(result.command, /sks update now --version 99\.99\.99/);
-    assert.match(logs.join('\n'), /SKS update available before MAD launch:/);
+    assert.equal(result.status, 'skipped');
+    assert.equal(result.reason, 'manual_update_commands_only');
+    assert.equal(result.latest, null);
+    assert.equal(result.command, null);
+    assert.equal(logs.join('\n'), '');
   } finally {
     console.log = originalLog;
     for (const [key, value] of Object.entries(previous)) {

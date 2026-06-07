@@ -22,7 +22,8 @@ export async function finalizePipelineResult(input: {
   const root = path.resolve(input.mutationLedgerRoot || path.join(cwd, '.sneakoscope', 'tmp', 'pipeline-finalize', safeName(input.missionId)))
   const requirement = gptFinalRequiredForPipeline({
     localParticipated: input.localParticipated,
-    candidateResults: input.candidateResults
+    candidateResults: input.candidateResults,
+    candidatePatchEnvelopes: input.candidatePatchEnvelopes
   })
   let arbiter: any = null
   let blockers: string[] = []
@@ -51,6 +52,7 @@ export async function finalizePipelineResult(input: {
     route: input.route,
     mission_id: input.missionId,
     local_participated: requirement.local_participated,
+    worktree_participated: requirement.worktree_participated,
     gpt_final_required: requirement.gpt_final_required,
     gpt_final_arbiter: arbiter,
     final_status: blockers.length ? 'blocked' : 'accepted',

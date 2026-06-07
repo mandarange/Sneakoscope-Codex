@@ -55,6 +55,13 @@ export interface AgentPatchEnvelope {
     worktree_head: string | null
     changed_files: string[]
     diff_bytes: number
+    checkpoint?: {
+      schema?: string
+      mode_applied?: string
+      commit_hash?: string | null
+      changed_files?: string[]
+      blockers?: string[]
+    } | null
   }
   operations: AgentPatchOperation[]
   rationale?: string
@@ -180,7 +187,14 @@ function normalizeGitWorktreeMetadata(input: any): NonNullable<AgentPatchEnvelop
     base_head: input?.base_head == null ? null : String(input.base_head),
     worktree_head: input?.worktree_head == null ? null : String(input.worktree_head),
     changed_files: Array.isArray(input?.changed_files) ? input.changed_files.map(String) : [],
-    diff_bytes: Number(input?.diff_bytes || 0)
+    diff_bytes: Number(input?.diff_bytes || 0),
+    checkpoint: input?.checkpoint ? {
+      ...(input.checkpoint.schema === undefined ? {} : { schema: String(input.checkpoint.schema) }),
+      ...(input.checkpoint.mode_applied === undefined ? {} : { mode_applied: String(input.checkpoint.mode_applied) }),
+      commit_hash: input.checkpoint.commit_hash == null ? null : String(input.checkpoint.commit_hash),
+      changed_files: Array.isArray(input.checkpoint.changed_files) ? input.checkpoint.changed_files.map(String) : [],
+      blockers: Array.isArray(input.checkpoint.blockers) ? input.checkpoint.blockers.map(String) : []
+    } : null
   }
 }
 

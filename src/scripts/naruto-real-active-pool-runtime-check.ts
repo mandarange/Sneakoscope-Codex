@@ -9,6 +9,7 @@ import { decideNarutoConcurrency } from '../core/naruto/naruto-concurrency-gover
 import { runNarutoRealActivePool } from '../core/naruto/naruto-active-pool.js'
 import { collectActualNarutoWorker, spawnActualNarutoWorker } from '../core/naruto/naruto-real-worker-runtime.js'
 
+process.env.SKS_CODEX_SDK_FAKE = '1'
 const graph = buildNarutoWorkGraph({ requestedClones: 12, totalWorkItems: 24, writeCapable: false, maxActiveWorkers: 6 })
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-naruto-real-runtime-'))
 const missionId = `M-naruto-real-runtime-${process.pid}`
@@ -32,7 +33,7 @@ const report = await runNarutoRealActivePool({
       missionId,
       item,
       placement,
-      backend: 'codex-sdk',
+      backend: 'fake',
       visiblePaneCap: target.safe_zellij_visible_panes,
       zellijSessionName: `sks-${missionId}`
     })
@@ -47,7 +48,8 @@ const report = await runNarutoRealActivePool({
 const processEvidence = report.worker_lifecycle.every((row) => row.pid && row.worker_artifact_dir)
 const artifactEvidence = report.worker_lifecycle.every((row) => row.worker_artifact_dir
   && fs.existsSync(path.join(row.worker_artifact_dir, 'worker-heartbeat.jsonl'))
-  && fs.existsSync(path.join(row.worker_artifact_dir, 'worker-result.json')))
+  && fs.existsSync(path.join(row.worker_artifact_dir, 'worker-result.json'))
+  && fs.existsSync(path.join(row.worker_artifact_dir, 'codex-control', 'codex-control-proof.json')))
 const ok = report.ok && spawned === graph.total_work_items && collected === graph.total_work_items && report.max_observed_active_workers >= target.safe_active_workers && report.active_pool_utilization >= 0.8 && processEvidence && artifactEvidence
 assertGate(ok, 'Naruto real active pool runtime must include actual child process, heartbeat, and result evidence', { report, spawned, collected, processEvidence, artifactEvidence, tempRoot })
 emitGate('naruto:real-active-pool-runtime', report)

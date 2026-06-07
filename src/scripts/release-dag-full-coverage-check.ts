@@ -17,17 +17,31 @@ const allowlist = new Map([
   ['release:dynamic-performance', 'performance budget gate covered by release:parallel-speed-budget']
 ])
 const gateIds = new Set(manifest.gates.map((gate) => gate.id))
+const releasePresetIds = new Set(manifest.gates.filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release')).map((gate) => gate.id))
+const requiredReleasePresetIds = [
+  'zellij:first-slot-down-stack',
+  'naruto:allocation-policy',
+  'naruto:rebalance-policy',
+  'naruto:actual-worker-control-plane',
+  'naruto:orchestrator-runtime-source',
+  'git:worktree-checkpoint',
+  'git:worktree-cross-rebase',
+  'release:dag-full-coverage'
+]
 const missing = legacyIds.filter((id) => !gateIds.has(id) && !allowlist.has(id))
+const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))
 const allowed = legacyIds.filter((id) => allowlist.has(id)).map((id) => ({ id, reason: allowlist.get(id) }))
 const coverage = legacyIds.length ? (legacyIds.length - missing.length) / legacyIds.length : 1
 const schemaComplete = manifest.gates.every((gate) => gate.id && gate.command && Array.isArray(gate.deps) && Array.isArray(gate.resource) && gate.side_effect && gate.timeout_ms && gate.cache && gate.isolation && Array.isArray(gate.preset))
 const report = {
   schema: 'sks.release-dag-full-coverage-check.v1',
-  ok: missing.length === 0 && coverage >= 0.95 && schemaComplete,
+  ok: missing.length === 0 && missingRequiredReleasePreset.length === 0 && coverage >= 0.95 && schemaComplete,
   legacy_gate_count: legacyIds.length,
   v2_gate_count: manifest.gates.length,
   coverage,
   missing,
+  required_release_preset_ids: requiredReleasePresetIds,
+  missing_required_release_preset: missingRequiredReleasePreset,
   allowed,
   schema_complete: schemaComplete
 }

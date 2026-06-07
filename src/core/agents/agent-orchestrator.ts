@@ -56,6 +56,7 @@ import { selectFinalGptPatchSource } from '../pipeline/final-gpt-patch-stage.js'
 import { allocateWorkerWorktree } from '../git/git-worktree-manager.js'
 import { exportGitWorktreeDiff } from '../git/git-worktree-diff.js'
 import { buildGitWorktreePatchEnvelope } from '../git/git-worktree-patch-envelope.js'
+import { checkpointWorkerWorktree } from '../git/git-worktree-checkpoint.js'
 import { cleanupGitWorktree } from '../git/git-worktree-cleanup.js'
 import { createGitIntegrationWorktree } from '../git/git-integration-worktree.js'
 import { applyGitWorktreeMergeQueue } from '../git/git-worktree-merge-queue.js'
@@ -273,6 +274,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     worktree_root: gitWorktreePolicy?.worktree_root || null,
     allocations: [] as any[],
     diffs: [] as any[],
+    checkpoints: [] as any[],
     cleanup: [] as any[],
     blockers: [] as string[]
   }
@@ -424,7 +426,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   await writeJsonAtomic(path.join(ledgerRoot, 'local-collaboration-policy.json'), localCollaborationPolicy)
   const localParticipated = localCollaborationParticipated(results)
   const candidatePatchEnvelopes = results.flatMap((result: any) => Array.isArray(result.patch_envelopes) ? result.patch_envelopes : [])
-  const gptFinalArbiter = localParticipated
+  const worktreeParticipated = candidatePatchEnvelopes.some((envelope: any) => envelope?.source === 'git-worktree-diff' || envelope?.git_worktree?.worktree_path)
+    || results.some((result: any) => result?.git_worktree_diff || result?.git_worktree_checkpoint)
+  const gptFinalRequired = localParticipated || worktreeParticipated
+  const gptFinalArbiter = gptFinalRequired
     ? await runFinalGptReviewStage({
       schema: 'sks.gpt-final-arbiter-input.v1',
       route,
@@ -448,10 +453,10 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
       rollback_plan: { verification_rollback_dag: strategyCompiled.verification_rollback_dag || null }
     }, { cwd: root, mutationLedgerRoot: path.join(ledgerRoot, 'gpt-final-arbiter') })
     : null
-  const finalGptPatchStage = localParticipated
+  const finalGptPatchStage = gptFinalRequired
     ? selectFinalGptPatchSource(gptFinalArbiter, candidatePatchEnvelopes)
     : null
-  const resultsForPatchSwarm = localParticipated && finalGptPatchStage?.ok === true && gptFinalArbiter?.result?.status === 'modified'
+  const resultsForPatchSwarm = gptFinalRequired && finalGptPatchStage?.ok === true && gptFinalArbiter?.result?.status === 'modified'
     ? withFinalGptPatchEnvelopes(results, finalGptPatchStage.patch_envelopes)
     : results
   const patchSwarm = await runAgentPatchSwarmRuntime(root, ledgerRoot, {
@@ -462,7 +467,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     results: resultsForPatchSwarm,
     parallelWritePolicy,
     verificationRollbackDag: strategyCompiled.verification_rollback_dag,
-    dryRun: opts.dryRunPatches === true || opts.applyPatches !== true || (localParticipated && gptFinalArbiter?.ok !== true),
+    dryRun: opts.dryRunPatches === true || opts.applyPatches !== true || (gptFinalRequired && gptFinalArbiter?.ok !== true),
     gptFinalArbiter,
     finalGptPatchStage
   })
@@ -490,8 +495,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     ...(noSubagentScalingPolicy.ok ? [] : noSubagentScalingPolicy.blockers),
     ...(fastModePropagation.ok ? [] : fastModePropagation.blockers),
     ...(gitWorktreeRuntime.required === true && gitWorktreeRuntime.ok === false ? gitWorktreeRuntime.blockers || ['git_worktree_runtime_not_ok'] : []),
-    ...(localParticipated && gptFinalArbiter?.ok !== true ? gptFinalArbiter?.blockers || ['gpt_final_arbiter_not_ok'] : []),
-    ...(localParticipated && finalGptPatchStage?.ok === false ? finalGptPatchStage.blockers || ['final_gpt_patch_stage_not_ok'] : []),
+    ...(gptFinalRequired && gptFinalArbiter?.ok !== true ? gptFinalArbiter?.blockers || ['gpt_final_arbiter_not_ok'] : []),
+    ...(gptFinalRequired && finalGptPatchStage?.ok === false ? finalGptPatchStage.blockers || ['final_gpt_patch_stage_not_ok'] : []),
     ...(patchSwarm.ok ? [] : patchSwarm.blockers),
     ...(janitor.ok ? [] : janitor.blockers)
   ]
@@ -661,6 +666,14 @@ async function finalizeWorkerGitWorktree(input: {
     workerId: String(input.agent.id || input.slice.id || 'worker')
   })
   await writeJsonAtomic(path.join(input.workerWorktree.artifactDir, 'git-worktree-diff.json'), diff)
+  const checkpoint = await checkpointWorkerWorktree({
+    worktreePath: allocation.worktree_path,
+    repoRoot: allocation.main_repo_root || input.root,
+    workerId: String(input.agent.id || input.slice.id || 'worker'),
+    taskId: String(input.slice.id || input.agent.id || 'task'),
+    mode: 'auto'
+  })
+  await writeJsonAtomic(path.join(input.workerWorktree.artifactDir, 'git-worktree-checkpoint.json'), checkpoint)
   input.runtime.diffs.push({
     agent_id: input.agent.id,
     slice_id: input.slice.id,
@@ -670,18 +683,29 @@ async function finalizeWorkerGitWorktree(input: {
     diff_bytes: diff.diff_bytes,
     blockers: diff.blockers
   })
+  input.runtime.checkpoints.push({
+    agent_id: input.agent.id,
+    slice_id: input.slice.id,
+    ok: checkpoint.ok,
+    mode_applied: checkpoint.mode_applied,
+    commit_hash: checkpoint.commit_hash,
+    changed_files: checkpoint.changed_files,
+    blockers: checkpoint.blockers
+  })
   if (!diff.clean && diff.ok) {
     const envelope = buildGitWorktreePatchEnvelope({
       diff,
       agentId: String(input.agent.id || 'agent'),
       sessionId: String(input.agent.session_id || ''),
       slotId: String(input.agent.slot_id || ''),
-      generationIndex: Math.max(1, Math.floor(Number(input.agent.generation_index || 1)))
+      generationIndex: Math.max(1, Math.floor(Number(input.agent.generation_index || 1))),
+      checkpoint
     })
     input.result.patch_envelopes = [...(Array.isArray(input.result.patch_envelopes) ? input.result.patch_envelopes : []), envelope]
     input.result.changed_files = [...new Set([...(input.result.changed_files || []), ...diff.changed_files])]
-    input.result.artifacts = [...new Set([...(input.result.artifacts || []), path.relative(input.ledgerRoot, path.join(input.workerWorktree.artifactDir, 'git-worktree-diff.json'))])]
+    input.result.artifacts = [...new Set([...(input.result.artifacts || []), path.relative(input.ledgerRoot, path.join(input.workerWorktree.artifactDir, 'git-worktree-diff.json')), path.relative(input.ledgerRoot, path.join(input.workerWorktree.artifactDir, 'git-worktree-checkpoint.json'))])]
     input.result.git_worktree_diff = diff
+    input.result.git_worktree_checkpoint = checkpoint
   }
   const cleanup = await cleanupGitWorktree({
     repoRoot: allocation.main_repo_root || input.root,
@@ -698,7 +722,7 @@ async function finalizeWorkerGitWorktree(input: {
     retention_lock_path: cleanup.retention_lock_path,
     blockers: cleanup.blockers
   })
-  input.runtime.blockers.push(...diff.blockers, ...cleanup.blockers)
+  input.runtime.blockers.push(...diff.blockers, ...checkpoint.blockers, ...cleanup.blockers)
   input.runtime.ok = input.runtime.blockers.length === 0
   await writeJsonAtomic(path.join(input.ledgerRoot, 'agent-git-worktree-runtime.json'), input.runtime)
 }
@@ -1015,6 +1039,7 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
 
 async function runGitWorktreeIntegrationPrimary(root: string, ledgerRoot: string, missionId: string, entries: any[], queueStore: PersistentAgentPatchQueueStore) {
   const diffs = entries.map((entry) => gitWorktreeDiffFromQueueEntry(entry)).filter(Boolean) as GitWorktreeDiff[]
+  const checkpoints = entries.map((entry) => gitWorktreeCheckpointFromQueueEntry(entry)).filter(Boolean) as any[]
   const repoRoot = diffs[0]?.main_repo_root || root
   const baseRef = diffs.find((diff) => diff.base_head)?.base_head || undefined
   const integration = await createGitIntegrationWorktree({ repoRoot, missionId, ...(baseRef ? { baseRef } : {}) })
@@ -1050,13 +1075,15 @@ async function runGitWorktreeIntegrationPrimary(root: string, ledgerRoot: string
   for (const entry of entries) await queueStore.markApplying(entry.id)
   const queueReport = await applyGitWorktreeMergeQueue({
     integrationWorktreePath: integration.worktree_path,
-    diffs
+    diffs,
+    checkpoints
   })
   const rollbackPlan = queueReport.ok ? await captureGitWorktreeRollbackPlan(repoRoot, queueReport.changed_files || []) : { ok: false, rollback: [], blockers: ['git_worktree_integration_prevalidation_failed'] }
   const mainApplyReport = queueReport.ok && rollbackPlan.ok
     ? await applyGitWorktreeMergeQueue({
         integrationWorktreePath: repoRoot,
-        diffs
+        diffs,
+        checkpoints
       })
     : null
   const rollbackEvidence = mainApplyReport?.ok
@@ -1188,6 +1215,27 @@ function gitWorktreeDiffFromQueueEntry(entry: any): GitWorktreeDiff | null {
     diff_bytes: Buffer.byteLength(diff),
     clean: diff.trim().length === 0,
     blockers: []
+  }
+}
+
+function gitWorktreeCheckpointFromQueueEntry(entry: any) {
+  const envelope = entry?.envelope || {}
+  const meta = envelope.git_worktree || {}
+  const checkpoint = meta.checkpoint || null
+  if (!checkpoint || checkpoint.mode_applied !== 'checkpoint-commit' || !checkpoint.commit_hash) return null
+  return {
+    schema: 'sks.git-worktree-checkpoint.v1',
+    ok: Array.isArray(checkpoint.blockers) ? checkpoint.blockers.length === 0 : true,
+    generated_at: nowIso(),
+    worktree_path: String(meta.worktree_path || ''),
+    repo_root: String(meta.main_repo_root || ''),
+    worker_id: String(envelope.agent_id || entry.agent_id || entry.id),
+    task_id: String(envelope.task_slice_id || entry.id || ''),
+    mode_requested: 'auto',
+    mode_applied: 'checkpoint-commit',
+    commit_hash: String(checkpoint.commit_hash),
+    changed_files: Array.isArray(checkpoint.changed_files) ? checkpoint.changed_files.map(String) : Array.isArray(meta.changed_files) ? meta.changed_files.map(String) : [],
+    blockers: Array.isArray(checkpoint.blockers) ? checkpoint.blockers.map(String) : []
   }
 }
 
