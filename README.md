@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.10** is the slot-only Zellij and Naruto runtime stabilization release. Compact slot panes are now the default visual worker surface, the initial Zellij session stays main-only until the first visible worker is reserved, overflow workers continue headlessly with runtime evidence instead of opening excess panes, and dashboard panes stay opt-in. The release path remains manifest-backed through the v2 DAG runner, with real Zellij/Naruto/worktree proof gates split into `real-check`.
+SKS **2.0.11** is the slot-only Zellij and Naruto runtime stabilization release. Compact slot panes are now the default visual worker surface, the initial Zellij session stays main-only until the first visible worker is reserved, overflow workers continue headlessly with runtime evidence instead of opening excess panes, and dashboard panes stay opt-in. The release path remains manifest-backed through the v2 DAG runner, with real Zellij/Naruto/worktree proof gates split into `real-check`.
 
 What changed:
 

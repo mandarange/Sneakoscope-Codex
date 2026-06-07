@@ -18,22 +18,18 @@ import { appendMigrationEvents, hashConfigText } from '../core/migration/migrati
 import { repairCodexAppFastUi } from '../core/codex-app/codex-app-fast-ui-repair.js';
 import { resolveProviderContext } from '../core/provider/provider-context.js';
 import { readLocalModelConfig } from '../core/agents/ollama-worker-config.js';
-import { runSksUpdateNow } from '../core/update-check.js';
 import { repairAgentRoleConfigs } from '../core/agents/agent-role-config.js';
 
 export async function run(_command: any, args: any = []) {
   const doctorFix = flag(args, '--fix');
   let setupRepair = null;
   const sksUpdate = doctorFix
-    ? await runSksUpdateNow({
-        timeoutMs: 10 * 60 * 1000,
-        maxOutputBytes: 128 * 1024
-      }).catch((err: any) => ({
+    ? {
         schema: 'sks.update-now.v1',
-        ok: false,
-        status: 'failed',
-        error: err?.message || String(err)
-      }))
+        ok: true,
+        status: 'skipped',
+        reason: 'manual_update_commands_only'
+      }
     : null;
   let migrationPreFix: Record<string, string | null> | null = null;
   if (doctorFix) {

@@ -1,4 +1,5 @@
 import type { AgentPatchEnvelope } from '../agents/agent-patch-schema.js'
+import type { GitWorktreeCheckpointReport } from './git-worktree-checkpoint.js'
 import type { GitWorktreeDiff } from './git-worktree-diff.js'
 
 export function buildGitWorktreePatchEnvelope(input: {
@@ -7,6 +8,7 @@ export function buildGitWorktreePatchEnvelope(input: {
   sessionId: string
   slotId: string
   generationIndex: number
+  checkpoint?: GitWorktreeCheckpointReport | null
 }): AgentPatchEnvelope {
   const changedFiles = input.diff.changed_files.length ? input.diff.changed_files : ['git-worktree.diff']
   return {
@@ -27,7 +29,14 @@ export function buildGitWorktreePatchEnvelope(input: {
       base_head: input.diff.base_head,
       worktree_head: input.diff.worktree_head,
       changed_files: changedFiles,
-      diff_bytes: input.diff.diff_bytes
+      diff_bytes: input.diff.diff_bytes,
+      checkpoint: input.checkpoint ? {
+        schema: input.checkpoint.schema,
+        mode_applied: input.checkpoint.mode_applied,
+        commit_hash: input.checkpoint.commit_hash,
+        changed_files: input.checkpoint.changed_files,
+        blockers: input.checkpoint.blockers
+      } : null
     },
     operations: [{
       op: 'git_apply_patch',

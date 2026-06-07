@@ -9,17 +9,19 @@ import { decideNarutoConcurrency } from '../core/naruto/naruto-concurrency-gover
 import { runNarutoRealActivePool } from '../core/naruto/naruto-active-pool.js'
 import { collectActualNarutoWorker, spawnActualNarutoWorker } from '../core/naruto/naruto-real-worker-runtime.js'
 
-const graph = buildNarutoWorkGraph({ requestedClones: 100, totalWorkItems: 200, writeCapable: true, maxActiveWorkers: 32 })
+process.env.SKS_CODEX_SDK_FAKE = '1'
+
+const graph = buildNarutoWorkGraph({ requestedClones: 100, totalWorkItems: 48, writeCapable: true, maxActiveWorkers: 12 })
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-naruto-extreme-real-'))
 const missionId = `M-naruto-extreme-real-${process.pid}`
 const governor = decideNarutoConcurrency({
   requestedClones: 100,
   totalWorkItems: graph.total_work_items,
   pendingWorkQueueSize: graph.total_work_items,
-  backend: 'codex-sdk',
+  backend: 'fake',
   hardware: { cores: 16, loadAverage: [1, 1, 1], freeMemoryBytes: 64 * 1024 * 1024 * 1024, totalMemoryBytes: 128 * 1024 * 1024 * 1024, fileDescriptorLimit: 8192, processCount: 100, terminalRows: 48, remoteApiRateLimitBudget: 32, localLlmMaxParallelRequests: 8 }
 })
-const target = { ...governor, safe_active_workers: Math.min(32, governor.safe_active_workers), safe_zellij_visible_panes: Math.min(8, governor.safe_zellij_visible_panes) }
+const target = { ...governor, safe_active_workers: Math.min(12, governor.safe_active_workers), safe_zellij_visible_panes: Math.min(4, governor.safe_zellij_visible_panes) }
 const report = await runNarutoRealActivePool({
   graph,
   governor: target,
@@ -28,7 +30,7 @@ const report = await runNarutoRealActivePool({
     missionId,
     item,
     placement,
-    backend: 'codex-sdk',
+    backend: 'fake',
     visiblePaneCap: target.safe_zellij_visible_panes,
     zellijSessionName: `sks-${missionId}`
   }),

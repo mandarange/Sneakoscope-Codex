@@ -77,9 +77,10 @@ assertGate(lowFreeButCapable.cap >= 4, 'capable hosts must not collapse Naruto c
 const bigMemoryHost = roster.systemSafeNarutoConcurrency({ backend: 'codex-sdk', cores: 4, freeBytes: 48 * 1024 * 1024 * 1024, totalBytes: 64 * 1024 * 1024 * 1024 });
 assertGate(bigMemoryHost.cap >= 64, 'a 64 GB host must allow >= 64 parallel codex-sdk workers regardless of core count (network-bound, memory-budgeted)', { bigMemoryHost });
 
-// 6) End-to-end run: 24 clones (> standard 20 → ceiling lifted) all complete, but live
-//    concurrency is throttled to the host-safe cap (never the full 24 unless the host allows).
+// 6) End-to-end run: 24 clones (> standard 20 -> ceiling lifted) all complete, while
+//    release verification keeps live slots bounded so the gate stays hermetic under DAG load.
 const proofClones = 24;
+const proofConcurrency = 6;
 const cli = path.join(root, 'dist', 'bin', 'sks.js');
 const isolatedWorktreeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-naruto-shadow-wt-'));
 const childEnv = { ...process.env, SKS_WORKTREE_ROOT: isolatedWorktreeRoot };
@@ -89,11 +90,12 @@ const helpParsed = parseJson(helpRun.stdout);
 assertGate(helpRun.status === 0 && helpParsed?.action === 'help', 'sks naruto --help must emit help instead of launching a run', { status: helpRun.status, stdout: tail(helpRun.stdout), stderr: tail(helpRun.stderr) });
 const run = spawnSync(process.execPath, [
   cli, 'naruto', 'run', 'shadow clone swarm gate proof',
-  '--clones', String(proofClones),
-  '--backend', 'fake',
-  '--work-items', String(proofClones),
-  '--json'
-], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 240000, maxBuffer: 8 * 1024 * 1024 });
+	  '--clones', String(proofClones),
+	  '--backend', 'fake',
+	  '--work-items', String(proofClones),
+	  '--concurrency', String(proofConcurrency),
+	  '--json'
+	], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 300000, maxBuffer: 8 * 1024 * 1024 });
 assertGate(run.status === 0, 'sks naruto run must exit 0', { status: run.status, stderr: tail(run.stderr) });
 
 const parsed = parseJson(run.stdout);
@@ -106,6 +108,7 @@ assertGate(parsed.proof === 'passed', 'naruto run proof must pass', { proof: par
 // Throttle invariant: active concurrency never exceeds the requested count nor the host cap.
 assertGate(parsed.target_active_slots >= 1 && parsed.target_active_slots <= proofClones, 'active slots must be in [1, clones]', { target_active_slots: parsed.target_active_slots });
 assertGate(parsed.target_active_slots <= fakeSafe.cap, 'active slots must be throttled to the system-safe cap', { target_active_slots: parsed.target_active_slots, cap: fakeSafe.cap });
+assertGate(parsed.target_active_slots === proofConcurrency, 'release proof must keep Naruto live slots bounded while fan-out stays >20', { target_active_slots: parsed.target_active_slots, proofConcurrency });
 
 // Task 9.1: fan-out (clones) and live concurrency (target_active_slots) are reported
 // distinctly, and concurrency_capped truthfully reflects "N clones, running M at a time".
@@ -140,7 +143,8 @@ emitGate('naruto:shadow-clone-swarm', {
   standard_ceiling: schema.MAX_AGENT_COUNT,
   default_clamp: defaultSlots,
   naruto_slots_at_100: narutoSlots,
-  proof_clones: proofClones,
+	  proof_clones: proofClones,
+	  proof_concurrency: proofConcurrency,
   target_active_slots: parsed.target_active_slots,
   fake_safe_cap: fakeSafe.cap,
   heavy_safe_cap: heavySafe.cap,

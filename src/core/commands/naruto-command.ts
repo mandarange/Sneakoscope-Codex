@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { createMission, findLatestMission, loadMission } from '../mission.js'
-import { readJson, sksRoot, writeJsonAtomic } from '../fsx.js'
+import { nowIso, readJson, sksRoot, writeJsonAtomic } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
 import { classifyOllamaWorkerSlice } from '../agents/agent-runner-ollama.js'
 import { buildNarutoCloneRoster, systemSafeNarutoConcurrency } from '../agents/agent-roster.js'
@@ -12,6 +12,8 @@ import { buildNarutoRoleDistribution } from '../naruto/naruto-role-policy.js'
 import { decideNarutoConcurrency } from '../naruto/naruto-concurrency-governor.js'
 import { runNarutoActivePool, runNarutoRealActivePool } from '../naruto/naruto-active-pool.js'
 import { collectActualNarutoWorker, spawnActualNarutoWorker } from '../naruto/naruto-real-worker-runtime.js'
+import { allocateNarutoTasksToWorkers } from '../naruto/naruto-allocation-policy.js'
+import { rebalanceNarutoReadyWork } from '../naruto/naruto-rebalance-policy.js'
 import { buildNarutoVerificationDag } from '../naruto/naruto-verification-dag.js'
 import { buildNarutoGptFinalPack } from '../naruto/naruto-gpt-final-pack.js'
 import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
@@ -101,6 +103,50 @@ async function narutoRun(parsed: NarutoArgs) {
     worktreePolicy
   })
   const roleDistribution = buildNarutoRoleDistribution(workGraph.work_items, { readonly: parsed.readonly })
+  const allocationWorkers = buildNarutoAllocationWorkers(workGraph, roleDistribution, roster)
+  const allocationAssignments = allocateNarutoTasksToWorkers(workGraph.work_items, allocationWorkers)
+  const allocationPolicy = {
+    schema: 'sks.naruto-allocation-policy.v1',
+    generated_at: nowIso(),
+    ok: allocationWorkers.length > 0 && allocationAssignments.length === workGraph.work_items.length,
+    scoring_model: {
+      same_primary_role: 18,
+      declared_role: 12,
+      same_path_lane: 12,
+      overlap_each: 4,
+      assigned_task_penalty_each: -4,
+      write_conflict_penalty: -20,
+      dependency_incomplete: '-Infinity'
+    },
+    workers: allocationWorkers,
+    assignments: allocationAssignments.map((row) => ({
+      task_id: row.id,
+      owner: row.owner,
+      score: Number.isFinite(row.allocation_score) ? row.allocation_score : '-Infinity',
+      reason: row.allocation_reason,
+      role: row.required_role,
+      kind: row.kind,
+      paths: row.hints.paths,
+      domains: row.hints.domains,
+      write_paths: row.hints.writePaths
+    })),
+    blockers: allocationWorkers.length ? [] : ['naruto_allocation_workers_missing']
+  }
+  const rebalanceDecisions = rebalanceNarutoReadyWork({
+    tasks: workGraph.work_items.map((item) => ({ ...item, owner: null, status: 'pending' })),
+    workers: allocationWorkers.map((worker) => ({ ...worker, alive: true, state: 'idle' as const })),
+    completedTaskIds: [],
+    reclaimedTaskIds: []
+  })
+  const rebalancePolicy = {
+    schema: 'sks.naruto-rebalance-policy.v1',
+    generated_at: nowIso(),
+    ok: true,
+    trigger: 'idle_worker_ready_queue',
+    decisions: rebalanceDecisions,
+    blocked_by_dependency_count: workGraph.work_items.filter((item) => item.dependencies.length > 0).length,
+    blockers: []
+  }
   const governor = decideNarutoConcurrency({
     requestedClones: roster.agent_count,
     totalWorkItems: workGraph.total_work_items,
@@ -111,24 +157,38 @@ async function narutoRun(parsed: NarutoArgs) {
   const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || Math.max(governor.safe_active_workers, backendMinimum), safe.cap))
   const zellijVisiblePanes = Math.max(1, Math.min(activeSlots, governor.safe_zellij_visible_panes))
   const activePool = await runNarutoActivePool({ graph: workGraph, governor: { ...governor, safe_active_workers: activeSlots } })
-  const realRuntimeWorktreePolicy = schedulerBackend === 'fake'
-    ? {
-        mode: 'patch-envelope-only' as const,
-        required: false,
-        main_repo_root: worktreePolicy.main_repo_root,
-        worktree_root: null,
-        fallback_reason: 'fake_backend_fixture_skips_real_worktree_cleanup'
-      }
-    : worktreePolicy
+  const realRuntimeSmokeGraph = buildNarutoWorkGraph({
+    prompt: parsed.prompt,
+    requestedClones: Math.min(2, roster.agent_count),
+    totalWorkItems: Math.min(2, workGraph.total_work_items),
+    readonly: true,
+    writeCapable: false,
+    leaseBasePath: patchEnvelopeBasePath,
+    maxActiveWorkers: Math.min(2, activeSlots),
+    worktreePolicy: {
+      mode: 'patch-envelope-only',
+      required: false,
+      main_repo_root: worktreePolicy.main_repo_root,
+      worktree_root: null,
+      fallback_reason: 'pre_run_smoke_never_owns_production_runtime'
+    }
+  })
+  const realRuntimeWorktreePolicy = {
+    mode: 'patch-envelope-only' as const,
+    required: false,
+    main_repo_root: worktreePolicy.main_repo_root,
+    worktree_root: null,
+    fallback_reason: 'pre_run_smoke_never_owns_production_runtime'
+  }
   const realActivePool = await runNarutoRealActivePool({
-    graph: workGraph,
-    governor: { ...governor, safe_active_workers: activeSlots },
+    graph: realRuntimeSmokeGraph,
+    governor: { ...governor, safe_active_workers: Math.min(2, activeSlots), safe_zellij_visible_panes: Math.min(1, zellijVisiblePanes) },
     spawnWorker: async (item, placement) => spawnActualNarutoWorker({
       root,
       missionId: mission.id,
       item,
       placement,
-      backend: schedulerBackend,
+      backend: 'fake',
       worktreePolicy: realRuntimeWorktreePolicy,
       zellijSessionName: `sks-${mission.id}`,
       visiblePaneCap: zellijVisiblePanes
@@ -137,6 +197,12 @@ async function narutoRun(parsed: NarutoArgs) {
     enqueueVerification: async () => undefined,
     updateDashboard: async () => undefined
   })
+  const realActivePoolSmoke = {
+    ...realActivePool,
+    runtime_source_of_truth: 'pre_run_smoke_only',
+    production_runtime_source_of_truth: 'agent-orchestrator-scheduler',
+    smoke_graph_total_work_items: realRuntimeSmokeGraph.total_work_items
+  }
   const verificationDag = buildNarutoVerificationDag(workGraph, { cwd: root })
   const gptFinalPack = buildNarutoGptFinalPack({
     missionId: mission.id,
@@ -160,7 +226,9 @@ async function narutoRun(parsed: NarutoArgs) {
     roleDistribution,
     governor,
     activePool,
-    realActivePool,
+    realActivePool: realActivePoolSmoke,
+    allocationPolicy,
+    rebalancePolicy,
     verificationDag,
     gptFinalPack,
     zellijDashboard,
@@ -249,6 +317,8 @@ async function narutoRun(parsed: NarutoArgs) {
     max_clones: MAX_NARUTO_AGENT_COUNT,
     concurrency: result.target_active_slots ?? activeSlots,
     target_active_slots: result.target_active_slots ?? activeSlots,
+    runtime_source_of_truth: 'agent-orchestrator-scheduler',
+    pre_run_real_active_pool_source: 'smoke_only',
     concurrency_capped: clones > (result.target_active_slots ?? activeSlots),
     system: { cores: safe.cores, free_gb: safe.free_gb, safe_concurrency: safe.cap, heavy_backend: safe.heavy },
     work_graph: {
@@ -262,6 +332,8 @@ async function narutoRun(parsed: NarutoArgs) {
     },
     git_worktree: gitWorktreeCapability,
     role_distribution: roleDistribution,
+    allocation_policy: allocationPolicy,
+    rebalance_policy: rebalancePolicy,
     concurrency_governor: governor,
     active_pool: {
       ok: activePool.ok,
@@ -269,16 +341,18 @@ async function narutoRun(parsed: NarutoArgs) {
       refill_events: activePool.refill_events,
       completed_count: activePool.completed_count,
       real_runtime: {
-        ok: realActivePool.ok,
-        active_cap: realActivePool.active_cap,
-        max_observed_active_workers: realActivePool.max_observed_active_workers,
-        average_active_workers: realActivePool.average_active_workers,
-        active_pool_utilization: realActivePool.active_pool_utilization,
-        refill_latency_ms_p95: realActivePool.refill_latency_ms_p95,
-        visible_workers: realActivePool.visible_workers,
-        headless_workers: realActivePool.headless_workers,
-        worker_lifecycle_count: realActivePool.worker_lifecycle.length,
-        worker_lifecycle_sample: realActivePool.worker_lifecycle.slice(0, 5)
+        ok: realActivePoolSmoke.ok,
+        runtime_source_of_truth: realActivePoolSmoke.runtime_source_of_truth,
+        production_runtime_source_of_truth: realActivePoolSmoke.production_runtime_source_of_truth,
+        active_cap: realActivePoolSmoke.active_cap,
+        max_observed_active_workers: realActivePoolSmoke.max_observed_active_workers,
+        average_active_workers: realActivePoolSmoke.average_active_workers,
+        active_pool_utilization: realActivePoolSmoke.active_pool_utilization,
+        refill_latency_ms_p95: realActivePoolSmoke.refill_latency_ms_p95,
+        visible_workers: realActivePoolSmoke.visible_workers,
+        headless_workers: realActivePoolSmoke.headless_workers,
+        worker_lifecycle_count: realActivePoolSmoke.worker_lifecycle.length,
+        worker_lifecycle_sample: realActivePoolSmoke.worker_lifecycle.slice(0, 5)
       }
     },
     local_worker: localWorkerSummary,
@@ -328,6 +402,29 @@ function compactNarutoRunResult(result: any) {
       naruto_real_active_pool: 'naruto-real-active-pool.json'
     }
   }
+}
+
+function buildNarutoAllocationWorkers(workGraph: any, roleDistribution: any, roster: any) {
+  const workItems = Array.isArray(workGraph?.work_items) ? workGraph.work_items : []
+  const roleByWorkItem = new Map((roleDistribution?.work_item_roles || []).map((row: any) => [String(row.work_item_id), String(row.role || '')]))
+  const rosterRows = Array.isArray(roster?.roster) ? roster.roster : []
+  const count = Math.max(1, Math.min(Number(roster?.agent_count || rosterRows.length || workItems.length || 1), Math.max(1, workItems.length || 1)))
+  return Array.from({ length: count }, (_unused, index) => {
+    const agent = rosterRows[index] || {}
+    const item = workItems[index % Math.max(1, workItems.length)] || {}
+    const role = String(agent.naruto_role || agent.role || roleByWorkItem.get(String(item.id || '')) || item.required_role || 'worker')
+    return {
+      id: String(agent.id || `clone-${String(index + 1).padStart(3, '0')}`),
+      role,
+      lane: narutoAllocationLane(item)
+    }
+  })
+}
+
+function narutoAllocationLane(item: any) {
+  const firstPath = String((item?.write_paths || item?.target_paths || item?.readonly_paths || [])[0] || '')
+  const parts = firstPath.replace(/\\/g, '/').split('/').filter(Boolean)
+  return parts.slice(0, Math.min(2, parts.length)).join('/') || null
 }
 
 function summarizeNarutoLocalWorkerResult(localWorker: any, result: any) {
@@ -512,6 +609,8 @@ async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {
   governor: any
   activePool: any
   realActivePool?: any
+  allocationPolicy?: any
+  rebalancePolicy?: any
   verificationDag: any
   gptFinalPack: any
   zellijDashboard: any
@@ -523,6 +622,8 @@ async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-concurrency-governor.json'), artifacts.governor)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-active-pool.json'), artifacts.activePool)
   if (artifacts.realActivePool) await writeJsonAtomic(path.join(ledgerRoot, 'naruto-real-active-pool.json'), artifacts.realActivePool)
+  if (artifacts.allocationPolicy) await writeJsonAtomic(path.join(ledgerRoot, 'naruto-allocation-policy.json'), artifacts.allocationPolicy)
+  if (artifacts.rebalancePolicy) await writeJsonAtomic(path.join(ledgerRoot, 'naruto-rebalance-policy.json'), artifacts.rebalancePolicy)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-verification-dag.json'), artifacts.verificationDag)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-gpt-final-pack.json'), artifacts.gptFinalPack)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-zellij-dashboard.json'), artifacts.zellijDashboard)

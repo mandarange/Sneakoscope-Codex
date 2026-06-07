@@ -13,7 +13,6 @@ import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
 import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.js';
 import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.js';
-import { runSksUpdateCheck, runSksUpdateNow } from '../core/update-check.js';
 import { loadCodexLbEnv, writeCodexLbKeychain, codexLbMetadataPath } from '../core/codex-lb/codex-lb-env.js';
 import {
   buildCodexLbSetupPlan,
@@ -2173,25 +2172,15 @@ export async function maybePromptCodexUpdateForLaunch(args: any = [], opts: any 
 }
 
 export async function maybePromptSksUpdateForLaunch(args: any = [], opts: any = {}) {
-  if (hasFlag(args, '--json') || hasFlag(args, '--skip-sks-update') || process.env.SKS_SKIP_SKS_UPDATE === '1') return { status: 'skipped' };
-  const label = opts.label || 'SKS launch';
-  const check = await runSksUpdateCheck({ timeoutMs: 5000 }).catch((err: any) => ({
-    ok: false,
-    update_available: false,
-    latest: null,
+  void args;
+  void opts;
+  return {
+    status: 'skipped',
+    reason: 'manual_update_commands_only',
     current: PACKAGE_VERSION,
-    command: null,
-    error: err?.message || String(err)
-  }));
-  if (!check.update_available) {
-    return { status: check.error ? 'unavailable' : 'current', latest: check.latest || null, current: check.current || PACKAGE_VERSION, error: check.error || null };
-  }
-  const command = check.command || `sks update now --version ${check.latest}`;
-  if (shouldAutoApproveInstall(args)) {
-    return runSksUpdateNow({ version: check.latest, timeoutMs: 10 * 60 * 1000, maxOutputBytes: 128 * 1024 });
-  }
-  console.log(`SKS update available before ${label}: ${check.current} -> ${check.latest}. Run when ready: ${command}`);
-  return { status: 'available', latest: check.latest || null, current: check.current || PACKAGE_VERSION, command };
+    latest: null,
+    command: null
+  };
 }
 
 export function shouldAutoApproveInstall(args: any = [], env: any = process.env) {
