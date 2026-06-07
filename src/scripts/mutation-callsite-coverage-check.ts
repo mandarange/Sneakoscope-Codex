@@ -20,6 +20,7 @@ const uncovered = [];
 const GUARD_CALL = /\bguarded(WriteFile|Rm|Rename|Chmod|Xattr|Chflags|GlobalCodexConfigWrite|ProcessKill|PackageInstall|SkillSnapshotPromotion|Apply)\(/;
 const RISKY = [
   { kind: 'write_file', token: 'fs.writeFile', re: /\bfs\.writeFile\(/ },
+  { kind: 'write_file', token: 'fs.promises.writeFile', re: /\bfs\.promises\.writeFile\(/ },
   { kind: 'write_file', token: 'fsp.writeFile', re: /\bfsp\.writeFile\(/ },
   { kind: 'write_file', token: 'writeFileSync', re: /\b(?:fs\.)?writeFileSync\(/ },
   { kind: 'rm', token: 'fs.rm', re: /\bfs\.rm\(/ },
@@ -169,7 +170,7 @@ function processKillIsLivenessProbe(line) {
 }
 
 function codexHomeMutationOnLine(line) {
-  return /\b(?:writeTextAtomic|writeJsonAtomic|writeFileSync|fs\.writeFile|fsp\.writeFile|fs\.rm|fsp\.rm|fs\.rename|fsp\.rename|fs\.chmod|fsp\.chmod|copyFile|open)\b/.test(line)
+  return /\b(?:writeTextAtomic|writeJsonAtomic|writeFileSync|fs\.writeFile|fs\.promises\.writeFile|fsp\.writeFile|fs\.rm|fsp\.rm|fs\.rename|fsp\.rename|fs\.chmod|fsp\.chmod|copyFile|open)\b/.test(line)
     && /(?:~\/\.codex|CODEX_HOME|codexHome|codexLbHome|auth\.json|config\.toml)/.test(line);
 }
 

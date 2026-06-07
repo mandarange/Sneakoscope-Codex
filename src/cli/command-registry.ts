@@ -161,6 +161,7 @@ export const COMMANDS = {
   hermes: entry('labs', 'Create Hermes Agent skill package', 'dist/commands/hermes.js', directCommand(() => import('../commands/hermes.js'), 'dist/commands/hermes.js')),
   tmux: entry('beta', 'Show removed-runtime migration notice', 'dist/commands/tmux.js', directCommand(() => import('../commands/tmux.js'), 'dist/commands/tmux.js')),
   'zellij-lane': entry('beta', 'Render a Zellij lane frame for SKS sessions', 'dist/commands/zellij-lane.js', directCommand(() => import('../commands/zellij-lane.js'), 'dist/commands/zellij-lane.js')),
+  'zellij-slot-pane': entry('beta', 'Render a compact Zellij worker slot pane', 'dist/commands/zellij-slot-pane.js', directCommand(() => import('../commands/zellij-slot-pane.js'), 'dist/commands/zellij-slot-pane.js')),
   zellij: entry('beta', 'Inspect Zellij runtime status and explain repair (no auto-install)', 'dist/commands/zellij.js', directCommand(() => import('../commands/zellij.js'), 'dist/commands/zellij.js')),
   mad: entry('beta', 'MAD-SKS Zellij permission launcher', 'dist/commands/mad-sks.js', directCommand(() => import('../commands/mad-sks.js'), 'dist/commands/mad-sks.js')),
   'mad-sks': entry('beta', 'MAD-SKS scoped permission modifier', 'dist/commands/mad-sks.js', directCommand(() => import('../commands/mad-sks.js'), 'dist/commands/mad-sks.js')),

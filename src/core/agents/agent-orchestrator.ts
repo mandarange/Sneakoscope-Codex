@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { createMission, missionDir, setCurrent } from '../mission.js'
-import { nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { exists, nowIso, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { buildAgentRoster, normalizeAgentConcurrency } from './agent-roster.js'
 import { buildAgentWorkPartition } from './agent-work-partition.js'
 import { initializeAgentCentralLedger, appendAgentLedgerEvent, compactAgentLedger } from './agent-central-ledger.js'
@@ -57,6 +57,9 @@ import { allocateWorkerWorktree } from '../git/git-worktree-manager.js'
 import { exportGitWorktreeDiff } from '../git/git-worktree-diff.js'
 import { buildGitWorktreePatchEnvelope } from '../git/git-worktree-patch-envelope.js'
 import { cleanupGitWorktree } from '../git/git-worktree-cleanup.js'
+import { createGitIntegrationWorktree } from '../git/git-integration-worktree.js'
+import { applyGitWorktreeMergeQueue } from '../git/git-worktree-merge-queue.js'
+import type { GitWorktreeDiff } from '../git/git-worktree-diff.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Promise<any> {
   const root = path.resolve(opts.root || process.cwd())
@@ -768,9 +771,17 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     }
   }
   const pendingEntries = queueStore.queue.queued()
-  const merge: any = coordinateAgentPatchMerge(pendingEntries)
+  const worktreeEntries = pendingEntries.filter((entry: any) => entry.envelope?.source === 'git-worktree-diff')
+  const normalEntries = pendingEntries.filter((entry: any) => entry.envelope?.source !== 'git-worktree-diff')
+  let worktreeMergeReport: any = null
+  const worktreeApplyResults: any[] = []
+  if (worktreeEntries.length) {
+    worktreeMergeReport = await runGitWorktreeIntegrationPrimary(root, ledgerRoot, input.missionId, worktreeEntries, queueStore)
+    for (const row of worktreeMergeReport.apply_results || []) worktreeApplyResults.push(row)
+  }
+  const merge: any = coordinateAgentPatchMerge(normalEntries)
   await writeAgentMergeCoordinatorArtifacts(ledgerRoot, merge)
-  const conflictRebase = await executeAgentPatchConflictRebase(root, pendingEntries, merge, { dryRun: input.dryRun, artifactsDir: ledgerRoot })
+  const conflictRebase = await executeAgentPatchConflictRebase(root, normalEntries, merge, { dryRun: input.dryRun, artifactsDir: ledgerRoot })
   merge.conflict_rebase_results = 'agent-patch-conflict-rebase-results.json'
   merge.rebase_success_count = conflictRebase.succeeded_entry_ids.length
   merge.rebase_blocker_count = conflictRebase.blockers.length
@@ -780,10 +791,10 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
   merge.unresolved_conflict_entry_ids = [...conflictedEntryIds]
   merge.ok = conflictedEntryIds.size === 0 && (conflictRebase.failed_entry_ids || []).length === 0 && (conflictRebase.blocked_entry_ids || []).length === 0
   merge.blockers = merge.ok ? [] : merge.blockers || []
-  for (const entry of pendingEntries) {
+  for (const entry of normalEntries) {
     if (conflictedEntryIds.has(entry.id)) await queueStore.markConflicted(entry.id, merge.blockers || ['patch_conflict'])
   }
-  const disjointEntries = pendingEntries.filter((entry) => !conflictedEntryIds.has(entry.id))
+  const disjointEntries = normalEntries.filter((entry) => !conflictedEntryIds.has(entry.id))
   const startedAt = nowIso()
   for (const entryId of rebaseSucceededEntryIds) {
     await queueStore.markApplying(entryId)
@@ -809,6 +820,7 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     return { entry_id: entry.id, started_at, finished_at, ...applyResult }
   }))
   const applyResults = [
+    ...worktreeApplyResults,
     ...parallelApplyResults,
     ...(conflictRebase.apply_results || []).map((row: any) => ({ entry_id: row.entry_id, started_at: row.apply_started_at || nowIso(), finished_at: row.apply_ended_at || nowIso(), ...row }))
   ]
@@ -923,7 +935,8 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     conflictRebase,
     verificationRollbackDag: input.verificationRollbackDag,
     gptFinalArbiter: input.gptFinalArbiter,
-    finalGptPatchStage: input.finalGptPatchStage
+    finalGptPatchStage: input.finalGptPatchStage,
+    worktreeMergeReport
   }
   const initialProof = buildAgentPatchProof(proofInput)
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-proof.json'), initialProof)
@@ -953,6 +966,8 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     apply_finished_at: finishedAt,
     apply_latency_ms: Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)),
     parallel_apply_count: parallelEntries.length,
+    worktree_integration_primary_count: worktreeEntries.length,
+    worktree_merge_queue: worktreeMergeReport,
     parallel_apply_groups: merge.parallel_apply_groups || [],
     serial_merge_groups: merge.serial_merge_groups || [],
     conflict_rebase: {
@@ -982,7 +997,8 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
       proof: 'agent-patch-proof.json',
       transaction_journal: 'agent-patch-transaction-journal.jsonl',
       transaction_journal_summary: 'agent-patch-transaction-journal-summary.json',
-      conflict_rebase: 'agent-patch-conflict-rebase-results.json'
+      conflict_rebase: 'agent-patch-conflict-rebase-results.json',
+      git_worktree_merge_queue: worktreeMergeReport ? 'git-worktree-merge-queue-report.json' : null
     },
     blockers
   }
@@ -995,6 +1011,184 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-proof.json'), proof)
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-swarm-runtime.json'), report)
   return report
+}
+
+async function runGitWorktreeIntegrationPrimary(root: string, ledgerRoot: string, missionId: string, entries: any[], queueStore: PersistentAgentPatchQueueStore) {
+  const diffs = entries.map((entry) => gitWorktreeDiffFromQueueEntry(entry)).filter(Boolean) as GitWorktreeDiff[]
+  const repoRoot = diffs[0]?.main_repo_root || root
+  const baseRef = diffs.find((diff) => diff.base_head)?.base_head || undefined
+  const integration = await createGitIntegrationWorktree({ repoRoot, missionId, ...(baseRef ? { baseRef } : {}) })
+  const applyResults: any[] = []
+  if (!integration.ok) {
+    for (const entry of entries) {
+      await queueStore.markConflicted(entry.id, integration.blockers || ['git_worktree_integration_allocation_failed'])
+      applyResults.push({
+        entry_id: entry.id,
+        started_at: nowIso(),
+        finished_at: nowIso(),
+        ok: false,
+        changed_files: entry.write_paths || entry.envelope?.git_worktree?.changed_files || [],
+        verification: { checks: ['git-worktree-integration-primary'] },
+        violations: integration.blockers || ['git_worktree_integration_allocation_failed']
+      })
+    }
+    const blockedReport = {
+      schema: 'sks.git-worktree-integration-primary-runtime.v1',
+      ok: false,
+      generated_at: nowIso(),
+      integration,
+      integration_worktree_path: integration.worktree_path || null,
+      applied_entry_ids: [],
+      conflicted_entry_ids: entries.map((entry) => entry.id),
+      apply_results: applyResults,
+      blockers: integration.blockers || ['git_worktree_integration_allocation_failed']
+    }
+    await writeJsonAtomic(path.join(ledgerRoot, 'git-worktree-merge-queue-report.json'), blockedReport)
+    return blockedReport
+  }
+  const startedAt = nowIso()
+  for (const entry of entries) await queueStore.markApplying(entry.id)
+  const queueReport = await applyGitWorktreeMergeQueue({
+    integrationWorktreePath: integration.worktree_path,
+    diffs
+  })
+  const rollbackPlan = queueReport.ok ? await captureGitWorktreeRollbackPlan(repoRoot, queueReport.changed_files || []) : { ok: false, rollback: [], blockers: ['git_worktree_integration_prevalidation_failed'] }
+  const mainApplyReport = queueReport.ok && rollbackPlan.ok
+    ? await applyGitWorktreeMergeQueue({
+        integrationWorktreePath: repoRoot,
+        diffs
+      })
+    : null
+  const rollbackEvidence = mainApplyReport?.ok
+    ? await completeGitWorktreeRollbackPlan(repoRoot, rollbackPlan.rollback)
+    : rollbackPlan
+  const finishedAt = nowIso()
+  const conflictsByWorker = new Set([
+    ...(queueReport.conflicts || []).map((row: any) => String(row.worker_id || row.workerId || '')),
+    ...((mainApplyReport?.conflicts || []) as any[]).map((row: any) => String(row.worker_id || row.workerId || ''))
+  ])
+  const appliedEntryIds: string[] = []
+  const conflictedEntryIds: string[] = []
+  for (const entry of entries) {
+    const workerId = String(entry.envelope?.git_worktree?.worker_id || entry.envelope?.agent_id || entry.agent_id || '')
+    const changedFiles = entry.write_paths || entry.envelope?.git_worktree?.changed_files || []
+    const ok = queueReport.ok && mainApplyReport?.ok === true && rollbackEvidence.ok === true && !conflictsByWorker.has(workerId)
+    if (ok) {
+      await queueStore.markApplied(entry.id)
+      appliedEntryIds.push(entry.id)
+    } else {
+      await queueStore.markConflicted(entry.id, queueReport.blockers || ['git_worktree_merge_failed'])
+      conflictedEntryIds.push(entry.id)
+    }
+    applyResults.push({
+      entry_id: entry.id,
+      started_at: startedAt,
+      finished_at: finishedAt,
+      ok,
+      changed_files: changedFiles,
+      rollback: ok ? rollbackEvidence.rollback.filter((row: any) => changedFiles.includes(row.path)) : [],
+      rollback_digest: ok ? `git-worktree-integration:${entry.id}:${sha256(JSON.stringify(rollbackEvidence.rollback.filter((row: any) => changedFiles.includes(row.path))))}` : null,
+      verification: { checks: ['git-worktree-integration-primary', 'git-apply-3way', 'main-repo-apply', 'rollback-hashes'] },
+      violations: ok ? [] : [...(queueReport.blockers || []), ...(mainApplyReport?.blockers || []), ...(rollbackEvidence.blockers || []), 'git_worktree_main_repo_apply_failed'].filter(Boolean)
+    })
+  }
+  const reportBlockers = [...(queueReport.blockers || []), ...(mainApplyReport?.blockers || []), ...(rollbackEvidence.blockers || [])]
+  const report = {
+    schema: 'sks.git-worktree-integration-primary-runtime.v1',
+    ok: reportBlockers.length === 0 && appliedEntryIds.length === entries.length,
+    generated_at: nowIso(),
+    integration,
+    integration_worktree_path: integration.worktree_path,
+    applied_entry_ids: appliedEntryIds,
+    conflicted_entry_ids: conflictedEntryIds,
+    merge_queue: queueReport,
+    main_repo_apply: mainApplyReport,
+    rollback_evidence: rollbackEvidence,
+    apply_results: applyResults,
+    blockers: reportBlockers
+  }
+  await writeJsonAtomic(path.join(ledgerRoot, 'git-worktree-merge-queue-report.json'), report)
+  return report
+}
+
+async function captureGitWorktreeRollbackPlan(root: string, changedFiles: string[]) {
+  const rootResolved = path.resolve(root)
+  const rollback: any[] = []
+  const blockers: string[] = []
+  for (const file of [...new Set(changedFiles.map((row) => String(row || '').trim()).filter(Boolean))]) {
+    const rel = normalizeWorktreeRelPath(file)
+    const absolute = path.resolve(rootResolved, rel)
+    if (!absolute.startsWith(rootResolved + path.sep)) {
+      blockers.push(`git_worktree_rollback_path_outside_root:${rel}`)
+      continue
+    }
+    const beforeExists = await exists(absolute)
+    const before = beforeExists ? await readText(absolute, '') : ''
+    rollback.push({
+      path: rel,
+      existed: beforeExists,
+      sha256_before: beforeExists ? sha256(String(before)) : null,
+      content_before: beforeExists ? String(before) : null
+    })
+  }
+  return { ok: blockers.length === 0, rollback, blockers }
+}
+
+async function completeGitWorktreeRollbackPlan(root: string, rollback: any[]) {
+  const rootResolved = path.resolve(root)
+  const blockers: string[] = []
+  const completed = []
+  for (const row of rollback) {
+    const rel = normalizeWorktreeRelPath(row.path)
+    const absolute = path.resolve(rootResolved, rel)
+    if (!absolute.startsWith(rootResolved + path.sep)) {
+      blockers.push(`git_worktree_rollback_path_outside_root:${rel}`)
+      continue
+    }
+    const afterExists = await exists(absolute)
+    if (!afterExists) {
+      blockers.push(`git_worktree_rollback_after_missing:${rel}`)
+      completed.push({ ...row, path: rel, sha256_after: null })
+      continue
+    }
+    const after = await readText(absolute, '')
+    completed.push({
+      ...row,
+      path: rel,
+      sha256_after: sha256(String(after))
+    })
+  }
+  return { ok: blockers.length === 0, rollback: completed, blockers }
+}
+
+function normalizeWorktreeRelPath(file: string) {
+  return String(file || '').replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
+function gitWorktreeDiffFromQueueEntry(entry: any): GitWorktreeDiff | null {
+  const envelope = entry?.envelope || {}
+  const meta = envelope.git_worktree || {}
+  const operation = Array.isArray(envelope.operations) ? envelope.operations.find((row: any) => row?.op === 'git_apply_patch') : null
+  const diff = String(operation?.diff || '')
+  return {
+    schema: 'sks.git-worktree-diff.v1',
+    ok: true,
+    generated_at: nowIso(),
+    mission_id: String(envelope.mission_id || ''),
+    worker_id: String(envelope.agent_id || entry.agent_id || entry.id),
+    main_repo_root: String(meta.main_repo_root || ''),
+    worktree_path: String(meta.worktree_path || ''),
+    branch: meta.branch == null ? null : String(meta.branch),
+    base_head: meta.base_head == null ? null : String(meta.base_head),
+    worktree_head: meta.worktree_head == null ? null : String(meta.worktree_head),
+    status_porcelain: '',
+    changed_files: Array.isArray(meta.changed_files) ? meta.changed_files.map(String) : entry.write_paths || [],
+    untracked_files: [],
+    diff,
+    diff_bytes: Buffer.byteLength(diff),
+    clean: diff.trim().length === 0,
+    blockers: []
+  }
 }
 
 function normalizeDesiredWorkItemCount(value: unknown, minimumValue: unknown, targetActiveSlots: number) {

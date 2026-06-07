@@ -14,7 +14,7 @@ const governor = decideNarutoConcurrency({
 })
 const report = {
   schema: 'sks.naruto-extreme-parallelism-check.v1',
-  ok: graph.total_work_items >= 200 && governor.safe_active_workers >= 16 && governor.safe_zellij_visible_panes <= governor.safe_active_workers && graph.mixed_work_kinds.length >= 6,
+  ok: graph.total_work_items >= 200 && governor.safe_active_workers >= 16 && governor.safe_zellij_visible_panes <= governor.safe_active_workers && governor.safe_zellij_visible_panes <= 8 && graph.mixed_work_kinds.length >= 6,
   graph: { total_work_items: graph.total_work_items, mixed_work_kinds: graph.mixed_work_kinds, write_allowed_count: graph.write_allowed_count },
   governor
 }

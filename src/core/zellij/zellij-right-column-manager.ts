@@ -3,6 +3,7 @@ import { appendJsonl, ensureDir, nowIso, readJson, writeJsonAtomic } from '../fs
 import { openZellijDashboardPane } from './zellij-dashboard-pane.js'
 import type { ZellijDashboardSnapshot } from './zellij-dashboard-renderer.js'
 import type { ZellijWorkerPaneOpenInput, ZellijWorkerPaneRecord } from './zellij-worker-pane-manager.js'
+import { zellijUiModeCreatesDashboard, type SksZellijUiMode } from './zellij-ui-mode.js'
 
 export const ZELLIJ_RIGHT_COLUMN_STATE_SCHEMA = 'sks.zellij-right-column-state.v1'
 
@@ -15,6 +16,7 @@ export interface ZellijRightColumnState {
   status: 'absent' | 'creating' | 'active' | 'draining' | 'closed'
   dashboard_pane_id: string | null
   right_anchor_pane_id: string | null
+  ui_mode: SksZellijUiMode
   visible_worker_panes: Array<{
     pane_id: string | null
     slot_id: string
@@ -26,6 +28,8 @@ export interface ZellijRightColumnState {
     slot_id: string
     generation_index: number
     reason: string
+    status?: 'running' | 'closed' | 'failed'
+    closed_at?: string | null
   }>
   blockers: string[]
 }
@@ -37,12 +41,20 @@ export async function ensureRightColumn(input: {
   sessionName: string
   cwd: string
   dashboardSnapshot: Partial<ZellijDashboardSnapshot>
+  uiMode?: SksZellijUiMode
+  createDashboard?: boolean
 }): Promise<ZellijRightColumnState> {
   const paths = resolveRightColumnPaths(input.root, input.missionId, input.projectRoot)
   await ensureDir(paths.missionDir)
+  const uiMode = input.uiMode || 'compact-slots'
+  const createDashboard = input.createDashboard ?? zellijUiModeCreatesDashboard(uiMode)
   const existing = await readRightColumnState(input.root, input.missionId, input.projectRoot)
-  if (existing?.status === 'active' && existing.dashboard_pane_id) {
-    return writeRightColumnState(paths.statePath, { ...existing, updated_at: nowIso() })
+  if (existing?.status === 'active') {
+    return writeRightColumnState(paths.statePath, {
+      ...existing,
+      updated_at: nowIso(),
+      ui_mode: existing.ui_mode || uiMode
+    })
   }
   const creating = await writeRightColumnState(paths.statePath, {
     schema: ZELLIJ_RIGHT_COLUMN_STATE_SCHEMA,
@@ -53,11 +65,29 @@ export async function ensureRightColumn(input: {
     status: 'creating',
     dashboard_pane_id: null,
     right_anchor_pane_id: null,
+    ui_mode: uiMode,
     visible_worker_panes: [],
     headless_workers: [],
     blockers: []
   })
   await appendRightColumnEvent(paths.eventsPath, 'right_column_creating', creating, {})
+  if (!createDashboard) {
+    const active = await writeRightColumnState(paths.statePath, {
+      ...creating,
+      updated_at: nowIso(),
+      status: 'active',
+      dashboard_pane_id: null,
+      right_anchor_pane_id: null,
+      ui_mode: uiMode,
+      blockers: []
+    })
+    await appendRightColumnEvent(paths.eventsPath, 'right_column_created', active, {
+      ok: true,
+      dashboard_created: false,
+      ui_mode: uiMode
+    })
+    return active
+  }
   const dashboard = await openZellijDashboardPane({
     root: paths.projectRoot,
     missionId: input.missionId,
@@ -80,6 +110,7 @@ export async function ensureRightColumn(input: {
     status: blockers.length ? 'creating' : 'active',
     dashboard_pane_id: (dashboard as any).pane_id ? String((dashboard as any).pane_id) : null,
     right_anchor_pane_id: (dashboard as any).pane_id ? String((dashboard as any).pane_id) : null,
+    ui_mode: uiMode,
     blockers
   })
   await appendRightColumnEvent(paths.eventsPath, 'right_column_created', active, { ok: active.status === 'active' })
@@ -96,6 +127,26 @@ export async function prepareWorkerInRightColumn(input: {
   worker: Pick<ZellijWorkerPaneOpenInput, 'slotId' | 'generationIndex'>
   visiblePaneCap: number
   dashboardSnapshot: Partial<ZellijDashboardSnapshot>
+  uiMode?: SksZellijUiMode
+}): Promise<{
+  state: ZellijRightColumnState
+  placement: 'zellij-pane' | 'headless'
+  focusPaneId: string | null
+  yOrder: number | null
+}> {
+  return withRightColumnLock(input.root, input.missionId, async () => prepareWorkerInRightColumnUnlocked(input))
+}
+
+async function prepareWorkerInRightColumnUnlocked(input: {
+  root: string
+  projectRoot?: string
+  missionId: string
+  sessionName: string
+  cwd: string
+  worker: Pick<ZellijWorkerPaneOpenInput, 'slotId' | 'generationIndex'>
+  visiblePaneCap: number
+  dashboardSnapshot: Partial<ZellijDashboardSnapshot>
+  uiMode?: SksZellijUiMode
 }): Promise<{
   state: ZellijRightColumnState
   placement: 'zellij-pane' | 'headless'
@@ -109,12 +160,13 @@ export async function prepareWorkerInRightColumn(input: {
     missionId: input.missionId,
     sessionName: input.sessionName,
     cwd: input.cwd,
-    dashboardSnapshot: input.dashboardSnapshot
+    dashboardSnapshot: input.dashboardSnapshot,
+    uiMode: input.uiMode || 'compact-slots'
   })
   const activeVisible = state.visible_worker_panes.filter((pane) => pane.status === 'launching' || pane.status === 'running')
   const cap = Math.max(1, Math.floor(Number(input.visiblePaneCap || 1)))
   if (activeVisible.length >= cap) {
-    const next = await recordHeadlessWorkerInRightColumn({
+    const next = await recordHeadlessWorkerInRightColumnUnlocked({
       root: input.root,
       ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
       missionId: input.missionId,
@@ -199,6 +251,18 @@ export async function recordHeadlessWorkerInRightColumn(input: {
   generationIndex: number
   reason: string
 }) {
+  return withRightColumnLock(input.root, input.missionId, async () => recordHeadlessWorkerInRightColumnUnlocked(input))
+}
+
+async function recordHeadlessWorkerInRightColumnUnlocked(input: {
+  root: string
+  projectRoot?: string
+  missionId: string
+  sessionName: string
+  slotId: string
+  generationIndex: number
+  reason: string
+}) {
   const paths = resolveRightColumnPaths(input.root, input.missionId, input.projectRoot)
   const state = await readRightColumnState(input.root, input.missionId, input.projectRoot) || {
     schema: ZELLIJ_RIGHT_COLUMN_STATE_SCHEMA,
@@ -209,13 +273,14 @@ export async function recordHeadlessWorkerInRightColumn(input: {
     status: 'absent',
     dashboard_pane_id: null,
     right_anchor_pane_id: null,
+    ui_mode: 'compact-slots',
     visible_worker_panes: [],
     headless_workers: [],
     blockers: []
   } satisfies ZellijRightColumnState
   const headless = [
     ...state.headless_workers.filter((row) => !(row.slot_id === input.slotId && row.generation_index === input.generationIndex)),
-    { slot_id: input.slotId, generation_index: input.generationIndex, reason: input.reason }
+    { slot_id: input.slotId, generation_index: input.generationIndex, reason: input.reason, status: 'running' as const, closed_at: null }
   ]
   const next = await writeRightColumnState(paths.statePath, { ...state, updated_at: nowIso(), headless_workers: headless })
   await appendRightColumnEvent(paths.eventsPath, 'worker_headless_overflow', next, {
@@ -242,13 +307,19 @@ export async function closeWorkerInRightColumn(input: {
     const same = pane.slot_id === input.slotId && pane.generation_index === input.generationIndex
     return same ? { ...pane, pane_id: input.paneId || pane.pane_id, status: input.status } : pane
   })
+  const headless = state.headless_workers.map((row) => {
+    const same = row.slot_id === input.slotId && row.generation_index === input.generationIndex
+    return same ? { ...row, status: input.status === 'draining' ? 'closed' as const : input.status, closed_at: nowIso() } : row
+  })
   const visibleStillActive = panes.filter((pane) => pane.status === 'launching' || pane.status === 'running')
+  const headlessStillActive = headless.filter((row) => !row.status || row.status === 'running')
   const next = await writeRightColumnState(paths.statePath, {
     ...state,
     updated_at: nowIso(),
-    status: visibleStillActive.length || state.headless_workers.length ? 'active' : 'draining',
+    status: visibleStillActive.length || headlessStillActive.length ? 'active' : 'draining',
     right_anchor_pane_id: visibleStillActive[visibleStillActive.length - 1]?.pane_id || state.dashboard_pane_id,
-    visible_worker_panes: panes
+    visible_worker_panes: panes,
+    headless_workers: headless
   })
   await appendRightColumnEvent(paths.eventsPath, 'worker_pane_drained', next, {
     slot_id: input.slotId,
@@ -324,4 +395,23 @@ function inferProjectRoot(root: string, missionId: string): string {
     return path.dirname(path.dirname(path.dirname(root)))
   }
   return root
+}
+
+const rightColumnLocks = new Map<string, Promise<unknown>>()
+
+async function withRightColumnLock<T>(root: string, missionId: string, fn: () => Promise<T>): Promise<T> {
+  const key = `${path.resolve(root)}:${missionId}`
+  const previous = rightColumnLocks.get(key) || Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  rightColumnLocks.set(key, previous.then(() => current, () => current))
+  await previous.catch(() => undefined)
+  try {
+    return await fn()
+  } finally {
+    release()
+    if (rightColumnLocks.get(key) === current) rightColumnLocks.delete(key)
+  }
 }

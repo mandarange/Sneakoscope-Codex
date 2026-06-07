@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { writeTextAtomic } from '../core/fsx.js';
 
 const root = process.cwd();
 const args = process.argv.slice(2);
@@ -143,12 +144,12 @@ if (!effectiveOutput) {
 
 async function ensurePromptContract() {
   if (!promptExistedBeforeRun) {
-    await fs.promises.writeFile(promptPath, prompt);
+    await writeTextAtomic(promptPath, prompt);
     return { changed: true, reason: 'created' };
   }
   const existing = await fs.promises.readFile(promptPath, 'utf8').catch(() => null);
   if (existing !== prompt) {
-    await fs.promises.writeFile(promptPath, prompt);
+    await writeTextAtomic(promptPath, prompt);
     return { changed: true, reason: 'refreshed_prompt_changed' };
   }
   return { changed: false, reason: 'unchanged' };
@@ -340,7 +341,7 @@ async function textArtifactMeta(file, promptWrite = null) {
 }
 
 async function writeReport(report) {
-  await fs.promises.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  await writeTextAtomic(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 }
 
 async function sha256File(file) {

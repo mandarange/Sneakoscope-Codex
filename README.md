@@ -16,15 +16,19 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.9** makes the release path DAG-parallel by default and hardens the Naruto/MAD-SKS worktree proof chain. `release:check` now runs a manifest-backed DAG runner with resource-aware scheduling, hermetic per-gate environments, bounded logs, per-gate reports, cache proof, and parallel speed-budget evidence. Git worktree coding now preserves allocation manifests, detects dirty main worktrees, includes untracked content in exported diffs, emits one `git_apply_patch` envelope operation, applies worktree diffs through an integration queue, and locks retained dirty worktrees.
+SKS **2.0.10** is the slot-only Zellij and Naruto runtime stabilization release. Compact slot panes are now the default visual worker surface, the initial Zellij session stays main-only until the first visible worker is reserved, overflow workers continue headlessly with runtime evidence instead of opening excess panes, and dashboard panes stay opt-in. The release path remains manifest-backed through the v2 DAG runner, with real Zellij/Naruto/worktree proof gates split into `real-check`.
 
 What changed:
 
+- Zellij slot panes render compact worker slots without nested dashboard chrome, and right-column state records visible panes plus headless overflow lifecycle.
+- Naruto active-pool checks now exercise real child-worker spawn/result collection paths, including high-fanout overflow and completed-worker collection order.
+- Visible Zellij reservations are capped before pane launch so concurrent worker starts cannot over-open the right column.
+- Git worktree integration now proves the primary repo receives validated worktree diffs, with rollback hash evidence recorded around the apply step.
+- Agent role config repair detects stale generated role files and rewrites structured GPT-5.5-compatible configs atomically.
+- Release gates now include slot-only UI, compact slot renderer, headless overflow, role-config repair, worktree primary-runtime, real active-pool, extreme real parallelism, and real right-column geometry checks.
+- Release audit, dynamic selection, and stamp hashing use `release-gates.v2.json` as the manifest source of truth.
 - Git capability checks detect repo roots, Git dirs, worktree support, and safe cache roots while blocking in-repo worktree roots unless `SKS_ALLOW_IN_REPO_WORKTREES=1` is explicit.
 - Worker worktree allocation creates isolated branches/paths under `$SKS_WORKTREE_ROOT`, `$XDG_CACHE_HOME/sks/worktrees`, or `~/.cache/sks/worktrees`; main checkouts stay untouched until integration.
-- Worktree diff export records status, changed files, full-index binary diffs, and `git-worktree-diff` patch envelopes for parent-owned integration.
-- Integration worktrees apply worker diffs with `git apply --3way`, while cleanup removes only clean worktrees and retains dirty ones with a lock artifact.
-- Naruto work graphs, active-pool artifacts, Zellij dashboard titles, native worker intake, and GPT Final packs now carry worktree policy and WT/branch context.
 - Product Design plugin readiness now checks both local and remote Codex App catalogs, auto-installs the remote plugin when needed, and records the installed/enabled skill surface.
 - UI/design/PPT runtime routes prefer Product Design for research, ideation, audit, design QA, prototype, URL-to-code, image-to-code, share, and user-context steps.
 - Naruto read-only runs force write mode off, propagate no-patch reasons through worker proof, and skip changed-file lease checks when no write-capable patch envelope exists.

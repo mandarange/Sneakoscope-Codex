@@ -43,6 +43,12 @@ const STOP_REPEAT_GUARD_MAX_ENTRIES = 25;
 const DEFAULT_STOP_REPEAT_GUARD_LIMIT = 2;
 const CODEX_GIT_ACTION_STOP_TTL_MS = 15 * 60 * 1000;
 
+const UPDATE_CHECK_HOOK_INVOCATION_POLICY = 'function-only:no-runSksUpdateCheck-call-in-hooks';
+
+// Update checks stay function-only in hooks: the policy marker above is checked
+// by release readiness so ordinary Codex hook flow cannot grow a hidden update
+// prompt path.
+
 async function loadHookPayload() {
   const raw = await readStdin();
   try { return raw.trim() ? JSON.parse(raw) : {}; } catch { return { raw }; }

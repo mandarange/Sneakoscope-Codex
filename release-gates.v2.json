@@ -840,6 +840,34 @@
       ]
     },
     {
+      "id": "codex-app:fast-ui-preservation",
+      "command": "npm run codex-app:fast-ui-preservation --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "codex-app:ui-clobber-guard",
       "command": "npm run codex-app:ui-clobber-guard --silent",
       "deps": [],
@@ -5086,6 +5114,229 @@
       },
       "preset": [
         "release"
+      ]
+    },
+    {
+      "id": "agent:role-config-repair",
+      "command": "npm run agent:role-config-repair --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/agents/agent-role-config.ts",
+          "src/scripts/agent-role-config-repair-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "git:worktree-integration-primary-runtime",
+      "command": "npm run git:worktree-integration-primary-runtime --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/agents/agent-orchestrator.ts",
+          "src/scripts/git-worktree-integration-primary-runtime-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:real-active-pool-runtime",
+      "command": "npm run naruto:real-active-pool-runtime --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/naruto/**",
+          "src/scripts/naruto-real-active-pool-runtime-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:extreme-parallelism-real",
+      "command": "npm run naruto:extreme-parallelism-real --silent",
+      "deps": [
+        "naruto:real-active-pool-runtime"
+      ],
+      "resource": [
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/naruto/**",
+          "src/scripts/naruto-extreme-parallelism-real-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:slot-only-ui",
+      "command": "npm run zellij:slot-only-ui --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/zellij/**",
+          "src/core/agents/native-cli-session-swarm.ts",
+          "src/scripts/zellij-slot-only-ui-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:compact-slot-renderer",
+      "command": "npm run zellij:compact-slot-renderer --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/zellij/zellij-slot-pane-renderer.ts",
+          "src/commands/zellij-slot-pane.ts",
+          "src/scripts/zellij-slot-pane-renderer-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:right-column-headless-overflow",
+      "command": "npm run zellij:right-column-headless-overflow --silent",
+      "deps": [
+        "zellij:slot-only-ui"
+      ],
+      "resource": [
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/zellij/**",
+          "src/core/agents/native-cli-session-swarm.ts",
+          "src/scripts/zellij-right-column-headless-overflow-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:right-column-real-geometry",
+      "command": "npm run zellij:right-column-real-geometry --silent -- --require-real",
+      "deps": [
+        "zellij:slot-only-ui"
+      ],
+      "resource": [
+        "zellij-real"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 180000,
+      "cache": {
+        "enabled": false,
+        "inputs": [
+          "src/core/zellij/**",
+          "src/scripts/zellij-right-column-geometry-proof.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check"
       ]
     },
     {

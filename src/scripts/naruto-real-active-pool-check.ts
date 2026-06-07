@@ -33,6 +33,7 @@ const report = await runNarutoRealActivePool({
     dashboardEvents += 1
   }
 })
-const ok = report.ok && spawned === graph.total_work_items && collected === graph.total_work_items && report.max_observed_active_workers >= target.safe_active_workers && dashboardEvents > graph.total_work_items
+const processEvidence = report.worker_lifecycle.every((row) => row.pid == null || row.worker_artifact_dir != null)
+const ok = report.ok && spawned === graph.total_work_items && collected === graph.total_work_items && report.max_observed_active_workers >= target.safe_active_workers && dashboardEvents > graph.total_work_items && report.active_cap === target.safe_active_workers && processEvidence
 assertGate(ok, 'Naruto real active pool must run spawn/collect lifecycle and refill to cap', { report, spawned, collected, dashboardEvents, target })
-emitGate('naruto:real-active-pool', { spawned, collected, max_observed_active_workers: report.max_observed_active_workers, refill_latency_ms_p95: report.refill_latency_ms_p95 })
+emitGate('naruto:real-active-pool', { spawned, collected, active_cap: report.active_cap, max_observed_active_workers: report.max_observed_active_workers, refill_latency_ms_p95: report.refill_latency_ms_p95, active_pool_utilization: report.active_pool_utilization })

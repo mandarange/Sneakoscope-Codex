@@ -5,7 +5,8 @@ import path from 'node:path';
 import { assertGate, emitGate, importDist, root } from './sks-1-18-gate-lib.js';
 
 const { selectGates } = await importDist('core/release/gate-manifest.js');
-const manifest = JSON.parse(fs.readFileSync(path.join(root, 'release-gates.json'), 'utf8'));
+const { buildGateManifest } = await importDist('core/release/gate-manifest.js');
+const manifest = loadDynamicManifest();
 const t0 = Date.now();
 
 const docsOnly = summarize(['docs/release-readiness.md']);
@@ -76,4 +77,33 @@ function readJson(rel, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function loadDynamicManifest() {
+  const v2Path = path.join(root, 'release-gates.v2.json');
+  if (fs.existsSync(v2Path)) {
+    const parsed = JSON.parse(fs.readFileSync(v2Path, 'utf8'));
+    const releaseNodes = (Array.isArray(parsed.gates) ? parsed.gates : []).filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'));
+    const byId = new Map(releaseNodes.map((gate) => [gate.id, gate]));
+    const dynamic = buildGateManifest(releaseNodes.map((gate) => gate.id));
+    return {
+      schema: 'sks.release-gate-manifest.v1.from-v2',
+      gates: dynamic.gates.map((entry) => {
+        const node = byId.get(entry.id);
+        const resource = Array.isArray(node?.resource) ? node.resource.join(',') : '';
+        return {
+          ...entry,
+          affected_by: usefulCacheInputs(node?.cache?.inputs, entry.affected_by),
+          cost: node?.side_effect === 'real-env' || resource.includes('real') ? 'real' : entry.cost
+        };
+      })
+    };
+  }
+  return JSON.parse(fs.readFileSync(path.join(root, 'release-gates.json'), 'utf8'));
+}
+
+function usefulCacheInputs(inputs, fallback) {
+  if (!Array.isArray(inputs) || !inputs.length) return fallback;
+  if (inputs.some((input) => ['src/**', 'package.json', 'release-gates.v2.json', 'schemas/**'].includes(input))) return fallback;
+  return inputs;
 }

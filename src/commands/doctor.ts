@@ -19,6 +19,7 @@ import { repairCodexAppFastUi } from '../core/codex-app/codex-app-fast-ui-repair
 import { resolveProviderContext } from '../core/provider/provider-context.js';
 import { readLocalModelConfig } from '../core/agents/ollama-worker-config.js';
 import { runSksUpdateNow } from '../core/update-check.js';
+import { repairAgentRoleConfigs } from '../core/agents/agent-role-config.js';
 
 export async function run(_command: any, args: any = []) {
   const doctorFix = flag(args, '--fix');
@@ -153,6 +154,20 @@ export async function run(_command: any, args: any = []) {
   const zellij = await checkZellijCapability({ root, require: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const localModel = await readLocalModelConfig().catch(() => null);
   const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
+  const agentRoleConfigRepair = await repairAgentRoleConfigs({
+    root,
+    apply: doctorFix,
+    reportPath: `${root}/.sneakoscope/reports/agent-role-config-repair.json`
+  }).catch((err: any) => ({
+    schema: 'sks.agent-role-config-repair.v1',
+    ok: false,
+    apply: doctorFix,
+    missing: [],
+    existing: [],
+    created: [],
+    warnings_suppressed: false,
+    blockers: [err?.message || String(err)]
+  }));
   const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only')
     ? await cleanDuplicateGlobalSksInstalls({ root, fix: true }).catch((err: any) => ({ schema: 'sks.global-sks-install-cleanup.v1', ok: false, fix: true, error: err?.message || String(err), blockers: ['global_sks_install_cleanup_exception'] }))
     : null;
@@ -168,6 +183,7 @@ export async function run(_command: any, args: any = []) {
     require_codex_doctor: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     zellij,
     local_model: localModel,
+    agent_role_config: agentRoleConfigRepair,
     repair: configRepair,
     codex_app_ui: codexAppUi,
     require_codex_cli_config_load: flag(args, '--fix') || flag(args, '--require-actual-codex'),
@@ -193,6 +209,7 @@ export async function run(_command: any, args: any = []) {
     codex_doctor_diff: codexDoctorDiff,
     zellij,
     local_model: localModel,
+    agent_role_config: agentRoleConfigRepair,
     zellij_readiness: zellijReadiness,
     codex_permission_profiles: permissionProfiles,
     imagegen: {
@@ -203,7 +220,7 @@ export async function run(_command: any, args: any = []) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair }
   };
   if (flag(args, '--json')) {
     printJson(result);
