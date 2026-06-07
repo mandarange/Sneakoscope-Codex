@@ -7,6 +7,22 @@ export interface ZellijSlotColumnAnchorInput {
   headlessWorkers?: number
   queueDepth?: number
   mode?: string
+  workerRows?: ZellijSlotColumnWorkerRow[]
+  maxWorkerRows?: number
+}
+
+export interface ZellijSlotColumnWorkerRow {
+  slotId: string
+  generationIndex?: number | null
+  placement?: 'zellij-pane' | 'headless' | 'process' | string | null
+  status?: string | null
+  backend?: string | null
+  role?: string | null
+  task?: string | null
+  worktreeId?: string | null
+  paneId?: string | null
+  reason?: string | null
+  heartbeatAgeMs?: number | null
 }
 
 export function renderZellijSlotColumnAnchor(input: ZellijSlotColumnAnchorInput = {}): string {
@@ -14,7 +30,17 @@ export function renderZellijSlotColumnAnchor(input: ZellijSlotColumnAnchorInput 
   const visible = Math.max(1, nonNegativeInt(input.visiblePaneCap, active || 1))
   const headless = nonNegativeInt(input.headlessWorkers, 0)
   const queue = nonNegativeInt(input.queueDepth, 0)
-  return `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}`
+  const header = `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}`
+  const workers = Array.isArray(input.workerRows) ? input.workerRows : []
+  if (!workers.length) return header
+  const maxRows = Math.max(1, nonNegativeInt(input.maxWorkerRows, input.mode === 'full-debug' ? 24 : 12))
+  const visibleRows = workers.slice(0, maxRows)
+  const hidden = Math.max(0, workers.length - visibleRows.length)
+  return [
+    header,
+    ...visibleRows.map((row, index) => renderWorkerRow(row, index + 1)),
+    ...(hidden ? [`+${hidden} more worker${hidden === 1 ? '' : 's'}`] : [])
+  ].join('\n')
 }
 
 export async function renderZellijSlotColumnAnchorFromArtifacts(input: {
@@ -26,11 +52,14 @@ export async function renderZellijSlotColumnAnchorFromArtifacts(input: {
   const missionDir = inferMissionDir(root, input.missionId)
   const snapshot = await readJson(path.join(missionDir, 'zellij-dashboard-snapshot.json'))
   const rightColumn = await readJson(path.join(missionDir, 'zellij-right-column-state.json'))
-  const activeWorkers = Number(snapshot?.active_workers ?? rightColumn?.visible_worker_panes?.filter((row: any) => row?.status === 'running' || row?.status === 'launching').length ?? 0)
+  const swarm = await readJson(path.join(root, 'agent-native-cli-session-swarm.json'))
+    || await readJson(path.join(missionDir, 'agents', 'agent-native-cli-session-swarm.json'))
+  const workerRows = await buildWorkerRows(root, missionDir, rightColumn, swarm)
+  const activeWorkers = Number(snapshot?.active_workers ?? workerRows.filter((row) => row.status === 'running' || row.status === 'launching').length ?? 0)
   const visiblePaneCap = Number(snapshot?.visible_panes ?? Math.max(1, rightColumn?.visible_worker_panes?.length || activeWorkers || 1))
-  const headlessWorkers = Number(snapshot?.headless_workers ?? rightColumn?.headless_workers?.filter((row: any) => !row?.status || row?.status === 'running').length ?? 0)
+  const headlessWorkers = Number(snapshot?.headless_workers ?? workerRows.filter((row) => row.placement === 'headless' && (!row.status || row.status === 'running')).length ?? 0)
   const queueDepth = Number(snapshot?.queue_depth ?? 0)
-  const anchorInput: ZellijSlotColumnAnchorInput = { activeWorkers, visiblePaneCap, headlessWorkers, queueDepth }
+  const anchorInput: ZellijSlotColumnAnchorInput = { activeWorkers, visiblePaneCap, headlessWorkers, queueDepth, workerRows }
   if (input.mode !== undefined) anchorInput.mode = input.mode
   return renderZellijSlotColumnAnchor(anchorInput)
 }
@@ -68,10 +97,147 @@ async function readJson(file: string): Promise<any | null> {
   }
 }
 
+async function buildWorkerRows(root: string, missionDir: string, rightColumn: any, swarm: any): Promise<ZellijSlotColumnWorkerRow[]> {
+  const byKey = new Map<string, ZellijSlotColumnWorkerRow & { yOrder?: number }>()
+  const records = Array.isArray(swarm?.records) ? swarm.records : []
+  const recordByKey = new Map<string, any>()
+  for (const record of records) {
+    const key = workerKey(record?.slot_id, record?.generation_index)
+    if (key) recordByKey.set(key, record)
+  }
+  for (const pane of Array.isArray(rightColumn?.visible_worker_panes) ? rightColumn.visible_worker_panes : []) {
+    const key = workerKey(pane?.slot_id, pane?.generation_index)
+    if (!key) continue
+    const record = recordByKey.get(key)
+    byKey.set(key, await hydrateWorkerRow(root, missionDir, {
+      slotId: String(pane.slot_id),
+      generationIndex: Number(pane.generation_index || 1),
+      placement: 'zellij-pane',
+      status: pane.status || record?.status || 'running',
+      paneId: pane.pane_id || record?.zellij_pane_id || null,
+      yOrder: Number(pane.y_order || 0)
+    }, record))
+  }
+  for (const row of Array.isArray(rightColumn?.headless_workers) ? rightColumn.headless_workers : []) {
+    const key = workerKey(row?.slot_id, row?.generation_index)
+    if (!key) continue
+    const record = recordByKey.get(key)
+    byKey.set(key, await hydrateWorkerRow(root, missionDir, {
+      slotId: String(row.slot_id),
+      generationIndex: Number(row.generation_index || 1),
+      placement: 'headless',
+      status: row.status || record?.status || 'running',
+      reason: row.reason || record?.headless_reason || null,
+      yOrder: 9000
+    }, record))
+  }
+  for (const record of records) {
+    const key = workerKey(record?.slot_id, record?.generation_index)
+    if (!key || byKey.has(key)) continue
+    byKey.set(key, await hydrateWorkerRow(root, missionDir, {
+      slotId: String(record.slot_id || record.agent_id || 'slot-?'),
+      generationIndex: Number(record.generation_index || 1),
+      placement: record.worker_placement || (record.zellij_pane_id ? 'zellij-pane' : 'process'),
+      status: record.status || 'running',
+      paneId: record.zellij_pane_id || null,
+      yOrder: 5000
+    }, record))
+  }
+  return [...byKey.values()].sort((a, b) => {
+    const statusDelta = statusWeight(a.status) - statusWeight(b.status)
+    if (statusDelta) return statusDelta
+    const yDelta = Number(a.yOrder || 0) - Number(b.yOrder || 0)
+    if (yDelta) return yDelta
+    return String(a.slotId).localeCompare(String(b.slotId))
+  })
+}
+
+async function hydrateWorkerRow(root: string, missionDir: string, base: ZellijSlotColumnWorkerRow & { yOrder?: number }, record: any): Promise<ZellijSlotColumnWorkerRow & { yOrder?: number }> {
+  const artifactDir = resolveArtifactDir(root, missionDir, record?.worker_artifact_dir)
+  const result = artifactDir ? await readJson(path.join(artifactDir, 'worker-result.json')) : null
+  const intake = artifactDir ? await readJson(path.join(artifactDir, 'worker-intake.json')) : null
+  const heartbeatPath = artifactDir ? path.join(artifactDir, 'worker-heartbeat.jsonl') : null
+  return {
+    ...base,
+    status: result?.status || base.status || record?.status || 'running',
+    backend: result?.backend || record?.backend || intake?.backend || null,
+    role: result?.persona_id || intake?.agent?.naruto_role || intake?.agent?.role || intake?.agent?.persona_id || null,
+    task: firstText([
+      result?.summary,
+      Array.isArray(result?.changed_files) ? result.changed_files[0] : null,
+      intake?.slice?.description,
+      intake?.slice?.title,
+      intake?.slice?.id,
+      base.reason
+    ]),
+    worktreeId: result?.worktree?.id || record?.worktree?.id || intake?.worktree?.id || null,
+    heartbeatAgeMs: heartbeatPath ? await heartbeatAgeMs(heartbeatPath) : null
+  }
+}
+
+function renderWorkerRow(row: ZellijSlotColumnWorkerRow, index: number): string {
+  const slot = `${trimInline(row.slotId || 'slot-?', 12)} g${Math.max(1, Math.floor(Number(row.generationIndex) || 1))}`
+  const status = trimInline(row.status || 'running', 9)
+  const backend = trimInline(row.backend || row.placement || '-', 12)
+  const worktree = trimInline(row.worktreeId || row.role || '-', 10)
+  const task = trimInline(row.task || row.reason || '-', 38)
+  return `${String(index).padStart(2, '0')} ${slot} ${status} ${backend} ${worktree} · ${task} · hb ${formatHeartbeat(row.heartbeatAgeMs)}`
+}
+
+function resolveArtifactDir(root: string, missionDir: string, value: unknown): string | null {
+  if (!value) return null
+  const text = String(value)
+  if (path.isAbsolute(text)) return text
+  return path.join(root, text)
+}
+
+async function heartbeatAgeMs(file: string): Promise<number | null> {
+  try {
+    return Date.now() - (await fs.promises.stat(file)).mtimeMs
+  } catch {
+    return null
+  }
+}
+
+function formatHeartbeat(ageMs: number | null | undefined): string {
+  if (ageMs == null) return '?'
+  if (ageMs < 1000) return 'now'
+  return `${Math.max(1, Math.round(ageMs / 1000))}s`
+}
+
+function firstText(values: unknown[]): string | null {
+  for (const value of values) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim()
+    if (text) return text
+  }
+  return null
+}
+
+function workerKey(slotId: unknown, generationIndex: unknown): string | null {
+  const slot = String(slotId || '').trim()
+  if (!slot) return null
+  return `${slot}:g${Math.max(1, Math.floor(Number(generationIndex) || 1))}`
+}
+
+function statusWeight(status: unknown): number {
+  const text = String(status || '').toLowerCase()
+  if (text === 'running' || text === 'launching') return 0
+  if (text === 'failed') return 1
+  if (text === 'draining') return 2
+  if (text === 'closed') return 3
+  return 4
+}
+
 function nonNegativeInt(value: unknown, fallback: number): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < 0) return fallback
   return Math.floor(parsed)
+}
+
+function trimInline(value: string, max: number): string {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (text.length <= max) return text
+  return text.slice(0, Math.max(1, max - 3)) + '...'
 }
 
 function shellQuote(value: string) {

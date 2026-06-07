@@ -4183,7 +4183,7 @@
         "cpu-light"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 240000,
+      "timeout_ms": 900000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -5427,6 +5427,37 @@
       ]
     },
     {
+      "id": "zellij:slot-renderer-proof-semantics",
+      "command": "npm run zellij:slot-renderer-proof-semantics --silent",
+      "deps": [
+        "zellij:first-slot-down-stack"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/zellij/**",
+          "src/core/agents/native-cli-session-swarm.ts",
+          "src/scripts/zellij-slot-renderer-proof-semantics-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "zellij:first-slot-down-stack:real",
       "command": "npm run zellij:first-slot-down-stack:real -- --require-real --silent",
       "deps": [
@@ -5500,6 +5531,38 @@
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:allocation-runtime-wiring",
+      "command": "npm run naruto:allocation-runtime-wiring --silent",
+      "deps": [
+        "naruto:allocation-policy",
+        "naruto:rebalance-policy"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 180000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/agents/**",
+          "src/core/naruto/**",
+          "src/scripts/naruto-allocation-runtime-wiring-check.ts"
         ]
       },
       "isolation": {
@@ -5618,6 +5681,35 @@
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "local-collab:worktree-gpt-final-apply-policy",
+      "command": "npm run local-collab:worktree-gpt-final-apply-policy --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/pipeline/**",
+          "src/core/codex-control/gpt-final-*",
+          "src/scripts/local-collab-worktree-gpt-final-apply-policy-check.ts"
         ]
       },
       "isolation": {

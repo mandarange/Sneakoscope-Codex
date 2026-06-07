@@ -50,6 +50,26 @@ const artifact = buildWorkerPaneArtifact({
   streamEventCount: 4,
   structuredOutputValid: true,
   status: 'running',
+  workerCommand: 'node dist/bin/sks.js --agent worker',
+  blockers: []
+})
+const slotRendererArtifact = buildWorkerPaneArtifact({
+  root,
+  missionId: 'M-worker-pane-manager',
+  sessionName: 'sks-M-worker-pane-manager',
+  slotId: 'slot-002',
+  generationIndex: 1,
+  sessionId: 'slot-002-gen-1',
+  workerArtifactDir: 'sessions/slot-002/gen-1/worker',
+  resultPath: 'sessions/slot-002/gen-1/worker/worker-result.json',
+  heartbeatPath: 'sessions/slot-002/gen-1/worker/worker-heartbeat.jsonl',
+  patchEnvelopePath: 'sessions/slot-002/gen-1/worker/worker-patch-envelope.json',
+  stdoutLog: 'sessions/slot-002/gen-1/worker/worker.stdout.log',
+  stderrLog: 'sessions/slot-002/gen-1/worker/worker.stderr.log',
+  paneId: '43',
+  paneIdSource: 'zellij_worker_new_pane_stdout',
+  status: 'running',
+  workerCommand: 'node dist/bin/sks.js zellij-slot-pane --watch',
   blockers: []
 })
 const spawnOrder = evaluateZellijWorkerPaneSpawnOrder([
@@ -75,11 +95,13 @@ const ok = artifact.ok
   && artifact.pane_kind === 'worker_codex_sdk'
   && artifact.provider === 'codex-lb'
   && artifact.service_tier === 'fast'
-  && artifact.direction_requested === 'right'
+  && artifact.direction_requested === 'down'
   && artifact.direction_applied === 'not_applied'
   && artifact.sdk_thread_id === 'sdk-thread-7'
   && artifact.stream_event_count === 4
   && artifact.scaling_primitive === 'native_cli_process_in_zellij_worker_pane'
+  && slotRendererArtifact.pane_kind === 'slot_status_renderer'
+  && slotRendererArtifact.scaling_primitive === 'native_cli_process_with_zellij_slot_renderer'
   && syntheticRejected
   && spawnOrder.ok
   && sourceOk

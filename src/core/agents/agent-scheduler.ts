@@ -198,7 +198,11 @@ export async function runAgentScheduler(input: {
       if (!slot) break
       const generationIndex = slot.generation_count + 1
       const provisionalSessionId = `${slot.slot_id}-gen-${generationIndex}`
-      const workItem = leaseNextWorkItem(queue, provisionalSessionId)
+      const workItem = leaseNextWorkItem(queue, provisionalSessionId, {
+        slotId: slot.slot_id,
+        agentId: String(slot.persona_assignment?.agent_id || ''),
+        activeWritePaths: activeWritePaths(queue)
+      })
       if (!workItem) break
       const generation = createAgentSessionGeneration({
         slotId: slot.slot_id,
@@ -410,6 +414,14 @@ function buildAgentForGeneration(slot: AgentWorkerSlot, generation: AgentSession
     source_intelligence_refs: generation.source_intelligence_refs,
     goal_mode_ref: generation.goal_mode_ref
   }
+}
+
+function activeWritePaths(queue: AgentWorkQueue) {
+  return queue.items
+    .filter((item) => item.status === 'running')
+    .flatMap((item) => Array.isArray(item.slice?.write_paths) ? item.slice.write_paths : [])
+    .map((file) => String(file || '').replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/\/+$/, ''))
+    .filter(Boolean)
 }
 
 function delay(ms: number) {

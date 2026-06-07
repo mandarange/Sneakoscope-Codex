@@ -127,7 +127,7 @@ assertGate(new Set(writePaths).size > 1, 'naruto command default patch-envelope 
 assertGate(commandGraph.active_waves.some((wave) => wave.write_paths.length > 1), 'naruto command graph must contain a parallel write wave when route-local patch envelopes do not overlap', { waves: commandGraph.active_waves.slice(0, 3) });
 
 const state = parsed.run?.scheduler?.state || parsed.run?.scheduler || {};
-assertGate(Number(state.completed_count) === proofClones, 'all clone work items must complete despite throttling', { completed_count: state.completed_count });
+assertGate(Number(state.completed_count) === Number(parsed.work_graph?.total_work_items || 0) && Number(state.completed_count) >= proofClones, 'all clone work items must complete despite throttling', { completed_count: state.completed_count, total_work_items: parsed.work_graph?.total_work_items, proofClones });
 
 const explicitConcurrency = spawnSync(process.execPath, [cli, 'naruto', 'run', 'explicit concurrency', '--clones', '6', '--backend', 'fake', '--work-items', '6', '--concurrency', '6', '--json'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
 const explicitParsed = parseJson(explicitConcurrency.stdout);

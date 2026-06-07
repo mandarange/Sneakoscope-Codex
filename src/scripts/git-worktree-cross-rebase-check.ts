@@ -14,14 +14,26 @@ fs.writeFileSync(path.join(root, 'base.txt'), 'base\n')
 await runGitCommand(root, ['add', 'base.txt'])
 await runGitCommand(root, ['commit', '-m', 'base'])
 const workerPath = path.join(root, '..', `worker-${process.pid}`)
+const dirtyWorkerPath = path.join(root, '..', `worker-dirty-${process.pid}`)
+const runningWorkerPath = path.join(root, '..', `worker-running-${process.pid}`)
 await runGitCommand(root, ['worktree', 'add', workerPath, 'HEAD'])
+await runGitCommand(root, ['worktree', 'add', dirtyWorkerPath, 'HEAD'])
+await runGitCommand(root, ['worktree', 'add', runningWorkerPath, 'HEAD'])
+fs.writeFileSync(path.join(dirtyWorkerPath, 'dirty.txt'), 'dirty\n')
 fs.writeFileSync(path.join(root, 'integration.txt'), 'integration\n')
 await runGitCommand(root, ['add', 'integration.txt'])
 await runGitCommand(root, ['commit', '-m', 'integration'])
 const head = gitOutputLine(await runGitCommand(root, ['rev-parse', 'HEAD']))
 const report = await crossRebaseIdleWorktrees({
   integrationHead: head,
-  workers: [{ worker_id: 'W1', worktree_path: workerPath, state: 'idle' }]
+  workers: [
+    { worker_id: 'W1', worktree_path: workerPath, state: 'idle' },
+    { worker_id: 'W-dirty', worktree_path: dirtyWorkerPath, state: 'idle' },
+    { worker_id: 'W-running', worktree_path: runningWorkerPath, state: 'running' }
+  ]
 })
 assertGate(report.ok && report.applied_count === 1, 'Idle worktrees must cross-rebase to the integration head', report)
+assertGate(report.skipped_count === 2, 'Dirty and running worktrees must be skipped during cross-rebase', report)
+assertGate(report.records.some((row) => row.worker_id === 'W-dirty' && row.status === 'skipped' && row.reason === 'dirty_worktree_skipped'), 'Dirty worktree must skip cross-rebase', report)
+assertGate(report.records.some((row) => row.worker_id === 'W-running' && row.status === 'skipped' && row.reason === 'worker_not_idle'), 'Running worktree must skip cross-rebase', report)
 emitGate('git:worktree-cross-rebase', report)

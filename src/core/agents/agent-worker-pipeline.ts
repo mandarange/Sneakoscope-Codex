@@ -58,6 +58,8 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     ...(result?.source_intelligence_refs === undefined ? {} : { source_intelligence_refs: result.source_intelligence_refs }),
     ...(result?.goal_mode_ref === undefined ? {} : { goal_mode_ref: result.goal_mode_ref }),
     ...(result?.follow_up_work_items === undefined ? {} : { follow_up_work_items: followUps.accepted }),
+    ...(result?.naruto_runtime === undefined ? {} : { naruto_runtime: result.naruto_runtime }),
+    ...(result?.control_plane_result === undefined ? {} : { control_plane_result: result.control_plane_result }),
     recursion_guard: { ok: guard.ok, violations: guard.violations },
     verification: normalizeVerification(result?.verification)
   }

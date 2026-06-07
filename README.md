@@ -16,12 +16,14 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.11** is the slot-only Zellij and Naruto runtime stabilization release. Compact slot panes are now the default visual worker surface, the initial Zellij session stays main-only until the first visible worker is reserved, overflow workers continue headlessly with runtime evidence instead of opening excess panes, and dashboard panes stay opt-in. The release path remains manifest-backed through the v2 DAG runner, with real Zellij/Naruto/worktree proof gates split into `real-check`.
+SKS **2.0.12** is the public-ready parallel runtime stabilization release. It closes release DAG coverage around Zellij slot renderer proof semantics, wires Naruto allocation/rebalance into the production scheduler, keeps pre-run worker smoke opt-in, and requires GPT Final approval before local/worktree candidate output can apply.
 
 What changed:
 
-- Zellij slot panes render compact worker slots without nested dashboard chrome, and right-column state records visible panes plus headless overflow lifecycle.
-- Naruto active-pool checks now exercise real child-worker spawn/result collection paths, including high-fanout overflow and completed-worker collection order.
+- Zellij slot panes distinguish `slot_status_renderer` panes from Codex worker panes, and the first visible worker now stacks downward below the `SLOTS` anchor with real geometry proof available under `real-check`.
+- Naruto allocation owners now flow into work graph items, scheduler slices, queue ownership, and worker runtime proof; inactive owners are rebalanced and active write conflicts stay out of concurrent execution.
+- Naruto active-pool checks now exercise actual child-worker spawn/result collection paths while production source-of-truth stays with the agent orchestrator scheduler.
+- Worktree candidate output requires GPT Final approval before apply; GPT `modified` output replaces candidate patches and GPT `rejected` blocks apply.
 - Visible Zellij reservations are capped before pane launch so concurrent worker starts cannot over-open the right column.
 - Git worktree integration now proves the primary repo receives validated worktree diffs, with rollback hash evidence recorded around the apply step.
 - Agent role config repair detects stale generated role files and rewrites structured GPT-5.5-compatible configs atomically.

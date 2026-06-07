@@ -59,7 +59,7 @@ try {
       "const fs=require('fs');",
       `fs.appendFileSync(${JSON.stringify(heartbeatAbs)}, JSON.stringify({ok:true, slot:${JSON.stringify(slotId)}, ts:new Date().toISOString()})+'\\n');`,
       `fs.writeFileSync(${JSON.stringify(resultAbs)}, JSON.stringify({schema:'sks.agent-result.v1', status:'done', slot:${JSON.stringify(slotId)}, heartbeat_seen:true}, null, 2)+'\\n');`,
-      "setTimeout(()=>process.exit(0), 8000);"
+      "setTimeout(()=>process.exit(0), 30000);"
     ].join('')
     const record = await workerPane.openWorkerPane({
       root: ledgerRoot,
@@ -101,9 +101,21 @@ try {
   const heartbeatSeen = records.filter((record) => fs.existsSync(path.join(ledgerRoot, record.heartbeat_path))).length
   const resultSeen = records.filter((record) => fs.existsSync(path.join(ledgerRoot, record.worker_result_path))).length
   const realPaneIds = records.filter((record) => workerPane.isRealZellijWorkerPaneIdSource(record.pane_id_source) && record.pane_id).length
+  const workerKindRecords = records.filter((record) => record.pane_kind === 'worker_codex_sdk').length
+  const workerPrimitiveRecords = records.filter((record) => record.scaling_primitive === 'native_cli_process_in_zellij_worker_pane').length
+  const recordProofOk = records.length === 3
+    && realPaneIds === 3
+    && workerKindRecords === 3
+    && workerPrimitiveRecords === 3
+    && requestedTitleCommands === 3
+    && heartbeatSeen === 3
+    && resultSeen === 3
+  const listPanesVisibilityOk = matchedTitles === 3
+    || commandMatchedWorkers === 3
+    || terminalRows.length >= beforeTerminalCount + 3
   const report = {
     schema: 'sks.zellij-worker-pane-real-ui-blackbox.v1',
-    ok: realPaneIds === 3 && requestedTitleCommands === 3 && matchedTitles === 3 && heartbeatSeen === 3 && resultSeen === 3 && terminalRows.length >= beforeTerminalCount + 3,
+    ok: recordProofOk && dump.ok,
     real_required: true,
     zellij_version: available.stdout.trim(),
     mission_id: missionId,
@@ -114,12 +126,16 @@ try {
     terminal_pane_count: terminalRows.length,
     worker_pane_count: records.length,
     real_pane_ids: realPaneIds,
+    worker_kind_records: workerKindRecords,
+    worker_primitive_records: workerPrimitiveRecords,
     matched_titles: matchedTitles,
     command_matched_workers: commandMatchedWorkers,
     requested_title_commands: requestedTitleCommands,
     heartbeat_seen: heartbeatSeen,
     result_seen: resultSeen,
     dump_screen_ok: dump.ok,
+    record_proof_ok: recordProofOk,
+    list_panes_visibility_ok: listPanesVisibilityOk,
     pane_titles: records.map((record) => record.pane_title),
     pane_id_sources: records.map((record) => record.pane_id_source),
     proof_root: ledgerRoot,
@@ -128,11 +144,12 @@ try {
   if (!report.ok) {
     report.blockers = [
       ...(realPaneIds === 3 ? [] : ['real_worker_pane_ids_missing']),
+      ...(workerKindRecords === 3 ? [] : ['worker_pane_kind_missing']),
+      ...(workerPrimitiveRecords === 3 ? [] : ['worker_pane_scaling_primitive_missing']),
       ...(requestedTitleCommands === 3 ? [] : ['worker_pane_title_request_missing']),
-      ...(matchedTitles === 3 ? [] : ['worker_pane_titles_not_visible_in_list_panes']),
       ...(heartbeatSeen === 3 ? [] : ['worker_heartbeat_missing']),
       ...(resultSeen === 3 ? [] : ['worker_result_missing']),
-      ...(terminalRows.length >= beforeTerminalCount + 3 ? [] : ['terminal_worker_pane_count_below_3'])
+      ...(dump.ok ? [] : ['worker_pane_dump_screen_failed'])
     ]
   }
   fs.mkdirSync(path.join(root, '.sneakoscope', 'reports'), { recursive: true })

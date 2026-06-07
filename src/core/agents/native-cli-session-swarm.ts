@@ -356,8 +356,8 @@ class NativeCliSessionSwarmRecorder {
     input.record.zellij_create_session = paneRecord.create_session
     input.record.zellij_launch = paneRecord.launch
     input.record.zellij_worker_pane = path.join(input.workerDirRel, 'zellij-worker-pane.json')
-    input.record.pane_kind = 'worker_codex_sdk'
-    input.record.scaling_primitive = 'native_cli_process_in_zellij_worker_pane'
+    input.record.pane_kind = paneRecord.pane_kind
+    input.record.scaling_primitive = paneRecord.scaling_primitive
     input.record.provider = paneRecord.provider
     input.record.service_tier = paneRecord.service_tier
     input.record.provider_context = paneRecord.provider_context

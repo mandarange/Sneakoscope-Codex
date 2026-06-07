@@ -92,7 +92,7 @@ async function narutoRun(parsed: NarutoArgs) {
   const localWorker = await resolveNarutoLocalWorkerMode(parsed)
   const schedulerBackend = localWorker.auto_select_eligible ? 'ollama' : parsed.backend
   const safe = systemSafeNarutoConcurrency({ backend: schedulerBackend })
-  const workGraph = buildNarutoWorkGraph({
+  const baseWorkGraph = buildNarutoWorkGraph({
     prompt: parsed.prompt,
     requestedClones: roster.agent_count,
     totalWorkItems: parsed.workItems,
@@ -102,9 +102,21 @@ async function narutoRun(parsed: NarutoArgs) {
     maxActiveWorkers: parsed.concurrency || safe.cap,
     worktreePolicy
   })
+  const baseRoleDistribution = buildNarutoRoleDistribution(baseWorkGraph.work_items, { readonly: parsed.readonly })
+  const allocationWorkers = buildNarutoAllocationWorkers(baseWorkGraph, baseRoleDistribution, roster)
+  const allocationAssignments = allocateNarutoTasksToWorkers(baseWorkGraph.work_items, allocationWorkers)
+  const workGraph = buildNarutoWorkGraph({
+    prompt: parsed.prompt,
+    requestedClones: roster.agent_count,
+    totalWorkItems: parsed.workItems,
+    readonly: parsed.readonly,
+    writeCapable,
+    leaseBasePath: patchEnvelopeBasePath,
+    maxActiveWorkers: parsed.concurrency || safe.cap,
+    worktreePolicy,
+    allocationAssignments
+  })
   const roleDistribution = buildNarutoRoleDistribution(workGraph.work_items, { readonly: parsed.readonly })
-  const allocationWorkers = buildNarutoAllocationWorkers(workGraph, roleDistribution, roster)
-  const allocationAssignments = allocateNarutoTasksToWorkers(workGraph.work_items, allocationWorkers)
   const allocationPolicy = {
     schema: 'sks.naruto-allocation-policy.v1',
     generated_at: nowIso(),
@@ -133,7 +145,7 @@ async function narutoRun(parsed: NarutoArgs) {
     blockers: allocationWorkers.length ? [] : ['naruto_allocation_workers_missing']
   }
   const rebalanceDecisions = rebalanceNarutoReadyWork({
-    tasks: workGraph.work_items.map((item) => ({ ...item, owner: null, status: 'pending' })),
+    tasks: workGraph.work_items.map((item) => ({ ...item, status: 'pending' })),
     workers: allocationWorkers.map((worker) => ({ ...worker, alive: true, state: 'idle' as const })),
     completedTaskIds: [],
     reclaimedTaskIds: []
@@ -157,52 +169,38 @@ async function narutoRun(parsed: NarutoArgs) {
   const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || Math.max(governor.safe_active_workers, backendMinimum), safe.cap))
   const zellijVisiblePanes = Math.max(1, Math.min(activeSlots, governor.safe_zellij_visible_panes))
   const activePool = await runNarutoActivePool({ graph: workGraph, governor: { ...governor, safe_active_workers: activeSlots } })
-  const realRuntimeSmokeGraph = buildNarutoWorkGraph({
-    prompt: parsed.prompt,
-    requestedClones: Math.min(2, roster.agent_count),
-    totalWorkItems: Math.min(2, workGraph.total_work_items),
-    readonly: true,
-    writeCapable: false,
-    leaseBasePath: patchEnvelopeBasePath,
-    maxActiveWorkers: Math.min(2, activeSlots),
-    worktreePolicy: {
-      mode: 'patch-envelope-only',
-      required: false,
-      main_repo_root: worktreePolicy.main_repo_root,
-      worktree_root: null,
-      fallback_reason: 'pre_run_smoke_never_owns_production_runtime'
-    }
-  })
-  const realRuntimeWorktreePolicy = {
-    mode: 'patch-envelope-only' as const,
-    required: false,
-    main_repo_root: worktreePolicy.main_repo_root,
-    worktree_root: null,
-    fallback_reason: 'pre_run_smoke_never_owns_production_runtime'
-  }
-  const realActivePool = await runNarutoRealActivePool({
-    graph: realRuntimeSmokeGraph,
-    governor: { ...governor, safe_active_workers: Math.min(2, activeSlots), safe_zellij_visible_panes: Math.min(1, zellijVisiblePanes) },
-    spawnWorker: async (item, placement) => spawnActualNarutoWorker({
+  const runPreRunSmoke = parsed.smoke === true || process.env.SKS_NARUTO_PRE_RUN_SMOKE === '1'
+  const realActivePoolSmoke = runPreRunSmoke
+    ? await runNarutoControlPlaneSmoke({
       root,
       missionId: mission.id,
-      item,
-      placement,
-      backend: 'fake',
-      worktreePolicy: realRuntimeWorktreePolicy,
-      zellijSessionName: `sks-${mission.id}`,
-      visiblePaneCap: zellijVisiblePanes
-    }) as any,
-    collectWorker: async (handle) => collectActualNarutoWorker(handle as any),
-    enqueueVerification: async () => undefined,
-    updateDashboard: async () => undefined
-  })
-  const realActivePoolSmoke = {
-    ...realActivePool,
-    runtime_source_of_truth: 'pre_run_smoke_only',
-    production_runtime_source_of_truth: 'agent-orchestrator-scheduler',
-    smoke_graph_total_work_items: realRuntimeSmokeGraph.total_work_items
-  }
+      prompt: parsed.prompt,
+      rosterCount: roster.agent_count,
+      totalWorkItems: workGraph.total_work_items,
+      patchEnvelopeBasePath,
+      worktreePolicy,
+      governor,
+      activeSlots,
+      zellijVisiblePanes
+    })
+    : {
+      schema: 'sks.naruto-active-pool.v1',
+      ok: true,
+      status: 'skipped',
+      runtime_source_of_truth: 'agent-orchestrator-scheduler',
+      production_runtime_source_of_truth: 'agent-orchestrator-scheduler',
+      fallback_reason: 'pre_run_smoke_never_owns_production_runtime',
+      reason: 'pre_run_smoke_disabled_for_production',
+      active_cap: 0,
+      max_observed_active_workers: 0,
+      average_active_workers: 0,
+      active_pool_utilization: 0,
+      refill_latency_ms_p95: 0,
+      visible_workers: 0,
+      headless_workers: 0,
+      worker_lifecycle: [],
+      smoke_graph_total_work_items: 0
+    }
   const verificationDag = buildNarutoVerificationDag(workGraph, { cwd: root })
   const gptFinalPack = buildNarutoGptFinalPack({
     missionId: mission.id,
@@ -279,7 +277,8 @@ async function narutoRun(parsed: NarutoArgs) {
     concurrency: activeSlots,
     targetActiveSlots: activeSlots,
     visualLaneCount: zellijVisiblePanes,
-    desiredWorkItemCount: parsed.workItems,
+    desiredWorkItemCount: workGraph.total_work_items,
+    minimumWorkItems: workGraph.total_work_items,
     maxAgentCount: MAX_NARUTO_AGENT_COUNT,
     narutoMode: true,
     clones: roster.agent_count,
@@ -302,6 +301,9 @@ async function narutoRun(parsed: NarutoArgs) {
     noFast: false,
     writeMode: writeCapable ? parsed.writeMode || 'parallel' : 'off',
     gitWorktreePolicy: worktreePolicy,
+    narutoWorkGraph: workGraph,
+    narutoAllocationPolicy: allocationPolicy,
+    narutoRebalancePolicy: rebalancePolicy,
     json: parsed.json
   })
   const clones = result.roster?.agent_count ?? roster.agent_count
@@ -318,7 +320,7 @@ async function narutoRun(parsed: NarutoArgs) {
     concurrency: result.target_active_slots ?? activeSlots,
     target_active_slots: result.target_active_slots ?? activeSlots,
     runtime_source_of_truth: 'agent-orchestrator-scheduler',
-    pre_run_real_active_pool_source: 'smoke_only',
+    pre_run_real_active_pool_source: runPreRunSmoke ? 'smoke_only' : 'skipped',
     concurrency_capped: clones > (result.target_active_slots ?? activeSlots),
     system: { cores: safe.cores, free_gb: safe.free_gb, safe_concurrency: safe.cap, heavy_backend: safe.heavy },
     work_graph: {
@@ -401,6 +403,68 @@ function compactNarutoRunResult(result: any) {
       native_cli_session_swarm: 'agent-native-cli-session-swarm.json',
       naruto_real_active_pool: 'naruto-real-active-pool.json'
     }
+  }
+}
+
+async function runNarutoControlPlaneSmoke(input: {
+  root: string
+  missionId: string
+  prompt: string
+  rosterCount: number
+  totalWorkItems: number
+  patchEnvelopeBasePath: string
+  worktreePolicy: any
+  governor: any
+  activeSlots: number
+  zellijVisiblePanes: number
+}) {
+  const smokeGraph = buildNarutoWorkGraph({
+    prompt: input.prompt,
+    requestedClones: Math.min(2, input.rosterCount),
+    totalWorkItems: Math.min(2, input.totalWorkItems),
+    readonly: true,
+    writeCapable: false,
+    leaseBasePath: input.patchEnvelopeBasePath,
+    maxActiveWorkers: Math.min(2, input.activeSlots),
+    worktreePolicy: {
+      mode: 'patch-envelope-only',
+      required: false,
+      main_repo_root: input.worktreePolicy.main_repo_root,
+      worktree_root: null,
+      fallback_reason: 'pre_run_smoke_never_owns_production_runtime'
+    }
+  })
+  const smokeWorktreePolicy = {
+    mode: 'patch-envelope-only' as const,
+    required: false,
+    main_repo_root: input.worktreePolicy.main_repo_root,
+    worktree_root: null,
+    fallback_reason: 'pre_run_smoke_never_owns_production_runtime'
+  }
+  const realActivePool = await runNarutoRealActivePool({
+    graph: smokeGraph,
+    governor: { ...input.governor, safe_active_workers: Math.min(2, input.activeSlots), safe_zellij_visible_panes: Math.min(1, input.zellijVisiblePanes) },
+    spawnWorker: async (item, placement) => spawnActualNarutoWorker({
+      root: input.root,
+      missionId: input.missionId,
+      item,
+      placement,
+      backend: 'fake',
+      worktreePolicy: smokeWorktreePolicy,
+      zellijSessionName: `sks-${input.missionId}`,
+      visiblePaneCap: input.zellijVisiblePanes
+    }) as any,
+    collectWorker: async (handle) => collectActualNarutoWorker(handle as any),
+    enqueueVerification: async () => undefined,
+    updateDashboard: async () => undefined
+  })
+  return {
+    ...realActivePool,
+    status: 'smoke_completed',
+    runtime_source_of_truth: 'pre_run_smoke_only',
+    production_runtime_source_of_truth: 'agent-orchestrator-scheduler',
+    fallback_reason: 'pre_run_smoke_never_owns_production_runtime',
+    smoke_graph_total_work_items: smokeGraph.total_work_items
   }
 }
 
@@ -568,6 +632,7 @@ interface NarutoArgs {
   missionId: string
   noOpenZellij: boolean
   attach: boolean
+  smoke: boolean
 }
 
 function parseNarutoArgs(args: string[] = []): NarutoArgs {
@@ -598,9 +663,10 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const ollamaBaseUrl = String(readOption(args, '--ollama-base-url', readOption(args, '--local-model-base-url', '')) || '') || null
   const noOpenZellij = hasFlag(args, '--no-open-zellij') || hasFlag(args, '--no-zellij')
   const attach = hasFlag(args, '--attach')
+  const smoke = hasFlag(args, '--smoke')
   const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
-  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, json, missionId, noOpenZellij, attach }
+  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, json, missionId, noOpenZellij, attach, smoke }
 }
 
 async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {

@@ -1,3 +1,5 @@
+import type { NarutoTaskHints } from './naruto-task-hints.js'
+
 export type NarutoWorkKind =
   | 'implementation'
   | 'code_modification'
@@ -61,6 +63,11 @@ export interface NarutoWorkItem {
   estimated_cost: NarutoWorkItemCost
   lease_requirements: NarutoLeaseRequirement[]
   acceptance: NarutoWorkItemAcceptance
+  owner?: string | null
+  allocation_reason?: string | null
+  allocation_score?: number | null
+  allocation_hints?: NarutoTaskHints | null
+  lane?: string | null
   worktree?: {
     mode: NarutoWorktreePolicy['mode']
     required: boolean

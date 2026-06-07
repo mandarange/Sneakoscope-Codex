@@ -70,13 +70,34 @@ export async function applyGitWorktreeMergeQueue(input: {
       input: diff.diff,
       timeoutMs: 30000
     })
-    if (apply.ok) appliedCount += 1
+    if (apply.ok) {
+      appliedCount += 1
+      strategyResults.push({
+        ok: true,
+        worker_id: diff.worker_id,
+        strategy: 'diff-apply-3way',
+        commit_hash: null,
+        conflict_files: [],
+        changed_files: diff.changed_files,
+        blockers: []
+      })
+    }
     else {
-      conflicts.push(summarizeGitWorktreeConflict({
+      const conflict = summarizeGitWorktreeConflict({
         workerId: diff.worker_id,
         changedFiles: diff.changed_files,
         stderr: apply.stderr || apply.stdout
-      }))
+      })
+      strategyResults.push({
+        ok: false,
+        worker_id: diff.worker_id,
+        strategy: 'diff-apply-3way',
+        commit_hash: null,
+        conflict_files: (conflict as any).conflict_files || diff.changed_files,
+        changed_files: diff.changed_files,
+        blockers: (conflict as any).blockers || ['git_worktree_diff_apply_failed']
+      })
+      conflicts.push(conflict)
     }
   }
   const blockers = conflicts.length ? ['git_worktree_merge_queue_conflicts'] : []
@@ -96,44 +117,44 @@ export async function applyGitWorktreeMergeQueue(input: {
 }
 
 async function applyCheckpointCommit(integrationWorktreePath: string, checkpoint: GitWorktreeCheckpointReport) {
-  const merge = await runGitCommand(integrationWorktreePath, ['merge', '--no-ff', '--no-edit', checkpoint.commit_hash || ''], {
-    timeoutMs: 120000
-  })
-  if (merge.ok) {
-    return {
-      ok: true,
-      worker_id: checkpoint.worker_id,
-      strategy: 'merge',
-      commit_hash: checkpoint.commit_hash,
-      conflict_files: [],
-      blockers: []
-    }
-  }
-  await runGitCommand(integrationWorktreePath, ['merge', '--abort'], { timeoutMs: 30000 }).catch(() => null)
-  const cherryPick = await runGitCommand(integrationWorktreePath, ['cherry-pick', checkpoint.commit_hash || ''], {
+  const cherryPick = await runGitCommand(integrationWorktreePath, ['cherry-pick', '--allow-empty', '-X', 'theirs', checkpoint.commit_hash || ''], {
     timeoutMs: 120000
   })
   if (cherryPick.ok) {
     return {
       ok: true,
       worker_id: checkpoint.worker_id,
-      strategy: 'cherry-pick',
+      strategy: 'checkpoint-cherry-pick',
+      commit_hash: checkpoint.commit_hash,
+      conflict_files: [],
+      blockers: []
+    }
+  }
+  await runGitCommand(integrationWorktreePath, ['cherry-pick', '--abort'], { timeoutMs: 30000 }).catch(() => null)
+  const merge = await runGitCommand(integrationWorktreePath, ['merge', '--no-ff', '--no-edit', '-X', 'theirs', checkpoint.commit_hash || ''], {
+    timeoutMs: 120000
+  })
+  if (merge.ok) {
+    return {
+      ok: true,
+      worker_id: checkpoint.worker_id,
+      strategy: 'checkpoint-merge',
       commit_hash: checkpoint.commit_hash,
       conflict_files: [],
       blockers: []
     }
   }
   const conflictFiles = await runGitCommand(integrationWorktreePath, ['diff', '--name-only', '--diff-filter=U'], { timeoutMs: 30000 }).catch(() => null)
-  await runGitCommand(integrationWorktreePath, ['cherry-pick', '--abort'], { timeoutMs: 30000 }).catch(() => null)
+  await runGitCommand(integrationWorktreePath, ['merge', '--abort'], { timeoutMs: 30000 }).catch(() => null)
   return {
     ok: false,
     worker_id: checkpoint.worker_id,
-    strategy: 'merge_then_cherry-pick',
+    strategy: 'checkpoint-cherry-pick-then-merge',
     commit_hash: checkpoint.commit_hash,
     conflict_files: String(conflictFiles?.stdout || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
     blockers: [
-      `git_worktree_checkpoint_merge_failed:${merge.stderr_tail || merge.stdout_tail}`,
-      `git_worktree_checkpoint_cherry_pick_failed:${cherryPick.stderr_tail || cherryPick.stdout_tail}`
+      `git_worktree_checkpoint_cherry_pick_failed:${cherryPick.stderr_tail || cherryPick.stdout_tail}`,
+      `git_worktree_checkpoint_merge_failed:${merge.stderr_tail || merge.stdout_tail}`
     ]
   }
 }

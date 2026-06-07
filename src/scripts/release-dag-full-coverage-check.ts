@@ -20,12 +20,16 @@ const gateIds = new Set(manifest.gates.map((gate) => gate.id))
 const releasePresetIds = new Set(manifest.gates.filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release')).map((gate) => gate.id))
 const requiredReleasePresetIds = [
   'zellij:first-slot-down-stack',
+  'zellij:slot-renderer-proof-semantics',
   'naruto:allocation-policy',
   'naruto:rebalance-policy',
+  'naruto:allocation-runtime-wiring',
   'naruto:actual-worker-control-plane',
   'naruto:orchestrator-runtime-source',
   'git:worktree-checkpoint',
   'git:worktree-cross-rebase',
+  'local-collab:worktree-gpt-final-apply-policy',
+  'release:cache-glob-hashing',
   'release:dag-full-coverage'
 ]
 const missing = legacyIds.filter((id) => !gateIds.has(id) && !allowlist.has(id))

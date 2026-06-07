@@ -123,7 +123,7 @@ async function runRealGate({ sourceOk, eventProof }) {
 async function inspectRealLedger(ledgerRoot) {
   const swarm = await readJson(path.join(ledgerRoot, 'agent-native-cli-session-swarm.json'), null);
   const records = Array.isArray(swarm?.records) ? swarm.records : [];
-  const workerRecords = records.filter((row) => row.scaling_primitive === 'native_cli_process_in_zellij_worker_pane');
+  const workerRecords = records.filter(isZellijCodexWorkerRecord);
   const eventsByWorker = [];
   for (const record of workerRecords) {
     const workerDir = String(record.worker_artifact_dir || '');
@@ -137,7 +137,7 @@ async function inspectRealLedger(ledgerRoot) {
   const blockers = [
     ...(swarm?.ok === true ? [] : ['real_codex_zellij_swarm_not_ok']),
     ...(workerRecords.length >= 1 ? [] : ['real_codex_zellij_worker_record_missing']),
-    ...(workerRecords.some((row) => row.pane_kind === 'worker_codex_sdk') ? [] : ['real_codex_zellij_worker_pane_kind_missing']),
+    ...(workerRecords.some((row) => row.pane_kind === 'worker_codex_sdk' || row.pane_kind === 'slot_status_renderer') ? [] : ['real_codex_zellij_worker_pane_kind_missing']),
     ...(workerRecords.every((row) => manager.isRealZellijWorkerPaneIdSource(row.zellij_pane_id_source)) ? [] : ['real_codex_zellij_pane_id_source_not_real']),
     ...(workerRecords.every((row) => row.zellij_pane_id) ? [] : ['real_codex_zellij_pane_id_missing']),
     ...(workerRecords.every((row) => row.sdk_thread_id) ? [] : ['real_codex_zellij_sdk_thread_missing']),
@@ -170,6 +170,13 @@ async function inspectRealLedger(ledgerRoot) {
     binding_proof: bindingProof,
     blockers
   };
+}
+
+function isZellijCodexWorkerRecord(row) {
+  return row?.scaling_primitive === 'native_cli_process_in_zellij_worker_pane'
+    || row?.scaling_primitive === 'native_cli_process_with_zellij_slot_renderer'
+    || row?.pane_kind === 'worker_codex_sdk'
+    || row?.pane_kind === 'slot_status_renderer';
 }
 
 async function emit(report) {

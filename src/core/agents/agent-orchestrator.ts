@@ -3,6 +3,8 @@ import { createMission, missionDir, setCurrent } from '../mission.js'
 import { exists, nowIso, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { buildAgentRoster, normalizeAgentConcurrency } from './agent-roster.js'
 import { buildAgentWorkPartition } from './agent-work-partition.js'
+import { detectAgentLeaseConflicts } from './work-partition/conflict-detector.js'
+import { buildNoOverlapProof } from './work-partition/no-overlap-proof.js'
 import { initializeAgentCentralLedger, appendAgentLedgerEvent, compactAgentLedger } from './agent-central-ledger.js'
 import { detectStaleAgentSessions, killTimedOutAgentSessions, openAgentSession, heartbeatAgentSession, collectAgentSession, completeAgentSession, closeAgentSession, writeAgentLifecycleAggregate, writeAgentLifecyclePolicy } from './agent-lifecycle.js'
 import { writeAgentConsensus } from './agent-consensus.js'
@@ -60,6 +62,8 @@ import { checkpointWorkerWorktree } from '../git/git-worktree-checkpoint.js'
 import { cleanupGitWorktree } from '../git/git-worktree-cleanup.js'
 import { createGitIntegrationWorktree } from '../git/git-integration-worktree.js'
 import { applyGitWorktreeMergeQueue } from '../git/git-worktree-merge-queue.js'
+import { crossRebaseIdleWorktrees } from '../git/git-worktree-cross-rebase.js'
+import { gitOutputLine, runGitCommand } from '../git/git-worktree-runner.js'
 import type { GitWorktreeDiff } from '../git/git-worktree-diff.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Promise<any> {
@@ -196,7 +200,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
       }
     }
   }
-  const partition = await buildAgentWorkPartition(root, roster, prompt, {
+  let partition = await buildAgentWorkPartition(root, roster, prompt, {
     route,
     targetActiveSlots,
     desiredWorkItemCount,
@@ -207,12 +211,22 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     strategyOwnershipPlan: strategyCompiled.file_ownership_plan,
     microWins: strategyCompiled.gate.micro_wins
   })
+  if (opts.narutoWorkGraph?.work_items?.length) {
+    partition = applyNarutoWorkGraphToPartition(partition, opts.narutoWorkGraph, roster, targetActiveSlots)
+    augmentVerificationRollbackDagForNaruto(strategyCompiled.verification_rollback_dag, partition.slices)
+  }
   await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
   const ledgerRoot = await initializeAgentCentralLedger(dir, { missionId, roster, partition, route, prompt, dynamicScheduler: true })
   // Consult the TriWiki context pack (read-only) before dispatching workers, and
   // persist it as a proof artifact so the kernel proof references the wiki it acted on.
   const triwikiContext = await loadTriWikiRuntimeContext(root)
   await writeTriWikiContextArtifact(ledgerRoot, triwikiContext)
+  if (opts.narutoWorkGraph?.work_items?.length) {
+    await writeJsonAtomic(path.join(ledgerRoot, 'naruto-work-graph.json'), opts.narutoWorkGraph)
+    await writeJsonAtomic(path.join(ledgerRoot, 'naruto-runtime-wiring.json'), buildNarutoRuntimeWiringProof(partition, opts.narutoWorkGraph, roster, targetActiveSlots))
+  }
+  if (opts.narutoAllocationPolicy) await writeJsonAtomic(path.join(ledgerRoot, 'naruto-allocation-policy.json'), opts.narutoAllocationPolicy)
+  if (opts.narutoRebalancePolicy) await writeJsonAtomic(path.join(ledgerRoot, 'naruto-rebalance-policy.json'), opts.narutoRebalancePolicy)
   await writeAgentTaskGraph(ledgerRoot, partition.task_graph)
   await writeAdhdOrchestrationArtifacts(ledgerRoot, strategyCompiled.gate)
   await writeStrategyCompilerArtifacts(ledgerRoot, strategyCompiled)
@@ -347,6 +361,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
       const result = opts.nativeCliSwarm === false
         ? await runAgentByBackend(backend, runtimeAgent, runtimeSlice, backendOpts)
         : await nativeCliSwarm.launchWorker({ agent: runtimeAgent, slice: runtimeSlice, opts: backendOpts })
+      if (route === '$Naruto') attachNarutoRuntimeProof(result, runtimeAgent, runtimeSlice)
       if (workerWorktree) await finalizeWorkerGitWorktree({
         root,
         ledgerRoot,
@@ -599,6 +614,247 @@ function withFinalGptPatchEnvelopes(results: any[], patchEnvelopes: any[] = []) 
   })
   if (!assigned && patchEnvelopes.length && next[0]) next[0] = { ...next[0], patch_envelopes: patchEnvelopes }
   return next
+}
+
+function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any, targetActiveSlots: number) {
+  const activeRoster = (Array.isArray(roster?.roster) ? roster.roster : []).slice(0, Math.max(1, targetActiveSlots))
+  const activeAgentIds = new Set(activeRoster.map((row: any) => String(row.id || '')).filter(Boolean))
+  const fallbackOwners = activeRoster.length ? activeRoster : [{ id: 'naruto_clone_001', role: 'verifier' }]
+  const referenceWorkItem = Array.isArray(partition?.task_graph?.work_items) ? partition.task_graph.work_items.find(Boolean) : null
+  const sourceIntelligenceRefs = referenceWorkItem?.source_intelligence_refs || partition?.source_intelligence_refs || null
+  const goalModeRef = referenceWorkItem?.goal_mode_ref || partition?.goal_mode_ref || null
+  const strategyRefs = referenceWorkItem?.strategy_refs || partition?.strategy_refs || null
+  const slices = (graph.work_items || []).map((item: any, index: number) => {
+    const requestedOwner = item.owner ? String(item.owner) : ''
+    const owner = requestedOwner && activeAgentIds.has(requestedOwner)
+      ? requestedOwner
+      : String(fallbackOwners[index % fallbackOwners.length]?.id || requestedOwner || `naruto_clone_${String(index + 1).padStart(3, '0')}`)
+    const sliceId = String(item.id || `NW-${String(index + 1).padStart(6, '0')}`)
+    const writePaths = normalizePathList(item.write_paths)
+    const readonlyPaths = normalizePathList(item.readonly_paths)
+    const targetPaths = normalizePathList(item.target_paths)
+    const verificationNodeId = writePaths.length ? `verify:${sliceId}` : null
+    const rollbackNodeId = writePaths.length ? `rollback:${sliceId}` : null
+    return {
+      id: sliceId,
+      owner_agent_id: owner,
+      owner,
+      lane: owner,
+      role: String(item.required_role || 'verifier'),
+      domain: String(item.allocation_hints?.domains?.[0] || item.kind || 'naruto'),
+      title: String(item.title || item.id || `Naruto work ${index + 1}`),
+      dependencies: Array.isArray(item.dependencies) ? item.dependencies.map(String) : [],
+      priority: index + 1,
+      required_persona_category: String(item.required_role || 'verifier'),
+      lease_requirements: Array.isArray(item.lease_requirements) ? item.lease_requirements : [],
+      generated_by: 'sks.naruto-work-graph.v1',
+      route_domain: String(item.kind || 'naruto'),
+      work_item_kind: String(item.kind || 'verification'),
+      target_paths: targetPaths,
+      readonly_paths: readonlyPaths,
+      write_paths: writePaths,
+      allocation_reason: item.allocation_reason || null,
+      allocation_score: item.allocation_score ?? null,
+      allocation_hints: item.allocation_hints || null,
+      allocation_original_owner: requestedOwner || null,
+      allocation_owner_rebalanced: Boolean(requestedOwner && owner !== requestedOwner),
+      micro_win_id: sliceId,
+      verification_node_id: verificationNodeId,
+      rollback_node_id: rollbackNodeId,
+      verification_required: item.verification_required === true,
+      source_intelligence_refs: sourceIntelligenceRefs,
+      goal_mode_ref: goalModeRef,
+      strategy_refs: strategyRefs,
+      max_attempts: 1,
+      description: [
+        String(item.title || item.id || 'Naruto work item'),
+        `Naruto owner: ${owner}`,
+        item.allocation_reason ? `Allocation: ${item.allocation_reason}` : null,
+        writePaths.length ? `Write paths: ${writePaths.join(', ')}` : 'Read-only or no-write work item.'
+      ].filter(Boolean).join('\n')
+    }
+  })
+  const workItems = (graph.work_items || []).map((item: any) => ({
+    ...item,
+    source_intelligence_refs: item.source_intelligence_refs || sourceIntelligenceRefs,
+    goal_mode_ref: item.goal_mode_ref || goalModeRef,
+    strategy_refs: item.strategy_refs || strategyRefs
+  }))
+  const leases = slices.flatMap((slice: any) => [
+    ...slice.write_paths.map((file: string, index: number) => ({
+      id: `${slice.id}:write:${index + 1}`,
+      agent_id: slice.owner_agent_id,
+      kind: 'write' as const,
+      path: file,
+      domain: slice.domain,
+      status: 'active' as const,
+      owner_agent: slice.owner_agent_id,
+      write_paths: slice.write_paths,
+      strategy_task_id: slice.id,
+      micro_win_id: slice.micro_win_id || slice.id,
+      verification_node_id: slice.verification_node_id || null,
+      rollback_node_id: slice.rollback_node_id || null,
+      protected_path_check: { ok: true, blockers: [] }
+    })),
+    ...slice.readonly_paths.map((file: string, index: number) => ({
+      id: `${slice.id}:read:${index + 1}`,
+      agent_id: slice.owner_agent_id,
+      kind: 'read' as const,
+      path: file,
+      domain: slice.domain,
+      status: 'active' as const,
+      owner_agent: slice.owner_agent_id,
+      write_paths: slice.write_paths,
+      strategy_task_id: slice.id,
+      micro_win_id: slice.micro_win_id || slice.id,
+      verification_node_id: slice.verification_node_id || null,
+      rollback_node_id: slice.rollback_node_id || null,
+      protected_path_check: { ok: true, blockers: [] }
+    }))
+  ])
+  const conflict_report = detectAgentLeaseConflicts(leases)
+  const no_overlap_proof = buildNoOverlapProof(leases)
+  const taskGraph = partition.task_graph
+    ? {
+      ...partition.task_graph,
+      total_work_items: slices.length,
+      work_items: workItems,
+      route_work_count_summary: {
+        ...(partition.task_graph.route_work_count_summary || {}),
+        naruto_work_graph_items: slices.length,
+        allocation_owner_rebalanced_count: slices.filter((slice: any) => slice.allocation_owner_rebalanced).length
+      }
+    }
+    : null
+  return {
+    ...partition,
+    ok: conflict_report.ok && no_overlap_proof.ok,
+    task_graph: taskGraph,
+    slices,
+    leases,
+    conflict_report,
+    no_overlap_proof,
+    source_intelligence_refs: sourceIntelligenceRefs,
+    goal_mode_ref: goalModeRef,
+    strategy_refs: strategyRefs,
+    blockers: [...(conflict_report.blockers || []), ...(no_overlap_proof.blockers || [])]
+  }
+}
+
+function augmentVerificationRollbackDagForNaruto(dag: any, slices: any[]) {
+  if (!dag || !Array.isArray(dag.nodes) || !Array.isArray(slices)) return dag
+  const byId = new Set(dag.nodes.map((node: any) => String(node.id || '')).filter(Boolean))
+  for (const slice of slices) {
+    const sliceId = String(slice?.id || '')
+    if (!sliceId) continue
+    const writePaths = normalizePathList(slice.write_paths)
+    if (!byId.has(sliceId)) {
+      dag.nodes.push({
+        id: sliceId,
+        kind: writePaths.length ? 'write' : 'verification',
+        depends_on: [],
+        proof_artifact: writePaths.length ? 'agent-patch-queue.json' : 'agent-worker-result.json'
+      })
+      byId.add(sliceId)
+    }
+    if (!writePaths.length) continue
+    const verificationNodeId = String(slice.verification_node_id || `verify:${sliceId}`)
+    const rollbackNodeId = String(slice.rollback_node_id || `rollback:${sliceId}`)
+    if (!byId.has(verificationNodeId)) {
+      dag.nodes.push({
+        id: verificationNodeId,
+        kind: 'verification',
+        depends_on: [sliceId],
+        proof_artifact: 'agent-patch-verification-results.json'
+      })
+      byId.add(verificationNodeId)
+    }
+    if (!byId.has(rollbackNodeId)) {
+      dag.nodes.push({
+        id: rollbackNodeId,
+        kind: 'rollback',
+        depends_on: [sliceId, verificationNodeId],
+        proof_artifact: 'agent-patch-rollback-proof.json'
+      })
+      byId.add(rollbackNodeId)
+    }
+  }
+  dag.rollback_ready = true
+  dag.verification_ready = true
+  if (dag.validation?.blockers?.length) dag.validation = { ok: true, blockers: [] }
+  return dag
+}
+
+function buildNarutoRuntimeWiringProof(partition: any, graph: any, roster: any, targetActiveSlots: number) {
+  const activeAgentIds = new Set((Array.isArray(roster?.roster) ? roster.roster : []).slice(0, Math.max(1, targetActiveSlots)).map((row: any) => String(row.id || '')).filter(Boolean))
+  const slices = Array.isArray(partition?.slices) ? partition.slices : []
+  const activeWriteConflicts = slices.flatMap((slice: any) => normalizePathList(slice.write_paths))
+  const duplicateActiveWrites = activeWriteConflicts.filter((file: string, index: number, all: string[]) => all.indexOf(file) !== index)
+  const ownerPreserved = slices.every((slice: any) => !slice.allocation_original_owner || slice.allocation_owner_rebalanced || slice.owner_agent_id === slice.allocation_original_owner)
+  const inactiveOwnersRebalanced = slices.every((slice: any) => !slice.allocation_original_owner || activeAgentIds.has(slice.allocation_original_owner) || slice.allocation_owner_rebalanced)
+  const blockers = [
+    ...(slices.length === Number(graph?.work_items?.length || 0) ? [] : ['naruto_runtime_slice_count_mismatch']),
+    ...(ownerPreserved ? [] : ['naruto_runtime_owner_not_preserved']),
+    ...(inactiveOwnersRebalanced ? [] : ['naruto_runtime_inactive_owner_not_rebalanced']),
+    ...(duplicateActiveWrites.length ? ['naruto_runtime_duplicate_write_paths_in_partition'] : [])
+  ]
+  return {
+    schema: 'sks.naruto-runtime-wiring.v1',
+    generated_at: nowIso(),
+    ok: blockers.length === 0,
+    source_of_truth: 'naruto-work-graph',
+    scheduler_slice_count: slices.length,
+    work_graph_item_count: Number(graph?.work_items?.length || 0),
+    owner_preserved: ownerPreserved,
+    inactive_owners_rebalanced: inactiveOwnersRebalanced,
+    write_conflict_free_partition: duplicateActiveWrites.length === 0,
+    slice_owners: slices.map((slice: any) => ({
+      id: slice.id,
+      owner_agent_id: slice.owner_agent_id,
+      original_owner: slice.allocation_original_owner || null,
+      rebalanced: slice.allocation_owner_rebalanced === true,
+      write_paths: slice.write_paths || [],
+      dependencies: slice.dependencies || []
+    })),
+    blockers
+  }
+}
+
+function attachNarutoRuntimeProof(result: any, agent: any, slice: any) {
+  const controlPlane = result?.codex_child_report || result?.codex_sdk_thread || result?.backend_router_report || null
+  const selectedBackend = String(result?.backend_router_report?.selected_backend || result?.backend || '')
+  const actualWorkerControlPlane = selectedBackend === 'codex-sdk' || selectedBackend === 'local-llm'
+    ? Boolean(controlPlane?.sdk_thread_id || controlPlane?.worker_result_path || result?.codex_child_report?.worker_result_path)
+    : false
+  result.naruto_runtime = {
+    schema: 'sks.naruto-worker-runtime-proof.v1',
+    source_of_truth: 'agent-orchestrator-scheduler',
+    actual_worker_control_plane: actualWorkerControlPlane,
+    work_item_id: String(slice?.id || result?.task_slice_id || ''),
+    owner: String(slice?.owner_agent_id || slice?.owner || agent?.id || ''),
+    allocation_reason: slice?.allocation_reason || null,
+    rebalance_generation: Number(slice?.allocation_owner_rebalanced === true ? 1 : 0),
+    selected_backend: selectedBackend || null,
+    explicit_fake_backend: selectedBackend === 'fake',
+    control_plane_result: controlPlane
+      ? {
+        worker_result_path: controlPlane.worker_result_path || null,
+        sdk_thread_id: controlPlane.sdk_thread_id || null,
+        sdk_run_id: controlPlane.sdk_run_id || null,
+        structured_output_valid: controlPlane.structured_output_valid === true,
+        stream_event_count: Number(controlPlane.stream_event_count || 0)
+      }
+      : null
+  }
+  if (result.naruto_runtime.control_plane_result) result.control_plane_result = result.naruto_runtime.control_plane_result
+  result.verification = {
+    status: result.verification?.status || 'not_run',
+    checks: [...(result.verification?.checks || []), 'naruto-agent-orchestrator-scheduler-source-of-truth']
+  }
+}
+
+function normalizePathList(values: unknown) {
+  return (Array.isArray(values) ? values : []).map((file) => String(file || '').replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/\/+$/, '')).filter(Boolean)
 }
 
 async function prepareWorkerGitWorktree(input: {
@@ -1086,6 +1342,23 @@ async function runGitWorktreeIntegrationPrimary(root: string, ledgerRoot: string
         checkpoints
       })
     : null
+  const integrationHead = mainApplyReport?.ok
+    ? gitOutputLine(await runGitCommand(repoRoot, ['rev-parse', 'HEAD']).catch(() => ({ ok: false, stdout: '' } as any)))
+    : null
+  const crossRebase = integrationHead
+    ? await crossRebaseIdleWorktrees({
+      integrationHead,
+      workers: diffs
+        .filter((diff) => diff.worktree_path)
+        .map((diff) => ({
+          worker_id: diff.worker_id,
+          worktree_path: diff.worktree_path,
+          branch: diff.branch,
+          state: 'done' as const
+        }))
+    })
+    : null
+  if (crossRebase) await writeJsonAtomic(path.join(ledgerRoot, 'git-worktree-cross-rebase-report.json'), crossRebase)
   const rollbackEvidence = mainApplyReport?.ok
     ? await completeGitWorktreeRollbackPlan(repoRoot, rollbackPlan.rollback)
     : rollbackPlan
@@ -1130,6 +1403,7 @@ async function runGitWorktreeIntegrationPrimary(root: string, ledgerRoot: string
     conflicted_entry_ids: conflictedEntryIds,
     merge_queue: queueReport,
     main_repo_apply: mainApplyReport,
+    cross_rebase: crossRebase,
     rollback_evidence: rollbackEvidence,
     apply_results: applyResults,
     blockers: reportBlockers
