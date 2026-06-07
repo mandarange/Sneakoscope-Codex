@@ -45,7 +45,7 @@ const invariants = {
 
 const distHash = distHashValue();
 const gitCommit = gitHead();
-const manifestHash = fileHash('release-gates.json');
+const manifestHash = fileHash(fs.existsSync(path.join(root, 'release-gates.v2.json')) ? 'release-gates.v2.json' : 'release-gates.json');
 const packageScriptsHash = sha256(JSON.stringify(pkg.scripts || {}));
 const nodeVersion = process.version;
 const npmVersion = npmVersionValue();
@@ -144,6 +144,25 @@ emitGate('release:check:dynamic:execute', {
 // ---- helpers ----------------------------------------------------------------
 
 function loadManifest() {
+  const v2Path = path.join(root, 'release-gates.v2.json');
+  if (fs.existsSync(v2Path)) {
+    const parsed = JSON.parse(fs.readFileSync(v2Path, 'utf8'));
+    const releaseNodes = (Array.isArray(parsed.gates) ? parsed.gates : []).filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'));
+    const byId = new Map(releaseNodes.map((gate) => [gate.id, gate]));
+    const dynamic = buildGateManifest(releaseNodes.map((gate) => gate.id));
+    return {
+      schema: 'sks.release-gate-manifest.v1.from-v2',
+      gates: dynamic.gates.map((entry) => {
+        const node = byId.get(entry.id);
+        const resource = Array.isArray(node?.resource) ? node.resource.join(',') : '';
+        return {
+          ...entry,
+          affected_by: usefulCacheInputs(node?.cache?.inputs, entry.affected_by),
+          cost: node?.side_effect === 'real-env' || resource.includes('real') ? 'real' : entry.cost
+        };
+      })
+    };
+  }
   const p = path.join(root, 'release-gates.json');
   if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
   const dagSource = fs.readFileSync(path.join(root, 'src/scripts/release-parallel-check.ts'), 'utf8');
@@ -151,6 +170,12 @@ function loadManifest() {
   const releaseCheckIds = [...String(pkg.scripts?.['release:check'] || '').matchAll(/npm run ([^\s&]+)/g)].map((m) => m[1]);
   const ids = [...new Set([...dagIds, ...releaseCheckIds])].filter((id) => id && id !== 'build' && id !== 'release:check:parallel');
   return buildGateManifest(ids);
+}
+
+function usefulCacheInputs(inputs, fallback) {
+  if (!Array.isArray(inputs) || !inputs.length) return fallback;
+  if (inputs.some((input) => ['src/**', 'package.json', 'release-gates.v2.json', 'schemas/**'].includes(input))) return fallback;
+  return inputs;
 }
 
 function hashAffectedFiles(globs) {

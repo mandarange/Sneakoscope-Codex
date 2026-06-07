@@ -11,6 +11,7 @@ import { buildNarutoWorkGraph } from '../naruto/naruto-work-graph.js'
 import { buildNarutoRoleDistribution } from '../naruto/naruto-role-policy.js'
 import { decideNarutoConcurrency } from '../naruto/naruto-concurrency-governor.js'
 import { runNarutoActivePool, runNarutoRealActivePool } from '../naruto/naruto-active-pool.js'
+import { collectActualNarutoWorker, spawnActualNarutoWorker } from '../naruto/naruto-real-worker-runtime.js'
 import { buildNarutoVerificationDag } from '../naruto/naruto-verification-dag.js'
 import { buildNarutoGptFinalPack } from '../naruto/naruto-gpt-final-pack.js'
 import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
@@ -110,11 +111,29 @@ async function narutoRun(parsed: NarutoArgs) {
   const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || Math.max(governor.safe_active_workers, backendMinimum), safe.cap))
   const zellijVisiblePanes = Math.max(1, Math.min(activeSlots, governor.safe_zellij_visible_panes))
   const activePool = await runNarutoActivePool({ graph: workGraph, governor: { ...governor, safe_active_workers: activeSlots } })
+  const realRuntimeWorktreePolicy = schedulerBackend === 'fake'
+    ? {
+        mode: 'patch-envelope-only' as const,
+        required: false,
+        main_repo_root: worktreePolicy.main_repo_root,
+        worktree_root: null,
+        fallback_reason: 'fake_backend_fixture_skips_real_worktree_cleanup'
+      }
+    : worktreePolicy
   const realActivePool = await runNarutoRealActivePool({
     graph: workGraph,
     governor: { ...governor, safe_active_workers: activeSlots },
-    spawnWorker: async (item, placement) => ({ id: item.id, item, placement, started_at: Date.now() }),
-    collectWorker: async (handle) => ({ id: handle.id, ok: true, item: handle.item, placement: handle.placement, completed_at: Date.now() }),
+    spawnWorker: async (item, placement) => spawnActualNarutoWorker({
+      root,
+      missionId: mission.id,
+      item,
+      placement,
+      backend: schedulerBackend,
+      worktreePolicy: realRuntimeWorktreePolicy,
+      zellijSessionName: `sks-${mission.id}`,
+      visiblePaneCap: zellijVisiblePanes
+    }) as any,
+    collectWorker: async (handle) => collectActualNarutoWorker(handle as any),
     enqueueVerification: async () => undefined,
     updateDashboard: async () => undefined
   })
@@ -251,14 +270,20 @@ async function narutoRun(parsed: NarutoArgs) {
       completed_count: activePool.completed_count,
       real_runtime: {
         ok: realActivePool.ok,
+        active_cap: realActivePool.active_cap,
         max_observed_active_workers: realActivePool.max_observed_active_workers,
+        average_active_workers: realActivePool.average_active_workers,
+        active_pool_utilization: realActivePool.active_pool_utilization,
         refill_latency_ms_p95: realActivePool.refill_latency_ms_p95,
-        worker_lifecycle: realActivePool.worker_lifecycle
+        visible_workers: realActivePool.visible_workers,
+        headless_workers: realActivePool.headless_workers,
+        worker_lifecycle_count: realActivePool.worker_lifecycle.length,
+        worker_lifecycle_sample: realActivePool.worker_lifecycle.slice(0, 5)
       }
     },
     local_worker: localWorkerSummary,
     proof: result.proof?.status || 'missing',
-    run: result,
+    run: compactNarutoRunResult(result),
     zellij: null as any
   }
   summary.zellij = liveZellij
@@ -272,6 +297,37 @@ async function narutoRun(parsed: NarutoArgs) {
     if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok') console.log('Zellij: prepared ' + zellijVisiblePanes + ' visible active clone lane(s) in ' + summary.zellij.session_name + '; dashboard tracks ' + Math.max(0, activeSlots - zellijVisiblePanes) + ' headless active worker(s)')
     else if (summary.zellij?.ok) console.log('Zellij: optional live panes unavailable (' + ((summary.zellij.warnings || []).join('; ') || summary.zellij.capability?.status || 'unknown') + ')')
   })
+}
+
+function compactNarutoRunResult(result: any) {
+  return {
+    schema: result?.schema || 'sks.agent-run.v1',
+    ok: result?.ok === true,
+    mission_id: result?.mission_id || null,
+    route: result?.route || NARUTO_ROUTE,
+    backend: result?.backend || null,
+    target_active_slots: result?.target_active_slots ?? null,
+    proof: result?.proof ? {
+      ok: result.proof.ok === true,
+      status: result.proof.status || null,
+      blockers: result.proof.blockers || []
+    } : null,
+    scheduler: result?.scheduler ? {
+      state: {
+        completed_count: result.scheduler.state?.completed_count ?? result.scheduler.completed_count ?? null,
+        failed_count: result.scheduler.state?.failed_count ?? result.scheduler.failed_count ?? null,
+        blocked_count: result.scheduler.state?.blocked_count ?? result.scheduler.blocked_count ?? null,
+        max_observed_active_slots: result.scheduler.state?.max_observed_active_slots ?? result.scheduler.max_observed_active_slots ?? null
+      }
+    } : null,
+    artifacts: {
+      ledger_root: result?.ledger_root || null,
+      proof: 'agent-proof-evidence.json',
+      scheduler: 'agent-scheduler-state.json',
+      native_cli_session_swarm: 'agent-native-cli-session-swarm.json',
+      naruto_real_active_pool: 'naruto-real-active-pool.json'
+    }
+  }
 }
 
 function summarizeNarutoLocalWorkerResult(localWorker: any, result: any) {

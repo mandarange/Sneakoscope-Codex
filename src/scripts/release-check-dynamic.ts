@@ -15,16 +15,9 @@ const publish = args.includes('--publish');
 const baseArg = readArg(args, '--base');
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const dagSource = fs.readFileSync(path.join(root, 'src/scripts/release-parallel-check.ts'), 'utf8');
-const dagIds = [...dagSource.matchAll(/task\('([^']+)'/g)].map((m) => m[1]);
-const releaseCheckIds = [...String(pkg.scripts?.['release:check'] || '').matchAll(/npm run ([^\s&]+)/g)].map((m) => m[1]);
-const releaseGateIds = [...new Set([...dagIds, ...releaseCheckIds])].filter((id) => id && id !== 'build' && id !== 'release:check:parallel');
 
-// Prefer the checked-in manifest; rebuild from the live set if absent.
-let manifest;
-const manifestPath = path.join(root, 'release-gates.json');
-if (fs.existsSync(manifestPath)) manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-else manifest = buildGateManifest(releaseGateIds);
+// Prefer the checked-in v2 DAG manifest and normalize it for the legacy dynamic selector.
+const manifest = loadDynamicManifest();
 
 const changedFiles = detectChangedFiles(baseArg);
 const plan = selectGates(manifest.gates, changedFiles, { publish });
@@ -63,6 +56,41 @@ emitGate('release:check:dynamic', { selected: report.selected.length, skipped: r
 function readArg(list, name) {
   const i = list.indexOf(name);
   return i >= 0 ? list[i + 1] || null : null;
+}
+
+function loadDynamicManifest() {
+  const v2Path = path.join(root, 'release-gates.v2.json');
+  if (fs.existsSync(v2Path)) {
+    const parsed = JSON.parse(fs.readFileSync(v2Path, 'utf8'));
+    const releaseNodes = (Array.isArray(parsed.gates) ? parsed.gates : []).filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'));
+    const byId = new Map(releaseNodes.map((gate) => [gate.id, gate]));
+    const dynamic = buildGateManifest(releaseNodes.map((gate) => gate.id));
+    return {
+      schema: 'sks.release-gate-manifest.v1.from-v2',
+      gates: dynamic.gates.map((entry) => {
+        const node = byId.get(entry.id);
+        const resource = Array.isArray(node?.resource) ? node.resource.join(',') : '';
+        return {
+          ...entry,
+          affected_by: usefulCacheInputs(node?.cache?.inputs, entry.affected_by),
+          cost: node?.side_effect === 'real-env' || resource.includes('real') ? 'real' : entry.cost
+        };
+      })
+    };
+  }
+  const manifestPath = path.join(root, 'release-gates.json');
+  if (fs.existsSync(manifestPath)) return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const legacySource = fs.readFileSync(path.join(root, 'src/scripts/release-parallel-check.ts'), 'utf8');
+  const legacyIds = [...legacySource.matchAll(/task\('([^']+)'/g)].map((m) => m[1]);
+  const releaseCheckIds = [...String(pkg.scripts?.['release:check'] || '').matchAll(/npm run ([^\s&]+)/g)].map((m) => m[1]);
+  const ids = [...new Set([...legacyIds, ...releaseCheckIds])].filter((id) => id && id !== 'build' && id !== 'release:check:parallel');
+  return buildGateManifest(ids);
+}
+
+function usefulCacheInputs(inputs, fallback) {
+  if (!Array.isArray(inputs) || !inputs.length) return fallback;
+  if (inputs.some((input) => ['src/**', 'package.json', 'release-gates.v2.json', 'schemas/**'].includes(input))) return fallback;
+  return inputs;
 }
 function detectChangedFiles(base) {
   try {

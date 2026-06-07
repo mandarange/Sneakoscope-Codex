@@ -42,6 +42,8 @@ export interface NarutoWorkerHandle {
   item: NarutoWorkItem
   placement: NarutoWorkerPlacementDecision
   started_at: number
+  pid?: number | null
+  worker_artifact_dir?: string | null
 }
 
 export interface NarutoWorkerResult {
@@ -50,6 +52,8 @@ export interface NarutoWorkerResult {
   item: NarutoWorkItem
   placement: NarutoWorkerPlacementDecision
   completed_at: number
+  pid?: number | null
+  worker_artifact_dir?: string | null
   blockers?: string[]
 }
 
@@ -64,10 +68,17 @@ export interface NarutoRuntimeEvent {
 
 export interface NarutoRealActivePoolReport extends NarutoActivePoolReport {
   runtime_mode: 'real-worker-lifecycle'
+  active_cap: number
+  average_active_workers: number
+  active_pool_utilization: number
+  visible_workers: number
+  headless_workers: number
   refill_latency_ms_p95: number
   worker_lifecycle: Array<{
     work_item_id: string
     placement: 'zellij-pane' | 'headless'
+    pid?: number | null
+    worker_artifact_dir?: string | null
     started_at: number
     completed_at: number | null
     ok: boolean | null
@@ -109,7 +120,7 @@ export async function runNarutoRealActivePool(input: {
       if (placement.placement === 'zellij-pane') visibleRunning += 1
       const handle = await input.spawnWorker(item, placement)
       active.set(handle.id, handle)
-      lifecycle.push({ work_item_id: item.id, placement: placement.placement, started_at: handle.started_at, completed_at: null, ok: null })
+      lifecycle.push({ work_item_id: item.id, placement: placement.placement, pid: handle.pid || null, worker_artifact_dir: handle.worker_artifact_dir || null, started_at: handle.started_at, completed_at: null, ok: null })
       launched += 1
       await input.updateDashboard({ event_type: 'worker_spawned', work_item_id: item.id, active_workers: active.size, pending_workers: pending.length, completed_workers: completed.size, placement })
     }
@@ -120,7 +131,7 @@ export async function runNarutoRealActivePool(input: {
     }
     maxObserved = Math.max(maxObserved, active.size)
     timeline.push({ tick, active: active.size, pending: pending.length, completed: completed.size, event: launched ? 'refill' : 'wait' })
-    const done = [...active.values()].slice(0, Math.max(1, Math.ceil(active.size / 2)))
+    const done = await nextCollectableWorkers(active)
     if (!done.length) break
     for (const handle of done) {
       active.delete(handle.id)
@@ -131,6 +142,8 @@ export async function runNarutoRealActivePool(input: {
       if (row) {
         row.completed_at = result.completed_at
         row.ok = result.ok
+        row.pid = result.pid || row.pid || null
+        row.worker_artifact_dir = result.worker_artifact_dir || row.worker_artifact_dir || null
       }
       await input.updateDashboard({ event_type: 'worker_completed', work_item_id: result.item.id, active_workers: active.size, pending_workers: pending.length, completed_workers: completed.size, placement: result.placement })
       if (result.item.verification_required) {
@@ -144,16 +157,32 @@ export async function runNarutoRealActivePool(input: {
 
   await input.updateDashboard({ event_type: 'pool_drained', active_workers: active.size, pending_workers: pending.length, completed_workers: completed.size })
   const failedCount = [...completed.values()].filter((result) => !result.ok).length
+  const activeSamples = timeline.map((row) => row.active)
+  const averageActiveWorkers = activeSamples.length
+    ? activeSamples.reduce((sum, value) => sum + value, 0) / activeSamples.length
+    : 0
+  const saturatedSamples = timeline
+    .filter((row) => row.pending + row.active >= safeActiveWorkers)
+    .map((row) => row.active)
+  const averageSaturatedActiveWorkers = saturatedSamples.length
+    ? saturatedSamples.reduce((sum, value) => sum + value, 0) / saturatedSamples.length
+    : averageActiveWorkers
+  const utilizationDenominator = Math.max(1, safeActiveWorkers)
+  const activePoolUtilization = Math.min(1, averageSaturatedActiveWorkers / utilizationDenominator)
+  const enoughWorkForUtilization = input.graph.total_work_items >= safeActiveWorkers * 2
   const blockers = [
     ...(pending.length ? ['naruto_real_active_pool_pending_not_drained'] : []),
     ...(active.size ? ['naruto_real_active_pool_active_not_drained'] : []),
     ...(maxObserved > safeActiveWorkers ? ['naruto_real_active_pool_exceeded_safe_workers'] : []),
+    ...(enoughWorkForUtilization && maxObserved < Math.ceil(safeActiveWorkers * 0.8) ? ['naruto_real_active_pool_underutilized'] : []),
+    ...(enoughWorkForUtilization && activePoolUtilization < 0.8 ? ['naruto_real_active_pool_low_sustained_utilization'] : []),
     ...[...completed.values()].flatMap((result) => result.blockers || [])
   ]
   return {
     schema: 'sks.naruto-active-pool.v1',
     ok: blockers.length === 0,
     runtime_mode: 'real-worker-lifecycle',
+    active_cap: safeActiveWorkers,
     safe_active_workers: safeActiveWorkers,
     total_work_items: input.graph.total_work_items,
     completed_count: completed.size,
@@ -163,11 +192,26 @@ export async function runNarutoRealActivePool(input: {
     duplicate_execution_count: 0,
     conflict_items_enqueued: 0,
     max_observed_write_lease_conflicts: 0,
+    average_active_workers: Number(averageSaturatedActiveWorkers.toFixed(4)),
+    active_pool_utilization: Number(activePoolUtilization.toFixed(4)),
+    visible_workers: lifecycle.filter((row) => row.placement === 'zellij-pane').length,
+    headless_workers: lifecycle.filter((row) => row.placement === 'headless').length,
     refill_latency_ms_p95: percentile(refillLatencies, 0.95),
     worker_lifecycle: lifecycle,
     timeline,
     blockers
   }
+}
+
+async function nextCollectableWorkers(active: Map<string, NarutoWorkerHandle>): Promise<NarutoWorkerHandle[]> {
+  const handles = [...active.values()]
+  const handlesWithExit = handles.filter((handle) => typeof (handle as any).exit?.then === 'function')
+  if (!handlesWithExit.length) return handles.slice(0, Math.max(1, Math.ceil(active.size / 2)))
+  const completed = await Promise.race(handlesWithExit.map(async (handle) => {
+    await (handle as any).exit.catch(() => undefined)
+    return handle
+  }))
+  return completed ? [completed] : []
 }
 
 export async function runNarutoActivePool(input: {

@@ -11,8 +11,13 @@ const reportDir = path.join(root, '.sneakoscope', 'reports');
 const RELEASE_VERSION = pkg.version;
 const jsonPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.json`);
 const mdPath = path.join(reportDir, `release-readiness-${RELEASE_VERSION}.md`);
+const releaseGateManifest = readJson('release-gates.v2.json', { gates: [] });
+const releaseGateIds = new Set((Array.isArray(releaseGateManifest.gates) ? releaseGateManifest.gates : [])
+  .filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'))
+  .map((gate) => gate.id));
 const releaseParallelCheckSource = readText('src/scripts/release-parallel-check.ts', '');
 const releaseRealCheckSource = readText('src/scripts/release-real-check.ts', '');
+const hooksRuntimeSource = readText('src/core/hooks-runtime.ts', '');
 
 const checks = {
   runtime_no_src_mjs: scriptContains('release:check:parallel', 'runtime:no-src-mjs'),
@@ -210,7 +215,8 @@ const checks = {
   official_docs_compat: scriptContains('release:check', 'official-docs:compat'),
   update_check_function_only: fileContains('src/core/update-check.ts', 'pipeline_required: false')
     && fileContains('src/core/update-check.ts', "mode: 'function'")
-    && fileContains('src/core/hooks-runtime.ts', 'runSksUpdateCheck')
+    && fileContains('src/core/hooks-runtime.ts', 'UPDATE_CHECK_HOOK_INVOCATION_POLICY')
+    && !/\brunSksUpdateCheck\s*\(/.test(stripComments(hooksRuntimeSource))
 };
 const docs = runNodeScript('dist/scripts/docs-truthfulness-check.js');
 const officialDocs = runNodeScriptWithOkReportCache(
@@ -1005,12 +1011,18 @@ function scriptContains(name, needle) {
     return String(pkg.scripts?.[name] || '').includes(needle) || releaseParallelCheckSource.includes(needle);
   }
   if (name === 'release:check') {
-    return String(pkg.scripts?.[name] || '').includes(needle) || releaseParallelCheckSource.includes(needle);
+    return String(pkg.scripts?.[name] || '').includes(needle) || releaseParallelCheckSource.includes(needle) || releaseGateIds.has(needle);
   }
   if (name === 'release:real-check') {
     return String(pkg.scripts?.[name] || '').includes(needle) || releaseRealCheckSource.includes(needle);
   }
   return String(pkg.scripts?.[name] || '').includes(needle);
+}
+
+function stripComments(text) {
+  return String(text || '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
 function readText(rel, fallback = '') {

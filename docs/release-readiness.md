@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.10 is the slot-only Zellij and Naruto runtime stabilization patch for the 2.0 line. It makes compact slot panes the default visual worker surface, keeps the initial Zellij session main-only until the first visible worker is spawned, sends overflow workers to headless runtime evidence instead of opening more panes, and keeps dashboard panes opt-in.
+
+The 2.0.10 release gate adds compact slot renderer checks, slot-only UI checks, right-column headless overflow proof, real Naruto active-pool runtime proof, extreme real parallelism proof, worktree integration primary-runtime proof, and agent role-config repair proof. Publish readiness still requires a fresh full `release:check` stamp, version-truth alignment, release metadata, and the optional real-environment checks where required.
+
 SKS 2.0.9 is the dynamic Zellij worker-pane and Naruto extreme parallelism patch for the 2.0 line. It keeps `release:check` on the manifest-backed `release-gate-dag-runner`, adds dynamic right-column worker placement, and makes high-fanout Naruto runs use a bounded visible-pane cap with headless overflow workers.
 
 The 2.0.9 release gate adds initial-main-only Zellij proof, right-column manager state/schema checks, geometry proof, dynamic pane lifecycle checks, developer controls for worker focus/logs/dashboard/close-drained, real active-pool lifecycle checks, extreme parallelism checks, dynamic Zellij right-column checks, recursive release cache glob hashing, and full DAG coverage proof. Publish readiness still requires a fresh full release check, with `publish:dry` retaining the version/provenance/dist freshness/npm dry-run checks before a human runs the real publish.
@@ -211,15 +215,15 @@ npm run official-docs:compat
 npm run release:readiness
 ```
 
-`release:readiness` writes:
+`release:readiness` writes current-version reports such as:
 
-- `.sneakoscope/reports/release-readiness-2.0.9.json`
-- `.sneakoscope/reports/release-readiness-2.0.9.md`
-- `.sneakoscope/reports/all-feature-completion-2.0.9.json`
-- `.sneakoscope/reports/all-feature-completion-2.0.9.md`
-- `.sneakoscope/reports/official-docs-compat-2.0.9.json`
-- `.sneakoscope/reports/official-docs-compat-2.0.9.md`
-- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-2.0.9.json`
+- `.sneakoscope/reports/release-readiness-2.0.10.json`
+- `.sneakoscope/reports/release-readiness-2.0.10.md`
+- `.sneakoscope/reports/all-feature-completion-2.0.10.json`
+- `.sneakoscope/reports/all-feature-completion-2.0.10.md`
+- `.sneakoscope/reports/official-docs-compat-2.0.10.json`
+- `.sneakoscope/reports/official-docs-compat-2.0.10.md`
+- `.sneakoscope/reports/agent-real-codex-dynamic-smoke-2.0.10.json`
 - `.sneakoscope/reports/agent-real-codex-patch-envelope-smoke.json`
 - `.sneakoscope/reports/agent-real-codex-parallel-workers.json`
 - `.sneakoscope/reports/zellij-real-session-launch.json`

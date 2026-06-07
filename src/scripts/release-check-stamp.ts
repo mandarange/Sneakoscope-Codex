@@ -71,8 +71,11 @@ function gitCommit() {
 }
 
 function releaseGateHash(pkg) {
-  const gateManifest = fs.existsSync(path.join(root, 'release-gates.json')) ? fs.readFileSync(path.join(root, 'release-gates.json'), 'utf8') : '';
-  return sha256(`${pkg.scripts?.['release:check'] || ''}\0${pkg.scripts?.['prepublishOnly'] || ''}\0${gateManifest}`);
+  const manifests = ['release-gates.v2.json', 'release-gates.json'].map((rel) => {
+    const file = path.join(root, rel);
+    return fs.existsSync(file) ? `${rel}\0${fs.readFileSync(file, 'utf8')}` : `${rel}\0missing`;
+  }).join('\0');
+  return sha256(`${pkg.scripts?.['release:check'] || ''}\0${pkg.scripts?.['prepublishOnly'] || ''}\0${manifests}`);
 }
 
 function collectFiles(dir, out) {
@@ -98,6 +101,7 @@ function releaseRelevant(file) {
   if (file.startsWith('crates/sks-core/target/')) return false;
   if (/\.tgz$|\.log$/i.test(file)) return false;
   if (/^(package|package-lock)\.json$/.test(file)) return true;
+  if (/^release-gates(?:\.v2)?\.json$/.test(file)) return true;
   if (/^tsconfig.*\.json$/.test(file)) return true;
   if (/^(README|CHANGELOG|LICENSE)(\.md)?$/i.test(file)) return true;
   return [

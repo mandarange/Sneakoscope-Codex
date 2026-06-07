@@ -4,6 +4,24 @@
 
 
 
+
+## [2.0.10] - 2026-06-06
+
+### Added
+
+- Add slot-only Zellij UI gates for compact slot rendering, headless right-column overflow, and real right-column geometry proof.
+- Add real Naruto active-pool and extreme-parallelism runtime checks that spawn actual child workers and validate result artifacts.
+- Add primary-repo worktree integration runtime proof and agent role-config repair proof.
+
+### Fixed
+
+- Keep Zellij visible worker reservations capped before pane launch and close headless overflow worker state when runtime workers exit.
+- Keep Naruto active-pool collection tied to completed workers instead of arbitrary first-half selection.
+- Keep Git worktree integration applying validated worker diffs back to the primary repo with rollback hash evidence.
+- Keep release audit, dynamic release planning, dynamic execution, and release-check stamps aligned to `release-gates.v2.json`.
+- Keep mutation callsite coverage from missing `fs.promises.writeFile` calls.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [2.0.9] - 2026-06-06
 
 ### Fixed

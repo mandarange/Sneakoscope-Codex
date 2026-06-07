@@ -5,6 +5,7 @@ import { resolveProviderContext, type ProviderContext } from '../provider/provid
 import { runZellij, type ZellijCommandResult } from './zellij-command.js'
 import { extractZellijPaneIdFromOutput } from './zellij-lane-runtime.js'
 import { closeWorkerInRightColumn, prepareWorkerInRightColumn, recordWorkerPaneInRightColumn } from './zellij-right-column-manager.js'
+import type { SksZellijUiMode } from './zellij-ui-mode.js'
 
 export const ZELLIJ_WORKER_PANE_SCHEMA = 'sks.zellij-worker-pane.v1'
 export const ZELLIJ_WORKER_PANE_EVENT_SCHEMA = 'sks.zellij-worker-pane-event.v1'
@@ -14,6 +15,7 @@ export type ZellijWorkerPaneIdSource =
   | 'zellij_worker_list_panes'
   | 'zellij_worker_pane_stdout_missing'
   | 'zellij_worker_pane_launch_failed'
+  | 'zellij_worker_headless_overflow'
 
 export interface ZellijWorkerPaneOpenInput {
   root: string
@@ -43,6 +45,7 @@ export interface ZellijWorkerPaneOpenInput {
   rightColumnMode?: 'spawn-on-first-worker' | 'off'
   visiblePaneCap?: number
   dashboardSnapshot?: Record<string, unknown>
+  uiMode?: SksZellijUiMode
 }
 
 export interface ZellijWorkerPaneRecord {
@@ -76,7 +79,7 @@ export interface ZellijWorkerPaneRecord {
   stdout_log: string
   stderr_log: string
   parent_child_transport: 'worker-result-json-and-heartbeat'
-  scaling_primitive: 'native_cli_process_in_zellij_worker_pane'
+  scaling_primitive: 'native_cli_process_in_zellij_worker_pane' | 'native_cli_process_headless_with_slot_dashboard'
   command: string
   create_session: ZellijCommandResult | null
   launch: ZellijCommandResult | null
@@ -127,7 +130,8 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   sdkRunId?: string | null
   streamEventCount?: number
   structuredOutputValid?: boolean
-  blockers?: string[]
+    blockers?: string[]
+  scalingPrimitive?: ZellijWorkerPaneRecord['scaling_primitive']
 }): ZellijWorkerPaneRecord {
   const now = nowIso()
   const paneIdSource = input.paneIdSource || 'zellij_worker_pane_launch_failed'
@@ -138,7 +142,7 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     schema: ZELLIJ_WORKER_PANE_SCHEMA,
     generated_at: now,
     updated_at: now,
-    ok: blockers.length === 0 && isRealZellijWorkerPaneIdSource(paneIdSource) && Boolean(input.paneId),
+    ok: blockers.length === 0 && (paneIdSource === 'zellij_worker_headless_overflow' || (isRealZellijWorkerPaneIdSource(paneIdSource) && Boolean(input.paneId))),
     status: input.status || 'launching',
     mission_id: input.missionId,
     session_name: input.sessionName,
@@ -161,8 +165,8 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     stdout_log: input.stdoutLog,
     stderr_log: input.stderrLog,
     parent_child_transport: 'worker-result-json-and-heartbeat',
-    scaling_primitive: 'native_cli_process_in_zellij_worker_pane',
-    command: '<native-cli-worker-command>',
+    scaling_primitive: input.scalingPrimitive || 'native_cli_process_in_zellij_worker_pane',
+    command: String((input as any).workerCommand || '').includes('zellij-slot-pane') ? '<zellij-slot-pane-renderer-command>' : '<native-cli-worker-command>',
     create_session: input.createSession || null,
     launch: input.launch || null,
     pane_reconciliation: input.paneReconciliation || null,
@@ -205,6 +209,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
         cwd,
         worker: { slotId: input.slotId, generationIndex: input.generationIndex },
         visiblePaneCap: input.visiblePaneCap || 1,
+        uiMode: input.uiMode || 'compact-slots',
         dashboardSnapshot: {
           ...(input.dashboardSnapshot || {}),
           mode: String(input.dashboardSnapshot?.mode || 'naruto'),
@@ -213,12 +218,41 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
         }
       })
     : null
+  if (rightColumn?.placement === 'headless') {
+    const record = buildWorkerPaneArtifact({
+      ...input,
+      paneId: null,
+      paneIdSource: 'zellij_worker_headless_overflow',
+      createSession,
+      launch: null,
+      paneReconciliation: null,
+      directionRequested: 'right',
+      directionApplied: 'not_applied',
+      rightColumn: {
+        mode: 'spawn-on-first-worker',
+        focus_pane_id: null,
+        y_order: null
+      },
+      status: 'running',
+      providerContext,
+      serviceTier: input.serviceTier || providerContext.service_tier,
+      scalingPrimitive: 'native_cli_process_headless_with_slot_dashboard',
+      blockers: []
+    })
+    await writeWorkerPaneArtifact(root, record)
+    await appendWorkerPaneEvent(root, 'worker_headless_overflow', input, {
+      slot_id: input.slotId,
+      generation_index: input.generationIndex,
+      reason: `visible_pane_cap:${input.visiblePaneCap || 1}`
+    })
+    return record
+  }
   const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || 'running', input.worktree || null)
-  const directionRequested: 'right' | 'down' = rightColumn ? 'down' : 'right'
+  const directionRequested: 'right' | 'down' = rightColumn?.focusPaneId ? 'down' : 'right'
   const focus = rightColumn?.focusPaneId
     ? await focusZellijPaneById(input.sessionName, rightColumn.focusPaneId, cwd)
     : null
-  const newPaneArgs = ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, ...(rightColumn ? ['--near-current-pane'] : []), '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
+  const newPaneArgs = ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, ...(directionRequested === 'down' ? ['--near-current-pane'] : []), '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
   let launch = createSession.ok
     ? await runZellij(newPaneArgs, {
         cwd,
@@ -228,9 +262,9 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     : null
   let directionApplied: ZellijWorkerPaneRecord['direction_applied'] = launch?.ok ? directionRequested : 'not_applied'
   if (createSession.ok && launch && !launch.ok) {
-    const fallbackArgs = rightColumn
+    const fallbackArgs = rightColumn && directionRequested === 'down'
       ? ['--session', input.sessionName, 'action', 'new-pane', '--direction', 'down', '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
-      : ['--session', input.sessionName, 'action', 'new-pane', '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
+      : ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
     const fallback = await runZellij(fallbackArgs, {
       cwd,
       timeoutMs: 5000,
@@ -313,7 +347,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     provider_context: record.provider_context,
     direction_requested: record.direction_requested,
     direction_applied: record.direction_applied,
-    command: '<native-cli-worker-command>',
+    command: record.command,
     worker_artifact_dir: input.workerArtifactDir,
     worker_result_path: input.resultPath,
     heartbeat_path: input.heartbeatPath,

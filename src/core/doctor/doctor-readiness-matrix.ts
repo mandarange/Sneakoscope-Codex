@@ -49,6 +49,9 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   if (localModel.enabled === true && localStatus === 'enabled_unverified') warnings.add('local_llm_enabled_unverified')
   if (localModel.enabled === true && localStatus === 'degraded') warnings.add('local_llm_degraded')
   if (localModel.enabled === true && localStatus === 'blocked') warnings.add('local_llm_blocked_worker_tier_disabled')
+  const agentRoleConfig = input.agent_role_config || {}
+  if (agentRoleConfig.ok === false) blockers.add('agent_role_config_repair_failed')
+  if (Array.isArray(agentRoleConfig.missing) && agentRoleConfig.missing.length && agentRoleConfig.apply !== true) warnings.add('agent_role_config_missing_repair_available')
   const localCollaborationPolicy = resolveLocalCollaborationPolicy({ mode: input.local_collaboration?.mode || null })
   const gptFinalAvailable = input.local_collaboration?.gpt_final_arbiter_available === undefined
     ? codexBinOk
@@ -111,6 +114,7 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
       worker_tier_enabled: localModel.enabled === true && localStatus === 'verified',
       blockers: normalizeList(localModel.blockers)
     },
+    agent_role_config: agentRoleConfig,
     ready: blockers.size === 0 && cliReady,
     primary_blocker: [...blockers][0] || null,
     blockers: [...blockers],
