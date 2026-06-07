@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.14 is the quantum research runtime closure patch for the 2.0 line. It promotes Research from a linear final-report path into a stage-aware runtime with parallel source shards, source-ledger merging, claim/evidence matrix construction, repository-aware implementation blueprint densification, experiment planning, synthesis, and static plus Codex final-review evidence.
+
+The 2.0.14 release gate adds stage-cycle runtime blackbox checks, parallel source-shard proof, source-ledger merge checks, claim-builder checks, blueprint densifier checks, short-report rejection, complete-package fixture proof, final-reviewer blackbox proof, and `codex-sdk:research-pipeline` coverage for the new default cycle runner. Publish readiness still requires a fresh full `release:check` stamp, `publish:dry`, and operator-run npm publication after review.
+
 SKS 2.0.13 is the research pipeline quality-contract closure patch for the 2.0 line. It promotes Research from a report-only route into a handoff-ready pipeline with claim/evidence matrices, source-quality scoring, implementation blueprints, experiment plans, replication packs, falsification checks, and final-review evidence that can be validated before downstream implementation work.
 
 The 2.0.13 release gate adds research schema checks, `research:quality-gates`, `codex-sdk:research-pipeline`, expanded `release-gates.v2.json` coverage, and version/provenance alignment across Node, Rust, docs, and package metadata. Publish readiness still requires a fresh full `release:check` stamp, `publish:dry`, and operator-run npm publication after the pushed commit is reviewed.

@@ -1492,6 +1492,18 @@ export async function writeMockResearchResult(dir: any, plan: any) {
     evidence: ['mock research report', `mock research paper: ${paperArtifact}`, 'mock genius opinion summary', 'mock research source skill', 'mock layered source ledger', 'mock agent ledger', 'mock debate ledger', 'mock novelty ledger', 'mock falsification ledger'],
     notes: ['mock mode records the new contract but does not call a model or perform live web browsing']
   });
+  await writeJsonAtomic(path.join(dir, 'research-final-review.codex.json'), {
+    schema: 'sks.research-codex-final-review.v1',
+    reviewed_at: nowIso(),
+    verdict: 'approve',
+    unsupported_claim_ids: [],
+    missing_evidence: [],
+    blueprint_findings: ['mock complete package fixture has implementation blueprint sections'],
+    falsification_findings: ['mock complete package fixture has counterevidence and falsification cases'],
+    required_revisions: [],
+    confidence: 'high',
+    mock: true
+  });
   await writeResearchNativeAgentBatchCompletion(dir, plan);
   return evaluateResearchGate(dir);
 }

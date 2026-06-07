@@ -1,23 +1,114 @@
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
 import type { NarutoWorkGraph, NarutoWorkItem, NarutoWorkKind } from '../naruto/naruto-work-item.js'
+import { RESEARCH_SOURCE_LAYERS } from './research-source-shards.js'
 
 export const RESEARCH_WORK_GRAPH_ARTIFACT = 'research-work-graph.json'
+export const REQUIRED_SOURCE_SHARD_IDS = Object.freeze([
+  'source_shard_academic_literature',
+  'source_shard_official_government_data',
+  'source_shard_standards_primary_docs',
+  'source_shard_news_current_events',
+  'source_shard_public_discourse',
+  'source_shard_developer_practitioner',
+  'source_shard_counterevidence_factcheck',
+  'source_shard_local_project_evidence'
+])
 
-const STAGES: Array<{ id: string, title: string, kind: NarutoWorkKind, outputs: string[] }> = [
-  { id: 'research_source_quality', title: 'Source quality and layered retrieval audit', kind: 'research', outputs: ['source-ledger.json', 'source-quality-report.json'] },
-  { id: 'research_claim_matrix', title: 'Claim-evidence matrix and citation coverage', kind: 'research', outputs: ['claim-evidence-matrix.json'] },
-  { id: 'research_falsification', title: 'Counterevidence and falsification strengthening', kind: 'research', outputs: ['falsification-ledger.json'] },
-  { id: 'research_synthesis_report', title: 'Research report and manuscript synthesis', kind: 'research', outputs: ['research-report.md'] },
-  { id: 'research_blueprint', title: 'Implementation blueprint and handoff', kind: 'documentation', outputs: ['implementation-blueprint.json', 'implementation-blueprint.md', 'team-handoff-goal.md'] },
-  { id: 'research_experiment', title: 'Experiment plan and replication pack', kind: 'verification', outputs: ['experiment-plan.json', 'replication-pack.json'] },
-  { id: 'research_final_review', title: 'Final reviewer quality audit', kind: 'verification', outputs: ['research-final-review.json'] },
-  { id: 'research_gate_close', title: 'Research gate evaluation and completion output', kind: 'final_review_input_pack', outputs: ['research-gate.evaluated.json', 'research-gate.json'] }
-]
+type ResearchGraphStage = {
+  id: string
+  title: string
+  kind: NarutoWorkKind
+  stage_kind: string
+  layer_id?: string
+  outputs: string[]
+  dependencies: string[]
+  required?: boolean
+}
 
-function workItem(stage: { id: string, title: string, kind: NarutoWorkKind, outputs: string[] }, index: number, plan: any = null): NarutoWorkItem {
+function researchStages(): ResearchGraphStage[] {
+  const sourceShards = RESEARCH_SOURCE_LAYERS.map((layer) => ({
+    id: `source_shard_${layer.id}`,
+    title: `Source shard: ${layer.label}`,
+    kind: 'research' as NarutoWorkKind,
+    stage_kind: 'source_shard',
+    layer_id: layer.id,
+    dependencies: [],
+    outputs: [`research/cycle-\${cycle}/source-shards/${layer.id}.json`]
+  }))
+  const shardIds = sourceShards.map((stage) => stage.id)
+  return [
+    ...sourceShards,
+    {
+      id: 'source_ledger_merge',
+      title: 'Source-ledger partial merge',
+      kind: 'research',
+      stage_kind: 'source_merge',
+      dependencies: shardIds,
+      outputs: ['source-ledger.json', 'source-quality-report.json']
+    },
+    {
+      id: 'claim_matrix_build',
+      title: 'Claim-evidence matrix build from merged source shards',
+      kind: 'research',
+      stage_kind: 'claim_matrix_build',
+      dependencies: [...shardIds, 'source_ledger_merge'],
+      outputs: ['claim-evidence-matrix.json']
+    },
+    {
+      id: 'falsification',
+      title: 'Counterevidence and falsification stage',
+      kind: 'verification',
+      stage_kind: 'falsification',
+      dependencies: ['claim_matrix_build', 'source_shard_counterevidence_factcheck'],
+      outputs: ['falsification-ledger.json']
+    },
+    {
+      id: 'implementation_blueprint',
+      title: 'Concrete implementation blueprint and handoff',
+      kind: 'documentation',
+      stage_kind: 'implementation_blueprint',
+      dependencies: ['claim_matrix_build', 'source_shard_local_project_evidence'],
+      outputs: ['implementation-blueprint.json', 'implementation-blueprint.md', 'team-handoff-goal.md']
+    },
+    {
+      id: 'experiment_plan',
+      title: 'Experiment plan and replication pack',
+      kind: 'verification',
+      stage_kind: 'experiment_plan',
+      dependencies: ['implementation_blueprint', 'falsification'],
+      outputs: ['experiment-plan.json', 'experiment-plan.md', 'replication-pack.json']
+    },
+    {
+      id: 'synthesis',
+      title: 'Research report and manuscript synthesis',
+      kind: 'research',
+      stage_kind: 'synthesis',
+      dependencies: ['claim_matrix_build', 'falsification', 'implementation_blueprint', 'experiment_plan'],
+      outputs: ['research-report.md', 'research-paper.md', 'genius-opinion-summary.md', 'agent-ledger.json', 'debate-ledger.json', 'novelty-ledger.json']
+    },
+    {
+      id: 'final_review',
+      title: 'Static plus Codex/GPT research final reviewer',
+      kind: 'verification',
+      stage_kind: 'final_review',
+      dependencies: ['synthesis'],
+      outputs: ['research-final-review.static.json', 'research-final-review.codex.json', 'research-final-review.json']
+    },
+    {
+      id: 'verification',
+      title: 'Research gate evaluation and route finalization input',
+      kind: 'final_review_input_pack',
+      stage_kind: 'verification',
+      dependencies: ['final_review'],
+      outputs: ['research-gate.json', 'research-gate.evaluated.json']
+    }
+  ]
+}
+
+function workItem(stage: ResearchGraphStage, index: number, allStages: ResearchGraphStage[], plan: any = null): NarutoWorkItem & Record<string, unknown> {
   const missionPrefix = plan?.mission_id ? `.sneakoscope/missions/${plan.mission_id}/` : ''
-  return {
+  const item: NarutoWorkItem = {
     id: stage.id,
     kind: stage.kind,
     title: stage.title,
@@ -26,30 +117,41 @@ function workItem(stage: { id: string, title: string, kind: NarutoWorkKind, outp
       `${missionPrefix}research-plan.json`,
       `${missionPrefix}research-quality-contract.json`,
       `${missionPrefix}source-ledger.json`,
-      `${missionPrefix}claim-evidence-matrix.json`
+      `${missionPrefix}claim-evidence-matrix.json`,
+      `${missionPrefix}falsification-ledger.json`
     ],
     write_paths: [],
-    required_role: index < 4 ? 'research' : 'verifier',
+    required_role: index < RESEARCH_SOURCE_LAYERS.length ? 'research' : stage.kind === 'documentation' ? 'planner' : 'verifier',
     write_allowed: false,
     verification_required: true,
-    dependencies: index === 0 ? [] : [STAGES[index - 1]?.id].filter(Boolean) as string[],
-    can_run_in_parallel_with: STAGES.filter((candidate) => candidate.id !== stage.id).map((candidate) => candidate.id),
+    dependencies: stage.dependencies,
+    can_run_in_parallel_with: allStages.filter((candidate) => candidate.id !== stage.id && !stage.dependencies.includes(candidate.id)).map((candidate) => candidate.id),
     conflicts_with: [],
-    estimated_cost: { tokens: 4000, latency_ms: 60000, cpu_weight: 1, memory_mb: 256, gpu_weight: 0 },
+    estimated_cost: { tokens: stage.stage_kind === 'source_shard' ? 2500 : 4000, latency_ms: stage.stage_kind === 'source_shard' ? 30000 : 60000, cpu_weight: 1, memory_mb: 256, gpu_weight: 0 },
     lease_requirements: stage.outputs.map((artifact) => ({ path: `${missionPrefix}${artifact}`, kind: 'read' })),
-    acceptance: { requires_patch_envelope: false, requires_verification: true, requires_gpt_final: false },
+    acceptance: { requires_patch_envelope: false, requires_verification: true, requires_gpt_final: stage.stage_kind === 'final_review' },
     owner: null,
-    allocation_reason: 'Stage-aware read-only research pipeline work graph',
+    allocation_reason: 'Stage-aware read-only research pipeline work graph with source-layer shard parallelism',
     allocation_score: 1,
     allocation_hints: { domains: [stage.kind], write_paths: [], read_only_paths: stage.outputs } as any,
     lane: null,
     worktree: { mode: 'patch-envelope-only', required: false, allocation_required: false }
   }
+  return {
+    ...item,
+    stage_kind: stage.stage_kind,
+    layer_id: stage.layer_id || null,
+    output_artifacts: stage.outputs,
+    required: stage.required !== false
+  }
 }
 
 export function buildResearchWorkGraph(plan: any = null): NarutoWorkGraph {
-  const requestedClones = Math.max(8, Number(plan?.native_agent_plan?.session_count || 0))
-  const workItems = STAGES.map((stage, index) => workItem(stage, index, plan))
+  const stages = researchStages()
+  const requestedClones = Math.max(8, Number(plan?.native_agent_plan?.session_count || 0), RESEARCH_SOURCE_LAYERS.length)
+  const workItems = stages.map((stage, index) => workItem(stage, index, stages, plan))
+  const sourceShardIds = workItems.filter((item: any) => item.stage_kind === 'source_shard').map((item) => item.id)
+  const closeoutIds = workItems.filter((item: any) => item.stage_kind !== 'source_shard').map((item) => item.id)
   return {
     schema: 'sks.naruto-work-graph.v1',
     route: '$Naruto',
@@ -59,8 +161,8 @@ export function buildResearchWorkGraph(plan: any = null): NarutoWorkGraph {
     write_capable: false,
     work_items: workItems,
     active_waves: [
-      { wave_id: 'research-quality-wave', work_item_ids: workItems.slice(0, 4).map((item) => item.id), write_paths: [], conflict_count: 0 },
-      { wave_id: 'research-closeout-wave', work_item_ids: workItems.slice(4).map((item) => item.id), write_paths: [], conflict_count: 0 }
+      { wave_id: 'parallel-source-shard-wave', work_item_ids: sourceShardIds, write_paths: [], conflict_count: 0 },
+      { wave_id: 'research-closeout-wave', work_item_ids: closeoutIds, write_paths: [], conflict_count: 0 }
     ],
     mixed_work_kinds: [...new Set(workItems.map((item) => item.kind))],
     write_allowed_count: 0,

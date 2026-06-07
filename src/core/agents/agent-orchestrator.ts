@@ -212,7 +212,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     microWins: strategyCompiled.gate.micro_wins
   })
   if (opts.narutoWorkGraph?.work_items?.length) {
-    partition = applyNarutoWorkGraphToPartition(partition, opts.narutoWorkGraph, roster, targetActiveSlots)
+    partition = applyNarutoWorkGraphToPartition(partition, opts.narutoWorkGraph, roster, targetActiveSlots, prompt)
     augmentVerificationRollbackDagForNaruto(strategyCompiled.verification_rollback_dag, partition.slices)
   }
   await runAgentJanitor({ missionDir: dir, missionId, projectHash: namespace.root_hash })
@@ -616,7 +616,7 @@ function withFinalGptPatchEnvelopes(results: any[], patchEnvelopes: any[] = []) 
   return next
 }
 
-function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any, targetActiveSlots: number) {
+function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any, targetActiveSlots: number, parentPrompt = '') {
   const activeRoster = (Array.isArray(roster?.roster) ? roster.roster : []).slice(0, Math.max(1, targetActiveSlots))
   const activeAgentIds = new Set(activeRoster.map((row: any) => String(row.id || '')).filter(Boolean))
   const fallbackOwners = activeRoster.length ? activeRoster : [{ id: 'naruto_clone_001', role: 'verifier' }]
@@ -635,6 +635,7 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
     const targetPaths = normalizePathList(item.target_paths)
     const verificationNodeId = writePaths.length ? `verify:${sliceId}` : null
     const rollbackNodeId = writePaths.length ? `rollback:${sliceId}` : null
+    const parentObjective = normalizeWorkerPromptText(parentPrompt)
     return {
       id: sliceId,
       owner_agent_id: owner,
@@ -665,12 +666,15 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
       source_intelligence_refs: sourceIntelligenceRefs,
       goal_mode_ref: goalModeRef,
       strategy_refs: strategyRefs,
+      parent_prompt: parentObjective,
       max_attempts: 1,
       description: [
+        parentObjective ? `Parent Naruto objective:\n${parentObjective}` : null,
         String(item.title || item.id || 'Naruto work item'),
         `Naruto owner: ${owner}`,
         item.allocation_reason ? `Allocation: ${item.allocation_reason}` : null,
-        writePaths.length ? `Write paths: ${writePaths.join(', ')}` : 'Read-only or no-write work item.'
+        writePaths.length ? `Write paths: ${writePaths.join(', ')}` : 'Read-only or no-write work item.',
+        writePaths.length ? null : 'Read-only instruction: inspect the requested files/artifacts and do not run package scripts, build commands, tests, or temp-file-creating checks unless the parent objective explicitly requires them.'
       ].filter(Boolean).join('\n')
     }
   })
@@ -1692,9 +1696,13 @@ function buildDirectSdkWorkerPrompt(slice: any) {
     '',
     write.length
       ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}. Each patch envelope must include schema, source "model_authored", agent_id, session_id, slot_id, generation_index, task_slice_id, lease_id, allowed_paths, operations, and rationale. Each operation must include op, path, search, replace, content, and diff; use empty strings for operation fields that do not apply.`
-      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; do not report pre-existing repository dirtiness as changed_files.`,
+      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; inspect relevant files/artifacts, do not mutate files, do not create temporary/build outputs, do not run package scripts/build/test commands unless explicitly required, and do not report pre-existing repository dirtiness as changed_files.`,
     'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
   ].join('\n')
+}
+
+function normalizeWorkerPromptText(value: unknown) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 4000)
 }
 
 function buildDirectNoPatchReason(slice: any, opts: any) {

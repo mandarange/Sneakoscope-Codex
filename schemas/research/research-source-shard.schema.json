@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sks.research-source-shard-output.v1",
+  "type": "object",
+  "required": ["schema", "mission_id", "cycle", "layer_id", "queries", "sources", "blockers"],
+  "properties": {
+    "schema": { "const": "sks.research-source-shard-output.v1" },
+    "mission_id": { "type": "string" },
+    "cycle": { "type": "number" },
+    "layer_id": { "type": "string" },
+    "queries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["query", "rationale"],
+        "properties": {
+          "query": { "type": "string" },
+          "rationale": { "type": "string" }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "layer", "kind", "title", "locator", "publisher_or_author", "accessed_at", "reliability", "credibility", "stance", "claim_ids", "notes"],
+        "properties": {
+          "id": { "type": "string" },
+          "layer": { "type": "string" },
+          "kind": { "type": "string" },
+          "title": { "type": "string" },
+          "locator": { "type": "string" },
+          "publisher_or_author": { "type": "string" },
+          "published_at": { "type": "string" },
+          "accessed_at": { "type": "string" },
+          "reliability": { "type": "string" },
+          "credibility": { "type": "string" },
+          "stance": { "enum": ["supports", "undermines", "mixed", "context"] },
+          "claim_ids": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  }
+}

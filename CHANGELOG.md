@@ -4,6 +4,27 @@
 
 
 
+## [2.0.14] - 2026-06-07
+
+### Added
+
+- Real stage-aware research cycle runner.
+- Parallel source layer shard execution.
+- Source-ledger partial merge.
+- Claim matrix builder from source/novelty/falsification ledgers.
+- Concrete implementation blueprint densifier.
+- Codex/GPT research final reviewer.
+- Research blackbox gates.
+
+### Fixed
+
+- Research stage runner no longer only records placeholder stages.
+- Research final reviewer no longer static-only.
+- codex-sdk:research-pipeline now verifies real research package behavior.
+- Short summary reports are rejected by blackbox gate.
+
+
+
 ## [2.0.13] - 2026-06-07
 
 ### Added

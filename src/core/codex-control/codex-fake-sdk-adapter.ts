@@ -38,11 +38,11 @@ function fakeStructuredOutput(input: CodexTaskInput) {
       summary: unsafe
         ? 'Fake Codex SDK GPT final arbiter rejected an unsafe candidate for hermetic verification.'
         : 'Fake Codex SDK GPT final arbiter approved the candidate for hermetic verification.',
-      gpt_review_findings: unsafe ? [{ severity: 'high', message: 'unsafe candidate rejected' }] : [],
+      gpt_review_findings: unsafe ? [{ id: 'unsafe-candidate', severity: 'high', summary: 'unsafe candidate rejected' }] : [],
       accepted_patch_envelopes: unsafe ? [] : [],
       modified_patch_envelopes: [],
-      rejected_patch_envelopes: unsafe ? [{ reason: 'unsafe candidate' }] : [],
-      required_followup_work: unsafe ? [{ blocker: 'unsafe_candidate_patch' }] : [],
+      rejected_patch_envelopes: unsafe ? [{ id: 'unsafe-candidate', summary: 'unsafe candidate', patch_envelope_json: '{}' }] : [],
+      required_followup_work: unsafe ? [{ id: 'unsafe_candidate_patch', severity: 'high', summary: 'unsafe_candidate_patch' }] : [],
       verification_plan: ['schema validation', 'local collaboration final gate'],
       rollback_notes: [],
       blockers: unsafe ? ['unsafe_candidate_patch'] : [],

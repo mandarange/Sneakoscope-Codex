@@ -1430,7 +1430,10 @@
     {
       "id": "codex-sdk:research-pipeline",
       "command": "npm run codex-sdk:research-pipeline --silent",
-      "deps": [],
+      "deps": [
+        "research:complete-package-fixture",
+        "research:short-report-rejection"
+      ],
       "resource": [
         "network"
       ],
@@ -1457,9 +1460,7 @@
     {
       "id": "research:quality-contract",
       "command": "npm run research:quality-contract --silent",
-      "deps": [
-        "codex-sdk:research-pipeline"
-      ],
+      "deps": [],
       "resource": [
         "cpu-light",
         "fs-read"
@@ -1793,6 +1794,252 @@
       "resource": [
         "cpu-light",
         "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:report-quality",
+      "command": "npm run research:report-quality --silent",
+      "deps": [
+        "research:quality-gates"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:short-report-rejection",
+      "command": "npm run research:short-report-rejection --silent",
+      "deps": [
+        "research:report-quality"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:complete-package-fixture",
+      "command": "npm run research:complete-package-fixture --silent",
+      "deps": [
+        "research:report-quality"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:source-ledger-merge",
+      "command": "npm run research:source-ledger-merge --silent",
+      "deps": [
+        "research:work-graph"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:claim-builder",
+      "command": "npm run research:claim-builder --silent",
+      "deps": [
+        "research:source-ledger-merge"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:blueprint-densifier",
+      "command": "npm run research:blueprint-densifier --silent",
+      "deps": [
+        "research:implementation-blueprint",
+        "research:claim-builder"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:final-reviewer-blackbox",
+      "command": "npm run research:final-reviewer-blackbox --silent",
+      "deps": [
+        "research:final-reviewer",
+        "research:complete-package-fixture"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:stage-cycle-runtime-blackbox",
+      "command": "npm run research:stage-cycle-runtime-blackbox --silent",
+      "deps": [
+        "research:work-graph",
+        "research:source-ledger-merge",
+        "research:claim-builder",
+        "research:implementation-blueprint",
+        "research:final-reviewer"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 120000,

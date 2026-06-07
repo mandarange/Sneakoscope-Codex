@@ -1,6 +1,28 @@
 export const GPT_FINAL_ARBITER_RESULT_SCHEMA_ID = 'sks.gpt-final-arbiter-result.v1'
 export const GPT_FINAL_ARBITER_INPUT_SCHEMA = 'sks.gpt-final-arbiter-input.v1'
 
+const reviewItemSchema = {
+  type: 'object',
+  required: ['id', 'severity', 'summary'],
+  properties: {
+    id: { type: 'string' },
+    severity: { type: 'string', enum: ['low', 'medium', 'high'] },
+    summary: { type: 'string' }
+  },
+  additionalProperties: false
+} as const
+
+const patchDecisionSchema = {
+  type: 'object',
+  required: ['id', 'summary', 'patch_envelope_json'],
+  properties: {
+    id: { type: 'string' },
+    summary: { type: 'string' },
+    patch_envelope_json: { type: 'string' }
+  },
+  additionalProperties: false
+} as const
+
 export const gptFinalArbiterResultSchema = {
   type: 'object',
   required: [
@@ -18,20 +40,20 @@ export const gptFinalArbiterResultSchema = {
     'confidence'
   ],
   properties: {
-    schema: { const: GPT_FINAL_ARBITER_RESULT_SCHEMA_ID },
+    schema: { type: 'string', enum: [GPT_FINAL_ARBITER_RESULT_SCHEMA_ID] },
     status: { enum: ['approved', 'modified', 'rejected', 'needs_more_work'] },
     summary: { type: 'string' },
-    gpt_review_findings: { type: 'array', items: { type: 'object' } },
-    accepted_patch_envelopes: { type: 'array', items: { type: 'object' } },
-    modified_patch_envelopes: { type: 'array', items: { type: 'object' } },
-    rejected_patch_envelopes: { type: 'array', items: { type: 'object' } },
-    required_followup_work: { type: 'array', items: { type: 'object' } },
+    gpt_review_findings: { type: 'array', items: reviewItemSchema },
+    accepted_patch_envelopes: { type: 'array', items: patchDecisionSchema },
+    modified_patch_envelopes: { type: 'array', items: patchDecisionSchema },
+    rejected_patch_envelopes: { type: 'array', items: patchDecisionSchema },
+    required_followup_work: { type: 'array', items: reviewItemSchema },
     verification_plan: { type: 'array', items: { type: 'string' } },
     rollback_notes: { type: 'array', items: { type: 'string' } },
     blockers: { type: 'array', items: { type: 'string' } },
     confidence: { enum: ['low', 'medium', 'high'] }
   },
-  additionalProperties: true
+  additionalProperties: false
 } as const
 
 export function normalizeGptFinalArbiterResult(value: any) {
@@ -40,11 +62,11 @@ export function normalizeGptFinalArbiterResult(value: any) {
     schema: GPT_FINAL_ARBITER_RESULT_SCHEMA_ID,
     status,
     summary: String(value?.summary || defaultSummary(status)),
-    gpt_review_findings: array(value?.gpt_review_findings),
-    accepted_patch_envelopes: array(value?.accepted_patch_envelopes),
-    modified_patch_envelopes: array(value?.modified_patch_envelopes),
-    rejected_patch_envelopes: array(value?.rejected_patch_envelopes),
-    required_followup_work: array(value?.required_followup_work),
+    gpt_review_findings: reviewItems(value?.gpt_review_findings),
+    accepted_patch_envelopes: patchDecisionItems(value?.accepted_patch_envelopes),
+    modified_patch_envelopes: patchDecisionItems(value?.modified_patch_envelopes),
+    rejected_patch_envelopes: patchDecisionItems(value?.rejected_patch_envelopes),
+    required_followup_work: reviewItems(value?.required_followup_work),
     verification_plan: stringArray(value?.verification_plan),
     rollback_notes: stringArray(value?.rollback_notes),
     blockers: stringArray(value?.blockers),
@@ -62,12 +84,39 @@ function normalizeConfidence(value: unknown): 'low' | 'medium' | 'high' {
   return value === 'low' || value === 'medium' || value === 'high' ? value : 'medium'
 }
 
-function array(value: unknown): any[] {
-  return Array.isArray(value) ? value : []
+function reviewItems(value: unknown): Array<{ id: string; severity: 'low' | 'medium' | 'high'; summary: string }> {
+  if (!Array.isArray(value)) return []
+  return value.map((entry, index) => {
+    const raw: Record<string, unknown> = typeof entry === 'object' && entry !== null ? entry as Record<string, unknown> : { summary: entry }
+    return {
+      id: String(raw.id || raw.blocker || raw.reason || `item-${index + 1}`),
+      severity: normalizeSeverity(raw.severity),
+      summary: String(raw.summary || raw.message || raw.blocker || raw.reason || entry || '').trim()
+    }
+  }).filter((entry) => entry.summary)
+}
+
+function patchDecisionItems(value: unknown): Array<{ id: string; summary: string; patch_envelope_json: string }> {
+  if (!Array.isArray(value)) return []
+  return value.map((entry, index) => {
+    const raw: Record<string, unknown> = typeof entry === 'object' && entry !== null ? entry as Record<string, unknown> : { summary: entry }
+    const patch = typeof raw.patch_envelope_json === 'string'
+      ? raw.patch_envelope_json
+      : JSON.stringify(entry ?? {})
+    return {
+      id: String(raw.id || raw.schema || raw.reason || `patch-${index + 1}`),
+      summary: String(raw.summary || raw.reason || raw.rationale || raw.schema || entry || '').trim() || `Patch decision ${index + 1}`,
+      patch_envelope_json: patch
+    }
+  })
 }
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((entry) => String(entry || '').trim()).filter(Boolean) : []
+}
+
+function normalizeSeverity(value: unknown): 'low' | 'medium' | 'high' {
+  return value === 'low' || value === 'medium' || value === 'high' ? value : 'medium'
 }
 
 function defaultSummary(status: string) {
