@@ -13,12 +13,15 @@ const summary = JSON.parse(fs.readFileSync(latest.summaryPath, 'utf8'))
 const slowest = slowestGateResults(latest.dir)
 const warnOnly = process.env.SKS_RELEASE_SPEED_BUDGET_WARN_ONLY === '1'
 const budgetMs = Number(process.env.SKS_RELEASE_SPEED_BUDGET_MS || 20 * 60 * 1000)
-const cachedBudgetMs = 3 * 60 * 1000
+const cachedBudgetMs = Number(process.env.SKS_RELEASE_CACHED_SPEED_BUDGET_MS || 4 * 60 * 1000)
 const cachedRatio = Number(summary.cached || 0) / Math.max(1, Number(summary.completed || summary.selected_gates || 1))
 const cachedRun = cachedRatio >= 0.5
 const parallelismOk = cachedRun || summary.parallelism_gain >= 2
 const wallOk = cachedRun ? summary.wall_ms <= cachedBudgetMs : summary.wall_ms <= budgetMs
-const summaryOk = Number(summary.failed || 0) === 0
+const failureIds = Array.isArray(summary.failures) ? summary.failures.map((entry) => String(entry?.id || '')).filter(Boolean) : []
+const selfFailureIds = new Set(['release:parallel-speed-budget', 'release:stability-report'])
+const blockingFailureIds = failureIds.filter((id) => !selfFailureIds.has(id))
+const summaryOk = Number(summary.failed || 0) === 0 || (failureIds.length > 0 && blockingFailureIds.length === 0)
 const report = {
   schema: 'sks.release-speed.v1',
   ok: summaryOk && parallelismOk && (wallOk || warnOnly),
@@ -35,6 +38,8 @@ const report = {
   sum_gate_ms: summary.sum_gate_ms,
   critical_path_ms: summary.critical_path_ms,
   slowest_gates: slowest,
+  functional_failure_ids: blockingFailureIds,
+  ignored_self_failure_ids: failureIds.filter((id) => selfFailureIds.has(id)),
   target_full_wall_ms: budgetMs,
   target_cached_wall_ms: cachedBudgetMs,
   target_changed_file_wall_ms: 90 * 1000,

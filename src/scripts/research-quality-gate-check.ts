@@ -38,11 +38,11 @@ const checks = {
     assertFileIncludes('src/core/research.ts', ['replication_pack_missing']);
   },
   'final-reviewer': () => {
-    assertFileIncludes('src/core/research/research-final-reviewer.ts', ['RESEARCH_FINAL_REVIEW_ARTIFACT', 'approved', 'runResearchFinalReviewer']);
+    assertFileIncludes('src/core/research/research-final-reviewer.ts', ['RESEARCH_FINAL_REVIEW_ARTIFACT', 'approved', 'runResearchFinalReviewer', 'runResearchStaticFinalReview', 'runResearchCodexFinalReviewer']);
     assertFileIncludes('src/core/research.ts', ['research_final_review_not_approved']);
   },
   'work-graph': () => {
-    assertFileIncludes('src/core/research/research-work-graph.ts', ['RESEARCH_WORK_GRAPH_ARTIFACT', 'buildResearchWorkGraph', 'sks.naruto-work-graph.v1']);
+    assertFileIncludes('src/core/research/research-work-graph.ts', ['RESEARCH_WORK_GRAPH_ARTIFACT', 'buildResearchWorkGraph', 'sks.naruto-work-graph.v1', 'RESEARCH_SOURCE_LAYERS', 'source_shard_local_project_evidence']);
     assertFileIncludes('src/core/commands/research-command.ts', ['narutoWorkGraph: researchWorkGraph', 'readonly: true', 'runResearchCycle']);
   },
   'prompt-contract': () => {
@@ -58,6 +58,10 @@ const checks = {
     ]);
     assertFileIncludes('src/core/research/falsification.ts', ['falsification_cases_below_contract']);
   },
+  'report-quality': () => {
+    assertFileIncludes('src/core/research/research-report-quality.ts', ['analyzeResearchReportQuality', 'REQUIRED_RESEARCH_REPORT_HEADINGS', 'research_report_references_missing_source_ids']);
+    assertFileIncludes('src/core/research.ts', ['report_word_count', 'report_quality', 'research_report_too_short']);
+  },
   'schemas': () => {
     for (const file of [
       'schemas/research/research-quality-contract.schema.json',
@@ -66,8 +70,29 @@ const checks = {
       'schemas/research/implementation-blueprint.schema.json',
       'schemas/research/experiment-plan.schema.json',
       'schemas/research/replication-pack.schema.json',
-      'schemas/research/research-final-review.schema.json'
+      'schemas/research/research-final-review.schema.json',
+      'schemas/research/research-source-shard.schema.json'
     ]) assertGate(readText(file).includes('"$schema"'), `${file} missing JSON Schema header`);
+  },
+  'stage-cycle-runner': () => {
+    assertFileIncludes('src/core/research/research-cycle-runner.ts', ['readyStages', 'Promise.race', 'max_observed_parallel', 'critical_path_length']);
+    assertFileIncludes('src/core/research/research-stage-runner.ts', ['ResearchStageResult', 'runSourceShardStage', 'runFinalReviewStage', 'cycle-${input.cycle}', 'stages']);
+  },
+  'parallel-source-shards': () => {
+    assertFileIncludes('src/core/research/research-work-graph.ts', ['source_shard_academic_literature', 'source_shard_official_government_data', 'source_shard_counterevidence_factcheck', 'source_shard_local_project_evidence']);
+    assertFileIncludes('src/core/research/research-source-shards.ts', ['ResearchSourceShardOutput', 'validateResearchSourceShardOutput', 'source_shard_empty_without_blocker']);
+  },
+  'source-ledger-merge': () => {
+    assertFileIncludes('src/core/research/research-source-ledger-merge.ts', ['mergeResearchSourceShards', 'source-ledger.json', 'source-quality-report.json', 'dedupeSources']);
+  },
+  'claim-builder': () => {
+    assertFileIncludes('src/core/research/research-claim-builder.ts', ['buildClaimEvidenceMatrixFromSourceShards', 'unsupported_important_claim', 'counterevidence_ids']);
+  },
+  'blueprint-densifier': () => {
+    assertFileIncludes('src/core/research/implementation-blueprint-densifier.ts', ['densifyImplementationBlueprint', 'git', 'ls-files', 'existing_files', 'parallel_work_decomposition']);
+  },
+  'real-cycle-no-legacy-final-md': () => {
+    assertFileIncludes('src/core/commands/research-command.ts', ['--legacy-research-cycle', 'SKS_RESEARCH_LEGACY_CYCLE', 'const cycleResult = await runResearchCycle({', 'legacy_final_md_loop']);
   }
 };
 

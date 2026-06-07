@@ -10,4 +10,6 @@ The handoff surface is:
 - `team-handoff-goal.md`: follow-up goal text for the execution route.
 - `decision-log.md`: route-local decisions and constraints.
 
-Before acting on research output, the follow-up execution route should re-read `claim-evidence-matrix.json`, `source-quality-report.json`, `experiment-plan.json`, `replication-pack.json`, `research-final-review.json`, and `research-gate.evaluated.json`. A passed research gate means the artifact contract was satisfied; it does not mean the proposed implementation is already correct.
+Before acting on research output, the follow-up execution route should re-read `source-ledger.json`, `claim-evidence-matrix.json`, `source-quality-report.json`, `implementation-blueprint.json`, `experiment-plan.json`, `replication-pack.json`, `research-final-review.json`, and `research-gate.evaluated.json`.
+
+The handoff must contain implementation plan, claims, evidence, tests, and rollback guidance. `$Team` or `$Naruto` can consume `team-handoff-goal.md` as the next goal, then revalidate current code before modifying files. A passed research gate means the artifact contract was satisfied; it does not mean the proposed implementation is already correct.

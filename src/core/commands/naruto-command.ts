@@ -450,6 +450,7 @@ async function runNarutoControlPlaneSmoke(input: {
       item,
       placement,
       backend: 'fake',
+      parentPrompt: input.prompt,
       worktreePolicy: smokeWorktreePolicy,
       zellijSessionName: `sks-${input.missionId}`,
       visiblePaneCap: input.zellijVisiblePanes

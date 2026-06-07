@@ -34,7 +34,7 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
     persona_id: { type: 'string' },
     task_slice_id: { type: 'string' },
     status: { enum: ['done', 'blocked', 'failed'] },
-    backend: { enum: ['fake', 'process', 'codex-sdk', 'zellij', 'ollama'] },
+    backend: { enum: ['fake', 'process', 'codex-sdk', 'python-codex-sdk', 'zellij', 'ollama', 'local-llm'] },
     summary: { type: 'string' },
     findings: { type: 'array', items: { type: 'string' } },
     proposed_changes: { type: 'array', items: { type: 'string' } },

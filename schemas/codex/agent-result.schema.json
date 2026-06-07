@@ -49,7 +49,7 @@
     "persona_id": { "type": "string" },
     "task_slice_id": { "type": "string" },
     "status": { "type": "string", "enum": ["done", "blocked", "failed"] },
-    "backend": { "type": "string", "enum": ["fake", "process", "codex-exec", "tmux"] },
+    "backend": { "type": "string", "enum": ["fake", "process", "codex-sdk", "python-codex-sdk", "codex-exec", "zellij", "tmux", "ollama", "local-llm"] },
     "summary": { "type": "string" },
     "findings": { "type": "array", "items": { "type": "string" } },
     "proposed_changes": { "type": "array", "items": { "type": "string" } },

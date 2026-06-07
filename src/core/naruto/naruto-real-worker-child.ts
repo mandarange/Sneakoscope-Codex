@@ -31,7 +31,7 @@ async function main() {
       generationIndex: 1,
       sessionId: String(intake.item.id || ''),
       cwd: String(intake.worktree_path || process.cwd()),
-      prompt: buildNarutoWorkerPrompt(intake.item),
+      prompt: buildNarutoWorkerPrompt(intake.item, intake.parent_prompt),
       outputSchemaId: CODEX_AGENT_WORKER_RESULT_SCHEMA_ID,
       outputSchema: codexAgentWorkerResultSchema as Record<string, unknown>,
       sandboxPolicy: intake.item.write_allowed === true ? 'workspace-write' : 'read-only',
@@ -108,10 +108,12 @@ function backendPreference(value: unknown): CodexControlBackend[] {
   return ['codex-sdk']
 }
 
-function buildNarutoWorkerPrompt(item: any) {
+function buildNarutoWorkerPrompt(item: any, parentPrompt?: string) {
   const writeAllowed = item?.write_allowed === true
+  const parentObjective = normalizeWorkerPromptText(parentPrompt)
   return [
     'You are a Naruto route worker. Complete only this assigned work item and return JSON matching the required schema.',
+    parentObjective ? `Parent Naruto objective:\n${parentObjective}` : null,
     `Work item: ${String(item?.id || '')} ${String(item?.title || item?.kind || '')}`,
     `Role: ${String(item?.required_role || 'worker')}`,
     `Kind: ${String(item?.kind || 'verification')}`,
@@ -121,8 +123,15 @@ function buildNarutoWorkerPrompt(item: any) {
     writeAllowed
       ? 'If changes are needed, return model-authored patch_envelopes scoped to write paths.'
       : 'This is read-only work. Do not mutate files and return an empty patch_envelopes array.',
+    writeAllowed
+      ? null
+      : 'For read-only work, inspect requested files/artifacts only; do not run package scripts, build commands, tests, or temp-file-creating checks unless the parent objective explicitly requires them.',
     'Include verification checks, rollback notes, blockers, findings, and changed_files.'
-  ].join('\n')
+  ].filter(Boolean).join('\n')
+}
+
+function normalizeWorkerPromptText(value: unknown) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 4000)
 }
 
 main().then(() => {

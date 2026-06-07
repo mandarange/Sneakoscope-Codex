@@ -28,6 +28,7 @@ export async function spawnActualNarutoWorker(input: {
   item: NarutoWorkItem
   placement: NarutoWorkerPlacementDecision
   backend: string
+  parentPrompt?: string | null
   worktreePolicy?: any
   zellijSessionName?: string | null
   visiblePaneCap: number
@@ -54,6 +55,7 @@ export async function spawnActualNarutoWorker(input: {
     generated_at: nowIso(),
     mission_id: input.missionId,
     item: input.item,
+    parent_prompt: normalizeWorkerPromptText(input.parentPrompt),
     placement: input.placement,
     backend: input.backend,
     result_path: resultPath,
@@ -110,6 +112,10 @@ export async function collectActualNarutoWorker(handle: NarutoActualWorkerHandle
     worker_artifact_dir: handle.worker_artifact_dir,
     blockers
   }
+}
+
+function normalizeWorkerPromptText(value: unknown) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 4000)
 }
 
 function actualWorkerEntrypoint(): string {

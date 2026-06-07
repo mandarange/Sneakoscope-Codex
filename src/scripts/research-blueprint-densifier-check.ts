@@ -1,0 +1,23 @@
+#!/usr/bin/env node
+// @ts-nocheck
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js'
+
+const research = await importDist('core/research.js')
+const workGraph = await importDist('core/research/research-work-graph.js')
+const cycleRunner = await importDist('core/research/research-cycle-runner.js')
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-research-blueprint-'))
+const plan = await research.writeResearchPlan(dir, 'blueprint densifier blackbox', { missionId: 'M-BLUEPRINT' })
+const graph = workGraph.buildResearchWorkGraph(plan)
+await cycleRunner.runResearchCycle({ root: process.cwd(), dir, plan, graph, cycle: 1, backend: 'mock', timeoutMs: 120000, maxParallelStages: 4, mock: true })
+const blueprint = JSON.parse(fs.readFileSync(path.join(dir, 'implementation-blueprint.json'), 'utf8'))
+
+assertGate(blueprint.repository_aware === true, 'blueprint must be repository-aware', blueprint)
+assertGate((blueprint.existing_files || []).length > 0, 'blueprint must list concrete existing files', blueprint)
+assertGate((blueprint.sections || []).length >= 8, 'blueprint must keep required sections', blueprint)
+assertGate((blueprint.test_commands || []).some((cmd) => String(cmd).includes('research:stage-cycle-runtime-blackbox')), 'blueprint must include concrete test commands', blueprint)
+assertGate(fs.existsSync(path.join(dir, 'team-handoff-goal.md')), 'team handoff goal must exist')
+
+emitGate('research:blueprint-densifier', { dir, sections: blueprint.sections.length, files: blueprint.existing_files.length })

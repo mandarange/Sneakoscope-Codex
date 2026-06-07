@@ -30,7 +30,20 @@ const requiredReleasePresetIds = [
   'git:worktree-cross-rebase',
   'local-collab:worktree-gpt-final-apply-policy',
   'release:cache-glob-hashing',
-  'release:dag-full-coverage'
+  'release:dag-full-coverage',
+  'research:quality-contract',
+  'research:claim-matrix',
+  'research:source-quality-report',
+  'research:implementation-blueprint',
+  'research:experiment-plan',
+  'research:replication-pack',
+  'research:final-reviewer',
+  'research:work-graph',
+  'research:short-report-rejection',
+  'research:complete-package-fixture',
+  'research:stage-cycle-runtime-blackbox',
+  'research:final-reviewer-blackbox',
+  'codex-sdk:research-pipeline'
 ]
 const missing = legacyIds.filter((id) => !gateIds.has(id) && !allowlist.has(id))
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))

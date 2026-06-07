@@ -142,22 +142,63 @@ async function researchRun(args: any) {
   const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount: Math.max(desiredWorkItemCount, graphWorkItemCount), minimumWorkItems: Math.max(minimumWorkItems, Math.min(graphWorkItemCount, targetActiveSlots)), maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: true, profile, writeMode: writeMode as any, applyPatches: false, dryRunPatches, maxWriteAgents, roster: plan.native_agent_plan, routeCommand: 'sks research run', routeBlackboxKind: 'actual_research_command', narutoWorkGraph: researchWorkGraph });
   await writeJsonAtomic(path.join(dir, 'research-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
-  if (mock) {
-    let gate = await writeMockResearchResult(dir, plan);
-    const nativeGate = { ...(gate.gate || gate), native_agent_proof: nativeAgentRun.proof?.ok === true, agent_central_ledger: true };
-    await writeJsonAtomic(path.join(dir, 'research-gate.json'), nativeGate);
-    gate = { ...gate, gate: nativeGate, passed: nativeGate.passed };
-    const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'research-native-agent-run.json', 'research-gate.json', 'research-report.md', researchPaperArtifactForPlan(plan), 'source-ledger.json', 'agent-ledger.json', 'debate-ledger.json', 'completion-proof.json'], mock, command: { cmd: `sks research run ${id} --mock`, status: 0 } });
-    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true, implementation_allowed: false });
-    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, quality_metrics: gate.metrics || null, proof: proof.validation, native_agent_run: nativeAgentRun, research_work_graph: researchWorkGraph, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
-    console.log(`Mock research done: ${id}`);
-    console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
-    return;
-  }
   if (!nativeAgentRun.ok) {
     await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: await readJson(path.join(dir, 'research-gate.json'), null), artifacts: ['agents/agent-proof-evidence.json', 'research-native-agent-run.json', 'completion-proof.json'], statusHint: 'blocked', blockers: nativeAgentRun.proof?.blockers || ['native_agent_backend_blocked'], command: { cmd: `sks research run ${id}`, status: 2 } });
     await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_BLOCKED_NATIVE_AGENTS', questions_allowed: true, implementation_allowed: false, blocker: 'agents/agent-proof-evidence.json' });
     process.exitCode = 2;
+    return;
+  }
+  const legacyResearchCycle = flag(args, '--legacy-research-cycle') || process.env.SKS_RESEARCH_LEGACY_CYCLE === '1';
+  const sourceMutationBaseline = await researchCodeMutationSnapshot(root, id);
+  if (!legacyResearchCycle) {
+    const cycleResult = await runResearchCycle({
+      root,
+      dir,
+      plan,
+      graph: researchWorkGraph,
+      cycle: 1,
+      backend: mock ? 'mock' : 'codex-sdk',
+      timeoutMs: cycleTimeoutMs,
+      maxParallelStages: readBoundedIntegerFlag(args, '--research-stage-parallelism', 4, 1, 16),
+      mock
+    });
+    const mutation = await researchCodeMutationDelta(root, sourceMutationBaseline, id);
+    if (mutation.blocked) {
+      const blocker = {
+        schema_version: 1,
+        mission_id: id,
+        ts: nowIso(),
+        phase: 'RESEARCH_BLOCKED_CODE_MUTATION',
+        reason: 'Research mode must not modify repository source files. Only route-local mission artifacts are allowed.',
+        changed_paths: mutation.changed_paths,
+        allowed_prefixes: mutation.allowed_prefixes,
+        implementation_allowed: false
+      };
+      await writeJsonAtomic(path.join(dir, 'research-code-mutation-blocker.json'), blocker);
+      await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: await readJson(path.join(dir, 'research-gate.json'), null), artifacts: ['research-code-mutation-blocker.json', 'completion-proof.json'], statusHint: 'blocked', blockers: ['research_code_mutation_detected'], command: { cmd: `sks research run ${id}`, status: 2 } });
+      await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_BLOCKED_CODE_MUTATION', questions_allowed: true, implementation_allowed: false, blocker: 'research-code-mutation-blocker.json' });
+      process.exitCode = 2;
+      return;
+    }
+    const gate = await evaluateResearchGate(dir);
+    const passed = cycleResult.status === 'passed' && gate.passed === true;
+    const proof = await maybeFinalizeRoute(root, {
+      missionId: id,
+      route: '$Research',
+      gateFile: 'research-gate.json',
+      gate: gate.gate || gate,
+      artifacts: ['agents/agent-proof-evidence.json', 'research-native-agent-run.json', 'research-cycle-runner.json', 'research-gate.json', 'research-report.md', researchPaperArtifactForPlan(plan), 'source-ledger.json', 'claim-evidence-matrix.json', 'implementation-blueprint.json', 'team-handoff-goal.md', 'completion-proof.json'],
+      statusHint: passed ? undefined : 'blocked',
+      blockers: passed ? [] : [...(cycleResult.blockers || []), ...(gate.reasons || [])],
+      mock,
+      command: { cmd: `sks research run ${id}${mock ? ' --mock' : ''}`, status: passed ? 0 : 2 }
+    });
+    await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: passed ? 'RESEARCH_DONE' : 'RESEARCH_BLOCKED_STAGE_CYCLE', questions_allowed: true, implementation_allowed: false });
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: passed ? 'research.done' : 'research.stage_cycle.blocked', cycle: 1, cycle_status: cycleResult.status });
+    await enforceRetention(root).catch(() => {});
+    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1', ok: proof.ok && passed, mission_id: id, gate, quality_metrics: gate.metrics || null, proof: proof.validation, native_agent_run: nativeAgentRun, research_work_graph: researchWorkGraph, research_cycle: cycleResult, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
+    printResearchCompletion(id, root, dir, plan, gate);
+    if (!passed) process.exitCode = 2;
     return;
   }
   const codex = await getCodexInfo();
@@ -181,12 +222,10 @@ async function researchRun(args: any) {
   }
   let last = '';
   const researchCodexArgs = ['-c', 'service_tier="fast"', '-c', 'model_reasoning_effort="xhigh"'];
-  const sourceMutationBaseline = await researchCodeMutationSnapshot(root, id);
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
     const cycleDir = path.join(dir, 'research', `cycle-${cycle}`);
     const outputFile = path.join(cycleDir, 'final.md');
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.start', cycle, timeoutMinutes: cycleTimeoutMinutes, profile, enforced_reasoning_effort: 'xhigh' });
-    await runResearchCycle(dir, researchWorkGraph, { cycle, status: 'codex_research_cycle_started' });
+    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.legacy_cycle.start', cycle, timeoutMinutes: cycleTimeoutMinutes, profile, enforced_reasoning_effort: 'xhigh', legacy_final_md_loop: true });
     const prompt = buildResearchPrompt({ id, mission, plan, cycle, previous: last });
     const result = await runCodexExec({ root, prompt, outputFile, json: true, profile, extraArgs: researchCodexArgs, logDir: cycleDir, timeoutMs: cycleTimeoutMs });
     await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
@@ -221,7 +260,7 @@ async function researchRun(args: any) {
       await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.done', cycle });
       await enforceRetention(root).catch(() => {});
       if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, quality_metrics: gate.metrics || null, proof: proof.validation, research_work_graph: researchWorkGraph, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
-      console.log(`Research done: ${id}`);
+      printResearchCompletion(id, root, dir, plan, gate);
       return;
     }
   }
@@ -229,6 +268,21 @@ async function researchRun(args: any) {
   await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: gate.gate || gate, artifacts: ['research-gate.json', 'completion-proof.json'], statusHint: 'blocked', blockers: ['research_max_cycles_without_consensus'], command: { cmd: `sks research run ${id}`, status: 2 } });
   await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_PAUSED_MAX_CYCLES', questions_allowed: true, implementation_allowed: false });
   console.log(`Research paused after max cycles without unanimous agent consensus: ${id}`);
+}
+
+function printResearchCompletion(id: string, root: string, dir: string, plan: any, gate: any) {
+  const metrics = gate?.metrics || {};
+  const rel = (artifact: string) => path.relative(root, path.join(dir, artifact));
+  console.log(`Research done: ${id}`);
+  console.log(`Report: ${rel('research-report.md')}`);
+  console.log(`Paper: ${rel(researchPaperArtifactForPlan(plan))}`);
+  console.log(`Implementation blueprint: ${rel('implementation-blueprint.json')}`);
+  console.log(`Claim-evidence matrix: ${rel('claim-evidence-matrix.json')}`);
+  console.log(`Experiment plan: ${rel('experiment-plan.json')}`);
+  console.log(`Replication pack: ${rel('replication-pack.json')}`);
+  console.log(`Gate: ${gate?.passed ? 'passed' : 'blocked'}`);
+  console.log(`Quality: ${metrics.source_entries_total_with_counterevidence ?? metrics.source_entries ?? 0} sources / ${metrics.source_layers_covered ?? 0} layers / ${metrics.key_claims ?? 0} key claims / ${metrics.falsification_cases ?? 0} falsification cases`);
+  console.log(`Handoff: ${rel('team-handoff-goal.md')}`);
 }
 
 async function researchStatus(args: any) {
