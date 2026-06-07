@@ -4,6 +4,17 @@
 
 
 
+## [2.0.13] - 2026-06-07
+
+### Added
+
+- Add Research quality contract artifacts, claim-evidence matrix, source quality report, implementation blueprint, experiment plan, replication pack, final reviewer, and stage-aware research work graph.
+- Add Research artifact JSON Schemas, docs, package scripts, and release DAG gates for the 2.0.13 research pipeline closure.
+
+### Fixed
+
+- Harden Research gate evaluation so short reports, thin source coverage, missing counterevidence, unsupported key claims, missing blueprints, missing replication artifacts, and unapproved final reviews keep the gate blocked.
+
 
 
 ## [2.0.12] - 2026-06-07

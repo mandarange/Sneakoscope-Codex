@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/research/implementation-blueprint.schema.json",
+  "title": "SKS Research Implementation Blueprint",
+  "type": "object",
+  "required": ["schema", "generated_at", "prompt", "implementation_allowed_in_research", "handoff_route", "sections"],
+  "properties": {
+    "schema": { "const": "sks.research-implementation-blueprint.v1" },
+    "generated_at": { "type": "string" },
+    "prompt": { "type": "string" },
+    "implementation_allowed_in_research": { "type": "boolean" },
+    "handoff_route": { "type": "string" },
+    "sections": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "detail", "acceptance_checks"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "detail": { "type": "string" },
+          "acceptance_checks": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

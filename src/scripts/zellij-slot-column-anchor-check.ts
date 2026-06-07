@@ -27,6 +27,24 @@ const roster = renderZellijSlotColumnAnchor({
     }
   ]
 })
+const overflow = renderZellijSlotColumnAnchor({
+  activeWorkers: 6,
+  visiblePaneCap: 5,
+  headlessWorkers: 1,
+  queueDepth: 0,
+  mode: 'compact-slots',
+  workerRows: [
+    {
+      slotId: 'slot-009',
+      generationIndex: 1,
+      placement: 'headless',
+      status: 'running',
+      backend: 'local-llm',
+      task: 'Waiting for a visible slot pane',
+      heartbeatAgeMs: 1200
+    }
+  ]
+})
 const command = buildZellijSlotColumnAnchorCommand({
   nodePath: '/usr/bin/node',
   cliPath: '/repo/dist/bin/sks.js',
@@ -35,11 +53,14 @@ const command = buildZellijSlotColumnAnchorCommand({
   artifactRoot: '/repo/.sneakoscope/missions/M-check/agents',
   watch: true
 })
-const ok = rendered === 'SLOTS active 3/8 · headless 12 · q 44'
+const ok = rendered.includes('SLOTS active 3/8 · headless 12 · q 44')
+  && rendered.includes('visible slot panes stack below this anchor')
   && roster.includes('SLOTS active 1/5 · headless 0 · q 0')
-  && roster.includes('slot-004 g1 running codex-sdk')
-  && roster.includes('Inspect Zellij slot UI assignment')
+  && roster.includes('visible slot panes stack below this anchor')
+  && !roster.includes('slot-004 g1 running codex-sdk')
+  && overflow.includes('slot-009 g1 running local-llm')
+  && overflow.includes('Waiting for a visible slot pane')
   && command.includes('zellij-slot-column-anchor')
   && command.includes('--watch')
-assertGate(ok, 'Zellij slot-column anchor must render compact SLOTS header plus live worker rows and build the CLI command', { rendered, roster, command })
-emitGate('zellij:slot-column-anchor', { rendered, roster, command })
+assertGate(ok, 'Zellij slot-column anchor must stay an anchor while slot workers render in dedicated stacked panes', { rendered, roster, overflow, command })
+emitGate('zellij:slot-column-anchor', { rendered, roster, overflow, command })

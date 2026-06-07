@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/research/research-quality-contract.schema.json",
+  "title": "SKS Research Quality Contract",
+  "type": "object",
+  "required": [
+    "schema",
+    "min_sources_total",
+    "min_source_layers_covered",
+    "min_counterevidence_sources",
+    "min_trianguled_claims",
+    "min_key_claims",
+    "min_implementation_blueprint_sections",
+    "min_falsification_cases",
+    "min_experiment_steps",
+    "min_report_words",
+    "required_artifacts"
+  ],
+  "properties": {
+    "schema": { "const": "sks.research-quality-contract.v1" },
+    "min_sources_total": { "type": "integer", "minimum": 1 },
+    "min_source_layers_covered": { "type": "integer", "minimum": 1 },
+    "min_counterevidence_sources": { "type": "integer", "minimum": 1 },
+    "min_trianguled_claims": { "type": "integer", "minimum": 1 },
+    "min_key_claims": { "type": "integer", "minimum": 1 },
+    "min_implementation_blueprint_sections": { "type": "integer", "minimum": 1 },
+    "min_falsification_cases": { "type": "integer", "minimum": 1 },
+    "min_experiment_steps": { "type": "integer", "minimum": 1 },
+    "min_report_words": { "type": "integer", "minimum": 1 },
+    "required_artifacts": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": true
+}

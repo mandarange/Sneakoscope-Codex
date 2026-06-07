@@ -33,3 +33,11 @@ The earlier hard-blocked state is superseded. The implementation now includes ba
 - Outcome: Completed targeted hybrid local-model routing repair.
 - Issue recorded: The stored disabled local-model config made one-off explicit local backend activation behave like a hard blocker. The fix keeps default/off behavior intact while allowing explicit run activation, and preserves `SKS_OLLAMA_WORKERS=0` as the hard force-off.
 - Verification: `npm run build --silent`; `node --test test/unit/ollama-worker-config.test.mjs test/unit/native-worker-backend-router.test.mjs test/unit/agent-command-surface.test.mjs test/unit/team-agent-prompt-spec.test.mjs`; `node dist/bin/sks.js wiki validate .sneakoscope/wiki/context-pack.json`.
+
+## 2026-06-07 Qwen3.6 MTP Local Server Reflection
+
+- Mission: M-20260607-220643-6671
+- Route: Team
+- Outcome: Completed local MTP runtime activation through `llama-server`.
+- Issue recorded: Ollama 0.30.4 could host the GGUF but did not expose an MTP/speculative decoding flag, so enabling MTP required switching SKS to an OpenAI-compatible `llama-server` endpoint with `--spec-type draft-mtp`.
+- Verification: `launchctl` service state checked for `com.sneakoscope.llama-server-qwen36-mtp`; `llama-server` stderr contained `adding speculative implementation 'draft-mtp'`, `speculative decoding context initialized`, and `thinking = 0`; `/v1/chat/completions` returned `READY`; `sks with-local-llm status --json` reported `status: verified`.

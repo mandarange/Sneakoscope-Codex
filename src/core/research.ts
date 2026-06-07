@@ -3,6 +3,19 @@ import { appendJsonlBounded, nowIso, readJson, readText, writeJsonAtomic, writeT
 import { OUTCOME_RUBRIC } from './proof-field.js';
 import { RESEARCH_AGENT_PERSONA_CONTRACT, validateResearchAgentPersonas } from './recallpulse.js';
 import { appendAgentLedgerEvent, initializeAgentCentralLedger } from './agents/agent-central-ledger.js';
+import { CLAIM_EVIDENCE_MATRIX_ARTIFACT, buildClaimEvidenceMatrixFromLedgers, defaultClaimEvidenceMatrix, readClaimEvidenceMatrix, validateClaimEvidenceMatrix, writeClaimEvidenceMatrix } from './research/claim-evidence-matrix.js';
+import { EXPERIMENT_PLAN_JSON_ARTIFACT, EXPERIMENT_PLAN_MARKDOWN_ARTIFACT, defaultExperimentPlan, readExperimentPlan, validateExperimentPlan, writeExperimentPlan } from './research/experiment-plan.js';
+import { IMPLEMENTATION_BLUEPRINT_ARTIFACT, defaultImplementationBlueprint, readImplementationBlueprint, validateImplementationBlueprint, writeImplementationBlueprint } from './research/implementation-blueprint.js';
+import { IMPLEMENTATION_BLUEPRINT_MARKDOWN_ARTIFACT, renderImplementationBlueprintMarkdown } from './research/implementation-blueprint-markdown.js';
+import { REPLICATION_PACK_ARTIFACT, defaultReplicationPack, readReplicationPack, validateReplicationPack, writeReplicationPack } from './research/replication-pack.js';
+import { RESEARCH_QUALITY_CONTRACT_ARTIFACT, DEFAULT_RESEARCH_QUALITY_CONTRACT, readResearchQualityContract, writeResearchQualityContract } from './research/research-quality-contract.js';
+import { RESEARCH_FINAL_REVIEW_ARTIFACT, readResearchFinalReview, runResearchFinalReviewer } from './research/research-final-reviewer.js';
+import { SOURCE_QUALITY_REPORT_ARTIFACT, readSourceQualityReport, writeSourceQualityReport } from './research/source-quality-report.js';
+import { analyzeResearchReportQuality, countWords } from './research/research-report-quality.js';
+import { validateFalsificationCoverage } from './research/falsification.js';
+import { writeResearchHandoffArtifacts } from './research/research-handoff.js';
+import { RESEARCH_WORK_GRAPH_ARTIFACT, writeResearchWorkGraph } from './research/research-work-graph.js';
+import { researchPromptContractText, validateResearchPromptContract } from './research/research-prompt-contract.js';
 
 export const RESEARCH_PAPER_ARTIFACT = 'research-paper.md';
 export const RESEARCH_SOURCE_SKILL_ARTIFACT = 'research-source-skill.md';
@@ -260,6 +273,7 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
     created_at: createdAt,
     methodology: opts.autoresearch ? 'native-agent-autoresearch-batch-frontier-loop' : 'native-agent-research-council-frontier-discovery-loop',
     paper_artifact: paperArtifact,
+    quality_contract: DEFAULT_RESEARCH_QUALITY_CONTRACT,
     native_agent_plan: nativeAgentPlan,
     agent_sessions: nativeAgentPlan.personas,
     agent_batches: nativeAgentPlan.batches,
@@ -268,7 +282,17 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
       research_paper: paperArtifact,
       legacy_research_paper: RESEARCH_PAPER_ARTIFACT,
       genius_opinion_summary: RESEARCH_GENIUS_SUMMARY_ARTIFACT,
-      research_source_skill: RESEARCH_SOURCE_SKILL_ARTIFACT
+      research_source_skill: RESEARCH_SOURCE_SKILL_ARTIFACT,
+      quality_contract: RESEARCH_QUALITY_CONTRACT_ARTIFACT,
+      claim_evidence_matrix: CLAIM_EVIDENCE_MATRIX_ARTIFACT,
+      source_quality_report: SOURCE_QUALITY_REPORT_ARTIFACT,
+      implementation_blueprint: IMPLEMENTATION_BLUEPRINT_ARTIFACT,
+      implementation_blueprint_markdown: IMPLEMENTATION_BLUEPRINT_MARKDOWN_ARTIFACT,
+      experiment_plan: EXPERIMENT_PLAN_JSON_ARTIFACT,
+      experiment_plan_markdown: EXPERIMENT_PLAN_MARKDOWN_ARTIFACT,
+      replication_pack: REPLICATION_PACK_ARTIFACT,
+      final_review: RESEARCH_FINAL_REVIEW_ARTIFACT,
+      research_work_graph: RESEARCH_WORK_GRAPH_ARTIFACT
     },
     objective: 'Find the shortest useful mechanism that can be falsified or applied, grounded in maximum available source retrieval rather than broad summary.',
     execution_policy: {
@@ -379,6 +403,16 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
       paperArtifact,
       RESEARCH_GENIUS_SUMMARY_ARTIFACT,
       RESEARCH_SOURCE_SKILL_ARTIFACT,
+      RESEARCH_QUALITY_CONTRACT_ARTIFACT,
+      CLAIM_EVIDENCE_MATRIX_ARTIFACT,
+      SOURCE_QUALITY_REPORT_ARTIFACT,
+      IMPLEMENTATION_BLUEPRINT_ARTIFACT,
+      IMPLEMENTATION_BLUEPRINT_MARKDOWN_ARTIFACT,
+      EXPERIMENT_PLAN_JSON_ARTIFACT,
+      EXPERIMENT_PLAN_MARKDOWN_ARTIFACT,
+      REPLICATION_PACK_ARTIFACT,
+      RESEARCH_FINAL_REVIEW_ARTIFACT,
+      RESEARCH_WORK_GRAPH_ARTIFACT,
       'source-ledger.json',
       'agent-ledger.json',
       'debate-ledger.json',
@@ -404,6 +438,20 @@ export function researchPlanMarkdown(plan: any) {
   }
   if (plan.mutation_policy) lines.push(`Mutation policy: ${plan.mutation_policy.rule}`);
   lines.push('');
+  if (plan.quality_contract) {
+    const contract = plan.quality_contract;
+    lines.push('## Quality Contract');
+    lines.push(`- minimum sources: ${contract.min_sources_total}`);
+    lines.push(`- minimum source layers covered: ${contract.min_source_layers_covered}`);
+    lines.push(`- minimum counterevidence sources: ${contract.min_counterevidence_sources}`);
+    lines.push(`- minimum key claims: ${contract.min_key_claims}`);
+    lines.push(`- minimum triangulated claims: ${contract.min_trianguled_claims}`);
+    lines.push(`- minimum blueprint sections: ${contract.min_implementation_blueprint_sections}`);
+    lines.push(`- minimum falsification cases: ${contract.min_falsification_cases}`);
+    lines.push(`- minimum experiment steps: ${contract.min_experiment_steps}`);
+    lines.push(`- minimum report words: ${contract.min_report_words}`);
+    lines.push('');
+  }
   if (plan.native_agent_plan) {
     lines.push('## Native Agent Plan');
     lines.push(`Backend: ${plan.native_agent_plan.backend}`);
@@ -499,10 +547,7 @@ export function countGeniusOpinionSummaries(text: any = '') {
 
 export async function writeResearchPlan(dir: any, prompt: any, opts: any = {}) {
   const plan = createResearchPlan(prompt, opts);
-  await writeJsonAtomic(path.join(dir, 'research-plan.json'), plan);
-  await writeTextAtomic(path.join(dir, 'research-plan.md'), researchPlanMarkdown(plan));
-  await writeTextAtomic(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT), researchSourceSkillMarkdown(plan));
-  await writeJsonAtomic(path.join(dir, 'novelty-ledger.json'), {
+  const noveltyLedger = {
     schema_version: 1,
     entries: [],
     rubric: {
@@ -510,8 +555,26 @@ export async function writeResearchPlan(dir: any, prompt: any, opts: any = {}) {
       confidence: '0 speculation, 1 weak, 2 supported, 3 strongly supported',
       falsifiability: '0 vague, 1 indirectly testable, 2 directly testable, 3 cheap decisive test exists'
     }
-  });
-  await writeJsonAtomic(path.join(dir, 'source-ledger.json'), defaultSourceLedger(plan));
+  };
+  const sourceLedger = defaultSourceLedger(plan);
+  const claimMatrix = defaultClaimEvidenceMatrix(plan.mission_id || '');
+  const blueprint = defaultImplementationBlueprint(plan);
+  const experimentPlan = defaultExperimentPlan(plan);
+  const replicationPack = defaultReplicationPack(plan);
+  await writeJsonAtomic(path.join(dir, 'research-plan.json'), plan);
+  await writeTextAtomic(path.join(dir, 'research-plan.md'), researchPlanMarkdown(plan));
+  await writeTextAtomic(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT), researchSourceSkillMarkdown(plan));
+  await writeResearchQualityContract(dir, plan.quality_contract);
+  await writeJsonAtomic(path.join(dir, 'novelty-ledger.json'), noveltyLedger);
+  await writeJsonAtomic(path.join(dir, 'source-ledger.json'), sourceLedger);
+  await writeClaimEvidenceMatrix(dir, claimMatrix);
+  await writeSourceQualityReport(dir, sourceLedger, claimMatrix);
+  await writeImplementationBlueprint(dir, blueprint);
+  await writeTextAtomic(path.join(dir, IMPLEMENTATION_BLUEPRINT_MARKDOWN_ARTIFACT), renderImplementationBlueprintMarkdown(blueprint));
+  await writeExperimentPlan(dir, experimentPlan);
+  await writeReplicationPack(dir, replicationPack);
+  await writeResearchHandoffArtifacts(dir, plan, blueprint);
+  await writeResearchWorkGraph(dir, plan);
   await writeJsonAtomic(path.join(dir, 'agent-ledger.json'), defaultAgentLedger(plan));
   await writeJsonAtomic(path.join(dir, 'debate-ledger.json'), defaultDebateLedger(plan));
   await writeJsonAtomic(path.join(dir, 'falsification-ledger.json'), defaultFalsificationLedger());
@@ -658,10 +721,14 @@ export function defaultSourceLedger(plan: any = null) {
     },
     quality_model: {
       reporting_basis: 'Record enough source metadata to make search reproducible, including query, layer, locator, publisher or author, publication date when known, accessed_at, reliability, credibility, stance, and cited claim ids.',
-      source_quality_fields: ['layer', 'kind', 'title', 'locator', 'publisher_or_author', 'published_at', 'accessed_at', 'reliability', 'credibility', 'stance', 'supports', 'undermines']
+      source_quality_fields: ['layer', 'kind', 'title', 'locator', 'publisher_or_author', 'published_at', 'accessed_at', 'reliability', 'credibility', 'stance', 'supports', 'undermines', 'claim_ids']
     },
     citation_coverage: {
       all_key_claims_cited: false,
+      key_claim_ids: [],
+      cited_claim_ids: [],
+      uncited_claim_ids: [],
+      source_claim_map: {},
       notes: []
     },
     blockers: []
@@ -736,7 +803,12 @@ export function defaultDebateLedger(plan: any = null) {
 export function defaultFalsificationLedger() {
   return {
     schema_version: 1,
+    schema: 'sks.falsification-ledger.v1',
     created_at: nowIso(),
+    quality_contract: {
+      min_cases: DEFAULT_RESEARCH_QUALITY_CONTRACT.min_falsification_cases,
+      required_fields: ['id', 'target_claim', 'attack', 'source_ids', 'result', 'next_decisive_test']
+    },
     cases: [],
     unresolved_failures: [],
     next_decisive_tests: []
@@ -846,8 +918,12 @@ export function defaultResearchGate() {
 
 export async function evaluateResearchGate(dir: any) {
   const gate = await readJson(path.join(dir, 'research-gate.json'), defaultResearchGate());
+  const contract = await readResearchQualityContract(dir);
   const plan = await readJson(path.join(dir, 'research-plan.json'), null);
   const reportPresent = await exists(path.join(dir, 'research-report.md'));
+  const reportText = reportPresent ? await readText(path.join(dir, 'research-report.md'), '') : '';
+  const reportQuality = analyzeResearchReportQuality(reportText);
+  const reportWordCount = countWords(reportText);
   const paperArtifact = await findResearchPaperArtifact(dir, plan);
   const paperPresent = paperArtifact.exists;
   const paperText = paperPresent ? await readText(paperArtifact.path, '') : '';
@@ -864,10 +940,24 @@ export async function evaluateResearchGate(dir: any) {
   const agentLedger = await readJson(path.join(dir, 'agent-ledger.json'), null);
   const debateLedger = await readJson(path.join(dir, 'debate-ledger.json'), null);
   const falsificationLedger = await readJson(path.join(dir, 'falsification-ledger.json'), null);
+  const noveltyLedger = await readJson(path.join(dir, 'novelty-ledger.json'), null);
+  const claimMatrixSummary = await readClaimEvidenceMatrix(dir);
+  const claimMatrix = claimMatrixSummary.matrix;
+  const claimMatrixValidation = validateClaimEvidenceMatrix(claimMatrix, sourceLedger, falsificationLedger);
+  const blueprint = await readImplementationBlueprint(dir);
+  const blueprintValidation = validateImplementationBlueprint(blueprint, contract);
+  const experimentPlan = await readExperimentPlan(dir);
+  const experimentValidation = validateExperimentPlan(experimentPlan, contract);
+  const replicationPack = await readReplicationPack(dir);
+  const replicationValidation = validateReplicationPack(replicationPack);
+  const falsificationValidation = validateFalsificationCoverage(falsificationLedger, contract);
+  let sourceQualityReport = await readSourceQualityReport(dir);
+  if (!sourceQualityReport && sourceLedger) sourceQualityReport = await writeSourceQualityReport(dir, sourceLedger, claimMatrix);
   const geniusSummaryText = geniusSummaryPresent ? await readText(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), '') : '';
   const personaValidation = validateResearchAgentLedger(agentLedger || {}, geniusSummaryText);
   const sourceEntries = Array.isArray(sourceLedger?.sources) ? sourceLedger.sources.length : 0;
   const counterEvidenceEntries = Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources.length : 0;
+  const totalSourceEntries = sourceEntries + counterEvidenceEntries;
   const webSearchPasses = Math.max(Number(gate.web_search_passes || 0), Number(sourceLedger?.web_search_passes || 0));
   const requiredSourceLayers = sourceLayerIdsForPlan(plan);
   const sourceLayerStats = sourceLayerCoverageStats(sourceLedger, requiredSourceLayers);
@@ -889,6 +979,8 @@ export async function evaluateResearchGate(dir: any) {
   const citationCoverage = gate.citation_coverage === true || sourceLedger?.citation_coverage?.all_key_claims_cited === true;
   const reasons: any[] = [];
   if (!reportPresent && gate.report_present !== true) reasons.push('research_report_missing');
+  if (reportWordCount < contract.min_report_words) reasons.push('research_report_too_short');
+  if (!reportQuality.ok) reasons.push(...reportQuality.blockers);
   if (!paperPresent) reasons.push('research_paper_missing');
   if (paperSections < RESEARCH_PAPER_SECTION_GROUPS.length) reasons.push('research_paper_sections_missing');
   if (!geniusSummaryPresent && gate.genius_opinion_summary_present !== true) reasons.push('genius_opinion_summary_missing');
@@ -901,7 +993,9 @@ export async function evaluateResearchGate(dir: any) {
   if (!falsificationPresent && gate.falsification_ledger_present !== true) reasons.push('falsification_ledger_missing');
   if (webSearchPasses < 1) reasons.push('web_search_pass_missing');
   if (Math.max(Number(gate.source_entries || 0), sourceEntries) < 1) reasons.push('source_entry_missing');
+  if (Math.max(Number(gate.source_entries || 0), totalSourceEntries) < contract.min_sources_total) reasons.push('source_entries_below_research_quality_contract');
   if (Math.max(Number(gate.source_layers_covered || 0), sourceLayerStats.covered.length) < requiredSourceLayers.length) reasons.push('source_layer_coverage_missing');
+  if (Math.max(Number(gate.source_layers_covered || 0), sourceLayerStats.covered.length) < contract.min_source_layers_covered) reasons.push('source_layer_coverage_below_contract');
   if (Math.max(Number(gate.triangulation_checks || 0), triangulationChecks) < 1) reasons.push('cross_layer_triangulation_missing');
   if (Math.max(Number(gate.independent_agents || 0), independentAgents) < RESEARCH_AGENT_COUNCIL.length) reasons.push('independent_agents_missing');
   if (Math.max(Number(gate.xhigh_agents || 0), xhighAgents) < RESEARCH_AGENT_COUNCIL.length) reasons.push('agent_effort_not_xhigh');
@@ -913,11 +1007,43 @@ export async function evaluateResearchGate(dir: any) {
   if (Math.max(Number(gate.consensus_iterations || 0), consensus.iterations) < 1) reasons.push('consensus_iteration_missing');
   if (!consensus.unanimous) reasons.push('unanimous_consensus_missing');
   if (Math.max(Number(gate.counterevidence_sources || 0), counterEvidenceEntries) < 1) reasons.push('counterevidence_source_missing');
+  if (Math.max(Number(gate.counterevidence_sources || 0), counterEvidenceEntries) < contract.min_counterevidence_sources) reasons.push('counterevidence_below_contract');
   if ((gate.candidate_insights || 0) < 1) reasons.push('candidate_insight_missing');
   if ((gate.falsification_passes || 0) < 1) reasons.push('falsification_missing');
   if (Math.max(Number(gate.falsification_cases || 0), falsificationCases) < 1) reasons.push('falsification_case_missing');
+  if (!falsificationValidation.ok) reasons.push(...falsificationValidation.blockers);
   if ((gate.testable_predictions || 0) < 1) reasons.push('testable_prediction_missing');
   if (!citationCoverage) reasons.push('citation_coverage_missing');
+  if (!claimMatrixSummary.present) reasons.push('claim_evidence_matrix_missing');
+  if (claimMatrix.key_claim_ids.length < contract.min_key_claims) reasons.push('key_claims_below_contract');
+  if (claimMatrix.triangulated_claim_count < contract.min_trianguled_claims) reasons.push('triangulated_claims_below_contract');
+  if (!claimMatrixValidation.ok) reasons.push(...claimMatrixValidation.blockers);
+  if (!sourceQualityReport) reasons.push('source_quality_report_missing');
+  if (sourceQualityReport && sourceQualityReport.ok !== true) reasons.push(...(Array.isArray(sourceQualityReport.blockers) ? sourceQualityReport.blockers : ['source_quality_report_not_ok']));
+  if (!blueprint) reasons.push('implementation_blueprint_missing');
+  if (!blueprintValidation.ok) reasons.push(...blueprintValidation.blockers);
+  if (!experimentPlan) reasons.push('experiment_plan_missing');
+  if (!experimentValidation.ok) reasons.push(...experimentValidation.blockers);
+  if (!replicationPack) reasons.push('replication_pack_missing');
+  if (!replicationValidation.ok) reasons.push(...replicationValidation.blockers);
+  for (const artifact of contract.required_artifacts || []) {
+    if (artifact === RESEARCH_FINAL_REVIEW_ARTIFACT) continue;
+    if (!(await exists(path.join(dir, artifact)))) reasons.push(`required_artifact_missing:${artifact}`);
+  }
+  let finalReview = await readResearchFinalReview(dir);
+  finalReview = await runResearchFinalReviewer(dir, {
+    contract,
+    sourceLedger,
+    claimMatrix,
+    blueprint,
+    experimentPlan,
+    replicationPack,
+    falsificationLedger,
+    reportText,
+    preliminaryReasons: reasons
+  });
+  if (!finalReview) reasons.push('final_review_missing');
+  if (finalReview && finalReview.approved !== true) reasons.push('research_final_review_not_approved');
   if (searchBlockers.length > 0) reasons.push('web_search_blocked');
   if (gate.unsafe_or_destructive_actions === true) reasons.push('unsafe_or_destructive_actions_present');
   if ((gate.unsupported_breakthrough_claims || 0) > 0) reasons.push('unsupported_breakthrough_claims_present');
@@ -928,16 +1054,31 @@ export async function evaluateResearchGate(dir: any) {
     metrics: {
       research_paper_artifact: paperArtifact.name,
       paper_present: paperPresent || gate.paper_present === true,
+      quality_contract: contract,
+      report_word_count: reportWordCount,
+      report_min_words: contract.min_report_words,
+      report_quality: reportQuality,
       web_search_passes: webSearchPasses,
       paper_sections: Math.max(Number(gate.paper_sections || 0), paperSections),
       genius_opinion_summary_present: geniusSummaryPresent || gate.genius_opinion_summary_present === true,
       genius_opinion_summaries: Math.max(Number(gate.genius_opinion_summaries || 0), geniusSummaryCount),
       research_source_skill_present: sourceSkillPresent || gate.research_source_skill_present === true,
       source_entries: Math.max(Number(gate.source_entries || 0), sourceEntries),
+      source_entries_total_with_counterevidence: totalSourceEntries,
+      min_sources_total: contract.min_sources_total,
       source_layers_required: requiredSourceLayers.length,
       source_layers_covered: Math.max(Number(gate.source_layers_covered || 0), sourceLayerStats.covered.length),
+      min_source_layers_covered: contract.min_source_layers_covered,
       source_layers_missing: sourceLayerStats.missing,
       triangulation_checks: Math.max(Number(gate.triangulation_checks || 0), triangulationChecks),
+      claim_evidence_matrix_present: claimMatrixSummary.present,
+      key_claims: claimMatrix.key_claim_ids.length,
+      min_key_claims: contract.min_key_claims,
+      triangulated_claims: claimMatrix.triangulated_claim_count,
+      min_triangulated_claims: contract.min_trianguled_claims,
+      claim_evidence_matrix_ok: claimMatrixValidation.ok,
+      claim_evidence_matrix_blockers: claimMatrixValidation.blockers,
+      source_quality_report_ok: sourceQualityReport?.ok === true,
       independent_agents: Math.max(Number(gate.independent_agents || 0), independentAgents),
       xhigh_agents: Math.max(Number(gate.xhigh_agents || 0), xhighAgents),
       eureka_moments: Math.max(Number(gate.eureka_moments || 0), eurekaMoments),
@@ -951,7 +1092,15 @@ export async function evaluateResearchGate(dir: any) {
       consensus_agreed_agents: consensus.agreed_count,
       consensus_missing_agents: consensus.missing,
       counterevidence_sources: Math.max(Number(gate.counterevidence_sources || 0), counterEvidenceEntries),
+      min_counterevidence_sources: contract.min_counterevidence_sources,
       falsification_cases: Math.max(Number(gate.falsification_cases || 0), falsificationCases),
+      falsification_validation: falsificationValidation,
+      implementation_blueprint_validation: blueprintValidation,
+      experiment_plan_validation: experimentValidation,
+      replication_pack_validation: replicationValidation,
+      novelty_entries: Array.isArray(noveltyLedger?.entries) ? noveltyLedger.entries.length : null,
+      final_review_approved: finalReview?.approved === true,
+      final_review_blockers: Array.isArray(finalReview?.blockers) ? finalReview.blockers : [],
       citation_coverage: citationCoverage,
       web_search_blockers: searchBlockers.length
     },
@@ -967,20 +1116,42 @@ export async function evaluateResearchGate(dir: any) {
 
 export async function writeMockResearchResult(dir: any, plan: any) {
   const paperArtifact = researchPaperArtifactForPlan(plan);
-  const mockLayerSources = RESEARCH_SOURCE_LAYERS.map((layer: any, index: any) => ({
+  const mockClaimIds = Array.from({ length: DEFAULT_RESEARCH_QUALITY_CONTRACT.min_key_claims }, (_unused, index) => `mock-claim-${index + 1}`);
+  const primaryMockSources = RESEARCH_SOURCE_LAYERS.map((layer: any, index: any) => ({
     id: `mock-source-${index + 1}`,
     layer: layer.id,
     kind: 'selftest',
     title: `Mock ${layer.label} coverage`,
     locator: 'writeMockResearchResult',
+    publisher_or_author: 'SKS mock research fixture',
+    published_at: nowIso().slice(0, 10),
     accessed_at: nowIso(),
     reliability: 'mock',
     credibility: 'mock',
     stance: layer.id === 'counterevidence_factcheck' ? 'undermines' : 'supports',
-    supports: layer.id === 'counterevidence_factcheck' ? [] : ['mock-insight-1'],
-    undermines: layer.id === 'counterevidence_factcheck' ? ['mock-insight-1'] : [],
+    supports: layer.id === 'counterevidence_factcheck' ? [] : [mockClaimIds[index % mockClaimIds.length]],
+    undermines: layer.id === 'counterevidence_factcheck' ? [mockClaimIds[0]] : [],
+    claim_ids: [mockClaimIds[index % mockClaimIds.length]],
     notes: `Selftest fixture for the ${layer.id} source layer; no live web call is made in --mock mode.`
   }));
+  const supplementalMockSources = RESEARCH_SOURCE_LAYERS.map((layer: any, index: any) => ({
+    id: `mock-source-${index + 8}`,
+    layer: layer.id,
+    kind: 'selftest-supplement',
+    title: `Supplemental mock ${layer.label} triangulation`,
+    locator: 'writeMockResearchResult',
+    publisher_or_author: 'SKS mock research fixture',
+    published_at: nowIso().slice(0, 10),
+    accessed_at: nowIso(),
+    reliability: 'mock',
+    credibility: 'mock',
+    stance: layer.id === 'counterevidence_factcheck' ? 'undermines' : 'supports',
+    supports: layer.id === 'counterevidence_factcheck' ? [] : [mockClaimIds[(index + 1) % mockClaimIds.length]],
+    undermines: layer.id === 'counterevidence_factcheck' ? [mockClaimIds[(index + 2) % mockClaimIds.length]] : [],
+    claim_ids: [mockClaimIds[(index + 1) % mockClaimIds.length]],
+    notes: `Second selftest source for ${layer.id}; it makes source-count and triangulation checks non-trivial.`
+  }));
+  const mockLayerSources = [...primaryMockSources, ...supplementalMockSources];
   const sourceLedger = {
     schema_version: 1,
     policy: 'layered_source_retrieval_and_triangulation',
@@ -998,8 +1169,8 @@ export async function writeMockResearchResult(dir: any, plan: any) {
       status: 'covered',
       evidence_role: layer.evidence_role,
       query_templates: layer.query_templates || [],
-      source_ids: [`mock-source-${index + 1}`],
-      counterevidence_ids: layer.id === 'counterevidence_factcheck' ? ['mock-counter-1'] : [],
+      source_ids: [`mock-source-${index + 1}`, `mock-source-${index + 8}`],
+      counterevidence_ids: layer.id === 'counterevidence_factcheck' ? ['mock-counter-1', 'mock-counter-2'] : [],
       blocker: null,
       notes: 'Mock mode records layer coverage without live web access.'
     })),
@@ -1023,12 +1194,31 @@ export async function writeMockResearchResult(dir: any, plan: any) {
         kind: 'selftest',
         title: 'Mock overclaim counterexample',
         locator: 'writeMockResearchResult',
+        publisher_or_author: 'SKS mock research fixture',
+        published_at: nowIso().slice(0, 10),
         accessed_at: nowIso(),
         reliability: 'mock',
         credibility: 'mock',
         stance: 'undermines',
-        undermines: ['mock-insight-1'],
+        undermines: [mockClaimIds[0]],
+        claim_ids: [mockClaimIds[0]],
         notes: 'Shows the gate must fail if a run produces no tests or falsifiers.'
+      },
+      {
+        id: 'mock-counter-2',
+        layer: 'counterevidence_factcheck',
+        kind: 'selftest',
+        title: 'Mock missing-replication counterexample',
+        locator: 'writeMockResearchResult',
+        publisher_or_author: 'SKS mock research fixture',
+        published_at: nowIso().slice(0, 10),
+        accessed_at: nowIso(),
+        reliability: 'mock',
+        credibility: 'mock',
+        stance: 'undermines',
+        undermines: [mockClaimIds[1]],
+        claim_ids: [mockClaimIds[1]],
+        notes: 'Shows the gate must fail if replication commands and experiment steps are absent.'
       }
     ],
     triangulation: {
@@ -1052,7 +1242,11 @@ export async function writeMockResearchResult(dir: any, plan: any) {
     quality_model: defaultSourceLedger(plan).quality_model,
     citation_coverage: {
       all_key_claims_cited: true,
-      notes: ['mock report and novelty entry cite mock-source-1 and mock-counter-1']
+      key_claim_ids: mockClaimIds,
+      cited_claim_ids: mockClaimIds,
+      uncited_claim_ids: [],
+      source_claim_map: Object.fromEntries(mockLayerSources.map((source: any) => [source.id, source.claim_ids || []])),
+      notes: ['mock report, claim matrix, and novelty ledger cite all mock key claims']
     },
     blockers: []
   };
@@ -1126,35 +1320,48 @@ export async function writeMockResearchResult(dir: any, plan: any) {
   };
   const falsificationLedger = {
     schema_version: 1,
+    schema: 'sks.falsification-ledger.v1',
     created_at: nowIso(),
-    cases: [
-      {
-        id: 'mock-falsification-1',
-        target_claim: 'A research run is useful if it produces falsifiable novelty.',
-        attack: 'The claim fails if the output only summarizes background material or has no decisive probe.',
-        source_ids: ['mock-counter-1'],
-        result: 'survives_with_gate_requirement',
-        next_decisive_test: 'Score testable insight count against a summary-only baseline.'
-      }
-    ],
+    cases: Array.from({ length: DEFAULT_RESEARCH_QUALITY_CONTRACT.min_falsification_cases }, (_unused, index) => ({
+      id: `mock-falsification-${index + 1}`,
+      target_claim: mockClaimIds[index % mockClaimIds.length],
+      attack: [
+        'The claim fails if the output only summarizes background material.',
+        'The claim fails if no independent source layer confirms it.',
+        'The claim fails if counterevidence is absent.',
+        'The claim fails if no replication step can be run.'
+      ][index] || 'The claim fails if the decisive test cannot be specified.',
+      source_ids: [index % 2 === 0 ? 'mock-counter-1' : 'mock-counter-2'],
+      result: 'survives_with_gate_requirement',
+      next_decisive_test: `Run decisive mock test ${index + 1} and compare against a summary-only baseline.`
+    })),
     unresolved_failures: [],
     next_decisive_tests: ['Run paired prompt comparison and measure cited testable insights.']
   };
   const ledger = {
     schema_version: 1,
-    entries: [
-      {
-        id: 'mock-insight-1',
-        claim: 'A useful research run must optimize for falsifiable novelty, not only breadth of summary.',
-        type: 'methodological_insight',
-        novelty: 2,
-        confidence: 2,
-        falsifiability: 2,
-        evidence: ['mock-source-1', 'mock run executed the genius-agent discovery phases'],
-        falsifiers: ['If the output contains no competing hypotheses or tests, the method failed.'],
-        next_experiment: 'Run the same topic through summary-only and discovery-loop prompts, then compare testable insight count.'
-      }
-    ]
+    entries: mockClaimIds.map((claimId, index) => ({
+      id: claimId,
+      claim: [
+        'A useful research run must optimize for falsifiable novelty, not only breadth of summary.',
+        'Source quality must be a first-class artifact rather than an implicit reviewer judgment.',
+        'A claim matrix makes implementation handoff safer by separating facts, hypotheses, and recommendations.',
+        'Counterevidence needs its own minimum threshold because single-source skepticism is too brittle.',
+        'A report-length floor catches summary-only outputs that dodge hard synthesis.',
+        'An implementation blueprint turns research into actionable but still read-only handoff material.',
+        'Replication artifacts make research pipeline behavior auditable after the run.',
+        'A final reviewer artifact prevents passed gates from relying on unstated assumptions.'
+      ][index],
+      type: index < 3 ? 'methodological_insight' : 'implementation_guidance',
+      novelty: 2,
+      confidence: 2,
+      falsifiability: 2,
+      source_ids: [`mock-source-${(index % RESEARCH_SOURCE_LAYERS.length) + 1}`, `mock-source-${((index + 1) % RESEARCH_SOURCE_LAYERS.length) + 1}`],
+      counterevidence_ids: [index % 2 === 0 ? 'mock-counter-1' : 'mock-counter-2'],
+      evidence: [`mock-source-${(index % RESEARCH_SOURCE_LAYERS.length) + 1}`, `mock-source-${((index + 1) % RESEARCH_SOURCE_LAYERS.length) + 1}`],
+      falsifiers: [index % 2 === 0 ? 'mock-counter-1' : 'mock-counter-2'],
+      next_experiment: `Run the same topic through summary-only and discovery-loop prompts, then compare claim ${index + 1} support, falsification, and reproducibility.`
+    }))
   };
   const geniusSummary = [
     '# Genius Opinion Summary',
@@ -1173,14 +1380,80 @@ export async function writeMockResearchResult(dir: any, plan: any) {
     '## Council Consensus',
     'The council keeps one modest, testable claim: Research Mode is useful when it writes a source-cited paper, records every agent opinion, triangulates across source layers, and exposes the next decisive test.'
   ].join('\n');
+  const claimMatrix = buildClaimEvidenceMatrixFromLedgers({
+    missionId: plan?.mission_id || '',
+    sourceLedger,
+    noveltyLedger: ledger,
+    falsificationLedger
+  });
+  const blueprint = defaultImplementationBlueprint(plan);
+  const experimentPlan = defaultExperimentPlan(plan);
+  const replicationPack = defaultReplicationPack(plan);
   await writeTextAtomic(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT), researchSourceSkillMarkdown(plan));
   await writeJsonAtomic(path.join(dir, 'source-ledger.json'), sourceLedger);
+  await writeResearchQualityContract(dir, plan.quality_contract || DEFAULT_RESEARCH_QUALITY_CONTRACT);
+  await writeClaimEvidenceMatrix(dir, claimMatrix);
+  await writeSourceQualityReport(dir, sourceLedger, claimMatrix);
+  await writeImplementationBlueprint(dir, blueprint);
+  await writeTextAtomic(path.join(dir, IMPLEMENTATION_BLUEPRINT_MARKDOWN_ARTIFACT), renderImplementationBlueprintMarkdown(blueprint));
+  await writeExperimentPlan(dir, experimentPlan);
+  await writeReplicationPack(dir, replicationPack);
+  await writeResearchHandoffArtifacts(dir, plan, blueprint);
+  await writeResearchWorkGraph(dir, plan);
   await writeJsonAtomic(path.join(dir, 'agent-ledger.json'), agentLedger);
   await writeJsonAtomic(path.join(dir, 'debate-ledger.json'), debateLedger);
   await writeJsonAtomic(path.join(dir, 'falsification-ledger.json'), falsificationLedger);
   await writeJsonAtomic(path.join(dir, 'novelty-ledger.json'), ledger);
   await writeTextAtomic(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), `${geniusSummary}\n`);
-  await writeTextAtomic(path.join(dir, 'research-report.md'), `# SKS Research Report\n\nPrompt: ${plan.prompt}\n\n## Agent Council Synthesis\n\nThe mock council keeps one cited methodological insight: a research mode should force layered, falsifiable novelty rather than summarize known material from one corpus [mock-source-1].\n\n## Source Coverage\n\nThis is a selftest fixture. It records mock coverage for academic literature, official data, standards, news, public discourse, developer knowledge, and counterevidence layers, but does not perform live web browsing in --mock mode.\n\n## Candidate Insight\n\nA useful research run must produce source-cited, cross-layer triangulated, falsifiable novelty with agent findings and a cheap probe.\n\n## Falsification\n\nThe claim is weak if no new testable prediction, counterevidence source, cross-layer check, or experiment is produced [mock-counter-1].\n\n## Next Test\n\nCompare this mode against a summary-only run and score candidate insights, falsification passes, citation coverage, source-layer coverage, triangulation checks, and testability.\n`);
+  const evidenceParagraphs = Array.from({ length: 72 }, (_unused, index) => {
+    const claimId = mockClaimIds[index % mockClaimIds.length];
+    const sourceA = `mock-source-${(index % RESEARCH_SOURCE_LAYERS.length) + 1}`;
+    const sourceB = `mock-source-${(index % RESEARCH_SOURCE_LAYERS.length) + 8}`;
+    const counter = index % 2 === 0 ? 'mock-counter-1' : 'mock-counter-2';
+    return `Quality note ${index + 1}: claim ${claimId} is treated as a falsifiable research-pipeline assertion, not a fact about live web evidence. The mock run cites ${sourceA} and ${sourceB}, compares the claim with ${counter}, and preserves the implementation handoff as read-only evidence. This repeated fixture text deliberately keeps the selftest report above the quality-contract word floor while still naming the same source-ledger ids that the gate verifies.`;
+  });
+  const researchReportText = [
+    '# SKS Research Report',
+    '',
+    `Prompt: ${plan.prompt}`,
+    '',
+    '## Question',
+    'Can SKS Research Mode close a research mission only when it has enough sourced claims, counterevidence, falsification, implementation handoff material, and replication evidence to support a downstream execution route?',
+    '',
+    '## Methodology',
+    'This mock run is a selftest fixture, so it does not claim live web retrieval. It exercises the same artifact contract that real research must satisfy: layered source ledger entries, source quality fields, claim-evidence matrix rows, falsification cases, a blueprint, an experiment plan, a replication pack, and a final reviewer decision.',
+    '',
+    '## Source Map',
+    'The source ledger contains two mock sources per source layer plus two counterevidence records. The source ids include mock-source-1 through mock-source-14, and the counterevidence ids include mock-counter-1 and mock-counter-2. Each source row includes layer, kind, locator, publisher_or_author, accessed_at, reliability, credibility, stance, and claim_ids.',
+    '',
+    '## Key Claims',
+    ...ledger.entries.map((entry: any) => `- ${entry.id}: ${entry.claim} Sources: ${(entry.source_ids || []).join(', ')}. Counterevidence: ${(entry.counterevidence_ids || entry.falsifiers || []).join(', ')}.`),
+    '',
+    '## Evidence Matrix Summary',
+    `The claim-evidence matrix records ${claimMatrix.key_claim_ids.length} key claims and ${claimMatrix.triangulated_claim_count} triangulated claims. Each critical or high-importance claim has at least one source id and one counterevidence id, and each hypothesis has a test_or_probe field for follow-up validation.`,
+    '',
+    '## Counterevidence',
+    'The first counterexample, mock-counter-1, attacks overclaiming without decisive tests. The second counterexample, mock-counter-2, attacks missing replication and thin experiment plans. Both are intentionally simple but give the gate two independent counterevidence entries to verify.',
+    '',
+    '## Falsification',
+    'The falsification ledger includes four cases. They attack summary-only output, missing independent confirmation, absent counterevidence, and absent replication. The cases survive only as gate-backed requirements, not as proof that the mock topic was researched on the live web.',
+    '',
+    '## Implementation Blueprint',
+    'The implementation blueprint has eight sections: problem, decision, architecture, interfaces, data contracts, execution plan, verification plan, and risks and rollbacks. The key point is that Research does not change repository source. It creates a handoff for a later $Team route that can validate the research and then decide what to implement.',
+    '',
+    '## Experiment / Validation Plan',
+    'The experiment plan contains five steps: compare a baseline and research output, score cited key claims, run the smallest implementation probe, compare falsification outcomes, and record replication commands. The replication pack lists the commands and expected artifacts needed to reproduce the gate.',
+    '',
+    '## Limitations',
+    'This is mock evidence for harness verification. It proves the local artifact contract and gate behavior, not live research accuracy. A normal non-mock run must still collect real sources and must keep the gate blocked if source access is unavailable.',
+    '',
+    '## References',
+    '- mock-source-1 through mock-source-14: layered mock sources generated by writeMockResearchResult.',
+    '- mock-counter-1 and mock-counter-2: counterevidence fixtures generated by writeMockResearchResult.',
+    '',
+    ...evidenceParagraphs
+  ].join('\n\n');
+  await writeTextAtomic(path.join(dir, 'research-report.md'), `${researchReportText}\n`);
   await writeTextAtomic(path.join(dir, paperArtifact), `# Research Paper: ${plan.prompt}\n\n## Abstract\nA source-cited research run should produce cross-layer, falsifiable novelty rather than only summarize known material.\n\n## Introduction\nThe mock topic is evaluated as a research workflow outcome with layered source coverage [mock-source-1].\n\n## Methodology\nFive xhigh agents produce Eureka ideas, debate, triangulate source layers, and falsify the strongest claim.\n\n## Findings\nThe surviving finding is that useful research needs cited novelty, source-layer coverage, cross-layer triangulation, and a cheap decisive probe.\n\n## Discussion\nThe debate favors gate-backed evidence over narrative confidence, and treats public discourse as signal rather than truth.\n\n## Limitations and Falsification\nThe claim fails without sources, counterevidence, triangulation checks, or testable predictions [mock-counter-1].\n\n## Conclusion and Next Experiment\nCompare this loop against a summary-only baseline and score testable insights.\n\n## References\n- [mock-source-1] Mock academic literature coverage.\n- [mock-source-2] Mock official government and leading-institution knowledge coverage.\n- [mock-source-3] Mock standards and primary documents coverage.\n- [mock-source-4] Mock current news and global reporting coverage.\n- [mock-source-5] Mock public discourse coverage.\n- [mock-source-6] Mock developer and practitioner knowledge coverage.\n- [mock-source-7] Mock counterevidence and fact-checking coverage.\n- [mock-counter-1] Mock overclaim counterexample.\n`);
   await writeJsonAtomic(path.join(dir, 'research-gate.json'), {
     ...defaultResearchGate(),
@@ -1202,19 +1475,19 @@ export async function writeMockResearchResult(dir: any, plan: any) {
     source_layers_required: RESEARCH_SOURCE_LAYER_IDS.length,
     source_layers_covered: RESEARCH_SOURCE_LAYER_IDS.length,
     triangulation_checks: sourceLedger.triangulation.cross_layer_checks.length,
-	    independent_agents: RESEARCH_AGENT_COUNCIL.length,
-	    xhigh_agents: RESEARCH_AGENT_COUNCIL.length,
-	    eureka_moments: RESEARCH_AGENT_COUNCIL.length,
-	    agent_findings: RESEARCH_AGENT_COUNCIL.length,
-	    debate_participants: RESEARCH_AGENT_COUNCIL.length,
-	    debate_exchanges: debateLedger.exchanges.length,
-	    consensus_iterations: debateLedger.consensus_iterations,
-	    unanimous_consensus: true,
-	    counterevidence_sources: 1,
-    candidate_insights: 1,
+    independent_agents: RESEARCH_AGENT_COUNCIL.length,
+    xhigh_agents: RESEARCH_AGENT_COUNCIL.length,
+    eureka_moments: RESEARCH_AGENT_COUNCIL.length,
+    agent_findings: RESEARCH_AGENT_COUNCIL.length,
+    debate_participants: RESEARCH_AGENT_COUNCIL.length,
+    debate_exchanges: debateLedger.exchanges.length,
+    consensus_iterations: debateLedger.consensus_iterations,
+    unanimous_consensus: true,
+    counterevidence_sources: 2,
+    candidate_insights: ledger.entries.length,
     falsification_passes: 1,
-    falsification_cases: 1,
-    testable_predictions: 1,
+    falsification_cases: falsificationLedger.cases.length,
+    testable_predictions: experimentPlan.steps.length,
     citation_coverage: true,
     evidence: ['mock research report', `mock research paper: ${paperArtifact}`, 'mock genius opinion summary', 'mock research source skill', 'mock layered source ledger', 'mock agent ledger', 'mock debate ledger', 'mock novelty ledger', 'mock falsification ledger'],
     notes: ['mock mode records the new contract but does not call a model or perform live web browsing']
@@ -1226,5 +1499,8 @@ export async function writeMockResearchResult(dir: any, plan: any) {
 export function buildResearchPrompt({ id, mission, plan, cycle, previous }: any) {
   const paperArtifact = researchPaperArtifactForPlan(plan);
   const agentAgentNames = (plan?.research_council?.agents || RESEARCH_AGENT_COUNCIL).map((agent: any) => researchAgentAgentName(agent)).join(', ');
-  return `You are running SKS Research Mode.\nMISSION: ${id}\nTOPIC: ${mission.prompt}\nCYCLE: ${cycle}\nMODE: Genius Agent Council + frontier discovery loop. Use maximum reasoning depth available under the current Codex profile.\nLONG-RUN REAL-RESEARCH POLICY: Normal Research is allowed to take one or two hours when the question requires it. Do real source gathering and evidence comparison; do not shortcut into mock, fixture, or summary-only output. If live source access is unavailable, write the blocker and keep the gate unpassed.\nNO-CODE-MUTATION POLICY: Do not edit repository source, package metadata, docs, config, generated skills, or harness files. Write only route-local artifacts under .sneakoscope/missions/${id}/. If a needed implementation change is discovered, record it as a recommendation or blocker for a later execution route.\nNO-QUESTION LOCK: Do not ask the user. Resolve scope from research-plan.json and current project evidence.\nSAFETY: Destructive database operations and unsafe external actions are forbidden. Prefer read-only inspection, local files, and cited public sources.\nPERSONA POLICY: Use Einstein/Feynman/Turing/von Neumann-inspired agent lenses only as cognitive roles. Do not impersonate, roleplay private identity, or speak as the historical people.\nAGENT PERSONA POLICY: Every Research agent row must include agent_name, display_name, persona, persona_boundary, reasoning_effort: "xhigh", service_tier when available, falsifiers, cheap_probes, and challenge_or_response. Use these agent_name values exactly: ${agentAgentNames}. Persona names are cognitive lenses, not impersonations.\nAGENT EFFORT POLICY: Every Research agent agent must use reasoning_effort=xhigh. Record effort: "xhigh" for every agent in agent-ledger.json. Any lower-effort agent output must keep research-gate.json unpassed.\nEUREKA POLICY: Every agent must literally write "Eureka!" and one non-obvious, source-linked idea before debate.\nCONSENSUS LOOP POLICY: This is not a fixed three-cycle run. Repeat source-gathering, agent Eureka ideas, debate, falsification, and synthesis pressure until every agent records final agreement with the surviving mechanism. If unanimous agreement is not reached, keep research-gate.json unpassed and continue until the explicit max-cycle safety cap pauses the run.\nDEBATE POLICY: The agents must debate vigorously but stay evidence-bound. Every agent must challenge or respond at least once, and debate-ledger.json must record exchanges, consensus_iterations, unanimous_consensus, and per-agent agreements before synthesis.\nPAPER POLICY: After the report and ledgers, write ${paperArtifact} as a concise manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References.\nSOURCE SKILL POLICY: Create or update ${RESEARCH_SOURCE_SKILL_ARTIFACT} as a route-local source collection skill before synthesis. It must name the selected source layers, query routes, quality fields, blockers, and cross-layer triangulation checks. Do not edit generated .agents/skills during the research run.\nWEB/SOURCE POLICY: Run layered source retrieval across every safely available layer before synthesis: latest public papers, official government or leading-institution data, standards or primary docs, current news including BBC/CNN/GDELT-style sources when relevant, public discourse including X/Twitter and Reddit when available, developer/practitioner sources such as Stack Overflow/Stack Exchange/GitHub, and counterevidence or fact-checking sources. Treat public discourse as signal, not truth. If a layer cannot be searched, record the blocker in source-ledger.json and do not pass the gate.\nRESEARCH PLAN:\n${JSON.stringify(plan, null, 2)}\n\nOBJECTIVE: Produce genuinely useful candidate discoveries: non-obvious hypotheses, mechanisms, predictions, or experiments. Do not merely summarize. Mark uncertainty clearly.\n\nREQUIRED PROCESS:\n1. Source skill first: create ${RESEARCH_SOURCE_SKILL_ARTIFACT} with source layers, query templates, quality fields, blockers, and triangulation rules.\n2. Layered source search: create source-ledger.json with source_layers, queries, source ids, source quality notes, counterevidence sources, triangulation.cross_layer_checks, citation coverage, and blockers.\n3. Independent xhigh agents: create agent-ledger.json with agent_name/display_name/persona/persona_boundary, effort=xhigh, reasoning_effort=xhigh, a literal Eureka! idea, findings, source_ids, falsifiers, cheap_probes, and challenge_or_response for every agent lens.\n4. Debate to agreement: create debate-ledger.json with evidence-bound challenge/response exchanges involving every agent, consensus_iterations >= 1, unanimous_consensus=true only when all agents agree, and agent_agreements for every agent.\n5. Falsification: create falsification-ledger.json with attacks, missing evidence, source conflicts, and decisive next tests.\n6. Synthesis: write research-report.md and novelty-ledger.json only after cited agent findings, Eureka ideas, unanimous debate agreement, cross-layer triangulation, and falsification are recorded.\n7. Paper: write ${paperArtifact} as a paper-style manuscript with source-ledger references and limitations.\n\nREQUIRED OUTPUT FILES in .sneakoscope/missions/${id}/:\n- research-report.md: concise report with framing, source coverage, agent synthesis, debate synthesis, hypotheses, falsification, predictions, and next experiments. Cite source-ledger ids for factual claims.\n- ${paperArtifact}: paper manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References using source-ledger ids.\n- ${RESEARCH_SOURCE_SKILL_ARTIFACT}: route-local source collection skill; it is evidence for the Skill Creator step and must not mutate generated .agents/skills.\n- source-ledger.json: layered web/source queries, source ids, source priority, source quality notes, counterevidence sources, citation coverage, triangulation checks, and blockers.\n- agent-ledger.json: one entry per agent lens with agent_name, display_name, persona, persona_boundary, effort, reasoning_effort, service_tier, eureka, query_set, findings, source_ids, falsifiers, cheap_probes, and challenge_or_response.\n- debate-ledger.json: evidence-bound challenge/response exchanges, participants, changed minds, unresolved conflicts, consensus_iterations, unanimous_consensus, and agent_agreements for every agent.\n- novelty-ledger.json: entries with claim, novelty, confidence, falsifiability, evidence source ids, falsifiers, next_experiment.\n- falsification-ledger.json: attacks/counterexamples/source conflicts, result, and next_decisive_tests.\n- research-gate.json: set passed only when all ledgers exist, ${RESEARCH_SOURCE_SKILL_ARTIFACT} exists, ${paperArtifact} exists with required paper sections, layered web/source retrieval covered every required source layer, at least one cross-layer triangulation check exists, all agents have agent_name/display_name/persona/persona_boundary, all agents have effort=xhigh, all agents have literal Eureka! ideas, every agent participated in debate, consensus_iterations >= 1, unanimous_consensus=true with every agent agreement recorded, at least one counterevidence source exists, citation coverage is complete, at least one insight survived falsification, at least one testable prediction exists, and unsupported breakthrough claims are zero.\n\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
+  const promptText = `You are running SKS Research Mode.\nMISSION: ${id}\nTOPIC: ${mission.prompt}\nCYCLE: ${cycle}\nMODE: Genius Agent Council + frontier discovery loop. Use maximum reasoning depth available under the current Codex profile.\nLONG-RUN REAL-RESEARCH POLICY: Normal Research is allowed to take one or two hours when the question requires it. Do real source gathering and evidence comparison; do not shortcut into mock, fixture, or summary-only output. If live source access is unavailable, write the blocker and keep the gate unpassed.\nNO-CODE-MUTATION POLICY: Do not edit repository source, package metadata, docs, config, generated skills, or harness files. Write only route-local artifacts under .sneakoscope/missions/${id}/. If a needed implementation change is discovered, record it as a recommendation or blocker for a later execution route.\nNO-QUESTION LOCK: Do not ask the user. Resolve scope from research-plan.json and current project evidence.\nSAFETY: Destructive database operations and unsafe external actions are forbidden. Prefer read-only inspection, local files, and cited public sources.\nPERSONA POLICY: Use Einstein/Feynman/Turing/von Neumann-inspired agent lenses only as cognitive roles. Do not impersonate, roleplay private identity, or speak as the historical people.\nAGENT PERSONA POLICY: Every Research agent row must include agent_name, display_name, persona, persona_boundary, reasoning_effort: "xhigh", service_tier when available, falsifiers, cheap_probes, and challenge_or_response. Use these agent_name values exactly: ${agentAgentNames}. Persona names are cognitive lenses, not impersonations.\nAGENT EFFORT POLICY: Every Research agent agent must use reasoning_effort=xhigh. Record effort: "xhigh" for every agent in agent-ledger.json. Any lower-effort agent output must keep research-gate.json unpassed.\nEUREKA POLICY: Every agent must literally write "Eureka!" and one non-obvious, source-linked idea before debate.\nCONSENSUS LOOP POLICY: This is not a fixed three-cycle run. Repeat source-gathering, agent Eureka ideas, debate, falsification, and synthesis pressure until every agent records final agreement with the surviving mechanism. If unanimous agreement is not reached, keep research-gate.json unpassed and continue until the explicit max-cycle safety cap pauses the run.\nDEBATE POLICY: The agents must debate vigorously but stay evidence-bound. Every agent must challenge or respond at least once, and debate-ledger.json must record exchanges, consensus_iterations, unanimous_consensus, and per-agent agreements before synthesis.\nPAPER POLICY: After the report and ledgers, write ${paperArtifact} as a concise manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References.\nSOURCE SKILL POLICY: Create or update ${RESEARCH_SOURCE_SKILL_ARTIFACT} as a route-local source collection skill before synthesis. It must name the selected source layers, query routes, quality fields, blockers, and cross-layer triangulation checks. Do not edit generated .agents/skills during the research run.\nWEB/SOURCE POLICY: Run layered source retrieval across every safely available layer before synthesis: latest public papers, official government or leading-institution data, standards or primary docs, current news including BBC/CNN/GDELT-style sources when relevant, public discourse including X/Twitter and Reddit when available, developer/practitioner sources such as Stack Overflow/Stack Exchange/GitHub, and counterevidence or fact-checking sources. Treat public discourse as signal, not truth. If a layer cannot be searched, record the blocker in source-ledger.json and do not pass the gate.\nQUALITY CONTRACT:\n${researchPromptContractText()}\nRESEARCH PLAN:\n${JSON.stringify(plan, null, 2)}\n\nOBJECTIVE: Produce genuinely useful candidate discoveries: non-obvious hypotheses, mechanisms, predictions, or experiments. Do not merely summarize. Mark uncertainty clearly.\n\nREQUIRED PROCESS:\n1. Source skill first: create ${RESEARCH_SOURCE_SKILL_ARTIFACT} with source layers, query templates, quality fields, blockers, and triangulation rules.\n2. Layered source search: create source-ledger.json with source_layers, queries, source ids, source quality notes, counterevidence sources, source claim_ids, triangulation.cross_layer_checks, citation coverage, and blockers.\n3. Claim matrix: create claim-evidence-matrix.json with at least ${DEFAULT_RESEARCH_QUALITY_CONTRACT.min_key_claims} key claims and ${DEFAULT_RESEARCH_QUALITY_CONTRACT.min_trianguled_claims} triangulated claims.\n4. Independent xhigh agents: create agent-ledger.json with agent_name/display_name/persona/persona_boundary, effort=xhigh, reasoning_effort=xhigh, a literal Eureka! idea, findings, source_ids, falsifiers, cheap_probes, and challenge_or_response for every agent lens.\n5. Debate to agreement: create debate-ledger.json with evidence-bound challenge/response exchanges involving every agent, consensus_iterations >= 1, unanimous_consensus=true only when all agents agree, and agent_agreements for every agent.\n6. Falsification: create falsification-ledger.json with at least ${DEFAULT_RESEARCH_QUALITY_CONTRACT.min_falsification_cases} attacks, missing evidence, source conflicts, and decisive next tests.\n7. Synthesis: write research-report.md with at least ${DEFAULT_RESEARCH_QUALITY_CONTRACT.min_report_words} words and novelty-ledger.json only after cited agent findings, Eureka ideas, unanimous debate agreement, cross-layer triangulation, and falsification are recorded.\n8. Handoff: write implementation-blueprint.json/.md, experiment-plan.json/.md, replication-pack.json, and research-final-review.json.\n9. Paper: write ${paperArtifact} as a paper-style manuscript with source-ledger references and limitations.\n\nREQUIRED OUTPUT FILES in .sneakoscope/missions/${id}/:\n- research-report.md: concise report with Question, Methodology, Source Map, Key Claims, Evidence Matrix Summary, Counterevidence, Falsification, Implementation Blueprint, Experiment / Validation Plan, Limitations, and References. Cite source-ledger ids for factual claims.\n- ${paperArtifact}: paper manuscript with Abstract, Introduction, Methodology, Findings/Results, Discussion, Limitations/Falsification, Conclusion/Next Experiment, and References using source-ledger ids.\n- ${RESEARCH_SOURCE_SKILL_ARTIFACT}: route-local source collection skill; it is evidence for the Skill Creator step and must not mutate generated .agents/skills.\n- source-ledger.json: layered web/source queries, source ids, source priority, source quality notes, claim_ids, counterevidence sources, citation coverage, triangulation checks, and blockers.\n- ${CLAIM_EVIDENCE_MATRIX_ARTIFACT}: key claims, source ids, counterevidence ids, triangulation, unsupported claims, and test probes.\n- ${SOURCE_QUALITY_REPORT_ARTIFACT}: source metadata and citation coverage audit.\n- agent-ledger.json: one entry per agent lens with agent_name, display_name, persona, persona_boundary, effort, reasoning_effort, service_tier, eureka, query_set, findings, source_ids, falsifiers, cheap_probes, and challenge_or_response.\n- debate-ledger.json: evidence-bound challenge/response exchanges, participants, changed minds, unresolved conflicts, consensus_iterations, unanimous_consensus, and agent_agreements for every agent.\n- novelty-ledger.json: entries with claim, novelty, confidence, falsifiability, evidence source ids, falsifiers, next_experiment.\n- falsification-ledger.json: attacks/counterexamples/source conflicts, result, and next_decisive_tests.\n- implementation-blueprint.json and implementation-blueprint.md: at least eight handoff sections.\n- experiment-plan.json and experiment-plan.md: at least five validation steps.\n- replication-pack.json: commands, inputs, expected artifacts, and reproduction notes.\n- research-final-review.json: approved=true only after all contract checks pass.\n- research-gate.json: set passed only when every required artifact and quality threshold passes.\n\nPrevious cycle tail:\n${String(previous || '').slice(-2500)}\n`;
+  const promptValidation = validateResearchPromptContract(promptText);
+  if (!promptValidation.ok) return `${promptText}\n\nPROMPT CONTRACT BLOCKERS:\n${promptValidation.blockers.join('\n')}\n`;
+  return promptText;
 }

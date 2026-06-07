@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/research/replication-pack.schema.json",
+  "title": "SKS Research Replication Pack",
+  "type": "object",
+  "required": ["schema", "generated_at", "inputs", "commands", "expected_artifacts"],
+  "properties": {
+    "schema": { "const": "sks.research-replication-pack.v1" },
+    "generated_at": { "type": "string" },
+    "mission_id": { "type": ["string", "null"] },
+    "prompt": { "type": "string" },
+    "inputs": { "type": "array", "minItems": 3, "items": { "type": "string" } },
+    "commands": { "type": "array", "minItems": 3, "items": { "type": "string" } },
+    "expected_artifacts": { "type": "array", "minItems": 6, "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

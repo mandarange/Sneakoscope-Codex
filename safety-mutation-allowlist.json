@@ -800,6 +800,18 @@
       "reason": "Real Zellij blackbox writes scoped worker fixture results and the matching proof report."
     },
     {
+      "file": "src/scripts/zellij-slot-pane-renderer-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes only scoped temporary slot-pane fixture artifacts under mkdtemp before renderer hydration."
+    },
+    {
+      "file": "src/scripts/zellij-slot-pane-renderer-check.ts",
+      "symbol": "module",
+      "token": "fs.rm",
+      "reason": "Release/check script removes only the scoped mkdtemp slot-pane fixture directory after hydration proof."
+    },
+    {
       "file": "src/core/zellij/zellij-command.ts",
       "symbol": "prepareZellijProcessEnv",
       "token": "chmod",

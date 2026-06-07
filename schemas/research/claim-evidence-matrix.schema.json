@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/research/claim-evidence-matrix.schema.json",
+  "title": "SKS Claim Evidence Matrix",
+  "type": "object",
+  "required": ["schema", "claims", "key_claim_ids", "unsupported_claims", "triangulated_claim_count", "blockers"],
+  "properties": {
+    "schema": { "const": "sks.claim-evidence-matrix.v1" },
+    "mission_id": { "type": "string" },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "claim", "claim_type", "importance", "source_ids", "counterevidence_ids", "triangulation", "confidence", "falsifiable", "test_or_probe"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "claim": { "type": "string" },
+          "claim_type": { "type": "string" },
+          "importance": { "type": "string" },
+          "source_ids": { "type": "array", "items": { "type": "string" } },
+          "local_evidence_ids": { "type": "array", "items": { "type": "string" } },
+          "counterevidence_ids": { "type": "array", "items": { "type": "string" } },
+          "triangulation": { "type": "object" },
+          "confidence": { "type": "string" },
+          "falsifiable": { "type": "boolean" },
+          "test_or_probe": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "key_claim_ids": { "type": "array", "items": { "type": "string" } },
+    "unsupported_claims": { "type": "array", "items": { "type": "string" } },
+    "triangulated_claim_count": { "type": "integer", "minimum": 0 },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

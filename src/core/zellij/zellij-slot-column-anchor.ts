@@ -32,14 +32,16 @@ export function renderZellijSlotColumnAnchor(input: ZellijSlotColumnAnchorInput 
   const queue = nonNegativeInt(input.queueDepth, 0)
   const header = `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}`
   const workers = Array.isArray(input.workerRows) ? input.workerRows : []
-  if (!workers.length) return header
+  if (!workers.length) return `${header}\nvisible slot panes stack below this anchor`
   const maxRows = Math.max(1, nonNegativeInt(input.maxWorkerRows, input.mode === 'full-debug' ? 24 : 12))
-  const visibleRows = workers.slice(0, maxRows)
+  const overflowRows = workers.filter((row) => row.placement === 'headless').slice(0, maxRows)
+  const visibleRows = overflowRows.length ? overflowRows : workers.filter((row) => row.placement !== 'zellij-pane').slice(0, maxRows)
   const hidden = Math.max(0, workers.length - visibleRows.length)
   return [
     header,
+    `visible slot panes stack below this anchor`,
     ...visibleRows.map((row, index) => renderWorkerRow(row, index + 1)),
-    ...(hidden ? [`+${hidden} more worker${hidden === 1 ? '' : 's'}`] : [])
+    ...(hidden && visibleRows.length ? [`+${hidden} worker${hidden === 1 ? '' : 's'} in dedicated panes or overflow`] : [])
   ].join('\n')
 }
 

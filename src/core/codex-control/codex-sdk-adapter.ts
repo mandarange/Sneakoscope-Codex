@@ -1,6 +1,9 @@
+import path from 'node:path'
+import { appendJsonl } from '../fsx.js'
 import type { CodexTaskInput } from './codex-control-plane.js'
 import { buildCodexSdkConfig } from './codex-sdk-config-policy.js'
 import { buildCodexSdkEnv } from './codex-sdk-env-policy.js'
+import { translateCodexSdkEvent } from './codex-event-translator.js'
 import type { CodexSdkSandboxMode } from './codex-sdk-sandbox-policy.js'
 
 export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
@@ -28,9 +31,15 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
   const thread = resumeId ? codex.resumeThread(resumeId, threadOptions) : codex.startThread(threadOptions)
   const events: any[] = []
   let finalResponse = ''
+  let liveEventsWritten = false
+  const liveEventPath = input.mutationLedgerRoot ? path.join(input.mutationLedgerRoot, 'codex-sdk-events.jsonl') : null
   const streamed = await thread.runStreamed(buildSdkInput(input), { outputSchema: input.outputSchema })
   for await (const event of streamed.events) {
     events.push(event)
+    if (liveEventPath) {
+      await appendJsonl(liveEventPath, translateCodexSdkEvent(event))
+      liveEventsWritten = true
+    }
     if (event?.type === 'item.completed' && event?.item?.type === 'agent_message') finalResponse = String(event.item.text || '')
   }
   const structuredOutput = parseStructuredOutput(finalResponse)
@@ -42,6 +51,7 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
     finalResponse,
     structuredOutput,
     blockers: [],
+    liveEventsWritten,
     raw: { item_count: events.filter((event) => String(event?.type || '').startsWith('item.')).length }
   }
 }
