@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/research/experiment-plan.schema.json",
+  "title": "SKS Research Experiment Plan",
+  "type": "object",
+  "required": ["schema", "generated_at", "prompt", "hypothesis", "steps", "metrics"],
+  "properties": {
+    "schema": { "const": "sks.research-experiment-plan.v1" },
+    "generated_at": { "type": "string" },
+    "prompt": { "type": "string" },
+    "hypothesis": { "type": "string" },
+    "steps": { "type": "array", "minItems": 5, "items": { "type": "object" } },
+    "metrics": { "type": "array", "items": { "type": "string" } },
+    "controls": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

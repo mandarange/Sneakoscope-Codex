@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.13 is the research pipeline quality-contract closure patch for the 2.0 line. It promotes Research from a report-only route into a handoff-ready pipeline with claim/evidence matrices, source-quality scoring, implementation blueprints, experiment plans, replication packs, falsification checks, and final-review evidence that can be validated before downstream implementation work.
+
+The 2.0.13 release gate adds research schema checks, `research:quality-gates`, `codex-sdk:research-pipeline`, expanded `release-gates.v2.json` coverage, and version/provenance alignment across Node, Rust, docs, and package metadata. Publish readiness still requires a fresh full `release:check` stamp, `publish:dry`, and operator-run npm publication after the pushed commit is reviewed.
+
 SKS 2.0.12 is the public-ready parallel runtime stabilization patch for the 2.0 line. It closes the Zellij first-slot down-stack real proof, distinguishes slot renderer panes from Codex worker panes, wires Naruto allocation/rebalance into production scheduler ownership, keeps pre-run smoke out of production source-of-truth claims, and protects local/worktree candidate apply with GPT Final approval.
 
 The 2.0.12 release gate adds `zellij:slot-renderer-proof-semantics`, `naruto:allocation-runtime-wiring`, `local-collab:worktree-gpt-final-apply-policy`, and cache-glob release DAG coverage while retaining the 2.0.11 Zellij/Naruto/Git worktree gates. Publish readiness requires a fresh full `release:check` stamp, version/provenance alignment, and operator-run real-environment checks where policy requires them.

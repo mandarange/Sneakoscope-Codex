@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/research/source-quality-report.schema.json",
+  "title": "SKS Source Quality Report",
+  "type": "object",
+  "required": ["schema", "generated_at", "ok", "blockers", "summary", "citation_coverage", "sources"],
+  "properties": {
+    "schema": { "const": "sks.research-source-quality-report.v1" },
+    "generated_at": { "type": "string" },
+    "ok": { "type": "boolean" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "required_source_fields": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "object" },
+    "citation_coverage": { "type": "object" },
+    "sources": { "type": "array", "items": { "type": "object" } }
+  },
+  "additionalProperties": true
+}

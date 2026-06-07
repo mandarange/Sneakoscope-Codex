@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/research/research-final-review.schema.json",
+  "title": "SKS Research Final Review",
+  "type": "object",
+  "required": ["schema", "reviewed_at", "approved", "blockers", "checks", "reviewer"],
+  "properties": {
+    "schema": { "const": "sks.research-final-reviewer.v1" },
+    "reviewed_at": { "type": "string" },
+    "approved": { "type": "boolean" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "checks": { "type": "object" },
+    "reviewer": { "type": "string" }
+  },
+  "additionalProperties": true
+}

@@ -1455,6 +1455,366 @@
       ]
     },
     {
+      "id": "research:quality-contract",
+      "command": "npm run research:quality-contract --silent",
+      "deps": [
+        "codex-sdk:research-pipeline"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:claim-matrix",
+      "command": "npm run research:claim-matrix --silent",
+      "deps": [
+        "research:quality-contract"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:source-quality-report",
+      "command": "npm run research:source-quality-report --silent",
+      "deps": [
+        "research:claim-matrix"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:implementation-blueprint",
+      "command": "npm run research:implementation-blueprint --silent",
+      "deps": [
+        "research:source-quality-report"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:experiment-plan",
+      "command": "npm run research:experiment-plan --silent",
+      "deps": [
+        "research:implementation-blueprint"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:replication-pack",
+      "command": "npm run research:replication-pack --silent",
+      "deps": [
+        "research:experiment-plan"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:final-reviewer",
+      "command": "npm run research:final-reviewer --silent",
+      "deps": [
+        "research:replication-pack"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:work-graph",
+      "command": "npm run research:work-graph --silent",
+      "deps": [
+        "research:final-reviewer"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:prompt-contract",
+      "command": "npm run research:prompt-contract --silent",
+      "deps": [
+        "research:work-graph"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:gate-thresholds",
+      "command": "npm run research:gate-thresholds --silent",
+      "deps": [
+        "research:prompt-contract"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:schemas",
+      "command": "npm run research:schemas --silent",
+      "deps": [
+        "research:gate-thresholds"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "research:quality-gates",
+      "command": "npm run research:quality-gates --silent",
+      "deps": [
+        "research:schemas"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "codex-sdk:sandbox-policy",
       "command": "npm run codex-sdk:sandbox-policy --silent",
       "deps": [],

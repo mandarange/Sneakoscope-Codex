@@ -63,7 +63,9 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
   }
   const events = Array.isArray(adapterResult?.events) ? adapterResult.events : []
   const translatedEvents = translateCodexSdkEvents(events)
-  for (const event of translatedEvents) await appendJsonl(path.join(root, 'codex-sdk-events.jsonl'), event)
+  if (adapterResult?.liveEventsWritten !== true) {
+    for (const event of translatedEvents) await appendJsonl(path.join(root, 'codex-sdk-events.jsonl'), event)
+  }
   if (adapterResult?.reliabilityShield) await writeJsonAtomic(path.join(root, 'codex-reliability-shield.json'), adapterResult.reliabilityShield)
   const structuredOutput = adapterResult?.structuredOutput
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }

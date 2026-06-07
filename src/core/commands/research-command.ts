@@ -14,6 +14,15 @@ import { scanDbSafety } from '../db-safety.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
 import { flag, positionalArgs, readFlagValue, readMaxCycles, readBoundedIntegerFlag, resolveMissionId, safeReadTextFile } from './command-utils.js';
+import { writeResearchWorkGraph } from '../research/research-work-graph.js';
+import { runResearchCycle } from '../research/research-cycle-runner.js';
+import { readResearchQualityContract } from '../research/research-quality-contract.js';
+import { readClaimEvidenceMatrix } from '../research/claim-evidence-matrix.js';
+import { readSourceQualityReport } from '../research/source-quality-report.js';
+import { readImplementationBlueprint, validateImplementationBlueprint } from '../research/implementation-blueprint.js';
+import { readExperimentPlan, validateExperimentPlan } from '../research/experiment-plan.js';
+import { readReplicationPack, validateReplicationPack } from '../research/replication-pack.js';
+import { readResearchFinalReview } from '../research/research-final-reviewer.js';
 
 const RESEARCH_DEFAULT_MAX_CYCLES = 12;
 const RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES = 120;
@@ -125,9 +134,12 @@ async function researchRun(args: any) {
   const dryRunPatches = flag(args, '--dry-run-patches') || flag(args, '--dryrun-patches');
   const maxWriteAgents = readBoundedIntegerFlag(args, '--max-write-agents', Math.min(requestedAgents, 5), 1, 20);
   const mock = flag(args, '--mock');
+  const researchWorkGraph = await writeResearchWorkGraph(dir, plan);
+  const graphWorkItemCount = Math.max(1, Number(researchWorkGraph.total_work_items || researchWorkGraph.work_items?.length || 0));
+  await runResearchCycle(dir, researchWorkGraph, { cycle: 0, status: mock ? 'mock_native_orchestrator_planned' : 'native_orchestrator_planned' });
   await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false, implementation_allowed: false, research_real_run_required: !mock, research_cycle_timeout_minutes: cycleTimeoutMinutes });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock, cycleTimeoutMinutes, real_run_required: !mock });
-  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: !(applyPatches && writeMode !== 'off'), profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: plan.native_agent_plan, routeCommand: 'sks research run', routeBlackboxKind: 'actual_research_command' });
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount: Math.max(desiredWorkItemCount, graphWorkItemCount), minimumWorkItems: Math.max(minimumWorkItems, Math.min(graphWorkItemCount, targetActiveSlots)), maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: true, profile, writeMode: writeMode as any, applyPatches: false, dryRunPatches, maxWriteAgents, roster: plan.native_agent_plan, routeCommand: 'sks research run', routeBlackboxKind: 'actual_research_command', narutoWorkGraph: researchWorkGraph });
   await writeJsonAtomic(path.join(dir, 'research-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (mock) {
@@ -137,7 +149,7 @@ async function researchRun(args: any) {
     gate = { ...gate, gate: nativeGate, passed: nativeGate.passed };
     const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'research-native-agent-run.json', 'research-gate.json', 'research-report.md', researchPaperArtifactForPlan(plan), 'source-ledger.json', 'agent-ledger.json', 'debate-ledger.json', 'completion-proof.json'], mock, command: { cmd: `sks research run ${id} --mock`, status: 0 } });
     await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: gate.passed ? 'RESEARCH_DONE' : 'RESEARCH_PAUSED', questions_allowed: true, implementation_allowed: false });
-    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation, native_agent_run: nativeAgentRun, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
+    if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, quality_metrics: gate.metrics || null, proof: proof.validation, native_agent_run: nativeAgentRun, research_work_graph: researchWorkGraph, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
     console.log(`Mock research done: ${id}`);
     console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
     return;
@@ -174,6 +186,7 @@ async function researchRun(args: any) {
     const cycleDir = path.join(dir, 'research', `cycle-${cycle}`);
     const outputFile = path.join(cycleDir, 'final.md');
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle.start', cycle, timeoutMinutes: cycleTimeoutMinutes, profile, enforced_reasoning_effort: 'xhigh' });
+    await runResearchCycle(dir, researchWorkGraph, { cycle, status: 'codex_research_cycle_started' });
     const prompt = buildResearchPrompt({ id, mission, plan, cycle, previous: last });
     const result = await runCodexExec({ root, prompt, outputFile, json: true, profile, extraArgs: researchCodexArgs, logDir: cycleDir, timeoutMs: cycleTimeoutMs });
     await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
@@ -207,7 +220,7 @@ async function researchRun(args: any) {
       await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_DONE', questions_allowed: true, implementation_allowed: false });
       await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.done', cycle });
       await enforceRetention(root).catch(() => {});
-      if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
+      if (flag(args, '--json')) return console.log(JSON.stringify({ schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1', ok: proof.ok, mission_id: id, gate, quality_metrics: gate.metrics || null, proof: proof.validation, research_work_graph: researchWorkGraph, agent_batches: plan.agent_batches, autoresearch_cycle_policy: plan.autoresearch_cycle_policy }, null, 2));
       console.log(`Research done: ${id}`);
       return;
     }
@@ -241,6 +254,16 @@ async function researchStatus(args: any) {
   const agentRows = Array.isArray(agentLedger?.agents) ? agentLedger.agents : [];
   const sourceLayerRows = Array.isArray(sourceLedger?.source_layers) ? sourceLedger.source_layers : [];
   const sourceLayersCovered = sourceLayerRows.filter((layer: any) => layer.status === 'covered' && ((Array.isArray(layer.source_ids) && layer.source_ids.length) || (Array.isArray(layer.counterevidence_ids) && layer.counterevidence_ids.length))).length;
+  const qualityContract = await readResearchQualityContract(dir);
+  const claimMatrix = await readClaimEvidenceMatrix(dir);
+  const sourceQualityReport = await readSourceQualityReport(dir);
+  const implementationBlueprint = await readImplementationBlueprint(dir);
+  const experimentPlan = await readExperimentPlan(dir);
+  const replicationPack = await readReplicationPack(dir);
+  const finalReview = await readResearchFinalReview(dir);
+  const blueprintValidation = validateImplementationBlueprint(implementationBlueprint, qualityContract);
+  const experimentValidation = validateExperimentPlan(experimentPlan, qualityContract);
+  const replicationValidation = validateReplicationPack(replicationPack);
   console.log(JSON.stringify({
     mission,
     state,
@@ -270,7 +293,23 @@ async function researchStatus(args: any) {
     research_paper_artifact: paperArtifact.name,
     paper_present: Boolean(paperText.trim()),
     paper_sections: countResearchPaperSections(paperText),
-    falsification_cases: falsificationLedger?.cases?.length ?? null
+    falsification_cases: falsificationLedger?.cases?.length ?? null,
+    research_quality: {
+      contract: qualityContract,
+      report_word_count: gate?.metrics?.report_word_count ?? null,
+      claim_evidence_matrix_present: claimMatrix.present,
+      key_claims: claimMatrix.key_claim_ids.length,
+      triangulated_claims: claimMatrix.triangulated_claim_count,
+      claim_matrix_blockers: claimMatrix.blockers,
+      source_quality_report_ok: sourceQualityReport?.ok === true,
+      implementation_blueprint_sections: Array.isArray(implementationBlueprint?.sections) ? implementationBlueprint.sections.length : null,
+      implementation_blueprint_ok: blueprintValidation.ok,
+      experiment_steps: Array.isArray(experimentPlan?.steps) ? experimentPlan.steps.length : null,
+      experiment_plan_ok: experimentValidation.ok,
+      replication_pack_ok: replicationValidation.ok,
+      final_review_approved: finalReview?.approved === true,
+      final_review_blockers: finalReview?.blockers || []
+    }
   }, null, 2));
 }
 
