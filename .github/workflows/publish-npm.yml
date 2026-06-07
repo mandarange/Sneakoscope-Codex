@@ -61,10 +61,20 @@ jobs:
             echo "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }} is not published yet; continuing."
           fi
 
-      - name: Run release gate
+      - name: Run publish gates
         if: steps.registry.outputs.published != 'true'
-        run: npm run release:check
+        shell: bash
+        run: |
+          npm run build --silent
+          npm run release:metadata
+          npm run release:version-truth
+          npm run release:dist-freshness
+          npm run publish:packlist-performance
+          npm run release:provenance -- --publish
+          node ./dist/scripts/release-registry-check.js --require-unpublished
 
       - name: Publish to npm
         if: steps.registry.outputs.published != 'true'
-        run: npm publish --provenance --access public
+        env:
+          NPM_CONFIG_PROVENANCE: 'true'
+        run: npm publish --ignore-scripts --provenance --access public
