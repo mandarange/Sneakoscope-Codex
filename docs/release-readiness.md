@@ -76,17 +76,19 @@ Publish mode treats main/tag/npm mismatches as blockers.
 runtime totals. Readiness blocks on unexpected applied mutations, global mutations
 without confirmation, or config/auth/skill mutations without backup or no-op proof.
 
-## Publish authorization policy (1.20.2)
+## Publish authorization policy (2.0.15)
 
-Publishing to npm requires a full `npm run release:check` (the complete hermetic gate
-set) **plus** `npm run release:real-check` for environment-dependent proof. Direct
-`npm publish` may use the fast path only when `.sneakoscope/reports/release-check-stamp.json`
-matches the current package/source/dist state; when that stamp is missing or stale,
-`prepublish:release-check-or-fast` runs the full `release:check` once and then
-re-verifies the stamp. The change-aware incremental runner
-`npm run release:check:dynamic:execute` is a local/CI acceleration only — it narrows
-the gate set to changed inputs and caches results, so it **cannot** authorize a publish
-on its own. See `docs/dynamic-release-pipeline.md` for the two-tier model.
+Publishing to npm requires `npm run release:check:full` (the complete hermetic gate
+set) **plus** `npm run release:real-check` for environment-dependent proof when that
+proof is required. Ordinary `npm run release:check` is now the change-aware affected
+gate for local checks; it cannot authorize a publish on its own. `prepublishOnly`
+and `npm run publish:dry` both run `release:check:full`, verify the fresh
+`.sneakoscope/reports/release-check-stamp.json`, and then run provenance/registry
+checks before the real or dry-run publish step. The dynamic runners
+`npm run release:check:dynamic` and `npm run release:check:dynamic:execute` remain
+local/CI accelerations only — they narrow the gate set to changed inputs and cached
+results, so they **cannot** authorize a publish on their own. See
+`docs/dynamic-release-pipeline.md` for the two-tier model.
 
 `prepublishOnly` also runs `release-registry-check.mjs --require-publish-auth`
 before `prepack`. That check uses the documented npm `whoami` identity and the
