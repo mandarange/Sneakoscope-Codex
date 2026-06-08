@@ -7,21 +7,21 @@ const scripts = pkg.scripts || {};
 const buildManifestWriter = fs.readFileSync('dist/scripts/write-build-manifest.js', 'utf8');
 const distRuntimeCheck = fs.readFileSync('dist/scripts/check-dist-runtime.js', 'utf8');
 
-test('publish lifecycle runs the expensive release gate only once', () => {
+test('publish lifecycle requires the full release gate for publish readiness', () => {
   assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
   assert.equal(pkg.publishConfig?.tag, 'latest');
   assert.match(scripts['feature-quality:check'], /--release/);
   assert.doesNotMatch(scripts['feature-quality:check'], /--rc/);
   assert.equal(scripts.prepack, 'npm run build');
-  assert.match(scripts['release:check'], /release-check-stamp\.js write/);
-  assert.match(scripts['release:check'], /release:readiness.*release-check-stamp\.js write/);
-  assert.match(scripts.prepublishOnly, /prepublish:release-check-or-fast/);
+  assert.equal(scripts['release:check'], 'npm run release:check:affected');
+  assert.match(scripts['release:check:affected'], /--preset affected/);
+  assert.match(scripts['release:check:full'], /--preset release --full/);
+  assert.match(scripts['release:check:full'], /release-check-stamp\.js write/);
+  assert.match(scripts.prepublishOnly, /npm run release:check:full/);
   assert.match(scripts.prepublishOnly, /release-check-stamp\.js verify/);
-  assert.doesNotMatch(scripts.prepublishOnly, /npm run release:check/);
   assert.match(scripts.prepublishOnly, /--require-unpublished/);
   assert.match(scripts.prepublishOnly, /--require-publish-auth/);
-  assert.doesNotMatch(scripts['publish:dry'], /release:check/);
-  assert.match(scripts['publish:dry'], /prepublish:release-check-or-fast/);
+  assert.match(scripts['publish:dry'], /npm run release:check:full/);
   assert.match(scripts['publish:dry'], /release-check-stamp\.js verify/);
   assert.match(scripts['publish:dry'], /--dry-run/);
   assert.doesNotMatch(scripts['publish:dry'], /--tag rc/);
