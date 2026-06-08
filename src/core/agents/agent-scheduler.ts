@@ -125,6 +125,8 @@ export async function runAgentScheduler(input: {
   const active = new Map<string, { slot_id: string; work_item_id: string; session_id: string; promise: Promise<any> }>()
   const results: any[] = []
   const schedulerStartedAt = Date.now()
+  let lastUtilizationUpdateMs = schedulerStartedAt
+  let activeSlotTimeMs = 0
   let batchCounter = 0
   let batchLaunchSpanTotalMs = 0
   let batchDispatchInProgress = false
@@ -147,6 +149,7 @@ export async function runAgentScheduler(input: {
     const entry = active.get(settled.session_id)
     if (!entry) continue
     const activeCountBeforeClose = active.size
+    accumulateActiveSlotTime()
     active.delete(settled.session_id)
     const resultStatus = settled.result?.status === 'done' ? 'completed' : settled.result?.status === 'blocked' ? 'blocked' : 'failed'
     completeWorkItem(queue, entry.work_item_id, settled.session_id, resultStatus, settled.error || null)
@@ -171,6 +174,7 @@ export async function runAgentScheduler(input: {
     }
     const pendingAfterClose = pendingWorkItems(queue).length
     if (pendingAfterClose > 0) state.expected_backfill_count += 1
+    updateUtilizationMetrics()
     await writeAll(input.root, state, slots, queue, active, {
       event_type: 'session_completed',
       session_id: settled.session_id,
@@ -187,6 +191,7 @@ export async function runAgentScheduler(input: {
     } : null)
   }
 
+  updateUtilizationMetrics()
   state.status = 'draining'
   await writeAll(input.root, state, slots, queue, active, { event_type: 'scheduler_draining' }, input.onSchedulerEvent)
   slots = closeWorkerSlotsAfterDrain(slots)
@@ -304,7 +309,8 @@ export async function runAgentScheduler(input: {
           error: err instanceof Error ? err.message : String(err),
           terminal_close_report_path: path.join(generation.artifact_dir, 'agent-terminal-close-report.json')
         }))
-      active.set(generation.session_id, { slot_id: slot.slot_id, work_item_id: workItem.id, session_id: generation.session_id, promise })
+        accumulateActiveSlotTime()
+        active.set(generation.session_id, { slot_id: slot.slot_id, work_item_id: workItem.id, session_id: generation.session_id, promise })
       }
       await appendAgentWorkQueueEvent(input.root, 'batch_work_items_dispatched', {
         batch_id: batchId,
@@ -409,10 +415,18 @@ export async function runAgentScheduler(input: {
   }
 
   function updateUtilizationMetrics() {
+    accumulateActiveSlotTime()
     state.wall_time_ms = Math.max(0, Date.now() - schedulerStartedAt)
-    state.active_slot_time_ms = Math.max(state.active_slot_time_ms, state.completed_count * state.wall_time_ms)
+    state.active_slot_time_ms = activeSlotTimeMs
     const denominator = Math.max(1, state.wall_time_ms * targetActiveSlots)
     state.scheduler_utilization = Number(Math.min(1, state.active_slot_time_ms / denominator).toFixed(3))
+  }
+
+  function accumulateActiveSlotTime() {
+    const now = Date.now()
+    const delta = Math.max(0, now - lastUtilizationUpdateMs)
+    activeSlotTimeMs += active.size * delta
+    lastUtilizationUpdateMs = now
   }
 }
 

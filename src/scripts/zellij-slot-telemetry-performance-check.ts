@@ -13,4 +13,6 @@ const wallMs = Date.now() - started
 const snapshot = await readZellijSlotTelemetrySnapshot(root, missionId)
 assertGate(wallMs < 15000, '5000 telemetry appends exceeded performance threshold', { wallMs, counts: snapshot.counts })
 assertGate(Object.keys(snapshot.slots).length === 5000, 'snapshot slot count mismatch', { wallMs, slot_count: Object.keys(snapshot.slots).length })
-emitGate('zellij:slot-telemetry-performance', { wall_ms: wallMs, slot_count: Object.keys(snapshot.slots).length })
+assertGate(Number(snapshot.flush_count || 0) > 0 && Number(snapshot.flush_count || 0) < 500, 'snapshot writes must be throttled far below event count', { flush_count: snapshot.flush_count })
+assertGate(snapshot.slots['slot-099:g50']?.status === 'running', 'latest slot state must remain correct after incremental updates', snapshot.slots['slot-099:g50'])
+emitGate('zellij:slot-telemetry-performance', { wall_ms: wallMs, slot_count: Object.keys(snapshot.slots).length, flush_count: snapshot.flush_count })

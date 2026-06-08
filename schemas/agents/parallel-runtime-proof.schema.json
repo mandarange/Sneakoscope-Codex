@@ -6,6 +6,9 @@
     "schema",
     "mission_id",
     "generated_at",
+    "proof_mode",
+    "require_worker_pids",
+    "allow_missing_pids",
     "requested_workers",
     "target_active_slots",
     "max_observed_active_workers",
@@ -19,6 +22,7 @@
     "overlap_windows",
     "visible_panes",
     "headless_workers",
+    "utilization_proof_consistency",
     "passed",
     "blockers"
   ],
@@ -26,6 +30,9 @@
     "schema": { "const": "sks.parallel-runtime-proof.v1" },
     "mission_id": { "type": "string", "minLength": 1 },
     "generated_at": { "type": "string" },
+    "proof_mode": { "enum": ["production", "mock-process", "in-process-fixture"] },
+    "require_worker_pids": { "type": "boolean" },
+    "allow_missing_pids": { "type": "boolean" },
     "requested_workers": { "type": "integer", "minimum": 1 },
     "target_active_slots": { "type": "integer", "minimum": 1 },
     "max_observed_active_workers": { "type": "integer", "minimum": 0 },
@@ -41,6 +48,30 @@
     "overlap_windows": { "type": "array" },
     "visible_panes": { "type": "integer", "minimum": 0 },
     "headless_workers": { "type": "integer", "minimum": 0 },
+    "utilization_proof_consistency": {
+      "type": "object",
+      "required": [
+        "ok",
+        "scheduler_max_active",
+        "proof_max_active",
+        "wall_ms_delta",
+        "scheduler_active_slot_time_ms",
+        "proof_active_slot_time_ms",
+        "active_slot_time_ms_delta",
+        "scheduler_observation_delay_tolerance_ms"
+      ],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "scheduler_max_active": { "type": "integer", "minimum": 0 },
+        "proof_max_active": { "type": "integer", "minimum": 0 },
+        "wall_ms_delta": { "type": "number", "minimum": 0 },
+        "scheduler_active_slot_time_ms": { "type": "number", "minimum": 0 },
+        "proof_active_slot_time_ms": { "type": "number", "minimum": 0 },
+        "active_slot_time_ms_delta": { "type": "number", "minimum": 0 },
+        "scheduler_observation_delay_tolerance_ms": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
     "passed": { "type": "boolean" },
     "blockers": { "type": "array", "items": { "type": "string" } }
   },

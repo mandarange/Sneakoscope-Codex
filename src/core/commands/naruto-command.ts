@@ -19,6 +19,7 @@ import { buildNarutoGptFinalPack } from '../naruto/naruto-gpt-final-pack.js'
 import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
 import { checkPromptPlaceholders } from '../prompt/prompt-placeholder-guard.js'
 import { evaluateGitWorktreeCapability } from '../git/git-worktree-capability.js'
+import { buildRuntimeProofSummary, renderRuntimeProofSummary } from '../agents/runtime-proof-summary.js'
 
 const NARUTO_RESULT_SCHEMA = 'sks.naruto-command-result.v1'
 const NARUTO_ROUTE = '$Naruto'
@@ -35,6 +36,7 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
   if (parsed.action === 'status') return narutoStatus(parsed)
   if (parsed.action === 'dashboard') return narutoDashboard(parsed)
   if (parsed.action === 'workers') return narutoWorkers(parsed)
+  if (parsed.action === 'proof') return narutoProof(parsed)
   return narutoRun(parsed)
 }
 
@@ -709,6 +711,16 @@ async function narutoWorkers(parsed: NarutoArgs) {
   })
 }
 
+async function narutoProof(parsed: NarutoArgs) {
+  const root = await sksRoot()
+  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root)
+  if (!id) return emit(parsed, { schema: NARUTO_RESULT_SCHEMA, ok: false, action: 'proof', status: 'missing_mission' }, () => console.log('No Naruto mission found.'))
+  const summary = await buildRuntimeProofSummary(root, id)
+  return emit(parsed, { ...summary, action: 'proof' }, () => {
+    console.log(renderRuntimeProofSummary(summary))
+  })
+}
+
 async function narutoHelp(parsed: NarutoArgs) {
   const help = {
     schema: NARUTO_RESULT_SCHEMA,
@@ -718,7 +730,8 @@ async function narutoHelp(parsed: NarutoArgs) {
     description: 'Shadow Clone Swarm: fan out up to ' + MAX_NARUTO_AGENT_COUNT + ' parallel clone sessions.',
     usage: [
       'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake|ollama] [--local-model|--no-ollama] [--work-items N] [--real] [--readonly] [--json]',
-      'sks naruto status [--mission <id>] [--json]'
+      'sks naruto status [--mission <id>] [--json]',
+      'sks naruto proof latest [--json]'
     ],
     defaults: { clones: DEFAULT_NARUTO_CLONES, max_clones: MAX_NARUTO_AGENT_COUNT, backend: 'codex-sdk' }
   }
@@ -730,7 +743,7 @@ async function narutoHelp(parsed: NarutoArgs) {
 }
 
 interface NarutoArgs {
-  action: 'run' | 'status' | 'help' | 'dashboard' | 'workers'
+  action: 'run' | 'status' | 'help' | 'dashboard' | 'workers' | 'proof'
   prompt: string
   clones: number
   workItems: number
@@ -756,7 +769,7 @@ interface NarutoArgs {
 function parseNarutoArgs(args: string[] = []): NarutoArgs {
   if (hasFlag(args, '--help') || hasFlag(args, '-h')) args = ['help', ...args.filter((arg) => arg !== '--help' && arg !== '-h')]
   const first = args[0] && !String(args[0]).startsWith('--') ? String(args[0]) : ''
-  const actions = new Set(['run', 'status', 'help', 'dashboard', 'workers'])
+  const actions = new Set(['run', 'status', 'help', 'dashboard', 'workers', 'proof'])
   const action = (actions.has(first) ? first : 'run') as NarutoArgs['action']
   const rest = action === first ? args.slice(1) : args
   const json = hasFlag(args, '--json')
@@ -773,7 +786,7 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const readonly = hasFlag(args, '--readonly') || hasFlag(args, '--read-only')
   const writeModeRaw = String(readOption(args, '--write-mode', hasFlag(args, '--parallel-write') ? 'parallel' : '') || '')
   const writeMode = (['proof-safe', 'parallel', 'serial', 'off'].includes(writeModeRaw) ? writeModeRaw : null) as NarutoArgs['writeMode']
-  const positionalMission = action === 'dashboard' || action === 'workers' || action === 'status'
+  const positionalMission = action === 'dashboard' || action === 'workers' || action === 'status' || action === 'proof'
     ? positionalArgs(rest, new Set()).find((arg) => /^latest$|^M-/.test(arg))
     : null
   const missionId = String(readOption(args, '--mission', readOption(args, '--mission-id', positionalMission || 'latest')))

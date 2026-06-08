@@ -5,6 +5,7 @@ import { evaluateMadSksPermissionGate, isMadSksRouteState } from './permission-g
 import { resolveMadDbMutationPolicy } from './mad-db/mad-db-policy-resolver.js';
 import { recordMadDbOperation } from './mad-db/mad-db-capability.js';
 import { appendMadDbLedgerEvent, appendMadDbOperationLifecycle } from './mad-db/mad-db-ledger.js';
+import { lifecycleHookFromUnknown, recordPendingMadDbLifecycleHook, type MadDbLifecycleHook } from './mad-db/mad-db-result-lifecycle.js';
 
 export const DEFAULT_DB_SAFETY_POLICY = Object.freeze({
   schema_version: 1,
@@ -459,6 +460,14 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
       sqlHash,
       destructive: classification.level === 'destructive'
     });
+    const lifecycleHook: MadDbLifecycleHook = {
+      mission_id: String(state.mission_id),
+      operation_id: operationId,
+      cycle_id: madDbDecision.cycle_id || null,
+      tool_name: classification.toolName || null,
+      sql_hash: sqlHash,
+      destructive: classification.level === 'destructive'
+    };
     const decision = {
       allowed: true,
       action: 'allow',
@@ -473,6 +482,8 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
         capability_file: 'mad-db-capability.json',
         consumed: false,
         operation_id: operationId,
+        lifecycle_result_pending: true,
+        ledger_result_hook: lifecycleHook,
         operation_count: Number(madDbDecision.operation_count || 0) + 1,
         max_operations: madDbDecision.max_operations || 20
       }
@@ -494,6 +505,7 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
     });
     decision.mad_db.consumed = updatedCapability?.consumed === true;
     decision.mad_db.operation_count = updatedCapability?.operation_count ?? decision.mad_db.operation_count;
+    await recordPendingMadDbLifecycleHook(root, state.mission_id, lifecycleHook);
     await appendJsonlBounded(path.join(missionDir(root, state.mission_id), 'db-safety.jsonl'), { ts: nowIso(), decision });
     return decision;
   }
@@ -504,6 +516,10 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
     await appendJsonlBounded(path.join(missionDir(root, state.mission_id), 'db-safety.jsonl'), { ts: nowIso(), decision });
   }
   return decision;
+}
+
+export function madDbLifecycleHookFromDecision(decision: any): MadDbLifecycleHook | null {
+  return lifecycleHookFromUnknown(decision)
 }
 
 export async function checkSqlFile(file: any) {

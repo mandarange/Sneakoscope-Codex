@@ -4,6 +4,23 @@
 
 
 
+## [2.0.17] - 2026-06-08
+
+### Added
+
+- Strict production PID enforcement for parallel runtime proof.
+- True active-time scheduler utilization.
+- 1-second live Zellij telemetry snapshot flush.
+- Mad-DB MCP result lifecycle audit.
+- Unified runtime/release proof summary.
+
+### Fixed
+
+- Production parallel proof no longer passes without worker PID evidence.
+- Scheduler utilization no longer uses completed-count approximation.
+- Slot panels no longer wait for 100 events before seeing telemetry updates.
+- Mad-DB operations now record succeeded/failed lifecycle results.
+
 ## [2.0.16] - 2026-06-08
 
 ### Added

@@ -176,6 +176,27 @@ export async function renderZellijSlotPaneFromArtifacts(input: {
   })
 }
 
+export async function renderZellijSlotPaneStatusFromArtifacts(input: {
+  artifactDir: string
+  artifactRoot?: string
+  missionId?: string
+  slotId: string
+  generationIndex: number
+}) {
+  const snapshot = input.missionId && input.missionId !== 'latest'
+    ? await readZellijSlotTelemetrySnapshot(path.resolve(input.artifactRoot || input.artifactDir), input.missionId).catch(() => null)
+    : null
+  const status = telemetryStatus(snapshot)
+  return {
+    schema: 'sks.zellij-slot-pane-status.v1',
+    mission_id: input.missionId || null,
+    slot_id: input.slotId,
+    generation_index: Math.max(1, Math.floor(Number(input.generationIndex) || 1)),
+    telemetry_stale: status.telemetry_stale,
+    telemetry_age_ms: status.telemetry_age_ms
+  }
+}
+
 export function buildZellijSlotPaneCommand(input: {
   nodePath?: string
   cliPath: string
@@ -215,9 +236,11 @@ async function tryRenderTelemetrySlotPane(input: {
   if (!snapshot || !Object.keys(snapshot.slots || {}).length) return null
   const slot = findTelemetrySlot(snapshot, input.slotId, input.generationIndex)
   if (!slot) return null
+  const staleRows = staleTelemetryRows(telemetryStatus(snapshot).telemetry_age_ms)
   if (slot.status === 'failed') {
     return [
       `${slot.slot_id} gen-${slot.generation_index} · FAILED`,
+      ...staleRows,
       `blocker: ${trimInline(slot.blockers[0] || 'worker_failed', 78)}`,
       `artifact: ${trimInline(slot.artifact_paths[slot.artifact_paths.length - 1] || '-', 78)}`
     ].join('\n')
@@ -225,6 +248,7 @@ async function tryRenderTelemetrySlotPane(input: {
   if (slot.status === 'completed' || slot.status === 'drained') {
     return [
       `${slot.slot_id} gen-${slot.generation_index} · done`,
+      ...staleRows,
       `artifacts ${slot.artifact_paths.length} · ${slot.latest_event_type === 'verification_passed' ? 'verify passed' : 'verify queued'}`,
       'closing in 3s'
     ].join('\n')
@@ -233,6 +257,7 @@ async function tryRenderTelemetrySlotPane(input: {
   const heartbeat = slot.latest_ts ? `${Math.max(0, Math.round((Date.now() - Date.parse(slot.latest_ts)) / 1000))}s` : '?'
   return [
     `${slot.slot_id} gen-${slot.generation_index} · ${trimInline(slot.role || 'worker', 28)}`,
+    ...staleRows,
     trimInline(backend, 78),
     `${slot.status}: ${trimInline(slot.task_title || 'worker task', 68)}`,
     `${formatTelemetryProgress(slot.progress)} · latest ${slot.latest_event_type} ${heartbeat}`,
@@ -248,6 +273,22 @@ function findTelemetrySlot(snapshot: ZellijSlotTelemetrySnapshot, slotId: string
 function formatTelemetryProgress(progress: { done: number; total: number; label: string } | null) {
   if (!progress) return 'progress ?'
   return `progress ${progress.done}/${progress.total}${progress.label ? ` ${trimInline(progress.label, 24)}` : ''}`
+}
+
+function telemetryStatus(snapshot: ZellijSlotTelemetrySnapshot | null) {
+  const parsed = snapshot?.updated_at ? Date.parse(snapshot.updated_at) : NaN
+  const telemetryAgeMs = Number.isFinite(parsed) ? Math.max(0, Date.now() - parsed) : Number.MAX_SAFE_INTEGER
+  return {
+    telemetry_stale: telemetryAgeMs > 3000,
+    telemetry_age_ms: telemetryAgeMs
+  }
+}
+
+function staleTelemetryRows(ageMs: number): string[] {
+  if (!Number.isFinite(ageMs)) return ['telemetry stale; worker may still be running']
+  if (ageMs > 10000) return ['telemetry stale; worker may still be running']
+  if (ageMs > 3000) return [`telemetry stale ${(ageMs / 1000).toFixed(1)}s`]
+  return []
 }
 
 async function readJson(file: string): Promise<any | null> {

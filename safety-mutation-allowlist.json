@@ -812,6 +812,18 @@
       "reason": "Release/check script removes only the scoped mkdtemp slot-pane fixture directory after hydration proof."
     },
     {
+      "file": "src/scripts/zellij-slot-pane-stale-detection-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes only scoped temporary slot telemetry snapshots under mkdtemp for stale detection proof."
+    },
+    {
+      "file": "src/core/mad-db/mad-db-result-lifecycle.ts",
+      "symbol": "markPendingHookResolved",
+      "token": "fs.rm",
+      "reason": "MAD-DB result lifecycle removes only the scoped latest pending-hook pointer after terminal result ledger resolution."
+    },
+    {
       "file": "src/core/zellij/zellij-command.ts",
       "symbol": "prepareZellijProcessEnv",
       "token": "chmod",

@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.16** is the real parallelism closure release. It proves Naruto/agent runtime concurrency with PID, launch overlap, wall-clock speedup, active/headless worker, model-call, worktree allocation, and incremental Zellij telemetry evidence while keeping Naruto as the execution SSOT.
+SKS **2.0.17** is the micro-hardening release for strict production PID proof, true scheduler active-time utilization, live Zellij slot telemetry freshness, Mad-DB result lifecycle audit, and unified runtime/release proof summaries.
 
 What changed:
 
@@ -613,7 +613,9 @@ SKS_HERMES=1 sks status --json
 
 Use these inside Codex App or another agent prompt. They are prompt commands, not terminal commands.
 
-Common prompts: `$Team`, `$From-Chat-IMG`, `$with-local-llm-on`, `$with-local-llm-off`, `$DFix`, `$Answer`, `$SKS`, `$QA-LOOP`, `$PPT`, `$Computer-Use`/`$CU`, `$Goal`, `$Research`, `$AutoResearch`, `$DB`, `$MAD-SKS`, `$GX`, `$Wiki`, and `$Help`.
+Common prompts: `$Team`, `$From-Chat-IMG`, `$with-local-llm-on`, `$with-local-llm-off`, `$DFix`, `$Answer`, `$SKS`, `$QA-LOOP`, `$PPT`, `$Computer-Use`/`$CU`, `$Goal`, `$Research`, `$AutoResearch`, `$DB`, `$MAD-SKS`, `$MAD-DB`, `$GX`, `$Wiki`, and `$Help`.
+
+`$MAD-DB` is the prompt-visible Mad-DB alias for one-cycle DB break-glass work. It maps to the same guarded MAD-SKS permission route, while the terminal lifecycle remains `sks mad-db status|enable|revoke`; it is not a permanent DB unlock and catastrophic DB safeguards remain active.
 
 ## Common Workflows
 

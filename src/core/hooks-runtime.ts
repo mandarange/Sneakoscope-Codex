@@ -3,6 +3,7 @@ import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdi
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.js';
 import { missionDir, setCurrent, stateFile } from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
+import { readLatestPendingMadDbLifecycleHook, recordMadDbToolResult } from './mad-db/mad-db-result-lifecycle.js';
 import { checkHarnessModification, harnessGuardBlockReason, isHarnessSourceProject } from './harness-guard.js';
 import { isMadSksRouteState } from './permission-gates.js';
 import { classifyMadSksShellCommand } from './mad-sks/write-guard.js';
@@ -428,10 +429,7 @@ function agentWorkerHookContext(state: any = {}, payload: any = {}) {
 }
 
 async function hookPostTool(root: any, state: any, payload: any, noQuestion: any) {
-  const dbDecision = await checkDbOperation(root, state, payload, { duringNoQuestion: noQuestion });
-  if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
-    return { decision: 'block', reason: dbBlockReason(dbDecision) };
-  }
+  await recordMadDbPostToolLifecycle(root, state, payload).catch(() => null);
   await recordContext7Evidence(root, state, payload).catch(() => null);
   await recordSubagentEvidence(root, state, payload).catch(() => null);
   if (toolFailed(payload)) await recordToolErrorTaxonomy(root, state, payload).catch(() => null);
@@ -453,6 +451,44 @@ async function hookPostTool(root: any, state: any, payload: any, noQuestion: any
   return teamDigest?.context
     ? { continue: true, additionalContext: teamDigest.context, systemMessage: joinSystemMessages(visibleHookMessage('post-tool'), teamDigest.system) }
     : { continue: true };
+}
+
+async function recordMadDbPostToolLifecycle(root: any, state: any = {}, payload: any = {}) {
+  if (!state?.mission_id) return null;
+  const hook = await readLatestPendingMadDbLifecycleHook(root, String(state.mission_id), payload);
+  if (!hook) return null;
+  return recordMadDbToolResult({
+    root,
+    missionId: String(state.mission_id),
+    hook,
+    ok: !toolFailed(payload),
+    rowCount: extractRowCount(payload),
+    error: toolFailed(payload) ? extractToolError(payload) : null
+  });
+}
+
+function extractRowCount(payload: any = {}) {
+  const candidates = [
+    payload.row_count,
+    payload.rowCount,
+    payload.tool_response?.row_count,
+    payload.tool_response?.rowCount,
+    payload.toolResponse?.rowCount,
+    payload.result?.row_count,
+    payload.result?.rowCount,
+    payload.result?.rows_affected,
+    payload.tool_response?.rows_affected
+  ];
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null || candidate === '') continue;
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function extractToolError(payload: any = {}) {
+  return String(payload.error || payload.message || payload.stderr || payload.tool_response?.stderr || payload.toolResponse?.stderr || payload.result?.stderr || payload.result?.error || 'tool_failed');
 }
 
 async function recordToolErrorTaxonomy(root: any, state: any = {}, payload: any = {}) {

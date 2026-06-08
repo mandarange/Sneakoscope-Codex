@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.17 is the micro-hardening release for the 2.0 parallel-runtime line. It makes production parallel proof require real worker PIDs, limits missing-PID acceptance to explicit in-process fixtures, computes scheduler utilization from active slot-time instead of completed-count estimates, and records proof consistency against the scheduler active-time integral.
+
+The 2.0.17 release gate adds strict PID rejection, scheduler active-time consistency, live Zellij slot telemetry flushing with stale-pane JSON/status output, Mad-DB decision-to-result lifecycle hooks, runtime proof summaries, Team alias isolation, and release speed/DAG coverage checks while retaining the 2.0.16 real parallelism closure gates. Publish readiness still requires a fresh full `release:check` stamp, `publish:dry`, provenance/registry checks, and operator-run publication after review.
+
 SKS 2.0.16 is the real parallelism closure patch for the 2.0 line. It proves actual tens-of-workers concurrency with PID, launch-overlap, active timeline, wall-clock speedup, model-call semaphore, worktree allocation, visible-pane, and headless-worker evidence instead of relying on pane count or scheduler counters alone.
 
 The 2.0.16 release gate adds `parallel:runtime-proof`, `parallel:runtime-proof-events`, `parallel:runtime-real-blackbox`, `parallel:claim-enforcement`, `scheduler:batch-dispatch`, `scheduler:utilization-proof`, `native-swarm:process-spawn-proof`, `native-swarm:zellij-does-not-block-workers`, `model-call:concurrency`, Naruto parallelism mode/UX/proof gates, `naruto:real-parallelism-blackbox`, worktree batch/prewarm checks, `release:full-parallelism-blackbox`, incremental Zellij telemetry checks, Team legacy-create removal proof, and bounded Mad-DB operation lifecycle checks. Publish readiness still requires a fresh full `release:check` stamp, `publish:dry`, provenance/registry checks, and operator-run publication after review.

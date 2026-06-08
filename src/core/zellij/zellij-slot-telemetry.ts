@@ -1,11 +1,13 @@
 import path from 'node:path'
 import fsp from 'node:fs/promises'
-import { appendJsonlBounded, ensureDir, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
+import { appendJsonlBounded, ensureDir, nowIso, readJson, readText } from '../fsx.js'
 
 export const ZELLIJ_SLOT_TELEMETRY_EVENT_SCHEMA = 'sks.zellij-slot-telemetry-event.v1'
 export const ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA = 'sks.zellij-slot-telemetry-snapshot.v1'
 const telemetrySnapshotCache = new Map<string, ZellijSlotTelemetrySnapshot>()
 const telemetrySnapshotWriteCounts = new Map<string, number>()
+const telemetrySnapshotFlushCounts = new Map<string, number>()
+const telemetrySnapshotLastFlushMs = new Map<string, number>()
 
 export type ZellijSlotTelemetryEventType =
   | 'slot_reserved'
@@ -63,6 +65,7 @@ export interface ZellijSlotTelemetrySnapshot {
   schema: typeof ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA
   mission_id: string
   updated_at: string
+  flush_count?: number
   slots: Record<string, {
     slot_id: string
     generation_index: number
@@ -147,6 +150,7 @@ export function applyTelemetryEventToSnapshot(snapshot: ZellijSlotTelemetrySnaps
     schema: ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA,
     mission_id: event.mission_id || snapshot.mission_id,
     updated_at: nowIso(),
+    flush_count: snapshot.flush_count || 0,
     slots,
     counts: countSlotTelemetry(slots)
   }
@@ -166,11 +170,11 @@ export async function rebuildZellijSlotTelemetrySnapshot(root: string, missionId
     schema: ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA,
     mission_id: missionId,
     updated_at: nowIso(),
+    flush_count: 0,
     slots,
     counts: countSlotTelemetry(slots)
   }
-  await writeJsonAtomic(slotTelemetrySnapshotPath(root, missionId), snapshot)
-  telemetrySnapshotCache.set(slotTelemetrySnapshotPath(root, missionId), snapshot)
+  await writeTelemetrySnapshotFast(slotTelemetrySnapshotPath(root, missionId), snapshot)
   return snapshot
 }
 
@@ -297,18 +301,39 @@ function tail(value: unknown, max: number) {
 
 async function writeTelemetrySnapshotFast(file: string, snapshot: ZellijSlotTelemetrySnapshot) {
   await ensureDir(path.dirname(file))
-  await fsp.writeFile(file, `${JSON.stringify(snapshot)}\n`, 'utf8')
+  const flushCount = Number(telemetrySnapshotFlushCounts.get(file) || 0) + 1
+  telemetrySnapshotFlushCounts.set(file, flushCount)
+  telemetrySnapshotLastFlushMs.set(file, Date.now())
+  const next = { ...snapshot, flush_count: flushCount }
+  telemetrySnapshotCache.set(file, next)
+  await fsp.writeFile(file, `${JSON.stringify(next)}\n`, 'utf8')
 }
 
 function shouldFlushTelemetrySnapshot(file: string, event: ZellijSlotTelemetryEvent) {
   const next = (telemetrySnapshotWriteCounts.get(file) || 0) + 1
   telemetrySnapshotWriteCounts.set(file, next)
-  return next === 1
-    || next % 100 === 0
+  const now = Date.now()
+  const last = telemetrySnapshotLastFlushMs.get(file) || 0
+  const parsedFlushMs = Number(process.env.SKS_ZELLIJ_SLOT_TELEMETRY_FLUSH_MS || 1000)
+  const parsedFlushEvery = Number(process.env.SKS_ZELLIJ_SLOT_TELEMETRY_FLUSH_EVERY_N || 100)
+  const flushMs = Math.max(250, Number.isFinite(parsedFlushMs) ? parsedFlushMs : 1000)
+  const flushEvery = Math.max(1, Number.isFinite(parsedFlushEvery) ? Math.floor(parsedFlushEvery) : 100)
+  const important =
+    event.event_type === 'task_started'
+    || event.event_type === 'task_progress'
+    || event.event_type === 'artifact_written'
+    || event.event_type === 'patch_candidate'
     || event.event_type === 'worker_completed'
     || event.event_type === 'worker_failed'
     || event.status === 'completed'
     || event.status === 'failed'
+  const should =
+    next === 1
+    || important
+    || now - last >= flushMs
+    || next % flushEvery === 0
+  if (should) telemetrySnapshotLastFlushMs.set(file, now)
+  return should
 }
 
 function inferMissionDir(root: string, missionId: string) {

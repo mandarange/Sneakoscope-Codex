@@ -574,12 +574,14 @@ export const ROUTES = [
     route: 'explicit scoped permission-widening modifier',
     description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily open approved target-project scopes such as files, shell, package installs, services, network, Computer Use/browser workflows, generated assets, file permissions, migrations, Supabase MCP DB writes, direct execute SQL, schema cleanup, and normal targeted DB writes for the active invocation, while preserving catastrophic wipe/all-row/project-management, credential-exfiltration, persistent security-weakening, and unrequested fallback safeguards.',
     requiredSkills: ['mad-sks', 'db-safety-guard', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
+    dollarAliases: ['$MAD-DB'],
+    appSkillAliases: ['mad-db'],
     lifecycle: ['explicit_invocation', 'auto_sealed_permission_scope', 'scoped_permission_override', 'catastrophic_guard', 'permission_deactivation', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'required',
     reasoningPolicy: 'xhigh',
     stopGate: 'mad-sks-gate.json',
     cliEntrypoint: 'Codex App prompt route only: $MAD-SKS <task>',
-    examples: ['$MAD-SKS $Team target project maintenance with package/service/file and DB scopes', '$DB Supabase 점검 $MAD-SKS']
+    examples: ['$MAD-SKS $Team target project maintenance with package/service/file and DB scopes', '$DB Supabase 점검 $MAD-SKS', '$MAD-DB enable one-cycle DB break-glass only after explicit ack']
   },
   {
     id: 'GX',

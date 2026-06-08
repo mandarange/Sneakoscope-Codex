@@ -1,4 +1,4 @@
-import { renderZellijSlotPaneFromArtifacts } from '../core/zellij/zellij-slot-pane-renderer.js'
+import { renderZellijSlotPaneFromArtifacts, renderZellijSlotPaneStatusFromArtifacts } from '../core/zellij/zellij-slot-pane-renderer.js'
 
 export async function run(_command: string = 'zellij-slot-pane', args: string[] = []) {
   const artifactDir = readOption(args, '--artifact-dir', process.cwd()) || process.cwd()
@@ -10,7 +10,13 @@ export async function run(_command: string = 'zellij-slot-pane', args: string[] 
   const role = readOption(args, '--role', null)
   const mode = readOption(args, '--mode', 'compact-slots') as any
   const watch = hasFlag(args, '--watch')
+  const json = hasFlag(args, '--json')
   const intervalMs = Math.max(250, Number(readOption(args, '--interval-ms', '1000') || 1000))
+  if (json) {
+    const status = await renderZellijSlotPaneStatusFromArtifacts({ artifactDir, artifactRoot, missionId, slotId, generationIndex })
+    console.log(JSON.stringify(status, null, 2))
+    return
+  }
   for (;;) {
     const text = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot, missionId, slotId, generationIndex, backend, role, mode })
     process.stdout.write('\x1Bc' + text + '\n')
